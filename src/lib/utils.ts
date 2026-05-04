@@ -1,9 +1,27 @@
 import { clsx, type ClassValue } from "clsx";
-import { format } from "date-fns";
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
 }
+
+const APP_TIME_ZONE = "Europe/Ljubljana";
+
+const calendarDateFormatter = new Intl.DateTimeFormat("sl-SI", {
+  day: "numeric",
+  month: "numeric",
+  year: "numeric",
+  timeZone: APP_TIME_ZONE,
+});
+
+const calendarDateTimeFormatter = new Intl.DateTimeFormat("sl-SI", {
+  day: "numeric",
+  month: "numeric",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: APP_TIME_ZONE,
+});
 
 export function formatTimestamp(ms: number) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -31,11 +49,25 @@ export function formatLectureDuration(seconds: number | null) {
 }
 
 export function formatRelativeDate(isoString: string) {
-  return format(new Date(isoString), "d. M. yyyy 'ob' HH:mm");
+  const parts = calendarDateTimeFormatter.formatToParts(new Date(isoString));
+  const valueByType = new Map(parts.map((part) => [part.type, part.value]));
+  const day = valueByType.get("day") ?? "";
+  const month = valueByType.get("month") ?? "";
+  const year = valueByType.get("year") ?? "";
+  const hour = valueByType.get("hour") ?? "00";
+  const minute = valueByType.get("minute") ?? "00";
+
+  return `${day}. ${month}. ${year} ob ${hour}:${minute}`;
 }
 
 export function formatCalendarDate(isoString: string) {
-  return format(new Date(isoString), "d. M. yyyy");
+  const parts = calendarDateFormatter.formatToParts(new Date(isoString));
+  const valueByType = new Map(parts.map((part) => [part.type, part.value]));
+  const day = valueByType.get("day") ?? "";
+  const month = valueByType.get("month") ?? "";
+  const year = valueByType.get("year") ?? "";
+
+  return `${day}. ${month}. ${year}`;
 }
 
 export function stripCodeFences(value: string) {

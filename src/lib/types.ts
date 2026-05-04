@@ -23,6 +23,14 @@ export interface AppLectureListItem extends LectureRow {
   profile?: ProfileRow | null;
 }
 
+export interface AppLibraryFolder {
+  id: string;
+  name: string;
+  lectureIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface LectureDetail {
   lecture: LectureRow;
   artifact: LectureArtifactRow | null;

@@ -272,6 +272,46 @@ export type Database = {
           updated_at?: string;
         };
       };
+      library_folders: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          updated_at?: string;
+        };
+      };
+      library_folder_lectures: {
+        Row: {
+          folder_id: string;
+          lecture_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          folder_id: string;
+          lecture_id: string;
+          user_id: string;
+          created_at?: string;
+        };
+        Update: {
+          folder_id?: string;
+          lecture_id?: string;
+          user_id?: string;
+          created_at?: string;
+        };
+      };
       transcript_segments: {
         Row: {
           id: string;
@@ -904,6 +944,10 @@ export type AiUsageEventRow =
 export type BillingSubscriptionRow =
   Database["public"]["Tables"]["billing_subscriptions"]["Row"];
 export type LectureRow = Database["public"]["Tables"]["lectures"]["Row"];
+export type LibraryFolderRow =
+  Database["public"]["Tables"]["library_folders"]["Row"];
+export type LibraryFolderLectureRow =
+  Database["public"]["Tables"]["library_folder_lectures"]["Row"];
 export type TranscriptSegmentRow =
   Database["public"]["Tables"]["transcript_segments"]["Row"];
 export type LectureArtifactRow =

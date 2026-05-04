@@ -7,6 +7,7 @@ import { ThemeSettings } from "@/components/theme-settings";
 import { getViewerAppState } from "@/lib/billing";
 import { requireUser } from "@/lib/auth";
 import { BRAND_NAME } from "@/lib/brand";
+import { formatCalendarDate } from "@/lib/utils";
 
 function SettingsLinkCard(props: {
   href: string;
@@ -82,7 +83,7 @@ export default async function SettingsPage() {
             </p>
             <p className="ios-row-subtitle mt-1">
               {subscription?.current_period_end
-                ? `Aktivno do ${new Date(subscription.current_period_end).toLocaleDateString()}`
+                ? `Aktivno do ${formatCalendarDate(subscription.current_period_end)}`
                 : "Pred vstopom v glavno aplikacijo uporabnik najprej opravi onboarding in plačilo."}
             </p>
           </div>

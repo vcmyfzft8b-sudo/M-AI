@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { EmojiIcon } from "@/components/emoji-icon";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
+import { formatCalendarDate } from "@/lib/utils";
 
 type BillingPlanCard = {
   id: "weekly" | "monthly" | "yearly";
@@ -411,7 +412,7 @@ export function OnboardingPaywall({
             <p>
               Paket {subscription.plan}
               {subscription.current_period_end
-                ? ` do ${new Date(subscription.current_period_end).toLocaleDateString()}`
+                ? ` do ${formatCalendarDate(subscription.current_period_end)}`
                 : ""}
             </p>
           </div>

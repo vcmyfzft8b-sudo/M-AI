@@ -26,7 +26,7 @@ import { InstantLink } from "@/components/instant-link";
 import { ViewportPortal } from "@/components/viewport-portal";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
 import { getEffectiveLectureSourceType } from "@/lib/lecture-source-metadata";
-import type { AppLectureListItem } from "@/lib/types";
+import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 import { formatCalendarDate } from "@/lib/utils";
 
 const QUICK_ACTIONS = [
@@ -197,6 +197,7 @@ const NoteRow = memo(function NoteRow({
 
 export function HomeDashboard({
   lectures,
+  folders,
   userId,
   canCreateNotes,
   hasPaidAccess,
@@ -205,6 +206,7 @@ export function HomeDashboard({
   trialChatMessagesRemaining,
 }: {
   lectures: AppLectureListItem[];
+  folders: AppLibraryFolder[];
   userId: string;
   canCreateNotes: boolean;
   hasPaidAccess: boolean;
@@ -714,6 +716,7 @@ export function HomeDashboard({
             <LibraryFolderMenu
               lectures={libraryLectures}
               userId={userId}
+              initialFolders={folders}
               selectedFolderId={selectedFolderId}
               onSelectFolder={(folderId, lectureIds) => {
                 setSelectedFolderId(folderId);

@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
@@ -12,14 +13,11 @@ import {
 import { EmojiIcon } from "@/components/emoji-icon";
 import { Folder } from "@/components/folder";
 import { ViewportPortal } from "@/components/viewport-portal";
-import type { AppLectureListItem } from "@/lib/types";
+import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 import { formatRelativeDate } from "@/lib/utils";
 
-type LibraryFolder = {
-  id: string;
-  name: string;
-  lectureIds: string[];
-};
+type LibraryFolder = AppLibraryFolder;
+type StoredLibraryFolder = Pick<AppLibraryFolder, "id" | "name" | "lectureIds">;
 
 const LEGACY_FOLDERS_STORAGE_KEY = "nota-library-folders";
 const FOLDERS_STORAGE_KEY_PREFIX = "nota-library-folders";
@@ -45,12 +43,12 @@ function parseStoredFolders(rawValue: string | null) {
       return [];
     }
 
-    return parsed.filter((folder): folder is LibraryFolder => {
+    return parsed.filter((folder): folder is StoredLibraryFolder => {
       if (!folder || typeof folder !== "object") {
         return false;
       }
 
-      const value = folder as Partial<LibraryFolder>;
+      const value = folder as Partial<StoredLibraryFolder>;
       return (
         typeof value.id === "string" &&
         typeof value.name === "string" &&
@@ -84,12 +82,13 @@ function readStoredFolders(userId: string) {
   return legacyFolders;
 }
 
-function writeStoredFolders(userId: string, nextFolders: LibraryFolder[]) {
+function clearStoredFolders(userId: string) {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.localStorage.setItem(getFoldersStorageKey(userId), JSON.stringify(nextFolders));
+  window.localStorage.removeItem(getFoldersStorageKey(userId));
+  window.localStorage.removeItem(LEGACY_FOLDERS_STORAGE_KEY);
 }
 
 function readStoredSelectedFolderId(userId: string) {
@@ -116,14 +115,6 @@ function writeStoredSelectedFolderId(userId: string, folderId: string | null) {
   window.localStorage.removeItem(storageKey);
 }
 
-function createFolder(name: string, lectureIds: string[]) {
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name,
-    lectureIds,
-  };
-}
-
 function toggleLectureId(currentIds: string[], lectureId: string) {
   return currentIds.includes(lectureId)
     ? currentIds.filter((id) => id !== lectureId)
@@ -141,16 +132,19 @@ function lectureSummary(count: number) {
 export function LibraryFolderMenu({
   lectures,
   userId,
+  initialFolders,
   selectedFolderId,
   onSelectFolder,
 }: {
   lectures: AppLectureListItem[];
   userId: string;
+  initialFolders: AppLibraryFolder[];
   selectedFolderId: string | null;
   onSelectFolder: (folderId: string | null, lectureIds: string[] | null) => void;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const hasRestoredSelectionRef = useRef(false);
+  const hasMigratedLocalFoldersRef = useRef(false);
   const folderSheetDragStartYRef = useRef<number | null>(null);
   const folderSheetDragOffsetRef = useRef(0);
   const folderSheetSuppressClickRef = useRef(false);
@@ -161,15 +155,31 @@ export function LibraryFolderMenu({
   const [folderSheetDragOffset, setFolderSheetDragOffset] = useState(0);
   const [folderModalDragOffset, setFolderModalDragOffset] = useState(0);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [folders, setFolders] = useState<LibraryFolder[]>(() => readStoredFolders(userId));
+  const [folders, setFolders] = useState<LibraryFolder[]>(initialFolders);
   const [folderName, setFolderName] = useState("");
   const [draftLectureIds, setDraftLectureIds] = useState<string[]>([]);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingLectureIds, setEditingLectureIds] = useState<string[]>([]);
+  const lectureIdSet = useMemo(
+    () => new Set(lectures.map((lecture) => lecture.id)),
+    [lectures],
+  );
+  const liveFolders = useMemo(
+    () =>
+      folders.map((folder) => ({
+        ...folder,
+        lectureIds: folder.lectureIds.filter((lectureId) => lectureIdSet.has(lectureId)),
+      })),
+    [folders, lectureIdSet],
+  );
 
-  const selectedFolder = folders.find((folder) => folder.id === selectedFolderId) ?? null;
+  const selectedFolder = liveFolders.find((folder) => folder.id === selectedFolderId) ?? null;
   const isEditModalOpen = editingFolderId !== null;
+
+  useEffect(() => {
+    setFolders(initialFolders);
+  }, [initialFolders]);
 
   function handleCancelEdit() {
     folderModalDragStartYRef.current = null;
@@ -194,18 +204,28 @@ export function LibraryFolderMenu({
       return;
     }
 
-    const storedFolder = folders.find((folder) => folder.id === storedFolderId);
+    const storedFolder = liveFolders.find((folder) => folder.id === storedFolderId);
 
     if (!storedFolder) {
+      const storedLocalFolders = readStoredFolders(userId);
+
+      if (storedLocalFolders.some((folder) => folder.id === storedFolderId)) {
+        return;
+      }
+
       writeStoredSelectedFolderId(userId, null);
       onSelectFolder(null, null);
       return;
     }
 
     onSelectFolder(storedFolder.id, storedFolder.lectureIds);
-  }, [folders, onSelectFolder, userId]);
+  }, [liveFolders, onSelectFolder, userId]);
 
   useEffect(() => {
+    if (!hasRestoredSelectionRef.current) {
+      return;
+    }
+
     writeStoredSelectedFolderId(userId, selectedFolderId);
   }, [selectedFolderId, userId]);
 
@@ -253,13 +273,84 @@ export function LibraryFolderMenu({
       return;
     }
 
-    const nextSelectedFolder = folders.find((folder) => folder.id === selectedFolderId);
+    const nextSelectedFolder = liveFolders.find((folder) => folder.id === selectedFolderId);
 
     if (!nextSelectedFolder) {
       writeStoredSelectedFolderId(userId, null);
       onSelectFolder(null, null);
     }
-  }, [folders, onSelectFolder, selectedFolderId, userId]);
+  }, [liveFolders, onSelectFolder, selectedFolderId, userId]);
+
+  useEffect(() => {
+    if (hasMigratedLocalFoldersRef.current) {
+      return;
+    }
+
+    hasMigratedLocalFoldersRef.current = true;
+
+    const storedFolders = readStoredFolders(userId);
+
+    if (storedFolders.length === 0) {
+      clearStoredFolders(userId);
+      return;
+    }
+
+    const storedFolderId = readStoredSelectedFolderId(userId);
+    const storedSelectedFolder = storedFolders.find((folder) => folder.id === storedFolderId) ?? null;
+    const foldersToImport = storedFolders
+      .map((folder) => ({
+        name: folder.name,
+        lectureIds: folder.lectureIds.filter((lectureId) => lectureIdSet.has(lectureId)),
+      }))
+      .filter((folder) => folder.name.trim().length > 0);
+
+    if (foldersToImport.length === 0) {
+      clearStoredFolders(userId);
+      return;
+    }
+
+    void fetch("/api/library-folders", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ folders: foldersToImport }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Folder migration failed.");
+        }
+
+        return (await response.json()) as { folders: AppLibraryFolder[] };
+      })
+      .then((payload) => {
+        setFolders(payload.folders);
+        clearStoredFolders(userId);
+
+        if (!storedSelectedFolder) {
+          if (storedFolderId) {
+            writeStoredSelectedFolderId(userId, null);
+          }
+          return;
+        }
+
+        const migratedSelectedFolder =
+          payload.folders.find((folder) => folder.name === storedSelectedFolder.name) ?? null;
+
+        if (migratedSelectedFolder) {
+          const nextLectureIds = migratedSelectedFolder.lectureIds.filter((lectureId) =>
+            lectureIdSet.has(lectureId),
+          );
+          onSelectFolder(migratedSelectedFolder.id, nextLectureIds);
+          return;
+        }
+
+        writeStoredSelectedFolderId(userId, null);
+      })
+      .catch(() => {
+        hasMigratedLocalFoldersRef.current = false;
+      });
+  }, [lectureIdSet, onSelectFolder, userId]);
 
   function handleToggleMenu() {
     setIsOpen((currentValue) => !currentValue);
@@ -475,18 +566,33 @@ export function LibraryFolderMenu({
     closeFolderSheet();
   }
 
-  function handleCreateFolder() {
+  async function handleCreateFolder() {
     const trimmedName = folderName.trim();
 
     if (!trimmedName) {
       return;
     }
 
-    const nextFolder = createFolder(trimmedName, draftLectureIds);
+    const response = await fetch("/api/library-folders", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: trimmedName,
+        lectureIds: draftLectureIds.filter((lectureId) => lectureIdSet.has(lectureId)),
+      }),
+    });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = (await response.json()) as { folder: AppLibraryFolder };
+    const nextFolder = payload.folder;
     const nextFolders = [...folders, nextFolder];
 
     setFolders(nextFolders);
-    writeStoredFolders(userId, nextFolders);
     onSelectFolder(nextFolder.id, nextFolder.lectureIds);
     setFolderName("");
     setDraftLectureIds([]);
@@ -500,7 +606,7 @@ export function LibraryFolderMenu({
     setEditingLectureIds(folder.lectureIds);
   }
 
-  function handleSaveFolder() {
+  async function handleSaveFolder() {
     if (!editingFolderId) {
       return;
     }
@@ -511,18 +617,27 @@ export function LibraryFolderMenu({
       return;
     }
 
+    const response = await fetch(`/api/library-folders/${editingFolderId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: trimmedName,
+        lectureIds: editingLectureIds.filter((lectureId) => lectureIdSet.has(lectureId)),
+      }),
+    });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = (await response.json()) as { folder: AppLibraryFolder };
     const nextFolders = folders.map((folder) =>
-      folder.id === editingFolderId
-        ? {
-            ...folder,
-            name: trimmedName,
-            lectureIds: editingLectureIds,
-          }
-        : folder,
+      folder.id === editingFolderId ? payload.folder : folder,
     );
 
     setFolders(nextFolders);
-    writeStoredFolders(userId, nextFolders);
 
     if (selectedFolderId === editingFolderId) {
       const nextSelectedFolder = nextFolders.find((folder) => folder.id === editingFolderId);
@@ -532,10 +647,17 @@ export function LibraryFolderMenu({
     handleCancelEdit();
   }
 
-  function handleDeleteFolder(folderId: string) {
+  async function handleDeleteFolder(folderId: string) {
+    const response = await fetch(`/api/library-folders/${folderId}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      return;
+    }
+
     const nextFolders = folders.filter((folder) => folder.id !== folderId);
     setFolders(nextFolders);
-    writeStoredFolders(userId, nextFolders);
 
     if (selectedFolderId === folderId) {
       onSelectFolder(null, null);
@@ -549,11 +671,11 @@ export function LibraryFolderMenu({
   }
 
   function handleOpenEditModal() {
-    if (folders.length === 0) {
+    if (liveFolders.length === 0) {
       return;
     }
 
-    startEditingFolder(selectedFolder ?? folders[0]);
+    startEditingFolder(selectedFolder ?? liveFolders[0]);
     setIsOpen(false);
   }
 
@@ -579,7 +701,7 @@ export function LibraryFolderMenu({
           </span>
         </button>
 
-        {folders.map((folder) => (
+        {liveFolders.map((folder) => (
           <button
             type="button"
             key={folder.id}
@@ -856,11 +978,11 @@ export function LibraryFolderMenu({
             </div>
 
             <div className="library-folder-modal-body">
-              {folders.length > 1 ? (
+              {liveFolders.length > 1 ? (
                 <div className="library-folder-modal-field">
                   <span>Izberi mapo</span>
                   <div className="library-folder-modal-folder-list">
-                    {folders.map((folder) => (
+                    {liveFolders.map((folder) => (
                       <button
                         type="button"
                         key={folder.id}

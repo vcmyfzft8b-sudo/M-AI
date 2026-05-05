@@ -458,7 +458,6 @@ export function HomeDashboard({
       return;
     }
 
-    closeMobileCreateMenu();
     setManualModal(mode);
   }
 

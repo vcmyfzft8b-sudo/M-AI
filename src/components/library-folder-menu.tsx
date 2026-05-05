@@ -645,6 +645,7 @@ export function LibraryFolderMenu({
     }
 
     handleCancelEdit();
+    setIsOpen(false);
   }
 
   async function handleDeleteFolder(folderId: string) {
@@ -667,6 +668,7 @@ export function LibraryFolderMenu({
       setEditingFolderId(null);
       setEditingName("");
       setEditingLectureIds([]);
+      setIsOpen(false);
     }
   }
 
@@ -676,7 +678,6 @@ export function LibraryFolderMenu({
     }
 
     startEditingFolder(selectedFolder ?? liveFolders[0]);
-    setIsOpen(false);
   }
 
   function renderFolderMenuOptions() {
@@ -730,7 +731,6 @@ export function LibraryFolderMenu({
           onClick={() => {
             setFolderName("");
             setDraftLectureIds([]);
-            setIsOpen(false);
             setIsCreateModalOpen(true);
           }}
         >

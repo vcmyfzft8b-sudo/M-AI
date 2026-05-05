@@ -21,13 +21,16 @@ export function applyTheme(preference: ThemePreference) {
     document.documentElement.removeAttribute("data-theme");
     document.documentElement.style.colorScheme = "";
     window.localStorage.removeItem(THEME_STORAGE_KEY);
-    window.dispatchEvent(new Event(THEME_EVENT));
     return;
   }
 
   document.documentElement.dataset.theme = preference;
   document.documentElement.style.colorScheme = preference;
   window.localStorage.setItem(THEME_STORAGE_KEY, preference);
+}
+
+export function setThemePreference(preference: ThemePreference) {
+  applyTheme(preference);
   window.dispatchEvent(new Event(THEME_EVENT));
 }
 

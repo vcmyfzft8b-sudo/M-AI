@@ -692,6 +692,7 @@ export function NoteSourceModal({
     }
 
     sourceSheetSuppressClickRef.current = false;
+    sourceSheetDragStartYRef.current = null;
 
     const target = event.target;
     if (target instanceof Element && target.closest(".note-source-segmented")) {

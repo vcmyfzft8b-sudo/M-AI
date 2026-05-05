@@ -5,8 +5,8 @@ import { useSyncExternalStore } from "react";
 import { EmojiIcon } from "@/components/emoji-icon";
 import type { ThemePreference } from "@/lib/theme";
 import {
-  applyTheme,
   readStoredThemePreference,
+  setThemePreference,
   subscribeToThemePreference,
 } from "@/lib/theme";
 
@@ -44,7 +44,7 @@ export function ThemeSettings() {
       return;
     }
 
-    applyTheme(next);
+    setThemePreference(next);
   }
 
   return (

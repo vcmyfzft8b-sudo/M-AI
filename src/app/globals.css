@@ -5091,6 +5091,10 @@ select:disabled {
   --lecture-flashcard-drag-y: 0px;
   --lecture-flashcard-drag-rotation: 0deg;
   --lecture-flashcard-drag-progress: 0;
+  --lecture-flashcard-drag-easy-background: rgba(230, 246, 234, 0.9);
+  --lecture-flashcard-drag-easy-color: #16a34a;
+  --lecture-flashcard-drag-again-background: rgba(253, 233, 230, 0.9);
+  --lecture-flashcard-drag-again-color: #dc2626;
   --lecture-flashcard-hover-y: 0px;
   position: relative;
   display: block;
@@ -5236,13 +5240,13 @@ select:disabled {
 }
 
 .lecture-flashcard.drag-easy .lecture-flashcard-drag-overlay {
-  background: rgba(230, 246, 234, 0.9);
-  color: #16a34a;
+  background: var(--lecture-flashcard-drag-easy-background);
+  color: var(--lecture-flashcard-drag-easy-color);
 }
 
 .lecture-flashcard.drag-again .lecture-flashcard-drag-overlay {
-  background: rgba(253, 233, 230, 0.9);
-  color: #dc2626;
+  background: var(--lecture-flashcard-drag-again-background);
+  color: var(--lecture-flashcard-drag-again-color);
 }
 
 .lecture-flashcard-citations {
@@ -5603,6 +5607,13 @@ select:disabled {
   color: color-mix(in srgb, var(--green) 92%, #208442);
 }
 
+:root[data-theme="dark"] .lecture-flashcard {
+  --lecture-flashcard-drag-easy-background: color-mix(in srgb, var(--surface-solid) 78%, var(--green));
+  --lecture-flashcard-drag-easy-color: var(--green);
+  --lecture-flashcard-drag-again-background: color-mix(in srgb, var(--surface-solid) 78%, var(--red));
+  --lecture-flashcard-drag-again-color: var(--red);
+}
+
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) .lecture-flashcard-stage-meta span,
   :root:not([data-theme]) .lecture-quiz-meta span,
@@ -5802,6 +5813,16 @@ select:disabled {
     border-color: color-mix(in srgb, var(--green) 45%, var(--separator-strong));
     background: linear-gradient(180deg, #f4fcf6, #e1f5e5);
     color: color-mix(in srgb, var(--green) 92%, #208442);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .lecture-flashcard,
+  :root[data-theme="system"] .lecture-flashcard {
+    --lecture-flashcard-drag-easy-background: color-mix(in srgb, var(--surface-solid) 78%, var(--green));
+    --lecture-flashcard-drag-easy-color: var(--green);
+    --lecture-flashcard-drag-again-background: color-mix(in srgb, var(--surface-solid) 78%, var(--red));
+    --lecture-flashcard-drag-again-color: var(--red);
   }
 }
 

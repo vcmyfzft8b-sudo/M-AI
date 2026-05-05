@@ -4301,6 +4301,14 @@ select:disabled {
   display: none;
 }
 
+.note-read-content {
+  --note-read-read-bg: var(--note-read-read-bg-light, #ffedd5);
+  --note-read-read-color: var(--note-read-read-color-light, #7c2d12);
+  --note-read-current-bg: var(--note-read-current-bg-light, #fb923c);
+  --note-read-current-color: var(--note-read-current-color-light, #431407);
+  --note-read-current-ring: var(--note-read-current-ring-light, rgba(251, 146, 60, 0.28));
+}
+
 .note-read-word {
   border-radius: 0.28rem;
   box-decoration-break: clone;
@@ -4321,6 +4329,25 @@ select:disabled {
   background: var(--note-read-current-bg, #fb923c);
   color: var(--note-read-current-color, #431407);
   box-shadow: 0 0 0 0.11rem var(--note-read-current-ring, rgba(251, 146, 60, 0.28));
+}
+
+:root[data-theme="dark"] .note-read-content {
+  --note-read-read-bg: var(--note-read-read-bg-dark, rgba(251, 146, 60, 0.22));
+  --note-read-read-color: var(--note-read-read-color-dark, #fed7aa);
+  --note-read-current-bg: var(--note-read-current-bg-dark, #c2410c);
+  --note-read-current-color: var(--note-read-current-color-dark, #fff7ed);
+  --note-read-current-ring: var(--note-read-current-ring-dark, rgba(251, 146, 60, 0.36));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .note-read-content,
+  :root[data-theme="system"] .note-read-content {
+    --note-read-read-bg: var(--note-read-read-bg-dark, rgba(251, 146, 60, 0.22));
+    --note-read-read-color: var(--note-read-read-color-dark, #fed7aa);
+    --note-read-current-bg: var(--note-read-current-bg-dark, #c2410c);
+    --note-read-current-color: var(--note-read-current-color-dark, #fff7ed);
+    --note-read-current-ring: var(--note-read-current-ring-dark, rgba(251, 146, 60, 0.36));
+  }
 }
 
 .lecture-study-shell {
@@ -5091,6 +5118,10 @@ select:disabled {
   --lecture-flashcard-drag-y: 0px;
   --lecture-flashcard-drag-rotation: 0deg;
   --lecture-flashcard-drag-progress: 0;
+  --lecture-flashcard-drag-easy-background: rgba(230, 246, 234, 0.9);
+  --lecture-flashcard-drag-easy-color: #16a34a;
+  --lecture-flashcard-drag-again-background: rgba(253, 233, 230, 0.9);
+  --lecture-flashcard-drag-again-color: #dc2626;
   --lecture-flashcard-hover-y: 0px;
   position: relative;
   display: block;
@@ -5236,13 +5267,13 @@ select:disabled {
 }
 
 .lecture-flashcard.drag-easy .lecture-flashcard-drag-overlay {
-  background: rgba(230, 246, 234, 0.9);
-  color: #16a34a;
+  background: var(--lecture-flashcard-drag-easy-background);
+  color: var(--lecture-flashcard-drag-easy-color);
 }
 
 .lecture-flashcard.drag-again .lecture-flashcard-drag-overlay {
-  background: rgba(253, 233, 230, 0.9);
-  color: #dc2626;
+  background: var(--lecture-flashcard-drag-again-background);
+  color: var(--lecture-flashcard-drag-again-color);
 }
 
 .lecture-flashcard-citations {
@@ -5603,6 +5634,13 @@ select:disabled {
   color: color-mix(in srgb, var(--green) 92%, #208442);
 }
 
+:root[data-theme="dark"] .lecture-flashcard {
+  --lecture-flashcard-drag-easy-background: color-mix(in srgb, var(--surface-solid) 78%, var(--green));
+  --lecture-flashcard-drag-easy-color: var(--green);
+  --lecture-flashcard-drag-again-background: color-mix(in srgb, var(--surface-solid) 78%, var(--red));
+  --lecture-flashcard-drag-again-color: var(--red);
+}
+
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) .lecture-flashcard-stage-meta span,
   :root:not([data-theme]) .lecture-quiz-meta span,
@@ -5802,6 +5840,16 @@ select:disabled {
     border-color: color-mix(in srgb, var(--green) 45%, var(--separator-strong));
     background: linear-gradient(180deg, #f4fcf6, #e1f5e5);
     color: color-mix(in srgb, var(--green) 92%, #208442);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .lecture-flashcard,
+  :root[data-theme="system"] .lecture-flashcard {
+    --lecture-flashcard-drag-easy-background: color-mix(in srgb, var(--surface-solid) 78%, var(--green));
+    --lecture-flashcard-drag-easy-color: var(--green);
+    --lecture-flashcard-drag-again-background: color-mix(in srgb, var(--surface-solid) 78%, var(--red));
+    --lecture-flashcard-drag-again-color: var(--red);
   }
 }
 

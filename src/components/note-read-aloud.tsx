@@ -650,11 +650,16 @@ export function NoteReadAloud({
     NOTE_TTS_HIGHLIGHT_COLORS.find((color) => color.id === highlightColorId) ??
     NOTE_TTS_HIGHLIGHT_COLORS[0];
   const readAlongStyle = {
-    "--note-read-read-bg": highlightColor.readBackground,
-    "--note-read-read-color": highlightColor.readColor,
-    "--note-read-current-bg": highlightColor.currentBackground,
-    "--note-read-current-color": highlightColor.currentColor,
-    "--note-read-current-ring": highlightColor.currentRing,
+    "--note-read-read-bg-light": highlightColor.readBackground,
+    "--note-read-read-color-light": highlightColor.readColor,
+    "--note-read-current-bg-light": highlightColor.currentBackground,
+    "--note-read-current-color-light": highlightColor.currentColor,
+    "--note-read-current-ring-light": highlightColor.currentRing,
+    "--note-read-read-bg-dark": highlightColor.darkReadBackground,
+    "--note-read-read-color-dark": highlightColor.darkReadColor,
+    "--note-read-current-bg-dark": highlightColor.darkCurrentBackground,
+    "--note-read-current-color-dark": highlightColor.darkCurrentColor,
+    "--note-read-current-ring-dark": highlightColor.darkCurrentRing,
   } as CSSProperties;
 
   useEffect(() => {
@@ -1349,7 +1354,7 @@ export function NoteReadAloud({
           <span className="mobile-note-read-pill-label">{playButtonLabel}</span>
         </button>
       </ViewportPortal>
-      <div ref={contentRef} style={readAlongStyle}>
+      <div ref={contentRef} className="note-read-content" style={readAlongStyle}>
         <ReadAlongMarkdown
           document={document}
           completedWordIndex={completedWordIndex}

@@ -691,6 +691,8 @@ export function NoteSourceModal({
       return;
     }
 
+    sourceSheetSuppressClickRef.current = false;
+
     const target = event.target;
     if (target instanceof Element && target.closest(".note-source-segmented")) {
       return;
@@ -702,20 +704,13 @@ export function NoteSourceModal({
         : null;
     const dragHandleTarget =
       target instanceof Element ? target.closest(".note-source-modal-drag-handle") : null;
-    const draggableInteractiveTarget =
-      target instanceof Element
-        ? target.closest(
-            ".note-source-guide-entry, .ios-card, .ios-primary-button, .ios-secondary-button",
-          )
-        : null;
 
-    if (interactiveTarget && !dragHandleTarget && !draggableInteractiveTarget) {
+    if (interactiveTarget && !dragHandleTarget) {
       return;
     }
 
-    sourceSheetSuppressClickRef.current = false;
     sourceSheetDragStartYRef.current = event.clientY;
-    if (!interactiveTarget || dragHandleTarget || draggableInteractiveTarget) {
+    if (!interactiveTarget || dragHandleTarget) {
       event.currentTarget.setPointerCapture(event.pointerId);
     }
   }

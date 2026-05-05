@@ -382,11 +382,7 @@ export function HomeDashboard({
     const dragHandleTarget =
       target instanceof Element ? target.closest(".mobile-create-menu-drag-handle") : null;
 
-    if (
-      interactiveTarget &&
-      !dragHandleTarget &&
-      !(interactiveTarget as Element).closest(".note-action-card")
-    ) {
+    if (interactiveTarget && !dragHandleTarget) {
       return;
     }
 

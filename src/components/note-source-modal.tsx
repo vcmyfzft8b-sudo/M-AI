@@ -6,7 +6,16 @@ import {
   ChevronDown,
   Loader2,
 } from "lucide-react";
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 
 import { EmojiIcon } from "@/components/emoji-icon";
@@ -186,6 +195,7 @@ export function NoteSourceModal({
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
+  const inlineTextAreaRef = useRef<HTMLTextAreaElement | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -195,6 +205,9 @@ export function NoteSourceModal({
   const activeRequestControllerRef = useRef<AbortController | null>(null);
   const createdLectureIdRef = useRef<string | null>(null);
   const cancelRequestedRef = useRef(false);
+  const sourceSheetDragStartYRef = useRef<number | null>(null);
+  const sourceSheetDragOffsetRef = useRef(0);
+  const sourceSheetSuppressClickRef = useRef(false);
 
   const recordingMimeType = useMemo(() => pickRecorderMimeType(), []);
 
@@ -217,6 +230,7 @@ export function NoteSourceModal({
   const [scannedFileNames, setScannedFileNames] = useState<string[]>([]);
   const [visualizerStream, setVisualizerStream] = useState<MediaStream | null>(null);
   const [showAudioImportGuide, setShowAudioImportGuide] = useState(false);
+  const [sourceSheetDragOffset, setSourceSheetDragOffset] = useState(0);
 
   useEffect(() => {
     if (mode) {
@@ -286,6 +300,34 @@ export function NoteSourceModal({
   const canGenerateText =
     Boolean(pdfSource) || photoSources.length > 0 || combinedTextSource.length >= 120;
   const canGenerateLink = trimmedLinkValue.length > 0 && !linkVideoError;
+
+  useEffect(() => {
+    if (!open || selectedMode !== "text") {
+      return;
+    }
+
+    const textarea = inlineTextAreaRef.current;
+
+    if (!textarea) {
+      return;
+    }
+
+    const rootFontSize =
+      Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+    const compactHeight = 4.5 * rootFontSize;
+    const emptyHeight = 6.25 * rootFontSize;
+    const filledMinHeight = 7.25 * rootFontSize;
+    const maxHeight = Math.min(
+      9.5 * rootFontSize,
+      Math.max(filledMinHeight, window.innerHeight * 0.18),
+    );
+    const minHeight = pdfSource ? compactHeight : trimmedTextValue ? filledMinHeight : emptyHeight;
+
+    textarea.style.height = `${minHeight}px`;
+    const nextHeight = Math.min(maxHeight, Math.max(minHeight, textarea.scrollHeight));
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > nextHeight + 1 ? "auto" : "hidden";
+  }, [open, pdfSource, selectedMode, textValue, trimmedTextValue]);
 
   function redirectToPaywall() {
     onClose();
@@ -609,6 +651,10 @@ export function NoteSourceModal({
   }, []);
 
   const requestClose = useCallback(() => {
+    sourceSheetDragStartYRef.current = null;
+    sourceSheetDragOffsetRef.current = 0;
+    setSourceSheetDragOffset(0);
+
     if (showAudioImportGuide) {
       setShowAudioImportGuide(false);
       return;
@@ -639,6 +685,94 @@ export function NoteSourceModal({
     showAudioImportGuide,
     stopRecording,
   ]);
+
+  function handleSourceSheetPointerDown(event: ReactPointerEvent<HTMLElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+
+    sourceSheetSuppressClickRef.current = false;
+    sourceSheetDragStartYRef.current = null;
+
+    const target = event.target;
+    if (target instanceof Element && target.closest(".note-source-segmented")) {
+      return;
+    }
+
+    const interactiveTarget =
+      target instanceof Element
+        ? target.closest("button, a, input, textarea, select, label, .app-close-button")
+        : null;
+    const dragHandleTarget =
+      target instanceof Element ? target.closest(".note-source-modal-drag-handle") : null;
+
+    if (interactiveTarget && !dragHandleTarget) {
+      return;
+    }
+
+    sourceSheetDragStartYRef.current = event.clientY;
+    if (!interactiveTarget || dragHandleTarget) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+  }
+
+  function updateSourceSheetDragOffset(clientY: number) {
+    if (sourceSheetDragStartYRef.current === null) {
+      return;
+    }
+
+    const nextOffset = Math.max(0, clientY - sourceSheetDragStartYRef.current);
+    sourceSheetDragOffsetRef.current = nextOffset;
+    if (nextOffset > 8) {
+      sourceSheetSuppressClickRef.current = true;
+    }
+    setSourceSheetDragOffset(nextOffset);
+  }
+
+  function handleSourceSheetClickCapture(event: ReactMouseEvent<HTMLElement>) {
+    if (!sourceSheetSuppressClickRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    sourceSheetSuppressClickRef.current = false;
+  }
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function handleWindowPointerMove(event: PointerEvent) {
+      updateSourceSheetDragOffset(event.clientY);
+    }
+
+    function handleWindowPointerEnd() {
+      if (sourceSheetDragOffsetRef.current > 80) {
+        sourceSheetDragStartYRef.current = null;
+        sourceSheetDragOffsetRef.current = window.innerHeight;
+        setSourceSheetDragOffset(window.innerHeight);
+        window.setTimeout(() => {
+          requestCloseRef.current();
+        }, 180);
+        return;
+      }
+
+      sourceSheetDragStartYRef.current = null;
+      sourceSheetDragOffsetRef.current = 0;
+      setSourceSheetDragOffset(0);
+    }
+
+    window.addEventListener("pointermove", handleWindowPointerMove);
+    window.addEventListener("pointerup", handleWindowPointerEnd);
+    window.addEventListener("pointercancel", handleWindowPointerEnd);
+    return () => {
+      window.removeEventListener("pointermove", handleWindowPointerMove);
+      window.removeEventListener("pointerup", handleWindowPointerEnd);
+      window.removeEventListener("pointercancel", handleWindowPointerEnd);
+    };
+  }, [open]);
 
   useEffect(() => {
     requestCloseRef.current = requestClose;
@@ -1242,7 +1376,21 @@ export function NoteSourceModal({
         aria-label="Nov zapisek"
       >
         <div className="ios-sheet-stack note-source-modal-stack">
-          <section className="ios-sheet note-source-sheet note-source-modal">
+          <section
+            className="ios-sheet note-source-sheet note-source-modal mobile-draggable-sheet"
+            onPointerDown={handleSourceSheetPointerDown}
+            onClickCapture={handleSourceSheetClickCapture}
+            style={
+              sourceSheetDragOffset > 0
+                ? { transform: `translateY(${sourceSheetDragOffset}px)` }
+                : undefined
+            }
+          >
+            <button
+              type="button"
+              className="mobile-sheet-drag-handle note-source-modal-drag-handle"
+              aria-label="Povleci navzdol za zapiranje"
+            />
             <div className="ios-sheet-header note-source-header">
               <div className="note-source-header-main">
                 {showAudioImportGuide ? (
@@ -1350,7 +1498,12 @@ export function NoteSourceModal({
                     ))}
                   </div>
                 ) : null}
-                <div className="mt-6 space-y-4 note-source-modal-body">
+                <div
+                  className={cn(
+                    "mt-6 space-y-4 note-source-modal-body",
+                    selectedMode === "text" && "note-source-modal-body-text",
+                  )}
+                >
                   {selectedMode === "record" && !isRecording ? (
                     <button
                       type="button"
@@ -1598,6 +1751,7 @@ export function NoteSourceModal({
 
                       <div className="note-source-docs-textarea-wrap">
                         <textarea
+                          ref={inlineTextAreaRef}
                           value={textValue}
                           onChange={(event) => {
                             const nextValue = event.target.value;

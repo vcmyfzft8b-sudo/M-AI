@@ -382,15 +382,13 @@ export function HomeDashboard({
     const dragHandleTarget =
       target instanceof Element ? target.closest(".mobile-create-menu-drag-handle") : null;
 
-    if (
-      interactiveTarget &&
-      !dragHandleTarget &&
-      !(interactiveTarget as Element).closest(".note-action-card")
-    ) {
+    mobileCreateMenuSuppressClickRef.current = false;
+    mobileCreateMenuDragStartYRef.current = null;
+
+    if (interactiveTarget && !dragHandleTarget) {
       return;
     }
 
-    mobileCreateMenuSuppressClickRef.current = false;
     mobileCreateMenuDragStartYRef.current = event.clientY;
     if (!interactiveTarget || dragHandleTarget) {
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -458,7 +456,6 @@ export function HomeDashboard({
       return;
     }
 
-    closeMobileCreateMenu();
     setManualModal(mode);
   }
 

@@ -9772,6 +9772,15 @@ select:disabled {
     overflow-y: auto;
   }
 
+  .note-source-modal-body-loading {
+    grid-row: 3 / -1;
+    align-self: stretch;
+    min-height: 0;
+    display: grid;
+    align-content: center;
+    overflow: hidden;
+  }
+
   .note-source-modal-body-text {
     align-content: stretch;
     gap: 0;

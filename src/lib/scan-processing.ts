@@ -178,14 +178,6 @@ export async function processStoredScanLecture(
       }
 
       if (artifact) {
-        await prepareInitialNoteTtsChunk({
-          userId: lectureRow.user_id,
-          lectureId: lectureRow.id,
-          content: (artifact as { structured_notes_md: string }).structured_notes_md,
-          title: lectureRow.title,
-          languageHint: lectureRow.language_hint,
-        });
-
         const { error: updateError } = await supabase
           .from("lectures")
           .update(
@@ -207,6 +199,18 @@ export async function processStoredScanLecture(
 
         if (updateError) {
           throw new Error(updateError.message);
+        }
+
+        try {
+          await prepareInitialNoteTtsChunk({
+            userId: lectureRow.user_id,
+            lectureId: lectureRow.id,
+            content: (artifact as { structured_notes_md: string }).structured_notes_md,
+            title: lectureRow.title,
+            languageHint: lectureRow.language_hint,
+          });
+        } catch (error) {
+          console.warn("Initial note TTS preparation failed; lecture remains ready.", error);
         }
 
         return { needsNotesGeneration: false };

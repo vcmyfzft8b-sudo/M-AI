@@ -12,12 +12,14 @@ export type GeminiUsageMetadata = {
   totalTokenCount?: number;
 };
 
-export type GeminiUsageContext = {
+export type AiUsageContext = {
   stage?: string;
   userId?: string | null;
   lectureId?: string | null;
   metadata?: Record<string, unknown>;
 };
+
+export type GeminiUsageContext = AiUsageContext;
 
 type GeminiModelPrice = {
   inputUsdPerMillion: number;
@@ -36,6 +38,17 @@ const GEMINI_MODEL_PRICES: Record<string, GeminiModelPrice> = {
   "gemini-2.5-flash-lite": {
     inputUsdPerMillion: 0.1,
     outputUsdPerMillion: 0.4,
+  },
+};
+
+const DEEPSEEK_MODEL_PRICES: Record<string, GeminiModelPrice> = {
+  "deepseek-v4-flash": {
+    inputUsdPerMillion: 0.14,
+    outputUsdPerMillion: 0.28,
+  },
+  "deepseek-v4-pro": {
+    inputUsdPerMillion: 0.435,
+    outputUsdPerMillion: 0.87,
   },
 };
 
@@ -99,7 +112,19 @@ export function estimateGeminiCostUsd(
   model: string,
   usageMetadata: GeminiUsageMetadata | null | undefined,
 ) {
-  const prices = GEMINI_MODEL_PRICES[model.toLowerCase().replace(/^models\//, "")];
+  return estimateAiCostUsd("gemini", model, usageMetadata);
+}
+
+export function estimateAiCostUsd(
+  provider: string,
+  model: string,
+  usageMetadata: GeminiUsageMetadata | null | undefined,
+) {
+  const normalizedModel = model.toLowerCase().replace(/^models\//, "");
+  const prices =
+    provider === "deepseek"
+      ? DEEPSEEK_MODEL_PRICES[normalizedModel]
+      : GEMINI_MODEL_PRICES[normalizedModel];
 
   if (!prices || !usageMetadata) {
     return null;
@@ -120,13 +145,14 @@ export function estimateGeminiCostUsd(
   return Math.round(cost * 100_000_000) / 100_000_000;
 }
 
-export async function logGeminiUsageEvent(params: {
+export async function logAiUsageEvent(params: {
+  provider: "gemini" | "deepseek";
   model: string;
   stage: string;
   attemptIndex: number;
   success: boolean;
   usageMetadata?: GeminiUsageMetadata | null;
-  context?: GeminiUsageContext;
+  context?: AiUsageContext;
   metadata?: Record<string, unknown>;
   error?: unknown;
 }) {
@@ -150,7 +176,7 @@ export async function logGeminiUsageEvent(params: {
     const { error } = await supabase.from("ai_usage_events").insert({
       user_id: params.context?.userId ?? null,
       lecture_id: params.context?.lectureId ?? null,
-      provider: "gemini",
+      provider: params.provider,
       model: params.model,
       stage: params.stage,
       attempt_index: params.attemptIndex,
@@ -159,7 +185,7 @@ export async function logGeminiUsageEvent(params: {
       candidates_token_count: candidatesTokenCount,
       thoughts_token_count: thoughtsTokenCount,
       total_token_count: totalTokenCount,
-      estimated_cost_usd: estimateGeminiCostUsd(params.model, usage),
+      estimated_cost_usd: estimateAiCostUsd(params.provider, params.model, usage),
       error_code: params.error ? normalizeErrorCode(params.error) : null,
       error_message: params.error ? normalizeErrorMessage(params.error) : null,
       metadata: sanitizeJson({
@@ -169,9 +195,16 @@ export async function logGeminiUsageEvent(params: {
     } as never);
 
     if (error) {
-      console.warn("Failed to log Gemini usage event.", error.message);
+      console.warn("Failed to log AI usage event.", error.message);
     }
   } catch (error) {
-    console.warn("Failed to log Gemini usage event.", error);
+    console.warn("Failed to log AI usage event.", error);
   }
+}
+
+export async function logGeminiUsageEvent(params: Omit<Parameters<typeof logAiUsageEvent>[0], "provider">) {
+  return logAiUsageEvent({
+    ...params,
+    provider: "gemini",
+  });
 }

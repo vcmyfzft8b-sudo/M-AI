@@ -6,6 +6,8 @@ import { DEFAULT_NOTE_TTS_VOICE } from "@/lib/note-tts-settings";
 import { getPublicEnv } from "@/lib/public-env";
 
 const serverEnvSchema = z.object({
+  AI_GENERATION_PROVIDER: z.enum(["gemini", "deepseek"]).default("gemini"),
+  AI_GENERATION_FALLBACK_PROVIDER: z.enum(["gemini", "none"]).default("gemini"),
   NEXT_PUBLIC_SITE_URL: z.string().url().optional(),
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
@@ -15,6 +17,10 @@ const serverEnvSchema = z.object({
   GEMINI_OCR_MODEL: z.string().default("gemini-3.1-flash-lite-preview"),
   GEMINI_OCR_RESCUE_MODEL: z.string().default("gemini-3-flash-preview"),
   GEMINI_EMBEDDING_MODEL: z.string().default("gemini-embedding-001"),
+  DEEPSEEK_API_KEY: z.string().optional(),
+  DEEPSEEK_BASE_URL: z.string().url().default("https://api.deepseek.com"),
+  DEEPSEEK_TEXT_MODEL: z.string().default("deepseek-v4-flash"),
+  DEEPSEEK_REASONING_MODEL: z.string().default("deepseek-v4-pro"),
   SONIOX_API_KEY: z.string().optional(),
   SONIOX_MODEL: z.string().default("stt-async-v4"),
   SONIOX_TTS_MODEL: z.string().default("tts-rt-v1-preview"),
@@ -31,6 +37,8 @@ const serverEnvSchema = z.object({
 
 export function getServerEnv() {
   return serverEnvSchema.parse({
+    AI_GENERATION_PROVIDER: process.env.AI_GENERATION_PROVIDER,
+    AI_GENERATION_FALLBACK_PROVIDER: process.env.AI_GENERATION_FALLBACK_PROVIDER,
     NEXT_PUBLIC_SITE_URL: getPublicEnv().siteUrl,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -40,6 +48,10 @@ export function getServerEnv() {
     GEMINI_OCR_MODEL: process.env.GEMINI_OCR_MODEL,
     GEMINI_OCR_RESCUE_MODEL: process.env.GEMINI_OCR_RESCUE_MODEL,
     GEMINI_EMBEDDING_MODEL: process.env.GEMINI_EMBEDDING_MODEL,
+    DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY,
+    DEEPSEEK_BASE_URL: process.env.DEEPSEEK_BASE_URL,
+    DEEPSEEK_TEXT_MODEL: process.env.DEEPSEEK_TEXT_MODEL,
+    DEEPSEEK_REASONING_MODEL: process.env.DEEPSEEK_REASONING_MODEL,
     SONIOX_API_KEY: process.env.SONIOX_API_KEY,
     SONIOX_MODEL: process.env.SONIOX_MODEL,
     SONIOX_TTS_MODEL: process.env.SONIOX_TTS_MODEL,
@@ -56,11 +68,11 @@ export function getServerEnv() {
 }
 
 export function hasServerAiEnv() {
-  return Boolean(process.env.GEMINI_API_KEY || process.env.SONIOX_API_KEY);
+  return Boolean(process.env.GEMINI_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.SONIOX_API_KEY);
 }
 
 export function getAiProvider() {
-  return "gemini" as const;
+  return getServerEnv().AI_GENERATION_PROVIDER;
 }
 
 export function getTranscriptionProviderName() {
@@ -75,6 +87,19 @@ export function requireGeminiEnv() {
   }
 
   return env;
+}
+
+export function requireDeepSeekEnv() {
+  const env = getServerEnv();
+
+  if (!env.DEEPSEEK_API_KEY) {
+    throw new Error("DEEPSEEK_API_KEY is not configured.");
+  }
+
+  return {
+    ...env,
+    DEEPSEEK_API_KEY: env.DEEPSEEK_API_KEY,
+  };
 }
 
 export function requireSonioxEnv() {

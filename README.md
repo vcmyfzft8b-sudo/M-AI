@@ -60,13 +60,22 @@ NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 GEMINI_API_KEY=...
+DEEPSEEK_API_KEY=...
 ```
 
 3. Configure AI and transcription:
 
 ```bash
+AI_GENERATION_PROVIDER=deepseek
+AI_GENERATION_FALLBACK_PROVIDER=gemini
+
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_TEXT_MODEL=deepseek-v4-flash
+DEEPSEEK_REASONING_MODEL=deepseek-v4-pro
+
 GEMINI_TEXT_MODEL=gemini-2.5-flash-lite
-GEMINI_OCR_MODEL=gemini-3-flash-preview
+GEMINI_OCR_MODEL=gemini-3.1-flash-lite-preview
+GEMINI_OCR_RESCUE_MODEL=gemini-3-flash-preview
 GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 
 # required for transcription
@@ -74,7 +83,8 @@ SONIOX_API_KEY=...
 SONIOX_MODEL=stt-async-v4
 ```
 
-Transcription is handled by `Soniox`. Generation, chat, extraction, and embeddings use `Gemini`.
+Transcription is handled by `Soniox`. Structured generation and chat answers can use
+`DeepSeek` with `Gemini` fallback. OCR, file extraction, and embeddings stay on `Gemini`.
 
 4. Add billing and job-processing env vars as needed:
 

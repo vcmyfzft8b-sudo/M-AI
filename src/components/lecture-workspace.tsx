@@ -500,9 +500,32 @@ function practiceTestStageLabel(stage: unknown) {
   return "Pripravljam preizkus";
 }
 
-function lectureProcessingStageLabel(status: LectureDetail["lecture"]["status"]) {
+function getLectureProcessingMetadataStage(processingMetadata: LectureDetail["lecture"]["processing_metadata"]) {
+  if (!isRecord(processingMetadata) || !isRecord(processingMetadata.processing)) {
+    return null;
+  }
+
+  return typeof processingMetadata.processing.stage === "string"
+    ? processingMetadata.processing.stage
+    : null;
+}
+
+function lectureProcessingStageLabel(
+  status: LectureDetail["lecture"]["status"],
+  processingMetadata: LectureDetail["lecture"]["processing_metadata"],
+) {
+  const metadataStage = getLectureProcessingMetadataStage(processingMetadata);
+
   if (status === "uploading") {
-    return "Nalagam gradivo";
+    return "Nalagam dokument";
+  }
+
+  if (metadataStage === "extracting_text") {
+    return "Izluščujem besedilo";
+  }
+
+  if (metadataStage === "queued") {
+    return "Pripravljam zapiske";
   }
 
   if (status === "queued") {
@@ -1446,7 +1469,10 @@ export function LectureWorkspace({
       ? detail.practiceTestAsset.model_metadata.stage
       : null;
   const practiceTestStageCopy = practiceTestStageLabel(practiceTestStage);
-  const lectureProcessingStageCopy = lectureProcessingStageLabel(detail.lecture.status);
+  const lectureProcessingStageCopy = lectureProcessingStageLabel(
+    detail.lecture.status,
+    detail.lecture.processing_metadata,
+  );
   const totalFlashcards = studyDeck.length;
   const flashcardFirstPassKnownCount = studyDeck.reduce((total, flashcard) => {
     return flashcardSessionResults[flashcard.id]?.firstConfidence !== "again" &&

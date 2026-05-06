@@ -28,6 +28,26 @@ import {
 export const maxDuration = 300;
 const PDF_UPLOAD_MAX_BYTES = MAX_DOCUMENT_BYTES + 256 * 1024;
 
+function buildDocumentProcessingMetadata(params: {
+  sourceType: "pdf" | "presentation" | "text";
+  sourceFileName: string;
+  languageHint: string;
+}) {
+  return {
+    documentImport: {
+      sourceType: params.sourceType,
+      sourceFileName: params.sourceFileName,
+      languageHint: params.languageHint,
+      status: "extracting_text",
+    },
+    processing: {
+      stage: "extracting_text",
+      updatedAt: new Date().toISOString(),
+      errorMessage: null,
+    },
+  };
+}
+
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   const {
@@ -143,43 +163,90 @@ export async function POST(request: Request) {
         ? "presentation"
         : "text";
     let nextLectureId = lectureId;
-    const extracted = await extractTextFromDocument(inputFile);
-    const lectureInput = {
-      userId: user.id,
+    const titleHint = sourceFileName.replace(/\.[^.]+$/i, "");
+    const processingMetadata = buildDocumentProcessingMetadata({
       sourceType,
-      text: extracted.text,
-      blocks: extracted.pages.map((page) => ({
-        label: sourceType === "presentation" ? `Prosojnica ${page.pageNumber}` : `Stran ${page.pageNumber}`,
-        pageNumber: page.pageNumber,
-        text: page.text,
-      })),
-      titleHint: extracted.title || sourceFileName.replace(/\.[^.]+$/i, ""),
+      sourceFileName,
       languageHint,
-      modelMetadata: {
-        importMode:
-          sourceType === "pdf"
-            ? "pdf"
-            : sourceType === "presentation"
-              ? "presentation"
-              : "document",
-        sourceFileName,
-      },
-    };
+    });
+    const queuedFileBytes = Buffer.from(await inputFile.arrayBuffer());
 
     if (!nextLectureId) {
-      nextLectureId = await prepareLectureFromTextSource({
-        ...lectureInput,
-      });
+      const { data: lecture, error: createError } = await supabase
+        .from("lectures")
+        .insert(
+          {
+            user_id: user.id,
+            source_type: sourceType,
+            access_tier: entitlement.hasPaidAccess ? "paid" : "trial",
+            status: "queued",
+            language_hint: languageHint,
+            title: titleHint,
+            error_message: null,
+            processing_metadata: processingMetadata,
+          } as never,
+        )
+        .select("id")
+        .single();
+
+      if (createError || !lecture) {
+        throw new Error(createError?.message ?? "Zapiska ni bilo mogoče ustvariti.");
+      }
+
+      nextLectureId = (lecture as { id: string }).id;
     } else {
-      await prepareLectureFromTextSource({
-        ...lectureInput,
-        lectureId: nextLectureId,
-      });
+      const { error: updateError } = await supabase
+        .from("lectures")
+        .update(
+          {
+            source_type: sourceType,
+            status: "queued",
+            language_hint: languageHint,
+            title: titleHint,
+            error_message: null,
+            processing_metadata: processingMetadata,
+          } as never,
+        )
+        .eq("id", nextLectureId)
+        .eq("user_id", user.id);
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
     }
 
     const queuedLectureId = nextLectureId;
     after(async () => {
       try {
+        const queuedFile = new File([queuedFileBytes], inputFile.name || sourceFileName, {
+          type: inputFile.type,
+          lastModified: inputFile.lastModified,
+        });
+        const extracted = await extractTextFromDocument(queuedFile);
+        const lectureInput = {
+          userId: user.id,
+          sourceType,
+          text: extracted.text,
+          blocks: extracted.pages.map((page) => ({
+            label: sourceType === "presentation" ? `Prosojnica ${page.pageNumber}` : `Stran ${page.pageNumber}`,
+            pageNumber: page.pageNumber,
+            text: page.text,
+          })),
+          titleHint: extracted.title || titleHint,
+          languageHint,
+          modelMetadata: {
+            importMode:
+              sourceType === "pdf"
+                ? "pdf"
+                : sourceType === "presentation"
+                  ? "presentation"
+                  : "document",
+            sourceFileName,
+          },
+          lectureId: queuedLectureId,
+        };
+
+        await prepareLectureFromTextSource(lectureInput);
         await enqueueLectureNotesGeneration(queuedLectureId);
       } catch (error) {
         await markLecturePipelineFailed({ lectureId: queuedLectureId, error });

@@ -46,10 +46,6 @@ const DEEPSEEK_MODEL_PRICES: Record<string, GeminiModelPrice> = {
     inputUsdPerMillion: 0.14,
     outputUsdPerMillion: 0.28,
   },
-  "deepseek-v4-pro": {
-    inputUsdPerMillion: 0.435,
-    outputUsdPerMillion: 0.87,
-  },
 };
 
 function toFiniteInteger(value: unknown) {

@@ -71,7 +71,6 @@ AI_GENERATION_FALLBACK_PROVIDER=gemini
 
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_TEXT_MODEL=deepseek-v4-flash
-DEEPSEEK_REASONING_MODEL=deepseek-v4-pro
 
 GEMINI_TEXT_MODEL=gemini-2.5-flash-lite
 GEMINI_OCR_MODEL=gemini-3.1-flash-lite-preview

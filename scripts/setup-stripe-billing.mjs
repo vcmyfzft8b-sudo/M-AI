@@ -1,7 +1,8 @@
 import Stripe from "stripe";
 
-const MEMO50_COUPON_ID = "memo50-first-cycle";
-const MEMO50_PROMOTION_CODE = "MEMO50";
+const FIRST_CYCLE_DISCOUNT_COUPON_ID = "memo50-first-cycle";
+const FIRST_CYCLE_DISCOUNT_PERCENT = 50;
+const FIRST_CYCLE_PROMOTION_CODES = ["MEMO50", "DAVID50"];
 const BILLING_WEBHOOK_DESCRIPTION = "Memo billing sync";
 const BILLING_WEBHOOK_EVENTS = [
   "checkout.session.completed",
@@ -102,25 +103,29 @@ function getPromotionCodeCouponId(promotionCode) {
   return typeof coupon === "string" ? coupon : coupon?.id ?? null;
 }
 
-function assertMemo50Coupon(coupon, productId) {
+function assertFirstCycleDiscountCoupon(coupon, productId) {
   if (coupon.deleted) {
-    throw new Error(`Stripe coupon ${MEMO50_COUPON_ID} was deleted and cannot be reused.`);
+    throw new Error(`Stripe coupon ${FIRST_CYCLE_DISCOUNT_COUPON_ID} was deleted and cannot be reused.`);
   }
 
   const products = coupon.applies_to?.products ?? [];
-  const appliesToProduct = products.length === 1 && products[0] === productId;
+  const appliesToProduct = products.length === 0 || (products.length === 1 && products[0] === productId);
 
-  if (coupon.percent_off !== 50 || coupon.duration !== "once" || !appliesToProduct) {
+  if (
+    coupon.percent_off !== FIRST_CYCLE_DISCOUNT_PERCENT ||
+    coupon.duration !== "once" ||
+    !appliesToProduct
+  ) {
     throw new Error(
-      `Stripe coupon ${MEMO50_COUPON_ID} already exists, but it is not a 50% first-cycle discount for product ${productId}.`,
+      `Stripe coupon ${FIRST_CYCLE_DISCOUNT_COUPON_ID} already exists, but it is not a ${FIRST_CYCLE_DISCOUNT_PERCENT}% first-cycle discount usable for product ${productId}.`,
     );
   }
 }
 
-async function findOrCreateMemo50Coupon(stripe, productId) {
+async function findOrCreateFirstCycleDiscountCoupon(stripe, productId) {
   try {
-    const coupon = await stripe.coupons.retrieve(MEMO50_COUPON_ID);
-    assertMemo50Coupon(coupon, productId);
+    const coupon = await stripe.coupons.retrieve(FIRST_CYCLE_DISCOUNT_COUPON_ID);
+    assertFirstCycleDiscountCoupon(coupon, productId);
     return coupon;
   } catch (error) {
     if (!isStripeMissingResourceError(error)) {
@@ -129,9 +134,9 @@ async function findOrCreateMemo50Coupon(stripe, productId) {
   }
 
   return stripe.coupons.create({
-    id: MEMO50_COUPON_ID,
-    name: "MEMO50 - 50% off first billing cycle",
-    percent_off: 50,
+    id: FIRST_CYCLE_DISCOUNT_COUPON_ID,
+    name: "50% off first billing cycle",
+    percent_off: FIRST_CYCLE_DISCOUNT_PERCENT,
     duration: "once",
     applies_to: {
       products: [productId],
@@ -139,12 +144,12 @@ async function findOrCreateMemo50Coupon(stripe, productId) {
     metadata: {
       app: "memo",
       billing_key: "pro",
-      promotion_code: MEMO50_PROMOTION_CODE,
+      promotion_codes: FIRST_CYCLE_PROMOTION_CODES.join(","),
     },
   });
 }
 
-function assertMemo50PromotionCode(promotionCode, couponId) {
+function assertFirstCyclePromotionCode(promotionCode, couponId, code) {
   const couponMatches = getPromotionCodeCouponId(promotionCode) === couponId;
   const isCustomerRestricted = Boolean(promotionCode.customer || promotionCode.customer_account);
   const hasUsageLimit = promotionCode.max_redemptions !== null;
@@ -161,26 +166,26 @@ function assertMemo50PromotionCode(promotionCode, couponId) {
     hasMinimumAmount
   ) {
     throw new Error(
-      `Active Stripe promotion code ${MEMO50_PROMOTION_CODE} already exists, but it does not match the expected unrestricted first-cycle discount.`,
+      `Active Stripe promotion code ${code} already exists, but it does not match the expected unrestricted first-cycle discount.`,
     );
   }
 }
 
-async function findOrCreateMemo50PromotionCode(stripe, couponId) {
+async function findOrCreateFirstCyclePromotionCode(stripe, couponId, code) {
   const existingCodes = await stripe.promotionCodes.list({
     active: true,
-    code: MEMO50_PROMOTION_CODE,
+    code,
     limit: 100,
   });
   const existing = existingCodes.data[0] ?? null;
 
   if (existing) {
-    assertMemo50PromotionCode(existing, couponId);
+    assertFirstCyclePromotionCode(existing, couponId, code);
     return existing;
   }
 
   return stripe.promotionCodes.create({
-    code: MEMO50_PROMOTION_CODE,
+    code,
     active: true,
     promotion: {
       type: "coupon",
@@ -190,6 +195,7 @@ async function findOrCreateMemo50PromotionCode(stripe, couponId) {
       app: "memo",
       billing_key: "pro",
       coupon_id: couponId,
+      promotion_code: code,
     },
   });
 }
@@ -401,8 +407,12 @@ async function main() {
     intervalCount: 1,
   });
 
-  const memo50Coupon = await findOrCreateMemo50Coupon(stripe, product.id);
-  const memo50PromotionCode = await findOrCreateMemo50PromotionCode(stripe, memo50Coupon.id);
+  const firstCycleDiscountCoupon = await findOrCreateFirstCycleDiscountCoupon(stripe, product.id);
+  const firstCyclePromotionCodes = await Promise.all(
+    FIRST_CYCLE_PROMOTION_CODES.map((code) =>
+      findOrCreateFirstCyclePromotionCode(stripe, firstCycleDiscountCoupon.id, code),
+    ),
+  );
 
   const portal = await ensureBillingPortalConfiguration(stripe, `${siteUrl}/app/settings`);
   const webhookResult = await ensureWebhookEndpoint(stripe, webhookUrl);
@@ -414,8 +424,10 @@ async function main() {
   console.log(`Weekly price: ${weekly.id}`);
   console.log(`Monthly price: ${monthly.id}`);
   console.log(`Yearly price: ${yearly.id}`);
-  console.log(`MEMO50 coupon: ${memo50Coupon.id}`);
-  console.log(`MEMO50 promotion code: ${memo50PromotionCode.id} (${memo50PromotionCode.code})`);
+  console.log(`First-cycle discount coupon: ${firstCycleDiscountCoupon.id}`);
+  for (const promotionCode of firstCyclePromotionCodes) {
+    console.log(`Promotion code: ${promotionCode.id} (${promotionCode.code})`);
+  }
   console.log(`Billing portal config: ${portal.id}`);
   console.log("");
   console.log("Add these env vars:");

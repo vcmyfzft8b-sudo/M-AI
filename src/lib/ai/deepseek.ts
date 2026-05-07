@@ -6,8 +6,8 @@ import { isRetryableAiError } from "@/lib/ai/errors";
 import { logAiUsageEvent, type AiUsageContext, type GeminiUsageMetadata } from "@/lib/ai/usage-logging";
 import { requireDeepSeekEnv } from "@/lib/server-env";
 
-const DEEPSEEK_GENERATION_MAX_ATTEMPTS = 4;
-const DEEPSEEK_GENERATION_TIMEOUT_MS = 90_000;
+const DEEPSEEK_GENERATION_MAX_ATTEMPTS = 2;
+const DEEPSEEK_GENERATION_TIMEOUT_MS = 45_000;
 const DEEPSEEK_RETRY_BASE_DELAY_MS = 1_500;
 
 type DeepSeekUsage = {
@@ -135,6 +135,7 @@ async function createDeepSeekChatCompletion(params: {
   input: string;
   responseSchema: unknown;
   maxOutputTokens?: number;
+  signal?: AbortSignal;
 }) {
   const response = await fetch(`${params.baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
@@ -166,6 +167,7 @@ ${params.input}`,
       temperature: 0.2,
       thinking: { type: "disabled" },
     }),
+    signal: params.signal,
   });
 
   const responseText = await response.text();
@@ -244,6 +246,7 @@ export async function generateStructuredObjectWithDeepSeek<TSchema extends z.Zod
       : undefined;
     let response: DeepSeekChatResponse | undefined;
     let usageMetadata: GeminiUsageMetadata | null = null;
+    const controller = new AbortController();
 
     try {
       response = await withTimeout(
@@ -255,6 +258,7 @@ export async function generateStructuredObjectWithDeepSeek<TSchema extends z.Zod
           input: params.input,
           responseSchema,
           maxOutputTokens,
+          signal: controller.signal,
         }),
         DEEPSEEK_GENERATION_TIMEOUT_MS,
         "DeepSeek structured generation",
@@ -287,6 +291,8 @@ export async function generateStructuredObjectWithDeepSeek<TSchema extends z.Zod
 
       return parsed;
     } catch (error) {
+      controller.abort();
+
       await logDeepSeekGenerationAttempt({
         model,
         stage: "deepseek_structured_text",

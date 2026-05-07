@@ -9,6 +9,8 @@ const AUDIO_UNIT_MAX_WORDS = 115;
 const AUDIO_SECTION_TARGET_MS = 6 * 60 * 1000;
 const AUDIO_SEGMENT_SPLIT_TARGET_WORDS = 55;
 const AUDIO_SEGMENT_SPLIT_MAX_WORDS = 80;
+const DOCUMENT_UNIT_TARGET_WORDS = 90;
+const DOCUMENT_UNIT_MAX_WORDS = 130;
 
 function normalizeLabel(value: string | null | undefined) {
   return value?.replace(/\s+/g, " ").trim() || null;
@@ -257,11 +259,55 @@ function buildDocumentSourceUnits(params: {
   const units: SourceUnit[] = [];
   let currentSectionLabel: string | null = null;
   let currentSectionIndex = -1;
+  let activeSegments: TranscriptSegmentRow[] = [];
+  let activeWordCount = 0;
+  let activeSectionLabel: string | null = null;
+  let activeSectionIndex = 0;
+  let activePageNumber: number | null = null;
+  let activeSectionTitle = "";
+
+  function flushActiveSegments() {
+    if (activeSegments.length === 0) {
+      return;
+    }
+
+    const text = activeSegments.map((segment) => segment.text).join("\n").trim();
+    const firstSegment = activeSegments[0];
+    const lastSegment = activeSegments[activeSegments.length - 1];
+
+    units.push({
+      lectureId: params.lecture.id,
+      unitIndex: units.length,
+      sectionIndex: Math.max(activeSectionIndex, 0),
+      sectionTitle: activeSectionTitle,
+      sourceType: params.lecture.source_type,
+      locatorLabel:
+        params.lecture.source_type === "pdf"
+          ? activeSectionLabel || `Page ${activePageNumber ?? activeSectionIndex + 1}`
+          : params.lecture.source_type === "presentation"
+            ? activeSectionLabel || `Slide ${activePageNumber ?? activeSectionIndex + 1}`
+            : activeSectionLabel || `Section ${activeSectionIndex + 1}`,
+      startMs: firstSegment.start_ms,
+      endMs: lastSegment.end_ms,
+      pageNumber: activePageNumber,
+      text,
+      wordCount: activeWordCount,
+      importance: inferImportance(text),
+      rawSourceRef: {
+        segmentIndexes: activeSegments.map((segment) => segment.idx),
+        speakerLabel: activeSectionLabel,
+      },
+    });
+
+    activeSegments = [];
+    activeWordCount = 0;
+  }
 
   for (const segment of params.transcript) {
     const label = normalizeLabel(segment.speaker_label);
 
     if (currentSectionIndex < 0 || label !== currentSectionLabel) {
+      flushActiveSegments();
       currentSectionLabel = label;
       currentSectionIndex += 1;
     }
@@ -274,31 +320,26 @@ function buildDocumentSourceUnits(params: {
         : params.lecture.source_type === "presentation"
           ? `Slide ${pageNumber ?? currentSectionIndex + 1}`
           : `Section ${currentSectionIndex + 1}`);
+    const segmentWordCount = countWords(segment.text);
+    const shouldFlush =
+      activeSegments.length > 0 &&
+      activeSectionLabel === label &&
+      (activeWordCount + segmentWordCount > DOCUMENT_UNIT_MAX_WORDS ||
+        activeWordCount >= DOCUMENT_UNIT_TARGET_WORDS);
 
-    units.push({
-      lectureId: params.lecture.id,
-      unitIndex: units.length,
-      sectionIndex: Math.max(currentSectionIndex, 0),
-      sectionTitle,
-      sourceType: params.lecture.source_type,
-      locatorLabel:
-        params.lecture.source_type === "pdf"
-          ? label || `Page ${pageNumber ?? currentSectionIndex + 1}`
-          : params.lecture.source_type === "presentation"
-            ? label || `Slide ${pageNumber ?? currentSectionIndex + 1}`
-          : label || `Section ${currentSectionIndex + 1}`,
-      startMs: segment.start_ms,
-      endMs: segment.end_ms,
-      pageNumber,
-      text: segment.text,
-      wordCount: countWords(segment.text),
-      importance: inferImportance(segment.text),
-      rawSourceRef: {
-        segmentIndexes: [segment.idx],
-        speakerLabel: label,
-      },
-    });
+    if (shouldFlush) {
+      flushActiveSegments();
+    }
+
+    activeSectionLabel = label;
+    activeSectionIndex = currentSectionIndex;
+    activePageNumber = pageNumber;
+    activeSectionTitle = sectionTitle;
+    activeSegments.push(segment);
+    activeWordCount += segmentWordCount;
   }
+
+  flushActiveSegments();
 
   return units;
 }

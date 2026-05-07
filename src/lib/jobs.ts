@@ -16,6 +16,8 @@ export type LectureProcessingStage = "transcribe" | "generate_notes";
 
 const INTERNAL_LECTURE_PROCESSING_PATH = "/api/internal/lectures/process";
 const INTERNAL_LECTURE_SCAN_PATH = "/api/internal/lectures/scan";
+const INTERNAL_LECTURE_STUDY_PATH = "/api/internal/lectures/study";
+const INTERNAL_LECTURE_QUIZ_PATH = "/api/internal/lectures/quiz";
 const INTERNAL_LECTURE_PRACTICE_TEST_PATH = "/api/internal/lectures/practice-test";
 
 function getInternalJobBaseUrl(publicSiteUrl?: string) {
@@ -213,6 +215,15 @@ export async function enqueueLectureStudyGeneration(lectureId: string) {
     return;
   }
 
+  if (
+    await tryEnqueueInternalLectureJob({
+      lectureId,
+      path: INTERNAL_LECTURE_STUDY_PATH,
+    })
+  ) {
+    return;
+  }
+
   await generateLectureFlashcards({ lectureId }).catch((error) => {
     console.error("Lecture study generation failed", { lectureId, error });
   });
@@ -226,6 +237,15 @@ export async function enqueueLectureQuizGeneration(lectureId: string) {
       name: "lecture/quiz.requested",
       data: { lectureId },
     });
+    return;
+  }
+
+  if (
+    await tryEnqueueInternalLectureJob({
+      lectureId,
+      path: INTERNAL_LECTURE_QUIZ_PATH,
+    })
+  ) {
     return;
   }
 

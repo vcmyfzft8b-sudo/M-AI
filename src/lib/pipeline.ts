@@ -458,6 +458,14 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
     throw artifactError;
   }
 
+  await prepareInitialNoteTtsChunk({
+    userId: lecture.user_id,
+    lectureId: lecture.id,
+    content: notes.structuredNotesMd,
+    title: notes.title,
+    languageHint: lecture.language_hint,
+  });
+
   await updateLectureProcessingState({
     lectureId: lecture.id,
     processingMetadata: lecture.processing_metadata,
@@ -465,26 +473,6 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
     title: notes.title,
     durationSeconds: lecture.duration_seconds,
   });
-
-  try {
-    await prepareInitialNoteTtsChunk({
-      userId: lecture.user_id,
-      lectureId: lecture.id,
-      content: notes.structuredNotesMd,
-      title: notes.title,
-      languageHint: lecture.language_hint,
-    });
-  } catch (error) {
-    captureRouteError(error, {
-      route: "lecture-pipeline",
-      operation: "prepareInitialNoteTtsChunk",
-      lectureId: lecture.id,
-      userId: lecture.user_id,
-      tags: {
-        sourceType: lecture.source_type ?? "unknown",
-      },
-    });
-  }
 }
 
 export async function markLecturePipelineFailed(params: {

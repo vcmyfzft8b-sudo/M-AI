@@ -1327,6 +1327,14 @@ export async function createLectureFromTextSource(params: {
       throw new Error(artifactError.message);
     }
 
+    await prepareInitialNoteTtsChunk({
+      userId: params.userId,
+      lectureId,
+      content: notes.structuredNotesMd,
+      title: notes.title,
+      languageHint: params.languageHint ?? "sl",
+    });
+
     const { data: updatedLecture, error: updateError } = await supabase
       .from("lectures")
       .update(
@@ -1347,18 +1355,6 @@ export async function createLectureFromTextSource(params: {
 
     if (!updatedLecture) {
       await requireActiveLecture(lectureId);
-    }
-
-    try {
-      await prepareInitialNoteTtsChunk({
-        userId: params.userId,
-        lectureId,
-        content: notes.structuredNotesMd,
-        title: notes.title,
-        languageHint: params.languageHint ?? "sl",
-      });
-    } catch (error) {
-      console.warn("Initial note TTS preparation failed; lecture remains ready.", error);
     }
 
     return lectureId;

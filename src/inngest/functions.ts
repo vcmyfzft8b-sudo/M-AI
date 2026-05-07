@@ -65,18 +65,9 @@ export const processLectureStudyFunction = inngest.createFunction(
   { event: "lecture/study.requested" },
   async ({ event, step }) => {
     await step.run("process-lecture-study", async () => {
-      try {
-        await generateLectureFlashcards({
-          lectureId: event.data.lectureId,
-        });
-      } catch (error) {
-        return {
-          ok: false,
-          error: error instanceof Error ? error.message : "Unknown flashcard generation error.",
-        };
-      }
-
-      return { ok: true };
+      await generateLectureFlashcards({
+        lectureId: event.data.lectureId,
+      });
     });
   },
 );
@@ -86,18 +77,9 @@ export const processLectureQuizFunction = inngest.createFunction(
   { event: "lecture/quiz.requested" },
   async ({ event, step }) => {
     await step.run("process-lecture-quiz", async () => {
-      try {
-        await generateLectureQuiz({
-          lectureId: event.data.lectureId,
-        });
-      } catch (error) {
-        return {
-          ok: false,
-          error: error instanceof Error ? error.message : "Unknown quiz generation error.",
-        };
-      }
-
-      return { ok: true };
+      await generateLectureQuiz({
+        lectureId: event.data.lectureId,
+      });
     });
   },
 );
@@ -107,20 +89,10 @@ export const processLecturePracticeTestFunction = inngest.createFunction(
   { event: "lecture/practice-test.requested" },
   async ({ event, step }) => {
     await step.run("process-lecture-practice-test", async () => {
-      try {
-        await generateLecturePracticeTest({
-          lectureId: event.data.lectureId,
-          regenerate: Boolean(event.data.regenerate),
-        });
-      } catch (error) {
-        return {
-          ok: false,
-          error:
-            error instanceof Error ? error.message : "Unknown practice-test generation error.",
-        };
-      }
-
-      return { ok: true };
+      await generateLecturePracticeTest({
+        lectureId: event.data.lectureId,
+        regenerate: Boolean(event.data.regenerate),
+      });
     });
   },
 );

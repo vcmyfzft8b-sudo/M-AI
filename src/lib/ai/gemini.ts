@@ -22,6 +22,13 @@ const GEMINI_RETRY_BASE_DELAY_MS = 1_500;
 
 let geminiClient: GoogleGenAI | undefined;
 
+export class GeminiEmptyTextOutputError extends Error {
+  constructor() {
+    super("Model returned empty text output.");
+    this.name = "GeminiEmptyTextOutputError";
+  }
+}
+
 function stripCodeFences(value: string) {
   return value.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
 }
@@ -462,7 +469,7 @@ export async function generateTextWithGeminiFile(params: {
           const outputText = stripCodeFences(response.text ?? "");
 
           if (!outputText) {
-            throw new Error("Model returned empty text output.");
+            throw new GeminiEmptyTextOutputError();
           }
 
           await logGenerationAttempt({
@@ -507,6 +514,10 @@ export async function generateTextWithGeminiFile(params: {
           await sleep(GEMINI_RETRY_BASE_DELAY_MS * (attempt + 1));
         }
       }
+    }
+
+    if (lastError instanceof GeminiEmptyTextOutputError) {
+      throw lastError;
     }
 
     throw new Error(toErrorMessage(lastError));

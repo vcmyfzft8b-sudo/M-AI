@@ -1,5 +1,7 @@
 import "server-only";
 
+import { after } from "next/server";
+
 import { inngest } from "@/inngest/client";
 import {
   generateLectureNotesFromStoredTranscript,
@@ -143,6 +145,23 @@ async function tryEnqueueInternalLectureJob(params: {
   }
 }
 
+function runAfterResponse(params: {
+  lectureId: string;
+  operation: string;
+  task: () => Promise<void>;
+}) {
+  after(async () => {
+    try {
+      await params.task();
+    } catch (error) {
+      console.error(`Lecture ${params.operation} failed`, {
+        lectureId: params.lectureId,
+        error,
+      });
+    }
+  });
+}
+
 export async function enqueueLectureProcessing(lectureId: string) {
   const env = getServerEnv();
 
@@ -224,8 +243,12 @@ export async function enqueueLectureStudyGeneration(lectureId: string) {
     return;
   }
 
-  await generateLectureFlashcards({ lectureId }).catch((error) => {
-    console.error("Lecture study generation failed", { lectureId, error });
+  runAfterResponse({
+    lectureId,
+    operation: "study generation",
+    task: async () => {
+      await generateLectureFlashcards({ lectureId });
+    },
   });
 }
 
@@ -249,8 +272,12 @@ export async function enqueueLectureQuizGeneration(lectureId: string) {
     return;
   }
 
-  await generateLectureQuiz({ lectureId }).catch((error) => {
-    console.error("Lecture quiz generation failed", { lectureId, error });
+  runAfterResponse({
+    lectureId,
+    operation: "quiz generation",
+    task: async () => {
+      await generateLectureQuiz({ lectureId });
+    },
   });
 }
 
@@ -278,7 +305,11 @@ export async function enqueueLecturePracticeTestGeneration(
     return;
   }
 
-  await generateLecturePracticeTest({ lectureId, regenerate }).catch((error) => {
-    console.error("Lecture practice-test generation failed", { lectureId, regenerate, error });
+  runAfterResponse({
+    lectureId,
+    operation: "practice-test generation",
+    task: async () => {
+      await generateLecturePracticeTest({ lectureId, regenerate });
+    },
   });
 }

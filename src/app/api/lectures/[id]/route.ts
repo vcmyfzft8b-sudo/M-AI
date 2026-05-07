@@ -14,7 +14,7 @@ import { lectureTitleSchema, routeIdParamSchema } from "@/lib/validation";
 
 const UPDATE_LECTURE_MAX_BYTES = 8 * 1024;
 const STALE_NOTES_GENERATION_MS = 6 * 60 * 1000;
-const FAILED_STALE_NOTES_GENERATION_MS = 15 * 60 * 1000;
+const FAILED_STALE_NOTES_GENERATION_MS = 60 * 60 * 1000;
 
 const updateLectureSchema = z.object({
   title: lectureTitleSchema,
@@ -50,6 +50,44 @@ function hasPreparedManualImportText(processingMetadata: unknown) {
     typeof processingMetadata.manualImport.text === "string" &&
     processingMetadata.manualImport.text.trim().length > 0
   );
+}
+
+function hasRecoverableNotesSource(detail: Awaited<ReturnType<typeof getLectureDetailForUser>>) {
+  if (!detail) {
+    return false;
+  }
+
+  return (
+    detail.transcript.length > 0 ||
+    hasPreparedManualImportText(detail.lecture.processing_metadata)
+  );
+}
+
+async function touchLectureNotesRetryQueued(params: {
+  lectureId: string;
+  processingMetadata: unknown;
+}) {
+  const metadata = isRecord(params.processingMetadata) ? params.processingMetadata : {};
+
+  await createSupabaseServiceRoleClient()
+    .from("lectures")
+    .update(
+      {
+        status: "generating_notes",
+        error_message: null,
+        processing_metadata: {
+          ...metadata,
+          processing: {
+            ...(isRecord(metadata.processing) ? metadata.processing : {}),
+            stage: "generating_notes",
+            updatedAt: new Date().toISOString(),
+            errorMessage: null,
+            retryQueued: true,
+          },
+        },
+      } as never,
+    )
+    .eq("id", params.lectureId);
 }
 
 export async function GET(
@@ -99,6 +137,20 @@ export async function GET(
   if (
     detail.lecture.status === "generating_notes" &&
     !detail.artifact &&
+    hasRecoverableNotesSource(detail) &&
+    Date.now() - processingUpdatedAt > STALE_NOTES_GENERATION_MS
+  ) {
+    after(async () => {
+      await touchLectureNotesRetryQueued({
+        lectureId: detail.lecture.id,
+        processingMetadata: detail.lecture.processing_metadata,
+      });
+      await enqueueLectureNotesGeneration(detail.lecture.id);
+    });
+  } else if (
+    detail.lecture.status === "generating_notes" &&
+    !detail.artifact &&
+    !hasRecoverableNotesSource(detail) &&
     Date.now() - processingUpdatedAt > FAILED_STALE_NOTES_GENERATION_MS
   ) {
     after(async () => {
@@ -106,15 +158,6 @@ export async function GET(
         lectureId: detail.lecture.id,
         error: new Error("Obdelava se je zataknila. Poskusi znova."),
       });
-    });
-  } else if (
-    detail.lecture.status === "generating_notes" &&
-    !detail.artifact &&
-    detail.transcript.length > 0 &&
-    Date.now() - processingUpdatedAt > STALE_NOTES_GENERATION_MS
-  ) {
-    after(async () => {
-      await enqueueLectureNotesGeneration(detail.lecture.id);
     });
   } else if (
     detail.lecture.status === "queued" &&

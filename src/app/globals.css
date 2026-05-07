@@ -6353,9 +6353,142 @@ select:disabled {
 }
 
 .lecture-markdown p,
-.lecture-markdown li {
+.lecture-markdown li,
+.lecture-markdown blockquote,
+.lecture-markdown th,
+.lecture-markdown td {
   font-size: 1.06rem;
   line-height: 1.82;
+}
+
+.lecture-markdown ul,
+.lecture-markdown ol,
+.lecture-markdown .markdown ul,
+.lecture-markdown .markdown ol {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.7rem 0 1.05rem;
+  padding-left: 0;
+  list-style: none;
+}
+
+.lecture-markdown li {
+  position: relative;
+  padding-left: 1.05rem;
+}
+
+.lecture-markdown li::before {
+  position: absolute;
+  top: 0.14em;
+  left: 0;
+  color: color-mix(in srgb, var(--label) 72%, transparent);
+  font-size: 0.72em;
+  font-weight: 850;
+  line-height: inherit;
+  content: "•";
+}
+
+.lecture-markdown ol {
+  counter-reset: lecture-note-list;
+}
+
+.lecture-markdown ol > li {
+  counter-increment: lecture-note-list;
+}
+
+.lecture-markdown ol > li::before {
+  top: 0.04em;
+  color: color-mix(in srgb, var(--label) 72%, transparent);
+  font-size: 0.76em;
+  content: counter(lecture-note-list) ".";
+}
+
+.lecture-markdown .note-read-leading-label {
+  display: inline;
+  margin-right: 0.12em;
+  padding: 0.04em 0.18em;
+  border-radius: 0.26em;
+  background: color-mix(in srgb, #2563eb 14%, transparent);
+  color: inherit;
+  font-weight: 800;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.lecture-markdown li > ul,
+.lecture-markdown li > ol,
+.lecture-markdown .markdown li > ul,
+.lecture-markdown .markdown li > ol {
+  margin-top: 0.45rem;
+}
+
+.lecture-markdown blockquote {
+  position: relative;
+  margin: 1rem 0;
+  padding: 0.85rem 1rem 0.85rem 1.15rem;
+  border: 1px solid color-mix(in srgb, var(--separator) 72%, transparent);
+  border-left: 4px solid #0ea5e9;
+  border-radius: 14px;
+  background: color-mix(in srgb, #e0f2fe 42%, var(--surface-solid));
+  color: var(--label);
+}
+
+.lecture-markdown blockquote[data-callout-kind="definition"] {
+  border-left-color: #2563eb;
+  background: color-mix(in srgb, #dbeafe 44%, var(--surface-solid));
+}
+
+.lecture-markdown blockquote[data-callout-kind="example"] {
+  border-left-color: #16a34a;
+  background: color-mix(in srgb, #dcfce7 40%, var(--surface-solid));
+}
+
+.lecture-markdown blockquote[data-callout-kind="common_mistake"] {
+  border-left-color: #dc2626;
+  background: color-mix(in srgb, #fee2e2 38%, var(--surface-solid));
+}
+
+.lecture-markdown blockquote[data-callout-kind="key_takeaway"] {
+  border-left-color: #f59e0b;
+  background: color-mix(in srgb, #fef3c7 44%, var(--surface-solid));
+}
+
+.lecture-markdown blockquote p {
+  margin: 0;
+}
+
+.lecture-markdown .note-read-table-wrap {
+  width: 100%;
+  margin: 1rem 0 1.15rem;
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, var(--separator) 76%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-solid) 96%, transparent);
+}
+
+.lecture-markdown table {
+  width: 100%;
+  min-width: 34rem;
+  border-collapse: collapse;
+}
+
+.lecture-markdown th,
+.lecture-markdown td {
+  min-width: 8rem;
+  padding: 0.78rem 0.9rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--separator) 72%, transparent);
+  text-align: left;
+  vertical-align: top;
+}
+
+.lecture-markdown th {
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface-solid));
+  color: var(--label);
+  font-weight: 750;
+}
+
+.lecture-markdown tr:last-child td {
+  border-bottom: 0;
 }
 
 .lecture-markdown p + h1,
@@ -6366,8 +6499,81 @@ select:disabled {
 .lecture-markdown ul + h3,
 .lecture-markdown ol + h1,
 .lecture-markdown ol + h2,
-.lecture-markdown ol + h3 {
+.lecture-markdown ol + h3,
+.lecture-markdown blockquote + h1,
+.lecture-markdown blockquote + h2,
+.lecture-markdown blockquote + h3,
+.lecture-markdown .note-read-table-wrap + h1,
+.lecture-markdown .note-read-table-wrap + h2,
+.lecture-markdown .note-read-table-wrap + h3 {
   margin-top: 2.15rem;
+}
+
+:root[data-theme="dark"] .lecture-markdown blockquote {
+  background: color-mix(in srgb, #075985 22%, var(--surface-solid));
+}
+
+:root[data-theme="dark"] .lecture-markdown blockquote[data-callout-kind="definition"] {
+  background: color-mix(in srgb, #1d4ed8 22%, var(--surface-solid));
+}
+
+:root[data-theme="dark"] .lecture-markdown blockquote[data-callout-kind="example"] {
+  background: color-mix(in srgb, #15803d 22%, var(--surface-solid));
+}
+
+:root[data-theme="dark"] .lecture-markdown blockquote[data-callout-kind="common_mistake"] {
+  background: color-mix(in srgb, #b91c1c 20%, var(--surface-solid));
+}
+
+:root[data-theme="dark"] .lecture-markdown blockquote[data-callout-kind="key_takeaway"] {
+  background: color-mix(in srgb, #b45309 22%, var(--surface-solid));
+}
+
+:root[data-theme="dark"] .lecture-markdown li::before {
+  color: color-mix(in srgb, var(--label) 78%, transparent);
+}
+
+:root[data-theme="dark"] .lecture-markdown .note-read-leading-label {
+  background: color-mix(in srgb, #60a5fa 18%, transparent);
+  color: inherit;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .lecture-markdown blockquote,
+  :root[data-theme="system"] .lecture-markdown blockquote {
+    background: color-mix(in srgb, #075985 22%, var(--surface-solid));
+  }
+
+  :root:not([data-theme]) .lecture-markdown blockquote[data-callout-kind="definition"],
+  :root[data-theme="system"] .lecture-markdown blockquote[data-callout-kind="definition"] {
+    background: color-mix(in srgb, #1d4ed8 22%, var(--surface-solid));
+  }
+
+  :root:not([data-theme]) .lecture-markdown blockquote[data-callout-kind="example"],
+  :root[data-theme="system"] .lecture-markdown blockquote[data-callout-kind="example"] {
+    background: color-mix(in srgb, #15803d 22%, var(--surface-solid));
+  }
+
+  :root:not([data-theme]) .lecture-markdown blockquote[data-callout-kind="common_mistake"],
+  :root[data-theme="system"] .lecture-markdown blockquote[data-callout-kind="common_mistake"] {
+    background: color-mix(in srgb, #b91c1c 20%, var(--surface-solid));
+  }
+
+  :root:not([data-theme]) .lecture-markdown blockquote[data-callout-kind="key_takeaway"],
+  :root[data-theme="system"] .lecture-markdown blockquote[data-callout-kind="key_takeaway"] {
+    background: color-mix(in srgb, #b45309 22%, var(--surface-solid));
+  }
+
+  :root:not([data-theme]) .lecture-markdown li::before,
+  :root[data-theme="system"] .lecture-markdown li::before {
+    color: color-mix(in srgb, var(--label) 78%, transparent);
+  }
+
+  :root:not([data-theme]) .lecture-markdown .note-read-leading-label,
+  :root[data-theme="system"] .lecture-markdown .note-read-leading-label {
+    background: color-mix(in srgb, #60a5fa 18%, transparent);
+    color: inherit;
+  }
 }
 
 .lecture-empty-card {

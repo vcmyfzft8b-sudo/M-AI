@@ -93,6 +93,15 @@ export async function POST(
     );
   }
 
+  const fileIndexes = new Set(parsed.data.files.map((file) => file.index));
+
+  if (fileIndexes.size !== parsed.data.files.length) {
+    return NextResponse.json(
+      { error: "Podvojene fotografije niso dovoljene." },
+      { status: 400 },
+    );
+  }
+
   const service = createSupabaseServiceRoleClient();
   const manifests = parsed.data.files.map((file) => {
     const mimeType = normalizeUploadScanImageMimeType({
@@ -119,7 +128,7 @@ export async function POST(
   for (const manifest of manifests) {
     const { data: signedUpload, error } = await service.storage
       .from(STORAGE_BUCKET)
-      .createSignedUploadUrl(manifest.path);
+      .createSignedUploadUrl(manifest.path, { upsert: true });
 
     if (error || !signedUpload?.token) {
       captureRouteError(

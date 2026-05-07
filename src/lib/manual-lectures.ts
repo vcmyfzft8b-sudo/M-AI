@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import { toUserFacingAiErrorMessage } from "@/lib/ai/errors";
 import {
+  GeminiEmptyTextOutputError,
   generateStructuredObjectWithGeminiFile,
   generateTextWithGeminiFile,
 } from "@/lib/ai/gemini";
@@ -199,10 +200,44 @@ function buildImageOcrUsageContext(params: {
     lectureId: params.context?.lectureId ?? null,
     metadata: {
       imageIndex: params.context?.imageIndex ?? null,
+      lectureId: params.context?.lectureId ?? null,
       fileMimeType: params.file.type || "application/octet-stream",
       fileSize: params.file.size,
     },
   };
+}
+
+function buildScanOcrImageDiagnostics(params: {
+  attempts: ScanOcrAttemptDiagnostics[];
+  context?: ImageOcrContext;
+  file: File;
+}) {
+  return {
+    attempts: params.attempts,
+    fileName: params.file.name,
+    imageIndex: params.context?.imageIndex ?? null,
+    mimeType: params.file.type || "application/octet-stream",
+    sizeBytes: params.file.size,
+  };
+}
+
+function buildNoReadableImageTextError(params: {
+  attempts: ScanOcrAttemptDiagnostics[];
+  context?: ImageOcrContext;
+  file: File;
+}) {
+  return new NoReadableScanTextError({
+    imageCount: 1,
+    images: [
+      buildScanOcrImageDiagnostics({
+        attempts: params.attempts,
+        context: params.context,
+        file: params.file,
+      }),
+    ],
+    readableImageCount: 0,
+    skippedImageCount: 1,
+  });
 }
 
 async function insertTranscriptSegmentsInBatches(
@@ -1093,12 +1128,12 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
   } catch (error) {
     primaryError = error;
     attempts.push({
-      acceptable: null,
+      acceptable: error instanceof GeminiEmptyTextOutputError ? false : null,
       errorMessage: toSafeErrorMessage(error),
       maxOutputTokens: OCR_PRIMARY_MAX_OUTPUT_TOKENS,
       mediaResolution: "medium",
       model: env.GEMINI_OCR_MODEL,
-      outputLength: null,
+      outputLength: error instanceof GeminiEmptyTextOutputError ? 0 : null,
       stage: "ocr_primary",
     });
   }
@@ -1158,6 +1193,24 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
   } catch (error) {
     if (error instanceof NoReadableScanTextError) {
       throw error;
+    }
+
+    if (error instanceof GeminiEmptyTextOutputError) {
+      attempts.push({
+        acceptable: false,
+        errorMessage: toSafeErrorMessage(error),
+        maxOutputTokens: OCR_RESCUE_MAX_OUTPUT_TOKENS,
+        mediaResolution: "high",
+        model: env.GEMINI_OCR_RESCUE_MODEL,
+        outputLength: 0,
+        stage: "ocr_rescue",
+      });
+
+      throw buildNoReadableImageTextError({
+        attempts,
+        context,
+        file,
+      });
     }
 
     throw new Error(toUserFacingAiErrorMessage(primaryError ?? error));

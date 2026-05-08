@@ -6348,6 +6348,17 @@ select:disabled {
   font-size: 1.32rem;
 }
 
+.lecture-markdown .lecture-heading-highlight {
+  display: inline;
+  padding: 0.1rem 0.32rem;
+  border-radius: 0.42rem;
+  background: color-mix(in srgb, #2563eb 18%, transparent);
+  color: var(--label);
+  outline: 1px solid color-mix(in srgb, #2563eb 20%, transparent);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
 .lecture-markdown h3 {
   font-size: 1.14rem;
 }
@@ -6406,11 +6417,11 @@ select:disabled {
 .lecture-markdown .note-read-leading-label {
   display: inline;
   margin-right: 0.12em;
-  padding: 0.04em 0.18em;
-  border-radius: 0.26em;
-  background: color-mix(in srgb, #2563eb 14%, transparent);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
   color: inherit;
-  font-weight: 800;
+  font-weight: inherit;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
@@ -6426,7 +6437,7 @@ select:disabled {
   position: relative;
   margin: 1rem 0;
   padding: 0.85rem 1rem 0.85rem 1.15rem;
-  border: 1px solid color-mix(in srgb, var(--separator) 72%, transparent);
+  border: 1px solid color-mix(in srgb, #0ea5e9 20%, var(--separator));
   border-left: 4px solid #0ea5e9;
   border-radius: 14px;
   background: color-mix(in srgb, #e0f2fe 42%, var(--surface-solid));
@@ -6434,21 +6445,25 @@ select:disabled {
 }
 
 .lecture-markdown blockquote[data-callout-kind="definition"] {
+  border-color: color-mix(in srgb, #2563eb 20%, var(--separator));
   border-left-color: #2563eb;
   background: color-mix(in srgb, #dbeafe 44%, var(--surface-solid));
 }
 
 .lecture-markdown blockquote[data-callout-kind="example"] {
+  border-color: color-mix(in srgb, #16a34a 20%, var(--separator));
   border-left-color: #16a34a;
   background: color-mix(in srgb, #dcfce7 40%, var(--surface-solid));
 }
 
 .lecture-markdown blockquote[data-callout-kind="common_mistake"] {
+  border-color: color-mix(in srgb, #dc2626 20%, var(--separator));
   border-left-color: #dc2626;
   background: color-mix(in srgb, #fee2e2 38%, var(--surface-solid));
 }
 
 .lecture-markdown blockquote[data-callout-kind="key_takeaway"] {
+  border-color: color-mix(in srgb, #f59e0b 22%, var(--separator));
   border-left-color: #f59e0b;
   background: color-mix(in srgb, #fef3c7 44%, var(--surface-solid));
 }
@@ -6510,23 +6525,33 @@ select:disabled {
 }
 
 :root[data-theme="dark"] .lecture-markdown blockquote {
+  border-color: color-mix(in srgb, #0ea5e9 28%, var(--separator));
   background: color-mix(in srgb, #075985 22%, var(--surface-solid));
 }
 
 :root[data-theme="dark"] .lecture-markdown blockquote[data-callout-kind="definition"] {
+  border-color: color-mix(in srgb, #2563eb 28%, var(--separator));
   background: color-mix(in srgb, #1d4ed8 22%, var(--surface-solid));
 }
 
 :root[data-theme="dark"] .lecture-markdown blockquote[data-callout-kind="example"] {
+  border-color: color-mix(in srgb, #16a34a 28%, var(--separator));
   background: color-mix(in srgb, #15803d 22%, var(--surface-solid));
 }
 
 :root[data-theme="dark"] .lecture-markdown blockquote[data-callout-kind="common_mistake"] {
+  border-color: color-mix(in srgb, #dc2626 28%, var(--separator));
   background: color-mix(in srgb, #b91c1c 20%, var(--surface-solid));
 }
 
 :root[data-theme="dark"] .lecture-markdown blockquote[data-callout-kind="key_takeaway"] {
+  border-color: color-mix(in srgb, #f59e0b 30%, var(--separator));
   background: color-mix(in srgb, #b45309 22%, var(--surface-solid));
+}
+
+:root[data-theme="dark"] .lecture-markdown .lecture-heading-highlight {
+  background: color-mix(in srgb, #2563eb 32%, transparent);
+  outline-color: color-mix(in srgb, #60a5fa 34%, transparent);
 }
 
 :root[data-theme="dark"] .lecture-markdown li::before {
@@ -6534,34 +6559,45 @@ select:disabled {
 }
 
 :root[data-theme="dark"] .lecture-markdown .note-read-leading-label {
-  background: color-mix(in srgb, #60a5fa 18%, transparent);
+  background: transparent;
   color: inherit;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) .lecture-markdown blockquote,
   :root[data-theme="system"] .lecture-markdown blockquote {
+    border-color: color-mix(in srgb, #0ea5e9 28%, var(--separator));
     background: color-mix(in srgb, #075985 22%, var(--surface-solid));
   }
 
   :root:not([data-theme]) .lecture-markdown blockquote[data-callout-kind="definition"],
   :root[data-theme="system"] .lecture-markdown blockquote[data-callout-kind="definition"] {
+    border-color: color-mix(in srgb, #2563eb 28%, var(--separator));
     background: color-mix(in srgb, #1d4ed8 22%, var(--surface-solid));
   }
 
   :root:not([data-theme]) .lecture-markdown blockquote[data-callout-kind="example"],
   :root[data-theme="system"] .lecture-markdown blockquote[data-callout-kind="example"] {
+    border-color: color-mix(in srgb, #16a34a 28%, var(--separator));
     background: color-mix(in srgb, #15803d 22%, var(--surface-solid));
   }
 
   :root:not([data-theme]) .lecture-markdown blockquote[data-callout-kind="common_mistake"],
   :root[data-theme="system"] .lecture-markdown blockquote[data-callout-kind="common_mistake"] {
+    border-color: color-mix(in srgb, #dc2626 28%, var(--separator));
     background: color-mix(in srgb, #b91c1c 20%, var(--surface-solid));
   }
 
   :root:not([data-theme]) .lecture-markdown blockquote[data-callout-kind="key_takeaway"],
   :root[data-theme="system"] .lecture-markdown blockquote[data-callout-kind="key_takeaway"] {
+    border-color: color-mix(in srgb, #f59e0b 30%, var(--separator));
     background: color-mix(in srgb, #b45309 22%, var(--surface-solid));
+  }
+
+  :root:not([data-theme]) .lecture-markdown .lecture-heading-highlight,
+  :root[data-theme="system"] .lecture-markdown .lecture-heading-highlight {
+    background: color-mix(in srgb, #2563eb 32%, transparent);
+    outline-color: color-mix(in srgb, #60a5fa 34%, transparent);
   }
 
   :root:not([data-theme]) .lecture-markdown li::before,
@@ -6571,7 +6607,7 @@ select:disabled {
 
   :root:not([data-theme]) .lecture-markdown .note-read-leading-label,
   :root[data-theme="system"] .lecture-markdown .note-read-leading-label {
-    background: color-mix(in srgb, #60a5fa 18%, transparent);
+    background: transparent;
     color: inherit;
   }
 }

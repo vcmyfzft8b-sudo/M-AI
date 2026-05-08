@@ -630,7 +630,13 @@ function ReadAlongBlock({
       currentWordIndex,
     });
 
-    return block.level && block.level <= 2 ? <h2>{children}</h2> : <h3>{children}</h3>;
+    return block.level && block.level <= 2 ? (
+      <h2>
+        <span className="lecture-heading-highlight">{children}</span>
+      </h2>
+    ) : (
+      <h3>{children}</h3>
+    );
   }
 
   if (block.kind === "callout") {

@@ -6352,9 +6352,8 @@ select:disabled {
   display: inline;
   padding: 0.1rem 0.32rem;
   border-radius: 0.42rem;
-  background: color-mix(in srgb, #2563eb 18%, transparent);
+  background: color-mix(in srgb, #2563eb 24%, transparent);
   color: var(--label);
-  outline: 1px solid color-mix(in srgb, #2563eb 20%, transparent);
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
@@ -6550,8 +6549,7 @@ select:disabled {
 }
 
 :root[data-theme="dark"] .lecture-markdown .lecture-heading-highlight {
-  background: color-mix(in srgb, #2563eb 32%, transparent);
-  outline-color: color-mix(in srgb, #60a5fa 34%, transparent);
+  background: color-mix(in srgb, #2563eb 42%, transparent);
 }
 
 :root[data-theme="dark"] .lecture-markdown li::before {
@@ -6596,8 +6594,7 @@ select:disabled {
 
   :root:not([data-theme]) .lecture-markdown .lecture-heading-highlight,
   :root[data-theme="system"] .lecture-markdown .lecture-heading-highlight {
-    background: color-mix(in srgb, #2563eb 32%, transparent);
-    outline-color: color-mix(in srgb, #60a5fa 34%, transparent);
+    background: color-mix(in srgb, #2563eb 42%, transparent);
   }
 
   :root:not([data-theme]) .lecture-markdown li::before,

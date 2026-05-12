@@ -5,6 +5,7 @@ import { inngest } from "@/inngest/client";
 import {
   processLectureFunction,
   processLectureNotesFunction,
+  processLecturePracticeTestFunction,
   processLectureQuizFunction,
   processLectureStudyFunction,
 } from "@/inngest/functions";
@@ -25,6 +26,7 @@ const handlers = serve({
     processLectureNotesFunction,
     processLectureStudyFunction,
     processLectureQuizFunction,
+    processLecturePracticeTestFunction,
   ],
 });
 

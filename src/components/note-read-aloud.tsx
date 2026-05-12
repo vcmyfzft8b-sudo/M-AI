@@ -549,6 +549,71 @@ function renderTokens(params: {
   });
 }
 
+function getLeadingLabelTokenEnd(tokens: NoteTtsInlineToken[]) {
+  let text = "";
+  let wordCount = 0;
+  let labelEnd: number | null = null;
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    text += token.text;
+
+    if (token.type === "word") {
+      wordCount += 1;
+    }
+
+    if (token.text.includes(":")) {
+      labelEnd = text.length <= 72 && wordCount <= 8 ? index + 1 : null;
+      break;
+    }
+
+    if (text.length > 72 || wordCount > 8) {
+      return null;
+    }
+  }
+
+  if (!labelEnd) {
+    return null;
+  }
+
+  const label = text
+    .replace(/[:\s]+$/g, "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+  const importantLabelPattern =
+    /^(definicija|kljucno|pomembno|pazi|pogosta napaka|primer|razlika|proces|korak|formula|pravilo|cilj|vzrok|posledica|prednost|slabost|problem|resitev|definition|key takeaway|important|common mistake|example|difference|process|step|formula|rule|goal|cause|effect|benefit|risk|problem|solution)\b/;
+
+  return importantLabelPattern.test(label) ? labelEnd : null;
+}
+
+function renderListItemTokens(params: {
+  tokens: NoteTtsInlineToken[];
+  completedWordIndex: number;
+  currentWordIndex: number | null;
+}) {
+  const labelEnd = getLeadingLabelTokenEnd(params.tokens);
+
+  if (!labelEnd) {
+    return renderTokens(params);
+  }
+
+  return (
+    <>
+      <span className="note-read-leading-label">
+        {renderTokens({
+          ...params,
+          tokens: params.tokens.slice(0, labelEnd),
+        })}
+      </span>
+      {renderTokens({
+        ...params,
+        tokens: params.tokens.slice(labelEnd),
+      })}
+    </>
+  );
+}
+
 function ReadAlongBlock({
   block,
   completedWordIndex,
@@ -558,23 +623,83 @@ function ReadAlongBlock({
   completedWordIndex: number;
   currentWordIndex: number | null;
 }) {
+  if (block.kind === "heading") {
+    const children = renderTokens({
+      tokens: block.tokens,
+      completedWordIndex,
+      currentWordIndex,
+    });
+
+    return block.level && block.level <= 2 ? (
+      <h2>
+        <span className="lecture-heading-highlight">{children}</span>
+      </h2>
+    ) : (
+      <h3>{children}</h3>
+    );
+  }
+
+  if (block.kind === "callout") {
+    const children = renderTokens({
+      tokens: block.tokens,
+      completedWordIndex,
+      currentWordIndex,
+    });
+
+    return <blockquote data-callout-kind={block.calloutKind}>{children}</blockquote>;
+  }
+
+  if (block.kind === "list") {
+    const ListTag = block.ordered ? "ol" : "ul";
+
+    return (
+      <ListTag>
+        {block.items.map((item) => (
+          <li key={item.id}>
+            {renderListItemTokens({
+              tokens: item.tokens,
+              completedWordIndex,
+              currentWordIndex,
+            })}
+          </li>
+        ))}
+      </ListTag>
+    );
+  }
+
+  if (block.kind === "table") {
+    return (
+      <div className="note-read-table-wrap">
+        <table>
+          <tbody>
+            {block.rows.map((row) => (
+              <tr key={row.id}>
+                {row.cells.map((cell) => {
+                  const CellTag = cell.header ? "th" : "td";
+
+                  return (
+                    <CellTag key={cell.id}>
+                      {renderTokens({
+                        tokens: cell.tokens,
+                        completedWordIndex,
+                        currentWordIndex,
+                      })}
+                    </CellTag>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   const children = renderTokens({
     tokens: block.tokens,
     completedWordIndex,
     currentWordIndex,
   });
-
-  if (block.kind === "heading") {
-    return block.level && block.level <= 2 ? <h2>{children}</h2> : <h3>{children}</h3>;
-  }
-
-  if (block.kind === "list_item") {
-    return (
-      <ul>
-        <li>{children}</li>
-      </ul>
-    );
-  }
 
   return <p>{children}</p>;
 }

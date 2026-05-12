@@ -6,7 +6,10 @@ import { MAX_SCAN_IMAGE_BYTES, MAX_SCAN_IMAGE_COUNT } from "@/lib/constants";
 import { enqueueLectureNotesGeneration, enqueueLectureScanProcessing } from "@/lib/jobs";
 import { extractTextFromImage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
-import { parseJsonRequest } from "@/lib/request-validation";
+import {
+  buildValidationErrorResponse,
+  parseJsonRequest,
+} from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import {
   isCanonicalLectureScanImageStoragePath,
@@ -191,7 +194,7 @@ export async function POST(request: Request) {
     });
 
     if (!parsedFields.success) {
-      return NextResponse.json({ error: parsedFields.error.flatten() }, { status: 400 });
+      return buildValidationErrorResponse(parsedFields.error);
     }
 
     const fileCandidates = formData

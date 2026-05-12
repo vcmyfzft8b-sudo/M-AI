@@ -140,7 +140,10 @@ async function replaceFolderLectures(params: {
 
   const { error: insertError } = await service
     .from("library_folder_lectures")
-    .insert(rows as never);
+    .upsert(rows as never, {
+      ignoreDuplicates: true,
+      onConflict: "folder_id,lecture_id",
+    });
 
   if (insertError) {
     throw insertError;

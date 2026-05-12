@@ -83,6 +83,33 @@ function isGeminiSchemaTooComplexError(error: unknown) {
   );
 }
 
+function isStructuredOutputError(error: unknown) {
+  if (error instanceof z.ZodError || error instanceof SyntaxError) {
+    return true;
+  }
+
+  const message = toErrorMessage(error).toLowerCase();
+
+  return (
+    message.includes("json") ||
+    message.includes("invalid structured output") ||
+    message.includes("expected") ||
+    message.includes("too small")
+  );
+}
+
+function getStructuredGenerationRetryDelayMs(error: unknown, attempt: number) {
+  if (isRetryableAiError(error)) {
+    return GEMINI_RETRY_BASE_DELAY_MS * (attempt + 1);
+  }
+
+  if (isStructuredOutputError(error)) {
+    return Math.round((GEMINI_RETRY_BASE_DELAY_MS / 3) * (attempt + 1));
+  }
+
+  return null;
+}
+
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -247,8 +274,10 @@ ${params.input}`,
 
       lastError = error;
 
-      if (attempt < maxAttempts - 1 && isRetryableAiError(error)) {
-        await sleep(GEMINI_RETRY_BASE_DELAY_MS * (attempt + 1));
+      const retryDelayMs = getStructuredGenerationRetryDelayMs(error, attempt);
+
+      if (attempt < maxAttempts - 1 && retryDelayMs != null) {
+        await sleep(retryDelayMs);
       }
     }
   }
@@ -382,8 +411,10 @@ ${JSON.stringify(responseSchema)}`,
 
         lastError = error;
 
-        if (attempt < maxAttempts - 1 && isRetryableAiError(error)) {
-          await sleep(GEMINI_RETRY_BASE_DELAY_MS * (attempt + 1));
+        const retryDelayMs = getStructuredGenerationRetryDelayMs(error, attempt);
+
+        if (attempt < maxAttempts - 1 && retryDelayMs != null) {
+          await sleep(retryDelayMs);
         }
       }
     }

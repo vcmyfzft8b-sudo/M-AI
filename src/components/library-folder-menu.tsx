@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -161,6 +162,7 @@ export function LibraryFolderMenu({
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingLectureIds, setEditingLectureIds] = useState<string[]>([]);
+  const [isSavingFolder, setIsSavingFolder] = useState(false);
   const lectureIdSet = useMemo(
     () => new Set(lectures.map((lecture) => lecture.id)),
     [lectures],
@@ -188,6 +190,7 @@ export function LibraryFolderMenu({
     setEditingFolderId(null);
     setEditingName("");
     setEditingLectureIds([]);
+    setIsSavingFolder(false);
   }
 
   useEffect(() => {
@@ -601,13 +604,17 @@ export function LibraryFolderMenu({
   }
 
   function startEditingFolder(folder: LibraryFolder) {
+    if (isSavingFolder) {
+      return;
+    }
+
     setEditingFolderId(folder.id);
     setEditingName(folder.name);
     setEditingLectureIds(folder.lectureIds);
   }
 
   async function handleSaveFolder() {
-    if (!editingFolderId) {
+    if (!editingFolderId || isSavingFolder) {
       return;
     }
 
@@ -617,35 +624,41 @@ export function LibraryFolderMenu({
       return;
     }
 
-    const response = await fetch(`/api/library-folders/${editingFolderId}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: trimmedName,
-        lectureIds: editingLectureIds.filter((lectureId) => lectureIdSet.has(lectureId)),
-      }),
-    });
+    setIsSavingFolder(true);
 
-    if (!response.ok) {
-      return;
+    try {
+      const response = await fetch(`/api/library-folders/${editingFolderId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: trimmedName,
+          lectureIds: editingLectureIds.filter((lectureId) => lectureIdSet.has(lectureId)),
+        }),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as { folder: AppLibraryFolder };
+      const nextFolders = folders.map((folder) =>
+        folder.id === editingFolderId ? payload.folder : folder,
+      );
+
+      setFolders(nextFolders);
+
+      if (selectedFolderId === editingFolderId) {
+        const nextSelectedFolder = nextFolders.find((folder) => folder.id === editingFolderId);
+        onSelectFolder(nextSelectedFolder?.id ?? null, nextSelectedFolder?.lectureIds ?? null);
+      }
+
+      handleCancelEdit();
+      setIsOpen(false);
+    } finally {
+      setIsSavingFolder(false);
     }
-
-    const payload = (await response.json()) as { folder: AppLibraryFolder };
-    const nextFolders = folders.map((folder) =>
-      folder.id === editingFolderId ? payload.folder : folder,
-    );
-
-    setFolders(nextFolders);
-
-    if (selectedFolderId === editingFolderId) {
-      const nextSelectedFolder = nextFolders.find((folder) => folder.id === editingFolderId);
-      onSelectFolder(nextSelectedFolder?.id ?? null, nextSelectedFolder?.lectureIds ?? null);
-    }
-
-    handleCancelEdit();
-    setIsOpen(false);
   }
 
   async function handleDeleteFolder(folderId: string) {
@@ -988,6 +1001,7 @@ export function LibraryFolderMenu({
                         key={folder.id}
                         className={`library-folder-modal-folder-option ${editingFolderId === folder.id ? "active" : ""}`}
                         onClick={() => startEditingFolder(folder)}
+                        disabled={isSavingFolder}
                       >
                         <span>
                           <span className="library-folder-saved-title">{folder.name}</span>
@@ -1049,13 +1063,19 @@ export function LibraryFolderMenu({
                 type="button"
                 className="library-folder-primary-button modal"
                 onClick={handleSaveFolder}
+                disabled={isSavingFolder || editingName.trim().length === 0}
+                aria-busy={isSavingFolder}
               >
-                Shrani spremembe
+                {isSavingFolder ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : null}
+                {isSavingFolder ? "Shranjujem..." : "Shrani spremembe"}
               </button>
               <button
                 type="button"
                 className="library-folder-secondary-button"
                 onClick={handleCancelEdit}
+                disabled={isSavingFolder}
               >
                 Prekliči
               </button>
@@ -1067,6 +1087,7 @@ export function LibraryFolderMenu({
                     handleDeleteFolder(editingFolderId);
                   }
                 }}
+                disabled={isSavingFolder}
               >
                 <EmojiIcon symbol="🗑️" size="0.95rem" />
                 Izbriši mapo

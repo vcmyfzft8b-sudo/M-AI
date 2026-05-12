@@ -2975,6 +2975,14 @@ select:disabled {
   font-size: 1rem;
 }
 
+.library-folder-primary-button:disabled,
+.library-folder-secondary-button:disabled,
+.library-folder-danger-button:disabled,
+.library-folder-modal-folder-option:disabled {
+  opacity: 0.62;
+  transform: none;
+}
+
 .library-folder-edit-card {
   padding: 0.2rem 0;
 }

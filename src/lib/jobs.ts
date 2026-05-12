@@ -17,9 +17,28 @@ export type LectureProcessingStage = "transcribe" | "generate_notes";
 const INTERNAL_LECTURE_PROCESSING_PATH = "/api/internal/lectures/process";
 const INTERNAL_LECTURE_SCAN_PATH = "/api/internal/lectures/scan";
 const INTERNAL_LECTURE_PRACTICE_TEST_PATH = "/api/internal/lectures/practice-test";
+const INTERNAL_LECTURE_STUDY_PATH = "/api/internal/lectures/study";
+const INTERNAL_LECTURE_QUIZ_PATH = "/api/internal/lectures/quiz";
 
 function hasInngestJobCredentials(env: ReturnType<typeof getServerEnv>) {
   return Boolean(env.INNGEST_EVENT_KEY && env.INNGEST_SIGNING_KEY);
+}
+
+function shouldUseHostedInngestJobs(env: ReturnType<typeof getServerEnv>) {
+  return (
+    hasInngestJobCredentials(env) &&
+    (process.env.VERCEL_ENV === "production" || process.env.USE_INNGEST_JOBS === "true")
+  );
+}
+
+function buildInternalJobHeaders(env: ReturnType<typeof getServerEnv>) {
+  return {
+    "content-type": "application/json",
+    "x-internal-job-secret": env.INTERNAL_JOB_SECRET ?? "",
+    ...(env.VERCEL_AUTOMATION_BYPASS_SECRET
+      ? { "x-vercel-protection-bypass": env.VERCEL_AUTOMATION_BYPASS_SECRET }
+      : {}),
+  };
 }
 
 function getInternalJobBaseUrl(publicSiteUrl?: string) {
@@ -45,10 +64,7 @@ export async function enqueueLectureProcessingStage(params: {
     new URL(INTERNAL_LECTURE_PROCESSING_PATH, internalJobBaseUrl),
     {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-internal-job-secret": env.INTERNAL_JOB_SECRET,
-      },
+      headers: buildInternalJobHeaders(env),
       body: JSON.stringify(params),
       cache: "no-store",
     },
@@ -100,10 +116,7 @@ async function enqueueInternalLectureJob(params: {
 
   const response = await fetch(new URL(params.path, internalJobBaseUrl), {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-internal-job-secret": env.INTERNAL_JOB_SECRET,
-    },
+    headers: buildInternalJobHeaders(env),
     body: JSON.stringify({
       lectureId: params.lectureId,
       ...(typeof params.regenerate === "boolean" ? { regenerate: params.regenerate } : {}),
@@ -148,15 +161,15 @@ async function tryEnqueueInternalLectureJob(params: {
 export async function enqueueLectureProcessing(lectureId: string) {
   const env = getServerEnv();
 
-  if (await tryEnqueueLectureProcessingStage({ lectureId, stage: "transcribe" })) {
-    return;
-  }
-
-  if (hasInngestJobCredentials(env)) {
+  if (shouldUseHostedInngestJobs(env)) {
     await inngest.send({
       name: "lecture/process.requested",
       data: { lectureId },
     });
+    return;
+  }
+
+  if (await tryEnqueueLectureProcessingStage({ lectureId, stage: "transcribe" })) {
     return;
   }
 
@@ -168,15 +181,15 @@ export async function enqueueLectureProcessing(lectureId: string) {
 export async function enqueueLectureNotesGeneration(lectureId: string) {
   const env = getServerEnv();
 
-  if (await tryEnqueueLectureProcessingStage({ lectureId, stage: "generate_notes" })) {
-    return;
-  }
-
-  if (hasInngestJobCredentials(env)) {
+  if (shouldUseHostedInngestJobs(env)) {
     await inngest.send({
       name: "lecture/notes.requested",
       data: { lectureId },
     });
+    return;
+  }
+
+  if (await tryEnqueueLectureProcessingStage({ lectureId, stage: "generate_notes" })) {
     return;
   }
 
@@ -209,11 +222,20 @@ export async function enqueueLectureScanProcessing(lectureId: string) {
 export async function enqueueLectureStudyGeneration(lectureId: string) {
   const env = getServerEnv();
 
-  if (hasInngestJobCredentials(env)) {
+  if (shouldUseHostedInngestJobs(env)) {
     await inngest.send({
       name: "lecture/study.requested",
       data: { lectureId },
     });
+    return;
+  }
+
+  if (
+    await tryEnqueueInternalLectureJob({
+      lectureId,
+      path: INTERNAL_LECTURE_STUDY_PATH,
+    })
+  ) {
     return;
   }
 
@@ -225,11 +247,20 @@ export async function enqueueLectureStudyGeneration(lectureId: string) {
 export async function enqueueLectureQuizGeneration(lectureId: string) {
   const env = getServerEnv();
 
-  if (hasInngestJobCredentials(env)) {
+  if (shouldUseHostedInngestJobs(env)) {
     await inngest.send({
       name: "lecture/quiz.requested",
       data: { lectureId },
     });
+    return;
+  }
+
+  if (
+    await tryEnqueueInternalLectureJob({
+      lectureId,
+      path: INTERNAL_LECTURE_QUIZ_PATH,
+    })
+  ) {
     return;
   }
 
@@ -244,6 +275,14 @@ export async function enqueueLecturePracticeTestGeneration(
 ) {
   const env = getServerEnv();
 
+  if (shouldUseHostedInngestJobs(env)) {
+    await inngest.send({
+      name: "lecture/practice-test.requested",
+      data: { lectureId, regenerate },
+    });
+    return;
+  }
+
   if (
     await tryEnqueueInternalLectureJob({
       lectureId,
@@ -251,14 +290,6 @@ export async function enqueueLecturePracticeTestGeneration(
       regenerate,
     })
   ) {
-    return;
-  }
-
-  if (hasInngestJobCredentials(env)) {
-    await inngest.send({
-      name: "lecture/practice-test.requested",
-      data: { lectureId, regenerate },
-    });
     return;
   }
 

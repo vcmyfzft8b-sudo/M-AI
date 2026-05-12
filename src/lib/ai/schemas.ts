@@ -1,5 +1,25 @@
 import { z } from "zod";
 
+const OPTIONAL_EXAMPLE_MIN_LENGTH = 12;
+
+function cleanOptionalExamples(value: unknown) {
+  if (!Array.isArray(value)) {
+    return value;
+  }
+
+  return value
+    .map((example) => (typeof example === "string" ? example.trim() : example))
+    .filter(
+      (example): example is string =>
+        typeof example === "string" && example.length >= OPTIONAL_EXAMPLE_MIN_LENGTH,
+    );
+}
+
+const optionalExamplesSchema = z.preprocess(
+  cleanOptionalExamples,
+  z.array(z.string().min(OPTIONAL_EXAMPLE_MIN_LENGTH)),
+);
+
 export const citationSchema = z.object({
   idx: z.number().int().nonnegative(),
   startMs: z.number().int().nonnegative(),
@@ -12,7 +32,7 @@ export const chunkSummarySchema = z.object({
   summary: z.string().min(60),
   bulletPoints: z.array(z.string().min(12)).min(5),
   supportingDetails: z.array(z.string().min(12)).min(2),
-  examples: z.array(z.string().min(12)),
+  examples: optionalExamplesSchema,
   terminology: z.array(z.string().min(2)).min(3),
 });
 

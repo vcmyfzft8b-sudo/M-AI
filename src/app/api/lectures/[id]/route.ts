@@ -3,7 +3,11 @@ import { z } from "zod";
 
 import { parseAudioChunkManifest } from "@/lib/audio-processing";
 import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
-import { enqueueLectureNotesGeneration, enqueueLectureScanProcessing } from "@/lib/jobs";
+import {
+  enqueueLectureNotesGeneration,
+  enqueueLectureProcessing,
+  enqueueLectureScanProcessing,
+} from "@/lib/jobs";
 import { isRecord } from "@/lib/lecture-source-metadata";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -61,6 +65,24 @@ function hasRecoverableNotesSource(detail: Awaited<ReturnType<typeof getLectureD
     detail.transcript.length > 0 ||
     hasPreparedManualImportText(detail.lecture.processing_metadata)
   );
+}
+
+function hasPreparedAudioSource(detail: Awaited<ReturnType<typeof getLectureDetailForUser>>) {
+  if (!detail || detail.lecture.source_type !== "audio") {
+    return false;
+  }
+
+  if (detail.lecture.storage_path) {
+    return true;
+  }
+
+  const audioChunks = parseAudioChunkManifest(
+    detail.lecture.processing_metadata && typeof detail.lecture.processing_metadata === "object"
+      ? (detail.lecture.processing_metadata as Record<string, unknown>).audioChunks
+      : null,
+  );
+
+  return audioChunks.length > 0;
 }
 
 async function touchLectureNotesRetryQueued(params: {
@@ -165,13 +187,25 @@ export async function GET(
     Date.now() - processingUpdatedAt > STALE_NOTES_GENERATION_MS
   ) {
     after(async () => {
-      if (hasPendingScanImages(detail.lecture.processing_metadata)) {
-        await enqueueLectureScanProcessing(detail.lecture.id);
-        return;
-      }
+      try {
+        if (hasPendingScanImages(detail.lecture.processing_metadata)) {
+          await enqueueLectureScanProcessing(detail.lecture.id);
+          return;
+        }
 
-      if (hasPreparedManualImportText(detail.lecture.processing_metadata)) {
-        await enqueueLectureNotesGeneration(detail.lecture.id);
+        if (hasPreparedManualImportText(detail.lecture.processing_metadata)) {
+          await enqueueLectureNotesGeneration(detail.lecture.id);
+          return;
+        }
+
+        if (hasPreparedAudioSource(detail)) {
+          await enqueueLectureProcessing(detail.lecture.id);
+        }
+      } catch (error) {
+        await markLecturePipelineFailed({
+          lectureId: detail.lecture.id,
+          error,
+        });
       }
     });
   }

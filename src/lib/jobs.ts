@@ -18,6 +18,10 @@ const INTERNAL_LECTURE_PROCESSING_PATH = "/api/internal/lectures/process";
 const INTERNAL_LECTURE_SCAN_PATH = "/api/internal/lectures/scan";
 const INTERNAL_LECTURE_PRACTICE_TEST_PATH = "/api/internal/lectures/practice-test";
 
+function hasInngestJobCredentials(env: ReturnType<typeof getServerEnv>) {
+  return Boolean(env.INNGEST_EVENT_KEY && env.INNGEST_SIGNING_KEY);
+}
+
 function getInternalJobBaseUrl(publicSiteUrl?: string) {
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
@@ -144,15 +148,15 @@ async function tryEnqueueInternalLectureJob(params: {
 export async function enqueueLectureProcessing(lectureId: string) {
   const env = getServerEnv();
 
-  if (env.INNGEST_EVENT_KEY && env.INNGEST_SIGNING_KEY) {
+  if (await tryEnqueueLectureProcessingStage({ lectureId, stage: "transcribe" })) {
+    return;
+  }
+
+  if (hasInngestJobCredentials(env)) {
     await inngest.send({
       name: "lecture/process.requested",
       data: { lectureId },
     });
-    return;
-  }
-
-  if (await tryEnqueueLectureProcessingStage({ lectureId, stage: "transcribe" })) {
     return;
   }
 
@@ -164,15 +168,15 @@ export async function enqueueLectureProcessing(lectureId: string) {
 export async function enqueueLectureNotesGeneration(lectureId: string) {
   const env = getServerEnv();
 
-  if (env.INNGEST_EVENT_KEY && env.INNGEST_SIGNING_KEY) {
+  if (await tryEnqueueLectureProcessingStage({ lectureId, stage: "generate_notes" })) {
+    return;
+  }
+
+  if (hasInngestJobCredentials(env)) {
     await inngest.send({
       name: "lecture/notes.requested",
       data: { lectureId },
     });
-    return;
-  }
-
-  if (await tryEnqueueLectureProcessingStage({ lectureId, stage: "generate_notes" })) {
     return;
   }
 
@@ -205,7 +209,7 @@ export async function enqueueLectureScanProcessing(lectureId: string) {
 export async function enqueueLectureStudyGeneration(lectureId: string) {
   const env = getServerEnv();
 
-  if (env.INNGEST_EVENT_KEY && env.INNGEST_SIGNING_KEY) {
+  if (hasInngestJobCredentials(env)) {
     await inngest.send({
       name: "lecture/study.requested",
       data: { lectureId },
@@ -221,7 +225,7 @@ export async function enqueueLectureStudyGeneration(lectureId: string) {
 export async function enqueueLectureQuizGeneration(lectureId: string) {
   const env = getServerEnv();
 
-  if (env.INNGEST_EVENT_KEY && env.INNGEST_SIGNING_KEY) {
+  if (hasInngestJobCredentials(env)) {
     await inngest.send({
       name: "lecture/quiz.requested",
       data: { lectureId },
@@ -240,14 +244,6 @@ export async function enqueueLecturePracticeTestGeneration(
 ) {
   const env = getServerEnv();
 
-  if (env.INNGEST_EVENT_KEY && env.INNGEST_SIGNING_KEY) {
-    await inngest.send({
-      name: "lecture/practice-test.requested",
-      data: { lectureId, regenerate },
-    });
-    return;
-  }
-
   if (
     await tryEnqueueInternalLectureJob({
       lectureId,
@@ -255,6 +251,14 @@ export async function enqueueLecturePracticeTestGeneration(
       regenerate,
     })
   ) {
+    return;
+  }
+
+  if (hasInngestJobCredentials(env)) {
+    await inngest.send({
+      name: "lecture/practice-test.requested",
+      data: { lectureId, regenerate },
+    });
     return;
   }
 

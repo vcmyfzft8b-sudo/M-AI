@@ -14,7 +14,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { NoteReadAloud } from "@/components/note-read-aloud";
 import { StudyCompletionCard } from "@/components/study-completion-card";
-import { parseApiResponse, redirectToBillingIfNeeded } from "@/lib/billing-client";
+import {
+  getApiErrorMessage,
+  parseApiResponse,
+  redirectToBillingIfNeeded,
+} from "@/lib/billing-client";
 import type { FlashcardConfidenceBucket, StudyAssetStatus } from "@/lib/database.types";
 import {
   getEffectiveLectureSourceType,
@@ -93,14 +97,14 @@ type QuizRoundSummary = {
 };
 
 type FlashcardProgressResponse = {
-  error?: string;
+  error?: unknown;
   progress?: LectureDetail["flashcards"][number]["progress"];
 };
 
 type ChatResponse = {
   answer?: ChatMessageWithCitations;
   code?: string;
-  error?: string;
+  error?: unknown;
 };
 
 type StudySessionSnapshot = {
@@ -1850,7 +1854,7 @@ export function LectureWorkspace({
     setStudyError(null);
     setIsSubmittingPracticeTest(true);
     let response: Response;
-    let payload: { error?: string } | null = null;
+    let payload: { error?: unknown } | null = null;
     try {
       response = await fetch(
         `/api/lectures/${detail.lecture.id}/practice-test/attempt/${currentPracticeAttempt.id}/submit`,
@@ -1862,7 +1866,7 @@ export function LectureWorkspace({
           body: JSON.stringify({ answers }),
         },
       );
-      payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
     } catch (error) {
       setStudyError(getRequestErrorMessage(error, "Preizkusa ni bilo mogoče oddati."));
       return;
@@ -1871,7 +1875,7 @@ export function LectureWorkspace({
     }
 
     if (!response.ok) {
-      setStudyError(payload?.error ?? "Preizkusa ni bilo mogoče oddati.");
+      setStudyError(getApiErrorMessage(payload, "Preizkusa ni bilo mogoče oddati."));
       return;
     }
 
@@ -2046,7 +2050,9 @@ export function LectureWorkspace({
       setRepeatQueue(previousRepeatQueue);
       setActiveFlashcardIndex(previousActiveFlashcardIndex);
       setFlashcardRoundSummary(previousRoundSummary);
-      setStudyError(payload?.error ?? "Napredka pri karticah ni bilo mogoče shraniti.");
+      setStudyError(
+        getApiErrorMessage(payload, "Napredka pri karticah ni bilo mogoče shraniti."),
+      );
       return;
     }
 
@@ -2265,7 +2271,7 @@ export function LectureWorkspace({
         setTrialChatMessagesRemaining(0);
       }
 
-      setChatError(payload?.error ?? "Odgovora ni bilo mogoče ustvariti.");
+      setChatError(getApiErrorMessage(payload, "Odgovora ni bilo mogoče ustvariti."));
       setDetail((current) => ({
         ...current,
         chatMessages: current.chatMessages.filter(

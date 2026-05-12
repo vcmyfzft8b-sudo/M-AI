@@ -26,6 +26,16 @@ function buildPayloadErrorResponse(message: string, status: 400 | 413) {
   );
 }
 
+export function buildValidationErrorResponse(error: z.ZodError) {
+  return NextResponse.json(
+    {
+      error: "Neveljavni podatki v zahtevi.",
+      validation: error.flatten(),
+    },
+    { status: 400, headers: { "Cache-Control": "no-store" } },
+  );
+}
+
 function getJsonContentType(request: Request) {
   return request.headers.get("content-type")?.toLowerCase() ?? "";
 }
@@ -109,10 +119,7 @@ export async function parseJsonRequest<TSchema extends z.ZodTypeAny>(
   if (!parsed.success) {
     return {
       success: false,
-      response: NextResponse.json(
-        { error: parsed.error.flatten() },
-        { status: 400, headers: { "Cache-Control": "no-store" } },
-      ),
+      response: buildValidationErrorResponse(parsed.error),
     };
   }
 

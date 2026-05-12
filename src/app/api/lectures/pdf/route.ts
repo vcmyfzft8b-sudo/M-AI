@@ -16,7 +16,10 @@ import {
   prepareLectureFromTextSource,
 } from "@/lib/manual-lectures";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
-import { parseFormDataRequest } from "@/lib/request-validation";
+import {
+  buildValidationErrorResponse,
+  parseFormDataRequest,
+} from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -77,7 +80,7 @@ export async function POST(request: Request) {
   const inputFile = formData.get("file");
 
   if (!parsedFields.success) {
-    return NextResponse.json({ error: parsedFields.error.flatten() }, { status: 400 });
+    return buildValidationErrorResponse(parsedFields.error);
   }
 
   const { lectureId, originalFileName, languageHint } = parsedFields.data;

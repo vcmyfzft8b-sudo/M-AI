@@ -39,8 +39,8 @@ export const chunkSummarySchema = z.object({
 export const noteArtifactSchema = z.object({
   title: z.string().min(3),
   summary: z.string().min(40),
-  keyTopics: z.array(z.string().min(2)).min(6),
-  structuredNotesMd: z.string().min(300),
+  keyTopics: z.array(z.string().min(2)).min(1),
+  structuredNotesMd: z.string().min(100),
 });
 
 export const chatAnswerSchema = z.object({

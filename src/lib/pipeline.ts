@@ -16,7 +16,10 @@ import {
   type StructuredSourceBlock,
 } from "@/lib/text-source-processing";
 import type { ChatMessageWithCitations } from "@/lib/types";
-import { generateNotesFromTranscript } from "@/lib/note-generation";
+import {
+  generateNotesFromTranscript,
+  InsufficientSourceMaterialError,
+} from "@/lib/note-generation";
 import { prepareInitialNoteTtsChunk } from "@/lib/note-tts";
 import { NoReadableScanTextError } from "@/lib/scan-ocr-errors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -523,7 +526,8 @@ export async function markLecturePipelineFailed(params: {
 
   if (
     !(params.error instanceof NoClearSpeechDetectedError) &&
-    !(params.error instanceof NoReadableScanTextError)
+    !(params.error instanceof NoReadableScanTextError) &&
+    !(params.error instanceof InsufficientSourceMaterialError)
   ) {
     captureRouteError(params.error, {
       route: "lecture-pipeline",

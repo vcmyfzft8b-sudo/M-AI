@@ -390,9 +390,7 @@ function buildStructuredPlusInstructions(params: {
 }) {
   const labels = getStructuredPlusLabels(params.outputLanguage);
   const emojiInstruction =
-    params.sourceProfile.kind === "short"
-      ? "Use 1-3 logical emojis total in headings or the top callout when they fit the source; skip emojis only when they would feel forced."
-      : "Use 2-5 logical emojis total in major section headings or the top callout so the notes feel more readable and polished. Put them only where they match the topic, and never on every bullet.";
+    "Every markdown heading must start with one relevant emoji followed by a space, for example \"## 🧭 Heading\" or \"### 💡 Heading\". Choose emojis that match the section meaning or topic. There is no total emoji limit. You may also use emojis inside callouts or bullets when they are genuinely helpful, but do not decorate every bullet.";
 
   return `Use a research-based "compressed expert study notes" style: select the important ideas, organize them clearly, signal what matters, and remove repetition or low-value wording. Cover the material by concepts, not by rewriting every sentence.
 
@@ -402,13 +400,13 @@ Core length rule:
 - Never invent facts, examples, definitions, or relationships that are not supported by the source.
 - Do not omit distinct names, dates, works, periods, categories, comparisons, examples, or teacher-emphasized points merely to keep the note short.
 
-Use this stable Structured Plus markdown format with these exact heading labels:
-- Start with "${labels.overview}" containing concise sentences that explain the whole material.
+Use this stable Structured Plus markdown format with these exact heading labels after a relevant emoji prefix:
+- Start with a heading like "## 🧭 ${labels.overview.replace(/^##\s+/, "")}" containing concise sentences that explain the whole material.
 - Add a semantic blockquote callout in this form only when the source has a genuinely important takeaway: "> **${labels.keyTakeaway}:** ...".
-- Add "${labels.keyThings}" with complete bullet points for the main ideas. Use fewer bullets when the source only contains a few ideas.
+- Add a heading like "## 🔑 ${labels.keyThings.replace(/^##\s+/, "")}" with complete bullet points for the main ideas. Use fewer bullets when the source only contains a few ideas.
 - Include a concise GFM markdown table only when the source contains comparable concepts, categories, systems, components, terms, steps, or cause-effect relationships that become clearer in a table.
-- Create numbered topic sections such as "${labels.topicExample}" only for distinct source-supported concepts that need explanation. Merge related chunks into one topic instead of creating a section for every chunk.
-- Inside each substantial topic, use "${labels.coreIdea}" and "${labels.detailedNotes}". Use "${labels.keyTerms}", "${labels.example}", "${labels.compare}", "${labels.process}", or "${labels.checkYourself}" only when they add real study value.
+- Create numbered topic sections such as "## 📌 ${labels.topicExample.replace(/^##\s+/, "")}" only for distinct source-supported concepts that need explanation. Merge related chunks into one topic instead of creating a section for every chunk.
+- Inside each substantial topic, use headings like "### 💡 ${labels.coreIdea.replace(/^###\s+/, "")}" and "### 📝 ${labels.detailedNotes.replace(/^###\s+/, "")}". Use emoji-prefixed versions of "${labels.keyTerms}", "${labels.example}", "${labels.compare}", "${labels.process}", or "${labels.checkYourself}" only when they add real study value.
 - "${labels.coreIdea}" must be exactly 1 sentence.
 - "${labels.detailedNotes}" should usually contain a short explanatory paragraph plus hyphen bullets when the material is naturally list-like. Do not force every concept into a bullet.
 - Use hyphen bullet lists only when the material is naturally list-like: steps, components, causes, benefits, risks, grouped examples, questions, takeaways, or direct comparisons. This follows good study-note design by segmenting related ideas so learners can scan, compare, and self-test more easily.
@@ -420,8 +418,8 @@ Use this stable Structured Plus markdown format with these exact heading labels:
 - Use GFM markdown tables only when they make terminology, comparisons, categories, formulas, steps, or cause-effect relationships shorter and easier to understand than prose. Tables must compress information, not duplicate the surrounding bullets. Format every table with leading and trailing pipes in the header, separator, and body rows.
 - Use semantic blockquote callouts in the selected language for visible highlighting where it actually helps learning. Do not turn every example into a callout. Supported forms: "> **${labels.definition}:** ...", "> **${labels.example}:** ...", "> **${labels.commonMistake}:** ...", or "> **${labels.keyTakeaway}:** ...".
 - Include source-grounded examples or worked explanations only when they clarify a difficult concept and the source supports them. Most examples should be normal text under "${labels.example}", not blockquote callouts. Skip generic examples.
-- Add "${labels.checkYourself}" only when the source contains enough concrete facts for useful self-testing. Format it as a hyphen bullet list with short questions that are answerable from the notes.
-- End with "${labels.finalReview}" formatted as a hyphen bullet list containing tight takeaways and any confusing points or common mistakes supported by the source.
+- Add an emoji-prefixed "${labels.checkYourself}" heading only when the source contains enough concrete facts for useful self-testing. Format it as a hyphen bullet list with short questions that are answerable from the notes.
+- End with a heading like "## ✅ ${labels.finalReview.replace(/^##\s+/, "")}" formatted as a hyphen bullet list containing tight takeaways and any confusing points or common mistakes supported by the source.
 
 Source profile: ${params.sourceProfile.kind}.
 ${

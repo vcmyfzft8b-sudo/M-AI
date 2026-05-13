@@ -1283,9 +1283,9 @@ export function NoteSourceModal({
     setError(null);
     setIsTextEditorOpen(false);
 
-    const heicPhotoSources = nextPhotoSources.filter(
-      (photoSource) => photoSource.previewStatus === "queued",
-    );
+    const heicPhotoSources = [...nextPhotoSources]
+      .reverse()
+      .filter((photoSource) => photoSource.previewStatus === "queued");
 
     if (heicPhotoSources.length > 0) {
       photoPreviewQueueRef.current = photoPreviewQueueRef.current

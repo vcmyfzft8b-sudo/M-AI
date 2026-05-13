@@ -5,6 +5,8 @@ import {
   ChevronLeft,
   ChevronDown,
   Loader2,
+  Trash2,
+  X,
 } from "lucide-react";
 import {
   type CSSProperties,
@@ -43,6 +45,7 @@ import {
 import { NOTE_LANGUAGE_OPTIONS } from "@/lib/languages";
 import {
   getExtensionForMimeType,
+  isSupportedScanImageMimeType,
   normalizeMimeType,
   normalizeUploadScanImageMimeType,
 } from "@/lib/storage";
@@ -65,6 +68,14 @@ type ScanUploadResponse = {
     path: string;
     token: string;
   }>;
+};
+
+type PhotoSource = {
+  id: string;
+  file: File;
+  previewUrl: string;
+  previewObjectUrls: string[];
+  previewStatus: "queued" | "converting" | "ready" | "failed";
 };
 
 const MODES: Array<{
@@ -180,6 +191,58 @@ function formatUploadedPhotoCount(count: number) {
   return `${count} fotografij naloženih`;
 }
 
+function isHeicPhoto(file: File) {
+  const lowerName = file.name.toLowerCase();
+  const normalizedMimeType = normalizeMimeType(file.type || "");
+
+  return (
+    normalizedMimeType === "image/heic" ||
+    normalizedMimeType === "image/heif" ||
+    lowerName.endsWith(".heic") ||
+    lowerName.endsWith(".heif")
+  );
+}
+
+function isScanPhotoFile(file: File) {
+  return file.type.startsWith("image/") || isSupportedScanImageMimeType(file.type, file.name);
+}
+
+function canPreviewHeicNatively() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  const userAgent = navigator.userAgent;
+  const vendor = navigator.vendor;
+  const isSafari =
+    /Safari/i.test(userAgent) &&
+    /Apple/i.test(vendor) &&
+    !/(Chrome|Chromium|CriOS|FxiOS|EdgiOS|OPiOS|OPR|SamsungBrowser)/i.test(userAgent);
+
+  return isSafari;
+}
+
+function createPhotoSource(file: File, canUseNativeHeicPreview: boolean): PhotoSource {
+  const randomId =
+    globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const needsConvertedPreview = isHeicPhoto(file) && !canUseNativeHeicPreview;
+  const previewObjectUrl = needsConvertedPreview ? "" : URL.createObjectURL(file);
+
+  return {
+    id: `${file.name}-${file.lastModified}-${file.size}-${randomId}`,
+    file,
+    previewUrl: previewObjectUrl,
+    previewObjectUrls: previewObjectUrl ? [previewObjectUrl] : [],
+    previewStatus: needsConvertedPreview ? "queued" : "ready",
+  };
+}
+
+function revokePhotoSourcePreviewUrls(photoSource: PhotoSource) {
+  photoSource.previewObjectUrls.forEach((previewObjectUrl) => {
+    URL.revokeObjectURL(previewObjectUrl);
+  });
+}
+
 export function NoteSourceModal({
   mode,
   open,
@@ -208,13 +271,16 @@ export function NoteSourceModal({
   const sourceSheetDragStartYRef = useRef<number | null>(null);
   const sourceSheetDragOffsetRef = useRef(0);
   const sourceSheetSuppressClickRef = useRef(false);
+  const photoSourcesRef = useRef<PhotoSource[]>([]);
+  const photoPreviewQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const recordingMimeType = useMemo(() => pickRecorderMimeType(), []);
 
   const [selectedMode, setSelectedMode] = useState<NoteSourceMode>(mode ?? "record");
   const [audioSource, setAudioSource] = useState<AudioSource | null>(null);
   const [pdfSource, setPdfSource] = useState<File | null>(null);
-  const [photoSources, setPhotoSources] = useState<File[]>([]);
+  const [photoSources, setPhotoSources] = useState<PhotoSource[]>([]);
+  const [activePhotoPreviewId, setActivePhotoPreviewId] = useState<string | null>(null);
   const [textValue, setTextValue] = useState("");
   const [linkValue, setLinkValue] = useState("");
   const [languageHint, setLanguageHint] = useState("sl");
@@ -227,7 +293,6 @@ export function NoteSourceModal({
   const [isPaused, setIsPaused] = useState(false);
   const [isTextEditorOpen, setIsTextEditorOpen] = useState(false);
   const [textEditorKeyboardOffset, setTextEditorKeyboardOffset] = useState(0);
-  const [scannedFileNames, setScannedFileNames] = useState<string[]>([]);
   const [visualizerStream, setVisualizerStream] = useState<MediaStream | null>(null);
   const [showAudioImportGuide, setShowAudioImportGuide] = useState(false);
   const [sourceSheetDragOffset, setSourceSheetDragOffset] = useState(0);
@@ -300,6 +365,13 @@ export function NoteSourceModal({
   const canGenerateText =
     Boolean(pdfSource) || photoSources.length > 0 || combinedTextSource.length >= 120;
   const canGenerateLink = trimmedLinkValue.length > 0 && !linkVideoError;
+  const activePhotoPreview =
+    photoSources.find((photoSource) => photoSource.id === activePhotoPreviewId) ?? null;
+  const visiblePhotoSources = [...photoSources].reverse();
+
+  useEffect(() => {
+    photoSourcesRef.current = photoSources;
+  }, [photoSources]);
 
   useEffect(() => {
     if (!open || selectedMode !== "text") {
@@ -382,7 +454,11 @@ export function NoteSourceModal({
     elapsedRef.current = 0;
     clearAudioSource();
     setPdfSource(null);
-    setPhotoSources([]);
+    setPhotoSources((current) => {
+      current.forEach((photoSource) => revokePhotoSourcePreviewUrls(photoSource));
+      return [];
+    });
+    setActivePhotoPreviewId(null);
     setTextValue("");
     setLinkValue("");
     setLanguageHint("sl");
@@ -393,7 +469,6 @@ export function NoteSourceModal({
     setBusyLabel(null);
     setIsCancelling(false);
     setIsTextEditorOpen(false);
-    setScannedFileNames([]);
     setShowAudioImportGuide(false);
     activeRequestControllerRef.current = null;
     createdLectureIdRef.current = null;
@@ -499,6 +574,14 @@ export function NoteSourceModal({
       }
     };
   }, [audioSource]);
+
+  useEffect(() => {
+    return () => {
+      photoSourcesRef.current.forEach((photoSource) => {
+        revokePhotoSourcePreviewUrls(photoSource);
+      });
+    };
+  }, []);
 
   async function handleUploadFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -655,6 +738,11 @@ export function NoteSourceModal({
     sourceSheetDragOffsetRef.current = 0;
     setSourceSheetDragOffset(0);
 
+    if (activePhotoPreviewId) {
+      setActivePhotoPreviewId(null);
+      return;
+    }
+
     if (showAudioImportGuide) {
       setShowAudioImportGuide(false);
       return;
@@ -679,6 +767,7 @@ export function NoteSourceModal({
   }, [
     busyLabel,
     handleCancelBusyAction,
+    activePhotoPreviewId,
     isRecording,
     isTextEditorOpen,
     onClose,
@@ -912,12 +1001,12 @@ export function NoteSourceModal({
         return;
       }
 
-      const filesForUpload = photoSources.map((file, index) => ({
-        file,
+      const filesForUpload = photoSources.map((photoSource, index) => ({
+        file: photoSource.file,
         index,
         mimeType: normalizeUploadScanImageMimeType({
-          mimeType: file.type || "application/octet-stream",
-          fileName: file.name,
+          mimeType: photoSource.file.type || "application/octet-stream",
+          fileName: photoSource.file.name,
         }),
       }));
       const controller = new AbortController();
@@ -1093,13 +1182,91 @@ export function NoteSourceModal({
     }
   }
 
+  async function prepareHeicPhotoPreview(photoSource: PhotoSource) {
+    const formData = new FormData();
+    formData.append("file", photoSource.file);
+
+    try {
+      setPhotoSources((current) =>
+        current.map((currentPhotoSource) =>
+          currentPhotoSource.id === photoSource.id
+            ? { ...currentPhotoSource, previewStatus: "converting" }
+            : currentPhotoSource,
+        ),
+      );
+
+      const response = await fetch("/api/scan-preview", {
+        method: "POST",
+        headers: {
+          Accept: "image/jpeg",
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(
+          typeof payload?.error === "string" ? payload.error : "Predogleda ni bilo mogoče ustvariti.",
+        );
+      }
+
+      const previewBlob = await response.blob();
+
+      if (!previewBlob.type.startsWith("image/")) {
+        throw new Error("Predogleda ni bilo mogoče prebrati.");
+      }
+
+      const previewObjectUrl = URL.createObjectURL(previewBlob);
+
+      setPhotoSources((current) =>
+        current.map((currentPhotoSource) => {
+          if (currentPhotoSource.id !== photoSource.id) {
+            return currentPhotoSource;
+          }
+
+          return {
+            ...currentPhotoSource,
+            previewUrl: previewObjectUrl,
+            previewObjectUrls: [...currentPhotoSource.previewObjectUrls, previewObjectUrl],
+            previewStatus: "ready",
+          };
+        }),
+      );
+    } catch (previewError) {
+      setPhotoSources((current) =>
+        current.map((currentPhotoSource) =>
+          currentPhotoSource.id === photoSource.id
+            ? { ...currentPhotoSource, previewStatus: "failed" }
+            : currentPhotoSource,
+        ),
+      );
+      Sentry.captureException(previewError, {
+        tags: {
+          component: "note-source-modal",
+          action: "scan-preview",
+        },
+        extra: {
+          fileName: photoSource.file.name,
+          fileType: photoSource.file.type,
+          fileSize: photoSource.file.size,
+        },
+      });
+    }
+  }
+
+  async function prepareHeicPhotoPreviewsSequentially(photoSourcesForPreview: PhotoSource[]) {
+    for (const photoSource of photoSourcesForPreview) {
+      await prepareHeicPhotoPreview(photoSource);
+    }
+  }
+
   function preparePhotoFiles(files: File[]) {
     if (photoSources.length + files.length > MAX_SCAN_IMAGE_COUNT) {
       throw new Error(`Dosegel si največ ${MAX_SCAN_IMAGE_COUNT} fotografij.`);
     }
 
     for (const file of files) {
-      if (!file.type.startsWith("image/")) {
+      if (!isScanPhotoFile(file)) {
         throw new Error("Za skeniranje uporabi fotografijo ali sliko.");
       }
 
@@ -1108,17 +1275,23 @@ export function NoteSourceModal({
       }
     }
 
+    const canUseNativeHeicPreview = canPreviewHeicNatively();
+    const nextPhotoSources = files.map((file) => createPhotoSource(file, canUseNativeHeicPreview));
+
     setPdfSource(null);
-    setPhotoSources((current) => [
-      ...current,
-      ...files,
-    ]);
-    setScannedFileNames((current) => [
-      ...current,
-      ...files.map((file) => file.name),
-    ]);
+    setPhotoSources((current) => [...current, ...nextPhotoSources]);
     setError(null);
     setIsTextEditorOpen(false);
+
+    const heicPhotoSources = [...nextPhotoSources]
+      .reverse()
+      .filter((photoSource) => photoSource.previewStatus === "queued");
+
+    if (heicPhotoSources.length > 0) {
+      photoPreviewQueueRef.current = photoPreviewQueueRef.current
+        .catch(() => undefined)
+        .then(() => prepareHeicPhotoPreviewsSequentially(heicPhotoSources));
+    }
   }
 
   function prepareDocumentFile(file: File) {
@@ -1145,10 +1318,44 @@ export function NoteSourceModal({
     }
 
     setPdfSource(file);
-    setPhotoSources([]);
+    setPhotoSources((current) => {
+      current.forEach((photoSource) => revokePhotoSourcePreviewUrls(photoSource));
+      return [];
+    });
+    setActivePhotoPreviewId(null);
     setTextValue("");
-    setScannedFileNames([]);
     setError(null);
+  }
+
+  function removePhotoSource(photoId: string) {
+    const nextPhotoSources = photoSources.filter((photoSource) => photoSource.id !== photoId);
+    const removedPhotoSource = photoSources.find((photoSource) => photoSource.id === photoId);
+
+    if (removedPhotoSource) {
+      revokePhotoSourcePreviewUrls(removedPhotoSource);
+    }
+
+    setPhotoSources(nextPhotoSources);
+    setActivePhotoPreviewId((current) => (current === photoId ? null : current));
+  }
+
+  function handlePhotoPreviewImageError(photoId: string) {
+    setPhotoSources((current) =>
+      current.map((photoSource) => {
+        if (
+          photoSource.id !== photoId ||
+          photoSource.previewStatus === "ready" ||
+          photoSource.previewStatus === "converting"
+        ) {
+          return photoSource;
+        }
+
+        return {
+          ...photoSource,
+          previewUrl: "",
+        };
+      }),
+    );
   }
 
   async function handleScanImageChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -1193,7 +1400,7 @@ export function NoteSourceModal({
       return;
     }
 
-    const allImages = files.every((file) => file.type.startsWith("image/"));
+    const allImages = files.every((file) => isScanPhotoFile(file));
 
     try {
       if (allImages) {
@@ -1502,6 +1709,9 @@ export function NoteSourceModal({
                   className={cn(
                     "mt-6 space-y-4 note-source-modal-body",
                     selectedMode === "text" && "note-source-modal-body-text",
+                    selectedMode === "text" &&
+                      photoSources.length > 0 &&
+                      "note-source-modal-body-photos",
                   )}
                 >
                   {selectedMode === "record" && !isRecording ? (
@@ -1763,16 +1973,67 @@ export function NoteSourceModal({
                           }}
                           className={cn(
                             "ios-textarea note-source-inline-textarea",
-                            pdfSource && "note-source-inline-textarea-compact",
+                            (pdfSource || photoSources.length > 0) &&
+                              "note-source-inline-textarea-compact",
                           )}
                           placeholder="Sem prilepi zapiske ali besedilo..."
                         />
                       </div>
 
-                      {!pdfSource && scannedFileNames.length > 0 ? (
-                        <p className="ios-row-subtitle note-source-docs-file-copy note-source-docs-status-copy">
-                          {formatUploadedPhotoCount(scannedFileNames.length)}
-                        </p>
+                      {!pdfSource && photoSources.length > 0 ? (
+                        <div className="note-source-photo-previews" aria-label="Naložene fotografije">
+                          <p className="ios-row-subtitle note-source-docs-file-copy note-source-docs-status-copy">
+                            {formatUploadedPhotoCount(photoSources.length)}
+                          </p>
+                          <div className="note-source-photo-grid">
+                            {visiblePhotoSources.map((photoSource) => {
+                              const originalIndex = photoSources.findIndex(
+                                (source) => source.id === photoSource.id,
+                              );
+
+                              return (
+                                <div key={photoSource.id} className="note-source-photo-preview">
+                                  <button
+                                    type="button"
+                                    className="note-source-photo-open"
+                                    onClick={() => setActivePhotoPreviewId(photoSource.id)}
+                                    aria-label={`Odpri fotografijo ${originalIndex + 1}`}
+                                  >
+                                    {photoSource.previewUrl ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={photoSource.previewUrl}
+                                        alt={
+                                          photoSource.file.name ||
+                                          `Fotografija ${originalIndex + 1}`
+                                        }
+                                        className="note-source-photo-image"
+                                        onError={() => handlePhotoPreviewImageError(photoSource.id)}
+                                      />
+                                    ) : (
+                                      <span className="note-source-photo-preview-status">
+                                        {photoSource.previewStatus === "failed"
+                                          ? "Ni predogleda"
+                                          : photoSource.previewStatus === "queued"
+                                            ? "Čaka..."
+                                            : "Predogled..."}
+                                      </span>
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="note-source-photo-remove"
+                                    onClick={() => removePhotoSource(photoSource.id)}
+                                    aria-label={`Odstrani fotografijo ${originalIndex + 1}`}
+                                    title="Odstrani fotografijo"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       ) : null}
 
                       <input
@@ -1858,6 +2119,58 @@ export function NoteSourceModal({
         </div>
       </div>
 
+      {activePhotoPreview ? (
+        <div
+          className="note-source-photo-viewer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Predogled fotografije"
+        >
+          <button
+            type="button"
+            className="note-source-photo-viewer-backdrop"
+            onClick={() => setActivePhotoPreviewId(null)}
+            aria-label="Zapri predogled fotografije"
+          />
+          <div className="note-source-photo-viewer-stage">
+            {activePhotoPreview.previewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={activePhotoPreview.previewUrl}
+                alt={activePhotoPreview.file.name || "Predogled fotografije"}
+                className="note-source-photo-viewer-image"
+              />
+            ) : (
+              <p className="note-source-photo-viewer-status">
+                {activePhotoPreview.previewStatus === "failed"
+                  ? "Predogleda te fotografije ni bilo mogoče prikazati."
+                  : "Predogled fotografije se pripravlja..."}
+              </p>
+            )}
+          </div>
+          <div className="note-source-photo-viewer-actions">
+            <button
+              type="button"
+              className="note-source-photo-viewer-icon-button"
+              onClick={() => removePhotoSource(activePhotoPreview.id)}
+              aria-label="Odstrani fotografijo"
+              title="Odstrani fotografijo"
+            >
+              <Trash2 className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              className="note-source-photo-viewer-icon-button"
+              onClick={() => setActivePhotoPreviewId(null)}
+              aria-label="Zapri predogled fotografije"
+              title="Zapri"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {selectedMode === "text" && isTextEditorOpen ? (
         <>
           <div
@@ -1940,14 +2253,19 @@ export function NoteSourceModal({
                         Počisti besedilo
                       </button>
                     ) : null}
-                    {scannedFileNames.length > 0 ? (
+                    {photoSources.length > 0 ? (
                       <button
                         type="button"
                         className="ios-secondary-button"
                         disabled={Boolean(busyLabel)}
                         onClick={() => {
-                          setPhotoSources([]);
-                          setScannedFileNames([]);
+                          setPhotoSources((current) => {
+                            current.forEach((photoSource) => {
+                              revokePhotoSourcePreviewUrls(photoSource);
+                            });
+                            return [];
+                          });
+                          setActivePhotoPreviewId(null);
                         }}
                       >
                         Počisti fotografije

@@ -49,6 +49,10 @@ export function getManualImportSourceType(metadata: unknown) {
     : null;
 }
 
+export function shouldCreateInitialNoteAudio(metadata: unknown) {
+  return isRecord(metadata) && metadata.createInitialAudio === true;
+}
+
 export function getEffectiveLectureSourceType(
   lecture: Pick<LectureRow, "source_type" | "processing_metadata">,
 ) {

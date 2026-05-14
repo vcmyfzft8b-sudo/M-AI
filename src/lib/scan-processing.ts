@@ -1,6 +1,7 @@
 import "server-only";
 
 import { MAX_SCAN_IMAGE_BYTES, STORAGE_BUCKET } from "@/lib/constants";
+import { shouldCreateInitialNoteAudio } from "@/lib/lecture-source-metadata";
 import { extractTextFromImage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
 import {
   isCanonicalLectureScanImageStoragePath,
@@ -251,14 +252,15 @@ export async function processStoredScanLecture(
       }
 
       if (artifact) {
-        await prepareInitialNoteTtsChunk({
-          userId: lectureRow.user_id,
-          lectureId: lectureRow.id,
-          content: (artifact as { structured_notes_md: string }).structured_notes_md,
-          title: lectureRow.title,
-          languageHint: lectureRow.language_hint,
-        });
-
+        if (shouldCreateInitialNoteAudio(metadata)) {
+          await prepareInitialNoteTtsChunk({
+            userId: lectureRow.user_id,
+            lectureId: lectureRow.id,
+            content: (artifact as { structured_notes_md: string }).structured_notes_md,
+            title: lectureRow.title,
+            languageHint: lectureRow.language_hint,
+          });
+        }
         const { error: updateError } = await supabase
           .from("lectures")
           .update(
@@ -418,6 +420,7 @@ export async function processStoredScanLecture(
     blocks,
     titleHint,
     languageHint: lectureRow.language_hint ?? "sl",
+    createInitialAudio: shouldCreateInitialNoteAudio(metadata),
     modelMetadata: {
       importMode: "scan",
       sourceFileNames,

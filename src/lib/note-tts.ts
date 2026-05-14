@@ -80,7 +80,7 @@ export function getLjubljanaUsageDate(now = new Date()) {
 }
 
 export function hashNoteTtsContent(content: string) {
-  return createHash("sha256").update(`note-tts-v4-skip-page-title:${content}`).digest("hex");
+  return createHash("sha256").update(`note-tts-v5-punctuation-pauses:${content}`).digest("hex");
 }
 
 function safeStorageSegment(value: string) {

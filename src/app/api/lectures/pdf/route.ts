@@ -31,6 +31,11 @@ import {
 export const maxDuration = 300;
 const PDF_UPLOAD_MAX_BYTES = MAX_DOCUMENT_BYTES + 256 * 1024;
 
+const formBooleanSchema = z
+  .union([z.boolean(), z.literal("true"), z.literal("false"), z.null()])
+  .optional()
+  .transform((value) => value === true || value === "true");
+
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   const {
@@ -71,11 +76,13 @@ export async function POST(request: Request) {
         .union([z.string(), z.null()])
         .transform((value) => (typeof value === "string" ? value : "sl"))
         .pipe(languageHintSchema),
+      createInitialAudio: formBooleanSchema,
     })
     .safeParse({
       lectureId: formData.get("lectureId"),
       originalFileName: formData.get("originalFileName"),
       languageHint: formData.get("languageHint"),
+      createInitialAudio: formData.get("createInitialAudio"),
     });
   const inputFile = formData.get("file");
 
@@ -83,7 +90,7 @@ export async function POST(request: Request) {
     return buildValidationErrorResponse(parsedFields.error);
   }
 
-  const { lectureId, originalFileName, languageHint } = parsedFields.data;
+  const { lectureId, originalFileName, languageHint, createInitialAudio } = parsedFields.data;
 
   if (!entitlement.hasPaidAccess && lectureId !== entitlement.trialLectureId) {
     return createBillingRequiredResponse(
@@ -158,6 +165,7 @@ export async function POST(request: Request) {
       })),
       titleHint: extracted.title || sourceFileName.replace(/\.[^.]+$/i, ""),
       languageHint,
+      createInitialAudio,
       modelMetadata: {
         importMode:
           sourceType === "pdf"

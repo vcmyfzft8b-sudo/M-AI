@@ -63,6 +63,9 @@ export type NoteTtsChunkPlan = {
 const DEFAULT_TARGET_WORDS_PER_CHUNK = 190;
 const ESTIMATED_TTS_WORDS_PER_SECOND = 2.35;
 const WORD_PATTERN = /[\p{L}\p{N}]+(?:[.'’_-][\p{L}\p{N}]+)*/gu;
+const SPEECH_BLOCK_SEPARATOR = "\n\n";
+const SPEECH_LIST_ITEM_SEPARATOR = "\n";
+const SPEECH_TERMINAL_PATTERN = /[.!?…:;)]["')\]]*$/u;
 
 function normalizeHeadingText(value: string) {
   return value
@@ -470,10 +473,108 @@ export function buildNoteTtsChunks(
       chunkIndex,
       wordStartIndex,
       wordEndIndex,
-      text: chunkWords.map((word) => word.text).join(" "),
+      text: buildChunkSpeechText(document.blocks, wordStartIndex, wordEndIndex),
       estimatedSeconds,
     });
   }
 
   return chunks;
+}
+
+function normalizeSpeechText(value: string) {
+  return value
+    .replace(/\s*(?:-{1,2}>|→|⇒|➜|➡)\s*/g, ". ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s+([,.;:!?…])/g, "$1")
+    .replace(/([,.;:!?…])(?=\S)/g, "$1 ")
+    .trim();
+}
+
+function ensureSpeechPause(value: string) {
+  const text = normalizeSpeechText(value);
+
+  if (!text || SPEECH_TERMINAL_PATTERN.test(text)) {
+    return text;
+  }
+
+  return `${text}.`;
+}
+
+function tokensToSpeechText(
+  tokens: NoteTtsInlineToken[],
+  wordStartIndex: number,
+  wordEndIndex: number,
+) {
+  let text = "";
+  let pendingText = "";
+  let hasIncludedWord = false;
+
+  for (const token of tokens) {
+    if (token.type === "text") {
+      if (hasIncludedWord) {
+        text += token.text;
+      } else {
+        pendingText += token.text;
+      }
+      continue;
+    }
+
+    if (token.wordIndex >= wordEndIndex) {
+      break;
+    }
+
+    if (token.wordIndex < wordStartIndex) {
+      pendingText = "";
+      continue;
+    }
+
+    text += hasIncludedWord ? pendingText : pendingText.replace(/^\s+/, "");
+    text += token.text;
+    pendingText = "";
+    hasIncludedWord = true;
+  }
+
+  return normalizeSpeechText(text);
+}
+
+function buildBlockSpeechText(
+  block: NoteTtsBlock,
+  wordStartIndex: number,
+  wordEndIndex: number,
+) {
+  if (block.kind === "list") {
+    return block.items
+      .map((item) => ensureSpeechPause(tokensToSpeechText(item.tokens, wordStartIndex, wordEndIndex)))
+      .filter(Boolean)
+      .join(SPEECH_LIST_ITEM_SEPARATOR);
+  }
+
+  if (block.kind === "table") {
+    return block.rows
+      .map((row) =>
+        ensureSpeechPause(
+          row.cells
+            .map((cell) => tokensToSpeechText(cell.tokens, wordStartIndex, wordEndIndex))
+            .filter(Boolean)
+            .join(", "),
+        ),
+      )
+      .filter(Boolean)
+      .join(SPEECH_LIST_ITEM_SEPARATOR);
+  }
+
+  return ensureSpeechPause(tokensToSpeechText(block.tokens, wordStartIndex, wordEndIndex));
+}
+
+function buildChunkSpeechText(
+  blocks: NoteTtsBlock[],
+  wordStartIndex: number,
+  wordEndIndex: number,
+) {
+  return (
+    blocks
+      .map((block) => buildBlockSpeechText(block, wordStartIndex, wordEndIndex))
+      .filter(Boolean)
+      .join(SPEECH_BLOCK_SEPARATOR) || ""
+  );
 }

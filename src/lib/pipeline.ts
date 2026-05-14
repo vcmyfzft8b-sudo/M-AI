@@ -9,6 +9,7 @@ import { createEmbeddings } from "@/lib/ai/embeddings";
 import { parseAudioChunkManifest } from "@/lib/audio-processing";
 import { CHAT_MATCH_COUNT } from "@/lib/constants";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
+import { shouldCreateInitialNoteAudio } from "@/lib/lecture-source-metadata";
 import { captureRouteError } from "@/lib/monitoring";
 import {
   buildSyntheticTranscriptFromTextSource,
@@ -458,13 +459,15 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
     throw artifactError;
   }
 
-  await prepareInitialNoteTtsChunk({
-    userId: lecture.user_id,
-    lectureId: lecture.id,
-    content: notes.structuredNotesMd,
-    title: notes.title,
-    languageHint: lecture.language_hint,
-  });
+  if (shouldCreateInitialNoteAudio(lecture.processing_metadata)) {
+    await prepareInitialNoteTtsChunk({
+      userId: lecture.user_id,
+      lectureId: lecture.id,
+      content: notes.structuredNotesMd,
+      title: notes.title,
+      languageHint: lecture.language_hint,
+    });
+  }
 
   await updateLectureProcessingState({
     lectureId: lecture.id,

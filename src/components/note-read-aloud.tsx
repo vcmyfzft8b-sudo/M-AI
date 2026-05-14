@@ -74,6 +74,25 @@ const TTS_FREE_DAILY_LIMIT_MESSAGE =
 const TTS_PAID_DAILY_LIMIT_MESSAGE =
   "Porabil si današnje poslušanje. Znova lahko poslušaš po ponastavitvi ob 00:00.";
 const READ_SETTINGS_SHEET_CLOSE_MS = 180;
+const TTS_GENERATION_PROGRESS_LABEL = "Ustvarjam zvok";
+
+function getTtsGenerationProgressPercent(startedAt: number) {
+  const elapsedSeconds = Math.max(0, (Date.now() - startedAt) / 1000);
+
+  if (elapsedSeconds < 5) {
+    return 5 + (elapsedSeconds / 5) * 14;
+  }
+
+  if (elapsedSeconds < 18) {
+    return 19 + ((elapsedSeconds - 5) / 13) * 31;
+  }
+
+  if (elapsedSeconds < 42) {
+    return 50 + ((elapsedSeconds - 18) / 24) * 28;
+  }
+
+  return Math.min(89, 78 + (1 - Math.exp(-(elapsedSeconds - 42) / 28)) * 11);
+}
 
 function createReadSessionId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -745,6 +764,9 @@ export function NoteReadAloud({
   const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse | null>>());
   const prefetchQueueRef = useRef<Promise<void>>(Promise.resolve());
   const playbackRequestIdRef = useRef(0);
+  const generationProgressIntervalRef = useRef<number | null>(null);
+  const generationProgressDismissRef = useRef<number | null>(null);
+  const generationProgressStartedAtRef = useRef(0);
   const playbackWordStateRef = useRef<{
     completedWordIndex: number;
     currentWordIndex: number | null;
@@ -768,6 +790,10 @@ export function NoteReadAloud({
   const [hasHydratedSettings, setHasHydratedSettings] = useState(false);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const [isFetchingChunk, setIsFetchingChunk] = useState(false);
+  const [ttsGenerationProgress, setTtsGenerationProgress] = useState<{
+    label: string;
+    percent: number;
+  } | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isStartingPlayback, setIsStartingPlayback] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -894,12 +920,79 @@ export function NoteReadAloud({
     [],
   );
 
+  const clearTtsGenerationProgressTimers = useCallback(() => {
+    if (generationProgressIntervalRef.current) {
+      window.clearInterval(generationProgressIntervalRef.current);
+      generationProgressIntervalRef.current = null;
+    }
+
+    if (generationProgressDismissRef.current) {
+      window.clearTimeout(generationProgressDismissRef.current);
+      generationProgressDismissRef.current = null;
+    }
+  }, []);
+
+  const startTtsGenerationProgress = useCallback(
+    () => {
+      clearTtsGenerationProgressTimers();
+
+      generationProgressStartedAtRef.current = Date.now();
+
+      setTtsGenerationProgress({
+        label: TTS_GENERATION_PROGRESS_LABEL,
+        percent: 5,
+      });
+
+      generationProgressIntervalRef.current = window.setInterval(() => {
+        setTtsGenerationProgress((current) => {
+          if (!current) {
+            return current;
+          }
+
+          const nextPercent = Math.max(
+            current.percent,
+            Math.round(getTtsGenerationProgressPercent(generationProgressStartedAtRef.current)),
+          );
+
+          return {
+            ...current,
+            percent: nextPercent,
+          };
+        });
+      }, 450);
+    },
+    [clearTtsGenerationProgressTimers],
+  );
+
+  const finishTtsGenerationProgress = useCallback(() => {
+    clearTtsGenerationProgressTimers();
+    setTtsGenerationProgress((current) =>
+      current
+        ? {
+            ...current,
+            label: TTS_GENERATION_PROGRESS_LABEL,
+            percent: 100,
+          }
+        : current,
+    );
+    generationProgressDismissRef.current = window.setTimeout(() => {
+      setTtsGenerationProgress(null);
+      generationProgressDismissRef.current = null;
+    }, 650);
+  }, [clearTtsGenerationProgressTimers]);
+
+  const cancelTtsGenerationProgress = useCallback(() => {
+    clearTtsGenerationProgressTimers();
+    setTtsGenerationProgress(null);
+  }, [clearTtsGenerationProgressTimers]);
+
   const resetPlaybackToStart = useCallback(() => {
     playbackRequestIdRef.current += 1;
     sessionIdRef.current = createReadSessionId();
     prefetchedChunksRef.current.clear();
     pendingChunkRequestsRef.current.clear();
     prefetchQueueRef.current = Promise.resolve();
+    cancelTtsGenerationProgress();
 
     const audio = audioRef.current;
 
@@ -918,7 +1011,13 @@ export function NoteReadAloud({
       completedWordIndex: -1,
       currentWordIndex: null,
     });
-  }, [setPlaybackWordState]);
+  }, [cancelTtsGenerationProgress, setPlaybackWordState]);
+
+  useEffect(() => {
+    return () => {
+      clearTtsGenerationProgressTimers();
+    };
+  }, [clearTtsGenerationProgressTimers]);
 
   useEffect(() => {
     if (status && !status.hasUnlimitedUsage && status.remainingSeconds <= 0) {
@@ -1016,12 +1115,14 @@ export function NoteReadAloud({
 
       if (!hasReadyChunk) {
         setIsFetchingChunk(true);
+        startTtsGenerationProgress();
       }
 
       setError(null);
+      let payload: TtsChunkResponse | null = null;
 
       try {
-        const payload = await fetchChunk(chunkIndex);
+        payload = await fetchChunk(chunkIndex);
 
         if (payload) {
           setActiveChunk(payload);
@@ -1030,10 +1131,21 @@ export function NoteReadAloud({
 
         return payload;
       } finally {
+        if (!hasReadyChunk) {
+          if (!payload) {
+            cancelTtsGenerationProgress();
+          }
+        }
+
         setIsFetchingChunk(false);
       }
     },
-    [fetchChunk, selectedVoice],
+    [
+      cancelTtsGenerationProgress,
+      fetchChunk,
+      selectedVoice,
+      startTtsGenerationProgress,
+    ],
   );
 
   const prefetchChunk = useCallback(
@@ -1178,6 +1290,7 @@ export function NoteReadAloud({
         currentWordIndex: payload.alignment[0]?.wordIndex ?? payload.wordStartIndex,
       });
       lastAutoScrolledWordRef.current = null;
+      finishTtsGenerationProgress();
 
       try {
         await audio.play();
@@ -1193,7 +1306,7 @@ export function NoteReadAloud({
         }
       }
     },
-    [loadChunk, playbackRate, setPlaybackWordState],
+    [finishTtsGenerationProgress, loadChunk, playbackRate, setPlaybackWordState],
   );
 
   const handlePlayPause = useCallback(async () => {
@@ -1449,6 +1562,25 @@ export function NoteReadAloud({
         />
         {error ? <span className="note-read-error">{error}</span> : null}
       </div>
+      {ttsGenerationProgress ? (
+        <div
+          className="note-read-generation-progress"
+          role="status"
+          aria-live="polite"
+          aria-label={`${ttsGenerationProgress.label} ${ttsGenerationProgress.percent}%`}
+        >
+          <div className="note-read-generation-progress-copy">
+            <span>{ttsGenerationProgress.label}</span>
+          </div>
+          <div className="note-read-generation-progress-track">
+            <span
+              className="note-read-generation-progress-fill"
+              style={{ width: `${ttsGenerationProgress.percent}%` }}
+            />
+            <strong>{ttsGenerationProgress.percent}%</strong>
+          </div>
+        </div>
+      ) : null}
       <audio
         ref={audioRef}
         preload="none"

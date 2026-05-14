@@ -24,6 +24,7 @@ const createLinkLectureSchema = z.object({
   lectureId: optionalLectureIdSchema,
   url: httpUrlSchema,
   languageHint: languageHintSchema.default("sl"),
+  createInitialAudio: z.boolean().optional().default(false),
 });
 
 export const maxDuration = 300;
@@ -102,6 +103,7 @@ export async function POST(request: Request) {
       text: webpage.text,
       titleHint: webpage.title,
       languageHint: parsed.data.languageHint,
+      createInitialAudio: parsed.data.createInitialAudio,
       modelMetadata: {
         importMode: "link",
         sourceUrl: parsed.data.url,

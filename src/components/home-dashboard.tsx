@@ -60,6 +60,37 @@ const QUICK_ACTIONS = [
   },
 ] as const;
 
+const DASHBOARD_MUTATION_TIMEOUT_MS = 18_000;
+
+async function fetchDashboardMutation(
+  input: Parameters<typeof fetch>[0],
+  init: RequestInit = {},
+) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, DASHBOARD_MUTATION_TIMEOUT_MS);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (timedOut) {
+      throw new Error(
+        "Lokalni strežnik se ni odzval. Osveži stran ali ponovno zaženi localhost.",
+      );
+    }
+
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 function sourceLabel(sourceType: string) {
   if (sourceType === "link") {
     return "Povezava";
@@ -236,6 +267,7 @@ export function HomeDashboard({
   const [renameTarget, setRenameTarget] = useState<AppLectureListItem | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<AppLectureListItem | null>(null);
+  const [dashboardActionError, setDashboardActionError] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
   const selectedFolderLectureIdSet = useMemo(
     () => (selectedFolderLectureIds ? new Set(selectedFolderLectureIds) : null),
@@ -461,6 +493,7 @@ export function HomeDashboard({
 
   function openRenameModal(lecture: AppLectureListItem) {
     setOpenMenuLectureId(null);
+    setDashboardActionError(null);
     setRenameTarget(lecture);
     setRenameValue(lecture.title?.trim() || "Neimenovan zapisek");
   }
@@ -473,12 +506,14 @@ export function HomeDashboard({
     dashboardDialogDragStartYRef.current = null;
     dashboardDialogDragOffsetRef.current = 0;
     setDashboardDialogDragOffset(0);
+    setDashboardActionError(null);
     setRenameTarget(null);
     setRenameValue("");
   }
 
   function openDeleteModal(lecture: AppLectureListItem) {
     setOpenMenuLectureId(null);
+    setDashboardActionError(null);
     setDeleteTarget(lecture);
   }
 
@@ -490,6 +525,7 @@ export function HomeDashboard({
     dashboardDialogDragStartYRef.current = null;
     dashboardDialogDragOffsetRef.current = 0;
     setDashboardDialogDragOffset(0);
+    setDashboardActionError(null);
     setDeleteTarget(null);
   }
 
@@ -555,29 +591,53 @@ export function HomeDashboard({
       return;
     }
 
-    setBusyLectureId(deleteTarget.id);
-    const response = await fetch(`/api/lectures/${deleteTarget.id}`, { method: "DELETE" });
-    setBusyLectureId(null);
+    const target = deleteTarget;
 
-    if (!response.ok) {
-      return;
+    try {
+      setDashboardActionError(null);
+      setBusyLectureId(target.id);
+      const response = await fetchDashboardMutation(`/api/lectures/${target.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "Zapiska ni bilo mogoče izbrisati.");
+      }
+
+      setLibraryLectures((current) => current.filter((lecture) => lecture.id !== target.id));
+      setDeleteTarget(null);
+      startTransition(() => router.refresh());
+    } catch (error) {
+      setDashboardActionError(
+        error instanceof Error ? error.message : "Zapiska ni bilo mogoče izbrisati.",
+      );
+    } finally {
+      setBusyLectureId(null);
     }
-
-    setLibraryLectures((current) => current.filter((lecture) => lecture.id !== deleteTarget.id));
-    setDeleteTarget(null);
-    startTransition(() => router.refresh());
   }
 
   async function handleRetryLecture(id: string) {
-    setBusyLectureId(id);
-    const response = await fetch(`/api/lectures/${id}/retry`, { method: "POST" });
-    setBusyLectureId(null);
+    try {
+      setDashboardActionError(null);
+      setBusyLectureId(id);
+      const response = await fetchDashboardMutation(`/api/lectures/${id}/retry`, {
+        method: "POST",
+      });
 
-    if (!response.ok) {
-      return;
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "Ponovni poskus ni uspel.");
+      }
+
+      startTransition(() => router.refresh());
+    } catch (error) {
+      setDashboardActionError(
+        error instanceof Error ? error.message : "Ponovni poskus ni uspel.",
+      );
+    } finally {
+      setBusyLectureId(null);
     }
-
-    startTransition(() => router.refresh());
   }
 
   async function handleRenameLecture() {
@@ -593,33 +653,44 @@ export function HomeDashboard({
       return;
     }
 
-    setBusyLectureId(renameTarget.id);
-    const response = await fetch(`/api/lectures/${renameTarget.id}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ title: nextTitle }),
-    });
-    setBusyLectureId(null);
+    const target = renameTarget;
 
-    if (!response.ok) {
-      return;
+    try {
+      setDashboardActionError(null);
+      setBusyLectureId(target.id);
+      const response = await fetchDashboardMutation(`/api/lectures/${target.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ title: nextTitle }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "Naslova ni bilo mogoče shraniti.");
+      }
+
+      setLibraryLectures((current) =>
+        current.map((item) =>
+          item.id === target.id
+            ? {
+                ...item,
+                title: nextTitle,
+              }
+            : item,
+        ),
+      );
+      setRenameTarget(null);
+      setRenameValue("");
+      startTransition(() => router.refresh());
+    } catch (error) {
+      setDashboardActionError(
+        error instanceof Error ? error.message : "Naslova ni bilo mogoče shraniti.",
+      );
+    } finally {
+      setBusyLectureId(null);
     }
-
-    setLibraryLectures((current) =>
-      current.map((item) =>
-        item.id === renameTarget.id
-          ? {
-              ...item,
-              title: nextTitle,
-            }
-          : item,
-      ),
-    );
-    setRenameTarget(null);
-    setRenameValue("");
-    startTransition(() => router.refresh());
   }
 
   const visibleLectures = selectedFolderLectureIdSet
@@ -986,6 +1057,11 @@ export function HomeDashboard({
                     <p className="ios-subtitle dashboard-note-dialog-copy">
                       Daj temu zapisku bolj jasen naslov, ne da zapustiš stran.
                     </p>
+                    {dashboardActionError ? (
+                      <p className="ios-info ios-danger dashboard-note-dialog-copy">
+                        {dashboardActionError}
+                      </p>
+                    ) : null}
 
                     <label className="dashboard-note-dialog-field">
                       <span>Naslov</span>
@@ -1081,6 +1157,11 @@ export function HomeDashboard({
                       </span>
                       ? Tega ni mogoče razveljaviti.
                     </p>
+                    {dashboardActionError ? (
+                      <p className="ios-info ios-danger dashboard-note-dialog-copy">
+                        {dashboardActionError}
+                      </p>
+                    ) : null}
 
                     <div className="dashboard-note-dialog-actions">
                       <button

@@ -16,6 +16,7 @@ const createTextLectureSchema = z.object({
   lectureId: optionalLectureIdSchema,
   text: noteTextSchema,
   languageHint: languageHintSchema.default("sl"),
+  createInitialAudio: z.boolean().optional().default(false),
 });
 
 export const maxDuration = 300;
@@ -82,6 +83,7 @@ export async function POST(request: Request) {
       sourceType: "text",
       text: parsed.data.text,
       languageHint: parsed.data.languageHint,
+      createInitialAudio: parsed.data.createInitialAudio,
       modelMetadata: {
         importMode: "text",
       },

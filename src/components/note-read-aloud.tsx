@@ -1132,9 +1132,7 @@ export function NoteReadAloud({
         return payload;
       } finally {
         if (!hasReadyChunk) {
-          if (payload) {
-            finishTtsGenerationProgress();
-          } else {
+          if (!payload) {
             cancelTtsGenerationProgress();
           }
         }
@@ -1145,7 +1143,6 @@ export function NoteReadAloud({
     [
       cancelTtsGenerationProgress,
       fetchChunk,
-      finishTtsGenerationProgress,
       selectedVoice,
       startTtsGenerationProgress,
     ],
@@ -1293,6 +1290,7 @@ export function NoteReadAloud({
         currentWordIndex: payload.alignment[0]?.wordIndex ?? payload.wordStartIndex,
       });
       lastAutoScrolledWordRef.current = null;
+      finishTtsGenerationProgress();
 
       try {
         await audio.play();
@@ -1308,7 +1306,7 @@ export function NoteReadAloud({
         }
       }
     },
-    [loadChunk, playbackRate, setPlaybackWordState],
+    [finishTtsGenerationProgress, loadChunk, playbackRate, setPlaybackWordState],
   );
 
   const handlePlayPause = useCallback(async () => {

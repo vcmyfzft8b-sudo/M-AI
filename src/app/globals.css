@@ -3891,6 +3891,7 @@ select:disabled {
 
 .dashboard-note-dialog-copy {
   margin: 0;
+  min-width: 0;
   text-align: center;
 }
 
@@ -3931,8 +3932,14 @@ select:disabled {
 }
 
 .dashboard-note-dialog-highlight {
+  display: inline-block;
+  max-width: min(100%, 24rem);
+  overflow: hidden;
   color: var(--label);
   font-weight: 600;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
 }
 
 .app-loading-shell {

@@ -79,19 +79,19 @@ const TTS_GENERATION_PROGRESS_LABEL = "Ustvarjam zvok";
 function getTtsGenerationProgressPercent(startedAt: number) {
   const elapsedSeconds = Math.max(0, (Date.now() - startedAt) / 1000);
 
-  if (elapsedSeconds < 3) {
-    return 5 + (elapsedSeconds / 3) * 15;
+  if (elapsedSeconds < 5) {
+    return 5 + (elapsedSeconds / 5) * 14;
   }
 
-  if (elapsedSeconds < 12) {
-    return 20 + ((elapsedSeconds - 3) / 9) * 34;
+  if (elapsedSeconds < 18) {
+    return 19 + ((elapsedSeconds - 5) / 13) * 31;
   }
 
-  if (elapsedSeconds < 30) {
-    return 54 + ((elapsedSeconds - 12) / 18) * 26;
+  if (elapsedSeconds < 42) {
+    return 50 + ((elapsedSeconds - 18) / 24) * 28;
   }
 
-  return Math.min(89, 80 + (1 - Math.exp(-(elapsedSeconds - 30) / 22)) * 9);
+  return Math.min(89, 78 + (1 - Math.exp(-(elapsedSeconds - 42) / 28)) * 11);
 }
 
 function createReadSessionId() {

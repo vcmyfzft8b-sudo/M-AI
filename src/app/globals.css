@@ -4555,15 +4555,22 @@ select:disabled {
 
 .note-read-generation-progress-track strong {
   position: absolute;
-  inset: 0 0.58rem 0 auto;
+  inset: 50% 0.34rem auto auto;
+  min-width: 2.42rem;
+  height: 0.82rem;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  color: #431407;
+  justify-content: center;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--background) 86%, rgba(255, 255, 255, 0.82));
+  color: var(--label);
   font-size: 0.68rem;
   font-weight: 850;
   line-height: 1;
-  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.36);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--separator) 68%, transparent),
+    0 1px 3px rgba(0, 0, 0, 0.2);
   white-space: nowrap;
 }
 

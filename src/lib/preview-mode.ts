@@ -9,6 +9,10 @@ export async function isPreviewAuthBypassEnabled() {
     return false;
   }
 
+  if (process.env.NODE_ENV === "development") {
+    return true;
+  }
+
   const cookieStore = await cookies();
   return cookieStore.get(PREVIEW_AUTH_BYPASS_DISABLED_COOKIE)?.value !== "true";
 }

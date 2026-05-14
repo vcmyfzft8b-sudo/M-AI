@@ -15,6 +15,8 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { prepareInitialNoteTtsChunk } from "@/lib/note-tts";
 
 const SCAN_OCR_CONCURRENCY = 3;
+const SCAN_STORAGE_DOWNLOAD_MAX_ATTEMPTS = 3;
+const SCAN_STORAGE_DOWNLOAD_RETRY_DELAYS_MS = [500, 1500] as const;
 
 type StoredScanImage = {
   index: number;
@@ -101,28 +103,99 @@ async function mapWithConcurrency<TInput, TOutput>(
   return results;
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function getStorageDownloadErrorMessage(error: unknown) {
+  if (isRecord(error) && typeof error.message === "string") {
+    return error.message;
+  }
+
+  return null;
+}
+
+function getStorageDownloadStatus(error: unknown) {
+  if (!isRecord(error)) {
+    return null;
+  }
+
+  const status = error.status ?? error.statusCode;
+
+  if (typeof status === "number") {
+    return status;
+  }
+
+  if (typeof status === "string") {
+    const parsedStatus = Number.parseInt(status, 10);
+    return Number.isFinite(parsedStatus) ? parsedStatus : null;
+  }
+
+  return null;
+}
+
+function isTransientStorageDownloadError(error: unknown) {
+  const status = getStorageDownloadStatus(error);
+
+  if (status != null) {
+    return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+  }
+
+  const message = getStorageDownloadErrorMessage(error)?.toLowerCase() ?? "";
+
+  return [
+    "bad gateway",
+    "connection",
+    "econnreset",
+    "fetch failed",
+    "gateway",
+    "network",
+    "service unavailable",
+    "timeout",
+    "temporarily",
+    "upstream",
+  ].some((fragment) => message.includes(fragment));
+}
+
 async function downloadStoredScanImage(image: StoredScanImage) {
   const normalizedMimeType = normalizeUploadScanImageMimeType({
     mimeType: image.mimeType,
     fileName: image.fileName,
   });
+  const storage = createSupabaseServiceRoleClient().storage.from(STORAGE_BUCKET);
+  let lastDownloadError: unknown = null;
 
-  const { data: blob, error } = await createSupabaseServiceRoleClient()
-    .storage
-    .from(STORAGE_BUCKET)
-    .download(image.path);
+  for (let attempt = 1; attempt <= SCAN_STORAGE_DOWNLOAD_MAX_ATTEMPTS; attempt += 1) {
+    const { data: blob, error } = await storage.download(image.path);
 
-  if (error || !blob) {
-    throw new Error(error?.message ?? "Fotografije ni bilo mogoče prebrati.");
+    if (!error && blob) {
+      if (blob.size <= 0 || blob.size > MAX_SCAN_IMAGE_BYTES) {
+        throw new Error("Slika za skeniranje je prevelika ali prazna.");
+      }
+
+      return new File([blob], image.fileName || `photo-${image.index + 1}`, {
+        type: normalizedMimeType,
+      });
+    }
+
+    const returnedNoBlob = !error && !blob;
+    lastDownloadError = error ?? new Error("Shramba ni vrnila fotografije.");
+
+    if (
+      attempt >= SCAN_STORAGE_DOWNLOAD_MAX_ATTEMPTS ||
+      (!returnedNoBlob && !isTransientStorageDownloadError(lastDownloadError))
+    ) {
+      break;
+    }
+
+    await sleep(SCAN_STORAGE_DOWNLOAD_RETRY_DELAYS_MS[attempt - 1] ?? 1500);
   }
 
-  if (blob.size <= 0 || blob.size > MAX_SCAN_IMAGE_BYTES) {
-    throw new Error("Slika za skeniranje je prevelika ali prazna.");
-  }
-
-  return new File([blob], image.fileName || `photo-${image.index + 1}`, {
-    type: normalizedMimeType,
-  });
+  throw new Error(
+    getStorageDownloadErrorMessage(lastDownloadError) ?? "Fotografije ni bilo mogoče prebrati.",
+  );
 }
 
 export async function processStoredScanLecture(

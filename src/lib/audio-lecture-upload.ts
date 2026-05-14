@@ -37,6 +37,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
   file: File;
   durationSeconds: number;
   languageHint: string;
+  createInitialAudio?: boolean;
   onStageChange?: (stage: UploadStage, message: string) => void;
   onLectureCreated?: (lectureId: string) => void;
   signal?: AbortSignal;
@@ -62,6 +63,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
       size: params.file.size,
       durationSeconds: Math.max(params.durationSeconds, 1),
       languageHint: params.languageHint,
+      createInitialAudio: params.createInitialAudio === true,
     }),
   });
 

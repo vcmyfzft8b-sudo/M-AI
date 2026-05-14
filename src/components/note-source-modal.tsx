@@ -172,6 +172,49 @@ function sheetDescription() {
 }
 
 const DOCUMENT_OR_IMAGE_INPUT_ACCEPT = `${DOCUMENT_FILE_INPUT_ACCEPT},${SCAN_IMAGE_INPUT_ACCEPT}`;
+const LOCAL_API_REQUEST_TIMEOUT_MS = 30_000;
+const SCAN_PREVIEW_TIMEOUT_MS = 18_000;
+
+async function fetchWithTimeout(
+  input: Parameters<typeof fetch>[0],
+  init: RequestInit & { timeoutMessage?: string; timeoutMs?: number } = {},
+) {
+  const { timeoutMessage, timeoutMs = LOCAL_API_REQUEST_TIMEOUT_MS, signal, ...fetchInit } = init;
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  const abortFromParent = () => controller.abort();
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener("abort", abortFromParent, { once: true });
+    }
+  }
+
+  try {
+    return await fetch(input, {
+      ...fetchInit,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (timedOut) {
+      throw new Error(
+        timeoutMessage ??
+          "Lokalni strežnik se ni odzval dovolj hitro. Osveži stran in poskusi znova.",
+      );
+    }
+
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+    signal?.removeEventListener("abort", abortFromParent);
+  }
+}
 
 function formatUploadedPhotoCount(count: number) {
   const remainder100 = count % 100;
@@ -284,6 +327,7 @@ export function NoteSourceModal({
   const [textValue, setTextValue] = useState("");
   const [linkValue, setLinkValue] = useState("");
   const [languageHint, setLanguageHint] = useState("sl");
+  const [createInitialAudio, setCreateInitialAudio] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [recordingSupported, setRecordingSupported] = useState<boolean | null>(null);
@@ -462,6 +506,7 @@ export function NoteSourceModal({
     setTextValue("");
     setLinkValue("");
     setLanguageHint("sl");
+    setCreateInitialAudio(false);
     setIsRecording(false);
     setIsPaused(false);
     setElapsedSeconds(0);
@@ -493,12 +538,13 @@ export function NoteSourceModal({
       const controller = new AbortController();
       activeRequestControllerRef.current = controller;
 
-      const response = await fetch("/api/lectures/manual", {
+      const response = await fetchWithTimeout("/api/lectures/manual", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         signal: controller.signal,
+        timeoutMessage: "Priprava zapiska traja predolgo. Osveži stran in poskusi znova.",
         body: JSON.stringify({
           sourceType,
           languageHint,
@@ -885,6 +931,7 @@ export function NoteSourceModal({
         file: audioSource.file,
         durationSeconds: Math.max(audioSource.durationSeconds, 1),
         languageHint,
+        createInitialAudio,
         signal: createController.signal,
         onLectureCreated: (lectureId) => {
           createdLectureIdRef.current = lectureId;
@@ -954,6 +1001,7 @@ export function NoteSourceModal({
           lectureId,
           text: combinedTextSource,
           languageHint,
+          createInitialAudio,
         }),
       });
 
@@ -1013,12 +1061,14 @@ export function NoteSourceModal({
       activeRequestControllerRef.current = controller;
 
       setBusyLabel("Pripravljam nalaganje fotografij...");
-      const uploadTargetsResponse = await fetch(`/api/lectures/${lectureId}/scan-uploads`, {
+      const uploadTargetsResponse = await fetchWithTimeout(`/api/lectures/${lectureId}/scan-uploads`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         signal: controller.signal,
+        timeoutMessage:
+          "Priprava nalaganja fotografij traja predolgo. Preveri localhost in poskusi znova.",
         body: JSON.stringify({
           files: filesForUpload.map(({ file, index, mimeType }) => ({
             index,
@@ -1061,15 +1111,18 @@ export function NoteSourceModal({
 
       setBusyLabel("Dodajam v vrsto...");
 
-      const response = await fetch("/api/lectures/scan", {
+      const response = await fetchWithTimeout("/api/lectures/scan", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         signal: controller.signal,
+        timeoutMessage:
+          "Dodajanje fotografij v obdelavo traja predolgo. Osveži stran in poskusi znova.",
         body: JSON.stringify({
           lectureId,
           languageHint,
+          createInitialAudio,
           text: combinedTextSource,
           images: filesForUpload.map(({ file, index, mimeType }) => {
             const uploadTarget = uploadTargetsByIndex.get(index);
@@ -1152,6 +1205,7 @@ export function NoteSourceModal({
           lectureId,
           url: trimmedLinkValue,
           languageHint,
+          createInitialAudio,
         }),
       });
 
@@ -1195,11 +1249,13 @@ export function NoteSourceModal({
         ),
       );
 
-      const response = await fetch("/api/scan-preview", {
+      const response = await fetchWithTimeout("/api/scan-preview", {
         method: "POST",
         headers: {
           Accept: "image/jpeg",
         },
+        timeoutMs: SCAN_PREVIEW_TIMEOUT_MS,
+        timeoutMessage: "Predogled fotografije traja predolgo.",
         body: formData,
       });
 
@@ -1461,6 +1517,7 @@ export function NoteSourceModal({
       formData.append("file", uploadFile);
       formData.append("originalFileName", pdfSource.name);
       formData.append("languageHint", languageHint);
+      formData.append("createInitialAudio", String(createInitialAudio));
 
       const controller = new AbortController();
       activeRequestControllerRef.current = controller;
@@ -1535,6 +1592,19 @@ export function NoteSourceModal({
         <EmojiIcon symbol={params.generateIcon} size="1rem" />
         Ustvari
       </button>
+    );
+  }
+
+  function renderInitialAudioOption() {
+    return (
+      <label className="note-source-audio-option">
+        <input
+          type="checkbox"
+          checked={createInitialAudio}
+          onChange={(event) => setCreateInitialAudio(event.target.checked)}
+        />
+        <span>Ustvari zvok</span>
+      </label>
     );
   }
 
@@ -1756,6 +1826,8 @@ export function NoteSourceModal({
                     </div>
                   ) : null}
 
+                  {!isRecording ? renderInitialAudioOption() : null}
+
                   {selectedMode === "record" ? (
                     <>
                       {preparedRecording ? (
@@ -1959,26 +2031,19 @@ export function NoteSourceModal({
                         </div>
                       ) : null}
 
-                      <div className="note-source-docs-textarea-wrap">
-                        <textarea
-                          ref={inlineTextAreaRef}
-                          value={textValue}
-                          onChange={(event) => {
-                            const nextValue = event.target.value;
-
-                            if (pdfSource && nextValue.trim().length > 0) {
-                              setPdfSource(null);
-                            }
-                            setTextValue(nextValue);
-                          }}
-                          className={cn(
-                            "ios-textarea note-source-inline-textarea",
-                            (pdfSource || photoSources.length > 0) &&
-                              "note-source-inline-textarea-compact",
-                          )}
-                          placeholder="Sem prilepi zapiske ali besedilo..."
-                        />
-                      </div>
+                      {!pdfSource && photoSources.length === 0 ? (
+                        <div className="note-source-docs-textarea-wrap">
+                          <textarea
+                            ref={inlineTextAreaRef}
+                            value={textValue}
+                            onChange={(event) => {
+                              setTextValue(event.target.value);
+                            }}
+                            className="ios-textarea note-source-inline-textarea"
+                            placeholder="Sem prilepi zapiske ali besedilo..."
+                          />
+                        </div>
+                      ) : null}
 
                       {!pdfSource && photoSources.length > 0 ? (
                         <div className="note-source-photo-previews" aria-label="Naložene fotografije">

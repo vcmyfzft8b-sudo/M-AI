@@ -28,6 +28,7 @@ const createLectureSchema = z.object({
   size: z.number().int().positive().max(MAX_AUDIO_BYTES),
   durationSeconds: z.number().positive().max(MAX_AUDIO_SECONDS),
   languageHint: languageHintSchema.default("sl"),
+  createInitialAudio: z.boolean().optional().default(false),
 });
 
 const deleteLecturesSchema = z.object({
@@ -94,6 +95,9 @@ export async function POST(request: Request) {
         status: "uploading",
         language_hint: parsed.data.languageHint,
         duration_seconds: Math.round(parsed.data.durationSeconds),
+        processing_metadata: {
+          createInitialAudio: parsed.data.createInitialAudio,
+        },
       } as never,
     )
     .select("id")

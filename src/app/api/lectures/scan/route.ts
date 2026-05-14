@@ -38,6 +38,10 @@ const scanLectureFieldsSchema = z.object({
     .refine((value) => value.length <= 120000, {
       message: "Text is too long.",
     }),
+  createInitialAudio: z
+    .union([z.boolean(), z.literal("true"), z.literal("false"), z.null()])
+    .optional()
+    .transform((value) => value === true || value === "true"),
 });
 
 const storedScanImageSchema = z.object({
@@ -51,6 +55,7 @@ const storedScanImageSchema = z.object({
 const storedScanLectureSchema = z.object({
   lectureId: optionalDocumentLectureIdSchema.pipe(z.string().uuid()),
   languageHint: languageHintSchema.default("sl"),
+  createInitialAudio: z.boolean().optional().default(false),
   text: z
     .string()
     .optional()
@@ -102,7 +107,7 @@ export async function POST(request: Request) {
         return parsed.response;
       }
 
-      const { lectureId, languageHint, text, images } = parsed.data;
+      const { lectureId, languageHint, text, images, createInitialAudio } = parsed.data;
 
       if (!entitlement.hasPaidAccess && lectureId !== entitlement.trialLectureId) {
         return createBillingRequiredResponse(
@@ -158,6 +163,7 @@ export async function POST(request: Request) {
             title: titleHint,
             language_hint: languageHint,
             processing_metadata: {
+              createInitialAudio,
               pendingScanImages: images,
               pendingScanText: text,
               processing: {
@@ -191,6 +197,7 @@ export async function POST(request: Request) {
       lectureId: formData.get("lectureId"),
       languageHint: formData.get("languageHint"),
       text: formData.get("text"),
+      createInitialAudio: formData.get("createInitialAudio"),
     });
 
     if (!parsedFields.success) {
@@ -265,6 +272,7 @@ export async function POST(request: Request) {
       const filesForProcessing = files;
       const languageHint = parsedFields.data.languageHint;
       const pastedText = parsedFields.data.text.trim();
+      const createInitialAudio = parsedFields.data.createInitialAudio;
 
       after(async () => {
         try {
@@ -321,6 +329,7 @@ export async function POST(request: Request) {
             blocks,
             titleHint,
             languageHint,
+            createInitialAudio,
             modelMetadata: {
               importMode: "scan",
               sourceFileNames,

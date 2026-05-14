@@ -2,7 +2,11 @@ import { after, NextResponse } from "next/server";
 
 import { enqueueLectureNotesGeneration, enqueueLectureProcessing } from "@/lib/jobs";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
-import { getEffectiveLectureSourceType, isRecord } from "@/lib/lecture-source-metadata";
+import {
+  getEffectiveLectureSourceType,
+  isRecord,
+  shouldCreateInitialNoteAudio,
+} from "@/lib/lecture-source-metadata";
 import { fetchReadableWebpage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -100,6 +104,7 @@ export async function POST(
         text: webpage.text,
         titleHint: webpage.title || lecture.title || undefined,
         languageHint: lecture.language_hint ?? undefined,
+        createInitialAudio: shouldCreateInitialNoteAudio(lecture.processing_metadata),
         modelMetadata: {
           importMode: "link",
           sourceUrl,

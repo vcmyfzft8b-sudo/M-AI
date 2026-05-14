@@ -74,6 +74,25 @@ const TTS_FREE_DAILY_LIMIT_MESSAGE =
 const TTS_PAID_DAILY_LIMIT_MESSAGE =
   "Porabil si današnje poslušanje. Znova lahko poslušaš po ponastavitvi ob 00:00.";
 const READ_SETTINGS_SHEET_CLOSE_MS = 180;
+const TTS_GENERATION_PROGRESS_LABEL = "Ustvarjam zvok";
+
+function getTtsGenerationProgressPercent(startedAt: number) {
+  const elapsedSeconds = Math.max(0, (Date.now() - startedAt) / 1000);
+
+  if (elapsedSeconds < 3) {
+    return 5 + (elapsedSeconds / 3) * 15;
+  }
+
+  if (elapsedSeconds < 12) {
+    return 20 + ((elapsedSeconds - 3) / 9) * 34;
+  }
+
+  if (elapsedSeconds < 30) {
+    return 54 + ((elapsedSeconds - 12) / 18) * 26;
+  }
+
+  return Math.min(89, 80 + (1 - Math.exp(-(elapsedSeconds - 30) / 22)) * 9);
+}
 
 function createReadSessionId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -747,6 +766,7 @@ export function NoteReadAloud({
   const playbackRequestIdRef = useRef(0);
   const generationProgressIntervalRef = useRef<number | null>(null);
   const generationProgressDismissRef = useRef<number | null>(null);
+  const generationProgressStartedAtRef = useRef(0);
   const playbackWordStateRef = useRef<{
     completedWordIndex: number;
     currentWordIndex: number | null;
@@ -913,17 +933,14 @@ export function NoteReadAloud({
   }, []);
 
   const startTtsGenerationProgress = useCallback(
-    (chunkIndex: number) => {
+    () => {
       clearTtsGenerationProgressTimers();
 
-      const label =
-        chunkIndex === 0
-          ? "Ustvarjam prvi zvočni del..."
-          : `Ustvarjam zvočni del ${chunkIndex + 1}...`;
+      generationProgressStartedAtRef.current = Date.now();
 
       setTtsGenerationProgress({
-        label,
-        percent: 8,
+        label: TTS_GENERATION_PROGRESS_LABEL,
+        percent: 5,
       });
 
       generationProgressIntervalRef.current = window.setInterval(() => {
@@ -932,10 +949,9 @@ export function NoteReadAloud({
             return current;
           }
 
-          const remaining = 92 - current.percent;
-          const nextPercent = Math.min(
-            92,
-            current.percent + Math.max(1, Math.round(remaining * 0.12)),
+          const nextPercent = Math.max(
+            current.percent,
+            Math.round(getTtsGenerationProgressPercent(generationProgressStartedAtRef.current)),
           );
 
           return {
@@ -954,7 +970,7 @@ export function NoteReadAloud({
       current
         ? {
             ...current,
-            label: "Zvok je pripravljen.",
+            label: TTS_GENERATION_PROGRESS_LABEL,
             percent: 100,
           }
         : current,
@@ -1099,7 +1115,7 @@ export function NoteReadAloud({
 
       if (!hasReadyChunk) {
         setIsFetchingChunk(true);
-        startTtsGenerationProgress(chunkIndex);
+        startTtsGenerationProgress();
       }
 
       setError(null);
@@ -1557,13 +1573,13 @@ export function NoteReadAloud({
         >
           <div className="note-read-generation-progress-copy">
             <span>{ttsGenerationProgress.label}</span>
-            <strong>{ttsGenerationProgress.percent}%</strong>
           </div>
           <div className="note-read-generation-progress-track">
             <span
               className="note-read-generation-progress-fill"
               style={{ width: `${ttsGenerationProgress.percent}%` }}
             />
+            <strong>{ttsGenerationProgress.percent}%</strong>
           </div>
         </div>
       ) : null}

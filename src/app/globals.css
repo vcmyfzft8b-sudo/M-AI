@@ -4522,39 +4522,26 @@ select:disabled {
 
 .note-read-generation-progress {
   display: grid;
-  gap: 0.48rem;
-  margin: -0.36rem 0 1rem;
-  padding: 0.74rem 0.86rem;
-  border: 1px solid color-mix(in srgb, var(--separator) 82%, transparent);
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--fill-primary) 88%, transparent);
-  box-shadow: var(--shadow-soft);
+  gap: 0.4rem;
+  margin: -0.28rem 0 1rem;
 }
 
 .note-read-generation-progress-copy {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
+  justify-content: flex-start;
   color: var(--label);
   font-size: 0.78rem;
   font-weight: 740;
   line-height: 1.2;
 }
 
-.note-read-generation-progress-copy strong {
-  color: #7c2d12;
-  font-size: 0.78rem;
-  font-weight: 850;
-  white-space: nowrap;
-}
-
 .note-read-generation-progress-track {
   position: relative;
-  height: 0.55rem;
+  height: 1.18rem;
   overflow: hidden;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--separator) 44%, transparent);
+  background: color-mix(in srgb, var(--separator) 48%, transparent);
 }
 
 .note-read-generation-progress-fill {
@@ -4564,6 +4551,20 @@ select:disabled {
   border-radius: inherit;
   background: linear-gradient(90deg, #f97316, #fdba74);
   transition: width 0.42s ease;
+}
+
+.note-read-generation-progress-track strong {
+  position: absolute;
+  inset: 0 0.58rem 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: #431407;
+  font-size: 0.68rem;
+  font-weight: 850;
+  line-height: 1;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.36);
+  white-space: nowrap;
 }
 
 .note-read-audio {

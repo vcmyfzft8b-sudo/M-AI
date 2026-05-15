@@ -11,8 +11,8 @@ import {
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { EditableLectureNotes } from "@/components/editable-lecture-notes";
 import { EmojiIcon } from "@/components/emoji-icon";
-import { NoteReadAloud } from "@/components/note-read-aloud";
 import { StudyCompletionCard } from "@/components/study-completion-card";
 import {
   getApiErrorMessage,
@@ -25,6 +25,7 @@ import {
   isRecord,
   lectureShowsTranscript,
 } from "@/lib/lecture-source-metadata";
+import { getEffectiveStructuredNotesMd } from "@/lib/note-editor";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import {
   POLL_INTERVAL_MS,
@@ -1413,15 +1414,21 @@ export function LectureWorkspace({
     };
   }, [persistStudySessionPayload]);
   const cleanedStructuredNotes = useMemo(() => {
-    if (!detail.artifact?.structured_notes_md) {
+    if (!detail.artifact) {
+      return null;
+    }
+
+    const effectiveNotesMd = getEffectiveStructuredNotesMd(detail.artifact);
+
+    if (!effectiveNotesMd.trim()) {
       return null;
     }
 
     return stripLeadingRedundantHeading(
-      detail.artifact.structured_notes_md,
+      effectiveNotesMd,
       detail.lecture.title,
     );
-  }, [detail.artifact?.structured_notes_md, detail.lecture.title]);
+  }, [detail.artifact, detail.lecture.title]);
   const notesArtifactLoadFailed =
     !cleanedStructuredNotes &&
     detail.lecture.status === "ready" &&
@@ -2331,9 +2338,13 @@ export function LectureWorkspace({
       return (
         <div className="workspace-panel-stack lecture-panel-stack">
           <div className="ios-card lecture-notes-card">
-            {cleanedStructuredNotes && detail.lecture.status === "ready" ? (
+            {cleanedStructuredNotes && detail.lecture.status === "ready" && detail.artifact ? (
               <div className="markdown lecture-markdown">
-                <NoteReadAloud lectureId={detail.lecture.id} content={cleanedStructuredNotes} />
+                <EditableLectureNotes
+                  lectureId={detail.lecture.id}
+                  lectureTitle={detail.lecture.title}
+                  artifact={detail.artifact}
+                />
               </div>
             ) : shouldPollLecture(detail.lecture.status) || notesArtifactLoadFailed ? (
               <div className="lecture-notes-processing">

@@ -350,6 +350,11 @@ export type Database = {
           summary: string;
           key_topics: string[];
           structured_notes_md: string;
+          editable_notes_doc: Json | null;
+          editable_notes_md: string | null;
+          editable_notes_plain: string | null;
+          editable_notes_revision: number;
+          editable_notes_updated_at: string | null;
           model_metadata: Json;
           generated_at: string;
         };
@@ -358,6 +363,11 @@ export type Database = {
           summary: string;
           key_topics: string[];
           structured_notes_md: string;
+          editable_notes_doc?: Json | null;
+          editable_notes_md?: string | null;
+          editable_notes_plain?: string | null;
+          editable_notes_revision?: number;
+          editable_notes_updated_at?: string | null;
           model_metadata?: Json;
           generated_at?: string;
         };
@@ -365,8 +375,44 @@ export type Database = {
           summary?: string;
           key_topics?: string[];
           structured_notes_md?: string;
+          editable_notes_doc?: Json | null;
+          editable_notes_md?: string | null;
+          editable_notes_plain?: string | null;
+          editable_notes_revision?: number;
+          editable_notes_updated_at?: string | null;
           model_metadata?: Json;
           generated_at?: string;
+        };
+      };
+      lecture_note_media: {
+        Row: {
+          id: string;
+          lecture_id: string;
+          user_id: string;
+          storage_path: string;
+          mime_type: string;
+          byte_size: number;
+          original_file_name: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          lecture_id: string;
+          user_id: string;
+          storage_path: string;
+          mime_type: string;
+          byte_size: number;
+          original_file_name?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          lecture_id?: string;
+          user_id?: string;
+          storage_path?: string;
+          mime_type?: string;
+          byte_size?: number;
+          original_file_name?: string | null;
+          created_at?: string;
         };
       };
       lecture_tts_chunks: {
@@ -952,6 +998,8 @@ export type TranscriptSegmentRow =
   Database["public"]["Tables"]["transcript_segments"]["Row"];
 export type LectureArtifactRow =
   Database["public"]["Tables"]["lecture_artifacts"]["Row"];
+export type LectureNoteMediaRow =
+  Database["public"]["Tables"]["lecture_note_media"]["Row"];
 export type LectureTtsChunkRow =
   Database["public"]["Tables"]["lecture_tts_chunks"]["Row"];
 export type TtsDailyUsageRow =

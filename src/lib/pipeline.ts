@@ -18,6 +18,7 @@ import {
 } from "@/lib/text-source-processing";
 import type { ChatMessageWithCitations } from "@/lib/types";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
+import { getEffectiveStructuredNotesMd } from "@/lib/note-editor";
 import { prepareInitialNoteTtsChunk } from "@/lib/note-tts";
 import { NoReadableScanTextError } from "@/lib/scan-ocr-errors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -605,6 +606,8 @@ export async function answerLectureChat(params: {
   const artifactRow = (artifact ?? null) as {
     summary: string;
     key_topics: string[];
+    structured_notes_md: string;
+    editable_notes_md: string | null;
   } | null;
   const lectureRow = (lecture ?? null) as { language_hint: string | null } | null;
 
@@ -625,12 +628,13 @@ export async function answerLectureChat(params: {
 
   const answer = await generateStructuredObject({
     schema: chatAnswerSchema,
-    instructions: `${buildGeneratedContentLanguageInstruction(lectureRow?.language_hint)} Answer the student using only the supplied lecture context. If the answer is not fully supported, say that the lecture does not clearly state it. Cite only transcript chunks that are genuinely relevant.`,
+    instructions: `${buildGeneratedContentLanguageInstruction(lectureRow?.language_hint)} Answer the student using only the supplied lecture context and notes. If the answer is not fully supported, say that the lecture does not clearly state it. Cite only transcript chunks that are genuinely relevant; when the edited notes answer the question but no transcript chunk is relevant, answer without citations.`,
     input: JSON.stringify(
       {
         question: params.question,
         summary: artifactRow?.summary ?? null,
         keyTopics: artifactRow?.key_topics ?? [],
+        notes: artifactRow ? getEffectiveStructuredNotesMd(artifactRow).slice(0, 12_000) : null,
         context,
       },
       null,

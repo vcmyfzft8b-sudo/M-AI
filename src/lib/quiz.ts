@@ -12,6 +12,7 @@ import type {
 import { generateStructuredObject } from "@/lib/ai/json";
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
+import { getEffectiveStructuredNotesMd } from "@/lib/note-editor";
 import { areHighQualityQuizOptions, isHighQualityStudyPrompt } from "@/lib/study-quality";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { createCoveragePlan, MAX_STUDY_ITEMS } from "@/lib/study-coverage";
@@ -531,10 +532,19 @@ async function generateCoverageQuiz(params: {
   artifact: LectureArtifactRow;
   transcript: TranscriptSegmentRow[];
 }) {
+  const editedNotesMd = params.artifact.editable_notes_md?.trim() || null;
+  const notesSourceMd =
+    editedNotesMd ?? (params.transcript.length === 0 ? params.artifact.structured_notes_md : null);
   const { units } = buildSourceUnits({
     lecture: params.lecture,
     transcript: params.transcript,
+    notesMarkdown: notesSourceMd,
   });
+
+  if (units.length === 0) {
+    throw new Error("The lecture notes are empty.");
+  }
+
   const plannedCoverage = await createCoveragePlan({
     title: params.lecture.title,
     summary: params.artifact.summary,
@@ -704,7 +714,7 @@ export async function generateLectureQuiz(params: { lectureId: string }) {
       throw new Error("Quizzes are available after note processing finishes.");
     }
 
-    if (transcriptRows.length === 0) {
+    if (transcriptRows.length === 0 && !getEffectiveStructuredNotesMd(artifactRow).trim()) {
       throw new Error("The lecture transcript is empty.");
     }
 

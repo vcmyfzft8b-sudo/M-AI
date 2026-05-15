@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { canUseLectureFeatures } from "@/lib/billing";
 import { getLectureDetailForUser } from "@/lib/lectures";
+import { getEffectiveStructuredNotesMd } from "@/lib/note-editor";
 import {
   buildNoteTtsChunks,
   parseNoteTtsDocument,
@@ -61,8 +62,9 @@ export async function GET(
     hasPaidAccess: access.entitlement.hasPaidAccess,
     hasUnlimitedUsage,
   });
-  const content = detail.artifact?.structured_notes_md
-    ? stripLeadingRedundantHeading(detail.artifact.structured_notes_md, detail.lecture.title)
+  const effectiveNotesMd = detail.artifact ? getEffectiveStructuredNotesMd(detail.artifact) : "";
+  const content = effectiveNotesMd
+    ? stripLeadingRedundantHeading(effectiveNotesMd, detail.lecture.title)
     : "";
   const document = content ? parseNoteTtsDocument(content) : null;
   const chunkCount = document ? buildNoteTtsChunks(document).length : 0;

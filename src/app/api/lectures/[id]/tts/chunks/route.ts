@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import { getLectureDetailForUser } from "@/lib/lectures";
+import { getEffectiveStructuredNotesMd } from "@/lib/note-editor";
 import {
   consumeTtsQuota,
   getOrCreateTtsChunk,
@@ -148,8 +149,9 @@ export async function POST(
     );
   }
 
-  const content = detail.artifact?.structured_notes_md
-    ? stripLeadingRedundantHeading(detail.artifact.structured_notes_md, detail.lecture.title)
+  const effectiveNotesMd = detail.artifact ? getEffectiveStructuredNotesMd(detail.artifact) : "";
+  const content = effectiveNotesMd
+    ? stripLeadingRedundantHeading(effectiveNotesMd, detail.lecture.title)
     : "";
 
   if (detail.lecture.status !== "ready" || !content) {

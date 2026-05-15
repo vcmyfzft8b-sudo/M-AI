@@ -9,6 +9,8 @@ const AUDIO_UNIT_MAX_WORDS = 115;
 const AUDIO_SECTION_TARGET_MS = 6 * 60 * 1000;
 const AUDIO_SEGMENT_SPLIT_TARGET_WORDS = 55;
 const AUDIO_SEGMENT_SPLIT_MAX_WORDS = 80;
+const NOTE_UNIT_TARGET_WORDS = 95;
+const NOTE_UNIT_MAX_WORDS = 130;
 
 function normalizeLabel(value: string | null | undefined) {
   return value?.replace(/\s+/g, " ").trim() || null;
@@ -93,6 +95,86 @@ function splitTextIntoAudioChunks(text: string) {
 
   if (activeSentences.length > 0) {
     chunks.push(activeSentences.join(" ").trim());
+  }
+
+  return chunks;
+}
+
+function cleanNoteMarkdownLine(line: string) {
+  return line
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/[*_~]{1,3}([^*_~]+)[*_~]{1,3}/g, "$1")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitEditedNotesIntoBlocks(markdown: string) {
+  const blocks: Array<{ title: string | null; text: string }> = [];
+  let currentTitle: string | null = null;
+  let activeLines: string[] = [];
+
+  function flush() {
+    const text = activeLines.map(cleanNoteMarkdownLine).filter(Boolean).join(" ").trim();
+
+    if (text) {
+      blocks.push({ title: currentTitle, text });
+    }
+
+    activeLines = [];
+  }
+
+  for (const line of markdown.split(/\r?\n/)) {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      flush();
+      continue;
+    }
+
+    const heading = /^#{1,6}\s+(.+)$/.exec(trimmed);
+
+    if (heading) {
+      flush();
+      currentTitle = cleanNoteMarkdownLine(heading[1]);
+      continue;
+    }
+
+    if (/^[-:| ]+$/.test(trimmed)) {
+      continue;
+    }
+
+    activeLines.push(trimmed.replace(/^>\s?/, "").replace(/^[-*+]\s+/, "").replace(/^\d+[.)]\s+/, ""));
+  }
+
+  flush();
+
+  return blocks;
+}
+
+function splitNoteBlockText(text: string) {
+  const words = text.replace(/\s+/g, " ").trim().split(/\s+/).filter(Boolean);
+
+  if (words.length <= NOTE_UNIT_MAX_WORDS) {
+    return [text];
+  }
+
+  const chunks: string[] = [];
+  let activeWords: string[] = [];
+
+  for (const word of words) {
+    if (activeWords.length >= NOTE_UNIT_TARGET_WORDS) {
+      chunks.push(activeWords.join(" "));
+      activeWords = [];
+    }
+
+    activeWords.push(word);
+  }
+
+  if (activeWords.length > 0) {
+    chunks.push(activeWords.join(" "));
   }
 
   return chunks;
@@ -303,12 +385,55 @@ function buildDocumentSourceUnits(params: {
   return units;
 }
 
+function buildEditedNoteSourceUnits(params: {
+  lecture: LectureRow;
+  notesMarkdown: string;
+}): SourceUnit[] {
+  const blocks = splitEditedNotesIntoBlocks(params.notesMarkdown);
+  const units: SourceUnit[] = [];
+
+  blocks.forEach((block, blockIndex) => {
+    splitNoteBlockText(block.text).forEach((chunk, chunkIndex) => {
+      const sectionTitle = block.title || `Edited notes ${blockIndex + 1}`;
+      units.push({
+        lectureId: params.lecture.id,
+        unitIndex: units.length,
+        sectionIndex: blockIndex,
+        sectionTitle,
+        sourceType: params.lecture.source_type,
+        locatorLabel:
+          chunkIndex === 0
+            ? sectionTitle
+            : `${sectionTitle}, part ${chunkIndex + 1}`,
+        startMs: 0,
+        endMs: 0,
+        pageNumber: null,
+        text: chunk,
+        wordCount: countWords(chunk),
+        importance: inferImportance(chunk),
+        rawSourceRef: {
+          segmentIndexes: [],
+          speakerLabel: "Edited notes",
+        },
+      });
+    });
+  });
+
+  return units;
+}
+
 export function buildSourceUnits(params: {
   lecture: LectureRow;
   transcript: TranscriptSegmentRow[];
+  notesMarkdown?: string | null;
 }) {
-  const units =
-    params.lecture.source_type === "audio"
+  const notesMarkdown = params.notesMarkdown?.trim();
+  const units = notesMarkdown
+    ? buildEditedNoteSourceUnits({
+        lecture: params.lecture,
+        notesMarkdown,
+      })
+    : params.lecture.source_type === "audio"
       ? buildAudioSourceUnits(params)
       : buildDocumentSourceUnits(params);
 

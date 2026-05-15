@@ -749,9 +749,13 @@ function ReadAlongMarkdown({
 export function NoteReadAloud({
   lectureId,
   content,
+  renderContent = true,
+  toolbarClassName = "",
 }: {
   lectureId: string;
   content: string;
+  renderContent?: boolean;
+  toolbarClassName?: string;
 }) {
   const document = useMemo(() => parseNoteTtsDocument(content), [content]);
   const chunks = useMemo(() => buildNoteTtsChunks(document), [document]);
@@ -1538,7 +1542,7 @@ export function NoteReadAloud({
 
   return (
     <>
-      <div className="note-read-toolbar">
+      <div className={`note-read-toolbar ${toolbarClassName}`.trim()}>
         <button
           type="button"
           className="note-read-button"
@@ -1611,13 +1615,15 @@ export function NoteReadAloud({
           <span className="mobile-note-read-pill-label">{playButtonLabel}</span>
         </button>
       </ViewportPortal>
-      <div ref={contentRef} className="note-read-content" style={readAlongStyle}>
-        <ReadAlongMarkdown
-          document={document}
-          completedWordIndex={completedWordIndex}
-          currentWordIndex={currentWordIndex}
-        />
-      </div>
+      {renderContent ? (
+        <div ref={contentRef} className="note-read-content" style={readAlongStyle}>
+          <ReadAlongMarkdown
+            document={document}
+            completedWordIndex={completedWordIndex}
+            currentWordIndex={currentWordIndex}
+          />
+        </div>
+      ) : null}
     </>
   );
 }

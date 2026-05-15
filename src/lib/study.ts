@@ -12,6 +12,7 @@ import type {
 } from "@/lib/database.types";
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
 import { countWords } from "@/lib/note-generation";
+import { getEffectiveStructuredNotesMd } from "@/lib/note-editor";
 import { createCoveragePlan, MAX_STUDY_ITEMS } from "@/lib/study-coverage";
 import { generateCoverageCards, repairCoverageCards } from "@/lib/study-cards";
 import type { CoverageCardDraft, CoverageUnitPlan, SourceUnit, StudySectionDraft } from "@/lib/study-models";
@@ -524,14 +525,22 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
       throw new Error("Flashcards are available after note processing finishes.");
     }
 
-    if (transcriptRows.length === 0) {
+    const editedNotesMd = artifactRow.editable_notes_md?.trim() || null;
+    const notesSourceMd = editedNotesMd ?? (transcriptRows.length === 0 ? artifactRow.structured_notes_md : null);
+
+    if (transcriptRows.length === 0 && !notesSourceMd?.trim()) {
       throw new Error("The lecture transcript is empty.");
     }
 
     const { units, sections } = buildSourceUnits({
       lecture: lectureRow,
       transcript: transcriptRows,
+      notesMarkdown: notesSourceMd,
     });
+
+    if (units.length === 0) {
+      throw new Error("The lecture notes are empty.");
+    }
 
     await setStudyAssetStatus({
       lectureId: params.lectureId,
@@ -780,7 +789,7 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
       },
     );
 
-    const noteWordCount = countWords(artifactRow.structured_notes_md);
+    const noteWordCount = countWords(getEffectiveStructuredNotesMd(artifactRow));
     const sourceWordCount = transcriptRows.reduce(
       (total, segment) => total + countWords(segment.text),
       0,

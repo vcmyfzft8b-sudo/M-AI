@@ -6795,6 +6795,223 @@ select:disabled {
   margin-top: 2.15rem;
 }
 
+.editable-notes-shell {
+  position: relative;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.editable-note-read-toolbar {
+  margin-bottom: 0.1rem;
+}
+
+.editable-note-block-menu {
+  position: absolute;
+  right: 0.2rem;
+  z-index: 14;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  max-width: min(100%, 28rem);
+  padding: 0.32rem;
+  border: 1px solid color-mix(in srgb, var(--separator) 74%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-solid) 94%, transparent);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(18px);
+  transform: translateY(calc(-100% - 0.35rem));
+}
+
+.editable-note-tool,
+.editable-note-bubble-menu button {
+  display: inline-grid;
+  place-items: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--label);
+  cursor: pointer;
+}
+
+.editable-note-tool:hover:not(:disabled),
+.editable-note-bubble-menu button:hover {
+  background: var(--surface-muted);
+}
+
+.editable-note-tool:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.editable-note-toolbar-separator {
+  width: 1px;
+  height: 1.45rem;
+  margin: 0 0.15rem;
+  background: color-mix(in srgb, var(--separator) 82%, transparent);
+}
+
+.editable-note-save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.15rem;
+  margin-left: auto;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--label) 72%, transparent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.editable-note-save-state.saving,
+.editable-note-save-state.unsaved {
+  color: #b45309;
+}
+
+.editable-note-save-state.error,
+.editable-note-save-state.conflict {
+  color: var(--red);
+}
+
+.editable-note-file-input {
+  display: none;
+}
+
+.editable-note-bubble-menu {
+  display: flex;
+  gap: 0.15rem;
+  padding: 0.25rem;
+  border: 1px solid color-mix(in srgb, var(--separator) 74%, transparent);
+  border-radius: 12px;
+  background: var(--surface-solid);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.16);
+}
+
+.editable-note-bubble-menu button {
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 8px;
+}
+
+.editable-note-content {
+  width: 100%;
+}
+
+.editable-note-editor {
+  min-height: 18rem;
+  outline: none;
+}
+
+.editable-note-editor > * {
+  position: relative;
+  border-radius: 16px;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease,
+    outline-color 0.15s ease;
+}
+
+.editable-notes-shell.is-block-menu-open .editable-note-editor > .editable-note-selected-block {
+  outline: 2px solid color-mix(in srgb, #2563eb 72%, transparent);
+  outline-offset: 0.34rem;
+  background: color-mix(in srgb, #2563eb 7%, transparent);
+  box-shadow: 0 0 0 0.65rem color-mix(in srgb, #2563eb 5%, transparent);
+}
+
+.editable-note-editor > :first-child {
+  margin-top: 0;
+}
+
+.editable-note-editor .is-editor-empty:first-child::before {
+  float: left;
+  height: 0;
+  color: color-mix(in srgb, var(--label) 42%, transparent);
+  content: "Začni pisati ...";
+  pointer-events: none;
+}
+
+.editable-note-editor mark {
+  padding: 0.05rem 0.12rem;
+  border-radius: 0.22rem;
+  background: color-mix(in srgb, #fde047 62%, transparent);
+  color: inherit;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.editable-note-editor img {
+  display: block;
+  max-width: min(100%, 46rem);
+  max-height: 30rem;
+  margin: 1rem auto;
+  border: 1px solid color-mix(in srgb, var(--separator) 76%, transparent);
+  border-radius: 14px;
+  object-fit: contain;
+  background: var(--surface-muted);
+}
+
+.editable-note-editor .ProseMirror-selectednode {
+  outline: 3px solid color-mix(in srgb, #2563eb 38%, transparent);
+  outline-offset: 3px;
+}
+
+.editable-note-editor u {
+  text-decoration-thickness: 0.11em;
+  text-underline-offset: 0.18em;
+}
+
+.editable-note-error {
+  margin: 0;
+  color: var(--red);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+@media (max-width: 700px) {
+  .editable-note-tool {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .editable-note-save-state {
+    min-width: 2rem;
+    width: 2rem;
+    margin-left: 0;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .editable-note-save-state span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .editable-note-block-menu {
+    right: 0;
+    left: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    border-radius: 16px;
+    transform: translateY(calc(-100% - 0.45rem));
+    scrollbar-width: none;
+  }
+
+  .editable-note-block-menu::-webkit-scrollbar {
+    display: none;
+  }
+
+  .editable-note-toolbar-separator {
+    flex: 0 0 auto;
+  }
+}
+
 :root[data-theme="dark"] .lecture-markdown blockquote {
   border-color: color-mix(in srgb, #0ea5e9 28%, var(--separator));
   background: color-mix(in srgb, #075985 22%, var(--surface-solid));

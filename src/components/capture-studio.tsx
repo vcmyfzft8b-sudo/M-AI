@@ -300,6 +300,7 @@ export function CaptureStudio({
         file: source.file,
         durationSeconds: Math.max(source.durationSeconds, 1),
         languageHint: "sl",
+        normalizeBeforeUpload: source.origin === "recording",
         signal: createController.signal,
         onLectureCreated: (lectureId) => {
           createdLectureIdRef.current = lectureId;

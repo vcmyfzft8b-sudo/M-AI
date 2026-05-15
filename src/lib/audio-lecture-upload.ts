@@ -5,7 +5,10 @@ import {
   shouldUseClientAudioChunking,
   type AudioChunkManifest,
 } from "@/lib/audio-processing";
-import { createAudioProcessingChunks } from "@/lib/audio-processing-client";
+import {
+  createAudioProcessingChunks,
+  normalizeRecordedAudioForUpload,
+} from "@/lib/audio-processing-client";
 import { parseApiResponse } from "@/lib/billing-client";
 import { getPublicEnv } from "@/lib/public-env";
 import { normalizeUploadAudioMimeType } from "@/lib/storage";
@@ -38,13 +41,27 @@ export async function createAudioLectureWithProcessingChunks(params: {
   durationSeconds: number;
   languageHint: string;
   createInitialAudio?: boolean;
+  normalizeBeforeUpload?: boolean;
   onStageChange?: (stage: UploadStage, message: string) => void;
   onLectureCreated?: (lectureId: string) => void;
   signal?: AbortSignal;
 }) {
+  let uploadFile = params.file;
+
+  if (params.normalizeBeforeUpload) {
+    assertNotAborted(params.signal);
+    params.onStageChange?.("preparing-chunks", "Preparing recording...");
+
+    const normalizedRecording = await normalizeRecordedAudioForUpload({
+      file: params.file,
+      signal: params.signal,
+    });
+    uploadFile = normalizedRecording.file;
+  }
+
   const normalizedMimeType = normalizeUploadAudioMimeType({
-    mimeType: params.file.type || "application/octet-stream",
-    fileName: params.file.name,
+    mimeType: uploadFile.type || "application/octet-stream",
+    fileName: uploadFile.name,
   });
   const supabase = createSupabaseBrowserClient();
 
@@ -59,8 +76,8 @@ export async function createAudioLectureWithProcessingChunks(params: {
     signal: params.signal,
     body: JSON.stringify({
       mimeType: normalizedMimeType,
-      fileName: params.file.name,
-      size: params.file.size,
+      fileName: uploadFile.name,
+      size: uploadFile.size,
       durationSeconds: Math.max(params.durationSeconds, 1),
       languageHint: params.languageHint,
       createInitialAudio: params.createInitialAudio === true,
@@ -78,13 +95,13 @@ export async function createAudioLectureWithProcessingChunks(params: {
     supabase,
     path: createData.path,
     token: createData.token,
-    file: params.file,
+    file: uploadFile,
     contentType: normalizedMimeType,
     signal: params.signal,
   });
 
   const shouldChunk = shouldUseClientAudioChunking({
-    sizeBytes: params.file.size,
+    sizeBytes: uploadFile.size,
     durationSeconds: params.durationSeconds,
   });
 
@@ -94,7 +111,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
       params.onStageChange?.("preparing-chunks", "Preparing audio chunks...");
 
       const chunks = await createAudioProcessingChunks({
-        file: params.file,
+        file: uploadFile,
         durationSeconds: params.durationSeconds,
         signal: params.signal,
         onProgress: (message) => params.onStageChange?.("preparing-chunks", message),

@@ -932,6 +932,7 @@ export function NoteSourceModal({
         durationSeconds: Math.max(audioSource.durationSeconds, 1),
         languageHint,
         createInitialAudio,
+        normalizeBeforeUpload: audioSource.origin === "recording",
         signal: createController.signal,
         onLectureCreated: (lectureId) => {
           createdLectureIdRef.current = lectureId;

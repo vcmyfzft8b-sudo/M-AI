@@ -25,7 +25,6 @@ import {
   Italic,
   Loader2,
   Underline as UnderlineIcon,
-  X,
 } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -148,7 +147,6 @@ export function EditableLectureNotes({
   const shellRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
-  const blockMenuDismissedRef = useRef(false);
   const revisionRef = useRef(getEditableNotesRevision(artifact));
   const latestSavedJsonRef = useRef(JSON.stringify(initialDocument));
   const pendingDocumentRef = useRef<NoteEditorDocument | null>(null);
@@ -159,6 +157,11 @@ export function EditableLectureNotes({
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [selectedBlockIndex, setSelectedBlockIndex] = useState<number | null>(null);
   const [blockMenuStyle, setBlockMenuStyle] = useState<CSSProperties | null>(null);
+  const selectedBlockIndexRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    selectedBlockIndexRef.current = selectedBlockIndex;
+  }, [selectedBlockIndex]);
 
   const saveDocument = useCallback(async (document: NoteEditorDocument) => {
     const serialized = JSON.stringify(document);
@@ -234,11 +237,6 @@ export function EditableLectureNotes({
   }, [saveDocument]);
 
   const syncSelectedBlock = useCallback((activeEditor: Editor) => {
-    if (blockMenuDismissedRef.current) {
-      setSelectedBlockIndex(null);
-      return;
-    }
-
     if (!activeEditor.state.selection.empty) {
       setSelectedBlockIndex(null);
       return;
@@ -283,15 +281,22 @@ export function EditableLectureNotes({
           });
 
           if (position) {
-            blockMenuDismissedRef.current = false;
-            setSelectedBlockIndex(view.state.doc.resolve(position.pos).index(0));
+            const nextBlockIndex = view.state.doc.resolve(position.pos).index(0);
+
+            if (selectedBlockIndexRef.current === nextBlockIndex) {
+              setSelectedBlockIndex(null);
+              view.dom.blur();
+              event.preventDefault();
+              return true;
+            }
+
+            setSelectedBlockIndex(nextBlockIndex);
           }
 
           return false;
         },
       },
       handleClick: (view, position) => {
-        blockMenuDismissedRef.current = false;
         setSelectedBlockIndex(view.state.doc.resolve(position).index(0));
         return false;
       },
@@ -309,6 +314,11 @@ export function EditableLectureNotes({
       syncSelectedBlock(focusedEditor);
     },
   });
+
+  const closeBlockMenu = useCallback(() => {
+    setSelectedBlockIndex(null);
+    editor?.commands.blur();
+  }, [editor]);
 
   const updateSelectedBlockChrome = useCallback(() => {
     const shell = shellRef.current;
@@ -351,6 +361,31 @@ export function EditableLectureNotes({
       }
     };
   }, []);
+
+  useEffect(() => {
+    function handleOutsidePointerDown(event: PointerEvent) {
+      if (selectedBlockIndexRef.current === null) {
+        return;
+      }
+
+      const target = event.target;
+
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      if (target.closest(".editable-note-block-menu") || target.closest(".editable-note-editor")) {
+        return;
+      }
+
+      closeBlockMenu();
+    }
+
+    document.addEventListener("pointerdown", handleOutsidePointerDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointerDown, true);
+    };
+  }, [closeBlockMenu]);
 
   const uploadImage = useCallback(async (file: File) => {
     if (!editor) {
@@ -465,114 +500,101 @@ export function EditableLectureNotes({
           aria-label="Urejanje izbranega dela zapiska"
           onMouseDown={(event) => event.preventDefault()}
         >
-          <button
-            type="button"
-            className="editable-note-tool"
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            disabled={!canUseEditor}
-            aria-label="Krepko"
-            title="Krepko"
-          >
-            <Bold className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="editable-note-tool"
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            disabled={!canUseEditor}
-            aria-label="Ležeče"
-            title="Ležeče"
-          >
-            <Italic className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="editable-note-tool"
-            onClick={() => editor.chain().focus().toggleUnderline().run()}
-            disabled={!canUseEditor}
-            aria-label="Podčrtaj"
-            title="Podčrtaj"
-          >
-            <UnderlineIcon className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="editable-note-tool"
-            onClick={() => editor.chain().focus().toggleHighlight().run()}
-            disabled={!canUseEditor}
-            aria-label="Označi"
-            title="Označi"
-          >
-            <Highlighter className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="editable-note-tool"
-            onClick={() => editor.chain().focus().unsetAllMarks().run()}
-            disabled={!canUseEditor}
-            aria-label="Počisti oblikovanje"
-            title="Počisti oblikovanje"
-          >
-            <Eraser className="h-4 w-4" />
-          </button>
-          <span className="editable-note-toolbar-separator" aria-hidden="true" />
-          <button
-            type="button"
-            className="editable-note-tool"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={!canUseEditor || isUploadingImage}
-            aria-label="Dodaj sliko"
-            title="Dodaj sliko"
-          >
-            {isUploadingImage ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <ImagePlus className="h-4 w-4" />
-            )}
-          </button>
-          <button
-            type="button"
-            className="editable-note-tool"
-            onClick={() => moveActiveBlock(-1)}
-            disabled={!canMoveSelectedBlockUp}
-            aria-label="Premakni blok gor"
-            title="Premakni blok gor"
-          >
-            <ArrowUp className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="editable-note-tool"
-            onClick={() => moveActiveBlock(1)}
-            disabled={!canMoveSelectedBlockDown}
-            aria-label="Premakni blok dol"
-            title="Premakni blok dol"
-          >
-            <ArrowDown className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="editable-note-tool"
-            onClick={() => {
-              blockMenuDismissedRef.current = true;
-              setSelectedBlockIndex(null);
-              editor.commands.blur();
-            }}
-            aria-label="Zapri meni"
-            title="Zapri meni"
-          >
-            <X className="h-4 w-4" />
-          </button>
-          <span className={`editable-note-save-state ${saveState}`} title={getSaveLabel(saveState)}>
-            {saveState === "saving" ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : saveState === "error" || saveState === "conflict" ? (
-              <AlertTriangle className="h-3.5 w-3.5" />
-            ) : (
-              <Check className="h-3.5 w-3.5" />
-            )}
-            <span>{getSaveLabel(saveState)}</span>
-          </span>
+            <button
+              type="button"
+              className="editable-note-tool"
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              disabled={!canUseEditor}
+              aria-label="Krepko"
+              title="Krepko"
+            >
+              <Bold className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="editable-note-tool"
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              disabled={!canUseEditor}
+              aria-label="Ležeče"
+              title="Ležeče"
+            >
+              <Italic className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="editable-note-tool"
+              onClick={() => editor.chain().focus().toggleUnderline().run()}
+              disabled={!canUseEditor}
+              aria-label="Podčrtaj"
+              title="Podčrtaj"
+            >
+              <UnderlineIcon className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="editable-note-tool"
+              onClick={() => editor.chain().focus().toggleHighlight().run()}
+              disabled={!canUseEditor}
+              aria-label="Označi"
+              title="Označi"
+            >
+              <Highlighter className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="editable-note-tool"
+              onClick={() => editor.chain().focus().unsetAllMarks().run()}
+              disabled={!canUseEditor}
+              aria-label="Počisti oblikovanje"
+              title="Počisti oblikovanje"
+            >
+              <Eraser className="h-4 w-4" />
+            </button>
+            <span className="editable-note-toolbar-separator" aria-hidden="true" />
+            <button
+              type="button"
+              className="editable-note-tool"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!canUseEditor || isUploadingImage}
+              aria-label="Dodaj sliko"
+              title="Dodaj sliko"
+            >
+              {isUploadingImage ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ImagePlus className="h-4 w-4" />
+              )}
+            </button>
+            <button
+              type="button"
+              className="editable-note-tool"
+              onClick={() => moveActiveBlock(-1)}
+              disabled={!canMoveSelectedBlockUp}
+              aria-label="Premakni blok gor"
+              title="Premakni blok gor"
+            >
+              <ArrowUp className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="editable-note-tool"
+              onClick={() => moveActiveBlock(1)}
+              disabled={!canMoveSelectedBlockDown}
+              aria-label="Premakni blok dol"
+              title="Premakni blok dol"
+            >
+              <ArrowDown className="h-4 w-4" />
+            </button>
+            <span className={`editable-note-save-state ${saveState}`} title={getSaveLabel(saveState)}>
+              {saveState === "saving" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : saveState === "error" || saveState === "conflict" ? (
+                <AlertTriangle className="h-3.5 w-3.5" />
+              ) : (
+                <Check className="h-3.5 w-3.5" />
+              )}
+              <span>{getSaveLabel(saveState)}</span>
+            </span>
         </div>
       ) : null}
       <input
@@ -612,7 +634,10 @@ export function EditableLectureNotes({
         </BubbleMenu>
       ) : null}
       {error ? <p className="editable-note-error">{error}</p> : null}
-      <EditorContent editor={editor} className="editable-note-content lecture-markdown" />
+      <EditorContent
+        editor={editor}
+        className="editable-note-content lecture-markdown"
+      />
     </div>
   );
 }

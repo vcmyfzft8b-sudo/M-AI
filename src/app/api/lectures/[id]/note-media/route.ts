@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { STORAGE_BUCKET } from "@/lib/constants";
+import type { Json } from "@/lib/database.types";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { noteEditorImageAttrs } from "@/lib/note-editor";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -15,6 +16,83 @@ const NOTE_IMAGE_MIME_TO_EXTENSION: Record<string, string> = {
   "image/webp": "webp",
   "image/gif": "gif",
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function toJsonRecord(value: Json | null | undefined): Record<string, Json> {
+  return isRecord(value) ? (value as Record<string, Json>) : {};
+}
+
+function isNoteMediaSchemaError(error: { code?: string; message?: string } | null) {
+  if (!error) {
+    return false;
+  }
+
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("lecture_note_media") ||
+    message.includes("Could not find the table")
+  );
+}
+
+async function saveFallbackMediaReference({
+  service,
+  lectureId,
+  mediaId,
+  storagePath,
+  mimeType,
+  byteSize,
+  originalFileName,
+}: {
+  service: ReturnType<typeof createSupabaseServiceRoleClient>;
+  lectureId: string;
+  mediaId: string;
+  storagePath: string;
+  mimeType: string;
+  byteSize: number;
+  originalFileName: string | null;
+}) {
+  const { data: artifact, error: artifactError } = await service
+    .from("lecture_artifacts")
+    .select("model_metadata")
+    .eq("lecture_id", lectureId)
+    .single();
+
+  if (artifactError) {
+    return { error: artifactError };
+  }
+
+  const modelMetadata = (artifact as { model_metadata?: Json | null } | null)?.model_metadata ?? {};
+  const metadata = toJsonRecord(modelMetadata);
+  const noteMedia = isRecord(metadata.editableNoteMedia)
+    ? (metadata.editableNoteMedia as Record<string, Json>)
+    : {};
+
+  const nextMetadata = {
+    ...metadata,
+    editableNoteMedia: {
+      ...noteMedia,
+      [mediaId]: {
+        storagePath,
+        mimeType,
+        byteSize,
+        originalFileName,
+        createdAt: new Date().toISOString(),
+      },
+    },
+  } satisfies Json;
+
+  const { error: updateError } = await service
+    .from("lecture_artifacts")
+    .update({ model_metadata: nextMetadata } as never)
+    .eq("lecture_id", lectureId);
+
+  return { error: updateError };
+}
 
 function getContentLength(request: Request) {
   const header = request.headers.get("content-length");
@@ -131,6 +209,29 @@ export async function POST(
     } as never);
 
   if (insertError) {
+    if (isNoteMediaSchemaError(insertError)) {
+      const fallback = await saveFallbackMediaReference({
+        service,
+        lectureId: id,
+        mediaId,
+        storagePath,
+        mimeType: file.type,
+        byteSize: file.size,
+        originalFileName,
+      });
+
+      if (!fallback.error) {
+        return NextResponse.json({
+          id: mediaId,
+          ...noteEditorImageAttrs({
+            lectureId: id,
+            mediaId,
+            alt: originalFileName,
+          }),
+        });
+      }
+    }
+
     await service.storage.from(STORAGE_BUCKET).remove([storagePath]);
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }

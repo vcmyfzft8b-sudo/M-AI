@@ -6808,7 +6808,7 @@ select:disabled {
 .editable-note-block-menu {
   position: absolute;
   right: 0.2rem;
-  z-index: 14;
+  z-index: 80;
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;

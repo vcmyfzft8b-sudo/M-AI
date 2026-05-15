@@ -48,6 +48,14 @@ function getMetadataRevision(modelMetadata: Json | null | undefined) {
   return typeof revision === "number" && Number.isInteger(revision) ? revision : 0;
 }
 
+function getFallbackMediaIds(modelMetadata: Json | null | undefined) {
+  if (!isRecord(modelMetadata) || !isRecord(modelMetadata.editableNoteMedia)) {
+    return new Set<string>();
+  }
+
+  return new Set(Object.keys(modelMetadata.editableNoteMedia));
+}
+
 function withEditableNotesMetadata({
   modelMetadata,
   document,
@@ -204,19 +212,31 @@ export async function PATCH(
       .in("id", mediaIds);
 
     if (mediaError) {
-      return NextResponse.json({ error: mediaError.message }, { status: 500 });
-    }
+      if (!isEditableNotesSchemaError(mediaError)) {
+        return NextResponse.json({ error: mediaError.message }, { status: 500 });
+      }
 
-    const ownedMediaIds = new Set(
-      ((mediaRows ?? []) as Array<{ id: string }>).map((row) => row.id),
-    );
-    const hasUnownedMedia = mediaIds.some((mediaId) => !ownedMediaIds.has(mediaId));
+      const fallbackMediaIds = getFallbackMediaIds(currentModelMetadata);
+      const hasMissingFallbackMedia = mediaIds.some((mediaId) => !fallbackMediaIds.has(mediaId));
 
-    if (hasUnownedMedia) {
-      return NextResponse.json(
-        { error: "Zapisek vsebuje sliko, ki ne pripada temu zapisku." },
-        { status: 400 },
+      if (hasMissingFallbackMedia) {
+        return NextResponse.json(
+          { error: "Zapisek vsebuje sliko, ki ne pripada temu zapisku." },
+          { status: 400 },
+        );
+      }
+    } else {
+      const ownedMediaIds = new Set(
+        ((mediaRows ?? []) as Array<{ id: string }>).map((row) => row.id),
       );
+      const hasUnownedMedia = mediaIds.some((mediaId) => !ownedMediaIds.has(mediaId));
+
+      if (hasUnownedMedia) {
+        return NextResponse.json(
+          { error: "Zapisek vsebuje sliko, ki ne pripada temu zapisku." },
+          { status: 400 },
+        );
+      }
     }
   }
 

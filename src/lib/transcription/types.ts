@@ -28,6 +28,16 @@ export class NoClearSpeechDetectedError extends Error {
   }
 }
 
+export class InvalidAudioFileError extends Error {
+  constructor(message?: string) {
+    super(
+      message?.trim() ||
+        "Zvočne datoteke ni bilo mogoče obdelati. Posnetek je morda poškodovan ali v nepodprtem formatu.",
+    );
+    this.name = "InvalidAudioFileError";
+  }
+}
+
 export interface TranscriptionProvider {
   transcribe(input: {
     file: File;

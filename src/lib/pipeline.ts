@@ -24,7 +24,10 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { normalizeMimeType } from "@/lib/storage";
 import { serializeVector } from "@/lib/utils";
 import { getTranscriptionProvider } from "@/lib/transcription/provider";
-import { NoClearSpeechDetectedError } from "@/lib/transcription/types";
+import {
+  InvalidAudioFileError,
+  NoClearSpeechDetectedError,
+} from "@/lib/transcription/types";
 
 const transcriptionProvider = getTranscriptionProvider();
 const EMBEDDING_BATCH_SIZE = 100;
@@ -525,6 +528,7 @@ export async function markLecturePipelineFailed(params: {
   }
 
   if (
+    !(params.error instanceof InvalidAudioFileError) &&
     !(params.error instanceof NoClearSpeechDetectedError) &&
     !(params.error instanceof NoReadableScanTextError)
   ) {

@@ -6,6 +6,7 @@ import { normalizeNoteLanguage } from "@/lib/languages";
 import { requireSonioxEnv } from "@/lib/server-env";
 import type { TranscriptResult } from "@/lib/types";
 import {
+  InvalidAudioFileError,
   NoClearSpeechDetectedError,
   type TranscriptionAttemptDiagnostics,
   type TranscriptionProvider,
@@ -58,6 +59,21 @@ function getFileMimeType(file: File) {
   return file.type || "application/octet-stream";
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : typeof error === "string" ? error : "";
+}
+
+function isInvalidAudioFileErrorMessage(message: string) {
+  const normalized = message.toLowerCase();
+
+  return (
+    normalized.includes("invalid audio file") ||
+    normalized.includes("error determining audio duration") ||
+    normalized.includes("unsupported format") ||
+    normalized.includes("corrupted")
+  );
+}
+
 type SonioxTranscribeOptions = {
   languageHintsStrict: boolean;
 };
@@ -76,23 +92,35 @@ export class SonioxTranscriptionProvider implements TranscriptionProvider {
     const env = requireSonioxEnv();
     const client = getSonioxClient();
     const languageHints = resolveLanguageHints(input.languageHint);
-    const transcription = await client.stt.transcribe({
-      model: env.SONIOX_MODEL,
-      file: input.bytes,
-      filename: input.file.name || "lecture-audio",
-      language_hints: languageHints,
-      language_hints_strict: input.options.languageHintsStrict,
-      enable_speaker_diarization: true,
-      enable_language_identification: !input.options.languageHintsStrict,
-      wait: true,
-      wait_options: {
-        interval_ms: SONIOX_WAIT_INTERVAL_MS,
-        timeout_ms: SONIOX_WAIT_TIMEOUT_MS,
-      },
-      cleanup: ["file", "transcription"],
-    });
+    const transcription = await client.stt
+      .transcribe({
+        model: env.SONIOX_MODEL,
+        file: input.bytes,
+        filename: input.file.name || "lecture-audio",
+        language_hints: languageHints,
+        language_hints_strict: input.options.languageHintsStrict,
+        enable_speaker_diarization: true,
+        enable_language_identification: !input.options.languageHintsStrict,
+        wait: true,
+        wait_options: {
+          interval_ms: SONIOX_WAIT_INTERVAL_MS,
+          timeout_ms: SONIOX_WAIT_TIMEOUT_MS,
+        },
+        cleanup: ["file", "transcription"],
+      })
+      .catch((error: unknown) => {
+        if (isInvalidAudioFileErrorMessage(getErrorMessage(error))) {
+          throw new InvalidAudioFileError();
+        }
+
+        throw error;
+      });
 
     if (transcription.status !== "completed") {
+      if (isInvalidAudioFileErrorMessage(transcription.error_message ?? "")) {
+        throw new InvalidAudioFileError();
+      }
+
       throw new Error(
         transcription.error_message || `Soniox transcription failed with status ${transcription.status}.`,
       );

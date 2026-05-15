@@ -411,7 +411,7 @@ export function NoteSourceModal({
   const canGenerateLink = trimmedLinkValue.length > 0 && !linkVideoError;
   const activePhotoPreview =
     photoSources.find((photoSource) => photoSource.id === activePhotoPreviewId) ?? null;
-  const visiblePhotoSources = [...photoSources].reverse();
+  const visiblePhotoSources = photoSources;
 
   useEffect(() => {
     photoSourcesRef.current = photoSources;
@@ -1339,9 +1339,9 @@ export function NoteSourceModal({
     setError(null);
     setIsTextEditorOpen(false);
 
-    const heicPhotoSources = [...nextPhotoSources]
-      .reverse()
-      .filter((photoSource) => photoSource.previewStatus === "queued");
+    const heicPhotoSources = nextPhotoSources.filter(
+      (photoSource) => photoSource.previewStatus === "queued",
+    );
 
     if (heicPhotoSources.length > 0) {
       photoPreviewQueueRef.current = photoPreviewQueueRef.current

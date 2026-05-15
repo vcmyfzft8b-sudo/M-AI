@@ -8,8 +8,7 @@ import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
 import TableRow from "@tiptap/extension-table-row";
 import Underline from "@tiptap/extension-underline";
-import { Plugin } from "@tiptap/pm/state";
-import { TextSelection } from "@tiptap/pm/state";
+import { Plugin, TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
@@ -43,6 +42,38 @@ type SaveState = "saved" | "unsaved" | "saving" | "error" | "conflict";
 const AUTOSAVE_DELAY_MS = 900;
 const LONG_PRESS_EDIT_MS = 520;
 
+const ProductionHeadingHighlight = Extension.create({
+  name: "productionHeadingHighlight",
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          decorations(state) {
+            const decorations: Decoration[] = [];
+
+            state.doc.descendants((node, position) => {
+              if (
+                node.type.name === "heading" &&
+                Number(node.attrs.level ?? 1) <= 2 &&
+                node.content.size > 0
+              ) {
+                decorations.push(
+                  Decoration.inline(position + 1, position + node.nodeSize - 1, {
+                    class: "lecture-heading-highlight",
+                  }),
+                );
+              }
+            });
+
+            return DecorationSet.create(state.doc, decorations);
+          },
+        },
+      }),
+    ];
+  },
+});
+
 const NoteImage = Image.extend({
   addAttributes() {
     return {
@@ -58,35 +89,6 @@ const NoteImage = Image.extend({
             : {},
       },
     };
-  },
-});
-
-const SelectedNoteBlock = Extension.create({
-  name: "selectedNoteBlock",
-
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        props: {
-          decorations(state) {
-            const { selection } = state;
-
-            if (!selection.empty || selection.$from.depth < 1) {
-              return null;
-            }
-
-            const from = selection.$from.before(1);
-            const to = selection.$from.after(1);
-
-            return DecorationSet.create(state.doc, [
-              Decoration.node(from, to, {
-                class: "editable-note-selected-block",
-              }),
-            ]);
-          },
-        },
-      }),
-    ];
   },
 });
 
@@ -148,6 +150,9 @@ export function EditableLectureNotes({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
+  const longPressActivatedRef = useRef(false);
+  const hadSelectedBlockOnPointerDownRef = useRef(false);
+  const suppressNextClickRef = useRef(false);
   const revisionRef = useRef(getEditableNotesRevision(artifact));
   const latestSavedJsonRef = useRef(JSON.stringify(initialDocument));
   const pendingDocumentRef = useRef<NoteEditorDocument | null>(null);
@@ -171,6 +176,25 @@ export function EditableLectureNotes({
       longPressTimerRef.current = null;
     }
   }, []);
+
+  const startLongPressEditTimer = useCallback((view: Editor["view"], position: number) => {
+    clearLongPressTimer();
+    longPressActivatedRef.current = false;
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressActivatedRef.current = true;
+      setIsTextEditing(true);
+      setSelectedBlockIndex(null);
+      window.setTimeout(() => {
+        const resolvedPosition = view.state.doc.resolve(
+          Math.min(position, view.state.doc.content.size),
+        );
+        view.dispatch(
+          view.state.tr.setSelection(TextSelection.near(resolvedPosition)),
+        );
+        view.focus();
+      }, 0);
+    }, LONG_PRESS_EDIT_MS);
+  }, [clearLongPressTimer]);
 
   const saveDocument = useCallback(async (document: NoteEditorDocument) => {
     const serialized = JSON.stringify(document);
@@ -253,10 +277,7 @@ export function EditableLectureNotes({
 
     if (!activeEditor.state.selection.empty) {
       setSelectedBlockIndex(null);
-      return;
     }
-
-    setSelectedBlockIndex(activeEditor.state.selection.$from.index(0));
   }, [isTextEditing]);
 
   const editor = useEditor({
@@ -267,8 +288,9 @@ export function EditableLectureNotes({
         heading: {
           levels: [1, 2, 3, 4],
         },
+        underline: false,
       }),
-      SelectedNoteBlock,
+      ProductionHeadingHighlight,
       Underline,
       Highlight,
       NoteImage.configure({
@@ -303,26 +325,12 @@ export function EditableLectureNotes({
             return false;
           }
 
-          clearLongPressTimer();
-          longPressTimerRef.current = window.setTimeout(() => {
-            setIsTextEditing(true);
-            setSelectedBlockIndex(null);
-            window.setTimeout(() => {
-              const resolvedPosition = view.state.doc.resolve(
-                Math.min(position.pos, view.state.doc.content.size),
-              );
-              view.dispatch(
-                view.state.tr.setSelection(TextSelection.near(resolvedPosition)),
-              );
-              view.focus();
-            }, 0);
-          }, LONG_PRESS_EDIT_MS);
-
           const nextBlockIndex = view.state.doc.resolve(position.pos).index(0);
+          const hadSelectedBlock = selectedBlockIndexRef.current !== null;
+          hadSelectedBlockOnPointerDownRef.current = hadSelectedBlock;
+          startLongPressEditTimer(view, position.pos);
 
-          if (selectedBlockIndexRef.current === nextBlockIndex) {
-            setSelectedBlockIndex(null);
-            view.dom.blur();
+          if (hadSelectedBlock) {
             event.preventDefault();
             return true;
           }
@@ -331,18 +339,41 @@ export function EditableLectureNotes({
           event.preventDefault();
           return true;
         },
-        pointerup: () => {
+        pointerup: (view) => {
+          const hadSelectedBlock = hadSelectedBlockOnPointerDownRef.current;
+          hadSelectedBlockOnPointerDownRef.current = false;
           clearLongPressTimer();
+
+          if (hadSelectedBlock && !longPressActivatedRef.current && !isTextEditing) {
+            suppressNextClickRef.current = true;
+            setSelectedBlockIndex(null);
+            view.dom.blur();
+            window.getSelection()?.removeAllRanges();
+            window.setTimeout(() => {
+              suppressNextClickRef.current = false;
+            }, 200);
+            longPressActivatedRef.current = false;
+            return true;
+          }
+
+          longPressActivatedRef.current = false;
           return false;
         },
         pointercancel: () => {
           clearLongPressTimer();
+          hadSelectedBlockOnPointerDownRef.current = false;
+          longPressActivatedRef.current = false;
           return false;
         },
       },
       handleClick: (view, position) => {
         if (isTextEditing) {
           return false;
+        }
+
+        if (suppressNextClickRef.current) {
+          suppressNextClickRef.current = false;
+          return true;
         }
 
         setSelectedBlockIndex(view.state.doc.resolve(position).index(0));

@@ -162,7 +162,9 @@ export function LibraryFolderMenu({
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingLectureIds, setEditingLectureIds] = useState<string[]>([]);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [isSavingFolder, setIsSavingFolder] = useState(false);
+  const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
   const lectureIdSet = useMemo(
     () => new Set(lectures.map((lecture) => lecture.id)),
     [lectures],
@@ -178,12 +180,13 @@ export function LibraryFolderMenu({
 
   const selectedFolder = liveFolders.find((folder) => folder.id === selectedFolderId) ?? null;
   const isEditModalOpen = editingFolderId !== null;
+  const isFolderEditBusy = isSavingFolder || deletingFolderId !== null;
 
   useEffect(() => {
     setFolders(initialFolders);
   }, [initialFolders]);
 
-  function handleCancelEdit() {
+  const resetEditModal = useCallback(() => {
     folderModalDragStartYRef.current = null;
     folderModalDragOffsetRef.current = 0;
     setFolderModalDragOffset(0);
@@ -191,7 +194,15 @@ export function LibraryFolderMenu({
     setEditingName("");
     setEditingLectureIds([]);
     setIsSavingFolder(false);
-  }
+  }, []);
+
+  const handleCancelEdit = useCallback(() => {
+    if (isFolderEditBusy) {
+      return;
+    }
+
+    resetEditModal();
+  }, [isFolderEditBusy, resetEditModal]);
 
   useEffect(() => {
     if (hasRestoredSelectionRef.current) {
@@ -269,7 +280,7 @@ export function LibraryFolderMenu({
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [isCreateModalOpen, isEditModalOpen, isOpen]);
+  }, [handleCancelEdit, isCreateModalOpen, isEditModalOpen, isOpen]);
 
   useEffect(() => {
     if (!selectedFolderId) {
@@ -359,12 +370,16 @@ export function LibraryFolderMenu({
     setIsOpen((currentValue) => !currentValue);
   }
 
-  function closeCreateModal() {
+  const closeCreateModal = useCallback(() => {
+    if (isCreatingFolder) {
+      return;
+    }
+
     folderModalDragStartYRef.current = null;
     folderModalDragOffsetRef.current = 0;
     setFolderModalDragOffset(0);
     setIsCreateModalOpen(false);
-  }
+  }, [isCreatingFolder]);
 
   const closeFolderSheet = useCallback(() => {
     folderSheetDragStartYRef.current = null;
@@ -557,7 +572,7 @@ export function LibraryFolderMenu({
       window.removeEventListener("pointerup", handleWindowPointerEnd);
       window.removeEventListener("pointercancel", handleWindowPointerEnd);
     };
-  }, [isCreateModalOpen, isEditModalOpen]);
+  }, [closeCreateModal, handleCancelEdit, isCreateModalOpen, isEditModalOpen]);
 
   function handleSelectAllNotes() {
     onSelectFolder(null, null);
@@ -572,39 +587,48 @@ export function LibraryFolderMenu({
   async function handleCreateFolder() {
     const trimmedName = folderName.trim();
 
-    if (!trimmedName) {
+    if (!trimmedName || isCreatingFolder) {
       return;
     }
 
-    const response = await fetch("/api/library-folders", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: trimmedName,
-        lectureIds: draftLectureIds.filter((lectureId) => lectureIdSet.has(lectureId)),
-      }),
-    });
+    setIsCreatingFolder(true);
 
-    if (!response.ok) {
-      return;
+    try {
+      const response = await fetch("/api/library-folders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: trimmedName,
+          lectureIds: draftLectureIds.filter((lectureId) => lectureIdSet.has(lectureId)),
+        }),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as { folder: AppLibraryFolder };
+      const nextFolder = payload.folder;
+      const nextFolders = [...folders, nextFolder];
+
+      setFolders(nextFolders);
+      onSelectFolder(nextFolder.id, nextFolder.lectureIds);
+      setFolderName("");
+      setDraftLectureIds([]);
+      folderModalDragStartYRef.current = null;
+      folderModalDragOffsetRef.current = 0;
+      setFolderModalDragOffset(0);
+      setIsCreateModalOpen(false);
+      setIsOpen(false);
+    } finally {
+      setIsCreatingFolder(false);
     }
-
-    const payload = (await response.json()) as { folder: AppLibraryFolder };
-    const nextFolder = payload.folder;
-    const nextFolders = [...folders, nextFolder];
-
-    setFolders(nextFolders);
-    onSelectFolder(nextFolder.id, nextFolder.lectureIds);
-    setFolderName("");
-    setDraftLectureIds([]);
-    closeCreateModal();
-    setIsOpen(false);
   }
 
   function startEditingFolder(folder: LibraryFolder) {
-    if (isSavingFolder) {
+    if (isFolderEditBusy) {
       return;
     }
 
@@ -614,7 +638,7 @@ export function LibraryFolderMenu({
   }
 
   async function handleSaveFolder() {
-    if (!editingFolderId || isSavingFolder) {
+    if (!editingFolderId || isFolderEditBusy) {
       return;
     }
 
@@ -654,7 +678,7 @@ export function LibraryFolderMenu({
         onSelectFolder(nextSelectedFolder?.id ?? null, nextSelectedFolder?.lectureIds ?? null);
       }
 
-      handleCancelEdit();
+      resetEditModal();
       setIsOpen(false);
     } finally {
       setIsSavingFolder(false);
@@ -662,26 +686,39 @@ export function LibraryFolderMenu({
   }
 
   async function handleDeleteFolder(folderId: string) {
-    const response = await fetch(`/api/library-folders/${folderId}`, {
-      method: "DELETE",
-    });
-
-    if (!response.ok) {
+    if (isFolderEditBusy) {
       return;
     }
 
-    const nextFolders = folders.filter((folder) => folder.id !== folderId);
-    setFolders(nextFolders);
+    setDeletingFolderId(folderId);
 
-    if (selectedFolderId === folderId) {
-      onSelectFolder(null, null);
-    }
+    try {
+      const response = await fetch(`/api/library-folders/${folderId}`, {
+        method: "DELETE",
+      });
 
-    if (editingFolderId === folderId) {
-      setEditingFolderId(null);
-      setEditingName("");
-      setEditingLectureIds([]);
-      setIsOpen(false);
+      if (!response.ok) {
+        return;
+      }
+
+      const nextFolders = folders.filter((folder) => folder.id !== folderId);
+      setFolders(nextFolders);
+
+      if (selectedFolderId === folderId) {
+        onSelectFolder(null, null);
+      }
+
+      if (editingFolderId === folderId) {
+        folderModalDragStartYRef.current = null;
+        folderModalDragOffsetRef.current = 0;
+        setFolderModalDragOffset(0);
+        setEditingFolderId(null);
+        setEditingName("");
+        setEditingLectureIds([]);
+        setIsOpen(false);
+      }
+    } finally {
+      setDeletingFolderId(null);
     }
   }
 
@@ -897,6 +934,7 @@ export function LibraryFolderMenu({
                     onChange={(event) => setFolderName(event.target.value)}
                     placeholder="Biologija, Matematika, Zgodovina..."
                     className="ios-input"
+                    disabled={isCreatingFolder}
                   />
                 </label>
 
@@ -909,6 +947,7 @@ export function LibraryFolderMenu({
                           <input
                             type="checkbox"
                             checked={draftLectureIds.includes(lecture.id)}
+                            disabled={isCreatingFolder}
                             onChange={() =>
                               setDraftLectureIds((currentIds) =>
                                 toggleLectureId(currentIds, lecture.id),
@@ -938,8 +977,13 @@ export function LibraryFolderMenu({
                 type="button"
                 className="library-folder-primary-button modal"
                 onClick={handleCreateFolder}
+                disabled={isCreatingFolder || folderName.trim().length === 0}
+                aria-busy={isCreatingFolder}
               >
-                Ustvari
+                {isCreatingFolder ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : null}
+                {isCreatingFolder ? "Ustvarjam..." : "Ustvari"}
               </button>
             </div>
           </div>
@@ -1001,7 +1045,7 @@ export function LibraryFolderMenu({
                         key={folder.id}
                         className={`library-folder-modal-folder-option ${editingFolderId === folder.id ? "active" : ""}`}
                         onClick={() => startEditingFolder(folder)}
-                        disabled={isSavingFolder}
+                        disabled={isFolderEditBusy}
                       >
                         <span>
                           <span className="library-folder-saved-title">{folder.name}</span>
@@ -1021,6 +1065,7 @@ export function LibraryFolderMenu({
                   value={editingName}
                   onChange={(event) => setEditingName(event.target.value)}
                   className="ios-input"
+                  disabled={isFolderEditBusy}
                 />
               </label>
 
@@ -1033,6 +1078,7 @@ export function LibraryFolderMenu({
                         <input
                           type="checkbox"
                           checked={editingLectureIds.includes(lecture.id)}
+                          disabled={isFolderEditBusy}
                           onChange={() =>
                             setEditingLectureIds((currentIds) =>
                               toggleLectureId(currentIds, lecture.id),
@@ -1063,7 +1109,7 @@ export function LibraryFolderMenu({
                 type="button"
                 className="library-folder-primary-button modal"
                 onClick={handleSaveFolder}
-                disabled={isSavingFolder || editingName.trim().length === 0}
+                disabled={isFolderEditBusy || editingName.trim().length === 0}
                 aria-busy={isSavingFolder}
               >
                 {isSavingFolder ? (
@@ -1075,7 +1121,7 @@ export function LibraryFolderMenu({
                 type="button"
                 className="library-folder-secondary-button"
                 onClick={handleCancelEdit}
-                disabled={isSavingFolder}
+                disabled={isFolderEditBusy}
               >
                 Prekliči
               </button>
@@ -1084,13 +1130,18 @@ export function LibraryFolderMenu({
                 className="library-folder-danger-button"
                 onClick={() => {
                   if (editingFolderId) {
-                    handleDeleteFolder(editingFolderId);
+                    void handleDeleteFolder(editingFolderId);
                   }
                 }}
-                disabled={isSavingFolder}
+                disabled={isFolderEditBusy}
+                aria-busy={deletingFolderId === editingFolderId}
               >
-                <EmojiIcon symbol="🗑️" size="0.95rem" />
-                Izbriši mapo
+                {deletingFolderId === editingFolderId ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <EmojiIcon symbol="🗑️" size="0.95rem" />
+                )}
+                {deletingFolderId === editingFolderId ? "Brišem..." : "Izbriši mapo"}
               </button>
             </div>
             </div>

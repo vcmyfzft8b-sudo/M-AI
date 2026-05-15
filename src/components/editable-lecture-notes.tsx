@@ -9,14 +9,13 @@ import TableHeader from "@tiptap/extension-table-header";
 import TableRow from "@tiptap/extension-table-row";
 import Underline from "@tiptap/extension-underline";
 import { Plugin } from "@tiptap/pm/state";
+import { TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import {
   AlertTriangle,
-  ArrowDown,
-  ArrowUp,
   Bold,
   Check,
   Eraser,
@@ -42,6 +41,7 @@ import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 type SaveState = "saved" | "unsaved" | "saving" | "error" | "conflict";
 
 const AUTOSAVE_DELAY_MS = 900;
+const LONG_PRESS_EDIT_MS = 520;
 
 const NoteImage = Image.extend({
   addAttributes() {
@@ -147,6 +147,7 @@ export function EditableLectureNotes({
   const shellRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
   const revisionRef = useRef(getEditableNotesRevision(artifact));
   const latestSavedJsonRef = useRef(JSON.stringify(initialDocument));
   const pendingDocumentRef = useRef<NoteEditorDocument | null>(null);
@@ -155,6 +156,7 @@ export function EditableLectureNotes({
   const [error, setError] = useState<string | null>(null);
   const [savedMarkdown, setSavedMarkdown] = useState(initialMarkdown);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isTextEditing, setIsTextEditing] = useState(false);
   const [selectedBlockIndex, setSelectedBlockIndex] = useState<number | null>(null);
   const [blockMenuStyle, setBlockMenuStyle] = useState<CSSProperties | null>(null);
   const selectedBlockIndexRef = useRef<number | null>(null);
@@ -162,6 +164,13 @@ export function EditableLectureNotes({
   useEffect(() => {
     selectedBlockIndexRef.current = selectedBlockIndex;
   }, [selectedBlockIndex]);
+
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
 
   const saveDocument = useCallback(async (document: NoteEditorDocument) => {
     const serialized = JSON.stringify(document);
@@ -237,16 +246,22 @@ export function EditableLectureNotes({
   }, [saveDocument]);
 
   const syncSelectedBlock = useCallback((activeEditor: Editor) => {
+    if (isTextEditing) {
+      setSelectedBlockIndex(null);
+      return;
+    }
+
     if (!activeEditor.state.selection.empty) {
       setSelectedBlockIndex(null);
       return;
     }
 
     setSelectedBlockIndex(activeEditor.state.selection.$from.index(0));
-  }, []);
+  }, [isTextEditing]);
 
   const editor = useEditor({
     immediatelyRender: false,
+    editable: false,
     extensions: [
       StarterKit.configure({
         heading: {
@@ -280,25 +295,58 @@ export function EditableLectureNotes({
             top: pointerEvent.clientY,
           });
 
-          if (position) {
-            const nextBlockIndex = view.state.doc.resolve(position.pos).index(0);
-
-            if (selectedBlockIndexRef.current === nextBlockIndex) {
-              setSelectedBlockIndex(null);
-              view.dom.blur();
-              event.preventDefault();
-              return true;
-            }
-
-            setSelectedBlockIndex(nextBlockIndex);
+          if (!position) {
+            return false;
           }
 
+          if (isTextEditing) {
+            return false;
+          }
+
+          clearLongPressTimer();
+          longPressTimerRef.current = window.setTimeout(() => {
+            setIsTextEditing(true);
+            setSelectedBlockIndex(null);
+            window.setTimeout(() => {
+              const resolvedPosition = view.state.doc.resolve(
+                Math.min(position.pos, view.state.doc.content.size),
+              );
+              view.dispatch(
+                view.state.tr.setSelection(TextSelection.near(resolvedPosition)),
+              );
+              view.focus();
+            }, 0);
+          }, LONG_PRESS_EDIT_MS);
+
+          const nextBlockIndex = view.state.doc.resolve(position.pos).index(0);
+
+          if (selectedBlockIndexRef.current === nextBlockIndex) {
+            setSelectedBlockIndex(null);
+            view.dom.blur();
+            event.preventDefault();
+            return true;
+          }
+
+          setSelectedBlockIndex(nextBlockIndex);
+          event.preventDefault();
+          return true;
+        },
+        pointerup: () => {
+          clearLongPressTimer();
+          return false;
+        },
+        pointercancel: () => {
+          clearLongPressTimer();
           return false;
         },
       },
       handleClick: (view, position) => {
+        if (isTextEditing) {
+          return false;
+        }
+
         setSelectedBlockIndex(view.state.doc.resolve(position).index(0));
-        return false;
+        return true;
       },
     },
     onUpdate: ({ editor: updatedEditor }) => {
@@ -313,7 +361,11 @@ export function EditableLectureNotes({
     onFocus: ({ editor: focusedEditor }) => {
       syncSelectedBlock(focusedEditor);
     },
-  });
+  }, [clearLongPressTimer, isTextEditing, syncSelectedBlock]);
+
+  useEffect(() => {
+    editor?.setEditable(isTextEditing);
+  }, [editor, isTextEditing]);
 
   const closeBlockMenu = useCallback(() => {
     setSelectedBlockIndex(null);
@@ -330,6 +382,8 @@ export function EditableLectureNotes({
     }
 
     const blocks = Array.from(editorRoot.children) as HTMLElement[];
+    blocks.forEach((block) => block.classList.remove("editable-note-selected-block"));
+
     const selectedBlock =
       selectedBlockIndex === null ? null : blocks[selectedBlockIndex] ?? null;
 
@@ -338,6 +392,7 @@ export function EditableLectureNotes({
       return;
     }
 
+    selectedBlock.classList.add("editable-note-selected-block");
     setBlockMenuStyle({
       top: `${Math.max(0, selectedBlock.offsetTop)}px`,
     });
@@ -359,8 +414,10 @@ export function EditableLectureNotes({
       if (saveTimerRef.current) {
         window.clearTimeout(saveTimerRef.current);
       }
+
+      clearLongPressTimer();
     };
-  }, []);
+  }, [clearLongPressTimer]);
 
   useEffect(() => {
     function handleOutsidePointerDown(event: PointerEvent) {
@@ -379,6 +436,7 @@ export function EditableLectureNotes({
       }
 
       closeBlockMenu();
+      setIsTextEditing(false);
     }
 
     document.addEventListener("pointerdown", handleOutsidePointerDown, true);
@@ -449,43 +507,14 @@ export function EditableLectureNotes({
     }
   }, [editor, lectureId, selectedBlockIndex]);
 
-  const moveActiveBlock = useCallback((direction: -1 | 1) => {
-    if (!editor) {
-      return;
-    }
-
-    const json = editor.getJSON() as NoteEditorDocument;
-    const content = [...(json.content ?? [])];
-    const index = selectedBlockIndex ?? editor.state.selection.$from.index(0);
-    const nextIndex = index + direction;
-
-    if (index < 0 || nextIndex < 0 || nextIndex >= content.length) {
-      return;
-    }
-
-    const [node] = content.splice(index, 1);
-    content.splice(nextIndex, 0, node);
-    editor.commands.setContent(
-      {
-        ...json,
-        content,
-      },
-      { emitUpdate: true },
-    );
-    setSelectedBlockIndex(nextIndex);
-  }, [editor, selectedBlockIndex]);
-
   const canUseEditor = Boolean(editor) && saveState !== "conflict";
-  const blockCount = editor?.state.doc.childCount ?? initialDocument.content.length;
-  const canMoveSelectedBlockUp =
-    canUseEditor && selectedBlockIndex !== null && selectedBlockIndex > 0;
-  const canMoveSelectedBlockDown =
-    canUseEditor && selectedBlockIndex !== null && selectedBlockIndex < blockCount - 1;
 
   return (
     <div
       ref={shellRef}
-      className={`editable-notes-shell ${selectedBlockIndex !== null ? "is-block-menu-open" : ""}`}
+      className={`editable-notes-shell ${
+        selectedBlockIndex !== null ? "is-block-menu-open" : ""
+      } ${isTextEditing ? "is-text-editing" : ""}`}
     >
       <NoteReadAloud
         lectureId={lectureId}
@@ -564,26 +593,6 @@ export function EditableLectureNotes({
               ) : (
                 <ImagePlus className="h-4 w-4" />
               )}
-            </button>
-            <button
-              type="button"
-              className="editable-note-tool"
-              onClick={() => moveActiveBlock(-1)}
-              disabled={!canMoveSelectedBlockUp}
-              aria-label="Premakni blok gor"
-              title="Premakni blok gor"
-            >
-              <ArrowUp className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className="editable-note-tool"
-              onClick={() => moveActiveBlock(1)}
-              disabled={!canMoveSelectedBlockDown}
-              aria-label="Premakni blok dol"
-              title="Premakni blok dol"
-            >
-              <ArrowDown className="h-4 w-4" />
             </button>
             <span className={`editable-note-save-state ${saveState}`} title={getSaveLabel(saveState)}>
               {saveState === "saving" ? (

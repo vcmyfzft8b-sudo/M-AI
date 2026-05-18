@@ -2711,7 +2711,6 @@ export function LectureWorkspace({
     const matchingAnnotations = activeNoteDoc.annotations.filter(
       (annotation) =>
         annotation.kind === kind &&
-        (annotation.colorId ?? "orange") === colorId &&
         annotationRangesOverlap(
           annotation.startWordIndex,
           annotation.endWordIndex,
@@ -2730,7 +2729,6 @@ export function LectureWorkspace({
         ? activeNoteDoc.annotations.flatMap((annotation) => {
             const shouldSplitAnnotation =
               annotation.kind === kind &&
-              (annotation.colorId ?? "orange") === colorId &&
               annotationRangesOverlap(
                 annotation.startWordIndex,
                 annotation.endWordIndex,

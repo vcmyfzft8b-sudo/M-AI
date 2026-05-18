@@ -15,12 +15,17 @@ import {
   Underline,
   X,
 } from "lucide-react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type {
+  CSSProperties,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EmojiIcon } from "@/components/emoji-icon";
 import { NoteReadAloud } from "@/components/note-read-aloud";
 import { StudyCompletionCard } from "@/components/study-completion-card";
+import { ViewportPortal } from "@/components/viewport-portal";
 import {
   getApiErrorMessage,
   parseApiResponse,
@@ -1127,8 +1132,13 @@ export function LectureWorkspace({
   const noteAnnotationShellRef = useRef<HTMLDivElement | null>(null);
   const deletingNoteMediaIdsRef = useRef(new Set<string>());
   const optimisticNoteMediaUrlsRef = useRef(new Map<string, string>());
+  const studyManagerDragStartYRef = useRef<number | null>(null);
+  const studyManagerDragOffsetRef = useRef(0);
+  const studyManagerSuppressClickRef = useRef(false);
+  const studyManagerCloseTimerRef = useRef<number | null>(null);
   const [isStudyManagerOpen, setIsStudyManagerOpen] = useState(false);
   const [studyManagerSearch, setStudyManagerSearch] = useState("");
+  const [studyManagerDragOffset, setStudyManagerDragOffset] = useState(0);
   const [editingFlashcardId, setEditingFlashcardId] = useState<string | null>(null);
   const [flashcardForm, setFlashcardForm] = useState<FlashcardFormState>(
     createEmptyFlashcardForm,
@@ -3065,6 +3075,136 @@ export function LectureWorkspace({
     }
   }
 
+  const closeStudyManager = useCallback(() => {
+    if (studyManagerCloseTimerRef.current !== null) {
+      window.clearTimeout(studyManagerCloseTimerRef.current);
+      studyManagerCloseTimerRef.current = null;
+    }
+    studyManagerDragStartYRef.current = null;
+    studyManagerDragOffsetRef.current = 0;
+    studyManagerSuppressClickRef.current = false;
+    setStudyManagerDragOffset(0);
+    setIsStudyManagerOpen(false);
+  }, []);
+
+  const animateCloseStudyManager = useCallback(() => {
+    if (studyManagerCloseTimerRef.current !== null) {
+      return;
+    }
+
+    studyManagerDragStartYRef.current = null;
+    studyManagerDragOffsetRef.current = window.innerHeight;
+    setStudyManagerDragOffset(window.innerHeight);
+    studyManagerCloseTimerRef.current = window.setTimeout(() => {
+      studyManagerCloseTimerRef.current = null;
+      closeStudyManager();
+    }, 180);
+  }, [closeStudyManager]);
+
+  useEffect(
+    () => () => {
+      if (studyManagerCloseTimerRef.current !== null) {
+        window.clearTimeout(studyManagerCloseTimerRef.current);
+        studyManagerCloseTimerRef.current = null;
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!isStudyManagerOpen) {
+      return;
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        animateCloseStudyManager();
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [animateCloseStudyManager, isStudyManagerOpen]);
+
+  function handleStudyManagerPointerDown(event: ReactPointerEvent<HTMLElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+
+    const target = event.target;
+    const interactiveTarget =
+      target instanceof Element
+        ? target.closest("button, a, input, textarea, select, .app-close-button")
+        : null;
+    const dragHandleTarget =
+      target instanceof Element ? target.closest(".study-manager-drag-handle") : null;
+
+    studyManagerSuppressClickRef.current = false;
+    studyManagerDragStartYRef.current = null;
+
+    if (interactiveTarget && !dragHandleTarget) {
+      return;
+    }
+
+    studyManagerDragStartYRef.current = event.clientY;
+    if (!interactiveTarget || dragHandleTarget) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+  }
+
+  function updateStudyManagerDragOffset(clientY: number) {
+    if (studyManagerDragStartYRef.current === null) {
+      return;
+    }
+
+    const nextOffset = Math.max(0, clientY - studyManagerDragStartYRef.current);
+    studyManagerDragOffsetRef.current = nextOffset;
+    if (nextOffset > 8) {
+      studyManagerSuppressClickRef.current = true;
+    }
+    setStudyManagerDragOffset(nextOffset);
+  }
+
+  function handleStudyManagerClickCapture(event: ReactMouseEvent<HTMLElement>) {
+    if (!studyManagerSuppressClickRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    studyManagerSuppressClickRef.current = false;
+  }
+
+  useEffect(() => {
+    if (!isStudyManagerOpen) {
+      return;
+    }
+
+    function handleWindowPointerMove(event: PointerEvent) {
+      updateStudyManagerDragOffset(event.clientY);
+    }
+
+    function handleWindowPointerEnd() {
+      if (studyManagerDragOffsetRef.current > 80) {
+        animateCloseStudyManager();
+        return;
+      }
+
+      studyManagerDragStartYRef.current = null;
+      studyManagerDragOffsetRef.current = 0;
+      setStudyManagerDragOffset(0);
+    }
+
+    window.addEventListener("pointermove", handleWindowPointerMove);
+    window.addEventListener("pointerup", handleWindowPointerEnd);
+    window.addEventListener("pointercancel", handleWindowPointerEnd);
+    return () => {
+      window.removeEventListener("pointermove", handleWindowPointerMove);
+      window.removeEventListener("pointerup", handleWindowPointerEnd);
+      window.removeEventListener("pointercancel", handleWindowPointerEnd);
+    };
+  }, [animateCloseStudyManager, isStudyManagerOpen]);
+
   function startFlashcardCreate() {
     setEditingFlashcardId(null);
     setFlashcardForm(createEmptyFlashcardForm());
@@ -3119,7 +3259,7 @@ export function LectureWorkspace({
           body: JSON.stringify({
             front: flashcardForm.front,
             back: flashcardForm.back,
-            hint: flashcardForm.hint || null,
+            hint: null,
             difficulty: flashcardForm.difficulty,
           }),
         },
@@ -3545,63 +3685,71 @@ export function LectureWorkspace({
           .toLowerCase()
           .includes(normalizedStudySearch);
       });
+      const canManageActiveStudyView = activeStudyView === "flashcards" || activeStudyView === "quiz";
+      const openStudyManager = () => {
+        window.dispatchEvent(new Event("memoai:mobile-dock-close"));
+        studyManagerDragStartYRef.current = null;
+        studyManagerDragOffsetRef.current = 0;
+        studyManagerSuppressClickRef.current = false;
+        setStudyManagerDragOffset(0);
+        setIsStudyManagerOpen(true);
+        setStudyManagerSearch("");
+        if (activeStudyView === "flashcards") {
+          startFlashcardCreate();
+        } else if (activeStudyView === "quiz") {
+          startQuizQuestionCreate();
+        }
+      };
 
       return (
-        <div className="workspace-panel-stack lecture-panel-stack">
-          <div
-            className={`ios-card lecture-study-shell ${shouldAutoSizeStudyShell ? "auto-height" : ""}`}
-          >
-            <div className="lecture-study-header">
-              <div className="lecture-study-title">
-                {activeMaterialStatus && activeMaterialStatusLabel ? (
-                  <div className="lecture-study-meta">
-                    <span className={`lecture-study-status ${activeMaterialStatus}`}>
-                      {activeMaterialStatusLabel}
-                    </span>
-                  </div>
-                ) : null}
+        <>
+          <div className="workspace-panel-stack lecture-panel-stack">
+            <div
+              className={`ios-card lecture-study-shell ${shouldAutoSizeStudyShell ? "auto-height" : ""}`}
+            >
+              <div className="lecture-study-header">
+                <div className="lecture-study-title">
+                  {activeMaterialStatus && activeMaterialStatusLabel ? (
+                    <div className="lecture-study-meta">
+                      <span className={`lecture-study-status ${activeMaterialStatus}`}>
+                        {activeMaterialStatusLabel}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="lecture-study-header-actions">
+                  {canManageActiveStudyView ? (
+                    <button
+                      type="button"
+                      className="lecture-study-manage-button"
+                      onClick={openStudyManager}
+                    >
+                      <Pencil aria-hidden="true" />
+                      <span>Uredi</span>
+                    </button>
+                  ) : null}
+                  {activeStudyView === "practice_test" ? (
+                    <span className="lecture-study-status demo">Demo</span>
+                  ) : null}
+                </div>
               </div>
-              <div className="lecture-study-header-actions">
-                {activeStudyView === "flashcards" || activeStudyView === "quiz" ? (
-                  <button
-                    type="button"
-                    className="lecture-study-manage-button"
-                    onClick={() => {
-                      setIsStudyManagerOpen(true);
-                      setStudyManagerSearch("");
-                      if (activeStudyView === "flashcards") {
-                        startFlashcardCreate();
-                      } else {
-                        startQuizQuestionCreate();
-                      }
-                    }}
-                  >
-                    <Pencil aria-hidden="true" />
-                    <span>Uredi</span>
-                  </button>
-                ) : null}
-                {activeStudyView === "practice_test" ? (
-                  <span className="lecture-study-status demo">Demo</span>
-                ) : null}
-              </div>
-            </div>
 
-            <div className="ios-segmented lecture-study-mode-switch">
-              {([
-                { id: "flashcards", label: "Flashcards" },
-                { id: "quiz", label: "Kviz" },
-                { id: "practice_test", label: "Test" },
-              ] as const).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveStudyView(item.id)}
-                  className={`ios-segment ${activeStudyView === item.id ? "active" : ""}`}
-                >
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </div>
+              <div className="ios-segmented lecture-study-mode-switch">
+                {([
+                  { id: "flashcards", label: "Flashcards" },
+                  { id: "quiz", label: "Kviz" },
+                  { id: "practice_test", label: "Test" },
+                ] as const).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveStudyView(item.id)}
+                    className={`ios-segment ${activeStudyView === item.id ? "active" : ""}`}
+                  >
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
 
             {studyError ? <p className="danger-panel lecture-inline-note">{studyError}</p> : null}
             {activeMaterialError ? (
@@ -3609,14 +3757,26 @@ export function LectureWorkspace({
             ) : null}
 
             {isStudyManagerOpen && (activeStudyView === "flashcards" || activeStudyView === "quiz") ? (
-              <div className="study-manager-backdrop" role="presentation" onClick={() => setIsStudyManagerOpen(false)}>
+              <div className="study-manager-backdrop" role="presentation" onClick={animateCloseStudyManager}>
                 <div
                   className="study-manager-sheet"
                   role="dialog"
                   aria-modal="true"
                   aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
+                  onPointerDown={handleStudyManagerPointerDown}
+                  onClickCapture={handleStudyManagerClickCapture}
                   onClick={(event) => event.stopPropagation()}
+                  style={
+                    studyManagerDragOffset > 0
+                      ? { transform: `translateY(${studyManagerDragOffset}px)` }
+                      : undefined
+                  }
                 >
+                  <button
+                    type="button"
+                    className="mobile-sheet-drag-handle study-manager-drag-handle"
+                    aria-label="Zapri urejanje"
+                  />
                   <div className="study-manager-header">
                     <div>
                       <p className="study-manager-eyebrow">
@@ -3626,8 +3786,8 @@ export function LectureWorkspace({
                     </div>
                     <button
                       type="button"
-                      className="study-manager-icon-button"
-                      onClick={() => setIsStudyManagerOpen(false)}
+                      className="app-close-button study-manager-icon-button"
+                      onClick={animateCloseStudyManager}
                       aria-label="Zapri"
                       title="Zapri"
                     >
@@ -3635,22 +3795,29 @@ export function LectureWorkspace({
                     </button>
                   </div>
 
-                  <input
-                    value={studyManagerSearch}
-                    onChange={(event) => setStudyManagerSearch(event.target.value)}
-                    className="study-manager-search"
-                    placeholder="Poišči..."
-                  />
+                  <div className="ios-search notes-search study-manager-search">
+                    <EmojiIcon symbol="🔎" size="0.95rem" />
+                    <input
+                      value={studyManagerSearch}
+                      onChange={(event) => setStudyManagerSearch(event.target.value)}
+                      placeholder="Poišči..."
+                    />
+                  </div>
 
                   {activeStudyView === "flashcards" ? (
                     <>
-                      <form onSubmit={handleFlashcardFormSubmit} className="study-manager-form">
+                      <form
+                        onSubmit={handleFlashcardFormSubmit}
+                        className="study-manager-form study-manager-form-flashcards"
+                      >
                         <div className="study-manager-form-header">
                           <span>{editingFlashcardId ? "Uredi kartico" : "Dodaj kartico"}</span>
-                          <button type="button" onClick={startFlashcardCreate}>
-                            <Plus aria-hidden="true" />
-                            Nova
-                          </button>
+                          {editingFlashcardId ? (
+                            <button type="button" onClick={startFlashcardCreate}>
+                              <Plus aria-hidden="true" />
+                              Nova
+                            </button>
+                          ) : null}
                         </div>
                         <label>
                           <span>Spredaj</span>
@@ -3674,33 +3841,6 @@ export function LectureWorkspace({
                             required
                           />
                         </label>
-                        <div className="study-manager-form-grid">
-                          <label>
-                            <span>Namig</span>
-                            <input
-                              value={flashcardForm.hint}
-                              onChange={(event) =>
-                                setFlashcardForm((current) => ({ ...current, hint: event.target.value }))
-                              }
-                            />
-                          </label>
-                          <label>
-                            <span>Težavnost</span>
-                            <select
-                              value={flashcardForm.difficulty}
-                              onChange={(event) =>
-                                setFlashcardForm((current) => ({
-                                  ...current,
-                                  difficulty: event.target.value as StudyItemDifficulty,
-                                }))
-                              }
-                            >
-                              <option value="easy">Lahko</option>
-                              <option value="medium">Srednje</option>
-                              <option value="hard">Težko</option>
-                            </select>
-                          </label>
-                        </div>
                         <button type="submit" className="study-manager-save" disabled={isSavingStudyItem}>
                           {isSavingStudyItem ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" />}
                           {editingFlashcardId ? "Shrani kartico" : "Dodaj kartico"}
@@ -3733,13 +3873,18 @@ export function LectureWorkspace({
                     </>
                   ) : (
                     <>
-                      <form onSubmit={handleQuizQuestionFormSubmit} className="study-manager-form">
+                      <form
+                        onSubmit={handleQuizQuestionFormSubmit}
+                        className="study-manager-form study-manager-form-quiz"
+                      >
                         <div className="study-manager-form-header">
                           <span>{editingQuizQuestionId ? "Uredi vprašanje" : "Dodaj vprašanje"}</span>
-                          <button type="button" onClick={startQuizQuestionCreate}>
-                            <Plus aria-hidden="true" />
-                            Novo
-                          </button>
+                          {editingQuizQuestionId ? (
+                            <button type="button" onClick={startQuizQuestionCreate}>
+                              <Plus aria-hidden="true" />
+                              Novo
+                            </button>
+                          ) : null}
                         </div>
                         <label>
                           <span>Vprašanje</span>
@@ -3755,7 +3900,7 @@ export function LectureWorkspace({
                         <div className="study-manager-options">
                           {quizQuestionForm.options.map((option, index) => (
                             <label key={`quiz-option-${index}`}>
-                              <span>Odgovor {String.fromCharCode(65 + index)}</span>
+                              <span>{String.fromCharCode(65 + index)}</span>
                               <div>
                                 <input
                                   type="radio"
@@ -3796,22 +3941,6 @@ export function LectureWorkspace({
                             rows={3}
                             required
                           />
-                        </label>
-                        <label>
-                          <span>Težavnost</span>
-                          <select
-                            value={quizQuestionForm.difficulty}
-                            onChange={(event) =>
-                              setQuizQuestionForm((current) => ({
-                                ...current,
-                                difficulty: event.target.value as StudyItemDifficulty,
-                              }))
-                            }
-                          >
-                            <option value="easy">Lahko</option>
-                            <option value="medium">Srednje</option>
-                            <option value="hard">Težko</option>
-                          </select>
                         </label>
                         <button type="submit" className="study-manager-save" disabled={isSavingStudyItem}>
                           {isSavingStudyItem ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" />}
@@ -4475,7 +4604,22 @@ export function LectureWorkspace({
               </div>
             )}
           </div>
-        </div>
+          </div>
+
+          <ViewportPortal>
+            {canManageActiveStudyView && !isStudyManagerOpen ? (
+              <button
+                type="button"
+                className="mobile-study-manage-pill"
+                onClick={openStudyManager}
+                aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
+              >
+                <Pencil aria-hidden="true" className="mobile-study-manage-pill-icon h-5 w-5" />
+                <span className="mobile-study-manage-pill-label">Uredi</span>
+              </button>
+            ) : null}
+          </ViewportPortal>
+        </>
       );
     }
 

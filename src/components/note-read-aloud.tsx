@@ -860,12 +860,14 @@ function ReadAlongBlock({
 function InlineNoteMedia({
   block,
   selected,
+  deleting,
   onSelect,
   onMove,
   onDelete,
 }: {
   block: NoteReadMediaBlock;
   selected: boolean;
+  deleting?: boolean;
   onSelect?: (blockId: string) => void;
   onMove?: (blockId: string, direction: "up" | "down") => void;
   onDelete?: (mediaId: string) => void;
@@ -921,12 +923,18 @@ function InlineNoteMedia({
           <button
             type="button"
             className="danger"
+            disabled={deleting}
             onClick={(event) => {
               event.stopPropagation();
+              if (deleting) {
+                return;
+              }
               onDelete?.(block.mediaId);
             }}
+            aria-label={deleting ? "Brišem fotografijo" : "Izbriši fotografijo"}
+            aria-busy={deleting}
           >
-            Izbriši
+            {deleting ? <Loader2 className="animate-spin" aria-hidden="true" /> : "Izbriši"}
           </button>
         </span>
       </figcaption>
@@ -977,6 +985,7 @@ function ReadAlongMarkdown({
   mediaBlocks,
   selectedBlockId,
   selectedMediaBlockId,
+  deletingMediaIds,
   onBlockSelect,
   onMediaBlockSelect,
   onMoveMediaBlock,
@@ -989,6 +998,7 @@ function ReadAlongMarkdown({
   mediaBlocks: NoteReadMediaBlock[];
   selectedBlockId?: string | null;
   selectedMediaBlockId?: string | null;
+  deletingMediaIds?: ReadonlySet<string>;
   onBlockSelect?: (blockId: string) => void;
   onMediaBlockSelect?: (blockId: string) => void;
   onMoveMediaBlock?: (blockId: string, direction: "up" | "down") => void;
@@ -1047,6 +1057,7 @@ function ReadAlongMarkdown({
                 key={mediaBlock.id}
                 block={mediaBlock}
                 selected={selectedMediaBlockId === mediaBlock.id}
+                deleting={deletingMediaIds?.has(mediaBlock.mediaId) ?? false}
                 onSelect={onMediaBlockSelect}
                 onMove={onMoveMediaBlock}
                 onDelete={onDeleteMedia}
@@ -1070,6 +1081,7 @@ export function NoteReadAloud({
   noteMedia = [],
   selectedBlockId,
   selectedMediaBlockId,
+  deletingMediaIds,
   onBlockSelect,
   onMediaBlockSelect,
   onMoveMediaBlock,
@@ -1085,6 +1097,7 @@ export function NoteReadAloud({
   noteMedia?: NoteMediaAsset[];
   selectedBlockId?: string | null;
   selectedMediaBlockId?: string | null;
+  deletingMediaIds?: ReadonlySet<string>;
   onBlockSelect?: (blockId: string) => void;
   onMediaBlockSelect?: (blockId: string) => void;
   onMoveMediaBlock?: (blockId: string, direction: "up" | "down") => void;
@@ -1107,6 +1120,7 @@ export function NoteReadAloud({
   const lastUserInteractionRef = useRef(Date.now());
   const ignoreScrollUntilRef = useRef(0);
   const pendingArrowMovedMediaBlockIdRef = useRef<string | null>(null);
+  const arrowMoveScrollFrameRef = useRef<number | null>(null);
   const prefetchedChunksRef = useRef(new Map<string, TtsChunkResponse>());
   const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse | null>>());
   const prefetchQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1144,6 +1158,48 @@ export function NoteReadAloud({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isStartingPlayback, setIsStartingPlayback] = useState(false);
 
+  const scrollWindowToMediaElement = useCallback((mediaElement: HTMLElement) => {
+    if (arrowMoveScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(arrowMoveScrollFrameRef.current);
+      arrowMoveScrollFrameRef.current = null;
+    }
+
+    const rect = mediaElement.getBoundingClientRect();
+    const startY = window.scrollY;
+    const maxScrollY = Math.max(
+      0,
+      window.document.documentElement.scrollHeight - window.innerHeight,
+    );
+    const targetY = Math.min(
+      maxScrollY,
+      Math.max(0, startY + rect.top - Math.max(24, (window.innerHeight - rect.height) / 2)),
+    );
+    const distance = targetY - startY;
+    const durationMs = Math.min(680, Math.max(360, Math.abs(distance) * 0.45));
+    const startedAt = window.performance.now();
+
+    function step(timestamp: number) {
+      const elapsed = timestamp - startedAt;
+      const progress = Math.min(1, elapsed / durationMs);
+      const easedProgress =
+        progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+      window.scrollTo({
+        top: startY + distance * easedProgress,
+        behavior: "auto",
+      });
+
+      if (progress < 1) {
+        arrowMoveScrollFrameRef.current = window.requestAnimationFrame(step);
+        return;
+      }
+
+      arrowMoveScrollFrameRef.current = null;
+    }
+
+    arrowMoveScrollFrameRef.current = window.requestAnimationFrame(step);
+  }, []);
+
   const handleMoveMediaBlock = useCallback(
     (blockId: string, direction: "up" | "down") => {
       pendingArrowMovedMediaBlockIdRef.current = blockId;
@@ -1180,11 +1236,7 @@ export function NoteReadAloud({
 
         pendingArrowMovedMediaBlockIdRef.current = null;
         ignoreScrollUntilRef.current = Date.now() + 900;
-        mediaElement.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-          inline: "nearest",
-        });
+        scrollWindowToMediaElement(mediaElement);
       });
     });
 
@@ -1192,7 +1244,16 @@ export function NoteReadAloud({
       window.cancelAnimationFrame(firstFrame);
       window.cancelAnimationFrame(secondFrame);
     };
-  }, [renderedMediaBlocks]);
+  }, [renderedMediaBlocks, scrollWindowToMediaElement]);
+
+  useEffect(
+    () => () => {
+      if (arrowMoveScrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(arrowMoveScrollFrameRef.current);
+      }
+    },
+    [],
+  );
   const [error, setError] = useState<string | null>(null);
   const highlightColor =
     NOTE_TTS_HIGHLIGHT_COLORS.find((color) => color.id === highlightColorId) ??
@@ -2025,6 +2086,7 @@ export function NoteReadAloud({
           mediaBlocks={renderedMediaBlocks}
           selectedBlockId={selectedBlockId}
           selectedMediaBlockId={selectedMediaBlockId}
+          deletingMediaIds={deletingMediaIds}
           onBlockSelect={onBlockSelect}
           onMediaBlockSelect={onMediaBlockSelect}
           onMoveMediaBlock={handleMoveMediaBlock}

@@ -4475,6 +4475,11 @@ select:disabled {
   color: var(--label);
 }
 
+.note-inline-media-actions button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .note-inline-media-actions button svg {
   width: 1rem;
   height: 1rem;
@@ -4482,6 +4487,7 @@ select:disabled {
 
 .note-inline-media-actions button.danger,
 .study-manager-item-actions button.danger {
+  min-width: 4.2rem;
   color: var(--red);
 }
 

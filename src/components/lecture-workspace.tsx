@@ -1117,8 +1117,12 @@ export function LectureWorkspace({
   const [selectedHighlightColorId, setSelectedHighlightColorId] = useState("orange");
   const [selectedNoteBlockId, setSelectedNoteBlockId] = useState<string | null>(null);
   const [selectedMediaBlockId, setSelectedMediaBlockId] = useState<string | null>(null);
+  const [deletingNoteMediaIds, setDeletingNoteMediaIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const notePhotoInputRef = useRef<HTMLInputElement | null>(null);
   const noteAnnotationShellRef = useRef<HTMLDivElement | null>(null);
+  const deletingNoteMediaIdsRef = useRef(new Set<string>());
   const [isStudyManagerOpen, setIsStudyManagerOpen] = useState(false);
   const [studyManagerSearch, setStudyManagerSearch] = useState("");
   const [editingFlashcardId, setEditingFlashcardId] = useState<string | null>(null);
@@ -2912,6 +2916,12 @@ export function LectureWorkspace({
   }
 
   async function handleDeleteNoteMedia(mediaId: string) {
+    if (deletingNoteMediaIdsRef.current.has(mediaId)) {
+      return;
+    }
+
+    deletingNoteMediaIdsRef.current.add(mediaId);
+    setDeletingNoteMediaIds(new Set(deletingNoteMediaIdsRef.current));
     setIsSavingNoteDoc(true);
     setNoteError(null);
 
@@ -2929,6 +2939,8 @@ export function LectureWorkspace({
     } catch (error) {
       setNoteError(getRequestErrorMessage(error, "Fotografije ni bilo mogoče izbrisati."));
     } finally {
+      deletingNoteMediaIdsRef.current.delete(mediaId);
+      setDeletingNoteMediaIds(new Set(deletingNoteMediaIdsRef.current));
       setIsSavingNoteDoc(false);
     }
   }
@@ -3170,7 +3182,6 @@ export function LectureWorkspace({
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     setSelectedHighlightColorId(color.id);
-                    void handleApplyAnnotation("highlight", color.id);
                   }}
                   aria-label={color.label}
                   title={color.label}
@@ -3278,6 +3289,7 @@ export function LectureWorkspace({
                   noteMedia={detail.noteMedia}
                   selectedBlockId={selectedNoteBlockId}
                   selectedMediaBlockId={selectedMediaBlockId}
+                  deletingMediaIds={deletingNoteMediaIds}
                   onBlockSelect={(blockId) => {
                     setSelectedNoteBlockId(blockId);
                     setSelectedMediaBlockId(null);

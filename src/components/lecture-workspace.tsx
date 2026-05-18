@@ -1118,6 +1118,7 @@ export function LectureWorkspace({
   const [selectedNoteBlockId, setSelectedNoteBlockId] = useState<string | null>(null);
   const [selectedMediaBlockId, setSelectedMediaBlockId] = useState<string | null>(null);
   const notePhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const noteAnnotationShellRef = useRef<HTMLDivElement | null>(null);
   const [isStudyManagerOpen, setIsStudyManagerOpen] = useState(false);
   const [studyManagerSearch, setStudyManagerSearch] = useState("");
   const [editingFlashcardId, setEditingFlashcardId] = useState<string | null>(null);
@@ -2673,7 +2674,7 @@ export function LectureWorkspace({
     }
   }
 
-  function handleNoteTextSelection(event: React.MouseEvent<HTMLDivElement> | React.KeyboardEvent<HTMLDivElement>) {
+  function updateNoteTextSelection(root: HTMLElement | null = noteAnnotationShellRef.current) {
     const selection = window.getSelection();
 
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
@@ -2683,9 +2684,8 @@ export function LectureWorkspace({
     }
 
     const range = selection.getRangeAt(0);
-    const root = event.currentTarget;
 
-    if (!root.contains(range.commonAncestorContainer)) {
+    if (!root || !root.contains(range.commonAncestorContainer)) {
       setNoteSelection(null);
       setIsHighlightPaletteOpen(false);
       return;
@@ -2722,6 +2722,36 @@ export function LectureWorkspace({
       endWordIndex: Math.max(...selectedWordIndexes),
     });
   }
+
+  useEffect(() => {
+    if (activeTab !== "notes") {
+      return;
+    }
+
+    let animationFrame = 0;
+    let timeoutId = 0;
+
+    const scheduleSelectionUpdate = () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.clearTimeout(timeoutId);
+      animationFrame = window.requestAnimationFrame(() => {
+        updateNoteTextSelection();
+        timeoutId = window.setTimeout(updateNoteTextSelection, 120);
+      });
+    };
+
+    document.addEventListener("selectionchange", scheduleSelectionUpdate);
+    window.addEventListener("touchend", scheduleSelectionUpdate, { passive: true });
+    window.addEventListener("pointerup", scheduleSelectionUpdate, { passive: true });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.clearTimeout(timeoutId);
+      document.removeEventListener("selectionchange", scheduleSelectionUpdate);
+      window.removeEventListener("touchend", scheduleSelectionUpdate);
+      window.removeEventListener("pointerup", scheduleSelectionUpdate);
+    };
+  }, [activeTab]);
 
   async function handleApplyAnnotation(kind: NoteAnnotationKind, colorId = selectedHighlightColorId) {
     if (!noteSelection) {
@@ -2874,25 +2904,6 @@ export function LectureWorkspace({
       updatedAt: new Date().toISOString(),
       mediaBlocks: activeNoteDoc.mediaBlocks.map((item) =>
         item.id === mediaBlockId ? { ...item, afterBlockId: nextBlockId } : item,
-      ),
-    };
-
-    applyOptimisticNoteDoc(nextDoc);
-    void persistNoteDoc(nextDoc);
-  }
-
-  function handleMoveMediaBlockToBlock(mediaBlockId: string, afterBlockId: string) {
-    const block = activeNoteDoc.mediaBlocks.find((item) => item.id === mediaBlockId);
-
-    if (!block || block.afterBlockId === afterBlockId || !noteBlockIds.includes(afterBlockId)) {
-      return;
-    }
-
-    const nextDoc = {
-      ...activeNoteDoc,
-      updatedAt: new Date().toISOString(),
-      mediaBlocks: activeNoteDoc.mediaBlocks.map((item) =>
-        item.id === mediaBlockId ? { ...item, afterBlockId } : item,
       ),
     };
 
@@ -3237,9 +3248,10 @@ export function LectureWorkspace({
           <div className="ios-card lecture-notes-card">
             {cleanedStructuredNotes && detail.lecture.status === "ready" ? (
               <div
+                ref={noteAnnotationShellRef}
                 className="markdown lecture-markdown note-annotation-shell"
-                onMouseUp={handleNoteTextSelection}
-                onKeyUp={handleNoteTextSelection}
+                onMouseUp={(event) => updateNoteTextSelection(event.currentTarget)}
+                onKeyUp={(event) => updateNoteTextSelection(event.currentTarget)}
               >
                 <input
                   ref={notePhotoInputRef}
@@ -3275,7 +3287,6 @@ export function LectureWorkspace({
                     setSelectedNoteBlockId(null);
                   }}
                   onMoveMediaBlock={handleMoveMediaBlock}
-                  onMoveMediaBlockToBlock={handleMoveMediaBlockToBlock}
                   onDeleteMedia={(mediaId) => void handleDeleteNoteMedia(mediaId)}
                 />
               </div>

@@ -103,9 +103,6 @@ const TTS_PAID_DAILY_LIMIT_MESSAGE =
   "Porabil si današnje poslušanje. Znova lahko poslušaš po ponastavitvi ob 00:00.";
 const READ_SETTINGS_SHEET_CLOSE_MS = 180;
 const TTS_GENERATION_PROGRESS_LABEL = "Ustvarjam zvok";
-const NOTE_MEDIA_DRAG_AUTO_SCROLL_MAX_VELOCITY = 128000;
-const NOTE_MEDIA_UP_DRAG_AUTO_SCROLL_MULTIPLIER = 4;
-const NOTE_MEDIA_DOWN_DRAG_AUTO_SCROLL_MULTIPLIER = 4;
 
 function getTtsGenerationProgressPercent(startedAt: number) {
   const elapsedSeconds = Math.max(0, (Date.now() - startedAt) / 1000);
@@ -865,329 +862,15 @@ function InlineNoteMedia({
   selected,
   onSelect,
   onMove,
-  onMoveToBlock,
   onDelete,
 }: {
   block: NoteReadMediaBlock;
   selected: boolean;
   onSelect?: (blockId: string) => void;
   onMove?: (blockId: string, direction: "up" | "down") => void;
-  onMoveToBlock?: (blockId: string, afterBlockId: string) => void;
   onDelete?: (mediaId: string) => void;
 }) {
-  const pointerSessionRef = useRef<{
-    pointerId: number;
-    startY: number;
-    startScrollY: number;
-    startTop: number;
-    height: number;
-    topLimit: number;
-    bottomLimit: number;
-    direction: -1 | 0 | 1;
-    moved: boolean;
-  } | null>(null);
-  const latestPointerYRef = useRef<number | null>(null);
-  const autoScrollFrameRef = useRef<number | null>(null);
-  const autoScrollTimestampRef = useRef<number | null>(null);
-  const autoScrollVelocityRef = useRef(0);
-  const figureRef = useRef<HTMLElement | null>(null);
-  const suppressClickRef = useRef(false);
-  const [isDragging, setIsDragging] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-
-  function stopAutoScroll() {
-    if (autoScrollFrameRef.current !== null) {
-      window.cancelAnimationFrame(autoScrollFrameRef.current);
-      autoScrollFrameRef.current = null;
-    }
-    autoScrollTimestampRef.current = null;
-    autoScrollVelocityRef.current = 0;
-  }
-
-  function setDragVisualOffset(offset: number) {
-    figureRef.current?.style.setProperty("--note-media-drag-offset", `${offset}px`);
-  }
-
-  function getCurrentMediaElement() {
-    return (
-      figureRef.current ??
-      document.querySelector<HTMLElement>(`[data-note-media-block-id="${block.id}"]`)
-    );
-  }
-
-  function setMediaDraggingAttribute(active: boolean) {
-    if (typeof document === "undefined") {
-      return;
-    }
-
-    if (active) {
-      document.body.dataset.noteMediaDragging = "true";
-      return;
-    }
-
-    delete document.body.dataset.noteMediaDragging;
-  }
-
-  function runAutoScroll(timestamp: number) {
-    const pointerY = latestPointerYRef.current;
-    const session = pointerSessionRef.current;
-
-    if (pointerY === null || !session?.moved) {
-      autoScrollFrameRef.current = null;
-      autoScrollTimestampRef.current = null;
-      autoScrollVelocityRef.current = 0;
-      return;
-    }
-
-    const previousTimestamp = autoScrollTimestampRef.current ?? timestamp;
-    const elapsedSeconds = Math.min(0.05, Math.max(0.008, (timestamp - previousTimestamp) / 1000));
-    autoScrollTimestampRef.current = timestamp;
-    const dragDirection =
-      session.direction !== 0
-        ? session.direction
-        : pointerY > session.startY
-          ? 1
-          : pointerY < session.startY
-            ? -1
-            : 0;
-    const lockedTop = getLockedDragTop(pointerY);
-    let targetVelocity = 0;
-
-    if (dragDirection < 0) {
-      const range = Math.max(1, session.bottomLimit - session.topLimit);
-      const middleTop = session.topLimit + range / 2;
-      const distanceFromMiddle = lockedTop - middleTop;
-      const deadZone = Math.min(34, Math.max(18, range * 0.1));
-      const pressure = Math.min(
-        1,
-        Math.max(0, (Math.abs(distanceFromMiddle) - deadZone) / Math.max(1, range / 2 - deadZone)),
-      );
-      const scrollDirection = Math.min(0, Math.sign(distanceFromMiddle));
-
-      targetVelocity =
-        scrollDirection *
-        Math.pow(pressure, 2.2) *
-        NOTE_MEDIA_DRAG_AUTO_SCROLL_MAX_VELOCITY *
-        NOTE_MEDIA_UP_DRAG_AUTO_SCROLL_MULTIPLIER;
-    } else if (dragDirection > 0) {
-      const edgeDistance = session.bottomLimit - lockedTop;
-      const edgeActivation = Math.min(120, Math.max(48, window.innerHeight * 0.16));
-      const pressure = Math.min(
-        1,
-        Math.max(0, (edgeActivation - Math.max(0, edgeDistance)) / edgeActivation),
-      );
-
-      targetVelocity =
-        dragDirection *
-        Math.pow(pressure, 2.2) *
-        NOTE_MEDIA_DRAG_AUTO_SCROLL_MAX_VELOCITY *
-        NOTE_MEDIA_DOWN_DRAG_AUTO_SCROLL_MULTIPLIER;
-    }
-
-    autoScrollVelocityRef.current += (targetVelocity - autoScrollVelocityRef.current) * 0.34;
-    const scrollVelocity =
-      Math.abs(autoScrollVelocityRef.current) < 2 ? 0 : autoScrollVelocityRef.current;
-
-    if (scrollVelocity !== 0) {
-      const scrollDelta = scrollVelocity * elapsedSeconds;
-      window.scrollBy({ top: scrollDelta, behavior: "auto" });
-
-      if (latestPointerYRef.current !== null) {
-        setDragVisualOffset(getLockedDragOffset(latestPointerYRef.current));
-      }
-    }
-
-    autoScrollFrameRef.current = window.requestAnimationFrame(runAutoScroll);
-  }
-
-  function startAutoScroll() {
-    if (autoScrollFrameRef.current === null) {
-      autoScrollTimestampRef.current = null;
-      autoScrollFrameRef.current = window.requestAnimationFrame(runAutoScroll);
-    }
-  }
-
-  function getVisibleDragTopLimit() {
-    const topBars = Array.from(document.querySelectorAll<HTMLElement>(".app-topbar, .ios-nav"));
-    const topInset = topBars.reduce((maxBottom, element) => {
-      const style = window.getComputedStyle(element);
-      const rect = element.getBoundingClientRect();
-      const isVisible =
-        style.display !== "none" &&
-        style.visibility !== "hidden" &&
-        rect.height > 0 &&
-        rect.top <= 4 &&
-        rect.bottom > 0;
-
-      return isVisible ? Math.max(maxBottom, rect.bottom) : maxBottom;
-    }, 0);
-
-    return Math.max(16, Math.ceil(topInset + 10));
-  }
-
-  function getVisibleDragBottomLimit() {
-    const bottomBars = Array.from(
-      document.querySelectorAll<HTMLElement>(
-        ".mobile-note-read-pill, .mobile-note-annotation-pill, .ios-tabbar",
-      ),
-    );
-    const bottomInset = bottomBars.reduce((minTop, element) => {
-      const style = window.getComputedStyle(element);
-      const rect = element.getBoundingClientRect();
-      const isVisible =
-        style.display !== "none" &&
-        style.visibility !== "hidden" &&
-        Number(style.opacity) !== 0 &&
-        rect.height > 0 &&
-        rect.bottom >= window.innerHeight - 4 &&
-        rect.top < window.innerHeight;
-
-      return isVisible ? Math.min(minTop, rect.top) : minTop;
-    }, window.innerHeight);
-
-    return Math.min(window.innerHeight - 16, Math.floor(bottomInset - 10));
-  }
-
-  function getLockedDragTop(clientY: number) {
-    const session = pointerSessionRef.current;
-
-    if (!session) {
-      return 0;
-    }
-
-    const scrolledDistance = window.scrollY - session.startScrollY;
-    const naturalTop = session.startTop - scrolledDistance;
-    const rawOffset = clientY - session.startY + scrolledDistance;
-    const rawTop = naturalTop + rawOffset;
-
-    return Math.min(session.bottomLimit, Math.max(session.topLimit, rawTop));
-  }
-
-  function getLockedDragOffset(clientY: number) {
-    const session = pointerSessionRef.current;
-
-    if (!session) {
-      return 0;
-    }
-
-    const scrolledDistance = window.scrollY - session.startScrollY;
-    const naturalTop = session.startTop - scrolledDistance;
-
-    return getLockedDragTop(clientY) - naturalTop;
-  }
-
-  function getDropTargetBlockId(clientY: number) {
-    const blocks = Array.from(document.querySelectorAll<HTMLElement>("[data-note-block-id]"));
-    let closestBlockId: string | null = null;
-    let closestDistance = Number.POSITIVE_INFINITY;
-
-    for (const element of blocks) {
-      const rect = element.getBoundingClientRect();
-      const validDropY = rect.bottom;
-      const distance = Math.abs(validDropY - clientY);
-
-      if (distance < closestDistance) {
-        closestBlockId = element.dataset.noteBlockId ?? null;
-        closestDistance = distance;
-      }
-    }
-
-    return closestBlockId;
-  }
-
-  function resetDragState() {
-    latestPointerYRef.current = null;
-    stopAutoScroll();
-    setDragVisualOffset(0);
-    setIsDragging(false);
-    setMediaDraggingAttribute(false);
-  }
-
-  function clampReleaseScrollDelta(delta: number) {
-    const maxCorrection = Math.max(180, window.innerHeight * 0.85);
-
-    return Math.min(maxCorrection, Math.max(-maxCorrection, delta));
-  }
-
-  function settleReleasedDrag(visualTop: number) {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const figure = getCurrentMediaElement();
-
-        if (figure) {
-          figure.style.setProperty("--note-media-drag-offset", "0px");
-          const releasedTop = figure.getBoundingClientRect().top;
-          const scrollDelta = clampReleaseScrollDelta(releasedTop - visualTop);
-
-          if (Number.isFinite(scrollDelta) && Math.abs(scrollDelta) > 1) {
-            window.scrollBy({ top: scrollDelta, behavior: "auto" });
-          }
-
-          figure.scrollIntoView({ behavior: "auto", block: "nearest", inline: "nearest" });
-        } else {
-          setDragVisualOffset(0);
-        }
-
-        setIsDragging(false);
-        setMediaDraggingAttribute(false);
-      });
-    });
-  }
-
-  function finishDrag(clientY: number) {
-    const session = pointerSessionRef.current;
-    const releasedVisualTop = getLockedDragTop(clientY);
-    const dropY = Math.min(window.innerHeight - 8, Math.max(8, clientY));
-    pointerSessionRef.current = null;
-
-    if (!session?.moved) {
-      resetDragState();
-      return;
-    }
-
-    const closestBlockId = getDropTargetBlockId(dropY);
-    latestPointerYRef.current = null;
-    stopAutoScroll();
-
-    if (closestBlockId && closestBlockId !== block.afterBlockId && onMoveToBlock) {
-      onMoveToBlock?.(block.id, closestBlockId);
-    }
-
-    settleReleasedDrag(releasedVisualTop);
-  }
-
-  useEffect(() => {
-    function handleGlobalPointerUp(event: PointerEvent) {
-      const session = pointerSessionRef.current;
-
-      if (session?.pointerId === event.pointerId) {
-        finishDrag(event.clientY);
-      }
-    }
-
-    function handleGlobalPointerCancel(event: PointerEvent) {
-      const session = pointerSessionRef.current;
-
-      if (session?.pointerId === event.pointerId) {
-        pointerSessionRef.current = null;
-        resetDragState();
-      }
-    }
-
-    window.addEventListener("pointerup", handleGlobalPointerUp);
-    window.addEventListener("pointercancel", handleGlobalPointerCancel);
-
-    return () => {
-      window.removeEventListener("pointerup", handleGlobalPointerUp);
-      window.removeEventListener("pointercancel", handleGlobalPointerCancel);
-      if (autoScrollFrameRef.current !== null) {
-        window.cancelAnimationFrame(autoScrollFrameRef.current);
-        autoScrollFrameRef.current = null;
-      }
-      autoScrollTimestampRef.current = null;
-      autoScrollVelocityRef.current = 0;
-    };
-  });
 
   if (!block.media?.signedUrl) {
     return null;
@@ -1195,89 +878,12 @@ function InlineNoteMedia({
 
   return (
     <figure
-      ref={figureRef}
-      className={`note-inline-media ${selected ? "selected" : ""} ${isDragging ? "dragging" : ""}`}
+      className={`note-inline-media ${selected ? "selected" : ""}`}
       data-note-media-block-id={block.id}
       onClick={(event) => {
-        if (suppressClickRef.current) {
-          suppressClickRef.current = false;
-          event.stopPropagation();
-          return;
-        }
-
         event.stopPropagation();
         onSelect?.(block.id);
         setIsPreviewOpen(true);
-      }}
-      onPointerDown={(event) => {
-        if (
-          event.button !== 0 ||
-          (event.target instanceof Element && event.target.closest("button, a"))
-        ) {
-          return;
-        }
-
-        const rect = event.currentTarget.getBoundingClientRect();
-
-        const topLimit = getVisibleDragTopLimit();
-        const bottomEdge = getVisibleDragBottomLimit();
-        const usableHeight = Math.max(1, bottomEdge - topLimit);
-        const visualHeight = Math.min(rect.height, usableHeight);
-        const bottomLimit = Math.max(topLimit, bottomEdge - visualHeight);
-
-        pointerSessionRef.current = {
-          pointerId: event.pointerId,
-          startY: event.clientY,
-          startScrollY: window.scrollY,
-          startTop: rect.top,
-          height: visualHeight,
-          topLimit,
-          bottomLimit,
-          direction: 0,
-          moved: false,
-        };
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }}
-      onPointerMove={(event) => {
-        const session = pointerSessionRef.current;
-
-        if (!session || session.pointerId !== event.pointerId) {
-          return;
-        }
-
-        const deltaY = event.clientY - session.startY;
-
-        if (Math.abs(deltaY) < 8 && !session.moved) {
-          return;
-        }
-
-        if (!session.moved) {
-          session.moved = true;
-          setMediaDraggingAttribute(true);
-          setIsDragging(true);
-        }
-        const nextDirection = Math.sign(deltaY) as -1 | 0 | 1;
-
-        if (nextDirection !== 0) {
-          session.direction = nextDirection;
-        }
-        latestPointerYRef.current = event.clientY;
-        suppressClickRef.current = true;
-        setDragVisualOffset(getLockedDragOffset(event.clientY));
-        startAutoScroll();
-        event.preventDefault();
-      }}
-      onPointerUp={(event) => {
-        const session = pointerSessionRef.current;
-
-        if (session?.pointerId === event.pointerId) {
-          event.currentTarget.releasePointerCapture(event.pointerId);
-          finishDrag(event.clientY);
-        }
-      }}
-      onPointerCancel={() => {
-        pointerSessionRef.current = null;
-        resetDragState();
       }}
     >
       <Image
@@ -1374,7 +980,6 @@ function ReadAlongMarkdown({
   onBlockSelect,
   onMediaBlockSelect,
   onMoveMediaBlock,
-  onMoveMediaBlockToBlock,
   onDeleteMedia,
 }: {
   document: NoteTtsDocument;
@@ -1387,7 +992,6 @@ function ReadAlongMarkdown({
   onBlockSelect?: (blockId: string) => void;
   onMediaBlockSelect?: (blockId: string) => void;
   onMoveMediaBlock?: (blockId: string, direction: "up" | "down") => void;
-  onMoveMediaBlockToBlock?: (blockId: string, afterBlockId: string) => void;
   onDeleteMedia?: (mediaId: string) => void;
 }) {
   const wordAnnotations = useMemo(() => {
@@ -1445,7 +1049,6 @@ function ReadAlongMarkdown({
                 selected={selectedMediaBlockId === mediaBlock.id}
                 onSelect={onMediaBlockSelect}
                 onMove={onMoveMediaBlock}
-                onMoveToBlock={onMoveMediaBlockToBlock}
                 onDelete={onDeleteMedia}
               />
             ))}
@@ -1470,7 +1073,6 @@ export function NoteReadAloud({
   onBlockSelect,
   onMediaBlockSelect,
   onMoveMediaBlock,
-  onMoveMediaBlockToBlock,
   onDeleteMedia,
 }: {
   lectureId: string;
@@ -1486,7 +1088,6 @@ export function NoteReadAloud({
   onBlockSelect?: (blockId: string) => void;
   onMediaBlockSelect?: (blockId: string) => void;
   onMoveMediaBlock?: (blockId: string, direction: "up" | "down") => void;
-  onMoveMediaBlockToBlock?: (blockId: string, afterBlockId: string) => void;
   onDeleteMedia?: (mediaId: string) => void;
 }) {
   const document = useMemo(() => parseNoteTtsDocument(content), [content]);
@@ -2427,7 +2028,6 @@ export function NoteReadAloud({
           onBlockSelect={onBlockSelect}
           onMediaBlockSelect={onMediaBlockSelect}
           onMoveMediaBlock={handleMoveMediaBlock}
-          onMoveMediaBlockToBlock={onMoveMediaBlockToBlock}
           onDeleteMedia={onDeleteMedia}
         />
       </div>

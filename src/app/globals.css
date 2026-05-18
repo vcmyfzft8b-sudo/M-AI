@@ -4416,32 +4416,16 @@ select:disabled {
   border-radius: 8px;
   overflow: hidden;
   background: var(--surface-muted);
-  cursor: grab;
-  transform: translateY(var(--note-media-drag-offset, 0));
+  cursor: pointer;
   transition:
-    transform 160ms var(--motion-curve-soft),
     opacity 160ms ease,
     box-shadow 160ms ease;
   user-select: none;
-  touch-action: none;
-  overflow-anchor: none;
-}
-
-body[data-note-media-dragging="true"],
-body[data-note-media-dragging="true"] * {
-  overflow-anchor: none;
+  touch-action: manipulation;
 }
 
 .note-inline-media.selected {
   outline: 2px solid color-mix(in srgb, var(--tint) 50%, transparent);
-}
-
-.note-inline-media.dragging {
-  z-index: 2;
-  cursor: grabbing;
-  opacity: 0.86;
-  box-shadow: var(--shadow-raised);
-  transition: none;
 }
 
 .note-inline-media img {
@@ -10570,7 +10554,9 @@ body[data-note-media-dragging="true"] * {
   .mobile-note-annotation-pill .note-annotation-toolbar.palette-open {
     width: min(23.4rem, calc(100vw - 2rem));
     min-width: min(23.4rem, calc(100vw - 2rem));
+    justify-content: center;
     padding-left: 0.62rem;
+    padding-right: 0.62rem;
   }
 
   .mobile-note-annotation-pill .note-annotation-toolbar button {

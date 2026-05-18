@@ -5,6 +5,7 @@ import type {
   FlashcardRow,
   FlashcardProgressRow,
   LectureArtifactRow,
+  LectureNoteMediaRow,
   LecturePracticeTestAssetRow,
   LectureQuizAssetRow,
   LectureRow,
@@ -18,6 +19,7 @@ import type {
   QuizQuestionRow,
   TranscriptSegmentRow,
 } from "@/lib/database.types";
+import type { EditableNoteDoc, NoteMediaAsset } from "@/lib/note-doc";
 
 export interface AppLectureListItem extends LectureRow {
   profile?: ProfileRow | null;
@@ -34,6 +36,9 @@ export interface AppLibraryFolder {
 export interface LectureDetail {
   lecture: LectureRow;
   artifact: LectureArtifactRow | null;
+  editableNoteDoc: EditableNoteDoc | null;
+  editableNoteRevision: number;
+  noteMedia: NoteMediaAsset[];
   studyAsset: LectureStudyAssetRow | null;
   quizAsset: LectureQuizAssetRow | null;
   practiceTestAsset: LecturePracticeTestAssetRow | null;
@@ -65,6 +70,8 @@ export interface FlashcardWithCitations extends Omit<FlashcardRow, "citations_js
 export interface QuizQuestionWithOptions extends Omit<QuizQuestionRow, "options_json"> {
   options: string[];
 }
+
+export type { LectureNoteMediaRow };
 
 export type PracticeTestQuestion = PracticeTestQuestionRow;
 

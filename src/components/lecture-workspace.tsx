@@ -5,7 +5,14 @@ import {
   ArrowRight,
   ArrowUp,
   Check,
+  Highlighter,
+  ImagePlus,
   Loader2,
+  Palette,
+  Pencil,
+  Plus,
+  Trash2,
+  Underline,
   X,
 } from "lucide-react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
@@ -25,10 +32,14 @@ import {
   isRecord,
   lectureShowsTranscript,
 } from "@/lib/lecture-source-metadata";
-import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
+import type { EditableNoteDoc, NoteAnnotation, NoteAnnotationKind } from "@/lib/note-doc";
+import { NOTE_TTS_HIGHLIGHT_COLORS } from "@/lib/note-tts-settings";
+import { parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import {
   POLL_INTERVAL_MS,
+  STORAGE_BUCKET,
 } from "@/lib/constants";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useRouter } from "next/navigation";
 import type {
   ChatMessageWithCitations,
@@ -106,6 +117,73 @@ type ChatResponse = {
   code?: string;
   error?: unknown;
 };
+
+type NoteSelectionRange = {
+  startWordIndex: number;
+  endWordIndex: number;
+};
+
+type NotesDocResponse = {
+  doc: EditableNoteDoc;
+  revision: number;
+  updatedAt?: string | null;
+  error?: unknown;
+};
+
+type NoteMediaUploadResponse = {
+  mediaId: string;
+  path: string;
+  token: string;
+  mimeType: string;
+  maxBytes: number;
+  error?: unknown;
+};
+
+type NoteMediaFinalizeResponse = NotesDocResponse & {
+  media?: LectureDetail["noteMedia"][number];
+};
+
+type StudyItemDifficulty = "easy" | "medium" | "hard";
+
+type FlashcardFormState = {
+  front: string;
+  back: string;
+  hint: string;
+  difficulty: StudyItemDifficulty;
+};
+
+type QuizQuestionFormState = {
+  prompt: string;
+  options: [string, string, string, string];
+  correctOptionIndex: number;
+  explanation: string;
+  difficulty: StudyItemDifficulty;
+};
+
+type FlashcardMutationResponse = {
+  flashcard: LectureDetail["flashcards"][number];
+  error?: unknown;
+};
+
+type QuizQuestionMutationResponse = {
+  question: LectureDetail["quizQuestions"][number];
+  error?: unknown;
+};
+
+const NOTE_HIGHLIGHT_COLORS = [
+  "orange",
+  "green",
+  "blue",
+  "pink",
+].map((colorId) => {
+  const color = NOTE_TTS_HIGHLIGHT_COLORS.find((item) => item.id === colorId);
+
+  return {
+    id: colorId,
+    label: color?.label ?? colorId,
+    value: color?.currentBackground ?? "#fb923c",
+  };
+});
 
 type StudySessionSnapshot = {
   savedAt: string;
@@ -214,6 +292,126 @@ function shouldPollDetail(detail: LectureDetail) {
 
 function getStudySessionStorageKey(lectureId: string) {
   return `${STUDY_SESSION_STORAGE_KEY_PREFIX}${lectureId}`;
+}
+
+function createClientFallbackNoteDoc(): EditableNoteDoc {
+  return {
+    version: 1,
+    baseNotesHash: "local",
+    updatedAt: new Date(0).toISOString(),
+    annotations: [],
+    mediaBlocks: [],
+  };
+}
+
+function mergeNoteDocs(baseDoc: EditableNoteDoc, nextDoc: EditableNoteDoc): EditableNoteDoc {
+  const annotationsById = new Map(baseDoc.annotations.map((annotation) => [annotation.id, annotation]));
+  const mediaBlocksById = new Map(baseDoc.mediaBlocks.map((mediaBlock) => [mediaBlock.id, mediaBlock]));
+
+  for (const annotation of nextDoc.annotations) {
+    annotationsById.set(annotation.id, annotation);
+  }
+
+  for (const mediaBlock of nextDoc.mediaBlocks) {
+    mediaBlocksById.set(mediaBlock.id, mediaBlock);
+  }
+
+  return {
+    ...baseDoc,
+    updatedAt: new Date().toISOString(),
+    annotations: Array.from(annotationsById.values()),
+    mediaBlocks: Array.from(mediaBlocksById.values()),
+  };
+}
+
+function annotationRangesOverlap(
+  firstStart: number,
+  firstEnd: number,
+  secondStart: number,
+  secondEnd: number,
+) {
+  return firstStart <= secondEnd && secondStart <= firstEnd;
+}
+
+function isSelectionFullyCoveredByAnnotations(
+  annotations: NoteAnnotation[],
+  selection: NoteSelectionRange,
+) {
+  let cursor = selection.startWordIndex;
+  const sortedAnnotations = annotations
+    .filter((annotation) =>
+      annotationRangesOverlap(
+        annotation.startWordIndex,
+        annotation.endWordIndex,
+        selection.startWordIndex,
+        selection.endWordIndex,
+      ),
+    )
+    .sort((first, second) => first.startWordIndex - second.startWordIndex);
+
+  for (const annotation of sortedAnnotations) {
+    if (annotation.startWordIndex > cursor) {
+      return false;
+    }
+
+    cursor = Math.max(cursor, annotation.endWordIndex + 1);
+
+    if (cursor > selection.endWordIndex) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function removeSelectionFromAnnotation(annotation: NoteAnnotation, selection: NoteSelectionRange) {
+  const pieces: NoteAnnotation[] = [];
+
+  if (annotation.startWordIndex < selection.startWordIndex) {
+    pieces.push({
+      ...annotation,
+      id: crypto.randomUUID(),
+      endWordIndex: selection.startWordIndex - 1,
+    });
+  }
+
+  if (annotation.endWordIndex > selection.endWordIndex) {
+    pieces.push({
+      ...annotation,
+      id: crypto.randomUUID(),
+      startWordIndex: selection.endWordIndex + 1,
+    });
+  }
+
+  return pieces;
+}
+
+function doRectsOverlap(first: DOMRect, second: DOMRect, padding = 8) {
+  return !(
+    first.right + padding < second.left ||
+    first.left - padding > second.right ||
+    first.bottom + padding < second.top ||
+    first.top - padding > second.bottom
+  );
+}
+
+function createEmptyFlashcardForm(): FlashcardFormState {
+  return {
+    front: "",
+    back: "",
+    hint: "",
+    difficulty: "medium",
+  };
+}
+
+function createEmptyQuizQuestionForm(): QuizQuestionFormState {
+  return {
+    prompt: "",
+    options: ["", "", "", ""],
+    correctOptionIndex: 0,
+    explanation: "",
+    difficulty: "medium",
+  };
 }
 
 function toTimestamp(value: string | null | undefined) {
@@ -912,6 +1110,25 @@ export function LectureWorkspace({
   const [isAwaitingPracticeTestGeneration, setIsAwaitingPracticeTestGeneration] = useState(false);
   const [isSubmittingPracticeTest, setIsSubmittingPracticeTest] = useState(false);
   const [studyError, setStudyError] = useState<string | null>(null);
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [isSavingNoteDoc, setIsSavingNoteDoc] = useState(false);
+  const [noteSelection, setNoteSelection] = useState<NoteSelectionRange | null>(null);
+  const [isHighlightPaletteOpen, setIsHighlightPaletteOpen] = useState(false);
+  const [selectedHighlightColorId, setSelectedHighlightColorId] = useState("orange");
+  const [selectedNoteBlockId, setSelectedNoteBlockId] = useState<string | null>(null);
+  const [selectedMediaBlockId, setSelectedMediaBlockId] = useState<string | null>(null);
+  const notePhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const [isStudyManagerOpen, setIsStudyManagerOpen] = useState(false);
+  const [studyManagerSearch, setStudyManagerSearch] = useState("");
+  const [editingFlashcardId, setEditingFlashcardId] = useState<string | null>(null);
+  const [flashcardForm, setFlashcardForm] = useState<FlashcardFormState>(
+    createEmptyFlashcardForm,
+  );
+  const [editingQuizQuestionId, setEditingQuizQuestionId] = useState<string | null>(null);
+  const [quizQuestionForm, setQuizQuestionForm] = useState<QuizQuestionFormState>(
+    createEmptyQuizQuestionForm,
+  );
+  const [isSavingStudyItem, setIsSavingStudyItem] = useState(false);
   const [isFlashcardFlipped, setIsFlashcardFlipped] = useState(false);
   const [activeStudyView, setActiveStudyView] = useState<StudyMaterialView>(
     getInitialStudyView(initialDetail),
@@ -1422,6 +1639,59 @@ export function LectureWorkspace({
       detail.lecture.title,
     );
   }, [detail.artifact?.structured_notes_md, detail.lecture.title]);
+  const activeNoteDoc = detail.editableNoteDoc ?? createClientFallbackNoteDoc();
+  const noteBlockIds = useMemo(
+    () => (cleanedStructuredNotes ? parseNoteTtsDocument(cleanedStructuredNotes).blocks.map((block) => block.id) : []),
+    [cleanedStructuredNotes],
+  );
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const isAnnotationPaletteExpanded =
+      activeTab === "notes" && Boolean(noteSelection) && isHighlightPaletteOpen;
+
+    function updateDockOverlapState() {
+      if (!isAnnotationPaletteExpanded) {
+        delete document.body.dataset.noteAnnotationDockOverlap;
+        return;
+      }
+
+      const annotationToolbar = document.querySelector(
+        ".mobile-note-annotation-pill .note-annotation-toolbar",
+      );
+      const mobileDockToggle = document.querySelector(".mobile-dock-toggle");
+
+      if (!(annotationToolbar instanceof HTMLElement) || !(mobileDockToggle instanceof HTMLElement)) {
+        delete document.body.dataset.noteAnnotationDockOverlap;
+        return;
+      }
+
+      const overlaps = doRectsOverlap(
+        annotationToolbar.getBoundingClientRect(),
+        mobileDockToggle.getBoundingClientRect(),
+      );
+
+      if (overlaps) {
+        document.body.dataset.noteAnnotationDockOverlap = "true";
+      } else {
+        delete document.body.dataset.noteAnnotationDockOverlap;
+      }
+    }
+
+    updateDockOverlapState();
+    const animationFrame = window.requestAnimationFrame(updateDockOverlapState);
+    window.addEventListener("resize", updateDockOverlapState);
+    window.visualViewport?.addEventListener("resize", updateDockOverlapState);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("resize", updateDockOverlapState);
+      window.visualViewport?.removeEventListener("resize", updateDockOverlapState);
+      delete document.body.dataset.noteAnnotationDockOverlap;
+    };
+  }, [activeTab, isHighlightPaletteOpen, noteSelection]);
   const notesArtifactLoadFailed =
     !cleanedStructuredNotes &&
     detail.lecture.status === "ready" &&
@@ -2326,14 +2596,636 @@ export function LectureWorkspace({
     void submitChatQuestion();
   }
 
+  function applySavedNoteDoc(payload: NotesDocResponse) {
+    setDetail((current) => ({
+      ...current,
+      editableNoteDoc: payload.doc,
+      editableNoteRevision: payload.revision,
+      artifact: current.artifact
+        ? {
+            ...current.artifact,
+            editable_notes_doc: payload.doc,
+            editable_notes_revision: payload.revision,
+            editable_notes_updated_at: payload.updatedAt ?? new Date().toISOString(),
+          }
+        : current.artifact,
+    }));
+  }
+
+  async function persistNoteDoc(nextDoc: EditableNoteDoc) {
+    setIsSavingNoteDoc(true);
+    setNoteError(null);
+
+    try {
+      const saveDoc = async (doc: EditableNoteDoc, expectedRevision: number) => {
+        const response = await fetch(`/api/lectures/${detail.lecture.id}/notes-doc`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            expectedRevision,
+            doc,
+          }),
+        });
+        const payload = (await response.json().catch(() => null)) as NotesDocResponse | null;
+
+        return { response, payload };
+      };
+
+      let { response, payload } = await saveDoc(nextDoc, detail.editableNoteRevision);
+
+      if (response.status === 409 && payload?.doc && Number.isInteger(payload.revision)) {
+        const rebasedDoc = mergeNoteDocs(payload.doc, nextDoc);
+        applySavedNoteDoc(payload);
+        ({ response, payload } = await saveDoc(rebasedDoc, payload.revision));
+      }
+
+      if (!response.ok || !payload?.doc) {
+        if (response.status === 409 && payload?.doc) {
+          applySavedNoteDoc(payload);
+        }
+        setNoteError(getApiErrorMessage(payload, "Shranjevanje ni uspelo."));
+        return null;
+      }
+
+      applySavedNoteDoc(payload);
+      return payload.doc;
+    } catch {
+      setNoteError("Shranjevanje ni uspelo.");
+      return null;
+    } finally {
+      setIsSavingNoteDoc(false);
+    }
+  }
+
+  function handleNoteTextSelection(event: React.MouseEvent<HTMLDivElement> | React.KeyboardEvent<HTMLDivElement>) {
+    const selection = window.getSelection();
+
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      setNoteSelection(null);
+      setIsHighlightPaletteOpen(false);
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const root = event.currentTarget;
+
+    if (!root.contains(range.commonAncestorContainer)) {
+      setNoteSelection(null);
+      setIsHighlightPaletteOpen(false);
+      return;
+    }
+
+    const selectedWordIndexes = Array.from(root.querySelectorAll<HTMLElement>(".note-read-word"))
+      .flatMap((element) => {
+        try {
+          if (!range.intersectsNode(element)) {
+            return [];
+          }
+        } catch {
+          return [];
+        }
+
+        const index = Number(element.dataset.wordIndex);
+        return Number.isInteger(index) ? [index] : [];
+      });
+
+    if (selectedWordIndexes.length === 0) {
+      setNoteSelection(null);
+      setIsHighlightPaletteOpen(false);
+      return;
+    }
+
+    setNoteSelection({
+      startWordIndex: Math.min(...selectedWordIndexes),
+      endWordIndex: Math.max(...selectedWordIndexes),
+    });
+  }
+
+  async function handleApplyAnnotation(kind: NoteAnnotationKind, colorId = selectedHighlightColorId) {
+    if (!noteSelection) {
+      return;
+    }
+
+    const matchingAnnotations = activeNoteDoc.annotations.filter(
+      (annotation) =>
+        annotation.kind === kind &&
+        (annotation.colorId ?? "orange") === colorId &&
+        annotationRangesOverlap(
+          annotation.startWordIndex,
+          annotation.endWordIndex,
+          noteSelection.startWordIndex,
+          noteSelection.endWordIndex,
+        ),
+    );
+    const shouldRemoveSelection = isSelectionFullyCoveredByAnnotations(
+      matchingAnnotations,
+      noteSelection,
+    );
+    const nextDoc: EditableNoteDoc = {
+      ...activeNoteDoc,
+      updatedAt: new Date().toISOString(),
+      annotations: shouldRemoveSelection
+        ? activeNoteDoc.annotations.flatMap((annotation) => {
+            const shouldSplitAnnotation =
+              annotation.kind === kind &&
+              (annotation.colorId ?? "orange") === colorId &&
+              annotationRangesOverlap(
+                annotation.startWordIndex,
+                annotation.endWordIndex,
+                noteSelection.startWordIndex,
+                noteSelection.endWordIndex,
+              );
+
+            return shouldSplitAnnotation
+              ? removeSelectionFromAnnotation(annotation, noteSelection)
+              : [annotation];
+          })
+        : [
+            ...activeNoteDoc.annotations,
+            {
+              id: crypto.randomUUID(),
+              kind,
+              startWordIndex: noteSelection.startWordIndex,
+              endWordIndex: noteSelection.endWordIndex,
+              colorId,
+              createdAt: new Date().toISOString(),
+            },
+          ],
+    };
+
+    await persistNoteDoc(nextDoc);
+    window.getSelection()?.removeAllRanges();
+    setNoteSelection(null);
+    setIsHighlightPaletteOpen(false);
+  }
+
+  async function handleNotePhotoSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+
+    if (!file || !selectedNoteBlockId) {
+      return;
+    }
+
+    setIsSavingNoteDoc(true);
+    setNoteError(null);
+
+    try {
+      const uploadResponse = await fetch(`/api/lectures/${detail.lecture.id}/note-media/uploads`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          byteSize: file.size,
+        }),
+      });
+      const uploadPayload = await parseApiResponse<NoteMediaUploadResponse>(uploadResponse);
+      const supabase = createSupabaseBrowserClient();
+      const uploadResult = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .uploadToSignedUrl(uploadPayload.path, uploadPayload.token, file, {
+          contentType: uploadPayload.mimeType,
+        });
+
+      if (uploadResult.error) {
+        throw new Error(uploadResult.error.message);
+      }
+
+      const finalizeResponse = await fetch(`/api/lectures/${detail.lecture.id}/note-media`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mediaId: uploadPayload.mediaId,
+          storagePath: uploadPayload.path,
+          mimeType: uploadPayload.mimeType,
+          byteSize: file.size,
+          originalFileName: file.name,
+          afterBlockId: selectedNoteBlockId,
+          expectedRevision: detail.editableNoteRevision,
+        }),
+      });
+      const finalizePayload = await parseApiResponse<NoteMediaFinalizeResponse>(finalizeResponse);
+
+      applySavedNoteDoc(finalizePayload);
+
+      const savedMedia = finalizePayload.media;
+
+      if (savedMedia) {
+        setDetail((current) => ({
+          ...current,
+          noteMedia: [
+            ...current.noteMedia.filter((media) => media.id !== savedMedia.id),
+            savedMedia,
+          ],
+        }));
+      }
+    } catch (error) {
+      setNoteError(getRequestErrorMessage(error, "Fotografije ni bilo mogoče dodati."));
+    } finally {
+      setIsSavingNoteDoc(false);
+    }
+  }
+
+  function handleMoveMediaBlock(mediaBlockId: string, direction: "up" | "down") {
+    const block = activeNoteDoc.mediaBlocks.find((item) => item.id === mediaBlockId);
+
+    if (!block || noteBlockIds.length === 0) {
+      return;
+    }
+
+    const currentIndex = Math.max(0, noteBlockIds.indexOf(block.afterBlockId));
+    const nextIndex =
+      direction === "up"
+        ? Math.max(0, currentIndex - 1)
+        : Math.min(noteBlockIds.length - 1, currentIndex + 1);
+    const nextBlockId = noteBlockIds[nextIndex];
+
+    if (!nextBlockId || nextBlockId === block.afterBlockId) {
+      return;
+    }
+
+    void persistNoteDoc({
+      ...activeNoteDoc,
+      updatedAt: new Date().toISOString(),
+      mediaBlocks: activeNoteDoc.mediaBlocks.map((item) =>
+        item.id === mediaBlockId ? { ...item, afterBlockId: nextBlockId } : item,
+      ),
+    });
+  }
+
+  async function handleDeleteNoteMedia(mediaId: string) {
+    setIsSavingNoteDoc(true);
+    setNoteError(null);
+
+    try {
+      const response = await fetch(`/api/lectures/${detail.lecture.id}/note-media/${mediaId}`, {
+        method: "DELETE",
+      });
+      const payload = await parseApiResponse<NotesDocResponse & { deletedMediaId?: string }>(response);
+      applySavedNoteDoc(payload);
+      setDetail((current) => ({
+        ...current,
+        noteMedia: current.noteMedia.filter((media) => media.id !== mediaId),
+      }));
+      setSelectedMediaBlockId(null);
+    } catch (error) {
+      setNoteError(getRequestErrorMessage(error, "Fotografije ni bilo mogoče izbrisati."));
+    } finally {
+      setIsSavingNoteDoc(false);
+    }
+  }
+
+  function startFlashcardCreate() {
+    setEditingFlashcardId(null);
+    setFlashcardForm(createEmptyFlashcardForm());
+  }
+
+  function startFlashcardEdit(flashcard: LectureDetail["flashcards"][number]) {
+    setEditingFlashcardId(flashcard.id);
+    setFlashcardForm({
+      front: flashcard.front,
+      back: flashcard.back,
+      hint: flashcard.hint ?? "",
+      difficulty: flashcard.difficulty,
+    });
+  }
+
+  function startQuizQuestionCreate() {
+    setEditingQuizQuestionId(null);
+    setQuizQuestionForm(createEmptyQuizQuestionForm());
+  }
+
+  function startQuizQuestionEdit(question: LectureDetail["quizQuestions"][number]) {
+    setEditingQuizQuestionId(question.id);
+    setQuizQuestionForm({
+      prompt: question.prompt,
+      options: [
+        question.options[0] ?? "",
+        question.options[1] ?? "",
+        question.options[2] ?? "",
+        question.options[3] ?? "",
+      ],
+      correctOptionIndex: question.correct_option_idx,
+      explanation: question.explanation,
+      difficulty: question.difficulty,
+    });
+  }
+
+  async function handleFlashcardFormSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStudyError(null);
+    setIsSavingStudyItem(true);
+
+    try {
+      const response = await fetch(
+        editingFlashcardId
+          ? `/api/flashcards/${editingFlashcardId}`
+          : `/api/lectures/${detail.lecture.id}/flashcards`,
+        {
+          method: editingFlashcardId ? "PATCH" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            front: flashcardForm.front,
+            back: flashcardForm.back,
+            hint: flashcardForm.hint || null,
+            difficulty: flashcardForm.difficulty,
+          }),
+        },
+      );
+      const payload = await parseApiResponse<FlashcardMutationResponse>(response);
+      const savedFlashcard = payload.flashcard;
+
+      setDetail((current) => {
+        const existing = current.flashcards.find((flashcard) => flashcard.id === savedFlashcard.id);
+        const merged = {
+          ...savedFlashcard,
+          citations: existing?.citations ?? savedFlashcard.citations ?? [],
+          progress: existing?.progress ?? savedFlashcard.progress ?? null,
+        };
+        const nextFlashcards = existing
+          ? current.flashcards.map((flashcard) =>
+              flashcard.id === savedFlashcard.id ? merged : flashcard,
+            )
+          : [...current.flashcards, merged];
+
+        return {
+          ...current,
+          flashcards: nextFlashcards.sort((first, second) => first.idx - second.idx),
+        };
+      });
+
+      if (!editingFlashcardId) {
+        setReviewQueue((current) =>
+          current.includes(savedFlashcard.id) ? current : [...current, savedFlashcard.id],
+        );
+        setCycleCardCount((current) => current + 1);
+      }
+
+      startFlashcardCreate();
+    } catch (error) {
+      setStudyError(getRequestErrorMessage(error, "Kartice ni bilo mogoče shraniti."));
+    } finally {
+      setIsSavingStudyItem(false);
+    }
+  }
+
+  async function handleDeleteFlashcard(flashcardId: string) {
+    setStudyError(null);
+    setIsSavingStudyItem(true);
+
+    try {
+      const response = await fetch(`/api/flashcards/${flashcardId}`, {
+        method: "DELETE",
+      });
+      await parseApiResponse<{ deletedFlashcardId: string }>(response);
+      setDetail((current) => ({
+        ...current,
+        flashcards: current.flashcards.filter((flashcard) => flashcard.id !== flashcardId),
+      }));
+      setReviewQueue((current) => current.filter((id) => id !== flashcardId));
+      setRepeatQueue((current) => current.filter((id) => id !== flashcardId));
+      setFlashcardSessionResults((current) => {
+        const next = { ...current };
+        delete next[flashcardId];
+        return next;
+      });
+      setActiveFlashcardIndex((current) => Math.max(0, current - 1));
+    } catch (error) {
+      setStudyError(getRequestErrorMessage(error, "Kartice ni bilo mogoče izbrisati."));
+    } finally {
+      setIsSavingStudyItem(false);
+    }
+  }
+
+  async function handleQuizQuestionFormSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStudyError(null);
+    setIsSavingStudyItem(true);
+
+    try {
+      const response = await fetch(
+        editingQuizQuestionId
+          ? `/api/lectures/${detail.lecture.id}/quiz/questions/${editingQuizQuestionId}`
+          : `/api/lectures/${detail.lecture.id}/quiz/questions`,
+        {
+          method: editingQuizQuestionId ? "PATCH" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(quizQuestionForm),
+        },
+      );
+      const payload = await parseApiResponse<QuizQuestionMutationResponse>(response);
+      const savedQuestion = payload.question;
+
+      setDetail((current) => {
+        const existing = current.quizQuestions.find((question) => question.id === savedQuestion.id);
+        const nextQuestions = existing
+          ? current.quizQuestions.map((question) =>
+              question.id === savedQuestion.id ? savedQuestion : question,
+            )
+          : [...current.quizQuestions, savedQuestion];
+
+        return {
+          ...current,
+          quizQuestions: nextQuestions.sort((first, second) => first.idx - second.idx),
+        };
+      });
+
+      if (!editingQuizQuestionId) {
+        setQuizQueue((current) =>
+          current.includes(savedQuestion.id) ? current : [...current, savedQuestion.id],
+        );
+        setQuizRoundCount((current) => current + 1);
+        setQuizOptionOrders((current) => {
+          const next = new Map(current);
+          next.set(savedQuestion.id, shuffleIndices(savedQuestion.options.length));
+          return next;
+        });
+      } else {
+        setQuizSelections((current) => {
+          const next = { ...current };
+          delete next[savedQuestion.id];
+          return next;
+        });
+        setQuizOptionOrders((current) => {
+          const next = new Map(current);
+          next.set(savedQuestion.id, shuffleIndices(savedQuestion.options.length));
+          return next;
+        });
+      }
+
+      startQuizQuestionCreate();
+    } catch (error) {
+      setStudyError(getRequestErrorMessage(error, "Vprašanja ni bilo mogoče shraniti."));
+    } finally {
+      setIsSavingStudyItem(false);
+    }
+  }
+
+  async function handleDeleteQuizQuestion(questionId: string) {
+    setStudyError(null);
+    setIsSavingStudyItem(true);
+
+    try {
+      const response = await fetch(`/api/lectures/${detail.lecture.id}/quiz/questions/${questionId}`, {
+        method: "DELETE",
+      });
+      await parseApiResponse<{ deletedQuestionId: string }>(response);
+      setDetail((current) => ({
+        ...current,
+        quizQuestions: current.quizQuestions.filter((question) => question.id !== questionId),
+      }));
+      setQuizQueue((current) => current.filter((id) => id !== questionId));
+      setQuizSelections((current) => {
+        const next = { ...current };
+        delete next[questionId];
+        return next;
+      });
+      setQuizOptionOrders((current) => {
+        const next = new Map(current);
+        next.delete(questionId);
+        return next;
+      });
+      setActiveQuizQuestionIndex((current) => Math.max(0, current - 1));
+    } catch (error) {
+      setStudyError(getRequestErrorMessage(error, "Vprašanja ni bilo mogoče izbrisati."));
+    } finally {
+      setIsSavingStudyItem(false);
+    }
+  }
+
   function renderPanel() {
     if (activeTab === "notes") {
+      const annotationToolbar = noteSelection ? (
+        <div className={`note-annotation-toolbar ${isHighlightPaletteOpen ? "palette-open" : ""}`}>
+          {isHighlightPaletteOpen ? (
+            <span className="note-annotation-colors" aria-label="Barva označevanja">
+              {NOTE_HIGHLIGHT_COLORS.map((color) => (
+                <button
+                  key={color.id}
+                  type="button"
+                  className={selectedHighlightColorId === color.id ? "active" : ""}
+                  style={{ "--note-annotation-color": color.value } as CSSProperties}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setSelectedHighlightColorId(color.id);
+                    void handleApplyAnnotation("highlight", color.id);
+                  }}
+                  aria-label={color.label}
+                  title={color.label}
+                />
+              ))}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="primary"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void handleApplyAnnotation("highlight")}
+            disabled={isSavingNoteDoc}
+            aria-label="Označi"
+            title="Označi"
+          >
+            <Highlighter aria-hidden="true" />
+            <span>Označi</span>
+          </button>
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void handleApplyAnnotation("underline")}
+            disabled={isSavingNoteDoc}
+            aria-label="Podčrtaj"
+            title="Podčrtaj"
+          >
+            <Underline aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="color-trigger"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => setIsHighlightPaletteOpen((current) => !current)}
+            disabled={isSavingNoteDoc}
+            aria-label="Barva"
+            title="Barva"
+          >
+            <Palette aria-hidden="true" />
+          </button>
+        </div>
+      ) : null;
+      const photoToolbar = selectedNoteBlockId ? (
+        <button
+          type="button"
+          className="note-photo-toolbar-button"
+          onClick={() => notePhotoInputRef.current?.click()}
+          disabled={isSavingNoteDoc}
+          aria-label="Dodaj fotografijo"
+          title="Dodaj fotografijo"
+        >
+          <ImagePlus aria-hidden="true" />
+          <span>Fotografija</span>
+        </button>
+      ) : null;
+      const noteStatus = noteError ? (
+        <span className="note-toolbar-status error">{noteError}</span>
+      ) : isSavingNoteDoc ? (
+        <span className="note-toolbar-status">Shranjujem...</span>
+      ) : null;
+
       return (
         <div className="workspace-panel-stack lecture-panel-stack">
           <div className="ios-card lecture-notes-card">
             {cleanedStructuredNotes && detail.lecture.status === "ready" ? (
-              <div className="markdown lecture-markdown">
-                <NoteReadAloud lectureId={detail.lecture.id} content={cleanedStructuredNotes} />
+              <div
+                className="markdown lecture-markdown note-annotation-shell"
+                onMouseUp={handleNoteTextSelection}
+                onKeyUp={handleNoteTextSelection}
+              >
+                <input
+                  ref={notePhotoInputRef}
+                  type="file"
+                  accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  onChange={(event) => void handleNotePhotoSelected(event)}
+                />
+                <NoteReadAloud
+                  lectureId={detail.lecture.id}
+                  content={cleanedStructuredNotes}
+                  annotationToolbar={annotationToolbar}
+                  toolbarAccessory={
+                    <>
+                      {photoToolbar}
+                      {noteStatus}
+                    </>
+                  }
+                  annotationActive={Boolean(noteSelection)}
+                  annotations={activeNoteDoc.annotations}
+                  mediaBlocks={activeNoteDoc.mediaBlocks}
+                  noteMedia={detail.noteMedia}
+                  selectedBlockId={selectedNoteBlockId}
+                  selectedMediaBlockId={selectedMediaBlockId}
+                  onBlockSelect={(blockId) => {
+                    setSelectedNoteBlockId(blockId);
+                    setSelectedMediaBlockId(null);
+                  }}
+                  onMediaBlockSelect={(blockId) => {
+                    setSelectedMediaBlockId(blockId);
+                    setSelectedNoteBlockId(null);
+                  }}
+                  onMoveMediaBlock={handleMoveMediaBlock}
+                  onDeleteMedia={(mediaId) => void handleDeleteNoteMedia(mediaId)}
+                />
               </div>
             ) : shouldPollLecture(detail.lecture.status) || notesArtifactLoadFailed ? (
               <div className="lecture-notes-processing">
@@ -2438,6 +3330,25 @@ export function LectureWorkspace({
           : activeStudyView === "quiz"
             ? detail.quizAsset?.error_message
             : detail.practiceTestAsset?.error_message;
+      const normalizedStudySearch = studyManagerSearch.trim().toLowerCase();
+      const managedFlashcards = studyDeck.filter((flashcard) => {
+        if (!normalizedStudySearch) {
+          return true;
+        }
+
+        return `${flashcard.front} ${flashcard.back} ${flashcard.hint ?? ""}`
+          .toLowerCase()
+          .includes(normalizedStudySearch);
+      });
+      const managedQuizQuestions = detail.quizQuestions.filter((question) => {
+        if (!normalizedStudySearch) {
+          return true;
+        }
+
+        return `${question.prompt} ${question.options.join(" ")} ${question.explanation}`
+          .toLowerCase()
+          .includes(normalizedStudySearch);
+      });
 
       return (
         <div className="workspace-panel-stack lecture-panel-stack">
@@ -2455,6 +3366,24 @@ export function LectureWorkspace({
                 ) : null}
               </div>
               <div className="lecture-study-header-actions">
+                {activeStudyView === "flashcards" || activeStudyView === "quiz" ? (
+                  <button
+                    type="button"
+                    className="lecture-study-manage-button"
+                    onClick={() => {
+                      setIsStudyManagerOpen(true);
+                      setStudyManagerSearch("");
+                      if (activeStudyView === "flashcards") {
+                        startFlashcardCreate();
+                      } else {
+                        startQuizQuestionCreate();
+                      }
+                    }}
+                  >
+                    <Pencil aria-hidden="true" />
+                    <span>Uredi</span>
+                  </button>
+                ) : null}
                 {activeStudyView === "practice_test" ? (
                   <span className="lecture-study-status demo">Demo</span>
                 ) : null}
@@ -2481,6 +3410,246 @@ export function LectureWorkspace({
             {studyError ? <p className="danger-panel lecture-inline-note">{studyError}</p> : null}
             {activeMaterialError ? (
               <p className="danger-panel lecture-inline-note">{activeMaterialError}</p>
+            ) : null}
+
+            {isStudyManagerOpen && (activeStudyView === "flashcards" || activeStudyView === "quiz") ? (
+              <div className="study-manager-backdrop" role="presentation" onClick={() => setIsStudyManagerOpen(false)}>
+                <div
+                  className="study-manager-sheet"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="study-manager-header">
+                    <div>
+                      <p className="study-manager-eyebrow">
+                        {activeStudyView === "flashcards" ? "Flashcards" : "Kviz"}
+                      </p>
+                      <h2>{activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi vprašanja"}</h2>
+                    </div>
+                    <button
+                      type="button"
+                      className="study-manager-icon-button"
+                      onClick={() => setIsStudyManagerOpen(false)}
+                      aria-label="Zapri"
+                      title="Zapri"
+                    >
+                      <X aria-hidden="true" />
+                    </button>
+                  </div>
+
+                  <input
+                    value={studyManagerSearch}
+                    onChange={(event) => setStudyManagerSearch(event.target.value)}
+                    className="study-manager-search"
+                    placeholder="Poišči..."
+                  />
+
+                  {activeStudyView === "flashcards" ? (
+                    <>
+                      <form onSubmit={handleFlashcardFormSubmit} className="study-manager-form">
+                        <div className="study-manager-form-header">
+                          <span>{editingFlashcardId ? "Uredi kartico" : "Dodaj kartico"}</span>
+                          <button type="button" onClick={startFlashcardCreate}>
+                            <Plus aria-hidden="true" />
+                            Nova
+                          </button>
+                        </div>
+                        <label>
+                          <span>Spredaj</span>
+                          <textarea
+                            value={flashcardForm.front}
+                            onChange={(event) =>
+                              setFlashcardForm((current) => ({ ...current, front: event.target.value }))
+                            }
+                            rows={3}
+                            required
+                          />
+                        </label>
+                        <label>
+                          <span>Zadaj</span>
+                          <textarea
+                            value={flashcardForm.back}
+                            onChange={(event) =>
+                              setFlashcardForm((current) => ({ ...current, back: event.target.value }))
+                            }
+                            rows={3}
+                            required
+                          />
+                        </label>
+                        <div className="study-manager-form-grid">
+                          <label>
+                            <span>Namig</span>
+                            <input
+                              value={flashcardForm.hint}
+                              onChange={(event) =>
+                                setFlashcardForm((current) => ({ ...current, hint: event.target.value }))
+                              }
+                            />
+                          </label>
+                          <label>
+                            <span>Težavnost</span>
+                            <select
+                              value={flashcardForm.difficulty}
+                              onChange={(event) =>
+                                setFlashcardForm((current) => ({
+                                  ...current,
+                                  difficulty: event.target.value as StudyItemDifficulty,
+                                }))
+                              }
+                            >
+                              <option value="easy">Lahko</option>
+                              <option value="medium">Srednje</option>
+                              <option value="hard">Težko</option>
+                            </select>
+                          </label>
+                        </div>
+                        <button type="submit" className="study-manager-save" disabled={isSavingStudyItem}>
+                          {isSavingStudyItem ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" />}
+                          {editingFlashcardId ? "Shrani kartico" : "Dodaj kartico"}
+                        </button>
+                      </form>
+
+                      <div className="study-manager-list">
+                        {managedFlashcards.map((flashcard) => (
+                          <article key={flashcard.id} className="study-manager-item">
+                            <div>
+                              <strong>{flashcard.front}</strong>
+                              <p>{flashcard.back}</p>
+                            </div>
+                            <div className="study-manager-item-actions">
+                              <button type="button" onClick={() => startFlashcardEdit(flashcard)}>
+                                <Pencil aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                className="danger"
+                                onClick={() => void handleDeleteFlashcard(flashcard.id)}
+                                disabled={isSavingStudyItem}
+                              >
+                                <Trash2 aria-hidden="true" />
+                              </button>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <form onSubmit={handleQuizQuestionFormSubmit} className="study-manager-form">
+                        <div className="study-manager-form-header">
+                          <span>{editingQuizQuestionId ? "Uredi vprašanje" : "Dodaj vprašanje"}</span>
+                          <button type="button" onClick={startQuizQuestionCreate}>
+                            <Plus aria-hidden="true" />
+                            Novo
+                          </button>
+                        </div>
+                        <label>
+                          <span>Vprašanje</span>
+                          <textarea
+                            value={quizQuestionForm.prompt}
+                            onChange={(event) =>
+                              setQuizQuestionForm((current) => ({ ...current, prompt: event.target.value }))
+                            }
+                            rows={3}
+                            required
+                          />
+                        </label>
+                        <div className="study-manager-options">
+                          {quizQuestionForm.options.map((option, index) => (
+                            <label key={`quiz-option-${index}`}>
+                              <span>Odgovor {String.fromCharCode(65 + index)}</span>
+                              <div>
+                                <input
+                                  type="radio"
+                                  checked={quizQuestionForm.correctOptionIndex === index}
+                                  onChange={() =>
+                                    setQuizQuestionForm((current) => ({
+                                      ...current,
+                                      correctOptionIndex: index,
+                                    }))
+                                  }
+                                  aria-label={`Pravilen odgovor ${String.fromCharCode(65 + index)}`}
+                                />
+                                <input
+                                  value={option}
+                                  onChange={(event) =>
+                                    setQuizQuestionForm((current) => {
+                                      const options = [...current.options] as QuizQuestionFormState["options"];
+                                      options[index] = event.target.value;
+                                      return { ...current, options };
+                                    })
+                                  }
+                                  required
+                                />
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                        <label>
+                          <span>Razlaga</span>
+                          <textarea
+                            value={quizQuestionForm.explanation}
+                            onChange={(event) =>
+                              setQuizQuestionForm((current) => ({
+                                ...current,
+                                explanation: event.target.value,
+                              }))
+                            }
+                            rows={3}
+                            required
+                          />
+                        </label>
+                        <label>
+                          <span>Težavnost</span>
+                          <select
+                            value={quizQuestionForm.difficulty}
+                            onChange={(event) =>
+                              setQuizQuestionForm((current) => ({
+                                ...current,
+                                difficulty: event.target.value as StudyItemDifficulty,
+                              }))
+                            }
+                          >
+                            <option value="easy">Lahko</option>
+                            <option value="medium">Srednje</option>
+                            <option value="hard">Težko</option>
+                          </select>
+                        </label>
+                        <button type="submit" className="study-manager-save" disabled={isSavingStudyItem}>
+                          {isSavingStudyItem ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" />}
+                          {editingQuizQuestionId ? "Shrani vprašanje" : "Dodaj vprašanje"}
+                        </button>
+                      </form>
+
+                      <div className="study-manager-list">
+                        {managedQuizQuestions.map((question) => (
+                          <article key={question.id} className="study-manager-item">
+                            <div>
+                              <strong>{question.prompt}</strong>
+                              <p>{question.options[question.correct_option_idx] ?? question.options[0]}</p>
+                            </div>
+                            <div className="study-manager-item-actions">
+                              <button type="button" onClick={() => startQuizQuestionEdit(question)}>
+                                <Pencil aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                className="danger"
+                                onClick={() => void handleDeleteQuizQuestion(question.id)}
+                                disabled={isSavingStudyItem}
+                              >
+                                <Trash2 aria-hidden="true" />
+                              </button>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             ) : null}
 
             {activeStudyView === "flashcards" ? (

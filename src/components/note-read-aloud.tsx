@@ -1,10 +1,12 @@
 "use client";
 
 import { Loader2, Pause, Play } from "lucide-react";
+import Image from "next/image";
 import type {
   CSSProperties,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
+  ReactNode,
 } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -28,6 +30,32 @@ import {
   type NoteTtsDocument,
   type NoteTtsInlineToken,
 } from "@/lib/note-tts-text";
+import type { NoteAnnotation, NoteMediaAsset, NoteMediaBlock } from "@/lib/note-doc";
+
+type NoteReadMediaBlock = NoteMediaBlock & {
+  media: NoteMediaAsset | null;
+};
+
+type NoteWordAnnotation = {
+  highlight: boolean;
+  highlightColorId?: string;
+  underline: boolean;
+  underlineColorId?: string;
+};
+
+const NOTE_USER_HIGHLIGHT_COLORS = Object.fromEntries(
+  NOTE_TTS_HIGHLIGHT_COLORS.map((color) => [color.id, color.currentBackground]),
+) as Record<string, string>;
+
+NOTE_USER_HIGHLIGHT_COLORS.yellow = NOTE_USER_HIGHLIGHT_COLORS.orange ?? "#fb923c";
+
+function getUserHighlightColor(colorId: string | undefined) {
+  return (
+    NOTE_USER_HIGHLIGHT_COLORS[colorId ?? DEFAULT_NOTE_TTS_HIGHLIGHT_COLOR_ID] ??
+    NOTE_USER_HIGHLIGHT_COLORS[DEFAULT_NOTE_TTS_HIGHLIGHT_COLOR_ID] ??
+    "#fb923c"
+  );
+}
 
 type TtsStatusResponse = {
   available: boolean;
@@ -528,10 +556,14 @@ function WordToken({
   token,
   completedWordIndex,
   currentWordIndex,
+  annotation,
+  renderHighlight = true,
 }: {
   token: Extract<NoteTtsInlineToken, { type: "word" }>;
   completedWordIndex: number;
   currentWordIndex: number | null;
+  annotation?: NoteWordAnnotation;
+  renderHighlight?: boolean;
 }) {
   const stateClass =
     token.wordIndex === currentWordIndex
@@ -539,9 +571,34 @@ function WordToken({
       : token.wordIndex <= completedWordIndex
         ? "read"
         : "";
+  const annotationClass = [
+    annotation?.highlight && renderHighlight ? "user-highlight" : "",
+    annotation?.underline ? "user-underline" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <span className={`note-read-word ${stateClass}`} data-word-index={token.wordIndex}>
+    <span
+      className={`note-read-word ${stateClass} ${annotationClass}`}
+      style={
+        (annotation?.highlight && renderHighlight) || annotation?.underline
+          ? ({
+              ...(annotation.highlight && renderHighlight
+                ? {
+                    "--note-user-highlight-bg": getUserHighlightColor(annotation.highlightColorId),
+                  }
+                : {}),
+              ...(annotation.underline
+                ? {
+                    "--note-user-underline-color": getUserHighlightColor(annotation.underlineColorId),
+                  }
+                : {}),
+            } as CSSProperties)
+          : undefined
+      }
+      data-word-index={token.wordIndex}
+    >
       {token.text}
     </span>
   );
@@ -551,21 +608,90 @@ function renderTokens(params: {
   tokens: NoteTtsInlineToken[];
   completedWordIndex: number;
   currentWordIndex: number | null;
+  wordAnnotations: Map<number, NoteWordAnnotation>;
 }) {
-  return params.tokens.map((token, index) => {
-    if (token.type === "text") {
-      return <span key={`text-${index}`}>{token.text}</span>;
+  const rendered: ReactNode[] = [];
+  let index = 0;
+
+  while (index < params.tokens.length) {
+    const token = params.tokens[index];
+
+    if (token.type === "word") {
+      const annotation = params.wordAnnotations.get(token.wordIndex);
+
+      if (annotation?.highlight) {
+        const runTokens: NoteTtsInlineToken[] = [token];
+        let cursor = index + 1;
+
+        while (cursor < params.tokens.length) {
+          const candidate = params.tokens[cursor];
+          const following = params.tokens[cursor + 1];
+
+          if (
+            candidate?.type === "text" &&
+            following?.type === "word" &&
+            params.wordAnnotations.get(following.wordIndex)?.highlight
+          ) {
+            runTokens.push(candidate, following);
+            cursor += 2;
+            continue;
+          }
+
+          break;
+        }
+
+        const colorId = annotation.highlightColorId;
+        rendered.push(
+          <span
+            key={`highlight-run-${token.wordIndex}`}
+            className="note-read-highlight-range user-highlight"
+            style={
+              {
+                "--note-user-highlight-bg": getUserHighlightColor(colorId),
+              } as CSSProperties
+            }
+          >
+            {runTokens.map((runToken, runIndex) =>
+              runToken.type === "text" ? (
+                <span key={`highlight-text-${index + runIndex}`}>{runToken.text}</span>
+              ) : (
+                <WordToken
+                  key={`highlight-word-${runToken.wordIndex}`}
+                  token={runToken}
+                  completedWordIndex={params.completedWordIndex}
+                  currentWordIndex={params.currentWordIndex}
+                  annotation={params.wordAnnotations.get(runToken.wordIndex)}
+                  renderHighlight={false}
+                />
+              ),
+            )}
+          </span>,
+        );
+        index = cursor;
+        continue;
+      }
+
+      rendered.push(
+        <WordToken
+          key={`word-${token.wordIndex}`}
+          token={token}
+          completedWordIndex={params.completedWordIndex}
+          currentWordIndex={params.currentWordIndex}
+          annotation={annotation}
+        />,
+      );
+      index += 1;
+      continue;
     }
 
-    return (
-      <WordToken
-        key={`word-${token.wordIndex}`}
-        token={token}
-        completedWordIndex={params.completedWordIndex}
-        currentWordIndex={params.currentWordIndex}
-      />
-    );
-  });
+    if (token.type === "text") {
+      rendered.push(<span key={`text-${index}`}>{token.text}</span>);
+      index += 1;
+      continue;
+    }
+  }
+
+  return rendered;
 }
 
 function getLeadingLabelTokenEnd(tokens: NoteTtsInlineToken[]) {
@@ -610,6 +736,7 @@ function renderListItemTokens(params: {
   tokens: NoteTtsInlineToken[];
   completedWordIndex: number;
   currentWordIndex: number | null;
+  wordAnnotations: Map<number, NoteWordAnnotation>;
 }) {
   const labelEnd = getLeadingLabelTokenEnd(params.tokens);
 
@@ -637,16 +764,19 @@ function ReadAlongBlock({
   block,
   completedWordIndex,
   currentWordIndex,
+  wordAnnotations,
 }: {
   block: NoteTtsBlock;
   completedWordIndex: number;
   currentWordIndex: number | null;
+  wordAnnotations: Map<number, NoteWordAnnotation>;
 }) {
   if (block.kind === "heading") {
     const children = renderTokens({
       tokens: block.tokens,
       completedWordIndex,
       currentWordIndex,
+      wordAnnotations,
     });
 
     return block.level && block.level <= 2 ? (
@@ -663,6 +793,7 @@ function ReadAlongBlock({
       tokens: block.tokens,
       completedWordIndex,
       currentWordIndex,
+      wordAnnotations,
     });
 
     return <blockquote data-callout-kind={block.calloutKind}>{children}</blockquote>;
@@ -679,6 +810,7 @@ function ReadAlongBlock({
               tokens: item.tokens,
               completedWordIndex,
               currentWordIndex,
+              wordAnnotations,
             })}
           </li>
         ))}
@@ -702,6 +834,7 @@ function ReadAlongBlock({
                         tokens: cell.tokens,
                         completedWordIndex,
                         currentWordIndex,
+                        wordAnnotations,
                       })}
                     </CellTag>
                   );
@@ -718,30 +851,149 @@ function ReadAlongBlock({
     tokens: block.tokens,
     completedWordIndex,
     currentWordIndex,
+    wordAnnotations,
   });
 
   return <p>{children}</p>;
+}
+
+function InlineNoteMedia({
+  block,
+  selected,
+  onSelect,
+  onMove,
+  onDelete,
+}: {
+  block: NoteReadMediaBlock;
+  selected: boolean;
+  onSelect?: (blockId: string) => void;
+  onMove?: (blockId: string, direction: "up" | "down") => void;
+  onDelete?: (mediaId: string) => void;
+}) {
+  if (!block.media?.signedUrl) {
+    return null;
+  }
+
+  return (
+    <figure
+      className={`note-inline-media ${selected ? "selected" : ""}`}
+      data-note-media-block-id={block.id}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect?.(block.id);
+      }}
+    >
+      <Image
+        src={block.media.signedUrl}
+        alt={block.media.original_file_name ?? "Dodana fotografija"}
+        width={1200}
+        height={800}
+        unoptimized
+      />
+      <figcaption>
+        <span>{block.media.original_file_name ?? "Fotografija"}</span>
+        <span className="note-inline-media-actions">
+          <button type="button" onClick={() => onMove?.(block.id, "up")}>
+            Gor
+          </button>
+          <button type="button" onClick={() => onMove?.(block.id, "down")}>
+            Dol
+          </button>
+          <button type="button" className="danger" onClick={() => onDelete?.(block.mediaId)}>
+            Izbriši
+          </button>
+        </span>
+      </figcaption>
+    </figure>
+  );
 }
 
 function ReadAlongMarkdown({
   document,
   completedWordIndex,
   currentWordIndex,
+  annotations,
+  mediaBlocks,
+  selectedBlockId,
+  selectedMediaBlockId,
+  onBlockSelect,
+  onMediaBlockSelect,
+  onMoveMediaBlock,
+  onDeleteMedia,
 }: {
   document: NoteTtsDocument;
   completedWordIndex: number;
   currentWordIndex: number | null;
+  annotations: NoteAnnotation[];
+  mediaBlocks: NoteReadMediaBlock[];
+  selectedBlockId?: string | null;
+  selectedMediaBlockId?: string | null;
+  onBlockSelect?: (blockId: string) => void;
+  onMediaBlockSelect?: (blockId: string) => void;
+  onMoveMediaBlock?: (blockId: string, direction: "up" | "down") => void;
+  onDeleteMedia?: (mediaId: string) => void;
 }) {
+  const wordAnnotations = useMemo(() => {
+    const map = new Map<number, NoteWordAnnotation>();
+
+    for (const annotation of annotations) {
+      for (let wordIndex = annotation.startWordIndex; wordIndex <= annotation.endWordIndex; wordIndex += 1) {
+        const current = map.get(wordIndex) ?? { highlight: false, underline: false };
+        map.set(wordIndex, {
+          highlight: current.highlight || annotation.kind === "highlight",
+          highlightColorId:
+            annotation.kind === "highlight"
+              ? annotation.colorId ?? current.highlightColorId ?? DEFAULT_NOTE_TTS_HIGHLIGHT_COLOR_ID
+              : current.highlightColorId,
+          underline: current.underline || annotation.kind === "underline",
+          underlineColorId:
+            annotation.kind === "underline"
+              ? annotation.colorId ?? current.underlineColorId ?? DEFAULT_NOTE_TTS_HIGHLIGHT_COLOR_ID
+              : current.underlineColorId,
+        });
+      }
+    }
+
+    return map;
+  }, [annotations]);
+
   return (
     <div className="markdown text-sm text-stone-700 sm:text-[15px]">
-      {document.blocks.map((block) => (
-        <ReadAlongBlock
-          key={block.id}
-          block={block}
-          completedWordIndex={completedWordIndex}
-          currentWordIndex={currentWordIndex}
-        />
-      ))}
+      {document.blocks.map((block) => {
+        const blockMedia = mediaBlocks.filter((mediaBlock) => mediaBlock.afterBlockId === block.id);
+
+        return (
+          <div key={block.id} className="note-read-block-group">
+            <div
+              className={`note-read-block ${selectedBlockId === block.id ? "selected" : ""}`}
+              data-note-block-id={block.id}
+              onClick={(event) => {
+                if (event.target instanceof Element && event.target.closest("button, a")) {
+                  return;
+                }
+                onBlockSelect?.(block.id);
+              }}
+            >
+              <ReadAlongBlock
+                block={block}
+                completedWordIndex={completedWordIndex}
+                currentWordIndex={currentWordIndex}
+                wordAnnotations={wordAnnotations}
+              />
+            </div>
+            {blockMedia.map((mediaBlock) => (
+              <InlineNoteMedia
+                key={mediaBlock.id}
+                block={mediaBlock}
+                selected={selectedMediaBlockId === mediaBlock.id}
+                onSelect={onMediaBlockSelect}
+                onMove={onMoveMediaBlock}
+                onDelete={onDeleteMedia}
+              />
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -749,12 +1001,45 @@ function ReadAlongMarkdown({
 export function NoteReadAloud({
   lectureId,
   content,
+  annotationToolbar,
+  toolbarAccessory,
+  annotationActive = false,
+  annotations = [],
+  mediaBlocks = [],
+  noteMedia = [],
+  selectedBlockId,
+  selectedMediaBlockId,
+  onBlockSelect,
+  onMediaBlockSelect,
+  onMoveMediaBlock,
+  onDeleteMedia,
 }: {
   lectureId: string;
   content: string;
+  annotationToolbar?: ReactNode;
+  toolbarAccessory?: ReactNode;
+  annotationActive?: boolean;
+  annotations?: NoteAnnotation[];
+  mediaBlocks?: NoteMediaBlock[];
+  noteMedia?: NoteMediaAsset[];
+  selectedBlockId?: string | null;
+  selectedMediaBlockId?: string | null;
+  onBlockSelect?: (blockId: string) => void;
+  onMediaBlockSelect?: (blockId: string) => void;
+  onMoveMediaBlock?: (blockId: string, direction: "up" | "down") => void;
+  onDeleteMedia?: (mediaId: string) => void;
 }) {
   const document = useMemo(() => parseNoteTtsDocument(content), [content]);
   const chunks = useMemo(() => buildNoteTtsChunks(document), [document]);
+  const mediaById = useMemo(() => new Map(noteMedia.map((media) => [media.id, media])), [noteMedia]);
+  const renderedMediaBlocks = useMemo(
+    () =>
+      mediaBlocks.map((block) => ({
+        ...block,
+        media: mediaById.get(block.mediaId) ?? null,
+      })),
+    [mediaBlocks, mediaById],
+  );
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const lastAutoScrolledWordRef = useRef<number | null>(null);
@@ -841,7 +1126,8 @@ export function NoteReadAloud({
         }
       } catch (statusError) {
         if (!cancelled) {
-          setError(statusError instanceof Error ? statusError.message : "Poslušanje ni na voljo.");
+          const message = statusError instanceof Error ? statusError.message : "";
+          setError(/failed to fetch|load failed|network/i.test(message) ? null : "Poslušanje ni na voljo.");
         }
       } finally {
         if (!cancelled) {
@@ -1539,18 +1825,20 @@ export function NoteReadAloud({
   return (
     <>
       <div className="note-read-toolbar">
-        <button
-          type="button"
-          className="note-read-button"
-          onClick={() => {
-            void handlePlayPause();
-          }}
-          disabled={disabled}
-          aria-label={playButtonLabel}
-        >
-          {renderPlaybackIcon("h-4 w-4")}
-          <span>{playButtonLabel}</span>
-        </button>
+        {annotationToolbar ?? (
+          <button
+            type="button"
+            className="note-read-button"
+            onClick={() => {
+              void handlePlayPause();
+            }}
+            disabled={disabled}
+            aria-label={playButtonLabel}
+          >
+            {renderPlaybackIcon("h-4 w-4")}
+            <span>{playButtonLabel}</span>
+          </button>
+        )}
         <QuotaUsageMenu
           status={status}
           playbackRate={playbackRate}
@@ -1560,6 +1848,7 @@ export function NoteReadAloud({
           onVoiceChange={setSelectedVoice}
           onHighlightColorChange={setHighlightColorId}
         />
+        {toolbarAccessory}
         {error ? <span className="note-read-error">{error}</span> : null}
       </div>
       {ttsGenerationProgress ? (
@@ -1597,25 +1886,37 @@ export function NoteReadAloud({
         className="note-read-audio"
       />
       <ViewportPortal>
-        <button
-          type="button"
-          className="mobile-note-read-pill"
-          onClick={() => {
-            window.dispatchEvent(new Event("memoai:mobile-dock-close"));
-            void handlePlayPause();
-          }}
-          disabled={disabled}
-          aria-label={playButtonLabel}
-        >
-          {renderPlaybackIcon("mobile-note-read-pill-icon h-5 w-5")}
-          <span className="mobile-note-read-pill-label">{playButtonLabel}</span>
-        </button>
+        {annotationActive && annotationToolbar ? (
+          <div className="mobile-note-annotation-pill">{annotationToolbar}</div>
+        ) : (
+          <button
+            type="button"
+            className="mobile-note-read-pill"
+            onClick={() => {
+              window.dispatchEvent(new Event("memoai:mobile-dock-close"));
+              void handlePlayPause();
+            }}
+            disabled={disabled}
+            aria-label={playButtonLabel}
+          >
+            {renderPlaybackIcon("mobile-note-read-pill-icon h-5 w-5")}
+            <span className="mobile-note-read-pill-label">{playButtonLabel}</span>
+          </button>
+        )}
       </ViewportPortal>
       <div ref={contentRef} className="note-read-content" style={readAlongStyle}>
         <ReadAlongMarkdown
           document={document}
           completedWordIndex={completedWordIndex}
           currentWordIndex={currentWordIndex}
+          annotations={annotations}
+          mediaBlocks={renderedMediaBlocks}
+          selectedBlockId={selectedBlockId}
+          selectedMediaBlockId={selectedMediaBlockId}
+          onBlockSelect={onBlockSelect}
+          onMediaBlockSelect={onMediaBlockSelect}
+          onMoveMediaBlock={onMoveMediaBlock}
+          onDeleteMedia={onDeleteMedia}
         />
       </div>
     </>

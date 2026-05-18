@@ -2612,6 +2612,20 @@ export function LectureWorkspace({
     }));
   }
 
+  function applyOptimisticNoteDoc(doc: EditableNoteDoc) {
+    setDetail((current) => ({
+      ...current,
+      editableNoteDoc: doc,
+      artifact: current.artifact
+        ? {
+            ...current.artifact,
+            editable_notes_doc: doc,
+            editable_notes_updated_at: doc.updatedAt,
+          }
+        : current.artifact,
+    }));
+  }
+
   async function persistNoteDoc(nextDoc: EditableNoteDoc) {
     setIsSavingNoteDoc(true);
     setNoteError(null);
@@ -2677,24 +2691,30 @@ export function LectureWorkspace({
       return;
     }
 
-    const selectedWordIndexes = Array.from(root.querySelectorAll<HTMLElement>(".note-read-word"))
-      .flatMap((element) => {
+    const selectedWordElements = Array.from(root.querySelectorAll<HTMLElement>(".note-read-word"))
+      .filter((element) => {
         try {
-          if (!range.intersectsNode(element)) {
-            return [];
-          }
+          return range.intersectsNode(element);
         } catch {
-          return [];
+          return false;
         }
-
-        const index = Number(element.dataset.wordIndex);
-        return Number.isInteger(index) ? [index] : [];
       });
+    const selectedWordIndexes = selectedWordElements.flatMap((element) => {
+      const index = Number(element.dataset.wordIndex);
+      return Number.isInteger(index) ? [index] : [];
+    });
 
     if (selectedWordIndexes.length === 0) {
       setNoteSelection(null);
       setIsHighlightPaletteOpen(false);
       return;
+    }
+
+    const selectedBlockId = selectedWordElements[0]?.closest<HTMLElement>("[data-note-block-id]")?.dataset.noteBlockId;
+
+    if (selectedBlockId) {
+      setSelectedNoteBlockId(selectedBlockId);
+      setSelectedMediaBlockId(null);
     }
 
     setNoteSelection({
@@ -2849,13 +2869,35 @@ export function LectureWorkspace({
       return;
     }
 
-    void persistNoteDoc({
+    const nextDoc = {
       ...activeNoteDoc,
       updatedAt: new Date().toISOString(),
       mediaBlocks: activeNoteDoc.mediaBlocks.map((item) =>
         item.id === mediaBlockId ? { ...item, afterBlockId: nextBlockId } : item,
       ),
-    });
+    };
+
+    applyOptimisticNoteDoc(nextDoc);
+    void persistNoteDoc(nextDoc);
+  }
+
+  function handleMoveMediaBlockToBlock(mediaBlockId: string, afterBlockId: string) {
+    const block = activeNoteDoc.mediaBlocks.find((item) => item.id === mediaBlockId);
+
+    if (!block || block.afterBlockId === afterBlockId || !noteBlockIds.includes(afterBlockId)) {
+      return;
+    }
+
+    const nextDoc = {
+      ...activeNoteDoc,
+      updatedAt: new Date().toISOString(),
+      mediaBlocks: activeNoteDoc.mediaBlocks.map((item) =>
+        item.id === mediaBlockId ? { ...item, afterBlockId } : item,
+      ),
+    };
+
+    applyOptimisticNoteDoc(nextDoc);
+    void persistNoteDoc(nextDoc);
   }
 
   async function handleDeleteNoteMedia(mediaId: string) {
@@ -3158,9 +3200,20 @@ export function LectureWorkspace({
           >
             <Palette aria-hidden="true" />
           </button>
+          <button
+            type="button"
+            className="note-annotation-photo"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => notePhotoInputRef.current?.click()}
+            disabled={isSavingNoteDoc || !selectedNoteBlockId}
+            aria-label="Dodaj fotografijo"
+            title="Dodaj fotografijo"
+          >
+            <ImagePlus aria-hidden="true" />
+          </button>
         </div>
       ) : null;
-      const photoToolbar = selectedNoteBlockId ? (
+      const photoToolbar = selectedNoteBlockId && !noteSelection ? (
         <button
           type="button"
           className="note-photo-toolbar-button"
@@ -3222,6 +3275,7 @@ export function LectureWorkspace({
                     setSelectedNoteBlockId(null);
                   }}
                   onMoveMediaBlock={handleMoveMediaBlock}
+                  onMoveMediaBlockToBlock={handleMoveMediaBlockToBlock}
                   onDeleteMedia={(mediaId) => void handleDeleteNoteMedia(mediaId)}
                 />
               </div>

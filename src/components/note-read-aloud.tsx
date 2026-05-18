@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Pause, Play } from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, Pause, Play, X } from "lucide-react";
 import Image from "next/image";
 import type {
   CSSProperties,
@@ -862,25 +862,259 @@ function InlineNoteMedia({
   selected,
   onSelect,
   onMove,
+  onMoveToBlock,
   onDelete,
 }: {
   block: NoteReadMediaBlock;
   selected: boolean;
   onSelect?: (blockId: string) => void;
   onMove?: (blockId: string, direction: "up" | "down") => void;
+  onMoveToBlock?: (blockId: string, afterBlockId: string) => void;
   onDelete?: (mediaId: string) => void;
 }) {
+  const pointerSessionRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startScrollY: number;
+    startTop: number;
+    height: number;
+    moved: boolean;
+  } | null>(null);
+  const latestPointerYRef = useRef<number | null>(null);
+  const autoScrollFrameRef = useRef<number | null>(null);
+  const autoScrollTimestampRef = useRef<number | null>(null);
+  const autoScrollVelocityRef = useRef(0);
+  const figureRef = useRef<HTMLElement | null>(null);
+  const suppressClickRef = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  function stopAutoScroll() {
+    if (autoScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(autoScrollFrameRef.current);
+      autoScrollFrameRef.current = null;
+    }
+    autoScrollTimestampRef.current = null;
+    autoScrollVelocityRef.current = 0;
+  }
+
+  function setDragVisualOffset(offset: number) {
+    figureRef.current?.style.setProperty("--note-media-drag-offset", `${offset}px`);
+  }
+
+  function runAutoScroll(timestamp: number) {
+    const pointerY = latestPointerYRef.current;
+
+    if (pointerY === null || !pointerSessionRef.current?.moved) {
+      autoScrollFrameRef.current = null;
+      autoScrollTimestampRef.current = null;
+      autoScrollVelocityRef.current = 0;
+      return;
+    }
+
+    const viewportHeight = window.innerHeight;
+    const midpoint = viewportHeight / 2;
+    const deadZone = Math.min(140, Math.max(86, viewportHeight * 0.13));
+    const maxDistance = Math.max(1, midpoint - deadZone);
+    const previousTimestamp = autoScrollTimestampRef.current ?? timestamp;
+    const elapsedSeconds = Math.min(0.05, Math.max(0.008, (timestamp - previousTimestamp) / 1000));
+    autoScrollTimestampRef.current = timestamp;
+    const distanceFromCenter = pointerY - midpoint;
+    const direction = Math.sign(distanceFromCenter);
+    const pressure = Math.min(
+      1,
+      Math.max(0, (Math.abs(distanceFromCenter) - deadZone) / maxDistance),
+    );
+    const targetVelocity = direction * Math.pow(pressure, 2.35) * 22800;
+
+    autoScrollVelocityRef.current += (targetVelocity - autoScrollVelocityRef.current) * 0.34;
+    const scrollVelocity =
+      Math.abs(autoScrollVelocityRef.current) < 2 ? 0 : autoScrollVelocityRef.current;
+
+    if (scrollVelocity !== 0) {
+      const scrollDelta = scrollVelocity * elapsedSeconds;
+      window.scrollBy({ top: scrollDelta, behavior: "auto" });
+      const session = pointerSessionRef.current;
+
+      if (session && latestPointerYRef.current !== null) {
+        setDragVisualOffset(getLockedDragOffset(latestPointerYRef.current));
+      }
+    }
+
+    autoScrollFrameRef.current = window.requestAnimationFrame(runAutoScroll);
+  }
+
+  function startAutoScroll() {
+    if (autoScrollFrameRef.current === null) {
+      autoScrollTimestampRef.current = null;
+      autoScrollFrameRef.current = window.requestAnimationFrame(runAutoScroll);
+    }
+  }
+
+  function getLockedDragOffset(clientY: number) {
+    const session = pointerSessionRef.current;
+
+    if (!session) {
+      return 0;
+    }
+
+    return clientY - session.startY + window.scrollY - session.startScrollY;
+  }
+
+  function getDropTargetBlockId(clientY: number) {
+    const blocks = Array.from(document.querySelectorAll<HTMLElement>("[data-note-block-id]"));
+    let closestBlockId: string | null = null;
+    let closestDistance = Number.POSITIVE_INFINITY;
+
+    for (const element of blocks) {
+      const rect = element.getBoundingClientRect();
+      const validDropY = rect.bottom;
+      const distance = Math.abs(validDropY - clientY);
+
+      if (distance < closestDistance) {
+        closestBlockId = element.dataset.noteBlockId ?? null;
+        closestDistance = distance;
+      }
+    }
+
+    return closestBlockId;
+  }
+
+  function resetDragState() {
+    latestPointerYRef.current = null;
+    stopAutoScroll();
+    setDragVisualOffset(0);
+    setIsDragging(false);
+  }
+
+  function finishDrag(clientY: number) {
+    const session = pointerSessionRef.current;
+    const dropY = Math.min(window.innerHeight - 8, Math.max(8, clientY));
+    pointerSessionRef.current = null;
+
+    if (!session?.moved) {
+      resetDragState();
+      return;
+    }
+
+    const closestBlockId = getDropTargetBlockId(dropY);
+
+    if (closestBlockId && closestBlockId !== block.afterBlockId) {
+      onMoveToBlock?.(block.id, closestBlockId);
+    }
+
+    requestAnimationFrame(() => {
+      resetDragState();
+    });
+  }
+
+  useEffect(() => {
+    function handleGlobalPointerUp(event: PointerEvent) {
+      const session = pointerSessionRef.current;
+
+      if (session?.pointerId === event.pointerId) {
+        finishDrag(event.clientY);
+      }
+    }
+
+    function handleGlobalPointerCancel(event: PointerEvent) {
+      const session = pointerSessionRef.current;
+
+      if (session?.pointerId === event.pointerId) {
+        pointerSessionRef.current = null;
+        resetDragState();
+      }
+    }
+
+    window.addEventListener("pointerup", handleGlobalPointerUp);
+    window.addEventListener("pointercancel", handleGlobalPointerCancel);
+
+    return () => {
+      window.removeEventListener("pointerup", handleGlobalPointerUp);
+      window.removeEventListener("pointercancel", handleGlobalPointerCancel);
+      if (autoScrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(autoScrollFrameRef.current);
+        autoScrollFrameRef.current = null;
+      }
+      autoScrollTimestampRef.current = null;
+      autoScrollVelocityRef.current = 0;
+    };
+  });
+
   if (!block.media?.signedUrl) {
     return null;
   }
 
   return (
     <figure
-      className={`note-inline-media ${selected ? "selected" : ""}`}
+      ref={figureRef}
+      className={`note-inline-media ${selected ? "selected" : ""} ${isDragging ? "dragging" : ""}`}
       data-note-media-block-id={block.id}
       onClick={(event) => {
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
+          event.stopPropagation();
+          return;
+        }
+
         event.stopPropagation();
         onSelect?.(block.id);
+        setIsPreviewOpen(true);
+      }}
+      onPointerDown={(event) => {
+        if (
+          event.button !== 0 ||
+          (event.target instanceof Element && event.target.closest("button, a"))
+        ) {
+          return;
+        }
+
+        const rect = event.currentTarget.getBoundingClientRect();
+
+        pointerSessionRef.current = {
+          pointerId: event.pointerId,
+          startY: event.clientY,
+          startScrollY: window.scrollY,
+          startTop: rect.top,
+          height: rect.height,
+          moved: false,
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        const session = pointerSessionRef.current;
+
+        if (!session || session.pointerId !== event.pointerId) {
+          return;
+        }
+
+        const deltaY = event.clientY - session.startY;
+
+        if (Math.abs(deltaY) < 8 && !session.moved) {
+          return;
+        }
+
+        if (!session.moved) {
+          session.moved = true;
+          setIsDragging(true);
+        }
+        latestPointerYRef.current = event.clientY;
+        suppressClickRef.current = true;
+        setDragVisualOffset(getLockedDragOffset(event.clientY));
+        startAutoScroll();
+        event.preventDefault();
+      }}
+      onPointerUp={(event) => {
+        const session = pointerSessionRef.current;
+
+        if (session?.pointerId === event.pointerId) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+          finishDrag(event.clientY);
+        }
+      }}
+      onPointerCancel={() => {
+        pointerSessionRef.current = null;
+        resetDragState();
       }}
     >
       <Image
@@ -888,22 +1122,80 @@ function InlineNoteMedia({
         alt={block.media.original_file_name ?? "Dodana fotografija"}
         width={1200}
         height={800}
+        draggable={false}
         unoptimized
       />
       <figcaption>
-        <span>{block.media.original_file_name ?? "Fotografija"}</span>
         <span className="note-inline-media-actions">
-          <button type="button" onClick={() => onMove?.(block.id, "up")}>
-            Gor
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onMove?.(block.id, "up");
+            }}
+            aria-label="Premakni gor"
+            title="Premakni gor"
+          >
+            <ArrowUp aria-hidden="true" />
           </button>
-          <button type="button" onClick={() => onMove?.(block.id, "down")}>
-            Dol
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onMove?.(block.id, "down");
+            }}
+            aria-label="Premakni dol"
+            title="Premakni dol"
+          >
+            <ArrowDown aria-hidden="true" />
           </button>
-          <button type="button" className="danger" onClick={() => onDelete?.(block.mediaId)}>
+          <button
+            type="button"
+            className="danger"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete?.(block.mediaId);
+            }}
+          >
             Izbriši
           </button>
         </span>
       </figcaption>
+      {isPreviewOpen ? (
+        <ViewportPortal>
+          <div
+            className="note-media-preview"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Pregled fotografije"
+            onClick={(event) => {
+              event.stopPropagation();
+              setIsPreviewOpen(false);
+            }}
+          >
+            <button
+              type="button"
+              className="note-media-preview-close"
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsPreviewOpen(false);
+              }}
+              aria-label="Zapri fotografijo"
+            >
+              <X aria-hidden="true" />
+            </button>
+            <Image
+              src={block.media.signedUrl}
+              alt={block.media.original_file_name ?? "Dodana fotografija"}
+              width={1600}
+              height={1200}
+              draggable={false}
+              unoptimized
+              onClick={(event) => event.stopPropagation()}
+            />
+          </div>
+        </ViewportPortal>
+      ) : null}
     </figure>
   );
 }
@@ -919,6 +1211,7 @@ function ReadAlongMarkdown({
   onBlockSelect,
   onMediaBlockSelect,
   onMoveMediaBlock,
+  onMoveMediaBlockToBlock,
   onDeleteMedia,
 }: {
   document: NoteTtsDocument;
@@ -931,6 +1224,7 @@ function ReadAlongMarkdown({
   onBlockSelect?: (blockId: string) => void;
   onMediaBlockSelect?: (blockId: string) => void;
   onMoveMediaBlock?: (blockId: string, direction: "up" | "down") => void;
+  onMoveMediaBlockToBlock?: (blockId: string, afterBlockId: string) => void;
   onDeleteMedia?: (mediaId: string) => void;
 }) {
   const wordAnnotations = useMemo(() => {
@@ -988,6 +1282,7 @@ function ReadAlongMarkdown({
                 selected={selectedMediaBlockId === mediaBlock.id}
                 onSelect={onMediaBlockSelect}
                 onMove={onMoveMediaBlock}
+                onMoveToBlock={onMoveMediaBlockToBlock}
                 onDelete={onDeleteMedia}
               />
             ))}
@@ -1012,6 +1307,7 @@ export function NoteReadAloud({
   onBlockSelect,
   onMediaBlockSelect,
   onMoveMediaBlock,
+  onMoveMediaBlockToBlock,
   onDeleteMedia,
 }: {
   lectureId: string;
@@ -1027,6 +1323,7 @@ export function NoteReadAloud({
   onBlockSelect?: (blockId: string) => void;
   onMediaBlockSelect?: (blockId: string) => void;
   onMoveMediaBlock?: (blockId: string, direction: "up" | "down") => void;
+  onMoveMediaBlockToBlock?: (blockId: string, afterBlockId: string) => void;
   onDeleteMedia?: (mediaId: string) => void;
 }) {
   const document = useMemo(() => parseNoteTtsDocument(content), [content]);
@@ -1916,6 +2213,7 @@ export function NoteReadAloud({
           onBlockSelect={onBlockSelect}
           onMediaBlockSelect={onMediaBlockSelect}
           onMoveMediaBlock={onMoveMediaBlock}
+          onMoveMediaBlockToBlock={onMoveMediaBlockToBlock}
           onDeleteMedia={onDeleteMedia}
         />
       </div>

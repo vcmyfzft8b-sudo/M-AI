@@ -927,6 +927,7 @@ function InlineNoteMedia({
 
   const commitLayout = useCallback(
     (update: NoteMediaBlockLayoutUpdate) => {
+      mediaRef.current?.removeAttribute("data-note-media-resizing");
       liveLayoutRef.current = null;
       setLiveLayout(null);
       onLayoutChange?.(block.id, {
@@ -936,6 +937,10 @@ function InlineNoteMedia({
     },
     [block.id, onLayoutChange, widthPercent, xPercent],
   );
+  const stopResizeSession = () => {
+    mediaRef.current?.removeAttribute("data-note-media-resizing");
+    setIsResizing(false);
+  };
   const updateLiveLayout = (update: NoteMediaBlockLayoutUpdate) => {
     liveLayoutRef.current = update;
     setLiveLayout(update);
@@ -958,6 +963,7 @@ function InlineNoteMedia({
     event.currentTarget.setPointerCapture(event.pointerId);
     onSelect?.(block.id);
     setIsActionMenuOpen(false);
+    mediaElement.dataset.noteMediaResizing = "true";
     setIsResizing(true);
 
     const mediaRect = mediaElement.getBoundingClientRect();
@@ -982,7 +988,7 @@ function InlineNoteMedia({
       resizeSessionRef.current = null;
       event.currentTarget.releasePointerCapture(event.pointerId);
       commitLayout(liveLayoutRef.current ?? { widthPercent, xPercent });
-      setIsResizing(false);
+      stopResizeSession();
       return;
     }
 
@@ -1018,7 +1024,7 @@ function InlineNoteMedia({
     resizeSessionRef.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
     commitLayout(liveLayoutRef.current ?? { widthPercent, xPercent });
-    setIsResizing(false);
+    stopResizeSession();
   };
 
   const handleMediaPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
@@ -1480,8 +1486,13 @@ export function NoteReadAloud({
       pendingArrowMoveFromRectRef.current = mediaElement?.getBoundingClientRect() ?? null;
 
       if (mediaElement && pendingArrowMoveFromRectRef.current) {
-        const clone = mediaElement.cloneNode(true) as HTMLElement;
+        const sourceImage = mediaElement.querySelector("img");
+        const clone = window.document.createElement("figure");
+        const cloneImage = window.document.createElement("img");
         const rect = pendingArrowMoveFromRectRef.current;
+        const sourceImageUrl = sourceImage?.currentSrc || sourceImage?.src || "";
+
+        clone.className = mediaElement.className;
         clone.classList.add("note-inline-media-moving-clone");
         clone.removeAttribute("data-note-media-block-id");
         clone.style.position = "fixed";
@@ -1494,6 +1505,24 @@ export function NoteReadAloud({
         clone.style.zIndex = "120";
         clone.style.transformOrigin = "top left";
         clone.style.willChange = "transform";
+        clone.style.backgroundImage = sourceImageUrl ? `url("${sourceImageUrl}")` : "";
+        clone.style.backgroundPosition = "center";
+        clone.style.backgroundRepeat = "no-repeat";
+        clone.style.backgroundSize = "contain";
+
+        if (sourceImageUrl) {
+          cloneImage.src = sourceImageUrl;
+          cloneImage.alt = sourceImage?.alt ?? "";
+          cloneImage.draggable = false;
+          cloneImage.decoding = "sync";
+          cloneImage.style.display = "block";
+          cloneImage.style.width = "100%";
+          cloneImage.style.height = "100%";
+          cloneImage.style.objectFit = "contain";
+          cloneImage.style.background = "#111827";
+          clone.appendChild(cloneImage);
+        }
+
         window.document.body.appendChild(clone);
         pendingArrowMoveCloneRef.current = clone;
       } else {

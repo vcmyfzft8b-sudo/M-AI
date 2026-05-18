@@ -4515,7 +4515,27 @@ select:disabled {
 .note-inline-media-action-popover button:disabled,
 .note-inline-media-resize-handle:disabled {
   cursor: wait;
-  opacity: 0.72;
+  border-color: color-mix(in srgb, var(--separator) 78%, transparent);
+  background: color-mix(in srgb, var(--surface-solid) 72%, transparent);
+  color: color-mix(in srgb, var(--label) 52%, transparent);
+  opacity: 1;
+}
+
+.note-inline-media[data-note-media-resizing="true"] .note-inline-media-actions button,
+.note-inline-media[data-note-media-resizing="true"] .note-inline-media-menu button,
+.note-inline-media[data-note-media-resizing="true"] .note-inline-media-action-popover button {
+  pointer-events: none;
+  border-color: color-mix(in srgb, var(--separator) 78%, transparent);
+  background: color-mix(in srgb, var(--surface-solid) 72%, transparent);
+  color: color-mix(in srgb, var(--label) 52%, transparent) !important;
+  opacity: 1;
+}
+
+.note-inline-media-actions button.danger:disabled,
+.note-inline-media-action-popover button.danger:disabled,
+.note-inline-media[data-note-media-resizing="true"] .note-inline-media-actions button.danger,
+.note-inline-media[data-note-media-resizing="true"] .note-inline-media-action-popover button.danger {
+  color: color-mix(in srgb, var(--label) 52%, transparent) !important;
 }
 
 .note-inline-media-actions button svg,

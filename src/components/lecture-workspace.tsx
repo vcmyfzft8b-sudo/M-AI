@@ -3756,227 +3756,6 @@ export function LectureWorkspace({
               <p className="danger-panel lecture-inline-note">{activeMaterialError}</p>
             ) : null}
 
-            {isStudyManagerOpen && (activeStudyView === "flashcards" || activeStudyView === "quiz") ? (
-              <div className="study-manager-backdrop" role="presentation" onClick={animateCloseStudyManager}>
-                <div
-                  className="study-manager-sheet"
-                  role="dialog"
-                  aria-modal="true"
-                  aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
-                  onPointerDown={handleStudyManagerPointerDown}
-                  onClickCapture={handleStudyManagerClickCapture}
-                  onClick={(event) => event.stopPropagation()}
-                  style={
-                    studyManagerDragOffset > 0
-                      ? { transform: `translateY(${studyManagerDragOffset}px)` }
-                      : undefined
-                  }
-                >
-                  <button
-                    type="button"
-                    className="mobile-sheet-drag-handle study-manager-drag-handle"
-                    aria-label="Zapri urejanje"
-                  />
-                  <div className="study-manager-header">
-                    <div>
-                      <p className="study-manager-eyebrow">
-                        {activeStudyView === "flashcards" ? "Flashcards" : "Kviz"}
-                      </p>
-                      <h2>{activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi vprašanja"}</h2>
-                    </div>
-                    <button
-                      type="button"
-                      className="app-close-button study-manager-icon-button"
-                      onClick={animateCloseStudyManager}
-                      aria-label="Zapri"
-                      title="Zapri"
-                    >
-                      <X aria-hidden="true" />
-                    </button>
-                  </div>
-
-                  <div className="ios-search notes-search study-manager-search">
-                    <EmojiIcon symbol="🔎" size="0.95rem" />
-                    <input
-                      value={studyManagerSearch}
-                      onChange={(event) => setStudyManagerSearch(event.target.value)}
-                      placeholder="Poišči..."
-                    />
-                  </div>
-
-                  {activeStudyView === "flashcards" ? (
-                    <>
-                      <form
-                        onSubmit={handleFlashcardFormSubmit}
-                        className="study-manager-form study-manager-form-flashcards"
-                      >
-                        <div className="study-manager-form-header">
-                          <span>{editingFlashcardId ? "Uredi kartico" : "Dodaj kartico"}</span>
-                          {editingFlashcardId ? (
-                            <button type="button" onClick={startFlashcardCreate}>
-                              <Plus aria-hidden="true" />
-                              Nova
-                            </button>
-                          ) : null}
-                        </div>
-                        <label>
-                          <span>Spredaj</span>
-                          <textarea
-                            value={flashcardForm.front}
-                            onChange={(event) =>
-                              setFlashcardForm((current) => ({ ...current, front: event.target.value }))
-                            }
-                            rows={3}
-                            required
-                          />
-                        </label>
-                        <label>
-                          <span>Zadaj</span>
-                          <textarea
-                            value={flashcardForm.back}
-                            onChange={(event) =>
-                              setFlashcardForm((current) => ({ ...current, back: event.target.value }))
-                            }
-                            rows={3}
-                            required
-                          />
-                        </label>
-                        <button type="submit" className="study-manager-save" disabled={isSavingStudyItem}>
-                          {isSavingStudyItem ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" />}
-                          {editingFlashcardId ? "Shrani kartico" : "Dodaj kartico"}
-                        </button>
-                      </form>
-
-                      <div className="study-manager-list">
-                        {managedFlashcards.map((flashcard) => (
-                          <article key={flashcard.id} className="study-manager-item">
-                            <div>
-                              <strong>{flashcard.front}</strong>
-                              <p>{flashcard.back}</p>
-                            </div>
-                            <div className="study-manager-item-actions">
-                              <button type="button" onClick={() => startFlashcardEdit(flashcard)}>
-                                <Pencil aria-hidden="true" />
-                              </button>
-                              <button
-                                type="button"
-                                className="danger"
-                                onClick={() => void handleDeleteFlashcard(flashcard.id)}
-                                disabled={isSavingStudyItem}
-                              >
-                                <Trash2 aria-hidden="true" />
-                              </button>
-                            </div>
-                          </article>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <form
-                        onSubmit={handleQuizQuestionFormSubmit}
-                        className="study-manager-form study-manager-form-quiz"
-                      >
-                        <div className="study-manager-form-header">
-                          <span>{editingQuizQuestionId ? "Uredi vprašanje" : "Dodaj vprašanje"}</span>
-                          {editingQuizQuestionId ? (
-                            <button type="button" onClick={startQuizQuestionCreate}>
-                              <Plus aria-hidden="true" />
-                              Novo
-                            </button>
-                          ) : null}
-                        </div>
-                        <label>
-                          <span>Vprašanje</span>
-                          <textarea
-                            value={quizQuestionForm.prompt}
-                            onChange={(event) =>
-                              setQuizQuestionForm((current) => ({ ...current, prompt: event.target.value }))
-                            }
-                            rows={3}
-                            required
-                          />
-                        </label>
-                        <div className="study-manager-options">
-                          {quizQuestionForm.options.map((option, index) => (
-                            <label key={`quiz-option-${index}`}>
-                              <span>{String.fromCharCode(65 + index)}</span>
-                              <div>
-                                <input
-                                  type="radio"
-                                  checked={quizQuestionForm.correctOptionIndex === index}
-                                  onChange={() =>
-                                    setQuizQuestionForm((current) => ({
-                                      ...current,
-                                      correctOptionIndex: index,
-                                    }))
-                                  }
-                                  aria-label={`Pravilen odgovor ${String.fromCharCode(65 + index)}`}
-                                />
-                                <input
-                                  value={option}
-                                  onChange={(event) =>
-                                    setQuizQuestionForm((current) => {
-                                      const options = [...current.options] as QuizQuestionFormState["options"];
-                                      options[index] = event.target.value;
-                                      return { ...current, options };
-                                    })
-                                  }
-                                  required
-                                />
-                              </div>
-                            </label>
-                          ))}
-                        </div>
-                        <label>
-                          <span>Razlaga</span>
-                          <textarea
-                            value={quizQuestionForm.explanation}
-                            onChange={(event) =>
-                              setQuizQuestionForm((current) => ({
-                                ...current,
-                                explanation: event.target.value,
-                              }))
-                            }
-                            rows={3}
-                            required
-                          />
-                        </label>
-                        <button type="submit" className="study-manager-save" disabled={isSavingStudyItem}>
-                          {isSavingStudyItem ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" />}
-                          {editingQuizQuestionId ? "Shrani vprašanje" : "Dodaj vprašanje"}
-                        </button>
-                      </form>
-
-                      <div className="study-manager-list">
-                        {managedQuizQuestions.map((question) => (
-                          <article key={question.id} className="study-manager-item">
-                            <div>
-                              <strong>{question.prompt}</strong>
-                              <p>{question.options[question.correct_option_idx] ?? question.options[0]}</p>
-                            </div>
-                            <div className="study-manager-item-actions">
-                              <button type="button" onClick={() => startQuizQuestionEdit(question)}>
-                                <Pencil aria-hidden="true" />
-                              </button>
-                              <button
-                                type="button"
-                                className="danger"
-                                onClick={() => void handleDeleteQuizQuestion(question.id)}
-                                disabled={isSavingStudyItem}
-                              >
-                                <Trash2 aria-hidden="true" />
-                              </button>
-                            </div>
-                          </article>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            ) : null}
-
             {activeStudyView === "flashcards" ? (
               totalFlashcards === 0 ? (
                 <div className="empty-state lecture-empty-card lecture-study-empty">
@@ -4605,6 +4384,229 @@ export function LectureWorkspace({
             )}
           </div>
           </div>
+
+          <ViewportPortal>
+            {isStudyManagerOpen && (activeStudyView === "flashcards" || activeStudyView === "quiz") ? (
+              <div className="study-manager-backdrop" role="presentation" onClick={animateCloseStudyManager}>
+                <div
+                  className="study-manager-sheet"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
+                  onPointerDown={handleStudyManagerPointerDown}
+                  onClickCapture={handleStudyManagerClickCapture}
+                  onClick={(event) => event.stopPropagation()}
+                  style={
+                    studyManagerDragOffset > 0
+                      ? { transform: `translateY(${studyManagerDragOffset}px)` }
+                      : undefined
+                  }
+                >
+                  <button
+                    type="button"
+                    className="mobile-sheet-drag-handle study-manager-drag-handle"
+                    aria-label="Zapri urejanje"
+                  />
+                  <div className="study-manager-header">
+                    <div>
+                      <p className="study-manager-eyebrow">
+                        {activeStudyView === "flashcards" ? "Flashcards" : "Kviz"}
+                      </p>
+                      <h2>{activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi vprašanja"}</h2>
+                    </div>
+                    <button
+                      type="button"
+                      className="app-close-button study-manager-icon-button"
+                      onClick={animateCloseStudyManager}
+                      aria-label="Zapri"
+                      title="Zapri"
+                    >
+                      <X aria-hidden="true" />
+                    </button>
+                  </div>
+
+                  <div className="ios-search notes-search study-manager-search">
+                    <EmojiIcon symbol="🔎" size="0.95rem" />
+                    <input
+                      value={studyManagerSearch}
+                      onChange={(event) => setStudyManagerSearch(event.target.value)}
+                      placeholder="Poišči..."
+                    />
+                  </div>
+
+                  {activeStudyView === "flashcards" ? (
+                    <>
+                      <form
+                        onSubmit={handleFlashcardFormSubmit}
+                        className="study-manager-form study-manager-form-flashcards"
+                      >
+                        <div className="study-manager-form-header">
+                          <span>{editingFlashcardId ? "Uredi kartico" : "Dodaj kartico"}</span>
+                          {editingFlashcardId ? (
+                            <button type="button" onClick={startFlashcardCreate}>
+                              <Plus aria-hidden="true" />
+                              Nova
+                            </button>
+                          ) : null}
+                        </div>
+                        <label>
+                          <span>Spredaj</span>
+                          <textarea
+                            value={flashcardForm.front}
+                            onChange={(event) =>
+                              setFlashcardForm((current) => ({ ...current, front: event.target.value }))
+                            }
+                            rows={3}
+                            required
+                          />
+                        </label>
+                        <label>
+                          <span>Zadaj</span>
+                          <textarea
+                            value={flashcardForm.back}
+                            onChange={(event) =>
+                              setFlashcardForm((current) => ({ ...current, back: event.target.value }))
+                            }
+                            rows={3}
+                            required
+                          />
+                        </label>
+                        <button type="submit" className="study-manager-save" disabled={isSavingStudyItem}>
+                          {isSavingStudyItem ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" />}
+                          {editingFlashcardId ? "Shrani kartico" : "Dodaj kartico"}
+                        </button>
+                      </form>
+
+                      <div className="study-manager-list">
+                        {managedFlashcards.map((flashcard) => (
+                          <article key={flashcard.id} className="study-manager-item">
+                            <div>
+                              <strong>{flashcard.front}</strong>
+                              <p>{flashcard.back}</p>
+                            </div>
+                            <div className="study-manager-item-actions">
+                              <button type="button" onClick={() => startFlashcardEdit(flashcard)}>
+                                <Pencil aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                className="danger"
+                                onClick={() => void handleDeleteFlashcard(flashcard.id)}
+                                disabled={isSavingStudyItem}
+                              >
+                                <Trash2 aria-hidden="true" />
+                              </button>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <form
+                        onSubmit={handleQuizQuestionFormSubmit}
+                        className="study-manager-form study-manager-form-quiz"
+                      >
+                        <div className="study-manager-form-header">
+                          <span>{editingQuizQuestionId ? "Uredi vprašanje" : "Dodaj vprašanje"}</span>
+                          {editingQuizQuestionId ? (
+                            <button type="button" onClick={startQuizQuestionCreate}>
+                              <Plus aria-hidden="true" />
+                              Novo
+                            </button>
+                          ) : null}
+                        </div>
+                        <label>
+                          <span>Vprašanje</span>
+                          <textarea
+                            value={quizQuestionForm.prompt}
+                            onChange={(event) =>
+                              setQuizQuestionForm((current) => ({ ...current, prompt: event.target.value }))
+                            }
+                            rows={3}
+                            required
+                          />
+                        </label>
+                        <div className="study-manager-options">
+                          {quizQuestionForm.options.map((option, index) => (
+                            <label key={`quiz-option-${index}`}>
+                              <span>{String.fromCharCode(65 + index)}</span>
+                              <div>
+                                <input
+                                  type="radio"
+                                  checked={quizQuestionForm.correctOptionIndex === index}
+                                  onChange={() =>
+                                    setQuizQuestionForm((current) => ({
+                                      ...current,
+                                      correctOptionIndex: index,
+                                    }))
+                                  }
+                                  aria-label={`Pravilen odgovor ${String.fromCharCode(65 + index)}`}
+                                />
+                                <input
+                                  value={option}
+                                  onChange={(event) =>
+                                    setQuizQuestionForm((current) => {
+                                      const options = [...current.options] as QuizQuestionFormState["options"];
+                                      options[index] = event.target.value;
+                                      return { ...current, options };
+                                    })
+                                  }
+                                  required
+                                />
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                        <label>
+                          <span>Razlaga</span>
+                          <textarea
+                            value={quizQuestionForm.explanation}
+                            onChange={(event) =>
+                              setQuizQuestionForm((current) => ({
+                                ...current,
+                                explanation: event.target.value,
+                              }))
+                            }
+                            rows={3}
+                            required
+                          />
+                        </label>
+                        <button type="submit" className="study-manager-save" disabled={isSavingStudyItem}>
+                          {isSavingStudyItem ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" />}
+                          {editingQuizQuestionId ? "Shrani vprašanje" : "Dodaj vprašanje"}
+                        </button>
+                      </form>
+
+                      <div className="study-manager-list">
+                        {managedQuizQuestions.map((question) => (
+                          <article key={question.id} className="study-manager-item">
+                            <div>
+                              <strong>{question.prompt}</strong>
+                              <p>{question.options[question.correct_option_idx] ?? question.options[0]}</p>
+                            </div>
+                            <div className="study-manager-item-actions">
+                              <button type="button" onClick={() => startQuizQuestionEdit(question)}>
+                                <Pencil aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                className="danger"
+                                onClick={() => void handleDeleteQuizQuestion(question.id)}
+                                disabled={isSavingStudyItem}
+                              >
+                                <Trash2 aria-hidden="true" />
+                              </button>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </ViewportPortal>
 
           <ViewportPortal>
             {canManageActiveStudyView && !isStudyManagerOpen ? (

@@ -904,6 +904,19 @@ function InlineNoteMedia({
     figureRef.current?.style.setProperty("--note-media-drag-offset", `${offset}px`);
   }
 
+  function setMediaDraggingAttribute(active: boolean) {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    if (active) {
+      document.body.dataset.noteMediaDragging = "true";
+      return;
+    }
+
+    delete document.body.dataset.noteMediaDragging;
+  }
+
   function runAutoScroll(timestamp: number) {
     const pointerY = latestPointerYRef.current;
     const session = pointerSessionRef.current;
@@ -970,6 +983,29 @@ function InlineNoteMedia({
     return Math.max(16, Math.ceil(topInset + 10));
   }
 
+  function getVisibleDragBottomLimit() {
+    const bottomBars = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        ".mobile-note-read-pill, .mobile-note-annotation-pill, .ios-tabbar",
+      ),
+    );
+    const bottomInset = bottomBars.reduce((minTop, element) => {
+      const style = window.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      const isVisible =
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        Number(style.opacity) !== 0 &&
+        rect.height > 0 &&
+        rect.bottom >= window.innerHeight - 4 &&
+        rect.top < window.innerHeight;
+
+      return isVisible ? Math.min(minTop, rect.top) : minTop;
+    }, window.innerHeight);
+
+    return Math.min(window.innerHeight - 16, Math.floor(bottomInset - 10));
+  }
+
   function getLockedDragTop(clientY: number) {
     const session = pointerSessionRef.current;
 
@@ -1022,6 +1058,7 @@ function InlineNoteMedia({
     stopAutoScroll();
     setDragVisualOffset(0);
     setIsDragging(false);
+    setMediaDraggingAttribute(false);
   }
 
   function finishDrag(clientY: number) {
@@ -1108,11 +1145,11 @@ function InlineNoteMedia({
 
         const rect = event.currentTarget.getBoundingClientRect();
 
-        const visibleMargin = 16;
         const topLimit = getVisibleDragTopLimit();
-        const usableHeight = Math.max(1, window.innerHeight - topLimit - visibleMargin);
+        const bottomEdge = getVisibleDragBottomLimit();
+        const usableHeight = Math.max(1, bottomEdge - topLimit);
         const visualHeight = Math.min(rect.height, usableHeight);
-        const bottomLimit = Math.max(topLimit, window.innerHeight - visibleMargin - visualHeight);
+        const bottomLimit = Math.max(topLimit, bottomEdge - visualHeight);
 
         pointerSessionRef.current = {
           pointerId: event.pointerId,
@@ -1141,6 +1178,7 @@ function InlineNoteMedia({
 
         if (!session.moved) {
           session.moved = true;
+          setMediaDraggingAttribute(true);
           setIsDragging(true);
         }
         latestPointerYRef.current = event.clientY;

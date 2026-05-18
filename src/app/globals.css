@@ -4424,6 +4424,12 @@ select:disabled {
     box-shadow 160ms ease;
   user-select: none;
   touch-action: none;
+  overflow-anchor: none;
+}
+
+body[data-note-media-dragging="true"],
+body[data-note-media-dragging="true"] * {
+  overflow-anchor: none;
 }
 
 .note-inline-media.selected {

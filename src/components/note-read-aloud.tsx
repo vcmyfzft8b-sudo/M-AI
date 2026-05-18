@@ -878,6 +878,8 @@ function InlineNoteMedia({
     startScrollY: number;
     startTop: number;
     height: number;
+    topLimit: number;
+    bottomLimit: number;
     moved: boolean;
   } | null>(null);
   const latestPointerYRef = useRef<number | null>(null);
@@ -904,28 +906,28 @@ function InlineNoteMedia({
 
   function runAutoScroll(timestamp: number) {
     const pointerY = latestPointerYRef.current;
+    const session = pointerSessionRef.current;
 
-    if (pointerY === null || !pointerSessionRef.current?.moved) {
+    if (pointerY === null || !session?.moved) {
       autoScrollFrameRef.current = null;
       autoScrollTimestampRef.current = null;
       autoScrollVelocityRef.current = 0;
       return;
     }
 
-    const viewportHeight = window.innerHeight;
-    const midpoint = viewportHeight / 2;
-    const deadZone = Math.min(140, Math.max(86, viewportHeight * 0.13));
-    const maxDistance = Math.max(1, midpoint - deadZone);
     const previousTimestamp = autoScrollTimestampRef.current ?? timestamp;
     const elapsedSeconds = Math.min(0.05, Math.max(0.008, (timestamp - previousTimestamp) / 1000));
     autoScrollTimestampRef.current = timestamp;
-    const distanceFromCenter = pointerY - midpoint;
-    const direction = Math.sign(distanceFromCenter);
+    const lockedTop = getLockedDragTop(pointerY);
+    const range = Math.max(1, session.bottomLimit - session.topLimit);
+    const middleTop = session.topLimit + range / 2;
+    const distanceFromMiddle = lockedTop - middleTop;
+    const deadZone = Math.min(34, Math.max(18, range * 0.1));
     const pressure = Math.min(
       1,
-      Math.max(0, (Math.abs(distanceFromCenter) - deadZone) / maxDistance),
+      Math.max(0, (Math.abs(distanceFromMiddle) - deadZone) / Math.max(1, range / 2 - deadZone)),
     );
-    const targetVelocity = direction * Math.pow(pressure, 2.35) * 22800;
+    const targetVelocity = Math.sign(distanceFromMiddle) * Math.pow(pressure, 2.2) * 128000;
 
     autoScrollVelocityRef.current += (targetVelocity - autoScrollVelocityRef.current) * 0.34;
     const scrollVelocity =
@@ -934,9 +936,8 @@ function InlineNoteMedia({
     if (scrollVelocity !== 0) {
       const scrollDelta = scrollVelocity * elapsedSeconds;
       window.scrollBy({ top: scrollDelta, behavior: "auto" });
-      const session = pointerSessionRef.current;
 
-      if (session && latestPointerYRef.current !== null) {
+      if (latestPointerYRef.current !== null) {
         setDragVisualOffset(getLockedDragOffset(latestPointerYRef.current));
       }
     }
@@ -951,6 +952,39 @@ function InlineNoteMedia({
     }
   }
 
+  function getVisibleDragTopLimit() {
+    const topBars = Array.from(document.querySelectorAll<HTMLElement>(".app-topbar, .ios-nav"));
+    const topInset = topBars.reduce((maxBottom, element) => {
+      const style = window.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      const isVisible =
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        rect.height > 0 &&
+        rect.top <= 4 &&
+        rect.bottom > 0;
+
+      return isVisible ? Math.max(maxBottom, rect.bottom) : maxBottom;
+    }, 0);
+
+    return Math.max(16, Math.ceil(topInset + 10));
+  }
+
+  function getLockedDragTop(clientY: number) {
+    const session = pointerSessionRef.current;
+
+    if (!session) {
+      return 0;
+    }
+
+    const scrolledDistance = window.scrollY - session.startScrollY;
+    const naturalTop = session.startTop - scrolledDistance;
+    const rawOffset = clientY - session.startY + scrolledDistance;
+    const rawTop = naturalTop + rawOffset;
+
+    return Math.min(session.bottomLimit, Math.max(session.topLimit, rawTop));
+  }
+
   function getLockedDragOffset(clientY: number) {
     const session = pointerSessionRef.current;
 
@@ -958,7 +992,10 @@ function InlineNoteMedia({
       return 0;
     }
 
-    return clientY - session.startY + window.scrollY - session.startScrollY;
+    const scrolledDistance = window.scrollY - session.startScrollY;
+    const naturalTop = session.startTop - scrolledDistance;
+
+    return getLockedDragTop(clientY) - naturalTop;
   }
 
   function getDropTargetBlockId(clientY: number) {
@@ -1071,12 +1108,20 @@ function InlineNoteMedia({
 
         const rect = event.currentTarget.getBoundingClientRect();
 
+        const visibleMargin = 16;
+        const topLimit = getVisibleDragTopLimit();
+        const usableHeight = Math.max(1, window.innerHeight - topLimit - visibleMargin);
+        const visualHeight = Math.min(rect.height, usableHeight);
+        const bottomLimit = Math.max(topLimit, window.innerHeight - visibleMargin - visualHeight);
+
         pointerSessionRef.current = {
           pointerId: event.pointerId,
           startY: event.clientY,
           startScrollY: window.scrollY,
           startTop: rect.top,
-          height: rect.height,
+          height: visualHeight,
+          topLimit,
+          bottomLimit,
           moved: false,
         };
         event.currentTarget.setPointerCapture(event.pointerId);

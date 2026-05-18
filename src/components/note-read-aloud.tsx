@@ -103,6 +103,9 @@ const TTS_PAID_DAILY_LIMIT_MESSAGE =
   "Porabil si današnje poslušanje. Znova lahko poslušaš po ponastavitvi ob 00:00.";
 const READ_SETTINGS_SHEET_CLOSE_MS = 180;
 const TTS_GENERATION_PROGRESS_LABEL = "Ustvarjam zvok";
+const NOTE_MEDIA_DRAG_AUTO_SCROLL_MAX_VELOCITY = 128000;
+const NOTE_MEDIA_UP_DRAG_AUTO_SCROLL_MULTIPLIER = 4;
+const NOTE_MEDIA_DOWN_DRAG_AUTO_SCROLL_MULTIPLIER = 4;
 
 function getTtsGenerationProgressPercent(startedAt: number) {
   const elapsedSeconds = Math.max(0, (Date.now() - startedAt) / 1000);
@@ -880,6 +883,7 @@ function InlineNoteMedia({
     height: number;
     topLimit: number;
     bottomLimit: number;
+    direction: -1 | 0 | 1;
     moved: boolean;
   } | null>(null);
   const latestPointerYRef = useRef<number | null>(null);
@@ -902,6 +906,13 @@ function InlineNoteMedia({
 
   function setDragVisualOffset(offset: number) {
     figureRef.current?.style.setProperty("--note-media-drag-offset", `${offset}px`);
+  }
+
+  function getCurrentMediaElement() {
+    return (
+      figureRef.current ??
+      document.querySelector<HTMLElement>(`[data-note-media-block-id="${block.id}"]`)
+    );
   }
 
   function setMediaDraggingAttribute(active: boolean) {
@@ -931,16 +942,47 @@ function InlineNoteMedia({
     const previousTimestamp = autoScrollTimestampRef.current ?? timestamp;
     const elapsedSeconds = Math.min(0.05, Math.max(0.008, (timestamp - previousTimestamp) / 1000));
     autoScrollTimestampRef.current = timestamp;
+    const dragDirection =
+      session.direction !== 0
+        ? session.direction
+        : pointerY > session.startY
+          ? 1
+          : pointerY < session.startY
+            ? -1
+            : 0;
     const lockedTop = getLockedDragTop(pointerY);
-    const range = Math.max(1, session.bottomLimit - session.topLimit);
-    const middleTop = session.topLimit + range / 2;
-    const distanceFromMiddle = lockedTop - middleTop;
-    const deadZone = Math.min(34, Math.max(18, range * 0.1));
-    const pressure = Math.min(
-      1,
-      Math.max(0, (Math.abs(distanceFromMiddle) - deadZone) / Math.max(1, range / 2 - deadZone)),
-    );
-    const targetVelocity = Math.sign(distanceFromMiddle) * Math.pow(pressure, 2.2) * 128000;
+    let targetVelocity = 0;
+
+    if (dragDirection < 0) {
+      const range = Math.max(1, session.bottomLimit - session.topLimit);
+      const middleTop = session.topLimit + range / 2;
+      const distanceFromMiddle = lockedTop - middleTop;
+      const deadZone = Math.min(34, Math.max(18, range * 0.1));
+      const pressure = Math.min(
+        1,
+        Math.max(0, (Math.abs(distanceFromMiddle) - deadZone) / Math.max(1, range / 2 - deadZone)),
+      );
+      const scrollDirection = Math.min(0, Math.sign(distanceFromMiddle));
+
+      targetVelocity =
+        scrollDirection *
+        Math.pow(pressure, 2.2) *
+        NOTE_MEDIA_DRAG_AUTO_SCROLL_MAX_VELOCITY *
+        NOTE_MEDIA_UP_DRAG_AUTO_SCROLL_MULTIPLIER;
+    } else if (dragDirection > 0) {
+      const edgeDistance = session.bottomLimit - lockedTop;
+      const edgeActivation = Math.min(120, Math.max(48, window.innerHeight * 0.16));
+      const pressure = Math.min(
+        1,
+        Math.max(0, (edgeActivation - Math.max(0, edgeDistance)) / edgeActivation),
+      );
+
+      targetVelocity =
+        dragDirection *
+        Math.pow(pressure, 2.2) *
+        NOTE_MEDIA_DRAG_AUTO_SCROLL_MAX_VELOCITY *
+        NOTE_MEDIA_DOWN_DRAG_AUTO_SCROLL_MULTIPLIER;
+    }
 
     autoScrollVelocityRef.current += (targetVelocity - autoScrollVelocityRef.current) * 0.34;
     const scrollVelocity =
@@ -1061,8 +1103,40 @@ function InlineNoteMedia({
     setMediaDraggingAttribute(false);
   }
 
+  function clampReleaseScrollDelta(delta: number) {
+    const maxCorrection = Math.max(180, window.innerHeight * 0.85);
+
+    return Math.min(maxCorrection, Math.max(-maxCorrection, delta));
+  }
+
+  function settleReleasedDrag(visualTop: number) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const figure = getCurrentMediaElement();
+
+        if (figure) {
+          figure.style.setProperty("--note-media-drag-offset", "0px");
+          const releasedTop = figure.getBoundingClientRect().top;
+          const scrollDelta = clampReleaseScrollDelta(releasedTop - visualTop);
+
+          if (Number.isFinite(scrollDelta) && Math.abs(scrollDelta) > 1) {
+            window.scrollBy({ top: scrollDelta, behavior: "auto" });
+          }
+
+          figure.scrollIntoView({ behavior: "auto", block: "nearest", inline: "nearest" });
+        } else {
+          setDragVisualOffset(0);
+        }
+
+        setIsDragging(false);
+        setMediaDraggingAttribute(false);
+      });
+    });
+  }
+
   function finishDrag(clientY: number) {
     const session = pointerSessionRef.current;
+    const releasedVisualTop = getLockedDragTop(clientY);
     const dropY = Math.min(window.innerHeight - 8, Math.max(8, clientY));
     pointerSessionRef.current = null;
 
@@ -1072,14 +1146,14 @@ function InlineNoteMedia({
     }
 
     const closestBlockId = getDropTargetBlockId(dropY);
+    latestPointerYRef.current = null;
+    stopAutoScroll();
 
-    if (closestBlockId && closestBlockId !== block.afterBlockId) {
+    if (closestBlockId && closestBlockId !== block.afterBlockId && onMoveToBlock) {
       onMoveToBlock?.(block.id, closestBlockId);
     }
 
-    requestAnimationFrame(() => {
-      resetDragState();
-    });
+    settleReleasedDrag(releasedVisualTop);
   }
 
   useEffect(() => {
@@ -1159,6 +1233,7 @@ function InlineNoteMedia({
           height: visualHeight,
           topLimit,
           bottomLimit,
+          direction: 0,
           moved: false,
         };
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -1180,6 +1255,11 @@ function InlineNoteMedia({
           session.moved = true;
           setMediaDraggingAttribute(true);
           setIsDragging(true);
+        }
+        const nextDirection = Math.sign(deltaY) as -1 | 0 | 1;
+
+        if (nextDirection !== 0) {
+          session.direction = nextDirection;
         }
         latestPointerYRef.current = event.clientY;
         suppressClickRef.current = true;
@@ -1425,6 +1505,7 @@ export function NoteReadAloud({
   const lastAutoScrolledWordRef = useRef<number | null>(null);
   const lastUserInteractionRef = useRef(Date.now());
   const ignoreScrollUntilRef = useRef(0);
+  const pendingArrowMovedMediaBlockIdRef = useRef<string | null>(null);
   const prefetchedChunksRef = useRef(new Map<string, TtsChunkResponse>());
   const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse | null>>());
   const prefetchQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1461,6 +1542,56 @@ export function NoteReadAloud({
   } | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isStartingPlayback, setIsStartingPlayback] = useState(false);
+
+  const handleMoveMediaBlock = useCallback(
+    (blockId: string, direction: "up" | "down") => {
+      pendingArrowMovedMediaBlockIdRef.current = blockId;
+      ignoreScrollUntilRef.current = Date.now() + 900;
+      onMoveMediaBlock?.(blockId, direction);
+    },
+    [onMoveMediaBlock],
+  );
+
+  useEffect(() => {
+    const pendingBlockId = pendingArrowMovedMediaBlockIdRef.current;
+
+    if (!pendingBlockId) {
+      return;
+    }
+
+    if (!renderedMediaBlocks.some((block) => block.id === pendingBlockId)) {
+      pendingArrowMovedMediaBlockIdRef.current = null;
+      return;
+    }
+
+    let firstFrame = 0;
+    let secondFrame = 0;
+
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const mediaElement = contentRef.current?.querySelector<HTMLElement>(
+          `[data-note-media-block-id="${pendingBlockId}"]`,
+        );
+
+        if (!mediaElement) {
+          return;
+        }
+
+        pendingArrowMovedMediaBlockIdRef.current = null;
+        ignoreScrollUntilRef.current = Date.now() + 900;
+        mediaElement.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+          inline: "nearest",
+        });
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [renderedMediaBlocks]);
   const [error, setError] = useState<string | null>(null);
   const highlightColor =
     NOTE_TTS_HIGHLIGHT_COLORS.find((color) => color.id === highlightColorId) ??
@@ -2295,7 +2426,7 @@ export function NoteReadAloud({
           selectedMediaBlockId={selectedMediaBlockId}
           onBlockSelect={onBlockSelect}
           onMediaBlockSelect={onMediaBlockSelect}
-          onMoveMediaBlock={onMoveMediaBlock}
+          onMoveMediaBlock={handleMoveMediaBlock}
           onMoveMediaBlockToBlock={onMoveMediaBlockToBlock}
           onDeleteMedia={onDeleteMedia}
         />

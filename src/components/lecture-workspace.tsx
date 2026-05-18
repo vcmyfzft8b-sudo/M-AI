@@ -1120,9 +1120,13 @@ export function LectureWorkspace({
   const [deletingNoteMediaIds, setDeletingNoteMediaIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [optimisticNoteMedia, setOptimisticNoteMedia] = useState<LectureDetail["noteMedia"]>(
+    () => [],
+  );
   const notePhotoInputRef = useRef<HTMLInputElement | null>(null);
   const noteAnnotationShellRef = useRef<HTMLDivElement | null>(null);
   const deletingNoteMediaIdsRef = useRef(new Set<string>());
+  const optimisticNoteMediaUrlsRef = useRef(new Map<string, string>());
   const [isStudyManagerOpen, setIsStudyManagerOpen] = useState(false);
   const [studyManagerSearch, setStudyManagerSearch] = useState("");
   const [editingFlashcardId, setEditingFlashcardId] = useState<string | null>(null);
@@ -1645,9 +1649,25 @@ export function LectureWorkspace({
     );
   }, [detail.artifact?.structured_notes_md, detail.lecture.title]);
   const activeNoteDoc = detail.editableNoteDoc ?? createClientFallbackNoteDoc();
+  const renderedNoteMedia = useMemo(() => {
+    const savedMediaIds = new Set(detail.noteMedia.map((media) => media.id));
+    return [
+      ...detail.noteMedia,
+      ...optimisticNoteMedia.filter((media) => !savedMediaIds.has(media.id)),
+    ];
+  }, [detail.noteMedia, optimisticNoteMedia]);
   const noteBlockIds = useMemo(
     () => (cleanedStructuredNotes ? parseNoteTtsDocument(cleanedStructuredNotes).blocks.map((block) => block.id) : []),
     [cleanedStructuredNotes],
+  );
+  useEffect(
+    () => () => {
+      optimisticNoteMediaUrlsRef.current.forEach((url) => {
+        URL.revokeObjectURL(url);
+      });
+      optimisticNoteMediaUrlsRef.current.clear();
+    },
+    [],
   );
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -2757,7 +2777,7 @@ export function LectureWorkspace({
     };
   }, [activeTab]);
 
-  async function handleApplyAnnotation(kind: NoteAnnotationKind, colorId = selectedHighlightColorId) {
+  function handleApplyAnnotation(kind: NoteAnnotationKind, colorId = selectedHighlightColorId) {
     if (!noteSelection) {
       return;
     }
@@ -2807,10 +2827,11 @@ export function LectureWorkspace({
           ],
     };
 
-    await persistNoteDoc(nextDoc);
+    applyOptimisticNoteDoc(nextDoc);
     window.getSelection()?.removeAllRanges();
     setNoteSelection(null);
     setIsHighlightPaletteOpen(false);
+    void persistNoteDoc(nextDoc);
   }
 
   async function handleNotePhotoSelected(event: React.ChangeEvent<HTMLInputElement>) {
@@ -2821,6 +2842,38 @@ export function LectureWorkspace({
       return;
     }
 
+    const createdAt = new Date().toISOString();
+    const optimisticMediaId = `optimistic-${crypto.randomUUID()}`;
+    const optimisticBlockId = `optimistic-${crypto.randomUUID()}`;
+    const localPreviewUrl = URL.createObjectURL(file);
+    const optimisticMedia: LectureDetail["noteMedia"][number] = {
+      id: optimisticMediaId,
+      lecture_id: detail.lecture.id,
+      user_id: "",
+      storage_path: "",
+      mime_type: file.type || "application/octet-stream",
+      byte_size: file.size,
+      original_file_name: file.name,
+      created_at: createdAt,
+      signedUrl: localPreviewUrl,
+    };
+    const optimisticDoc: EditableNoteDoc = {
+      ...activeNoteDoc,
+      updatedAt: createdAt,
+      mediaBlocks: [
+        ...activeNoteDoc.mediaBlocks,
+        {
+          id: optimisticBlockId,
+          mediaId: optimisticMediaId,
+          afterBlockId: selectedNoteBlockId,
+          createdAt,
+        },
+      ],
+    };
+
+    optimisticNoteMediaUrlsRef.current.set(optimisticMediaId, localPreviewUrl);
+    setOptimisticNoteMedia((current) => [...current, optimisticMedia]);
+    applyOptimisticNoteDoc(optimisticDoc);
     setIsSavingNoteDoc(true);
     setNoteError(null);
 
@@ -2879,8 +2932,42 @@ export function LectureWorkspace({
         }));
       }
     } catch (error) {
+      setDetail((current) => {
+        const currentDoc = current.editableNoteDoc;
+
+        if (!currentDoc?.mediaBlocks.some((block) => block.id === optimisticBlockId)) {
+          return current;
+        }
+
+        const nextDoc = {
+          ...currentDoc,
+          updatedAt: new Date().toISOString(),
+          mediaBlocks: currentDoc.mediaBlocks.filter((block) => block.id !== optimisticBlockId),
+        };
+
+        return {
+          ...current,
+          editableNoteDoc: nextDoc,
+          artifact: current.artifact
+            ? {
+                ...current.artifact,
+                editable_notes_doc: nextDoc,
+                editable_notes_updated_at: nextDoc.updatedAt,
+              }
+            : current.artifact,
+        };
+      });
       setNoteError(getRequestErrorMessage(error, "Fotografije ni bilo mogoče dodati."));
     } finally {
+      setOptimisticNoteMedia((current) =>
+        current.filter((media) => media.id !== optimisticMediaId),
+      );
+      const objectUrl = optimisticNoteMediaUrlsRef.current.get(optimisticMediaId);
+
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        optimisticNoteMediaUrlsRef.current.delete(optimisticMediaId);
+      }
       setIsSavingNoteDoc(false);
     }
   }
@@ -3286,7 +3373,7 @@ export function LectureWorkspace({
                   annotationActive={Boolean(noteSelection)}
                   annotations={activeNoteDoc.annotations}
                   mediaBlocks={activeNoteDoc.mediaBlocks}
-                  noteMedia={detail.noteMedia}
+                  noteMedia={renderedNoteMedia}
                   selectedBlockId={selectedNoteBlockId}
                   selectedMediaBlockId={selectedMediaBlockId}
                   deletingMediaIds={deletingNoteMediaIds}

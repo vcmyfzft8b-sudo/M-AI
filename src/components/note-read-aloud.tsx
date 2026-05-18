@@ -8,7 +8,7 @@ import type {
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { EmojiIcon } from "@/components/emoji-icon";
 import { ViewportPortal } from "@/components/viewport-portal";
@@ -873,6 +873,7 @@ function InlineNoteMedia({
   onDelete?: (mediaId: string) => void;
 }) {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const actionsDisabled = deleting || block.mediaId.startsWith("optimistic-");
 
   if (!block.media?.signedUrl) {
     return null;
@@ -900,8 +901,12 @@ function InlineNoteMedia({
         <span className="note-inline-media-actions">
           <button
             type="button"
+            disabled={actionsDisabled}
             onClick={(event) => {
               event.stopPropagation();
+              if (actionsDisabled) {
+                return;
+              }
               onMove?.(block.id, "up");
             }}
             aria-label="Premakni gor"
@@ -911,8 +916,12 @@ function InlineNoteMedia({
           </button>
           <button
             type="button"
+            disabled={actionsDisabled}
             onClick={(event) => {
               event.stopPropagation();
+              if (actionsDisabled) {
+                return;
+              }
               onMove?.(block.id, "down");
             }}
             aria-label="Premakni dol"
@@ -1120,7 +1129,7 @@ export function NoteReadAloud({
   const lastUserInteractionRef = useRef(Date.now());
   const ignoreScrollUntilRef = useRef(0);
   const pendingArrowMovedMediaBlockIdRef = useRef<string | null>(null);
-  const arrowMoveScrollFrameRef = useRef<number | null>(null);
+  const pendingArrowMoveFromRectRef = useRef<DOMRect | null>(null);
   const prefetchedChunksRef = useRef(new Map<string, TtsChunkResponse>());
   const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse | null>>());
   const prefetchQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1158,50 +1167,13 @@ export function NoteReadAloud({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isStartingPlayback, setIsStartingPlayback] = useState(false);
 
-  const scrollWindowToMediaElement = useCallback((mediaElement: HTMLElement) => {
-    if (arrowMoveScrollFrameRef.current !== null) {
-      window.cancelAnimationFrame(arrowMoveScrollFrameRef.current);
-      arrowMoveScrollFrameRef.current = null;
-    }
-
-    const rect = mediaElement.getBoundingClientRect();
-    const startY = window.scrollY;
-    const maxScrollY = Math.max(
-      0,
-      window.document.documentElement.scrollHeight - window.innerHeight,
-    );
-    const targetY = Math.min(
-      maxScrollY,
-      Math.max(0, startY + rect.top - Math.max(24, (window.innerHeight - rect.height) / 2)),
-    );
-    const distance = targetY - startY;
-    const durationMs = Math.min(680, Math.max(360, Math.abs(distance) * 0.45));
-    const startedAt = window.performance.now();
-
-    function step(timestamp: number) {
-      const elapsed = timestamp - startedAt;
-      const progress = Math.min(1, elapsed / durationMs);
-      const easedProgress =
-        progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-      window.scrollTo({
-        top: startY + distance * easedProgress,
-        behavior: "auto",
-      });
-
-      if (progress < 1) {
-        arrowMoveScrollFrameRef.current = window.requestAnimationFrame(step);
-        return;
-      }
-
-      arrowMoveScrollFrameRef.current = null;
-    }
-
-    arrowMoveScrollFrameRef.current = window.requestAnimationFrame(step);
-  }, []);
-
   const handleMoveMediaBlock = useCallback(
     (blockId: string, direction: "up" | "down") => {
+      const mediaElement = contentRef.current?.querySelector<HTMLElement>(
+        `[data-note-media-block-id="${blockId}"]`,
+      );
+
+      pendingArrowMoveFromRectRef.current = mediaElement?.getBoundingClientRect() ?? null;
       pendingArrowMovedMediaBlockIdRef.current = blockId;
       ignoreScrollUntilRef.current = Date.now() + 900;
       onMoveMediaBlock?.(blockId, direction);
@@ -1209,7 +1181,7 @@ export function NoteReadAloud({
     [onMoveMediaBlock],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const pendingBlockId = pendingArrowMovedMediaBlockIdRef.current;
 
     if (!pendingBlockId) {
@@ -1221,39 +1193,78 @@ export function NoteReadAloud({
       return;
     }
 
-    let firstFrame = 0;
-    let secondFrame = 0;
+    let cleanupTimeout = 0;
+    let animatedElement: HTMLElement | null = null;
+    let moveAnimation: Animation | null = null;
 
-    firstFrame = window.requestAnimationFrame(() => {
-      secondFrame = window.requestAnimationFrame(() => {
-        const mediaElement = contentRef.current?.querySelector<HTMLElement>(
-          `[data-note-media-block-id="${pendingBlockId}"]`,
+    const clearAnimatedElementStyles = () => {
+      if (!animatedElement) {
+        return;
+      }
+
+      animatedElement.style.backfaceVisibility = "";
+      animatedElement.style.transformOrigin = "";
+      animatedElement.style.willChange = "";
+      animatedElement.style.zIndex = "";
+    };
+
+    const mediaElement = contentRef.current?.querySelector<HTMLElement>(
+      `[data-note-media-block-id="${pendingBlockId}"]`,
+    );
+
+    if (!mediaElement) {
+      return;
+    }
+
+    const fromRect = pendingArrowMoveFromRectRef.current;
+    const toRect = mediaElement.getBoundingClientRect();
+    pendingArrowMovedMediaBlockIdRef.current = null;
+    pendingArrowMoveFromRectRef.current = null;
+    ignoreScrollUntilRef.current = Date.now() + 900;
+
+    if (fromRect) {
+      const deltaX = fromRect.left - toRect.left;
+      const deltaY = fromRect.top - toRect.top;
+
+      if (Math.abs(deltaX) > 0.5 || Math.abs(deltaY) > 0.5) {
+        animatedElement = mediaElement;
+        mediaElement.style.backfaceVisibility = "hidden";
+        mediaElement.style.transformOrigin = "center center";
+        mediaElement.style.willChange = "transform";
+        mediaElement.style.zIndex = "3";
+        moveAnimation = mediaElement.animate(
+          [
+            {
+              transform: `translate3d(${deltaX}px, ${deltaY}px, 0)`,
+              offset: 0,
+            },
+            {
+              transform: "translate3d(0, 0, 0)",
+              offset: 1,
+            },
+          ],
+          {
+            duration: 460,
+            easing: "cubic-bezier(0.2, 0, 0, 1)",
+            composite: "replace",
+          },
         );
+        moveAnimation.addEventListener("finish", clearAnimatedElementStyles, { once: true });
 
-        if (!mediaElement) {
-          return;
-        }
-
-        pendingArrowMovedMediaBlockIdRef.current = null;
-        ignoreScrollUntilRef.current = Date.now() + 900;
-        scrollWindowToMediaElement(mediaElement);
-      });
-    });
+        cleanupTimeout = window.setTimeout(() => {
+          clearAnimatedElementStyles();
+        }, 540);
+      }
+    }
 
     return () => {
-      window.cancelAnimationFrame(firstFrame);
-      window.cancelAnimationFrame(secondFrame);
-    };
-  }, [renderedMediaBlocks, scrollWindowToMediaElement]);
+      window.clearTimeout(cleanupTimeout);
+      moveAnimation?.cancel();
 
-  useEffect(
-    () => () => {
-      if (arrowMoveScrollFrameRef.current !== null) {
-        window.cancelAnimationFrame(arrowMoveScrollFrameRef.current);
-      }
-    },
-    [],
-  );
+      clearAnimatedElementStyles();
+    };
+  }, [renderedMediaBlocks]);
+
   const [error, setError] = useState<string | null>(null);
   const highlightColor =
     NOTE_TTS_HIGHLIGHT_COLORS.find((color) => color.id === highlightColorId) ??

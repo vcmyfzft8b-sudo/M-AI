@@ -1487,22 +1487,25 @@ export function NoteReadAloud({
 
       if (mediaElement && pendingArrowMoveFromRectRef.current) {
         const sourceImage = mediaElement.querySelector("img");
+        const cloneHost =
+          mediaElement.closest<HTMLElement>(".app-shell-pull-content") ?? window.document.body;
         const clone = window.document.createElement("figure");
         const cloneImage = window.document.createElement("img");
         const rect = pendingArrowMoveFromRectRef.current;
+        const hostRect = cloneHost.getBoundingClientRect();
         const sourceImageUrl = sourceImage?.currentSrc || sourceImage?.src || "";
 
         clone.className = mediaElement.className;
         clone.classList.add("note-inline-media-moving-clone");
         clone.removeAttribute("data-note-media-block-id");
-        clone.style.position = "fixed";
-        clone.style.left = `${rect.left}px`;
-        clone.style.top = `${rect.top}px`;
+        clone.style.position = "absolute";
+        clone.style.left = `${rect.left - hostRect.left + cloneHost.scrollLeft}px`;
+        clone.style.top = `${rect.top - hostRect.top + cloneHost.scrollTop}px`;
         clone.style.width = `${rect.width}px`;
         clone.style.height = `${rect.height}px`;
         clone.style.margin = "0";
         clone.style.pointerEvents = "none";
-        clone.style.zIndex = "120";
+        clone.style.zIndex = "30";
         clone.style.transformOrigin = "top left";
         clone.style.willChange = "transform";
         clone.style.backgroundImage = sourceImageUrl ? `url("${sourceImageUrl}")` : "";
@@ -1523,7 +1526,7 @@ export function NoteReadAloud({
           clone.appendChild(cloneImage);
         }
 
-        window.document.body.appendChild(clone);
+        cloneHost.appendChild(clone);
         pendingArrowMoveCloneRef.current = clone;
       } else {
         pendingArrowMoveCloneRef.current = null;
@@ -1590,6 +1593,8 @@ export function NoteReadAloud({
     if (fromRect) {
       const deltaX = fromRect.left - toRect.left;
       const deltaY = fromRect.top - toRect.top;
+      const moveDistance = Math.hypot(deltaX, deltaY);
+      const moveDurationMs = Math.min(760, Math.max(460, moveDistance * 1.08));
 
       if (Math.abs(deltaX) > 0.5 || Math.abs(deltaY) > 0.5) {
         animatedElement = mediaElement;
@@ -1627,7 +1632,7 @@ export function NoteReadAloud({
                 },
               ],
           {
-            duration: 460,
+            duration: moveDurationMs,
             easing: "cubic-bezier(0.2, 0, 0, 1)",
             composite: "replace",
           },
@@ -1636,7 +1641,7 @@ export function NoteReadAloud({
 
         cleanupTimeout = window.setTimeout(() => {
           clearAnimatedElementStyles();
-        }, 540);
+        }, moveDurationMs + 80);
       } else {
         clone?.remove();
         if (pendingArrowMoveCloneRef.current === clone) {

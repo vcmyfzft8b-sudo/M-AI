@@ -908,6 +908,7 @@ select:disabled {
 }
 
 .app-shell-pull-content {
+  position: relative;
   will-change: transform;
 }
 

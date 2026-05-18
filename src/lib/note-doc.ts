@@ -17,6 +17,8 @@ export type NoteMediaBlock = {
   id: string;
   mediaId: string;
   afterBlockId: string;
+  widthPercent?: number;
+  xPercent?: number;
   createdAt: string;
 };
 
@@ -95,6 +97,20 @@ function parseMediaBlock(value: unknown): NoteMediaBlock | null {
     id: record.id,
     mediaId: record.mediaId,
     afterBlockId: record.afterBlockId,
+    widthPercent:
+      typeof record.widthPercent === "number" &&
+      Number.isFinite(record.widthPercent) &&
+      record.widthPercent >= 35 &&
+      record.widthPercent <= 100
+        ? record.widthPercent
+        : undefined,
+    xPercent:
+      typeof record.xPercent === "number" &&
+      Number.isFinite(record.xPercent) &&
+      record.xPercent >= 0 &&
+      record.xPercent <= 100
+        ? record.xPercent
+        : undefined,
     createdAt: record.createdAt,
   };
 }
@@ -149,6 +165,8 @@ export function serializeEditableNoteDoc(doc: EditableNoteDoc): Json {
       id: block.id,
       mediaId: block.mediaId,
       afterBlockId: block.afterBlockId,
+      widthPercent: block.widthPercent,
+      xPercent: block.xPercent,
       createdAt: block.createdAt,
     })),
   };

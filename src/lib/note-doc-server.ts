@@ -30,6 +30,8 @@ export const noteMediaBlockSchema = z.object({
   id: z.string().min(1).max(120),
   mediaId: z.string().uuid(),
   afterBlockId: z.string().min(1).max(160),
+  widthPercent: z.number().int().min(35).max(100).optional(),
+  xPercent: z.number().int().min(0).max(100).optional(),
   createdAt: z.string().datetime(),
 });
 

@@ -2843,7 +2843,7 @@ export function LectureWorkspace({
     }
 
     const createdAt = new Date().toISOString();
-    const optimisticMediaId = `optimistic-${crypto.randomUUID()}`;
+    const optimisticMediaId = crypto.randomUUID();
     const optimisticBlockId = `optimistic-${crypto.randomUUID()}`;
     const localPreviewUrl = URL.createObjectURL(file);
     const optimisticMedia: LectureDetail["noteMedia"][number] = {
@@ -2866,6 +2866,8 @@ export function LectureWorkspace({
           id: optimisticBlockId,
           mediaId: optimisticMediaId,
           afterBlockId: selectedNoteBlockId,
+          widthPercent: 100,
+          xPercent: 50,
           createdAt,
         },
       ],
@@ -2995,6 +2997,37 @@ export function LectureWorkspace({
       updatedAt: new Date().toISOString(),
       mediaBlocks: activeNoteDoc.mediaBlocks.map((item) =>
         item.id === mediaBlockId ? { ...item, afterBlockId: nextBlockId } : item,
+      ),
+    };
+
+    applyOptimisticNoteDoc(nextDoc);
+    void persistNoteDoc(nextDoc);
+  }
+
+  function handleLayoutMediaBlock(
+    mediaBlockId: string,
+    update: { widthPercent?: number; xPercent?: number },
+  ) {
+    const boundedWidthPercent =
+      typeof update.widthPercent === "number"
+        ? Math.min(100, Math.max(35, Math.round(update.widthPercent)))
+        : undefined;
+    const boundedXPercent =
+      typeof update.xPercent === "number"
+        ? Math.min(100, Math.max(0, Math.round(update.xPercent)))
+        : undefined;
+
+    const nextDoc = {
+      ...activeNoteDoc,
+      updatedAt: new Date().toISOString(),
+      mediaBlocks: activeNoteDoc.mediaBlocks.map((item) =>
+        item.id === mediaBlockId
+          ? {
+              ...item,
+              widthPercent: boundedWidthPercent ?? item.widthPercent,
+              xPercent: boundedXPercent ?? item.xPercent,
+            }
+          : item,
       ),
     };
 
@@ -3386,6 +3419,7 @@ export function LectureWorkspace({
                     setSelectedNoteBlockId(null);
                   }}
                   onMoveMediaBlock={handleMoveMediaBlock}
+                  onLayoutMediaBlock={handleLayoutMediaBlock}
                   onDeleteMedia={(mediaId) => void handleDeleteNoteMedia(mediaId)}
                 />
               </div>

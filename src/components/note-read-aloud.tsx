@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Loader2, Pause, Play, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Pause, Play, X } from "lucide-react";
 import Image from "next/image";
 import type {
   CSSProperties,
@@ -34,6 +34,31 @@ import type { NoteAnnotation, NoteMediaAsset, NoteMediaBlock } from "@/lib/note-
 
 type NoteReadMediaBlock = NoteMediaBlock & {
   media: NoteMediaAsset | null;
+};
+
+const NOTE_MEDIA_MIN_WIDTH_PERCENT = 35;
+const NOTE_MEDIA_MAX_WIDTH_PERCENT = 100;
+const NOTE_MEDIA_CENTER_X_PERCENT = 50;
+
+type NoteMediaBlockLayoutUpdate = {
+  widthPercent?: number;
+  xPercent?: number;
+};
+
+type NoteMediaResizeSession = {
+  pointerId: number;
+  parentLeft: number;
+  parentWidth: number;
+  startLeft: number;
+};
+
+type NoteMediaXDragSession = {
+  pointerId: number;
+  startClientX: number;
+  parentWidth: number;
+  startLeft: number;
+  widthPercent: number;
+  moved: boolean;
 };
 
 type NoteWordAnnotation = {
@@ -863,6 +888,7 @@ function InlineNoteMedia({
   deleting,
   onSelect,
   onMove,
+  onLayoutChange,
   onDelete,
 }: {
   block: NoteReadMediaBlock;
@@ -870,10 +896,266 @@ function InlineNoteMedia({
   deleting?: boolean;
   onSelect?: (blockId: string) => void;
   onMove?: (blockId: string, direction: "up" | "down") => void;
+  onLayoutChange?: (blockId: string, update: NoteMediaBlockLayoutUpdate) => void;
   onDelete?: (mediaId: string) => void;
 }) {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const actionsDisabled = deleting || block.mediaId.startsWith("optimistic-");
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [liveLayout, setLiveLayout] = useState<NoteMediaBlockLayoutUpdate | null>(null);
+  const mediaRef = useRef<HTMLElement | null>(null);
+  const liveLayoutRef = useRef<NoteMediaBlockLayoutUpdate | null>(null);
+  const resizeSessionRef = useRef<NoteMediaResizeSession | null>(null);
+  const xDragSessionRef = useRef<NoteMediaXDragSession | null>(null);
+  const suppressClickRef = useRef(false);
+  const isSavingPreview = block.media?.signedUrl.startsWith("blob:") ?? false;
+  const actionsDisabled = deleting || isSavingPreview;
+  const storedWidthPercent = liveLayout?.widthPercent ?? block.widthPercent;
+  const storedXPercent = liveLayout?.xPercent ?? block.xPercent;
+  const widthPercent = Math.min(
+    NOTE_MEDIA_MAX_WIDTH_PERCENT,
+    Math.max(NOTE_MEDIA_MIN_WIDTH_PERCENT, storedWidthPercent ?? NOTE_MEDIA_MAX_WIDTH_PERCENT),
+  );
+  const xPercent =
+    widthPercent >= NOTE_MEDIA_MAX_WIDTH_PERCENT
+      ? NOTE_MEDIA_CENTER_X_PERCENT
+      : Math.min(100, Math.max(0, storedXPercent ?? NOTE_MEDIA_CENTER_X_PERCENT));
+  const marginLeftPercent = ((NOTE_MEDIA_MAX_WIDTH_PERCENT - widthPercent) * xPercent) / 100;
+  const canDragHorizontally = !actionsDisabled && widthPercent < NOTE_MEDIA_MAX_WIDTH_PERCENT;
+  const useCompactActions = widthPercent <= 55;
+
+  const commitLayout = useCallback(
+    (update: NoteMediaBlockLayoutUpdate) => {
+      liveLayoutRef.current = null;
+      setLiveLayout(null);
+      onLayoutChange?.(block.id, {
+        widthPercent: Math.round(update.widthPercent ?? widthPercent),
+        xPercent: Math.round(update.xPercent ?? xPercent),
+      });
+    },
+    [block.id, onLayoutChange, widthPercent, xPercent],
+  );
+  const updateLiveLayout = (update: NoteMediaBlockLayoutUpdate) => {
+    liveLayoutRef.current = update;
+    setLiveLayout(update);
+  };
+
+  const handleResizePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (actionsDisabled) {
+      return;
+    }
+
+    const mediaElement = mediaRef.current;
+    const parentElement = mediaElement?.parentElement;
+
+    if (!mediaElement || !parentElement) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    onSelect?.(block.id);
+
+    const mediaRect = mediaElement.getBoundingClientRect();
+    const parentRect = parentElement.getBoundingClientRect();
+    resizeSessionRef.current = {
+      pointerId: event.pointerId,
+      parentLeft: parentRect.left,
+      parentWidth: parentRect.width,
+      startLeft: mediaRect.left - parentRect.left,
+    };
+    suppressClickRef.current = true;
+  };
+
+  const handleResizePointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const session = resizeSessionRef.current;
+
+    if (!session || session.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (event.pointerType !== "touch" && (event.buttons & 1) !== 1) {
+      resizeSessionRef.current = null;
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      commitLayout(liveLayoutRef.current ?? { widthPercent, xPercent });
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const minWidth = (session.parentWidth * NOTE_MEDIA_MIN_WIDTH_PERCENT) / 100;
+    const maxWidth = session.parentWidth;
+    const requestedWidth = event.clientX - session.parentLeft - session.startLeft;
+    const nextWidth = Math.min(maxWidth, Math.max(minWidth, requestedWidth));
+    const nextWidthPercent = Math.round((nextWidth / session.parentWidth) * 100);
+    const remainingWidth = Math.max(0, session.parentWidth - nextWidth);
+    const nextXPercent =
+      remainingWidth > 0
+        ? Math.min(100, Math.max(0, Math.round((session.startLeft / remainingWidth) * 100)))
+        : NOTE_MEDIA_CENTER_X_PERCENT;
+
+    updateLiveLayout({
+      widthPercent: nextWidthPercent,
+      xPercent: nextXPercent,
+    });
+  };
+
+  const handleResizePointerEnd = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const session = resizeSessionRef.current;
+
+    if (!session || session.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    resizeSessionRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    commitLayout(liveLayoutRef.current ?? { widthPercent, xPercent });
+  };
+
+  const handleMediaPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!canDragHorizontally) {
+      return;
+    }
+
+    if (event.target instanceof Element && event.target.closest("button")) {
+      return;
+    }
+
+    const mediaElement = mediaRef.current;
+    const parentElement = mediaElement?.parentElement;
+
+    if (!mediaElement || !parentElement) {
+      return;
+    }
+
+    const mediaRect = mediaElement.getBoundingClientRect();
+    const parentRect = parentElement.getBoundingClientRect();
+    const availableWidth = Math.max(0, parentRect.width - mediaRect.width);
+
+    if (availableWidth <= 1) {
+      return;
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    onSelect?.(block.id);
+    xDragSessionRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      parentWidth: parentRect.width,
+      startLeft: mediaRect.left - parentRect.left,
+      widthPercent,
+      moved: false,
+    };
+  };
+
+  const handleMediaPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    const session = xDragSessionRef.current;
+
+    if (!session || session.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const deltaX = event.clientX - session.startClientX;
+
+    if (Math.abs(deltaX) > 2) {
+      session.moved = true;
+      suppressClickRef.current = true;
+    }
+
+    const widthPx = (session.parentWidth * session.widthPercent) / 100;
+    const availableWidth = Math.max(0, session.parentWidth - widthPx);
+    const nextLeft = Math.min(availableWidth, Math.max(0, session.startLeft + deltaX));
+    const nextXPercent =
+      availableWidth > 0
+        ? Math.min(100, Math.max(0, Math.round((nextLeft / availableWidth) * 100)))
+        : NOTE_MEDIA_CENTER_X_PERCENT;
+
+    updateLiveLayout({
+      widthPercent: session.widthPercent,
+      xPercent: nextXPercent,
+    });
+  };
+
+  const handleMediaPointerEnd = (event: ReactPointerEvent<HTMLElement>) => {
+    const session = xDragSessionRef.current;
+
+    if (!session || session.pointerId !== event.pointerId) {
+      return;
+    }
+
+    xDragSessionRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+
+    if (session.moved) {
+      event.preventDefault();
+      event.stopPropagation();
+      commitLayout(liveLayoutRef.current ?? { widthPercent, xPercent });
+      return;
+    }
+
+    liveLayoutRef.current = null;
+    setLiveLayout(null);
+  };
+
+  const renderMediaActions = (compact = false) => (
+    <>
+      <button
+        type="button"
+        disabled={actionsDisabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          setIsActionMenuOpen(false);
+          if (actionsDisabled) {
+            return;
+          }
+          onMove?.(block.id, "up");
+        }}
+        aria-label="Premakni gor"
+        title="Premakni gor"
+      >
+        <ArrowUp aria-hidden="true" />
+        {compact ? <span>Gor</span> : null}
+      </button>
+      <button
+        type="button"
+        disabled={actionsDisabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          setIsActionMenuOpen(false);
+          if (actionsDisabled) {
+            return;
+          }
+          onMove?.(block.id, "down");
+        }}
+        aria-label="Premakni dol"
+        title="Premakni dol"
+      >
+        <ArrowDown aria-hidden="true" />
+        {compact ? <span>Dol</span> : null}
+      </button>
+      <button
+        type="button"
+        className="danger"
+        disabled={actionsDisabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          setIsActionMenuOpen(false);
+          if (actionsDisabled) {
+            return;
+          }
+          onDelete?.(block.mediaId);
+        }}
+        aria-label={deleting ? "Brišem fotografijo" : "Izbriši fotografijo"}
+        aria-busy={deleting}
+      >
+        {deleting ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
+        <span>{deleting ? "Brišem" : "Izbriši"}</span>
+      </button>
+    </>
+  );
 
   if (!block.media?.signedUrl) {
     return null;
@@ -881,10 +1163,25 @@ function InlineNoteMedia({
 
   return (
     <figure
+      ref={mediaRef}
       className={`note-inline-media ${selected ? "selected" : ""}`}
       data-note-media-block-id={block.id}
+      style={
+        {
+          "--note-inline-media-width": `${widthPercent}%`,
+          marginLeft: `${marginLeftPercent}%`,
+        } as CSSProperties
+      }
+      onPointerDown={handleMediaPointerDown}
+      onPointerMove={handleMediaPointerMove}
+      onPointerUp={handleMediaPointerEnd}
+      onPointerCancel={handleMediaPointerEnd}
       onClick={(event) => {
         event.stopPropagation();
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
+          return;
+        }
         onSelect?.(block.id);
         setIsPreviewOpen(true);
       }}
@@ -898,55 +1195,45 @@ function InlineNoteMedia({
         unoptimized
       />
       <figcaption>
-        <span className="note-inline-media-actions">
+        <span
+          className={`note-inline-media-actions ${
+            useCompactActions ? "compact-hidden" : ""
+          }`}
+        >
+          {renderMediaActions(false)}
+        </span>
+        <span
+          className={`note-inline-media-menu ${useCompactActions ? "compact-visible" : ""}`}
+        >
           <button
             type="button"
-            disabled={actionsDisabled}
+            className="note-inline-media-menu-trigger"
             onClick={(event) => {
               event.stopPropagation();
-              if (actionsDisabled) {
-                return;
-              }
-              onMove?.(block.id, "up");
+              setIsActionMenuOpen((current) => !current);
             }}
-            aria-label="Premakni gor"
-            title="Premakni gor"
+            aria-label="Možnosti fotografije"
+            title="Možnosti fotografije"
+            aria-expanded={isActionMenuOpen}
           >
-            <ArrowUp aria-hidden="true" />
+            <MoreHorizontal aria-hidden="true" />
           </button>
-          <button
-            type="button"
-            disabled={actionsDisabled}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (actionsDisabled) {
-                return;
-              }
-              onMove?.(block.id, "down");
-            }}
-            aria-label="Premakni dol"
-            title="Premakni dol"
-          >
-            <ArrowDown aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            className="danger"
-            disabled={deleting}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (deleting) {
-                return;
-              }
-              onDelete?.(block.mediaId);
-            }}
-            aria-label={deleting ? "Brišem fotografijo" : "Izbriši fotografijo"}
-            aria-busy={deleting}
-          >
-            {deleting ? <Loader2 className="animate-spin" aria-hidden="true" /> : "Izbriši"}
-          </button>
+          {isActionMenuOpen ? (
+            <span className="note-inline-media-action-popover">{renderMediaActions(true)}</span>
+          ) : null}
         </span>
       </figcaption>
+      <button
+        type="button"
+        className="note-inline-media-resize-handle"
+        disabled={actionsDisabled}
+        onPointerDown={handleResizePointerDown}
+        onPointerMove={handleResizePointerMove}
+        onPointerUp={handleResizePointerEnd}
+        onPointerCancel={handleResizePointerEnd}
+        aria-label="Spremeni velikost fotografije"
+        title="Spremeni velikost fotografije"
+      />
       {isPreviewOpen ? (
         <ViewportPortal>
           <div
@@ -998,6 +1285,7 @@ function ReadAlongMarkdown({
   onBlockSelect,
   onMediaBlockSelect,
   onMoveMediaBlock,
+  onLayoutMediaBlock,
   onDeleteMedia,
 }: {
   document: NoteTtsDocument;
@@ -1011,6 +1299,7 @@ function ReadAlongMarkdown({
   onBlockSelect?: (blockId: string) => void;
   onMediaBlockSelect?: (blockId: string) => void;
   onMoveMediaBlock?: (blockId: string, direction: "up" | "down") => void;
+  onLayoutMediaBlock?: (blockId: string, update: NoteMediaBlockLayoutUpdate) => void;
   onDeleteMedia?: (mediaId: string) => void;
 }) {
   const wordAnnotations = useMemo(() => {
@@ -1069,6 +1358,7 @@ function ReadAlongMarkdown({
                 deleting={deletingMediaIds?.has(mediaBlock.mediaId) ?? false}
                 onSelect={onMediaBlockSelect}
                 onMove={onMoveMediaBlock}
+                onLayoutChange={onLayoutMediaBlock}
                 onDelete={onDeleteMedia}
               />
             ))}
@@ -1094,6 +1384,7 @@ export function NoteReadAloud({
   onBlockSelect,
   onMediaBlockSelect,
   onMoveMediaBlock,
+  onLayoutMediaBlock,
   onDeleteMedia,
 }: {
   lectureId: string;
@@ -1110,6 +1401,7 @@ export function NoteReadAloud({
   onBlockSelect?: (blockId: string) => void;
   onMediaBlockSelect?: (blockId: string) => void;
   onMoveMediaBlock?: (blockId: string, direction: "up" | "down") => void;
+  onLayoutMediaBlock?: (blockId: string, update: NoteMediaBlockLayoutUpdate) => void;
   onDeleteMedia?: (mediaId: string) => void;
 }) {
   const document = useMemo(() => parseNoteTtsDocument(content), [content]);
@@ -2101,6 +2393,7 @@ export function NoteReadAloud({
           onBlockSelect={onBlockSelect}
           onMediaBlockSelect={onMediaBlockSelect}
           onMoveMediaBlock={handleMoveMediaBlock}
+          onLayoutMediaBlock={onLayoutMediaBlock}
           onDeleteMedia={onDeleteMedia}
         />
       </div>

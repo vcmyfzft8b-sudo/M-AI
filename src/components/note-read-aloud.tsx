@@ -902,13 +902,15 @@ function InlineNoteMedia({
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [liveLayout, setLiveLayout] = useState<NoteMediaBlockLayoutUpdate | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
   const mediaRef = useRef<HTMLElement | null>(null);
   const liveLayoutRef = useRef<NoteMediaBlockLayoutUpdate | null>(null);
   const resizeSessionRef = useRef<NoteMediaResizeSession | null>(null);
   const xDragSessionRef = useRef<NoteMediaXDragSession | null>(null);
   const suppressClickRef = useRef(false);
   const isSavingPreview = block.media?.signedUrl.startsWith("blob:") ?? false;
-  const actionsDisabled = deleting || isSavingPreview;
+  const handleDisabled = deleting || isSavingPreview;
+  const actionsDisabled = handleDisabled || isResizing;
   const storedWidthPercent = liveLayout?.widthPercent ?? block.widthPercent;
   const storedXPercent = liveLayout?.xPercent ?? block.xPercent;
   const widthPercent = Math.min(
@@ -940,7 +942,7 @@ function InlineNoteMedia({
   };
 
   const handleResizePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (actionsDisabled) {
+    if (handleDisabled) {
       return;
     }
 
@@ -955,6 +957,8 @@ function InlineNoteMedia({
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     onSelect?.(block.id);
+    setIsActionMenuOpen(false);
+    setIsResizing(true);
 
     const mediaRect = mediaElement.getBoundingClientRect();
     const parentRect = parentElement.getBoundingClientRect();
@@ -978,6 +982,7 @@ function InlineNoteMedia({
       resizeSessionRef.current = null;
       event.currentTarget.releasePointerCapture(event.pointerId);
       commitLayout(liveLayoutRef.current ?? { widthPercent, xPercent });
+      setIsResizing(false);
       return;
     }
 
@@ -1013,6 +1018,7 @@ function InlineNoteMedia({
     resizeSessionRef.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
     commitLayout(liveLayoutRef.current ?? { widthPercent, xPercent });
+    setIsResizing(false);
   };
 
   const handleMediaPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
@@ -1104,7 +1110,7 @@ function InlineNoteMedia({
     <>
       <button
         type="button"
-        disabled={actionsDisabled}
+        disabled={handleDisabled}
         onClick={(event) => {
           event.stopPropagation();
           setIsActionMenuOpen(false);
@@ -1208,8 +1214,12 @@ function InlineNoteMedia({
           <button
             type="button"
             className="note-inline-media-menu-trigger"
+            disabled={actionsDisabled}
             onClick={(event) => {
               event.stopPropagation();
+              if (actionsDisabled) {
+                return;
+              }
               setIsActionMenuOpen((current) => !current);
             }}
             aria-label="Možnosti fotografije"
@@ -1226,7 +1236,7 @@ function InlineNoteMedia({
       <button
         type="button"
         className="note-inline-media-resize-handle"
-        disabled={actionsDisabled}
+        disabled={handleDisabled}
         onPointerDown={handleResizePointerDown}
         onPointerMove={handleResizePointerMove}
         onPointerUp={handleResizePointerEnd}
@@ -1422,6 +1432,7 @@ export function NoteReadAloud({
   const ignoreScrollUntilRef = useRef(0);
   const pendingArrowMovedMediaBlockIdRef = useRef<string | null>(null);
   const pendingArrowMoveFromRectRef = useRef<DOMRect | null>(null);
+  const pendingArrowMoveCloneRef = useRef<HTMLElement | null>(null);
   const prefetchedChunksRef = useRef(new Map<string, TtsChunkResponse>());
   const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse | null>>());
   const prefetchQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1465,7 +1476,30 @@ export function NoteReadAloud({
         `[data-note-media-block-id="${blockId}"]`,
       );
 
+      pendingArrowMoveCloneRef.current?.remove();
       pendingArrowMoveFromRectRef.current = mediaElement?.getBoundingClientRect() ?? null;
+
+      if (mediaElement && pendingArrowMoveFromRectRef.current) {
+        const clone = mediaElement.cloneNode(true) as HTMLElement;
+        const rect = pendingArrowMoveFromRectRef.current;
+        clone.classList.add("note-inline-media-moving-clone");
+        clone.removeAttribute("data-note-media-block-id");
+        clone.style.position = "fixed";
+        clone.style.left = `${rect.left}px`;
+        clone.style.top = `${rect.top}px`;
+        clone.style.width = `${rect.width}px`;
+        clone.style.height = `${rect.height}px`;
+        clone.style.margin = "0";
+        clone.style.pointerEvents = "none";
+        clone.style.zIndex = "120";
+        clone.style.transformOrigin = "top left";
+        clone.style.willChange = "transform";
+        window.document.body.appendChild(clone);
+        pendingArrowMoveCloneRef.current = clone;
+      } else {
+        pendingArrowMoveCloneRef.current = null;
+      }
+
       pendingArrowMovedMediaBlockIdRef.current = blockId;
       ignoreScrollUntilRef.current = Date.now() + 900;
       onMoveMediaBlock?.(blockId, direction);
@@ -1482,22 +1516,29 @@ export function NoteReadAloud({
 
     if (!renderedMediaBlocks.some((block) => block.id === pendingBlockId)) {
       pendingArrowMovedMediaBlockIdRef.current = null;
+      pendingArrowMoveCloneRef.current?.remove();
+      pendingArrowMoveCloneRef.current = null;
       return;
     }
 
     let cleanupTimeout = 0;
     let animatedElement: HTMLElement | null = null;
+    let animatedClone: HTMLElement | null = null;
     let moveAnimation: Animation | null = null;
 
     const clearAnimatedElementStyles = () => {
-      if (!animatedElement) {
-        return;
+      if (animatedElement) {
+        animatedElement.style.backfaceVisibility = "";
+        animatedElement.style.transformOrigin = "";
+        animatedElement.style.visibility = "";
+        animatedElement.style.willChange = "";
+        animatedElement.style.zIndex = "";
       }
 
-      animatedElement.style.backfaceVisibility = "";
-      animatedElement.style.transformOrigin = "";
-      animatedElement.style.willChange = "";
-      animatedElement.style.zIndex = "";
+      animatedClone?.remove();
+      if (pendingArrowMoveCloneRef.current === animatedClone) {
+        pendingArrowMoveCloneRef.current = null;
+      }
     };
 
     const mediaElement = contentRef.current?.querySelector<HTMLElement>(
@@ -1505,10 +1546,13 @@ export function NoteReadAloud({
     );
 
     if (!mediaElement) {
+      pendingArrowMoveCloneRef.current?.remove();
+      pendingArrowMoveCloneRef.current = null;
       return;
     }
 
     const fromRect = pendingArrowMoveFromRectRef.current;
+    const clone = pendingArrowMoveCloneRef.current;
     const toRect = mediaElement.getBoundingClientRect();
     pendingArrowMovedMediaBlockIdRef.current = null;
     pendingArrowMoveFromRectRef.current = null;
@@ -1520,21 +1564,39 @@ export function NoteReadAloud({
 
       if (Math.abs(deltaX) > 0.5 || Math.abs(deltaY) > 0.5) {
         animatedElement = mediaElement;
+        animatedClone = clone;
         mediaElement.style.backfaceVisibility = "hidden";
         mediaElement.style.transformOrigin = "center center";
-        mediaElement.style.willChange = "transform";
-        mediaElement.style.zIndex = "3";
-        moveAnimation = mediaElement.animate(
-          [
-            {
-              transform: `translate3d(${deltaX}px, ${deltaY}px, 0)`,
-              offset: 0,
-            },
-            {
-              transform: "translate3d(0, 0, 0)",
-              offset: 1,
-            },
-          ],
+        mediaElement.style.visibility = clone ? "hidden" : "";
+
+        const animationTarget = clone ?? mediaElement;
+        if (!clone) {
+          mediaElement.style.willChange = "transform";
+          mediaElement.style.zIndex = "3";
+        }
+
+        moveAnimation = animationTarget.animate(
+          clone
+            ? [
+                {
+                  transform: "translate3d(0, 0, 0)",
+                  offset: 0,
+                },
+                {
+                  transform: `translate3d(${-deltaX}px, ${-deltaY}px, 0)`,
+                  offset: 1,
+                },
+              ]
+            : [
+                {
+                  transform: `translate3d(${deltaX}px, ${deltaY}px, 0)`,
+                  offset: 0,
+                },
+                {
+                  transform: "translate3d(0, 0, 0)",
+                  offset: 1,
+                },
+              ],
           {
             duration: 460,
             easing: "cubic-bezier(0.2, 0, 0, 1)",
@@ -1546,6 +1608,11 @@ export function NoteReadAloud({
         cleanupTimeout = window.setTimeout(() => {
           clearAnimatedElementStyles();
         }, 540);
+      } else {
+        clone?.remove();
+        if (pendingArrowMoveCloneRef.current === clone) {
+          pendingArrowMoveCloneRef.current = null;
+        }
       }
     }
 

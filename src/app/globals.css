@@ -3791,6 +3791,10 @@ select:disabled {
   will-change: transform;
 }
 
+.dashboard-note-swipe-row.is-dragging .dashboard-note-card-surface {
+  transition: none;
+}
+
 .dashboard-note-actions {
   position: absolute;
   inset: 0 0 0 auto;

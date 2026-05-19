@@ -289,7 +289,7 @@ const NoteRow = memo(function NoteRow({
     <div
       className={`ios-row-note-card dashboard-note-swipe-row ${
         isMenuOpen ? "menu-open" : ""
-      } ${isSwipeActive ? "is-swiping" : ""}`}
+      } ${isSwipeActive ? "is-swiping" : ""} ${dragState ? "is-dragging" : ""}`}
     >
       <div ref={isMenuOpen ? attachMenuRef : undefined} className="dashboard-note-actions">
         <button

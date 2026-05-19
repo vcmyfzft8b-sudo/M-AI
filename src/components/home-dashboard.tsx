@@ -335,8 +335,6 @@ const NoteRow = memo(function NoteRow({
         style={
           {
             "--dashboard-note-swipe-offset": `${noteOffset}px`,
-            borderTopLeftRadius: isSwipeActive ? "0px" : undefined,
-            borderBottomLeftRadius: isSwipeActive ? "0px" : undefined,
           } as CSSProperties
         }
       >

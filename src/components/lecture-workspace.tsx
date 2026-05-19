@@ -4714,8 +4714,6 @@ export function LectureWorkspace({
                                 style={
                                   {
                                     "--study-manager-swipe-offset": `${itemOffset}px`,
-                                    borderTopLeftRadius: isItemSwipeActive ? "0px" : undefined,
-                                    borderBottomLeftRadius: isItemSwipeActive ? "0px" : undefined,
                                   } as CSSProperties
                                 }
                               >
@@ -4860,8 +4858,6 @@ export function LectureWorkspace({
                                 style={
                                   {
                                     "--study-manager-swipe-offset": `${itemOffset}px`,
-                                    borderTopLeftRadius: isItemSwipeActive ? "0px" : undefined,
-                                    borderBottomLeftRadius: isItemSwipeActive ? "0px" : undefined,
                                   } as CSSProperties
                                 }
                               >

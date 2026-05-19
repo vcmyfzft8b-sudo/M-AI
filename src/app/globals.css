@@ -2672,7 +2672,7 @@ select:disabled {
   gap: 1.1rem;
   max-width: 1660px;
   margin: 0 auto;
-  overflow-x: clip;
+  overflow-x: visible;
   padding-bottom: calc(env(safe-area-inset-bottom) + 5.5rem);
 }
 
@@ -3789,11 +3789,6 @@ select:disabled {
   touch-action: pan-y;
   user-select: none;
   will-change: transform;
-}
-
-.dashboard-note-swipe-row.is-swiping .dashboard-note-card-surface {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
 }
 
 .dashboard-note-actions {
@@ -5363,11 +5358,6 @@ select:disabled {
   transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
   touch-action: pan-y;
   will-change: transform;
-}
-
-.study-manager-item.is-swiping .study-manager-item-surface {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
 }
 
 .study-manager-item-content {

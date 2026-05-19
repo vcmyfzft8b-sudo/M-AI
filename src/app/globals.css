@@ -3739,6 +3739,14 @@ select:disabled {
   contain: layout style;
 }
 
+.ios-row-note-card.dashboard-note-swipe-row {
+  display: block;
+  overflow: hidden;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
 .ios-row-note-card:hover {
   transform: translate3d(0, -0.5px, 0);
   box-shadow: var(--shadow-soft);
@@ -3763,10 +3771,36 @@ select:disabled {
   -webkit-tap-highlight-color: transparent;
 }
 
-.dashboard-note-actions {
+.dashboard-note-card-surface {
   position: relative;
-  flex-shrink: 0;
-  z-index: 5;
+  z-index: 1;
+  width: 100%;
+  min-height: calc(3.5rem + 2.7rem);
+  padding: 1.35rem 1.7rem;
+  border: 1px solid color-mix(in srgb, var(--separator) 65%, transparent);
+  border-radius: inherit;
+  background-color: var(--surface-solid);
+  box-shadow: var(--shadow-soft);
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transform: translateX(var(--dashboard-note-swipe-offset, 0px));
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  touch-action: pan-y;
+  user-select: none;
+  will-change: transform;
+}
+
+.dashboard-note-actions {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  width: 8rem;
+  padding-left: 0.45rem;
 }
 
 .ios-row-note-card .ios-row-icon {
@@ -3834,6 +3868,19 @@ select:disabled {
   height: 2.7rem;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+
+.dashboard-note-swipe-row .dashboard-note-menu-button {
+  flex: 1 1 0;
+  width: auto;
+  height: 100%;
+  min-height: 100%;
+  border-radius: 18px;
+}
+
+.dashboard-note-menu-button.danger {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 14%, var(--surface-muted));
 }
 
 .dashboard-note-menu-button::before {
@@ -5106,7 +5153,7 @@ select:disabled {
 
 .study-manager-header,
 .study-manager-form-header,
-.study-manager-item {
+.study-manager-item-surface {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -5227,11 +5274,32 @@ select:disabled {
 }
 
 .study-manager-item {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.study-manager-item-surface {
+  position: relative;
+  z-index: 1;
   align-items: flex-start;
+  min-width: 0;
   padding: 0.82rem;
   border: 1px solid var(--separator);
-  border-radius: 8px;
+  border-radius: inherit;
   background: var(--surface-muted);
+  transform: translateX(var(--study-manager-swipe-offset, 0px));
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  touch-action: pan-y;
+  will-change: transform;
+}
+
+.study-manager-item-content {
+  min-width: 0;
 }
 
 .study-manager-item strong,
@@ -5256,9 +5324,28 @@ select:disabled {
 }
 
 .study-manager-item-actions {
+  position: absolute;
+  inset: 0 0 0 auto;
   display: inline-flex;
+  align-items: stretch;
+  justify-content: flex-end;
   gap: 0.35rem;
-  flex: 0 0 auto;
+  width: 4.6rem;
+  padding-left: 0.4rem;
+}
+
+.study-manager-item-actions button {
+  flex: 1 1 0;
+  height: 100%;
+  min-height: 100%;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-muted) 82%, var(--canvas));
+}
+
+.study-manager-item-actions button.danger {
+  min-width: 0;
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 12%, var(--surface-muted));
 }
 
 .lecture-study-mode-switch {
@@ -10568,6 +10655,10 @@ select:disabled {
     padding: 1.13rem 1rem;
   }
 
+  .ios-row-note-card.dashboard-note-swipe-row {
+    padding: 0;
+  }
+
   .ios-row-note-card:active,
   .dashboard-note-menu-button:active,
   .library-folder-trigger:active,
@@ -10580,6 +10671,11 @@ select:disabled {
     gap: 0.75rem;
     min-height: 3.82rem;
     padding: 0.14rem 0;
+  }
+
+  .dashboard-note-card-surface {
+    min-height: calc(3.82rem + 2.26rem);
+    padding: 1.13rem 1rem;
   }
 
   .ios-row-note-card .ios-row-icon {
@@ -11122,8 +11218,21 @@ select:disabled {
 
   .study-manager-item {
     border-radius: 18px;
+  }
+
+  .study-manager-item-surface {
+    min-height: 5rem;
     border-color: color-mix(in srgb, var(--separator) 72%, transparent);
     background: color-mix(in srgb, var(--surface-muted) 88%, var(--surface-solid));
+  }
+
+  .study-manager-item-actions {
+    width: 4.8rem;
+  }
+
+  .study-manager-item-actions button {
+    min-width: 4.4rem;
+    border-radius: 16px;
   }
 
   .mobile-draggable-sheet {

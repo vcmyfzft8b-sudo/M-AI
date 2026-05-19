@@ -13,6 +13,8 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -22,7 +24,6 @@ import { NoteSourceModal, type NoteSourceMode } from "@/components/note-source-m
 import { StatusBadge } from "@/components/status-badge";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { LibraryFolderMenu } from "@/components/library-folder-menu";
-import { InstantLink } from "@/components/instant-link";
 import { ViewportPortal } from "@/components/viewport-portal";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
 import { getEffectiveLectureSourceType } from "@/lib/lecture-source-metadata";
@@ -61,6 +62,16 @@ const QUICK_ACTIONS = [
 ] as const;
 
 const DASHBOARD_MUTATION_TIMEOUT_MS = 18_000;
+const DASHBOARD_NOTE_ACTION_REVEAL_PX = 132;
+
+type DashboardNoteDragState = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startOffset: number;
+  offset: number;
+  isDragging: boolean;
+};
 
 async function fetchDashboardMutation(
   input: Parameters<typeof fetch>[0],
@@ -151,13 +162,170 @@ const NoteRow = memo(function NoteRow({
   onOpenDelete,
   attachMenuRef,
 }: NoteRowProps) {
+  const router = useRouter();
   const sourceType = getEffectiveLectureSourceType(lecture);
+  const lectureHref = `/app/lectures/${lecture.id}`;
+  const dragRef = useRef<DashboardNoteDragState | null>(null);
+  const suppressClickRef = useRef(false);
+  const [dragState, setDragState] = useState<DashboardNoteDragState | null>(null);
+  const noteOffset = dragState?.offset ?? (isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0);
+
+  const finishDrag = useCallback((pointerId: number) => {
+    const current = dragRef.current;
+
+    if (!current || current.pointerId !== pointerId) {
+      return;
+    }
+
+    const shouldOpen = current.offset < -DASHBOARD_NOTE_ACTION_REVEAL_PX / 2;
+
+    if (shouldOpen && !isMenuOpen) {
+      onToggleMenu(lecture.id);
+    } else if (!shouldOpen && isMenuOpen) {
+      onToggleMenu(lecture.id);
+    }
+
+    dragRef.current = null;
+    setDragState(null);
+  }, [isMenuOpen, lecture.id, onToggleMenu]);
+
+  useEffect(() => {
+    const current = dragRef.current;
+
+    if (!current) {
+      return;
+    }
+
+    function handleWindowPointerEnd(event: PointerEvent) {
+      finishDrag(event.pointerId);
+    }
+
+    window.addEventListener("pointerup", handleWindowPointerEnd);
+    window.addEventListener("pointercancel", handleWindowPointerEnd);
+
+    return () => {
+      window.removeEventListener("pointerup", handleWindowPointerEnd);
+      window.removeEventListener("pointercancel", handleWindowPointerEnd);
+    };
+  }, [dragState, finishDrag]);
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+
+    const nextDrag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startOffset: isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0,
+      offset: isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0,
+      isDragging: false,
+    };
+    dragRef.current = nextDrag;
+    suppressClickRef.current = false;
+    setDragState(nextDrag);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    router.prefetch(lectureHref);
+  }
+
+  function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
+    const current = dragRef.current;
+
+    if (!current || current.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const deltaX = event.clientX - current.startX;
+    const deltaY = event.clientY - current.startY;
+    const isHorizontalDrag =
+      current.isDragging || (Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY));
+
+    if (!isHorizontalDrag) {
+      return;
+    }
+
+    event.preventDefault();
+    suppressClickRef.current = true;
+
+    const nextDrag = {
+      ...current,
+      offset: Math.min(
+        0,
+        Math.max(-DASHBOARD_NOTE_ACTION_REVEAL_PX, current.startOffset + deltaX),
+      ),
+      isDragging: true,
+    };
+    dragRef.current = nextDrag;
+    setDragState(nextDrag);
+  }
+
+  function handlePointerEnd(event: ReactPointerEvent<HTMLElement>) {
+    finishDrag(event.pointerId);
+  }
+
+  function handleSurfaceClick(event: ReactMouseEvent<HTMLElement>) {
+    if (suppressClickRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      suppressClickRef.current = false;
+      return;
+    }
+
+    router.push(lectureHref);
+  }
+
+  function handleSurfaceKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    router.push(lectureHref);
+  }
 
   return (
-    <div className={`ios-row-note-card ${isMenuOpen ? "menu-open" : ""}`}>
-      <InstantLink
-        href={`/app/lectures/${lecture.id}`}
-        className="ios-row-note-card-link"
+    <div className={`ios-row-note-card dashboard-note-swipe-row ${isMenuOpen ? "menu-open" : ""}`}>
+      <div ref={isMenuOpen ? attachMenuRef : undefined} className="dashboard-note-actions">
+        <button
+          type="button"
+          aria-label={`Preimenuj ${lecture.title ?? "zapisek"}`}
+          disabled={isBusy}
+          onClick={() => onOpenRename(lecture)}
+          className="dashboard-note-menu-button"
+        >
+          <EmojiIcon symbol="✏️" size="1rem" />
+        </button>
+        <button
+          type="button"
+          aria-label={`Izbriši ${lecture.title ?? "zapisek"}`}
+          disabled={isBusy}
+          onClick={() => onOpenDelete(lecture)}
+          className="dashboard-note-menu-button danger"
+        >
+          {isBusy ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <EmojiIcon symbol="🗑️" size="1rem" />
+          )}
+        </button>
+      </div>
+      <div
+        role="link"
+        tabIndex={0}
+        className="ios-row-note-card-link dashboard-note-card-surface"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerEnd}
+        onLostPointerCapture={handlePointerEnd}
+        onClick={handleSurfaceClick}
+        onKeyDown={handleSurfaceKeyDown}
+        style={
+          {
+            "--dashboard-note-swipe-offset": `${noteOffset}px`,
+          } as CSSProperties
+        }
       >
         <div className="ios-row-icon" style={{ backgroundColor: "var(--surface-muted)" }}>
           <SourceIcon sourceType={sourceType} />
@@ -173,48 +341,6 @@ const NoteRow = memo(function NoteRow({
         <div className="flex items-center gap-3">
           {lecture.status !== "ready" && <StatusBadge status={lecture.status} />}
         </div>
-      </InstantLink>
-
-      <div ref={isMenuOpen ? attachMenuRef : undefined} className="dashboard-note-actions">
-        <button
-          type="button"
-          aria-label={`Odpri dejanja za ${lecture.title ?? "zapisek"}`}
-          aria-expanded={isMenuOpen}
-          disabled={isBusy}
-          onClick={() => onToggleMenu(lecture.id)}
-          className={`dashboard-note-menu-button ${isMenuOpen ? "open" : ""}`}
-        >
-          {isBusy ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <EmojiIcon symbol="⋯" size="1rem" />
-          )}
-        </button>
-
-        {isMenuOpen ? (
-          <div className="dashboard-note-menu">
-            <button
-              type="button"
-              onClick={() => onOpenRename(lecture)}
-              className="dashboard-note-menu-item"
-              aria-label="Preimenuj zapisek"
-              title="Preimenuj zapisek"
-            >
-              <EmojiIcon symbol="✏️" size="0.95rem" />
-              <span>Preimenuj</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onOpenDelete(lecture)}
-              className="dashboard-note-menu-item danger"
-              aria-label="Izbriši zapisek"
-              title="Izbriši zapisek"
-            >
-              <EmojiIcon symbol="🗑️" size="0.95rem" />
-              <span>Izbriši</span>
-            </button>
-          </div>
-        ) : null}
       </div>
     </div>
   );

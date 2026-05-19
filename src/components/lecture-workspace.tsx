@@ -98,6 +98,16 @@ type FlashcardDragSession = {
   width: number;
 };
 
+type StudyManagerItemDragState = {
+  id: string;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startOffset: number;
+  offset: number;
+  isDragging: boolean;
+};
+
 type FlashcardExitStart = {
   xPercent: number;
   yPercent: number;
@@ -203,6 +213,7 @@ const NETWORK_REQUEST_ERROR_MESSAGE = "Povezava je bila prekinjena. Poskusi znov
 const FAST_DETAIL_POLL_INTERVAL_MS = 5000;
 const MIN_DETAIL_REFRESH_INTERVAL_MS = 3000;
 const STUDY_SESSION_SAVE_DEBOUNCE_MS = 5000;
+const STUDY_MANAGER_ACTION_REVEAL_PX = 78;
 
 function ignoreBackgroundRequestError() {
   return null;
@@ -909,16 +920,27 @@ function sanitizeFlashcardSessionState(
     reviewQueue = flashcardIds;
   }
 
+  if (!roundSummary) {
+    const queuedIds = new Set([...reviewQueue, ...repeatQueue]);
+    const missingFlashcardIds = flashcardIds.filter((id) => !queuedIds.has(id));
+    reviewQueue = [...reviewQueue, ...missingFlashcardIds];
+  }
+
   if (flashcardIds.length > 0 && reviewQueue.length === 0 && !roundSummary) {
     return fallback;
   }
+
+  const cycleCardCount = Math.max(
+    reviewQueue.length,
+    Math.min(Math.max(0, session.cycleCardCount), flashcardIds.length),
+  );
 
   return {
     reviewQueue,
     repeatQueue,
     activeFlashcardIndex,
     reviewCycle: Math.max(1, session.reviewCycle),
-    cycleCardCount: Math.max(0, session.cycleCardCount),
+    cycleCardCount,
     roundSummary,
     sessionResults,
   };
@@ -994,18 +1016,30 @@ function sanitizeQuizSessionState(
       }
     : null;
 
-  if (questionIds.length > 0 && quizQueue.length === 0 && !roundSummary) {
+  const nextQuizQueue = !roundSummary
+    ? [
+        ...quizQueue,
+        ...questionIds.filter((id) => !quizQueue.includes(id)),
+      ]
+    : quizQueue;
+
+  if (questionIds.length > 0 && nextQuizQueue.length === 0 && !roundSummary) {
     return fallback;
   }
 
+  const quizRoundCount = Math.max(
+    nextQuizQueue.length,
+    Math.min(Math.max(0, session.quizRoundCount), questionIds.length),
+  );
+
   return {
-    quizQueue,
+    quizQueue: nextQuizQueue,
     quizRound: Math.max(1, session.quizRound),
-    quizRoundCount: Math.max(0, session.quizRoundCount),
+    quizRoundCount,
     roundSummary,
     activeQuestionIndex:
-      quizQueue.length > 0
-        ? Math.min(Math.max(0, session.activeQuestionIndex), quizQueue.length - 1)
+      nextQuizQueue.length > 0
+        ? Math.min(Math.max(0, session.activeQuestionIndex), nextQuizQueue.length - 1)
         : 0,
     selections,
     optionOrders: {
@@ -1136,9 +1170,17 @@ export function LectureWorkspace({
   const studyManagerDragOffsetRef = useRef(0);
   const studyManagerSuppressClickRef = useRef(false);
   const studyManagerCloseTimerRef = useRef<number | null>(null);
+  const studyManagerItemSuppressClickRef = useRef(false);
+  const studyManagerItemDragRef = useRef<StudyManagerItemDragState | null>(null);
+  const deletingStudyItemIdsRef = useRef(new Set<string>());
   const [isStudyManagerOpen, setIsStudyManagerOpen] = useState(false);
   const [studyManagerSearch, setStudyManagerSearch] = useState("");
   const [studyManagerDragOffset, setStudyManagerDragOffset] = useState(0);
+  const [studyManagerItemDrag, setStudyManagerItemDrag] =
+    useState<StudyManagerItemDragState | null>(null);
+  const [openStudyManagerActionItemId, setOpenStudyManagerActionItemId] = useState<string | null>(
+    null,
+  );
   const [editingFlashcardId, setEditingFlashcardId] = useState<string | null>(null);
   const [flashcardForm, setFlashcardForm] = useState<FlashcardFormState>(
     createEmptyFlashcardForm,
@@ -1148,6 +1190,9 @@ export function LectureWorkspace({
     createEmptyQuizQuestionForm,
   );
   const [isSavingStudyItem, setIsSavingStudyItem] = useState(false);
+  const [deletingStudyItemIds, setDeletingStudyItemIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [isFlashcardFlipped, setIsFlashcardFlipped] = useState(false);
   const [activeStudyView, setActiveStudyView] = useState<StudyMaterialView>(
     getInitialStudyView(initialDetail),
@@ -3083,7 +3128,10 @@ export function LectureWorkspace({
     studyManagerDragStartYRef.current = null;
     studyManagerDragOffsetRef.current = 0;
     studyManagerSuppressClickRef.current = false;
+    studyManagerItemDragRef.current = null;
     setStudyManagerDragOffset(0);
+    setStudyManagerItemDrag(null);
+    setOpenStudyManagerActionItemId(null);
     setIsStudyManagerOpen(false);
   }, []);
 
@@ -3132,6 +3180,8 @@ export function LectureWorkspace({
     }
 
     const target = event.target;
+    const swipeItemTarget =
+      target instanceof Element ? target.closest(".study-manager-item-surface") : null;
     const interactiveTarget =
       target instanceof Element
         ? target.closest("button, a, input, textarea, select, .app-close-button")
@@ -3141,6 +3191,10 @@ export function LectureWorkspace({
 
     studyManagerSuppressClickRef.current = false;
     studyManagerDragStartYRef.current = null;
+
+    if (swipeItemTarget) {
+      return;
+    }
 
     if (interactiveTarget && !dragHandleTarget) {
       return;
@@ -3205,13 +3259,120 @@ export function LectureWorkspace({
     };
   }, [animateCloseStudyManager, isStudyManagerOpen]);
 
+  function getStudyManagerItemOffset(itemId: string) {
+    if (studyManagerItemDrag?.id === itemId) {
+      return studyManagerItemDrag.offset;
+    }
+
+    return openStudyManagerActionItemId === itemId ? -STUDY_MANAGER_ACTION_REVEAL_PX : 0;
+  }
+
+  function handleStudyManagerItemPointerDown(
+    event: ReactPointerEvent<HTMLElement>,
+    itemId: string,
+  ) {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+
+    const target = event.target;
+
+    if (
+      target instanceof Element &&
+      target.closest("button, a, input, textarea, select")
+    ) {
+      return;
+    }
+
+    const nextDrag = {
+      id: itemId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startOffset: openStudyManagerActionItemId === itemId ? -STUDY_MANAGER_ACTION_REVEAL_PX : 0,
+      offset: openStudyManagerActionItemId === itemId ? -STUDY_MANAGER_ACTION_REVEAL_PX : 0,
+      isDragging: false,
+    };
+    studyManagerItemDragRef.current = nextDrag;
+    setStudyManagerItemDrag(nextDrag);
+    studyManagerItemSuppressClickRef.current = false;
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleStudyManagerItemPointerMove(
+    event: ReactPointerEvent<HTMLElement>,
+    itemId: string,
+  ) {
+    const current = studyManagerItemDragRef.current;
+
+    if (!current || current.id !== itemId || current.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const deltaX = event.clientX - current.startX;
+    const deltaY = event.clientY - current.startY;
+    const isHorizontalDrag =
+      current.isDragging || (Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY));
+
+    if (!isHorizontalDrag) {
+      return;
+    }
+
+    event.preventDefault();
+    studyManagerItemSuppressClickRef.current = true;
+
+    const nextDrag = {
+      ...current,
+      offset: Math.min(0, Math.max(-STUDY_MANAGER_ACTION_REVEAL_PX, current.startOffset + deltaX)),
+      isDragging: true,
+    };
+    studyManagerItemDragRef.current = nextDrag;
+    setStudyManagerItemDrag(nextDrag);
+  }
+
+  function handleStudyManagerItemPointerEnd(
+    event: ReactPointerEvent<HTMLElement>,
+    itemId: string,
+  ) {
+    const current = studyManagerItemDragRef.current;
+
+    if (!current || current.id !== itemId || current.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const shouldOpen = current.offset < -STUDY_MANAGER_ACTION_REVEAL_PX / 2;
+    setOpenStudyManagerActionItemId(shouldOpen ? itemId : null);
+    studyManagerItemDragRef.current = null;
+    setStudyManagerItemDrag(null);
+  }
+
+  function handleStudyManagerItemClick(
+    event: ReactMouseEvent<HTMLElement>,
+    startEdit: () => void,
+  ) {
+    if (studyManagerItemSuppressClickRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      studyManagerItemSuppressClickRef.current = false;
+      return;
+    }
+
+    startEdit();
+    requestAnimationFrame(() => {
+      const sheet = document.querySelector(".study-manager-sheet");
+      sheet?.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
   function startFlashcardCreate() {
     setEditingFlashcardId(null);
+    setOpenStudyManagerActionItemId(null);
     setFlashcardForm(createEmptyFlashcardForm());
   }
 
   function startFlashcardEdit(flashcard: LectureDetail["flashcards"][number]) {
     setEditingFlashcardId(flashcard.id);
+    setOpenStudyManagerActionItemId(null);
     setFlashcardForm({
       front: flashcard.front,
       back: flashcard.back,
@@ -3222,11 +3383,13 @@ export function LectureWorkspace({
 
   function startQuizQuestionCreate() {
     setEditingQuizQuestionId(null);
+    setOpenStudyManagerActionItemId(null);
     setQuizQuestionForm(createEmptyQuizQuestionForm());
   }
 
   function startQuizQuestionEdit(question: LectureDetail["quizQuestions"][number]) {
     setEditingQuizQuestionId(question.id);
+    setOpenStudyManagerActionItemId(null);
     setQuizQuestionForm({
       prompt: question.prompt,
       options: [
@@ -3302,6 +3465,13 @@ export function LectureWorkspace({
   }
 
   async function handleDeleteFlashcard(flashcardId: string) {
+    if (deletingStudyItemIdsRef.current.has(flashcardId)) {
+      return;
+    }
+
+    deletingStudyItemIdsRef.current.add(flashcardId);
+    setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
+    setOpenStudyManagerActionItemId(null);
     setStudyError(null);
     setIsSavingStudyItem(true);
 
@@ -3325,6 +3495,8 @@ export function LectureWorkspace({
     } catch (error) {
       setStudyError(getRequestErrorMessage(error, "Kartice ni bilo mogoče izbrisati."));
     } finally {
+      deletingStudyItemIdsRef.current.delete(flashcardId);
+      setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
       setIsSavingStudyItem(false);
     }
   }
@@ -3396,6 +3568,13 @@ export function LectureWorkspace({
   }
 
   async function handleDeleteQuizQuestion(questionId: string) {
+    if (deletingStudyItemIdsRef.current.has(questionId)) {
+      return;
+    }
+
+    deletingStudyItemIdsRef.current.add(questionId);
+    setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
+    setOpenStudyManagerActionItemId(null);
     setStudyError(null);
     setIsSavingStudyItem(true);
 
@@ -3423,6 +3602,8 @@ export function LectureWorkspace({
     } catch (error) {
       setStudyError(getRequestErrorMessage(error, "Vprašanja ni bilo mogoče izbrisati."));
     } finally {
+      deletingStudyItemIdsRef.current.delete(questionId);
+      setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
       setIsSavingStudyItem(false);
     }
   }
@@ -3691,7 +3872,10 @@ export function LectureWorkspace({
         studyManagerDragStartYRef.current = null;
         studyManagerDragOffsetRef.current = 0;
         studyManagerSuppressClickRef.current = false;
+        studyManagerItemDragRef.current = null;
         setStudyManagerDragOffset(0);
+        setStudyManagerItemDrag(null);
+        setOpenStudyManagerActionItemId(null);
         setIsStudyManagerOpen(true);
         setStudyManagerSearch("");
         if (activeStudyView === "flashcards") {
@@ -4450,7 +4634,7 @@ export function LectureWorkspace({
                           ) : null}
                         </div>
                         <label>
-                          <span>Spredaj</span>
+                          <span>Vprašanje</span>
                           <textarea
                             value={flashcardForm.front}
                             onChange={(event) =>
@@ -4461,7 +4645,7 @@ export function LectureWorkspace({
                           />
                         </label>
                         <label>
-                          <span>Zadaj</span>
+                          <span>Odgovor</span>
                           <textarea
                             value={flashcardForm.back}
                             onChange={(event) =>
@@ -4478,27 +4662,62 @@ export function LectureWorkspace({
                       </form>
 
                       <div className="study-manager-list">
-                        {managedFlashcards.map((flashcard) => (
-                          <article key={flashcard.id} className="study-manager-item">
-                            <div>
-                              <strong>{flashcard.front}</strong>
-                              <p>{flashcard.back}</p>
-                            </div>
-                            <div className="study-manager-item-actions">
-                              <button type="button" onClick={() => startFlashcardEdit(flashcard)}>
-                                <Pencil aria-hidden="true" />
-                              </button>
-                              <button
-                                type="button"
-                                className="danger"
-                                onClick={() => void handleDeleteFlashcard(flashcard.id)}
-                                disabled={isSavingStudyItem}
+                        {managedFlashcards.map((flashcard) => {
+                          const isDeleting = deletingStudyItemIds.has(flashcard.id);
+                          const itemOffset = getStudyManagerItemOffset(flashcard.id);
+
+                          return (
+                            <article
+                              key={flashcard.id}
+                              className="study-manager-item"
+                              data-swipe-open={openStudyManagerActionItemId === flashcard.id ? "true" : undefined}
+                            >
+                              <div className="study-manager-item-actions" aria-label="Dejanja kartice">
+                                <button
+                                  type="button"
+                                  className="danger"
+                                  onClick={() => void handleDeleteFlashcard(flashcard.id)}
+                                  disabled={isSavingStudyItem}
+                                  aria-busy={isDeleting}
+                                >
+                                  {isDeleting ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 aria-hidden="true" />
+                                  )}
+                                </button>
+                              </div>
+                              <div
+                                className="study-manager-item-surface"
+                                onPointerDown={(event) =>
+                                  handleStudyManagerItemPointerDown(event, flashcard.id)
+                                }
+                                onPointerMove={(event) =>
+                                  handleStudyManagerItemPointerMove(event, flashcard.id)
+                                }
+                                onPointerUp={(event) =>
+                                  handleStudyManagerItemPointerEnd(event, flashcard.id)
+                                }
+                                onPointerCancel={(event) =>
+                                  handleStudyManagerItemPointerEnd(event, flashcard.id)
+                                }
+                                onClick={(event) =>
+                                  handleStudyManagerItemClick(event, () => startFlashcardEdit(flashcard))
+                                }
+                                style={
+                                  {
+                                    "--study-manager-swipe-offset": `${itemOffset}px`,
+                                  } as CSSProperties
+                                }
                               >
-                                <Trash2 aria-hidden="true" />
-                              </button>
-                            </div>
-                          </article>
-                        ))}
+                                <div className="study-manager-item-content">
+                                  <strong>{flashcard.front}</strong>
+                                  <p>{flashcard.back}</p>
+                                </div>
+                              </div>
+                            </article>
+                          );
+                        })}
                       </div>
                     </>
                   ) : (
@@ -4579,27 +4798,62 @@ export function LectureWorkspace({
                       </form>
 
                       <div className="study-manager-list">
-                        {managedQuizQuestions.map((question) => (
-                          <article key={question.id} className="study-manager-item">
-                            <div>
-                              <strong>{question.prompt}</strong>
-                              <p>{question.options[question.correct_option_idx] ?? question.options[0]}</p>
-                            </div>
-                            <div className="study-manager-item-actions">
-                              <button type="button" onClick={() => startQuizQuestionEdit(question)}>
-                                <Pencil aria-hidden="true" />
-                              </button>
-                              <button
-                                type="button"
-                                className="danger"
-                                onClick={() => void handleDeleteQuizQuestion(question.id)}
-                                disabled={isSavingStudyItem}
+                        {managedQuizQuestions.map((question) => {
+                          const isDeleting = deletingStudyItemIds.has(question.id);
+                          const itemOffset = getStudyManagerItemOffset(question.id);
+
+                          return (
+                            <article
+                              key={question.id}
+                              className="study-manager-item"
+                              data-swipe-open={openStudyManagerActionItemId === question.id ? "true" : undefined}
+                            >
+                              <div className="study-manager-item-actions" aria-label="Dejanja vprašanja">
+                                <button
+                                  type="button"
+                                  className="danger"
+                                  onClick={() => void handleDeleteQuizQuestion(question.id)}
+                                  disabled={isSavingStudyItem}
+                                  aria-busy={isDeleting}
+                                >
+                                  {isDeleting ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 aria-hidden="true" />
+                                  )}
+                                </button>
+                              </div>
+                              <div
+                                className="study-manager-item-surface"
+                                onPointerDown={(event) =>
+                                  handleStudyManagerItemPointerDown(event, question.id)
+                                }
+                                onPointerMove={(event) =>
+                                  handleStudyManagerItemPointerMove(event, question.id)
+                                }
+                                onPointerUp={(event) =>
+                                  handleStudyManagerItemPointerEnd(event, question.id)
+                                }
+                                onPointerCancel={(event) =>
+                                  handleStudyManagerItemPointerEnd(event, question.id)
+                                }
+                                onClick={(event) =>
+                                  handleStudyManagerItemClick(event, () => startQuizQuestionEdit(question))
+                                }
+                                style={
+                                  {
+                                    "--study-manager-swipe-offset": `${itemOffset}px`,
+                                  } as CSSProperties
+                                }
                               >
-                                <Trash2 aria-hidden="true" />
-                              </button>
-                            </div>
-                          </article>
-                        ))}
+                                <div className="study-manager-item-content">
+                                  <strong>{question.prompt}</strong>
+                                  <p>{question.options[question.correct_option_idx] ?? question.options[0]}</p>
+                                </div>
+                              </div>
+                            </article>
+                          );
+                        })}
                       </div>
                     </>
                   )}

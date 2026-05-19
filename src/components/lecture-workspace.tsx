@@ -11,7 +11,6 @@ import {
   Palette,
   Pencil,
   Plus,
-  Trash2,
   Underline,
   X,
 } from "lucide-react";
@@ -4665,11 +4664,16 @@ export function LectureWorkspace({
                         {managedFlashcards.map((flashcard) => {
                           const isDeleting = deletingStudyItemIds.has(flashcard.id);
                           const itemOffset = getStudyManagerItemOffset(flashcard.id);
+                          const isItemSwipeActive = Boolean(
+                            studyManagerItemDrag?.id === flashcard.id ||
+                              openStudyManagerActionItemId === flashcard.id ||
+                              itemOffset < 0,
+                          );
 
                           return (
                             <article
                               key={flashcard.id}
-                              className="study-manager-item"
+                              className={`study-manager-item ${isItemSwipeActive ? "is-swiping" : ""}`}
                               data-swipe-open={openStudyManagerActionItemId === flashcard.id ? "true" : undefined}
                             >
                               <div className="study-manager-item-actions" aria-label="Dejanja kartice">
@@ -4680,11 +4684,14 @@ export function LectureWorkspace({
                                   disabled={isSavingStudyItem}
                                   aria-busy={isDeleting}
                                 >
-                                  {isDeleting ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 aria-hidden="true" />
-                                  )}
+                                  <span className="study-manager-action-circle">
+                                    {isDeleting ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <EmojiIcon symbol="🗑️" size="1.1rem" />
+                                    )}
+                                  </span>
+                                  <span className="study-manager-action-label">Izbriši</span>
                                 </button>
                               </div>
                               <div
@@ -4707,6 +4714,8 @@ export function LectureWorkspace({
                                 style={
                                   {
                                     "--study-manager-swipe-offset": `${itemOffset}px`,
+                                    borderTopLeftRadius: isItemSwipeActive ? "0px" : undefined,
+                                    borderBottomLeftRadius: isItemSwipeActive ? "0px" : undefined,
                                   } as CSSProperties
                                 }
                               >
@@ -4801,11 +4810,16 @@ export function LectureWorkspace({
                         {managedQuizQuestions.map((question) => {
                           const isDeleting = deletingStudyItemIds.has(question.id);
                           const itemOffset = getStudyManagerItemOffset(question.id);
+                          const isItemSwipeActive = Boolean(
+                            studyManagerItemDrag?.id === question.id ||
+                              openStudyManagerActionItemId === question.id ||
+                              itemOffset < 0,
+                          );
 
                           return (
                             <article
                               key={question.id}
-                              className="study-manager-item"
+                              className={`study-manager-item ${isItemSwipeActive ? "is-swiping" : ""}`}
                               data-swipe-open={openStudyManagerActionItemId === question.id ? "true" : undefined}
                             >
                               <div className="study-manager-item-actions" aria-label="Dejanja vprašanja">
@@ -4816,11 +4830,14 @@ export function LectureWorkspace({
                                   disabled={isSavingStudyItem}
                                   aria-busy={isDeleting}
                                 >
-                                  {isDeleting ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 aria-hidden="true" />
-                                  )}
+                                  <span className="study-manager-action-circle">
+                                    {isDeleting ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <EmojiIcon symbol="🗑️" size="1.1rem" />
+                                    )}
+                                  </span>
+                                  <span className="study-manager-action-label">Izbriši</span>
                                 </button>
                               </div>
                               <div
@@ -4843,6 +4860,8 @@ export function LectureWorkspace({
                                 style={
                                   {
                                     "--study-manager-swipe-offset": `${itemOffset}px`,
+                                    borderTopLeftRadius: isItemSwipeActive ? "0px" : undefined,
+                                    borderBottomLeftRadius: isItemSwipeActive ? "0px" : undefined,
                                   } as CSSProperties
                                 }
                               >

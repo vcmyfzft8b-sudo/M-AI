@@ -169,6 +169,7 @@ const NoteRow = memo(function NoteRow({
   const suppressClickRef = useRef(false);
   const [dragState, setDragState] = useState<DashboardNoteDragState | null>(null);
   const noteOffset = dragState?.offset ?? (isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0);
+  const isSwipeActive = Boolean(dragState || isMenuOpen || noteOffset < 0);
 
   const finishDrag = useCallback((pointerId: number) => {
     const current = dragRef.current;
@@ -288,7 +289,7 @@ const NoteRow = memo(function NoteRow({
     <div
       className={`ios-row-note-card dashboard-note-swipe-row ${
         isMenuOpen ? "menu-open" : ""
-      } ${dragState?.isDragging || noteOffset < 0 ? "is-swiping" : ""}`}
+      } ${isSwipeActive ? "is-swiping" : ""}`}
     >
       <div ref={isMenuOpen ? attachMenuRef : undefined} className="dashboard-note-actions">
         <button
@@ -334,6 +335,8 @@ const NoteRow = memo(function NoteRow({
         style={
           {
             "--dashboard-note-swipe-offset": `${noteOffset}px`,
+            borderTopLeftRadius: isSwipeActive ? "0px" : undefined,
+            borderBottomLeftRadius: isSwipeActive ? "0px" : undefined,
           } as CSSProperties
         }
       >

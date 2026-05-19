@@ -364,6 +364,8 @@ export function HomeDashboard({
   const mobileCreateMenuCloseTimerRef = useRef<number | null>(null);
   const dashboardDialogDragStartYRef = useRef<number | null>(null);
   const dashboardDialogDragOffsetRef = useRef(0);
+  const dashboardDialogSuppressClickRef = useRef(false);
+  const dashboardDialogCloseTimerRef = useRef<number | null>(null);
   const [query, setQuery] = useState("");
   const [manualModal, setManualModal] = useState<NoteSourceMode | null>(null);
   const [isMobileCreateMenuOpen, setIsMobileCreateMenuOpen] = useState(false);
@@ -439,29 +441,6 @@ export function HomeDashboard({
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, [openMenuLectureId]);
 
-  useEffect(() => {
-    if (!renameTarget && !deleteTarget) {
-      return;
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key !== "Escape") {
-        return;
-      }
-
-      if (busyLectureId) {
-        return;
-      }
-
-      setRenameTarget(null);
-      setRenameValue("");
-      setDeleteTarget(null);
-    }
-
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [busyLectureId, deleteTarget, renameTarget]);
-
   function closeModal() {
     setManualModal(null);
     if (searchModal) {
@@ -493,6 +472,61 @@ export function HomeDashboard({
       closeMobileCreateMenu();
     }, 180);
   }, [closeMobileCreateMenu]);
+
+  const closeDashboardDialog = useCallback(() => {
+    if (dashboardDialogCloseTimerRef.current !== null) {
+      window.clearTimeout(dashboardDialogCloseTimerRef.current);
+      dashboardDialogCloseTimerRef.current = null;
+    }
+
+    dashboardDialogDragStartYRef.current = null;
+    dashboardDialogDragOffsetRef.current = 0;
+    dashboardDialogSuppressClickRef.current = false;
+    setDashboardDialogDragOffset(0);
+    setDashboardActionError(null);
+    setRenameTarget(null);
+    setRenameValue("");
+    setDeleteTarget(null);
+  }, []);
+
+  const animateCloseDashboardDialog = useCallback(() => {
+    if (busyLectureId || dashboardDialogCloseTimerRef.current !== null) {
+      return;
+    }
+
+    dashboardDialogDragStartYRef.current = null;
+    dashboardDialogDragOffsetRef.current = window.innerHeight;
+    setDashboardDialogDragOffset(window.innerHeight);
+    dashboardDialogCloseTimerRef.current = window.setTimeout(() => {
+      dashboardDialogCloseTimerRef.current = null;
+      closeDashboardDialog();
+    }, 180);
+  }, [busyLectureId, closeDashboardDialog]);
+
+  useEffect(() => {
+    if (!renameTarget && !deleteTarget) {
+      return;
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        animateCloseDashboardDialog();
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [animateCloseDashboardDialog, deleteTarget, renameTarget]);
+
+  useEffect(
+    () => () => {
+      if (dashboardDialogCloseTimerRef.current !== null) {
+        window.clearTimeout(dashboardDialogCloseTimerRef.current);
+        dashboardDialogCloseTimerRef.current = null;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!isMobileCreateMenuOpen) {
@@ -613,12 +647,7 @@ export function HomeDashboard({
       return;
     }
 
-    dashboardDialogDragStartYRef.current = null;
-    dashboardDialogDragOffsetRef.current = 0;
-    setDashboardDialogDragOffset(0);
-    setDashboardActionError(null);
-    setRenameTarget(null);
-    setRenameValue("");
+    animateCloseDashboardDialog();
   }
 
   function openDeleteModal(lecture: AppLectureListItem) {
@@ -632,23 +661,35 @@ export function HomeDashboard({
       return;
     }
 
-    dashboardDialogDragStartYRef.current = null;
-    dashboardDialogDragOffsetRef.current = 0;
-    setDashboardDialogDragOffset(0);
-    setDashboardActionError(null);
-    setDeleteTarget(null);
+    animateCloseDashboardDialog();
   }
 
   function handleDashboardDialogDragHandlePointerDown(
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
   ) {
-    if (busyLectureId) {
+    if (busyLectureId || (event.pointerType === "mouse" && event.button !== 0)) {
       return;
     }
 
-    event.preventDefault();
+    const target = event.target;
+    const interactiveTarget =
+      target instanceof Element
+        ? target.closest("button, a, input, textarea, select, .app-close-button")
+        : null;
+    const dragHandleTarget =
+      target instanceof Element ? target.closest(".mobile-create-menu-drag-handle") : null;
+
+    dashboardDialogSuppressClickRef.current = false;
+    dashboardDialogDragStartYRef.current = null;
+
+    if (interactiveTarget && !dragHandleTarget) {
+      return;
+    }
+
     dashboardDialogDragStartYRef.current = event.clientY;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (!interactiveTarget || dragHandleTarget) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
   }
 
   function updateDashboardDialogDragOffset(clientY: number) {
@@ -658,7 +699,20 @@ export function HomeDashboard({
 
     const nextOffset = Math.max(0, clientY - dashboardDialogDragStartYRef.current);
     dashboardDialogDragOffsetRef.current = nextOffset;
+    if (nextOffset > 8) {
+      dashboardDialogSuppressClickRef.current = true;
+    }
     setDashboardDialogDragOffset(nextOffset);
+  }
+
+  function handleDashboardDialogClickCapture(event: ReactMouseEvent<HTMLElement>) {
+    if (!dashboardDialogSuppressClickRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    dashboardDialogSuppressClickRef.current = false;
   }
 
   useEffect(() => {
@@ -672,12 +726,7 @@ export function HomeDashboard({
 
     function handleWindowPointerEnd() {
       if (dashboardDialogDragOffsetRef.current > 80 && !busyLectureId) {
-        dashboardDialogDragStartYRef.current = null;
-        dashboardDialogDragOffsetRef.current = 0;
-        setDashboardDialogDragOffset(0);
-        setRenameTarget(null);
-        setRenameValue("");
-        setDeleteTarget(null);
+        animateCloseDashboardDialog();
         return;
       }
 
@@ -694,7 +743,7 @@ export function HomeDashboard({
       window.removeEventListener("pointerup", handleWindowPointerEnd);
       window.removeEventListener("pointercancel", handleWindowPointerEnd);
     };
-  }, [busyLectureId, deleteTarget, renameTarget]);
+  }, [animateCloseDashboardDialog, busyLectureId, deleteTarget, renameTarget]);
 
   async function handleDeleteLecture() {
     if (!deleteTarget) {
@@ -1128,6 +1177,8 @@ export function HomeDashboard({
               role="dialog"
               aria-modal="true"
               aria-labelledby="rename-note-title"
+              onPointerDown={handleDashboardDialogDragHandlePointerDown}
+              onClickCapture={handleDashboardDialogClickCapture}
               style={
                 dashboardDialogDragOffset > 0
                   ? { transform: `translateY(${dashboardDialogDragOffset}px)` }
@@ -1137,7 +1188,6 @@ export function HomeDashboard({
               <button
                 type="button"
                 className="mobile-sheet-drag-handle mobile-create-menu-drag-handle dashboard-note-dialog-drag-handle"
-                onPointerDown={handleDashboardDialogDragHandlePointerDown}
                 aria-label="Povleci navzdol za zapiranje"
                 disabled={busyLectureId === renameTarget.id}
               />
@@ -1227,6 +1277,8 @@ export function HomeDashboard({
               role="dialog"
               aria-modal="true"
               aria-labelledby="delete-note-title"
+              onPointerDown={handleDashboardDialogDragHandlePointerDown}
+              onClickCapture={handleDashboardDialogClickCapture}
               style={
                 dashboardDialogDragOffset > 0
                   ? { transform: `translateY(${dashboardDialogDragOffset}px)` }
@@ -1236,7 +1288,6 @@ export function HomeDashboard({
               <button
                 type="button"
                 className="mobile-sheet-drag-handle mobile-create-menu-drag-handle dashboard-note-dialog-drag-handle"
-                onPointerDown={handleDashboardDialogDragHandlePointerDown}
                 aria-label="Povleci navzdol za zapiranje"
                 disabled={busyLectureId === deleteTarget.id}
               />

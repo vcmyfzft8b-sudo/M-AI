@@ -5,9 +5,13 @@ import {
   ArrowRight,
   ArrowUp,
   Check,
+  Highlighter,
+  ImagePlus,
   Loader2,
+  Palette,
   Pencil,
   Plus,
+  Underline,
   X,
 } from "lucide-react";
 import type {
@@ -3610,7 +3614,7 @@ export function LectureWorkspace({
             aria-label="Označi"
             title="Označi"
           >
-            <EmojiIcon symbol="🖍️" size="1rem" />
+            <Highlighter aria-hidden="true" />
             <span>Označi</span>
           </button>
           <button
@@ -3621,7 +3625,7 @@ export function LectureWorkspace({
             aria-label="Podčrtaj"
             title="Podčrtaj"
           >
-            <EmojiIcon symbol="➖" size="1rem" />
+            <Underline aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -3632,7 +3636,7 @@ export function LectureWorkspace({
             aria-label="Barva"
             title="Barva"
           >
-            <EmojiIcon symbol="🎨" size="1rem" />
+            <Palette aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -3643,7 +3647,7 @@ export function LectureWorkspace({
             aria-label="Dodaj fotografijo"
             title="Dodaj fotografijo"
           >
-            <EmojiIcon symbol="🖼️" size="1rem" />
+            <ImagePlus aria-hidden="true" />
           </button>
         </div>
       ) : null;
@@ -3656,7 +3660,7 @@ export function LectureWorkspace({
           aria-label="Dodaj fotografijo"
           title="Dodaj fotografijo"
         >
-          <EmojiIcon symbol="🖼️" size="1rem" />
+          <ImagePlus aria-hidden="true" />
           <span>Fotografija</span>
         </button>
       ) : null;

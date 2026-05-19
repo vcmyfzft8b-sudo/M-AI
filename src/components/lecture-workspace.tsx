@@ -3470,7 +3470,7 @@ export function LectureWorkspace({
 
     deletingStudyItemIdsRef.current.add(flashcardId);
     setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
-    setOpenStudyManagerActionItemId(null);
+    setOpenStudyManagerActionItemId(flashcardId);
     setStudyError(null);
     setIsSavingStudyItem(true);
 
@@ -3573,7 +3573,7 @@ export function LectureWorkspace({
 
     deletingStudyItemIdsRef.current.add(questionId);
     setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
-    setOpenStudyManagerActionItemId(null);
+    setOpenStudyManagerActionItemId(questionId);
     setStudyError(null);
     setIsSavingStudyItem(true);
 
@@ -4684,14 +4684,20 @@ export function LectureWorkspace({
                                   disabled={isSavingStudyItem}
                                   aria-busy={isDeleting}
                                 >
-                                  <span className="study-manager-action-circle">
+                                  <span
+                                    className={`study-manager-action-circle ${
+                                      isDeleting ? "is-loading" : ""
+                                    }`}
+                                  >
                                     {isDeleting ? (
                                       <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
                                       <EmojiIcon symbol="🗑️" size="1.1rem" />
                                     )}
                                   </span>
-                                  <span className="study-manager-action-label">Izbriši</span>
+                                  <span className="study-manager-action-label">
+                                    {isDeleting ? "Brisanje" : "Izbriši"}
+                                  </span>
                                 </button>
                               </div>
                               <div
@@ -4828,14 +4834,20 @@ export function LectureWorkspace({
                                   disabled={isSavingStudyItem}
                                   aria-busy={isDeleting}
                                 >
-                                  <span className="study-manager-action-circle">
+                                  <span
+                                    className={`study-manager-action-circle ${
+                                      isDeleting ? "is-loading" : ""
+                                    }`}
+                                  >
                                     {isDeleting ? (
                                       <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
                                       <EmojiIcon symbol="🗑️" size="1.1rem" />
                                     )}
                                   </span>
-                                  <span className="study-manager-action-label">Izbriši</span>
+                                  <span className="study-manager-action-label">
+                                    {isDeleting ? "Brisanje" : "Izbriši"}
+                                  </span>
                                 </button>
                               </div>
                               <div

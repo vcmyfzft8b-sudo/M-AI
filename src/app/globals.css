@@ -5443,6 +5443,10 @@ select:disabled {
   box-shadow: 0 0.55rem 1.2rem color-mix(in srgb, var(--red) 28%, transparent);
 }
 
+.study-manager-action-circle.is-loading {
+  animation: study-manager-delete-loading 900ms ease-in-out infinite;
+}
+
 .study-manager-action-label {
   display: block;
   max-width: 100%;
@@ -5454,6 +5458,19 @@ select:disabled {
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@keyframes study-manager-delete-loading {
+  0%,
+  100% {
+    box-shadow: 0 0.55rem 1.2rem color-mix(in srgb, var(--red) 24%, transparent);
+    transform: scale(1);
+  }
+
+  50% {
+    box-shadow: 0 0.7rem 1.45rem color-mix(in srgb, var(--red) 38%, transparent);
+    transform: scale(1.04);
+  }
 }
 
 .lecture-study-mode-switch {

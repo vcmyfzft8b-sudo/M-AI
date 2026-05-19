@@ -3785,12 +3785,15 @@ select:disabled {
   cursor: pointer;
   text-decoration: none;
   transform: translateX(var(--dashboard-note-swipe-offset, 0px));
-  transition:
-    border-radius 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
   touch-action: pan-y;
   user-select: none;
   will-change: transform;
+}
+
+.dashboard-note-swipe-row.is-swiping .dashboard-note-card-surface {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .dashboard-note-actions {
@@ -3888,23 +3891,13 @@ select:disabled {
   box-shadow: none;
   color: var(--secondary-label);
   opacity: 0;
-  transform: translate3d(0.7rem, 0, 0) scale(0.96);
-  transition:
-    opacity 200ms ease,
-    transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform: none;
+  transition: none;
 }
 
 .dashboard-note-swipe-row.is-swiping .dashboard-note-menu-button {
   opacity: 1;
-  transform: translate3d(0, 0, 0) scale(1);
-}
-
-.dashboard-note-swipe-row.menu-open .dashboard-note-menu-button {
-  animation: dashboard-note-action-appear 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.dashboard-note-swipe-row.menu-open .dashboard-note-menu-button.danger {
-  animation-delay: 28ms;
+  transform: none;
 }
 
 .dashboard-note-swipe-row .dashboard-note-menu-button:hover,
@@ -3955,18 +3948,6 @@ select:disabled {
 
 .dashboard-note-menu-button.danger .dashboard-note-action-label {
   color: color-mix(in srgb, var(--red) 78%, white);
-}
-
-@keyframes dashboard-note-action-appear {
-  0% {
-    opacity: 0;
-    transform: translate3d(0.55rem, 0, 0) scale(0.94);
-  }
-
-  100% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-  }
 }
 
 .dashboard-note-menu-button::before {

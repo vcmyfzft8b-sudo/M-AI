@@ -3472,7 +3472,6 @@ export function LectureWorkspace({
     setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
     setOpenStudyManagerActionItemId(flashcardId);
     setStudyError(null);
-    setIsSavingStudyItem(true);
 
     try {
       const response = await fetch(`/api/flashcards/${flashcardId}`, {
@@ -3496,7 +3495,6 @@ export function LectureWorkspace({
     } finally {
       deletingStudyItemIdsRef.current.delete(flashcardId);
       setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
-      setIsSavingStudyItem(false);
     }
   }
 
@@ -3575,7 +3573,6 @@ export function LectureWorkspace({
     setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
     setOpenStudyManagerActionItemId(questionId);
     setStudyError(null);
-    setIsSavingStudyItem(true);
 
     try {
       const response = await fetch(`/api/lectures/${detail.lecture.id}/quiz/questions/${questionId}`, {
@@ -3603,7 +3600,6 @@ export function LectureWorkspace({
     } finally {
       deletingStudyItemIdsRef.current.delete(questionId);
       setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
-      setIsSavingStudyItem(false);
     }
   }
 
@@ -4681,7 +4677,7 @@ export function LectureWorkspace({
                                   type="button"
                                   className="danger"
                                   onClick={() => void handleDeleteFlashcard(flashcard.id)}
-                                  disabled={isSavingStudyItem}
+                                  disabled={isDeleting}
                                   aria-busy={isDeleting}
                                 >
                                   <span
@@ -4831,7 +4827,7 @@ export function LectureWorkspace({
                                   type="button"
                                   className="danger"
                                   onClick={() => void handleDeleteQuizQuestion(question.id)}
-                                  disabled={isSavingStudyItem}
+                                  disabled={isDeleting}
                                   aria-busy={isDeleting}
                                 >
                                   <span

@@ -4619,15 +4619,14 @@ export function LectureWorkspace({
                         onSubmit={handleFlashcardFormSubmit}
                         className="study-manager-form study-manager-form-flashcards"
                       >
-                        <div className="study-manager-form-header">
-                          <span>{editingFlashcardId ? "Uredi kartico" : "Dodaj kartico"}</span>
-                          {editingFlashcardId ? (
+                        {editingFlashcardId ? (
+                          <div className="study-manager-form-header">
                             <button type="button" onClick={startFlashcardCreate}>
                               <Plus aria-hidden="true" />
                               Nova
                             </button>
-                          ) : null}
-                        </div>
+                          </div>
+                        ) : null}
                         <label>
                           <span>Vprašanje</span>
                           <textarea

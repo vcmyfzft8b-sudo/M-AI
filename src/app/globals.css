@@ -3741,6 +3741,7 @@ select:disabled {
 
 .ios-row-note-card.dashboard-note-swipe-row {
   display: block;
+  contain: none;
   overflow: visible;
   padding: 0;
   background: transparent;

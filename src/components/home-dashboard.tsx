@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  Loader2,
-  X,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import {
   memo,
   startTransition,
@@ -1202,7 +1199,7 @@ export function HomeDashboard({
                   aria-label="Zapri okno za preimenovanje zapiska"
                   disabled={busyLectureId === renameTarget.id}
                 >
-                  <X className="h-4 w-4" />
+                  <EmojiIcon symbol="✖️" size="1rem" />
                 </button>
               </div>
 
@@ -1302,7 +1299,7 @@ export function HomeDashboard({
                   aria-label="Zapri okno za brisanje zapiska"
                   disabled={busyLectureId === deleteTarget.id}
                 >
-                  <X className="h-4 w-4" />
+                  <EmojiIcon symbol="✖️" size="1rem" />
                 </button>
               </div>
 

@@ -5,13 +5,9 @@ import {
   ArrowRight,
   ArrowUp,
   Check,
-  Highlighter,
-  ImagePlus,
   Loader2,
-  Palette,
   Pencil,
   Plus,
-  Underline,
   X,
 } from "lucide-react";
 import type {
@@ -549,26 +545,6 @@ const FLASHCARD_DRAG_TRIGGER_RATIO = 0.28;
 const FLASHCARD_DRAG_TRIGGER_MIN_PX = 88;
 const FLASHCARD_DRAG_TRIGGER_MAX_PX = 150;
 const FLASHCARD_DRAG_MAX_ROTATION_DEG = 8;
-
-function sourceLabel(sourceType: string) {
-  if (sourceType === "link") {
-    return "Spletna povezava";
-  }
-
-  if (sourceType === "text") {
-    return "Besedilo";
-  }
-
-  if (sourceType === "pdf") {
-    return "PDF dokument";
-  }
-
-  if (sourceType === "presentation") {
-    return "PowerPoint predstavitev";
-  }
-
-  return "Zvočni posnetek";
-}
 
 function isScanImport(detail: LectureDetail) {
   const sourceType = getEffectiveLectureSourceType(detail.lecture);
@@ -3634,7 +3610,7 @@ export function LectureWorkspace({
             aria-label="Označi"
             title="Označi"
           >
-            <Highlighter aria-hidden="true" />
+            <EmojiIcon symbol="🖍️" size="1rem" />
             <span>Označi</span>
           </button>
           <button
@@ -3645,7 +3621,7 @@ export function LectureWorkspace({
             aria-label="Podčrtaj"
             title="Podčrtaj"
           >
-            <Underline aria-hidden="true" />
+            <EmojiIcon symbol="➖" size="1rem" />
           </button>
           <button
             type="button"
@@ -3656,7 +3632,7 @@ export function LectureWorkspace({
             aria-label="Barva"
             title="Barva"
           >
-            <Palette aria-hidden="true" />
+            <EmojiIcon symbol="🎨" size="1rem" />
           </button>
           <button
             type="button"
@@ -3667,7 +3643,7 @@ export function LectureWorkspace({
             aria-label="Dodaj fotografijo"
             title="Dodaj fotografijo"
           >
-            <ImagePlus aria-hidden="true" />
+            <EmojiIcon symbol="🖼️" size="1rem" />
           </button>
         </div>
       ) : null;
@@ -3680,7 +3656,7 @@ export function LectureWorkspace({
           aria-label="Dodaj fotografijo"
           title="Dodaj fotografijo"
         >
-          <ImagePlus aria-hidden="true" />
+          <EmojiIcon symbol="🖼️" size="1rem" />
           <span>Fotografija</span>
         </button>
       ) : null;
@@ -4600,7 +4576,7 @@ export function LectureWorkspace({
                       aria-label="Zapri"
                       title="Zapri"
                     >
-                      <X aria-hidden="true" />
+                      <EmojiIcon symbol="✖️" size="1rem" />
                     </button>
                   </div>
 
@@ -4650,7 +4626,11 @@ export function LectureWorkspace({
                           />
                         </label>
                         <button type="submit" className="study-manager-save" disabled={isSavingStudyItem}>
-                          {isSavingStudyItem ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" />}
+                          {isSavingStudyItem ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <EmojiIcon symbol="✅" size="1rem" />
+                          )}
                           {editingFlashcardId ? "Shrani kartico" : "Dodaj kartico"}
                         </button>
                       </form>
@@ -4734,15 +4714,14 @@ export function LectureWorkspace({
                         onSubmit={handleQuizQuestionFormSubmit}
                         className="study-manager-form study-manager-form-quiz"
                       >
-                        <div className="study-manager-form-header">
-                          <span>{editingQuizQuestionId ? "Uredi vprašanje" : "Dodaj vprašanje"}</span>
-                          {editingQuizQuestionId ? (
+                        {editingQuizQuestionId ? (
+                          <div className="study-manager-form-header">
                             <button type="button" onClick={startQuizQuestionCreate}>
                               <Plus aria-hidden="true" />
                               Novo
                             </button>
-                          ) : null}
-                        </div>
+                          </div>
+                        ) : null}
                         <label>
                           <span>Vprašanje</span>
                           <textarea
@@ -4800,7 +4779,11 @@ export function LectureWorkspace({
                           />
                         </label>
                         <button type="submit" className="study-manager-save" disabled={isSavingStudyItem}>
-                          {isSavingStudyItem ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" />}
+                          {isSavingStudyItem ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <EmojiIcon symbol="✅" size="1rem" />
+                          )}
                           {editingQuizQuestionId ? "Shrani vprašanje" : "Dodaj vprašanje"}
                         </button>
                       </form>
@@ -4892,7 +4875,7 @@ export function LectureWorkspace({
                 onClick={openStudyManager}
                 aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
               >
-                <Pencil aria-hidden="true" className="mobile-study-manage-pill-icon h-5 w-5" />
+                <EmojiIcon symbol="✏️" size="1.12rem" className="mobile-study-manage-pill-icon" />
                 <span className="mobile-study-manage-pill-label">Uredi</span>
               </button>
             ) : null}
@@ -5050,9 +5033,6 @@ export function LectureWorkspace({
                 {detail.lecture.title ?? "Predavanje v obdelavi"}
               </h1>
               <div className="lecture-meta-row">
-                <span className="lecture-meta-pill">
-                  {sourceLabel(getEffectiveLectureSourceType(detail.lecture))}
-                </span>
                 <span className="lecture-meta-copy">{formatCalendarDate(detail.lecture.created_at)}</span>
               </div>
             </div>

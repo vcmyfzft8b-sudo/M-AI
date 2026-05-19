@@ -2476,7 +2476,11 @@ export function NoteReadAloud({
             disabled={disabled}
             aria-label={playButtonLabel}
           >
-            {renderPlaybackIcon("mobile-note-read-pill-icon h-5 w-5")}
+            <EmojiIcon
+              symbol={isPreparingPlayback ? "⏳" : isPlaying ? "⏸️" : "🎧"}
+              size="1.12rem"
+              className="mobile-note-read-pill-icon"
+            />
             <span className="mobile-note-read-pill-label">{playButtonLabel}</span>
           </button>
         )}

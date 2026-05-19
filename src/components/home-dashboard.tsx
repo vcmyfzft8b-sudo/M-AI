@@ -62,7 +62,7 @@ const QUICK_ACTIONS = [
 ] as const;
 
 const DASHBOARD_MUTATION_TIMEOUT_MS = 18_000;
-const DASHBOARD_NOTE_ACTION_REVEAL_PX = 132;
+const DASHBOARD_NOTE_ACTION_REVEAL_PX = 176;
 
 type DashboardNoteDragState = {
   pointerId: number;
@@ -285,16 +285,23 @@ const NoteRow = memo(function NoteRow({
   }
 
   return (
-    <div className={`ios-row-note-card dashboard-note-swipe-row ${isMenuOpen ? "menu-open" : ""}`}>
+    <div
+      className={`ios-row-note-card dashboard-note-swipe-row ${
+        isMenuOpen ? "menu-open" : ""
+      } ${noteOffset < 0 ? "is-swiping" : ""}`}
+    >
       <div ref={isMenuOpen ? attachMenuRef : undefined} className="dashboard-note-actions">
         <button
           type="button"
           aria-label={`Preimenuj ${lecture.title ?? "zapisek"}`}
           disabled={isBusy}
           onClick={() => onOpenRename(lecture)}
-          className="dashboard-note-menu-button"
+          className="dashboard-note-menu-button edit"
         >
-          <EmojiIcon symbol="✏️" size="1rem" />
+          <span className="dashboard-note-action-circle">
+            <EmojiIcon symbol="✏️" size="1.1rem" />
+          </span>
+          <span className="dashboard-note-action-label">Uredi</span>
         </button>
         <button
           type="button"
@@ -303,11 +310,14 @@ const NoteRow = memo(function NoteRow({
           onClick={() => onOpenDelete(lecture)}
           className="dashboard-note-menu-button danger"
         >
-          {isBusy ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <EmojiIcon symbol="🗑️" size="1rem" />
-          )}
+          <span className="dashboard-note-action-circle">
+            {isBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <EmojiIcon symbol="🗑️" size="1.1rem" />
+            )}
+          </span>
+          <span className="dashboard-note-action-label">Izbriši</span>
         </button>
       </div>
       <div

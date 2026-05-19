@@ -62,7 +62,7 @@ const QUICK_ACTIONS = [
 ] as const;
 
 const DASHBOARD_MUTATION_TIMEOUT_MS = 18_000;
-const DASHBOARD_NOTE_ACTION_REVEAL_PX = 176;
+const DASHBOARD_NOTE_ACTION_REVEAL_PX = 144;
 
 type DashboardNoteDragState = {
   pointerId: number;

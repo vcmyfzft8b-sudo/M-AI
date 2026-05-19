@@ -171,45 +171,6 @@ const NoteRow = memo(function NoteRow({
   const noteOffset = dragState?.offset ?? (isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0);
   const isSwipeActive = Boolean(dragState || isMenuOpen || noteOffset < 0);
 
-  const finishDrag = useCallback((pointerId: number) => {
-    const current = dragRef.current;
-
-    if (!current || current.pointerId !== pointerId) {
-      return;
-    }
-
-    const shouldOpen = current.offset < -DASHBOARD_NOTE_ACTION_REVEAL_PX / 2;
-
-    if (shouldOpen && !isMenuOpen) {
-      onToggleMenu(lecture.id);
-    } else if (!shouldOpen && isMenuOpen) {
-      onToggleMenu(lecture.id);
-    }
-
-    dragRef.current = null;
-    setDragState(null);
-  }, [isMenuOpen, lecture.id, onToggleMenu]);
-
-  useEffect(() => {
-    const current = dragRef.current;
-
-    if (!current) {
-      return;
-    }
-
-    function handleWindowPointerEnd(event: PointerEvent) {
-      finishDrag(event.pointerId);
-    }
-
-    window.addEventListener("pointerup", handleWindowPointerEnd);
-    window.addEventListener("pointercancel", handleWindowPointerEnd);
-
-    return () => {
-      window.removeEventListener("pointerup", handleWindowPointerEnd);
-      window.removeEventListener("pointercancel", handleWindowPointerEnd);
-    };
-  }, [dragState, finishDrag]);
-
   function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
     if (event.pointerType === "mouse" && event.button !== 0) {
       return;
@@ -227,7 +188,6 @@ const NoteRow = memo(function NoteRow({
     suppressClickRef.current = false;
     setDragState(nextDrag);
     event.currentTarget.setPointerCapture(event.pointerId);
-    router.prefetch(lectureHref);
   }
 
   function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
@@ -262,7 +222,21 @@ const NoteRow = memo(function NoteRow({
   }
 
   function handlePointerEnd(event: ReactPointerEvent<HTMLElement>) {
-    finishDrag(event.pointerId);
+    const current = dragRef.current;
+
+    if (!current || current.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const shouldOpen = current.offset < -DASHBOARD_NOTE_ACTION_REVEAL_PX / 2;
+    if (shouldOpen && !isMenuOpen) {
+      onToggleMenu(lecture.id);
+    } else if (!shouldOpen && isMenuOpen) {
+      onToggleMenu(lecture.id);
+    }
+
+    dragRef.current = null;
+    setDragState(null);
   }
 
   function handleSurfaceClick(event: ReactMouseEvent<HTMLElement>) {
@@ -329,7 +303,6 @@ const NoteRow = memo(function NoteRow({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
         onPointerCancel={handlePointerEnd}
-        onLostPointerCapture={handlePointerEnd}
         onClick={handleSurfaceClick}
         onKeyDown={handleSurfaceKeyDown}
         style={

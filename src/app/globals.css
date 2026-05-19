@@ -11674,6 +11674,12 @@ select:disabled {
     margin-bottom: -0.2rem;
   }
 
+  .dashboard-note-dialog-body {
+    align-content: start;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
   .library-folder-modal-drag-handle {
     margin-bottom: -0.35rem;
   }
@@ -11952,7 +11958,7 @@ select:disabled {
     max-height: 85vh;
     overflow-y: auto;
   }
-  
+
   .ios-sheet-cancel {
     display: none;
   }

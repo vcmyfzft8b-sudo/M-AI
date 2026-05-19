@@ -5362,11 +5362,15 @@ select:disabled {
   transform: translateX(var(--study-manager-swipe-offset, 0px));
   transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
   touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
   will-change: transform;
 }
 
 .study-manager-item-content {
   min-width: 0;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .study-manager-item strong,

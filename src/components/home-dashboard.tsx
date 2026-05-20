@@ -163,6 +163,7 @@ const NoteRow = memo(function NoteRow({
   const sourceType = getEffectiveLectureSourceType(lecture);
   const lectureHref = `/app/lectures/${lecture.id}`;
   const dragRef = useRef<DashboardNoteDragState | null>(null);
+  const cleanupDragListenersRef = useRef<(() => void) | null>(null);
   const suppressClickRef = useRef(false);
   const [dragState, setDragState] = useState<DashboardNoteDragState | null>(null);
   const [isOpening, setIsOpening] = useState(false);
@@ -173,32 +174,22 @@ const NoteRow = memo(function NoteRow({
     router.prefetch(lectureHref);
   }, [lectureHref, router]);
 
-  function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
-    if (event.pointerType === "mouse" && event.button !== 0) {
-      return;
-    }
+  useEffect(
+    () => () => {
+      cleanupDragListenersRef.current?.();
+    },
+    [],
+  );
 
-    const nextDrag = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      startOffset: isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0,
-      offset: isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0,
-      isDragging: false,
-    };
-    dragRef.current = nextDrag;
-    suppressClickRef.current = false;
-  }
-
-  function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
+  function updateDrag(clientX: number, clientY: number, pointerId: number, preventDefault?: () => void) {
     const current = dragRef.current;
 
-    if (!current || current.pointerId !== event.pointerId) {
+    if (!current || current.pointerId !== pointerId) {
       return;
     }
 
-    const deltaX = event.clientX - current.startX;
-    const deltaY = event.clientY - current.startY;
+    const deltaX = clientX - current.startX;
+    const deltaY = clientY - current.startY;
     const isHorizontalDrag =
       current.isDragging || (Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY));
 
@@ -206,11 +197,8 @@ const NoteRow = memo(function NoteRow({
       return;
     }
 
-    event.preventDefault();
+    preventDefault?.();
     suppressClickRef.current = true;
-    if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
 
     const nextDrag = {
       ...current,
@@ -224,10 +212,10 @@ const NoteRow = memo(function NoteRow({
     setDragState(nextDrag);
   }
 
-  function handlePointerEnd(event: ReactPointerEvent<HTMLElement>) {
+  function finishDrag(pointerId: number) {
     const current = dragRef.current;
 
-    if (!current || current.pointerId !== event.pointerId) {
+    if (!current || current.pointerId !== pointerId) {
       return;
     }
 
@@ -240,9 +228,48 @@ const NoteRow = memo(function NoteRow({
 
     dragRef.current = null;
     setDragState(null);
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+    cleanupDragListenersRef.current?.();
+  }
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
     }
+
+    cleanupDragListenersRef.current?.();
+
+    const nextDrag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startOffset: isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0,
+      offset: isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0,
+      isDragging: false,
+    };
+    dragRef.current = nextDrag;
+    suppressClickRef.current = false;
+    if (isMenuOpen) {
+      setDragState(nextDrag);
+    }
+
+    const handleWindowPointerMove = (moveEvent: PointerEvent) => {
+      updateDrag(moveEvent.clientX, moveEvent.clientY, moveEvent.pointerId, () =>
+        moveEvent.preventDefault(),
+      );
+    };
+    const handleWindowPointerEnd = (endEvent: PointerEvent) => {
+      finishDrag(endEvent.pointerId);
+    };
+
+    window.addEventListener("pointermove", handleWindowPointerMove, { passive: false });
+    window.addEventListener("pointerup", handleWindowPointerEnd);
+    window.addEventListener("pointercancel", handleWindowPointerEnd);
+    cleanupDragListenersRef.current = () => {
+      window.removeEventListener("pointermove", handleWindowPointerMove);
+      window.removeEventListener("pointerup", handleWindowPointerEnd);
+      window.removeEventListener("pointercancel", handleWindowPointerEnd);
+      cleanupDragListenersRef.current = null;
+    };
   }
 
   function openLecture() {
@@ -311,9 +338,6 @@ const NoteRow = memo(function NoteRow({
         tabIndex={0}
         className="ios-row-note-card-link dashboard-note-card-surface"
         onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerEnd}
-        onPointerCancel={handlePointerEnd}
         onClick={handleSurfaceClick}
         onKeyDown={handleSurfaceKeyDown}
         style={
@@ -390,6 +414,7 @@ export function HomeDashboard({
   const [renameTarget, setRenameTarget] = useState<AppLectureListItem | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [renameInputFocused, setRenameInputFocused] = useState(false);
+  const [keepRenameExpandedDuringClose, setKeepRenameExpandedDuringClose] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AppLectureListItem | null>(null);
   const [dashboardActionError, setDashboardActionError] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
@@ -444,7 +469,16 @@ export function HomeDashboard({
     }
 
     function handlePointerDown(event: PointerEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) {
+      const target = event.target;
+      const isInsideOpenSwipeRow =
+        target instanceof Element &&
+        Boolean(target.closest(".dashboard-note-swipe-row.menu-open"));
+
+      if (isInsideOpenSwipeRow) {
+        return;
+      }
+
+      if (!menuRef.current?.contains(target as Node)) {
         setOpenMenuLectureId(null);
       }
     }
@@ -498,6 +532,8 @@ export function HomeDashboard({
     setDashboardActionError(null);
     setRenameTarget(null);
     setRenameValue("");
+    setRenameInputFocused(false);
+    setKeepRenameExpandedDuringClose(false);
     setDeleteTarget(null);
   }, []);
 
@@ -506,6 +542,9 @@ export function HomeDashboard({
       return;
     }
 
+    setKeepRenameExpandedDuringClose(
+      (current) => current || Boolean(renameTarget && renameInputFocused),
+    );
     dashboardDialogDragStartYRef.current = null;
     dashboardDialogDragOffsetRef.current = window.innerHeight;
     setDashboardDialogDragOffset(window.innerHeight);
@@ -513,7 +552,7 @@ export function HomeDashboard({
       dashboardDialogCloseTimerRef.current = null;
       closeDashboardDialog();
     }, 180);
-  }, [busyLectureId, closeDashboardDialog]);
+  }, [busyLectureId, closeDashboardDialog, renameInputFocused, renameTarget]);
 
   useEffect(() => {
     if (!renameTarget && !deleteTarget) {
@@ -652,7 +691,8 @@ export function HomeDashboard({
     setDashboardActionError(null);
     setRenameTarget(lecture);
     setRenameValue(lecture.title?.trim() || "Neimenovan zapisek");
-    setRenameInputFocused(false);
+    setRenameInputFocused(true);
+    setKeepRenameExpandedDuringClose(false);
   }
 
   function closeRenameModal() {
@@ -660,7 +700,6 @@ export function HomeDashboard({
       return;
     }
 
-    setRenameInputFocused(false);
     animateCloseDashboardDialog();
   }
 
@@ -668,6 +707,7 @@ export function HomeDashboard({
     setOpenMenuLectureId(null);
     setDashboardActionError(null);
     setRenameInputFocused(false);
+    setKeepRenameExpandedDuringClose(false);
     setDeleteTarget(lecture);
   }
 
@@ -684,6 +724,10 @@ export function HomeDashboard({
   ) {
     if (busyLectureId || (event.pointerType === "mouse" && event.button !== 0)) {
       return;
+    }
+
+    if (renameTarget && renameInputFocused) {
+      setKeepRenameExpandedDuringClose(true);
     }
 
     const target = event.target;
@@ -1184,12 +1228,20 @@ export function HomeDashboard({
             <button
               type="button"
               className="mobile-create-menu-backdrop dashboard-note-dialog-backdrop"
+              onPointerDown={() => {
+                if (renameInputFocused) {
+                  setKeepRenameExpandedDuringClose(true);
+                }
+              }}
               onClick={closeRenameModal}
               aria-label="Zapri okno za preimenovanje zapiska"
             />
             <section
               className={`mobile-create-menu dashboard-note-dialog dashboard-note-dialog-rename mobile-draggable-sheet ${
-                renameInputFocused ? "keyboard-open" : ""
+                (renameInputFocused || keepRenameExpandedDuringClose) &&
+                busyLectureId !== renameTarget.id
+                  ? "keyboard-open"
+                  : ""
               }`}
               role="dialog"
               aria-modal="true"
@@ -1227,6 +1279,11 @@ export function HomeDashboard({
                 className="dashboard-note-dialog-body"
                 onSubmit={(event) => {
                   event.preventDefault();
+                  setRenameInputFocused(false);
+                  setKeepRenameExpandedDuringClose(false);
+                  if (document.activeElement instanceof HTMLElement) {
+                    document.activeElement.blur();
+                  }
                   void handleRenameLecture();
                 }}
               >

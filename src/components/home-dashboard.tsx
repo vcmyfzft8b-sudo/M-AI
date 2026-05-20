@@ -11,12 +11,12 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { InstantLink } from "@/components/instant-link";
 import { NoteSourceModal, type NoteSourceMode } from "@/components/note-source-modal";
 import { StatusBadge } from "@/components/status-badge";
 import { EmojiIcon } from "@/components/emoji-icon";
@@ -159,6 +159,7 @@ const NoteRow = memo(function NoteRow({
   onOpenDelete,
   attachMenuRef,
 }: NoteRowProps) {
+  const router = useRouter();
   const sourceType = getEffectiveLectureSourceType(lecture);
   const lectureHref = `/app/lectures/${lecture.id}`;
   const dragRef = useRef<DashboardNoteDragState | null>(null);
@@ -167,6 +168,10 @@ const NoteRow = memo(function NoteRow({
   const [isOpening, setIsOpening] = useState(false);
   const noteOffset = dragState?.offset ?? (isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0);
   const isSwipeActive = Boolean(dragState || isMenuOpen || noteOffset < 0);
+
+  useEffect(() => {
+    router.prefetch(lectureHref);
+  }, [lectureHref, router]);
 
   function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
     if (event.pointerType === "mouse" && event.button !== 0) {
@@ -183,7 +188,6 @@ const NoteRow = memo(function NoteRow({
     };
     dragRef.current = nextDrag;
     suppressClickRef.current = false;
-    event.currentTarget.setPointerCapture(event.pointerId);
   }
 
   function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
@@ -241,7 +245,12 @@ const NoteRow = memo(function NoteRow({
     }
   }
 
-  function handleSurfaceClick(event: ReactMouseEvent<HTMLAnchorElement>) {
+  function openLecture() {
+    setIsOpening(true);
+    router.push(lectureHref);
+  }
+
+  function handleSurfaceClick(event: ReactMouseEvent<HTMLElement>) {
     if (suppressClickRef.current) {
       event.preventDefault();
       event.stopPropagation();
@@ -249,7 +258,16 @@ const NoteRow = memo(function NoteRow({
       return;
     }
 
-    setIsOpening(true);
+    openLecture();
+  }
+
+  function handleSurfaceKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    openLecture();
   }
 
   return (
@@ -288,14 +306,16 @@ const NoteRow = memo(function NoteRow({
           <span className="dashboard-note-action-label">Izbriši</span>
         </button>
       </div>
-      <InstantLink
-        href={lectureHref}
+      <div
+        role="link"
+        tabIndex={0}
         className="ios-row-note-card-link dashboard-note-card-surface"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
         onPointerCancel={handlePointerEnd}
         onClick={handleSurfaceClick}
+        onKeyDown={handleSurfaceKeyDown}
         style={
           {
             "--dashboard-note-swipe-offset": `${noteOffset}px`,
@@ -316,7 +336,7 @@ const NoteRow = memo(function NoteRow({
         <div className="flex items-center gap-3">
           {lecture.status !== "ready" && <StatusBadge status={lecture.status} />}
         </div>
-      </InstantLink>
+      </div>
     </div>
   );
 }, (previousProps, nextProps) => {

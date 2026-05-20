@@ -62,6 +62,9 @@ const QUICK_ACTIONS = [
 
 const DASHBOARD_MUTATION_TIMEOUT_MS = 18_000;
 const DASHBOARD_NOTE_ACTION_REVEAL_PX = 144;
+const RENAME_KEYBOARD_OPEN_GRACE_MS = 700;
+const RENAME_KEYBOARD_INSET_ACTIVE_PX = 80;
+const RENAME_KEYBOARD_INSET_CLOSED_PX = 24;
 
 type DashboardNoteDragState = {
   pointerId: number;
@@ -405,7 +408,9 @@ export function HomeDashboard({
   const dashboardDialogCloseTimerRef = useRef<number | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const renameKeyboardSeenRef = useRef(false);
+  const renameKeyboardActivationTimeRef = useRef(0);
   const renameKeyboardLayoutActiveRef = useRef(false);
+  const renameViewportMetricsKeyRef = useRef("");
   const [query, setQuery] = useState("");
   const [manualModal, setManualModal] = useState<NoteSourceMode | null>(null);
   const [isMobileCreateMenuOpen, setIsMobileCreateMenuOpen] = useState(false);
@@ -438,6 +443,13 @@ export function HomeDashboard({
   })();
 
   const activeModal = manualModal ?? searchModal;
+
+  const activateRenameKeyboardLayout = useCallback(() => {
+    renameKeyboardSeenRef.current = false;
+    renameKeyboardActivationTimeRef.current = window.performance.now();
+    setRenameInputFocused(true);
+    setRenameKeyboardLayoutActive(true);
+  }, []);
 
   useEffect(() => {
     renameKeyboardLayoutActiveRef.current = renameKeyboardLayoutActive;
@@ -632,22 +644,42 @@ export function HomeDashboard({
         0,
         window.innerHeight - viewportHeight - viewportOffsetTop,
       );
-      if (keyboardInset > 80) {
+      const isKeyboardOpeningGraceActive =
+        window.performance.now() - renameKeyboardActivationTimeRef.current <=
+        RENAME_KEYBOARD_OPEN_GRACE_MS;
+
+      if (keyboardInset > RENAME_KEYBOARD_INSET_ACTIVE_PX) {
         renameKeyboardSeenRef.current = true;
+        if (!renameKeyboardLayoutActiveRef.current) {
+          setRenameInputFocused(true);
+          setRenameKeyboardLayoutActive(true);
+        }
       } else if (
-        renameKeyboardSeenRef.current &&
-        keyboardInset < 24 &&
-        renameKeyboardLayoutActiveRef.current
+        keyboardInset < RENAME_KEYBOARD_INSET_CLOSED_PX &&
+        renameKeyboardLayoutActiveRef.current &&
+        !isKeyboardOpeningGraceActive
       ) {
         setRenameInputFocused(false);
         setRenameKeyboardLayoutActive(false);
       }
 
-      setRenameDialogStyle({
-        "--dashboard-note-dialog-keyboard-inset": `${Math.round(keyboardInset)}px`,
-        "--dashboard-note-dialog-visual-height": `${Math.round(viewportHeight)}px`,
-        "--dashboard-note-dialog-visual-offset-top": `${Math.round(viewportOffsetTop)}px`,
-      } as CSSProperties);
+      const roundedKeyboardInset = Math.round(keyboardInset);
+      const roundedViewportHeight = Math.round(viewportHeight);
+      const roundedViewportOffsetTop = Math.round(viewportOffsetTop);
+      const viewportMetricsKey = [
+        roundedKeyboardInset,
+        roundedViewportHeight,
+        roundedViewportOffsetTop,
+      ].join(":");
+
+      if (renameViewportMetricsKeyRef.current !== viewportMetricsKey) {
+        renameViewportMetricsKeyRef.current = viewportMetricsKey;
+        setRenameDialogStyle({
+          "--dashboard-note-dialog-keyboard-inset": `${roundedKeyboardInset}px`,
+          "--dashboard-note-dialog-visual-height": `${roundedViewportHeight}px`,
+          "--dashboard-note-dialog-visual-offset-top": `${roundedViewportOffsetTop}px`,
+        } as CSSProperties);
+      }
       scheduleScrollRestore();
     };
 
@@ -686,6 +718,7 @@ export function HomeDashboard({
     window.visualViewport?.addEventListener("scroll", updateViewportMetrics, { passive: true });
     window.visualViewport?.addEventListener("resize", updateViewportMetrics, { passive: true });
     renameInput?.addEventListener("focus", handleFocusIn);
+    const viewportPollId = window.setInterval(updateViewportMetrics, 120);
     updateViewportMetrics();
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(focusRenameInput);
@@ -700,6 +733,8 @@ export function HomeDashboard({
       window.visualViewport?.removeEventListener("scroll", updateViewportMetrics);
       window.visualViewport?.removeEventListener("resize", updateViewportMetrics);
       renameInput?.removeEventListener("focus", handleFocusIn);
+      window.clearInterval(viewportPollId);
+      renameViewportMetricsKeyRef.current = "";
       setRenameDialogStyle(undefined);
       root.style.overflow = previousRootOverflow;
       root.style.overscrollBehavior = previousRootOverscrollBehavior;
@@ -839,11 +874,9 @@ export function HomeDashboard({
       setDashboardActionError(null);
       setRenameTarget(lecture);
       setRenameValue(lecture.title?.trim() || "Neimenovan zapisek");
-      setRenameInputFocused(true);
-      setRenameKeyboardLayoutActive(true);
+      activateRenameKeyboardLayout();
       setKeepRenameExpandedDuringClose(false);
     });
-    renameKeyboardSeenRef.current = false;
     renameInputRef.current?.focus({ preventScroll: true });
   }
 
@@ -1457,9 +1490,14 @@ export function HomeDashboard({
                     ref={renameInputRef}
                     value={renameValue}
                     onChange={(event) => setRenameValue(event.target.value)}
+                    onPointerDown={() => {
+                      activateRenameKeyboardLayout();
+                    }}
+                    onClick={() => {
+                      activateRenameKeyboardLayout();
+                    }}
                     onFocus={() => {
-                      setRenameInputFocused(true);
-                      setRenameKeyboardLayoutActive(true);
+                      activateRenameKeyboardLayout();
                     }}
                     onBlur={() => {
                       setRenameInputFocused(false);

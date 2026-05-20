@@ -404,6 +404,8 @@ export function HomeDashboard({
   const dashboardDialogSuppressClickRef = useRef(false);
   const dashboardDialogCloseTimerRef = useRef<number | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const renameKeyboardSeenRef = useRef(false);
+  const renameKeyboardLayoutActiveRef = useRef(false);
   const [query, setQuery] = useState("");
   const [manualModal, setManualModal] = useState<NoteSourceMode | null>(null);
   const [isMobileCreateMenuOpen, setIsMobileCreateMenuOpen] = useState(false);
@@ -436,6 +438,10 @@ export function HomeDashboard({
   })();
 
   const activeModal = manualModal ?? searchModal;
+
+  useEffect(() => {
+    renameKeyboardLayoutActiveRef.current = renameKeyboardLayoutActive;
+  }, [renameKeyboardLayoutActive]);
 
   useEffect(() => {
     setLibraryLectures(lectures);
@@ -539,6 +545,7 @@ export function HomeDashboard({
     setRenameValue("");
     setRenameInputFocused(false);
     setRenameKeyboardLayoutActive(false);
+    renameKeyboardSeenRef.current = false;
     setRenameDialogStyle(undefined);
     setKeepRenameExpandedDuringClose(false);
     setDeleteTarget(null);
@@ -625,6 +632,16 @@ export function HomeDashboard({
         0,
         window.innerHeight - viewportHeight - viewportOffsetTop,
       );
+      if (keyboardInset > 80) {
+        renameKeyboardSeenRef.current = true;
+      } else if (
+        renameKeyboardSeenRef.current &&
+        keyboardInset < 24 &&
+        renameKeyboardLayoutActiveRef.current
+      ) {
+        setRenameInputFocused(false);
+        setRenameKeyboardLayoutActive(false);
+      }
 
       setRenameDialogStyle({
         "--dashboard-note-dialog-keyboard-inset": `${Math.round(keyboardInset)}px`,
@@ -826,6 +843,7 @@ export function HomeDashboard({
       setRenameKeyboardLayoutActive(true);
       setKeepRenameExpandedDuringClose(false);
     });
+    renameKeyboardSeenRef.current = false;
     renameInputRef.current?.focus({ preventScroll: true });
   }
 

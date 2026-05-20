@@ -3677,8 +3677,8 @@ export function LectureWorkspace({
 
       return (
         <div className="workspace-panel-stack lecture-panel-stack">
-          <div className="ios-card lecture-notes-card">
-            {cleanedStructuredNotes && detail.lecture.status === "ready" ? (
+          {cleanedStructuredNotes && detail.lecture.status === "ready" ? (
+            <div className="ios-card lecture-notes-card">
               <div
                 ref={noteAnnotationShellRef}
                 className="markdown lecture-markdown note-annotation-shell"
@@ -3724,21 +3724,21 @@ export function LectureWorkspace({
                   onDeleteMedia={(mediaId) => void handleDeleteNoteMedia(mediaId)}
                 />
               </div>
-            ) : shouldPollLecture(detail.lecture.status) || notesArtifactLoadFailed ? (
-              <div className="lecture-notes-processing">
-                <StudyGenerationNotice
-                  stageCopy={notesArtifactLoadFailed ? "Nalaganje zapiskov" : lectureProcessingStageCopy}
-                  bodyCopy={
-                    notesArtifactLoadFailed
-                      ? "Zapiski so pripravljeni, vendar se niso naložili v tem poskusu. Poskušamo znova."
-                      : "Obdelava teče v ozadju. Lahko zapreš ta pogled in se vrneš čez nekaj minut."
-                  }
-                />
-              </div>
-            ) : (
-              <p className="ios-info">Zapiski še niso pripravljeni.</p>
-            )}
-          </div>
+            </div>
+          ) : shouldPollLecture(detail.lecture.status) || notesArtifactLoadFailed ? (
+            <div className="lecture-notes-processing">
+              <StudyGenerationNotice
+                stageCopy={notesArtifactLoadFailed ? "Nalaganje zapiskov" : lectureProcessingStageCopy}
+                bodyCopy={
+                  notesArtifactLoadFailed
+                    ? "Zapiski so pripravljeni, vendar se niso naložili v tem poskusu. Poskušamo znova."
+                    : "Obdelava teče v ozadju. Lahko zapreš ta pogled in se vrneš čez nekaj minut."
+                }
+              />
+            </div>
+          ) : (
+            <p className="ios-info lecture-empty-message">Zapiski še niso pripravljeni.</p>
+          )}
         </div>
       );
     }
@@ -5012,7 +5012,7 @@ export function LectureWorkspace({
           ))}
         </div>
       ) : (
-        <div className="ios-card empty-state lecture-empty-card">
+        <div className="empty-state lecture-empty-card lecture-empty-message">
           <p className="ios-row-title">Prepis se še pripravlja.</p>
           <p className="ios-row-subtitle">Ko bo pripravljen, se bo prikazal tukaj.</p>
         </div>

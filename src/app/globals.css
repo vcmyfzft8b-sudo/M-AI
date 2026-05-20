@@ -7312,8 +7312,14 @@ select:disabled {
 .lecture-notes-processing {
   display: grid;
   place-items: center;
-  min-height: 9rem;
+  min-height: min(42vh, 20rem);
   padding: 0.75rem 1rem;
+}
+
+.lecture-empty-message {
+  margin: 0 auto;
+  color: var(--secondary-label);
+  text-align: center;
 }
 
 .lecture-study-generation-notice {

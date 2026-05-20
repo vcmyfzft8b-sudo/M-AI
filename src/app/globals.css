@@ -11700,11 +11700,11 @@ select:disabled {
     height: min(54vh, 30rem);
     overscroll-behavior: none;
     transition:
-      bottom 130ms cubic-bezier(0.22, 1, 0.36, 1),
-      height 130ms cubic-bezier(0.22, 1, 0.36, 1),
-      max-height 130ms cubic-bezier(0.22, 1, 0.36, 1),
-      padding 110ms cubic-bezier(0.22, 1, 0.36, 1),
-      gap 110ms ease,
+      bottom 260ms cubic-bezier(0.22, 1, 0.36, 1),
+      height 260ms cubic-bezier(0.22, 1, 0.36, 1),
+      max-height 260ms cubic-bezier(0.22, 1, 0.36, 1),
+      padding 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      gap 220ms ease,
       transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 

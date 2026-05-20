@@ -1460,6 +1460,9 @@ export function HomeDashboard({
                     onClick={(event) => {
                       event.currentTarget.focus({ preventScroll: true });
                     }}
+                    onBlur={() => {
+                      setRenameKeyboardVisible(false);
+                    }}
                     className="ios-input"
                     placeholder="Neimenovan zapisek"
                   />

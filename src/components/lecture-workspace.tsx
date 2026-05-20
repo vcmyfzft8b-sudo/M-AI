@@ -1147,6 +1147,8 @@ export function LectureWorkspace({
   const studyManagerDragOffsetRef = useRef(0);
   const studyManagerSuppressClickRef = useRef(false);
   const studyManagerCloseTimerRef = useRef<number | null>(null);
+  const studyManagerSheetRef = useRef<HTMLDivElement | null>(null);
+  const studyManagerTouchDragActiveRef = useRef(false);
   const studyManagerItemSuppressClickRef = useRef(false);
   const studyManagerItemDragRef = useRef<StudyManagerItemDragState | null>(null);
   const deletingStudyItemIdsRef = useRef(new Set<string>());
@@ -3225,6 +3227,36 @@ export function LectureWorkspace({
     }
   }
 
+  function shouldStartStudyManagerTopDrag(target: EventTarget | null) {
+    const sheet = studyManagerSheetRef.current;
+
+    if (!sheet || sheet.scrollTop > 0) {
+      return false;
+    }
+
+    if (!(target instanceof Element) || !sheet.contains(target)) {
+      return false;
+    }
+
+    if (target.closest(".study-manager-item-surface")) {
+      return false;
+    }
+
+    const dragHandleTarget = target.closest(".study-manager-drag-handle");
+
+    if (
+      target.closest("button, a, input, textarea, select, .app-close-button") &&
+      !dragHandleTarget
+    ) {
+      return false;
+    }
+
+    return Boolean(
+      dragHandleTarget ||
+        target.closest(".study-manager-header, .study-manager-form, .study-manager-list"),
+    );
+  }
+
   function updateStudyManagerDragOffset(clientY: number) {
     if (studyManagerDragStartYRef.current === null) {
       return false;
@@ -3279,6 +3311,81 @@ export function LectureWorkspace({
       window.removeEventListener("pointermove", handleWindowPointerMove);
       window.removeEventListener("pointerup", handleWindowPointerEnd);
       window.removeEventListener("pointercancel", handleWindowPointerEnd);
+    };
+  }, [animateCloseStudyManager, isStudyManagerOpen]);
+
+  useEffect(() => {
+    if (!isStudyManagerOpen) {
+      return;
+    }
+
+    const sheet = studyManagerSheetRef.current;
+
+    if (!sheet) {
+      return;
+    }
+
+    function handleTouchStart(event: TouchEvent) {
+      studyManagerTouchDragActiveRef.current = false;
+
+      if (
+        window.innerWidth >= 1100 ||
+        event.touches.length !== 1 ||
+        !shouldStartStudyManagerTopDrag(event.target)
+      ) {
+        return;
+      }
+
+      studyManagerDragStartYRef.current = event.touches[0]?.clientY ?? null;
+    }
+
+    function handleTouchMove(event: TouchEvent) {
+      const touch = event.touches[0];
+      const startY = studyManagerDragStartYRef.current;
+
+      if (!touch || startY === null) {
+        return;
+      }
+
+      const deltaY = touch.clientY - startY;
+
+      if (deltaY <= 0) {
+        return;
+      }
+
+      event.preventDefault();
+      studyManagerTouchDragActiveRef.current = true;
+      updateStudyManagerDragOffset(touch.clientY);
+    }
+
+    function handleTouchEnd() {
+      if (!studyManagerTouchDragActiveRef.current) {
+        studyManagerDragStartYRef.current = null;
+        return;
+      }
+
+      studyManagerTouchDragActiveRef.current = false;
+
+      if (studyManagerDragOffsetRef.current > 80) {
+        animateCloseStudyManager();
+        return;
+      }
+
+      studyManagerDragStartYRef.current = null;
+      studyManagerDragOffsetRef.current = 0;
+      setStudyManagerDragOffset(0);
+    }
+
+    sheet.addEventListener("touchstart", handleTouchStart, { passive: true });
+    sheet.addEventListener("touchmove", handleTouchMove, { passive: false });
+    sheet.addEventListener("touchend", handleTouchEnd);
+    sheet.addEventListener("touchcancel", handleTouchEnd);
+
+    return () => {
+      sheet.removeEventListener("touchstart", handleTouchStart);
+      sheet.removeEventListener("touchmove", handleTouchMove);
+      sheet.removeEventListener("touchend", handleTouchEnd);
+      sheet.removeEventListener("touchcancel", handleTouchEnd);
     };
   }, [animateCloseStudyManager, isStudyManagerOpen]);
 
@@ -4608,6 +4715,7 @@ export function LectureWorkspace({
             {isStudyManagerOpen && (activeStudyView === "flashcards" || activeStudyView === "quiz") ? (
               <div className="study-manager-backdrop" role="presentation" onClick={animateCloseStudyManager}>
                 <div
+                  ref={studyManagerSheetRef}
                   className={`study-manager-sheet mobile-draggable-sheet ${
                     studyManagerInputFocused ? "keyboard-open" : ""
                   }`}

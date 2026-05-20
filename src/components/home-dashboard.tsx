@@ -7,6 +7,7 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -568,6 +569,65 @@ export function HomeDashboard({
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, [animateCloseDashboardDialog, deleteTarget, renameTarget]);
+
+  useLayoutEffect(() => {
+    if (!renameTarget) {
+      return;
+    }
+
+    const scrollY = window.scrollY;
+    const root = document.documentElement;
+    const previousRootOverflow = root.style.overflow;
+    const previousRootOverscrollBehavior = root.style.overscrollBehavior;
+    const previousRootTouchAction = root.style.touchAction;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousBodyPosition = document.body.style.position;
+    const previousBodyTop = document.body.style.top;
+    const previousBodyWidth = document.body.style.width;
+    const previousBodyHeight = document.body.style.height;
+    const previousBodyOverscrollBehavior = document.body.style.overscrollBehavior;
+    const previousBodyTouchAction = document.body.style.touchAction;
+
+    root.style.overflow = "hidden";
+    root.style.overscrollBehavior = "none";
+    root.style.touchAction = "none";
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    document.body.style.height = "100%";
+    document.body.style.overscrollBehavior = "none";
+    document.body.style.touchAction = "none";
+
+    function preventPageScroll(event: TouchEvent | WheelEvent) {
+      event.preventDefault();
+    }
+
+    document.addEventListener("touchmove", preventPageScroll, {
+      capture: true,
+      passive: false,
+    });
+    document.addEventListener("wheel", preventPageScroll, {
+      capture: true,
+      passive: false,
+    });
+
+    return () => {
+      document.removeEventListener("touchmove", preventPageScroll, true);
+      document.removeEventListener("wheel", preventPageScroll, true);
+      root.style.overflow = previousRootOverflow;
+      root.style.overscrollBehavior = previousRootOverscrollBehavior;
+      root.style.touchAction = previousRootTouchAction;
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.position = previousBodyPosition;
+      document.body.style.top = previousBodyTop;
+      document.body.style.width = previousBodyWidth;
+      document.body.style.height = previousBodyHeight;
+      document.body.style.overscrollBehavior = previousBodyOverscrollBehavior;
+      document.body.style.touchAction = previousBodyTouchAction;
+      window.scrollTo(0, scrollY);
+    };
+  }, [renameTarget]);
 
   useEffect(
     () => () => {

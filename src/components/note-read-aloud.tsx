@@ -647,15 +647,20 @@ function renderTokens(params: {
       if (annotation?.highlight) {
         const runTokens: NoteTtsInlineToken[] = [token];
         let cursor = index + 1;
+        const colorId = annotation.highlightColorId;
 
         while (cursor < params.tokens.length) {
           const candidate = params.tokens[cursor];
           const following = params.tokens[cursor + 1];
+          const followingAnnotation = following?.type === "word"
+            ? params.wordAnnotations.get(following.wordIndex)
+            : undefined;
 
           if (
             candidate?.type === "text" &&
             following?.type === "word" &&
-            params.wordAnnotations.get(following.wordIndex)?.highlight
+            followingAnnotation?.highlight &&
+            followingAnnotation.highlightColorId === colorId
           ) {
             runTokens.push(candidate, following);
             cursor += 2;
@@ -665,7 +670,6 @@ function renderTokens(params: {
           break;
         }
 
-        const colorId = annotation.highlightColorId;
         rendered.push(
           <span
             key={`highlight-run-${token.wordIndex}`}

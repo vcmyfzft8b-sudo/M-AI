@@ -746,9 +746,7 @@ function StudyGenerationNotice({
 }) {
   return (
     <div className="lecture-study-generation-notice" role="status" aria-live="polite">
-      <div className="lecture-study-generation-loader" aria-hidden="true">
-        <span />
-        <span />
+      <div className="lecture-study-generation-progress" aria-hidden="true">
         <span />
       </div>
       <div className="lecture-study-generation-copy">
@@ -2826,30 +2824,32 @@ export function LectureWorkspace({
           noteSelection.endWordIndex,
         ),
     );
+    const sameColorMatchingAnnotations = matchingAnnotations.filter(
+      (annotation) => (annotation.colorId ?? "orange") === colorId,
+    );
     const shouldRemoveSelection = isSelectionFullyCoveredByAnnotations(
-      matchingAnnotations,
+      sameColorMatchingAnnotations,
       noteSelection,
     );
+    const annotationsWithoutSelectionForKind = activeNoteDoc.annotations.flatMap((annotation) => {
+      const shouldSplitAnnotation =
+        annotation.kind === kind &&
+        annotationRangesOverlap(
+          annotation.startWordIndex,
+          annotation.endWordIndex,
+          noteSelection.startWordIndex,
+          noteSelection.endWordIndex,
+        );
+
+      return shouldSplitAnnotation ? removeSelectionFromAnnotation(annotation, noteSelection) : [annotation];
+    });
     const nextDoc: EditableNoteDoc = {
       ...activeNoteDoc,
       updatedAt: new Date().toISOString(),
       annotations: shouldRemoveSelection
-        ? activeNoteDoc.annotations.flatMap((annotation) => {
-            const shouldSplitAnnotation =
-              annotation.kind === kind &&
-              annotationRangesOverlap(
-                annotation.startWordIndex,
-                annotation.endWordIndex,
-                noteSelection.startWordIndex,
-                noteSelection.endWordIndex,
-              );
-
-            return shouldSplitAnnotation
-              ? removeSelectionFromAnnotation(annotation, noteSelection)
-              : [annotation];
-          })
+        ? annotationsWithoutSelectionForKind
         : [
-            ...activeNoteDoc.annotations,
+            ...annotationsWithoutSelectionForKind,
             {
               id: crypto.randomUUID(),
               kind,
@@ -3273,9 +3273,7 @@ export function LectureWorkspace({
       isDragging: false,
     };
     studyManagerItemDragRef.current = nextDrag;
-    setStudyManagerItemDrag(nextDrag);
     studyManagerItemSuppressClickRef.current = false;
-    event.currentTarget.setPointerCapture(event.pointerId);
   }
 
   function handleStudyManagerItemPointerMove(
@@ -3299,6 +3297,9 @@ export function LectureWorkspace({
 
     event.preventDefault();
     studyManagerItemSuppressClickRef.current = true;
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
 
     const nextDrag = {
       ...current,
@@ -3323,6 +3324,9 @@ export function LectureWorkspace({
     setOpenStudyManagerActionItemId(shouldOpen ? itemId : null);
     studyManagerItemDragRef.current = null;
     setStudyManagerItemDrag(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   }
 
   function handleStudyManagerItemClick(
@@ -3595,6 +3599,7 @@ export function LectureWorkspace({
                   type="button"
                   className={selectedHighlightColorId === color.id ? "active" : ""}
                   style={{ "--note-annotation-color": color.value } as CSSProperties}
+                  onPointerDown={(event) => event.preventDefault()}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     setSelectedHighlightColorId(color.id);
@@ -3841,7 +3846,9 @@ export function LectureWorkspace({
           .toLowerCase()
           .includes(normalizedStudySearch);
       });
-      const canManageActiveStudyView = activeStudyView === "flashcards" || activeStudyView === "quiz";
+      const canManageActiveStudyView =
+        (activeStudyView === "flashcards" && detail.flashcards.length > 0) ||
+        (activeStudyView === "quiz" && detail.quizQuestions.length > 0);
       const openStudyManager = () => {
         window.dispatchEvent(new Event("memoai:mobile-dock-close"));
         studyManagerDragStartYRef.current = null;

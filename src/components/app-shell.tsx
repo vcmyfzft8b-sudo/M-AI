@@ -194,13 +194,21 @@ export function AppShell({
       );
     }
 
+    function isInsideSwipeActionRow(target: EventTarget | null) {
+      return (
+        target instanceof HTMLElement &&
+        Boolean(target.closest(".dashboard-note-swipe-row, .dashboard-note-actions"))
+      );
+    }
+
     function handleTouchStart(event: TouchEvent) {
       if (
         window.innerWidth >= mobileBreakpoint ||
         isRefreshing ||
         event.touches.length !== 1 ||
         hasActiveMobileSheet() ||
-        isInsideMobileSheet(event.target)
+        isInsideMobileSheet(event.target) ||
+        isInsideSwipeActionRow(event.target)
       ) {
         resetGesture();
         return;
@@ -211,7 +219,11 @@ export function AppShell({
     }
 
     function handleTouchMove(event: TouchEvent) {
-      if (hasActiveMobileSheet() || isInsideMobileSheet(event.target)) {
+      if (
+        hasActiveMobileSheet() ||
+        isInsideMobileSheet(event.target) ||
+        isInsideSwipeActionRow(event.target)
+      ) {
         resetGesture();
         return;
       }

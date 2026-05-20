@@ -11,12 +11,12 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { InstantLink } from "@/components/instant-link";
 import { NoteSourceModal, type NoteSourceMode } from "@/components/note-source-modal";
 import { StatusBadge } from "@/components/status-badge";
 import { EmojiIcon } from "@/components/emoji-icon";
@@ -159,12 +159,12 @@ const NoteRow = memo(function NoteRow({
   onOpenDelete,
   attachMenuRef,
 }: NoteRowProps) {
-  const router = useRouter();
   const sourceType = getEffectiveLectureSourceType(lecture);
   const lectureHref = `/app/lectures/${lecture.id}`;
   const dragRef = useRef<DashboardNoteDragState | null>(null);
   const suppressClickRef = useRef(false);
   const [dragState, setDragState] = useState<DashboardNoteDragState | null>(null);
+  const [isOpening, setIsOpening] = useState(false);
   const noteOffset = dragState?.offset ?? (isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0);
   const isSwipeActive = Boolean(dragState || isMenuOpen || noteOffset < 0);
 
@@ -183,7 +183,6 @@ const NoteRow = memo(function NoteRow({
     };
     dragRef.current = nextDrag;
     suppressClickRef.current = false;
-    setDragState(nextDrag);
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
@@ -205,6 +204,9 @@ const NoteRow = memo(function NoteRow({
 
     event.preventDefault();
     suppressClickRef.current = true;
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
 
     const nextDrag = {
       ...current,
@@ -234,9 +236,12 @@ const NoteRow = memo(function NoteRow({
 
     dragRef.current = null;
     setDragState(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   }
 
-  function handleSurfaceClick(event: ReactMouseEvent<HTMLElement>) {
+  function handleSurfaceClick(event: ReactMouseEvent<HTMLAnchorElement>) {
     if (suppressClickRef.current) {
       event.preventDefault();
       event.stopPropagation();
@@ -244,23 +249,14 @@ const NoteRow = memo(function NoteRow({
       return;
     }
 
-    router.push(lectureHref);
-  }
-
-  function handleSurfaceKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
-    if (event.key !== "Enter" && event.key !== " ") {
-      return;
-    }
-
-    event.preventDefault();
-    router.push(lectureHref);
+    setIsOpening(true);
   }
 
   return (
     <div
       className={`ios-row-note-card dashboard-note-swipe-row ${
         isMenuOpen ? "menu-open" : ""
-      } ${isSwipeActive ? "is-swiping" : ""} ${dragState ? "is-dragging" : ""}`}
+      } ${isSwipeActive ? "is-swiping" : ""} ${dragState ? "is-dragging" : ""} ${isOpening ? "is-opening" : ""}`}
     >
       <div ref={isMenuOpen ? attachMenuRef : undefined} className="dashboard-note-actions">
         <button
@@ -292,16 +288,14 @@ const NoteRow = memo(function NoteRow({
           <span className="dashboard-note-action-label">Izbriši</span>
         </button>
       </div>
-      <div
-        role="link"
-        tabIndex={0}
+      <InstantLink
+        href={lectureHref}
         className="ios-row-note-card-link dashboard-note-card-surface"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
         onPointerCancel={handlePointerEnd}
         onClick={handleSurfaceClick}
-        onKeyDown={handleSurfaceKeyDown}
         style={
           {
             "--dashboard-note-swipe-offset": `${noteOffset}px`,
@@ -322,7 +316,7 @@ const NoteRow = memo(function NoteRow({
         <div className="flex items-center gap-3">
           {lecture.status !== "ready" && <StatusBadge status={lecture.status} />}
         </div>
-      </div>
+      </InstantLink>
     </div>
   );
 }, (previousProps, nextProps) => {
@@ -375,6 +369,7 @@ export function HomeDashboard({
   const [openMenuLectureId, setOpenMenuLectureId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<AppLectureListItem | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [renameInputFocused, setRenameInputFocused] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AppLectureListItem | null>(null);
   const [dashboardActionError, setDashboardActionError] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
@@ -637,6 +632,7 @@ export function HomeDashboard({
     setDashboardActionError(null);
     setRenameTarget(lecture);
     setRenameValue(lecture.title?.trim() || "Neimenovan zapisek");
+    setRenameInputFocused(false);
   }
 
   function closeRenameModal() {
@@ -644,12 +640,14 @@ export function HomeDashboard({
       return;
     }
 
+    setRenameInputFocused(false);
     animateCloseDashboardDialog();
   }
 
   function openDeleteModal(lecture: AppLectureListItem) {
     setOpenMenuLectureId(null);
     setDashboardActionError(null);
+    setRenameInputFocused(false);
     setDeleteTarget(lecture);
   }
 
@@ -1170,7 +1168,9 @@ export function HomeDashboard({
               aria-label="Zapri okno za preimenovanje zapiska"
             />
             <section
-              className="mobile-create-menu dashboard-note-dialog mobile-draggable-sheet"
+              className={`mobile-create-menu dashboard-note-dialog dashboard-note-dialog-rename mobile-draggable-sheet ${
+                renameInputFocused ? "keyboard-open" : ""
+              }`}
               role="dialog"
               aria-modal="true"
               aria-labelledby="rename-note-title"
@@ -1225,6 +1225,8 @@ export function HomeDashboard({
                     autoFocus
                     value={renameValue}
                     onChange={(event) => setRenameValue(event.target.value)}
+                    onFocus={() => setRenameInputFocused(true)}
+                    onBlur={() => setRenameInputFocused(false)}
                     className="ios-input"
                     placeholder="Neimenovan zapisek"
                   />

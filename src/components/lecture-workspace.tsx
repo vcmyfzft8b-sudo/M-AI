@@ -3145,6 +3145,19 @@ export function LectureWorkspace({
       return;
     }
 
+    const shouldLockBodyScroll = window.innerWidth < 1100;
+    const scrollY = window.scrollY;
+    const previousOverflow = document.body.style.overflow;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    const previousWidth = document.body.style.width;
+    if (shouldLockBodyScroll) {
+      document.body.style.overflow = "hidden";
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = "100%";
+    }
+
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         animateCloseStudyManager();
@@ -3152,7 +3165,16 @@ export function LectureWorkspace({
     }
 
     window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
+    return () => {
+      if (shouldLockBodyScroll) {
+        document.body.style.overflow = previousOverflow;
+        document.body.style.position = previousPosition;
+        document.body.style.top = previousTop;
+        document.body.style.width = previousWidth;
+        window.scrollTo(0, scrollY);
+      }
+      window.removeEventListener("keydown", handleEscape);
+    };
   }, [animateCloseStudyManager, isStudyManagerOpen]);
 
   function handleStudyManagerPointerDown(event: ReactPointerEvent<HTMLElement>) {
@@ -3169,6 +3191,14 @@ export function LectureWorkspace({
         : null;
     const dragHandleTarget =
       target instanceof Element ? target.closest(".study-manager-drag-handle") : null;
+    const dragHeaderTarget =
+      target instanceof Element ? target.closest(".study-manager-header") : null;
+    const draggableRegionTarget =
+      target instanceof Element
+        ? target.closest(
+            ".study-manager-sheet, .study-manager-header, .study-manager-form, .study-manager-list",
+          )
+        : null;
 
     studyManagerSuppressClickRef.current = false;
     studyManagerDragStartYRef.current = null;
@@ -3181,6 +3211,14 @@ export function LectureWorkspace({
       return;
     }
 
+    if (!dragHandleTarget && !draggableRegionTarget) {
+      return;
+    }
+
+    if (!dragHandleTarget && !dragHeaderTarget && event.currentTarget.scrollTop > 0) {
+      return;
+    }
+
     studyManagerDragStartYRef.current = event.clientY;
     if (!interactiveTarget || dragHandleTarget) {
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -3189,7 +3227,7 @@ export function LectureWorkspace({
 
   function updateStudyManagerDragOffset(clientY: number) {
     if (studyManagerDragStartYRef.current === null) {
-      return;
+      return false;
     }
 
     const nextOffset = Math.max(0, clientY - studyManagerDragStartYRef.current);
@@ -3198,6 +3236,7 @@ export function LectureWorkspace({
       studyManagerSuppressClickRef.current = true;
     }
     setStudyManagerDragOffset(nextOffset);
+    return nextOffset > 0;
   }
 
   function handleStudyManagerClickCapture(event: ReactMouseEvent<HTMLElement>) {
@@ -3216,7 +3255,10 @@ export function LectureWorkspace({
     }
 
     function handleWindowPointerMove(event: PointerEvent) {
-      updateStudyManagerDragOffset(event.clientY);
+      const isDraggingDown = updateStudyManagerDragOffset(event.clientY);
+      if (isDraggingDown) {
+        event.preventDefault();
+      }
     }
 
     function handleWindowPointerEnd() {
@@ -3230,7 +3272,7 @@ export function LectureWorkspace({
       setStudyManagerDragOffset(0);
     }
 
-    window.addEventListener("pointermove", handleWindowPointerMove);
+    window.addEventListener("pointermove", handleWindowPointerMove, { passive: false });
     window.addEventListener("pointerup", handleWindowPointerEnd);
     window.addEventListener("pointercancel", handleWindowPointerEnd);
     return () => {

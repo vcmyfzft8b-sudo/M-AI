@@ -1439,8 +1439,14 @@ export function HomeDashboard({
                     ref={renameInputRef}
                     value={renameValue}
                     onChange={(event) => setRenameValue(event.target.value)}
-                    onFocus={() => setRenameInputFocused(true)}
-                    onBlur={() => setRenameInputFocused(false)}
+                    onFocus={() => {
+                      setRenameInputFocused(true);
+                      setRenameKeyboardLayoutActive(true);
+                    }}
+                    onBlur={() => {
+                      setRenameInputFocused(false);
+                      setRenameKeyboardLayoutActive(false);
+                    }}
                     className="ios-input"
                     placeholder="Neimenovan zapisek"
                   />

@@ -17,6 +17,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { flushSync } from "react-dom";
 
 import { NoteSourceModal, type NoteSourceMode } from "@/components/note-source-modal";
 import { StatusBadge } from "@/components/status-badge";
@@ -814,12 +815,15 @@ export function HomeDashboard({
   }
 
   function openRenameModal(lecture: AppLectureListItem) {
-    setOpenMenuLectureId(null);
-    setDashboardActionError(null);
-    setRenameTarget(lecture);
-    setRenameValue(lecture.title?.trim() || "Neimenovan zapisek");
-    setRenameInputFocused(true);
-    setKeepRenameExpandedDuringClose(false);
+    flushSync(() => {
+      setOpenMenuLectureId(null);
+      setDashboardActionError(null);
+      setRenameTarget(lecture);
+      setRenameValue(lecture.title?.trim() || "Neimenovan zapisek");
+      setRenameInputFocused(true);
+      setKeepRenameExpandedDuringClose(false);
+    });
+    renameInputRef.current?.focus({ preventScroll: true });
   }
 
   function closeRenameModal() {

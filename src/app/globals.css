@@ -11206,6 +11206,18 @@ select:disabled {
     transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
+  .study-manager-top-drag-zone {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1;
+    height: 5rem;
+    border-radius: 34px 34px 0 0;
+    cursor: grab;
+    touch-action: none;
+  }
+
   .study-manager-sheet.keyboard-open {
     height: calc(100dvh - var(--study-manager-mobile-top));
     max-height: calc(100dvh - var(--study-manager-mobile-top));
@@ -11219,10 +11231,13 @@ select:disabled {
   }
 
   .study-manager-drag-handle {
+    z-index: 2;
     touch-action: none;
   }
 
   .study-manager-header {
+    position: relative;
+    z-index: 2;
     display: grid;
     grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
     align-items: center;

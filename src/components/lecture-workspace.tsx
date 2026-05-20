@@ -3185,6 +3185,7 @@ export function LectureWorkspace({
     }
 
     const target = event.target;
+    const sheet = event.currentTarget;
     const swipeItemTarget =
       target instanceof Element ? target.closest(".study-manager-item-surface") : null;
     const interactiveTarget =
@@ -3193,6 +3194,8 @@ export function LectureWorkspace({
         : null;
     const dragHandleTarget =
       target instanceof Element ? target.closest(".study-manager-drag-handle") : null;
+    const topDragZoneTarget =
+      target instanceof Element ? target.closest(".study-manager-top-drag-zone") : null;
     const dragHeaderTarget =
       target instanceof Element ? target.closest(".study-manager-header") : null;
     const draggableRegionTarget =
@@ -3209,21 +3212,25 @@ export function LectureWorkspace({
       return;
     }
 
-    if (interactiveTarget && !dragHandleTarget) {
+    if (interactiveTarget && !dragHandleTarget && !topDragZoneTarget) {
       return;
     }
 
-    if (!dragHandleTarget && !draggableRegionTarget) {
+    if (!dragHandleTarget && !topDragZoneTarget && !draggableRegionTarget) {
       return;
     }
 
-    if (!dragHandleTarget && !dragHeaderTarget && event.currentTarget.scrollTop > 0) {
+    if (!dragHandleTarget && !topDragZoneTarget && !dragHeaderTarget && sheet.scrollTop > 0) {
       return;
+    }
+
+    if (topDragZoneTarget && sheet.scrollTop > 0) {
+      sheet.scrollTo({ top: 0 });
     }
 
     studyManagerDragStartYRef.current = event.clientY;
-    if (!interactiveTarget || dragHandleTarget) {
-      event.currentTarget.setPointerCapture(event.pointerId);
+    if (!interactiveTarget || dragHandleTarget || topDragZoneTarget) {
+      sheet.setPointerCapture(event.pointerId);
     }
   }
 
@@ -3243,16 +3250,19 @@ export function LectureWorkspace({
     }
 
     const dragHandleTarget = target.closest(".study-manager-drag-handle");
+    const topDragZoneTarget = target.closest(".study-manager-top-drag-zone");
 
     if (
       target.closest("button, a, input, textarea, select, .app-close-button") &&
-      !dragHandleTarget
+      !dragHandleTarget &&
+      !topDragZoneTarget
     ) {
       return false;
     }
 
     return Boolean(
       dragHandleTarget ||
+        topDragZoneTarget ||
         target.closest(".study-manager-header, .study-manager-form, .study-manager-list"),
     );
   }
@@ -4732,6 +4742,7 @@ export function LectureWorkspace({
                       : undefined
                   }
                 >
+                  <div className="study-manager-top-drag-zone" aria-hidden="true" />
                   <button
                     type="button"
                     className="mobile-sheet-drag-handle study-manager-drag-handle"

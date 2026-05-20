@@ -960,6 +960,51 @@ export function HomeDashboard({
     dashboardDialogSuppressClickRef.current = false;
   }
 
+  function collapseRenameKeyboardLayout() {
+    setRenameInputFocused(false);
+    setRenameKeyboardLayoutActive(false);
+    renameKeyboardSeenRef.current = false;
+    if (document.activeElement === renameInputRef.current) {
+      renameInputRef.current?.blur();
+    }
+  }
+
+  function focusRenameInputFromGesture(input: HTMLInputElement) {
+    const shouldRefocusHiddenKeyboard =
+      document.activeElement === input && !renameKeyboardLayoutActiveRef.current;
+
+    activateRenameKeyboardLayout();
+
+    if (shouldRefocusHiddenKeyboard) {
+      input.blur();
+    }
+
+    input.focus({ preventScroll: true });
+  }
+
+  function handleRenameDialogPointerDownCapture(event: ReactPointerEvent<HTMLElement>) {
+    const target = event.target;
+
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const inputTarget = target.closest(".dashboard-note-dialog-field");
+    if (inputTarget && target !== renameInputRef.current) {
+      const input = renameInputRef.current;
+      if (input) {
+        focusRenameInputFromGesture(input);
+      }
+      return;
+    }
+
+    if (target.closest("button, a, input, textarea, select, .mobile-sheet-drag-handle")) {
+      return;
+    }
+
+    collapseRenameKeyboardLayout();
+  }
+
   useEffect(() => {
     if (!renameTarget && !deleteTarget) {
       return;
@@ -1438,6 +1483,7 @@ export function HomeDashboard({
               role="dialog"
               aria-modal="true"
               aria-labelledby="rename-note-title"
+              onPointerDownCapture={handleRenameDialogPointerDownCapture}
               onPointerDown={handleDashboardDialogDragHandlePointerDown}
               onClickCapture={handleDashboardDialogClickCapture}
               style={{
@@ -1490,11 +1536,11 @@ export function HomeDashboard({
                     ref={renameInputRef}
                     value={renameValue}
                     onChange={(event) => setRenameValue(event.target.value)}
-                    onPointerDown={() => {
-                      activateRenameKeyboardLayout();
+                    onPointerDown={(event) => {
+                      focusRenameInputFromGesture(event.currentTarget);
                     }}
-                    onClick={() => {
-                      activateRenameKeyboardLayout();
+                    onClick={(event) => {
+                      focusRenameInputFromGesture(event.currentTarget);
                     }}
                     onFocus={() => {
                       activateRenameKeyboardLayout();

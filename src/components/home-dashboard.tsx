@@ -418,6 +418,7 @@ export function HomeDashboard({
   const [renameTarget, setRenameTarget] = useState<AppLectureListItem | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [renameInputFocused, setRenameInputFocused] = useState(false);
+  const [renameKeyboardLayoutActive, setRenameKeyboardLayoutActive] = useState(false);
   const [keepRenameExpandedDuringClose, setKeepRenameExpandedDuringClose] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AppLectureListItem | null>(null);
   const [dashboardActionError, setDashboardActionError] = useState<string | null>(null);
@@ -537,6 +538,7 @@ export function HomeDashboard({
     setRenameTarget(null);
     setRenameValue("");
     setRenameInputFocused(false);
+    setRenameKeyboardLayoutActive(false);
     setRenameDialogStyle(undefined);
     setKeepRenameExpandedDuringClose(false);
     setDeleteTarget(null);
@@ -821,6 +823,7 @@ export function HomeDashboard({
       setRenameTarget(lecture);
       setRenameValue(lecture.title?.trim() || "Neimenovan zapisek");
       setRenameInputFocused(true);
+      setRenameKeyboardLayoutActive(true);
       setKeepRenameExpandedDuringClose(false);
     });
     renameInputRef.current?.focus({ preventScroll: true });
@@ -838,6 +841,7 @@ export function HomeDashboard({
     setOpenMenuLectureId(null);
     setDashboardActionError(null);
     setRenameInputFocused(false);
+    setRenameKeyboardLayoutActive(false);
     setKeepRenameExpandedDuringClose(false);
     setDeleteTarget(lecture);
   }
@@ -1003,6 +1007,12 @@ export function HomeDashboard({
     }
 
     const target = renameTarget;
+    setRenameInputFocused(false);
+    setRenameKeyboardLayoutActive(false);
+    setKeepRenameExpandedDuringClose(false);
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
 
     try {
       setDashboardActionError(null);
@@ -1369,7 +1379,7 @@ export function HomeDashboard({
             />
             <section
               className={`mobile-create-menu dashboard-note-dialog dashboard-note-dialog-rename mobile-draggable-sheet ${
-                (renameInputFocused || keepRenameExpandedDuringClose) &&
+                (renameKeyboardLayoutActive || keepRenameExpandedDuringClose) &&
                 busyLectureId !== renameTarget.id
                   ? "keyboard-open"
                   : ""
@@ -1411,11 +1421,6 @@ export function HomeDashboard({
                 className="dashboard-note-dialog-body"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  setRenameInputFocused(false);
-                  setKeepRenameExpandedDuringClose(false);
-                  if (document.activeElement instanceof HTMLElement) {
-                    document.activeElement.blur();
-                  }
                   void handleRenameLecture();
                 }}
               >

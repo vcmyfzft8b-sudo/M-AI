@@ -625,8 +625,14 @@ export function HomeDashboard({
         0,
         window.innerHeight - viewportHeight - viewportOffsetTop,
       );
+      const actionHeight = Math.max(44, Math.min(56, viewportHeight * 0.096));
+      const actionGap = Math.max(8, Math.min(14, viewportHeight * 0.018));
+      const keyboardBuffer = Math.max(14, Math.min(24, viewportHeight * 0.034));
 
       setRenameDialogStyle({
+        "--dashboard-note-dialog-action-gap": `${Math.round(actionGap)}px`,
+        "--dashboard-note-dialog-action-height": `${Math.round(actionHeight)}px`,
+        "--dashboard-note-dialog-keyboard-buffer": `${Math.round(keyboardBuffer)}px`,
         "--dashboard-note-dialog-keyboard-inset": `${Math.round(keyboardInset)}px`,
         "--dashboard-note-dialog-visual-height": `${Math.round(viewportHeight)}px`,
         "--dashboard-note-dialog-visual-offset-top": `${Math.round(viewportOffsetTop)}px`,

@@ -11713,7 +11713,10 @@ select:disabled {
       )
       0
       max(
-        var(--dashboard-note-dialog-keyboard-inset, 0px),
+        calc(
+          var(--dashboard-note-dialog-keyboard-inset, 0px) +
+          var(--dashboard-note-dialog-keyboard-buffer, 16px)
+        ),
         env(safe-area-inset-bottom)
       );
     height: auto;
@@ -11749,14 +11752,14 @@ select:disabled {
   }
 
   .dashboard-note-dialog-rename.keyboard-open .dashboard-note-dialog-actions {
-    gap: 0.45rem;
+    gap: var(--dashboard-note-dialog-action-gap, 0.55rem);
   }
 
   .dashboard-note-dialog-rename.keyboard-open .ios-primary-button,
   .dashboard-note-dialog-rename.keyboard-open .ios-secondary-button {
-    min-height: 2.55rem;
+    min-height: var(--dashboard-note-dialog-action-height, 2.85rem);
     border-radius: 14px;
-    font-size: 0.96rem;
+    font-size: clamp(0.96rem, 2.35vw, 1.05rem);
   }
 
   .library-folder-modal-drag-handle {

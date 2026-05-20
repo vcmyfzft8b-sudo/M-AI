@@ -408,6 +408,7 @@ export function HomeDashboard({
   const [isMobileCreateMenuOpen, setIsMobileCreateMenuOpen] = useState(false);
   const [mobileCreateMenuDragOffset, setMobileCreateMenuDragOffset] = useState(0);
   const [dashboardDialogDragOffset, setDashboardDialogDragOffset] = useState(0);
+  const [renameDialogStyle, setRenameDialogStyle] = useState<CSSProperties | undefined>();
   const [libraryLectures, setLibraryLectures] = useState(lectures);
   const [busyLectureId, setBusyLectureId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -535,6 +536,7 @@ export function HomeDashboard({
     setRenameTarget(null);
     setRenameValue("");
     setRenameInputFocused(false);
+    setRenameDialogStyle(undefined);
     setKeepRenameExpandedDuringClose(false);
     setDeleteTarget(null);
   }, []);
@@ -580,6 +582,7 @@ export function HomeDashboard({
     const root = document.documentElement;
     const previousRootOverflow = root.style.overflow;
     const previousRootOverscrollBehavior = root.style.overscrollBehavior;
+    const previousRootScrollBehavior = root.style.scrollBehavior;
     const previousRootTouchAction = root.style.touchAction;
     const previousBodyOverflow = document.body.style.overflow;
     const previousBodyPosition = document.body.style.position;
@@ -592,6 +595,7 @@ export function HomeDashboard({
 
     root.style.overflow = "hidden";
     root.style.overscrollBehavior = "none";
+    root.style.scrollBehavior = "auto";
     root.style.touchAction = "none";
     document.body.style.overflow = "hidden";
     document.body.style.position = "fixed";
@@ -602,13 +606,37 @@ export function HomeDashboard({
     document.body.style.touchAction = "none";
 
     const restoreScrollPosition = () => {
-      window.scrollTo(0, scrollY);
+      window.scrollTo({ left: 0, top: scrollY, behavior: "auto" });
     };
 
     const scheduleScrollRestore = () => {
       window.requestAnimationFrame(restoreScrollPosition);
       window.setTimeout(restoreScrollPosition, 0);
-      window.setTimeout(restoreScrollPosition, 250);
+    };
+
+    const updateViewportMetrics = () => {
+      const viewport = window.visualViewport;
+      const viewportHeight = viewport?.height ?? window.innerHeight;
+      const viewportOffsetTop = viewport?.offsetTop ?? 0;
+      const keyboardInset = Math.max(
+        0,
+        window.innerHeight - viewportHeight - viewportOffsetTop,
+      );
+
+      setRenameDialogStyle({
+        "--dashboard-note-dialog-keyboard-inset": `${Math.round(keyboardInset)}px`,
+        "--dashboard-note-dialog-visual-height": `${Math.round(viewportHeight)}px`,
+        "--dashboard-note-dialog-visual-offset-top": `${Math.round(viewportOffsetTop)}px`,
+      } as CSSProperties);
+      scheduleScrollRestore();
+    };
+
+    const focusRenameInput = () => {
+      if (renameInput && document.activeElement !== renameInput) {
+        renameInput.focus({ preventScroll: true });
+      }
+
+      scheduleScrollRestore();
     };
 
     function preventPageScroll(event: TouchEvent | WheelEvent) {
@@ -621,6 +649,7 @@ export function HomeDashboard({
     }
 
     function handleFocusIn() {
+      updateViewportMetrics();
       scheduleScrollRestore();
     }
 
@@ -633,22 +662,28 @@ export function HomeDashboard({
       passive: false,
     });
     window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("resize", handleScroll, { passive: true });
-    window.visualViewport?.addEventListener("scroll", handleScroll, { passive: true });
-    window.visualViewport?.addEventListener("resize", handleScroll, { passive: true });
+    window.addEventListener("resize", updateViewportMetrics, { passive: true });
+    window.visualViewport?.addEventListener("scroll", updateViewportMetrics, { passive: true });
+    window.visualViewport?.addEventListener("resize", updateViewportMetrics, { passive: true });
     renameInput?.addEventListener("focus", handleFocusIn);
+    updateViewportMetrics();
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(focusRenameInput);
+    });
     scheduleScrollRestore();
 
     return () => {
       document.removeEventListener("touchmove", preventPageScroll, true);
       document.removeEventListener("wheel", preventPageScroll, true);
       window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("resize", handleScroll);
-      window.visualViewport?.removeEventListener("scroll", handleScroll);
-      window.visualViewport?.removeEventListener("resize", handleScroll);
+      window.removeEventListener("resize", updateViewportMetrics);
+      window.visualViewport?.removeEventListener("scroll", updateViewportMetrics);
+      window.visualViewport?.removeEventListener("resize", updateViewportMetrics);
       renameInput?.removeEventListener("focus", handleFocusIn);
+      setRenameDialogStyle(undefined);
       root.style.overflow = previousRootOverflow;
       root.style.overscrollBehavior = previousRootOverscrollBehavior;
+      root.style.scrollBehavior = previousRootScrollBehavior;
       root.style.touchAction = previousRootTouchAction;
       document.body.style.overflow = previousBodyOverflow;
       document.body.style.position = previousBodyPosition;
@@ -1340,11 +1375,12 @@ export function HomeDashboard({
               aria-labelledby="rename-note-title"
               onPointerDown={handleDashboardDialogDragHandlePointerDown}
               onClickCapture={handleDashboardDialogClickCapture}
-              style={
-                dashboardDialogDragOffset > 0
+              style={{
+                ...renameDialogStyle,
+                ...(dashboardDialogDragOffset > 0
                   ? { transform: `translateY(${dashboardDialogDragOffset}px)` }
-                  : undefined
-              }
+                  : null),
+              }}
             >
               <button
                 type="button"
@@ -1392,7 +1428,6 @@ export function HomeDashboard({
                   <span>Naslov</span>
                   <input
                     ref={renameInputRef}
-                    autoFocus
                     value={renameValue}
                     onChange={(event) => setRenameValue(event.target.value)}
                     onFocus={() => setRenameInputFocused(true)}

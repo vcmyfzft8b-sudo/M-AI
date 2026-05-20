@@ -11703,14 +11703,60 @@ select:disabled {
 
   .mobile-create-menu.dashboard-note-dialog.dashboard-note-dialog-rename.keyboard-open {
     grid-template-rows: auto auto minmax(0, 1fr);
-    inset: max(4.7rem, env(safe-area-inset-top)) 0 0;
+    inset:
+      max(
+        4.7rem,
+        calc(
+          env(safe-area-inset-top) +
+          var(--dashboard-note-dialog-visual-offset-top, 0px)
+        )
+      )
+      0
+      max(
+        var(--dashboard-note-dialog-keyboard-inset, 0px),
+        env(safe-area-inset-bottom)
+      );
     height: auto;
+    max-height: calc(
+      var(--dashboard-note-dialog-visual-height, 100dvh) -
+      max(4.7rem, env(safe-area-inset-top)) -
+      0.5rem
+    );
+    gap: 0.65rem;
+    padding: 0.55rem 0.85rem max(0.75rem, env(safe-area-inset-bottom));
   }
 
   .dashboard-note-dialog-rename.keyboard-open .dashboard-note-dialog-body {
     max-width: 100%;
     align-content: start;
-    padding-bottom: max(2rem, env(safe-area-inset-bottom));
+    gap: 0.62rem;
+    padding-bottom: 0;
+  }
+
+  .dashboard-note-dialog-rename.keyboard-open .dashboard-note-dialog-copy {
+    font-size: 0.94rem;
+    line-height: 1.28;
+  }
+
+  .dashboard-note-dialog-rename.keyboard-open .dashboard-note-dialog-field {
+    gap: 0.35rem;
+  }
+
+  .dashboard-note-dialog-rename.keyboard-open .ios-input {
+    min-height: 2.45rem;
+    padding: 0.4rem 0.65rem;
+    font-size: 1rem;
+  }
+
+  .dashboard-note-dialog-rename.keyboard-open .dashboard-note-dialog-actions {
+    gap: 0.45rem;
+  }
+
+  .dashboard-note-dialog-rename.keyboard-open .ios-primary-button,
+  .dashboard-note-dialog-rename.keyboard-open .ios-secondary-button {
+    min-height: 2.55rem;
+    border-radius: 14px;
+    font-size: 0.96rem;
   }
 
   .library-folder-modal-drag-handle {

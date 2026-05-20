@@ -406,6 +406,8 @@ export function HomeDashboard({
   const dashboardDialogCloseTimerRef = useRef<number | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const renameViewportMetricsKeyRef = useRef("");
+  const renameKeyboardVisibleRef = useRef(false);
+  const renamePreviousKeyboardInsetRef = useRef(0);
   const [query, setQuery] = useState("");
   const [manualModal, setManualModal] = useState<NoteSourceMode | null>(null);
   const [isMobileCreateMenuOpen, setIsMobileCreateMenuOpen] = useState(false);
@@ -537,6 +539,8 @@ export function HomeDashboard({
     setDashboardActionError(null);
     setRenameTarget(null);
     setRenameValue("");
+    renameKeyboardVisibleRef.current = false;
+    renamePreviousKeyboardInsetRef.current = 0;
     setRenameKeyboardVisible(false);
     setRenameDialogStyle(undefined);
     setDeleteTarget(null);
@@ -620,9 +624,15 @@ export function HomeDashboard({
         0,
         window.innerHeight - viewportHeight - viewportOffsetTop,
       );
-      setRenameKeyboardVisible(keyboardInset > RENAME_KEYBOARD_VISIBLE_INSET_PX);
+      const previousKeyboardInset = renamePreviousKeyboardInsetRef.current;
+      const keyboardInsetIsShrinking =
+        previousKeyboardInset > RENAME_KEYBOARD_VISIBLE_INSET_PX &&
+        keyboardInset < previousKeyboardInset - 4;
+      const nextKeyboardVisible =
+        keyboardInset > RENAME_KEYBOARD_VISIBLE_INSET_PX && !keyboardInsetIsShrinking;
+      const effectiveKeyboardInset = nextKeyboardVisible ? keyboardInset : 0;
 
-      const roundedKeyboardInset = Math.round(keyboardInset);
+      const roundedKeyboardInset = Math.round(effectiveKeyboardInset);
       const roundedViewportHeight = Math.round(viewportHeight);
       const roundedViewportOffsetTop = Math.round(viewportOffsetTop);
       const viewportMetricsKey = [
@@ -631,14 +641,25 @@ export function HomeDashboard({
         roundedViewportOffsetTop,
       ].join(":");
 
-      if (renameViewportMetricsKeyRef.current !== viewportMetricsKey) {
+      const keyboardVisibilityChanged =
+        renameKeyboardVisibleRef.current !== nextKeyboardVisible;
+
+      if (
+        renameViewportMetricsKeyRef.current !== viewportMetricsKey ||
+        keyboardVisibilityChanged
+      ) {
         renameViewportMetricsKeyRef.current = viewportMetricsKey;
-        setRenameDialogStyle({
-          "--dashboard-note-dialog-keyboard-inset": `${roundedKeyboardInset}px`,
-          "--dashboard-note-dialog-visual-height": `${roundedViewportHeight}px`,
-          "--dashboard-note-dialog-visual-offset-top": `${roundedViewportOffsetTop}px`,
-        } as CSSProperties);
+        renameKeyboardVisibleRef.current = nextKeyboardVisible;
+        flushSync(() => {
+          setRenameKeyboardVisible(nextKeyboardVisible);
+          setRenameDialogStyle({
+            "--dashboard-note-dialog-keyboard-inset": `${roundedKeyboardInset}px`,
+            "--dashboard-note-dialog-visual-height": `${roundedViewportHeight}px`,
+            "--dashboard-note-dialog-visual-offset-top": `${roundedViewportOffsetTop}px`,
+          } as CSSProperties);
+        });
       }
+      renamePreviousKeyboardInsetRef.current = keyboardInset;
       scheduleScrollRestore();
     };
 
@@ -677,7 +698,7 @@ export function HomeDashboard({
     window.visualViewport?.addEventListener("scroll", updateViewportMetrics, { passive: true });
     window.visualViewport?.addEventListener("resize", updateViewportMetrics, { passive: true });
     renameInput?.addEventListener("focus", handleFocusIn);
-    const viewportPollId = window.setInterval(updateViewportMetrics, 120);
+    const viewportPollId = window.setInterval(updateViewportMetrics, 32);
     updateViewportMetrics();
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(focusRenameInput);
@@ -694,6 +715,8 @@ export function HomeDashboard({
       renameInput?.removeEventListener("focus", handleFocusIn);
       window.clearInterval(viewportPollId);
       renameViewportMetricsKeyRef.current = "";
+      renameKeyboardVisibleRef.current = false;
+      renamePreviousKeyboardInsetRef.current = 0;
       setRenameDialogStyle(undefined);
       root.style.overflow = previousRootOverflow;
       root.style.overscrollBehavior = previousRootOverscrollBehavior;
@@ -1461,6 +1484,8 @@ export function HomeDashboard({
                       event.currentTarget.focus({ preventScroll: true });
                     }}
                     onBlur={() => {
+                      renameKeyboardVisibleRef.current = false;
+                      renamePreviousKeyboardInsetRef.current = 0;
                       setRenameKeyboardVisible(false);
                     }}
                     className="ios-input"

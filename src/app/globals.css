@@ -11734,32 +11734,45 @@ select:disabled {
 
   .dashboard-note-dialog-rename.keyboard-open .dashboard-note-dialog-body {
     max-width: 100%;
-    align-content: start;
-    gap: 0.62rem;
     padding-bottom: 0;
   }
 
-  .dashboard-note-dialog-rename.keyboard-open .dashboard-note-dialog-copy {
+  .dashboard-note-dialog-rename.keyboard-hidden {
+    gap: 1rem;
+    padding: 0.85rem 1rem calc(env(safe-area-inset-bottom) + 1.25rem);
+  }
+
+  .dashboard-note-dialog-rename.keyboard-hidden .dashboard-note-dialog-body {
+    align-content: center;
+    padding-bottom: min(8vh, 4rem);
+  }
+
+  .dashboard-note-dialog-rename.keyboard-visible .dashboard-note-dialog-body {
+    align-content: start;
+    gap: 0.62rem;
+  }
+
+  .dashboard-note-dialog-rename.keyboard-visible .dashboard-note-dialog-copy {
     font-size: 0.94rem;
     line-height: 1.28;
   }
 
-  .dashboard-note-dialog-rename.keyboard-open .dashboard-note-dialog-field {
+  .dashboard-note-dialog-rename.keyboard-visible .dashboard-note-dialog-field {
     gap: 0.35rem;
   }
 
-  .dashboard-note-dialog-rename.keyboard-open .ios-input {
+  .dashboard-note-dialog-rename.keyboard-visible .ios-input {
     min-height: 2.45rem;
     padding: 0.4rem 0.65rem;
     font-size: 1rem;
   }
 
-  .dashboard-note-dialog-rename.keyboard-open .dashboard-note-dialog-actions {
+  .dashboard-note-dialog-rename.keyboard-visible .dashboard-note-dialog-actions {
     gap: 0.45rem;
   }
 
-  .dashboard-note-dialog-rename.keyboard-open .ios-primary-button,
-  .dashboard-note-dialog-rename.keyboard-open .ios-secondary-button {
+  .dashboard-note-dialog-rename.keyboard-visible .ios-primary-button,
+  .dashboard-note-dialog-rename.keyboard-visible .ios-secondary-button {
     min-height: 2.55rem;
     border-radius: 14px;
     font-size: 0.96rem;

@@ -62,9 +62,7 @@ const QUICK_ACTIONS = [
 
 const DASHBOARD_MUTATION_TIMEOUT_MS = 18_000;
 const DASHBOARD_NOTE_ACTION_REVEAL_PX = 144;
-const RENAME_KEYBOARD_OPEN_GRACE_MS = 700;
-const RENAME_KEYBOARD_INSET_ACTIVE_PX = 80;
-const RENAME_KEYBOARD_INSET_CLOSED_PX = 24;
+const RENAME_KEYBOARD_VISIBLE_INSET_PX = 80;
 
 type DashboardNoteDragState = {
   pointerId: number;
@@ -407,9 +405,6 @@ export function HomeDashboard({
   const dashboardDialogSuppressClickRef = useRef(false);
   const dashboardDialogCloseTimerRef = useRef<number | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
-  const renameKeyboardSeenRef = useRef(false);
-  const renameKeyboardActivationTimeRef = useRef(0);
-  const renameKeyboardLayoutActiveRef = useRef(false);
   const renameViewportMetricsKeyRef = useRef("");
   const [query, setQuery] = useState("");
   const [manualModal, setManualModal] = useState<NoteSourceMode | null>(null);
@@ -424,9 +419,7 @@ export function HomeDashboard({
   const [openMenuLectureId, setOpenMenuLectureId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<AppLectureListItem | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [renameInputFocused, setRenameInputFocused] = useState(false);
-  const [renameKeyboardLayoutActive, setRenameKeyboardLayoutActive] = useState(false);
-  const [keepRenameExpandedDuringClose, setKeepRenameExpandedDuringClose] = useState(false);
+  const [renameKeyboardVisible, setRenameKeyboardVisible] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AppLectureListItem | null>(null);
   const [dashboardActionError, setDashboardActionError] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
@@ -443,17 +436,6 @@ export function HomeDashboard({
   })();
 
   const activeModal = manualModal ?? searchModal;
-
-  const activateRenameKeyboardLayout = useCallback(() => {
-    renameKeyboardSeenRef.current = false;
-    renameKeyboardActivationTimeRef.current = window.performance.now();
-    setRenameInputFocused(true);
-    setRenameKeyboardLayoutActive(true);
-  }, []);
-
-  useEffect(() => {
-    renameKeyboardLayoutActiveRef.current = renameKeyboardLayoutActive;
-  }, [renameKeyboardLayoutActive]);
 
   useEffect(() => {
     setLibraryLectures(lectures);
@@ -555,11 +537,8 @@ export function HomeDashboard({
     setDashboardActionError(null);
     setRenameTarget(null);
     setRenameValue("");
-    setRenameInputFocused(false);
-    setRenameKeyboardLayoutActive(false);
-    renameKeyboardSeenRef.current = false;
+    setRenameKeyboardVisible(false);
     setRenameDialogStyle(undefined);
-    setKeepRenameExpandedDuringClose(false);
     setDeleteTarget(null);
   }, []);
 
@@ -568,9 +547,6 @@ export function HomeDashboard({
       return;
     }
 
-    setKeepRenameExpandedDuringClose(
-      (current) => current || Boolean(renameTarget && renameInputFocused),
-    );
     dashboardDialogDragStartYRef.current = null;
     dashboardDialogDragOffsetRef.current = window.innerHeight;
     setDashboardDialogDragOffset(window.innerHeight);
@@ -578,7 +554,7 @@ export function HomeDashboard({
       dashboardDialogCloseTimerRef.current = null;
       closeDashboardDialog();
     }, 180);
-  }, [busyLectureId, closeDashboardDialog, renameInputFocused, renameTarget]);
+  }, [busyLectureId, closeDashboardDialog]);
 
   useEffect(() => {
     if (!renameTarget && !deleteTarget) {
@@ -644,24 +620,7 @@ export function HomeDashboard({
         0,
         window.innerHeight - viewportHeight - viewportOffsetTop,
       );
-      const isKeyboardOpeningGraceActive =
-        window.performance.now() - renameKeyboardActivationTimeRef.current <=
-        RENAME_KEYBOARD_OPEN_GRACE_MS;
-
-      if (keyboardInset > RENAME_KEYBOARD_INSET_ACTIVE_PX) {
-        renameKeyboardSeenRef.current = true;
-        if (!renameKeyboardLayoutActiveRef.current) {
-          setRenameInputFocused(true);
-          setRenameKeyboardLayoutActive(true);
-        }
-      } else if (
-        keyboardInset < RENAME_KEYBOARD_INSET_CLOSED_PX &&
-        renameKeyboardLayoutActiveRef.current &&
-        !isKeyboardOpeningGraceActive
-      ) {
-        setRenameInputFocused(false);
-        setRenameKeyboardLayoutActive(false);
-      }
+      setRenameKeyboardVisible(keyboardInset > RENAME_KEYBOARD_VISIBLE_INSET_PX);
 
       const roundedKeyboardInset = Math.round(keyboardInset);
       const roundedViewportHeight = Math.round(viewportHeight);
@@ -874,8 +833,6 @@ export function HomeDashboard({
       setDashboardActionError(null);
       setRenameTarget(lecture);
       setRenameValue(lecture.title?.trim() || "Neimenovan zapisek");
-      activateRenameKeyboardLayout();
-      setKeepRenameExpandedDuringClose(false);
     });
     renameInputRef.current?.focus({ preventScroll: true });
   }
@@ -891,9 +848,6 @@ export function HomeDashboard({
   function openDeleteModal(lecture: AppLectureListItem) {
     setOpenMenuLectureId(null);
     setDashboardActionError(null);
-    setRenameInputFocused(false);
-    setRenameKeyboardLayoutActive(false);
-    setKeepRenameExpandedDuringClose(false);
     setDeleteTarget(lecture);
   }
 
@@ -910,10 +864,6 @@ export function HomeDashboard({
   ) {
     if (busyLectureId || (event.pointerType === "mouse" && event.button !== 0)) {
       return;
-    }
-
-    if (renameTarget && renameInputFocused) {
-      setKeepRenameExpandedDuringClose(true);
     }
 
     const target = event.target;
@@ -960,28 +910,6 @@ export function HomeDashboard({
     dashboardDialogSuppressClickRef.current = false;
   }
 
-  function collapseRenameKeyboardLayout() {
-    setRenameInputFocused(false);
-    setRenameKeyboardLayoutActive(false);
-    renameKeyboardSeenRef.current = false;
-    if (document.activeElement === renameInputRef.current) {
-      renameInputRef.current?.blur();
-    }
-  }
-
-  function focusRenameInputFromGesture(input: HTMLInputElement) {
-    const shouldRefocusHiddenKeyboard =
-      document.activeElement === input && !renameKeyboardLayoutActiveRef.current;
-
-    activateRenameKeyboardLayout();
-
-    if (shouldRefocusHiddenKeyboard) {
-      input.blur();
-    }
-
-    input.focus({ preventScroll: true });
-  }
-
   function handleRenameDialogPointerDownCapture(event: ReactPointerEvent<HTMLElement>) {
     const target = event.target;
 
@@ -991,10 +919,7 @@ export function HomeDashboard({
 
     const inputTarget = target.closest(".dashboard-note-dialog-field");
     if (inputTarget && target !== renameInputRef.current) {
-      const input = renameInputRef.current;
-      if (input) {
-        focusRenameInputFromGesture(input);
-      }
+      renameInputRef.current?.focus({ preventScroll: true });
       return;
     }
 
@@ -1002,7 +927,7 @@ export function HomeDashboard({
       return;
     }
 
-    collapseRenameKeyboardLayout();
+    renameInputRef.current?.blur();
   }
 
   useEffect(() => {
@@ -1103,9 +1028,6 @@ export function HomeDashboard({
     }
 
     const target = renameTarget;
-    setRenameInputFocused(false);
-    setRenameKeyboardLayoutActive(false);
-    setKeepRenameExpandedDuringClose(false);
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
@@ -1465,20 +1387,12 @@ export function HomeDashboard({
             <button
               type="button"
               className="mobile-create-menu-backdrop dashboard-note-dialog-backdrop"
-              onPointerDown={() => {
-                if (renameInputFocused) {
-                  setKeepRenameExpandedDuringClose(true);
-                }
-              }}
               onClick={closeRenameModal}
               aria-label="Zapri okno za preimenovanje zapiska"
             />
             <section
-              className={`mobile-create-menu dashboard-note-dialog dashboard-note-dialog-rename mobile-draggable-sheet ${
-                (renameKeyboardLayoutActive || keepRenameExpandedDuringClose) &&
-                busyLectureId !== renameTarget.id
-                  ? "keyboard-open"
-                  : ""
+              className={`mobile-create-menu dashboard-note-dialog dashboard-note-dialog-rename mobile-draggable-sheet keyboard-open ${
+                renameKeyboardVisible ? "keyboard-visible" : "keyboard-hidden"
               }`}
               role="dialog"
               aria-modal="true"
@@ -1537,17 +1451,14 @@ export function HomeDashboard({
                     value={renameValue}
                     onChange={(event) => setRenameValue(event.target.value)}
                     onPointerDown={(event) => {
-                      focusRenameInputFromGesture(event.currentTarget);
+                      if (document.activeElement === event.currentTarget && !renameKeyboardVisible) {
+                        event.currentTarget.blur();
+                      }
+
+                      event.currentTarget.focus({ preventScroll: true });
                     }}
                     onClick={(event) => {
-                      focusRenameInputFromGesture(event.currentTarget);
-                    }}
-                    onFocus={() => {
-                      activateRenameKeyboardLayout();
-                    }}
-                    onBlur={() => {
-                      setRenameInputFocused(false);
-                      setRenameKeyboardLayoutActive(false);
+                      event.currentTarget.focus({ preventScroll: true });
                     }}
                     className="ios-input"
                     placeholder="Neimenovan zapisek"

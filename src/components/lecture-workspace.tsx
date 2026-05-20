@@ -1153,6 +1153,7 @@ export function LectureWorkspace({
   const [isStudyManagerOpen, setIsStudyManagerOpen] = useState(false);
   const [studyManagerSearch, setStudyManagerSearch] = useState("");
   const [studyManagerDragOffset, setStudyManagerDragOffset] = useState(0);
+  const [studyManagerInputFocused, setStudyManagerInputFocused] = useState(false);
   const [studyManagerItemDrag, setStudyManagerItemDrag] =
     useState<StudyManagerItemDragState | null>(null);
   const [openStudyManagerActionItemId, setOpenStudyManagerActionItemId] = useState<string | null>(
@@ -3108,6 +3109,7 @@ export function LectureWorkspace({
     studyManagerDragOffsetRef.current = 0;
     studyManagerSuppressClickRef.current = false;
     studyManagerItemDragRef.current = null;
+    setStudyManagerInputFocused(false);
     setStudyManagerDragOffset(0);
     setStudyManagerItemDrag(null);
     setOpenStudyManagerActionItemId(null);
@@ -3389,6 +3391,10 @@ export function LectureWorkspace({
 
   async function handleFlashcardFormSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setStudyManagerInputFocused(false);
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     setStudyError(null);
     setIsSavingStudyItem(true);
 
@@ -3484,6 +3490,10 @@ export function LectureWorkspace({
 
   async function handleQuizQuestionFormSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setStudyManagerInputFocused(false);
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     setStudyError(null);
     setIsSavingStudyItem(true);
 
@@ -3856,6 +3866,7 @@ export function LectureWorkspace({
         studyManagerSuppressClickRef.current = false;
         studyManagerItemDragRef.current = null;
         setStudyManagerDragOffset(0);
+        setStudyManagerInputFocused(false);
         setStudyManagerItemDrag(null);
         setOpenStudyManagerActionItemId(null);
         setIsStudyManagerOpen(true);
@@ -4555,7 +4566,9 @@ export function LectureWorkspace({
             {isStudyManagerOpen && (activeStudyView === "flashcards" || activeStudyView === "quiz") ? (
               <div className="study-manager-backdrop" role="presentation" onClick={animateCloseStudyManager}>
                 <div
-                  className="study-manager-sheet"
+                  className={`study-manager-sheet mobile-draggable-sheet ${
+                    studyManagerInputFocused ? "keyboard-open" : ""
+                  }`}
                   role="dialog"
                   aria-modal="true"
                   aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
@@ -4605,6 +4618,12 @@ export function LectureWorkspace({
                       <form
                         onSubmit={handleFlashcardFormSubmit}
                         className="study-manager-form study-manager-form-flashcards"
+                        onFocusCapture={() => setStudyManagerInputFocused(true)}
+                        onBlurCapture={(event) => {
+                          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                            setStudyManagerInputFocused(false);
+                          }
+                        }}
                       >
                         {editingFlashcardId ? (
                           <div className="study-manager-form-header">
@@ -4724,6 +4743,12 @@ export function LectureWorkspace({
                       <form
                         onSubmit={handleQuizQuestionFormSubmit}
                         className="study-manager-form study-manager-form-quiz"
+                        onFocusCapture={() => setStudyManagerInputFocused(true)}
+                        onBlurCapture={(event) => {
+                          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                            setStudyManagerInputFocused(false);
+                          }
+                        }}
                       >
                         {editingQuizQuestionId ? (
                           <div className="study-manager-form-header">

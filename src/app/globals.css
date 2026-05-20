@@ -11184,8 +11184,9 @@ select:disabled {
   }
 
   .study-manager-sheet {
+    --study-manager-mobile-top: max(4.7rem, env(safe-area-inset-top));
     position: fixed;
-    inset: max(4.7rem, env(safe-area-inset-top)) 0 0;
+    inset: var(--study-manager-mobile-top) 0 0;
     z-index: 119;
     width: 100%;
     height: auto;
@@ -11203,6 +11204,18 @@ select:disabled {
     animation: folder-sheet-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
     touch-action: pan-y;
     transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .study-manager-sheet.keyboard-open {
+    height: calc(100dvh - var(--study-manager-mobile-top));
+    max-height: calc(100dvh - var(--study-manager-mobile-top));
+    overflow-y: auto;
+    align-content: start;
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+  }
+
+  .study-manager-sheet.keyboard-open .study-manager-list {
+    padding-bottom: 1rem;
   }
 
   .study-manager-drag-handle {

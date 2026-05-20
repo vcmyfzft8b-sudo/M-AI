@@ -181,7 +181,7 @@ export function AppShell({
     }
 
     const mobileSheetSelector =
-      ".mobile-create-menu, .mobile-create-menu-backdrop, .library-folder-mobile-sheet, .library-folder-mobile-sheet-backdrop, .library-folder-modal, .library-folder-modal-overlay, .note-read-usage-popover, .note-read-usage-mobile-backdrop, .dashboard-note-dialog, .dashboard-note-dialog-backdrop, .note-source-modal-wrap, .note-source-modal-backdrop";
+      ".mobile-create-menu, .mobile-create-menu-backdrop, .library-folder-mobile-sheet, .library-folder-mobile-sheet-backdrop, .library-folder-modal, .library-folder-modal-overlay, .note-read-usage-popover, .note-read-usage-mobile-backdrop, .dashboard-note-dialog, .dashboard-note-dialog-backdrop, .study-manager-sheet, .study-manager-backdrop, .note-source-modal-wrap, .note-source-modal-backdrop";
 
     function hasActiveMobileSheet() {
       return window.innerWidth < mobileBreakpoint && Boolean(document.querySelector(mobileSheetSelector));

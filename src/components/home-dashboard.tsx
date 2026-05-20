@@ -402,6 +402,7 @@ export function HomeDashboard({
   const dashboardDialogDragOffsetRef = useRef(0);
   const dashboardDialogSuppressClickRef = useRef(false);
   const dashboardDialogCloseTimerRef = useRef<number | null>(null);
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = useState("");
   const [manualModal, setManualModal] = useState<NoteSourceMode | null>(null);
   const [isMobileCreateMenuOpen, setIsMobileCreateMenuOpen] = useState(false);
@@ -587,6 +588,7 @@ export function HomeDashboard({
     const previousBodyHeight = document.body.style.height;
     const previousBodyOverscrollBehavior = document.body.style.overscrollBehavior;
     const previousBodyTouchAction = document.body.style.touchAction;
+    const renameInput = renameInputRef.current;
 
     root.style.overflow = "hidden";
     root.style.overscrollBehavior = "none";
@@ -599,8 +601,27 @@ export function HomeDashboard({
     document.body.style.overscrollBehavior = "none";
     document.body.style.touchAction = "none";
 
+    const restoreScrollPosition = () => {
+      window.scrollTo(0, scrollY);
+    };
+
+    const scheduleScrollRestore = () => {
+      window.requestAnimationFrame(restoreScrollPosition);
+      window.setTimeout(restoreScrollPosition, 0);
+      window.setTimeout(restoreScrollPosition, 250);
+    };
+
     function preventPageScroll(event: TouchEvent | WheelEvent) {
       event.preventDefault();
+      scheduleScrollRestore();
+    }
+
+    function handleScroll() {
+      scheduleScrollRestore();
+    }
+
+    function handleFocusIn() {
+      scheduleScrollRestore();
     }
 
     document.addEventListener("touchmove", preventPageScroll, {
@@ -611,10 +632,21 @@ export function HomeDashboard({
       capture: true,
       passive: false,
     });
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll, { passive: true });
+    window.visualViewport?.addEventListener("scroll", handleScroll, { passive: true });
+    window.visualViewport?.addEventListener("resize", handleScroll, { passive: true });
+    renameInput?.addEventListener("focus", handleFocusIn);
+    scheduleScrollRestore();
 
     return () => {
       document.removeEventListener("touchmove", preventPageScroll, true);
       document.removeEventListener("wheel", preventPageScroll, true);
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+      window.visualViewport?.removeEventListener("scroll", handleScroll);
+      window.visualViewport?.removeEventListener("resize", handleScroll);
+      renameInput?.removeEventListener("focus", handleFocusIn);
       root.style.overflow = previousRootOverflow;
       root.style.overscrollBehavior = previousRootOverscrollBehavior;
       root.style.touchAction = previousRootTouchAction;
@@ -1359,6 +1391,7 @@ export function HomeDashboard({
                 <label className="dashboard-note-dialog-field">
                   <span>Naslov</span>
                   <input
+                    ref={renameInputRef}
                     autoFocus
                     value={renameValue}
                     onChange={(event) => setRenameValue(event.target.value)}

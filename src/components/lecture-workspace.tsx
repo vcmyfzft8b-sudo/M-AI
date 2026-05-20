@@ -3319,14 +3319,9 @@ export function LectureWorkspace({
       return;
     }
 
-    const sheet = studyManagerSheetRef.current;
-
-    if (!sheet) {
-      return;
-    }
-
     function handleTouchStart(event: TouchEvent) {
       studyManagerTouchDragActiveRef.current = false;
+      studyManagerDragStartYRef.current = null;
 
       if (
         window.innerWidth >= 1100 ||
@@ -3376,16 +3371,22 @@ export function LectureWorkspace({
       setStudyManagerDragOffset(0);
     }
 
-    sheet.addEventListener("touchstart", handleTouchStart, { passive: true });
-    sheet.addEventListener("touchmove", handleTouchMove, { passive: false });
-    sheet.addEventListener("touchend", handleTouchEnd);
-    sheet.addEventListener("touchcancel", handleTouchEnd);
+    document.addEventListener("touchstart", handleTouchStart, {
+      capture: true,
+      passive: true,
+    });
+    document.addEventListener("touchmove", handleTouchMove, {
+      capture: true,
+      passive: false,
+    });
+    document.addEventListener("touchend", handleTouchEnd, true);
+    document.addEventListener("touchcancel", handleTouchEnd, true);
 
     return () => {
-      sheet.removeEventListener("touchstart", handleTouchStart);
-      sheet.removeEventListener("touchmove", handleTouchMove);
-      sheet.removeEventListener("touchend", handleTouchEnd);
-      sheet.removeEventListener("touchcancel", handleTouchEnd);
+      document.removeEventListener("touchstart", handleTouchStart, true);
+      document.removeEventListener("touchmove", handleTouchMove, true);
+      document.removeEventListener("touchend", handleTouchEnd, true);
+      document.removeEventListener("touchcancel", handleTouchEnd, true);
     };
   }, [animateCloseStudyManager, isStudyManagerOpen]);
 

@@ -1,0 +1,178 @@
+import { NextResponse } from "next/server";
+import type { User } from "@supabase/supabase-js";
+import { z } from "zod";
+
+import type { QuizQuestionRow } from "@/lib/database.types";
+import { ensureUserOwnsLecture } from "@/lib/lectures";
+import { parseJsonRequest } from "@/lib/request-validation";
+import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
+import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { routeIdParamSchema } from "@/lib/validation";
+
+const QUIZ_QUESTION_MUTATION_MAX_BYTES = 48 * 1024;
+
+const quizQuestionParamsSchema = z.object({
+  id: routeIdParamSchema.shape.id,
+  questionId: z.string().uuid(),
+});
+
+const quizQuestionPayloadSchema = z.object({
+  prompt: z.string().trim().min(1).max(3_000),
+  options: z.array(z.string().trim().min(1).max(1_000)).length(4),
+  correctOptionIndex: z.number().int().min(0).max(3),
+  explanation: z.string().trim().min(1).max(4_000),
+  difficulty: z.enum(["easy", "medium", "hard"]),
+});
+
+async function getOwnedQuestion(params: {
+  lectureId: string;
+  questionId: string;
+  user: User;
+}) {
+  const lecture = await ensureUserOwnsLecture({
+    lectureId: params.lectureId,
+    user: params.user,
+  });
+
+  if (!lecture) {
+    return null;
+  }
+
+  const service = createSupabaseServiceRoleClient();
+  const { data, error } = await service
+    .from("quiz_questions")
+    .select("*")
+    .eq("id", params.questionId)
+    .eq("lecture_id", params.lectureId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as QuizQuestionRow | null;
+}
+
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ id: string; questionId: string }> },
+) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+  }
+
+  const limited = await enforceRateLimit({
+    request,
+    route: "api:lectures:quiz-questions:patch",
+    rules: rateLimitPresets.mutate,
+    userId: user.id,
+  });
+
+  if (limited) {
+    return limited;
+  }
+
+  const parsed = await parseJsonRequest(request, quizQuestionPayloadSchema, {
+    maxBytes: QUIZ_QUESTION_MUTATION_MAX_BYTES,
+  });
+
+  if (!parsed.success) {
+    return parsed.response;
+  }
+
+  const parsedParams = quizQuestionParamsSchema.safeParse(await context.params);
+
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: "Neveljaven ID vprašanja." }, { status: 400 });
+  }
+
+  const existing = await getOwnedQuestion({
+    lectureId: parsedParams.data.id,
+    questionId: parsedParams.data.questionId,
+    user,
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+  }
+
+  const service = createSupabaseServiceRoleClient();
+  const { data: question, error } = await service
+    .from("quiz_questions")
+    .update({
+      prompt: parsed.data.prompt,
+      options_json: parsed.data.options,
+      correct_option_idx: parsed.data.correctOptionIndex,
+      explanation: parsed.data.explanation,
+      difficulty: parsed.data.difficulty,
+    } as never)
+    .eq("id", existing.id)
+    .select("*")
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    question: {
+      ...(question as QuizQuestionRow),
+      options: parsed.data.options,
+    },
+  });
+}
+
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ id: string; questionId: string }> },
+) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+  }
+
+  const limited = await enforceRateLimit({
+    request,
+    route: "api:lectures:quiz-questions:delete",
+    rules: rateLimitPresets.mutate,
+    userId: user.id,
+  });
+
+  if (limited) {
+    return limited;
+  }
+
+  const parsedParams = quizQuestionParamsSchema.safeParse(await context.params);
+
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: "Neveljaven ID vprašanja." }, { status: 400 });
+  }
+
+  const existing = await getOwnedQuestion({
+    lectureId: parsedParams.data.id,
+    questionId: parsedParams.data.questionId,
+    user,
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+  }
+
+  const service = createSupabaseServiceRoleClient();
+  const { error } = await service.from("quiz_questions").delete().eq("id", existing.id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ deletedQuestionId: existing.id });
+}

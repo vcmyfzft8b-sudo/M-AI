@@ -45,6 +45,7 @@ const TTS_OUTPUT_MIME_TYPE = "audio/mpeg";
 const TTS_OUTPUT_BITRATE = 64_000;
 const TTS_WAIT_TIMEOUT_MS = 120_000;
 const TTS_WAIT_INTERVAL_MS = 2_000;
+const TTS_PROVIDER_RETRY_DELAYS_MS = [1_500, 3_500] as const;
 
 let sonioxClient: SonioxNodeClient | undefined;
 
@@ -57,6 +58,82 @@ function getSonioxClient() {
   }
 
   return sonioxClient;
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function isTtsProviderRateLimitError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const statusCode =
+    "statusCode" in error && typeof error.statusCode === "number"
+      ? error.statusCode
+      : undefined;
+  const message = error instanceof Error ? error.message : "";
+
+  return statusCode === 429 || message.includes("HTTP 429") || message.includes("rate limit");
+}
+
+async function retryTtsProviderRateLimit<T>(operation: () => Promise<T>) {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= TTS_PROVIDER_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+
+      if (!isTtsProviderRateLimitError(error) || attempt >= TTS_PROVIDER_RETRY_DELAYS_MS.length) {
+        throw error;
+      }
+
+      await wait(TTS_PROVIDER_RETRY_DELAYS_MS[attempt] ?? 0);
+    }
+  }
+
+  throw lastError;
+}
+
+function getInitialTtsErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Initial note audio could not be prepared.";
+}
+
+function getMetadataRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+export async function markInitialNoteAudioPreparing(params: {
+  lectureId: string;
+  processingMetadata: unknown;
+}) {
+  const metadata = getMetadataRecord(params.processingMetadata);
+  const { error } = await createSupabaseServiceRoleClient()
+    .from("lectures")
+    .update(
+      {
+        processing_metadata: {
+          ...metadata,
+          processing: {
+            stage: "preparing_audio",
+            updatedAt: new Date().toISOString(),
+            errorMessage: null,
+          },
+        },
+      } as never,
+    )
+    .eq("id", params.lectureId);
+
+  if (error) {
+    throw error;
+  }
 }
 
 export function getTtsDailyLimitSeconds(hasPaidAccess: boolean) {
@@ -786,15 +863,40 @@ export async function prepareInitialNoteTtsChunk(params: {
     return null;
   }
 
-  return getOrCreateTtsChunk({
-    userId: params.userId,
-    lectureId: params.lectureId,
-    contentHash: hashNoteTtsContent(content),
-    chunk: firstChunk,
-    allWords: document.words,
-    languageHint: params.languageHint,
-    voice: params.voice,
-  });
+  return retryTtsProviderRateLimit(() =>
+    getOrCreateTtsChunk({
+      userId: params.userId,
+      lectureId: params.lectureId,
+      contentHash: hashNoteTtsContent(content),
+      chunk: firstChunk,
+      allWords: document.words,
+      languageHint: params.languageHint,
+      voice: params.voice,
+    }),
+  );
+}
+
+export async function prepareInitialNoteTtsChunkSafely(
+  params: Parameters<typeof prepareInitialNoteTtsChunk>[0],
+) {
+  try {
+    const chunk = await prepareInitialNoteTtsChunk(params);
+
+    return {
+      status: chunk ? "ready" : "skipped",
+      errorMessage: null,
+    } as const;
+  } catch (error) {
+    console.error("Initial note audio preparation failed", {
+      lectureId: params.lectureId,
+      error,
+    });
+
+    return {
+      status: "failed",
+      errorMessage: getInitialTtsErrorMessage(error),
+    } as const;
+  }
 }
 
 export async function hasInitialNoteTtsChunk(params: {

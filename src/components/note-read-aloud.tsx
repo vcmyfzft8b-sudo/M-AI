@@ -1,12 +1,14 @@
 "use client";
 
-import { Loader2, Pause, Play } from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Pause, Play, X } from "lucide-react";
+import Image from "next/image";
 import type {
   CSSProperties,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
+  ReactNode,
 } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { EmojiIcon } from "@/components/emoji-icon";
 import { ViewportPortal } from "@/components/viewport-portal";
@@ -16,6 +18,7 @@ import {
   DEFAULT_NOTE_TTS_VOICE,
   NOTE_TTS_HIGHLIGHT_COLORS,
   NOTE_TTS_PLAYBACK_RATES,
+  NOTE_TTS_VOICE_STORAGE_KEY,
   NOTE_TTS_VOICES,
   type NoteTtsHighlightColorId,
   type NoteTtsPlaybackRate,
@@ -28,6 +31,57 @@ import {
   type NoteTtsDocument,
   type NoteTtsInlineToken,
 } from "@/lib/note-tts-text";
+import type { NoteAnnotation, NoteMediaAsset, NoteMediaBlock } from "@/lib/note-doc";
+
+type NoteReadMediaBlock = NoteMediaBlock & {
+  media: NoteMediaAsset | null;
+};
+
+const NOTE_MEDIA_MIN_WIDTH_PERCENT = 35;
+const NOTE_MEDIA_MAX_WIDTH_PERCENT = 100;
+const NOTE_MEDIA_CENTER_X_PERCENT = 50;
+
+type NoteMediaBlockLayoutUpdate = {
+  widthPercent?: number;
+  xPercent?: number;
+};
+
+type NoteMediaResizeSession = {
+  pointerId: number;
+  parentLeft: number;
+  parentWidth: number;
+  startLeft: number;
+};
+
+type NoteMediaXDragSession = {
+  pointerId: number;
+  startClientX: number;
+  parentWidth: number;
+  startLeft: number;
+  widthPercent: number;
+  moved: boolean;
+};
+
+type NoteWordAnnotation = {
+  highlight: boolean;
+  highlightColorId?: string;
+  underline: boolean;
+  underlineColorId?: string;
+};
+
+const NOTE_USER_HIGHLIGHT_COLORS = Object.fromEntries(
+  NOTE_TTS_HIGHLIGHT_COLORS.map((color) => [color.id, color.currentBackground]),
+) as Record<string, string>;
+
+NOTE_USER_HIGHLIGHT_COLORS.yellow = NOTE_USER_HIGHLIGHT_COLORS.orange ?? "#fb923c";
+
+function getUserHighlightColor(colorId: string | undefined) {
+  return (
+    NOTE_USER_HIGHLIGHT_COLORS[colorId ?? DEFAULT_NOTE_TTS_HIGHLIGHT_COLOR_ID] ??
+    NOTE_USER_HIGHLIGHT_COLORS[DEFAULT_NOTE_TTS_HIGHLIGHT_COLOR_ID] ??
+    "#fb923c"
+  );
+}
 
 type TtsStatusResponse = {
   available: boolean;
@@ -65,7 +119,6 @@ type TtsChunkResponse = {
 type ActiveChunk = TtsChunkResponse;
 
 const AUTO_SCROLL_IDLE_MS = 5_000;
-const NOTE_TTS_VOICE_STORAGE_KEY = "memo-note-tts-voice";
 const NOTE_TTS_RATE_STORAGE_KEY = "memo-note-tts-rate";
 const NOTE_TTS_COLOR_STORAGE_KEY = "memo-note-tts-color";
 const TTS_DAILY_LIMIT_MESSAGE = "Porabil si današnje poslušanje.";
@@ -528,10 +581,14 @@ function WordToken({
   token,
   completedWordIndex,
   currentWordIndex,
+  annotation,
+  renderHighlight = true,
 }: {
   token: Extract<NoteTtsInlineToken, { type: "word" }>;
   completedWordIndex: number;
   currentWordIndex: number | null;
+  annotation?: NoteWordAnnotation;
+  renderHighlight?: boolean;
 }) {
   const stateClass =
     token.wordIndex === currentWordIndex
@@ -539,9 +596,34 @@ function WordToken({
       : token.wordIndex <= completedWordIndex
         ? "read"
         : "";
+  const annotationClass = [
+    annotation?.highlight && renderHighlight ? "user-highlight" : "",
+    annotation?.underline ? "user-underline" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <span className={`note-read-word ${stateClass}`} data-word-index={token.wordIndex}>
+    <span
+      className={`note-read-word ${stateClass} ${annotationClass}`}
+      style={
+        (annotation?.highlight && renderHighlight) || annotation?.underline
+          ? ({
+              ...(annotation.highlight && renderHighlight
+                ? {
+                    "--note-user-highlight-bg": getUserHighlightColor(annotation.highlightColorId),
+                  }
+                : {}),
+              ...(annotation.underline
+                ? {
+                    "--note-user-underline-color": getUserHighlightColor(annotation.underlineColorId),
+                  }
+                : {}),
+            } as CSSProperties)
+          : undefined
+      }
+      data-word-index={token.wordIndex}
+    >
       {token.text}
     </span>
   );
@@ -551,21 +633,94 @@ function renderTokens(params: {
   tokens: NoteTtsInlineToken[];
   completedWordIndex: number;
   currentWordIndex: number | null;
+  wordAnnotations: Map<number, NoteWordAnnotation>;
 }) {
-  return params.tokens.map((token, index) => {
-    if (token.type === "text") {
-      return <span key={`text-${index}`}>{token.text}</span>;
+  const rendered: ReactNode[] = [];
+  let index = 0;
+
+  while (index < params.tokens.length) {
+    const token = params.tokens[index];
+
+    if (token.type === "word") {
+      const annotation = params.wordAnnotations.get(token.wordIndex);
+
+      if (annotation?.highlight) {
+        const runTokens: NoteTtsInlineToken[] = [token];
+        let cursor = index + 1;
+        const colorId = annotation.highlightColorId;
+
+        while (cursor < params.tokens.length) {
+          const candidate = params.tokens[cursor];
+          const following = params.tokens[cursor + 1];
+          const followingAnnotation = following?.type === "word"
+            ? params.wordAnnotations.get(following.wordIndex)
+            : undefined;
+
+          if (
+            candidate?.type === "text" &&
+            following?.type === "word" &&
+            followingAnnotation?.highlight &&
+            followingAnnotation.highlightColorId === colorId
+          ) {
+            runTokens.push(candidate, following);
+            cursor += 2;
+            continue;
+          }
+
+          break;
+        }
+
+        rendered.push(
+          <span
+            key={`highlight-run-${token.wordIndex}`}
+            className="note-read-highlight-range user-highlight"
+            style={
+              {
+                "--note-user-highlight-bg": getUserHighlightColor(colorId),
+              } as CSSProperties
+            }
+          >
+            {runTokens.map((runToken, runIndex) =>
+              runToken.type === "text" ? (
+                <span key={`highlight-text-${index + runIndex}`}>{runToken.text}</span>
+              ) : (
+                <WordToken
+                  key={`highlight-word-${runToken.wordIndex}`}
+                  token={runToken}
+                  completedWordIndex={params.completedWordIndex}
+                  currentWordIndex={params.currentWordIndex}
+                  annotation={params.wordAnnotations.get(runToken.wordIndex)}
+                  renderHighlight={false}
+                />
+              ),
+            )}
+          </span>,
+        );
+        index = cursor;
+        continue;
+      }
+
+      rendered.push(
+        <WordToken
+          key={`word-${token.wordIndex}`}
+          token={token}
+          completedWordIndex={params.completedWordIndex}
+          currentWordIndex={params.currentWordIndex}
+          annotation={annotation}
+        />,
+      );
+      index += 1;
+      continue;
     }
 
-    return (
-      <WordToken
-        key={`word-${token.wordIndex}`}
-        token={token}
-        completedWordIndex={params.completedWordIndex}
-        currentWordIndex={params.currentWordIndex}
-      />
-    );
-  });
+    if (token.type === "text") {
+      rendered.push(<span key={`text-${index}`}>{token.text}</span>);
+      index += 1;
+      continue;
+    }
+  }
+
+  return rendered;
 }
 
 function getLeadingLabelTokenEnd(tokens: NoteTtsInlineToken[]) {
@@ -610,6 +765,7 @@ function renderListItemTokens(params: {
   tokens: NoteTtsInlineToken[];
   completedWordIndex: number;
   currentWordIndex: number | null;
+  wordAnnotations: Map<number, NoteWordAnnotation>;
 }) {
   const labelEnd = getLeadingLabelTokenEnd(params.tokens);
 
@@ -637,16 +793,19 @@ function ReadAlongBlock({
   block,
   completedWordIndex,
   currentWordIndex,
+  wordAnnotations,
 }: {
   block: NoteTtsBlock;
   completedWordIndex: number;
   currentWordIndex: number | null;
+  wordAnnotations: Map<number, NoteWordAnnotation>;
 }) {
   if (block.kind === "heading") {
     const children = renderTokens({
       tokens: block.tokens,
       completedWordIndex,
       currentWordIndex,
+      wordAnnotations,
     });
 
     return block.level && block.level <= 2 ? (
@@ -663,6 +822,7 @@ function ReadAlongBlock({
       tokens: block.tokens,
       completedWordIndex,
       currentWordIndex,
+      wordAnnotations,
     });
 
     return <blockquote data-callout-kind={block.calloutKind}>{children}</blockquote>;
@@ -679,6 +839,7 @@ function ReadAlongBlock({
               tokens: item.tokens,
               completedWordIndex,
               currentWordIndex,
+              wordAnnotations,
             })}
           </li>
         ))}
@@ -702,6 +863,7 @@ function ReadAlongBlock({
                         tokens: cell.tokens,
                         completedWordIndex,
                         currentWordIndex,
+                        wordAnnotations,
                       })}
                     </CellTag>
                   );
@@ -718,30 +880,511 @@ function ReadAlongBlock({
     tokens: block.tokens,
     completedWordIndex,
     currentWordIndex,
+    wordAnnotations,
   });
 
   return <p>{children}</p>;
+}
+
+function InlineNoteMedia({
+  block,
+  selected,
+  deleting,
+  onSelect,
+  onMove,
+  onLayoutChange,
+  onDelete,
+}: {
+  block: NoteReadMediaBlock;
+  selected: boolean;
+  deleting?: boolean;
+  onSelect?: (blockId: string) => void;
+  onMove?: (blockId: string, direction: "up" | "down") => void;
+  onLayoutChange?: (blockId: string, update: NoteMediaBlockLayoutUpdate) => void;
+  onDelete?: (mediaId: string) => void;
+}) {
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [liveLayout, setLiveLayout] = useState<NoteMediaBlockLayoutUpdate | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
+  const mediaRef = useRef<HTMLElement | null>(null);
+  const liveLayoutRef = useRef<NoteMediaBlockLayoutUpdate | null>(null);
+  const resizeSessionRef = useRef<NoteMediaResizeSession | null>(null);
+  const xDragSessionRef = useRef<NoteMediaXDragSession | null>(null);
+  const suppressClickRef = useRef(false);
+  const isSavingPreview = block.media?.signedUrl.startsWith("blob:") ?? false;
+  const handleDisabled = deleting || isSavingPreview;
+  const actionsDisabled = handleDisabled || isResizing;
+  const storedWidthPercent = liveLayout?.widthPercent ?? block.widthPercent;
+  const storedXPercent = liveLayout?.xPercent ?? block.xPercent;
+  const widthPercent = Math.min(
+    NOTE_MEDIA_MAX_WIDTH_PERCENT,
+    Math.max(NOTE_MEDIA_MIN_WIDTH_PERCENT, storedWidthPercent ?? NOTE_MEDIA_MAX_WIDTH_PERCENT),
+  );
+  const xPercent =
+    widthPercent >= NOTE_MEDIA_MAX_WIDTH_PERCENT
+      ? NOTE_MEDIA_CENTER_X_PERCENT
+      : Math.min(100, Math.max(0, storedXPercent ?? NOTE_MEDIA_CENTER_X_PERCENT));
+  const marginLeftPercent = ((NOTE_MEDIA_MAX_WIDTH_PERCENT - widthPercent) * xPercent) / 100;
+  const canDragHorizontally = !actionsDisabled && widthPercent < NOTE_MEDIA_MAX_WIDTH_PERCENT;
+  const useCompactActions = widthPercent <= 55;
+
+  const commitLayout = useCallback(
+    (update: NoteMediaBlockLayoutUpdate) => {
+      mediaRef.current?.removeAttribute("data-note-media-resizing");
+      liveLayoutRef.current = null;
+      setLiveLayout(null);
+      onLayoutChange?.(block.id, {
+        widthPercent: Math.round(update.widthPercent ?? widthPercent),
+        xPercent: Math.round(update.xPercent ?? xPercent),
+      });
+    },
+    [block.id, onLayoutChange, widthPercent, xPercent],
+  );
+  const stopResizeSession = () => {
+    mediaRef.current?.removeAttribute("data-note-media-resizing");
+    setIsResizing(false);
+  };
+  const updateLiveLayout = (update: NoteMediaBlockLayoutUpdate) => {
+    liveLayoutRef.current = update;
+    setLiveLayout(update);
+  };
+
+  const handleResizePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (handleDisabled) {
+      return;
+    }
+
+    const mediaElement = mediaRef.current;
+    const parentElement = mediaElement?.parentElement;
+
+    if (!mediaElement || !parentElement) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    onSelect?.(block.id);
+    setIsActionMenuOpen(false);
+    mediaElement.dataset.noteMediaResizing = "true";
+    setIsResizing(true);
+
+    const mediaRect = mediaElement.getBoundingClientRect();
+    const parentRect = parentElement.getBoundingClientRect();
+    resizeSessionRef.current = {
+      pointerId: event.pointerId,
+      parentLeft: parentRect.left,
+      parentWidth: parentRect.width,
+      startLeft: mediaRect.left - parentRect.left,
+    };
+    suppressClickRef.current = true;
+  };
+
+  const handleResizePointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const session = resizeSessionRef.current;
+
+    if (!session || session.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (event.pointerType !== "touch" && (event.buttons & 1) !== 1) {
+      resizeSessionRef.current = null;
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      commitLayout(liveLayoutRef.current ?? { widthPercent, xPercent });
+      stopResizeSession();
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const minWidth = (session.parentWidth * NOTE_MEDIA_MIN_WIDTH_PERCENT) / 100;
+    const maxWidth = session.parentWidth;
+    const requestedWidth = event.clientX - session.parentLeft - session.startLeft;
+    const nextWidth = Math.min(maxWidth, Math.max(minWidth, requestedWidth));
+    const nextWidthPercent = Math.round((nextWidth / session.parentWidth) * 100);
+    const remainingWidth = Math.max(0, session.parentWidth - nextWidth);
+    const nextXPercent =
+      remainingWidth > 0
+        ? Math.min(100, Math.max(0, Math.round((session.startLeft / remainingWidth) * 100)))
+        : NOTE_MEDIA_CENTER_X_PERCENT;
+
+    updateLiveLayout({
+      widthPercent: nextWidthPercent,
+      xPercent: nextXPercent,
+    });
+  };
+
+  const handleResizePointerEnd = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const session = resizeSessionRef.current;
+
+    if (!session || session.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    resizeSessionRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    commitLayout(liveLayoutRef.current ?? { widthPercent, xPercent });
+    stopResizeSession();
+  };
+
+  const handleMediaPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!canDragHorizontally) {
+      return;
+    }
+
+    if (event.target instanceof Element && event.target.closest("button")) {
+      return;
+    }
+
+    const mediaElement = mediaRef.current;
+    const parentElement = mediaElement?.parentElement;
+
+    if (!mediaElement || !parentElement) {
+      return;
+    }
+
+    const mediaRect = mediaElement.getBoundingClientRect();
+    const parentRect = parentElement.getBoundingClientRect();
+    const availableWidth = Math.max(0, parentRect.width - mediaRect.width);
+
+    if (availableWidth <= 1) {
+      return;
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    onSelect?.(block.id);
+    xDragSessionRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      parentWidth: parentRect.width,
+      startLeft: mediaRect.left - parentRect.left,
+      widthPercent,
+      moved: false,
+    };
+  };
+
+  const handleMediaPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    const session = xDragSessionRef.current;
+
+    if (!session || session.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const deltaX = event.clientX - session.startClientX;
+
+    if (Math.abs(deltaX) > 2) {
+      session.moved = true;
+      suppressClickRef.current = true;
+    }
+
+    const widthPx = (session.parentWidth * session.widthPercent) / 100;
+    const availableWidth = Math.max(0, session.parentWidth - widthPx);
+    const nextLeft = Math.min(availableWidth, Math.max(0, session.startLeft + deltaX));
+    const nextXPercent =
+      availableWidth > 0
+        ? Math.min(100, Math.max(0, Math.round((nextLeft / availableWidth) * 100)))
+        : NOTE_MEDIA_CENTER_X_PERCENT;
+
+    updateLiveLayout({
+      widthPercent: session.widthPercent,
+      xPercent: nextXPercent,
+    });
+  };
+
+  const handleMediaPointerEnd = (event: ReactPointerEvent<HTMLElement>) => {
+    const session = xDragSessionRef.current;
+
+    if (!session || session.pointerId !== event.pointerId) {
+      return;
+    }
+
+    xDragSessionRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+
+    if (session.moved) {
+      event.preventDefault();
+      event.stopPropagation();
+      commitLayout(liveLayoutRef.current ?? { widthPercent, xPercent });
+      return;
+    }
+
+    liveLayoutRef.current = null;
+    setLiveLayout(null);
+  };
+
+  const renderMediaActions = (compact = false) => (
+    <>
+      <button
+        type="button"
+        disabled={handleDisabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          setIsActionMenuOpen(false);
+          if (actionsDisabled) {
+            return;
+          }
+          onMove?.(block.id, "up");
+        }}
+        aria-label="Premakni gor"
+        title="Premakni gor"
+      >
+        <ArrowUp aria-hidden="true" />
+        {compact ? <span>Gor</span> : null}
+      </button>
+      <button
+        type="button"
+        disabled={actionsDisabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          setIsActionMenuOpen(false);
+          if (actionsDisabled) {
+            return;
+          }
+          onMove?.(block.id, "down");
+        }}
+        aria-label="Premakni dol"
+        title="Premakni dol"
+      >
+        <ArrowDown aria-hidden="true" />
+        {compact ? <span>Dol</span> : null}
+      </button>
+      <button
+        type="button"
+        className="danger"
+        disabled={actionsDisabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          setIsActionMenuOpen(false);
+          if (actionsDisabled) {
+            return;
+          }
+          onDelete?.(block.mediaId);
+        }}
+        aria-label={deleting ? "Brišem fotografijo" : "Izbriši fotografijo"}
+        aria-busy={deleting}
+      >
+        {deleting ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
+        <span>{deleting ? "Brišem" : "Izbriši"}</span>
+      </button>
+    </>
+  );
+
+  if (!block.media?.signedUrl) {
+    return null;
+  }
+
+  return (
+    <figure
+      ref={mediaRef}
+      className={`note-inline-media ${selected ? "selected" : ""}`}
+      data-note-media-block-id={block.id}
+      style={
+        {
+          "--note-inline-media-width": `${widthPercent}%`,
+          marginLeft: `${marginLeftPercent}%`,
+        } as CSSProperties
+      }
+      onPointerDown={handleMediaPointerDown}
+      onPointerMove={handleMediaPointerMove}
+      onPointerUp={handleMediaPointerEnd}
+      onPointerCancel={handleMediaPointerEnd}
+      onClick={(event) => {
+        event.stopPropagation();
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
+          return;
+        }
+        onSelect?.(block.id);
+        setIsPreviewOpen(true);
+      }}
+    >
+      <Image
+        src={block.media.signedUrl}
+        alt={block.media.original_file_name ?? "Dodana fotografija"}
+        width={1200}
+        height={800}
+        draggable={false}
+        unoptimized
+      />
+      <figcaption>
+        <span
+          className={`note-inline-media-actions ${
+            useCompactActions ? "compact-hidden" : ""
+          }`}
+        >
+          {renderMediaActions(false)}
+        </span>
+        <span
+          className={`note-inline-media-menu ${useCompactActions ? "compact-visible" : ""}`}
+        >
+          <button
+            type="button"
+            className="note-inline-media-menu-trigger"
+            disabled={actionsDisabled}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (actionsDisabled) {
+                return;
+              }
+              setIsActionMenuOpen((current) => !current);
+            }}
+            aria-label="Možnosti fotografije"
+            title="Možnosti fotografije"
+            aria-expanded={isActionMenuOpen}
+          >
+            <MoreHorizontal aria-hidden="true" />
+          </button>
+          {isActionMenuOpen ? (
+            <span className="note-inline-media-action-popover">{renderMediaActions(true)}</span>
+          ) : null}
+        </span>
+      </figcaption>
+      <button
+        type="button"
+        className="note-inline-media-resize-handle"
+        disabled={handleDisabled}
+        onPointerDown={handleResizePointerDown}
+        onPointerMove={handleResizePointerMove}
+        onPointerUp={handleResizePointerEnd}
+        onPointerCancel={handleResizePointerEnd}
+        aria-label="Spremeni velikost fotografije"
+        title="Spremeni velikost fotografije"
+      />
+      {isPreviewOpen ? (
+        <ViewportPortal>
+          <div
+            className="note-media-preview"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Pregled fotografije"
+            onClick={(event) => {
+              event.stopPropagation();
+              setIsPreviewOpen(false);
+            }}
+          >
+            <button
+              type="button"
+              className="note-media-preview-close"
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsPreviewOpen(false);
+              }}
+              aria-label="Zapri fotografijo"
+            >
+              <X aria-hidden="true" />
+            </button>
+            <Image
+              src={block.media.signedUrl}
+              alt={block.media.original_file_name ?? "Dodana fotografija"}
+              width={1600}
+              height={1200}
+              draggable={false}
+              unoptimized
+              onClick={(event) => event.stopPropagation()}
+            />
+          </div>
+        </ViewportPortal>
+      ) : null}
+    </figure>
+  );
 }
 
 function ReadAlongMarkdown({
   document,
   completedWordIndex,
   currentWordIndex,
+  annotations,
+  mediaBlocks,
+  selectedBlockId,
+  selectedMediaBlockId,
+  deletingMediaIds,
+  onBlockSelect,
+  onMediaBlockSelect,
+  onMoveMediaBlock,
+  onLayoutMediaBlock,
+  onDeleteMedia,
 }: {
   document: NoteTtsDocument;
   completedWordIndex: number;
   currentWordIndex: number | null;
+  annotations: NoteAnnotation[];
+  mediaBlocks: NoteReadMediaBlock[];
+  selectedBlockId?: string | null;
+  selectedMediaBlockId?: string | null;
+  deletingMediaIds?: ReadonlySet<string>;
+  onBlockSelect?: (blockId: string) => void;
+  onMediaBlockSelect?: (blockId: string) => void;
+  onMoveMediaBlock?: (blockId: string, direction: "up" | "down") => void;
+  onLayoutMediaBlock?: (blockId: string, update: NoteMediaBlockLayoutUpdate) => void;
+  onDeleteMedia?: (mediaId: string) => void;
 }) {
+  const wordAnnotations = useMemo(() => {
+    const map = new Map<number, NoteWordAnnotation>();
+
+    for (const annotation of annotations) {
+      for (let wordIndex = annotation.startWordIndex; wordIndex <= annotation.endWordIndex; wordIndex += 1) {
+        const current = map.get(wordIndex) ?? { highlight: false, underline: false };
+        map.set(wordIndex, {
+          highlight: current.highlight || annotation.kind === "highlight",
+          highlightColorId:
+            annotation.kind === "highlight"
+              ? annotation.colorId ?? current.highlightColorId ?? DEFAULT_NOTE_TTS_HIGHLIGHT_COLOR_ID
+              : current.highlightColorId,
+          underline: current.underline || annotation.kind === "underline",
+          underlineColorId:
+            annotation.kind === "underline"
+              ? annotation.colorId ?? current.underlineColorId ?? DEFAULT_NOTE_TTS_HIGHLIGHT_COLOR_ID
+              : current.underlineColorId,
+        });
+      }
+    }
+
+    return map;
+  }, [annotations]);
+
   return (
     <div className="markdown text-sm text-stone-700 sm:text-[15px]">
-      {document.blocks.map((block) => (
-        <ReadAlongBlock
-          key={block.id}
-          block={block}
-          completedWordIndex={completedWordIndex}
-          currentWordIndex={currentWordIndex}
-        />
-      ))}
+      {document.blocks.map((block) => {
+        const blockMedia = mediaBlocks.filter((mediaBlock) => mediaBlock.afterBlockId === block.id);
+
+        return (
+          <div key={block.id} className="note-read-block-group">
+            <div
+              className={`note-read-block ${selectedBlockId === block.id ? "selected" : ""}`}
+              data-note-block-id={block.id}
+              onClick={(event) => {
+                if (event.target instanceof Element && event.target.closest("button, a")) {
+                  return;
+                }
+                onBlockSelect?.(block.id);
+              }}
+            >
+              <ReadAlongBlock
+                block={block}
+                completedWordIndex={completedWordIndex}
+                currentWordIndex={currentWordIndex}
+                wordAnnotations={wordAnnotations}
+              />
+            </div>
+            {blockMedia.map((mediaBlock) => (
+              <InlineNoteMedia
+                key={mediaBlock.id}
+                block={mediaBlock}
+                selected={selectedMediaBlockId === mediaBlock.id}
+                deleting={deletingMediaIds?.has(mediaBlock.mediaId) ?? false}
+                onSelect={onMediaBlockSelect}
+                onMove={onMoveMediaBlock}
+                onLayoutChange={onLayoutMediaBlock}
+                onDelete={onDeleteMedia}
+              />
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -749,21 +1392,64 @@ function ReadAlongMarkdown({
 export function NoteReadAloud({
   lectureId,
   content,
+  autoPrepareFirstChunk = false,
+  annotationToolbar,
+  toolbarAccessory,
+  annotationActive = false,
+  annotations = [],
+  mediaBlocks = [],
+  noteMedia = [],
+  selectedBlockId,
+  selectedMediaBlockId,
+  deletingMediaIds,
+  onBlockSelect,
+  onMediaBlockSelect,
+  onMoveMediaBlock,
+  onLayoutMediaBlock,
+  onDeleteMedia,
 }: {
   lectureId: string;
   content: string;
+  autoPrepareFirstChunk?: boolean;
+  annotationToolbar?: ReactNode;
+  toolbarAccessory?: ReactNode;
+  annotationActive?: boolean;
+  annotations?: NoteAnnotation[];
+  mediaBlocks?: NoteMediaBlock[];
+  noteMedia?: NoteMediaAsset[];
+  selectedBlockId?: string | null;
+  selectedMediaBlockId?: string | null;
+  deletingMediaIds?: ReadonlySet<string>;
+  onBlockSelect?: (blockId: string) => void;
+  onMediaBlockSelect?: (blockId: string) => void;
+  onMoveMediaBlock?: (blockId: string, direction: "up" | "down") => void;
+  onLayoutMediaBlock?: (blockId: string, update: NoteMediaBlockLayoutUpdate) => void;
+  onDeleteMedia?: (mediaId: string) => void;
 }) {
   const document = useMemo(() => parseNoteTtsDocument(content), [content]);
   const chunks = useMemo(() => buildNoteTtsChunks(document), [document]);
+  const mediaById = useMemo(() => new Map(noteMedia.map((media) => [media.id, media])), [noteMedia]);
+  const renderedMediaBlocks = useMemo(
+    () =>
+      mediaBlocks.map((block) => ({
+        ...block,
+        media: mediaById.get(block.mediaId) ?? null,
+      })),
+    [mediaBlocks, mediaById],
+  );
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const lastAutoScrolledWordRef = useRef<number | null>(null);
   const lastUserInteractionRef = useRef(Date.now());
   const ignoreScrollUntilRef = useRef(0);
+  const pendingArrowMovedMediaBlockIdRef = useRef<string | null>(null);
+  const pendingArrowMoveFromRectRef = useRef<DOMRect | null>(null);
+  const pendingArrowMoveCloneRef = useRef<HTMLElement | null>(null);
   const prefetchedChunksRef = useRef(new Map<string, TtsChunkResponse>());
   const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse | null>>());
   const prefetchQueueRef = useRef<Promise<void>>(Promise.resolve());
   const playbackRequestIdRef = useRef(0);
+  const preparedInitialChunkKeyRef = useRef<string | null>(null);
   const generationProgressIntervalRef = useRef<number | null>(null);
   const generationProgressDismissRef = useRef<number | null>(null);
   const generationProgressStartedAtRef = useRef(0);
@@ -796,6 +1482,189 @@ export function NoteReadAloud({
   } | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isStartingPlayback, setIsStartingPlayback] = useState(false);
+
+  const handleMoveMediaBlock = useCallback(
+    (blockId: string, direction: "up" | "down") => {
+      const mediaElement = contentRef.current?.querySelector<HTMLElement>(
+        `[data-note-media-block-id="${blockId}"]`,
+      );
+
+      pendingArrowMoveCloneRef.current?.remove();
+      pendingArrowMoveFromRectRef.current = mediaElement?.getBoundingClientRect() ?? null;
+
+      if (mediaElement && pendingArrowMoveFromRectRef.current) {
+        const sourceImage = mediaElement.querySelector("img");
+        const cloneHost =
+          mediaElement.closest<HTMLElement>(".app-shell-pull-content") ?? window.document.body;
+        const clone = window.document.createElement("figure");
+        const cloneImage = window.document.createElement("img");
+        const rect = pendingArrowMoveFromRectRef.current;
+        const hostRect = cloneHost.getBoundingClientRect();
+        const sourceImageUrl = sourceImage?.currentSrc || sourceImage?.src || "";
+
+        clone.className = mediaElement.className;
+        clone.classList.add("note-inline-media-moving-clone");
+        clone.removeAttribute("data-note-media-block-id");
+        clone.style.position = "absolute";
+        clone.style.left = `${rect.left - hostRect.left + cloneHost.scrollLeft}px`;
+        clone.style.top = `${rect.top - hostRect.top + cloneHost.scrollTop}px`;
+        clone.style.width = `${rect.width}px`;
+        clone.style.height = `${rect.height}px`;
+        clone.style.margin = "0";
+        clone.style.pointerEvents = "none";
+        clone.style.zIndex = "30";
+        clone.style.transformOrigin = "top left";
+        clone.style.willChange = "transform";
+        clone.style.backgroundImage = sourceImageUrl ? `url("${sourceImageUrl}")` : "";
+        clone.style.backgroundPosition = "center";
+        clone.style.backgroundRepeat = "no-repeat";
+        clone.style.backgroundSize = "contain";
+
+        if (sourceImageUrl) {
+          cloneImage.src = sourceImageUrl;
+          cloneImage.alt = sourceImage?.alt ?? "";
+          cloneImage.draggable = false;
+          cloneImage.decoding = "sync";
+          cloneImage.style.display = "block";
+          cloneImage.style.width = "100%";
+          cloneImage.style.height = "100%";
+          cloneImage.style.objectFit = "contain";
+          cloneImage.style.background = "#111827";
+          clone.appendChild(cloneImage);
+        }
+
+        cloneHost.appendChild(clone);
+        pendingArrowMoveCloneRef.current = clone;
+      } else {
+        pendingArrowMoveCloneRef.current = null;
+      }
+
+      pendingArrowMovedMediaBlockIdRef.current = blockId;
+      ignoreScrollUntilRef.current = Date.now() + 900;
+      onMoveMediaBlock?.(blockId, direction);
+    },
+    [onMoveMediaBlock],
+  );
+
+  useLayoutEffect(() => {
+    const pendingBlockId = pendingArrowMovedMediaBlockIdRef.current;
+
+    if (!pendingBlockId) {
+      return;
+    }
+
+    if (!renderedMediaBlocks.some((block) => block.id === pendingBlockId)) {
+      pendingArrowMovedMediaBlockIdRef.current = null;
+      pendingArrowMoveCloneRef.current?.remove();
+      pendingArrowMoveCloneRef.current = null;
+      return;
+    }
+
+    let cleanupTimeout = 0;
+    let animatedElement: HTMLElement | null = null;
+    let animatedClone: HTMLElement | null = null;
+    let moveAnimation: Animation | null = null;
+
+    const clearAnimatedElementStyles = () => {
+      if (animatedElement) {
+        animatedElement.style.backfaceVisibility = "";
+        animatedElement.style.transformOrigin = "";
+        animatedElement.style.visibility = "";
+        animatedElement.style.willChange = "";
+        animatedElement.style.zIndex = "";
+      }
+
+      animatedClone?.remove();
+      if (pendingArrowMoveCloneRef.current === animatedClone) {
+        pendingArrowMoveCloneRef.current = null;
+      }
+    };
+
+    const mediaElement = contentRef.current?.querySelector<HTMLElement>(
+      `[data-note-media-block-id="${pendingBlockId}"]`,
+    );
+
+    if (!mediaElement) {
+      pendingArrowMoveCloneRef.current?.remove();
+      pendingArrowMoveCloneRef.current = null;
+      return;
+    }
+
+    const fromRect = pendingArrowMoveFromRectRef.current;
+    const clone = pendingArrowMoveCloneRef.current;
+    const toRect = mediaElement.getBoundingClientRect();
+    pendingArrowMovedMediaBlockIdRef.current = null;
+    pendingArrowMoveFromRectRef.current = null;
+    ignoreScrollUntilRef.current = Date.now() + 900;
+
+    if (fromRect) {
+      const deltaX = fromRect.left - toRect.left;
+      const deltaY = fromRect.top - toRect.top;
+      const moveDistance = Math.hypot(deltaX, deltaY);
+      const moveDurationMs = Math.min(760, Math.max(460, moveDistance * 1.08));
+
+      if (Math.abs(deltaX) > 0.5 || Math.abs(deltaY) > 0.5) {
+        animatedElement = mediaElement;
+        animatedClone = clone;
+        mediaElement.style.backfaceVisibility = "hidden";
+        mediaElement.style.transformOrigin = "center center";
+        mediaElement.style.visibility = clone ? "hidden" : "";
+
+        const animationTarget = clone ?? mediaElement;
+        if (!clone) {
+          mediaElement.style.willChange = "transform";
+          mediaElement.style.zIndex = "3";
+        }
+
+        moveAnimation = animationTarget.animate(
+          clone
+            ? [
+                {
+                  transform: "translate3d(0, 0, 0)",
+                  offset: 0,
+                },
+                {
+                  transform: `translate3d(${-deltaX}px, ${-deltaY}px, 0)`,
+                  offset: 1,
+                },
+              ]
+            : [
+                {
+                  transform: `translate3d(${deltaX}px, ${deltaY}px, 0)`,
+                  offset: 0,
+                },
+                {
+                  transform: "translate3d(0, 0, 0)",
+                  offset: 1,
+                },
+              ],
+          {
+            duration: moveDurationMs,
+            easing: "cubic-bezier(0.2, 0, 0, 1)",
+            composite: "replace",
+          },
+        );
+        moveAnimation.addEventListener("finish", clearAnimatedElementStyles, { once: true });
+
+        cleanupTimeout = window.setTimeout(() => {
+          clearAnimatedElementStyles();
+        }, moveDurationMs + 80);
+      } else {
+        clone?.remove();
+        if (pendingArrowMoveCloneRef.current === clone) {
+          pendingArrowMoveCloneRef.current = null;
+        }
+      }
+    }
+
+    return () => {
+      window.clearTimeout(cleanupTimeout);
+      moveAnimation?.cancel();
+
+      clearAnimatedElementStyles();
+    };
+  }, [renderedMediaBlocks]);
+
   const [error, setError] = useState<string | null>(null);
   const highlightColor =
     NOTE_TTS_HIGHLIGHT_COLORS.find((color) => color.id === highlightColorId) ??
@@ -841,7 +1710,8 @@ export function NoteReadAloud({
         }
       } catch (statusError) {
         if (!cancelled) {
-          setError(statusError instanceof Error ? statusError.message : "Poslušanje ni na voljo.");
+          const message = statusError instanceof Error ? statusError.message : "";
+          setError(/failed to fetch|load failed|network/i.test(message) ? null : "Poslušanje ni na voljo.");
         }
       } finally {
         if (!cancelled) {
@@ -1197,6 +2067,58 @@ export function NoteReadAloud({
   );
 
   useEffect(() => {
+    if (
+      !autoPrepareFirstChunk ||
+      !hasHydratedSettings ||
+      !status?.available ||
+      status.remainingSeconds <= 0 ||
+      chunks.length === 0
+    ) {
+      return;
+    }
+
+    const cacheKey = getChunkCacheKey(selectedVoice, 0);
+    const warmupKey = `${lectureId}:${cacheKey}:${chunks[0]?.text ?? ""}`;
+
+    if (preparedInitialChunkKeyRef.current === warmupKey) {
+      return;
+    }
+
+    preparedInitialChunkKeyRef.current = warmupKey;
+
+    let cancelled = false;
+
+    void fetchChunk(0, { silent: true }).then((payload) => {
+      if (cancelled || !payload) {
+        return;
+      }
+
+      const audio = audioRef.current;
+
+      if (!audio || audio.src === payload.audioUrl) {
+        return;
+      }
+
+      audio.src = payload.audioUrl;
+      audio.preload = "auto";
+      audio.load();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    autoPrepareFirstChunk,
+    chunks,
+    fetchChunk,
+    hasHydratedSettings,
+    lectureId,
+    selectedVoice,
+    status?.available,
+    status?.remainingSeconds,
+  ]);
+
+  useEffect(() => {
     const markUserInteraction = () => {
       lastUserInteractionRef.current = Date.now();
     };
@@ -1282,7 +2204,9 @@ export function NoteReadAloud({
         return;
       }
 
-      audio.src = payload.audioUrl;
+      if (audio.src !== payload.audioUrl) {
+        audio.src = payload.audioUrl;
+      }
       audio.currentTime = 0;
       audio.playbackRate = playbackRate;
       setPlaybackWordState({
@@ -1539,18 +2463,20 @@ export function NoteReadAloud({
   return (
     <>
       <div className="note-read-toolbar">
-        <button
-          type="button"
-          className="note-read-button"
-          onClick={() => {
-            void handlePlayPause();
-          }}
-          disabled={disabled}
-          aria-label={playButtonLabel}
-        >
-          {renderPlaybackIcon("h-4 w-4")}
-          <span>{playButtonLabel}</span>
-        </button>
+        {annotationToolbar ?? (
+          <button
+            type="button"
+            className="note-read-button"
+            onClick={() => {
+              void handlePlayPause();
+            }}
+            disabled={disabled}
+            aria-label={playButtonLabel}
+          >
+            {renderPlaybackIcon("h-4 w-4")}
+            <span>{playButtonLabel}</span>
+          </button>
+        )}
         <QuotaUsageMenu
           status={status}
           playbackRate={playbackRate}
@@ -1560,6 +2486,7 @@ export function NoteReadAloud({
           onVoiceChange={setSelectedVoice}
           onHighlightColorChange={setHighlightColorId}
         />
+        {toolbarAccessory}
         {error ? <span className="note-read-error">{error}</span> : null}
       </div>
       {ttsGenerationProgress ? (
@@ -1597,25 +2524,43 @@ export function NoteReadAloud({
         className="note-read-audio"
       />
       <ViewportPortal>
-        <button
-          type="button"
-          className="mobile-note-read-pill"
-          onClick={() => {
-            window.dispatchEvent(new Event("memoai:mobile-dock-close"));
-            void handlePlayPause();
-          }}
-          disabled={disabled}
-          aria-label={playButtonLabel}
-        >
-          {renderPlaybackIcon("mobile-note-read-pill-icon h-5 w-5")}
-          <span className="mobile-note-read-pill-label">{playButtonLabel}</span>
-        </button>
+        {annotationActive && annotationToolbar ? (
+          <div className="mobile-note-annotation-pill">{annotationToolbar}</div>
+        ) : (
+          <button
+            type="button"
+            className="mobile-note-read-pill"
+            onClick={() => {
+              window.dispatchEvent(new Event("memoai:mobile-dock-close"));
+              void handlePlayPause();
+            }}
+            disabled={disabled}
+            aria-label={playButtonLabel}
+          >
+            <EmojiIcon
+              symbol={isPreparingPlayback ? "⏳" : isPlaying ? "⏸️" : "🎧"}
+              size="1.12rem"
+              className="mobile-note-read-pill-icon"
+            />
+            <span className="mobile-note-read-pill-label">{playButtonLabel}</span>
+          </button>
+        )}
       </ViewportPortal>
       <div ref={contentRef} className="note-read-content" style={readAlongStyle}>
         <ReadAlongMarkdown
           document={document}
           completedWordIndex={completedWordIndex}
           currentWordIndex={currentWordIndex}
+          annotations={annotations}
+          mediaBlocks={renderedMediaBlocks}
+          selectedBlockId={selectedBlockId}
+          selectedMediaBlockId={selectedMediaBlockId}
+          deletingMediaIds={deletingMediaIds}
+          onBlockSelect={onBlockSelect}
+          onMediaBlockSelect={onMediaBlockSelect}
+          onMoveMediaBlock={handleMoveMediaBlock}
+          onLayoutMediaBlock={onLayoutMediaBlock}
+          onDeleteMedia={onDeleteMedia}
         />
       </div>
     </>

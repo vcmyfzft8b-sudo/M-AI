@@ -181,7 +181,7 @@ export function AppShell({
     }
 
     const mobileSheetSelector =
-      ".mobile-create-menu, .mobile-create-menu-backdrop, .library-folder-mobile-sheet, .library-folder-mobile-sheet-backdrop, .library-folder-modal, .library-folder-modal-overlay, .note-read-usage-popover, .note-read-usage-mobile-backdrop, .dashboard-note-dialog, .dashboard-note-dialog-backdrop, .note-source-modal-wrap, .note-source-modal-backdrop";
+      ".mobile-create-menu, .mobile-create-menu-backdrop, .library-folder-mobile-sheet, .library-folder-mobile-sheet-backdrop, .library-folder-modal, .library-folder-modal-overlay, .note-read-usage-popover, .note-read-usage-mobile-backdrop, .dashboard-note-dialog, .dashboard-note-dialog-backdrop, .study-manager-sheet, .study-manager-backdrop, .note-source-modal-wrap, .note-source-modal-backdrop";
 
     function hasActiveMobileSheet() {
       return window.innerWidth < mobileBreakpoint && Boolean(document.querySelector(mobileSheetSelector));
@@ -194,13 +194,21 @@ export function AppShell({
       );
     }
 
+    function isInsideSwipeActionRow(target: EventTarget | null) {
+      return (
+        target instanceof HTMLElement &&
+        Boolean(target.closest(".dashboard-note-swipe-row, .dashboard-note-actions"))
+      );
+    }
+
     function handleTouchStart(event: TouchEvent) {
       if (
         window.innerWidth >= mobileBreakpoint ||
         isRefreshing ||
         event.touches.length !== 1 ||
         hasActiveMobileSheet() ||
-        isInsideMobileSheet(event.target)
+        isInsideMobileSheet(event.target) ||
+        isInsideSwipeActionRow(event.target)
       ) {
         resetGesture();
         return;
@@ -211,7 +219,11 @@ export function AppShell({
     }
 
     function handleTouchMove(event: TouchEvent) {
-      if (hasActiveMobileSheet() || isInsideMobileSheet(event.target)) {
+      if (
+        hasActiveMobileSheet() ||
+        isInsideMobileSheet(event.target) ||
+        isInsideSwipeActionRow(event.target)
+      ) {
         resetGesture();
         return;
       }

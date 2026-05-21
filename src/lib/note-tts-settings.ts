@@ -13,6 +13,8 @@ export type NoteTtsVoice = (typeof NOTE_TTS_VOICES)[number];
 
 export const DEFAULT_NOTE_TTS_VOICE: NoteTtsVoice = "Grace";
 
+export const NOTE_TTS_VOICE_STORAGE_KEY = "memo-note-tts-voice";
+
 export const NOTE_TTS_PLAYBACK_RATES = [0.5, 1, 1.5, 2] as const;
 
 export type NoteTtsPlaybackRate = (typeof NOTE_TTS_PLAYBACK_RATES)[number];

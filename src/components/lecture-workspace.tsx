@@ -5,15 +5,26 @@ import {
   ArrowRight,
   ArrowUp,
   Check,
+  Highlighter,
+  ImagePlus,
   Loader2,
+  Palette,
+  Pencil,
+  Plus,
+  Underline,
   X,
 } from "lucide-react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type {
+  CSSProperties,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EmojiIcon } from "@/components/emoji-icon";
 import { NoteReadAloud } from "@/components/note-read-aloud";
 import { StudyCompletionCard } from "@/components/study-completion-card";
+import { ViewportPortal } from "@/components/viewport-portal";
 import {
   getApiErrorMessage,
   parseApiResponse,
@@ -24,11 +35,16 @@ import {
   getEffectiveLectureSourceType,
   isRecord,
   lectureShowsTranscript,
+  shouldCreateInitialNoteAudio,
 } from "@/lib/lecture-source-metadata";
-import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
+import type { EditableNoteDoc, NoteAnnotation, NoteAnnotationKind } from "@/lib/note-doc";
+import { NOTE_TTS_HIGHLIGHT_COLORS } from "@/lib/note-tts-settings";
+import { parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import {
   POLL_INTERVAL_MS,
+  STORAGE_BUCKET,
 } from "@/lib/constants";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useRouter } from "next/navigation";
 import type {
   ChatMessageWithCitations,
@@ -82,6 +98,16 @@ type FlashcardDragSession = {
   width: number;
 };
 
+type StudyManagerItemDragState = {
+  id: string;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startOffset: number;
+  offset: number;
+  isDragging: boolean;
+};
+
 type FlashcardExitStart = {
   xPercent: number;
   yPercent: number;
@@ -107,6 +133,73 @@ type ChatResponse = {
   error?: unknown;
 };
 
+type NoteSelectionRange = {
+  startWordIndex: number;
+  endWordIndex: number;
+};
+
+type NotesDocResponse = {
+  doc: EditableNoteDoc;
+  revision: number;
+  updatedAt?: string | null;
+  error?: unknown;
+};
+
+type NoteMediaUploadResponse = {
+  mediaId: string;
+  path: string;
+  token: string;
+  mimeType: string;
+  maxBytes: number;
+  error?: unknown;
+};
+
+type NoteMediaFinalizeResponse = NotesDocResponse & {
+  media?: LectureDetail["noteMedia"][number];
+};
+
+type StudyItemDifficulty = "easy" | "medium" | "hard";
+
+type FlashcardFormState = {
+  front: string;
+  back: string;
+  hint: string;
+  difficulty: StudyItemDifficulty;
+};
+
+type QuizQuestionFormState = {
+  prompt: string;
+  options: [string, string, string, string];
+  correctOptionIndex: number;
+  explanation: string;
+  difficulty: StudyItemDifficulty;
+};
+
+type FlashcardMutationResponse = {
+  flashcard: LectureDetail["flashcards"][number];
+  error?: unknown;
+};
+
+type QuizQuestionMutationResponse = {
+  question: LectureDetail["quizQuestions"][number];
+  error?: unknown;
+};
+
+const NOTE_HIGHLIGHT_COLORS = [
+  "orange",
+  "green",
+  "blue",
+  "pink",
+].map((colorId) => {
+  const color = NOTE_TTS_HIGHLIGHT_COLORS.find((item) => item.id === colorId);
+
+  return {
+    id: colorId,
+    label: color?.label ?? colorId,
+    value: color?.currentBackground ?? "#fb923c",
+  };
+});
+
 type StudySessionSnapshot = {
   savedAt: string;
   activeStudyView: StudyMaterialView;
@@ -120,6 +213,7 @@ const NETWORK_REQUEST_ERROR_MESSAGE = "Povezava je bila prekinjena. Poskusi znov
 const FAST_DETAIL_POLL_INTERVAL_MS = 5000;
 const MIN_DETAIL_REFRESH_INTERVAL_MS = 3000;
 const STUDY_SESSION_SAVE_DEBOUNCE_MS = 5000;
+const STUDY_MANAGER_ACTION_REVEAL_PX = 78;
 
 function ignoreBackgroundRequestError() {
   return null;
@@ -214,6 +308,126 @@ function shouldPollDetail(detail: LectureDetail) {
 
 function getStudySessionStorageKey(lectureId: string) {
   return `${STUDY_SESSION_STORAGE_KEY_PREFIX}${lectureId}`;
+}
+
+function createClientFallbackNoteDoc(): EditableNoteDoc {
+  return {
+    version: 1,
+    baseNotesHash: "local",
+    updatedAt: new Date(0).toISOString(),
+    annotations: [],
+    mediaBlocks: [],
+  };
+}
+
+function mergeNoteDocs(baseDoc: EditableNoteDoc, nextDoc: EditableNoteDoc): EditableNoteDoc {
+  const annotationsById = new Map(baseDoc.annotations.map((annotation) => [annotation.id, annotation]));
+  const mediaBlocksById = new Map(baseDoc.mediaBlocks.map((mediaBlock) => [mediaBlock.id, mediaBlock]));
+
+  for (const annotation of nextDoc.annotations) {
+    annotationsById.set(annotation.id, annotation);
+  }
+
+  for (const mediaBlock of nextDoc.mediaBlocks) {
+    mediaBlocksById.set(mediaBlock.id, mediaBlock);
+  }
+
+  return {
+    ...baseDoc,
+    updatedAt: new Date().toISOString(),
+    annotations: Array.from(annotationsById.values()),
+    mediaBlocks: Array.from(mediaBlocksById.values()),
+  };
+}
+
+function annotationRangesOverlap(
+  firstStart: number,
+  firstEnd: number,
+  secondStart: number,
+  secondEnd: number,
+) {
+  return firstStart <= secondEnd && secondStart <= firstEnd;
+}
+
+function isSelectionFullyCoveredByAnnotations(
+  annotations: NoteAnnotation[],
+  selection: NoteSelectionRange,
+) {
+  let cursor = selection.startWordIndex;
+  const sortedAnnotations = annotations
+    .filter((annotation) =>
+      annotationRangesOverlap(
+        annotation.startWordIndex,
+        annotation.endWordIndex,
+        selection.startWordIndex,
+        selection.endWordIndex,
+      ),
+    )
+    .sort((first, second) => first.startWordIndex - second.startWordIndex);
+
+  for (const annotation of sortedAnnotations) {
+    if (annotation.startWordIndex > cursor) {
+      return false;
+    }
+
+    cursor = Math.max(cursor, annotation.endWordIndex + 1);
+
+    if (cursor > selection.endWordIndex) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function removeSelectionFromAnnotation(annotation: NoteAnnotation, selection: NoteSelectionRange) {
+  const pieces: NoteAnnotation[] = [];
+
+  if (annotation.startWordIndex < selection.startWordIndex) {
+    pieces.push({
+      ...annotation,
+      id: crypto.randomUUID(),
+      endWordIndex: selection.startWordIndex - 1,
+    });
+  }
+
+  if (annotation.endWordIndex > selection.endWordIndex) {
+    pieces.push({
+      ...annotation,
+      id: crypto.randomUUID(),
+      startWordIndex: selection.endWordIndex + 1,
+    });
+  }
+
+  return pieces;
+}
+
+function doRectsOverlap(first: DOMRect, second: DOMRect, padding = 8) {
+  return !(
+    first.right + padding < second.left ||
+    first.left - padding > second.right ||
+    first.bottom + padding < second.top ||
+    first.top - padding > second.bottom
+  );
+}
+
+function createEmptyFlashcardForm(): FlashcardFormState {
+  return {
+    front: "",
+    back: "",
+    hint: "",
+    difficulty: "medium",
+  };
+}
+
+function createEmptyQuizQuestionForm(): QuizQuestionFormState {
+  return {
+    prompt: "",
+    options: ["", "", "", ""],
+    correctOptionIndex: 0,
+    explanation: "",
+    difficulty: "medium",
+  };
 }
 
 function toTimestamp(value: string | null | undefined) {
@@ -336,26 +550,6 @@ const FLASHCARD_DRAG_TRIGGER_RATIO = 0.28;
 const FLASHCARD_DRAG_TRIGGER_MIN_PX = 88;
 const FLASHCARD_DRAG_TRIGGER_MAX_PX = 150;
 const FLASHCARD_DRAG_MAX_ROTATION_DEG = 8;
-
-function sourceLabel(sourceType: string) {
-  if (sourceType === "link") {
-    return "Spletna povezava";
-  }
-
-  if (sourceType === "text") {
-    return "Besedilo";
-  }
-
-  if (sourceType === "pdf") {
-    return "PDF dokument";
-  }
-
-  if (sourceType === "presentation") {
-    return "PowerPoint predstavitev";
-  }
-
-  return "Zvočni posnetek";
-}
 
 function isScanImport(detail: LectureDetail) {
   const sourceType = getEffectiveLectureSourceType(detail.lecture);
@@ -504,7 +698,22 @@ function practiceTestStageLabel(stage: unknown) {
   return "Pripravljam preizkus";
 }
 
-function lectureProcessingStageLabel(status: LectureDetail["lecture"]["status"]) {
+function getLectureProcessingStage(metadata: unknown) {
+  if (!isRecord(metadata) || !isRecord(metadata.processing)) {
+    return null;
+  }
+
+  return typeof metadata.processing.stage === "string" ? metadata.processing.stage : null;
+}
+
+function lectureProcessingStageLabel(
+  status: LectureDetail["lecture"]["status"],
+  processingStage?: string | null,
+) {
+  if (processingStage === "preparing_audio") {
+    return "Ustvarjam zvok";
+  }
+
   if (status === "uploading") {
     return "Nalagam gradivo";
   }
@@ -553,9 +762,7 @@ function StudyGenerationNotice({
 }) {
   return (
     <div className="lecture-study-generation-notice" role="status" aria-live="polite">
-      <div className="lecture-study-generation-loader" aria-hidden="true">
-        <span />
-        <span />
+      <div className="lecture-study-generation-progress" aria-hidden="true">
         <span />
       </div>
       <div className="lecture-study-generation-copy">
@@ -706,16 +913,27 @@ function sanitizeFlashcardSessionState(
     reviewQueue = flashcardIds;
   }
 
+  if (!roundSummary) {
+    const queuedIds = new Set([...reviewQueue, ...repeatQueue]);
+    const missingFlashcardIds = flashcardIds.filter((id) => !queuedIds.has(id));
+    reviewQueue = [...reviewQueue, ...missingFlashcardIds];
+  }
+
   if (flashcardIds.length > 0 && reviewQueue.length === 0 && !roundSummary) {
     return fallback;
   }
+
+  const cycleCardCount = Math.max(
+    reviewQueue.length,
+    Math.min(Math.max(0, session.cycleCardCount), flashcardIds.length),
+  );
 
   return {
     reviewQueue,
     repeatQueue,
     activeFlashcardIndex,
     reviewCycle: Math.max(1, session.reviewCycle),
-    cycleCardCount: Math.max(0, session.cycleCardCount),
+    cycleCardCount,
     roundSummary,
     sessionResults,
   };
@@ -791,18 +1009,30 @@ function sanitizeQuizSessionState(
       }
     : null;
 
-  if (questionIds.length > 0 && quizQueue.length === 0 && !roundSummary) {
+  const nextQuizQueue = !roundSummary
+    ? [
+        ...quizQueue,
+        ...questionIds.filter((id) => !quizQueue.includes(id)),
+      ]
+    : quizQueue;
+
+  if (questionIds.length > 0 && nextQuizQueue.length === 0 && !roundSummary) {
     return fallback;
   }
 
+  const quizRoundCount = Math.max(
+    nextQuizQueue.length,
+    Math.min(Math.max(0, session.quizRoundCount), questionIds.length),
+  );
+
   return {
-    quizQueue,
+    quizQueue: nextQuizQueue,
     quizRound: Math.max(1, session.quizRound),
-    quizRoundCount: Math.max(0, session.quizRoundCount),
+    quizRoundCount,
     roundSummary,
     activeQuestionIndex:
-      quizQueue.length > 0
-        ? Math.min(Math.max(0, session.activeQuestionIndex), quizQueue.length - 1)
+      nextQuizQueue.length > 0
+        ? Math.min(Math.max(0, session.activeQuestionIndex), nextQuizQueue.length - 1)
         : 0,
     selections,
     optionOrders: {
@@ -912,6 +1142,53 @@ export function LectureWorkspace({
   const [isAwaitingPracticeTestGeneration, setIsAwaitingPracticeTestGeneration] = useState(false);
   const [isSubmittingPracticeTest, setIsSubmittingPracticeTest] = useState(false);
   const [studyError, setStudyError] = useState<string | null>(null);
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [isSavingNoteDoc, setIsSavingNoteDoc] = useState(false);
+  const [noteSelection, setNoteSelection] = useState<NoteSelectionRange | null>(null);
+  const [isHighlightPaletteOpen, setIsHighlightPaletteOpen] = useState(false);
+  const [selectedHighlightColorId, setSelectedHighlightColorId] = useState("orange");
+  const [selectedNoteBlockId, setSelectedNoteBlockId] = useState<string | null>(null);
+  const [selectedMediaBlockId, setSelectedMediaBlockId] = useState<string | null>(null);
+  const [deletingNoteMediaIds, setDeletingNoteMediaIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [optimisticNoteMedia, setOptimisticNoteMedia] = useState<LectureDetail["noteMedia"]>(
+    () => [],
+  );
+  const notePhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const noteAnnotationShellRef = useRef<HTMLDivElement | null>(null);
+  const deletingNoteMediaIdsRef = useRef(new Set<string>());
+  const optimisticNoteMediaUrlsRef = useRef(new Map<string, string>());
+  const studyManagerDragStartYRef = useRef<number | null>(null);
+  const studyManagerDragOffsetRef = useRef(0);
+  const studyManagerSuppressClickRef = useRef(false);
+  const studyManagerCloseTimerRef = useRef<number | null>(null);
+  const studyManagerSheetRef = useRef<HTMLDivElement | null>(null);
+  const studyManagerTouchDragActiveRef = useRef(false);
+  const studyManagerItemSuppressClickRef = useRef(false);
+  const studyManagerItemDragRef = useRef<StudyManagerItemDragState | null>(null);
+  const deletingStudyItemIdsRef = useRef(new Set<string>());
+  const [isStudyManagerOpen, setIsStudyManagerOpen] = useState(false);
+  const [studyManagerSearch, setStudyManagerSearch] = useState("");
+  const [studyManagerDragOffset, setStudyManagerDragOffset] = useState(0);
+  const [studyManagerInputFocused, setStudyManagerInputFocused] = useState(false);
+  const [studyManagerItemDrag, setStudyManagerItemDrag] =
+    useState<StudyManagerItemDragState | null>(null);
+  const [openStudyManagerActionItemId, setOpenStudyManagerActionItemId] = useState<string | null>(
+    null,
+  );
+  const [editingFlashcardId, setEditingFlashcardId] = useState<string | null>(null);
+  const [flashcardForm, setFlashcardForm] = useState<FlashcardFormState>(
+    createEmptyFlashcardForm,
+  );
+  const [editingQuizQuestionId, setEditingQuizQuestionId] = useState<string | null>(null);
+  const [quizQuestionForm, setQuizQuestionForm] = useState<QuizQuestionFormState>(
+    createEmptyQuizQuestionForm,
+  );
+  const [isSavingStudyItem, setIsSavingStudyItem] = useState(false);
+  const [deletingStudyItemIds, setDeletingStudyItemIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [isFlashcardFlipped, setIsFlashcardFlipped] = useState(false);
   const [activeStudyView, setActiveStudyView] = useState<StudyMaterialView>(
     getInitialStudyView(initialDetail),
@@ -1422,6 +1699,75 @@ export function LectureWorkspace({
       detail.lecture.title,
     );
   }, [detail.artifact?.structured_notes_md, detail.lecture.title]);
+  const activeNoteDoc = detail.editableNoteDoc ?? createClientFallbackNoteDoc();
+  const renderedNoteMedia = useMemo(() => {
+    const savedMediaIds = new Set(detail.noteMedia.map((media) => media.id));
+    return [
+      ...detail.noteMedia,
+      ...optimisticNoteMedia.filter((media) => !savedMediaIds.has(media.id)),
+    ];
+  }, [detail.noteMedia, optimisticNoteMedia]);
+  const noteBlockIds = useMemo(
+    () => (cleanedStructuredNotes ? parseNoteTtsDocument(cleanedStructuredNotes).blocks.map((block) => block.id) : []),
+    [cleanedStructuredNotes],
+  );
+  useEffect(
+    () => () => {
+      optimisticNoteMediaUrlsRef.current.forEach((url) => {
+        URL.revokeObjectURL(url);
+      });
+      optimisticNoteMediaUrlsRef.current.clear();
+    },
+    [],
+  );
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const isAnnotationPaletteExpanded =
+      activeTab === "notes" && Boolean(noteSelection) && isHighlightPaletteOpen;
+
+    function updateDockOverlapState() {
+      if (!isAnnotationPaletteExpanded) {
+        delete document.body.dataset.noteAnnotationDockOverlap;
+        return;
+      }
+
+      const annotationToolbar = document.querySelector(
+        ".mobile-note-annotation-pill .note-annotation-toolbar",
+      );
+      const mobileDockToggle = document.querySelector(".mobile-dock-toggle");
+
+      if (!(annotationToolbar instanceof HTMLElement) || !(mobileDockToggle instanceof HTMLElement)) {
+        delete document.body.dataset.noteAnnotationDockOverlap;
+        return;
+      }
+
+      const overlaps = doRectsOverlap(
+        annotationToolbar.getBoundingClientRect(),
+        mobileDockToggle.getBoundingClientRect(),
+      );
+
+      if (overlaps) {
+        document.body.dataset.noteAnnotationDockOverlap = "true";
+      } else {
+        delete document.body.dataset.noteAnnotationDockOverlap;
+      }
+    }
+
+    updateDockOverlapState();
+    const animationFrame = window.requestAnimationFrame(updateDockOverlapState);
+    window.addEventListener("resize", updateDockOverlapState);
+    window.visualViewport?.addEventListener("resize", updateDockOverlapState);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("resize", updateDockOverlapState);
+      window.visualViewport?.removeEventListener("resize", updateDockOverlapState);
+      delete document.body.dataset.noteAnnotationDockOverlap;
+    };
+  }, [activeTab, isHighlightPaletteOpen, noteSelection]);
   const notesArtifactLoadFailed =
     !cleanedStructuredNotes &&
     detail.lecture.status === "ready" &&
@@ -1450,7 +1796,10 @@ export function LectureWorkspace({
       ? detail.practiceTestAsset.model_metadata.stage
       : null;
   const practiceTestStageCopy = practiceTestStageLabel(practiceTestStage);
-  const lectureProcessingStageCopy = lectureProcessingStageLabel(detail.lecture.status);
+  const lectureProcessingStageCopy = lectureProcessingStageLabel(
+    detail.lecture.status,
+    getLectureProcessingStage(detail.lecture.processing_metadata),
+  );
   const totalFlashcards = studyDeck.length;
   const flashcardFirstPassKnownCount = studyDeck.reduce((total, flashcard) => {
     return flashcardSessionResults[flashcard.id]?.firstConfidence !== "again" &&
@@ -2326,30 +2675,1262 @@ export function LectureWorkspace({
     void submitChatQuestion();
   }
 
+  function applySavedNoteDoc(payload: NotesDocResponse) {
+    setDetail((current) => ({
+      ...current,
+      editableNoteDoc: payload.doc,
+      editableNoteRevision: payload.revision,
+      artifact: current.artifact
+        ? {
+            ...current.artifact,
+            editable_notes_doc: payload.doc,
+            editable_notes_revision: payload.revision,
+            editable_notes_updated_at: payload.updatedAt ?? new Date().toISOString(),
+          }
+        : current.artifact,
+    }));
+  }
+
+  function applyOptimisticNoteDoc(doc: EditableNoteDoc) {
+    setDetail((current) => ({
+      ...current,
+      editableNoteDoc: doc,
+      artifact: current.artifact
+        ? {
+            ...current.artifact,
+            editable_notes_doc: doc,
+            editable_notes_updated_at: doc.updatedAt,
+          }
+        : current.artifact,
+    }));
+  }
+
+  async function persistNoteDoc(nextDoc: EditableNoteDoc) {
+    setIsSavingNoteDoc(true);
+    setNoteError(null);
+
+    try {
+      const saveDoc = async (doc: EditableNoteDoc, expectedRevision: number) => {
+        const response = await fetch(`/api/lectures/${detail.lecture.id}/notes-doc`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            expectedRevision,
+            doc,
+          }),
+        });
+        const payload = (await response.json().catch(() => null)) as NotesDocResponse | null;
+
+        return { response, payload };
+      };
+
+      let { response, payload } = await saveDoc(nextDoc, detail.editableNoteRevision);
+
+      if (response.status === 409 && payload?.doc && Number.isInteger(payload.revision)) {
+        const rebasedDoc = mergeNoteDocs(payload.doc, nextDoc);
+        applySavedNoteDoc(payload);
+        ({ response, payload } = await saveDoc(rebasedDoc, payload.revision));
+      }
+
+      if (!response.ok || !payload?.doc) {
+        if (response.status === 409 && payload?.doc) {
+          applySavedNoteDoc(payload);
+        }
+        setNoteError(getApiErrorMessage(payload, "Shranjevanje ni uspelo."));
+        return null;
+      }
+
+      applySavedNoteDoc(payload);
+      return payload.doc;
+    } catch {
+      setNoteError("Shranjevanje ni uspelo.");
+      return null;
+    } finally {
+      setIsSavingNoteDoc(false);
+    }
+  }
+
+  function updateNoteTextSelection(root: HTMLElement | null = noteAnnotationShellRef.current) {
+    const selection = window.getSelection();
+
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      setNoteSelection(null);
+      setIsHighlightPaletteOpen(false);
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+
+    if (!root || !root.contains(range.commonAncestorContainer)) {
+      setNoteSelection(null);
+      setIsHighlightPaletteOpen(false);
+      return;
+    }
+
+    const selectedWordElements = Array.from(root.querySelectorAll<HTMLElement>(".note-read-word"))
+      .filter((element) => {
+        try {
+          return range.intersectsNode(element);
+        } catch {
+          return false;
+        }
+      });
+    const selectedWordIndexes = selectedWordElements.flatMap((element) => {
+      const index = Number(element.dataset.wordIndex);
+      return Number.isInteger(index) ? [index] : [];
+    });
+
+    if (selectedWordIndexes.length === 0) {
+      setNoteSelection(null);
+      setIsHighlightPaletteOpen(false);
+      return;
+    }
+
+    const selectedBlockId = selectedWordElements[0]?.closest<HTMLElement>("[data-note-block-id]")?.dataset.noteBlockId;
+
+    if (selectedBlockId) {
+      setSelectedNoteBlockId(selectedBlockId);
+      setSelectedMediaBlockId(null);
+    }
+
+    setNoteSelection({
+      startWordIndex: Math.min(...selectedWordIndexes),
+      endWordIndex: Math.max(...selectedWordIndexes),
+    });
+  }
+
+  useEffect(() => {
+    if (activeTab !== "notes") {
+      return;
+    }
+
+    let animationFrame = 0;
+    let timeoutId = 0;
+
+    const scheduleSelectionUpdate = () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.clearTimeout(timeoutId);
+      animationFrame = window.requestAnimationFrame(() => {
+        updateNoteTextSelection();
+        timeoutId = window.setTimeout(updateNoteTextSelection, 120);
+      });
+    };
+
+    document.addEventListener("selectionchange", scheduleSelectionUpdate);
+    window.addEventListener("touchend", scheduleSelectionUpdate, { passive: true });
+    window.addEventListener("pointerup", scheduleSelectionUpdate, { passive: true });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.clearTimeout(timeoutId);
+      document.removeEventListener("selectionchange", scheduleSelectionUpdate);
+      window.removeEventListener("touchend", scheduleSelectionUpdate);
+      window.removeEventListener("pointerup", scheduleSelectionUpdate);
+    };
+  }, [activeTab]);
+
+  function handleApplyAnnotation(kind: NoteAnnotationKind, colorId = selectedHighlightColorId) {
+    if (!noteSelection) {
+      return;
+    }
+
+    const matchingAnnotations = activeNoteDoc.annotations.filter(
+      (annotation) =>
+        annotation.kind === kind &&
+        annotationRangesOverlap(
+          annotation.startWordIndex,
+          annotation.endWordIndex,
+          noteSelection.startWordIndex,
+          noteSelection.endWordIndex,
+        ),
+    );
+    const sameColorMatchingAnnotations = matchingAnnotations.filter(
+      (annotation) => (annotation.colorId ?? "orange") === colorId,
+    );
+    const shouldRemoveSelection = isSelectionFullyCoveredByAnnotations(
+      sameColorMatchingAnnotations,
+      noteSelection,
+    );
+    const annotationsWithoutSelectionForKind = activeNoteDoc.annotations.flatMap((annotation) => {
+      const shouldSplitAnnotation =
+        annotation.kind === kind &&
+        annotationRangesOverlap(
+          annotation.startWordIndex,
+          annotation.endWordIndex,
+          noteSelection.startWordIndex,
+          noteSelection.endWordIndex,
+        );
+
+      return shouldSplitAnnotation ? removeSelectionFromAnnotation(annotation, noteSelection) : [annotation];
+    });
+    const nextDoc: EditableNoteDoc = {
+      ...activeNoteDoc,
+      updatedAt: new Date().toISOString(),
+      annotations: shouldRemoveSelection
+        ? annotationsWithoutSelectionForKind
+        : [
+            ...annotationsWithoutSelectionForKind,
+            {
+              id: crypto.randomUUID(),
+              kind,
+              startWordIndex: noteSelection.startWordIndex,
+              endWordIndex: noteSelection.endWordIndex,
+              colorId,
+              createdAt: new Date().toISOString(),
+            },
+          ],
+    };
+
+    applyOptimisticNoteDoc(nextDoc);
+    window.getSelection()?.removeAllRanges();
+    setNoteSelection(null);
+    setIsHighlightPaletteOpen(false);
+    void persistNoteDoc(nextDoc);
+  }
+
+  async function handleNotePhotoSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+
+    if (!file || !selectedNoteBlockId) {
+      return;
+    }
+
+    const createdAt = new Date().toISOString();
+    const optimisticMediaId = crypto.randomUUID();
+    const optimisticBlockId = `optimistic-${crypto.randomUUID()}`;
+    const localPreviewUrl = URL.createObjectURL(file);
+    const optimisticMedia: LectureDetail["noteMedia"][number] = {
+      id: optimisticMediaId,
+      lecture_id: detail.lecture.id,
+      user_id: "",
+      storage_path: "",
+      mime_type: file.type || "application/octet-stream",
+      byte_size: file.size,
+      original_file_name: file.name,
+      created_at: createdAt,
+      signedUrl: localPreviewUrl,
+    };
+    const optimisticDoc: EditableNoteDoc = {
+      ...activeNoteDoc,
+      updatedAt: createdAt,
+      mediaBlocks: [
+        ...activeNoteDoc.mediaBlocks,
+        {
+          id: optimisticBlockId,
+          mediaId: optimisticMediaId,
+          afterBlockId: selectedNoteBlockId,
+          widthPercent: 100,
+          xPercent: 50,
+          createdAt,
+        },
+      ],
+    };
+
+    optimisticNoteMediaUrlsRef.current.set(optimisticMediaId, localPreviewUrl);
+    setOptimisticNoteMedia((current) => [...current, optimisticMedia]);
+    applyOptimisticNoteDoc(optimisticDoc);
+    setIsSavingNoteDoc(true);
+    setNoteError(null);
+
+    try {
+      const uploadResponse = await fetch(`/api/lectures/${detail.lecture.id}/note-media/uploads`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          byteSize: file.size,
+        }),
+      });
+      const uploadPayload = await parseApiResponse<NoteMediaUploadResponse>(uploadResponse);
+      const supabase = createSupabaseBrowserClient();
+      const uploadResult = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .uploadToSignedUrl(uploadPayload.path, uploadPayload.token, file, {
+          contentType: uploadPayload.mimeType,
+        });
+
+      if (uploadResult.error) {
+        throw new Error(uploadResult.error.message);
+      }
+
+      const finalizeResponse = await fetch(`/api/lectures/${detail.lecture.id}/note-media`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mediaId: uploadPayload.mediaId,
+          storagePath: uploadPayload.path,
+          mimeType: uploadPayload.mimeType,
+          byteSize: file.size,
+          originalFileName: file.name,
+          afterBlockId: selectedNoteBlockId,
+          expectedRevision: detail.editableNoteRevision,
+        }),
+      });
+      const finalizePayload = await parseApiResponse<NoteMediaFinalizeResponse>(finalizeResponse);
+
+      applySavedNoteDoc(finalizePayload);
+
+      const savedMedia = finalizePayload.media;
+
+      if (savedMedia) {
+        setDetail((current) => ({
+          ...current,
+          noteMedia: [
+            ...current.noteMedia.filter((media) => media.id !== savedMedia.id),
+            savedMedia,
+          ],
+        }));
+      }
+    } catch (error) {
+      setDetail((current) => {
+        const currentDoc = current.editableNoteDoc;
+
+        if (!currentDoc?.mediaBlocks.some((block) => block.id === optimisticBlockId)) {
+          return current;
+        }
+
+        const nextDoc = {
+          ...currentDoc,
+          updatedAt: new Date().toISOString(),
+          mediaBlocks: currentDoc.mediaBlocks.filter((block) => block.id !== optimisticBlockId),
+        };
+
+        return {
+          ...current,
+          editableNoteDoc: nextDoc,
+          artifact: current.artifact
+            ? {
+                ...current.artifact,
+                editable_notes_doc: nextDoc,
+                editable_notes_updated_at: nextDoc.updatedAt,
+              }
+            : current.artifact,
+        };
+      });
+      setNoteError(getRequestErrorMessage(error, "Fotografije ni bilo mogoče dodati."));
+    } finally {
+      setOptimisticNoteMedia((current) =>
+        current.filter((media) => media.id !== optimisticMediaId),
+      );
+      const objectUrl = optimisticNoteMediaUrlsRef.current.get(optimisticMediaId);
+
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        optimisticNoteMediaUrlsRef.current.delete(optimisticMediaId);
+      }
+      setIsSavingNoteDoc(false);
+    }
+  }
+
+  function handleMoveMediaBlock(mediaBlockId: string, direction: "up" | "down") {
+    const block = activeNoteDoc.mediaBlocks.find((item) => item.id === mediaBlockId);
+
+    if (!block || noteBlockIds.length === 0) {
+      return;
+    }
+
+    const currentIndex = Math.max(0, noteBlockIds.indexOf(block.afterBlockId));
+    const nextIndex =
+      direction === "up"
+        ? Math.max(0, currentIndex - 1)
+        : Math.min(noteBlockIds.length - 1, currentIndex + 1);
+    const nextBlockId = noteBlockIds[nextIndex];
+
+    if (!nextBlockId || nextBlockId === block.afterBlockId) {
+      return;
+    }
+
+    const nextDoc = {
+      ...activeNoteDoc,
+      updatedAt: new Date().toISOString(),
+      mediaBlocks: activeNoteDoc.mediaBlocks.map((item) =>
+        item.id === mediaBlockId ? { ...item, afterBlockId: nextBlockId } : item,
+      ),
+    };
+
+    applyOptimisticNoteDoc(nextDoc);
+    void persistNoteDoc(nextDoc);
+  }
+
+  function handleLayoutMediaBlock(
+    mediaBlockId: string,
+    update: { widthPercent?: number; xPercent?: number },
+  ) {
+    const boundedWidthPercent =
+      typeof update.widthPercent === "number"
+        ? Math.min(100, Math.max(35, Math.round(update.widthPercent)))
+        : undefined;
+    const boundedXPercent =
+      typeof update.xPercent === "number"
+        ? Math.min(100, Math.max(0, Math.round(update.xPercent)))
+        : undefined;
+
+    const nextDoc = {
+      ...activeNoteDoc,
+      updatedAt: new Date().toISOString(),
+      mediaBlocks: activeNoteDoc.mediaBlocks.map((item) =>
+        item.id === mediaBlockId
+          ? {
+              ...item,
+              widthPercent: boundedWidthPercent ?? item.widthPercent,
+              xPercent: boundedXPercent ?? item.xPercent,
+            }
+          : item,
+      ),
+    };
+
+    applyOptimisticNoteDoc(nextDoc);
+    void persistNoteDoc(nextDoc);
+  }
+
+  async function handleDeleteNoteMedia(mediaId: string) {
+    if (deletingNoteMediaIdsRef.current.has(mediaId)) {
+      return;
+    }
+
+    deletingNoteMediaIdsRef.current.add(mediaId);
+    setDeletingNoteMediaIds(new Set(deletingNoteMediaIdsRef.current));
+    setIsSavingNoteDoc(true);
+    setNoteError(null);
+
+    try {
+      const response = await fetch(`/api/lectures/${detail.lecture.id}/note-media/${mediaId}`, {
+        method: "DELETE",
+      });
+      const payload = await parseApiResponse<NotesDocResponse & { deletedMediaId?: string }>(response);
+      applySavedNoteDoc(payload);
+      setDetail((current) => ({
+        ...current,
+        noteMedia: current.noteMedia.filter((media) => media.id !== mediaId),
+      }));
+      setSelectedMediaBlockId(null);
+    } catch (error) {
+      setNoteError(getRequestErrorMessage(error, "Fotografije ni bilo mogoče izbrisati."));
+    } finally {
+      deletingNoteMediaIdsRef.current.delete(mediaId);
+      setDeletingNoteMediaIds(new Set(deletingNoteMediaIdsRef.current));
+      setIsSavingNoteDoc(false);
+    }
+  }
+
+  const closeStudyManager = useCallback(() => {
+    if (studyManagerCloseTimerRef.current !== null) {
+      window.clearTimeout(studyManagerCloseTimerRef.current);
+      studyManagerCloseTimerRef.current = null;
+    }
+    studyManagerDragStartYRef.current = null;
+    studyManagerDragOffsetRef.current = 0;
+    studyManagerSuppressClickRef.current = false;
+    studyManagerItemDragRef.current = null;
+    setStudyManagerInputFocused(false);
+    setStudyManagerDragOffset(0);
+    setStudyManagerItemDrag(null);
+    setOpenStudyManagerActionItemId(null);
+    setIsStudyManagerOpen(false);
+  }, []);
+
+  const animateCloseStudyManager = useCallback(() => {
+    if (studyManagerCloseTimerRef.current !== null) {
+      return;
+    }
+
+    studyManagerDragStartYRef.current = null;
+    studyManagerDragOffsetRef.current = window.innerHeight;
+    setStudyManagerDragOffset(window.innerHeight);
+    studyManagerCloseTimerRef.current = window.setTimeout(() => {
+      studyManagerCloseTimerRef.current = null;
+      closeStudyManager();
+    }, 180);
+  }, [closeStudyManager]);
+
+  useEffect(
+    () => () => {
+      if (studyManagerCloseTimerRef.current !== null) {
+        window.clearTimeout(studyManagerCloseTimerRef.current);
+        studyManagerCloseTimerRef.current = null;
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!isStudyManagerOpen) {
+      return;
+    }
+
+    const shouldLockBodyScroll = window.innerWidth < 1100;
+    const scrollY = window.scrollY;
+    const previousOverflow = document.body.style.overflow;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    const previousWidth = document.body.style.width;
+    if (shouldLockBodyScroll) {
+      document.body.style.overflow = "hidden";
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = "100%";
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        animateCloseStudyManager();
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      if (shouldLockBodyScroll) {
+        document.body.style.overflow = previousOverflow;
+        document.body.style.position = previousPosition;
+        document.body.style.top = previousTop;
+        document.body.style.width = previousWidth;
+        window.scrollTo(0, scrollY);
+      }
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [animateCloseStudyManager, isStudyManagerOpen]);
+
+  function handleStudyManagerPointerDown(event: ReactPointerEvent<HTMLElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+
+    const target = event.target;
+    const sheet = event.currentTarget;
+    const swipeItemTarget =
+      target instanceof Element ? target.closest(".study-manager-item-surface") : null;
+    const interactiveTarget =
+      target instanceof Element
+        ? target.closest("button, a, input, textarea, select, .app-close-button")
+        : null;
+    const dragHandleTarget =
+      target instanceof Element ? target.closest(".study-manager-drag-handle") : null;
+    const topDragZoneTarget =
+      target instanceof Element ? target.closest(".study-manager-top-drag-zone") : null;
+    const dragHeaderTarget =
+      target instanceof Element ? target.closest(".study-manager-header") : null;
+    const draggableRegionTarget =
+      target instanceof Element
+        ? target.closest(
+            ".study-manager-sheet, .study-manager-header, .study-manager-form, .study-manager-list",
+          )
+        : null;
+
+    studyManagerSuppressClickRef.current = false;
+    studyManagerDragStartYRef.current = null;
+
+    if (swipeItemTarget) {
+      return;
+    }
+
+    if (interactiveTarget && !dragHandleTarget && !topDragZoneTarget) {
+      return;
+    }
+
+    if (!dragHandleTarget && !topDragZoneTarget && !draggableRegionTarget) {
+      return;
+    }
+
+    if (!dragHandleTarget && !topDragZoneTarget && !dragHeaderTarget && sheet.scrollTop > 0) {
+      return;
+    }
+
+    if (topDragZoneTarget && sheet.scrollTop > 0) {
+      sheet.scrollTo({ top: 0 });
+    }
+
+    studyManagerDragStartYRef.current = event.clientY;
+    if (!interactiveTarget || dragHandleTarget || topDragZoneTarget) {
+      sheet.setPointerCapture(event.pointerId);
+    }
+  }
+
+  function shouldStartStudyManagerTopDrag(target: EventTarget | null) {
+    const sheet = studyManagerSheetRef.current;
+
+    if (!sheet || sheet.scrollTop > 0) {
+      return false;
+    }
+
+    if (!(target instanceof Element) || !sheet.contains(target)) {
+      return false;
+    }
+
+    if (target.closest(".study-manager-item-surface")) {
+      return false;
+    }
+
+    const dragHandleTarget = target.closest(".study-manager-drag-handle");
+    const topDragZoneTarget = target.closest(".study-manager-top-drag-zone");
+
+    if (
+      target.closest("button, a, input, textarea, select, .app-close-button") &&
+      !dragHandleTarget &&
+      !topDragZoneTarget
+    ) {
+      return false;
+    }
+
+    return Boolean(
+      dragHandleTarget ||
+        topDragZoneTarget ||
+        target.closest(".study-manager-header, .study-manager-form, .study-manager-list"),
+    );
+  }
+
+  function updateStudyManagerDragOffset(clientY: number) {
+    if (studyManagerDragStartYRef.current === null) {
+      return false;
+    }
+
+    const nextOffset = Math.max(0, clientY - studyManagerDragStartYRef.current);
+    studyManagerDragOffsetRef.current = nextOffset;
+    if (nextOffset > 8) {
+      studyManagerSuppressClickRef.current = true;
+    }
+    setStudyManagerDragOffset(nextOffset);
+    return nextOffset > 0;
+  }
+
+  function handleStudyManagerClickCapture(event: ReactMouseEvent<HTMLElement>) {
+    if (!studyManagerSuppressClickRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    studyManagerSuppressClickRef.current = false;
+  }
+
+  useEffect(() => {
+    if (!isStudyManagerOpen) {
+      return;
+    }
+
+    function handleWindowPointerMove(event: PointerEvent) {
+      const isDraggingDown = updateStudyManagerDragOffset(event.clientY);
+      if (isDraggingDown) {
+        event.preventDefault();
+      }
+    }
+
+    function handleWindowPointerEnd() {
+      if (studyManagerDragOffsetRef.current > 80) {
+        animateCloseStudyManager();
+        return;
+      }
+
+      studyManagerDragStartYRef.current = null;
+      studyManagerDragOffsetRef.current = 0;
+      setStudyManagerDragOffset(0);
+    }
+
+    window.addEventListener("pointermove", handleWindowPointerMove, { passive: false });
+    window.addEventListener("pointerup", handleWindowPointerEnd);
+    window.addEventListener("pointercancel", handleWindowPointerEnd);
+    return () => {
+      window.removeEventListener("pointermove", handleWindowPointerMove);
+      window.removeEventListener("pointerup", handleWindowPointerEnd);
+      window.removeEventListener("pointercancel", handleWindowPointerEnd);
+    };
+  }, [animateCloseStudyManager, isStudyManagerOpen]);
+
+  useEffect(() => {
+    if (!isStudyManagerOpen) {
+      return;
+    }
+
+    function handleTouchStart(event: TouchEvent) {
+      studyManagerTouchDragActiveRef.current = false;
+      studyManagerDragStartYRef.current = null;
+
+      if (
+        window.innerWidth >= 1100 ||
+        event.touches.length !== 1 ||
+        !shouldStartStudyManagerTopDrag(event.target)
+      ) {
+        return;
+      }
+
+      studyManagerDragStartYRef.current = event.touches[0]?.clientY ?? null;
+    }
+
+    function handleTouchMove(event: TouchEvent) {
+      const touch = event.touches[0];
+      const startY = studyManagerDragStartYRef.current;
+
+      if (!touch || startY === null) {
+        return;
+      }
+
+      const deltaY = touch.clientY - startY;
+
+      if (deltaY <= 0) {
+        return;
+      }
+
+      event.preventDefault();
+      studyManagerTouchDragActiveRef.current = true;
+      updateStudyManagerDragOffset(touch.clientY);
+    }
+
+    function handleTouchEnd() {
+      if (!studyManagerTouchDragActiveRef.current) {
+        studyManagerDragStartYRef.current = null;
+        return;
+      }
+
+      studyManagerTouchDragActiveRef.current = false;
+
+      if (studyManagerDragOffsetRef.current > 80) {
+        animateCloseStudyManager();
+        return;
+      }
+
+      studyManagerDragStartYRef.current = null;
+      studyManagerDragOffsetRef.current = 0;
+      setStudyManagerDragOffset(0);
+    }
+
+    document.addEventListener("touchstart", handleTouchStart, {
+      capture: true,
+      passive: true,
+    });
+    document.addEventListener("touchmove", handleTouchMove, {
+      capture: true,
+      passive: false,
+    });
+    document.addEventListener("touchend", handleTouchEnd, true);
+    document.addEventListener("touchcancel", handleTouchEnd, true);
+
+    return () => {
+      document.removeEventListener("touchstart", handleTouchStart, true);
+      document.removeEventListener("touchmove", handleTouchMove, true);
+      document.removeEventListener("touchend", handleTouchEnd, true);
+      document.removeEventListener("touchcancel", handleTouchEnd, true);
+    };
+  }, [animateCloseStudyManager, isStudyManagerOpen]);
+
+  function getStudyManagerItemOffset(itemId: string) {
+    if (studyManagerItemDrag?.id === itemId) {
+      return studyManagerItemDrag.offset;
+    }
+
+    return openStudyManagerActionItemId === itemId ? -STUDY_MANAGER_ACTION_REVEAL_PX : 0;
+  }
+
+  function handleStudyManagerItemPointerDown(
+    event: ReactPointerEvent<HTMLElement>,
+    itemId: string,
+  ) {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+
+    const target = event.target;
+
+    if (
+      target instanceof Element &&
+      target.closest("button, a, input, textarea, select")
+    ) {
+      return;
+    }
+
+    const nextDrag = {
+      id: itemId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startOffset: openStudyManagerActionItemId === itemId ? -STUDY_MANAGER_ACTION_REVEAL_PX : 0,
+      offset: openStudyManagerActionItemId === itemId ? -STUDY_MANAGER_ACTION_REVEAL_PX : 0,
+      isDragging: false,
+    };
+    studyManagerItemDragRef.current = nextDrag;
+    studyManagerItemSuppressClickRef.current = false;
+  }
+
+  function handleStudyManagerItemPointerMove(
+    event: ReactPointerEvent<HTMLElement>,
+    itemId: string,
+  ) {
+    const current = studyManagerItemDragRef.current;
+
+    if (!current || current.id !== itemId || current.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const deltaX = event.clientX - current.startX;
+    const deltaY = event.clientY - current.startY;
+    const isHorizontalDrag =
+      current.isDragging || (Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY));
+
+    if (!isHorizontalDrag) {
+      return;
+    }
+
+    event.preventDefault();
+    studyManagerItemSuppressClickRef.current = true;
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+
+    const nextDrag = {
+      ...current,
+      offset: Math.min(0, Math.max(-STUDY_MANAGER_ACTION_REVEAL_PX, current.startOffset + deltaX)),
+      isDragging: true,
+    };
+    studyManagerItemDragRef.current = nextDrag;
+    setStudyManagerItemDrag(nextDrag);
+  }
+
+  function handleStudyManagerItemPointerEnd(
+    event: ReactPointerEvent<HTMLElement>,
+    itemId: string,
+  ) {
+    const current = studyManagerItemDragRef.current;
+
+    if (!current || current.id !== itemId || current.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const shouldOpen = current.offset < -STUDY_MANAGER_ACTION_REVEAL_PX / 2;
+    setOpenStudyManagerActionItemId(shouldOpen ? itemId : null);
+    studyManagerItemDragRef.current = null;
+    setStudyManagerItemDrag(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function handleStudyManagerItemClick(
+    event: ReactMouseEvent<HTMLElement>,
+    startEdit: () => void,
+  ) {
+    if (studyManagerItemSuppressClickRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      studyManagerItemSuppressClickRef.current = false;
+      return;
+    }
+
+    startEdit();
+    requestAnimationFrame(() => {
+      const sheet = document.querySelector(".study-manager-sheet");
+      sheet?.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
+  function startFlashcardCreate() {
+    setEditingFlashcardId(null);
+    setOpenStudyManagerActionItemId(null);
+    setFlashcardForm(createEmptyFlashcardForm());
+  }
+
+  function startFlashcardEdit(flashcard: LectureDetail["flashcards"][number]) {
+    setEditingFlashcardId(flashcard.id);
+    setOpenStudyManagerActionItemId(null);
+    setFlashcardForm({
+      front: flashcard.front,
+      back: flashcard.back,
+      hint: flashcard.hint ?? "",
+      difficulty: flashcard.difficulty,
+    });
+  }
+
+  function startQuizQuestionCreate() {
+    setEditingQuizQuestionId(null);
+    setOpenStudyManagerActionItemId(null);
+    setQuizQuestionForm(createEmptyQuizQuestionForm());
+  }
+
+  function startQuizQuestionEdit(question: LectureDetail["quizQuestions"][number]) {
+    setEditingQuizQuestionId(question.id);
+    setOpenStudyManagerActionItemId(null);
+    setQuizQuestionForm({
+      prompt: question.prompt,
+      options: [
+        question.options[0] ?? "",
+        question.options[1] ?? "",
+        question.options[2] ?? "",
+        question.options[3] ?? "",
+      ],
+      correctOptionIndex: question.correct_option_idx,
+      explanation: question.explanation,
+      difficulty: question.difficulty,
+    });
+  }
+
+  async function handleFlashcardFormSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStudyManagerInputFocused(false);
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    setStudyError(null);
+    setIsSavingStudyItem(true);
+
+    try {
+      const response = await fetch(
+        editingFlashcardId
+          ? `/api/flashcards/${editingFlashcardId}`
+          : `/api/lectures/${detail.lecture.id}/flashcards`,
+        {
+          method: editingFlashcardId ? "PATCH" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            front: flashcardForm.front,
+            back: flashcardForm.back,
+            hint: null,
+            difficulty: flashcardForm.difficulty,
+          }),
+        },
+      );
+      const payload = await parseApiResponse<FlashcardMutationResponse>(response);
+      const savedFlashcard = payload.flashcard;
+
+      setDetail((current) => {
+        const existing = current.flashcards.find((flashcard) => flashcard.id === savedFlashcard.id);
+        const merged = {
+          ...savedFlashcard,
+          citations: existing?.citations ?? savedFlashcard.citations ?? [],
+          progress: existing?.progress ?? savedFlashcard.progress ?? null,
+        };
+        const nextFlashcards = existing
+          ? current.flashcards.map((flashcard) =>
+              flashcard.id === savedFlashcard.id ? merged : flashcard,
+            )
+          : [...current.flashcards, merged];
+
+        return {
+          ...current,
+          flashcards: nextFlashcards.sort((first, second) => first.idx - second.idx),
+        };
+      });
+
+      if (!editingFlashcardId) {
+        setReviewQueue((current) =>
+          current.includes(savedFlashcard.id) ? current : [...current, savedFlashcard.id],
+        );
+        setCycleCardCount((current) => current + 1);
+      }
+
+      startFlashcardCreate();
+    } catch (error) {
+      setStudyError(getRequestErrorMessage(error, "Kartice ni bilo mogoče shraniti."));
+    } finally {
+      setIsSavingStudyItem(false);
+    }
+  }
+
+  async function handleDeleteFlashcard(flashcardId: string) {
+    if (deletingStudyItemIdsRef.current.has(flashcardId)) {
+      return;
+    }
+
+    deletingStudyItemIdsRef.current.add(flashcardId);
+    setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
+    setOpenStudyManagerActionItemId(flashcardId);
+    setStudyError(null);
+
+    try {
+      const response = await fetch(`/api/flashcards/${flashcardId}`, {
+        method: "DELETE",
+      });
+      await parseApiResponse<{ deletedFlashcardId: string }>(response);
+      setDetail((current) => ({
+        ...current,
+        flashcards: current.flashcards.filter((flashcard) => flashcard.id !== flashcardId),
+      }));
+      setReviewQueue((current) => current.filter((id) => id !== flashcardId));
+      setRepeatQueue((current) => current.filter((id) => id !== flashcardId));
+      setFlashcardSessionResults((current) => {
+        const next = { ...current };
+        delete next[flashcardId];
+        return next;
+      });
+      setActiveFlashcardIndex((current) => Math.max(0, current - 1));
+    } catch (error) {
+      setStudyError(getRequestErrorMessage(error, "Kartice ni bilo mogoče izbrisati."));
+    } finally {
+      deletingStudyItemIdsRef.current.delete(flashcardId);
+      setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
+    }
+  }
+
+  async function handleQuizQuestionFormSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStudyManagerInputFocused(false);
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    setStudyError(null);
+    setIsSavingStudyItem(true);
+
+    try {
+      const response = await fetch(
+        editingQuizQuestionId
+          ? `/api/lectures/${detail.lecture.id}/quiz/questions/${editingQuizQuestionId}`
+          : `/api/lectures/${detail.lecture.id}/quiz/questions`,
+        {
+          method: editingQuizQuestionId ? "PATCH" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(quizQuestionForm),
+        },
+      );
+      const payload = await parseApiResponse<QuizQuestionMutationResponse>(response);
+      const savedQuestion = payload.question;
+
+      setDetail((current) => {
+        const existing = current.quizQuestions.find((question) => question.id === savedQuestion.id);
+        const nextQuestions = existing
+          ? current.quizQuestions.map((question) =>
+              question.id === savedQuestion.id ? savedQuestion : question,
+            )
+          : [...current.quizQuestions, savedQuestion];
+
+        return {
+          ...current,
+          quizQuestions: nextQuestions.sort((first, second) => first.idx - second.idx),
+        };
+      });
+
+      if (!editingQuizQuestionId) {
+        setQuizQueue((current) =>
+          current.includes(savedQuestion.id) ? current : [...current, savedQuestion.id],
+        );
+        setQuizRoundCount((current) => current + 1);
+        setQuizOptionOrders((current) => {
+          const next = new Map(current);
+          next.set(savedQuestion.id, shuffleIndices(savedQuestion.options.length));
+          return next;
+        });
+      } else {
+        setQuizSelections((current) => {
+          const next = { ...current };
+          delete next[savedQuestion.id];
+          return next;
+        });
+        setQuizOptionOrders((current) => {
+          const next = new Map(current);
+          next.set(savedQuestion.id, shuffleIndices(savedQuestion.options.length));
+          return next;
+        });
+      }
+
+      startQuizQuestionCreate();
+    } catch (error) {
+      setStudyError(getRequestErrorMessage(error, "Vprašanja ni bilo mogoče shraniti."));
+    } finally {
+      setIsSavingStudyItem(false);
+    }
+  }
+
+  async function handleDeleteQuizQuestion(questionId: string) {
+    if (deletingStudyItemIdsRef.current.has(questionId)) {
+      return;
+    }
+
+    deletingStudyItemIdsRef.current.add(questionId);
+    setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
+    setOpenStudyManagerActionItemId(questionId);
+    setStudyError(null);
+
+    try {
+      const response = await fetch(`/api/lectures/${detail.lecture.id}/quiz/questions/${questionId}`, {
+        method: "DELETE",
+      });
+      await parseApiResponse<{ deletedQuestionId: string }>(response);
+      setDetail((current) => ({
+        ...current,
+        quizQuestions: current.quizQuestions.filter((question) => question.id !== questionId),
+      }));
+      setQuizQueue((current) => current.filter((id) => id !== questionId));
+      setQuizSelections((current) => {
+        const next = { ...current };
+        delete next[questionId];
+        return next;
+      });
+      setQuizOptionOrders((current) => {
+        const next = new Map(current);
+        next.delete(questionId);
+        return next;
+      });
+      setActiveQuizQuestionIndex((current) => Math.max(0, current - 1));
+    } catch (error) {
+      setStudyError(getRequestErrorMessage(error, "Vprašanja ni bilo mogoče izbrisati."));
+    } finally {
+      deletingStudyItemIdsRef.current.delete(questionId);
+      setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
+    }
+  }
+
   function renderPanel() {
     if (activeTab === "notes") {
+      const annotationToolbar = noteSelection ? (
+        <div className={`note-annotation-toolbar ${isHighlightPaletteOpen ? "palette-open" : ""}`}>
+          {isHighlightPaletteOpen ? (
+            <span className="note-annotation-colors" aria-label="Barva označevanja">
+              {NOTE_HIGHLIGHT_COLORS.map((color) => (
+                <button
+                  key={color.id}
+                  type="button"
+                  className={selectedHighlightColorId === color.id ? "active" : ""}
+                  style={{ "--note-annotation-color": color.value } as CSSProperties}
+                  onPointerDown={(event) => event.preventDefault()}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setSelectedHighlightColorId(color.id);
+                  }}
+                  aria-label={color.label}
+                  title={color.label}
+                />
+              ))}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="primary"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void handleApplyAnnotation("highlight")}
+            disabled={isSavingNoteDoc}
+            aria-label="Označi"
+            title="Označi"
+          >
+            <Highlighter aria-hidden="true" />
+            <span>Označi</span>
+          </button>
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void handleApplyAnnotation("underline")}
+            disabled={isSavingNoteDoc}
+            aria-label="Podčrtaj"
+            title="Podčrtaj"
+          >
+            <Underline aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="color-trigger"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => setIsHighlightPaletteOpen((current) => !current)}
+            disabled={isSavingNoteDoc}
+            aria-label="Barva"
+            title="Barva"
+          >
+            <Palette aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="note-annotation-photo"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => notePhotoInputRef.current?.click()}
+            disabled={isSavingNoteDoc || !selectedNoteBlockId}
+            aria-label="Dodaj fotografijo"
+            title="Dodaj fotografijo"
+          >
+            <ImagePlus aria-hidden="true" />
+          </button>
+        </div>
+      ) : null;
+      const photoToolbar = selectedNoteBlockId && !noteSelection ? (
+        <button
+          type="button"
+          className="note-photo-toolbar-button"
+          onClick={() => notePhotoInputRef.current?.click()}
+          disabled={isSavingNoteDoc}
+          aria-label="Dodaj fotografijo"
+          title="Dodaj fotografijo"
+        >
+          <ImagePlus aria-hidden="true" />
+          <span>Fotografija</span>
+        </button>
+      ) : null;
+      const noteStatus = noteError ? (
+        <span className="note-toolbar-status error">{noteError}</span>
+      ) : isSavingNoteDoc ? (
+        <span className="note-toolbar-status">Shranjujem...</span>
+      ) : null;
+
       return (
         <div className="workspace-panel-stack lecture-panel-stack">
-          <div className="ios-card lecture-notes-card">
-            {cleanedStructuredNotes && detail.lecture.status === "ready" ? (
-              <div className="markdown lecture-markdown">
-                <NoteReadAloud lectureId={detail.lecture.id} content={cleanedStructuredNotes} />
-              </div>
-            ) : shouldPollLecture(detail.lecture.status) || notesArtifactLoadFailed ? (
-              <div className="lecture-notes-processing">
-                <StudyGenerationNotice
-                  stageCopy={notesArtifactLoadFailed ? "Nalaganje zapiskov" : lectureProcessingStageCopy}
-                  bodyCopy={
-                    notesArtifactLoadFailed
-                      ? "Zapiski so pripravljeni, vendar se niso naložili v tem poskusu. Poskušamo znova."
-                      : "Obdelava teče v ozadju. Lahko zapreš ta pogled in se vrneš čez nekaj minut."
+          {cleanedStructuredNotes && detail.lecture.status === "ready" ? (
+            <div className="ios-card lecture-notes-card">
+              <div
+                ref={noteAnnotationShellRef}
+                className="markdown lecture-markdown note-annotation-shell"
+                onMouseUp={(event) => updateNoteTextSelection(event.currentTarget)}
+                onKeyUp={(event) => updateNoteTextSelection(event.currentTarget)}
+              >
+                <input
+                  ref={notePhotoInputRef}
+                  type="file"
+                  accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  onChange={(event) => void handleNotePhotoSelected(event)}
+                />
+                <NoteReadAloud
+                  lectureId={detail.lecture.id}
+                  content={cleanedStructuredNotes}
+                  autoPrepareFirstChunk={shouldCreateInitialNoteAudio(
+                    detail.lecture.processing_metadata,
+                  )}
+                  annotationToolbar={annotationToolbar}
+                  toolbarAccessory={
+                    <>
+                      {photoToolbar}
+                      {noteStatus}
+                    </>
                   }
+                  annotationActive={Boolean(noteSelection)}
+                  annotations={activeNoteDoc.annotations}
+                  mediaBlocks={activeNoteDoc.mediaBlocks}
+                  noteMedia={renderedNoteMedia}
+                  selectedBlockId={selectedNoteBlockId}
+                  selectedMediaBlockId={selectedMediaBlockId}
+                  deletingMediaIds={deletingNoteMediaIds}
+                  onBlockSelect={(blockId) => {
+                    setSelectedNoteBlockId(blockId);
+                    setSelectedMediaBlockId(null);
+                  }}
+                  onMediaBlockSelect={(blockId) => {
+                    setSelectedMediaBlockId(blockId);
+                    setSelectedNoteBlockId(null);
+                  }}
+                  onMoveMediaBlock={handleMoveMediaBlock}
+                  onLayoutMediaBlock={handleLayoutMediaBlock}
+                  onDeleteMedia={(mediaId) => void handleDeleteNoteMedia(mediaId)}
                 />
               </div>
-            ) : (
-              <p className="ios-info">Zapiski še niso pripravljeni.</p>
-            )}
-          </div>
+            </div>
+          ) : shouldPollLecture(detail.lecture.status) || notesArtifactLoadFailed ? (
+            <div className="lecture-notes-processing">
+              <StudyGenerationNotice
+                stageCopy={notesArtifactLoadFailed ? "Nalaganje zapiskov" : lectureProcessingStageCopy}
+                bodyCopy={
+                  notesArtifactLoadFailed
+                    ? "Zapiski so pripravljeni, vendar se niso naložili v tem poskusu. Poskušamo znova."
+                    : "Obdelava teče v ozadju. Lahko zapreš ta pogled in se vrneš čez nekaj minut."
+                }
+              />
+            </div>
+          ) : (
+            <p className="ios-info lecture-empty-message">Zapiski še niso pripravljeni.</p>
+          )}
         </div>
       );
     }
@@ -2438,45 +4019,96 @@ export function LectureWorkspace({
           : activeStudyView === "quiz"
             ? detail.quizAsset?.error_message
             : detail.practiceTestAsset?.error_message;
+      const normalizedStudySearch = studyManagerSearch.trim().toLowerCase();
+      const managedFlashcards = studyDeck.filter((flashcard) => {
+        if (!normalizedStudySearch) {
+          return true;
+        }
+
+        return `${flashcard.front} ${flashcard.back} ${flashcard.hint ?? ""}`
+          .toLowerCase()
+          .includes(normalizedStudySearch);
+      });
+      const managedQuizQuestions = detail.quizQuestions.filter((question) => {
+        if (!normalizedStudySearch) {
+          return true;
+        }
+
+        return `${question.prompt} ${question.options.join(" ")} ${question.explanation}`
+          .toLowerCase()
+          .includes(normalizedStudySearch);
+      });
+      const canManageActiveStudyView =
+        (activeStudyView === "flashcards" && detail.flashcards.length > 0) ||
+        (activeStudyView === "quiz" && detail.quizQuestions.length > 0);
+      const openStudyManager = () => {
+        window.dispatchEvent(new Event("memoai:mobile-dock-close"));
+        studyManagerDragStartYRef.current = null;
+        studyManagerDragOffsetRef.current = 0;
+        studyManagerSuppressClickRef.current = false;
+        studyManagerItemDragRef.current = null;
+        setStudyManagerDragOffset(0);
+        setStudyManagerInputFocused(false);
+        setStudyManagerItemDrag(null);
+        setOpenStudyManagerActionItemId(null);
+        setIsStudyManagerOpen(true);
+        setStudyManagerSearch("");
+        if (activeStudyView === "flashcards") {
+          startFlashcardCreate();
+        } else if (activeStudyView === "quiz") {
+          startQuizQuestionCreate();
+        }
+      };
 
       return (
-        <div className="workspace-panel-stack lecture-panel-stack">
-          <div
-            className={`ios-card lecture-study-shell ${shouldAutoSizeStudyShell ? "auto-height" : ""}`}
-          >
-            <div className="lecture-study-header">
-              <div className="lecture-study-title">
-                {activeMaterialStatus && activeMaterialStatusLabel ? (
-                  <div className="lecture-study-meta">
-                    <span className={`lecture-study-status ${activeMaterialStatus}`}>
-                      {activeMaterialStatusLabel}
-                    </span>
-                  </div>
-                ) : null}
+        <>
+          <div className="workspace-panel-stack lecture-panel-stack">
+            <div
+              className={`ios-card lecture-study-shell ${shouldAutoSizeStudyShell ? "auto-height" : ""}`}
+            >
+              <div className="lecture-study-header">
+                <div className="lecture-study-title">
+                  {activeMaterialStatus && activeMaterialStatusLabel ? (
+                    <div className="lecture-study-meta">
+                      <span className={`lecture-study-status ${activeMaterialStatus}`}>
+                        {activeMaterialStatusLabel}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="lecture-study-header-actions">
+                  {canManageActiveStudyView ? (
+                    <button
+                      type="button"
+                      className="lecture-study-manage-button"
+                      onClick={openStudyManager}
+                    >
+                      <Pencil aria-hidden="true" />
+                      <span>Uredi</span>
+                    </button>
+                  ) : null}
+                  {activeStudyView === "practice_test" ? (
+                    <span className="lecture-study-status demo">Demo</span>
+                  ) : null}
+                </div>
               </div>
-              <div className="lecture-study-header-actions">
-                {activeStudyView === "practice_test" ? (
-                  <span className="lecture-study-status demo">Demo</span>
-                ) : null}
-              </div>
-            </div>
 
-            <div className="ios-segmented lecture-study-mode-switch">
-              {([
-                { id: "flashcards", label: "Flashcards" },
-                { id: "quiz", label: "Kviz" },
-                { id: "practice_test", label: "Test" },
-              ] as const).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveStudyView(item.id)}
-                  className={`ios-segment ${activeStudyView === item.id ? "active" : ""}`}
-                >
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </div>
+              <div className="ios-segmented lecture-study-mode-switch">
+                {([
+                  { id: "flashcards", label: "Flashcards" },
+                  { id: "quiz", label: "Kviz" },
+                  { id: "practice_test", label: "Test" },
+                ] as const).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveStudyView(item.id)}
+                    className={`ios-segment ${activeStudyView === item.id ? "active" : ""}`}
+                  >
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
 
             {studyError ? <p className="danger-panel lecture-inline-note">{studyError}</p> : null}
             {activeMaterialError ? (
@@ -3110,7 +4742,365 @@ export function LectureWorkspace({
               </div>
             )}
           </div>
-        </div>
+          </div>
+
+          <ViewportPortal>
+            {isStudyManagerOpen && (activeStudyView === "flashcards" || activeStudyView === "quiz") ? (
+              <div className="study-manager-backdrop" role="presentation" onClick={animateCloseStudyManager}>
+                <div
+                  ref={studyManagerSheetRef}
+                  className={`study-manager-sheet mobile-draggable-sheet ${
+                    studyManagerInputFocused ? "keyboard-open" : ""
+                  }`}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
+                  onPointerDown={handleStudyManagerPointerDown}
+                  onClickCapture={handleStudyManagerClickCapture}
+                  onClick={(event) => event.stopPropagation()}
+                  style={
+                    studyManagerDragOffset > 0
+                      ? { transform: `translateY(${studyManagerDragOffset}px)` }
+                      : undefined
+                  }
+                >
+                  <div className="study-manager-top-drag-zone" aria-hidden="true" />
+                  <button
+                    type="button"
+                    className="mobile-sheet-drag-handle study-manager-drag-handle"
+                    aria-label="Zapri urejanje"
+                  />
+                  <div className="study-manager-header">
+                    <div>
+                      <p className="study-manager-eyebrow">
+                        {activeStudyView === "flashcards" ? "Flashcards" : "Kviz"}
+                      </p>
+                      <h2>{activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi vprašanja"}</h2>
+                    </div>
+                    <button
+                      type="button"
+                      className="app-close-button study-manager-icon-button"
+                      onClick={animateCloseStudyManager}
+                      aria-label="Zapri"
+                      title="Zapri"
+                    >
+                      <EmojiIcon symbol="✖️" size="1rem" />
+                    </button>
+                  </div>
+
+                  <div className="ios-search notes-search study-manager-search">
+                    <EmojiIcon symbol="🔎" size="0.95rem" />
+                    <input
+                      value={studyManagerSearch}
+                      onChange={(event) => setStudyManagerSearch(event.target.value)}
+                      placeholder="Poišči..."
+                    />
+                  </div>
+
+                  {activeStudyView === "flashcards" ? (
+                    <>
+                      <form
+                        onSubmit={handleFlashcardFormSubmit}
+                        className="study-manager-form study-manager-form-flashcards"
+                        onFocusCapture={() => setStudyManagerInputFocused(true)}
+                        onBlurCapture={(event) => {
+                          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                            setStudyManagerInputFocused(false);
+                          }
+                        }}
+                      >
+                        {editingFlashcardId ? (
+                          <div className="study-manager-form-header">
+                            <button type="button" onClick={startFlashcardCreate}>
+                              <Plus aria-hidden="true" />
+                              Nova
+                            </button>
+                          </div>
+                        ) : null}
+                        <label>
+                          <span>Vprašanje</span>
+                          <textarea
+                            value={flashcardForm.front}
+                            onChange={(event) =>
+                              setFlashcardForm((current) => ({ ...current, front: event.target.value }))
+                            }
+                            rows={3}
+                            required
+                          />
+                        </label>
+                        <label>
+                          <span>Odgovor</span>
+                          <textarea
+                            value={flashcardForm.back}
+                            onChange={(event) =>
+                              setFlashcardForm((current) => ({ ...current, back: event.target.value }))
+                            }
+                            rows={3}
+                            required
+                          />
+                        </label>
+                        <button type="submit" className="study-manager-save" disabled={isSavingStudyItem}>
+                          {isSavingStudyItem ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <EmojiIcon symbol="✅" size="1rem" />
+                          )}
+                          {editingFlashcardId ? "Shrani kartico" : "Dodaj kartico"}
+                        </button>
+                      </form>
+
+                      <div className="study-manager-list">
+                        {managedFlashcards.map((flashcard) => {
+                          const isDeleting = deletingStudyItemIds.has(flashcard.id);
+                          const itemOffset = getStudyManagerItemOffset(flashcard.id);
+                          const isItemSwipeActive = Boolean(
+                            studyManagerItemDrag?.id === flashcard.id ||
+                              openStudyManagerActionItemId === flashcard.id ||
+                              itemOffset < 0,
+                          );
+
+                          return (
+                            <article
+                              key={flashcard.id}
+                              className={`study-manager-item ${isItemSwipeActive ? "is-swiping" : ""}`}
+                              data-swipe-open={openStudyManagerActionItemId === flashcard.id ? "true" : undefined}
+                            >
+                              <div className="study-manager-item-actions" aria-label="Dejanja kartice">
+                                <button
+                                  type="button"
+                                  className="danger"
+                                  onClick={() => void handleDeleteFlashcard(flashcard.id)}
+                                  disabled={isDeleting}
+                                  aria-busy={isDeleting}
+                                >
+                                  <span
+                                    className={`study-manager-action-circle ${
+                                      isDeleting ? "is-loading" : ""
+                                    }`}
+                                  >
+                                    {isDeleting ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <EmojiIcon symbol="🗑️" size="1.1rem" />
+                                    )}
+                                  </span>
+                                  <span className="study-manager-action-label">
+                                    {isDeleting ? "Brisanje" : "Izbriši"}
+                                  </span>
+                                </button>
+                              </div>
+                              <div
+                                className="study-manager-item-surface"
+                                onPointerDown={(event) =>
+                                  handleStudyManagerItemPointerDown(event, flashcard.id)
+                                }
+                                onPointerMove={(event) =>
+                                  handleStudyManagerItemPointerMove(event, flashcard.id)
+                                }
+                                onPointerUp={(event) =>
+                                  handleStudyManagerItemPointerEnd(event, flashcard.id)
+                                }
+                                onPointerCancel={(event) =>
+                                  handleStudyManagerItemPointerEnd(event, flashcard.id)
+                                }
+                                onClick={(event) =>
+                                  handleStudyManagerItemClick(event, () => startFlashcardEdit(flashcard))
+                                }
+                                style={
+                                  {
+                                    "--study-manager-swipe-offset": `${itemOffset}px`,
+                                  } as CSSProperties
+                                }
+                              >
+                                <div className="study-manager-item-content">
+                                  <strong>{flashcard.front}</strong>
+                                  <p>{flashcard.back}</p>
+                                </div>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <form
+                        onSubmit={handleQuizQuestionFormSubmit}
+                        className="study-manager-form study-manager-form-quiz"
+                        onFocusCapture={() => setStudyManagerInputFocused(true)}
+                        onBlurCapture={(event) => {
+                          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                            setStudyManagerInputFocused(false);
+                          }
+                        }}
+                      >
+                        {editingQuizQuestionId ? (
+                          <div className="study-manager-form-header">
+                            <button type="button" onClick={startQuizQuestionCreate}>
+                              <Plus aria-hidden="true" />
+                              Novo
+                            </button>
+                          </div>
+                        ) : null}
+                        <label>
+                          <span>Vprašanje</span>
+                          <textarea
+                            value={quizQuestionForm.prompt}
+                            onChange={(event) =>
+                              setQuizQuestionForm((current) => ({ ...current, prompt: event.target.value }))
+                            }
+                            rows={3}
+                            required
+                          />
+                        </label>
+                        <div className="study-manager-options">
+                          {quizQuestionForm.options.map((option, index) => (
+                            <label key={`quiz-option-${index}`}>
+                              <span>{String.fromCharCode(65 + index)}</span>
+                              <div>
+                                <input
+                                  type="radio"
+                                  checked={quizQuestionForm.correctOptionIndex === index}
+                                  onChange={() =>
+                                    setQuizQuestionForm((current) => ({
+                                      ...current,
+                                      correctOptionIndex: index,
+                                    }))
+                                  }
+                                  aria-label={`Pravilen odgovor ${String.fromCharCode(65 + index)}`}
+                                />
+                                <input
+                                  value={option}
+                                  onChange={(event) =>
+                                    setQuizQuestionForm((current) => {
+                                      const options = [...current.options] as QuizQuestionFormState["options"];
+                                      options[index] = event.target.value;
+                                      return { ...current, options };
+                                    })
+                                  }
+                                  required
+                                />
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                        <label>
+                          <span>Razlaga</span>
+                          <textarea
+                            value={quizQuestionForm.explanation}
+                            onChange={(event) =>
+                              setQuizQuestionForm((current) => ({
+                                ...current,
+                                explanation: event.target.value,
+                              }))
+                            }
+                            rows={3}
+                            required
+                          />
+                        </label>
+                        <button type="submit" className="study-manager-save" disabled={isSavingStudyItem}>
+                          {isSavingStudyItem ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <EmojiIcon symbol="✅" size="1rem" />
+                          )}
+                          {editingQuizQuestionId ? "Shrani vprašanje" : "Dodaj vprašanje"}
+                        </button>
+                      </form>
+
+                      <div className="study-manager-list">
+                        {managedQuizQuestions.map((question) => {
+                          const isDeleting = deletingStudyItemIds.has(question.id);
+                          const itemOffset = getStudyManagerItemOffset(question.id);
+                          const isItemSwipeActive = Boolean(
+                            studyManagerItemDrag?.id === question.id ||
+                              openStudyManagerActionItemId === question.id ||
+                              itemOffset < 0,
+                          );
+
+                          return (
+                            <article
+                              key={question.id}
+                              className={`study-manager-item ${isItemSwipeActive ? "is-swiping" : ""}`}
+                              data-swipe-open={openStudyManagerActionItemId === question.id ? "true" : undefined}
+                            >
+                              <div className="study-manager-item-actions" aria-label="Dejanja vprašanja">
+                                <button
+                                  type="button"
+                                  className="danger"
+                                  onClick={() => void handleDeleteQuizQuestion(question.id)}
+                                  disabled={isDeleting}
+                                  aria-busy={isDeleting}
+                                >
+                                  <span
+                                    className={`study-manager-action-circle ${
+                                      isDeleting ? "is-loading" : ""
+                                    }`}
+                                  >
+                                    {isDeleting ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <EmojiIcon symbol="🗑️" size="1.1rem" />
+                                    )}
+                                  </span>
+                                  <span className="study-manager-action-label">
+                                    {isDeleting ? "Brisanje" : "Izbriši"}
+                                  </span>
+                                </button>
+                              </div>
+                              <div
+                                className="study-manager-item-surface"
+                                onPointerDown={(event) =>
+                                  handleStudyManagerItemPointerDown(event, question.id)
+                                }
+                                onPointerMove={(event) =>
+                                  handleStudyManagerItemPointerMove(event, question.id)
+                                }
+                                onPointerUp={(event) =>
+                                  handleStudyManagerItemPointerEnd(event, question.id)
+                                }
+                                onPointerCancel={(event) =>
+                                  handleStudyManagerItemPointerEnd(event, question.id)
+                                }
+                                onClick={(event) =>
+                                  handleStudyManagerItemClick(event, () => startQuizQuestionEdit(question))
+                                }
+                                style={
+                                  {
+                                    "--study-manager-swipe-offset": `${itemOffset}px`,
+                                  } as CSSProperties
+                                }
+                              >
+                                <div className="study-manager-item-content">
+                                  <strong>{question.prompt}</strong>
+                                  <p>{question.options[question.correct_option_idx] ?? question.options[0]}</p>
+                                </div>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </ViewportPortal>
+
+          <ViewportPortal>
+            {canManageActiveStudyView && !isStudyManagerOpen ? (
+              <button
+                type="button"
+                className="mobile-study-manage-pill"
+                onClick={openStudyManager}
+                aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
+              >
+                <EmojiIcon symbol="✏️" size="1.12rem" className="mobile-study-manage-pill-icon" />
+                <span className="mobile-study-manage-pill-label">Uredi</span>
+              </button>
+            ) : null}
+          </ViewportPortal>
+        </>
       );
     }
 
@@ -3231,7 +5221,7 @@ export function LectureWorkspace({
           ))}
         </div>
       ) : (
-        <div className="ios-card empty-state lecture-empty-card">
+        <div className="empty-state lecture-empty-card lecture-empty-message">
           <p className="ios-row-title">Prepis se še pripravlja.</p>
           <p className="ios-row-subtitle">Ko bo pripravljen, se bo prikazal tukaj.</p>
         </div>
@@ -3263,9 +5253,6 @@ export function LectureWorkspace({
                 {detail.lecture.title ?? "Predavanje v obdelavi"}
               </h1>
               <div className="lecture-meta-row">
-                <span className="lecture-meta-pill">
-                  {sourceLabel(getEffectiveLectureSourceType(detail.lecture))}
-                </span>
                 <span className="lecture-meta-copy">{formatCalendarDate(detail.lecture.created_at)}</span>
               </div>
             </div>

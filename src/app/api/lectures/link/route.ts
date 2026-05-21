@@ -9,6 +9,7 @@ import {
   UNSUPPORTED_VIDEO_LINK_MESSAGE,
 } from "@/lib/link-source-validation";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
+import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -25,6 +26,7 @@ const createLinkLectureSchema = z.object({
   url: httpUrlSchema,
   languageHint: languageHintSchema.default("sl"),
   createInitialAudio: z.boolean().optional().default(false),
+  initialAudioVoice: z.enum(NOTE_TTS_VOICES).optional(),
 });
 
 export const maxDuration = 300;
@@ -104,6 +106,7 @@ export async function POST(request: Request) {
       titleHint: webpage.title,
       languageHint: parsed.data.languageHint,
       createInitialAudio: parsed.data.createInitialAudio,
+      initialAudioVoice: parsed.data.initialAudioVoice,
       modelMetadata: {
         importMode: "link",
         sourceUrl: parsed.data.url,

@@ -143,9 +143,11 @@ export async function GET(
   }
 
   const { id } = parsedParams.data;
+  const scope = new URL(request.url).searchParams.get("scope") === "notes" ? "notes" : "full";
   const detail = await getLectureDetailForUser({
     lectureId: id,
     userId: user.id,
+    scope,
   });
 
   if (!detail) {

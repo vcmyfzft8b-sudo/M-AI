@@ -538,6 +538,19 @@ function mergeLectureDetailForRefresh(current: LectureDetail, next: LectureDetai
   return merged;
 }
 
+function mergeLectureDetailNotePayload(current: LectureDetail, next: LectureDetail) {
+  const merged = mergeLectureDetailWithStoredStudySession(next);
+
+  return {
+    ...current,
+    lecture: merged.lecture,
+    artifact: merged.artifact,
+    editableNoteDoc: merged.editableNoteDoc,
+    editableNoteRevision: merged.editableNoteRevision,
+    noteMedia: merged.noteMedia,
+  };
+}
+
 function confidenceLabel(value: FlashcardConfidenceBucket) {
   if (value === "again") {
     return "Nisem vedel";
@@ -1115,17 +1128,23 @@ function ChatBubble({ message }: { message: ChatMessageWithCitations }) {
 
 export function LectureWorkspace({
   initialDetail,
+  initialDetailScope = "full",
   hasPaidAccess,
   trialLectureId,
   initialTrialChatMessagesRemaining,
+  onDetailChange,
 }: {
   initialDetail: LectureDetail;
+  initialDetailScope?: "full" | "notes";
   hasPaidAccess: boolean;
   trialLectureId: string | null;
   initialTrialChatMessagesRemaining: number;
+  onDetailChange?: (detail: LectureDetail) => void;
 }) {
   const router = useRouter();
   const [detail, setDetail] = useState(initialDetail);
+  const [hasLoadedFullDetail, setHasLoadedFullDetail] = useState(initialDetailScope === "full");
+  const initialLectureIdRef = useRef(initialDetail.lecture.id);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("notes");
   const [question, setQuestion] = useState("");
   const [chatError, setChatError] = useState<string | null>(null);
@@ -1329,6 +1348,7 @@ export function LectureWorkspace({
 
         const nextDetail = (await refresh.json()) as LectureDetail;
         setDetail((current) => mergeLectureDetailForRefresh(current, nextDetail));
+        setHasLoadedFullDetail(true);
       } catch {
         return;
       }
@@ -1404,9 +1424,39 @@ export function LectureWorkspace({
 
   useEffect(() => {
     const nextDetail = mergeLectureDetailWithStoredStudySession(initialDetail);
-    setDetail(nextDetail);
-    setActiveStudyView(getInitialStudyView(nextDetail));
-  }, [initialDetail]);
+    const isSameLecture = initialLectureIdRef.current === nextDetail.lecture.id;
+
+    initialLectureIdRef.current = nextDetail.lecture.id;
+    setDetail((current) => {
+      const hasFullSections =
+        hasLoadedFullDetail ||
+        current.flashcards.length > 0 ||
+        current.quizQuestions.length > 0 ||
+        current.practiceTestQuestions.length > 0 ||
+        current.chatMessages.length > 0 ||
+        current.transcript.length > 0;
+
+      if (initialDetailScope === "notes" && isSameLecture && hasFullSections) {
+        return mergeLectureDetailNotePayload(current, nextDetail);
+      }
+
+      return nextDetail;
+    });
+    if (!isSameLecture) {
+      setActiveStudyView(getInitialStudyView(nextDetail));
+    }
+    setHasLoadedFullDetail((current) => {
+      if (initialDetailScope === "full") {
+        return true;
+      }
+
+      return isSameLecture ? current : false;
+    });
+  }, [hasLoadedFullDetail, initialDetail, initialDetailScope]);
+
+  useEffect(() => {
+    onDetailChange?.(detail);
+  }, [detail, onDetailChange]);
 
   useEffect(() => {
     if (activeTab === "transcript" && !showsTranscript) {
@@ -1488,6 +1538,25 @@ export function LectureWorkspace({
     detail.studyAsset?.status,
     shouldPollCurrentDetail,
   ]);
+
+  useEffect(() => {
+    if (hasLoadedFullDetail) {
+      return;
+    }
+
+    if (activeTab !== "notes") {
+      void refreshLectureDetail({ force: true });
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void refreshLectureDetail({ force: true });
+    }, 900);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [activeTab, hasLoadedFullDetail, refreshLectureDetail]);
 
   useEffect(() => {
     setIsFlashcardFlipped(false);
@@ -1575,6 +1644,11 @@ export function LectureWorkspace({
   }, [activeTab, detail.chatMessages.length, isSending]);
 
   useEffect(() => {
+    if (!hasLoadedFullDetail) {
+      studySessionPayloadRef.current = null;
+      return;
+    }
+
     const nextSavedAt = new Date().toISOString();
     const nextSession = {
       activeStudyView,
@@ -1640,6 +1714,7 @@ export function LectureWorkspace({
     detail.quizQuestions.length,
     flashcardRoundSummary,
     flashcardSessionResults,
+    hasLoadedFullDetail,
     latestViewedPracticeAttemptId,
     practiceAttemptQuestionIds,
     practiceSubmittedAt,

@@ -842,6 +842,7 @@ export async function listLecturesForUser(userId: string): Promise<AppLectureLis
 export async function getLectureDetailForUser(params: {
   lectureId: string;
   userId: string;
+  scope?: "full" | "notes";
 }): Promise<LectureDetail | null> {
   if (!uuidSchema.safeParse(params.lectureId).success) {
     return null;
@@ -872,6 +873,8 @@ export async function getLectureDetailForUser(params: {
   let lectureRow = lecture as LectureRow;
   const detailClient = service;
   const failedSections: string[] = [];
+  const notesOnly = params.scope === "notes";
+  const emptyResult = <T,>(data: T) => ({ data, error: null }) satisfies PostgrestResponse<T>;
 
   const [
     artifactResult,
@@ -897,7 +900,7 @@ export async function getLectureDetailForUser(params: {
         .eq("lecture_id", lectureRow.id)
         .maybeSingle(),
     }),
-    safeLectureDetailQuery<LectureStudyAssetRow | null>({
+    notesOnly ? Promise.resolve(emptyResult<LectureStudyAssetRow | null>(null)) : safeLectureDetailQuery<LectureStudyAssetRow | null>({
       section: "studyAsset",
       failedSections,
       fallbackData: null,
@@ -907,7 +910,7 @@ export async function getLectureDetailForUser(params: {
         .eq("lecture_id", lectureRow.id)
         .maybeSingle(),
     }),
-    safeLectureDetailQuery<FlashcardRow[]>({
+    notesOnly ? Promise.resolve(emptyResult<FlashcardRow[]>([])) : safeLectureDetailQuery<FlashcardRow[]>({
       section: "flashcards",
       failedSections,
       fallbackData: [],
@@ -918,7 +921,7 @@ export async function getLectureDetailForUser(params: {
         .eq("lecture_id", lectureRow.id)
         .order("idx", { ascending: true }),
     }),
-    safeLectureDetailQuery<ChatMessageRow[]>({
+    notesOnly ? Promise.resolve(emptyResult<ChatMessageRow[]>([])) : safeLectureDetailQuery<ChatMessageRow[]>({
       section: "chatMessages",
       failedSections,
       fallbackData: [],
@@ -929,7 +932,7 @@ export async function getLectureDetailForUser(params: {
         .eq("lecture_id", lectureRow.id)
         .order("created_at", { ascending: true }),
     }),
-    safeLectureDetailQuery<LectureStudySectionRow[]>({
+    notesOnly ? Promise.resolve(emptyResult<LectureStudySectionRow[]>([])) : safeLectureDetailQuery<LectureStudySectionRow[]>({
       section: "studySections",
       failedSections,
       fallbackData: [],
@@ -939,7 +942,7 @@ export async function getLectureDetailForUser(params: {
         .eq("lecture_id", lectureRow.id)
         .order("idx", { ascending: true }),
     }),
-    safeLectureDetailQuery<LectureQuizAssetRow | null>({
+    notesOnly ? Promise.resolve(emptyResult<LectureQuizAssetRow | null>(null)) : safeLectureDetailQuery<LectureQuizAssetRow | null>({
       section: "quizAsset",
       failedSections,
       fallbackData: null,
@@ -949,7 +952,7 @@ export async function getLectureDetailForUser(params: {
         .eq("lecture_id", lectureRow.id)
         .maybeSingle(),
     }),
-    safeLectureDetailQuery<LectureStudySessionRow | null>({
+    notesOnly ? Promise.resolve(emptyResult<LectureStudySessionRow | null>(null)) : safeLectureDetailQuery<LectureStudySessionRow | null>({
       section: "studySession",
       failedSections,
       fallbackData: null,
@@ -960,7 +963,7 @@ export async function getLectureDetailForUser(params: {
         .eq("user_id", params.userId)
         .maybeSingle(),
     }),
-    safeLectureDetailQuery<QuizQuestionRow[]>({
+    notesOnly ? Promise.resolve(emptyResult<QuizQuestionRow[]>([])) : safeLectureDetailQuery<QuizQuestionRow[]>({
       section: "quizQuestions",
       failedSections,
       fallbackData: [],
@@ -970,7 +973,7 @@ export async function getLectureDetailForUser(params: {
         .eq("lecture_id", lectureRow.id)
         .order("idx", { ascending: true }),
     }),
-    safeLectureDetailQuery<LecturePracticeTestAssetRow | null>({
+    notesOnly ? Promise.resolve(emptyResult<LecturePracticeTestAssetRow | null>(null)) : safeLectureDetailQuery<LecturePracticeTestAssetRow | null>({
       section: "practiceTestAsset",
       failedSections,
       fallbackData: null,
@@ -980,7 +983,7 @@ export async function getLectureDetailForUser(params: {
         .eq("lecture_id", lectureRow.id)
         .maybeSingle(),
     }),
-    safeLectureDetailQuery<PracticeTestQuestionRow[]>({
+    notesOnly ? Promise.resolve(emptyResult<PracticeTestQuestionRow[]>([])) : safeLectureDetailQuery<PracticeTestQuestionRow[]>({
       section: "practiceTestQuestions",
       failedSections,
       fallbackData: [],
@@ -990,7 +993,7 @@ export async function getLectureDetailForUser(params: {
         .eq("lecture_id", lectureRow.id)
         .order("idx", { ascending: true }),
     }),
-    safeLectureDetailQuery<PracticeTestAttemptRow[]>({
+    notesOnly ? Promise.resolve(emptyResult<PracticeTestAttemptRow[]>([])) : safeLectureDetailQuery<PracticeTestAttemptRow[]>({
       section: "practiceTestAttempts",
       failedSections,
       fallbackData: [],
@@ -1033,7 +1036,7 @@ export async function getLectureDetailForUser(params: {
     noteLectureDetailFailure(failedSections, "artifactReconciliation", error);
   }
 
-  const transcriptResult = lectureShowsTranscript({
+  const transcriptResult = !notesOnly && lectureShowsTranscript({
     lecture: lectureRow,
     artifact,
   })
@@ -1051,10 +1054,12 @@ export async function getLectureDetailForUser(params: {
     : { data: [], error: null };
 
   const studySections = (studySectionsResult.data ?? []) as LectureStudySectionRow[];
-  const fallbackQuizState = parseFallbackQuizState({
-    lectureId: lectureRow.id,
-    metadata: artifact?.model_metadata,
-  });
+  const fallbackQuizState = notesOnly
+    ? { quizAsset: null, quizQuestions: [] }
+    : parseFallbackQuizState({
+        lectureId: lectureRow.id,
+        metadata: artifact?.model_metadata,
+      });
   const quizAsset = (quizAssetResult.data as LectureQuizAssetRow | null) ?? fallbackQuizState.quizAsset;
   const quizQuestions = ((quizQuestionsResult.data ?? []) as QuizQuestionRow[]).map(mapQuizQuestion);
   const practiceTestAsset = practiceTestAssetResult.data as LecturePracticeTestAssetRow | null;
@@ -1092,7 +1097,7 @@ export async function getLectureDetailForUser(params: {
   let mappedPracticeAttempts: PracticeTestAttemptWithAnswers[] = [];
   let noteMedia: NoteMediaAsset[] = [];
 
-  if (lectureRow.storage_path) {
+  if (!notesOnly && lectureRow.storage_path) {
     try {
       const { data: signed, error } = await runWithTimeout(
         service.storage

@@ -1,9 +1,8 @@
 import { notFound } from "next/navigation";
 
-import { LectureWorkspace } from "@/components/lecture-workspace";
+import { LectureWorkspaceLoader } from "@/components/lecture-workspace-loader";
 import { requireUser } from "@/lib/auth";
 import { getViewerAppState } from "@/lib/billing";
-import { getLectureDetailForUser } from "@/lib/lectures";
 import { routeIdParamSchema } from "@/lib/validation";
 
 export default async function LecturePage({
@@ -11,7 +10,7 @@ export default async function LecturePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await requireUser();
+  await requireUser();
   const parsedParams = routeIdParamSchema.safeParse(await params);
 
   if (!parsedParams.success) {
@@ -20,18 +19,10 @@ export default async function LecturePage({
 
   const { id } = parsedParams.data;
   const appState = await getViewerAppState();
-  const detail = await getLectureDetailForUser({
-    lectureId: id,
-    userId: user.id,
-  });
-
-  if (!detail) {
-    notFound();
-  }
 
   return (
-    <LectureWorkspace
-      initialDetail={detail}
+    <LectureWorkspaceLoader
+      lectureId={id}
       hasPaidAccess={Boolean(appState?.hasPaidAccess)}
       trialLectureId={appState?.trialLectureId ?? null}
       initialTrialChatMessagesRemaining={appState?.trialChatMessagesRemaining ?? 5}

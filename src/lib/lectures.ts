@@ -39,9 +39,12 @@ import type {
 } from "@/lib/types";
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
 import {
+  getInitialNoteAudioVoice,
   isRecord,
   lectureShowsTranscript,
+  shouldCreateInitialNoteAudio,
 } from "@/lib/lecture-source-metadata";
+import { hasInitialNoteTtsChunk } from "@/lib/note-tts";
 import { buildPracticeTestHistorySummary, mapAttemptWithAnswers } from "@/lib/practice-test";
 import { parseEditableNoteDoc, type NoteMediaAsset } from "@/lib/note-doc";
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -148,6 +151,19 @@ async function reconcileLectureWithArtifact(
   }
 
   const processingMetadata = await getProcessingMetadataForUpdate(lecture);
+  if (
+    shouldCreateInitialNoteAudio(processingMetadata) &&
+    !(await hasInitialNoteTtsChunk({
+      lectureId: lecture.id,
+      content: artifact.structured_notes_md,
+      title: lecture.title,
+      languageHint: lecture.language_hint,
+      voice: getInitialNoteAudioVoice(processingMetadata),
+    }))
+  ) {
+    return lecture;
+  }
+
   const titleFromNotes = parseMarkdownTitle(artifact.structured_notes_md);
   const nextTitle =
     isPlaceholderLectureTitle(lecture.title) && titleFromNotes

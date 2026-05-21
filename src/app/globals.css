@@ -3804,13 +3804,18 @@ select:disabled {
 .dashboard-note-actions {
   position: absolute;
   inset: 0 0 0 auto;
-  z-index: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 0.35rem;
   width: 8.15rem;
   padding-left: 0.35rem;
+  pointer-events: none;
+}
+
+.dashboard-note-swipe-row.is-swiping .dashboard-note-actions {
+  pointer-events: auto;
 }
 
 .ios-row-note-card .ios-row-icon {

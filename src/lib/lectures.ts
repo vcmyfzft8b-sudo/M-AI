@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import type { User } from "@supabase/supabase-js";
 
 import type {
@@ -10,6 +11,7 @@ import type {
   LectureQuizAssetRow,
   LecturePracticeTestAssetRow,
   LectureArtifactRow,
+  LectureNoteMediaRow,
   LectureRow,
   LectureStudyAssetRow,
   LectureStudySessionRow,
@@ -41,6 +43,7 @@ import {
   lectureShowsTranscript,
 } from "@/lib/lecture-source-metadata";
 import { buildPracticeTestHistorySummary, mapAttemptWithAnswers } from "@/lib/practice-test";
+import { parseEditableNoteDoc, type NoteMediaAsset } from "@/lib/note-doc";
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { uuidSchema } from "@/lib/validation";
 
@@ -64,6 +67,10 @@ const BATCHED_IN_QUERY_SIZE = 100;
 const LECTURE_DETAIL_CORE_TIMEOUT_MS = 8_000;
 const LECTURE_DETAIL_OPTIONAL_TIMEOUT_MS = 4_500;
 const LECTURE_DETAIL_HEAVY_TIMEOUT_MS = 6_000;
+
+function hashNotesContent(content: string) {
+  return createHash("sha256").update(content).digest("hex");
+}
 
 function parseMarkdownTitle(markdown: string) {
   const heading = markdown.match(/^#{1,6}\s+(.+)$/m)?.[1]?.trim();
@@ -862,6 +869,7 @@ export async function getLectureDetailForUser(params: {
     practiceTestAssetResult,
     practiceTestQuestionsResult,
     practiceTestAttemptsResult,
+    noteMediaResult,
   ] = await Promise.all([
     safeLectureDetailQuery<LectureArtifactRow | null>({
       section: "artifact",
@@ -978,9 +986,26 @@ export async function getLectureDetailForUser(params: {
         .eq("user_id", params.userId)
         .order("created_at", { ascending: true }),
     }),
+    safeLectureDetailQuery<LectureNoteMediaRow[]>({
+      section: "noteMedia",
+      failedSections,
+      fallbackData: [],
+      query: detailClient
+        .from("lecture_note_media")
+        .select("*")
+        .eq("lecture_id", lectureRow.id)
+        .eq("user_id", params.userId)
+        .order("created_at", { ascending: true }),
+    }),
   ]);
 
   const artifact = artifactResult.data as LectureArtifactRow | null;
+  const editableNoteDoc = artifact
+    ? parseEditableNoteDoc(
+        artifact.editable_notes_doc,
+        hashNotesContent(artifact.structured_notes_md),
+      )
+    : null;
 
   try {
     lectureRow = await runWithTimeout(
@@ -1049,6 +1074,7 @@ export async function getLectureDetailForUser(params: {
 
   let audioUrl: string | null = null;
   let mappedPracticeAttempts: PracticeTestAttemptWithAnswers[] = [];
+  let noteMedia: NoteMediaAsset[] = [];
 
   if (lectureRow.storage_path) {
     try {
@@ -1106,9 +1132,40 @@ export async function getLectureDetailForUser(params: {
     );
   }
 
+  if ((noteMediaResult.data ?? []).length > 0) {
+    noteMedia = await Promise.all(
+      ((noteMediaResult.data ?? []) as LectureNoteMediaRow[]).map(async (media) => {
+        try {
+          const { data: signed, error } = await runWithTimeout(
+            service.storage
+              .from("lecture-audio")
+              .createSignedUrl(media.storage_path, 60 * 60),
+            LECTURE_DETAIL_OPTIONAL_TIMEOUT_MS,
+            "note media signed URL",
+          );
+
+          if (error || !signed?.signedUrl) {
+            if (error) {
+              noteLectureDetailFailure(failedSections, "noteMediaUrl", error);
+            }
+            return { ...media, signedUrl: "" };
+          }
+
+          return { ...media, signedUrl: signed.signedUrl };
+        } catch (error) {
+          noteLectureDetailFailure(failedSections, "noteMediaUrl", error);
+          return { ...media, signedUrl: "" };
+        }
+      }),
+    );
+  }
+
   return {
     lecture: lectureRow,
     artifact,
+    editableNoteDoc,
+    editableNoteRevision: artifact?.editable_notes_revision ?? 0,
+    noteMedia,
     studyAsset: studyAssetResult.data as LectureStudyAssetRow | null,
     quizAsset,
     practiceTestAsset,

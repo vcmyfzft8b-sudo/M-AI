@@ -21,7 +21,10 @@ import {
 } from "@/lib/text-source-processing";
 import type { ChatMessageWithCitations } from "@/lib/types";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
-import { prepareInitialNoteTtsChunkSafely } from "@/lib/note-tts";
+import {
+  markInitialNoteAudioPreparing,
+  prepareInitialNoteTtsChunkSafely,
+} from "@/lib/note-tts";
 import { NoReadableScanTextError } from "@/lib/scan-ocr-errors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { normalizeMimeType } from "@/lib/storage";
@@ -466,6 +469,10 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
   }
 
   if (shouldCreateInitialNoteAudio(lecture.processing_metadata)) {
+    await markInitialNoteAudioPreparing({
+      lectureId: lecture.id,
+      processingMetadata: lecture.processing_metadata,
+    });
     await prepareInitialNoteTtsChunkSafely({
       userId: lecture.user_id,
       lectureId: lecture.id,

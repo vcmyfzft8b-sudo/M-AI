@@ -16,7 +16,10 @@ import {
   type ScanOcrImageDiagnostics,
 } from "@/lib/scan-ocr-errors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { prepareInitialNoteTtsChunkSafely } from "@/lib/note-tts";
+import {
+  markInitialNoteAudioPreparing,
+  prepareInitialNoteTtsChunkSafely,
+} from "@/lib/note-tts";
 
 const SCAN_OCR_CONCURRENCY = 3;
 const SCAN_STORAGE_DOWNLOAD_MAX_ATTEMPTS = 3;
@@ -256,6 +259,10 @@ export async function processStoredScanLecture(
 
       if (artifact) {
         if (shouldCreateInitialNoteAudio(metadata)) {
+          await markInitialNoteAudioPreparing({
+            lectureId: lectureRow.id,
+            processingMetadata: metadata,
+          });
           await prepareInitialNoteTtsChunkSafely({
             userId: lectureRow.user_id,
             lectureId: lectureRow.id,

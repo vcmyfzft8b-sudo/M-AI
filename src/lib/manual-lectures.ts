@@ -29,7 +29,10 @@ import {
 } from "@/lib/scan-ocr-errors";
 import { getServerEnv } from "@/lib/server-env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { prepareInitialNoteTtsChunkSafely } from "@/lib/note-tts";
+import {
+  markInitialNoteAudioPreparing,
+  prepareInitialNoteTtsChunkSafely,
+} from "@/lib/note-tts";
 import { type NoteTtsVoice } from "@/lib/note-tts-settings";
 import {
   buildSyntheticTranscriptFromTextSource,
@@ -1388,6 +1391,20 @@ export async function createLectureFromTextSource(params: {
     }
 
     if (params.createInitialAudio === true) {
+      await markInitialNoteAudioPreparing({
+        lectureId,
+        processingMetadata: {
+          createInitialAudio: params.createInitialAudio === true,
+          initialAudioVoice: params.initialAudioVoice ?? null,
+          manualImport: {
+            sourceType: params.sourceType,
+            titleHint: params.titleHint ?? null,
+            modelMetadata: params.modelMetadata ?? {},
+            text: cleanedText,
+            blocks: params.blocks ?? null,
+          },
+        },
+      });
       await prepareInitialNoteTtsChunkSafely({
         userId: params.userId,
         lectureId,

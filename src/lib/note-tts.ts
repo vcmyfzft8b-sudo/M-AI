@@ -104,6 +104,38 @@ function getInitialTtsErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Initial note audio could not be prepared.";
 }
 
+function getMetadataRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+export async function markInitialNoteAudioPreparing(params: {
+  lectureId: string;
+  processingMetadata: unknown;
+}) {
+  const metadata = getMetadataRecord(params.processingMetadata);
+  const { error } = await createSupabaseServiceRoleClient()
+    .from("lectures")
+    .update(
+      {
+        processing_metadata: {
+          ...metadata,
+          processing: {
+            stage: "preparing_audio",
+            updatedAt: new Date().toISOString(),
+            errorMessage: null,
+          },
+        },
+      } as never,
+    )
+    .eq("id", params.lectureId);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export function getTtsDailyLimitSeconds(hasPaidAccess: boolean) {
   return hasPaidAccess ? PAID_TTS_DAILY_LIMIT_SECONDS : FREE_TTS_DAILY_LIMIT_SECONDS;
 }

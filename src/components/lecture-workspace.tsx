@@ -698,7 +698,22 @@ function practiceTestStageLabel(stage: unknown) {
   return "Pripravljam preizkus";
 }
 
-function lectureProcessingStageLabel(status: LectureDetail["lecture"]["status"]) {
+function getLectureProcessingStage(metadata: unknown) {
+  if (!isRecord(metadata) || !isRecord(metadata.processing)) {
+    return null;
+  }
+
+  return typeof metadata.processing.stage === "string" ? metadata.processing.stage : null;
+}
+
+function lectureProcessingStageLabel(
+  status: LectureDetail["lecture"]["status"],
+  processingStage?: string | null,
+) {
+  if (processingStage === "preparing_audio") {
+    return "Ustvarjam zvok";
+  }
+
   if (status === "uploading") {
     return "Nalagam gradivo";
   }
@@ -1781,7 +1796,10 @@ export function LectureWorkspace({
       ? detail.practiceTestAsset.model_metadata.stage
       : null;
   const practiceTestStageCopy = practiceTestStageLabel(practiceTestStage);
-  const lectureProcessingStageCopy = lectureProcessingStageLabel(detail.lecture.status);
+  const lectureProcessingStageCopy = lectureProcessingStageLabel(
+    detail.lecture.status,
+    getLectureProcessingStage(detail.lecture.processing_metadata),
+  );
   const totalFlashcards = studyDeck.length;
   const flashcardFirstPassKnownCount = studyDeck.reduce((total, flashcard) => {
     return flashcardSessionResults[flashcard.id]?.firstConfidence !== "again" &&

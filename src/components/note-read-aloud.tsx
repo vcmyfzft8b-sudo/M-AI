@@ -1392,6 +1392,7 @@ function ReadAlongMarkdown({
 export function NoteReadAloud({
   lectureId,
   content,
+  autoPrepareFirstChunk = false,
   annotationToolbar,
   toolbarAccessory,
   annotationActive = false,
@@ -1409,6 +1410,7 @@ export function NoteReadAloud({
 }: {
   lectureId: string;
   content: string;
+  autoPrepareFirstChunk?: boolean;
   annotationToolbar?: ReactNode;
   toolbarAccessory?: ReactNode;
   annotationActive?: boolean;
@@ -1447,6 +1449,7 @@ export function NoteReadAloud({
   const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse | null>>());
   const prefetchQueueRef = useRef<Promise<void>>(Promise.resolve());
   const playbackRequestIdRef = useRef(0);
+  const preparedInitialChunkKeyRef = useRef<string | null>(null);
   const generationProgressIntervalRef = useRef<number | null>(null);
   const generationProgressDismissRef = useRef<number | null>(null);
   const generationProgressStartedAtRef = useRef(0);
@@ -2064,6 +2067,58 @@ export function NoteReadAloud({
   );
 
   useEffect(() => {
+    if (
+      !autoPrepareFirstChunk ||
+      !hasHydratedSettings ||
+      !status?.available ||
+      status.remainingSeconds <= 0 ||
+      chunks.length === 0
+    ) {
+      return;
+    }
+
+    const cacheKey = getChunkCacheKey(selectedVoice, 0);
+    const warmupKey = `${lectureId}:${cacheKey}:${chunks[0]?.text ?? ""}`;
+
+    if (preparedInitialChunkKeyRef.current === warmupKey) {
+      return;
+    }
+
+    preparedInitialChunkKeyRef.current = warmupKey;
+
+    let cancelled = false;
+
+    void fetchChunk(0, { silent: true }).then((payload) => {
+      if (cancelled || !payload) {
+        return;
+      }
+
+      const audio = audioRef.current;
+
+      if (!audio || audio.src === payload.audioUrl) {
+        return;
+      }
+
+      audio.src = payload.audioUrl;
+      audio.preload = "auto";
+      audio.load();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    autoPrepareFirstChunk,
+    chunks,
+    fetchChunk,
+    hasHydratedSettings,
+    lectureId,
+    selectedVoice,
+    status?.available,
+    status?.remainingSeconds,
+  ]);
+
+  useEffect(() => {
     const markUserInteraction = () => {
       lastUserInteractionRef.current = Date.now();
     };
@@ -2149,7 +2204,9 @@ export function NoteReadAloud({
         return;
       }
 
-      audio.src = payload.audioUrl;
+      if (audio.src !== payload.audioUrl) {
+        audio.src = payload.audioUrl;
+      }
       audio.currentTime = 0;
       audio.playbackRate = playbackRate;
       setPlaybackWordState({

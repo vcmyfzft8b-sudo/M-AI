@@ -35,6 +35,7 @@ import {
   getEffectiveLectureSourceType,
   isRecord,
   lectureShowsTranscript,
+  shouldCreateInitialNoteAudio,
 } from "@/lib/lecture-source-metadata";
 import type { EditableNoteDoc, NoteAnnotation, NoteAnnotationKind } from "@/lib/note-doc";
 import { NOTE_TTS_HIGHLIGHT_COLORS } from "@/lib/note-tts-settings";
@@ -3867,6 +3868,9 @@ export function LectureWorkspace({
                 <NoteReadAloud
                   lectureId={detail.lecture.id}
                   content={cleanedStructuredNotes}
+                  autoPrepareFirstChunk={shouldCreateInitialNoteAudio(
+                    detail.lecture.processing_metadata,
+                  )}
                   annotationToolbar={annotationToolbar}
                   toolbarAccessory={
                     <>

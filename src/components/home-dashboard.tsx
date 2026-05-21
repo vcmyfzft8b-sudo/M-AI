@@ -492,9 +492,7 @@ export function HomeDashboard({
   const [dashboardDialogDragOffset, setDashboardDialogDragOffset] = useState(0);
   const [renameDialogStyle, setRenameDialogStyle] = useState<CSSProperties | undefined>();
   const [libraryLectures, setLibraryLectures] = useState(lectures);
-  const [useDashboardSwipeActions, setUseDashboardSwipeActions] = useState(() =>
-    typeof window === "undefined" ? false : window.matchMedia("(max-width: 767px)").matches,
-  );
+  const [useDashboardSwipeActions, setUseDashboardSwipeActions] = useState(false);
   const [busyLectureId, setBusyLectureId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedFolderLectureIds, setSelectedFolderLectureIds] = useState<string[] | null>(null);

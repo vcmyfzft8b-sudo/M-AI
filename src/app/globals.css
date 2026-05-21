@@ -3810,7 +3810,7 @@ select:disabled {
 .dashboard-note-swipe-row .dashboard-note-actions {
   position: absolute;
   inset: 0 0 0 auto;
-  z-index: 2;
+  z-index: 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;

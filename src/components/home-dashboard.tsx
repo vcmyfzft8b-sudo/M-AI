@@ -209,7 +209,11 @@ const NoteRow = memo(function NoteRow({
           </div>
         </InstantLink>
 
-        <div ref={isMenuOpen ? attachMenuRef : undefined} className="dashboard-note-actions">
+        <div
+          ref={isMenuOpen ? attachMenuRef : undefined}
+          className="dashboard-note-actions"
+          onPointerDown={(event) => event.stopPropagation()}
+        >
           <button
             type="button"
             aria-label={`Odpri dejanja za ${lecture.title ?? "zapisek"}`}
@@ -376,7 +380,11 @@ const NoteRow = memo(function NoteRow({
         isMenuOpen ? "menu-open" : ""
       } ${isSwipeActive ? "is-swiping" : ""} ${dragState ? "is-dragging" : ""} ${isOpening ? "is-opening" : ""}`}
     >
-      <div ref={isMenuOpen ? attachMenuRef : undefined} className="dashboard-note-actions">
+      <div
+        ref={isMenuOpen ? attachMenuRef : undefined}
+        className="dashboard-note-actions"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
         <button
           type="button"
           aria-label={`Preimenuj ${lecture.title ?? "zapisek"}`}

@@ -3802,6 +3802,12 @@ select:disabled {
 }
 
 .dashboard-note-actions {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 5;
+}
+
+.dashboard-note-swipe-row .dashboard-note-actions {
   position: absolute;
   inset: 0 0 0 auto;
   z-index: 2;

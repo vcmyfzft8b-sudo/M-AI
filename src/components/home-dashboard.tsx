@@ -22,6 +22,7 @@ import { flushSync } from "react-dom";
 import { NoteSourceModal, type NoteSourceMode } from "@/components/note-source-modal";
 import { StatusBadge } from "@/components/status-badge";
 import { EmojiIcon } from "@/components/emoji-icon";
+import { InstantLink } from "@/components/instant-link";
 import { LibraryFolderMenu } from "@/components/library-folder-menu";
 import { ViewportPortal } from "@/components/viewport-portal";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
@@ -147,6 +148,7 @@ type NoteRowProps = {
   lecture: AppLectureListItem;
   isMenuOpen: boolean;
   isBusy: boolean;
+  useSwipeActions: boolean;
   onToggleMenu: (lectureId: string) => void;
   onOpenRename: (lecture: AppLectureListItem) => void;
   onOpenDelete: (lecture: AppLectureListItem) => void;
@@ -157,6 +159,7 @@ const NoteRow = memo(function NoteRow({
   lecture,
   isMenuOpen,
   isBusy,
+  useSwipeActions,
   onToggleMenu,
   onOpenRename,
   onOpenDelete,
@@ -183,6 +186,73 @@ const NoteRow = memo(function NoteRow({
     },
     [],
   );
+
+  if (!useSwipeActions) {
+    return (
+      <div className={`ios-row-note-card ${isMenuOpen ? "menu-open" : ""}`}>
+        <InstantLink href={lectureHref} className="ios-row-note-card-link">
+          <div className="ios-row-icon" style={{ backgroundColor: "var(--surface-muted)" }}>
+            <SourceIcon sourceType={sourceType} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="ios-row-title truncate font-medium">
+              {lecture.title ?? "Neimenovan zapisek"}
+            </p>
+            <p className="ios-row-subtitle mt-1">
+              {sourceLabel(sourceType)} • {formatCalendarDate(lecture.created_at)}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {lecture.status !== "ready" && <StatusBadge status={lecture.status} />}
+          </div>
+        </InstantLink>
+
+        <div ref={isMenuOpen ? attachMenuRef : undefined} className="dashboard-note-actions">
+          <button
+            type="button"
+            aria-label={`Odpri dejanja za ${lecture.title ?? "zapisek"}`}
+            aria-expanded={isMenuOpen}
+            disabled={isBusy}
+            onClick={() => onToggleMenu(lecture.id)}
+            className={`dashboard-note-menu-button ${isMenuOpen ? "open" : ""}`}
+          >
+            {isBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <EmojiIcon symbol="⋯" size="1rem" />
+            )}
+          </button>
+
+          {isMenuOpen ? (
+            <div className="dashboard-note-menu">
+              <button
+                type="button"
+                onClick={() => onOpenRename(lecture)}
+                className="dashboard-note-menu-item"
+                aria-label="Preimenuj zapisek"
+                title="Preimenuj zapisek"
+              >
+                <EmojiIcon symbol="✏️" size="0.95rem" />
+                <span>Preimenuj</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenDelete(lecture)}
+                className="dashboard-note-menu-item danger"
+                aria-label="Izbriši zapisek"
+                title="Izbriši zapisek"
+              >
+                <EmojiIcon symbol="🗑️" size="0.95rem" />
+                <span>Izbriši</span>
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   function updateDrag(clientX: number, clientY: number, pointerId: number, preventDefault?: () => void) {
     const current = dragRef.current;
@@ -370,7 +440,8 @@ const NoteRow = memo(function NoteRow({
   return (
     previousProps.lecture === nextProps.lecture &&
     previousProps.isMenuOpen === nextProps.isMenuOpen &&
-    previousProps.isBusy === nextProps.isBusy
+    previousProps.isBusy === nextProps.isBusy &&
+    previousProps.useSwipeActions === nextProps.useSwipeActions
   );
 });
 
@@ -413,6 +484,9 @@ export function HomeDashboard({
   const [dashboardDialogDragOffset, setDashboardDialogDragOffset] = useState(0);
   const [renameDialogStyle, setRenameDialogStyle] = useState<CSSProperties | undefined>();
   const [libraryLectures, setLibraryLectures] = useState(lectures);
+  const [useDashboardSwipeActions, setUseDashboardSwipeActions] = useState(() =>
+    typeof window === "undefined" ? false : window.matchMedia("(max-width: 767px)").matches,
+  );
   const [busyLectureId, setBusyLectureId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedFolderLectureIds, setSelectedFolderLectureIds] = useState<string[] | null>(null);
@@ -436,6 +510,15 @@ export function HomeDashboard({
   })();
 
   const activeModal = manualModal ?? searchModal;
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const syncSwipeMode = () => setUseDashboardSwipeActions(mediaQuery.matches);
+
+    syncSwipeMode();
+    mediaQuery.addEventListener("change", syncSwipeMode);
+    return () => mediaQuery.removeEventListener("change", syncSwipeMode);
+  }, []);
 
   useEffect(() => {
     setLibraryLectures(lectures);
@@ -1240,6 +1323,7 @@ export function HomeDashboard({
                   lecture={lecture}
                   isMenuOpen={openMenuLectureId === lecture.id}
                   isBusy={busyLectureId === lecture.id}
+                  useSwipeActions={useDashboardSwipeActions}
                   onToggleMenu={toggleLectureMenu}
                   onOpenRename={openRenameModal}
                   onOpenDelete={openDeleteModal}

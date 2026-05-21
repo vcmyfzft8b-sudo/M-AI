@@ -207,16 +207,6 @@ export function buildLectureScanImageStoragePath(params: {
   return `${params.userId}/${params.lectureId}/scans/photo-${String(params.index).padStart(3, "0")}.${ext}`;
 }
 
-export function buildLectureNoteMediaStoragePath(params: {
-  userId: string;
-  lectureId: string;
-  mediaId: string;
-  mimeType: string;
-}) {
-  const ext = getExtensionForMimeType(params.mimeType);
-  return `${params.userId}/${params.lectureId}/note-media/${params.mediaId}.${ext}`;
-}
-
 export function isCanonicalLectureScanImageStoragePath(params: {
   path: string;
   userId: string;
@@ -235,25 +225,6 @@ export function isCanonicalLectureScanImageStoragePath(params: {
   }
 
   const extension = fileName.split(".").pop()?.toLowerCase() ?? "";
-  return supportedScanImageExtensions.has(
-    extension as (typeof SUPPORTED_SCAN_IMAGE_EXTENSIONS)[number],
-  );
-}
-
-export function isCanonicalLectureNoteMediaStoragePath(params: {
-  path: string;
-  userId: string;
-  lectureId: string;
-  mediaId: string;
-}) {
-  const expectedPrefix = `${params.userId}/${params.lectureId}/note-media/${params.mediaId}.`;
-
-  if (!params.path.startsWith(expectedPrefix)) {
-    return false;
-  }
-
-  const extension = params.path.slice(expectedPrefix.length).toLowerCase();
-
   return supportedScanImageExtensions.has(
     extension as (typeof SUPPORTED_SCAN_IMAGE_EXTENSIONS)[number],
   );

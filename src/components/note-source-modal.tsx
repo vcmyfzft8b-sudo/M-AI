@@ -50,6 +50,12 @@ import {
   normalizeUploadScanImageMimeType,
 } from "@/lib/storage";
 import { getUnsupportedVideoUrlMessage } from "@/lib/link-source-validation";
+import {
+  DEFAULT_NOTE_TTS_VOICE,
+  NOTE_TTS_VOICE_STORAGE_KEY,
+  NOTE_TTS_VOICES,
+  type NoteTtsVoice,
+} from "@/lib/note-tts-settings";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { cn, formatTimestamp } from "@/lib/utils";
 
@@ -69,6 +75,16 @@ type ScanUploadResponse = {
     token: string;
   }>;
 };
+
+function getInitialAudioVoice(): NoteTtsVoice {
+  if (typeof window === "undefined") {
+    return DEFAULT_NOTE_TTS_VOICE;
+  }
+
+  const storedVoice = window.localStorage.getItem(NOTE_TTS_VOICE_STORAGE_KEY);
+
+  return NOTE_TTS_VOICES.find((voice) => voice === storedVoice) ?? DEFAULT_NOTE_TTS_VOICE;
+}
 
 type PhotoSource = {
   id: string;
@@ -932,6 +948,7 @@ export function NoteSourceModal({
         durationSeconds: Math.max(audioSource.durationSeconds, 1),
         languageHint,
         createInitialAudio,
+        initialAudioVoice: getInitialAudioVoice(),
         normalizeBeforeUpload: audioSource.origin === "recording",
         signal: createController.signal,
         onLectureCreated: (lectureId) => {
@@ -1003,6 +1020,7 @@ export function NoteSourceModal({
           text: combinedTextSource,
           languageHint,
           createInitialAudio,
+          initialAudioVoice: getInitialAudioVoice(),
         }),
       });
 
@@ -1124,6 +1142,7 @@ export function NoteSourceModal({
           lectureId,
           languageHint,
           createInitialAudio,
+          initialAudioVoice: getInitialAudioVoice(),
           text: combinedTextSource,
           images: filesForUpload.map(({ file, index, mimeType }) => {
             const uploadTarget = uploadTargetsByIndex.get(index);
@@ -1207,6 +1226,7 @@ export function NoteSourceModal({
           url: trimmedLinkValue,
           languageHint,
           createInitialAudio,
+          initialAudioVoice: getInitialAudioVoice(),
         }),
       });
 
@@ -1519,6 +1539,7 @@ export function NoteSourceModal({
       formData.append("originalFileName", pdfSource.name);
       formData.append("languageHint", languageHint);
       formData.append("createInitialAudio", String(createInitialAudio));
+      formData.append("initialAudioVoice", getInitialAudioVoice());
 
       const controller = new AbortController();
       activeRequestControllerRef.current = controller;

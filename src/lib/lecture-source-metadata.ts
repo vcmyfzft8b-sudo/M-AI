@@ -1,4 +1,9 @@
 import type { LectureArtifactRow, LectureRow } from "@/lib/database.types";
+import {
+  DEFAULT_NOTE_TTS_VOICE,
+  NOTE_TTS_VOICES,
+  type NoteTtsVoice,
+} from "@/lib/note-tts-settings";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -51,6 +56,16 @@ export function getManualImportSourceType(metadata: unknown) {
 
 export function shouldCreateInitialNoteAudio(metadata: unknown) {
   return isRecord(metadata) && metadata.createInitialAudio === true;
+}
+
+export function getInitialNoteAudioVoice(metadata: unknown): NoteTtsVoice {
+  if (!isRecord(metadata)) {
+    return DEFAULT_NOTE_TTS_VOICE;
+  }
+
+  const voice = metadata.initialAudioVoice;
+
+  return NOTE_TTS_VOICES.find((candidate) => candidate === voice) ?? DEFAULT_NOTE_TTS_VOICE;
 }
 
 export function getEffectiveLectureSourceType(

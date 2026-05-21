@@ -30,6 +30,7 @@ import {
 import { getServerEnv } from "@/lib/server-env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { prepareInitialNoteTtsChunkSafely } from "@/lib/note-tts";
+import { type NoteTtsVoice } from "@/lib/note-tts-settings";
 import {
   buildSyntheticTranscriptFromTextSource,
   estimateTextSourceDurationSeconds,
@@ -1227,6 +1228,7 @@ export async function createLectureFromTextSource(params: {
   modelMetadata?: Record<string, unknown>;
   lectureId?: string;
   createInitialAudio?: boolean;
+  initialAudioVoice?: NoteTtsVoice;
 }) {
   const supabase = createSupabaseServiceRoleClient();
   const cleanedText = normalizeWhitespace(params.text);
@@ -1270,6 +1272,7 @@ export async function createLectureFromTextSource(params: {
             title: params.titleHint ?? null,
             processing_metadata: {
               createInitialAudio: params.createInitialAudio === true,
+              initialAudioVoice: params.initialAudioVoice ?? null,
               manualImport: {
                 sourceType: params.sourceType,
                 titleHint: params.titleHint ?? null,
@@ -1299,6 +1302,7 @@ export async function createLectureFromTextSource(params: {
             title: params.titleHint ?? null,
             processing_metadata: {
               createInitialAudio: params.createInitialAudio === true,
+              initialAudioVoice: params.initialAudioVoice ?? null,
               manualImport: {
                 sourceType: params.sourceType,
                 titleHint: params.titleHint ?? null,
@@ -1390,6 +1394,7 @@ export async function createLectureFromTextSource(params: {
         content: notes.structuredNotesMd,
         title: notes.title,
         languageHint: params.languageHint ?? "sl",
+        voice: params.initialAudioVoice,
       });
     }
 
@@ -1451,6 +1456,7 @@ export async function prepareLectureFromTextSource(params: {
   modelMetadata?: Record<string, unknown>;
   lectureId?: string;
   createInitialAudio?: boolean;
+  initialAudioVoice?: NoteTtsVoice;
 }) {
   const supabase = createSupabaseServiceRoleClient();
   const cleanedText = normalizeWhitespace(params.text);
@@ -1462,6 +1468,7 @@ export async function prepareLectureFromTextSource(params: {
   const durationSeconds = estimateTextSourceDurationSeconds(cleanedText);
   const processingMetadata = {
     createInitialAudio: params.createInitialAudio === true,
+    initialAudioVoice: params.initialAudioVoice ?? null,
     manualImport: {
       sourceType: params.sourceType,
       titleHint: params.titleHint ?? null,

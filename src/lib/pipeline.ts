@@ -9,7 +9,10 @@ import { createEmbeddings } from "@/lib/ai/embeddings";
 import { parseAudioChunkManifest } from "@/lib/audio-processing";
 import { CHAT_MATCH_COUNT } from "@/lib/constants";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
-import { shouldCreateInitialNoteAudio } from "@/lib/lecture-source-metadata";
+import {
+  getInitialNoteAudioVoice,
+  shouldCreateInitialNoteAudio,
+} from "@/lib/lecture-source-metadata";
 import { captureRouteError } from "@/lib/monitoring";
 import {
   buildSyntheticTranscriptFromTextSource,
@@ -469,6 +472,7 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
       content: notes.structuredNotesMd,
       title: notes.title,
       languageHint: lecture.language_hint,
+      voice: getInitialNoteAudioVoice(lecture.processing_metadata),
     });
   }
 

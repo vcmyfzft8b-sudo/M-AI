@@ -11,6 +11,7 @@ import { MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS } from "@/lib/constants";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { extractScanImageStoragePaths } from "@/lib/scan-image-uploads";
+import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
 import {
   buildLectureStoragePath,
   isSupportedAudioMimeType,
@@ -29,6 +30,7 @@ const createLectureSchema = z.object({
   durationSeconds: z.number().positive().max(MAX_AUDIO_SECONDS),
   languageHint: languageHintSchema.default("sl"),
   createInitialAudio: z.boolean().optional().default(false),
+  initialAudioVoice: z.enum(NOTE_TTS_VOICES).optional(),
 });
 
 const deleteLecturesSchema = z.object({
@@ -97,6 +99,7 @@ export async function POST(request: Request) {
         duration_seconds: Math.round(parsed.data.durationSeconds),
         processing_metadata: {
           createInitialAudio: parsed.data.createInitialAudio,
+          initialAudioVoice: parsed.data.initialAudioVoice ?? null,
         },
       } as never,
     )

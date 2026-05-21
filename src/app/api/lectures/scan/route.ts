@@ -5,6 +5,7 @@ import { createBillingRequiredResponse, getUserEntitlementState } from "@/lib/bi
 import { MAX_SCAN_IMAGE_BYTES, MAX_SCAN_IMAGE_COUNT } from "@/lib/constants";
 import { enqueueLectureNotesGeneration, enqueueLectureScanProcessing } from "@/lib/jobs";
 import { extractTextFromImage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
+import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import {
   buildValidationErrorResponse,
@@ -42,6 +43,10 @@ const scanLectureFieldsSchema = z.object({
     .union([z.boolean(), z.literal("true"), z.literal("false"), z.null()])
     .optional()
     .transform((value) => value === true || value === "true"),
+  initialAudioVoice: z
+    .union([z.enum(NOTE_TTS_VOICES), z.null()])
+    .optional()
+    .transform((value) => value ?? undefined),
 });
 
 const storedScanImageSchema = z.object({
@@ -56,6 +61,7 @@ const storedScanLectureSchema = z.object({
   lectureId: optionalDocumentLectureIdSchema.pipe(z.string().uuid()),
   languageHint: languageHintSchema.default("sl"),
   createInitialAudio: z.boolean().optional().default(false),
+  initialAudioVoice: z.enum(NOTE_TTS_VOICES).optional(),
   text: z
     .string()
     .optional()
@@ -107,7 +113,8 @@ export async function POST(request: Request) {
         return parsed.response;
       }
 
-      const { lectureId, languageHint, text, images, createInitialAudio } = parsed.data;
+      const { lectureId, languageHint, text, images, createInitialAudio, initialAudioVoice } =
+        parsed.data;
 
       if (!entitlement.hasPaidAccess && lectureId !== entitlement.trialLectureId) {
         return createBillingRequiredResponse(
@@ -164,6 +171,7 @@ export async function POST(request: Request) {
             language_hint: languageHint,
             processing_metadata: {
               createInitialAudio,
+              initialAudioVoice: initialAudioVoice ?? null,
               pendingScanImages: images,
               pendingScanText: text,
               processing: {
@@ -198,6 +206,7 @@ export async function POST(request: Request) {
       languageHint: formData.get("languageHint"),
       text: formData.get("text"),
       createInitialAudio: formData.get("createInitialAudio"),
+      initialAudioVoice: formData.get("initialAudioVoice"),
     });
 
     if (!parsedFields.success) {
@@ -273,6 +282,7 @@ export async function POST(request: Request) {
       const languageHint = parsedFields.data.languageHint;
       const pastedText = parsedFields.data.text.trim();
       const createInitialAudio = parsedFields.data.createInitialAudio;
+      const initialAudioVoice = parsedFields.data.initialAudioVoice;
 
       after(async () => {
         try {
@@ -330,6 +340,7 @@ export async function POST(request: Request) {
             titleHint,
             languageHint,
             createInitialAudio,
+            initialAudioVoice,
             modelMetadata: {
               importMode: "scan",
               sourceFileNames,

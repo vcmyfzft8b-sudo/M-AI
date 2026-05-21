@@ -3,6 +3,7 @@ import { after, NextResponse } from "next/server";
 import { enqueueLectureNotesGeneration, enqueueLectureProcessing } from "@/lib/jobs";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import {
+  getInitialNoteAudioVoice,
   getEffectiveLectureSourceType,
   isRecord,
   shouldCreateInitialNoteAudio,
@@ -105,6 +106,7 @@ export async function POST(
         titleHint: webpage.title || lecture.title || undefined,
         languageHint: lecture.language_hint ?? undefined,
         createInitialAudio: shouldCreateInitialNoteAudio(lecture.processing_metadata),
+        initialAudioVoice: getInitialNoteAudioVoice(lecture.processing_metadata),
         modelMetadata: {
           importMode: "link",
           sourceUrl,

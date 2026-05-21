@@ -18,6 +18,7 @@ import {
   DEFAULT_NOTE_TTS_VOICE,
   NOTE_TTS_HIGHLIGHT_COLORS,
   NOTE_TTS_PLAYBACK_RATES,
+  NOTE_TTS_VOICE_STORAGE_KEY,
   NOTE_TTS_VOICES,
   type NoteTtsHighlightColorId,
   type NoteTtsPlaybackRate,
@@ -118,7 +119,6 @@ type TtsChunkResponse = {
 type ActiveChunk = TtsChunkResponse;
 
 const AUTO_SCROLL_IDLE_MS = 5_000;
-const NOTE_TTS_VOICE_STORAGE_KEY = "memo-note-tts-voice";
 const NOTE_TTS_RATE_STORAGE_KEY = "memo-note-tts-rate";
 const NOTE_TTS_COLOR_STORAGE_KEY = "memo-note-tts-color";
 const TTS_DAILY_LIMIT_MESSAGE = "Porabil si današnje poslušanje.";

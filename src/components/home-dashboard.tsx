@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import {
   memo,
   startTransition,
@@ -663,7 +663,7 @@ export function HomeDashboard({
   }, [animateCloseDashboardDialog, deleteTarget, renameTarget]);
 
   useLayoutEffect(() => {
-    if (!renameTarget) {
+    if (!renameTarget || !useDashboardSwipeActions) {
       return;
     }
 
@@ -799,7 +799,7 @@ export function HomeDashboard({
       document.body.style.touchAction = previousBodyTouchAction;
       window.scrollTo(0, scrollY);
     };
-  }, [renameTarget]);
+  }, [renameTarget, useDashboardSwipeActions]);
 
   useEffect(
     () => () => {
@@ -933,7 +933,11 @@ export function HomeDashboard({
       return;
     }
 
-    animateCloseDashboardDialog();
+    if (useDashboardSwipeActions) {
+      animateCloseDashboardDialog();
+    } else {
+      closeDashboardDialog();
+    }
   }
 
   function openDeleteModal(lecture: AppLectureListItem) {
@@ -947,7 +951,11 @@ export function HomeDashboard({
       return;
     }
 
-    animateCloseDashboardDialog();
+    if (useDashboardSwipeActions) {
+      animateCloseDashboardDialog();
+    } else {
+      closeDashboardDialog();
+    }
   }
 
   function handleDashboardDialogDragHandlePointerDown(
@@ -1476,6 +1484,8 @@ export function HomeDashboard({
       {renameTarget ? (
         <ViewportPortal>
           <>
+            {useDashboardSwipeActions ? (
+              <>
             <button
               type="button"
               className="mobile-create-menu-backdrop dashboard-note-dialog-backdrop"
@@ -1583,6 +1593,107 @@ export function HomeDashboard({
                 </div>
               </form>
             </section>
+              </>
+            ) : (
+              <>
+                <div
+                  className="ios-sheet-backdrop dashboard-note-dialog-backdrop"
+                  onClick={closeRenameModal}
+                  aria-hidden="true"
+                />
+                <div className="ios-sheet-wrap dashboard-note-dialog-wrap" role="presentation">
+                  <div className="ios-sheet-stack">
+                    <section
+                      className="ios-sheet dashboard-note-dialog mobile-draggable-sheet"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="rename-note-title"
+                      style={
+                        dashboardDialogDragOffset > 0
+                          ? { transform: `translateY(${dashboardDialogDragOffset}px)` }
+                          : undefined
+                      }
+                    >
+                      <button
+                        type="button"
+                        className="mobile-sheet-drag-handle dashboard-note-dialog-drag-handle"
+                        onPointerDown={handleDashboardDialogDragHandlePointerDown}
+                        aria-label="Povleci navzdol za zapiranje"
+                        disabled={busyLectureId === renameTarget.id}
+                      />
+                      <div className="ios-sheet-header">
+                        <h2 id="rename-note-title" className="ios-sheet-title">
+                          Preimenuj zapisek
+                        </h2>
+                        <button
+                          type="button"
+                          className="app-close-button ios-sheet-header-close"
+                          onClick={closeRenameModal}
+                          aria-label="Zapri okno za preimenovanje zapiska"
+                          disabled={busyLectureId === renameTarget.id}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      <form
+                        className="dashboard-note-dialog-body"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void handleRenameLecture();
+                        }}
+                      >
+                        <p className="ios-subtitle dashboard-note-dialog-copy">
+                          Daj temu zapisku bolj jasen naslov, ne da zapustiš stran.
+                        </p>
+                        {dashboardActionError ? (
+                          <p className="ios-info ios-danger dashboard-note-dialog-copy">
+                            {dashboardActionError}
+                          </p>
+                        ) : null}
+
+                        <label className="dashboard-note-dialog-field">
+                          <span>Naslov</span>
+                          <input
+                            autoFocus
+                            value={renameValue}
+                            onChange={(event) => setRenameValue(event.target.value)}
+                            className="ios-input"
+                            placeholder="Neimenovan zapisek"
+                          />
+                        </label>
+
+                        <div className="dashboard-note-dialog-actions">
+                          <button
+                            type="submit"
+                            className="ios-primary-button"
+                            disabled={
+                              busyLectureId === renameTarget.id ||
+                              !renameValue.trim() ||
+                              renameValue.trim() ===
+                                (renameTarget.title?.trim() || "Neimenovan zapisek")
+                            }
+                          >
+                            {busyLectureId === renameTarget.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : null}
+                            Shrani naslov
+                          </button>
+                          <button
+                            type="button"
+                            className="ios-secondary-button"
+                            onClick={closeRenameModal}
+                            disabled={busyLectureId === renameTarget.id}
+                          >
+                            Prekliči
+                          </button>
+                        </div>
+                      </form>
+                    </section>
+                  </div>
+                </div>
+              </>
+            )}
           </>
         </ViewportPortal>
       ) : null}
@@ -1590,6 +1701,8 @@ export function HomeDashboard({
       {deleteTarget ? (
         <ViewportPortal>
           <>
+            {useDashboardSwipeActions ? (
+              <>
             <button
               type="button"
               className="mobile-create-menu-backdrop dashboard-note-dialog-backdrop"
@@ -1667,6 +1780,90 @@ export function HomeDashboard({
                 </div>
               </div>
             </section>
+              </>
+            ) : (
+              <>
+                <div
+                  className="ios-sheet-backdrop dashboard-note-dialog-backdrop"
+                  onClick={closeDeleteModal}
+                  aria-hidden="true"
+                />
+                <div className="ios-sheet-wrap dashboard-note-dialog-wrap" role="presentation">
+                  <div className="ios-sheet-stack">
+                    <section
+                      className="ios-sheet dashboard-note-dialog mobile-draggable-sheet"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="delete-note-title"
+                      style={
+                        dashboardDialogDragOffset > 0
+                          ? { transform: `translateY(${dashboardDialogDragOffset}px)` }
+                          : undefined
+                      }
+                    >
+                      <button
+                        type="button"
+                        className="mobile-sheet-drag-handle dashboard-note-dialog-drag-handle"
+                        onPointerDown={handleDashboardDialogDragHandlePointerDown}
+                        aria-label="Povleci navzdol za zapiranje"
+                        disabled={busyLectureId === deleteTarget.id}
+                      />
+                      <div className="ios-sheet-header">
+                        <h2 id="delete-note-title" className="ios-sheet-title">
+                          Izbriši zapisek
+                        </h2>
+                        <button
+                          type="button"
+                          className="app-close-button ios-sheet-header-close"
+                          onClick={closeDeleteModal}
+                          aria-label="Zapri okno za brisanje zapiska"
+                          disabled={busyLectureId === deleteTarget.id}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      <div className="dashboard-note-dialog-body">
+                        <p className="ios-subtitle dashboard-note-dialog-copy">
+                          Izbriši{" "}
+                          <span className="dashboard-note-dialog-highlight">
+                            {deleteTarget.title?.trim() || "Neimenovan zapisek"}
+                          </span>
+                          ? Tega ni mogoče razveljaviti.
+                        </p>
+                        {dashboardActionError ? (
+                          <p className="ios-info ios-danger dashboard-note-dialog-copy">
+                            {dashboardActionError}
+                          </p>
+                        ) : null}
+
+                        <div className="dashboard-note-dialog-actions">
+                          <button
+                            type="button"
+                            className="dashboard-note-dialog-danger"
+                            onClick={() => void handleDeleteLecture()}
+                            disabled={busyLectureId === deleteTarget.id}
+                          >
+                            {busyLectureId === deleteTarget.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : null}
+                            Izbriši zapisek
+                          </button>
+                          <button
+                            type="button"
+                            className="ios-secondary-button"
+                            onClick={closeDeleteModal}
+                            disabled={busyLectureId === deleteTarget.id}
+                          >
+                            Prekliči
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              </>
+            )}
           </>
         </ViewportPortal>
       ) : null}

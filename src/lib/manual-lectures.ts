@@ -1164,30 +1164,34 @@ async function extractPdfWithOcr(
 
 function mergePdfExtractionResults(params: {
   native: ExtractedDocumentText | null;
+  structuredFallback: ExtractedDocumentText | null;
   ocr: ExtractedDocumentText | null;
   file: File;
 }) {
+  const baseline = params.native ?? params.structuredFallback;
   const title =
     params.native?.title ||
+    params.structuredFallback?.title ||
     params.ocr?.title ||
     params.file.name.replace(/\.pdf$/i, "") ||
     "PDF document";
   const ocrText = getNonDuplicateOcrText({
-    nativeText: params.native?.text ?? "",
+    nativeText: baseline?.text ?? "",
     ocrText: params.ocr?.text ?? "",
   });
   const text = normalizeWhitespace(
-    [params.native?.text, ocrText ? `OCR text:\n${ocrText}` : ""].filter(Boolean).join("\n\n"),
+    [baseline?.text, ocrText ? `OCR text:\n${ocrText}` : ""].filter(Boolean).join("\n\n"),
   );
 
   return {
     title,
     text,
-    pages: params.native?.pages ?? [],
+    pages: params.native?.pages ?? params.structuredFallback?.pages ?? [],
     modelMetadata: {
       ...(params.ocr?.modelMetadata ?? {}),
       pdfExtraction: {
         nativeText: Boolean(params.native?.text),
+        structuredFallbackText: Boolean(params.structuredFallback?.text),
         ocrText: Boolean(ocrText),
       },
     },
@@ -1236,10 +1240,35 @@ export async function extractTextFromPdf(
   const env = getServerEnv();
 
   if (env.DOCUMENT_AI_OCR_MODE === "pdf") {
-    const ocr = await extractPdfWithOcr(file, context);
+    let structuredFallback: ExtractedDocumentText | null = null;
+    let ocr: ExtractedDocumentText | null = null;
 
-    if (native || ocr) {
-      return mergePdfExtractionResults({ native, ocr, file });
+    if (native) {
+      ocr = await extractPdfWithOcr(file, context);
+    } else {
+      const [structuredFallbackResult, ocrResult] = await Promise.allSettled([
+        extractPdfWithStructuredGeminiFallback(file),
+        extractPdfWithOcr(file, context),
+      ]);
+
+      if (structuredFallbackResult.status === "fulfilled") {
+        structuredFallback = structuredFallbackResult.value;
+      } else {
+        console.warn(
+          "Structured PDF extraction fallback failed during PDF OCR mode.",
+          structuredFallbackResult.reason,
+        );
+      }
+
+      if (ocrResult.status === "fulfilled") {
+        ocr = ocrResult.value;
+      } else {
+        console.warn("PDF OCR failed during PDF OCR mode.", ocrResult.reason);
+      }
+    }
+
+    if (native || structuredFallback || ocr) {
+      return mergePdfExtractionResults({ native, structuredFallback, ocr, file });
     }
 
     throw new Error("PDF ne vsebuje dovolj berljivega besedila.");

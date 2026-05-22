@@ -27,6 +27,21 @@ type BillingPlanCard = {
   blurb: string;
 };
 
+type OnboardingForm = {
+  heardFrom: string;
+  audience: string;
+  role: string;
+  schoolLevel: string;
+  schoolYear: string;
+  subject: string;
+  motivation: string;
+  targetGrade: number;
+  currentAverageGrade: number;
+  feature: string;
+  classFocus: string;
+  dailyGoal: string;
+};
+
 const AGE_OPTIONS = [
   { value: "under_16", label: "Manj kot 16" },
   { value: "16_18", label: "16-18" },
@@ -208,7 +223,7 @@ function usesTenPointGrades(schoolLevel: string) {
 function getGradeDefaults(schoolLevel: string) {
   if (usesTenPointGrades(schoolLevel)) {
     return {
-      currentAverageGrade: 8,
+      currentAverageGrade: 6,
       targetGrade: 8,
     };
   }
@@ -409,7 +424,7 @@ export function OnboardingPaywall({
     targetGrade: false,
     currentAverageGrade: false,
   });
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<OnboardingForm>({
     heardFrom: SOURCE_OPTIONS[0].value,
     audience: AUDIENCE_OPTIONS[0].value,
     role: ROLE_OPTIONS[2].value,
@@ -936,7 +951,7 @@ export function OnboardingPaywall({
               <button
                 type="button"
                 className={`memo-onboarding-pill-button ${currentStep.action === "Preskoči" ? "secondary" : ""}`}
-                onClick={goNext}
+                onClick={() => goNext()}
                 disabled={Boolean("disabled" in currentStep && currentStep.disabled) || savingProfile}
               >
                 {savingProfile ? <Loader2 className="h-5 w-5 animate-spin" /> : null}

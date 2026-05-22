@@ -518,7 +518,7 @@ Coverage and explanation rules:
 - Integrate OCR-only or handwritten material into the correct topic instead of leaving it as separate OCR text.
 - Do not invent facts, translations, or examples not supported by the source.
 
-Return markdown only. Do not use HTML tags. Do not include decorative color instructions or unsupported facts. Include relevant emojis in the notes wherever they logically improve scanning, memory, or topic recognition, especially in major section headings, key callouts, examples, warnings, formulas, process sections, and final review. Do not use a fixed minimum or maximum count. Use as many or as few as the material naturally needs, but the final notes should contain emojis in logical places when the topic supports them. Use emojis as study-signposts, not decoration: choose emojis that match the meaning, avoid random or childish emoji use, and do not place an emoji on every ordinary bullet just for style.`;
+Return markdown only. Do not use HTML tags. Do not include decorative color instructions or unsupported facts. Add a small number of relevant emojis where they naturally improve scanning and memory, especially in major section headings, key callouts, examples, warnings, formulas, process sections, and final review. Use emojis as study-signposts, not decoration: include them when they fit the topic, avoid repeating the same emoji too often, do not force emojis into every heading or bullet, and do not make the notes feel childish.`;
 }
 
 function resolveNoteLengthLimits(
@@ -667,8 +667,7 @@ Repair goals:
 - remove or merge repeated low-value material;
 - compress sections that are over-expanded compared with the source while preserving the important ideas;
 - remove unsupported claims;
-- keep the notes readable and organized;
-- include or preserve relevant emojis in logical places such as major section headings, key callouts, examples, warnings, formulas, process sections, and final review. Do not use a fixed minimum or maximum count, but do not remove useful emojis just because this is a repair pass.
+- keep the notes readable and organized.
 
 Return the same JSON fields. For structuredNotesMd, return markdown only with no HTML and no unsupported facts.`;
 }
@@ -690,8 +689,7 @@ Compression goals:
 - keep formulas as standalone "$$ ... $$" math blocks with clean equation notation;
 - keep the final notes under the supplied maxNoteWords limit;
 - obey maxKeyTopics, maxKeyThingBullets, maxNumberedSections, maxCheckQuestions, and maxFinalReviewBullets exactly;
-- include a table only when the supplied tablePolicy allows it;
-- preserve relevant emojis and keep emojis in logical places where they help scanning or memory. Do not use a fixed minimum or maximum count.
+- include a table only when the supplied tablePolicy allows it.
 
 Return the same JSON fields. For structuredNotesMd, return markdown only with no HTML and no unsupported facts.`;
 }

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { cache } from "react";
 import Stripe from "stripe";
 
-import { getOptionalUser } from "@/lib/auth";
+import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 import { getServerEnv } from "@/lib/server-env";
 import { resolveSiteOrigin } from "@/lib/site-url";
@@ -97,6 +97,17 @@ export function getActiveSubscription(
     sorted.find((subscription) => ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status)) ??
     sorted[0] ??
     null
+  );
+}
+
+function hasCompletedOnboardingProfile(profile: ProfileRow | null) {
+  return Boolean(
+    profile?.onboarding_completed_at &&
+      profile.age_range &&
+      profile.education_level &&
+      profile.current_average_grade &&
+      profile.target_grade &&
+      profile.study_goal,
   );
 }
 
@@ -298,7 +309,7 @@ function buildEntitlementState(params: {
   trialChatMessagesUsed: number;
   trialChatMessagesRemaining: number;
 }) {
-  const onboardingComplete = Boolean(params.profile?.onboarding_completed_at);
+  const onboardingComplete = hasCompletedOnboardingProfile(params.profile);
   const trialLectureId = params.profile?.trial_lecture_id ?? null;
   const hasConsumedTrial = Boolean(params.profile?.trial_consumed_at || trialLectureId);
   const hasTrialLectureAvailable =
@@ -358,7 +369,7 @@ export const getUserEntitlementState = cache(async function getUserEntitlementSt
 });
 
 export const getViewerAppState = cache(async function getViewerAppState() {
-  const user = await getOptionalUser();
+  const user = await getOptionalUserOrPreviewBypass();
 
   if (!user) {
     return null;

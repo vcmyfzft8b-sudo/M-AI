@@ -3,7 +3,10 @@ import { z } from "zod";
 
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceRoleClient,
+} from "@/lib/supabase/server";
 
 const onboardingSchema = z.object({
   ageRange: z.enum(["under_16", "16_18", "19_22", "23_29", "30_plus"]),
@@ -42,17 +45,25 @@ export async function POST(request: Request) {
     return parsed.response;
   }
 
-  const { error } = await supabase
+  const service = createSupabaseServiceRoleClient();
+  const { error } = await service
     .from("profiles")
-    .update({
+    .upsert({
+      id: user.id,
+      email: user.email ?? null,
+      full_name:
+        typeof user.user_metadata?.full_name === "string"
+          ? user.user_metadata.full_name
+          : typeof user.user_metadata?.name === "string"
+            ? user.user_metadata.name
+            : null,
       age_range: parsed.data.ageRange,
       education_level: parsed.data.educationLevel,
       current_average_grade: parsed.data.currentAverageGrade,
       target_grade: parsed.data.targetGrade,
       study_goal: parsed.data.studyGoal,
       onboarding_completed_at: new Date().toISOString(),
-    } as never)
-    .eq("id", user.id);
+    } as never, { onConflict: "id" });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

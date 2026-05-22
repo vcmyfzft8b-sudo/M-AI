@@ -748,10 +748,7 @@ function shouldRepairNotes(review: {
   return (
     review.needsRepair &&
     (review.missingUnitHeadings.length > 0 ||
-      review.shallowExplanationHeadings.length > 1 ||
-      review.unsupportedClaims.length > 0 ||
-      review.repeatedOrLowValueSections.length > 1 ||
-      review.overExpandedSections.length > 0)
+      review.unsupportedClaims.length > 0)
   );
 }
 
@@ -843,7 +840,9 @@ export async function generateNotesFromTranscript(
   const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
   const languageLabel = resolveNoteLanguageLabel(params.outputLanguage);
   const sourceText = segments.map((segment) => segment.text).join("\n\n");
-  const noteGenerationMode = getServerEnv().NOTE_GENERATION_MODE;
+  const env = getServerEnv();
+  const noteGenerationMode = env.NOTE_GENERATION_MODE;
+  const notesModel = env.GEMINI_NOTES_MODEL;
   const directSourceMaxChars =
     sourceType === "audio" ? DIRECT_AUDIO_SOURCE_MAX_CHARS : DIRECT_DOCUMENT_SOURCE_MAX_CHARS;
   const includeFullSource = sourceText.length <= directSourceMaxChars;
@@ -865,6 +864,7 @@ export async function generateNotesFromTranscript(
       generateStructuredObject({
         schema: noteCoverageExtractionSchema,
         maxOutputTokens: sourceType === "audio" ? 2600 : 2300,
+        model: notesModel,
         instructions: buildCoverageExtractionInstructions({
           outputLanguage: params.outputLanguage,
           sourceType,
@@ -879,6 +879,7 @@ export async function generateNotesFromTranscript(
   const result = await generateStructuredObject({
     schema: noteArtifactSchema,
     maxOutputTokens: resolveFinalMaxOutputTokens(sourceWordCount, sourceType),
+    model: notesModel,
     instructions: finalInstructions,
     input: JSON.stringify(
       {
@@ -912,6 +913,7 @@ export async function generateNotesFromTranscript(
   const review = await generateStructuredObject({
     schema: noteCoverageReviewSchema,
     maxOutputTokens: 2600,
+    model: notesModel,
     instructions: buildCoverageReviewInstructions({
       outputLanguage: params.outputLanguage,
     }),
@@ -943,6 +945,7 @@ export async function generateNotesFromTranscript(
     finalResult = await generateStructuredObject({
       schema: noteArtifactSchema,
       maxOutputTokens: resolveFinalMaxOutputTokens(sourceWordCount, sourceType),
+      model: notesModel,
       instructions: buildNoteRepairInstructions({
         outputLanguage: params.outputLanguage,
       }),
@@ -991,6 +994,7 @@ export async function generateNotesFromTranscript(
     finalResult = await generateStructuredObject({
       schema: noteArtifactSchema,
       maxOutputTokens: resolveCompressionMaxOutputTokens(lengthLimits),
+      model: notesModel,
       instructions: buildDeterministicCompressionInstructions({
         outputLanguage: params.outputLanguage,
       }),

@@ -12,8 +12,10 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
   input: string;
   maxOutputTokens?: number;
   usageContext?: GeminiUsageContext;
+  model?: string;
 }) {
   const env = getServerEnv();
+  const primaryModel = params.model ?? env.GEMINI_TEXT_MODEL;
   const request = {
     schema: params.schema,
     instructions: params.instructions,
@@ -25,12 +27,12 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
   try {
     return await generateStructuredObjectWithGemini({
       ...request,
-      model: env.GEMINI_TEXT_MODEL,
+      model: primaryModel,
     });
   } catch (error) {
     if (
       !env.GEMINI_TEXT_FALLBACK_MODEL ||
-      env.GEMINI_TEXT_FALLBACK_MODEL === env.GEMINI_TEXT_MODEL
+      env.GEMINI_TEXT_FALLBACK_MODEL === primaryModel
     ) {
       throw error;
     }
@@ -39,7 +41,7 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
       ...request,
       model: env.GEMINI_TEXT_FALLBACK_MODEL,
       metadata: {
-        fallbackFrom: env.GEMINI_TEXT_MODEL,
+        fallbackFrom: primaryModel,
         fallbackReason: error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240),
       },
     });

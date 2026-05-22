@@ -124,6 +124,15 @@ type ExtractedDocumentText = {
   modelMetadata?: Record<string, unknown>;
 };
 
+type PdfNativeExtractionDiagnostics = {
+  engine: "pdfjs";
+  status: "ok" | "too_short" | "failed";
+  wordCount: number;
+  pageCount: number | null;
+  pagesWithText: number;
+  errorMessage?: string;
+};
+
 let pdfJsPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null =
   null;
 
@@ -972,84 +981,129 @@ export async function fetchReadableWebpage(params: { url: string }) {
   };
 }
 
-async function extractPdfNativeText(file: File): Promise<ExtractedDocumentText | null> {
-  const fileBytes = new Uint8Array(await file.arrayBuffer());
-  const pdfjs = await getPdfJs();
-  const loadingTask = pdfjs.getDocument({
-    data: fileBytes,
-    useWorkerFetch: false,
-    isEvalSupported: false,
-  });
+async function extractPdfNativeText(file: File): Promise<{
+  extracted: ExtractedDocumentText | null;
+  diagnostics: PdfNativeExtractionDiagnostics;
+}> {
+  let pageCount: number | null = null;
+  let pagesWithText = 0;
+  let wordCount = 0;
 
   try {
-    const document = await loadingTask.promise;
+    const fileBytes = new Uint8Array(await file.arrayBuffer());
+    const pdfjs = await getPdfJs();
+    const loadingTask = pdfjs.getDocument({
+      data: fileBytes,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+    });
 
     try {
-      const [metadata, pageTexts] = await Promise.all([
-        document.getMetadata().catch(() => null),
-        Promise.all(
-          Array.from({ length: document.numPages }, async (_, pageIndex) => {
-            const page = await document.getPage(pageIndex + 1);
+      const document = await loadingTask.promise;
 
-            try {
-              const textContent = await page.getTextContent();
-              const pageText = textContent.items.reduce<string[]>(
-                (accumulator, item) => {
-                  if (!isPdfTextItem(item)) {
+      try {
+        pageCount = document.numPages;
+        const [metadata, pageTexts] = await Promise.all([
+          document.getMetadata().catch(() => null),
+          Promise.all(
+            Array.from({ length: document.numPages }, async (_, pageIndex) => {
+              const page = await document.getPage(pageIndex + 1);
+
+              try {
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.reduce<string[]>(
+                  (accumulator, item) => {
+                    if (!isPdfTextItem(item)) {
+                      return accumulator;
+                    }
+
+                    const value = item.str.trim();
+
+                    if (!value) {
+                      return accumulator;
+                    }
+
+                    accumulator.push(item.hasEOL ? `${value}\n` : value);
+
                     return accumulator;
-                  }
+                  },
+                  [],
+                );
 
-                  const value = item.str.trim();
+                return {
+                  pageNumber: pageIndex + 1,
+                  text: normalizeWhitespace(pageText.join(" ")),
+                };
+              } finally {
+                page.cleanup();
+              }
+            }),
+          ),
+        ]);
 
-                  if (!value) {
-                    return accumulator;
-                  }
+        const parsedText = normalizeWhitespace(
+          pageTexts.map((page) => page.text).filter(Boolean).join("\n\n"),
+        );
+        const textPages = pageTexts.filter((page) => page.text.length > 0);
+        pagesWithText = textPages.length;
+        wordCount = countWords(parsedText);
+        const metadataTitle =
+          (typeof metadata?.info === "object" &&
+          metadata.info !== null &&
+          "Title" in metadata.info &&
+          typeof metadata.info.Title === "string"
+            ? metadata.info.Title.replace(/\s+/g, " ").trim()
+            : "") ||
+          file.name.replace(/\.pdf$/i, "");
 
-                  accumulator.push(item.hasEOL ? `${value}\n` : value);
+        if (wordCount < 40) {
+          return {
+            extracted: null,
+            diagnostics: {
+              engine: "pdfjs",
+              status: "too_short",
+              wordCount,
+              pageCount,
+              pagesWithText,
+            },
+          };
+        }
 
-                  return accumulator;
-                },
-                [],
-              );
-
-              return {
-                pageNumber: pageIndex + 1,
-                text: normalizeWhitespace(pageText.join(" ")),
-              };
-            } finally {
-              page.cleanup();
-            }
-          }),
-        ),
-      ]);
-
-      const parsedText = normalizeWhitespace(
-        pageTexts.map((page) => page.text).filter(Boolean).join("\n\n"),
-      );
-      const metadataTitle =
-        (typeof metadata?.info === "object" &&
-        metadata.info !== null &&
-        "Title" in metadata.info &&
-        typeof metadata.info.Title === "string"
-          ? metadata.info.Title.replace(/\s+/g, " ").trim()
-          : "") ||
-        file.name.replace(/\.pdf$/i, "");
-
-      if (parsedText.split(/\s+/).filter(Boolean).length < 40) {
-        return null;
+        return {
+          extracted: {
+            title: metadataTitle || "PDF document",
+            text: parsedText,
+            pages: textPages,
+          },
+          diagnostics: {
+            engine: "pdfjs",
+            status: "ok",
+            wordCount,
+            pageCount,
+            pagesWithText,
+          },
+        };
+      } finally {
+        await document.cleanup();
+        await document.destroy();
       }
-
-      return {
-        title: metadataTitle || "PDF document",
-        text: parsedText,
-        pages: pageTexts.filter((page) => page.text.length > 0),
-      };
     } finally {
-      await document.cleanup();
-      await document.destroy();
+      await loadingTask.destroy();
     }
-  } finally {
-    await loadingTask.destroy();
+  } catch (error) {
+    console.warn("PDF.js extraction failed.", error);
+
+    return {
+      extracted: null,
+      diagnostics: {
+        engine: "pdfjs",
+        status: "failed",
+        wordCount,
+        pageCount,
+        pagesWithText,
+        errorMessage: toSafeErrorMessage(error),
+      },
+    };
   }
 }
 
@@ -1167,6 +1221,7 @@ function mergePdfExtractionResults(params: {
   structuredFallback: ExtractedDocumentText | null;
   ocr: ExtractedDocumentText | null;
   file: File;
+  nativeDiagnostics: PdfNativeExtractionDiagnostics;
 }) {
   const baseline = params.native ?? params.structuredFallback;
   const title =
@@ -1193,6 +1248,10 @@ function mergePdfExtractionResults(params: {
         nativeText: Boolean(params.native?.text),
         structuredFallbackText: Boolean(params.structuredFallback?.text),
         ocrText: Boolean(ocrText),
+        nativeDiagnostics: params.nativeDiagnostics,
+        nativeWordCount: countWords(params.native?.text ?? ""),
+        ocrWordCount: countWords(params.ocr?.text ?? ""),
+        mergedWordCount: countWords(text),
       },
     },
   };
@@ -1222,53 +1281,71 @@ function getNonDuplicateOcrText(params: { nativeText: string; ocrText: string })
     return "";
   }
 
-  return ocrText;
+  const nativeTokens = new Set(nativeComparable.split(" ").filter(Boolean));
+  const paragraphs = ocrText
+    .split(/\n{2,}/)
+    .map((paragraph) => normalizeWhitespace(paragraph))
+    .filter(Boolean);
+  const uniqueParagraphs = paragraphs.filter((paragraph) => {
+    const comparable = normalizeForPdfOcrComparison(paragraph);
+
+    if (!comparable) {
+      return false;
+    }
+
+    if (comparable.length >= 120 && nativeComparable.includes(comparable.slice(0, 400))) {
+      return false;
+    }
+
+    const tokens = comparable.split(" ").filter(Boolean);
+
+    if (tokens.length < 8) {
+      return !nativeComparable.includes(comparable);
+    }
+
+    const overlappingTokens = tokens.filter((token) => nativeTokens.has(token)).length;
+    const overlapRatio = overlappingTokens / tokens.length;
+
+    return overlapRatio < 0.82;
+  });
+
+  return normalizeWhitespace(uniqueParagraphs.join("\n\n"));
 }
 
 export async function extractTextFromPdf(
   file: File,
   context?: DocumentExtractionContext,
 ): Promise<ExtractedDocumentText> {
-  let native: ExtractedDocumentText | null = null;
-
-  try {
-    native = await extractPdfNativeText(file);
-  } catch (error) {
-    console.warn("PDF.js extraction failed.", error);
-  }
+  const nativeExtraction = await extractPdfNativeText(file);
+  const native = nativeExtraction.extracted;
 
   const env = getServerEnv();
 
   if (env.DOCUMENT_AI_OCR_MODE === "pdf") {
-    let structuredFallback: ExtractedDocumentText | null = null;
-    let ocr: ExtractedDocumentText | null = null;
+    const ocr = await extractPdfWithOcr(file, context);
 
-    if (native) {
-      ocr = await extractPdfWithOcr(file, context);
-    } else {
-      const [structuredFallbackResult, ocrResult] = await Promise.allSettled([
-        extractPdfWithStructuredGeminiFallback(file),
-        extractPdfWithOcr(file, context),
-      ]);
-
-      if (structuredFallbackResult.status === "fulfilled") {
-        structuredFallback = structuredFallbackResult.value;
-      } else {
-        console.warn(
-          "Structured PDF extraction fallback failed during PDF OCR mode.",
-          structuredFallbackResult.reason,
-        );
-      }
-
-      if (ocrResult.status === "fulfilled") {
-        ocr = ocrResult.value;
-      } else {
-        console.warn("PDF OCR failed during PDF OCR mode.", ocrResult.reason);
-      }
+    if (native || ocr) {
+      return mergePdfExtractionResults({
+        native,
+        structuredFallback: null,
+        ocr,
+        file,
+        nativeDiagnostics: nativeExtraction.diagnostics,
+      });
     }
 
-    if (native || structuredFallback || ocr) {
-      return mergePdfExtractionResults({ native, structuredFallback, ocr, file });
+    try {
+      const structuredFallback = await extractPdfWithStructuredGeminiFallback(file);
+
+      return mergePdfExtractionResults({
+        native,
+        structuredFallback,
+        ocr: null,
+        file,
+        nativeDiagnostics: nativeExtraction.diagnostics,
+      });
+    } catch (error) {
+      console.warn("Structured PDF extraction fallback failed during PDF OCR mode.", error);
     }
 
     throw new Error("PDF ne vsebuje dovolj berljivega besedila.");
@@ -1279,7 +1356,23 @@ export async function extractTextFromPdf(
   }
 
   console.warn("PDF.js did not find enough text; falling back to Gemini file extraction.");
-  return extractPdfWithStructuredGeminiFallback(file);
+  const structuredFallback = await extractPdfWithStructuredGeminiFallback(file);
+
+  return {
+    ...structuredFallback,
+    modelMetadata: {
+      ...(structuredFallback.modelMetadata ?? {}),
+      pdfExtraction: {
+        nativeText: false,
+        structuredFallbackText: true,
+        ocrText: false,
+        nativeDiagnostics: nativeExtraction.diagnostics,
+        nativeWordCount: 0,
+        ocrWordCount: 0,
+        mergedWordCount: countWords(structuredFallback.text),
+      },
+    },
+  };
 }
 
 export async function extractTextFromDocument(

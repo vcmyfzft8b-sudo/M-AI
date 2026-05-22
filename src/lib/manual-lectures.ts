@@ -111,6 +111,19 @@ export type ImageOcrContext = {
   imageIndex?: number | null;
 };
 
+export type DocumentExtractionContext = {
+  userId?: string | null;
+  lectureId?: string | null;
+  sourceFileName?: string | null;
+};
+
+type ExtractedDocumentText = {
+  title: string;
+  text: string;
+  pages: Array<{ pageNumber: number; text: string }>;
+  modelMetadata?: Record<string, unknown>;
+};
+
 let pdfJsPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null =
   null;
 
@@ -207,6 +220,27 @@ function buildImageOcrUsageContext(params: {
       lectureId: params.context?.lectureId ?? null,
       fileMimeType: params.file.type || "application/octet-stream",
       fileSize: params.file.size,
+    },
+  };
+}
+
+function buildDocumentOcrUsageContext(params: {
+  context?: DocumentExtractionContext;
+  stage: string;
+  file: File;
+  mode: string;
+}) {
+  return {
+    stage: params.stage,
+    userId: params.context?.userId ?? null,
+    lectureId: params.context?.lectureId ?? null,
+    metadata: {
+      lectureId: params.context?.lectureId ?? null,
+      sourceType: "pdf",
+      sourceFileName: params.context?.sourceFileName ?? params.file.name,
+      fileMimeType: params.file.type || "application/octet-stream",
+      fileSize: params.file.size,
+      ocrMode: params.mode,
     },
   };
 }
@@ -938,88 +972,88 @@ export async function fetchReadableWebpage(params: { url: string }) {
   };
 }
 
-export async function extractTextFromPdf(file: File) {
+async function extractPdfNativeText(file: File): Promise<ExtractedDocumentText | null> {
   const fileBytes = new Uint8Array(await file.arrayBuffer());
+  const pdfjs = await getPdfJs();
+  const loadingTask = pdfjs.getDocument({
+    data: fileBytes,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+  });
+
   try {
-    const pdfjs = await getPdfJs();
-    const loadingTask = pdfjs.getDocument({
-      data: fileBytes,
-      useWorkerFetch: false,
-      isEvalSupported: false,
-    });
+    const document = await loadingTask.promise;
 
     try {
-      const document = await loadingTask.promise;
+      const [metadata, pageTexts] = await Promise.all([
+        document.getMetadata().catch(() => null),
+        Promise.all(
+          Array.from({ length: document.numPages }, async (_, pageIndex) => {
+            const page = await document.getPage(pageIndex + 1);
 
-      try {
-        const [metadata, pageTexts] = await Promise.all([
-          document.getMetadata().catch(() => null),
-          Promise.all(
-            Array.from({ length: document.numPages }, async (_, pageIndex) => {
-              const page = await document.getPage(pageIndex + 1);
-
-              try {
-                const textContent = await page.getTextContent();
-                const pageText = textContent.items.reduce<string[]>(
-                  (accumulator, item) => {
-                    if (!isPdfTextItem(item)) {
-                      return accumulator;
-                    }
-
-                    const value = item.str.trim();
-
-                    if (!value) {
-                      return accumulator;
-                    }
-
-                    accumulator.push(item.hasEOL ? `${value}\n` : value);
-
+            try {
+              const textContent = await page.getTextContent();
+              const pageText = textContent.items.reduce<string[]>(
+                (accumulator, item) => {
+                  if (!isPdfTextItem(item)) {
                     return accumulator;
-                  },
-                  [],
-                );
+                  }
 
-                return {
-                  pageNumber: pageIndex + 1,
-                  text: normalizeWhitespace(pageText.join(" ")),
-                };
-              } finally {
-                page.cleanup();
-              }
-            }),
-          ),
-        ]);
+                  const value = item.str.trim();
 
-        const parsedText = normalizeWhitespace(
-          pageTexts.map((page) => page.text).filter(Boolean).join("\n\n"),
-        );
-        const metadataTitle =
-          (typeof metadata?.info === "object" &&
-          metadata.info !== null &&
-          "Title" in metadata.info &&
-          typeof metadata.info.Title === "string"
-            ? metadata.info.Title.replace(/\s+/g, " ").trim()
-            : "") ||
-          file.name.replace(/\.pdf$/i, "");
+                  if (!value) {
+                    return accumulator;
+                  }
 
-        if (parsedText.split(/\s+/).filter(Boolean).length >= 40) {
-          return {
-            title: metadataTitle || "PDF document",
-            text: parsedText,
-            pages: pageTexts.filter((page) => page.text.length > 0),
-          };
-        }
-      } finally {
-        await document.cleanup();
-        await document.destroy();
+                  accumulator.push(item.hasEOL ? `${value}\n` : value);
+
+                  return accumulator;
+                },
+                [],
+              );
+
+              return {
+                pageNumber: pageIndex + 1,
+                text: normalizeWhitespace(pageText.join(" ")),
+              };
+            } finally {
+              page.cleanup();
+            }
+          }),
+        ),
+      ]);
+
+      const parsedText = normalizeWhitespace(
+        pageTexts.map((page) => page.text).filter(Boolean).join("\n\n"),
+      );
+      const metadataTitle =
+        (typeof metadata?.info === "object" &&
+        metadata.info !== null &&
+        "Title" in metadata.info &&
+        typeof metadata.info.Title === "string"
+          ? metadata.info.Title.replace(/\s+/g, " ").trim()
+          : "") ||
+        file.name.replace(/\.pdf$/i, "");
+
+      if (parsedText.split(/\s+/).filter(Boolean).length < 40) {
+        return null;
       }
-    } finally {
-      await loadingTask.destroy();
-    }
-  } catch (error) {
-    console.warn("PDF.js extraction failed, falling back to Gemini file extraction.", error);
-  }
 
+      return {
+        title: metadataTitle || "PDF document",
+        text: parsedText,
+        pages: pageTexts.filter((page) => page.text.length > 0),
+      };
+    } finally {
+      await document.cleanup();
+      await document.destroy();
+    }
+  } finally {
+    await loadingTask.destroy();
+  }
+}
+
+async function extractPdfWithStructuredGeminiFallback(file: File): Promise<ExtractedDocumentText> {
   const fallbackInstructions =
     "Extract as much readable text from this PDF as possible into plain text. Do not summarize. Preserve the source language, preserve examples and important details, and ignore repeated headers, footers, and page numbers when possible. Return a concise title plus the document text.";
   const env = getServerEnv();
@@ -1038,9 +1072,193 @@ export async function extractTextFromPdf(file: File) {
   };
 }
 
-export async function extractTextFromDocument(file: File) {
+async function extractPdfWithOcr(
+  file: File,
+  context?: DocumentExtractionContext,
+): Promise<ExtractedDocumentText | null> {
+  const env = getServerEnv();
+  const instructions =
+    "Extract all readable text from this PDF document. Preserve the original language, Slovenian characters such as č, š, and ž, headings, bullet points, equations, labels, tables, handwriting when readable, line breaks, and important details. Do not translate and do not summarize. Return only the extracted text. Do not include JSON, markdown fences, commentary, or confidence notes.";
+
+  async function runOcr(params: {
+    model: string;
+    stage: "document_ocr_primary" | "document_ocr_rescue";
+    maxOutputTokens: number;
+    mediaResolution: PartMediaResolutionLevel;
+  }) {
+    const output = await generateTextWithGeminiFile({
+      instructions,
+      file,
+      model: params.model,
+      maxOutputTokens: params.maxOutputTokens,
+      maxAttempts: 1,
+      thinkingConfig: OCR_THINKING_CONFIG,
+      mediaResolution: params.mediaResolution,
+      usageContext: buildDocumentOcrUsageContext({
+        context,
+        stage: params.stage,
+        file,
+        mode: env.DOCUMENT_AI_OCR_MODE,
+      }),
+    });
+    const text = normalizeOcrPlainText(output);
+
+    if (!isAcceptableImageOcrText(text)) {
+      throw new GeminiEmptyTextOutputError();
+    }
+
+    return text;
+  }
+
+  try {
+    const text = await runOcr({
+      model: env.GEMINI_OCR_MODEL,
+      stage: "document_ocr_primary",
+      maxOutputTokens: 12000,
+      mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH,
+    });
+
+    return {
+      title: file.name.replace(/\.pdf$/i, "") || "PDF document",
+      text,
+      pages: [],
+      modelMetadata: {
+        documentOcr: {
+          mode: env.DOCUMENT_AI_OCR_MODE,
+          primaryModel: env.GEMINI_OCR_MODEL,
+          rescueModel: null,
+          sourceType: "pdf",
+        },
+      },
+    };
+  } catch (primaryError) {
+    console.warn("Primary PDF OCR failed; retrying rescue model.", primaryError);
+  }
+
+  try {
+    const text = await runOcr({
+      model: env.GEMINI_OCR_RESCUE_MODEL,
+      stage: "document_ocr_rescue",
+      maxOutputTokens: 14000,
+      mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH,
+    });
+
+    return {
+      title: file.name.replace(/\.pdf$/i, "") || "PDF document",
+      text,
+      pages: [],
+      modelMetadata: {
+        documentOcr: {
+          mode: env.DOCUMENT_AI_OCR_MODE,
+          primaryModel: env.GEMINI_OCR_MODEL,
+          rescueModel: env.GEMINI_OCR_RESCUE_MODEL,
+          sourceType: "pdf",
+        },
+      },
+    };
+  } catch (rescueError) {
+    console.warn("Rescue PDF OCR failed; using native PDF text when available.", rescueError);
+    return null;
+  }
+}
+
+function mergePdfExtractionResults(params: {
+  native: ExtractedDocumentText | null;
+  ocr: ExtractedDocumentText | null;
+  file: File;
+}) {
+  const title =
+    params.native?.title ||
+    params.ocr?.title ||
+    params.file.name.replace(/\.pdf$/i, "") ||
+    "PDF document";
+  const ocrText = getNonDuplicateOcrText({
+    nativeText: params.native?.text ?? "",
+    ocrText: params.ocr?.text ?? "",
+  });
+  const text = normalizeWhitespace(
+    [params.native?.text, ocrText ? `OCR text:\n${ocrText}` : ""].filter(Boolean).join("\n\n"),
+  );
+
+  return {
+    title,
+    text,
+    pages: params.native?.pages ?? [],
+    modelMetadata: {
+      ...(params.ocr?.modelMetadata ?? {}),
+      pdfExtraction: {
+        nativeText: Boolean(params.native?.text),
+        ocrText: Boolean(ocrText),
+      },
+    },
+  };
+}
+
+function normalizeForPdfOcrComparison(value: string) {
+  return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").replace(/\s+/g, " ").trim();
+}
+
+function getNonDuplicateOcrText(params: { nativeText: string; ocrText: string }) {
+  const ocrText = normalizeWhitespace(params.ocrText);
+
+  if (!ocrText || !params.nativeText) {
+    return ocrText;
+  }
+
+  const nativeComparable = normalizeForPdfOcrComparison(params.nativeText);
+  const ocrComparable = normalizeForPdfOcrComparison(ocrText);
+
+  if (!ocrComparable) {
+    return "";
+  }
+
+  const sample = ocrComparable.slice(0, Math.min(ocrComparable.length, 1000));
+
+  if (sample.length >= 200 && nativeComparable.includes(sample)) {
+    return "";
+  }
+
+  return ocrText;
+}
+
+export async function extractTextFromPdf(
+  file: File,
+  context?: DocumentExtractionContext,
+): Promise<ExtractedDocumentText> {
+  let native: ExtractedDocumentText | null = null;
+
+  try {
+    native = await extractPdfNativeText(file);
+  } catch (error) {
+    console.warn("PDF.js extraction failed.", error);
+  }
+
+  const env = getServerEnv();
+
+  if (env.DOCUMENT_AI_OCR_MODE === "pdf") {
+    const ocr = await extractPdfWithOcr(file, context);
+
+    if (native || ocr) {
+      return mergePdfExtractionResults({ native, ocr, file });
+    }
+
+    throw new Error("PDF ne vsebuje dovolj berljivega besedila.");
+  }
+
+  if (native) {
+    return native;
+  }
+
+  console.warn("PDF.js did not find enough text; falling back to Gemini file extraction.");
+  return extractPdfWithStructuredGeminiFallback(file);
+}
+
+export async function extractTextFromDocument(
+  file: File,
+  context?: DocumentExtractionContext,
+): Promise<ExtractedDocumentText> {
   if (isPdfDocument(file)) {
-    return extractTextFromPdf(file);
+    return extractTextFromPdf(file, context);
   }
 
   if (isPlainTextDocument(file)) {

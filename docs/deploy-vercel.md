@@ -44,8 +44,10 @@ Add these in the Vercel project settings:
 - `SUPABASE_SERVICE_ROLE_KEY=...`
 - `GEMINI_API_KEY=...`
 - `GEMINI_TEXT_MODEL=gemini-2.5-flash-lite`
+- `GEMINI_TEXT_FALLBACK_MODEL=`
 - `GEMINI_OCR_MODEL=gemini-3-flash-preview`
 - `GEMINI_EMBEDDING_MODEL=gemini-embedding-001`
+- `DOCUMENT_AI_OCR_MODE=legacy`
 - `SONIOX_API_KEY=...`
 - `SONIOX_MODEL=stt-async-v4`
 - `NEXT_PUBLIC_SENTRY_DSN=...`

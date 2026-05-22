@@ -12,9 +12,11 @@ const serverEnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_TEXT_MODEL: z.string().default("gemini-2.5-flash-lite"),
+  GEMINI_TEXT_FALLBACK_MODEL: z.string().optional(),
   GEMINI_OCR_MODEL: z.string().default("gemini-3.1-flash-lite-preview"),
   GEMINI_OCR_RESCUE_MODEL: z.string().default("gemini-3-flash-preview"),
   GEMINI_EMBEDDING_MODEL: z.string().default("gemini-embedding-001"),
+  DOCUMENT_AI_OCR_MODE: z.enum(["legacy", "pdf"]).default("legacy"),
   SONIOX_API_KEY: z.string().optional(),
   SONIOX_MODEL: z.string().default("stt-async-v4"),
   SONIOX_TTS_MODEL: z.string().default("tts-rt-v1-preview"),
@@ -30,17 +32,24 @@ const serverEnvSchema = z.object({
   STRIPE_PRICE_YEARLY: z.string().optional(),
 });
 
+function cleanEnvString(value: string | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 export function getServerEnv() {
   return serverEnvSchema.parse({
     NEXT_PUBLIC_SITE_URL: getPublicEnv().siteUrl,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
-    GEMINI_TEXT_MODEL: process.env.GEMINI_TEXT_MODEL,
-    GEMINI_OCR_MODEL: process.env.GEMINI_OCR_MODEL,
-    GEMINI_OCR_RESCUE_MODEL: process.env.GEMINI_OCR_RESCUE_MODEL,
-    GEMINI_EMBEDDING_MODEL: process.env.GEMINI_EMBEDDING_MODEL,
+    GEMINI_API_KEY: cleanEnvString(process.env.GEMINI_API_KEY),
+    GEMINI_TEXT_MODEL: cleanEnvString(process.env.GEMINI_TEXT_MODEL),
+    GEMINI_TEXT_FALLBACK_MODEL: cleanEnvString(process.env.GEMINI_TEXT_FALLBACK_MODEL),
+    GEMINI_OCR_MODEL: cleanEnvString(process.env.GEMINI_OCR_MODEL),
+    GEMINI_OCR_RESCUE_MODEL: cleanEnvString(process.env.GEMINI_OCR_RESCUE_MODEL),
+    GEMINI_EMBEDDING_MODEL: cleanEnvString(process.env.GEMINI_EMBEDDING_MODEL),
+    DOCUMENT_AI_OCR_MODE: cleanEnvString(process.env.DOCUMENT_AI_OCR_MODE),
     SONIOX_API_KEY: process.env.SONIOX_API_KEY,
     SONIOX_MODEL: process.env.SONIOX_MODEL,
     SONIOX_TTS_MODEL: process.env.SONIOX_TTS_MODEL,

@@ -161,7 +161,11 @@ export async function POST(request: Request) {
         ? "presentation"
         : "text";
     let nextLectureId = lectureId;
-    const extracted = await extractTextFromDocument(inputFile);
+    const extracted = await extractTextFromDocument(inputFile, {
+      userId: user.id,
+      lectureId: nextLectureId ?? null,
+      sourceFileName,
+    });
     const lectureInput = {
       userId: user.id,
       sourceType,
@@ -176,6 +180,7 @@ export async function POST(request: Request) {
       createInitialAudio,
       initialAudioVoice,
       modelMetadata: {
+        ...(extracted.modelMetadata ?? {}),
         importMode:
           sourceType === "pdf"
             ? "pdf"

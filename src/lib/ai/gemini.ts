@@ -182,6 +182,7 @@ export async function generateStructuredObjectWithGemini<TSchema extends z.ZodTy
   maxAttempts?: number;
   thinkingConfig?: ThinkingConfig;
   usageContext?: GeminiUsageContext;
+  metadata?: Record<string, unknown>;
 }) {
   const ai = getGeminiClient();
   let lastError: unknown = null;
@@ -242,6 +243,7 @@ ${params.input}`,
           usageContext: params.usageContext,
           usageMetadata: response.usageMetadata,
           metadata: {
+            ...(params.metadata ?? {}),
             maxOutputTokens,
             responseMimeType: "application/json",
             responseSchema: useResponseSchema,
@@ -258,6 +260,7 @@ ${params.input}`,
           usageContext: params.usageContext,
           usageMetadata: response?.usageMetadata,
           metadata: {
+            ...(params.metadata ?? {}),
             maxOutputTokens,
             responseMimeType: "application/json",
             responseSchema: useResponseSchema,

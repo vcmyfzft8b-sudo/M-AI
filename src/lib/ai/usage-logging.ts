@@ -25,6 +25,10 @@ type GeminiModelPrice = {
 };
 
 const GEMINI_MODEL_PRICES: Record<string, GeminiModelPrice> = {
+  "gemini-3.1-flash-lite": {
+    inputUsdPerMillion: 0.25,
+    outputUsdPerMillion: 1.5,
+  },
   "gemini-3.1-flash-lite-preview": {
     inputUsdPerMillion: 0.25,
     outputUsdPerMillion: 1.5,

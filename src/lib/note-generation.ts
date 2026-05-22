@@ -161,9 +161,8 @@ function normalizeStudyListSections(markdown: string) {
   return normalizedLines.join("\n");
 }
 
-function hasHeadingEmoji(value: string) {
-  return /^\s*(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})/u.test(value)
-    || /^\s*\d+[\s.)-]+(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})/u.test(value);
+function hasLeadingEmoji(value: string) {
+  return /^\s*(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})/u.test(value);
 }
 
 function pickHeadingEmoji(heading: string) {
@@ -251,7 +250,7 @@ function ensureHeadingEmojis(markdown: string) {
 
       const [, hashes, spacing, text] = heading;
 
-      if (hasHeadingEmoji(text)) {
+      if (hasLeadingEmoji(text)) {
         return line;
       }
 
@@ -576,10 +575,10 @@ Title rule:
 - Never use section labels as the title. Forbidden titles include "${labels.overview.replace(/^#+\s*/, "")}", "Quick Overview", "Overview", "Pregled", "Notes", and "Zapiski".
 - The first heading inside structuredNotesMd should still be "${labels.overview}", but that heading is not the artifact title.
 
-Use this stable Structured Plus markdown format with these exact heading labels:
-- Start with "${labels.overview}" containing a concise, plain-language explanation of the whole material.
+Use this stable Structured Plus markdown format with these exact heading label words, prefixed by one logical emoji:
+- Start with one logical emoji plus "${labels.overview}" containing a concise, plain-language explanation of the whole material.
 - Immediately after "${labels.overview}", add a semantic blockquote callout in this form: "> **${labels.keyTakeaway}:** ...". This creates the main visual highlight.
-- Add "${labels.keyThings}" with complete bullets for the main ideas a student must remember.
+- Add one logical emoji plus "${labels.keyThings}" with complete bullets for the main ideas a student must remember.
 - After "${labels.keyThings}", include a concise GFM markdown table when it makes terminology, comparisons, categories, formulas, steps, or cause-effect relationships easier to understand than prose.
 - Then create as many numbered topic sections as the source needs, such as "${labels.topicExample}". Merge duplicates and closely related chunks, but do not merge unrelated learning units just to make the note shorter.
 - Inside each substantial topic, use "${labels.coreIdea}" and "${labels.detailedNotes}". Use "${labels.keyTerms}", "${labels.example}", "${labels.compare}", "${labels.process}", or "${labels.checkYourself}" only when they add real study value.
@@ -596,6 +595,7 @@ Use this stable Structured Plus markdown format with these exact heading labels:
 - Include source-grounded examples or worked explanations when they clarify a difficult concept and the source supports them. Skip generic invented examples.
 - Add "${labels.checkYourself}" near the end. Format it as a hyphen bullet list with questions that are answerable from the notes.
 - End with "${labels.finalReview}" formatted as a hyphen bullet list containing tight takeaways and confusing points or common mistakes supported by the source.
+- Every markdown heading in structuredNotesMd must start with exactly one logical emoji before the heading text. For example, write "## 🧭 Hiter pregled" or "## 🧭 Quick Overview", not "## Hiter pregled". Also add one logical emoji to every numbered topic heading and every "###" subsection heading. Keep the required heading label text after the emoji.
 
 Coverage and explanation rules:
 - Keep named concepts, definitions, formulas, categories, process steps, comparisons, examples that explain hard ideas, and exam-relevant caveats.
@@ -617,7 +617,7 @@ Coverage and explanation rules:
 - Integrate OCR-only or handwritten material into the correct topic instead of leaving it as separate OCR text.
 - Do not invent facts, translations, or examples not supported by the source.
 
-Return markdown only. Do not use HTML tags. Do not include decorative color instructions or unsupported facts.`;
+Return markdown only. Do not use HTML tags. Do not include decorative color instructions or unsupported facts. Include one logical emoji at the start of every markdown heading. Elsewhere in the notes, include relevant emojis only where they logically improve scanning, memory, or topic recognition, such as key callouts, examples, warnings, formulas, process sections, and final review. Do not use a fixed minimum or maximum count for body emojis. Use emojis as study-signposts, not decoration: choose emojis that match the meaning, avoid random or childish emoji use, and do not place an emoji on every ordinary bullet just for style.`;
 }
 
 function resolveNoteLengthLimits(
@@ -766,7 +766,9 @@ Repair goals:
 - remove or merge repeated low-value material;
 - compress sections that are over-expanded compared with the source while preserving the important ideas;
 - remove unsupported claims;
-- keep the notes readable and organized.
+- keep the notes readable and organized;
+- make sure every markdown heading starts with exactly one logical emoji before the heading text;
+- include or preserve relevant emojis in logical body locations such as key callouts, examples, warnings, formulas, process sections, and final review. Do not use a fixed minimum or maximum count for body emojis, but do not remove useful emojis just because this is a repair pass.
 
 Return the same JSON fields. For structuredNotesMd, return markdown only with no HTML and no unsupported facts.`;
 }
@@ -788,7 +790,9 @@ Compression goals:
 - keep formulas as standalone "$$ ... $$" math blocks with clean equation notation;
 - keep the final notes under the supplied maxNoteWords limit;
 - obey maxKeyTopics, maxKeyThingBullets, maxNumberedSections, maxCheckQuestions, and maxFinalReviewBullets exactly;
-- include a table only when the supplied tablePolicy allows it.
+- include a table only when the supplied tablePolicy allows it;
+- make sure every markdown heading starts with exactly one logical emoji before the heading text;
+- preserve relevant emojis and keep body emojis in logical places where they help scanning or memory. Do not use a fixed minimum or maximum count for body emojis.
 
 Return the same JSON fields. For structuredNotesMd, return markdown only with no HTML and no unsupported facts.`;
 }
@@ -849,7 +853,8 @@ function shouldRepairNotes(review: {
     (review.missingUnitHeadings.length > 0 ||
       review.shallowExplanationHeadings.length > 1 ||
       review.unsupportedClaims.length > 0 ||
-      review.repeatedOrLowValueSections.length > 1)
+      review.repeatedOrLowValueSections.length > 1 ||
+      review.overExpandedSections.length > 0)
   );
 }
 
@@ -999,8 +1004,10 @@ export async function generateNotesFromTranscript(
     ),
   });
 
-  let normalizedStructuredNotesMd = normalizeStudyListSections(
-    normalizeFormulaMarkdown(stripHtmlFromNotes(result.structuredNotesMd)),
+  let normalizedStructuredNotesMd = ensureHeadingEmojis(
+    normalizeStudyListSections(
+      normalizeFormulaMarkdown(stripHtmlFromNotes(result.structuredNotesMd)),
+    ),
   );
   let finalResult = result;
   let repairApplied = false;
@@ -1068,8 +1075,10 @@ export async function generateNotesFromTranscript(
         2,
       ),
     });
-    normalizedStructuredNotesMd = normalizeStudyListSections(
-      normalizeFormulaMarkdown(stripHtmlFromNotes(finalResult.structuredNotesMd)),
+    normalizedStructuredNotesMd = ensureHeadingEmojis(
+      normalizeStudyListSections(
+        normalizeFormulaMarkdown(stripHtmlFromNotes(finalResult.structuredNotesMd)),
+      ),
     );
     repairApplied = true;
   }
@@ -1116,8 +1125,10 @@ export async function generateNotesFromTranscript(
         2,
       ),
     });
-    normalizedStructuredNotesMd = normalizeStudyListSections(
-      normalizeFormulaMarkdown(stripHtmlFromNotes(finalResult.structuredNotesMd)),
+    normalizedStructuredNotesMd = ensureHeadingEmojis(
+      normalizeStudyListSections(
+        normalizeFormulaMarkdown(stripHtmlFromNotes(finalResult.structuredNotesMd)),
+      ),
     );
     normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
     deterministicCompressionApplied = true;
@@ -1141,7 +1152,7 @@ export async function generateNotesFromTranscript(
     ...finalResult,
     title,
     keyTopics,
-    structuredNotesMd: ensureHeadingEmojis(normalizedStructuredNotesMd),
+    structuredNotesMd: normalizedStructuredNotesMd,
     modelMetadata: {
       chunkCount: windows.length,
       sourceWordCount,

@@ -10,20 +10,16 @@ const nextConfig: NextConfig = {
   },
 };
 
+const isVercelPreview = process.env.VERCEL_ENV === "preview";
+
 export default withSentryConfig(nextConfig, {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
-  authToken: process.env.SENTRY_AUTH_TOKEN,
+  authToken: isVercelPreview ? undefined : process.env.SENTRY_AUTH_TOKEN,
   silent: !process.env.CI,
-  errorHandler:
-    process.env.VERCEL_ENV === "preview"
-      ? (error) => {
-          console.warn("Sentry upload failed during preview build; continuing.", error);
-        }
-      : undefined,
   widenClientFileUpload: true,
   sourcemaps: {
-    disable: !process.env.SENTRY_AUTH_TOKEN,
+    disable: isVercelPreview || !process.env.SENTRY_AUTH_TOKEN,
   },
   webpack: {
     treeshake: {

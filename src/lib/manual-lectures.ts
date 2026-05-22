@@ -135,9 +135,34 @@ type PdfNativeExtractionDiagnostics = {
 
 let pdfJsPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null =
   null;
+let pdfJsDomPolyfillsPromise: Promise<void> | null = null;
+
+async function ensurePdfJsDomPolyfills() {
+  if (!pdfJsDomPolyfillsPromise) {
+    pdfJsDomPolyfillsPromise = import("@napi-rs/canvas")
+      .then((canvas) => {
+        const pdfGlobal = globalThis as typeof globalThis & {
+          DOMMatrix?: typeof DOMMatrix;
+          ImageData?: typeof ImageData;
+          Path2D?: typeof Path2D;
+        };
+
+        pdfGlobal.DOMMatrix ??= canvas.DOMMatrix as unknown as typeof DOMMatrix;
+        pdfGlobal.ImageData ??= canvas.ImageData as unknown as typeof ImageData;
+        pdfGlobal.Path2D ??= canvas.Path2D as unknown as typeof Path2D;
+      })
+      .catch((error: unknown) => {
+        console.warn("PDF.js DOM polyfill setup failed.", error);
+      });
+  }
+
+  await pdfJsDomPolyfillsPromise;
+}
 
 async function getPdfJs() {
   if (!pdfJsPromise) {
+    await ensurePdfJsDomPolyfills();
+
     const pdfGlobal = globalThis as {
       self?: unknown;
     };

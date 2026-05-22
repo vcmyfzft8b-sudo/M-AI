@@ -4,7 +4,10 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: process.cwd(),
-  serverExternalPackages: ["@napi-rs/canvas"],
+  serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist"],
+  outputFileTracingIncludes: {
+    "/*": ["./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"],
+  },
 };
 
 export default withSentryConfig(nextConfig, {

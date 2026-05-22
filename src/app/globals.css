@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "katex/dist/katex.min.css";
 
 :root,
 :root[data-theme="light"] {
@@ -7585,6 +7586,52 @@ select:disabled {
 
 .lecture-markdown tr:last-child td {
   border-bottom: 0;
+}
+
+.lecture-markdown .note-read-math {
+  margin: 1rem 0 1.15rem;
+  overflow-x: auto;
+  border-left: 2px solid color-mix(in srgb, var(--separator-strong) 55%, transparent);
+  padding: 0.15rem 0 0.15rem 1rem;
+}
+
+.lecture-markdown .note-read-math .katex-display {
+  margin: 0;
+  text-align: left;
+}
+
+.lecture-markdown .note-read-math .katex {
+  color: var(--label);
+  font-size: clamp(1.15rem, 2.8vw, 1.62rem);
+  line-height: 1.7;
+  white-space: nowrap;
+}
+
+.lecture-markdown .note-read-math-fallback {
+  border-left: 2px solid color-mix(in srgb, var(--separator-strong) 55%, transparent);
+  padding-left: 1rem;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.1rem, 2.5vw, 1.5rem);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.lecture-markdown .note-read-inline-math {
+  display: inline-block;
+  margin: 0 0.08em;
+  vertical-align: -0.08em;
+  white-space: nowrap;
+}
+
+.lecture-markdown .note-read-inline-math .katex {
+  color: inherit;
+  font-size: 1em;
+  line-height: 1;
+}
+
+.lecture-markdown .note-read-inline-math.current {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  border-radius: 0.2em;
 }
 
 .lecture-markdown p + h1,

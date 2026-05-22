@@ -1,5 +1,6 @@
 "use client";
 
+import katex from "katex";
 import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Pause, Play, X } from "lucide-react";
 import Image from "next/image";
 import type {
@@ -641,6 +642,19 @@ function renderTokens(params: {
   while (index < params.tokens.length) {
     const token = params.tokens[index];
 
+    if (token.type === "math") {
+      rendered.push(
+        <InlineMathToken
+          key={`math-${token.wordIndex}`}
+          token={token}
+          completedWordIndex={params.completedWordIndex}
+          currentWordIndex={params.currentWordIndex}
+        />,
+      );
+      index += 1;
+      continue;
+    }
+
     if (token.type === "word") {
       const annotation = params.wordAnnotations.get(token.wordIndex);
 
@@ -683,6 +697,13 @@ function renderTokens(params: {
             {runTokens.map((runToken, runIndex) =>
               runToken.type === "text" ? (
                 <span key={`highlight-text-${index + runIndex}`}>{runToken.text}</span>
+              ) : runToken.type === "math" ? (
+                <InlineMathToken
+                  key={`highlight-math-${runToken.wordIndex}`}
+                  token={runToken}
+                  completedWordIndex={params.completedWordIndex}
+                  currentWordIndex={params.currentWordIndex}
+                />
               ) : (
                 <WordToken
                   key={`highlight-word-${runToken.wordIndex}`}
@@ -789,6 +810,66 @@ function renderListItemTokens(params: {
   );
 }
 
+function normalizeMathExpression(expression: string) {
+  return expression
+    .replace(/\u000c(?=rac)/g, "\\f")
+    .replace(/\u0008(?=ar)/g, "\\b")
+    .replace(/\brac\{/g, "\\frac{")
+    .replace(/\\bar\{/g, "\\bar{")
+    .replace(/([A-Za-z])\\bar\{\}/g, "\\bar{$1}")
+    .replace(/I_\{p\\bar\{\}\}/g, "I_{\\bar{p}}")
+    .replace(/\bimes\b/g, "\\times")
+    .replace(/\s+\*\s+/g, " \\cdot ")
+    .replace(
+      /([A-Za-zČŠŽĆĐčšžćđ][\p{L}\p{N}]*)_\{([^{}\n]*\s[^{}\n]*)\}/gu,
+      (_match, base: string, subscript: string) =>
+        `${base}_{\\text{${subscript.replace(/[{}]/g, "").trim()}}}`,
+    );
+}
+
+function renderMathExpression(expression: string, displayMode = true) {
+  try {
+    return katex.renderToString(normalizeMathExpression(expression), {
+      displayMode,
+      throwOnError: true,
+      strict: false,
+      trust: false,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function InlineMathToken({
+  token,
+  completedWordIndex,
+  currentWordIndex,
+}: {
+  token: Extract<NoteTtsInlineToken, { type: "math" }>;
+  completedWordIndex: number;
+  currentWordIndex: number | null;
+}) {
+  const renderedMath = renderMathExpression(token.expression, false);
+  const stateClass =
+    token.wordIndex === currentWordIndex
+      ? "current"
+      : token.wordIndex <= completedWordIndex
+        ? "read"
+        : "";
+
+  return renderedMath ? (
+    <span
+      className={`note-read-inline-math ${stateClass}`}
+      dangerouslySetInnerHTML={{ __html: renderedMath }}
+      data-word-index={token.wordIndex}
+    />
+  ) : (
+    <span className={`note-read-word ${stateClass}`} data-word-index={token.wordIndex}>
+      {token.text}
+    </span>
+  );
+}
+
 function ReadAlongBlock({
   block,
   completedWordIndex,
@@ -873,6 +954,19 @@ function ReadAlongBlock({
           </tbody>
         </table>
       </div>
+    );
+  }
+
+  if (block.kind === "math") {
+    const renderedMath = renderMathExpression(block.expression);
+
+    return renderedMath ? (
+      <div
+        className="note-read-math"
+        dangerouslySetInnerHTML={{ __html: renderedMath }}
+      />
+    ) : (
+      <p className="note-read-math-fallback">{block.expression}</p>
     );
   }
 

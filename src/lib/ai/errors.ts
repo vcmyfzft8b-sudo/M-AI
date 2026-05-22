@@ -54,6 +54,16 @@ export function toUserFacingAiErrorMessage(error: unknown) {
     return "The AI provider is temporarily overloaded. Please retry this note in a minute.";
   }
 
+  if (
+    message.includes("invalid structured data") ||
+    message.includes("expected ','") ||
+    message.includes("expected ']'") ||
+    message.includes("expected '}'") ||
+    (message.includes("json") && message.includes("position"))
+  ) {
+    return "The AI response was malformed. Please retry this note.";
+  }
+
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message;
   }

@@ -162,6 +162,105 @@ async function logGenerationAttempt(params: {
   });
 }
 
+async function repairStructuredOutputWithGemini<TSchema extends z.ZodTypeAny>(params: {
+  ai: GoogleGenAI;
+  schema: TSchema;
+  responseSchema: unknown;
+  model: string;
+  invalidOutputText: string;
+  parseError: unknown;
+  maxOutputTokens?: number;
+  thinkingConfig?: ThinkingConfig;
+  usageContext?: GeminiUsageContext;
+  metadata?: Record<string, unknown>;
+  stage: string;
+  attemptIndex: number;
+  useResponseSchema: boolean;
+}) {
+  let response:
+    | Awaited<ReturnType<typeof params.ai.models.generateContent>>
+    | undefined;
+  const repairMaxOutputTokens = params.maxOutputTokens
+    ? Math.round(params.maxOutputTokens * 1.25)
+    : undefined;
+
+  try {
+    response = await withTimeout(
+      params.ai.models.generateContent({
+        model: params.model,
+        contents: `Repair this malformed JSON output.
+
+Rules:
+- Return exactly one valid JSON object.
+- Preserve the original content as much as possible.
+- Do not add markdown fences.
+- Do not explain the repair.
+- The repaired object must match this JSON schema:
+${JSON.stringify(params.responseSchema)}
+
+Parser error:
+${toErrorMessage(params.parseError)}
+
+Malformed JSON:
+${params.invalidOutputText}`,
+        config: {
+          responseMimeType: "application/json",
+          ...(params.useResponseSchema ? { responseSchema: params.responseSchema } : {}),
+          maxOutputTokens: repairMaxOutputTokens,
+          ...(params.thinkingConfig ? { thinkingConfig: params.thinkingConfig } : {}),
+        },
+      }),
+      GEMINI_GENERATION_TIMEOUT_MS,
+      "Gemini structured JSON repair",
+    );
+
+    const repairedOutputText = stripCodeFences(response.text ?? "");
+
+    if (!repairedOutputText) {
+      throw new Error("Model returned empty repaired structured output.");
+    }
+
+    const repaired = parseStructuredText(params.schema, repairedOutputText);
+
+    await logGenerationAttempt({
+      model: params.model,
+      stage: `${params.stage}_repair`,
+      attemptIndex: params.attemptIndex,
+      success: true,
+      usageContext: params.usageContext,
+      usageMetadata: response.usageMetadata,
+      metadata: {
+        ...(params.metadata ?? {}),
+        repairOfAttemptIndex: params.attemptIndex,
+        maxOutputTokens: repairMaxOutputTokens,
+        responseMimeType: "application/json",
+        responseSchema: params.useResponseSchema,
+      },
+    });
+
+    return repaired;
+  } catch (error) {
+    await logGenerationAttempt({
+      model: params.model,
+      stage: `${params.stage}_repair`,
+      attemptIndex: params.attemptIndex,
+      success: false,
+      usageContext: params.usageContext,
+      usageMetadata: response?.usageMetadata,
+      metadata: {
+        ...(params.metadata ?? {}),
+        repairOfAttemptIndex: params.attemptIndex,
+        maxOutputTokens: repairMaxOutputTokens,
+        responseMimeType: "application/json",
+        responseSchema: params.useResponseSchema,
+      },
+      error,
+    });
+
+    return null;
+  }
+}
+
 export function getGeminiClient() {
   if (!geminiClient) {
     const env = requireGeminiEnv();
@@ -205,6 +304,7 @@ export async function generateStructuredObjectWithGemini<TSchema extends z.ZodTy
       let response:
         | Awaited<ReturnType<typeof ai.models.generateContent>>
         | undefined;
+      let outputText: string | null = null;
 
       try {
         response = await withTimeout(
@@ -228,7 +328,7 @@ ${params.input}`,
           "Gemini structured generation",
         );
 
-        const outputText = stripCodeFences(response.text ?? "");
+        outputText = stripCodeFences(response.text ?? "");
 
         if (!outputText) {
           throw new Error("Model returned empty structured output.");
@@ -268,6 +368,28 @@ ${params.input}`,
           error,
         });
 
+        if (outputText && isStructuredOutputError(error)) {
+          const repaired = await repairStructuredOutputWithGemini({
+            ai,
+            schema: params.schema,
+            responseSchema,
+            model: params.model,
+            invalidOutputText: outputText,
+            parseError: error,
+            maxOutputTokens,
+            thinkingConfig: params.thinkingConfig,
+            usageContext: params.usageContext,
+            metadata: params.metadata,
+            stage: "gemini_structured_text",
+            attemptIndex: attempt,
+            useResponseSchema,
+          });
+
+          if (repaired) {
+            return repaired;
+          }
+        }
+
         throw error;
       }
     } catch (error) {
@@ -285,7 +407,11 @@ ${params.input}`,
     }
   }
 
-  throw new Error(toErrorMessage(lastError));
+  throw new Error(
+    isStructuredOutputError(lastError)
+      ? "The AI returned invalid structured data after multiple repair attempts. Please retry this note."
+      : toErrorMessage(lastError),
+  );
 }
 
 export async function generateStructuredObjectWithGeminiFile<TSchema extends z.ZodTypeAny>(params: {
@@ -336,6 +462,7 @@ export async function generateStructuredObjectWithGeminiFile<TSchema extends z.Z
         let response:
           | Awaited<ReturnType<typeof ai.models.generateContent>>
           | undefined;
+        let outputText: string | null = null;
 
         try {
           response = await withTimeout(
@@ -363,7 +490,7 @@ ${JSON.stringify(responseSchema)}`,
             "Gemini document extraction",
           );
 
-          const outputText = stripCodeFences(response.text ?? "");
+          outputText = stripCodeFences(response.text ?? "");
 
           if (!outputText) {
             throw new Error("Model returned empty structured output.");
@@ -405,6 +532,31 @@ ${JSON.stringify(responseSchema)}`,
             error,
           });
 
+          if (outputText && isStructuredOutputError(error)) {
+            const repaired = await repairStructuredOutputWithGemini({
+              ai,
+              schema: params.schema,
+              responseSchema,
+              model: params.model,
+              invalidOutputText: outputText,
+              parseError: error,
+              maxOutputTokens,
+              thinkingConfig: params.thinkingConfig,
+              usageContext: params.usageContext,
+              stage: "gemini_structured_file",
+              attemptIndex: attempt,
+              useResponseSchema,
+              metadata: {
+                fileMimeType: uploaded.mimeType ?? params.file.type ?? "application/octet-stream",
+                mediaResolution: params.mediaResolution,
+              },
+            });
+
+            if (repaired) {
+              return repaired;
+            }
+          }
+
           throw error;
         }
       } catch (error) {
@@ -422,7 +574,11 @@ ${JSON.stringify(responseSchema)}`,
       }
     }
 
-    throw new Error(toErrorMessage(lastError));
+    throw new Error(
+      isStructuredOutputError(lastError)
+        ? "The AI returned invalid structured data after multiple repair attempts. Please retry this note."
+        : toErrorMessage(lastError),
+    );
   } finally {
     await fs.rm(tempPath, { force: true }).catch(() => null);
 

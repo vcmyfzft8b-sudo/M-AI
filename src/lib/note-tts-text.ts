@@ -12,6 +12,12 @@ export type NoteTtsInlineToken =
       type: "word";
       text: string;
       wordIndex: number;
+    }
+  | {
+      type: "math";
+      text: string;
+      expression: string;
+      wordIndex: number;
     };
 
 export type NoteTtsTextBlock = {
@@ -45,7 +51,18 @@ export type NoteTtsTableBlock = {
   }>;
 };
 
-export type NoteTtsBlock = NoteTtsTextBlock | NoteTtsListBlock | NoteTtsTableBlock;
+export type NoteTtsMathBlock = {
+  id: string;
+  kind: "math";
+  expression: string;
+  tokens: NoteTtsInlineToken[];
+};
+
+export type NoteTtsBlock =
+  | NoteTtsTextBlock
+  | NoteTtsListBlock
+  | NoteTtsTableBlock
+  | NoteTtsMathBlock;
 
 export type NoteTtsDocument = {
   blocks: NoteTtsBlock[];
@@ -112,7 +129,9 @@ function cleanMarkdownLine(line: string) {
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
-    .replace(/[*_~]{1,3}([^*_~]+)[*_~]{1,3}/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/~~([^~]+)~~/g, "$1")
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -201,42 +220,238 @@ function splitTableCells(line: string) {
   return withoutOuterPipes.split("|").map((cell) => cleanMarkdownLine(cell));
 }
 
+function stripMathDelimiters(value: string) {
+  return value
+    .trim()
+    .replace(/^\$\$\s*/, "")
+    .replace(/\s*\$\$$/, "")
+    .replace(/^\$\s*/, "")
+    .replace(/\s*\$$/, "")
+    .trim();
+}
+
+function isInlineMathLine(value: string) {
+  return /^\$[^$\n]+\$$/.test(value.trim()) && /[=\\_^{}]/.test(value);
+}
+
+function isLikelyMathExpression(value: string) {
+  return /[=\\_^{}]|(?:\b(?:sqrt|frac|rac|sum|times|imes|cdot|bar)\b)/.test(value);
+}
+
+function isLikelyMarkdownBlockStart(value: string) {
+  const trimmed = value.trim();
+
+  return (
+    /^#{1,6}\s+/.test(trimmed) ||
+    /^[-*+]\s+/.test(trimmed) ||
+    /^\d+[.)]\s+/.test(trimmed) ||
+    /^>\s+/.test(trimmed) ||
+    trimmed.includes("|")
+  );
+}
+
+function stripOpeningMathDelimiter(value: string) {
+  return value.trim().replace(/^\${2,3}\s*/, "");
+}
+
+function stripClosingMathDelimiter(value: string) {
+  return value.trim().replace(/\s*\${2,3}$/, "");
+}
+
+function splitLeadingMathDelimiter(value: string) {
+  const trimmed = value.trim();
+  const match = /^(\${2,3})([\s\S]*)$/.exec(trimmed);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    delimiter: match[1],
+    rest: match[2].trim(),
+  };
+}
+
+function cleanFormulaExplanation(value: string) {
+  return cleanMarkdownLine(value.replace(/\$\s*([^$\n]+?)\s*\$/g, "$1"))
+    .replace(/^[,.;:\s]+/, "")
+    .trim();
+}
+
+function splitMalformedTrailingMathDelimiter(value: string) {
+  const dollarIndex = value.indexOf("$");
+
+  if (dollarIndex <= 0) {
+    return null;
+  }
+
+  const expression = value.slice(0, dollarIndex).trim();
+  const explanation = value.slice(dollarIndex + 1);
+
+  if (!expression || !isLikelyMathExpression(expression)) {
+    return null;
+  }
+
+  return {
+    expression: stripMathDelimiters(expression),
+    explanation: cleanFormulaExplanation(explanation),
+  };
+}
+
+function extractFormulaPartsFromLine(value: string) {
+  const trimmed = value.trim();
+  const labeledInlineMathMatch = /^(?:[-*+]\s+)?(?:\*\*)?(?:Formula|Enačba|Equation)\b(?:\*\*)?[^$\n]*\$\s*([^$\n]{3,700}?)\s*\$(.*)$/iu.exec(
+    trimmed,
+  );
+
+  if (labeledInlineMathMatch?.[1] && isLikelyMathExpression(labeledInlineMathMatch[1])) {
+    return {
+      expression: labeledInlineMathMatch[1].trim(),
+      explanation: cleanFormulaExplanation(labeledInlineMathMatch[2] ?? ""),
+    };
+  }
+
+  const standaloneInlineMathMatch = /^\$\s*([^$\n]{3,700}?)\s*\$(.*)$/u.exec(trimmed);
+
+  if (standaloneInlineMathMatch?.[1] && isLikelyMathExpression(standaloneInlineMathMatch[1])) {
+    return {
+      expression: standaloneInlineMathMatch[1].trim(),
+      explanation: cleanFormulaExplanation(standaloneInlineMathMatch[2] ?? ""),
+    };
+  }
+
+  if (/\$[^$\n]+\$/.test(trimmed)) {
+    return null;
+  }
+
+  const labeledPlainMatch = /^(?:[-*+]\s+)?(?:\*\*)?(?:Formula|Enačba|Equation)\s*:?(?:\*\*)?\s*(.{3,700})$/iu.exec(
+    trimmed,
+  );
+
+  if (labeledPlainMatch?.[1] && isLikelyMathExpression(labeledPlainMatch[1])) {
+    const malformedDelimitedFormula = splitMalformedTrailingMathDelimiter(labeledPlainMatch[1]);
+
+    if (malformedDelimitedFormula) {
+      return malformedDelimitedFormula;
+    }
+
+    return {
+      expression: stripMathDelimiters(labeledPlainMatch[1]),
+      explanation: "",
+    };
+  }
+
+  const plainEquationMatch = /^(?:[-*+]\s+)?(.{1,700}=.{1,700})$/u.exec(trimmed);
+
+  if (
+    plainEquationMatch?.[1] &&
+    isLikelyMathExpression(plainEquationMatch[1])
+  ) {
+    const malformedDelimitedFormula = splitMalformedTrailingMathDelimiter(plainEquationMatch[1]);
+
+    if (malformedDelimitedFormula) {
+      return malformedDelimitedFormula;
+    }
+
+    return {
+      expression: stripMathDelimiters(plainEquationMatch[1]),
+      explanation: "",
+    };
+  }
+
+  return null;
+}
+
+const INLINE_MATH_PATTERN =
+  /\$([^$\n]{1,180})\$|\\(?:bar|frac|sum|sqrt|cdot|Delta|delta|alpha|beta|gamma|lambda|mu|sigma|theta|pi)\{[^{}\n]+\}(?:[_^](?:\{[^{}\n]+\}|[\p{L}\p{N}-]+))?|[\p{L}][\p{L}\p{N}]*(?:_\{[^{}\n]+\}|_[\p{L}\p{N}-]+)(?:\^\{[^{}\n]+\}|\^[\p{L}\p{N}-]+)?/gu;
+
+function normalizeInlineMathExpression(value: string) {
+  return stripMathDelimiters(value)
+    .replace(/\u000c(?=rac)/g, "\\f")
+    .replace(/\u0008(?=ar)/g, "\\b")
+    .replace(/\brac\{/g, "\\frac{")
+    .replace(/\\bar\{/g, "\\bar{")
+    .replace(/([A-Za-z])\\bar\{\}/g, "\\bar{$1}")
+    .replace(/I_\{p\\bar\{\}\}/g, "I_{\\bar{p}}")
+    .replace(/\bimes\b/g, "\\times")
+    .replace(/\s+\*\s+/g, " \\cdot ")
+    .trim();
+}
+
 function tokenizeLine(text: string, nextWordIndex: number) {
   const tokens: NoteTtsInlineToken[] = [];
   const words: NoteTtsWord[] = [];
-  let lastIndex = 0;
   let wordIndex = nextWordIndex;
 
-  for (const match of text.matchAll(WORD_PATTERN)) {
-    const matchIndex = match.index ?? 0;
-    const word = match[0];
+  function pushPlainText(value: string) {
+    let lastIndex = 0;
 
-    if (matchIndex > lastIndex) {
+    for (const match of value.matchAll(WORD_PATTERN)) {
+      const matchIndex = match.index ?? 0;
+      const word = match[0];
+
+      if (matchIndex > lastIndex) {
+        tokens.push({
+          type: "text",
+          text: value.slice(lastIndex, matchIndex),
+        });
+      }
+
+      tokens.push({
+        type: "word",
+        text: word,
+        wordIndex,
+      });
+      words.push({
+        index: wordIndex,
+        text: word,
+      });
+
+      wordIndex += 1;
+      lastIndex = matchIndex + word.length;
+    }
+
+    if (lastIndex < value.length) {
       tokens.push({
         type: "text",
-        text: text.slice(lastIndex, matchIndex),
+        text: value.slice(lastIndex),
       });
+    }
+  }
+
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(INLINE_MATH_PATTERN)) {
+    const matchIndex = match.index ?? 0;
+    const rawExpression = match[1] ?? match[0];
+    const expression = normalizeInlineMathExpression(rawExpression);
+    const wasDollarDelimited = Boolean(match[1]);
+
+    if (!expression || (!wasDollarDelimited && !/[\\_^{}=]/.test(expression))) {
+      continue;
+    }
+
+    if (matchIndex > lastIndex) {
+      pushPlainText(text.slice(lastIndex, matchIndex));
     }
 
     tokens.push({
-      type: "word",
-      text: word,
+      type: "math",
+      text: expression,
+      expression,
       wordIndex,
     });
     words.push({
       index: wordIndex,
-      text: word,
+      text: expression,
     });
 
     wordIndex += 1;
-    lastIndex = matchIndex + word.length;
+    lastIndex = matchIndex + match[0].length;
   }
 
   if (lastIndex < text.length) {
-    tokens.push({
-      type: "text",
-      text: text.slice(lastIndex),
-    });
+    pushPlainText(text.slice(lastIndex));
   }
 
   return {
@@ -276,6 +491,43 @@ export function parseNoteTtsDocument(markdown: string): NoteTtsDocument {
     pendingList = null;
   }
 
+  function pushMathBlock(expression: string) {
+    const cleanedExpression = expression.trim();
+
+    if (!cleanedExpression) {
+      return;
+    }
+
+    const speechText = cleanedExpression
+      .replace(/\\/g, " ")
+      .replace(/[{}_$^]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const tokens = tokenizeText(speechText);
+
+    blocks.push({
+      id: `note-tts-block-${blocks.length}`,
+      kind: "math",
+      expression: cleanedExpression,
+      tokens: tokens ?? [],
+    });
+  }
+
+  function pushParagraph(text: string) {
+    const cleanedText = cleanMarkdownLine(text);
+    const tokens = tokenizeText(cleanedText);
+
+    if (!tokens) {
+      return;
+    }
+
+    blocks.push({
+      id: `note-tts-block-${blocks.length}`,
+      kind: "paragraph",
+      tokens,
+    });
+  }
+
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     const rawLine = lines[lineIndex];
     const trimmed = rawLine.trim();
@@ -287,6 +539,83 @@ export function parseNoteTtsDocument(markdown: string): NoteTtsDocument {
     }
 
     if (inCodeBlock) {
+      continue;
+    }
+
+    const formulaParts = extractFormulaPartsFromLine(trimmed);
+
+    if (formulaParts) {
+      flushList();
+      pushMathBlock(formulaParts.expression);
+      pushParagraph(formulaParts.explanation);
+      continue;
+    }
+
+    if (trimmed.startsWith("$$")) {
+      flushList();
+
+      const opening = splitLeadingMathDelimiter(trimmed);
+      const openingRest = opening?.rest ?? "";
+
+      if (openingRest && !isLikelyMathExpression(openingRest)) {
+        lines.splice(lineIndex + 1, 0, openingRest);
+        continue;
+      }
+
+      if (openingRest && /\${2,3}\s*$/.test(openingRest)) {
+        pushMathBlock(stripClosingMathDelimiter(openingRest));
+        continue;
+      }
+
+      const mathLines: string[] = [];
+
+      if (openingRest) {
+        mathLines.push(stripClosingMathDelimiter(openingRest));
+      }
+
+      let foundClosingDelimiter = false;
+
+      while (lineIndex + 1 < lines.length) {
+        lineIndex += 1;
+        const mathLine = lines[lineIndex].trim();
+        const leadingClose = splitLeadingMathDelimiter(mathLine);
+
+        if (leadingClose) {
+          foundClosingDelimiter = true;
+
+          if (leadingClose.rest) {
+            lines.splice(lineIndex + 1, 0, leadingClose.rest);
+          }
+
+          break;
+        }
+
+        if (isLikelyMarkdownBlockStart(mathLine) && mathLines.some((line) => line.trim())) {
+          lineIndex -= 1;
+          break;
+        }
+
+        if (/\${2,3}\s*$/.test(mathLine)) {
+          foundClosingDelimiter = true;
+          mathLines.push(stripClosingMathDelimiter(mathLine));
+          break;
+        }
+
+        mathLines.push(mathLine);
+      }
+
+      if (mathLines.some((line) => line.trim())) {
+        pushMathBlock(mathLines.filter(Boolean).join(" "));
+      } else if (!foundClosingDelimiter) {
+        pushParagraph(stripOpeningMathDelimiter(trimmed));
+      }
+
+      continue;
+    }
+
+    if (isInlineMathLine(trimmed)) {
+      flushList();
+      pushMathBlock(stripMathDelimiters(trimmed));
       continue;
     }
 
@@ -452,8 +781,8 @@ export function buildNoteTtsChunks(
     /^\d+[\s.)]/.test(secondBlock.tokens.map((token) => token.text).join("").trim());
   const wordStartOffset = shouldSkipDuplicatedPageTitle
     ? firstBlock.tokens.filter(
-        (token): token is Extract<NoteTtsInlineToken, { type: "word" }> =>
-          token.type === "word",
+        (token): token is Extract<NoteTtsInlineToken, { type: "word" | "math" }> =>
+          token.type === "word" || token.type === "math",
       ).length
     : 0;
 
@@ -561,6 +890,10 @@ function buildBlockSpeechText(
       )
       .filter(Boolean)
       .join(SPEECH_LIST_ITEM_SEPARATOR);
+  }
+
+  if (block.kind === "math") {
+    return ensureSpeechPause(tokensToSpeechText(block.tokens, wordStartIndex, wordEndIndex));
   }
 
   return ensureSpeechPause(tokensToSpeechText(block.tokens, wordStartIndex, wordEndIndex));

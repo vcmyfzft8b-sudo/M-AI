@@ -1,6 +1,10 @@
 import "server-only";
 
-import { chunkSummarySchema, noteArtifactSchema } from "@/lib/ai/schemas";
+import {
+  noteArtifactSchema,
+  noteCoverageExtractionSchema,
+  noteCoverageReviewSchema,
+} from "@/lib/ai/schemas";
 import { generateStructuredObject } from "@/lib/ai/json";
 import { buildTranscriptWindows } from "@/lib/chunking";
 import {
@@ -8,9 +12,45 @@ import {
   normalizeNoteLanguage,
   resolveNoteLanguageLabel,
 } from "@/lib/languages";
+import { getServerEnv } from "@/lib/server-env";
 import type { NoteGenerationResult, TranscriptSegmentInput } from "@/lib/types";
 
-const NOTE_CHUNK_SUMMARY_CONCURRENCY = 2;
+const NOTE_COVERAGE_EXTRACTION_CONCURRENCY = 2;
+const DIRECT_DOCUMENT_SOURCE_MAX_CHARS = 60_000;
+const DIRECT_AUDIO_SOURCE_MAX_CHARS = 42_000;
+
+type CoverageUnit = {
+  category:
+    | "concept"
+    | "definition"
+    | "formula"
+    | "example"
+    | "comparison"
+    | "process"
+    | "warning"
+    | "exercise"
+    | "ocr_addition";
+  heading: string;
+  details: string[];
+  sourceEvidence: string;
+  importance: "core" | "supporting" | "context";
+  needsExplanation: boolean;
+};
+
+type NoteLengthLimits = {
+  sourceSize: "short" | "modest" | "long";
+  targetNoteWords: number;
+  maxNoteWords: number;
+  maxKeyTopics: number;
+  maxKeyThingBullets: number;
+  maxNumberedSections: number;
+  maxOverviewSentences: number;
+  maxCheckQuestions: number;
+  maxFinalReviewBullets: number;
+  tablePolicy: string;
+};
+
+type NoteGenerationMode = "study_value" | "strict_limits";
 
 export function countWords(value: string) {
   return value.trim().split(/\s+/).filter(Boolean).length;
@@ -76,27 +116,12 @@ function normalizeStudyListSections(markdown: string) {
   const lines = markdown.split("\n");
   const normalizedLines: string[] = [];
   let inListSection = false;
-  let keptCalloutCount = 0;
 
   for (const line of lines) {
     const blockquote = /^>\s+(.+)$/.exec(line.trim());
 
     if (blockquote) {
-      const content = blockquote[1];
-      const normalizedContent = content
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/\p{Diacritic}/gu, "");
-      const isExample = /^\*\*(primer|example):\*\*/.test(normalizedContent);
-      const shouldKeepCallout = keptCalloutCount < 3 && (!isExample || keptCalloutCount === 0);
-
-      if (shouldKeepCallout) {
-        keptCalloutCount += 1;
-        normalizedLines.push(line);
-      } else {
-        normalizedLines.push(content);
-      }
-
+      normalizedLines.push(line);
       continue;
     }
 
@@ -136,28 +161,169 @@ function normalizeStudyListSections(markdown: string) {
   return normalizedLines.join("\n");
 }
 
-function buildNoteTargets(sourceWordCount: number, chunkCount: number) {
-  const targetNoteWordCount = Math.max(700, Math.min(3200, Math.round(sourceWordCount * 0.42)));
-
-  return {
-    targetNoteWordCount,
-    minNoteWordCount: Math.max(700, Math.round(targetNoteWordCount * 0.88)),
-    maxNoteWordCount: Math.max(900, Math.min(2400, Math.round(targetNoteWordCount * 1.18))),
-    minSectionCount: Math.max(4, Math.min(12, chunkCount)),
-    recommendedTopicCount: Math.max(4, Math.min(9, Math.ceil(chunkCount / 1.8))),
-  };
+function cleanMathFormula(formula: string) {
+  return formula.replace(/\s+/g, " ").trim();
 }
 
-function buildAudioNoteTargets(sourceWordCount: number, chunkCount: number) {
-  const targetNoteWordCount = Math.max(1200, Math.min(5200, Math.round(sourceWordCount * 0.58)));
+function shouldRenderAsMath(formula: string) {
+  return /[=\\_^{}]/.test(formula);
+}
 
-  return {
-    targetNoteWordCount,
-    minNoteWordCount: Math.max(1100, Math.round(targetNoteWordCount * 0.86)),
-    maxNoteWordCount: Math.max(1500, Math.min(5600, Math.round(targetNoteWordCount * 1.18))),
-    minSectionCount: Math.max(6, Math.min(18, Math.ceil(chunkCount * 1.15))),
-    recommendedTopicCount: Math.max(6, Math.min(14, Math.ceil(chunkCount / 1.5))),
-  };
+function normalizeFormulaMarkdown(markdown: string) {
+  return markdown
+    .replace(/\${3,}/g, "$$")
+    .replace(/\$\$(?=\s*(?:[-*+]\s|#{1,6}\s|>))/g, "$$\n")
+    .replace(/\$\$\s*([\s\S]*?)\s*\$\$/g, (_match, formula: string) => {
+      const cleanedFormula = cleanMathFormula(formula);
+
+      if (!shouldRenderAsMath(cleanedFormula)) {
+        return cleanedFormula;
+      }
+
+      return `\n\n$$\n${cleanedFormula}\n$$\n\n`;
+    })
+    .replace(/(\bFormula\b[^$\n]{0,80}?)\s*\$\s*([^$\n]{3,420}?)\s*\$/gi, (_match, label: string, formula: string) => {
+      const cleanedFormula = cleanMathFormula(formula);
+
+      if (!shouldRenderAsMath(cleanedFormula)) {
+        return `${label} ${cleanedFormula}`;
+      }
+
+      return `${label.trim()}\n\n$$\n${cleanedFormula}\n$$`;
+    })
+    .replace(/\$\s*([^$\n]{3,420}?)\s*\$/g, (_match, formula: string) => {
+      const cleanedFormula = cleanMathFormula(formula);
+
+      if (!shouldRenderAsMath(cleanedFormula)) {
+        return cleanedFormula;
+      }
+
+      return `$$\n${cleanedFormula}\n$$`;
+    })
+    .replace(/\bFormula\s*:/gi, "Formula:");
+}
+
+function normalizeTitleForComparison(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanTitleCandidate(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const cleaned = value
+    .replace(/^#+\s*/, "")
+    .replace(/^\d+[\s.)-]+/, "")
+    .replace(/[*_~`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (cleaned.length < 3) {
+    return null;
+  }
+
+  return cleaned.length > 96 ? cleaned.slice(0, 96).replace(/[,\s;:-]+$/u, "").trim() : cleaned;
+}
+
+function isGenericNoteTitle(value?: string | null) {
+  const cleaned = cleanTitleCandidate(value);
+
+  if (!cleaned) {
+    return true;
+  }
+
+  const normalized = normalizeTitleForComparison(cleaned);
+  const genericTitles = new Set([
+    "hiter pregled",
+    "quick overview",
+    "overview",
+    "pregled",
+    "zapiski",
+    "notes",
+    "lecture notes",
+    "structured notes",
+    "student ready notes",
+    "study notes",
+  ]);
+
+  return genericTitles.has(normalized);
+}
+
+function titleCaseFirst(value: string) {
+  return value.charAt(0).toLocaleUpperCase() + value.slice(1);
+}
+
+function deriveTitleFromSummary(summary?: string | null) {
+  const firstSentence = cleanTitleCandidate(summary?.split(/[.!?]\s/u)[0]);
+
+  if (!firstSentence) {
+    return null;
+  }
+
+  const withoutLead = firstSentence
+    .replace(/^(predavanje|gradivo|zapiski|snov)\s+(obravnava|pojasnjuje|razlozi|razlaga|predstavi)\s+/iu, "")
+    .replace(/^(the\s+)?(lecture|material|source|notes)\s+(covers|explains|discusses|presents)\s+/iu, "")
+    .replace(/^kljucne\s+vidike\s+/iu, "")
+    .replace(/^ključne\s+vidike\s+/iu, "")
+    .trim();
+
+  if (!withoutLead || isGenericNoteTitle(withoutLead)) {
+    return null;
+  }
+
+  return cleanTitleCandidate(titleCaseFirst(withoutLead));
+}
+
+function deriveTitleFromTopics(keyTopics: string[], coverageUnits: CoverageUnit[]) {
+  const candidates = [
+    ...keyTopics,
+    ...coverageUnits
+      .filter((unit) => unit.importance === "core")
+      .map((unit) => unit.heading),
+    ...coverageUnits.map((unit) => unit.heading),
+  ]
+    .map(cleanTitleCandidate)
+    .filter((candidate): candidate is string => Boolean(candidate) && !isGenericNoteTitle(candidate));
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+
+  return cleanTitleCandidate(`${candidates[0]} in ${candidates[1]}`);
+}
+
+function normalizeGeneratedNoteTitle(params: {
+  title?: string | null;
+  sourceTitleHint?: string | null;
+  summary?: string | null;
+  keyTopics: string[];
+  coverageUnits: CoverageUnit[];
+  sourceType: "audio" | "document";
+}) {
+  if (!isGenericNoteTitle(params.title)) {
+    return cleanTitleCandidate(params.title) ?? params.title ?? "Zapiski";
+  }
+
+  if (!isGenericNoteTitle(params.sourceTitleHint)) {
+    return cleanTitleCandidate(params.sourceTitleHint) ?? params.sourceTitleHint ?? "Zapiski";
+  }
+
+  return (
+    deriveTitleFromSummary(params.summary) ??
+    deriveTitleFromTopics(params.keyTopics, params.coverageUnits) ??
+    (params.sourceType === "audio" ? "Predavanje" : "Zapiski")
+  );
 }
 
 function getStructuredPlusLabels(outputLanguage?: string | null) {
@@ -200,86 +366,443 @@ function getStructuredPlusLabels(outputLanguage?: string | null) {
   };
 }
 
+function buildCoverageUnitKey(unit: Pick<CoverageUnit, "category" | "heading">) {
+  return `${unit.category}:${unit.heading}`
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function mergeImportance(
+  left: CoverageUnit["importance"],
+  right: CoverageUnit["importance"],
+): CoverageUnit["importance"] {
+  const rank: Record<CoverageUnit["importance"], number> = {
+    context: 0,
+    supporting: 1,
+    core: 2,
+  };
+
+  return rank[right] > rank[left] ? right : left;
+}
+
+function dedupeCoverageUnits(units: CoverageUnit[]) {
+  const byKey = new Map<string, CoverageUnit>();
+
+  for (const unit of units) {
+    const key = buildCoverageUnitKey(unit);
+    const existing = byKey.get(key);
+
+    if (!existing) {
+      byKey.set(key, {
+        ...unit,
+        details: unit.details.slice(0, 6),
+      });
+      continue;
+    }
+
+    const mergedDetails = [...existing.details];
+
+    for (const detail of unit.details) {
+      const normalized = detail
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "");
+
+      if (
+        !mergedDetails.some((existingDetail) =>
+          existingDetail
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/\p{Diacritic}/gu, "")
+            .includes(normalized.slice(0, 40)),
+        )
+      ) {
+        mergedDetails.push(detail);
+      }
+    }
+
+    byKey.set(key, {
+      ...existing,
+      details: mergedDetails.slice(0, 6),
+      sourceEvidence:
+        existing.sourceEvidence.length >= unit.sourceEvidence.length
+          ? existing.sourceEvidence
+          : unit.sourceEvidence,
+      importance: mergeImportance(existing.importance, unit.importance),
+      needsExplanation: existing.needsExplanation || unit.needsExplanation,
+    });
+  }
+
+  return Array.from(byKey.values()).sort((left, right) => {
+    const importanceRank: Record<CoverageUnit["importance"], number> = {
+      core: 0,
+      supporting: 1,
+      context: 2,
+    };
+
+    return importanceRank[left.importance] - importanceRank[right.importance];
+  });
+}
+
+function buildCoverageExtractionInstructions(params: {
+  outputLanguage?: string | null;
+  sourceType: "audio" | "document";
+}) {
+  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
+
+  return `${languageInstruction} Extract the distinct learning units from this source chunk so final notes can cover the material well without repetition.
+
+Return only source-supported units. Prefer useful study material over filler:
+- concepts, definitions, formulas, named methods, categories, comparisons, process steps, warnings/common mistakes, worked examples, exercises, and important OCR/handwritten additions;
+- include formulas and explainable symbols as formula units;
+- include exercises or worked numerical examples as exercise/example units;
+- skip repeated learning objectives, page headers, duplicated slide titles, navigation text, and decorative text;
+- split different ideas into separate units, but do not create duplicates for the same idea.
+
+For every unit, include enough details for a student-friendly explanation later. Use "core" importance for exam-relevant material, "supporting" for helpful details/examples, and "context" only when needed to understand the topic.`;
+}
+
 function buildStructuredPlusInstructions(params: {
   outputLanguage?: string | null;
-  targetNoteWordCount: number;
-  minNoteWordCount: number;
-  maxNoteWordCount: number;
-  recommendedTopicCount: number;
 }) {
   const labels = getStructuredPlusLabels(params.outputLanguage);
 
-  return `Use a research-based "compressed expert study notes" style: select the important ideas, organize them clearly, signal what matters, and remove repetition or low-value wording. Cover the material by concepts, not by rewriting every sentence.
+  return `Use a student-friendly study-note style: cover the source thoroughly, explain it clearly, and remove repetition or low-value wording. These are not shallow recap notes, but they must still be summarized study notes instead of a rewritten version of the source. They should help a student understand and study the material without needing the original document open.
+
+Title rule:
+- The JSON "title" field must be a concise title for what the source is actually about.
+- Never use section labels as the title. Forbidden titles include "${labels.overview.replace(/^#+\s*/, "")}", "Quick Overview", "Overview", "Pregled", "Notes", and "Zapiski".
+- The first heading inside structuredNotesMd should still be "${labels.overview}", but that heading is not the artifact title.
 
 Use this stable Structured Plus markdown format with these exact heading labels:
-- Start with "${labels.overview}" containing 2-3 concise sentences that explain the whole material.
-- Immediately after "${labels.overview}", add exactly one semantic blockquote callout in this form: "> **${labels.keyTakeaway}:** ...". This creates the main visual highlight.
-- Add "${labels.keyThings}" with 5-8 complete bullet points for the main ideas.
-- After "${labels.keyThings}", include exactly one concise GFM markdown table when the source contains at least three comparable concepts, categories, systems, components, terms, steps, or cause-effect relationships. Most lecture/course materials have at least one logical table, so include the table unless the source truly has no comparable set.
-- Then create about ${params.recommendedTopicCount} numbered topic sections such as "${labels.topicExample}". Merge related chunks into one topic instead of creating a section for every chunk. Never create more than ${params.recommendedTopicCount + 1} numbered topic sections.
+- Start with "${labels.overview}" containing a concise, plain-language explanation of the whole material.
+- Immediately after "${labels.overview}", add a semantic blockquote callout in this form: "> **${labels.keyTakeaway}:** ...". This creates the main visual highlight.
+- Add "${labels.keyThings}" with complete bullets for the main ideas a student must remember.
+- After "${labels.keyThings}", include a concise GFM markdown table when it makes terminology, comparisons, categories, formulas, steps, or cause-effect relationships easier to understand than prose.
+- Then create as many numbered topic sections as the source needs, such as "${labels.topicExample}". Merge duplicates and closely related chunks, but do not merge unrelated learning units just to make the note shorter.
 - Inside each substantial topic, use "${labels.coreIdea}" and "${labels.detailedNotes}". Use "${labels.keyTerms}", "${labels.example}", "${labels.compare}", "${labels.process}", or "${labels.checkYourself}" only when they add real study value.
-- "${labels.coreIdea}" must be exactly 1 sentence.
-- "${labels.detailedNotes}" should usually contain 1 short explanatory paragraph plus 2-3 hyphen bullets. Use 4 bullets only when the section contains a true component list or process. Do not force every concept into a bullet.
-- Use hyphen bullet lists only when the material is naturally list-like: steps, components, causes, benefits, risks, grouped examples, questions, takeaways, or direct comparisons. This follows good study-note design by segmenting related ideas so learners can scan, compare, and self-test more easily.
-- Avoid nested bullet lists unless the source contains an actual component list or process. If nested bullets are needed, keep them short and do not use more than one nested list in a topic.
+- "${labels.coreIdea}" should be a simple explanation of the main point of that topic.
+- "${labels.detailedNotes}" should explain what the concept means, how it works, and why it matters. Use enough detail for understanding, but avoid filler.
+- Use hyphen bullet lists when the material is naturally list-like: steps, components, causes, benefits, risks, grouped examples, questions, takeaways, or direct comparisons.
+- Avoid nested bullet lists unless the source contains an actual component list or process. If nested bullets are needed, keep them short.
 - Use labeled bullets only when the label is semantically important, for example "- **${labels.definition}:** ...", "- **${labels.keyTakeaway}:** ...", "- **${labels.example}:** ...", "- **Razlika:** ...", "- **Korak:** ...", "- **Pazi:** ...". Do not label every ordinary bullet just for style.
 - When a concept has multiple examples, use a short hyphen list under the concept. Do not write examples as several standalone paragraphs.
 - Use normal paragraphs for "${labels.overview}", "${labels.coreIdea}", short explanations, and semantic callouts. Avoid long runs of paragraph after paragraph, but do not overuse bullets.
 - For unordered lists, always use "- " as the Markdown bullet marker. Do not use "*" or "+" bullets.
-- Use GFM markdown tables only when they make terminology, comparisons, categories, formulas, steps, or cause-effect relationships shorter and easier to understand than prose. Use exactly 1 table total for normal course notes when there is any logical comparison/classification/process; never use more than 2. Tables must compress information, not duplicate the surrounding bullets. Format every table with leading and trailing pipes in the header, separator, and body rows.
-- Use semantic blockquote callouts in the selected language for visible highlighting where it actually helps learning: include exactly 2 callouts in a normal note and at most 3 in a complex note. One must be the top "${labels.keyTakeaway}" callout; the second should be a genuinely important "${labels.definition}", "${labels.commonMistake}", or "${labels.keyTakeaway}" later in the notes. Do not turn every example into a callout. Supported forms: "> **${labels.definition}:** ...", "> **${labels.example}:** ...", "> **${labels.commonMistake}:** ...", or "> **${labels.keyTakeaway}:** ...".
-- Include source-grounded examples or worked explanations only when they clarify a difficult concept and the source supports them. Most examples should be normal text under "${labels.example}", not blockquote callouts. Skip generic examples.
-- Add "${labels.checkYourself}" only once near the end unless the source is long and complex. Format it as a hyphen bullet list with 3-5 short questions that are answerable from the notes.
-- End with "${labels.finalReview}" formatted as a hyphen bullet list containing 4-7 tight takeaways and any confusing points or common mistakes supported by the source.
+- Format every GFM table with leading and trailing pipes in the header, separator, and body rows.
+- Use semantic blockquote callouts in the selected language only where they actually help learning. Supported forms: "> **${labels.definition}:** ...", "> **${labels.example}:** ...", "> **${labels.commonMistake}:** ...", or "> **${labels.keyTakeaway}:** ...".
+- Include source-grounded examples or worked explanations when they clarify a difficult concept and the source supports them. Skip generic invented examples.
+- Add "${labels.checkYourself}" near the end. Format it as a hyphen bullet list with questions that are answerable from the notes.
+- End with "${labels.finalReview}" formatted as a hyphen bullet list containing tight takeaways and confusing points or common mistakes supported by the source.
 
-Compression rules:
+Coverage and explanation rules:
 - Keep named concepts, definitions, formulas, categories, process steps, comparisons, examples that explain hard ideas, and exam-relevant caveats.
 - Merge duplicate ideas across chunks. Omit repeated objectives, transition phrases, obvious restatements, filler, and examples that do not add new understanding.
-- Prefer signal words and structure over extra prose: "zato", "posledica", "razlika", "korak", "primer", "pazi".
-- Preserve coverage by writing concise organized study notes, not by making the note longer.
+- Explain concepts simply, as if helping a student understand them for the first time.
+- Match depth to the source size: short sources need compact explanations; longer dense sources can use more sections, but still summarize instead of rewriting.
+- For formulas, explain what each symbol means, when to use the formula, and how to interpret the result.
+- Display every important formula as a standalone markdown math block using "$$" delimiters so it can render like a handwritten equation with subscripts. Use LaTeX-style notation for subscripts, superscripts, fractions, and multiplication, for example:
+  $$
+  V_t = \frac{Y_t}{Y_{t-1}} \cdot 100
+  $$
+- Put "$$" delimiters on their own lines. Never write "$$$". Never attach a bullet, heading, sentence, or explanation to the same line as "$$".
+  Then explain: Y_t = value in the current period; Y_{t-1} = value in the previous period.
+  For worked examples, show the symbolic formula in one math block, then the inserted numbers in another math block.
+- Do not write formulas as raw text like "Formula: $ ... $" or leave visible "$" characters in normal prose. Use "$$ ... $$" blocks for formula lines, and use "$...$" only for very short inline variables if needed.
+- For processes, explain the steps and why the order matters.
+- For comparisons, explain the practical difference, not only definitions.
+- Prefer clear explanations over overly dense wording.
+- Integrate OCR-only or handwritten material into the correct topic instead of leaving it as separate OCR text.
+- Do not invent facts, translations, or examples not supported by the source.
 
-Return markdown only. Do not use HTML tags. Do not include decorative color instructions or unsupported facts. Use 2-5 logical emojis total in major section headings or the top callout to improve scanning, for example one emoji before a few numbered topic headings. Do not use emojis on every bullet or make the notes feel childish. Aim for about ${params.targetNoteWordCount} words, with a normal range of ${params.minNoteWordCount}-${params.maxNoteWordCount} words. Do not compress below ${params.minNoteWordCount} words unless the source itself is very short or sparse.`;
+Return markdown only. Do not use HTML tags. Do not include decorative color instructions or unsupported facts. Add a small number of relevant emojis where they naturally improve scanning and memory, especially in major section headings, key callouts, examples, warnings, formulas, process sections, and final review. Use emojis as study-signposts, not decoration: include them when they fit the topic, avoid repeating the same emoji too often, do not force emojis into every heading or bullet, and do not make the notes feel childish.`;
 }
 
-function buildNoteCompressionInstructions(params: {
+function resolveNoteLengthLimits(
+  sourceWordCount: number,
+  sourceType: "audio" | "document",
+): NoteLengthLimits {
+  if (sourceWordCount < 450) {
+    return {
+      sourceSize: "short",
+      targetNoteWords:
+        sourceType === "audio"
+          ? Math.max(420, Math.round(sourceWordCount * 1.5))
+          : Math.max(320, Math.round(sourceWordCount * 1.25)),
+      maxNoteWords:
+        sourceType === "audio"
+          ? Math.min(760, Math.max(520, Math.round(sourceWordCount * 1.8)))
+          : Math.min(620, Math.max(420, Math.round(sourceWordCount * 1.55))),
+      maxKeyTopics: 5,
+      maxKeyThingBullets: 5,
+      maxNumberedSections: 3,
+      maxOverviewSentences: 2,
+      maxCheckQuestions: 3,
+      maxFinalReviewBullets: 4,
+      tablePolicy:
+        "Do not include a table unless the short source contains a real comparison, formula set, category set, or process that is clearly shorter as a table.",
+    };
+  }
+
+  if (sourceWordCount < 1200) {
+    return {
+      sourceSize: "modest",
+      targetNoteWords:
+        sourceType === "audio"
+          ? Math.max(650, Math.round(sourceWordCount * 0.95))
+          : Math.max(560, Math.round(sourceWordCount * 0.75)),
+      maxNoteWords:
+        sourceType === "audio"
+          ? Math.min(1250, Math.max(780, Math.round(sourceWordCount * 1.15)))
+          : Math.min(1050, Math.max(680, Math.round(sourceWordCount * 0.95))),
+      maxKeyTopics: 7,
+      maxKeyThingBullets: 7,
+      maxNumberedSections: 5,
+      maxOverviewSentences: 3,
+      maxCheckQuestions: 4,
+      maxFinalReviewBullets: 5,
+      tablePolicy:
+        "Include at most one concise table, and only when it replaces a longer explanation rather than duplicating it.",
+    };
+  }
+
+  return {
+    sourceSize: "long",
+    targetNoteWords:
+      sourceType === "audio"
+        ? Math.max(1300, Math.round(sourceWordCount * 0.55))
+        : Math.max(1100, Math.round(sourceWordCount * 0.45)),
+    maxNoteWords:
+      sourceType === "audio"
+        ? Math.min(5200, Math.max(1700, Math.round(sourceWordCount * 0.85)))
+        : Math.min(4200, Math.max(1400, Math.round(sourceWordCount * 0.7))),
+    maxKeyTopics: 12,
+    maxKeyThingBullets: 10,
+    maxNumberedSections: 10,
+    maxOverviewSentences: 4,
+    maxCheckQuestions: 6,
+    maxFinalReviewBullets: 7,
+    tablePolicy:
+      "Use at most two concise tables, and only when they make comparisons, categories, formulas, or processes easier to study.",
+  };
+}
+
+function buildStrictLengthLimitGuidance(limits: NoteLengthLimits) {
+  return `Hard source-size limits for this note:
+- Source size profile: ${limits.sourceSize}.
+- Aim for about ${limits.targetNoteWords} words and stay under ${limits.maxNoteWords} words unless the source is only sparse keywords that need expansion.
+- keyTopics must contain no more than ${limits.maxKeyTopics} items.
+- "${limits.sourceSize === "short" ? "Hiter pregled / Quick Overview" : "Overview"}" must be no more than ${limits.maxOverviewSentences} sentences.
+- "Key Things To Know / Ključne stvari, ki jih moraš znati" must contain no more than ${limits.maxKeyThingBullets} bullets.
+- Use no more than ${limits.maxNumberedSections} numbered topic sections.
+- "Check Yourself / Preveri svoje znanje" must contain no more than ${limits.maxCheckQuestions} questions.
+- "Final Review / Končni pregled" must contain no more than ${limits.maxFinalReviewBullets} bullets.
+- ${limits.tablePolicy}
+If the source is short or modest, prioritize concise explanation over extra sections. Do not expand exercise blanks, headings, or examples into long textbook explanations unless the source gives that detail.`;
+}
+
+function buildStudyValueGuidance(limits: NoteLengthLimits) {
+  return `Optimize these notes for study value per sentence, not for maximum detail.
+
+For every sentence, bullet, table row, and example, ask:
+- Does this teach a source-supported idea?
+- Does it explain something the student must understand?
+- Does it remove likely confusion?
+- Is it needed for studying or self-testing?
+
+If the answer is no, omit it.
+
+Use source-size proportionality as a guardrail, not as a target to fill:
+- Source size profile: ${limits.sourceSize}.
+- Let the amount of notes follow the amount of real learning material in the source.
+- Short or sparse sources should become compact notes.
+- Long or dense sources can become longer notes, but only when the extra detail improves understanding.
+- Keep keyTopics focused on the main study themes instead of listing every small detail.
+- Create enough numbered sections to organize the source clearly, but do not create sections just to fill space.
+- ${limits.tablePolicy}
+
+Do not expand exercise blanks, headings, table labels, or named topics into generic textbook explanations unless the source actually explains them. Prefer dense, useful, proportional notes over long notes.`;
+}
+
+function buildPromptControlGuidance(mode: NoteGenerationMode, limits: NoteLengthLimits) {
+  return mode === "strict_limits"
+    ? buildStrictLengthLimitGuidance(limits)
+    : buildStudyValueGuidance(limits);
+}
+
+function buildCoverageReviewInstructions(params: {
   outputLanguage?: string | null;
-  targetNoteWordCount: number;
-  minNoteWordCount: number;
-  maxNoteWordCount: number;
-  recommendedTopicCount: number;
 }) {
   const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
-  const languageLabel = resolveNoteLanguageLabel(params.outputLanguage);
-  const labels = getStructuredPlusLabels(params.outputLanguage);
 
-  return `${languageInstruction} Rewrite the supplied notes in ${languageLabel} into concise, research-based study notes while preserving all high-value source concepts.
+  return `${languageInstruction} Review whether these generated notes cover the supplied source and coverage units well enough for a student.
 
-Keep the exact Structured Plus organization and exact localized heading labels:
-- Start with "${labels.overview}".
-- Then include one top callout in this form: "> **${labels.keyTakeaway}:** ...".
-- Then include "${labels.keyThings}".
-- Then include about ${params.recommendedTopicCount} numbered topic sections.
-- Never exceed ${params.recommendedTopicCount + 1} numbered topic sections.
-- Each numbered topic must include "${labels.coreIdea}" and "${labels.detailedNotes}".
-- End with "${labels.checkYourself}" and "${labels.finalReview}".
+Mark repair as needed when:
+- a core coverage unit is missing;
+- formulas, symbols, exercises, comparisons, or examples are only named but not explained;
+- handwritten/OCR-only additions are missing;
+- notes contain unsupported claims;
+- notes repeat low-value material while omitting useful material;
+- notes are over-expanded compared with the supplied source, especially for short document/photo sources.
 
-Compress carefully:
-- Aim for about ${params.targetNoteWordCount} words and keep the normal range ${params.minNoteWordCount}-${params.maxNoteWordCount} words.
-- Do not compress below ${params.minNoteWordCount} words unless the source is sparse.
-- Keep about ${params.recommendedTopicCount} numbered topic sections by merging related sections.
-- Keep definitions, named concepts, formulas, categories, process steps, comparisons, and exam-relevant caveats.
-- Remove repetition, filler sentences, transition phrases, duplicate explanations, and generic examples.
-- Use hyphen bullets for scanability, but keep bullets complete and meaningful. Use "- " for every unordered bullet, never "*" or "+".
-- Convert questions, takeaways, steps, causes, benefits, risks, and grouped examples into hyphen bullet lists. Keep normal explanatory paragraphs when the idea is better understood as a short explanation.
-- In topic sections, prefer 1 short paragraph plus 2-3 bullets. Use more bullets only for real component lists, process steps, or comparisons.
-- Use labeled bullets only for semantic importance labels such as "${labels.definition}", "${labels.keyTakeaway}", "${labels.example}", "Razlika", "Korak", or "Pazi". Do not label every ordinary bullet.
-- Keep exactly 1 table when the notes contain a real comparison, classification, component set, process, terminology cluster, or cause-effect set; otherwise keep no table. Never keep more than 2 tables total. For business/IT/course notes, assume a table is needed if the source mentions multiple systems, process types, modules, roles, or categories.
-- Keep exactly 2 semantic callouts total in a normal note and at most 3 in a complex note. Use them for important definitions, common mistakes, or key takeaways. Do not add callouts for filler and do not make every example a callout.
-- Keep 2-5 logical emojis total in major section headings or the top callout; do not use emojis in every bullet.
-- Include one short Check Yourself section near the end, not after every topic. It must be a hyphen bullet list.
-- Final Review must be a hyphen bullet list, not paragraph text.
+Do not request repair just because the notes are concise. Request repair only when coverage, explanation quality, faithfulness, repetition, or source-size balance is materially weak.`;
+}
+
+function buildNoteRepairInstructions(params: {
+  outputLanguage?: string | null;
+}) {
+  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
+
+  return `${languageInstruction} Repair the supplied study notes using the review findings, source text, and coverage units.
+
+Keep the same Structured Plus organization and exact localized heading labels already used in the notes. Do not rewrite everything unnecessarily.
+
+Repair goals:
+- add missing core concepts, formulas, examples, comparisons, process steps, warnings, exercises, and OCR/handwritten additions;
+- expand shallow explanations so a student can understand what the concept means, how it works, and why it matters;
+- for formulas, use standalone "$$ ... $$" math blocks with LaTeX-style subscripts/fractions/multiplication so they render as equations, then explain symbols, use cases, and result interpretation;
+- remove or merge repeated low-value material;
+- compress sections that are over-expanded compared with the source while preserving the important ideas;
+- remove unsupported claims;
+- keep the notes readable and organized.
 
 Return the same JSON fields. For structuredNotesMd, return markdown only with no HTML and no unsupported facts.`;
+}
+
+function buildDeterministicCompressionInstructions(params: {
+  outputLanguage?: string | null;
+}) {
+  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
+
+  return `${languageInstruction} Compress the supplied study notes because they are too long for the amount of source material.
+
+Keep the same Structured Plus heading style, but make the notes proportional to the source. This is a compression pass, not a coverage-expansion pass.
+
+Compression goals:
+- preserve the important concepts, formulas, definitions, examples, comparisons, process steps, warnings, and OCR/handwritten additions;
+- remove duplicated explanations, long overviews, generic textbook expansion, unnecessary examples, and repeated source wording;
+- merge related small topics into fewer numbered sections;
+- keep explanations simple, but short;
+- keep formulas as standalone "$$ ... $$" math blocks with clean equation notation;
+- keep the final notes under the supplied maxNoteWords limit;
+- obey maxKeyTopics, maxKeyThingBullets, maxNumberedSections, maxCheckQuestions, and maxFinalReviewBullets exactly;
+- include a table only when the supplied tablePolicy allows it.
+
+Return the same JSON fields. For structuredNotesMd, return markdown only with no HTML and no unsupported facts.`;
+}
+
+function buildSourceExcerptPayload(windows: Array<{ text: string }>) {
+  return windows.map((window, index) => ({
+    chunk: index + 1,
+    excerpt: window.text.length > 1600 ? `${window.text.slice(0, 1600)}...` : window.text,
+  }));
+}
+
+function resolveFinalMaxOutputTokens(sourceWordCount: number, sourceType: "audio" | "document") {
+  if (sourceWordCount < 450) {
+    return sourceType === "audio" ? 3600 : 2600;
+  }
+
+  if (sourceWordCount < 1200) {
+    return sourceType === "audio" ? 5600 : 4200;
+  }
+
+  const base = sourceType === "audio" ? 7600 : 6200;
+  const scaled = Math.round(sourceWordCount * (sourceType === "audio" ? 2.0 : 1.65));
+  const cap = sourceType === "audio" ? 16_000 : 14_000;
+
+  return Math.min(cap, Math.max(base, scaled));
+}
+
+function resolveCompressionMaxOutputTokens(limits: NoteLengthLimits) {
+  return Math.max(1800, Math.min(8000, Math.round(limits.maxNoteWords * 3.2)));
+}
+
+function buildSummarizationDepthGuidance(sourceWordCount: number, sourceType: "audio" | "document") {
+  if (sourceWordCount < 450) {
+    return `The source is short. Produce compact notes that explain the important ideas clearly, but do not expand the notes beyond the source unless the source is only sparse keywords. Avoid turning a short photo or small excerpt into a long article.`;
+  }
+
+  if (sourceWordCount < 1200) {
+    return `The source is modest in length. Produce concise study notes that are clearly shorter than the source while preserving the important concepts, definitions, examples, and formulas. Add explanations only where they improve understanding.`;
+  }
+
+  if (sourceType === "audio") {
+    return `The source is a longer spoken transcript. Summarize repeated spoken material aggressively, but keep lecturer-added explanations, examples, mechanisms, definitions, and caveats that matter for studying.`;
+  }
+
+  return `The source is a longer document. Produce summarized study notes, not a rewrite. The notes should usually be meaningfully shorter than the source while still covering every distinct high-value learning unit once.`;
+}
+
+function shouldRepairNotes(review: {
+  needsRepair: boolean;
+  missingUnitHeadings: string[];
+  shallowExplanationHeadings: string[];
+  unsupportedClaims: string[];
+  repeatedOrLowValueSections: string[];
+  overExpandedSections: string[];
+}) {
+  return (
+    review.needsRepair &&
+    (review.missingUnitHeadings.length > 0 ||
+      review.shallowExplanationHeadings.length > 1 ||
+      review.unsupportedClaims.length > 0 ||
+      review.repeatedOrLowValueSections.length > 1 ||
+      review.overExpandedSections.length > 0)
+  );
+}
+
+function isDeterministicallyOverExpanded(params: {
+  noteWordCount: number;
+  sourceWordCount: number;
+  sourceType: "audio" | "document";
+  limits: NoteLengthLimits;
+  mode: NoteGenerationMode;
+}) {
+  if (params.sourceWordCount <= 0) {
+    return false;
+  }
+
+  if (params.mode === "study_value" && params.sourceType === "audio") {
+    return false;
+  }
+
+  const maxAllowedNoteWords =
+    params.mode === "strict_limits"
+      ? params.limits.maxNoteWords
+      : Math.round(params.limits.maxNoteWords * 1.25);
+
+  if (params.noteWordCount <= maxAllowedNoteWords) {
+    return false;
+  }
+
+  if (params.sourceType === "document") {
+    return true;
+  }
+
+  return params.sourceWordCount < 1200 && params.noteWordCount > maxAllowedNoteWords;
+}
+
+function getEffectiveMaxKeyTopics(mode: NoteGenerationMode, limits: NoteLengthLimits) {
+  return mode === "strict_limits"
+    ? limits.maxKeyTopics
+    : Math.min(16, limits.maxKeyTopics + 2);
+}
+
+function clampKeyTopics(
+  keyTopics: string[],
+  limits: NoteLengthLimits,
+  mode: NoteGenerationMode,
+  sourceType: "audio" | "document",
+) {
+  if (mode === "study_value" && sourceType === "audio") {
+    return keyTopics;
+  }
+
+  return keyTopics.slice(0, getEffectiveMaxKeyTopics(mode, limits));
 }
 
 async function mapWithConcurrency<TInput, TOutput>(
@@ -317,55 +840,61 @@ export async function generateNotesFromTranscript(
   const sourceType = params.sourceType ?? "audio";
   const windows = buildTranscriptWindows(segments, sourceType === "audio" ? 2200 : 3200);
   const sourceWordCount = segments.reduce((total, segment) => total + countWords(segment.text), 0);
-  const targets =
-    sourceType === "audio"
-      ? buildAudioNoteTargets(sourceWordCount, windows.length)
-      : buildNoteTargets(sourceWordCount, windows.length);
   const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
   const languageLabel = resolveNoteLanguageLabel(params.outputLanguage);
-  const chunkInstructions =
-    sourceType === "audio"
-      ? `${languageInstruction} You create detailed study notes from spoken lecture transcripts. Capture all substantive material from the chunk, including definitions, mechanisms, sequences, comparisons, examples, clarifications, caveats, and exam-relevant details. Preserve technical terms and explain abbreviated or implied ideas when the transcript supports them. Do not compress the lecture into a short recap. Never invent facts. Bullet points must be complete study points, not fragments.`
-      : `${languageInstruction} You create detailed study notes from lecture-style source material. Capture all substantive material from the chunk, including definitions, mechanisms, sequences, comparisons, caveats, examples already present in the source, and exam-relevant details. Never invent facts. Bullet points must be complete study points, not fragments.`;
+  const sourceText = segments.map((segment) => segment.text).join("\n\n");
+  const noteGenerationMode = getServerEnv().NOTE_GENERATION_MODE;
+  const directSourceMaxChars =
+    sourceType === "audio" ? DIRECT_AUDIO_SOURCE_MAX_CHARS : DIRECT_DOCUMENT_SOURCE_MAX_CHARS;
+  const includeFullSource = sourceText.length <= directSourceMaxChars;
   const structuredPlusInstructions = buildStructuredPlusInstructions({
     outputLanguage: params.outputLanguage,
-    targetNoteWordCount: targets.targetNoteWordCount,
-    minNoteWordCount: targets.minNoteWordCount,
-    maxNoteWordCount: targets.maxNoteWordCount,
-    recommendedTopicCount: targets.recommendedTopicCount,
   });
+  const lengthLimits = resolveNoteLengthLimits(sourceWordCount, sourceType);
+  const summarizationGuidance = buildSummarizationDepthGuidance(sourceWordCount, sourceType);
+  const promptControlGuidance = buildPromptControlGuidance(noteGenerationMode, lengthLimits);
   const finalInstructions =
     sourceType === "audio"
-      ? `${languageInstruction} You are preparing final study notes in ${languageLabel} from ${params.sourceLabel}. Produce a title, summary, key topics, and student-ready notes that cover the high-value material in the source without unnecessary text. This is a spoken lecture transcript, so reconstruct the material into clean, structured notes and merge repeated spoken ideas. Include important definitions, steps, relationships, examples, clarifications, and lecturer-added context when supported by the transcript. Do not turn the lecture into a shallow recap; do turn it into concise study notes. Explain the logic behind processes and relationships, preserve technical terms, and include examples only when supported by the source material. Every chunk summary should contribute only its non-duplicate substantive content to the final notes. Aim for about ${targets.targetNoteWordCount} words when the source supports it. Build about ${targets.recommendedTopicCount} substantial sections when the material supports it. ${structuredPlusInstructions}`
-      : `${languageInstruction} You are preparing final study notes in ${languageLabel} from ${params.sourceLabel}. Produce a title, summary, key topics, and student-ready notes that cover the high-value material in the source without unnecessary text. Do not turn the material into a shallow recap; do turn it into concise study notes. Explain the logic behind processes and relationships, preserve technical terms, and include examples only when supported by the source material. Every chunk summary should contribute only its non-duplicate substantive content to the final notes. Aim for about ${targets.targetNoteWordCount} words when the source supports it. Build about ${targets.recommendedTopicCount} substantial sections when the material supports it. ${structuredPlusInstructions}`;
+      ? `${languageInstruction} You are preparing final study notes in ${languageLabel} from ${params.sourceLabel}. This is a spoken lecture transcript, so reconstruct repeated or fragmented spoken material into clean, student-ready notes. Cover the high-value material, explain the logic behind concepts, and include examples, clarifications, and caveats when supported by the transcript. ${summarizationGuidance} ${promptControlGuidance} ${structuredPlusInstructions}`
+      : `${languageInstruction} You are preparing final study notes in ${languageLabel} from ${params.sourceLabel}. Produce student-ready notes that cover the high-value material, explain concepts simply, preserve source-supported examples and formulas, and avoid repeated filler. ${summarizationGuidance} ${promptControlGuidance} ${structuredPlusInstructions}`;
 
-  const chunkOutputs = await mapWithConcurrency(
+  const coverageOutputs = await mapWithConcurrency(
     windows,
-    NOTE_CHUNK_SUMMARY_CONCURRENCY,
+    NOTE_COVERAGE_EXTRACTION_CONCURRENCY,
     (window, index) =>
       generateStructuredObject({
-        schema: chunkSummarySchema,
-        maxOutputTokens: sourceType === "audio" ? 1900 : 1400,
-        instructions: chunkInstructions,
+        schema: noteCoverageExtractionSchema,
+        maxOutputTokens: sourceType === "audio" ? 2600 : 2300,
+        instructions: buildCoverageExtractionInstructions({
+          outputLanguage: params.outputLanguage,
+          sourceType,
+        }),
         input: `Source chunk ${index + 1} of ${windows.length}.\nTime range: ${window.startMs}-${window.endMs} ms.\nText:\n${window.text}`,
       }),
+  );
+  const coverageUnits = dedupeCoverageUnits(
+    coverageOutputs.flatMap((output) => output.units as CoverageUnit[]),
   );
 
   const result = await generateStructuredObject({
     schema: noteArtifactSchema,
-    maxOutputTokens:
-      sourceType === "audio"
-        ? Math.min(12000, Math.max(7000, Math.round(targets.maxNoteWordCount * 2.4)))
-        : Math.min(7000, Math.max(5200, Math.round(targets.maxNoteWordCount * 2.8))),
+    maxOutputTokens: resolveFinalMaxOutputTokens(sourceWordCount, sourceType),
     instructions: finalInstructions,
     input: JSON.stringify(
       {
         sourceType,
         sourceWordCount,
-        chunkCount: chunkOutputs.length,
-        targets,
+        noteGenerationMode,
+        summarizationGuidance,
+        promptControlGuidance,
+        lengthLimits,
+        sourceHandling: includeFullSource
+          ? "full_merged_source_text"
+          : "coverage_units_with_source_excerpts",
         sourceTitleHint: params.sourceTitleHint ?? null,
-        chunkSummaries: chunkOutputs,
+        coverageUnits,
+        fullMergedSourceText: includeFullSource ? sourceText : null,
+        sourceExcerpts: includeFullSource ? null : buildSourceExcerptPayload(windows),
       },
       null,
       2,
@@ -373,62 +902,175 @@ export async function generateNotesFromTranscript(
   });
 
   let normalizedStructuredNotesMd = normalizeStudyListSections(
-    stripHtmlFromNotes(result.structuredNotesMd),
+    normalizeFormulaMarkdown(stripHtmlFromNotes(result.structuredNotesMd)),
   );
   let finalResult = result;
+  let repairApplied = false;
+  let deterministicOverExpanded = false;
+  let deterministicCompressionApplied = false;
 
-  if (countWords(normalizedStructuredNotesMd) > Math.round(targets.maxNoteWordCount * 1.08)) {
+  const review = await generateStructuredObject({
+    schema: noteCoverageReviewSchema,
+    maxOutputTokens: 2600,
+    instructions: buildCoverageReviewInstructions({
+      outputLanguage: params.outputLanguage,
+    }),
+    input: JSON.stringify(
+      {
+        sourceType,
+        sourceWordCount,
+        noteGenerationMode,
+        summarizationGuidance,
+        promptControlGuidance,
+        lengthLimits,
+        sourceTitleHint: params.sourceTitleHint ?? null,
+        coverageUnits,
+        generatedNotes: {
+          title: result.title,
+          summary: result.summary,
+          keyTopics: result.keyTopics,
+          structuredNotesMd: normalizedStructuredNotesMd,
+        },
+        fullMergedSourceText: includeFullSource ? sourceText : null,
+        sourceExcerpts: includeFullSource ? null : buildSourceExcerptPayload(windows),
+      },
+      null,
+      2,
+    ),
+  });
+
+  if (shouldRepairNotes(review)) {
     finalResult = await generateStructuredObject({
       schema: noteArtifactSchema,
-      maxOutputTokens:
-        sourceType === "audio"
-          ? Math.min(11000, Math.max(6500, Math.round(targets.maxNoteWordCount * 2.2)))
-          : Math.min(6500, Math.max(4800, Math.round(targets.maxNoteWordCount * 2.5))),
-      instructions: buildNoteCompressionInstructions({
+      maxOutputTokens: resolveFinalMaxOutputTokens(sourceWordCount, sourceType),
+      instructions: buildNoteRepairInstructions({
         outputLanguage: params.outputLanguage,
-        targetNoteWordCount: targets.targetNoteWordCount,
-        minNoteWordCount: targets.minNoteWordCount,
-        maxNoteWordCount: targets.maxNoteWordCount,
-        recommendedTopicCount: targets.recommendedTopicCount,
       }),
       input: JSON.stringify(
         {
           sourceType,
           sourceWordCount,
-          targets,
+          noteGenerationMode,
+          summarizationGuidance,
+          promptControlGuidance,
+          lengthLimits,
           sourceTitleHint: params.sourceTitleHint ?? null,
-          overlongNotes: {
+          coverageUnits,
+          review,
+          currentNotes: {
             title: result.title,
             summary: result.summary,
             keyTopics: result.keyTopics,
             structuredNotesMd: normalizedStructuredNotesMd,
-            wordCount: countWords(normalizedStructuredNotesMd),
           },
+          fullMergedSourceText: includeFullSource ? sourceText : null,
+          sourceExcerpts: includeFullSource ? null : buildSourceExcerptPayload(windows),
         },
         null,
         2,
       ),
     });
     normalizedStructuredNotesMd = normalizeStudyListSections(
-      stripHtmlFromNotes(finalResult.structuredNotesMd),
+      normalizeFormulaMarkdown(stripHtmlFromNotes(finalResult.structuredNotesMd)),
     );
+    repairApplied = true;
   }
 
-  const normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
+  let normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
+
+  if (
+    isDeterministicallyOverExpanded({
+      noteWordCount: normalizedNoteWordCount,
+      sourceWordCount,
+      sourceType,
+      limits: lengthLimits,
+      mode: noteGenerationMode,
+    })
+  ) {
+    deterministicOverExpanded = true;
+    finalResult = await generateStructuredObject({
+      schema: noteArtifactSchema,
+      maxOutputTokens: resolveCompressionMaxOutputTokens(lengthLimits),
+      instructions: buildDeterministicCompressionInstructions({
+        outputLanguage: params.outputLanguage,
+      }),
+      input: JSON.stringify(
+        {
+          sourceType,
+          sourceWordCount,
+          currentNoteWordCount: normalizedNoteWordCount,
+          noteGenerationMode,
+          summarizationGuidance,
+          promptControlGuidance,
+          lengthLimits,
+          sourceTitleHint: params.sourceTitleHint ?? null,
+          coverageUnits,
+          currentNotes: {
+            title: finalResult.title,
+            summary: finalResult.summary,
+            keyTopics: finalResult.keyTopics,
+            structuredNotesMd: normalizedStructuredNotesMd,
+          },
+          fullMergedSourceText: includeFullSource ? sourceText : null,
+          sourceExcerpts: includeFullSource ? null : buildSourceExcerptPayload(windows),
+        },
+        null,
+        2,
+      ),
+    });
+    normalizedStructuredNotesMd = normalizeStudyListSections(
+      normalizeFormulaMarkdown(stripHtmlFromNotes(finalResult.structuredNotesMd)),
+    );
+    normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
+    deterministicCompressionApplied = true;
+  }
+  const keyTopics = clampKeyTopics(
+    finalResult.keyTopics,
+    lengthLimits,
+    noteGenerationMode,
+    sourceType,
+  );
+  const title = normalizeGeneratedNoteTitle({
+    title: finalResult.title,
+    sourceTitleHint: params.sourceTitleHint,
+    summary: finalResult.summary,
+    keyTopics,
+    coverageUnits,
+    sourceType,
+  });
 
   return {
     ...finalResult,
+    title,
+    keyTopics,
     structuredNotesMd: normalizedStructuredNotesMd,
     modelMetadata: {
-      chunkCount: chunkOutputs.length,
+      chunkCount: windows.length,
       sourceWordCount,
       noteWordCount: normalizedNoteWordCount,
+      targetNoteWordCount: lengthLimits.targetNoteWords,
+      maxNoteWordCount: lengthLimits.maxNoteWords,
       coverageRatio:
         sourceWordCount > 0
           ? Number((normalizedNoteWordCount / sourceWordCount).toFixed(3))
           : null,
-      targetNoteWordCount: targets.targetNoteWordCount,
-      recommendedTopicCount: targets.recommendedTopicCount,
+      noteGenerationStrategy: "coverage_explained_notes_v1",
+      noteGenerationMode,
+      sourceHandling: includeFullSource
+        ? "full_merged_source_text"
+        : "coverage_units_with_source_excerpts",
+      coverageUnitCount: coverageUnits.length,
+      coveredCoverageUnitCount: review.coveredUnitHeadings.length,
+      missingCoverageUnitCount: review.missingUnitHeadings.length,
+      shallowExplanationUnitCount: review.shallowExplanationHeadings.length,
+      unsupportedClaimCount: review.unsupportedClaims.length,
+      repeatedOrLowValueSectionCount: review.repeatedOrLowValueSections.length,
+      overExpandedSectionCount: review.overExpandedSections.length,
+      repairApplied,
+      deterministicOverExpanded,
+      deterministicCompressionApplied,
+      finalNoteExceededMaxWords: normalizedNoteWordCount > lengthLimits.maxNoteWords,
+      explanationQualityChecked: true,
       sourceType,
       pipeline: params.pipelineName,
     },

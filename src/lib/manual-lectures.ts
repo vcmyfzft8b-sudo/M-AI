@@ -1255,12 +1255,29 @@ function mergePdfExtractionResults(params: {
     params.ocr?.title ||
     params.file.name.replace(/\.pdf$/i, "") ||
     "PDF document";
-  const ocrText = getNonDuplicateOcrText({
-    nativeText: baseline?.text ?? "",
-    ocrText: params.ocr?.text ?? "",
+
+  const structuredFallbackText =
+    params.native && params.structuredFallback
+      ? getNonDuplicateSupplementText({
+          baselineText: params.native.text,
+          supplementText: params.structuredFallback.text,
+        })
+      : "";
+  const baselineWithStructuredFallback = normalizeWhitespace(
+    [baseline?.text, structuredFallbackText].filter(Boolean).join("\n\n"),
+  );
+  const ocrText = getNonDuplicateSupplementText({
+    baselineText: baselineWithStructuredFallback,
+    supplementText: params.ocr?.text ?? "",
   });
   const text = normalizeWhitespace(
-    [baseline?.text, ocrText ? `OCR text:\n${ocrText}` : ""].filter(Boolean).join("\n\n"),
+    [
+      baseline?.text,
+      structuredFallbackText ? `Additional extracted text:\n${structuredFallbackText}` : "",
+      ocrText ? `OCR text:\n${ocrText}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
   );
 
   return {
@@ -1272,10 +1289,14 @@ function mergePdfExtractionResults(params: {
       pdfExtraction: {
         nativeText: Boolean(params.native?.text),
         structuredFallbackText: Boolean(params.structuredFallback?.text),
+        structuredFallbackAddedText: Boolean(structuredFallbackText),
         ocrText: Boolean(ocrText),
         nativeDiagnostics: params.nativeDiagnostics,
         nativeWordCount: countWords(params.native?.text ?? ""),
+        structuredFallbackWordCount: countWords(params.structuredFallback?.text ?? ""),
+        structuredFallbackAddedWordCount: countWords(structuredFallbackText),
         ocrWordCount: countWords(params.ocr?.text ?? ""),
+        ocrAddedWordCount: countWords(ocrText),
         mergedWordCount: countWords(text),
       },
     },
@@ -1286,55 +1307,123 @@ function normalizeForPdfOcrComparison(value: string) {
   return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").replace(/\s+/g, " ").trim();
 }
 
-function getNonDuplicateOcrText(params: { nativeText: string; ocrText: string }) {
-  const ocrText = normalizeWhitespace(params.ocrText);
+function splitPdfSupplementTextIntoChunks(text: string) {
+  const normalized = normalizeWhitespace(text);
 
-  if (!ocrText || !params.nativeText) {
-    return ocrText;
+  if (!normalized) {
+    return [];
   }
 
-  const nativeComparable = normalizeForPdfOcrComparison(params.nativeText);
-  const ocrComparable = normalizeForPdfOcrComparison(ocrText);
-
-  if (!ocrComparable) {
-    return "";
-  }
-
-  const sample = ocrComparable.slice(0, Math.min(ocrComparable.length, 1000));
-
-  if (sample.length >= 200 && nativeComparable.includes(sample)) {
-    return "";
-  }
-
-  const nativeTokens = new Set(nativeComparable.split(" ").filter(Boolean));
-  const paragraphs = ocrText
+  const paragraphChunks = normalized
     .split(/\n{2,}/)
-    .map((paragraph) => normalizeWhitespace(paragraph))
+    .map((chunk) => normalizeWhitespace(chunk))
     .filter(Boolean);
-  const uniqueParagraphs = paragraphs.filter((paragraph) => {
-    const comparable = normalizeForPdfOcrComparison(paragraph);
 
+  if (paragraphChunks.length > 1) {
+    return paragraphChunks;
+  }
+
+  const lineChunks = normalized
+    .split(/\n+/)
+    .map((chunk) => normalizeWhitespace(chunk))
+    .filter((chunk) => countWords(chunk) >= 6);
+
+  if (lineChunks.length > 1) {
+    return lineChunks;
+  }
+
+  const words = normalized.split(/\s+/).filter(Boolean);
+  const chunks: string[] = [];
+  const chunkSize = 90;
+
+  for (let index = 0; index < words.length; index += chunkSize) {
+    chunks.push(words.slice(index, index + chunkSize).join(" "));
+  }
+
+  return chunks.filter(Boolean);
+}
+
+function getNonDuplicateSupplementText(params: { baselineText: string; supplementText: string }) {
+  const supplementText = normalizeWhitespace(params.supplementText);
+
+  if (!supplementText || !params.baselineText) {
+    return supplementText;
+  }
+
+  let baselineComparable = normalizeForPdfOcrComparison(params.baselineText);
+  const supplementComparable = normalizeForPdfOcrComparison(supplementText);
+
+  if (!supplementComparable) {
+    return "";
+  }
+
+  const sample = supplementComparable.slice(0, Math.min(supplementComparable.length, 1000));
+
+  if (sample.length >= 200 && baselineComparable.includes(sample)) {
+    return "";
+  }
+
+  const uniqueChunks: string[] = [];
+
+  for (const chunk of splitPdfSupplementTextIntoChunks(supplementText)) {
+    const comparable = normalizeForPdfOcrComparison(chunk);
     if (!comparable) {
-      return false;
+      continue;
     }
 
-    if (comparable.length >= 120 && nativeComparable.includes(comparable.slice(0, 400))) {
-      return false;
+    if (comparable.length >= 120 && baselineComparable.includes(comparable.slice(0, 400))) {
+      continue;
     }
 
     const tokens = comparable.split(" ").filter(Boolean);
 
     if (tokens.length < 8) {
-      return !nativeComparable.includes(comparable);
+      if (!baselineComparable.includes(comparable)) {
+        uniqueChunks.push(chunk);
+        baselineComparable = normalizeWhitespace(`${baselineComparable} ${comparable}`);
+      }
+      continue;
     }
 
-    const overlappingTokens = tokens.filter((token) => nativeTokens.has(token)).length;
+    const baselineTokens = new Set(baselineComparable.split(" ").filter(Boolean));
+    const overlappingTokens = tokens.filter((token) => baselineTokens.has(token)).length;
     const overlapRatio = overlappingTokens / tokens.length;
+    const uniqueTokenCount = tokens.length - overlappingTokens;
 
-    return overlapRatio < 0.82;
-  });
+    if (overlapRatio < 0.72 || uniqueTokenCount >= 10) {
+      uniqueChunks.push(chunk);
+      baselineComparable = normalizeWhitespace(`${baselineComparable} ${comparable}`);
+    }
+  }
 
-  return normalizeWhitespace(uniqueParagraphs.join("\n\n"));
+  return normalizeWhitespace(uniqueChunks.join("\n\n"));
+}
+
+function shouldRunStructuredPdfFallbackInOcrMode(params: {
+  native: ExtractedDocumentText | null;
+  ocr: ExtractedDocumentText | null;
+  nativeDiagnostics: PdfNativeExtractionDiagnostics;
+}) {
+  if (!params.native) {
+    return true;
+  }
+
+  const nativeWordCount = countWords(params.native.text);
+  const pageCount = params.nativeDiagnostics.pageCount ?? params.native.pages.length;
+
+  if (pageCount < 8 || nativeWordCount <= 0) {
+    return false;
+  }
+
+  const nativeWordsPerPage = nativeWordCount / pageCount;
+  const ocrAddedWordCount = countWords(
+    getNonDuplicateSupplementText({
+      baselineText: params.native.text,
+      supplementText: params.ocr?.text ?? "",
+    }),
+  );
+
+  return nativeWordsPerPage < 60 && ocrAddedWordCount < Math.max(80, nativeWordCount * 0.08);
 }
 
 export async function extractTextFromPdf(
@@ -1348,29 +1437,30 @@ export async function extractTextFromPdf(
 
   if (env.DOCUMENT_AI_OCR_MODE === "pdf") {
     const ocr = await extractPdfWithOcr(file, context);
+    let structuredFallback: ExtractedDocumentText | null = null;
 
-    if (native || ocr) {
+    if (
+      shouldRunStructuredPdfFallbackInOcrMode({
+        native,
+        ocr,
+        nativeDiagnostics: nativeExtraction.diagnostics,
+      })
+    ) {
+      try {
+        structuredFallback = await extractPdfWithStructuredGeminiFallback(file);
+      } catch (error) {
+        console.warn("Structured PDF extraction fallback failed during PDF OCR mode.", error);
+      }
+    }
+
+    if (native || structuredFallback || ocr) {
       return mergePdfExtractionResults({
         native,
-        structuredFallback: null,
+        structuredFallback,
         ocr,
         file,
         nativeDiagnostics: nativeExtraction.diagnostics,
       });
-    }
-
-    try {
-      const structuredFallback = await extractPdfWithStructuredGeminiFallback(file);
-
-      return mergePdfExtractionResults({
-        native,
-        structuredFallback,
-        ocr: null,
-        file,
-        nativeDiagnostics: nativeExtraction.diagnostics,
-      });
-    } catch (error) {
-      console.warn("Structured PDF extraction fallback failed during PDF OCR mode.", error);
     }
 
     throw new Error("PDF ne vsebuje dovolj berljivega besedila.");

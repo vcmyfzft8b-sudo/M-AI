@@ -15,6 +15,12 @@ export default withSentryConfig(nextConfig, {
   project: process.env.SENTRY_PROJECT,
   authToken: process.env.SENTRY_AUTH_TOKEN,
   silent: !process.env.CI,
+  errorHandler:
+    process.env.VERCEL_ENV === "preview"
+      ? (error) => {
+          console.warn("Sentry upload failed during preview build; continuing.", error);
+        }
+      : undefined,
   widenClientFileUpload: true,
   sourcemaps: {
     disable: !process.env.SENTRY_AUTH_TOKEN,

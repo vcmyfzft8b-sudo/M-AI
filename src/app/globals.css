@@ -342,8 +342,8 @@ a:visited {
 }
 
 .memo-paywall-shell {
-  --memo-paywall-purple: #ff6d68;
-  --memo-paywall-purple-soft: rgba(255, 109, 104, 0.18);
+  --memo-paywall-purple: var(--tint);
+  --memo-paywall-purple-soft: var(--tint-soft);
   --memo-paywall-panel: rgba(30, 28, 38, 0.86);
   --memo-paywall-border: rgba(255, 255, 255, 0.12);
   gap: 1.05rem;
@@ -351,9 +351,9 @@ a:visited {
   overflow: hidden auto;
   padding: max(4.75rem, env(safe-area-inset-top)) 1.5rem max(1.2rem, env(safe-area-inset-bottom));
   background:
-    radial-gradient(circle at 50% -10%, rgba(255, 122, 24, 0.34), transparent 34%),
-    radial-gradient(circle at 50% 8%, rgba(255, 109, 104, 0.22), transparent 42%),
-    linear-gradient(180deg, #3a1d24 0%, #161017 36%, #050505 100%);
+    radial-gradient(circle at 50% -10%, rgba(10, 132, 255, 0.38), transparent 34%),
+    radial-gradient(circle at 50% 8%, rgba(10, 132, 255, 0.22), transparent 42%),
+    linear-gradient(180deg, #0b3158 0%, #061828 36%, #050505 100%);
   color: #ffffff;
 }
 
@@ -436,7 +436,7 @@ a:visited {
   align-items: center;
   justify-content: center;
   border-radius: 1.1rem;
-  background: rgba(255, 109, 104, 0.18);
+  background: var(--memo-paywall-purple-soft);
   color: var(--memo-paywall-purple);
   font-size: 1.6rem;
 }
@@ -483,7 +483,7 @@ a:visited {
 
 .memo-paywall-plan.selected {
   border-color: var(--memo-paywall-purple);
-  background: linear-gradient(180deg, rgba(255, 109, 104, 0.14), rgba(36, 15, 18, 0.9));
+  background: linear-gradient(180deg, rgba(10, 132, 255, 0.18), rgba(7, 28, 48, 0.88));
   color: #ffffff;
 }
 
@@ -601,14 +601,14 @@ a:visited {
   justify-content: center;
   padding: 0 1.35rem;
   border-radius: 1.35rem;
-  background: linear-gradient(135deg, #ff6d68, #ff8a2a);
+  background: var(--memo-paywall-purple);
   color: #ffffff;
   font-size: clamp(1rem, 3.7vw, 1.32rem);
   font-weight: 900;
   letter-spacing: 0;
   overflow: hidden;
   white-space: nowrap;
-  box-shadow: 0 1rem 3rem rgba(255, 109, 104, 0.28);
+  box-shadow: 0 1rem 3rem rgba(10, 132, 255, 0.3);
 }
 
 .memo-paywall-cta:disabled {

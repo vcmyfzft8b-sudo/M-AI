@@ -27,10 +27,7 @@ export default async function AppLayout({
   }
 
   return (
-    <AppShell
-      hasPaidAccess={Boolean(appState?.hasPaidAccess)}
-      hasTrialLectureAvailable={Boolean(appState?.hasTrialLectureAvailable)}
-    >
+    <AppShell hasPaidAccess={Boolean(appState?.hasPaidAccess)}>
       {children}
     </AppShell>
   );

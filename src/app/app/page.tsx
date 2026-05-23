@@ -28,9 +28,6 @@ export default async function AppHomePage({
       userId={user.id}
       canCreateNotes={Boolean(appState?.onboardingComplete && appState?.canCreateNotes)}
       hasPaidAccess={Boolean(appState?.hasPaidAccess)}
-      hasTrialLectureAvailable={Boolean(appState?.hasTrialLectureAvailable)}
-      trialLectureId={appState?.trialLectureId ?? null}
-      trialChatMessagesRemaining={appState?.trialChatMessagesRemaining ?? 5}
     />
   );
 }

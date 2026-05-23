@@ -2618,9 +2618,11 @@ export function LectureWorkspace({
     if (!response.ok) {
       if (payload?.code === "trial_chat_limit_reached") {
         setTrialChatMessagesRemaining(0);
+        setChatError(null);
+      } else {
+        setChatError(getApiErrorMessage(payload, "Odgovora ni bilo mogoče ustvariti."));
       }
 
-      setChatError(getApiErrorMessage(payload, "Odgovora ni bilo mogoče ustvariti."));
       setDetail((current) => ({
         ...current,
         chatMessages: current.chatMessages.filter(
@@ -5166,7 +5168,9 @@ export function LectureWorkspace({
                 <p className="lecture-chat-status">Na voljo bo po koncu obdelave.</p>
               ) : chatLimitReached ? (
                 <div className="flex items-center justify-between gap-3">
-                  <p className="lecture-chat-status ios-danger">Porabil si vseh 5 brezplačnih sporočil.</p>
+                  <p className="lecture-chat-status">
+                    Porabil si brezplačna sporočila za ta zapisek. Za nadaljevanje klepeta nadgradi paket.
+                  </p>
                   <button
                     type="button"
                     className="ios-secondary-button"
@@ -5175,10 +5179,6 @@ export function LectureWorkspace({
                     Nadgradi
                   </button>
                 </div>
-              ) : isTrialLecture ? (
-                <p className="lecture-chat-status">
-                  Brezplačna sporočila za ta zapisek: {trialChatMessagesRemaining}/5.
-                </p>
               ) : (
                 <p className="lecture-chat-status">Odgovori ostajajo vezani na to predavanje.</p>
               )}

@@ -9,12 +9,13 @@ import {
   getPriceIdForPlan,
   getStripeClient,
   getViewerAppState,
+  PURCHASABLE_BILLING_PLAN_IDS,
 } from "@/lib/billing";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
 
 const checkoutSchema = z.object({
-  plan: z.enum(["weekly", "monthly", "yearly"]),
+  plan: z.enum(PURCHASABLE_BILLING_PLAN_IDS),
 });
 
 export async function POST(request: Request) {

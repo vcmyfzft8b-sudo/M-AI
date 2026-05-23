@@ -11,6 +11,7 @@ import { resolveSiteOrigin } from "@/lib/site-url";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 export type BillingPlan = "weekly" | "monthly" | "yearly";
+export type PurchasableBillingPlan = Exclude<BillingPlan, "weekly">;
 export type BillingRequiredCode =
   | "subscription_required"
   | "trial_exhausted"
@@ -82,6 +83,11 @@ export const BILLING_PLANS: Record<
     blurb: "Najnižja dejanska cena, če uporabljaš aplikacijo celo leto.",
   },
 };
+
+export const PURCHASABLE_BILLING_PLAN_IDS = ["monthly", "yearly"] as const satisfies readonly PurchasableBillingPlan[];
+export const PURCHASABLE_BILLING_PLANS = PURCHASABLE_BILLING_PLAN_IDS.map(
+  (planId) => BILLING_PLANS[planId],
+);
 
 export function hasPaidAccess(subscription: BillingSubscriptionRow | null) {
   return Boolean(subscription && ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status));

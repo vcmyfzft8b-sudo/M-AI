@@ -459,6 +459,7 @@ export function OnboardingPaywall({
   const homeScreenPointerStartYRef = useRef<number | null>(null);
   const homeScreenPointerIdRef = useRef<number | null>(null);
   const homeScreenPointerStartScrollLeftRef = useRef(0);
+  const homeScreenPointerHasDraggedRef = useRef(false);
   const [gradeTouched, setGradeTouched] = useState({
     targetGrade: false,
     currentAverageGrade: false,
@@ -505,6 +506,7 @@ export function OnboardingPaywall({
     homeScreenPointerStartYRef.current = null;
     homeScreenPointerIdRef.current = null;
     homeScreenPointerStartScrollLeftRef.current = 0;
+    homeScreenPointerHasDraggedRef.current = false;
     setHomeScreenDragging(false);
   }
 
@@ -520,9 +522,13 @@ export function OnboardingPaywall({
 
     const deltaX = startX - endX;
     const deltaY = startY - endY;
+    const startStep =
+      scrollContainer.clientWidth > 0
+        ? Math.round(homeScreenPointerStartScrollLeftRef.current / scrollContainer.clientWidth)
+        : homeScreenStep;
 
     if (Math.abs(deltaX) >= 42 && Math.abs(deltaX) >= Math.abs(deltaY) * 1.2) {
-      goToHomeScreenStep(homeScreenStep + (deltaX > 0 ? 1 : -1));
+      goToHomeScreenStep(startStep + (deltaX > 0 ? 1 : -1));
       resetHomeScreenDrag();
       return;
     }
@@ -944,7 +950,7 @@ export function OnboardingPaywall({
               }
             }}
             onPointerDown={(event) => {
-              if (event.pointerType !== "mouse") {
+              if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) {
                 return;
               }
 
@@ -952,7 +958,7 @@ export function OnboardingPaywall({
               homeScreenPointerStartYRef.current = event.clientY;
               homeScreenPointerIdRef.current = event.pointerId;
               homeScreenPointerStartScrollLeftRef.current = event.currentTarget.scrollLeft;
-              setHomeScreenDragging(true);
+              homeScreenPointerHasDraggedRef.current = false;
               event.currentTarget.setPointerCapture(event.pointerId);
             }}
             onPointerMove={(event) => {
@@ -965,9 +971,29 @@ export function OnboardingPaywall({
                 return;
               }
 
+              const startY = homeScreenPointerStartYRef.current;
+              const deltaX = event.clientX - startX;
+              const deltaY = startY == null ? 0 : event.clientY - startY;
+
+              if (
+                !homeScreenPointerHasDraggedRef.current &&
+                Math.abs(deltaX) < 8 &&
+                Math.abs(deltaY) < 8
+              ) {
+                return;
+              }
+
+              if (!homeScreenPointerHasDraggedRef.current && Math.abs(deltaY) > Math.abs(deltaX)) {
+                return;
+              }
+
+              if (!homeScreenPointerHasDraggedRef.current) {
+                homeScreenPointerHasDraggedRef.current = true;
+                setHomeScreenDragging(true);
+              }
               event.preventDefault();
               event.currentTarget.scrollLeft =
-                homeScreenPointerStartScrollLeftRef.current - (event.clientX - startX);
+                homeScreenPointerStartScrollLeftRef.current - deltaX;
             }}
             onPointerUp={(event) => {
               if (homeScreenPointerIdRef.current !== event.pointerId) {

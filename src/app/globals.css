@@ -1710,7 +1710,7 @@ a:visited {
   overflow-y: hidden;
   scroll-behavior: smooth;
   scroll-snap-type: x mandatory;
-  touch-action: pan-x pan-y;
+  touch-action: pan-y;
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
   cursor: grab;

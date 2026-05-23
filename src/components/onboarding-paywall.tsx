@@ -4,17 +4,19 @@ import {
   ArrowRight,
   Check,
   ChevronLeft,
+  CircleCheck,
   Instagram,
   Loader2,
   Minus,
   Plus,
+  X,
 } from "lucide-react";
 import { startTransition, useState } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { EmojiIcon } from "@/components/emoji-icon";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
-import { formatCalendarDate } from "@/lib/utils";
 
 type BillingPlanCard = {
   id: "weekly" | "monthly" | "yearly";
@@ -405,20 +407,22 @@ export function OnboardingPaywall({
   onboardingComplete,
   hasPaidAccess,
   plans,
+  devPreview = false,
 }: {
   profile: ProfileRow | null;
   subscription: BillingSubscriptionRow | null;
   onboardingComplete: boolean;
   hasPaidAccess: boolean;
   plans: BillingPlanCard[];
+  devPreview?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState(0);
+  const [previewOnboardingComplete, setPreviewOnboardingComplete] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
-  const [isPersonalizing, setIsPersonalizing] = useState(false);
+  const [selectedPaywallPlan, setSelectedPaywallPlan] = useState<BillingPlanCard["id"]>("yearly");
   const [checkoutPlan, setCheckoutPlan] = useState<BillingPlanCard["id"] | null>(null);
-  const [portalLoading, setPortalLoading] = useState(false);
   const [billingError, setBillingError] = useState<string | null>(null);
   const [gradeTouched, setGradeTouched] = useState({
     targetGrade: false,
@@ -531,6 +535,11 @@ export function OnboardingPaywall({
     setSavingProfile(true);
 
     try {
+      if (devPreview) {
+        setPreviewOnboardingComplete(true);
+        return;
+      }
+
       const response = await fetch("/api/profile/onboarding", {
         method: "POST",
         headers: {
@@ -543,11 +552,8 @@ export function OnboardingPaywall({
         throw new Error("Onboardinga ni bilo mogoče shraniti.");
       }
 
-      setIsPersonalizing(true);
-      await new Promise((resolve) => window.setTimeout(resolve, 1800));
-
       startTransition(() => {
-        router.push("/app");
+        router.push("/app/start");
         router.refresh();
       });
     } finally {
@@ -870,53 +876,14 @@ export function OnboardingPaywall({
     }
   }
 
-  async function openPortal() {
-    setBillingError(null);
-    setPortalLoading(true);
+  const effectiveOnboardingComplete = onboardingComplete || previewOnboardingComplete;
+  const monthlyPlan = plans.find((plan) => plan.id === "monthly");
+  const yearlyPlan = plans.find((plan) => plan.id === "yearly");
+  const paywallPlans = [yearlyPlan, monthlyPlan].filter(
+    (plan): plan is BillingPlanCard => Boolean(plan),
+  );
 
-    try {
-      const response = await fetch("/api/billing/portal", {
-        method: "POST",
-      });
-      const payload = (await response.json()) as { url?: string; error?: string };
-
-      if (!response.ok || !payload.url) {
-        throw new Error(payload.error ?? "Portala za obračun ni bilo mogoče odpreti.");
-      }
-
-      window.location.href = payload.url;
-    } catch (error) {
-      setBillingError(
-        error instanceof Error
-          ? error.message
-          : "Portala za obračun ni bilo mogoče odpreti.",
-      );
-    } finally {
-      setPortalLoading(false);
-    }
-  }
-
-  if (!onboardingComplete) {
-    if (isPersonalizing) {
-      return (
-        <section className="app-start-panel app-start-panel-fullscreen app-start-panel-survey memo-onboarding-shell">
-          <div className="memo-onboarding-personalizing">
-            <div className="memo-onboarding-personalizing-orb" aria-hidden="true" />
-            <p className="memo-onboarding-kicker">Personaliziramo tvoj Memo AI...</p>
-            <h2>Nastavljamo ga po tvoji meri.</h2>
-            <p>
-              Pripravljamo izkušnjo glede na tvojo šolo, področje, ocene in učni cilj.
-            </p>
-            <div className="memo-onboarding-personalizing-bars" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </div>
-          </div>
-        </section>
-      );
-    }
-
+  if (!effectiveOnboardingComplete) {
     const currentStep = renderCurrentStep();
     const progress = ((step + 1) / ONBOARDING_STEP_COUNT) * 100;
 
@@ -966,8 +933,8 @@ export function OnboardingPaywall({
   }
 
   return (
-    <section className="app-start-panel app-start-panel-paywall">
-      {onboardingComplete ? (
+    <section className="app-start-panel app-start-panel-paywall memo-paywall-shell">
+      {effectiveOnboardingComplete ? (
         <div className="app-start-dismiss-row">
           <button
             type="button"
@@ -975,7 +942,7 @@ export function OnboardingPaywall({
             onClick={() => router.push("/app")}
             aria-label="Zapri ponudbo naročnine"
           >
-            <EmojiIcon symbol="✕" size="0.95rem" />
+            <X className="h-5 w-5" />
           </button>
         </div>
       ) : null}
@@ -983,72 +950,122 @@ export function OnboardingPaywall({
       <CheckoutBanner state={searchParams.get("checkout")} />
       {billingError ? <div className="app-start-banner">{billingError}</div> : null}
 
-      <div className="app-start-pricing-grid">
-        {plans.map((plan) => {
+      <div className="memo-paywall-brand">
+        <span className="memo-paywall-logo" aria-hidden="true">
+          <Image
+            src="/memo-logo.png"
+            alt=""
+            width={3651}
+            height={3285}
+            sizes="2.6rem"
+            priority
+          />
+        </span>
+        <span>Memo AI</span>
+      </div>
+
+      <h1 className="memo-paywall-title">Nadgradi in ustvarjaj več zapiskov</h1>
+
+      <div className="memo-paywall-benefits">
+        {[
+          {
+            title: "Neomejeni zapiski",
+            copy: "Naloži neomejeno PDF-jev in zvoka",
+            icon: "📝",
+          },
+          {
+            title: "Pametna učna orodja",
+            copy: "Personalizirane vaje za boljše rezultate",
+            icon: "💡",
+          },
+          {
+            title: "Uči se 10x hitreje",
+            copy: "Pospeši učenje z AI podporo",
+            icon: "⚡",
+          },
+        ].map((benefit) => (
+          <div className="memo-paywall-benefit" key={benefit.title}>
+            <span aria-hidden="true">{benefit.icon}</span>
+            <div>
+              <strong>{benefit.title}</strong>
+              <p>{benefit.copy}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="memo-paywall-plan-grid" role="radiogroup" aria-label="Izberi paket">
+        {paywallPlans.map((plan) => {
+          const selected = selectedPaywallPlan === plan.id;
           const activePlan = subscription?.plan === plan.id && hasPaidAccess;
+          const annualizedMonthly = monthlyPlan?.annualizedAmount ?? 0;
+          const yearlySavings = annualizedMonthly > plan.annualizedAmount
+            ? Math.round((1 - plan.annualizedAmount / annualizedMonthly) * 100)
+            : 0;
+          const displayPrice =
+            plan.id === "yearly"
+              ? `€${plan.displayAmount ?? plan.amount}`
+              : `€${plan.displayAmount ?? plan.amount}`;
+          const suffix = "/ mesec";
+          const detail =
+            plan.id === "yearly"
+              ? `Obračunano letno: €${plan.annualizedAmount}`
+              : "Obračunano mesečno";
 
           return (
-            <article
+            <button
+              type="button"
               key={plan.id}
-              className={`app-start-price-card ${plan.id === "monthly" ? "featured" : ""}`}
+              className={`memo-paywall-plan ${selected ? "selected" : ""}`}
+              onClick={() => setSelectedPaywallPlan(plan.id)}
+              role="radio"
+              aria-checked={selected}
             >
-              <div className="app-start-price-header">
-                <div>
-                  <p className="app-start-price-name">{plan.label}</p>
-                  <h2>€{plan.displayAmount ?? plan.amount}</h2>
-                  <p className="app-start-price-cadence">{plan.cadence}</p>
-                  {plan.billingNote ? (
-                    <p className="app-start-price-billing-note">{plan.billingNote}</p>
-                  ) : null}
-                </div>
-                {plan.id === "monthly" ? <span className="app-start-badge">Privzeto</span> : null}
-              </div>
-
-              <p className="app-start-price-blurb">{plan.blurb}</p>
-              <p className="app-start-price-footnote">Letni strošek: €{plan.annualizedAmount}</p>
-
-              <button
-                type="button"
-                className="app-start-primary-button"
-                onClick={() => startCheckout(plan.id)}
-                disabled={checkoutPlan !== null || activePlan}
-              >
-                {checkoutPlan === plan.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {activePlan ? "Trenutni paket" : `Izberi ${plan.label.toLowerCase()}`}
-              </button>
-            </article>
+              {plan.id === "yearly" ? (
+                <span className="memo-paywall-plan-badge">Najbolj priljubljeno</span>
+              ) : null}
+              <span className="memo-paywall-plan-header">
+                <strong>{plan.label}</strong>
+                <span className="memo-paywall-radio" aria-hidden="true">
+                  {selected || activePlan ? <span /> : null}
+                </span>
+              </span>
+              <span className="memo-paywall-plan-price">
+                {displayPrice}
+                <small>{suffix}</small>
+              </span>
+              <span className="memo-paywall-plan-detail">{detail}</span>
+              {plan.id === "yearly" && yearlySavings > 0 ? (
+                <span className="memo-paywall-save">Prihrani {yearlySavings}%</span>
+              ) : null}
+            </button>
           );
         })}
       </div>
 
-      <p className="app-start-discount-note">
-        Uporabi kodo MEMO50 za 50% popusta na prvi obračun. Naslednji obračuni so po redni ceni.
+      <p className="memo-paywall-due">
+        <CircleCheck className="h-5 w-5" />
+        Danes brez plačila
       </p>
 
-      {subscription ? (
-        <div className="app-start-subscription-status">
-          <div>
-            <p className="app-start-overline">Trenutno stanje naročnine</p>
-            <h3>{subscription.status.replaceAll("_", " ")}</h3>
-            <p>
-              Paket {subscription.plan}
-              {subscription.current_period_end
-                ? ` do ${formatCalendarDate(subscription.current_period_end)}`
-                : ""}
-            </p>
-          </div>
+      <button
+        type="button"
+        className="memo-paywall-cta"
+        onClick={() => startCheckout(selectedPaywallPlan)}
+        disabled={checkoutPlan !== null || (subscription?.plan === selectedPaywallPlan && hasPaidAccess)}
+      >
+        {checkoutPlan === selectedPaywallPlan ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+        {subscription?.plan === selectedPaywallPlan && hasPaidAccess
+          ? "Trenutni paket"
+          : "Začni 3-dnevni brezplačni preizkus"}
+      </button>
 
-          <button
-            type="button"
-            className="app-start-secondary-button"
-            onClick={openPortal}
-            disabled={portalLoading}
-          >
-            {portalLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Uredi naročnino
-          </button>
-        </div>
-      ) : null}
+      <div className="memo-paywall-foot">
+        <span>
+          <CircleCheck className="h-5 w-5" />
+          Prekliči kadarkoli
+        </span>
+      </div>
     </section>
   );
 }

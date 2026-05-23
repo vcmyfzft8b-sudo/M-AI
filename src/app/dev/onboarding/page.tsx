@@ -16,6 +16,7 @@ export default function DevOnboardingPreviewPage() {
         onboardingComplete={false}
         hasPaidAccess={false}
         plans={Object.values(BILLING_PLANS)}
+        devPreview
       />
     </main>
   );

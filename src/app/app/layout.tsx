@@ -20,7 +20,7 @@ export default async function AppLayout({
 
   if (
     appState?.onboardingComplete &&
-    (appState.hasPaidAccess || appState.hasTrialLectureAvailable) &&
+    appState.hasPaidAccess &&
     pathname === "/app/start"
   ) {
     redirect("/app");

@@ -11,7 +11,7 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { startTransition, useState } from "react";
+import { startTransition, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -212,7 +212,36 @@ const DAILY_GOAL_OPTIONS = [
   { value: "intensive", label: "Intenzivno - 90+ min / dan", icon: "🌳" },
 ] as const;
 
-const ONBOARDING_STEP_COUNT = 15;
+const HOME_SCREEN_STEPS = [
+  {
+    title: "Klikni Share",
+    description: "V Safariju odpri meni in pritisni Share.",
+    src: "/onboarding/add-home-screen-menu.png",
+    alt: "Safari meni z možnostjo Share",
+    highlight: { left: "27.4%", top: "58.75%", width: "64.2%", height: "4.15%" },
+  },
+  {
+    title: "Izberi Add to Home Screen",
+    description: "V share meniju pritisni Add to Home Screen.",
+    src: "/onboarding/add-home-screen-share.png",
+    alt: "iPhone delilni meni z možnostjo Add to Home Screen",
+    highlight: { left: "5.2%", top: "78.65%", width: "89.6%", height: "5.15%" },
+  },
+  {
+    title: "Pritisni Add",
+    description: "Ime lahko pustiš Memo AI in potrdiš z Add.",
+    src: "/onboarding/add-home-screen-add.png",
+    alt: "Potrditev Add to Home Screen za Memo AI",
+  },
+  {
+    title: "Memo AI je zdaj na Home Screenu",
+    description: "Naslednjič ga odpreš kot aplikacijo.",
+    src: "/onboarding/add-home-screen-result.png",
+    alt: "Memo AI ikona na začetnem zaslonu iPhona",
+  },
+] as const;
+
+const ONBOARDING_STEP_COUNT = 16;
 
 function formatSlovenianGrade(value: number) {
   return value.toFixed(1).replace(".", ",");
@@ -408,7 +437,6 @@ export function OnboardingPaywall({
   hasPaidAccess,
   subscriptionTrialEligible = true,
   plans,
-  devPreview = false,
 }: {
   profile: ProfileRow | null;
   subscription: BillingSubscriptionRow | null;
@@ -416,16 +444,21 @@ export function OnboardingPaywall({
   hasPaidAccess: boolean;
   subscriptionTrialEligible?: boolean;
   plans: BillingPlanCard[];
-  devPreview?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState(0);
-  const [previewOnboardingComplete, setPreviewOnboardingComplete] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [selectedPaywallPlan, setSelectedPaywallPlan] = useState<BillingPlanCard["id"]>("yearly");
   const [checkoutPlan, setCheckoutPlan] = useState<BillingPlanCard["id"] | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
+  const [homeScreenStep, setHomeScreenStep] = useState(0);
+  const [homeScreenDragging, setHomeScreenDragging] = useState(false);
+  const homeScreenScrollRef = useRef<HTMLDivElement | null>(null);
+  const homeScreenPointerStartXRef = useRef<number | null>(null);
+  const homeScreenPointerStartYRef = useRef<number | null>(null);
+  const homeScreenPointerIdRef = useRef<number | null>(null);
+  const homeScreenPointerStartScrollLeftRef = useRef(0);
   const [gradeTouched, setGradeTouched] = useState({
     targetGrade: false,
     currentAverageGrade: false,
@@ -452,6 +485,50 @@ export function OnboardingPaywall({
 
   function goNext(roleOverride = form.role) {
     setStep((current) => getNextOnboardingStep(current, roleOverride));
+  }
+
+  function goToHomeScreenStep(nextStep: number) {
+    const boundedStep = Math.min(HOME_SCREEN_STEPS.length - 1, Math.max(0, nextStep));
+    setHomeScreenStep(boundedStep);
+
+    const scrollContainer = homeScreenScrollRef.current;
+    if (scrollContainer) {
+      scrollContainer.scrollTo({
+        left: scrollContainer.clientWidth * boundedStep,
+        behavior: "smooth",
+      });
+    }
+  }
+
+  function resetHomeScreenDrag() {
+    homeScreenPointerStartXRef.current = null;
+    homeScreenPointerStartYRef.current = null;
+    homeScreenPointerIdRef.current = null;
+    homeScreenPointerStartScrollLeftRef.current = 0;
+    setHomeScreenDragging(false);
+  }
+
+  function finishHomeScreenDrag(endX: number | null, endY: number | null) {
+    const scrollContainer = homeScreenScrollRef.current;
+    const startX = homeScreenPointerStartXRef.current;
+    const startY = homeScreenPointerStartYRef.current;
+
+    if (!scrollContainer || startX == null || startY == null || endX == null || endY == null) {
+      resetHomeScreenDrag();
+      return;
+    }
+
+    const deltaX = startX - endX;
+    const deltaY = startY - endY;
+
+    if (Math.abs(deltaX) >= 42 && Math.abs(deltaX) >= Math.abs(deltaY) * 1.2) {
+      goToHomeScreenStep(homeScreenStep + (deltaX > 0 ? 1 : -1));
+      resetHomeScreenDrag();
+      return;
+    }
+
+    goToHomeScreenStep(Math.round(scrollContainer.scrollLeft / scrollContainer.clientWidth));
+    resetHomeScreenDrag();
   }
 
   function selectAndAdvance<Key extends keyof typeof form>(
@@ -537,11 +614,6 @@ export function OnboardingPaywall({
     setSavingProfile(true);
 
     try {
-      if (devPreview) {
-        setPreviewOnboardingComplete(true);
-        return;
-      }
-
       const response = await fetch("/api/profile/onboarding", {
         method: "POST",
         headers: {
@@ -818,34 +890,158 @@ export function OnboardingPaywall({
       };
     }
 
+    if (step === 14) {
+      return {
+        title: "Kakšen je tvoj dnevni študijski cilj?",
+        body: (
+          <div className="memo-onboarding-option-list">
+            {DAILY_GOAL_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`memo-onboarding-option ${form.dailyGoal === option.value ? "selected" : ""}`}
+                onClick={() => {
+                  const nextForm = { ...form, dailyGoal: option.value };
+                  setForm(nextForm);
+                  window.setTimeout(() => {
+                    setStep(15);
+                  }, 120);
+                }}
+                disabled={savingProfile}
+              >
+                <span className="memo-onboarding-option-icon" aria-hidden="true">
+                  <OnboardingOptionIcon icon={option.icon} />
+                </span>
+                <span>
+                  <strong>{option.label}</strong>
+                </span>
+              </button>
+            ))}
+          </div>
+        ),
+      };
+    }
+
     return {
-      title: "Kakšen je tvoj dnevni študijski cilj?",
+      title: "Dodaj Memo AI na homescreen",
       body: (
-        <div className="memo-onboarding-option-list">
-          {DAILY_GOAL_OPTIONS.map((option) => (
+        <div className="memo-onboarding-home-wrap">
+          <div
+            ref={homeScreenScrollRef}
+            className={`memo-onboarding-home-screen ${homeScreenDragging ? "dragging" : ""}`}
+            onScroll={(event) => {
+              const { clientWidth, scrollLeft } = event.currentTarget;
+              if (clientWidth > 0) {
+                setHomeScreenStep(Math.round(scrollLeft / clientWidth));
+              }
+            }}
+            onPointerDown={(event) => {
+              if (event.pointerType !== "mouse") {
+                return;
+              }
+
+              homeScreenPointerStartXRef.current = event.clientX;
+              homeScreenPointerStartYRef.current = event.clientY;
+              homeScreenPointerIdRef.current = event.pointerId;
+              homeScreenPointerStartScrollLeftRef.current = event.currentTarget.scrollLeft;
+              setHomeScreenDragging(true);
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (homeScreenPointerIdRef.current !== event.pointerId) {
+                return;
+              }
+
+              const startX = homeScreenPointerStartXRef.current;
+              if (startX == null) {
+                return;
+              }
+
+              event.preventDefault();
+              event.currentTarget.scrollLeft =
+                homeScreenPointerStartScrollLeftRef.current - (event.clientX - startX);
+            }}
+            onPointerUp={(event) => {
+              if (homeScreenPointerIdRef.current !== event.pointerId) {
+                return;
+              }
+
+              finishHomeScreenDrag(event.clientX, event.clientY);
+            }}
+            onPointerCancel={resetHomeScreenDrag}
+            onLostPointerCapture={resetHomeScreenDrag}
+            onDragStart={(event) => {
+              event.preventDefault();
+            }}
+          >
+            <div className="memo-onboarding-home-track">
+              {HOME_SCREEN_STEPS.map((item) => (
+                <article key={item.src} className="memo-onboarding-home-card">
+                  <div className="memo-onboarding-home-copy">
+                    <div>
+                      <strong>{item.title}</strong>
+                      <p>{item.description}</p>
+                    </div>
+                  </div>
+                  <div className="memo-onboarding-home-visual">
+                    <Image
+                      src={item.src}
+                      alt={item.alt}
+                      width={1170}
+                      height={2532}
+                      sizes="(max-width: 640px) 100vw, 35rem"
+                      unoptimized
+                    />
+                    {"highlight" in item ? (
+                      <span
+                        className="memo-onboarding-home-highlight"
+                        style={{
+                          left: item.highlight.left,
+                          top: item.highlight.top,
+                          width: item.highlight.width,
+                          height: item.highlight.height,
+                        }}
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="memo-onboarding-home-controls" aria-label="Koraki za Home Screen">
             <button
-              key={option.value}
               type="button"
-              className={`memo-onboarding-option ${form.dailyGoal === option.value ? "selected" : ""}`}
-              onClick={() => {
-                const nextForm = { ...form, dailyGoal: option.value };
-                setForm(nextForm);
-                window.setTimeout(() => {
-                  void submitOnboarding(nextForm);
-                }, 120);
-              }}
-              disabled={savingProfile}
+              onClick={() => goToHomeScreenStep(homeScreenStep - 1)}
+              disabled={homeScreenStep === 0}
+              aria-label="Prejšnji korak"
             >
-              <span className="memo-onboarding-option-icon" aria-hidden="true">
-                <OnboardingOptionIcon icon={option.icon} />
-              </span>
-              <span>
-                <strong>{option.label}</strong>
-              </span>
+              <ChevronLeft className="h-6 w-6" />
             </button>
-          ))}
+            <div>
+              {HOME_SCREEN_STEPS.map((item, index) => (
+                <button
+                  key={item.src}
+                  type="button"
+                  className={homeScreenStep === index ? "active" : ""}
+                  onClick={() => goToHomeScreenStep(index)}
+                  aria-label={`Prikaži korak ${index + 1}`}
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => goToHomeScreenStep(homeScreenStep + 1)}
+              disabled={homeScreenStep === HOME_SCREEN_STEPS.length - 1}
+              aria-label="Naslednji korak"
+            >
+              <ArrowRight className="h-6 w-6" />
+            </button>
+          </div>
         </div>
       ),
+      action: "Končaj",
     };
   }
 
@@ -878,7 +1074,7 @@ export function OnboardingPaywall({
     }
   }
 
-  const effectiveOnboardingComplete = onboardingComplete || previewOnboardingComplete;
+  const effectiveOnboardingComplete = onboardingComplete;
   const monthlyPlan = plans.find((plan) => plan.id === "monthly");
   const yearlyPlan = plans.find((plan) => plan.id === "yearly");
   const paywallPlans = [yearlyPlan, monthlyPlan].filter(
@@ -920,7 +1116,14 @@ export function OnboardingPaywall({
               <button
                 type="button"
                 className={`memo-onboarding-pill-button ${currentStep.action === "Preskoči" ? "secondary" : ""}`}
-                onClick={() => goNext()}
+                onClick={() => {
+                  if (step === ONBOARDING_STEP_COUNT - 1) {
+                    void submitOnboarding();
+                    return;
+                  }
+
+                  goNext();
+                }}
                 disabled={Boolean("disabled" in currentStep && currentStep.disabled) || savingProfile}
               >
                 {savingProfile ? <Loader2 className="h-5 w-5 animate-spin" /> : null}

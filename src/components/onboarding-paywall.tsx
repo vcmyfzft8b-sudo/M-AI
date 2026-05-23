@@ -611,7 +611,12 @@ export function OnboardingPaywall({
   }
 
   async function submitOnboarding(formOverride?: typeof form) {
+    if (savingProfile) {
+      return;
+    }
+
     setSavingProfile(true);
+    setBillingError(null);
 
     try {
       const response = await fetch("/api/profile/onboarding", {
@@ -630,7 +635,10 @@ export function OnboardingPaywall({
         router.push("/app/start");
         router.refresh();
       });
-    } finally {
+    } catch (error) {
+      setBillingError(
+        error instanceof Error ? error.message : "Onboardinga ni bilo mogoče shraniti.",
+      );
       setSavingProfile(false);
     }
   }
@@ -1106,6 +1114,7 @@ export function OnboardingPaywall({
           </div>
 
           <div className="memo-onboarding-content">
+            {billingError ? <div className="app-start-banner">{billingError}</div> : null}
             {currentStep.title ? <h2>{currentStep.title}</h2> : null}
             {"copy" in currentStep && currentStep.copy ? <p>{currentStep.copy}</p> : null}
             {currentStep.body}

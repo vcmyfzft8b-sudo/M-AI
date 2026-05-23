@@ -33,6 +33,7 @@ export type UserEntitlementState = {
   canResumeTrialLecture: boolean;
   trialChatMessagesUsed: number;
   trialChatMessagesRemaining: number;
+  subscriptionTrialEligible: boolean;
   canCreateNotes: boolean;
   canAccessPaywalledCreation: boolean;
   shouldShowTrialEntry: boolean;
@@ -84,6 +85,16 @@ export const BILLING_PLANS: Record<
 
 export function hasPaidAccess(subscription: BillingSubscriptionRow | null) {
   return Boolean(subscription && ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status));
+}
+
+export function hasStartedSubscriptionTrial(
+  profile: ProfileRow | null,
+  subscriptions: BillingSubscriptionRow[],
+) {
+  return Boolean(
+    profile?.subscription_trial_started_at ||
+      subscriptions.some((subscription) => subscription.status === "trialing"),
+  );
 }
 
 export function getActiveSubscription(
@@ -308,6 +319,7 @@ function buildEntitlementState(params: {
   canResumeTrialLecture: boolean;
   trialChatMessagesUsed: number;
   trialChatMessagesRemaining: number;
+  subscriptionTrialEligible: boolean;
 }) {
   const onboardingComplete = hasCompletedOnboardingProfile(params.profile);
   const trialLectureId = params.profile?.trial_lecture_id ?? null;
@@ -330,6 +342,7 @@ function buildEntitlementState(params: {
     canResumeTrialLecture: params.canResumeTrialLecture,
     trialChatMessagesUsed: params.trialChatMessagesUsed,
     trialChatMessagesRemaining: params.trialChatMessagesRemaining,
+    subscriptionTrialEligible: params.subscriptionTrialEligible,
     canCreateNotes,
     canAccessPaywalledCreation: !canCreateNotes,
     shouldShowTrialEntry,
@@ -357,6 +370,10 @@ export const getUserEntitlementState = cache(async function getUserEntitlementSt
     userId,
     recoveredProfile?.trial_lecture_id ?? null,
   );
+  const subscriptionTrialEligible = !hasStartedSubscriptionTrial(
+    recoveredProfile,
+    billingState.subscriptions,
+  );
 
   return buildEntitlementState({
     profile: recoveredProfile,
@@ -364,6 +381,7 @@ export const getUserEntitlementState = cache(async function getUserEntitlementSt
     subscription: billingState.subscription,
     hasPaidAccess: billingState.hasPaidAccess,
     canResumeTrialLecture,
+    subscriptionTrialEligible,
     ...trialUsage,
   });
 });
@@ -491,12 +509,19 @@ export async function syncStripeSubscriptionRecord(subscription: Stripe.Subscrip
   }
 
   const service = createSupabaseServiceRoleClient();
+  const profileUpdate: Record<string, string | null> = {
+    stripe_customer_id: customerId,
+  };
+
+  if (subscription.trial_start) {
+    profileUpdate.subscription_trial_started_at = new Date(
+      subscription.trial_start * 1000,
+    ).toISOString();
+  }
 
   await service
     .from("profiles")
-    .update({
-      stripe_customer_id: customerId,
-    } as never)
+    .update(profileUpdate as never)
     .eq("id", resolvedUserId);
 
   await service

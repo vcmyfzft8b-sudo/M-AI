@@ -193,9 +193,9 @@ const FEATURE_OPTIONS = [
   { value: "audio_notes", label: "Audio zapiski", icon: "🎧" },
   { value: "quizzes", label: "Kvizi", icon: "📝" },
   { value: "flashcards", label: "Flashcards", icon: "🃏" },
-  { value: "record_lectures", label: "Snemanje predavanj", icon: "🎙️" },
+  { value: "record_lectures", label: "Personalizacija zapiskov", icon: "✨" },
   { value: "tests", label: "Testi", icon: "✅" },
-  { value: "ai_chat_notes", label: "AI klepet z zapiski", icon: "💬" },
+  { value: "ai_chat_notes", label: "Branje zapiskov", icon: "🔊" },
 ] as const;
 
 const CLASS_FOCUS_OPTIONS = [
@@ -406,6 +406,7 @@ export function OnboardingPaywall({
   subscription,
   onboardingComplete,
   hasPaidAccess,
+  subscriptionTrialEligible = true,
   plans,
   devPreview = false,
 }: {
@@ -413,6 +414,7 @@ export function OnboardingPaywall({
   subscription: BillingSubscriptionRow | null;
   onboardingComplete: boolean;
   hasPaidAccess: boolean;
+  subscriptionTrialEligible?: boolean;
   plans: BillingPlanCard[];
   devPreview?: boolean;
 }) {
@@ -957,7 +959,7 @@ export function OnboardingPaywall({
             alt=""
             width={3651}
             height={3285}
-            sizes="2.6rem"
+            sizes="(max-width: 420px) 4.25rem, 4.7rem"
             priority
           />
         </span>
@@ -1045,19 +1047,27 @@ export function OnboardingPaywall({
 
       <p className="memo-paywall-due">
         <CircleCheck className="h-5 w-5" />
-        Danes brez plačila
+        {subscriptionTrialEligible ? "Danes brez plačila" : "Varno plačilo prek Stripe"}
       </p>
 
       <button
         type="button"
-        className="memo-paywall-cta"
+        className={`memo-paywall-cta ${checkoutPlan === selectedPaywallPlan ? "loading" : ""}`}
         onClick={() => startCheckout(selectedPaywallPlan)}
         disabled={checkoutPlan !== null || (subscription?.plan === selectedPaywallPlan && hasPaidAccess)}
       >
-        {checkoutPlan === selectedPaywallPlan ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-        {subscription?.plan === selectedPaywallPlan && hasPaidAccess
-          ? "Trenutni paket"
-          : "Začni 3-dnevni brezplačni preizkus"}
+        {checkoutPlan === selectedPaywallPlan ? (
+          <Loader2 className="memo-paywall-cta-spinner animate-spin" />
+        ) : null}
+        {checkoutPlan === selectedPaywallPlan ? null : (
+          <span className="memo-paywall-cta-label">
+            {subscription?.plan === selectedPaywallPlan && hasPaidAccess
+              ? "Trenutni paket"
+              : subscriptionTrialEligible
+                ? "Začni 3-dnevni brezplačni preizkus"
+                : "Nadaljuj na plačilo"}
+          </span>
+        )}
       </button>
 
       <div className="memo-paywall-foot">

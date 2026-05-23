@@ -384,8 +384,8 @@ a:visited {
 
 .memo-paywall-logo {
   display: inline-flex;
-  width: 3.15rem;
-  height: 2.85rem;
+  width: 4.7rem;
+  height: 4.25rem;
   align-items: center;
   justify-content: center;
 }
@@ -437,6 +437,7 @@ a:visited {
   border-radius: 1.1rem;
   background: rgba(10, 132, 255, 0.22);
   color: var(--memo-paywall-purple);
+  font-size: 1.6rem;
 }
 
 .memo-paywall-benefit strong {
@@ -591,23 +592,47 @@ a:visited {
 }
 
 .memo-paywall-cta {
+  position: relative;
   display: inline-flex;
   width: min(100%, 31rem);
-  min-height: 4.25rem;
+  height: 4.25rem;
   align-items: center;
   justify-content: center;
-  gap: 0.55rem;
+  padding: 0 1.35rem;
   border-radius: 1.35rem;
   background: var(--memo-paywall-purple);
   color: #ffffff;
-  font-size: clamp(1.24rem, 5vw, 1.75rem);
+  font-size: clamp(1rem, 3.7vw, 1.32rem);
   font-weight: 900;
   letter-spacing: 0;
+  overflow: hidden;
+  white-space: nowrap;
   box-shadow: 0 1rem 3rem rgba(10, 132, 255, 0.3);
 }
 
 .memo-paywall-cta:disabled {
   opacity: 0.65;
+}
+
+.memo-paywall-cta-spinner {
+  position: absolute;
+  left: 1.05rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 auto;
+}
+
+.memo-paywall-cta.loading .memo-paywall-cta-spinner {
+  left: calc(50% - 0.625rem);
+}
+
+.memo-paywall-cta-label {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .memo-paywall-foot {
@@ -1629,9 +1654,9 @@ a:visited {
 .memo-onboarding-feature-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(0.65rem, 2vh, 1.2rem);
+  gap: clamp(1.15rem, 3.1vh, 2.15rem) clamp(1rem, 6vw, 3.25rem);
   width: 100%;
-  margin-top: clamp(0.9rem, 3vh, 1.8rem);
+  margin-top: clamp(1.5rem, 4vh, 2.8rem);
   padding-bottom: 0.25rem;
 }
 
@@ -1647,18 +1672,18 @@ a:visited {
 .memo-onboarding-feature span {
   display: grid;
   place-items: center;
+  width: min(100%, clamp(7.4rem, 29vw, 11.4rem));
   aspect-ratio: 1;
-  max-height: min(22vh, 9.5rem);
   border-radius: 1.8rem;
   background: var(--memo-onboarding-card);
-  font-size: clamp(3.2rem, 13vw, 5.2rem);
+  font-size: clamp(4.15rem, 15vw, 6.8rem);
   transition:
     transform var(--motion-duration-fast) var(--motion-curve-standard),
     box-shadow var(--motion-duration-fast) var(--motion-curve-standard);
 }
 
 .memo-onboarding-feature strong {
-  font-size: clamp(1rem, 3.7vw, 1.35rem);
+  font-size: clamp(1.08rem, 4vw, 1.48rem);
   font-weight: 800;
   line-height: 1.08;
   width: 100%;
@@ -1756,8 +1781,8 @@ a:visited {
   }
 
   .memo-paywall-logo {
-    width: 2.85rem;
-    height: 2.55rem;
+    width: 4.25rem;
+    height: 3.85rem;
   }
 
   .memo-paywall-title {
@@ -1782,6 +1807,7 @@ a:visited {
     width: 3.35rem;
     height: 3.35rem;
     border-radius: 0.9rem;
+    font-size: 1.5rem;
   }
 
   .memo-paywall-benefit > span svg {
@@ -1850,9 +1876,19 @@ a:visited {
   }
 
   .memo-paywall-cta {
-    min-height: 3.45rem;
+    height: 3.45rem;
     border-radius: 1.05rem;
-    font-size: 1.12rem;
+    font-size: 1rem;
+  }
+
+  .memo-paywall-cta-spinner {
+    left: 0.85rem;
+    width: 1.05rem;
+    height: 1.05rem;
+  }
+
+  .memo-paywall-cta.loading .memo-paywall-cta-spinner {
+    left: calc(50% - 0.525rem);
   }
 
   .memo-paywall-foot {
@@ -2509,6 +2545,13 @@ select:disabled {
 .app-shell-content {
   padding-top: 1rem;
   overflow-x: clip;
+}
+
+.ios-content.app-shell-content-start {
+  width: 100%;
+  max-width: none;
+  min-height: 100dvh;
+  padding: 0;
 }
 
 .ios-tabbar {
@@ -5222,7 +5265,10 @@ select:disabled {
 
 .app-loading-shell {
   display: grid;
+  width: 100%;
+  max-width: none;
   gap: 1rem;
+  align-content: start;
 }
 
 .app-loading-header,
@@ -5233,17 +5279,20 @@ select:disabled {
 
 .app-loading-header {
   display: grid;
+  width: 100%;
   gap: 0.65rem;
   padding: 0.5rem 0 0.25rem;
 }
 
 .app-loading-grid {
   display: grid;
+  width: 100%;
   gap: 1rem;
 }
 
 .app-loading-card {
   display: grid;
+  width: 100%;
   gap: 0.85rem;
   padding: 1.35rem 1.4rem;
   border-radius: 20px;

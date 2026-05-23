@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type Stripe from "stripe";
 import { z } from "zod";
 
 import {
@@ -55,6 +56,14 @@ export async function POST(request: Request) {
     });
 
     const stripe = getStripeClient();
+    const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
+      metadata: {
+        userId: appState.user.id,
+        plan: parsed.data.plan,
+      },
+      ...(appState.subscriptionTrialEligible ? { trial_period_days: 3 } : {}),
+    };
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customerId,
@@ -76,12 +85,7 @@ export async function POST(request: Request) {
         userId: appState.user.id,
         plan: parsed.data.plan,
       },
-      subscription_data: {
-        metadata: {
-          userId: appState.user.id,
-          plan: parsed.data.plan,
-        },
-      },
+      subscription_data: subscriptionData,
     });
 
     return NextResponse.json({ url: session.url });

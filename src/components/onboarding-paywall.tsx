@@ -241,6 +241,9 @@ const HOME_SCREEN_STEPS = [
   },
 ] as const;
 
+const HOME_SCREEN_DRAG_LOCK_THRESHOLD_PX = 6;
+const HOME_SCREEN_SWIPE_THRESHOLD_PX = 18;
+
 const ONBOARDING_STEP_COUNT = 16;
 
 function formatSlovenianGrade(value: number) {
@@ -460,6 +463,7 @@ export function OnboardingPaywall({
   const homeScreenPointerIdRef = useRef<number | null>(null);
   const homeScreenPointerStartScrollLeftRef = useRef(0);
   const homeScreenPointerHasDraggedRef = useRef(false);
+  const homeScreenDragAxisRef = useRef<"horizontal" | "vertical" | null>(null);
   const [gradeTouched, setGradeTouched] = useState({
     targetGrade: false,
     currentAverageGrade: false,
@@ -507,6 +511,7 @@ export function OnboardingPaywall({
     homeScreenPointerIdRef.current = null;
     homeScreenPointerStartScrollLeftRef.current = 0;
     homeScreenPointerHasDraggedRef.current = false;
+    homeScreenDragAxisRef.current = null;
     setHomeScreenDragging(false);
   }
 
@@ -521,13 +526,15 @@ export function OnboardingPaywall({
     }
 
     const deltaX = startX - endX;
-    const deltaY = startY - endY;
     const startStep =
       scrollContainer.clientWidth > 0
         ? Math.round(homeScreenPointerStartScrollLeftRef.current / scrollContainer.clientWidth)
         : homeScreenStep;
 
-    if (Math.abs(deltaX) >= 42 && Math.abs(deltaX) >= Math.abs(deltaY) * 1.2) {
+    if (
+      homeScreenDragAxisRef.current === "horizontal" &&
+      Math.abs(deltaX) >= HOME_SCREEN_SWIPE_THRESHOLD_PX
+    ) {
       goToHomeScreenStep(startStep + (deltaX > 0 ? 1 : -1));
       resetHomeScreenDrag();
       return;
@@ -959,6 +966,7 @@ export function OnboardingPaywall({
               homeScreenPointerIdRef.current = event.pointerId;
               homeScreenPointerStartScrollLeftRef.current = event.currentTarget.scrollLeft;
               homeScreenPointerHasDraggedRef.current = false;
+              homeScreenDragAxisRef.current = null;
               event.currentTarget.setPointerCapture(event.pointerId);
             }}
             onPointerMove={(event) => {
@@ -974,16 +982,23 @@ export function OnboardingPaywall({
               const startY = homeScreenPointerStartYRef.current;
               const deltaX = event.clientX - startX;
               const deltaY = startY == null ? 0 : event.clientY - startY;
+              const absoluteDeltaX = Math.abs(deltaX);
+              const absoluteDeltaY = Math.abs(deltaY);
 
               if (
-                !homeScreenPointerHasDraggedRef.current &&
-                Math.abs(deltaX) < 8 &&
-                Math.abs(deltaY) < 8
+                homeScreenDragAxisRef.current == null &&
+                absoluteDeltaX < HOME_SCREEN_DRAG_LOCK_THRESHOLD_PX &&
+                absoluteDeltaY < HOME_SCREEN_DRAG_LOCK_THRESHOLD_PX
               ) {
                 return;
               }
 
-              if (!homeScreenPointerHasDraggedRef.current && Math.abs(deltaY) > Math.abs(deltaX)) {
+              if (homeScreenDragAxisRef.current == null) {
+                homeScreenDragAxisRef.current =
+                  absoluteDeltaX >= absoluteDeltaY ? "horizontal" : "vertical";
+              }
+
+              if (homeScreenDragAxisRef.current === "vertical") {
                 return;
               }
 

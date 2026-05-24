@@ -180,7 +180,7 @@ export default async function HomePage() {
                 Preizkusi za 0 €
               </LandingLoadingLink>
               <LandingLoadingLink href="/auth/continue" className="landing-public-cta secondary">
-                Nadaljuj na spletu
+                Prijavi se
               </LandingLoadingLink>
             </div>
           </div>

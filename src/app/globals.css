@@ -10713,6 +10713,25 @@ select:disabled {
   box-shadow: 0 1.6rem 3.8rem rgba(0, 0, 0, 0.07);
 }
 
+:root[data-theme="dark"] .landing-study-story {
+  border-color: #171b22;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(9, 12, 17, 0.72) 38%, rgba(3, 5, 8, 0.94)),
+    linear-gradient(150deg, #17202b 0%, #080b10 44%, #020304 100%);
+  box-shadow: 0 1.8rem 4.2rem rgba(0, 0, 0, 0.72);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .landing-study-story,
+  :root[data-theme="system"] .landing-study-story {
+    border-color: #171b22;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(9, 12, 17, 0.72) 38%, rgba(3, 5, 8, 0.94)),
+      linear-gradient(150deg, #17202b 0%, #080b10 44%, #020304 100%);
+    box-shadow: 0 1.8rem 4.2rem rgba(0, 0, 0, 0.72);
+  }
+}
+
 .landing-study-story::before {
   content: "";
   position: absolute;

@@ -4,6 +4,9 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: process.cwd(),
+  images: {
+    qualities: [75, 92],
+  },
 };
 
 export default withSentryConfig(nextConfig, {

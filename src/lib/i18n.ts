@@ -160,9 +160,7 @@ export type HelpArticleTranslation = {
 
 const commonUiCs = {
   "Nazaj": "Zpět",
-  "Zapri": "Zavřít",
   "Domov": "Domů",
-  "Pomoč": "Pomoc",
   "Pojdi na": "Přejít na",
   "Odpri navigacijo": "Otevřít navigaci",
   "Nastavitve": "Nastavení",
@@ -434,7 +432,6 @@ const commonUiCs = {
   "Kakšen je tvoj dnevni študijski cilj?": "Jaký je tvůj denní studijní cíl?",
   "Dodaj Memo AI na homescreen": "Přidej Memo AI na Home Screen",
   "Plačila ni bilo mogoče začeti.": "Platbu se nepodařilo spustit.",
-  "Plačilo je bilo preklicano. Spodaj lahko ponovno izbereš paket.": "Platba byla zrušena. Níže si můžeš znovu vybrat balíček.",
   "Zapri ponudbo naročnine": "Zavřít nabídku předplatného",
   "Nadgradi in ustvarjaj več zapiskov": "Upgraduj a vytvářej víc poznámek",
   "Neomejeni zapiski": "Neomezené poznámky",
@@ -443,7 +440,6 @@ const commonUiCs = {
   "Personalizirane vaje za boljše rezultate": "Personalizovaná cvičení pro lepší výsledky",
   "Uči se 10x hitreje": "Uč se 10x rychleji",
   "Pospeši učenje z AI podporo": "Zrychli učení s AI podporou",
-  "Izberi paket": "Vybrat balíček",
   "Letno": "Ročně",
   "Mesečno": "Měsíčně",
   "/ mesec": "/ měsíc",
@@ -801,7 +797,7 @@ export function normalizeLocale(value: string | null | undefined): AppLocale {
   return isSupportedLocale(value) ? value : DEFAULT_LOCALE;
 }
 
-export function getDictionary(locale: string | null | undefined) {
+export function getDictionary(locale: string | null | undefined): LocaleDictionary {
   return dictionaries[normalizeLocale(locale)];
 }
 

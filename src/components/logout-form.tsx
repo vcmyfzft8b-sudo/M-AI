@@ -4,8 +4,10 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import { EmojiIcon } from "@/components/emoji-icon";
+import { useI18n } from "@/components/locale-provider";
 
 export function LogoutForm() {
+  const { dictionary } = useI18n();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   return (
@@ -32,7 +34,7 @@ export function LogoutForm() {
         ) : (
           <EmojiIcon symbol="🚪" size="0.95rem" />
         )}
-        {isSubmitting ? "Odjavljam..." : "Odjava"}
+        {isSubmitting ? dictionary.settings.loggingOut : dictionary.settings.logout}
       </button>
     </form>
   );

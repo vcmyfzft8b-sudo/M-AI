@@ -1,7 +1,9 @@
+import { CZECH_LOCALE, type AppLocale, normalizeLocale } from "@/lib/i18n";
+
 export type HelpArticle = {
   slug: string;
   title: string;
-  category: "Pogosto" | "Snemanje in zapiski" | "Račun in dostop";
+  category: string;
   content: string;
 };
 
@@ -236,4 +238,237 @@ export const HELP_SECTIONS = [
 
 export function getHelpArticle(slug: string) {
   return HELP_ARTICLES.find((article) => article.slug === slug) ?? null;
+}
+
+const CS_CATEGORY_LABELS = {
+  frequent: "Časté",
+  recording: "Nahrávání a poznámky",
+  account: "Účet a přístup",
+} as const;
+
+const CS_HELP_ARTICLES: HelpArticle[] = [
+  {
+    slug: "terms-of-use",
+    title: "Podmínky používání",
+    category: CS_CATEGORY_LABELS.account,
+    content: `# Podmínky používání
+
+Vytvořením účtu nebo pokračováním v Memo souhlasíš s těmito podmínkami.
+
+## Tvoje odpovědnost
+
+- nahrávej, vkládej nebo propojuj jen materiály, které vlastníš nebo je smíš používat
+- odpovídáš za zákonnost obsahu, který odešleš
+- Memo nesmíš používat k nahrávání škodlivého softwaru, zneužívání systémů třetích stran, získávání přístupu k soukromým systémům ani k porušování školních, pracovních nebo platformních pravidel
+
+## Povolení k nahrávání a materiálům
+
+Používáním Memo potvrzuješ, že máš před nahráváním, odesíláním, vkládáním nebo propojováním obsahu všechna potřebná povolení a práva. To zahrnuje povolení školy, učitele, přednášejícího, instituce, zaměstnavatele, účastníků nahrávky nebo jiných držitelů práv, pokud jsou taková povolení potřeba.
+
+Nenahrávej přednášky, rozhovory, prezentace, poznámky, studijní materiály, dokumenty ani jiné soubory, pokud k tomu nemáš povolení nebo zákonný důvod.
+
+## AI zpracování
+
+Memo je AI studijní nástroj. Pro přepisy, shrnutí, Flashcards, Quiz, odpovědi v AI chat a extrakci obsahu z dokumentů může Memo zpracovat tvůj obsah u externích AI a infrastrukturních poskytovatelů.
+
+To může zahrnovat audio nahrávky, nahrané soubory, vložený text, PDF, podporované dokumenty, veřejné odkazy a provozní metadata potřebná pro fungování, bezpečnost a zlepšování služby.
+
+## Bez záruk
+
+Memo může vytvořit chyby, neúplné odpovědi nebo zavádějící studijní materiál. Než výsledky použiješ u zkoušek, seminárek nebo důležitých rozhodnutí, ověř si je.
+
+## Účet a opatření
+
+Přístup můžeme dočasně omezit, vypnout některé funkce nebo odstranit obsah, pokud používání vypadá zneužívajícím, nezákonným, nebezpečným nebo škodlivým způsobem.
+
+## Změny
+
+Tyto podmínky se mohou měnit podle vývoje produktu. Pokud po aktualizaci pokračuješ v používání, přijímáš aktualizovanou verzi.
+`,
+  },
+  {
+    slug: "family-plan",
+    title: "Rodinný balíček?",
+    category: CS_CATEGORY_LABELS.frequent,
+    content: `# Rodinný balíček
+
+Společný rodinný pracovní prostor zatím není podporovaný.
+
+Každý účet má prozatím vlastní knihovnu poznámek a historii zpracování.
+
+## Co můžeš udělat teď
+
+- přihlas se účtem, který má poznámky vlastnit
+- poznámky podle potřeby zkopíruj ze zobrazení poznámky
+- pro konzistentnější výsledky používej stejné jazykové nastavení`,
+  },
+  {
+    slug: "gift-coconote",
+    title: "Můžu Memo darovat?",
+    category: CS_CATEGORY_LABELS.frequent,
+    content: `# Darování přístupu
+
+Pokud máš promo nebo dárkový kód, příjemce ho může použít ve Stripe Checkout před dokončením nákupu.
+
+Příjemce si vytvoří vlastní účet a při platbě ve Stripe zadá kód. Před potvrzením platby si má ověřit, že se sleva opravdu zobrazila.`,
+  },
+  {
+    slug: "supported-language",
+    title: "Podporujete můj jazyk?",
+    category: CS_CATEGORY_LABELS.frequent,
+    content: `# Podporované jazyky
+
+Aplikace zvládne vícejazyčný materiál, ale výsledky jsou nejlepší, když před vytvořením poznámky vybereš správný zdrojový jazyk.
+
+## Doporučení
+
+- před odesláním vyber skutečný jazyk nahrávky nebo textu
+- u míchání jazyků pomáhají kratší nahrávky
+- technické anglické výrazy můžou zůstat ve výsledku, když jsou součástí zdrojového obsahu`,
+  },
+  {
+    slug: "feature-request",
+    title: "Návrh funkce",
+    category: CS_CATEGORY_LABELS.frequent,
+    content: `# Navrhni zlepšení
+
+Nejužitečnější návrh je krátký a konkrétní popis toho, jak Memo používáš.
+
+Hodí se přidat:
+
+- čeho jsi chtěl dosáhnout
+- kde ses zasekl
+- jaký výsledek jsi čekal
+- jestli jde o problém s audiem, textem, PDF nebo odkazem`,
+  },
+  {
+    slug: "video-isnt-working",
+    title: "Video odkaz nefunguje",
+    category: CS_CATEGORY_LABELS.recording,
+    content: `# Problémy s video odkazem
+
+Memo umí zpracovat jen obsah, který je veřejně dostupný a dostatečně čitelný pro shrnutí.
+
+## Zkus tohle
+
+- ověř, že stránka nevyžaduje přihlášení
+- použij přímou URL stránky
+- pokud máš materiál jinde, nahraj PDF nebo vlož text`,
+  },
+  {
+    slug: "audio-upload-issue",
+    title: "Nemůžu nahrát audio",
+    category: CS_CATEGORY_LABELS.recording,
+    content: `# Problémy s nahráním audia
+
+Podporované formáty jsou MP3, M4A, WAV, OGG a WEBM.
+
+## Kontrolní seznam
+
+- ověř, že soubor není poškozený
+- zůstaň pod aktuálním limitem velikosti
+- pokud audio vzniklo ze záznamu obrazovky, exportuj ho znovu
+- pokud se nahrávání předtím zastavilo, zkus to znovu z domovské stránky`,
+  },
+  {
+    slug: "transcript-cut-short",
+    title: "Přepis je moc krátký nebo nepřesný",
+    category: CS_CATEGORY_LABELS.recording,
+    content: `# Kvalita přepisu
+
+Kvalita přepisu závisí na čistotě audia, překrývání mluvčích a vybraném zdrojovém jazyce.
+
+## Jak zlepšit výsledky
+
+- před zpracováním vyber správný jazyk
+- u rozhovorů povol zachycení více mluvčích
+- sniž hluk na pozadí
+- velmi dlouhé nahrávky rozděl na menší části`,
+  },
+  {
+    slug: "redeem-code",
+    title: "Uplatnit kód",
+    category: CS_CATEGORY_LABELS.account,
+    content: `# Uplatnění kódu
+
+Promo nebo dárkový kód můžeš použít ve Stripe Checkout před dokončením nákupu.
+
+## Jak zadat kód
+
+- v nastavení vyber nákup nebo upgrade
+- ve Stripe platebním formuláři otevři pole pro promo kód
+- zadej kód a ověř, že se sleva zobrazí před platbou
+
+Pokud se pole nezobrazí nebo kód není přijatý, ověř, jestli je kód pořád platný a jestli je určený pro vybraný balíček.`,
+  },
+  {
+    slug: "privacy-policy",
+    title: "Zásady ochrany soukromí",
+    category: CS_CATEGORY_LABELS.account,
+    content: `# Zásady ochrany soukromí
+
+Tvoje poznámky zůstávají propojené s tvým účtem. Nahraný materiál se používá pro přepisy, shrnutí, strukturované poznámky, Flashcards, Quiz a odpovědi v AI chat uvnitř aplikace.
+
+## Co poskytuješ
+
+Podle způsobu používání můžeš poskytovat:
+
+- údaje o účtu, jako je e-mail a autentizační údaje
+- audio nahrávky a nahrané zvukové soubory
+- vložený text, poznámky, prompty a zprávy v chatu
+- PDF a dokumenty
+- veřejné odkazy, které má Memo přečíst
+
+## Povolení k nahrávání a materiálům
+
+Používáním Memo potvrzuješ, že máš všechna potřebná povolení a práva k nahrávání, odesílání, vkládání nebo propojování obsahu, který do aplikace posíláš.
+
+## Jak služba používá tvůj obsah
+
+Tvůj obsah používáme pro přihlášení k účtu, uložení a úpravy knihovny poznámek, přepis a analýzu zdrojového materiálu, generování poznámek, Flashcards, Quiz a odpovědí v AI chat, provoz úloh na pozadí, omezení požadavků a prevenci zneužití.
+
+## Zpracování u třetích stran
+
+Pro AI funkce může Memo poslat relevantní obsah externím poskytovatelům, kteří podporují přepis, extrakci dokumentů, embeddingy, generování textu, hosting, ukládání a autentizaci.
+
+## Tvoje možnosti
+
+Pokud nechceš, aby k takovému zpracování došlo, tento obsah do Memo nenahrávej, nevkládej, nenatáčej ani nepropojuj.
+
+## Uchování a mazání
+
+Obsah zůstává propojený s tvým účtem, dokud ho v produktu nesmažeš nebo dokud ho neodstraníme přes podporu či provozní čištění.`,
+  },
+];
+
+function getLocalizedHelpArticles(locale: AppLocale) {
+  return locale === CZECH_LOCALE ? CS_HELP_ARTICLES : HELP_ARTICLES;
+}
+
+export function getHelpSections(locale?: AppLocale | string | null) {
+  const normalizedLocale = normalizeLocale(locale);
+  const articles = getLocalizedHelpArticles(normalizedLocale);
+
+  if (normalizedLocale === CZECH_LOCALE) {
+    return [
+      {
+        title: CS_CATEGORY_LABELS.frequent,
+        items: articles.filter((article) => article.category === CS_CATEGORY_LABELS.frequent),
+      },
+      {
+        title: CS_CATEGORY_LABELS.recording,
+        items: articles.filter((article) => article.category === CS_CATEGORY_LABELS.recording),
+      },
+      {
+        title: CS_CATEGORY_LABELS.account,
+        items: articles.filter((article) => article.category === CS_CATEGORY_LABELS.account),
+      },
+    ];
+  }
+
+  return HELP_SECTIONS;
+}
+
+export function getLocalizedHelpArticle(slug: string, locale?: AppLocale | string | null) {
+  return getLocalizedHelpArticles(normalizeLocale(locale)).find((article) => article.slug === slug) ?? null;
 }

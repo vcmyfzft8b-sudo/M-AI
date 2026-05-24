@@ -5,6 +5,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { EmailEntryForm } from "@/components/email-entry-form";
 import { getOptionalUser } from "@/lib/auth";
 import { BRAND_NAME } from "@/lib/brand";
+import { getRequestDictionary } from "@/lib/i18n-server";
 import { normalizeNextPath, sanitizeUserInput } from "@/lib/validation";
 
 type SearchParams = Promise<{
@@ -19,6 +20,7 @@ export default async function EmailEntryPage({
   searchParams?: SearchParams;
 }) {
   const user = await getOptionalUser();
+  const dictionary = await getRequestDictionary();
   const params = await searchParams;
   const next = normalizeNextPath(params?.next);
   const mode = params?.mode === "login" ? "login" : "signup";
@@ -34,20 +36,20 @@ export default async function EmailEntryPage({
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a href="/" className="app-back-button">
           <ChevronLeft className="h-5 w-5" />
-          Nazaj
+          {dictionary.common.back}
         </a>
       </div>
 
       <section className="landing-auth-wrap email-entry-wrap">
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-        <a href="/" className="landing-auth-brand email-entry-brand" aria-label={`Domov ${BRAND_NAME}`}>
+        <a href="/" className="landing-auth-brand email-entry-brand" aria-label={`${dictionary.common.home} ${BRAND_NAME}`}>
           <BrandLogo compact imageSizes="(max-width: 768px) 4.6rem, 7rem" priority />
         </a>
 
         <div className="landing-auth-hero email-entry-copy">
-          <h1 className="landing-auth-title email-entry-title">Kateri je tvoj e-naslov?</h1>
+          <h1 className="landing-auth-title email-entry-title">{dictionary.auth.emailQuestion}</h1>
           <p className="landing-auth-copy email-entry-text">
-            Vnesi svoj e-naslov in poslali ti bomo potrditveno kodo.
+            {dictionary.auth.emailEntryCopy}
           </p>
         </div>
 

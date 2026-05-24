@@ -1,4 +1,7 @@
+"use client";
+
 import { EmailAuthForm } from "@/components/email-auth-form";
+import { useI18n } from "@/components/locale-provider";
 
 export function EmailEntryForm({
   email,
@@ -9,6 +12,8 @@ export function EmailEntryForm({
   mode: "login" | "signup";
   next: string;
 }) {
+  const { dictionary } = useI18n();
+
   return (
     <EmailAuthForm
       buttonClassName="email-entry-submit"
@@ -17,10 +22,10 @@ export function EmailEntryForm({
       inputClassName="email-entry-input"
       mode={mode}
       next={next}
-      placeholder="Vnesi e-naslov"
-      pendingLabel="Pošiljam kodo..."
+      placeholder={dictionary.auth.emailPlaceholder}
+      pendingLabel={dictionary.auth.sendingCode}
       readOnlyWhileSubmitting
-      submitLabel="Nadaljuj"
+      submitLabel={dictionary.auth.continueEmail}
     />
   );
 }

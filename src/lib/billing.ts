@@ -43,6 +43,8 @@ export type UserEntitlementState = {
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing", "past_due"]);
 const TRIAL_CHAT_MESSAGE_LIMIT = 5;
 
+export const DEV_BILLING_OVERRIDE_COOKIE = "memo_dev_billing_override";
+
 export const BILLING_PLANS: Record<
   BillingPlan,
   {

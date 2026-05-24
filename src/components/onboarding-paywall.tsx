@@ -16,6 +16,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { EmojiIcon } from "@/components/emoji-icon";
+import { useI18n } from "@/components/locale-provider";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 
 type BillingPlanCard = {
@@ -411,12 +412,18 @@ function OnboardingOptionIcon({ icon }: { icon: string }) {
   return <>{icon}</>;
 }
 
-function CheckoutBanner({ state }: { state: string | null }) {
+function CheckoutBanner({
+  state,
+  t,
+}: {
+  state: string | null;
+  t: (value: string) => string;
+}) {
   if (state === "success") {
     return (
       <div className="app-start-banner success">
         <Check className="h-4 w-4" />
-        Plačilo prejeto. Stripe trenutno zaključuje aktivacijo naročnine.
+        {t("Plačilo prejeto. Stripe trenutno zaključuje aktivacijo naročnine.")}
       </div>
     );
   }
@@ -425,7 +432,7 @@ function CheckoutBanner({ state }: { state: string | null }) {
     return (
       <div className="app-start-banner">
         <EmojiIcon symbol="🧾" size="1rem" />
-        Plačilo je bilo preklicano. Spodaj lahko ponovno izbereš paket.
+        {t("Plačilo je bilo preklicano. Spodaj lahko ponovno izbereš paket.")}
       </div>
     );
   }
@@ -448,6 +455,7 @@ export function OnboardingPaywall({
   subscriptionTrialEligible?: boolean;
   plans: BillingPlanCard[];
 }) {
+  const { dictionary } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState(0);
@@ -487,6 +495,7 @@ export function OnboardingPaywall({
     classFocus: "",
     dailyGoal: "",
   });
+  const t = (value: string) => dictionary.ui[value] ?? value;
 
   function goNext(roleOverride = form.role) {
     setStep((current) => getNextOnboardingStep(current, roleOverride));
@@ -641,7 +650,7 @@ export function OnboardingPaywall({
       });
 
       if (!response.ok) {
-        throw new Error("Onboardinga ni bilo mogoče shraniti.");
+        throw new Error(t("Onboardinga ni bilo mogoče shraniti."));
       }
 
       startTransition(() => {
@@ -650,7 +659,7 @@ export function OnboardingPaywall({
       });
     } catch (error) {
       setBillingError(
-        error instanceof Error ? error.message : "Onboardinga ni bilo mogoče shraniti.",
+        error instanceof Error ? error.message : t("Onboardinga ni bilo mogoče shraniti."),
       );
       setSavingProfile(false);
     }
@@ -690,8 +699,8 @@ export function OnboardingPaywall({
                 <OnboardingOptionIcon icon={option.icon} />
               </span>
               <span>
-                <strong>{option.label}</strong>
-                {option.description ? <small>{option.description}</small> : null}
+                <strong>{t(option.label)}</strong>
+                {option.description ? <small>{t(option.description)}</small> : null}
               </span>
             </button>
           );
@@ -703,11 +712,11 @@ export function OnboardingPaywall({
   function renderGradeStepper(key: "targetGrade" | "currentAverageGrade") {
     return (
       <div className="memo-onboarding-grade-wrap">
-        <div className="memo-onboarding-grade-stepper" aria-label="Izberi povprečno oceno">
+        <div className="memo-onboarding-grade-stepper" aria-label={t("Izberi povprečno oceno")}>
           <button
             type="button"
             onClick={() => updateGrade(key, -0.1)}
-            aria-label="Znižaj oceno"
+            aria-label={t("Znižaj oceno")}
           >
             <Minus className="h-7 w-7" />
           </button>
@@ -715,7 +724,7 @@ export function OnboardingPaywall({
           <button
             type="button"
             onClick={() => updateGrade(key, 0.1)}
-            aria-label="Zvišaj oceno"
+            aria-label={t("Zvišaj oceno")}
           >
             <Plus className="h-7 w-7" />
           </button>
@@ -727,42 +736,42 @@ export function OnboardingPaywall({
   function renderCurrentStep() {
     if (step === 0) {
       return {
-        title: "Kako si izvedel/a za Memo AI?",
+        title: t("Kako si izvedel/a za Memo AI?"),
         body: renderOptionList(SOURCE_OPTIONS, "heardFrom"),
       };
     }
 
     if (step === 1) {
       return {
-        title: "Za koga je Memo AI?",
+        title: t("Za koga je Memo AI?"),
         body: renderOptionList(AUDIENCE_OPTIONS, "audience"),
       };
     }
 
     if (step === 2) {
       return {
-        title: "Kaj te najbolje opiše?",
+        title: t("Kaj te najbolje opiše?"),
         body: renderOptionList(ROLE_OPTIONS, "role"),
       };
     }
 
     if (step === 3) {
       return {
-        title: "Kje se šolaš?",
+        title: t("Kje se šolaš?"),
         body: renderOptionList(getSchoolOptionsForRole(form.role), "schoolLevel"),
       };
     }
 
     if (step === 4) {
       return {
-        title: getYearQuestionForRole(form.role),
+        title: t(getYearQuestionForRole(form.role)),
         body: renderOptionList(getYearOptionsForRole(form.role, form.schoolLevel), "schoolYear"),
       };
     }
 
     if (step === 5) {
       return {
-        title: "Katero je tvoje glavno področje študija?",
+        title: t("Katero je tvoje glavno področje študija?"),
         body: renderOptionList(SUBJECT_OPTIONS, "subject"),
       };
     }
@@ -772,8 +781,8 @@ export function OnboardingPaywall({
         title: null,
         body: (
           <div className="memo-onboarding-proof">
-            <h2>Si v dobri družbi!</h2>
-            <p>Veliko tvojih sošolcev že uporablja Memo AI za:</p>
+            <h2>{t("Si v dobri družbi!")}</h2>
+            <p>{t("Veliko tvojih sošolcev že uporablja Memo AI za:")}</p>
             <ul>
               {[
                 "Podrobne zapiske s predavanj",
@@ -785,7 +794,7 @@ export function OnboardingPaywall({
                   <span aria-hidden="true">
                     <Check className="h-7 w-7" />
                   </span>
-                  <strong>{item}</strong>
+                  <strong>{t(item)}</strong>
                 </li>
               ))}
             </ul>
@@ -797,7 +806,7 @@ export function OnboardingPaywall({
 
     if (step === 7) {
       return {
-        title: "Kaj te pripelje v Memo AI?",
+        title: t("Kaj te pripelje v Memo AI?"),
         body: renderOptionList(MOTIVATION_OPTIONS, "motivation", "manual"),
         action: "Nadaljuj",
         disabled: !form.motivation,
@@ -806,8 +815,8 @@ export function OnboardingPaywall({
 
     if (step === 8) {
       return {
-        title: "Kakšna je tvoja povprečna ocena zdaj?",
-        copy: "Približek je v redu.",
+        title: t("Kakšna je tvoja povprečna ocena zdaj?"),
+        copy: t("Približek je v redu."),
         body: renderGradeStepper("currentAverageGrade"),
         action: gradeTouched.currentAverageGrade ? "Nadaljuj" : "Preskoči",
       };
@@ -815,7 +824,7 @@ export function OnboardingPaywall({
 
     if (step === 9) {
       return {
-        title: "Kakšna je tvoja ciljna povprečna ocena?",
+        title: t("Kakšna je tvoja ciljna povprečna ocena?"),
         body: renderGradeStepper("targetGrade"),
         action: gradeTouched.targetGrade ? "Nadaljuj" : "Preskoči",
       };
@@ -823,18 +832,17 @@ export function OnboardingPaywall({
 
     if (step === 10) {
       return {
-        title: "Na pravem mestu si.",
+        title: t("Na pravem mestu si."),
         body: (
           <div className="memo-onboarding-testimonial">
             <div>
-              <strong>Študent financ</strong>
-              <span>Univerza v Ljubljani</span>
+              <strong>{t("Študent financ")}</strong>
+              <span>{t("Univerza v Ljubljani")}</span>
             </div>
             <p>
-              Nepogrešljivo za hiter tempo na fakulteti. V predavalnici sem bolj miren,
-              ker vem, da lahko pozneje znova pregledam vse pomembne razlage.
+              {t("Nepogrešljivo za hiter tempo na fakulteti. V predavalnici sem bolj miren, ker vem, da lahko pozneje znova pregledam vse pomembne razlage.")}
             </p>
-            <div className="memo-onboarding-stars" aria-label="5 od 5 zvezdic">
+            <div className="memo-onboarding-stars" aria-label={t("5 od 5 zvezdic")}>
               ★★★★★
             </div>
           </div>
@@ -848,14 +856,14 @@ export function OnboardingPaywall({
         title: null,
         body: (
           <div className="memo-onboarding-progress-story">
-            <h2>Naredil/a si prvi korak!</h2>
-            <p>Z rednim delom ti Memo AI pomaga doseči dolgoročen napredek.</p>
-            <div className="memo-onboarding-chart" aria-label="Primer napredka ocen">
+            <h2>{t("Naredil/a si prvi korak!")}</h2>
+            <p>{t("Z rednim delom ti Memo AI pomaga doseči dolgoročen napredek.")}</p>
+            <div className="memo-onboarding-chart" aria-label={t("Primer napredka ocen")}>
               <div className="memo-onboarding-chart-header">
-                <strong>Tvoje ocene</strong>
+                <strong>{t("Tvoje ocene")}</strong>
                 <div>
-                  <span className="memo-onboarding-legend-primary">z Memo AI</span>
-                  <span className="memo-onboarding-legend-muted">samostojno</span>
+                  <span className="memo-onboarding-legend-primary">{t("z Memo AI")}</span>
+                  <span className="memo-onboarding-legend-muted">{t("samostojno")}</span>
                 </div>
               </div>
               <div className="memo-onboarding-chart-lines" aria-hidden="true">
@@ -883,7 +891,7 @@ export function OnboardingPaywall({
 
     if (step === 12) {
       return {
-        title: "Kateri del Memo AI-ja ti bo najbolj pomagal?",
+        title: t("Kateri del Memo AI-ja ti bo najbolj pomagal?"),
         body: (
           <div className="memo-onboarding-feature-grid">
             {FEATURE_OPTIONS.map((option) => (
@@ -894,7 +902,7 @@ export function OnboardingPaywall({
                 onClick={() => setForm((current) => ({ ...current, feature: option.value }))}
               >
                 <span aria-hidden="true">{option.icon}</span>
-                <strong>{option.label}</strong>
+                <strong>{t(option.label)}</strong>
               </button>
             ))}
           </div>
@@ -906,14 +914,14 @@ export function OnboardingPaywall({
 
     if (step === 13) {
       return {
-        title: "Imaš v mislih določen predmet ali izpit/test, pri katerem naj ti Memo AI pomaga?",
+        title: t("Imaš v mislih določen predmet ali izpit/test, pri katerem naj ti Memo AI pomaga?"),
         body: renderOptionList(CLASS_FOCUS_OPTIONS, "classFocus"),
       };
     }
 
     if (step === 14) {
       return {
-        title: "Kakšen je tvoj dnevni študijski cilj?",
+        title: t("Kakšen je tvoj dnevni študijski cilj?"),
         body: (
           <div className="memo-onboarding-option-list">
             {DAILY_GOAL_OPTIONS.map((option) => (
@@ -934,7 +942,7 @@ export function OnboardingPaywall({
                   <OnboardingOptionIcon icon={option.icon} />
                 </span>
                 <span>
-                  <strong>{option.label}</strong>
+                  <strong>{t(option.label)}</strong>
                 </span>
               </button>
             ))}
@@ -944,7 +952,7 @@ export function OnboardingPaywall({
     }
 
     return {
-      title: "Dodaj Memo AI na homescreen",
+      title: t("Dodaj Memo AI na homescreen"),
       body: (
         <div className="memo-onboarding-home-wrap">
           <div
@@ -1028,14 +1036,14 @@ export function OnboardingPaywall({
                 <article key={item.src} className="memo-onboarding-home-card">
                   <div className="memo-onboarding-home-copy">
                     <div>
-                      <strong>{item.title}</strong>
-                      <p>{item.description}</p>
+                      <strong>{t(item.title)}</strong>
+                      <p>{t(item.description)}</p>
                     </div>
                   </div>
                   <div className="memo-onboarding-home-visual">
                     <Image
                       src={item.src}
-                      alt={item.alt}
+                      alt={t(item.alt)}
                       width={1170}
                       height={2532}
                       sizes="(max-width: 640px) 100vw, 35rem"
@@ -1059,12 +1067,12 @@ export function OnboardingPaywall({
             </div>
           </div>
 
-          <div className="memo-onboarding-home-controls" aria-label="Koraki za Home Screen">
+          <div className="memo-onboarding-home-controls" aria-label={t("Koraki za Home Screen")}>
             <button
               type="button"
               onClick={() => goToHomeScreenStep(homeScreenStep - 1)}
               disabled={homeScreenStep === 0}
-              aria-label="Prejšnji korak"
+              aria-label={t("Prejšnji korak")}
             >
               <ChevronLeft className="h-6 w-6" />
             </button>
@@ -1075,7 +1083,7 @@ export function OnboardingPaywall({
                   type="button"
                   className={homeScreenStep === index ? "active" : ""}
                   onClick={() => goToHomeScreenStep(index)}
-                  aria-label={`Prikaži korak ${index + 1}`}
+                  aria-label={`${t("Prikaži korak")} ${index + 1}`}
                 />
               ))}
             </div>
@@ -1083,7 +1091,7 @@ export function OnboardingPaywall({
               type="button"
               onClick={() => goToHomeScreenStep(homeScreenStep + 1)}
               disabled={homeScreenStep === HOME_SCREEN_STEPS.length - 1}
-              aria-label="Naslednji korak"
+              aria-label={t("Naslednji korak")}
             >
               <ArrowRight className="h-6 w-6" />
             </button>
@@ -1110,13 +1118,13 @@ export function OnboardingPaywall({
       const payload = (await response.json()) as { url?: string; error?: string };
 
       if (!response.ok || !payload.url) {
-        throw new Error(payload.error ?? "Plačila ni bilo mogoče začeti.");
+        throw new Error(payload.error ?? t("Plačila ni bilo mogoče začeti."));
       }
 
       window.location.href = payload.url;
     } catch (error) {
       setBillingError(
-        error instanceof Error ? error.message : "Plačila ni bilo mogoče začeti.",
+        error instanceof Error ? error.message : t("Plačila ni bilo mogoče začeti."),
       );
     } finally {
       setCheckoutPlan(null);
@@ -1145,7 +1153,7 @@ export function OnboardingPaywall({
                 setStep((current) => getPreviousOnboardingStep(current, form.role))
               }
               disabled={step === 0 || savingProfile}
-              aria-label="Nazaj"
+              aria-label={dictionary.common.back}
             >
               <ChevronLeft className="h-9 w-9" />
             </button>
@@ -1177,7 +1185,7 @@ export function OnboardingPaywall({
                 disabled={Boolean("disabled" in currentStep && currentStep.disabled) || savingProfile}
               >
                 {savingProfile ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-                {currentStep.action}
+                {t(currentStep.action)}
                 <ArrowRight className="h-7 w-7" />
               </button>
             </div>
@@ -1195,14 +1203,14 @@ export function OnboardingPaywall({
             type="button"
             className="app-start-close-button"
             onClick={() => router.push("/app")}
-            aria-label="Zapri ponudbo naročnine"
+            aria-label={t("Zapri ponudbo naročnine")}
           >
             <X className="h-5 w-5" />
           </button>
         </div>
       ) : null}
 
-      <CheckoutBanner state={searchParams.get("checkout")} />
+      <CheckoutBanner state={searchParams.get("checkout")} t={t} />
       {billingError ? <div className="app-start-banner">{billingError}</div> : null}
 
       <div className="memo-paywall-brand">
@@ -1219,23 +1227,23 @@ export function OnboardingPaywall({
         <span>Memo AI</span>
       </div>
 
-      <h1 className="memo-paywall-title">Nadgradi in ustvarjaj več zapiskov</h1>
+      <h1 className="memo-paywall-title">{t("Nadgradi in ustvarjaj več zapiskov")}</h1>
 
       <div className="memo-paywall-benefits">
         {[
           {
-            title: "Neomejeni zapiski",
-            copy: "Naloži neomejeno PDF-jev in zvoka",
+            title: t("Neomejeni zapiski"),
+            copy: t("Naloži neomejeno PDF-jev in zvoka"),
             icon: "📝",
           },
           {
-            title: "Pametna učna orodja",
-            copy: "Personalizirane vaje za boljše rezultate",
+            title: t("Pametna učna orodja"),
+            copy: t("Personalizirane vaje za boljše rezultate"),
             icon: "💡",
           },
           {
-            title: "Uči se 10x hitreje",
-            copy: "Pospeši učenje z AI podporo",
+            title: t("Uči se 10x hitreje"),
+            copy: t("Pospeši učenje z AI podporo"),
             icon: "⚡",
           },
         ].map((benefit) => (
@@ -1249,7 +1257,7 @@ export function OnboardingPaywall({
         ))}
       </div>
 
-      <div className="memo-paywall-plan-grid" role="radiogroup" aria-label="Izberi paket">
+      <div className="memo-paywall-plan-grid" role="radiogroup" aria-label={t("Izberi paket")}>
         {paywallPlans.map((plan) => {
           const selected = selectedPaywallPlan === plan.id;
           const activePlan = subscription?.plan === plan.id && hasPaidAccess;
@@ -1261,11 +1269,11 @@ export function OnboardingPaywall({
             plan.id === "yearly"
               ? `€${plan.displayAmount ?? plan.amount}`
               : `€${plan.displayAmount ?? plan.amount}`;
-          const suffix = "/ mesec";
+          const suffix = t("/ mesec");
           const detail =
             plan.id === "yearly"
-              ? `Obračunano letno: €${plan.annualizedAmount}`
-              : "Obračunano mesečno";
+              ? `${t("Obračunano letno")}: €${plan.annualizedAmount}`
+              : t("Obračunano mesečno");
 
           return (
             <button
@@ -1277,10 +1285,10 @@ export function OnboardingPaywall({
               aria-checked={selected}
             >
               {plan.id === "yearly" ? (
-                <span className="memo-paywall-plan-badge">Najbolj priljubljeno</span>
+                <span className="memo-paywall-plan-badge">{t("Najbolj priljubljeno")}</span>
               ) : null}
               <span className="memo-paywall-plan-header">
-                <strong>{plan.label}</strong>
+                <strong>{t(plan.label)}</strong>
                 <span className="memo-paywall-radio" aria-hidden="true">
                   {selected || activePlan ? <span /> : null}
                 </span>
@@ -1291,7 +1299,9 @@ export function OnboardingPaywall({
               </span>
               <span className="memo-paywall-plan-detail">{detail}</span>
               {plan.id === "yearly" && yearlySavings > 0 ? (
-                <span className="memo-paywall-save">Prihrani {yearlySavings}%</span>
+                <span className="memo-paywall-save">
+                  {t("Prihrani")} {yearlySavings}%
+                </span>
               ) : null}
             </button>
           );
@@ -1300,7 +1310,7 @@ export function OnboardingPaywall({
 
       <p className="memo-paywall-due">
         <CircleCheck className="h-5 w-5" />
-        {subscriptionTrialEligible ? "Danes brez plačila" : "Varno plačilo prek Stripe"}
+        {subscriptionTrialEligible ? t("Danes brez plačila") : t("Varno plačilo prek Stripe")}
       </p>
 
       <button
@@ -1315,10 +1325,10 @@ export function OnboardingPaywall({
         {checkoutPlan === selectedPaywallPlan ? null : (
           <span className="memo-paywall-cta-label">
             {subscription?.plan === selectedPaywallPlan && hasPaidAccess
-              ? "Trenutni paket"
+              ? t("Trenutni paket")
               : subscriptionTrialEligible
-                ? "Začni 3-dnevni brezplačni preizkus"
-                : "Nadaljuj na plačilo"}
+                ? t("Začni 3-dnevni brezplačni preizkus")
+                : t("Nadaljuj na plačilo")}
           </span>
         )}
       </button>
@@ -1326,7 +1336,7 @@ export function OnboardingPaywall({
       <div className="memo-paywall-foot">
         <span>
           <CircleCheck className="h-5 w-5" />
-          Prekliči kadarkoli
+          {t("Prekliči kadarkoli")}
         </span>
       </div>
     </section>

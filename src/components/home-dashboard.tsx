@@ -24,6 +24,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { InstantLink } from "@/components/instant-link";
 import { LibraryFolderMenu } from "@/components/library-folder-menu";
+import { useI18n } from "@/components/locale-provider";
 import { ViewportPortal } from "@/components/viewport-portal";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
 import { getEffectiveLectureSourceType } from "@/lib/lecture-source-metadata";
@@ -466,6 +467,7 @@ export function HomeDashboard({
   canCreateNotes: boolean;
   hasPaidAccess: boolean;
 }) {
+  const { dictionary } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -510,6 +512,7 @@ export function HomeDashboard({
   })();
 
   const activeModal = manualModal ?? searchModal;
+  const t = useCallback((value: string) => dictionary.ui[value] ?? value, [dictionary.ui]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 767px)");
@@ -1197,7 +1200,7 @@ export function HomeDashboard({
                 className="app-home-highlight-link"
                 onClick={() => router.push("/app/start")}
               >
-                <span>Nadgradi za nov zapisek</span>
+                <span>{t("Nadgradi za nov zapisek")}</span>
                 <EmojiIcon symbol="›" size="1.1rem" />
               </button>
             </div>
@@ -1206,7 +1209,7 @@ export function HomeDashboard({
 
         <section className="dashboard-section dashboard-create-section">
           <div className="dashboard-section-heading">
-            <h2 className="dashboard-section-title">Nov zapisek</h2>
+            <h2 className="dashboard-section-title">{t("Nov zapisek")}</h2>
           </div>
 
           <div className="note-action-grid">
@@ -1225,8 +1228,8 @@ export function HomeDashboard({
                   <EmojiIcon symbol={action.icon} size="1.2rem" />
                 </span>
                 <span className="note-action-card-copy">
-                  <span className="note-action-card-label">{action.label}</span>
-                  <span className="note-action-card-detail">{action.detail}</span>
+                  <span className="note-action-card-label">{t(action.label)}</span>
+                  <span className="note-action-card-detail">{t(action.detail)}</span>
                 </span>
                 <EmojiIcon className="note-action-card-chevron" symbol="›" size="1.1rem" />
               </button>
@@ -1236,7 +1239,7 @@ export function HomeDashboard({
 
         <section className="dashboard-section dashboard-library-section mt-4">
           <div className="dashboard-section-heading mb-4">
-            <h2 className="dashboard-section-title">Moji zapiski</h2>
+            <h2 className="dashboard-section-title">{t("Moji zapiski")}</h2>
           </div>
 
           <div className="dashboard-toolbar library-toolbar">
@@ -1256,7 +1259,7 @@ export function HomeDashboard({
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Išči po naslovu"
+                placeholder={t("Išči po naslovu")}
               />
             </div>
           </div>
@@ -1264,7 +1267,7 @@ export function HomeDashboard({
           {failedLectures.length > 0 ? (
             <div className="dashboard-subsection">
               <div className="dashboard-subsection-heading">
-                <h3 className="dashboard-subsection-title">Potrebno pozornosti</h3>
+                <h3 className="dashboard-subsection-title">{t("Potrebno pozornosti")}</h3>
               </div>
 
               {failedLectures.map((lecture) => (
@@ -1274,10 +1277,10 @@ export function HomeDashboard({
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="ios-row-title text-[var(--red)] font-medium">
-                      {lecture.error_message ? "Napaka pri obdelavi zapiska" : "Napaka pri ustvarjanju zapiska"}
+                      {lecture.error_message ? t("Napaka pri obdelavi zapiska") : t("Napaka pri ustvarjanju zapiska")}
                     </p>
                     <p className="ios-row-subtitle mt-1" style={{ fontSize: "0.8rem", color: "var(--label)" }}>
-                      {lecture.error_message ?? "Poskusi znova ali odstrani zapisek iz knjižnice."}
+                      {lecture.error_message ?? t("Poskusi znova ali odstrani zapisek iz knjižnice.")}
                     </p>
                   </div>
 
@@ -1292,7 +1295,7 @@ export function HomeDashboard({
                       {busyLectureId === lecture.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : null}
-                      Izbriši
+                      {t("Izbriši")}
                     </button>
                     {lecture.status === "failed" ? (
                       <button
@@ -1305,7 +1308,7 @@ export function HomeDashboard({
                         {busyLectureId === lecture.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : null}
-                        Poskusi znova
+                        {t("Poskusi znova")}
                       </button>
                     ) : null}
                   </div>
@@ -1337,17 +1340,17 @@ export function HomeDashboard({
               </div>
               <p className="ios-row-title">
                 {search
-                  ? "Ni ujemajočih zapiskov"
+                  ? t("Ni ujemajočih zapiskov")
                   : selectedFolderId
-                    ? "Ta mapa je prazna"
-                    : "Tvoja knjižnica je prazna"}
+                    ? t("Ta mapa je prazna")
+                    : t("Tvoja knjižnica je prazna")}
               </p>
               <p className="ios-row-subtitle mt-2">
                 {search
-                  ? "Poskusi krajši iskalni izraz ali počisti iskanje."
+                  ? t("Poskusi krajši iskalni izraz ali počisti iskanje.")
                   : selectedFolderId
-                    ? "Dodaj predavanja v to mapo ali se vrni na vse zapiske."
-                    : "Začni s posnetkom, zvočno datoteko, PDF-jem, PPTX-om, besedilom ali povezavo."}
+                    ? t("Dodaj predavanja v to mapo ali se vrni na vse zapiske.")
+                    : t("Začni s posnetkom, zvočno datoteko, PDF-jem, PPTX-om, besedilom ali povezavo.")}
               </p>
               {!search && !selectedFolderId ? (
                 <button
@@ -1362,7 +1365,7 @@ export function HomeDashboard({
                   }}
                   className="app-home-highlight-link"
                 >
-                  <span>Ustvari svoj prvi zapisek</span>
+                  <span>{t("Ustvari svoj prvi zapisek")}</span>
                   <EmojiIcon symbol="›" size="1.1rem" />
                 </button>
               ) : null}
@@ -1384,7 +1387,7 @@ export function HomeDashboard({
           aria-expanded={isMobileCreateMenuOpen}
         >
           <EmojiIcon symbol="➕" size="1rem" className="mobile-new-note-pill-icon" />
-          <span className="mobile-new-note-pill-label">Nov zapisek</span>
+          <span className="mobile-new-note-pill-label">{t("Nov zapisek")}</span>
         </button>
       </ViewportPortal>
 
@@ -1395,7 +1398,7 @@ export function HomeDashboard({
               type="button"
               className="mobile-create-menu-backdrop"
               onClick={animateCloseMobileCreateMenu}
-              aria-label="Zapri meni za nov zapisek"
+              aria-label={t("Zapri meni za nov zapisek")}
             />
             <section
               className="mobile-create-menu"
@@ -1413,17 +1416,17 @@ export function HomeDashboard({
               <button
                 type="button"
                 className="mobile-sheet-drag-handle mobile-create-menu-drag-handle"
-                aria-label="Povleci navzdol za zapiranje"
+                aria-label={t("Povleci navzdol za zapiranje")}
               />
               <div className="mobile-create-menu-header">
                 <h2 id="mobile-create-menu-title" className="dashboard-section-title">
-                  Nov zapisek
+                  {t("Nov zapisek")}
                 </h2>
                 <button
                   type="button"
                   className="app-close-button"
                   onClick={animateCloseMobileCreateMenu}
-                  aria-label="Zapri meni za nov zapisek"
+                  aria-label={t("Zapri meni za nov zapisek")}
                 >
                   <EmojiIcon symbol="✖️" size="1rem" />
                 </button>
@@ -1445,8 +1448,8 @@ export function HomeDashboard({
                       <EmojiIcon symbol={action.icon} size="1.2rem" />
                     </span>
                     <span className="note-action-card-copy">
-                      <span className="note-action-card-label">{action.label}</span>
-                      <span className="note-action-card-detail">{action.detail}</span>
+                      <span className="note-action-card-label">{t(action.label)}</span>
+                      <span className="note-action-card-detail">{t(action.detail)}</span>
                     </span>
                     <EmojiIcon className="note-action-card-chevron" symbol="›" size="1.1rem" />
                   </button>

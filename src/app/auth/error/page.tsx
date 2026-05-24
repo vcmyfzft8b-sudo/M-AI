@@ -3,6 +3,7 @@ import { AlertCircle, ChevronLeft } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand-logo";
 import { BRAND_NAME } from "@/lib/brand";
+import { getRequestDictionary } from "@/lib/i18n-server";
 import { sanitizeUserInput } from "@/lib/validation";
 
 export default async function AuthErrorPage({
@@ -11,6 +12,7 @@ export default async function AuthErrorPage({
   searchParams: Promise<{ message?: string }>;
 }) {
   const params = await searchParams;
+  const dictionary = await getRequestDictionary();
   const message = typeof params.message === "string"
     ? sanitizeUserInput(params.message).slice(0, 240)
     : undefined;
@@ -19,14 +21,14 @@ export default async function AuthErrorPage({
     <main className="landing-shell auth-shell">
       <header className="ios-nav landing-nav">
         <div className="ios-nav-inner landing-nav-inner">
-          <Link href="/" className="landing-brand-link" aria-label={`Domov ${BRAND_NAME}`}>
+          <Link href="/" className="landing-brand-link" aria-label={`${dictionary.common.home} ${BRAND_NAME}`}>
             <BrandLogo compact />
           </Link>
 
           <div className="landing-nav-actions">
             <Link href="/" className="app-back-button">
               <ChevronLeft className="h-5 w-5" />
-              Nazaj
+              {dictionary.common.back}
             </Link>
           </div>
         </div>
@@ -38,19 +40,19 @@ export default async function AuthErrorPage({
             <div className="auth-check-icon error">
               <AlertCircle className="h-6 w-6" />
             </div>
-            <p className="auth-eyebrow">Napaka pri prijavi</p>
-            <h1 className="auth-title">Prijava ni uspela</h1>
+            <p className="auth-eyebrow">{dictionary.auth.authErrorEyebrow}</p>
+            <h1 className="auth-title">{dictionary.auth.authErrorTitle}</h1>
             <p className="auth-copy">
               {message ??
-                "Poskusi drugo metodo prijave ali preveri, ali so ponudniki prijave pravilno nastavljeni."}
+                dictionary.auth.authErrorCopy}
             </p>
 
             <div className="auth-check-actions">
               <Link href="/auth/login?next=/app/start" className="ios-primary-button auth-submit-button">
-                Nazaj na prijavo
+                {dictionary.auth.backToLogin}
               </Link>
               <Link href="/auth/signup?next=/app/start" className="auth-secondary-link">
-                Ustvari račun
+                {dictionary.auth.createAccount}
               </Link>
             </div>
           </div>

@@ -7,59 +7,55 @@ import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { InstantLink } from "@/components/instant-link";
+import { useI18n } from "@/components/locale-provider";
 import { BRAND_NAME } from "@/lib/brand";
 
-const TAB_ITEMS = [
-  { href: "/app", displayLabel: "Domov", icon: "🏠" },
-  { href: "/app/support", displayLabel: "Pomoč", icon: "❓" },
-  { href: "/app/settings", displayLabel: "Nastavitve", icon: "⚙️" },
-];
 const PULL_REFRESH_SPOKES = Array.from({ length: 8 }, (_, index) => index);
 
-function getChrome(pathname: string) {
+function getChrome(pathname: string, dictionary: ReturnType<typeof useI18n>["dictionary"]) {
   if (pathname === "/app/start") {
     return {
-      title: "Začni",
-      subtitle: "Prilagodi aplikacijo in izberi paket",
+      title: dictionary.appShell.startTitle,
+      subtitle: dictionary.appShell.startSubtitle,
       backHref: null,
     };
   }
 
   if (pathname.startsWith("/app/lectures/")) {
     return {
-      title: "Zapisek",
-      subtitle: "Preglej in klepetaj o vsebini",
+      title: dictionary.appShell.noteTitle,
+      subtitle: dictionary.appShell.noteSubtitle,
       backHref: "/app",
     };
   }
 
   if (pathname.startsWith("/app/support/") && pathname !== "/app/support") {
     return {
-      title: "Pomoč",
-      subtitle: "Vodnik za uporabo",
+      title: dictionary.appShell.helpTitle,
+      subtitle: dictionary.appShell.helpArticleSubtitle,
       backHref: "/app/support",
     };
   }
 
   if (pathname === "/app/support") {
     return {
-      title: "Pomoč",
-      subtitle: "Vodniki",
+      title: dictionary.appShell.helpTitle,
+      subtitle: dictionary.appShell.helpSubtitle,
       backHref: null,
     };
   }
 
   if (pathname === "/app/settings") {
     return {
-      title: "Nastavitve",
-      subtitle: "Tema in račun",
+      title: dictionary.appShell.settingsTitle,
+      subtitle: dictionary.appShell.settingsSubtitle,
       backHref: null,
     };
   }
 
   return {
-    title: "Zapiski",
-    subtitle: "Celotna knjižnica na enem mestu",
+    title: dictionary.appShell.notesTitle,
+    subtitle: dictionary.appShell.notesSubtitle,
     backHref: null,
   };
 }
@@ -71,6 +67,7 @@ export function AppShell({
   children: React.ReactNode;
   hasPaidAccess: boolean;
 }) {
+  const { dictionary } = useI18n();
   const pathname = usePathname();
   const router = useRouter();
   const [pullDistance, setPullDistance] = useState(0);
@@ -82,21 +79,21 @@ export function AppShell({
   const pullDistanceRef = useRef(0);
   const mobileDockRef = useRef<HTMLElement | null>(null);
   const shouldHideNavigation = pathname === "/app/start";
-  const chrome = getChrome(pathname);
+  const chrome = getChrome(pathname, dictionary);
   const createHref = "/app?mode=record";
   const subscribeHref = "/app/start";
   const showCreateCta = !shouldHideNavigation;
   const showSubscribeCta = !hasPaidAccess && showCreateCta;
-  const subscribeLabel = "Kupi";
+  const subscribeLabel = dictionary.appShell.buy;
   const pullThreshold = 168;
   const cappedPullDistance = Math.min(pullDistance, 220);
   const isLecturePage = pathname.startsWith("/app/lectures/");
 
   useEffect(() => {
-    for (const item of TAB_ITEMS) {
+    for (const item of dictionary.appShell.tabs) {
       router.prefetch(item.href);
     }
-  }, [router]);
+  }, [dictionary.appShell.tabs, router]);
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -295,8 +292,9 @@ export function AppShell({
     transition: isPulling ? "none" : "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)",
   };
   const isHomePage = pathname === "/app";
-  const mobileDockToggleItem = isHomePage ? TAB_ITEMS[2] : TAB_ITEMS[0];
-  const isTabItemActive = (item: (typeof TAB_ITEMS)[number]) =>
+  const tabItems = dictionary.appShell.tabs;
+  const mobileDockToggleItem = isHomePage ? tabItems[2] : tabItems[0];
+  const isTabItemActive = (item: (typeof tabItems)[number]) =>
     item.href === "/app"
       ? pathname === "/app" || isLecturePage
       : pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -367,7 +365,7 @@ export function AppShell({
           {chrome.backHref ? (
             <InstantLink href={chrome.backHref} className="app-back-button desktop-brandline-back">
               <ChevronLeft className="h-5 w-5" />
-              Nazaj
+              {dictionary.common.back}
             </InstantLink>
           ) : null}
 
@@ -389,12 +387,12 @@ export function AppShell({
           {showCreateCta ? (
             <InstantLink href={createHref} className="nota-sidebar-cta">
               <EmojiIcon symbol="➕" size="1rem" />
-            Nov zapisek
+              {dictionary.ui["Nov zapisek"] ?? "Nov zapisek"}
             </InstantLink>
           ) : null}
 
-          <nav className="desktop-sidebar-nav" aria-label="Stranska navigacija">
-            {TAB_ITEMS.map((item) => {
+          <nav className="desktop-sidebar-nav" aria-label={dictionary.appShell.sideNavigation}>
+            {tabItems.map((item) => {
               const active =
                 item.href === "/app"
                   ? pathname === "/app" || pathname.startsWith("/app/lectures/")
@@ -422,7 +420,7 @@ export function AppShell({
         <div className="app-shell-pull-content" style={mobilePullContentStyle}>
           <header className="ios-nav app-topbar">
             <div className="ios-nav-inner app-topbar-inner">
-              <InstantLink href="/app" className="app-topbar-brand" aria-label={`Domov ${BRAND_NAME}`}>
+              <InstantLink href="/app" className="app-topbar-brand" aria-label={`${dictionary.common.home} ${BRAND_NAME}`}>
                 <BrandLogo compact />
               </InstantLink>
 
@@ -435,7 +433,7 @@ export function AppShell({
                 <div className="ios-nav-actions">
                   <InstantLink href={chrome.backHref} className="app-back-button">
                     <ChevronLeft className="h-5 w-5" />
-                    Nazaj
+                    {dictionary.common.back}
                   </InstantLink>
                 </div>
               ) : null}
@@ -453,7 +451,7 @@ export function AppShell({
                 <div className="ios-nav-actions app-topbar-actions">
                   <InstantLink href={createHref} className="app-topbar-cta">
                     <EmojiIcon symbol="➕" size="1rem" />
-                    <span>Nov zapisek</span>
+                    <span>{dictionary.ui["Nov zapisek"] ?? "Nov zapisek"}</span>
                   </InstantLink>
                 </div>
               ) : null}
@@ -467,7 +465,7 @@ export function AppShell({
       <nav
         ref={mobileDockRef}
         className={`ios-tabbar ${isMobileDockOpen ? "mobile-open" : "mobile-collapsed"}`}
-        aria-label="Glavna navigacija"
+        aria-label={dictionary.appShell.mainNavigation}
       >
         <button
           type="button"
@@ -475,15 +473,15 @@ export function AppShell({
           onClick={handleMobileDockToggle}
           aria-label={
             isMobileDockOpen
-              ? `Pojdi na ${mobileDockToggleItem.displayLabel}`
-              : "Odpri navigacijo"
+              ? `${dictionary.ui["Pojdi na"] ?? "Pojdi na"} ${mobileDockToggleItem.displayLabel}`
+              : (dictionary.ui["Odpri navigacijo"] ?? "Odpri navigacijo")
           }
           aria-expanded={isMobileDockOpen}
         >
           <EmojiIcon symbol={mobileDockToggleItem.icon} size="1.05rem" />
         </button>
         <div className="ios-tabbar-inner">
-          {TAB_ITEMS.map((item) => {
+          {tabItems.map((item) => {
             const active = isTabItemActive(item);
 
             return (

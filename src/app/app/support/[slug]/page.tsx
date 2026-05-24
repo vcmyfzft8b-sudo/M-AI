@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 
 import { MarkdownRenderer } from "@/components/markdown-renderer";
-import { getHelpArticle } from "@/lib/help-center";
+import { getLocalizedHelpArticle } from "@/lib/help-center";
+import { getRequestLocale } from "@/lib/i18n-server";
 
 export default async function SupportArticlePage({
   params,
@@ -9,7 +10,8 @@ export default async function SupportArticlePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const article = getHelpArticle(slug);
+  const locale = await getRequestLocale();
+  const article = getLocalizedHelpArticle(slug, locale);
 
   if (!article) {
     notFound();

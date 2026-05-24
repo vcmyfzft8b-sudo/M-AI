@@ -4,6 +4,8 @@ import { Loader2, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { useI18n } from "@/components/locale-provider";
+
 function GoogleMark() {
   return (
     <svg className="auth-provider-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -49,6 +51,7 @@ export function LandingAuthOptions(props: {
   next: string;
 }) {
   const router = useRouter();
+  const { dictionary } = useI18n();
   const [pendingTarget, setPendingTarget] = useState<PendingTarget>(null);
   const emailHref = `/auth/email-entry?mode=signup&next=${encodeURIComponent(props.next)}`;
 
@@ -75,7 +78,7 @@ export function LandingAuthOptions(props: {
             aria-busy={isPending("google")}
           >
             {isPending("google") ? <Loader2 className="auth-provider-icon animate-spin" /> : <GoogleMark />}
-            <span>{isPending("google") ? "Preusmerjam..." : "Nadaljuj z Google"}</span>
+            <span>{isPending("google") ? dictionary.auth.redirecting : dictionary.auth.continueGoogle}</span>
           </button>
         </form>
       ) : null}
@@ -97,7 +100,7 @@ export function LandingAuthOptions(props: {
             aria-busy={isPending("apple")}
           >
             {isPending("apple") ? <Loader2 className="auth-provider-icon animate-spin" /> : <AppleMark />}
-            <span>{isPending("apple") ? "Preusmerjam..." : "Nadaljuj z Apple"}</span>
+            <span>{isPending("apple") ? dictionary.auth.redirecting : dictionary.auth.continueApple}</span>
           </button>
         </form>
       ) : null}
@@ -114,7 +117,7 @@ export function LandingAuthOptions(props: {
           }}
         >
           {isPending("email") ? <Loader2 className="auth-provider-icon animate-spin" /> : <Mail className="auth-provider-icon" />}
-          <span>{isPending("email") ? "Odpiram..." : "Nadaljuj z e-pošto"}</span>
+          <span>{isPending("email") ? dictionary.auth.opening : dictionary.auth.continueEmail}</span>
         </button>
       ) : null}
     </div>

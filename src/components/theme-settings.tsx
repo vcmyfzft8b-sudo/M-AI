@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 
 import { EmojiIcon } from "@/components/emoji-icon";
+import { useI18n } from "@/components/locale-provider";
 import type { ThemePreference } from "@/lib/theme";
 import {
   readStoredThemePreference,
@@ -33,6 +34,7 @@ const OPTIONS: Array<{
 ];
 
 export function ThemeSettings() {
+  const { dictionary } = useI18n();
   const preference = useSyncExternalStore(
     subscribeToThemePreference,
     readStoredThemePreference,
@@ -64,7 +66,13 @@ export function ThemeSettings() {
               <EmojiIcon symbol={option.icon} size="1.2rem" />
             </span>
             <span className="note-action-card-copy">
-              <span className="note-action-card-label">{option.label}</span>
+              <span className="note-action-card-label">
+                {option.value === "system"
+                  ? dictionary.theme.system
+                  : option.value === "light"
+                    ? dictionary.theme.light
+                    : dictionary.theme.dark}
+              </span>
             </span>
           </button>
         );

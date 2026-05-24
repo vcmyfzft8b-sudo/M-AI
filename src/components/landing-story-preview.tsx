@@ -4,7 +4,24 @@ import Image from "next/image";
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
 
-const STORY_SLIDES = [
+type StorySlide = {
+  kind: string;
+  title: string;
+  caption: string;
+  label: string;
+  image: string;
+};
+
+type StoryLabels = {
+  aria: string;
+  choose: string;
+  show: string;
+  previous: string;
+  next: string;
+  navigation: string;
+};
+
+const DEFAULT_STORY_SLIDES = [
   {
     kind: "notes",
     title: "Clean zapiski",
@@ -51,31 +68,44 @@ const STORY_SLIDES = [
 
 const STORY_AUTOPLAY_MS = 3200;
 
-export function LandingStoryPreview() {
+export function LandingStoryPreview({
+  labels = {
+    aria: "Primeri učnega gradiva",
+    choose: "Izberi primer",
+    show: "Pokaži",
+    previous: "Prejšnji primer",
+    next: "Naslednji primer",
+    navigation: "Story navigacija",
+  },
+  slides = DEFAULT_STORY_SLIDES,
+}: {
+  labels?: StoryLabels;
+  slides?: readonly StorySlide[];
+}) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const activeSlide = STORY_SLIDES[activeIndex];
+  const activeSlide = (slides[activeIndex] ?? slides[0]) as StorySlide;
   const storyStyle = { "--story-duration": `${STORY_AUTOPLAY_MS}ms` } as CSSProperties;
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setActiveIndex((current) => (current === STORY_SLIDES.length - 1 ? 0 : current + 1));
+      setActiveIndex((current) => (current === slides.length - 1 ? 0 : current + 1));
     }, STORY_AUTOPLAY_MS);
 
     return () => {
       window.clearInterval(timer);
     };
-  }, []);
+  }, [slides.length]);
 
   function showPrevious() {
-    setActiveIndex((current) => (current === 0 ? STORY_SLIDES.length - 1 : current - 1));
+    setActiveIndex((current) => (current === 0 ? slides.length - 1 : current - 1));
   }
 
   function showNext() {
-    setActiveIndex((current) => (current === STORY_SLIDES.length - 1 ? 0 : current + 1));
+    setActiveIndex((current) => (current === slides.length - 1 ? 0 : current + 1));
   }
 
   return (
-    <div className="landing-study-visual" aria-label="Primeri učnega gradiva">
+    <div className="landing-study-visual" aria-label={labels.aria}>
       <div className={`landing-study-story landing-study-story-${activeSlide.kind}`} style={storyStyle}>
         <div key={`${activeSlide.kind}-media`} className="landing-study-story-media">
           <Image
@@ -90,13 +120,13 @@ export function LandingStoryPreview() {
         </div>
         <div className="landing-study-story-overlay" aria-hidden="true" />
 
-        <div className="landing-study-story-bars" aria-label="Izberi primer">
-          {STORY_SLIDES.map((slide, index) => (
+        <div className="landing-study-story-bars" aria-label={labels.choose}>
+          {slides.map((slide, index) => (
             <button
               type="button"
               key={slide.kind}
               className={index === activeIndex ? "active" : ""}
-              aria-label={`Pokaži ${slide.label}`}
+              aria-label={`${labels.show} ${slide.label}`}
               aria-current={index === activeIndex ? "step" : undefined}
               onClick={() => {
                 setActiveIndex(index);
@@ -111,11 +141,11 @@ export function LandingStoryPreview() {
           <Image src="/memo-logo.png" alt="" width={3651} height={3285} sizes="3.6rem" />
         </span>
 
-        <div className="landing-study-story-controls" aria-label="Story navigacija">
-          <button type="button" aria-label="Prejšnji primer" onClick={showPrevious}>
+        <div className="landing-study-story-controls" aria-label={labels.navigation}>
+          <button type="button" aria-label={labels.previous} onClick={showPrevious}>
             ←
           </button>
-          <button type="button" aria-label="Naslednji primer" onClick={showNext}>
+          <button type="button" aria-label={labels.next} onClick={showNext}>
             →
           </button>
         </div>

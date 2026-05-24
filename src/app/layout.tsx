@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 
+import { LocaleProvider } from "@/components/locale-provider";
 import { ThemeController } from "@/components/theme-controller";
 import {
   BRAND_SHORTLINE,
@@ -8,6 +9,8 @@ import {
   SEO_SITE_DESCRIPTION,
   SEO_SITE_URL,
 } from "@/lib/brand";
+import { getRequestLocale } from "@/lib/i18n-server";
+import { getHtmlLang } from "@/lib/i18n";
 
 import "./globals.css";
 
@@ -21,6 +24,14 @@ export const metadata: Metadata = {
   },
   description: SEO_SITE_DESCRIPTION,
   applicationName: SEO_BRAND_NAME,
+  alternates: {
+    canonical: "/",
+    languages: {
+      "sl-SI": "/",
+      "cs-CZ": "/cz",
+      "x-default": "/",
+    },
+  },
   openGraph: {
     title: siteTitle,
     description: SEO_SITE_DESCRIPTION,
@@ -73,13 +84,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getRequestLocale();
+
   return (
-    <html lang="sl" suppressHydrationWarning>
+    <html lang={getHtmlLang(locale)} suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -101,9 +114,11 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <ThemeController />
-        {children}
-        <Analytics />
+        <LocaleProvider initialLocale={locale}>
+          <ThemeController />
+          {children}
+          <Analytics />
+        </LocaleProvider>
       </body>
     </html>
   );

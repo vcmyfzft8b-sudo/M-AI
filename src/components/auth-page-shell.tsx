@@ -6,6 +6,7 @@ import { getAuthProviderAvailability } from "@/lib/auth-providers";
 import { BrandLogo } from "@/components/brand-logo";
 import { EmailAuthForm } from "@/components/email-auth-form";
 import { BRAND_NAME } from "@/lib/brand";
+import { getRequestDictionary } from "@/lib/i18n-server";
 
 type AuthMode = "login" | "signup";
 
@@ -62,17 +63,16 @@ export async function AuthPageShell(props: {
   prefilledEmail?: string;
 }) {
   const providers = await getAuthProviderAvailability();
+  const dictionary = await getRequestDictionary();
   const loginMode = props.mode === "login";
-  const title = loginMode ? "Dobrodošel nazaj" : "Ustvari svoj račun";
-  const copy = loginMode
-    ? "Nadaljuj tam, kjer si ostal, s prepisom, zapiski, karticami in klepetom."
-    : "Začni z enim predavanjem in v enem prostoru dobi prepis, povzetek, kartice in klepet.";
-  const googleLabel = loginMode ? "Prijava z Google" : "Ustvari račun z Google";
-  const appleLabel = loginMode ? "Prijava z Apple" : "Ustvari račun z Apple";
-  const emailLabel = loginMode ? "Pošlji mi prijavno povezavo" : "Pošlji mi povezavo za registracijo";
+  const title = loginMode ? dictionary.auth.welcomeBack : dictionary.auth.createAccount;
+  const copy = loginMode ? dictionary.auth.loginCopy : dictionary.auth.signupCopy;
+  const googleLabel = loginMode ? dictionary.auth.googleLogin : dictionary.auth.googleSignup;
+  const appleLabel = loginMode ? dictionary.auth.appleLogin : dictionary.auth.appleSignup;
+  const emailLabel = loginMode ? dictionary.auth.emailLogin : dictionary.auth.emailSignup;
   const switchHref = loginMode ? "/auth/signup" : "/auth/login";
-  const switchLabel = loginMode ? "Ustvari račun" : "Prijava";
-  const switchCopy = loginMode ? "Si tukaj prvič?" : "Že imaš račun?";
+  const switchLabel = loginMode ? dictionary.auth.createAccount : dictionary.auth.signIn;
+  const switchCopy = loginMode ? dictionary.auth.firstTime : dictionary.auth.alreadyAccount;
 
   return (
     <main className="landing-shell auth-shell">
@@ -87,7 +87,7 @@ export async function AuthPageShell(props: {
             {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a href="/" className="app-back-button">
               <ChevronLeft className="h-5 w-5" />
-              Nazaj
+              {dictionary.common.back}
             </a>
           </div>
         </div>
@@ -96,7 +96,7 @@ export async function AuthPageShell(props: {
       <div className="ios-content">
         <section className="auth-stage">
           <div className="auth-panel">
-            <p className="auth-eyebrow">{loginMode ? "Prijava" : "Registracija"}</p>
+            <p className="auth-eyebrow">{loginMode ? dictionary.auth.loginEyebrow : dictionary.auth.signupEyebrow}</p>
             <h1 className="auth-title">{title}</h1>
             <p className="auth-copy">{copy}</p>
 
@@ -120,31 +120,30 @@ export async function AuthPageShell(props: {
             {providers.email ? (
               <>
                 <div className="auth-divider">
-                  <span>ali</span>
+                  <span>{dictionary.auth.or}</span>
                 </div>
 
                 <EmailAuthForm
                   buttonClassName="ios-primary-button auth-submit-button"
                   defaultEmail={props.prefilledEmail}
                   formClassName="auth-email-form"
-                  helperText="Na tvoj e-naslov bomo poslali potrditveno kodo."
+                  helperText={dictionary.auth.emailHelper}
                   inputWrapperClassName="auth-field"
                   mode={props.mode}
                   next={props.next}
-                  placeholder="Vnesi svoj e-naslov"
-                  pendingLabel="Pošiljam kodo..."
+                  placeholder={dictionary.auth.emailPlaceholder}
+                  pendingLabel={dictionary.auth.sendingCode}
                   submitLabel={emailLabel}
                 />
               </>
             ) : null}
 
             <p className="auth-legal-copy">
-              Z nadaljevanjem se strinjaš s {`${BRAND_NAME}`}{" "}
-              <Link href="/app/support/terms-of-use">pogoji uporabe</Link> in{" "}
-              <Link href="/app/support/privacy-policy">politiko zasebnosti</Link>, vključno
-              z obdelavo zvoka, besedila, dokumentov in povezav pri AI ponudnikih. Potrjuješ
-              tudi, da imaš potrebna dovoljenja za snemanje, nalaganje in uporabo gradiva,
-              ki ga pošlješ v Memo.
+              {dictionary.auth.legalPrefix} {`${BRAND_NAME}`}{" "}
+              <Link href="/app/support/terms-of-use">{dictionary.auth.terms}</Link>{" "}
+              {dictionary.common.and}{" "}
+              <Link href="/app/support/privacy-policy">{dictionary.auth.privacy}</Link>,{" "}
+              {dictionary.auth.legalSuffix}
             </p>
 
             <p className="auth-switch-copy">

@@ -13,6 +13,7 @@ import {
 
 import { EmojiIcon } from "@/components/emoji-icon";
 import { Folder } from "@/components/folder";
+import { useI18n } from "@/components/locale-provider";
 import { ViewportPortal } from "@/components/viewport-portal";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 import { formatRelativeDate } from "@/lib/utils";
@@ -143,6 +144,7 @@ export function LibraryFolderMenu({
   selectedFolderId: string | null;
   onSelectFolder: (folderId: string | null, lectureIds: string[] | null) => void;
 }) {
+  const { dictionary } = useI18n();
   const shellRef = useRef<HTMLDivElement | null>(null);
   const hasRestoredSelectionRef = useRef(false);
   const hasMigratedLocalFoldersRef = useRef(false);
@@ -181,6 +183,7 @@ export function LibraryFolderMenu({
   const selectedFolder = liveFolders.find((folder) => folder.id === selectedFolderId) ?? null;
   const isEditModalOpen = editingFolderId !== null;
   const isFolderEditBusy = isSavingFolder || deletingFolderId !== null;
+  const t = useCallback((value: string) => dictionary.ui[value] ?? value, [dictionary.ui]);
 
   useEffect(() => {
     setFolders(initialFolders);
@@ -744,7 +747,7 @@ export function LibraryFolderMenu({
               <Folder open={false} size={0.34} />
             </span>
             <span className="library-folder-option-text">
-              <span>Vsi zapiski</span>
+              <span>{t("Vsi zapiski")}</span>
               <span className="library-folder-option-meta">
                 {lectureSummary(lectures.length)}
               </span>
@@ -788,7 +791,7 @@ export function LibraryFolderMenu({
             <span className="library-folder-option-icon">
               <EmojiIcon symbol="➕" size="0.95rem" />
             </span>
-            <span>Nova mapa</span>
+            <span>{t("Nova mapa")}</span>
           </span>
           <span className="library-folder-option-icon">
             <EmojiIcon symbol="›" size="1.1rem" />
@@ -804,7 +807,7 @@ export function LibraryFolderMenu({
             <span className="library-folder-option-icon">
               <EmojiIcon symbol="✏️" size="0.95rem" />
             </span>
-            <span>Uredi mape</span>
+            <span>{t("Uredi mape")}</span>
           </span>
           <span className="library-folder-option-icon">
             <EmojiIcon symbol="›" size="1.1rem" />
@@ -827,7 +830,7 @@ export function LibraryFolderMenu({
           <Folder open={isOpen} size={0.5} />
         </span>
         <span className="library-folder-trigger-label">
-          {selectedFolder?.name ?? "Vsi zapiski"}
+          {selectedFolder?.name ?? t("Vsi zapiski")}
         </span>
         <EmojiIcon className={`library-folder-chevron ${isOpen ? "open" : ""}`} symbol="▾" size="0.95rem" />
       </button>

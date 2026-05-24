@@ -1,20 +1,25 @@
 import Link from "next/link";
 
 import { EmojiIcon } from "@/components/emoji-icon";
-import { HELP_SECTIONS } from "@/lib/help-center";
+import { getHelpSections } from "@/lib/help-center";
+import { getRequestDictionary, getRequestLocale } from "@/lib/i18n-server";
 
-export default function SupportPage() {
+export default async function SupportPage() {
+  const locale = await getRequestLocale();
+  const dictionary = await getRequestDictionary();
+  const helpSections = getHelpSections(locale);
+
   return (
     <main className="home-dashboard pb-8">
       <section className="dashboard-section">
         <div className="dashboard-section-heading">
           <div>
-            <h1 className="dashboard-page-title">Pomoč</h1>
+            <h1 className="dashboard-page-title">{dictionary.help.pageTitle}</h1>
           </div>
         </div>
       </section>
 
-      {HELP_SECTIONS.map((section) => (
+      {helpSections.map((section) => (
         <section key={section.title} className="dashboard-section">
           <div className="dashboard-section-heading">
             <h2 className="dashboard-section-title">{section.title}</h2>

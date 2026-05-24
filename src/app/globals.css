@@ -10199,16 +10199,19 @@ select:disabled {
 }
 
 .landing-public-nav {
-  position: relative;
+  position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 80;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   width: min(100%, 78rem);
   margin: 0 auto;
-  padding: 2rem 1.25rem 0;
+  padding: 1.1rem 1.25rem;
+  background: color-mix(in srgb, var(--canvas) 88%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .landing-public-brand,
@@ -10282,10 +10285,10 @@ select:disabled {
 
 .landing-public-hero-inner {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(22rem, 28rem);
+  grid-template-columns: minmax(0, 1fr) minmax(14.5rem, 18.25rem);
   align-content: center;
   align-items: center;
-  gap: 5.5rem;
+  gap: 4rem;
   width: min(100%, 78rem);
   min-height: inherit;
   margin: 0 auto;
@@ -10469,6 +10472,29 @@ select:disabled {
   gap: 1.35rem;
   margin-bottom: 3.25rem;
   text-align: left;
+}
+
+.landing-scroll-reveal {
+  opacity: 0;
+  transform: translateY(1.15rem);
+  transition:
+    opacity 0.72s var(--motion-curve-soft) var(--reveal-delay, 0ms),
+    transform 0.72s var(--motion-curve-soft) var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+.landing-scroll-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-scroll-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    will-change: auto;
+  }
 }
 
 .landing-public-section-heading h2 {
@@ -10695,53 +10721,39 @@ select:disabled {
 .landing-study-visual {
   position: relative;
   display: grid;
-  min-height: 36rem;
+  min-height: 27.5rem;
+  align-items: center;
   justify-items: end;
 }
 
 .landing-study-story {
   position: relative;
-  width: min(100%, 28rem);
-  min-height: 36rem;
-  overflow: hidden;
-  padding: 1.15rem;
-  border: 0.8rem solid color-mix(in srgb, var(--surface-solid) 88%, var(--tint-soft));
-  border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.18) 42%, color-mix(in srgb, var(--tint) 12%, transparent)),
-    linear-gradient(150deg, color-mix(in srgb, var(--surface-solid) 78%, var(--tint) 22%), color-mix(in srgb, var(--canvas) 72%, var(--surface-solid) 28%) 42%, color-mix(in srgb, var(--surface-muted) 64%, var(--tint-strong) 36%));
-  box-shadow: 0 1.6rem 3.8rem rgba(0, 0, 0, 0.07);
+  width: min(100%, 17.5rem);
+  overflow: visible;
+  padding: 0.42rem;
+  border: 1px solid color-mix(in srgb, var(--separator-strong) 42%, white);
+  border-radius: 1.72rem;
+  background: color-mix(in srgb, var(--canvas) 72%, white);
+  box-shadow: 0 1.65rem 4rem rgba(0, 0, 0, 0.16);
 }
 
 :root[data-theme="dark"] .landing-study-story {
-  border-color: #171b22;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(9, 12, 17, 0.72) 38%, rgba(3, 5, 8, 0.94)),
-    linear-gradient(150deg, #17202b 0%, #080b10 44%, #020304 100%);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: #121216;
   box-shadow: 0 1.8rem 4.2rem rgba(0, 0, 0, 0.72);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) .landing-study-story,
   :root[data-theme="system"] .landing-study-story {
-    border-color: #171b22;
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(9, 12, 17, 0.72) 38%, rgba(3, 5, 8, 0.94)),
-      linear-gradient(150deg, #17202b 0%, #080b10 44%, #020304 100%);
+    border-color: rgba(255, 255, 255, 0.18);
+    background: #121216;
     box-shadow: 0 1.8rem 4.2rem rgba(0, 0, 0, 0.72);
   }
 }
 
 .landing-study-story::before {
-  content: "";
-  position: absolute;
-  inset: 6.8rem -5.2rem auto 4.8rem;
-  height: 15rem;
-  border: 1px solid color-mix(in srgb, var(--separator-strong) 55%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
-  box-shadow: var(--shadow-soft);
-  transform: rotate(-11deg);
+  content: none;
 }
 
 .landing-study-story-transcript::before {
@@ -10760,9 +10772,44 @@ select:disabled {
   transform: rotate(-7deg);
 }
 
-.landing-study-story-bars {
+.landing-study-story-media {
   position: relative;
-  z-index: 1;
+  width: 100%;
+  aspect-ratio: 1170 / 2532;
+  overflow: hidden;
+  border-radius: 1.38rem;
+  background: #050505;
+  animation: landing-story-card-enter 0.46s var(--motion-curve-soft) both;
+}
+
+.landing-study-story-image {
+  object-fit: contain;
+  object-position: center top;
+}
+
+.landing-study-story-overlay {
+  position: absolute;
+  inset: 0.42rem;
+  border-radius: 1.38rem;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.36), transparent 20%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.66), transparent 34%);
+}
+
+.landing-study-story-notes .landing-study-story-overlay,
+.landing-study-story-reading .landing-study-story-overlay {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.36), transparent 20%),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.18), transparent 38%);
+}
+
+.landing-study-story-bars {
+  position: absolute;
+  top: 0.92rem;
+  left: 1.12rem;
+  right: 1.12rem;
+  z-index: 2;
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.35rem;
@@ -10784,12 +10831,12 @@ select:disabled {
   width: 100%;
   overflow: hidden;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--label) 26%, transparent);
+  background: rgba(255, 255, 255, 0.42);
 }
 
 .landing-study-story-bars button.active span {
   position: relative;
-  background: color-mix(in srgb, var(--label) 26%, transparent);
+  background: rgba(255, 255, 255, 0.32);
 }
 
 .landing-study-story-bars button.active span::after {
@@ -10797,38 +10844,42 @@ select:disabled {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: color-mix(in srgb, var(--label) 78%, transparent);
+  background: rgba(255, 255, 255, 0.94);
   animation: landing-story-progress var(--story-duration, 3200ms) linear forwards;
 }
 
 .landing-study-story-brand {
-  position: relative;
-  z-index: 1;
+  position: absolute;
+  top: 2.05rem;
+  left: 1.12rem;
+  right: 1.12rem;
+  z-index: 2;
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  margin-top: 1.55rem;
-  color: var(--label);
-  font-size: 1rem;
+  gap: 0.55rem;
+  margin: 0;
+  color: white;
+  font-size: 0.9rem;
   font-weight: 750;
+  text-shadow: 0 0.1rem 0.8rem rgba(0, 0, 0, 0.42);
 }
 
 .landing-study-story-brand small {
-  color: color-mix(in srgb, var(--secondary-label) 82%, transparent);
-  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.82rem;
   font-weight: 500;
 }
 
 .landing-study-story-logo {
   display: inline-flex;
-  width: 2.4rem;
-  height: 2.4rem;
+  width: 2.15rem;
+  height: 2.15rem;
   align-items: center;
   justify-content: center;
-  padding: 0.34rem;
-  border-radius: 8px;
-  background: var(--surface-solid);
-  box-shadow: var(--shadow-soft);
+  padding: 0.28rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0.55rem 1.6rem rgba(0, 0, 0, 0.18);
 }
 
 .landing-study-story-logo img {
@@ -10946,38 +10997,79 @@ select:disabled {
 
 .landing-study-story-copy {
   position: absolute;
-  left: 2.4rem;
-  right: 2.4rem;
-  bottom: 3.4rem;
-  z-index: 1;
+  left: 1.7rem;
+  right: 1.7rem;
+  bottom: 2.55rem;
+  z-index: 2;
   display: grid;
-  gap: 0.65rem;
+  gap: 0.45rem;
   animation: landing-story-copy-enter 0.5s var(--motion-curve-soft) both;
+}
+
+.landing-study-story-notes .landing-study-story-copy,
+.landing-study-story-reading .landing-study-story-copy {
+  bottom: 2.55rem;
 }
 
 .landing-public-hero .landing-study-story .landing-study-story-title {
   margin: 0;
   max-width: none;
-  color: var(--label);
-  font-size: 2.6rem;
-  font-weight: 700;
+  color: white;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 680;
   letter-spacing: 0;
   line-height: 1.08;
-  text-shadow: 0 0.12rem 0.85rem rgba(255, 255, 255, 0.48);
+  text-shadow: 0 0.16rem 1rem rgba(0, 0, 0, 0.58);
   text-wrap: balance;
+}
+
+.landing-public-hero .landing-study-story-notes .landing-study-story-title,
+.landing-public-hero .landing-study-story-reading .landing-study-story-title {
+  color: #070707;
+  text-shadow: 0 0.08rem 0.55rem rgba(255, 255, 255, 0.68);
 }
 
 .landing-public-hero .landing-study-story .landing-study-story-copy p:not(.landing-study-story-title) {
   margin: 0;
   max-width: none;
-  color: color-mix(in srgb, var(--secondary-label) 90%, var(--label));
-  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.8rem;
   line-height: 1.35;
+  text-shadow: 0 0.12rem 0.75rem rgba(0, 0, 0, 0.48);
+}
+
+.landing-public-hero .landing-study-story-notes .landing-study-story-copy p:not(.landing-study-story-title),
+.landing-public-hero .landing-study-story-reading .landing-study-story-copy p:not(.landing-study-story-title) {
+  color: rgba(0, 0, 0, 0.68);
+  text-shadow: none;
+}
+
+.landing-study-story-floating-logo {
+  position: absolute;
+  left: 50%;
+  bottom: -1.35rem;
+  z-index: 4;
+  display: inline-flex;
+  width: 3rem;
+  height: 3rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.48rem;
+  border-radius: 0.85rem;
+  background: white;
+  box-shadow: 0 1rem 2.4rem rgba(0, 0, 0, 0.22);
+  transform: translateX(-50%);
+}
+
+.landing-study-story-floating-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .landing-study-story-controls {
   position: absolute;
-  inset: 0;
+  inset: 0.62rem;
   z-index: 3;
   pointer-events: none;
 }
@@ -10986,14 +11078,14 @@ select:disabled {
   display: inline-flex;
   position: absolute;
   top: 50%;
-  width: 2.55rem;
-  height: 2.55rem;
+  width: 2.25rem;
+  height: 2.25rem;
   align-items: center;
   justify-content: center;
   border: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-solid) 78%, transparent);
-  color: color-mix(in srgb, var(--label) 82%, transparent);
+  background: rgba(12, 12, 14, 0.58);
+  color: rgba(255, 255, 255, 0.86);
   cursor: pointer;
   pointer-events: auto;
   font-size: 1rem;
@@ -11007,16 +11099,16 @@ select:disabled {
 }
 
 .landing-study-story-controls button:first-child {
-  left: 1rem;
+  left: 0.82rem;
 }
 
 .landing-study-story-controls button:last-child {
-  right: 1rem;
+  right: 0.82rem;
 }
 
 .landing-study-story-controls button:hover {
-  background: var(--surface-solid);
-  color: var(--label);
+  background: rgba(12, 12, 14, 0.78);
+  color: white;
   transform: translateY(-50%) scale(1.04);
 }
 
@@ -11061,26 +11153,55 @@ select:disabled {
 
 @media (max-width: 639px) {
   .landing-study-visual {
-    min-height: 35rem;
+    min-height: min(31.5rem, 124vw);
     justify-items: center;
   }
 
   .landing-study-story {
-    min-height: 34rem;
-  }
-
-  .landing-study-story-card {
-    left: 1.7rem;
-    width: calc(100% - 3.4rem);
+    width: min(72vw, 16.5rem);
   }
 
   .landing-study-story-copy {
-    left: 1.7rem;
-    right: 1.7rem;
+    left: 1.45rem;
+    right: 1.45rem;
+    bottom: 2.65rem;
   }
 
   .landing-public-hero .landing-study-story .landing-study-story-title {
-    font-size: 2.35rem;
+    font-size: clamp(1.45rem, 7.2vw, 1.9rem);
+  }
+
+  .landing-public-hero .landing-study-story .landing-study-story-copy p:not(.landing-study-story-title) {
+    font-size: 0.82rem;
+  }
+
+  .landing-study-story-brand {
+    top: 2rem;
+    left: 1.15rem;
+    right: 1.15rem;
+    gap: 0.52rem;
+    font-size: 0.88rem;
+  }
+
+  .landing-study-story-brand small {
+    font-size: 0.8rem;
+  }
+
+  .landing-study-story-logo {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .landing-study-story-bars {
+    top: 0.95rem;
+    left: 1.15rem;
+    right: 1.15rem;
+  }
+
+  .landing-study-story-floating-logo {
+    width: 3rem;
+    height: 3rem;
+    bottom: -1.35rem;
   }
 }
 

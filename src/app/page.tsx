@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { BrandLogo } from "@/components/brand-logo";
 import { LandingLoadingLink } from "@/components/landing-loading-link";
+import { LandingScrollReveal } from "@/components/landing-scroll-reveal";
 import { LandingStoryPreview } from "@/components/landing-story-preview";
 import { getOptionalUser } from "@/lib/auth";
 import {
@@ -86,9 +88,9 @@ const FEATURE_CARDS = [
     detail: "Vadi daljše odgovore in pripravo na preverjanje znanja.",
   },
   {
-    icon: "💬",
-    title: "AI chat",
-    detail: "Vprašaj zapisek in ohrani kontekst iz izvirnega gradiva.",
+    icon: "🎧",
+    title: "Poslušaj zapiske",
+    detail: "Aplikacija ti zapiske prebere na glas, da jih lahko ponavljaš tudi brez gledanja v ekran.",
   },
 ] as const;
 
@@ -135,6 +137,7 @@ export default async function HomePage() {
 
   return (
     <main className="landing-shell landing-public-page">
+      <LandingScrollReveal />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -189,14 +192,19 @@ export default async function HomePage() {
       </section>
 
       <section className="landing-public-section" aria-labelledby="landing-workflow-title">
-        <div className="landing-public-section-heading">
+        <div className="landing-public-section-heading" data-scroll-reveal>
           <p className="landing-section-pill">Kako deluje</p>
           <h2 id="landing-workflow-title">Memo vse poenostavi.</h2>
         </div>
 
         <div className="landing-workflow-grid">
-          {WORKFLOW_STEPS.map((step) => (
-            <article key={step.title} className="landing-workflow-item">
+          {WORKFLOW_STEPS.map((step, index) => (
+            <article
+              key={step.title}
+              className="landing-workflow-item"
+              data-scroll-reveal
+              style={{ "--reveal-delay": `${index * 80}ms` } as CSSProperties}
+            >
               <span className="landing-workflow-icon">{step.icon}</span>
               <h3>{step.title}</h3>
               <p>{step.detail}</p>
@@ -206,14 +214,19 @@ export default async function HomePage() {
       </section>
 
       <section className="landing-public-section landing-feature-section" aria-labelledby="landing-feature-title">
-        <div className="landing-public-section-heading">
+        <div className="landing-public-section-heading" data-scroll-reveal>
           <p className="landing-section-pill">Funkcije</p>
           <h2 id="landing-feature-title">Zajemi, uredi in se uči hitreje</h2>
         </div>
 
         <div className="landing-feature-grid">
-          {FEATURE_CARDS.map((feature) => (
-            <article key={feature.title} className="landing-feature-large-card">
+          {FEATURE_CARDS.map((feature, index) => (
+            <article
+              key={feature.title}
+              className="landing-feature-large-card"
+              data-scroll-reveal
+              style={{ "--reveal-delay": `${index * 55}ms` } as CSSProperties}
+            >
               <span className="landing-feature-large-icon">{feature.icon}</span>
               <h3>{feature.title}</h3>
               <p>{feature.detail}</p>
@@ -223,14 +236,19 @@ export default async function HomePage() {
       </section>
 
       <section className="landing-public-section" id="examples" aria-labelledby="landing-examples-title">
-        <div className="landing-public-section-heading">
+        <div className="landing-public-section-heading" data-scroll-reveal>
           <p className="landing-section-pill">Učno gradivo</p>
           <h2 id="landing-examples-title">Flashcardi, kvizi, testi in AI chat iz istega zapiska.</h2>
         </div>
 
         <div className="landing-example-grid">
-          {STUDY_EXAMPLES.map((example) => (
-            <article key={example.label} className="landing-example-card">
+          {STUDY_EXAMPLES.map((example, index) => (
+            <article
+              key={example.label}
+              className="landing-example-card"
+              data-scroll-reveal
+              style={{ "--reveal-delay": `${index * 70}ms` } as CSSProperties}
+            >
               <p className="landing-example-label">{example.label}</p>
               <h3>{example.title}</h3>
               <p>{example.detail}</p>

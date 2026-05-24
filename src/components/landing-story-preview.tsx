@@ -10,102 +10,46 @@ const STORY_SLIDES = [
     title: "Clean zapiski",
     caption: "Predavanje postane urejen povzetek.",
     label: "Zapiski",
-  },
-  {
-    kind: "transcript",
-    title: "Prepis predavanja",
-    caption: "Besedilo ostane povezano z izvorom.",
-    label: "Prepis",
+    image: "/IMG_6651.png",
   },
   {
     kind: "flashcards",
     title: "Flashcardi",
     caption: "Ključni pojmi za hitro ponavljanje.",
     label: "Flashcardi",
+    image: "/IMG_6653.png",
   },
   {
     kind: "quiz",
     title: "Kvizi",
     caption: "Vprašanja iz tvojega gradiva.",
     label: "Kvizi",
+    image: "/IMG_6654.png",
   },
   {
     kind: "test",
     title: "Testi",
     caption: "Vaja za daljše odgovore in izpite.",
     label: "Testi",
+    image: "/IMG_6655.png",
   },
   {
     kind: "chat",
     title: "AI chat",
     caption: "Vprašaj zapisek in dobi odgovor.",
     label: "AI chat",
+    image: "/IMG_6656.png",
+  },
+  {
+    kind: "reading",
+    title: "Branje zapiskov",
+    caption: "Poslušaj in beri zapiske na telefonu.",
+    label: "Branje zapiskov",
+    image: "/IMG_6657.png",
   },
 ] as const;
 
 const STORY_AUTOPLAY_MS = 3200;
-
-function StoryGraphic({ kind }: { kind: (typeof STORY_SLIDES)[number]["kind"] }) {
-  if (kind === "notes") {
-    return (
-      <div className="landing-story-notes" aria-hidden="true">
-        <strong>Ključni pojmi</strong>
-        <span />
-        <span />
-        <span className="short" />
-        <em>3 pomembne točke</em>
-      </div>
-    );
-  }
-
-  if (kind === "transcript") {
-    return (
-      <div className="landing-story-transcript" aria-hidden="true">
-        <p>00:42 Uvod v temo</p>
-        <p>02:15 Primer iz predavanja</p>
-        <p>04:08 Zaključek</p>
-      </div>
-    );
-  }
-
-  if (kind === "quiz") {
-    return (
-      <div className="landing-story-quiz" aria-hidden="true">
-        <strong>Kaj encimi najpogosteje naredijo?</strong>
-        <span>A Pospešijo reakcije</span>
-        <span>B Ustavijo celice</span>
-        <span>C Shranijo energijo</span>
-      </div>
-    );
-  }
-
-  if (kind === "test") {
-    return (
-      <div className="landing-story-test" aria-hidden="true">
-        <strong>Test</strong>
-        <p>Primerjaj mitozo in mejozo.</p>
-        <span />
-        <span />
-      </div>
-    );
-  }
-
-  if (kind === "chat") {
-    return (
-      <div className="landing-story-chat" aria-hidden="true">
-        <p>Zakaj je to pomembno?</p>
-        <p>Ker se pogosto pojavi pri primerjavi pojmov.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="landing-story-flashcard" aria-hidden="true">
-      <strong>Flashcard</strong>
-      <p>Kaj je aktivni priklic?</p>
-    </div>
-  );
-}
 
 export function LandingStoryPreview() {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -133,6 +77,19 @@ export function LandingStoryPreview() {
   return (
     <div className="landing-study-visual" aria-label="Primeri učnega gradiva">
       <div className={`landing-study-story landing-study-story-${activeSlide.kind}`} style={storyStyle}>
+        <div key={`${activeSlide.kind}-media`} className="landing-study-story-media">
+          <Image
+            src={activeSlide.image}
+            alt=""
+            fill
+            priority={activeIndex === 0}
+            quality={92}
+            sizes="(max-width: 639px) min(72vw, 16.5rem), (max-width: 1199px) 16.75rem, 17.5rem"
+            className="landing-study-story-image"
+          />
+        </div>
+        <div className="landing-study-story-overlay" aria-hidden="true" />
+
         <div className="landing-study-story-bars" aria-label="Izberi primer">
           {STORY_SLIDES.map((slide, index) => (
             <button
@@ -150,22 +107,9 @@ export function LandingStoryPreview() {
           ))}
         </div>
 
-        <div className="landing-study-story-brand">
-          <span className="landing-study-story-logo">
-            <Image src="/memo-logo.png" alt="" width={3651} height={3285} sizes="2.4rem" />
-          </span>
-          <span>memoai.eu</span>
-          <small>{activeSlide.label}</small>
-        </div>
-
-        <div key={`${activeSlide.kind}-card`} className="landing-study-story-card">
-          <StoryGraphic kind={activeSlide.kind} />
-        </div>
-
-        <div key={`${activeSlide.kind}-copy`} className="landing-study-story-copy">
-          <p className="landing-study-story-title">{activeSlide.title}</p>
-          <p>{activeSlide.caption}</p>
-        </div>
+        <span className="landing-study-story-floating-logo" aria-hidden="true">
+          <Image src="/memo-logo.png" alt="" width={3651} height={3285} sizes="3.6rem" />
+        </span>
 
         <div className="landing-study-story-controls" aria-label="Story navigacija">
           <button type="button" aria-label="Prejšnji primer" onClick={showPrevious}>

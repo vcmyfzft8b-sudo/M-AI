@@ -18,6 +18,63 @@ const checkoutSchema = z.object({
   plan: z.enum(PURCHASABLE_BILLING_PLAN_IDS),
 });
 
+async function hasStripeSubscriptionHistory(
+  stripe: Stripe,
+  params: {
+    customerId: string;
+    email: string | null;
+  },
+) {
+  const checkedCustomerIds = new Set<string>();
+
+  async function customerHasSubscription(customerId: string) {
+    if (checkedCustomerIds.has(customerId)) {
+      return false;
+    }
+
+    checkedCustomerIds.add(customerId);
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 1,
+    });
+
+    return subscriptions.data.length > 0;
+  }
+
+  if (await customerHasSubscription(params.customerId)) {
+    return true;
+  }
+
+  if (!params.email) {
+    return false;
+  }
+
+  let startingAfter: string | undefined;
+
+  do {
+    const customers = await stripe.customers.list({
+      email: params.email,
+      limit: 100,
+      starting_after: startingAfter,
+    });
+
+    for (const customer of customers.data) {
+      if (await customerHasSubscription(customer.id)) {
+        return true;
+      }
+    }
+
+    if (!customers.has_more || customers.data.length === 0) {
+      break;
+    }
+
+    startingAfter = customers.data.at(-1)?.id;
+  } while (startingAfter);
+
+  return false;
+}
+
 export async function POST(request: Request) {
   const appState = await getViewerAppState();
 
@@ -57,12 +114,18 @@ export async function POST(request: Request) {
     });
 
     const stripe = getStripeClient();
+    const hasPriorStripeSubscription = await hasStripeSubscriptionHistory(stripe, {
+      customerId,
+      email: appState.user.email ?? appState.profile?.email ?? null,
+    });
+    const subscriptionTrialEligible =
+      appState.subscriptionTrialEligible && !hasPriorStripeSubscription;
     const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
       metadata: {
         userId: appState.user.id,
         plan: parsed.data.plan,
       },
-      ...(appState.subscriptionTrialEligible ? { trial_period_days: 3 } : {}),
+      ...(subscriptionTrialEligible ? { trial_period_days: 3 } : {}),
     };
 
     const session = await stripe.checkout.sessions.create({

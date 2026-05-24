@@ -42,6 +42,7 @@ export type UserEntitlementState = {
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing", "past_due"]);
 const TRIAL_CHAT_MESSAGE_LIMIT = 5;
+export const DEV_BILLING_OVERRIDE_COOKIE = "memo-dev-billing-override";
 
 export const BILLING_PLANS: Record<
   BillingPlan,
@@ -93,14 +94,11 @@ export function hasPaidAccess(subscription: BillingSubscriptionRow | null) {
   return Boolean(subscription && ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status));
 }
 
-export function hasStartedSubscriptionTrial(
+export function hasPriorSubscriptionHistory(
   profile: ProfileRow | null,
   subscriptions: BillingSubscriptionRow[],
 ) {
-  return Boolean(
-    profile?.subscription_trial_started_at ||
-      subscriptions.some((subscription) => subscription.status === "trialing"),
-  );
+  return Boolean(profile?.subscription_trial_started_at || subscriptions.length > 0);
 }
 
 export function getActiveSubscription(
@@ -376,7 +374,7 @@ export const getUserEntitlementState = cache(async function getUserEntitlementSt
     userId,
     recoveredProfile?.trial_lecture_id ?? null,
   );
-  const subscriptionTrialEligible = !hasStartedSubscriptionTrial(
+  const subscriptionTrialEligible = !hasPriorSubscriptionHistory(
     recoveredProfile,
     billingState.subscriptions,
   );

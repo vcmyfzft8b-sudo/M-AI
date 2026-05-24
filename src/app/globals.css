@@ -649,21 +649,12 @@ a:visited {
   text-transform: uppercase;
 }
 
-.memo-paywall-due,
 .memo-paywall-foot,
 .memo-paywall-foot span,
 .memo-paywall-foot button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.memo-paywall-due {
-  gap: 0.55rem;
-  margin: 0.1rem 0;
-  color: var(--memo-paywall-muted);
-  font-size: clamp(1rem, 4vw, 1.25rem);
-  font-weight: 750;
 }
 
 .memo-paywall-cta {
@@ -2165,11 +2156,6 @@ a:visited {
     font-size: 0.62rem;
   }
 
-  .memo-paywall-due {
-    margin: 0;
-    font-size: clamp(0.86rem, 3.2vw, 0.98rem);
-  }
-
   .memo-paywall-cta {
     height: 3.45rem;
     border-radius: 1.05rem;
@@ -2364,11 +2350,6 @@ a:visited {
   .memo-paywall-save {
     padding: 0.3rem 0.45rem;
     font-size: 0.58rem;
-  }
-
-  .memo-paywall-due {
-    margin: 0;
-    font-size: 0.9rem;
   }
 
   .memo-paywall-cta {
@@ -2846,11 +2827,6 @@ select:disabled {
 
   .memo-paywall-plan-price {
     font-size: clamp(1.95rem, 6.7vw, 2.45rem);
-  }
-
-  .memo-paywall-due {
-    margin-top: clamp(0.12rem, 0.5vh, 0.35rem);
-    margin-bottom: clamp(0.12rem, 0.5vh, 0.35rem);
   }
 
   .memo-paywall-cta {

@@ -101,6 +101,62 @@ export function hasPriorSubscriptionHistory(
   return Boolean(profile?.subscription_trial_started_at || subscriptions.length > 0);
 }
 
+export async function hasStripeSubscriptionHistory(params: {
+  stripe?: Stripe;
+  customerId: string | null;
+  email: string | null;
+}) {
+  const stripe = params.stripe ?? getStripeClient();
+  const checkedCustomerIds = new Set<string>();
+
+  async function customerHasSubscription(customerId: string) {
+    if (checkedCustomerIds.has(customerId)) {
+      return false;
+    }
+
+    checkedCustomerIds.add(customerId);
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 1,
+    });
+
+    return subscriptions.data.length > 0;
+  }
+
+  if (params.customerId && (await customerHasSubscription(params.customerId))) {
+    return true;
+  }
+
+  if (!params.email) {
+    return false;
+  }
+
+  let startingAfter: string | undefined;
+
+  do {
+    const customers = await stripe.customers.list({
+      email: params.email,
+      limit: 100,
+      starting_after: startingAfter,
+    });
+
+    for (const customer of customers.data) {
+      if (await customerHasSubscription(customer.id)) {
+        return true;
+      }
+    }
+
+    if (!customers.has_more || customers.data.length === 0) {
+      break;
+    }
+
+    startingAfter = customers.data.at(-1)?.id;
+  } while (startingAfter);
+
+  return false;
+}
+
 export function getActiveSubscription(
   subscriptions: BillingSubscriptionRow[],
 ): BillingSubscriptionRow | null {
@@ -374,10 +430,24 @@ export const getUserEntitlementState = cache(async function getUserEntitlementSt
     userId,
     recoveredProfile?.trial_lecture_id ?? null,
   );
-  const subscriptionTrialEligible = !hasPriorSubscriptionHistory(
+  let subscriptionTrialEligible = !hasPriorSubscriptionHistory(
     recoveredProfile,
     billingState.subscriptions,
   );
+
+  if (subscriptionTrialEligible) {
+    try {
+      subscriptionTrialEligible = !(await hasStripeSubscriptionHistory({
+        customerId: recoveredProfile?.stripe_customer_id ?? null,
+        email: recoveredProfile?.email ?? null,
+      }));
+    } catch (error) {
+      console.error("Stripe subscription history check failed", {
+        userId,
+        error,
+      });
+    }
+  }
 
   return buildEntitlementState({
     profile: recoveredProfile,

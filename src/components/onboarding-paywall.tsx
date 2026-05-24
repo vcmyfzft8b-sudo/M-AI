@@ -1298,6 +1298,11 @@ export function OnboardingPaywall({
         })}
       </div>
 
+      <p className="memo-paywall-due">
+        <CircleCheck className="h-5 w-5" />
+        {subscriptionTrialEligible ? "Danes brez plačila" : "Varno plačilo prek Stripe"}
+      </p>
+
       <button
         type="button"
         className={`memo-paywall-cta ${checkoutPlan === selectedPaywallPlan ? "loading" : ""}`}

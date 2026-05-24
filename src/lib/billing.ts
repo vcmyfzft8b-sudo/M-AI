@@ -42,6 +42,7 @@ export type UserEntitlementState = {
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing", "past_due"]);
 const TRIAL_CHAT_MESSAGE_LIMIT = 5;
+export const DEV_BILLING_OVERRIDE_COOKIE = "memo-dev-billing-override";
 
 export const BILLING_PLANS: Record<
   BillingPlan,
@@ -93,14 +94,67 @@ export function hasPaidAccess(subscription: BillingSubscriptionRow | null) {
   return Boolean(subscription && ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status));
 }
 
-export function hasStartedSubscriptionTrial(
+export function hasPriorSubscriptionHistory(
   profile: ProfileRow | null,
   subscriptions: BillingSubscriptionRow[],
 ) {
-  return Boolean(
-    profile?.subscription_trial_started_at ||
-      subscriptions.some((subscription) => subscription.status === "trialing"),
-  );
+  return Boolean(profile?.subscription_trial_started_at || subscriptions.length > 0);
+}
+
+export async function hasStripeSubscriptionHistory(params: {
+  stripe?: Stripe;
+  customerId: string | null;
+  email: string | null;
+}) {
+  const stripe = params.stripe ?? getStripeClient();
+  const checkedCustomerIds = new Set<string>();
+
+  async function customerHasSubscription(customerId: string) {
+    if (checkedCustomerIds.has(customerId)) {
+      return false;
+    }
+
+    checkedCustomerIds.add(customerId);
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 1,
+    });
+
+    return subscriptions.data.length > 0;
+  }
+
+  if (params.customerId && (await customerHasSubscription(params.customerId))) {
+    return true;
+  }
+
+  if (!params.email) {
+    return false;
+  }
+
+  let startingAfter: string | undefined;
+
+  do {
+    const customers = await stripe.customers.list({
+      email: params.email,
+      limit: 100,
+      starting_after: startingAfter,
+    });
+
+    for (const customer of customers.data) {
+      if (await customerHasSubscription(customer.id)) {
+        return true;
+      }
+    }
+
+    if (!customers.has_more || customers.data.length === 0) {
+      break;
+    }
+
+    startingAfter = customers.data.at(-1)?.id;
+  } while (startingAfter);
+
+  return false;
 }
 
 export function getActiveSubscription(
@@ -376,10 +430,24 @@ export const getUserEntitlementState = cache(async function getUserEntitlementSt
     userId,
     recoveredProfile?.trial_lecture_id ?? null,
   );
-  const subscriptionTrialEligible = !hasStartedSubscriptionTrial(
+  let subscriptionTrialEligible = !hasPriorSubscriptionHistory(
     recoveredProfile,
     billingState.subscriptions,
   );
+
+  if (subscriptionTrialEligible) {
+    try {
+      subscriptionTrialEligible = !(await hasStripeSubscriptionHistory({
+        customerId: recoveredProfile?.stripe_customer_id ?? null,
+        email: recoveredProfile?.email ?? null,
+      }));
+    } catch (error) {
+      console.error("Stripe subscription history check failed", {
+        userId,
+        error,
+      });
+    }
+  }
 
   return buildEntitlementState({
     profile: recoveredProfile,

@@ -9,6 +9,7 @@ import {
   getPriceIdForPlan,
   getStripeClient,
   getViewerAppState,
+  hasStripeSubscriptionHistory,
   PURCHASABLE_BILLING_PLAN_IDS,
 } from "@/lib/billing";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -57,12 +58,19 @@ export async function POST(request: Request) {
     });
 
     const stripe = getStripeClient();
+    const hasPriorStripeSubscription = await hasStripeSubscriptionHistory({
+      stripe,
+      customerId,
+      email: appState.user.email ?? appState.profile?.email ?? null,
+    });
+    const subscriptionTrialEligible =
+      appState.subscriptionTrialEligible && !hasPriorStripeSubscription;
     const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
       metadata: {
         userId: appState.user.id,
         plan: parsed.data.plan,
       },
-      ...(appState.subscriptionTrialEligible ? { trial_period_days: 3 } : {}),
+      ...(subscriptionTrialEligible ? { trial_period_days: 3 } : {}),
     };
 
     const session = await stripe.checkout.sessions.create({

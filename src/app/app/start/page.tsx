@@ -21,7 +21,7 @@ export default async function AppStartPage() {
         subscription={appState.subscription}
         onboardingComplete={appState.onboardingComplete}
         hasPaidAccess={appState.hasPaidAccess}
-        subscriptionTrialEligible={false}
+        subscriptionTrialEligible={appState.subscriptionTrialEligible}
         plans={PURCHASABLE_BILLING_PLANS}
       />
     </main>

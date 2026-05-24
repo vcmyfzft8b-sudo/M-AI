@@ -10199,16 +10199,19 @@ select:disabled {
 }
 
 .landing-public-nav {
-  position: relative;
+  position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 80;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   width: min(100%, 78rem);
   margin: 0 auto;
-  padding: 2rem 1.25rem 0;
+  padding: 1.1rem 1.25rem;
+  background: color-mix(in srgb, var(--canvas) 88%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .landing-public-brand,

@@ -4,13 +4,14 @@ import { NextResponse } from "next/server";
 import { cache } from "react";
 import Stripe from "stripe";
 
-import { getOptionalUser } from "@/lib/auth";
+import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 import { getServerEnv } from "@/lib/server-env";
 import { resolveSiteOrigin } from "@/lib/site-url";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 export type BillingPlan = "weekly" | "monthly" | "yearly";
+export type PurchasableBillingPlan = Exclude<BillingPlan, "weekly">;
 export type BillingRequiredCode =
   | "subscription_required"
   | "trial_exhausted"
@@ -33,6 +34,7 @@ export type UserEntitlementState = {
   canResumeTrialLecture: boolean;
   trialChatMessagesUsed: number;
   trialChatMessagesRemaining: number;
+  subscriptionTrialEligible: boolean;
   canCreateNotes: boolean;
   canAccessPaywalledCreation: boolean;
   shouldShowTrialEntry: boolean;
@@ -82,8 +84,23 @@ export const BILLING_PLANS: Record<
   },
 };
 
+export const PURCHASABLE_BILLING_PLAN_IDS = ["monthly", "yearly"] as const satisfies readonly PurchasableBillingPlan[];
+export const PURCHASABLE_BILLING_PLANS = PURCHASABLE_BILLING_PLAN_IDS.map(
+  (planId) => BILLING_PLANS[planId],
+);
+
 export function hasPaidAccess(subscription: BillingSubscriptionRow | null) {
   return Boolean(subscription && ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status));
+}
+
+export function hasStartedSubscriptionTrial(
+  profile: ProfileRow | null,
+  subscriptions: BillingSubscriptionRow[],
+) {
+  return Boolean(
+    profile?.subscription_trial_started_at ||
+      subscriptions.some((subscription) => subscription.status === "trialing"),
+  );
 }
 
 export function getActiveSubscription(
@@ -97,6 +114,17 @@ export function getActiveSubscription(
     sorted.find((subscription) => ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status)) ??
     sorted[0] ??
     null
+  );
+}
+
+function hasCompletedOnboardingProfile(profile: ProfileRow | null) {
+  return Boolean(
+    profile?.onboarding_completed_at &&
+      profile.age_range &&
+      profile.education_level &&
+      profile.current_average_grade &&
+      profile.target_grade &&
+      profile.study_goal,
   );
 }
 
@@ -297,8 +325,9 @@ function buildEntitlementState(params: {
   canResumeTrialLecture: boolean;
   trialChatMessagesUsed: number;
   trialChatMessagesRemaining: number;
+  subscriptionTrialEligible: boolean;
 }) {
-  const onboardingComplete = Boolean(params.profile?.onboarding_completed_at);
+  const onboardingComplete = hasCompletedOnboardingProfile(params.profile);
   const trialLectureId = params.profile?.trial_lecture_id ?? null;
   const hasConsumedTrial = Boolean(params.profile?.trial_consumed_at || trialLectureId);
   const hasTrialLectureAvailable =
@@ -319,6 +348,7 @@ function buildEntitlementState(params: {
     canResumeTrialLecture: params.canResumeTrialLecture,
     trialChatMessagesUsed: params.trialChatMessagesUsed,
     trialChatMessagesRemaining: params.trialChatMessagesRemaining,
+    subscriptionTrialEligible: params.subscriptionTrialEligible,
     canCreateNotes,
     canAccessPaywalledCreation: !canCreateNotes,
     shouldShowTrialEntry,
@@ -346,6 +376,10 @@ export const getUserEntitlementState = cache(async function getUserEntitlementSt
     userId,
     recoveredProfile?.trial_lecture_id ?? null,
   );
+  const subscriptionTrialEligible = !hasStartedSubscriptionTrial(
+    recoveredProfile,
+    billingState.subscriptions,
+  );
 
   return buildEntitlementState({
     profile: recoveredProfile,
@@ -353,12 +387,13 @@ export const getUserEntitlementState = cache(async function getUserEntitlementSt
     subscription: billingState.subscription,
     hasPaidAccess: billingState.hasPaidAccess,
     canResumeTrialLecture,
+    subscriptionTrialEligible,
     ...trialUsage,
   });
 });
 
 export const getViewerAppState = cache(async function getViewerAppState() {
-  const user = await getOptionalUser();
+  const user = await getOptionalUserOrPreviewBypass();
 
   if (!user) {
     return null;
@@ -480,12 +515,19 @@ export async function syncStripeSubscriptionRecord(subscription: Stripe.Subscrip
   }
 
   const service = createSupabaseServiceRoleClient();
+  const profileUpdate: Record<string, string | null> = {
+    stripe_customer_id: customerId,
+  };
+
+  if (subscription.trial_start) {
+    profileUpdate.subscription_trial_started_at = new Date(
+      subscription.trial_start * 1000,
+    ).toISOString();
+  }
 
   await service
     .from("profiles")
-    .update({
-      stripe_customer_id: customerId,
-    } as never)
+    .update(profileUpdate as never)
     .eq("id", resolvedUserId);
 
   await service

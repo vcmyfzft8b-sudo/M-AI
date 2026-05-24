@@ -16,30 +16,44 @@ export const getOptionalUser = cache(async function getOptionalUser() {
   return user;
 });
 
-export const requireUser = cache(async function requireUser() {
+function getPreviewAuthBypassUser() {
+  return {
+    id: "00000000-0000-4000-8000-000000000001",
+    aud: "authenticated",
+    role: "authenticated",
+    email: "preview@memo.app",
+    app_metadata: {
+      provider: "preview",
+      providers: ["preview"],
+    },
+    user_metadata: {
+      name: "Preview User",
+    },
+    identities: [],
+    created_at: new Date(0).toISOString(),
+    updated_at: new Date(0).toISOString(),
+    is_anonymous: false,
+  } as User;
+}
+
+export const getOptionalUserOrPreviewBypass = cache(async function getOptionalUserOrPreviewBypass() {
   const user = await getOptionalUser();
 
-  if (!user) {
-    if (await isPreviewAuthBypassEnabled()) {
-      return {
-        id: "00000000-0000-4000-8000-000000000001",
-        aud: "authenticated",
-        role: "authenticated",
-        email: "preview@memo.app",
-        app_metadata: {
-          provider: "preview",
-          providers: ["preview"],
-        },
-        user_metadata: {
-          name: "Preview User",
-        },
-        identities: [],
-        created_at: new Date(0).toISOString(),
-        updated_at: new Date(0).toISOString(),
-        is_anonymous: false,
-      } as User;
-    }
+  if (user) {
+    return user;
+  }
 
+  if (await isPreviewAuthBypassEnabled()) {
+    return getPreviewAuthBypassUser();
+  }
+
+  return null;
+});
+
+export const requireUser = cache(async function requireUser() {
+  const user = await getOptionalUserOrPreviewBypass();
+
+  if (!user) {
     redirect("/");
   }
 

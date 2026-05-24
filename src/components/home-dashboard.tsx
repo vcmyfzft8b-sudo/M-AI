@@ -459,18 +459,12 @@ export function HomeDashboard({
   userId,
   canCreateNotes,
   hasPaidAccess,
-  hasTrialLectureAvailable,
-  trialLectureId,
-  trialChatMessagesRemaining,
 }: {
   lectures: AppLectureListItem[];
   folders: AppLibraryFolder[];
   userId: string;
   canCreateNotes: boolean;
   hasPaidAccess: boolean;
-  hasTrialLectureAvailable: boolean;
-  trialLectureId: string | null;
-  trialChatMessagesRemaining: number;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1195,26 +1189,17 @@ export function HomeDashboard({
   return (
     <>
       <div className="home-dashboard pb-8">
-        {!hasPaidAccess ? (
+        {!hasPaidAccess && !canCreateNotes ? (
           <section className="dashboard-section">
             <div style={{ padding: "0.1rem 0" }}>
-              <p className="ios-row-subtitle">
-                {hasTrialLectureAvailable
-                  ? "Na voljo imaš en brezplačen preizkus. Vključuje zapiske, flashcardse, kviz, test in chat."
-                  : trialLectureId
-                    ? `Tvoj poskusni zapisek ostane v knjižnici. Preostalih brezplačnih sporočil v klepetu: ${trialChatMessagesRemaining}.`
-                    : "Nadgradi za ustvarjanje novega gradiva."}
-              </p>
-              {!canCreateNotes ? (
-                <button
-                  type="button"
-                  className="app-home-highlight-link"
-                  onClick={() => router.push("/app/start")}
-                >
-                  <span>Nadgradi za nov zapisek</span>
-                  <EmojiIcon symbol="›" size="1.1rem" />
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="app-home-highlight-link"
+                onClick={() => router.push("/app/start")}
+              >
+                <span>Nadgradi za nov zapisek</span>
+                <EmojiIcon symbol="›" size="1.1rem" />
+              </button>
             </div>
           </section>
         ) : null}

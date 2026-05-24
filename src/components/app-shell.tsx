@@ -67,11 +67,9 @@ function getChrome(pathname: string) {
 export function AppShell({
   children,
   hasPaidAccess,
-  hasTrialLectureAvailable,
 }: {
   children: React.ReactNode;
   hasPaidAccess: boolean;
-  hasTrialLectureAvailable: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -89,7 +87,7 @@ export function AppShell({
   const subscribeHref = "/app/start";
   const showCreateCta = !shouldHideNavigation;
   const showSubscribeCta = !hasPaidAccess && showCreateCta;
-  const subscribeLabel = hasTrialLectureAvailable ? "Trial" : "Naročnina";
+  const subscribeLabel = "Kupi";
   const pullThreshold = 168;
   const cappedPullDistance = Math.min(pullDistance, 220);
   const isLecturePage = pathname.startsWith("/app/lectures/");

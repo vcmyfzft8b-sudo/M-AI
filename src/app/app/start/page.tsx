@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { OnboardingPaywall } from "@/components/onboarding-paywall";
-import { BILLING_PLANS, getViewerAppState } from "@/lib/billing";
+import { PURCHASABLE_BILLING_PLANS, getViewerAppState } from "@/lib/billing";
 
 export default async function AppStartPage() {
   const appState = await getViewerAppState();
@@ -10,7 +10,7 @@ export default async function AppStartPage() {
     redirect("/");
   }
 
-  if (appState.onboardingComplete && (appState.hasPaidAccess || appState.hasTrialLectureAvailable)) {
+  if (appState.onboardingComplete && appState.hasPaidAccess) {
     redirect("/app");
   }
 
@@ -21,7 +21,8 @@ export default async function AppStartPage() {
         subscription={appState.subscription}
         onboardingComplete={appState.onboardingComplete}
         hasPaidAccess={appState.hasPaidAccess}
-        plans={Object.values(BILLING_PLANS)}
+        subscriptionTrialEligible={false}
+        plans={PURCHASABLE_BILLING_PLANS}
       />
     </main>
   );

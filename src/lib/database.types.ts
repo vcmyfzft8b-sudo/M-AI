@@ -121,6 +121,7 @@ export type Database = {
           target_grade: string | null;
           study_goal: string | null;
           stripe_customer_id: string | null;
+          subscription_trial_started_at: string | null;
           trial_lecture_id: string | null;
           trial_started_at: string | null;
           trial_consumed_at: string | null;
@@ -138,6 +139,7 @@ export type Database = {
           target_grade?: string | null;
           study_goal?: string | null;
           stripe_customer_id?: string | null;
+          subscription_trial_started_at?: string | null;
           trial_lecture_id?: string | null;
           trial_started_at?: string | null;
           trial_consumed_at?: string | null;
@@ -154,6 +156,7 @@ export type Database = {
           target_grade?: string | null;
           study_goal?: string | null;
           stripe_customer_id?: string | null;
+          subscription_trial_started_at?: string | null;
           trial_lecture_id?: string | null;
           trial_started_at?: string | null;
           trial_consumed_at?: string | null;

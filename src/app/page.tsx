@@ -88,9 +88,9 @@ const FEATURE_CARDS = [
     detail: "Vadi daljše odgovore in pripravo na preverjanje znanja.",
   },
   {
-    icon: "💬",
-    title: "AI chat",
-    detail: "Vprašaj zapisek in ohrani kontekst iz izvirnega gradiva.",
+    icon: "🎧",
+    title: "Poslušaj zapiske",
+    detail: "Aplikacija ti zapiske prebere na glas, da jih lahko ponavljaš tudi brez gledanja v ekran.",
   },
 ] as const;
 

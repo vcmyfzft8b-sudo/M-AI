@@ -15,6 +15,7 @@ import {
   SEO_SITE_URL,
 } from "@/lib/brand";
 import { hasPublicSupabaseEnv } from "@/lib/public-env";
+import { SEO_PUBLIC_PAGES } from "@/lib/seo-pages";
 
 const WORKFLOW_STEPS = [
   {
@@ -231,6 +232,29 @@ export default async function HomePage() {
               <h3>{feature.title}</h3>
               <p>{feature.detail}</p>
             </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-public-section" aria-labelledby="landing-seo-links-title">
+        <div className="landing-public-section-heading" data-scroll-reveal>
+          <p className="landing-section-pill">Za študente</p>
+          <h2 id="landing-seo-links-title">Izberi način, kako želiš urediti gradivo</h2>
+        </div>
+
+        <div className="landing-seo-link-grid">
+          {SEO_PUBLIC_PAGES.map((page, index) => (
+            <Link
+              key={page.slug}
+              href={`/${page.slug}`}
+              className="landing-seo-link-card"
+              data-scroll-reveal
+              style={{ "--reveal-delay": `${index * 55}ms` } as CSSProperties}
+            >
+              <span>{page.eyebrow}</span>
+              <h3>{page.primaryKeyword}</h3>
+              <p>{page.description}</p>
+            </Link>
           ))}
         </div>
       </section>

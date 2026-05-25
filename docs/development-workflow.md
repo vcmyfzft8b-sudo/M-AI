@@ -7,7 +7,7 @@ This project uses one GitHub repository, local development for fast testing, and
 - `main` = production
 - feature or fix branches = work in progress
 - Vercel preview URL = test branch on the web
-- `https://memoai.eu` = live production site only
+- `https://www.memoai.eu` = live production site only
 
 ## Why This Setup
 
@@ -100,7 +100,7 @@ Important:
 
 ## How You See The App If It Is Not On `main`
 
-You do not view branch work on `https://memoai.eu`.
+You do not view branch work on `https://www.memoai.eu`.
 
 Instead, you open the Vercel preview URL for that branch. It usually looks something like:
 
@@ -137,7 +137,7 @@ Merge only after:
 After merge, Vercel deploys `main` to production, and production stays on:
 
 ```text
-https://memoai.eu
+https://www.memoai.eu
 ```
 
 The normal release flow is:

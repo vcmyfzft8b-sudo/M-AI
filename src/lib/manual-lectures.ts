@@ -863,7 +863,7 @@ async function fetchReadableWebpageResponse(targetUrl: URL, redirectCount = 0): 
     const response = await fetch(targetUrl, {
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (compatible; MemoAI/1.0; +https://memoai.eu)",
+          "Mozilla/5.0 (compatible; MemoAI/1.0; +https://www.memoai.eu)",
         Accept: "text/html,application/xhtml+xml",
       },
       redirect: "manual",

@@ -1,7 +1,8 @@
 # Project Instructions
 
-- Production domain: `https://memoai.eu` is the canonical live app domain.
-- When adding or updating hardcoded production URLs, use `https://memoai.eu`, not legacy Vercel domains.
+- Production domain: `https://www.memoai.eu` is the canonical live app domain.
+- The apex domain `https://memoai.eu` should redirect to `https://www.memoai.eu`.
+- When adding or updating hardcoded production URLs, use `https://www.memoai.eu`, not legacy Vercel domains.
 - Prefer `NEXT_PUBLIC_SITE_URL` or another central config for app URLs when the target supports configuration.
 - Treat `notetakingappslo.vercel.app` as deprecated unless a task explicitly requires it.
 
@@ -16,14 +17,14 @@
 - After local testing, agents may prepare commits on the branch, but they must not push to GitHub unless the user explicitly asks for that push.
 - The user is the default person responsible for pushing branches to GitHub and opening or merging pull requests.
 - Use Vercel Preview Deployments to test branch work on the web before merging to `main`.
-- Do not treat a Vercel preview URL as the production URL. Production remains `https://memoai.eu`.
+- Do not treat a Vercel preview URL as the production URL. Production remains `https://www.memoai.eu`.
 - Merge to `main` only after the branch has been checked locally and in its Vercel preview deployment.
 
 ## Vercel Preview Rule
 
 - Every pushed branch should be expected to get its own Vercel preview deployment when the GitHub repo is connected to Vercel.
 - The preview deployment URL is where branch work should be reviewed on the web.
-- The custom production domain `https://memoai.eu` should point only to the production deployment from `main`, unless the user explicitly requests a temporary branch domain strategy.
+- The custom production domain `https://www.memoai.eu` should point only to the production deployment from `main`, unless the user explicitly requests a temporary branch domain strategy.
 
 ## Documentation
 

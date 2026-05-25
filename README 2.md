@@ -2,7 +2,7 @@
 
 Memo is an AI note-taking and study app for lectures, recordings, documents, and pasted material. It turns source content into transcripts, structured notes, flashcards, quizzes, practice tests, exports, and lecture-grounded chat.
 
-The canonical production domain is `https://memoai.eu`.
+The canonical production domain is `https://www.memoai.eu`.
 
 ## What the app does
 
@@ -137,8 +137,8 @@ For the in-app email code flow, use an email template that includes `{{ .Token }
 
 For production:
 
-- Set Supabase Auth Site URL to `https://memoai.eu`
-- Add `https://memoai.eu/auth/callback` to redirect URLs
+- Set Supabase Auth Site URL to `https://www.memoai.eu`
+- Add `https://www.memoai.eu/auth/callback` to redirect URLs
 - Use a real SMTP provider for email delivery
 - Treat `notetakingappslo.vercel.app` as deprecated
 
@@ -214,7 +214,7 @@ Relevant deployment files:
 - [next.config.ts](/Users/nacevalencic/Desktop/note_taking_app_slo/next.config.ts)
 - [.env.production.example](/Users/nacevalencic/Desktop/note_taking_app_slo/.env.production.example)
 
-When deploying, prefer `NEXT_PUBLIC_SITE_URL=https://memoai.eu` for production unless you are intentionally targeting another domain.
+When deploying, prefer `NEXT_PUBLIC_SITE_URL=https://www.memoai.eu` for production unless you are intentionally targeting another domain.
 
 ## Notes
 

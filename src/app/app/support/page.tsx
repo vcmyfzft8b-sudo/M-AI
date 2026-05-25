@@ -25,6 +25,7 @@ export default function SupportPage() {
               <Link
                 key={item.slug}
                 href={`/app/support/${item.slug}`}
+                prefetch={false}
                 className="dashboard-link-card"
               >
                 <p className="dashboard-link-card-title">{item.title}</p>

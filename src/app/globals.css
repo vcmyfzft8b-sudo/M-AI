@@ -4600,12 +4600,13 @@ select:disabled {
 .support-navigation-loading-overlay {
   position: fixed;
   inset: 0;
-  z-index: 45;
+  z-index: 160;
+  width: 100vw;
+  min-height: 100dvh;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 5.75rem max(0.95rem, env(safe-area-inset-left)) calc(env(safe-area-inset-bottom) + 6.5rem);
-  background: color-mix(in srgb, var(--canvas) 82%, transparent);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  background: var(--canvas);
 }
 
 .support-navigation-loading-overlay .home-dashboard {

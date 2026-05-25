@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 
 import { EmojiIcon } from "@/components/emoji-icon";
 import { SupportArticleLoading } from "@/components/support-loading";
@@ -80,10 +81,11 @@ export function SupportArticleLink({
         <EmojiIcon className="ios-chevron" symbol="›" size="1.1rem" />
       </Link>
 
-      {isNavigating ? (
+      {isNavigating ? createPortal(
         <div className="support-navigation-loading-overlay" role="status">
           <SupportArticleLoading />
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );

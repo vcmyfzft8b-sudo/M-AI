@@ -8,6 +8,26 @@ import { createPortal } from "react-dom";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { SupportArticleLoading } from "@/components/support-loading";
 
+function getVisibleAppHeaderBottom() {
+  const selectors = [".app-topbar", ".desktop-brandline"];
+
+  for (const selector of selectors) {
+    const element = document.querySelector<HTMLElement>(selector);
+
+    if (!element) {
+      continue;
+    }
+
+    const rect = element.getBoundingClientRect();
+
+    if (rect.width > 0 && rect.height > 0) {
+      return Math.max(0, rect.bottom);
+    }
+  }
+
+  return 0;
+}
+
 function shouldShowNavigationFeedback(event: MouseEvent<HTMLAnchorElement>) {
   return (
     !event.defaultPrevented &&
@@ -30,6 +50,7 @@ export function SupportArticleLink({
   const pathname = usePathname();
   const router = useRouter();
   const [isNavigating, setIsNavigating] = useState(false);
+  const [overlayTop, setOverlayTop] = useState(0);
   const navigationTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -71,6 +92,7 @@ export function SupportArticleLink({
             window.clearTimeout(navigationTimeoutRef.current);
           }
 
+          setOverlayTop(getVisibleAppHeaderBottom());
           setIsNavigating(true);
           navigationTimeoutRef.current = window.setTimeout(() => {
             router.push(href);
@@ -82,7 +104,11 @@ export function SupportArticleLink({
       </Link>
 
       {isNavigating ? createPortal(
-        <div className="support-navigation-loading-overlay" role="status">
+        <div
+          className="support-navigation-loading-overlay"
+          role="status"
+          style={{ top: `${overlayTop}px` }}
+        >
           <SupportArticleLoading />
         </div>,
         document.body,

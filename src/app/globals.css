@@ -4599,13 +4599,14 @@ select:disabled {
 
 .support-navigation-loading-overlay {
   position: fixed;
-  inset: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 160;
   width: 100vw;
-  min-height: 100dvh;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 5.75rem max(0.95rem, env(safe-area-inset-left)) calc(env(safe-area-inset-bottom) + 6.5rem);
+  padding: 1.05rem max(0.95rem, env(safe-area-inset-left)) calc(env(safe-area-inset-bottom) + 6.5rem);
   background: var(--canvas);
 }
 

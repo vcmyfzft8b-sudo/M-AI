@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { canAccessLectureContent, createBillingRequiredResponse } from "@/lib/billing";
 import { STORAGE_BUCKET } from "@/lib/constants";
 import { validateStoredAudioFile } from "@/lib/file-validation";
 import { enqueueLectureProcessing } from "@/lib/jobs";
@@ -59,6 +60,15 @@ export async function POST(
 
   if (!lecture) {
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+  }
+
+  const access = await canAccessLectureContent(user.id, id);
+
+  if (!access.allowed) {
+    return createBillingRequiredResponse(
+      "Za nalaganje tega zapiska je potreben plačljiv paket.",
+      access.code,
+    );
   }
 
   const parsed = await parseJsonRequest(request, finalizeSchema, {

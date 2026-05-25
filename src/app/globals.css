@@ -5384,6 +5384,27 @@ select:disabled {
   display: inline-block;
 }
 
+.app-dev-dashboard-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 2.75rem;
+  min-width: 10.5rem;
+  padding: 0 1rem;
+  border: 1px solid color-mix(in srgb, var(--tint) 26%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tint) 15%, var(--surface));
+  color: var(--label);
+  font-size: 0.92rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.app-dev-dashboard-link span {
+  display: inline-block;
+}
+
 .app-home-hero,
 .app-home-eyebrow,
 .app-home-title,

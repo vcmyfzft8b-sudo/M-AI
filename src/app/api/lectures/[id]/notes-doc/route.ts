@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { canAccessLectureContent, createBillingRequiredResponse } from "@/lib/billing";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import {
   editableNoteDocSchema,
@@ -67,6 +68,15 @@ export async function PATCH(
 
   if (!lecture) {
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+  }
+
+  const access = await canAccessLectureContent(user.id, id);
+
+  if (!access.allowed) {
+    return createBillingRequiredResponse(
+      "Za urejanje tega zapiska je potreben plačljiv paket.",
+      access.code,
+    );
   }
 
   const artifact = await readLectureArtifactForNoteDoc(id);

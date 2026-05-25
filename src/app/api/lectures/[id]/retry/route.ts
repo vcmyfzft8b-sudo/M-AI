@@ -1,5 +1,6 @@
 import { after, NextResponse } from "next/server";
 
+import { canAccessLectureContent, createBillingRequiredResponse } from "@/lib/billing";
 import { enqueueLectureNotesGeneration, enqueueLectureProcessing } from "@/lib/jobs";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import {
@@ -74,6 +75,15 @@ export async function POST(
 
   if (!lecture) {
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+  }
+
+  const access = await canAccessLectureContent(user.id, id);
+
+  if (!access.allowed) {
+    return createBillingRequiredResponse(
+      "Za ponovni poskus tega zapiska je potreben plačljiv paket.",
+      access.code,
+    );
   }
 
   const hasManualImport = Boolean(getManualImportMetadata(lecture.processing_metadata));

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
-import { getLectureDetailForUser } from "@/lib/lectures";
+import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
 import {
   consumeTtsQuota,
   getOrCreateTtsChunk,
@@ -129,12 +129,12 @@ export async function POST(
   }
 
   const { id } = parsedParams.data;
-  const detail = await getLectureDetailForUser({
+  const lecture = await ensureUserOwnsLecture({
     lectureId: id,
-    userId: user.id,
+    user,
   });
 
-  if (!detail) {
+  if (!lecture) {
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
   }
 
@@ -146,6 +146,15 @@ export async function POST(
       "Pred poslušanjem tega zapiska izberi paket.",
       access.code,
     );
+  }
+
+  const detail = await getLectureDetailForUser({
+    lectureId: id,
+    userId: user.id,
+  });
+
+  if (!detail) {
+    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
   }
 
   const content = detail.artifact?.structured_notes_md

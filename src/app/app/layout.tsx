@@ -12,7 +12,8 @@ export default async function AppLayout({
 }) {
   await requireUser();
   const appState = await getViewerAppState();
-  const pathname = (await headers()).get("x-pathname") ?? "/app";
+  const headerStore = await headers();
+  const pathname = headerStore.get("x-pathname") ?? "/app";
 
   if (appState && !appState.onboardingComplete && pathname !== "/app/start") {
     redirect("/app/start");
@@ -26,9 +27,5 @@ export default async function AppLayout({
     redirect("/app");
   }
 
-  return (
-    <AppShell hasPaidAccess={Boolean(appState?.hasPaidAccess)}>
-      {children}
-    </AppShell>
-  );
+  return <AppShell hasPaidAccess={Boolean(appState?.hasPaidAccess)}>{children}</AppShell>;
 }

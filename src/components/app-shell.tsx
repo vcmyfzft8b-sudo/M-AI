@@ -83,10 +83,11 @@ export function AppShell({
   const mobileDockRef = useRef<HTMLElement | null>(null);
   const shouldHideNavigation = pathname === "/app/start";
   const chrome = getChrome(pathname);
+  const isHomePage = pathname === "/app";
   const createHref = "/app?mode=record";
   const subscribeHref = "/app/start";
   const showCreateCta = !shouldHideNavigation;
-  const showSubscribeCta = !hasPaidAccess && showCreateCta;
+  const showSubscribeCta = !hasPaidAccess && showCreateCta && isHomePage;
   const subscribeLabel = "Kupi";
   const pullThreshold = 168;
   const cappedPullDistance = Math.min(pullDistance, 220);
@@ -294,7 +295,6 @@ export function AppShell({
       mobilePullOffset > 0 ? `translate3d(0, ${mobilePullOffset}px, 0)` : undefined,
     transition: isPulling ? "none" : "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)",
   };
-  const isHomePage = pathname === "/app";
   const mobileDockToggleItem = isHomePage ? TAB_ITEMS[2] : TAB_ITEMS[0];
   const isTabItemActive = (item: (typeof TAB_ITEMS)[number]) =>
     item.href === "/app"

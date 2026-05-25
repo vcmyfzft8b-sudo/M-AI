@@ -767,6 +767,10 @@ export async function canUseLectureFeatures(
   feature: EntitlementFeature,
 ) {
   void feature;
+  return canAccessLectureContent(userId, lectureId);
+}
+
+export async function canAccessLectureContent(userId: string, lectureId: string) {
   const entitlement = await getUserEntitlementState(userId);
 
   if (entitlement.hasPaidAccess) {
@@ -791,33 +795,27 @@ export async function canUseLectureFeatures(
 }
 
 export async function canSendTrialChatMessage(userId: string, lectureId: string) {
-  const entitlement = await getUserEntitlementState(userId);
+  const lectureAccess = await canAccessLectureContent(userId, lectureId);
 
-  if (entitlement.hasPaidAccess) {
-    return {
-      allowed: true,
-      entitlement,
-    };
-  }
-
-  if (entitlement.trialLectureId !== lectureId) {
+  if (!lectureAccess.allowed) {
     return {
       allowed: false,
-      code: "trial_exhausted" as const,
-      entitlement,
+      code: lectureAccess.code,
+      entitlement: lectureAccess.entitlement,
     };
   }
 
-  if (entitlement.trialChatMessagesRemaining <= 0) {
+  if (lectureAccess.entitlement.hasPaidAccess) {
+    return lectureAccess;
+  }
+
+  if (lectureAccess.entitlement.trialChatMessagesRemaining <= 0) {
     return {
       allowed: false,
       code: "trial_chat_limit_reached" as const,
-      entitlement,
+      entitlement: lectureAccess.entitlement,
     };
   }
 
-  return {
-    allowed: true,
-    entitlement,
-  };
+  return lectureAccess;
 }

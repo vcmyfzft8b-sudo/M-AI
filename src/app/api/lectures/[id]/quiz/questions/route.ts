@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import type { QuizQuestionRow } from "@/lib/database.types";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -64,6 +65,15 @@ export async function POST(
 
   if (!lecture) {
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+  }
+
+  const access = await canUseLectureFeatures(user.id, id, "quiz");
+
+  if (!access.allowed) {
+    return createBillingRequiredResponse(
+      "Brez plačljivega paketa je kviz na voljo samo za tvoje poskusno gradivo.",
+      access.code,
+    );
   }
 
   const service = createSupabaseServiceRoleClient();

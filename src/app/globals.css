@@ -4602,7 +4602,7 @@ select:disabled {
   right: 0;
   bottom: 0;
   left: 0;
-  z-index: 160;
+  z-index: 70;
   width: 100vw;
   overflow: auto;
   overscroll-behavior: contain;

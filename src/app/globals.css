@@ -4578,6 +4578,41 @@ select:disabled {
   padding: clamp(1.2rem, 3vw, 1.8rem);
 }
 
+.support-link-card-skeleton {
+  pointer-events: none;
+}
+
+.support-link-card-skeleton .app-loading-row {
+  flex: 1;
+  max-width: min(18rem, 72%);
+}
+
+.support-chevron-skeleton {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
+}
+
+.support-article-skeleton {
+  gap: 1rem;
+}
+
+.support-navigation-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  overflow: auto;
+  padding: 5.75rem max(0.95rem, env(safe-area-inset-left)) calc(env(safe-area-inset-bottom) + 6.5rem);
+  background: color-mix(in srgb, var(--canvas) 82%, transparent);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.support-navigation-loading-overlay .home-dashboard {
+  width: min(100%, 900px);
+  margin: 0 auto;
+}
+
 .dashboard-toolbar {
   display: flex;
   align-items: center;

@@ -1,0 +1,118 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
+
+import { EmojiIcon } from "@/components/emoji-icon";
+import { SupportArticleLoading } from "@/components/support-loading";
+
+function getVisibleAppHeaderBottom() {
+  const selectors = [".app-topbar", ".desktop-brandline"];
+
+  for (const selector of selectors) {
+    const element = document.querySelector<HTMLElement>(selector);
+
+    if (!element) {
+      continue;
+    }
+
+    const rect = element.getBoundingClientRect();
+
+    if (rect.width > 0 && rect.height > 0) {
+      return Math.max(0, rect.bottom);
+    }
+  }
+
+  return 0;
+}
+
+function shouldShowNavigationFeedback(event: MouseEvent<HTMLAnchorElement>) {
+  return (
+    !event.defaultPrevented &&
+    event.button === 0 &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    event.currentTarget.target !== "_blank"
+  );
+}
+
+export function SupportArticleLink({
+  href,
+  title,
+}: {
+  href: string;
+  title: string;
+}) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [overlayTop, setOverlayTop] = useState(0);
+  const navigationTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (navigationTimeoutRef.current != null) {
+        window.clearTimeout(navigationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isNavigating) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsNavigating(false);
+    }, 12000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isNavigating]);
+
+  return (
+    <>
+      <Link
+        href={href}
+        prefetch={false}
+        className="dashboard-link-card"
+        aria-busy={isNavigating}
+        onClick={(event) => {
+          if (!shouldShowNavigationFeedback(event) || pathname === href) {
+            return;
+          }
+
+          event.preventDefault();
+          if (navigationTimeoutRef.current != null) {
+            window.clearTimeout(navigationTimeoutRef.current);
+          }
+
+          setOverlayTop(getVisibleAppHeaderBottom());
+          setIsNavigating(true);
+          navigationTimeoutRef.current = window.setTimeout(() => {
+            router.push(href);
+          }, 180);
+        }}
+      >
+        <p className="dashboard-link-card-title">{title}</p>
+        <EmojiIcon className="ios-chevron" symbol="›" size="1.1rem" />
+      </Link>
+
+      {isNavigating ? createPortal(
+        <div
+          className="support-navigation-loading-overlay"
+          role="status"
+          style={{ top: `${overlayTop}px` }}
+        >
+          <SupportArticleLoading />
+        </div>,
+        document.body,
+      ) : null}
+    </>
+  );
+}

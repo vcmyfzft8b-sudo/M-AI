@@ -1,6 +1,4 @@
-import Link from "next/link";
-
-import { EmojiIcon } from "@/components/emoji-icon";
+import { SupportArticleLink } from "@/components/support-article-link";
 import { HELP_SECTIONS } from "@/lib/help-center";
 
 export default function SupportPage() {
@@ -22,14 +20,11 @@ export default function SupportPage() {
 
           <div className="dashboard-note-list">
             {section.items.map((item) => (
-              <Link
+              <SupportArticleLink
                 key={item.slug}
                 href={`/app/support/${item.slug}`}
-                className="dashboard-link-card"
-              >
-                <p className="dashboard-link-card-title">{item.title}</p>
-                <EmojiIcon className="ios-chevron" symbol="›" size="1.1rem" />
-              </Link>
+                title={item.title}
+              />
             ))}
           </div>
         </section>

@@ -4578,6 +4578,43 @@ select:disabled {
   padding: clamp(1.2rem, 3vw, 1.8rem);
 }
 
+.support-link-card-skeleton {
+  pointer-events: none;
+}
+
+.support-link-card-skeleton .app-loading-row {
+  flex: 1;
+  max-width: min(18rem, 72%);
+}
+
+.support-chevron-skeleton {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
+}
+
+.support-article-skeleton {
+  gap: 1rem;
+}
+
+.support-navigation-loading-overlay {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 160;
+  width: 100vw;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 1.05rem max(0.95rem, env(safe-area-inset-left)) calc(env(safe-area-inset-bottom) + 6.5rem);
+  background: var(--canvas);
+}
+
+.support-navigation-loading-overlay .home-dashboard {
+  width: min(100%, 900px);
+  margin: 0 auto;
+}
+
 .dashboard-toolbar {
   display: flex;
   align-items: center;

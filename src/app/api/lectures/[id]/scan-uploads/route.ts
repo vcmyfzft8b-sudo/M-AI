@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { canAccessLectureContent, createBillingRequiredResponse } from "@/lib/billing";
 import { MAX_SCAN_IMAGE_BYTES, MAX_SCAN_IMAGE_COUNT, STORAGE_BUCKET } from "@/lib/constants";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { captureRouteError } from "@/lib/monitoring";
@@ -72,6 +73,15 @@ export async function POST(
 
   if (!lecture) {
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+  }
+
+  const access = await canAccessLectureContent(user.id, id);
+
+  if (!access.allowed) {
+    return createBillingRequiredResponse(
+      "Za nalaganje tega zapiska je potreben plačljiv paket.",
+      access.code,
+    );
   }
 
   const parsed = await parseJsonRequest(request, prepareScanUploadsSchema, {

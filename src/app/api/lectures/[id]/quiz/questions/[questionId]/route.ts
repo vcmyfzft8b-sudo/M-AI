@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 import { z } from "zod";
 
+import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import type { QuizQuestionRow } from "@/lib/database.types";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -101,6 +102,15 @@ export async function PATCH(
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
   }
 
+  const access = await canUseLectureFeatures(user.id, parsedParams.data.id, "quiz");
+
+  if (!access.allowed) {
+    return createBillingRequiredResponse(
+      "Brez plačljivega paketa je kviz na voljo samo za tvoje poskusno gradivo.",
+      access.code,
+    );
+  }
+
   const service = createSupabaseServiceRoleClient();
   const { data: question, error } = await service
     .from("quiz_questions")
@@ -165,6 +175,15 @@ export async function DELETE(
 
   if (!existing) {
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+  }
+
+  const access = await canUseLectureFeatures(user.id, parsedParams.data.id, "quiz");
+
+  if (!access.allowed) {
+    return createBillingRequiredResponse(
+      "Brez plačljivega paketa je kviz na voljo samo za tvoje poskusno gradivo.",
+      access.code,
+    );
   }
 
   const service = createSupabaseServiceRoleClient();

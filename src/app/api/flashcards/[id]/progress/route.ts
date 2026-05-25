@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import type { FlashcardProgressRow } from "@/lib/database.types";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -54,7 +55,7 @@ export async function POST(
   const { id } = parsedParams.data;
   const { data: flashcard, error: flashcardError } = await supabase
     .from("flashcards")
-    .select("id")
+    .select("id, lecture_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -62,8 +63,19 @@ export async function POST(
     return NextResponse.json({ error: flashcardError.message }, { status: 500 });
   }
 
-  if (!flashcard) {
+  const flashcardRow = flashcard as { id: string; lecture_id: string } | null;
+
+  if (!flashcardRow) {
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+  }
+
+  const access = await canUseLectureFeatures(user.id, flashcardRow.lecture_id, "study");
+
+  if (!access.allowed) {
+    return createBillingRequiredResponse(
+      "Brez plačljivega paketa so kartice na voljo samo za tvoje poskusno gradivo.",
+      access.code,
+    );
   }
 
   const { data: existing, error: existingError } = await supabase

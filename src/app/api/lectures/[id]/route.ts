@@ -2,6 +2,7 @@ import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { parseAudioChunkManifest } from "@/lib/audio-processing";
+import { canAccessLectureContent, createBillingRequiredResponse } from "@/lib/billing";
 import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
 import {
   enqueueLectureNotesGeneration,
@@ -143,6 +144,24 @@ export async function GET(
   }
 
   const { id } = parsedParams.data;
+  const lecture = await ensureUserOwnsLecture({
+    lectureId: id,
+    user,
+  });
+
+  if (!lecture) {
+    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+  }
+
+  const access = await canAccessLectureContent(user.id, id);
+
+  if (!access.allowed) {
+    return createBillingRequiredResponse(
+      "Za dostop do tega zapiska je potreben plačljiv paket.",
+      access.code,
+    );
+  }
+
   const detail = await getLectureDetailForUser({
     lectureId: id,
     userId: user.id,

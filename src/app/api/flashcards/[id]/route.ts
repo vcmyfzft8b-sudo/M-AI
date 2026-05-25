@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 import { z } from "zod";
 
+import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import type { FlashcardRow } from "@/lib/database.types";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -94,6 +95,15 @@ export async function PATCH(
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
   }
 
+  const access = await canUseLectureFeatures(user.id, existing.lecture_id, "study");
+
+  if (!access.allowed) {
+    return createBillingRequiredResponse(
+      "Brez plačljivega paketa so kartice na voljo samo za tvoje poskusno gradivo.",
+      access.code,
+    );
+  }
+
   const service = createSupabaseServiceRoleClient();
   const { data: flashcard, error } = await service
     .from("flashcards")
@@ -159,6 +169,15 @@ export async function DELETE(
 
   if (!existing) {
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+  }
+
+  const access = await canUseLectureFeatures(user.id, existing.lecture_id, "study");
+
+  if (!access.allowed) {
+    return createBillingRequiredResponse(
+      "Brez plačljivega paketa so kartice na voljo samo za tvoje poskusno gradivo.",
+      access.code,
+    );
   }
 
   const service = createSupabaseServiceRoleClient();

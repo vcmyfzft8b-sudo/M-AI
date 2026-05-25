@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { canUseLectureFeatures } from "@/lib/billing";
-import { getLectureDetailForUser } from "@/lib/lectures";
+import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
 import {
   buildNoteTtsChunks,
   parseNoteTtsDocument,
@@ -45,12 +45,12 @@ export async function GET(
   }
 
   const { id } = parsedParams.data;
-  const detail = await getLectureDetailForUser({
+  const lecture = await ensureUserOwnsLecture({
     lectureId: id,
-    userId: user.id,
+    user,
   });
 
-  if (!detail) {
+  if (!lecture) {
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
   }
 
@@ -61,6 +61,30 @@ export async function GET(
     hasPaidAccess: access.entitlement.hasPaidAccess,
     hasUnlimitedUsage,
   });
+
+  if (!access.allowed) {
+    return NextResponse.json({
+      available: false,
+      reason: "subscription_required",
+      tier: "free",
+      limitSeconds: usage.limitSeconds,
+      secondsUsed: usage.secondsUsed,
+      remainingSeconds: usage.remainingSeconds,
+      hasUnlimitedUsage,
+      chunkCount: 0,
+      totalWords: 0,
+    });
+  }
+
+  const detail = await getLectureDetailForUser({
+    lectureId: id,
+    userId: user.id,
+  });
+
+  if (!detail) {
+    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+  }
+
   const content = detail.artifact?.structured_notes_md
     ? stripLeadingRedundantHeading(detail.artifact.structured_notes_md, detail.lecture.title)
     : "";

@@ -1,9 +1,9 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { LectureWorkspace } from "@/components/lecture-workspace";
 import { requireUser } from "@/lib/auth";
-import { getViewerAppState } from "@/lib/billing";
-import { getLectureDetailForUser } from "@/lib/lectures";
+import { canAccessLectureContent, getPaywallPath, getViewerAppState } from "@/lib/billing";
+import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
 import { routeIdParamSchema } from "@/lib/validation";
 
 export default async function LecturePage({
@@ -20,6 +20,21 @@ export default async function LecturePage({
 
   const { id } = parsedParams.data;
   const appState = await getViewerAppState();
+  const lecture = await ensureUserOwnsLecture({
+    lectureId: id,
+    user,
+  });
+
+  if (!lecture) {
+    notFound();
+  }
+
+  const access = await canAccessLectureContent(user.id, id);
+
+  if (!access.allowed) {
+    redirect(getPaywallPath());
+  }
+
   const detail = await getLectureDetailForUser({
     lectureId: id,
     userId: user.id,

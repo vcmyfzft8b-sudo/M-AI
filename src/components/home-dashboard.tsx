@@ -149,6 +149,7 @@ type NoteRowProps = {
   isMenuOpen: boolean;
   isBusy: boolean;
   useSwipeActions: boolean;
+  href: string;
   onToggleMenu: (lectureId: string) => void;
   onOpenRename: (lecture: AppLectureListItem) => void;
   onOpenDelete: (lecture: AppLectureListItem) => void;
@@ -160,6 +161,7 @@ const NoteRow = memo(function NoteRow({
   isMenuOpen,
   isBusy,
   useSwipeActions,
+  href,
   onToggleMenu,
   onOpenRename,
   onOpenDelete,
@@ -167,7 +169,6 @@ const NoteRow = memo(function NoteRow({
 }: NoteRowProps) {
   const router = useRouter();
   const sourceType = getEffectiveLectureSourceType(lecture);
-  const lectureHref = `/app/lectures/${lecture.id}`;
   const dragRef = useRef<DashboardNoteDragState | null>(null);
   const cleanupDragListenersRef = useRef<(() => void) | null>(null);
   const suppressClickRef = useRef(false);
@@ -177,8 +178,8 @@ const NoteRow = memo(function NoteRow({
   const isSwipeActive = Boolean(dragState || isMenuOpen || noteOffset < 0);
 
   useEffect(() => {
-    router.prefetch(lectureHref);
-  }, [lectureHref, router]);
+    router.prefetch(href);
+  }, [href, router]);
 
   useEffect(
     () => () => {
@@ -190,7 +191,7 @@ const NoteRow = memo(function NoteRow({
   if (!useSwipeActions) {
     return (
       <div className={`ios-row-note-card ${isMenuOpen ? "menu-open" : ""}`}>
-        <InstantLink href={lectureHref} className="ios-row-note-card-link">
+        <InstantLink href={href} className="ios-row-note-card-link">
           <div className="ios-row-icon" style={{ backgroundColor: "var(--surface-muted)" }}>
             <SourceIcon sourceType={sourceType} />
           </div>
@@ -351,7 +352,7 @@ const NoteRow = memo(function NoteRow({
 
   function openLecture() {
     setIsOpening(true);
-    router.push(lectureHref);
+    router.push(href);
   }
 
   function handleSurfaceClick(event: ReactMouseEvent<HTMLElement>) {
@@ -447,6 +448,7 @@ const NoteRow = memo(function NoteRow({
 }, (previousProps, nextProps) => {
   return (
     previousProps.lecture === nextProps.lecture &&
+    previousProps.href === nextProps.href &&
     previousProps.isMenuOpen === nextProps.isMenuOpen &&
     previousProps.isBusy === nextProps.isBusy &&
     previousProps.useSwipeActions === nextProps.useSwipeActions
@@ -459,12 +461,16 @@ export function HomeDashboard({
   userId,
   canCreateNotes,
   hasPaidAccess,
+  trialLectureId,
+  showDevDashboard,
 }: {
   lectures: AppLectureListItem[];
   folders: AppLibraryFolder[];
   userId: string;
   canCreateNotes: boolean;
   hasPaidAccess: boolean;
+  trialLectureId: string | null;
+  showDevDashboard: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -496,6 +502,7 @@ export function HomeDashboard({
   const [renameKeyboardVisible, setRenameKeyboardVisible] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AppLectureListItem | null>(null);
   const [dashboardActionError, setDashboardActionError] = useState<string | null>(null);
+  const [showLocalDevDashboard, setShowLocalDevDashboard] = useState(showDevDashboard);
   const deferredQuery = useDeferredValue(query);
   const selectedFolderLectureIdSet = useMemo(
     () => (selectedFolderLectureIds ? new Set(selectedFolderLectureIds) : null),
@@ -510,6 +517,18 @@ export function HomeDashboard({
   })();
 
   const activeModal = manualModal ?? searchModal;
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    setShowLocalDevDashboard(
+      window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1" ||
+        window.location.hostname === "::1",
+    );
+  }, []);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 767px)");
@@ -1189,6 +1208,23 @@ export function HomeDashboard({
   return (
     <>
       <div className="home-dashboard pb-8">
+        {showLocalDevDashboard ? (
+          <section className="dashboard-section">
+            <div style={{ padding: "0.1rem 0" }}>
+              <button
+                type="button"
+                aria-label="Dev dashboard"
+                data-testid="dev-dashboard-button"
+                className="app-dev-dashboard-link"
+                onClick={() => router.push("/dev/account-state")}
+              >
+                <span>Dev dashboard</span>
+                <EmojiIcon symbol="›" size="1.1rem" />
+              </button>
+            </div>
+          </section>
+        ) : null}
+
         {!hasPaidAccess && !canCreateNotes ? (
           <section className="dashboard-section">
             <div style={{ padding: "0.1rem 0" }}>
@@ -1316,19 +1352,25 @@ export function HomeDashboard({
 
           {regularLectures.length > 0 ? (
             <div className="dashboard-note-list">
-              {regularLectures.map((lecture) => (
-                <NoteRow
-                  key={lecture.id}
-                  lecture={lecture}
-                  isMenuOpen={openMenuLectureId === lecture.id}
-                  isBusy={busyLectureId === lecture.id}
-                  useSwipeActions={useDashboardSwipeActions}
-                  onToggleMenu={toggleLectureMenu}
-                  onOpenRename={openRenameModal}
-                  onOpenDelete={openDeleteModal}
-                  attachMenuRef={attachMenuRef}
-                />
-              ))}
+              {regularLectures.map((lecture) => {
+                const canOpenLecture = hasPaidAccess || trialLectureId === lecture.id;
+                const href = canOpenLecture ? `/app/lectures/${lecture.id}` : "/app/start";
+
+                return (
+                  <NoteRow
+                    key={lecture.id}
+                    lecture={lecture}
+                    href={href}
+                    isMenuOpen={openMenuLectureId === lecture.id}
+                    isBusy={busyLectureId === lecture.id}
+                    useSwipeActions={useDashboardSwipeActions}
+                    onToggleMenu={toggleLectureMenu}
+                    onOpenRename={openRenameModal}
+                    onOpenDelete={openDeleteModal}
+                    attachMenuRef={attachMenuRef}
+                  />
+                );
+              })}
             </div>
           ) : (
             <div className="empty-state app-empty-state">

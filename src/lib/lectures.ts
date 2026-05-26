@@ -44,6 +44,7 @@ import {
   lectureShowsTranscript,
   shouldCreateInitialNoteAudio,
 } from "@/lib/lecture-source-metadata";
+import { isNoteEnrichmentCompleteOrLegacy } from "@/lib/note-enrichment-status";
 import { hasInitialNoteTtsChunk } from "@/lib/note-tts";
 import { buildPracticeTestHistorySummary, mapAttemptWithAnswers } from "@/lib/practice-test";
 import { parseEditableNoteDoc, type NoteMediaAsset } from "@/lib/note-doc";
@@ -140,12 +141,13 @@ async function getProcessingMetadataForUpdate(lecture: LectureRow) {
 
 async function reconcileLectureWithArtifact(
   lecture: LectureRow,
-  artifact: Pick<LectureArtifactRow, "structured_notes_md"> | null,
+  artifact: Pick<LectureArtifactRow, "structured_notes_md" | "model_metadata"> | null,
 ) {
   if (
     lecture.status === "ready" ||
     lecture.status === "failed" ||
-    !artifact?.structured_notes_md?.trim()
+    !artifact?.structured_notes_md?.trim() ||
+    !isNoteEnrichmentCompleteOrLegacy(artifact.model_metadata)
   ) {
     return lecture;
   }
@@ -207,7 +209,7 @@ async function reconcileLecturesWithArtifacts(lectures: LectureRow[]) {
 
   const { data, error } = await createSupabaseServiceRoleClient()
     .from("lecture_artifacts")
-    .select("lecture_id, structured_notes_md")
+    .select("lecture_id, structured_notes_md, model_metadata")
     .in(
       "lecture_id",
       candidates.map((lecture) => lecture.id),
@@ -218,7 +220,9 @@ async function reconcileLecturesWithArtifacts(lectures: LectureRow[]) {
   }
 
   const artifactByLectureId = new Map(
-    ((data ?? []) as Array<Pick<LectureArtifactRow, "lecture_id" | "structured_notes_md">>)
+    ((data ?? []) as Array<
+      Pick<LectureArtifactRow, "lecture_id" | "structured_notes_md" | "model_metadata">
+    >)
       .map((artifact) => [artifact.lecture_id, artifact]),
   );
 

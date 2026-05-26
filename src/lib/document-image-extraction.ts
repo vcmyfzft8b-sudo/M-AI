@@ -542,7 +542,7 @@ export async function extractDocumentImages(file: File) {
     }
   } catch (error) {
     console.warn("Document image extraction failed.", error);
-    images = [];
+    throw error;
   }
 
   return addImageDescriptions(images.slice(0, MAX_DOCUMENT_IMAGES));

@@ -37,6 +37,7 @@ import {
   lectureShowsTranscript,
   shouldCreateInitialNoteAudio,
 } from "@/lib/lecture-source-metadata";
+import { isNoteEnrichmentPending } from "@/lib/note-enrichment-status";
 import type { EditableNoteDoc, NoteAnnotation, NoteAnnotationKind } from "@/lib/note-doc";
 import { NOTE_TTS_HIGHLIGHT_COLORS } from "@/lib/note-tts-settings";
 import { parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
@@ -273,6 +274,10 @@ function shouldPollAsset(status: StudyAssetStatus | null | undefined) {
 
 function shouldPollDetail(detail: LectureDetail) {
   if (shouldPollLecture(detail.lecture.status)) {
+    return true;
+  }
+
+  if (isNoteEnrichmentPending(detail.artifact?.model_metadata)) {
     return true;
   }
 
@@ -720,6 +725,14 @@ function lectureProcessingStageLabel(
 
   if (processingStage === "extracting_scan_text") {
     return "Berem fotografije";
+  }
+
+  if (processingStage === "annotating_notes") {
+    return "Označujem pomembne dele";
+  }
+
+  if (processingStage === "checking_document_images") {
+    return "Dodajam slike iz gradiva";
   }
 
   if (processingStage === "reading_link") {
@@ -1784,6 +1797,7 @@ export function LectureWorkspace({
     !cleanedStructuredNotes &&
     detail.lecture.status === "ready" &&
     detailSectionFailed(detail, "artifact");
+  const noteEnrichmentPending = isNoteEnrichmentPending(detail.artifact?.model_metadata);
   const studyStage =
     detail.studyAsset?.model_metadata &&
     typeof detail.studyAsset.model_metadata === "object" &&
@@ -3880,7 +3894,7 @@ export function LectureWorkspace({
 
       return (
         <div className="workspace-panel-stack lecture-panel-stack">
-          {cleanedStructuredNotes && detail.lecture.status === "ready" ? (
+          {cleanedStructuredNotes && detail.lecture.status === "ready" && !noteEnrichmentPending ? (
             <div className="ios-card lecture-notes-card">
               <div
                 ref={noteAnnotationShellRef}
@@ -3931,7 +3945,9 @@ export function LectureWorkspace({
                 />
               </div>
             </div>
-          ) : shouldPollLecture(detail.lecture.status) || notesArtifactLoadFailed ? (
+          ) : shouldPollLecture(detail.lecture.status) ||
+            noteEnrichmentPending ||
+            notesArtifactLoadFailed ? (
             <div className="lecture-notes-processing">
               <StudyGenerationNotice
                 stageCopy={notesArtifactLoadFailed ? "Nalaganje zapiskov" : lectureProcessingStageCopy}

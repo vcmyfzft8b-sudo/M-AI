@@ -28,6 +28,7 @@ import {
 } from "@/lib/document-note-media";
 import { attachAutomaticNoteAnnotations } from "@/lib/note-auto-annotations";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
+import { withNoteEnrichmentStage } from "@/lib/note-enrichment-status";
 import {
   NoReadableScanTextError,
   type ScanOcrAttemptDiagnostics,
@@ -126,7 +127,11 @@ export async function getPdfJs() {
     };
 
     pdfGlobal.self = globalThis;
-    pdfJsPromise = import("pdfjs-dist/legacy/build/pdf.mjs").catch((error) => {
+    const nativeImport = new Function("specifier", "return import(specifier)") as (
+      specifier: string,
+    ) => Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")>;
+
+    pdfJsPromise = nativeImport("pdfjs-dist/legacy/build/pdf.mjs").catch((error) => {
       pdfJsPromise = null;
       throw error;
     });
@@ -152,6 +157,10 @@ function normalizeWhitespace(value: string) {
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function normalizeOcrPlainText(value: string) {
@@ -1216,6 +1225,51 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
   }
 }
 
+async function updateLectureEnrichmentProcessingStage(params: {
+  lectureId: string;
+  stage: "annotating_notes" | "checking_document_images";
+  title?: string | null;
+  durationSeconds?: number | null;
+}) {
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .from("lectures")
+    .select("processing_metadata")
+    .eq("id", params.lectureId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const row = data as { processing_metadata: unknown } | null;
+  const metadata = isPlainRecord(row?.processing_metadata) ? row.processing_metadata : {};
+
+  const { error: updateError } = await supabase
+    .from("lectures")
+    .update(
+      {
+        status: "generating_notes",
+        title: params.title,
+        duration_seconds: params.durationSeconds,
+        error_message: null,
+        processing_metadata: {
+          ...metadata,
+          processing: {
+            stage: params.stage,
+            updatedAt: new Date().toISOString(),
+            errorMessage: null,
+          },
+        },
+      } as never,
+    )
+    .eq("id", params.lectureId);
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+}
+
 export async function createLectureFromTextSource(params: {
   userId: string;
   sourceType: string;
@@ -1363,6 +1417,11 @@ export async function createLectureFromTextSource(params: {
 
     await requireActiveLecture(lectureId);
 
+    const baseModelMetadata = {
+      ...notes.modelMetadata,
+      ...params.modelMetadata,
+    };
+
     const { error: artifactError } = await supabase
       .from("lecture_artifacts")
       .upsert(
@@ -1371,10 +1430,7 @@ export async function createLectureFromTextSource(params: {
           summary: notes.summary,
           key_topics: notes.keyTopics,
           structured_notes_md: notes.structuredNotesMd,
-          model_metadata: {
-            ...notes.modelMetadata,
-            ...params.modelMetadata,
-          },
+          model_metadata: withNoteEnrichmentStage(baseModelMetadata, "annotating"),
         } as never,
         {
           onConflict: "lecture_id",
@@ -1385,11 +1441,23 @@ export async function createLectureFromTextSource(params: {
       throw new Error(artifactError.message);
     }
 
+    await updateLectureEnrichmentProcessingStage({
+      lectureId,
+      stage: "annotating_notes",
+      title: notes.title,
+      durationSeconds,
+    });
+
     await attachAutomaticNoteAnnotations({
       lectureId,
       structuredNotesMd: notes.structuredNotesMd,
-    }).catch((error) => {
-      console.warn("Automatic note annotation failed.", error);
+    });
+
+    await updateLectureEnrichmentProcessingStage({
+      lectureId,
+      stage: "checking_document_images",
+      title: notes.title,
+      durationSeconds,
     });
 
     const documentImages = getStoredDocumentImagesFromMetadata(params.modelMetadata ?? {});
@@ -1399,9 +1467,18 @@ export async function createLectureFromTextSource(params: {
         lectureId,
         structuredNotesMd: notes.structuredNotesMd,
         documentImages,
-      }).catch((error) => {
-        console.warn("Document image note attachment failed.", error);
       });
+    }
+
+    const { error: enrichmentCompleteError } = await supabase
+      .from("lecture_artifacts")
+      .update({
+        model_metadata: withNoteEnrichmentStage(baseModelMetadata, "complete"),
+      } as never)
+      .eq("lecture_id", lectureId);
+
+    if (enrichmentCompleteError) {
+      throw new Error(enrichmentCompleteError.message);
     }
 
     if (params.createInitialAudio === true) {

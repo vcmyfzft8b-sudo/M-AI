@@ -26,6 +26,7 @@ import {
 } from "@/lib/text-source-processing";
 import type { ChatMessageWithCitations } from "@/lib/types";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
+import { withNoteEnrichmentStage } from "@/lib/note-enrichment-status";
 import {
   markInitialNoteAudioPreparing,
   prepareInitialNoteTtsChunkSafely,
@@ -76,19 +77,29 @@ function parseProcessingMetadata(value: unknown) {
 async function updateLectureProcessingState(params: {
   lectureId: string;
   processingMetadata: unknown;
-  stage: "transcribing" | "generating_notes" | "ready" | "failed";
+  stage:
+    | "transcribing"
+    | "generating_notes"
+    | "annotating_notes"
+    | "checking_document_images"
+    | "ready"
+    | "failed";
   errorMessage?: string | null;
   durationSeconds?: number | null;
   title?: string | null;
 }) {
   const supabase = createSupabaseServiceRoleClient();
   const metadata = parseProcessingMetadata(params.processingMetadata);
+  const status =
+    params.stage === "annotating_notes" || params.stage === "checking_document_images"
+      ? "generating_notes"
+      : params.stage;
 
   const { error } = await supabase
     .from("lectures")
     .update(
       {
-        status: params.stage,
+        status,
         error_message: params.errorMessage ?? null,
         duration_seconds: params.durationSeconds,
         title: params.title,
@@ -451,6 +462,11 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
       ? (manualImportRecord.modelMetadata as Record<string, unknown>)
       : {};
 
+  const baseModelMetadata = {
+    ...notes.modelMetadata,
+    ...manualModelMetadata,
+  };
+
   const { error: artifactError } = await supabase
     .from("lecture_artifacts")
     .upsert(
@@ -459,10 +475,7 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
         summary: notes.summary,
         key_topics: notes.keyTopics,
         structured_notes_md: notes.structuredNotesMd,
-        model_metadata: {
-          ...notes.modelMetadata,
-          ...manualModelMetadata,
-        },
+        model_metadata: withNoteEnrichmentStage(baseModelMetadata, "annotating"),
       } as never,
       {
         onConflict: "lecture_id",
@@ -473,11 +486,25 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
     throw artifactError;
   }
 
+  await updateLectureProcessingState({
+    lectureId: lecture.id,
+    processingMetadata: lecture.processing_metadata,
+    stage: "annotating_notes",
+    durationSeconds: lecture.duration_seconds,
+    title: notes.title,
+  });
+
   await attachAutomaticNoteAnnotations({
     lectureId: lecture.id,
     structuredNotesMd: notes.structuredNotesMd,
-  }).catch((error) => {
-    console.warn("Automatic note annotation failed.", error);
+  });
+
+  await updateLectureProcessingState({
+    lectureId: lecture.id,
+    processingMetadata: lecture.processing_metadata,
+    stage: "checking_document_images",
+    durationSeconds: lecture.duration_seconds,
+    title: notes.title,
   });
 
   const documentImages = getStoredDocumentImagesFromMetadata(manualModelMetadata);
@@ -487,9 +514,18 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
       lectureId: lecture.id,
       structuredNotesMd: notes.structuredNotesMd,
       documentImages,
-    }).catch((error) => {
-      console.warn("Document image note attachment failed.", error);
     });
+  }
+
+  const { error: enrichmentCompleteError } = await supabase
+    .from("lecture_artifacts")
+    .update({
+      model_metadata: withNoteEnrichmentStage(baseModelMetadata, "complete"),
+    } as never)
+    .eq("lecture_id", lecture.id);
+
+  if (enrichmentCompleteError) {
+    throw enrichmentCompleteError;
   }
 
   if (shouldCreateInitialNoteAudio(lecture.processing_metadata)) {

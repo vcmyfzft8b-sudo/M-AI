@@ -204,10 +204,32 @@ export async function processStoredDocumentLecture(params: {
     : isPptxDocument(file)
       ? "presentation"
       : "text";
-  const [extracted, extractedImages] = await Promise.all([
-    extractTextFromDocument(file),
-    extractDocumentImages(file),
-  ]);
+  const extracted = await extractTextFromDocument(file);
+  const { error: imageStatusError } = await supabase
+    .from("lectures")
+    .update(
+      {
+        status: "queued",
+        error_message: null,
+        processing_metadata: {
+          ...metadata,
+          pendingDocument,
+          processing: {
+            stage: "checking_document_images",
+            updatedAt: new Date().toISOString(),
+            errorMessage: null,
+          },
+        },
+      } as never,
+    )
+    .eq("id", lectureRow.id)
+    .eq("user_id", lectureRow.user_id);
+
+  if (imageStatusError) {
+    throw new Error(imageStatusError.message);
+  }
+
+  const extractedImages = await extractDocumentImages(file);
   const documentImages = await storeDocumentImagesAsNoteMedia({
     lectureId: lectureRow.id,
     userId: lectureRow.user_id,

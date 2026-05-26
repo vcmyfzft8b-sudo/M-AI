@@ -50,6 +50,10 @@ function getInternalJobBaseUrl(publicSiteUrl?: string) {
     return `https://${process.env.VERCEL_URL}`;
   }
 
+  if (process.env.NODE_ENV === "development") {
+    return `http://localhost:${process.env.PORT ?? "3000"}`;
+  }
+
   return publicSiteUrl;
 }
 

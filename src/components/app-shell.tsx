@@ -8,6 +8,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { InstantLink } from "@/components/instant-link";
 import { BRAND_NAME } from "@/lib/brand";
+import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 
 const TAB_ITEMS = [
   { href: "/app", displayLabel: "Domov", icon: "🏠" },
@@ -95,7 +96,7 @@ export function AppShell({
 
   useEffect(() => {
     for (const item of TAB_ITEMS) {
-      router.prefetch(item.href);
+      safeRouterPrefetch(router, item.href);
     }
   }, [router]);
 

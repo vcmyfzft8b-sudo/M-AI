@@ -4550,6 +4550,21 @@ select:disabled {
   transform: translate3d(0, 0, 0);
 }
 
+.settings-action-stack {
+  display: grid;
+  justify-items: end;
+  gap: 0.45rem;
+}
+
+.settings-action-error {
+  max-width: 18rem;
+  margin: 0;
+  color: var(--red);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-align: right;
+}
+
 .theme-choice-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

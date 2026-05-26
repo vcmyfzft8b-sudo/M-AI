@@ -1170,23 +1170,10 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
     });
 
     if (!acceptable) {
-      if (primaryError) {
-        throw new Error(toUserFacingAiErrorMessage(primaryError));
-      }
-
-      throw new NoReadableScanTextError({
-        imageCount: 1,
-        images: [
-          {
-            attempts,
-            fileName: file.name,
-            imageIndex: context?.imageIndex ?? null,
-            mimeType: file.type || "application/octet-stream",
-            sizeBytes: file.size,
-          },
-        ],
-        readableImageCount: 0,
-        skippedImageCount: 1,
+      throw buildNoReadableImageTextError({
+        attempts,
+        context,
+        file,
       });
     }
 

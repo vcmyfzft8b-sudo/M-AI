@@ -23,6 +23,8 @@ import {
 } from "@/lib/validation";
 
 const PREPARE_SCAN_UPLOADS_MAX_BYTES = 32 * 1024;
+const SIGNED_UPLOAD_MAX_ATTEMPTS = 3;
+const SIGNED_UPLOAD_RETRY_DELAYS_MS = [300, 1000] as const;
 
 const scanUploadFileSchema = z.object({
   index: z.number().int().min(0).max(MAX_SCAN_IMAGE_COUNT - 1),
@@ -34,6 +36,66 @@ const scanUploadFileSchema = z.object({
 const prepareScanUploadsSchema = z.object({
   files: z.array(scanUploadFileSchema).min(1).max(MAX_SCAN_IMAGE_COUNT),
 });
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function getStorageErrorMessage(error: unknown) {
+  if (isRecord(error) && typeof error.message === "string") {
+    return error.message;
+  }
+
+  return null;
+}
+
+function getStorageErrorStatus(error: unknown) {
+  if (!isRecord(error)) {
+    return null;
+  }
+
+  const status = error.status ?? error.statusCode ?? error.code;
+
+  if (typeof status === "number") {
+    return status;
+  }
+
+  if (typeof status === "string") {
+    const parsedStatus = Number.parseInt(status, 10);
+    return Number.isFinite(parsedStatus) ? parsedStatus : null;
+  }
+
+  return null;
+}
+
+function isTransientStorageError(error: unknown) {
+  const status = getStorageErrorStatus(error);
+
+  if (status != null) {
+    return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+  }
+
+  const message = getStorageErrorMessage(error)?.toLowerCase() ?? "";
+
+  return [
+    "bad gateway",
+    "connection",
+    "econnreset",
+    "fetch failed",
+    "gateway",
+    "network",
+    "service unavailable",
+    "timeout",
+    "temporarily",
+    "upstream",
+  ].some((fragment) => message.includes(fragment));
+}
 
 export async function POST(
   request: Request,
@@ -113,6 +175,41 @@ export async function POST(
   }
 
   const service = createSupabaseServiceRoleClient();
+  const storage = service.storage.from(STORAGE_BUCKET);
+  async function createSignedScanUploadUrl(path: string) {
+    let attempts = 0;
+    let lastError: unknown = null;
+
+    for (let attempt = 1; attempt <= SIGNED_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
+      attempts = attempt;
+      const { data: signedUpload, error } = await storage.createSignedUploadUrl(path, {
+        upsert: true,
+      });
+
+      if (!error && signedUpload?.token) {
+        return {
+          attempts,
+          error: null,
+          signedUpload,
+        };
+      }
+
+      lastError = error ?? new Error("Supabase did not return a signed upload token.");
+
+      if (attempt >= SIGNED_UPLOAD_MAX_ATTEMPTS || !isTransientStorageError(lastError)) {
+        break;
+      }
+
+      await sleep(SIGNED_UPLOAD_RETRY_DELAYS_MS[attempt - 1] ?? 1000);
+    }
+
+    return {
+      attempts,
+      error: lastError ?? new Error("Supabase did not return a signed upload token."),
+      signedUpload: null,
+    };
+  }
+
   const manifests = parsed.data.files.map((file) => {
     const mimeType = normalizeUploadScanImageMimeType({
       mimeType: file.mimeType,
@@ -136,13 +233,13 @@ export async function POST(
   const uploads = [];
 
   for (const manifest of manifests) {
-    const { data: signedUpload, error } = await service.storage
-      .from(STORAGE_BUCKET)
-      .createSignedUploadUrl(manifest.path, { upsert: true });
+    const { attempts, error, signedUpload } = await createSignedScanUploadUrl(manifest.path);
 
-    if (error || !signedUpload?.token) {
+    if (error || !signedUpload) {
+      const isTransient = isTransientStorageError(error);
+
       captureRouteError(
-        error ?? new Error("Supabase did not return a signed upload token."),
+        error,
         {
           route: "/api/lectures/[id]/scan-uploads",
           operation: "createSignedUploadUrl",
@@ -154,14 +251,24 @@ export async function POST(
             fileIndex: manifest.index,
             fileSize: manifest.size,
             mimeType: manifest.mimeType,
+            attempts,
+            storageStatus: getStorageErrorStatus(error),
+            transientStorageError: isTransient,
             hasSignedUpload: Boolean(signedUpload),
           },
         },
       );
 
       return NextResponse.json(
-        { error: error?.message ?? "Ni bilo mogoče pripraviti nalaganja fotografij." },
-        { status: 500 },
+        {
+          error: isTransient
+            ? "Shramba je trenutno preobremenjena. Poskusi znova čez trenutek."
+            : getStorageErrorMessage(error) ?? "Ni bilo mogoče pripraviti nalaganja fotografij.",
+        },
+        {
+          status: isTransient ? 503 : 500,
+          headers: isTransient ? { "Retry-After": "2" } : undefined,
+        },
       );
     }
 

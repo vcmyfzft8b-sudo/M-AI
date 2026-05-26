@@ -1087,7 +1087,7 @@ export function NoteSourceModal({
         },
         signal: controller.signal,
         timeoutMessage:
-          "Priprava nalaganja fotografij traja predolgo. Preveri localhost in poskusi znova.",
+          "Priprava nalaganja fotografij traja predolgo. Preveri povezavo in poskusi znova.",
         body: JSON.stringify({
           files: filesForUpload.map(({ file, index, mimeType }) => ({
             index,

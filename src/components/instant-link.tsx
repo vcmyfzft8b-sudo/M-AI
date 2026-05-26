@@ -9,6 +9,8 @@ import {
   type AnchorHTMLAttributes,
 } from "react";
 
+import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
+
 type InstantLinkProps = LinkProps &
   Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
     href: string;
@@ -26,7 +28,7 @@ export const InstantLink = forwardRef<HTMLAnchorElement, InstantLinkProps>(funct
       return;
     }
 
-    router.prefetch(href);
+    safeRouterPrefetch(router, href);
   }, [href, router, shouldPrefetch]);
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export const InstantLink = forwardRef<HTMLAnchorElement, InstantLinkProps>(funct
       href={href}
       replace={replace}
       scroll={scroll}
-      prefetch={shouldPrefetch}
+      prefetch={false}
       onPointerDown={(event) => {
         prefetchHref();
         onPointerDown?.(event);

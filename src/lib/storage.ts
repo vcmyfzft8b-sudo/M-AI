@@ -1,5 +1,6 @@
 import {
   STORAGE_BUCKET,
+  SUPPORTED_DOCUMENT_EXTENSIONS,
   SUPPORTED_AUDIO_EXTENSIONS,
   SUPPORTED_AUDIO_MIME_TYPES,
   SUPPORTED_SCAN_IMAGE_EXTENSIONS,
@@ -41,6 +42,15 @@ const extensionMap = new Map<string, string>([
   ["image/webp", "webp"],
   ["image/heic", "heic"],
   ["image/heif", "heif"],
+  ["application/pdf", "pdf"],
+  ["text/plain", "txt"],
+  ["text/markdown", "md"],
+  ["text/x-markdown", "md"],
+  ["text/html", "html"],
+  ["application/rtf", "rtf"],
+  ["text/rtf", "rtf"],
+  ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"],
+  ["application/vnd.openxmlformats-officedocument.presentationml.presentation", "pptx"],
 ]);
 
 const extensionToMimeTypeMap = new Map<string, string>([
@@ -65,9 +75,19 @@ const extensionToMimeTypeMap = new Map<string, string>([
   ["webp", "image/webp"],
   ["heic", "image/heic"],
   ["heif", "image/heif"],
+  ["pdf", "application/pdf"],
+  ["txt", "text/plain"],
+  ["md", "text/markdown"],
+  ["markdown", "text/markdown"],
+  ["html", "text/html"],
+  ["htm", "text/html"],
+  ["rtf", "application/rtf"],
+  ["docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+  ["pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"],
 ]);
 
 const supportedAudioExtensions = new Set<string>(SUPPORTED_AUDIO_EXTENSIONS);
+const supportedDocumentExtensions = new Set<string>(SUPPORTED_DOCUMENT_EXTENSIONS);
 const supportedScanImageExtensions = new Set<string>(SUPPORTED_SCAN_IMAGE_EXTENSIONS);
 
 function getExtensionFromFileName(fileName: string) {
@@ -154,6 +174,24 @@ export function normalizeUploadScanImageMimeType(params: {
   return inferScanImageMimeTypeFromFile(params);
 }
 
+export function normalizeUploadDocumentMimeType(params: {
+  mimeType: string;
+  fileName?: string | null;
+}) {
+  const normalizedMimeType = normalizeMimeType(params.mimeType);
+
+  if (
+    normalizedMimeType &&
+    normalizedMimeType !== "application/octet-stream" &&
+    normalizedMimeType !== "binary/octet-stream"
+  ) {
+    return normalizedMimeType;
+  }
+
+  const extension = getExtensionFromFileName(params.fileName ?? "");
+  return extensionToMimeTypeMap.get(extension) ?? normalizedMimeType;
+}
+
 export function getExtensionForMimeType(mimeType: string) {
   return extensionMap.get(normalizeMimeType(mimeType)) ?? "webm";
 }
@@ -207,6 +245,16 @@ export function buildLectureScanImageStoragePath(params: {
   return `${params.userId}/${params.lectureId}/scans/photo-${String(params.index).padStart(3, "0")}.${ext}`;
 }
 
+export function buildLectureDocumentStoragePath(params: {
+  userId: string;
+  lectureId: string;
+  fileName: string;
+  mimeType: string;
+}) {
+  const extension = getExtensionFromFileName(params.fileName) || getExtensionForMimeType(params.mimeType);
+  return `${params.userId}/${params.lectureId}/documents/source.${extension.toLowerCase()}`;
+}
+
 export function buildLectureNoteMediaStoragePath(params: {
   userId: string;
   lectureId: string;
@@ -237,6 +285,28 @@ export function isCanonicalLectureScanImageStoragePath(params: {
   const extension = fileName.split(".").pop()?.toLowerCase() ?? "";
   return supportedScanImageExtensions.has(
     extension as (typeof SUPPORTED_SCAN_IMAGE_EXTENSIONS)[number],
+  );
+}
+
+export function isCanonicalLectureDocumentStoragePath(params: {
+  path: string;
+  userId: string;
+  lectureId: string;
+}) {
+  const expectedPrefix = `${params.userId}/${params.lectureId}/documents/source.`;
+
+  if (!params.path.startsWith(expectedPrefix)) {
+    return false;
+  }
+
+  const extension = params.path.slice(expectedPrefix.length).toLowerCase();
+
+  if (!extension || extension.includes("/")) {
+    return false;
+  }
+
+  return supportedDocumentExtensions.has(
+    extension as (typeof SUPPORTED_DOCUMENT_EXTENSIONS)[number],
   );
 }
 

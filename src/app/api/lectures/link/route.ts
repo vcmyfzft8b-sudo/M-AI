@@ -2,8 +2,7 @@ import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createBillingRequiredResponse, getUserEntitlementState } from "@/lib/billing";
-import { enqueueLectureNotesGeneration } from "@/lib/jobs";
-import { fetchReadableWebpage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
+import { enqueueLectureLinkProcessing } from "@/lib/jobs";
 import {
   isUnsupportedVideoUrl,
   UNSUPPORTED_VIDEO_LINK_MESSAGE,
@@ -77,45 +76,59 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (parsed.data.lectureId) {
-      const { data: lecture, error: lectureError } = await supabase
-        .from("lectures")
-        .select("id")
-        .eq("id", parsed.data.lectureId)
-        .eq("user_id", user.id)
-        .maybeSingle();
+    const lectureId = parsed.data.lectureId;
 
-      if (lectureError) {
-        throw new Error(lectureError.message);
-      }
-
-      if (!lecture) {
-        return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
-      }
+    if (!lectureId) {
+      return NextResponse.json({ error: "Manjka ID zapiska." }, { status: 400 });
     }
 
-    const webpage = await fetchReadableWebpage({
-      url: parsed.data.url,
-    });
+    const { data: lecture, error: lectureError } = await supabase
+      .from("lectures")
+      .select("id")
+      .eq("id", lectureId)
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-    const lectureId = await prepareLectureFromTextSource({
-      lectureId: parsed.data.lectureId,
-      userId: user.id,
-      sourceType: "link",
-      text: webpage.text,
-      titleHint: webpage.title,
-      languageHint: parsed.data.languageHint,
-      createInitialAudio: parsed.data.createInitialAudio,
-      initialAudioVoice: parsed.data.initialAudioVoice,
-      modelMetadata: {
-        importMode: "link",
-        sourceUrl: parsed.data.url,
-      },
-    });
+    if (lectureError) {
+      throw new Error(lectureError.message);
+    }
+
+    if (!lecture) {
+      return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    }
+
+    const titleHint = new URL(parsed.data.url).hostname;
+    const { error: updateError } = await supabase
+      .from("lectures")
+      .update(
+        {
+          source_type: "link",
+          status: "queued",
+          error_message: null,
+          title: titleHint,
+          language_hint: parsed.data.languageHint,
+          processing_metadata: {
+            createInitialAudio: parsed.data.createInitialAudio,
+            initialAudioVoice: parsed.data.initialAudioVoice ?? null,
+            pendingLinkUrl: parsed.data.url,
+            processing: {
+              stage: "reading_link",
+              updatedAt: new Date().toISOString(),
+              errorMessage: null,
+            },
+          },
+        } as never,
+      )
+      .eq("id", lectureId)
+      .eq("user_id", user.id);
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
 
     after(async () => {
       try {
-        await enqueueLectureNotesGeneration(lectureId);
+        await enqueueLectureLinkProcessing(lectureId);
       } catch (error) {
         await markLecturePipelineFailed({ lectureId, error });
       }

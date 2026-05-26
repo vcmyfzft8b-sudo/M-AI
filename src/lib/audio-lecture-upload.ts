@@ -52,7 +52,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
 
   if (params.normalizeBeforeUpload) {
     assertNotAborted(params.signal);
-    params.onStageChange?.("preparing-chunks", "Preparing recording...");
+    params.onStageChange?.("preparing-chunks", "Pripravljam posnetek...");
 
     const normalizedRecording = await normalizeRecordedAudioForUpload({
       file: params.file,
@@ -68,7 +68,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
   const supabase = createSupabaseBrowserClient();
 
   assertNotAborted(params.signal);
-  params.onStageChange?.("creating", "Preparing...");
+  params.onStageChange?.("creating", "Pripravljam...");
 
   const createResponse = await fetch("/api/lectures", {
     method: "POST",
@@ -92,7 +92,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
   params.onLectureCreated?.(createData.lectureId);
 
   assertNotAborted(params.signal);
-  params.onStageChange?.("uploading-original", "Uploading audio...");
+  params.onStageChange?.("uploading-original", "Nalagam zvok...");
 
   await uploadAudioFileToSignedUrl({
     supabase,
@@ -111,7 +111,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
   if (shouldChunk) {
     try {
       assertNotAborted(params.signal);
-      params.onStageChange?.("preparing-chunks", "Preparing audio chunks...");
+      params.onStageChange?.("preparing-chunks", "Pripravljam zvočne dele...");
 
       const chunks = await createAudioProcessingChunks({
         file: uploadFile,
@@ -146,7 +146,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
         assertNotAborted(params.signal);
         params.onStageChange?.(
           "uploading-chunks",
-          `Uploading audio chunks (${position + 1}/${chunks.length})...`,
+          `Nalagam zvočne dele (${position + 1}/${chunks.length})...`,
         );
 
         const uploadTarget = uploadsByIndex.get(chunk.index);
@@ -174,7 +174,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
   }
 
   assertNotAborted(params.signal);
-  params.onStageChange?.("finalizing", "Starting processing...");
+  params.onStageChange?.("finalizing", "Začenjam obdelavo...");
 
   const finalizeResponse = await fetch(`/api/lectures/${createData.lectureId}/finalize`, {
     method: "POST",

@@ -1,7 +1,12 @@
 import { after, NextResponse } from "next/server";
 
 import { canAccessLectureContent, createBillingRequiredResponse } from "@/lib/billing";
-import { enqueueLectureNotesGeneration, enqueueLectureProcessing } from "@/lib/jobs";
+import {
+  enqueueLectureDocumentProcessing,
+  enqueueLectureLinkProcessing,
+  enqueueLectureNotesGeneration,
+  enqueueLectureProcessing,
+} from "@/lib/jobs";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import {
   getInitialNoteAudioVoice,
@@ -35,6 +40,18 @@ function getLinkSourceUrl(processingMetadata: unknown) {
   const sourceUrl = manualImport.modelMetadata.sourceUrl;
 
   return typeof sourceUrl === "string" && sourceUrl.length > 0 ? sourceUrl : null;
+}
+
+function hasPendingDocument(processingMetadata: unknown) {
+  return isRecord(processingMetadata) && isRecord(processingMetadata.pendingDocument);
+}
+
+function hasPendingLink(processingMetadata: unknown) {
+  return (
+    isRecord(processingMetadata) &&
+    typeof processingMetadata.pendingLinkUrl === "string" &&
+    processingMetadata.pendingLinkUrl.trim().length > 0
+  );
 }
 
 export async function POST(
@@ -87,16 +104,23 @@ export async function POST(
   }
 
   const hasManualImport = Boolean(getManualImportMetadata(lecture.processing_metadata));
+  const hasPendingDocumentImport = hasPendingDocument(lecture.processing_metadata);
+  const hasPendingLinkImport = hasPendingLink(lecture.processing_metadata);
   const effectiveSourceType = getEffectiveLectureSourceType(lecture);
 
-  if (effectiveSourceType !== "audio" && !hasManualImport) {
+  if (
+    effectiveSourceType !== "audio" &&
+    !hasManualImport &&
+    !hasPendingDocumentImport &&
+    !hasPendingLinkImport
+  ) {
     return NextResponse.json(
       { error: "Ponovni poskus za ta zapisek ni na voljo." },
       { status: 400 },
     );
   }
 
-  if (effectiveSourceType === "link") {
+  if (effectiveSourceType === "link" && !hasPendingLinkImport) {
     const sourceUrl = getLinkSourceUrl(lecture.processing_metadata);
 
     if (!sourceUrl) {
@@ -167,6 +191,16 @@ export async function POST(
     try {
       if (effectiveSourceType === "audio") {
         await enqueueLectureProcessing(id);
+        return;
+      }
+
+      if (hasPendingDocumentImport) {
+        await enqueueLectureDocumentProcessing(id);
+        return;
+      }
+
+      if (hasPendingLinkImport) {
+        await enqueueLectureLinkProcessing(id);
         return;
       }
 

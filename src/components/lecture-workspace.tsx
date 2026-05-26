@@ -714,6 +714,18 @@ function lectureProcessingStageLabel(
     return "Ustvarjam zvok";
   }
 
+  if (processingStage === "extracting_document_text") {
+    return "Berem dokument";
+  }
+
+  if (processingStage === "extracting_scan_text") {
+    return "Berem fotografije";
+  }
+
+  if (processingStage === "reading_link") {
+    return "Berem povezavo";
+  }
+
   if (status === "uploading") {
     return "Nalagam gradivo";
   }

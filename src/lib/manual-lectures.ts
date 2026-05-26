@@ -22,6 +22,10 @@ import {
   isPptxDocument,
   isRtfDocument,
 } from "@/lib/document-files";
+import {
+  attachDocumentImagesToNotes,
+  getStoredDocumentImagesFromMetadata,
+} from "@/lib/document-note-media";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
 import {
   NoReadableScanTextError,
@@ -114,14 +118,17 @@ export type ImageOcrContext = {
 let pdfJsPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null =
   null;
 
-async function getPdfJs() {
+export async function getPdfJs() {
   if (!pdfJsPromise) {
     const pdfGlobal = globalThis as {
       self?: unknown;
     };
 
-    pdfGlobal.self ??= globalThis;
-    pdfJsPromise = import("pdfjs-dist/legacy/build/pdf.mjs");
+    pdfGlobal.self = globalThis;
+    pdfJsPromise = import("pdfjs-dist/legacy/build/pdf.mjs").catch((error) => {
+      pdfJsPromise = null;
+      throw error;
+    });
   }
 
   return pdfJsPromise;
@@ -1375,6 +1382,18 @@ export async function createLectureFromTextSource(params: {
 
     if (artifactError) {
       throw new Error(artifactError.message);
+    }
+
+    const documentImages = getStoredDocumentImagesFromMetadata(params.modelMetadata ?? {});
+
+    if (documentImages.length > 0) {
+      await attachDocumentImagesToNotes({
+        lectureId,
+        structuredNotesMd: notes.structuredNotesMd,
+        documentImages,
+      }).catch((error) => {
+        console.warn("Document image note attachment failed.", error);
+      });
     }
 
     if (params.createInitialAudio === true) {

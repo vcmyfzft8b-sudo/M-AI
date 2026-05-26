@@ -210,6 +210,17 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
   }
 
+  const service = createSupabaseServiceRoleClient();
+  const { data: noteMediaRows, error: noteMediaError } = await service
+    .from("lecture_note_media")
+    .select("storage_path")
+    .eq("user_id", user.id)
+    .in("lecture_id", lectureIds);
+
+  if (noteMediaError) {
+    return NextResponse.json({ error: noteMediaError.message }, { status: 500 });
+  }
+
   const { error: deleteError } = await supabase
     .from("lectures")
     .delete()
@@ -233,12 +244,20 @@ export async function DELETE(request: Request) {
   const scanImagePaths = ownedLectureRows.flatMap((lecture) =>
     extractScanImageStoragePaths(lecture.processing_metadata),
   );
+  const noteMediaPaths = ((noteMediaRows ?? []) as Array<{ storage_path: string | null }>)
+    .map((row) => row.storage_path)
+    .filter((path): path is string => Boolean(path));
 
-  if (storagePaths.length > 0 || chunkPaths.length > 0 || scanImagePaths.length > 0) {
-    await createSupabaseServiceRoleClient()
+  if (
+    storagePaths.length > 0 ||
+    chunkPaths.length > 0 ||
+    scanImagePaths.length > 0 ||
+    noteMediaPaths.length > 0
+  ) {
+    await service
       .storage
       .from("lecture-audio")
-      .remove([...storagePaths, ...chunkPaths, ...scanImagePaths]);
+      .remove([...storagePaths, ...chunkPaths, ...scanImagePaths, ...noteMediaPaths]);
   }
 
   return NextResponse.json({ ok: true, deletedCount: lectureIds.length });

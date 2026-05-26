@@ -8,6 +8,10 @@ import { generateStructuredObject } from "@/lib/ai/json";
 import { createEmbeddings } from "@/lib/ai/embeddings";
 import { parseAudioChunkManifest } from "@/lib/audio-processing";
 import { CHAT_MATCH_COUNT } from "@/lib/constants";
+import {
+  attachDocumentImagesToNotes,
+  getStoredDocumentImagesFromMetadata,
+} from "@/lib/document-note-media";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
 import {
   getInitialNoteAudioVoice,
@@ -466,6 +470,18 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
 
   if (artifactError) {
     throw artifactError;
+  }
+
+  const documentImages = getStoredDocumentImagesFromMetadata(manualModelMetadata);
+
+  if (documentImages.length > 0) {
+    await attachDocumentImagesToNotes({
+      lectureId: lecture.id,
+      structuredNotesMd: notes.structuredNotesMd,
+      documentImages,
+    }).catch((error) => {
+      console.warn("Document image note attachment failed.", error);
+    });
   }
 
   if (shouldCreateInitialNoteAudio(lecture.processing_metadata)) {

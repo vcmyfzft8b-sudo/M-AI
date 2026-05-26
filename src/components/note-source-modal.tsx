@@ -1213,7 +1213,7 @@ export function NoteSourceModal({
 
       const controller = new AbortController();
       activeRequestControllerRef.current = controller;
-      setBusyLabel("Berem stran...");
+      setBusyLabel("Dodajam v vrsto...");
 
       const response = await fetch("/api/lectures/link", {
         method: "POST",

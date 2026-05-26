@@ -12,6 +12,7 @@ import {
   attachDocumentImagesToNotes,
   getStoredDocumentImagesFromMetadata,
 } from "@/lib/document-note-media";
+import { attachAutomaticNoteAnnotations } from "@/lib/note-auto-annotations";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
 import {
   getInitialNoteAudioVoice,
@@ -471,6 +472,13 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
   if (artifactError) {
     throw artifactError;
   }
+
+  await attachAutomaticNoteAnnotations({
+    lectureId: lecture.id,
+    structuredNotesMd: notes.structuredNotesMd,
+  }).catch((error) => {
+    console.warn("Automatic note annotation failed.", error);
+  });
 
   const documentImages = getStoredDocumentImagesFromMetadata(manualModelMetadata);
 

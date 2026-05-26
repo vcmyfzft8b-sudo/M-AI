@@ -14,6 +14,7 @@ import {
 } from "@/lib/note-tts-text";
 
 const MAX_AUTO_INSERTED_DOCUMENT_IMAGES = 6;
+const MAX_FALLBACK_DOCUMENT_IMAGES = 3;
 const DEFAULT_DOCUMENT_IMAGE_WIDTH_PERCENT = 82;
 const DEFAULT_DOCUMENT_IMAGE_X_PERCENT = 50;
 const MIN_IMAGE_NOTE_RELEVANCE_SCORE = 3;
@@ -172,6 +173,26 @@ function findImagePlacement(params: {
   return null;
 }
 
+function findSourceOrderPlacement(params: {
+  imageIndex: number;
+  usefulImageCount: number;
+  blocks: Array<{ id: string; text: string }>;
+}) {
+  if (params.blocks.length === 0) {
+    return null;
+  }
+
+  if (params.usefulImageCount <= 1) {
+    return params.blocks[Math.min(1, params.blocks.length - 1)].id;
+  }
+
+  const blockIndex = Math.round(
+    (params.imageIndex / (params.usefulImageCount - 1)) * (params.blocks.length - 1),
+  );
+
+  return params.blocks[Math.max(0, Math.min(params.blocks.length - 1, blockIndex))].id;
+}
+
 function isLikelyUsefulStudyImage(image: StoredDocumentNoteImage) {
   const area = image.width * image.height;
   const description = normalizeText(image.description ?? "");
@@ -202,9 +223,10 @@ function planDocumentImageMediaBlocks(params: {
   existingMediaIds: Set<string>;
   openSlots: number;
 }) {
-  const ranked = params.documentImages
+  const usefulImages = params.documentImages
     .filter((image) => !params.existingMediaIds.has(image.mediaId))
-    .filter(isLikelyUsefulStudyImage)
+    .filter(isLikelyUsefulStudyImage);
+  const ranked = usefulImages
     .flatMap((image, index) => {
       const placement = findImagePlacement({
         image,
@@ -219,19 +241,50 @@ function planDocumentImageMediaBlocks(params: {
         {
           image,
           index,
+          fallback: false,
           ...placement,
         },
       ];
     })
     .sort((left, right) => right.score - left.score || left.index - right.index);
+  const fallbackRanked = usefulImages.flatMap((image, index) => {
+    if (ranked.some((candidate) => candidate.image.mediaId === image.mediaId)) {
+      return [];
+    }
+
+    const afterBlockId = findSourceOrderPlacement({
+      imageIndex: index,
+      usefulImageCount: usefulImages.length,
+      blocks: params.blocks,
+    });
+
+    if (!afterBlockId) {
+      return [];
+    }
+
+    return [
+      {
+        image,
+        index,
+        afterBlockId,
+        score: 0,
+        fallback: true,
+      },
+    ];
+  });
 
   const selected: typeof ranked = [];
   const usedBlocks = new Set<string>();
   const usedPages = new Set<number>();
+  let fallbackCount = 0;
 
-  for (const candidate of ranked) {
+  for (const candidate of [...ranked, ...fallbackRanked]) {
     if (selected.length >= Math.min(MAX_AUTO_INSERTED_DOCUMENT_IMAGES, params.openSlots)) {
       break;
+    }
+
+    if (candidate.fallback && fallbackCount >= MAX_FALLBACK_DOCUMENT_IMAGES) {
+      continue;
     }
 
     const pageNumber = candidate.image.sourcePageNumber;
@@ -251,6 +304,10 @@ function planDocumentImageMediaBlocks(params: {
     }
 
     selected.push(candidate);
+
+    if (candidate.fallback) {
+      fallbackCount += 1;
+    }
   }
 
   return selected.sort((left, right) => left.index - right.index);

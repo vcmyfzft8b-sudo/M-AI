@@ -2,6 +2,7 @@
 
 import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Pause, Play, X } from "lucide-react";
 import Image from "next/image";
+import katex from "katex";
 import type {
   CSSProperties,
   MouseEvent as ReactMouseEvent,
@@ -629,6 +630,35 @@ function WordToken({
   );
 }
 
+function MathToken({ value, display }: { value: string; display: boolean }) {
+  let html = "";
+
+  try {
+    html = katex.renderToString(value, {
+      displayMode: display,
+      throwOnError: false,
+      strict: false,
+    });
+  } catch {
+    html = "";
+  }
+
+  const className = display ? "note-read-math display" : "note-read-math inline";
+
+  if (!html) {
+    return <span className={className}>{value}</span>;
+  }
+
+  const MathTag = display ? "span" : "span";
+
+  return (
+    <MathTag
+      className={className}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
 function renderTokens(params: {
   tokens: NoteTtsInlineToken[];
   completedWordIndex: number;
@@ -680,10 +710,13 @@ function renderTokens(params: {
               } as CSSProperties
             }
           >
-            {runTokens.map((runToken, runIndex) =>
-              runToken.type === "text" ? (
-                <span key={`highlight-text-${index + runIndex}`}>{runToken.text}</span>
-              ) : (
+            {runTokens.map((runToken, runIndex) => {
+              if (runToken.type === "text") {
+                return <span key={`highlight-text-${index + runIndex}`}>{runToken.text}</span>;
+              }
+
+              if (runToken.type === "word") {
+                return (
                 <WordToken
                   key={`highlight-word-${runToken.wordIndex}`}
                   token={runToken}
@@ -692,8 +725,11 @@ function renderTokens(params: {
                   annotation={params.wordAnnotations.get(runToken.wordIndex)}
                   renderHighlight={false}
                 />
-              ),
-            )}
+                );
+              }
+
+              return null;
+            })}
           </span>,
         );
         index = cursor;
@@ -715,6 +751,18 @@ function renderTokens(params: {
 
     if (token.type === "text") {
       rendered.push(<span key={`text-${index}`}>{token.text}</span>);
+      index += 1;
+      continue;
+    }
+
+    if (token.type === "math") {
+      rendered.push(
+        <MathToken
+          key={`math-${index}`}
+          value={token.text}
+          display={token.display}
+        />,
+      );
       index += 1;
       continue;
     }

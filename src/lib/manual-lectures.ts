@@ -26,6 +26,7 @@ import {
   attachDocumentImagesToNotes,
   getStoredDocumentImagesFromMetadata,
 } from "@/lib/document-note-media";
+import { attachAutomaticNoteAnnotations } from "@/lib/note-auto-annotations";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
 import {
   NoReadableScanTextError,
@@ -1383,6 +1384,13 @@ export async function createLectureFromTextSource(params: {
     if (artifactError) {
       throw new Error(artifactError.message);
     }
+
+    await attachAutomaticNoteAnnotations({
+      lectureId,
+      structuredNotesMd: notes.structuredNotesMd,
+    }).catch((error) => {
+      console.warn("Automatic note annotation failed.", error);
+    });
 
     const documentImages = getStoredDocumentImagesFromMetadata(params.modelMetadata ?? {});
 

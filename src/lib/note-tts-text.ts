@@ -12,6 +12,11 @@ export type NoteTtsInlineToken =
       type: "word";
       text: string;
       wordIndex: number;
+    }
+  | {
+      type: "math";
+      text: string;
+      display: boolean;
     };
 
 export type NoteTtsTextBlock = {
@@ -108,12 +113,23 @@ export function stripLeadingRedundantHeading(markdown: string, title?: string | 
 }
 
 function cleanMarkdownLine(line: string) {
-  return line
+  const mathSpans: string[] = [];
+  const protectedLine = line.replace(
+    /(\$\$[\s\S]+?\$\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\])/g,
+    (match) => {
+      const placeholder = `\uE000${mathSpans.length}\uE001`;
+      mathSpans.push(match);
+      return placeholder;
+    },
+  );
+
+  return protectedLine
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/[*_~]{1,3}([^*_~]+)[*_~]{1,3}/g, "$1")
     .replace(/<[^>]+>/g, " ")
+    .replace(/\uE000(\d+)\uE001/g, (_match, index: string) => mathSpans[Number(index)] ?? "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -201,7 +217,7 @@ function splitTableCells(line: string) {
   return withoutOuterPipes.split("|").map((cell) => cleanMarkdownLine(cell));
 }
 
-function tokenizeLine(text: string, nextWordIndex: number) {
+function tokenizePlainText(text: string, nextWordIndex: number) {
   const tokens: NoteTtsInlineToken[] = [];
   const words: NoteTtsWord[] = [];
   let lastIndex = 0;
@@ -246,6 +262,77 @@ function tokenizeLine(text: string, nextWordIndex: number) {
   };
 }
 
+function findNextMathDelimiter(text: string, startIndex: number) {
+  const candidates = [
+    { open: "$$", close: "$$", index: text.indexOf("$$", startIndex) },
+    { open: "\\(", close: "\\)", index: text.indexOf("\\(", startIndex) },
+    { open: "\\[", close: "\\]", index: text.indexOf("\\[", startIndex) },
+  ].filter((candidate) => candidate.index >= 0);
+
+  return candidates.sort((left, right) => left.index - right.index)[0] ?? null;
+}
+
+function tokenizeLine(text: string, nextWordIndex: number) {
+  const tokens: NoteTtsInlineToken[] = [];
+  const words: NoteTtsWord[] = [];
+  const trimmed = text.trim();
+  let cursor = 0;
+  let wordIndex = nextWordIndex;
+
+  while (cursor < text.length) {
+    const delimiter = findNextMathDelimiter(text, cursor);
+
+    if (!delimiter) {
+      const tokenized = tokenizePlainText(text.slice(cursor), wordIndex);
+      tokens.push(...tokenized.tokens);
+      words.push(...tokenized.words);
+      wordIndex = tokenized.nextWordIndex;
+      break;
+    }
+
+    if (delimiter.index > cursor) {
+      const tokenized = tokenizePlainText(text.slice(cursor, delimiter.index), wordIndex);
+      tokens.push(...tokenized.tokens);
+      words.push(...tokenized.words);
+      wordIndex = tokenized.nextWordIndex;
+    }
+
+    const mathStart = delimiter.index + delimiter.open.length;
+    const mathEnd = text.indexOf(delimiter.close, mathStart);
+
+    if (mathEnd === -1) {
+      const tokenized = tokenizePlainText(text.slice(delimiter.index), wordIndex);
+      tokens.push(...tokenized.tokens);
+      words.push(...tokenized.words);
+      wordIndex = tokenized.nextWordIndex;
+      break;
+    }
+
+    const rawMath = text.slice(mathStart, mathEnd).trim();
+
+    if (rawMath) {
+      const fullMathSpan = text.slice(delimiter.index, mathEnd + delimiter.close.length).trim();
+
+      tokens.push({
+        type: "math",
+        text: rawMath,
+        display:
+          delimiter.open !== "\\(" &&
+          trimmed === fullMathSpan &&
+          delimiter.index === text.indexOf(trimmed),
+      });
+    }
+
+    cursor = mathEnd + delimiter.close.length;
+  }
+
+  return {
+    tokens,
+    words,
+    nextWordIndex: wordIndex,
+  };
+}
+
 export function parseNoteTtsDocument(markdown: string): NoteTtsDocument {
   const blocks: NoteTtsBlock[] = [];
   const words: NoteTtsWord[] = [];
@@ -257,7 +344,7 @@ export function parseNoteTtsDocument(markdown: string): NoteTtsDocument {
   function tokenizeText(text: string) {
     const tokenized = tokenizeLine(text, nextWordIndex);
 
-    if (tokenized.words.length === 0) {
+    if (tokenized.tokens.length === 0) {
       return null;
     }
 
@@ -511,6 +598,15 @@ function tokensToSpeechText(
 
   for (const token of tokens) {
     if (token.type === "text") {
+      if (hasIncludedWord) {
+        text += token.text;
+      } else {
+        pendingText += token.text;
+      }
+      continue;
+    }
+
+    if (token.type === "math") {
       if (hasIncludedWord) {
         text += token.text;
       } else {

@@ -509,6 +509,14 @@ async function addImageDescriptions(images: ExtractedDocumentImage[]) {
     const description = await describeDocumentImage(image);
 
     if (description === null) {
+      const area = image.width * image.height;
+      const hasNearbyContext = normalizeWhitespace(image.contextText ?? "").length >= 80;
+
+      if (area < 120_000 && !hasNearbyContext) {
+        continue;
+      }
+
+      describedImages.push(image);
       continue;
     }
 

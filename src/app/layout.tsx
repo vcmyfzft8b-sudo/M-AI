@@ -9,6 +9,7 @@ import {
   SEO_SITE_URL,
 } from "@/lib/brand";
 
+import "katex/dist/katex.min.css";
 import "./globals.css";
 
 const siteTitle = `${SEO_BRAND_NAME} | ${BRAND_SHORTLINE}`;

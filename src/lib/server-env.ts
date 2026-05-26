@@ -5,29 +5,32 @@ import { z } from "zod";
 import { DEFAULT_NOTE_TTS_VOICE } from "@/lib/note-tts-settings";
 import { getPublicEnv } from "@/lib/public-env";
 
+const trimmedString = z.string().trim();
+const optionalTrimmedString = z.string().trim().optional();
+
 const serverEnvSchema = z.object({
-  NEXT_PUBLIC_SITE_URL: z.string().url().optional(),
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
-  GEMINI_API_KEY: z.string().optional(),
-  GEMINI_TEXT_MODEL: z.string().default("gemini-2.5-flash-lite"),
-  GEMINI_OCR_MODEL: z.string().default("gemini-3.1-flash-lite-preview"),
-  GEMINI_OCR_RESCUE_MODEL: z.string().default("gemini-3-flash-preview"),
-  GEMINI_EMBEDDING_MODEL: z.string().default("gemini-embedding-001"),
-  SONIOX_API_KEY: z.string().optional(),
-  SONIOX_MODEL: z.string().default("stt-async-v4"),
-  SONIOX_TTS_MODEL: z.string().default("tts-rt-v1-preview"),
-  SONIOX_TTS_VOICE: z.string().default(DEFAULT_NOTE_TTS_VOICE),
-  INNGEST_EVENT_KEY: z.string().optional(),
-  INNGEST_SIGNING_KEY: z.string().optional(),
-  INTERNAL_JOB_SECRET: z.string().optional(),
-  VERCEL_AUTOMATION_BYPASS_SECRET: z.string().optional(),
-  STRIPE_SECRET_KEY: z.string().optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().optional(),
-  STRIPE_PRICE_WEEKLY: z.string().optional(),
-  STRIPE_PRICE_MONTHLY: z.string().optional(),
-  STRIPE_PRICE_YEARLY: z.string().optional(),
+  NEXT_PUBLIC_SITE_URL: trimmedString.url().optional(),
+  NEXT_PUBLIC_SUPABASE_URL: trimmedString.url(),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: trimmedString.min(1),
+  SUPABASE_SERVICE_ROLE_KEY: trimmedString.min(1),
+  GEMINI_API_KEY: optionalTrimmedString,
+  GEMINI_TEXT_MODEL: trimmedString.default("gemini-2.5-flash-lite"),
+  GEMINI_OCR_MODEL: trimmedString.default("gemini-3.1-flash-lite-preview"),
+  GEMINI_OCR_RESCUE_MODEL: trimmedString.default("gemini-3-flash-preview"),
+  GEMINI_EMBEDDING_MODEL: trimmedString.default("gemini-embedding-001"),
+  SONIOX_API_KEY: optionalTrimmedString,
+  SONIOX_MODEL: trimmedString.default("stt-async-v4"),
+  SONIOX_TTS_MODEL: trimmedString.default("tts-rt-v1-preview"),
+  SONIOX_TTS_VOICE: trimmedString.default(DEFAULT_NOTE_TTS_VOICE),
+  INNGEST_EVENT_KEY: optionalTrimmedString,
+  INNGEST_SIGNING_KEY: optionalTrimmedString,
+  INTERNAL_JOB_SECRET: optionalTrimmedString,
+  VERCEL_AUTOMATION_BYPASS_SECRET: optionalTrimmedString,
+  STRIPE_SECRET_KEY: optionalTrimmedString,
+  STRIPE_WEBHOOK_SECRET: optionalTrimmedString,
+  STRIPE_PRICE_WEEKLY: optionalTrimmedString,
+  STRIPE_PRICE_MONTHLY: optionalTrimmedString,
+  STRIPE_PRICE_YEARLY: optionalTrimmedString,
 });
 
 export function getServerEnv() {
@@ -47,13 +50,13 @@ export function getServerEnv() {
     SONIOX_TTS_VOICE: process.env.SONIOX_TTS_VOICE,
     INNGEST_EVENT_KEY: process.env.INNGEST_EVENT_KEY,
     INNGEST_SIGNING_KEY: process.env.INNGEST_SIGNING_KEY,
-    INTERNAL_JOB_SECRET: process.env.INTERNAL_JOB_SECRET?.trim(),
-    VERCEL_AUTOMATION_BYPASS_SECRET: process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim(),
-    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY?.trim(),
-    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET?.trim(),
-    STRIPE_PRICE_WEEKLY: process.env.STRIPE_PRICE_WEEKLY?.trim(),
-    STRIPE_PRICE_MONTHLY: process.env.STRIPE_PRICE_MONTHLY?.trim(),
-    STRIPE_PRICE_YEARLY: process.env.STRIPE_PRICE_YEARLY?.trim(),
+    INTERNAL_JOB_SECRET: process.env.INTERNAL_JOB_SECRET,
+    VERCEL_AUTOMATION_BYPASS_SECRET: process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+    STRIPE_PRICE_WEEKLY: process.env.STRIPE_PRICE_WEEKLY,
+    STRIPE_PRICE_MONTHLY: process.env.STRIPE_PRICE_MONTHLY,
+    STRIPE_PRICE_YEARLY: process.env.STRIPE_PRICE_YEARLY,
   });
 }
 

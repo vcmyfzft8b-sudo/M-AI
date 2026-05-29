@@ -126,12 +126,8 @@ export async function getPdfJs() {
       self?: unknown;
     };
 
-    pdfGlobal.self = globalThis;
-    const nativeImport = new Function("specifier", "return import(specifier)") as (
-      specifier: string,
-    ) => Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")>;
-
-    pdfJsPromise = nativeImport("pdfjs-dist/legacy/build/pdf.mjs").catch((error) => {
+    pdfGlobal.self ??= globalThis;
+    pdfJsPromise = import("pdfjs-dist/legacy/build/pdf.mjs").catch((error) => {
       pdfJsPromise = null;
       throw error;
     });

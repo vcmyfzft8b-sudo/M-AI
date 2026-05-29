@@ -42,6 +42,11 @@ import {
   isLegacyPowerPointDocument,
   isSupportedDocumentFile,
 } from "@/lib/document-files";
+import {
+  compressAudioForUpload,
+  compressDocumentForUpload,
+  compressScanImageForUpload,
+} from "@/lib/file-compression-client";
 import { NOTE_LANGUAGE_OPTIONS } from "@/lib/languages";
 import {
   getExtensionForMimeType,
@@ -467,23 +472,55 @@ export function NoteSourceModal({
   }
 
   const replaceAudioSource = useCallback(async (nextSource: AudioSource) => {
+    let preparedSource = nextSource;
+    let originalPreviewUrlToRevoke: string | null = null;
+
     try {
-      validateAudio(nextSource.file, nextSource.durationSeconds);
+      if (nextSource.durationSeconds > MAX_AUDIO_SECONDS) {
+        throw new Error("Zvočna datoteka je predolga. Omejitev je 3 ure.");
+      }
+
+      if (nextSource.file.size > MAX_AUDIO_BYTES) {
+        setBusyLabel("Stiskam zvok...");
+        const compressedAudio = await compressAudioForUpload(nextSource.file);
+
+        if (compressedAudio.compressed) {
+          originalPreviewUrlToRevoke = nextSource.previewUrl;
+          preparedSource = {
+            ...nextSource,
+            file: compressedAudio.file,
+            previewUrl: URL.createObjectURL(compressedAudio.file),
+          };
+        }
+      }
+
+      validateAudio(preparedSource.file, preparedSource.durationSeconds);
 
       if (audioSource?.previewUrl) {
         URL.revokeObjectURL(audioSource.previewUrl);
       }
 
-      setAudioSource(nextSource);
+      if (originalPreviewUrlToRevoke) {
+        URL.revokeObjectURL(originalPreviewUrlToRevoke);
+      }
+
+      setAudioSource(preparedSource);
       setError(null);
     } catch (validationError) {
       URL.revokeObjectURL(nextSource.previewUrl);
+
+      if (preparedSource.previewUrl !== nextSource.previewUrl) {
+        URL.revokeObjectURL(preparedSource.previewUrl);
+      }
+
       setAudioSource(null);
       setError(
         validationError instanceof Error
           ? validationError.message
           : "Zvoka ni bilo mogoče pripraviti.",
       );
+    } finally {
+      setBusyLabel(null);
     }
   }, [audioSource]);
 
@@ -1337,23 +1374,34 @@ export function NoteSourceModal({
     }
   }
 
-  function preparePhotoFiles(files: File[]) {
+  async function preparePhotoFiles(files: File[]) {
     if (photoSources.length + files.length > MAX_SCAN_IMAGE_COUNT) {
       throw new Error(`Dosegel si največ ${MAX_SCAN_IMAGE_COUNT} fotografij.`);
     }
+
+    const preparedFiles: File[] = [];
 
     for (const file of files) {
       if (!isScanPhotoFile(file)) {
         throw new Error("Za skeniranje uporabi fotografijo ali sliko.");
       }
 
-      if (file.size > MAX_SCAN_IMAGE_BYTES) {
-        throw new Error("Slika za skeniranje je prevelika. Omejitev je 10 MB.");
+      let preparedFile = file;
+
+      if (preparedFile.size > MAX_SCAN_IMAGE_BYTES) {
+        setBusyLabel(files.length === 1 ? "Stiskam fotografijo..." : "Stiskam fotografije...");
+        preparedFile = (await compressScanImageForUpload(preparedFile)).file;
       }
+
+      if (preparedFile.size > MAX_SCAN_IMAGE_BYTES) {
+        throw new Error("Slika je tudi po stiskanju prevelika. Omejitev je 10 MB.");
+      }
+
+      preparedFiles.push(preparedFile);
     }
 
     const canUseNativeHeicPreview = canPreviewHeicNatively();
-    const nextPhotoSources = files.map((file) => createPhotoSource(file, canUseNativeHeicPreview));
+    const nextPhotoSources = preparedFiles.map((file) => createPhotoSource(file, canUseNativeHeicPreview));
 
     setPdfSource(null);
     setPhotoSources((current) => [...current, ...nextPhotoSources]);
@@ -1371,7 +1419,7 @@ export function NoteSourceModal({
     }
   }
 
-  function prepareDocumentFile(file: File) {
+  async function prepareDocumentFile(file: File) {
     if (isLegacyPowerPointDocument(file)) {
       Sentry.captureMessage("Legacy PowerPoint upload rejected", {
         level: "info",
@@ -1390,11 +1438,18 @@ export function NoteSourceModal({
       throw new Error("Uporabi PDF, TXT, Markdown, HTML, RTF, DOCX ali PPTX.");
     }
 
-    if (file.size > MAX_DOCUMENT_BYTES) {
-      throw new Error("Datoteka dokumenta je prevelika. Trenutna omejitev je 4 MB.");
+    let preparedFile = file;
+
+    if (preparedFile.size > MAX_DOCUMENT_BYTES) {
+      setBusyLabel("Stiskam dokument...");
+      preparedFile = (await compressDocumentForUpload(preparedFile)).file;
     }
 
-    setPdfSource(file);
+    if (preparedFile.size > MAX_DOCUMENT_BYTES) {
+      throw new Error("Dokument je tudi po stiskanju prevelik. Trenutna omejitev je 4 MB.");
+    }
+
+    setPdfSource(preparedFile);
     setPhotoSources((current) => {
       current.forEach((photoSource) => revokePhotoSourcePreviewUrls(photoSource));
       return [];
@@ -1449,7 +1504,7 @@ export function NoteSourceModal({
     }
 
     try {
-      preparePhotoFiles(files);
+      await preparePhotoFiles(files);
     } catch (scanError) {
       if (redirectToBillingIfNeeded({ error: scanError, router })) {
         onClose();
@@ -1460,6 +1515,7 @@ export function NoteSourceModal({
         scanError instanceof Error ? scanError.message : "Fotografije ni bilo mogoče skenirati.",
       );
     } finally {
+      setBusyLabel(null);
       event.target.value = "";
     }
   }
@@ -1481,7 +1537,7 @@ export function NoteSourceModal({
 
     try {
       if (allImages) {
-        preparePhotoFiles(files);
+        await preparePhotoFiles(files);
         return;
       }
 
@@ -1489,7 +1545,7 @@ export function NoteSourceModal({
         throw new Error("Izberi en dokument ali do 10 fotografij.");
       }
 
-      prepareDocumentFile(files[0]);
+      await prepareDocumentFile(files[0]);
     } catch (submitError) {
       if (redirectToBillingIfNeeded({ error: submitError, router })) {
         onClose();

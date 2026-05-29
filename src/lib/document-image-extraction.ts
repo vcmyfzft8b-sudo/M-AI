@@ -1,5 +1,7 @@
 import "server-only";
 
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import path from "node:path";
 
 import { PartMediaResolutionLevel } from "@google/genai";
@@ -20,10 +22,13 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 const MAX_DOCUMENT_IMAGES = 12;
 const MAX_IMAGE_DESCRIPTION_COUNT = 8;
+const MAX_WEBPAGE_IMAGE_CANDIDATES = 24;
 const MIN_DOCUMENT_IMAGE_WIDTH = 140;
 const MIN_DOCUMENT_IMAGE_HEIGHT = 100;
 const MIN_DOCUMENT_IMAGE_AREA = 24_000;
+const LARGE_DOCUMENT_IMAGE_AREA = 120_000;
 const DOCUMENT_IMAGE_OUTPUT_MIME_TYPE = "image/jpeg";
+const WEBPAGE_IMAGE_FETCH_TIMEOUT_MS = 8_000;
 
 export type ExtractedDocumentImage = {
   fileName: string;
@@ -81,6 +86,16 @@ function parseXmlAttributes(value: string) {
   return attributes;
 }
 
+function parseHtmlAttributes(value: string) {
+  const attributes = new Map<string, string>();
+
+  for (const match of value.matchAll(/([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g)) {
+    attributes.set(match[1].toLowerCase(), decodeXmlText(match[2] ?? match[3] ?? match[4] ?? ""));
+  }
+
+  return attributes;
+}
+
 function extractOfficeXmlText(xml: string) {
   const runs = Array.from(xml.matchAll(/<(?:a|w):t(?:\s[^>]*)?>([\s\S]*?)<\/(?:a|w):t>/g))
     .map((match) => decodeXmlText(match[1] ?? "").trim())
@@ -129,7 +144,7 @@ async function parseRelationships(zip: JSZip, relsPath: string, baseDir: string)
 }
 
 function extractEmbeddedRelationshipIds(xml: string) {
-  return Array.from(xml.matchAll(/r:embed="([^"]+)"/g)).map((match) => match[1]);
+  return Array.from(xml.matchAll(/\br:(?:embed|id)="([^"]+)"/g)).map((match) => match[1]);
 }
 
 function getMimeTypeFromPath(pathValue: string) {
@@ -201,6 +216,10 @@ async function normalizeImageForNotes(params: {
   };
 }
 
+function fallbackImageDescription(image: Pick<ExtractedDocumentImage, "sourcePartLabel">) {
+  return `Embedded image from ${image.sourcePartLabel}.`;
+}
+
 async function describeDocumentImage(image: ExtractedDocumentImage) {
   const file = new File([new Uint8Array(image.bytes)], image.fileName, { type: image.mimeType });
   const contextHint = image.contextText
@@ -240,6 +259,7 @@ async function extractDocxImages(file: File) {
   const documentXml = await zip.file("word/document.xml")?.async("string");
   const relationships = await parseRelationships(zip, "word/_rels/document.xml.rels", "word");
   const images: ExtractedDocumentImage[] = [];
+  const usedMediaPaths = new Set<string>();
 
   if (!documentXml) {
     return images;
@@ -267,6 +287,7 @@ async function extractDocxImages(file: File) {
         continue;
       }
 
+      usedMediaPaths.add(mediaPath);
       const image = await normalizeImageForNotes({
         bytes: Buffer.from(await mediaFile.async("uint8array")),
         sourceName: path.posix.basename(mediaPath),
@@ -280,6 +301,36 @@ async function extractDocxImages(file: File) {
     }
   }
 
+  const fallbackMediaPaths = getSortedZipParts(zip, /^word\/media\/[^/]+\.(?:jpe?g|png|webp)$/i);
+
+  for (const mediaPath of fallbackMediaPaths) {
+    if (images.length >= MAX_DOCUMENT_IMAGES) {
+      break;
+    }
+
+    if (usedMediaPaths.has(mediaPath)) {
+      continue;
+    }
+
+    const mimeType = getMimeTypeFromPath(mediaPath);
+    const mediaFile = zip.file(mediaPath);
+
+    if (!mimeType || !mediaFile) {
+      continue;
+    }
+
+    const image = await normalizeImageForNotes({
+      bytes: Buffer.from(await mediaFile.async("uint8array")),
+      sourceName: path.posix.basename(mediaPath),
+      sourcePartLabel: "Word document",
+      contextText: null,
+    });
+
+    if (image) {
+      images.push(image);
+    }
+  }
+
   return images;
 }
 
@@ -287,6 +338,7 @@ async function extractPptxImages(file: File) {
   const zip = await JSZip.loadAsync(await file.arrayBuffer());
   const slidePaths = getSortedZipParts(zip, /^ppt\/slides\/slide\d+\.xml$/);
   const images: ExtractedDocumentImage[] = [];
+  const usedMediaPaths = new Set<string>();
 
   for (const slidePath of slidePaths) {
     if (images.length >= MAX_DOCUMENT_IMAGES) {
@@ -318,6 +370,7 @@ async function extractPptxImages(file: File) {
         continue;
       }
 
+      usedMediaPaths.add(mediaPath);
       const image = await normalizeImageForNotes({
         bytes: Buffer.from(await mediaFile.async("uint8array")),
         sourceName: path.posix.basename(mediaPath),
@@ -332,7 +385,256 @@ async function extractPptxImages(file: File) {
     }
   }
 
+  const fallbackMediaPaths = getSortedZipParts(zip, /^ppt\/media\/[^/]+\.(?:jpe?g|png|webp)$/i);
+
+  for (const mediaPath of fallbackMediaPaths) {
+    if (images.length >= MAX_DOCUMENT_IMAGES) {
+      break;
+    }
+
+    if (usedMediaPaths.has(mediaPath)) {
+      continue;
+    }
+
+    const mimeType = getMimeTypeFromPath(mediaPath);
+    const mediaFile = zip.file(mediaPath);
+
+    if (!mimeType || !mediaFile) {
+      continue;
+    }
+
+    const image = await normalizeImageForNotes({
+      bytes: Buffer.from(await mediaFile.async("uint8array")),
+      sourceName: path.posix.basename(mediaPath),
+      sourcePartLabel: "Presentation",
+      contextText: null,
+    });
+
+    if (image) {
+      images.push(image);
+    }
+  }
+
   return images;
+}
+
+function isDisallowedIpAddress(address: string) {
+  if (address === "::1" || address === "0:0:0:0:0:0:0:1") {
+    return true;
+  }
+
+  const ipVersion = isIP(address);
+
+  if (ipVersion === 4) {
+    const [first = 0, second = 0] = address.split(".").map((part) => Number.parseInt(part, 10));
+
+    return (
+      first === 10 ||
+      first === 127 ||
+      (first === 100 && second >= 64 && second <= 127) ||
+      (first === 169 && second === 254) ||
+      (first === 172 && second >= 16 && second <= 31) ||
+      (first === 192 && second === 168) ||
+      first === 0
+    );
+  }
+
+  if (ipVersion === 6) {
+    const normalized = address.toLowerCase();
+
+    return (
+      normalized.startsWith("fc") ||
+      normalized.startsWith("fd") ||
+      normalized.startsWith("fe80") ||
+      normalized === "::"
+    );
+  }
+
+  return true;
+}
+
+async function assertPublicImageHostname(hostname: string) {
+  const normalizedHostname = hostname.trim().toLowerCase();
+
+  if (
+    normalizedHostname === "localhost" ||
+    normalizedHostname.endsWith(".localhost") ||
+    (isIP(normalizedHostname) !== 0 && isDisallowedIpAddress(normalizedHostname))
+  ) {
+    throw new Error("Private network image addresses are not allowed.");
+  }
+
+  const addresses = await lookup(normalizedHostname, { all: true, verbatim: true });
+
+  if (
+    addresses.length === 0 ||
+    addresses.some((entry) => isDisallowedIpAddress(entry.address))
+  ) {
+    throw new Error("Private network image addresses are not allowed.");
+  }
+}
+
+function pickSrcFromSrcset(srcset: string | null) {
+  if (!srcset) {
+    return null;
+  }
+
+  return srcset
+    .split(",")
+    .map((candidate) => candidate.trim().split(/\s+/)[0])
+    .find(Boolean) ?? null;
+}
+
+function extractWebpageImageCandidates(params: {
+  html: string;
+  pageUrl: string;
+  pageTitle?: string | null;
+}) {
+  const pageUrl = new URL(params.pageUrl);
+  const candidates: Array<{ url: URL; contextText: string }> = [];
+  const seenUrls = new Set<string>();
+
+  for (const match of params.html.matchAll(/<img\b([^>]*)>/gi)) {
+    if (candidates.length >= MAX_WEBPAGE_IMAGE_CANDIDATES) {
+      break;
+    }
+
+    const attributes = parseHtmlAttributes(match[1] ?? "");
+    const rawSrc =
+      attributes.get("src") ||
+      attributes.get("data-src") ||
+      attributes.get("data-original") ||
+      pickSrcFromSrcset(attributes.get("srcset") ?? attributes.get("data-srcset") ?? null);
+
+    if (!rawSrc || rawSrc.startsWith("data:") || rawSrc.startsWith("blob:")) {
+      continue;
+    }
+
+    let imageUrl: URL;
+
+    try {
+      imageUrl = new URL(rawSrc, pageUrl);
+    } catch {
+      continue;
+    }
+
+    if (imageUrl.protocol !== "http:" && imageUrl.protocol !== "https:") {
+      continue;
+    }
+
+    const key = imageUrl.toString();
+
+    if (seenUrls.has(key)) {
+      continue;
+    }
+
+    seenUrls.add(key);
+    candidates.push({
+      url: imageUrl,
+      contextText: normalizeWhitespace(
+        [
+          attributes.get("alt"),
+          attributes.get("title"),
+          params.pageTitle,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      ),
+    });
+  }
+
+  return candidates;
+}
+
+async function fetchWebpageImageBytes(url: URL, redirectCount = 0): Promise<Buffer | null> {
+  if (redirectCount > 5) {
+    return null;
+  }
+
+  await assertPublicImageHostname(url.hostname);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WEBPAGE_IMAGE_FETCH_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; MemoAI/1.0; +https://memoai.eu)",
+        Accept: "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8",
+      },
+      redirect: "manual",
+      signal: controller.signal,
+      cache: "no-store",
+    });
+
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get("location");
+
+      if (!location) {
+        return null;
+      }
+
+      return fetchWebpageImageBytes(new URL(location, url), redirectCount + 1);
+    }
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const contentType = response.headers.get("content-type") ?? "";
+
+    if (!contentType.startsWith("image/")) {
+      return null;
+    }
+
+    const contentLength = Number(response.headers.get("content-length"));
+
+    if (Number.isFinite(contentLength) && contentLength > MAX_SCAN_IMAGE_BYTES) {
+      return null;
+    }
+
+    const bytes = Buffer.from(await response.arrayBuffer());
+
+    return bytes.length > MAX_SCAN_IMAGE_BYTES ? null : bytes;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function extractWebpageImages(params: {
+  html: string;
+  pageUrl: string;
+  pageTitle?: string | null;
+}) {
+  const images: ExtractedDocumentImage[] = [];
+  const candidates = extractWebpageImageCandidates(params);
+
+  for (const candidate of candidates) {
+    if (images.length >= MAX_DOCUMENT_IMAGES) {
+      break;
+    }
+
+    const bytes = await fetchWebpageImageBytes(candidate.url);
+
+    if (!bytes) {
+      continue;
+    }
+
+    const image = await normalizeImageForNotes({
+      bytes,
+      sourceName: path.posix.basename(candidate.url.pathname) || "webpage-image",
+      sourcePartLabel: "Web page",
+      contextText: candidate.contextText,
+    });
+
+    if (image) {
+      images.push(image);
+    }
+  }
+
+  return addImageDescriptions(images.slice(0, MAX_DOCUMENT_IMAGES));
 }
 
 function getPdfObject(store: unknown, name: string) {
@@ -512,17 +814,20 @@ async function addImageDescriptions(images: ExtractedDocumentImage[]) {
       const area = image.width * image.height;
       const hasNearbyContext = normalizeWhitespace(image.contextText ?? "").length >= 80;
 
-      if (area < 120_000 && !hasNearbyContext) {
+      if (area < LARGE_DOCUMENT_IMAGE_AREA && !hasNearbyContext) {
         continue;
       }
 
-      describedImages.push(image);
+      describedImages.push({
+        ...image,
+        description: image.description ?? fallbackImageDescription(image),
+      });
       continue;
     }
 
     describedImages.push({
       ...image,
-      description: description ?? image.description,
+      description: description ?? image.description ?? fallbackImageDescription(image),
     });
   }
 

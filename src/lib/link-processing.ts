@@ -6,6 +6,10 @@ import {
   shouldCreateInitialNoteAudio,
 } from "@/lib/lecture-source-metadata";
 import {
+  extractWebpageImages,
+  storeDocumentImagesAsNoteMedia,
+} from "@/lib/document-image-extraction";
+import {
   fetchReadableWebpage,
   prepareLectureFromTextSource,
 } from "@/lib/manual-lectures";
@@ -74,6 +78,16 @@ export async function processStoredLinkLecture(params: {
   const webpage = await fetchReadableWebpage({
     url: pendingLinkUrl,
   });
+  const extractedImages = await extractWebpageImages({
+    html: webpage.html,
+    pageUrl: webpage.finalUrl,
+    pageTitle: webpage.title,
+  });
+  const documentImages = await storeDocumentImagesAsNoteMedia({
+    lectureId: lectureRow.id,
+    userId: lectureRow.user_id,
+    images: extractedImages,
+  });
 
   await prepareLectureFromTextSource({
     lectureId: lectureRow.id,
@@ -87,6 +101,7 @@ export async function processStoredLinkLecture(params: {
     modelMetadata: {
       importMode: "link",
       sourceUrl: pendingLinkUrl,
+      documentImages,
     },
   });
 

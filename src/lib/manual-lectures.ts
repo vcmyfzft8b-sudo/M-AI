@@ -954,7 +954,7 @@ async function fetchReadableWebpageResponse(targetUrl: URL, redirectCount = 0): 
 
 export async function fetchReadableWebpage(params: { url: string }) {
   const targetUrl = new URL(params.url);
-  const { response } = await fetchReadableWebpageResponse(targetUrl);
+  const { url, response } = await fetchReadableWebpageResponse(targetUrl);
 
   if (!response.ok) {
     throw new Error("The link could not be loaded.");
@@ -983,6 +983,8 @@ export async function fetchReadableWebpage(params: { url: string }) {
   }
 
   return {
+    finalUrl: url.toString(),
+    html,
     title,
     text: composed.slice(0, MAX_LINK_READABLE_TEXT_CHARS),
   };

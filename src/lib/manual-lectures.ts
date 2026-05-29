@@ -995,7 +995,11 @@ export async function extractTextFromPdf(file: File) {
     const loadingTask = pdfjs.getDocument({
       data: fileBytes,
       useWorkerFetch: false,
+      useWasm: false,
       isEvalSupported: false,
+      isOffscreenCanvasSupported: false,
+      isImageDecoderSupported: false,
+      verbosity: pdfjs.VerbosityLevel.ERRORS,
     });
 
     try {
@@ -1067,7 +1071,9 @@ export async function extractTextFromPdf(file: File) {
       await loadingTask.destroy();
     }
   } catch (error) {
-    console.warn("PDF.js extraction failed, falling back to Gemini file extraction.", error);
+    console.info("PDF.js extraction failed, falling back to Gemini file extraction.", {
+      message: toSafeErrorMessage(error),
+    });
   }
 
   const fallbackInstructions =

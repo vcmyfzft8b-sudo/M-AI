@@ -120,14 +120,31 @@ export type ImageOcrContext = {
 let pdfJsPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null =
   null;
 
+async function ensurePdfJsNodeCanvasGlobals() {
+  const pdfGlobal = globalThis as {
+    DOMMatrix?: unknown;
+    ImageData?: unknown;
+    Path2D?: unknown;
+    self?: unknown;
+  };
+
+  pdfGlobal.self ??= globalThis;
+
+  if (pdfGlobal.DOMMatrix && pdfGlobal.ImageData && pdfGlobal.Path2D) {
+    return;
+  }
+
+  const canvas = await import("@napi-rs/canvas");
+  pdfGlobal.DOMMatrix ??= canvas.DOMMatrix;
+  pdfGlobal.ImageData ??= canvas.ImageData;
+  pdfGlobal.Path2D ??= canvas.Path2D;
+}
+
 export async function getPdfJs() {
   if (!pdfJsPromise) {
-    const pdfGlobal = globalThis as {
-      self?: unknown;
-    };
-
-    pdfGlobal.self ??= globalThis;
-    pdfJsPromise = import("pdfjs-dist/legacy/build/pdf.mjs").catch((error) => {
+    pdfJsPromise = ensurePdfJsNodeCanvasGlobals().then(() =>
+      import("pdfjs-dist/legacy/build/pdf.mjs"),
+    ).catch((error) => {
       pdfJsPromise = null;
       throw error;
     });

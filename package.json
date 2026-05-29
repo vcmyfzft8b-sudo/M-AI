@@ -19,6 +19,7 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@google/genai": "^1.46.0",
+    "@napi-rs/canvas": "^0.1.97",
     "@sentry/nextjs": "^10.49.0",
     "@soniox/node": "^2.0.0",
     "@supabase/ssr": "^0.9.0",

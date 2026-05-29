@@ -4,6 +4,7 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: process.cwd(),
+  serverExternalPackages: ["@napi-rs/canvas"],
   images: {
     qualities: [75, 92],
   },

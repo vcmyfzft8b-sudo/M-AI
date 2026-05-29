@@ -120,29 +120,49 @@ export type ImageOcrContext = {
 let pdfJsPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null =
   null;
 
-async function ensurePdfJsNodeCanvasGlobals() {
+let pdfWorkerPromise: Promise<void> | null = null;
+
+async function ensurePdfJsNodeRuntime() {
   const pdfGlobal = globalThis as {
     DOMMatrix?: unknown;
     ImageData?: unknown;
     Path2D?: unknown;
+    pdfjsWorker?: {
+      WorkerMessageHandler?: {
+        setup: (...args: unknown[]) => void;
+      };
+    };
     self?: unknown;
   };
 
   pdfGlobal.self ??= globalThis;
 
-  if (pdfGlobal.DOMMatrix && pdfGlobal.ImageData && pdfGlobal.Path2D) {
-    return;
+  if (!pdfGlobal.DOMMatrix || !pdfGlobal.ImageData || !pdfGlobal.Path2D) {
+    const canvas = await import("@napi-rs/canvas");
+    pdfGlobal.DOMMatrix ??= canvas.DOMMatrix;
+    pdfGlobal.ImageData ??= canvas.ImageData;
+    pdfGlobal.Path2D ??= canvas.Path2D;
   }
 
-  const canvas = await import("@napi-rs/canvas");
-  pdfGlobal.DOMMatrix ??= canvas.DOMMatrix;
-  pdfGlobal.ImageData ??= canvas.ImageData;
-  pdfGlobal.Path2D ??= canvas.Path2D;
+  if (!pdfGlobal.pdfjsWorker?.WorkerMessageHandler) {
+    pdfWorkerPromise ??= import("pdfjs-dist/legacy/build/pdf.worker.mjs")
+      .then((worker) => {
+        pdfGlobal.pdfjsWorker = {
+          WorkerMessageHandler: worker.WorkerMessageHandler,
+        };
+      })
+      .catch((error) => {
+        pdfWorkerPromise = null;
+        throw error;
+      });
+
+    await pdfWorkerPromise;
+  }
 }
 
 export async function getPdfJs() {
   if (!pdfJsPromise) {
-    pdfJsPromise = ensurePdfJsNodeCanvasGlobals().then(() =>
+    pdfJsPromise = ensurePdfJsNodeRuntime().then(() =>
       import("pdfjs-dist/legacy/build/pdf.mjs"),
     ).catch((error) => {
       pdfJsPromise = null;

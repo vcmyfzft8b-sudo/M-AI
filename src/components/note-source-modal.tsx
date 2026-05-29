@@ -1446,7 +1446,7 @@ export function NoteSourceModal({
     }
 
     if (preparedFile.size > MAX_DOCUMENT_BYTES) {
-      throw new Error("Dokument je tudi po stiskanju prevelik. Trenutna omejitev je 4 MB.");
+      throw new Error("Dokumenta po stiskanju ni bilo mogoče pripraviti v dovolj berljivi obliki za obdelavo.");
     }
 
     setPdfSource(preparedFile);

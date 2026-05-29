@@ -8,8 +8,11 @@ import {
 import {
   getLowercaseExtension,
   isDocxDocument,
+  isHtmlDocument,
   isPdfDocument,
+  isPlainTextDocument,
   isPptxDocument,
+  isRtfDocument,
 } from "@/lib/document-files";
 import {
   getExtensionForMimeType,
@@ -18,9 +21,11 @@ import {
 import type JSZip from "jszip";
 
 const COMPRESSED_IMAGE_MIME_TYPE = "image/jpeg";
-const MAX_COMPRESSIBLE_SCAN_IMAGE_BYTES = 40 * 1024 * 1024;
-const MAX_COMPRESSIBLE_DOCUMENT_BYTES = 60 * 1024 * 1024;
+const MAX_COMPRESSIBLE_SCAN_IMAGE_BYTES = 120 * 1024 * 1024;
+const MAX_COMPRESSIBLE_DOCUMENT_BYTES = 250 * 1024 * 1024;
 const MAX_COMPRESSIBLE_AUDIO_BYTES = 650 * 1024 * 1024;
+const DOCUMENT_TEXT_TRUNCATION_MARKER =
+  "\n\n[Dokument je bil skrajsan, ker je presegal tehnicno omejitev nalaganja.]\n";
 const PDF_RENDER_BACKGROUND = "#ffffff";
 
 type CompressionResult = {
@@ -40,6 +45,10 @@ const SCAN_IMAGE_PROFILES: RasterCompressionProfile[] = [
   { maxDimension: 1500, quality: 0.58 },
   { maxDimension: 1200, quality: 0.5 },
   { maxDimension: 960, quality: 0.44 },
+  { maxDimension: 720, quality: 0.36 },
+  { maxDimension: 540, quality: 0.28 },
+  { maxDimension: 360, quality: 0.2 },
+  { maxDimension: 240, quality: 0.14 },
 ];
 
 const OFFICE_IMAGE_PROFILES: RasterCompressionProfile[] = [
@@ -47,6 +56,11 @@ const OFFICE_IMAGE_PROFILES: RasterCompressionProfile[] = [
   { maxDimension: 1500, quality: 0.68 },
   { maxDimension: 1200, quality: 0.58 },
   { maxDimension: 960, quality: 0.5 },
+  { maxDimension: 720, quality: 0.4 },
+  { maxDimension: 540, quality: 0.32 },
+  { maxDimension: 360, quality: 0.24 },
+  { maxDimension: 240, quality: 0.16 },
+  { maxDimension: 160, quality: 0.1 },
 ];
 
 const PDF_PROFILES: RasterCompressionProfile[] = [
@@ -54,6 +68,14 @@ const PDF_PROFILES: RasterCompressionProfile[] = [
   { maxDimension: 1200, quality: 0.62 },
   { maxDimension: 1000, quality: 0.54 },
   { maxDimension: 820, quality: 0.46 },
+  { maxDimension: 640, quality: 0.36 },
+  { maxDimension: 520, quality: 0.3 },
+  { maxDimension: 420, quality: 0.24 },
+  { maxDimension: 320, quality: 0.18 },
+  { maxDimension: 240, quality: 0.13 },
+  { maxDimension: 180, quality: 0.1 },
+  { maxDimension: 120, quality: 0.08 },
+  { maxDimension: 90, quality: 0.06 },
 ];
 
 function cleanFileBaseName(fileName: string) {
@@ -77,7 +99,7 @@ function fileTooLargeMessage(kind: "audio" | "document" | "photo", maxBytes: num
     return `Slika je tudi po stiskanju prevelika. Največja velikost je ${formatMegabytes(maxBytes)}.`;
   }
 
-  return `Dokument je tudi po stiskanju prevelik. Največja velikost je ${formatMegabytes(maxBytes)}.`;
+  return `Dokumenta po stiskanju ni bilo mogoče pripraviti v dovolj berljivi obliki za obdelavo. Poskusi z jasnejsim ali krajsim dokumentom.`;
 }
 
 function unsupportedCompressionMessage(kind: "audio" | "document" | "photo") {
@@ -89,7 +111,7 @@ function unsupportedCompressionMessage(kind: "audio" | "document" | "photo") {
     return "Slike ni bilo mogoče stisniti dovolj. Poskusi z manjšo fotografijo ali formatom JPG/WebP.";
   }
 
-  return "Dokumenta ni bilo mogoče stisniti dovolj. Poskusi izvoziti manjšo datoteko ali odstrani velike slike.";
+  return "Dokumenta ni bilo mogoče pripraviti za obdelavo. Poskusi ga izvoziti kot PDF ali odstrani elemente, ki niso del gradiva.";
 }
 
 function isAbortError(error: unknown) {
@@ -288,6 +310,21 @@ function getOfficeMediaPaths(zip: JSZip, file: File) {
   return paths;
 }
 
+function getOfficeRemovableBulkPaths(zip: JSZip, file: File) {
+  const paths: string[] = [];
+  const removablePattern = isPptxDocument(file)
+    ? /^(?:docProps\/thumbnail\.[^/]+|ppt\/embeddings\/.+|ppt\/media\/[^/]+\.(?:mp4|m4v|mov|avi|wmv|mp3|m4a|wav|aiff?|caf|zip|bin))$/i
+    : /^(?:docProps\/thumbnail\.[^/]+|word\/embeddings\/.+|word\/media\/[^/]+\.(?:mp4|m4v|mov|avi|wmv|mp3|m4a|wav|aiff?|caf|zip|bin))$/i;
+
+  zip.forEach((path, entry) => {
+    if (!entry.dir && removablePattern.test(path)) {
+      paths.push(path);
+    }
+  });
+
+  return paths;
+}
+
 async function compressOfficeDocument(file: File): Promise<CompressionResult> {
   if (file.size > MAX_COMPRESSIBLE_DOCUMENT_BYTES) {
     throw new Error(fileTooLargeMessage("document", MAX_DOCUMENT_BYTES));
@@ -309,14 +346,34 @@ async function compressOfficeDocument(file: File): Promise<CompressionResult> {
   }
 
   const mediaPaths = getOfficeMediaPaths(recompressedZip, file);
+  const removablePaths = getOfficeRemovableBulkPaths(recompressedZip, file);
 
-  if (mediaPaths.length === 0) {
-    throw new Error(unsupportedCompressionMessage("document"));
+  if (removablePaths.length > 0) {
+    const strippedZip = await JSZip.loadAsync(originalBytes);
+
+    for (const removablePath of removablePaths) {
+      strippedZip.remove(removablePath);
+    }
+
+    const strippedBlob = await generateZipBlob(strippedZip);
+
+    if (strippedBlob.size <= MAX_DOCUMENT_BYTES) {
+      return {
+        file: new File([strippedBlob], file.name, {
+          type: file.type,
+          lastModified: Date.now(),
+        }),
+        compressed: true,
+      };
+    }
   }
 
   for (const profile of OFFICE_IMAGE_PROFILES) {
     const zip = await JSZip.loadAsync(originalBytes);
-    let compressedAnyImage = false;
+
+    for (const removablePath of removablePaths) {
+      zip.remove(removablePath);
+    }
 
     await Promise.all(
       mediaPaths.map(async (mediaPath) => {
@@ -334,13 +391,8 @@ async function compressOfficeDocument(file: File): Promise<CompressionResult> {
         }
 
         zip.file(mediaPath, compressedBlob);
-        compressedAnyImage = true;
       }),
     );
-
-    if (!compressedAnyImage) {
-      continue;
-    }
 
     const compressedBlob = await generateZipBlob(zip);
 
@@ -356,6 +408,45 @@ async function compressOfficeDocument(file: File): Promise<CompressionResult> {
   }
 
   throw new Error(fileTooLargeMessage("document", MAX_DOCUMENT_BYTES));
+}
+
+function truncateTextToBytes(text: string, maxBytes: number) {
+  const encoder = new TextEncoder();
+  const markerBytes = encoder.encode(DOCUMENT_TEXT_TRUNCATION_MARKER).length;
+  const targetBytes = Math.max(0, maxBytes - markerBytes - 1024);
+  let low = 0;
+  let high = text.length;
+
+  while (low < high) {
+    const midpoint = Math.ceil((low + high) / 2);
+
+    if (encoder.encode(text.slice(0, midpoint)).length <= targetBytes) {
+      low = midpoint;
+    } else {
+      high = midpoint - 1;
+    }
+  }
+
+  return `${text.slice(0, low)}${DOCUMENT_TEXT_TRUNCATION_MARKER}`;
+}
+
+async function compressTextDocument(file: File): Promise<CompressionResult> {
+  const text = await file.text();
+  const truncatedText = truncateTextToBytes(text, MAX_DOCUMENT_BYTES);
+  const type = file.type || "text/plain";
+  const compressedFile = new File([truncatedText], file.name, {
+    type,
+    lastModified: Date.now(),
+  });
+
+  if (compressedFile.size > MAX_DOCUMENT_BYTES) {
+    throw new Error(fileTooLargeMessage("document", MAX_DOCUMENT_BYTES));
+  }
+
+  return {
+    file: compressedFile,
+    compressed: true,
+  };
 }
 
 type PdfPageImage = {
@@ -465,7 +556,7 @@ function buildImageOnlyPdf(images: PdfPageImage[]) {
   return new Blob([concatBytes(parts)], { type: "application/pdf" });
 }
 
-async function renderPdfAsJpegPages(file: File, profile: RasterCompressionProfile) {
+async function renderPdfAsJpegPages(sourceBytes: Uint8Array, profile: RasterCompressionProfile) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   pdfjs.GlobalWorkerOptions.workerSrc = new URL(
     "pdfjs-dist/legacy/build/pdf.worker.mjs",
@@ -473,7 +564,7 @@ async function renderPdfAsJpegPages(file: File, profile: RasterCompressionProfil
   ).toString();
 
   const loadingTask = pdfjs.getDocument({
-    data: new Uint8Array(await file.arrayBuffer()),
+    data: sourceBytes.slice(),
     useWorkerFetch: false,
     isEvalSupported: false,
   });
@@ -535,8 +626,10 @@ async function compressPdfDocument(file: File): Promise<CompressionResult> {
     throw new Error(fileTooLargeMessage("document", MAX_DOCUMENT_BYTES));
   }
 
+  const sourceBytes = new Uint8Array(await file.arrayBuffer());
+
   for (const profile of PDF_PROFILES) {
-    const pages = await renderPdfAsJpegPages(file, profile);
+    const pages = await renderPdfAsJpegPages(sourceBytes, profile);
     const blob = buildImageOnlyPdf(pages);
 
     if (blob.size <= MAX_DOCUMENT_BYTES) {
@@ -562,6 +655,10 @@ export async function compressDocumentForUpload(file: File): Promise<Compression
   }
 
   try {
+    if (isPlainTextDocument(file) || isHtmlDocument(file) || isRtfDocument(file)) {
+      return await compressTextDocument(file);
+    }
+
     if (isPdfDocument(file)) {
       return await compressPdfDocument(file);
     }

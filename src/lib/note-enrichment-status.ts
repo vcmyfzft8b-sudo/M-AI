@@ -1,4 +1,4 @@
-export type NoteEnrichmentStage = "annotating" | "complete";
+export type NoteEnrichmentStage = "checking_document_images" | "complete";
 
 const NOTE_ENRICHMENT_METADATA_KEY = "noteEnrichment";
 

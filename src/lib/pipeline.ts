@@ -12,7 +12,6 @@ import {
   attachDocumentImagesToNotes,
   getStoredDocumentImagesFromMetadata,
 } from "@/lib/document-note-media";
-import { attachAutomaticNoteAnnotations } from "@/lib/note-auto-annotations";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
 import {
   getInitialNoteAudioVoice,
@@ -80,7 +79,6 @@ async function updateLectureProcessingState(params: {
   stage:
     | "transcribing"
     | "generating_notes"
-    | "annotating_notes"
     | "checking_document_images"
     | "ready"
     | "failed";
@@ -90,10 +88,7 @@ async function updateLectureProcessingState(params: {
 }) {
   const supabase = createSupabaseServiceRoleClient();
   const metadata = parseProcessingMetadata(params.processingMetadata);
-  const status =
-    params.stage === "annotating_notes" || params.stage === "checking_document_images"
-      ? "generating_notes"
-      : params.stage;
+  const status = params.stage === "checking_document_images" ? "generating_notes" : params.stage;
 
   const { error } = await supabase
     .from("lectures")
@@ -475,7 +470,7 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
         summary: notes.summary,
         key_topics: notes.keyTopics,
         structured_notes_md: notes.structuredNotesMd,
-        model_metadata: withNoteEnrichmentStage(baseModelMetadata, "annotating"),
+        model_metadata: withNoteEnrichmentStage(baseModelMetadata, "checking_document_images"),
       } as never,
       {
         onConflict: "lecture_id",
@@ -485,19 +480,6 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
   if (artifactError) {
     throw artifactError;
   }
-
-  await updateLectureProcessingState({
-    lectureId: lecture.id,
-    processingMetadata: lecture.processing_metadata,
-    stage: "annotating_notes",
-    durationSeconds: lecture.duration_seconds,
-    title: notes.title,
-  });
-
-  await attachAutomaticNoteAnnotations({
-    lectureId: lecture.id,
-    structuredNotesMd: notes.structuredNotesMd,
-  });
 
   await updateLectureProcessingState({
     lectureId: lecture.id,

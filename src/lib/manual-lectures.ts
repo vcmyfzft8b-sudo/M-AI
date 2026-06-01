@@ -26,7 +26,6 @@ import {
   attachDocumentImagesToNotes,
   getStoredDocumentImagesFromMetadata,
 } from "@/lib/document-note-media";
-import { attachAutomaticNoteAnnotations } from "@/lib/note-auto-annotations";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
 import { withNoteEnrichmentStage } from "@/lib/note-enrichment-status";
 import {
@@ -1268,7 +1267,7 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
 
 async function updateLectureEnrichmentProcessingStage(params: {
   lectureId: string;
-  stage: "annotating_notes" | "checking_document_images";
+  stage: "checking_document_images";
   title?: string | null;
   durationSeconds?: number | null;
 }) {
@@ -1471,7 +1470,7 @@ export async function createLectureFromTextSource(params: {
           summary: notes.summary,
           key_topics: notes.keyTopics,
           structured_notes_md: notes.structuredNotesMd,
-          model_metadata: withNoteEnrichmentStage(baseModelMetadata, "annotating"),
+          model_metadata: withNoteEnrichmentStage(baseModelMetadata, "checking_document_images"),
         } as never,
         {
           onConflict: "lecture_id",
@@ -1481,18 +1480,6 @@ export async function createLectureFromTextSource(params: {
     if (artifactError) {
       throw new Error(artifactError.message);
     }
-
-    await updateLectureEnrichmentProcessingStage({
-      lectureId,
-      stage: "annotating_notes",
-      title: notes.title,
-      durationSeconds,
-    });
-
-    await attachAutomaticNoteAnnotations({
-      lectureId,
-      structuredNotesMd: notes.structuredNotesMd,
-    });
 
     await updateLectureEnrichmentProcessingStage({
       lectureId,

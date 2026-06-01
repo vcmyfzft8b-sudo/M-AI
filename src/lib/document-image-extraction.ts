@@ -23,9 +23,9 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 const MAX_DOCUMENT_IMAGES = 12;
 const MAX_IMAGE_DESCRIPTION_COUNT = 8;
 const MAX_WEBPAGE_IMAGE_CANDIDATES = 24;
-const MIN_DOCUMENT_IMAGE_WIDTH = 140;
-const MIN_DOCUMENT_IMAGE_HEIGHT = 100;
-const MIN_DOCUMENT_IMAGE_AREA = 24_000;
+const MIN_DOCUMENT_IMAGE_WIDTH = 96;
+const MIN_DOCUMENT_IMAGE_HEIGHT = 72;
+const MIN_DOCUMENT_IMAGE_AREA = 9_000;
 const LARGE_DOCUMENT_IMAGE_AREA = 120_000;
 const DOCUMENT_IMAGE_OUTPUT_MIME_TYPE = "image/jpeg";
 const WEBPAGE_IMAGE_FETCH_TIMEOUT_MS = 8_000;
@@ -137,14 +137,22 @@ async function parseRelationships(zip: JSZip, relsPath: string, baseDir: string)
       continue;
     }
 
-    relationships.set(id, path.posix.normalize(path.posix.join(baseDir, target)));
+    const normalizedTarget = path.posix.normalize(path.posix.join(baseDir, target));
+
+    try {
+      relationships.set(id, decodeURI(normalizedTarget));
+    } catch {
+      relationships.set(id, normalizedTarget);
+    }
   }
 
   return relationships;
 }
 
 function extractEmbeddedRelationshipIds(xml: string) {
-  return Array.from(xml.matchAll(/\br:(?:embed|id)="([^"]+)"/g)).map((match) => match[1]);
+  return Array.from(xml.matchAll(/\b(?:r|a|o):(?:embed|id|link|relid)="([^"]+)"/g)).map(
+    (match) => match[1],
+  );
 }
 
 function getMimeTypeFromPath(pathValue: string) {
@@ -162,7 +170,56 @@ function getMimeTypeFromPath(pathValue: string) {
     return "image/webp";
   }
 
+  if (extension === "gif") {
+    return "image/gif";
+  }
+
+  if (extension === "tif" || extension === "tiff") {
+    return "image/tiff";
+  }
+
+  if (extension === "bmp") {
+    return "image/bmp";
+  }
+
+  if (extension === "avif") {
+    return "image/avif";
+  }
+
   return null;
+}
+
+function getNearbyOfficeContext(parts: string[], index: number) {
+  const currentText = extractOfficeXmlText(parts[index] ?? "");
+
+  if (currentText.length >= 40) {
+    return currentText;
+  }
+
+  const nearby: string[] = [];
+
+  for (let offset = 1; offset <= 3; offset += 1) {
+    const before = parts[index - offset];
+    const after = parts[index + offset];
+
+    if (before) {
+      const text = extractOfficeXmlText(before);
+
+      if (text) {
+        nearby.unshift(text);
+      }
+    }
+
+    if (after) {
+      const text = extractOfficeXmlText(after);
+
+      if (text) {
+        nearby.push(text);
+      }
+    }
+  }
+
+  return normalizeWhitespace([currentText, ...nearby].filter(Boolean).join(" ")).slice(0, 900);
 }
 
 async function normalizeImageForNotes(params: {
@@ -265,13 +322,16 @@ async function extractDocxImages(file: File) {
     return images;
   }
 
-  for (const paragraphMatch of documentXml.matchAll(/<w:p\b[\s\S]*?<\/w:p>/g)) {
+  const paragraphs = Array.from(documentXml.matchAll(/<w:p\b[\s\S]*?<\/w:p>/g)).map(
+    (match) => match[0],
+  );
+
+  for (const [paragraphIndex, paragraphXml] of paragraphs.entries()) {
     if (images.length >= MAX_DOCUMENT_IMAGES) {
       break;
     }
 
-    const paragraphXml = paragraphMatch[0];
-    const contextText = extractOfficeXmlText(paragraphXml);
+    const contextText = getNearbyOfficeContext(paragraphs, paragraphIndex);
     const relationshipIds = extractEmbeddedRelationshipIds(paragraphXml);
 
     for (const relationshipId of relationshipIds) {
@@ -301,7 +361,10 @@ async function extractDocxImages(file: File) {
     }
   }
 
-  const fallbackMediaPaths = getSortedZipParts(zip, /^word\/media\/[^/]+\.(?:jpe?g|png|webp)$/i);
+  const fallbackMediaPaths = getSortedZipParts(
+    zip,
+    /^word\/media\/[^/]+\.(?:jpe?g|png|webp|gif|tiff?|bmp|avif)$/i,
+  );
 
   for (const mediaPath of fallbackMediaPaths) {
     if (images.length >= MAX_DOCUMENT_IMAGES) {
@@ -385,7 +448,10 @@ async function extractPptxImages(file: File) {
     }
   }
 
-  const fallbackMediaPaths = getSortedZipParts(zip, /^ppt\/media\/[^/]+\.(?:jpe?g|png|webp)$/i);
+  const fallbackMediaPaths = getSortedZipParts(
+    zip,
+    /^ppt\/media\/[^/]+\.(?:jpe?g|png|webp|gif|tiff?|bmp|avif)$/i,
+  );
 
   for (const mediaPath of fallbackMediaPaths) {
     if (images.length >= MAX_DOCUMENT_IMAGES) {

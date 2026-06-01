@@ -17,7 +17,8 @@ const MAX_AUTO_INSERTED_DOCUMENT_IMAGES = 6;
 const MAX_FALLBACK_DOCUMENT_IMAGES = 6;
 const DEFAULT_DOCUMENT_IMAGE_WIDTH_PERCENT = 82;
 const DEFAULT_DOCUMENT_IMAGE_X_PERCENT = 50;
-const MIN_IMAGE_NOTE_RELEVANCE_SCORE = 3;
+const MAX_DOCUMENT_IMAGES_PER_NOTE_BLOCK = 2;
+const MIN_IMAGE_NOTE_RELEVANCE_SCORE = 1;
 const STOP_WORDS = new Set([
   "the",
   "and",
@@ -274,8 +275,7 @@ function planDocumentImageMediaBlocks(params: {
   });
 
   const selected: typeof ranked = [];
-  const usedBlocks = new Set<string>();
-  const usedPages = new Set<number>();
+  const blockUsageCount = new Map<string, number>();
   let fallbackCount = 0;
 
   for (const candidate of [...ranked, ...fallbackRanked]) {
@@ -287,21 +287,13 @@ function planDocumentImageMediaBlocks(params: {
       continue;
     }
 
-    const pageNumber = candidate.image.sourcePageNumber;
+    const blockUsage = blockUsageCount.get(candidate.afterBlockId) ?? 0;
 
-    if (usedBlocks.has(candidate.afterBlockId)) {
+    if (blockUsage >= MAX_DOCUMENT_IMAGES_PER_NOTE_BLOCK) {
       continue;
     }
 
-    if (typeof pageNumber === "number" && usedPages.has(pageNumber)) {
-      continue;
-    }
-
-    usedBlocks.add(candidate.afterBlockId);
-
-    if (typeof pageNumber === "number") {
-      usedPages.add(pageNumber);
-    }
+    blockUsageCount.set(candidate.afterBlockId, blockUsage + 1);
 
     selected.push(candidate);
 

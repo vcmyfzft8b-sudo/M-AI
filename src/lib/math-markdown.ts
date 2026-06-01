@@ -1,9 +1,31 @@
+function repairDroppedLatexCommandBackslashes(value: string) {
+  return value
+    .replace(/\f\s*rac\s*\{/gi, "\\frac{")
+    .replace(/\t\s*ext\s*\{/gi, "\\text{")
+    .replace(/\t\s*imes\b/gi, "\\times")
+    .replace(/\t\s*heta\b/gi, "\\theta")
+    .replace(/\r\s*ho\b/gi, "\\rho")
+    .replace(/\u0008\s*eta\b/gi, "\\beta")
+    .replace(/(?<![\\A-Za-z])(?:dfrac|tfrac|frac)\s*\{/gi, (match) => {
+      const command = match.match(/[A-Za-z]+/)?.[0] ?? "frac";
+
+      return `\\${command.toLowerCase()}{`;
+    })
+    .replace(/(?<![\\A-Za-z])rac\s*\{/gi, "\\frac{")
+    .replace(/(?<![\\A-Za-z])(?:text|ext)\s*\{/gi, "\\text{")
+    .replace(/(?<![\\A-Za-z])sqrt\s*\{/gi, "\\sqrt{")
+    .replace(/(?<![\\A-Za-z])imes\b/gi, "\\times")
+    .replace(
+      /(?<![\\A-Za-z])(?:times|cdot|le|leq|ge|geq|ne|neq|approx|infty|pm|mp|sum|prod|int)\b/gi,
+      (match) => `\\${match.toLowerCase() === "neq" ? "ne" : match.toLowerCase()}`,
+    );
+}
+
 export function isLikelyMathExpression(value: string) {
-  const trimmed = value.trim();
+  const trimmed = repairDroppedLatexCommandBackslashes(value).trim();
 
   return (
     trimmed.length > 0 &&
-    !trimmed.includes("\n") &&
     !/^\d+(?:[.,]\d+)?\s*(?:€|eur|usd|gbp|\$)?$/i.test(trimmed) &&
     (/^[A-Za-z](?:_\{[^{}]+\}|_[A-Za-z0-9]+)?$/.test(trimmed) ||
       /\b(?:alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|rho|sigma|tau|omega)\b/i.test(
@@ -224,9 +246,93 @@ function normalizeMathFunctions(value: string) {
     );
 }
 
+function hasMarkdownOrSentenceSyntax(value: string) {
+  return (
+    /^\s*(?:[-*+]|\d+[.)])\s+\S/.test(value) ||
+    /(?:\*\*|__|\[[^\]]+\]\(|#{1,6}\s)/.test(value)
+  );
+}
+
+function getMathSignalCount(value: string) {
+  return (
+    value.match(
+      /[=<>≤≥≠≈+\-*/^_{}∑∫√]|\\(?:begin|frac|dfrac|tfrac|sqrt|text|sum|prod|int|lim|sin|cos|tan|log|ln|exp|min|max|alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|rho|sigma|tau|omega|le|ge|ne|approx|infty|pm|mp|cdot|times)\b/g,
+    ) ?? []
+  ).length;
+}
+
+function stripLatexTextCommands(value: string) {
+  return value.replace(/\\text\{[^{}]*\}/g, "");
+}
+
+function getLongWordCount(value: string) {
+  return (value.match(/\p{L}{3,}/gu) ?? []).length;
+}
+
+function containsProseKeyword(value: string) {
+  return /\b(?:and|are|because|for|from|into|that|the|then|this|where|which|with|formula|value|values|period|change|uses|velja|formula|kjer|kar|kot|med|skozi|glede|količine|kolicine|cene|ceno|uporablja|ustreza|vprašanju|vprasanju|sprememba|vrednost|obdobju)\b/i.test(
+    value,
+  );
+}
+
+function shouldRenderMathExpression(value: string) {
+  const repaired = repairDroppedLatexCommandBackslashes(value).trim();
+
+  if (!repaired) {
+    return false;
+  }
+
+  if (hasMarkdownOrSentenceSyntax(repaired)) {
+    return false;
+  }
+
+  if (!isLikelyMathExpression(repaired)) {
+    return false;
+  }
+
+  const withoutText = stripLatexTextCommands(repaired);
+  const mathSignalCount = getMathSignalCount(withoutText);
+  const longWordCount = getLongWordCount(withoutText.replace(/\\[A-Za-z]+/g, ""));
+
+  if (mathSignalCount === 0) {
+    return false;
+  }
+
+  if (mathSignalCount <= 1 && longWordCount >= 3) {
+    return false;
+  }
+
+  if (containsProseKeyword(withoutText) && !/[=<>≤≥≠≈]/.test(withoutText)) {
+    return false;
+  }
+
+  return true;
+}
+
+function normalizeDelimitedMath(
+  rawMath: string,
+  wrap: (normalizedMath: string) => string,
+  fallback?: string,
+) {
+  if (!shouldRenderMathExpression(rawMath)) {
+    return fallback ?? cleanUnwrappedMathText(rawMath);
+  }
+
+  return wrap(normalizeFormulaSyntax(rawMath));
+}
+
+function cleanUnwrappedMathText(value: string) {
+  return value
+    .trim()
+    .replace(/^[.,;:!?)]\s*/, "")
+    .replace(/\s+-\s+(\*\*)/g, "\n- $1");
+}
+
 export function normalizeFormulaSyntax(value: string) {
   return replaceTopLevelFormulaFractions(
-    normalizeMathFunctions(normalizeLatexEnvironment(value))
+    normalizeMathFunctions(
+      repairDroppedLatexCommandBackslashes(normalizeLatexEnvironment(value)),
+    )
       .trim()
       .replace(/[−–—]/g, "-")
       .replace(/≤/g, "\\le ")
@@ -245,6 +351,7 @@ export function normalizeFormulaSyntax(value: string) {
       .replace(/(?<![>\\])>=/g, "\\ge ")
       .replace(/!=/g, "\\ne ")
       .replace(/×|·/g, "\\cdot ")
+      .replace(/(?<!\\)\bper\b/g, "/")
       .replace(/(?<!\\)%/g, "\\%")
       .replace(/\b([A-Z])\{([^{}]+)\}/g, "$1_{$2}")
       .replace(/\b([A-Z])([a-z])\b/g, "$1_{$2}")
@@ -261,19 +368,62 @@ function hasInlineClosingDelimiter(value: string, delimiter: "$$" | "\\]") {
   return value.indexOf(delimiter, startIndex) >= 0;
 }
 
+function repairUnbalancedDisplayMathLine(line: string) {
+  const delimiterMatches = [...line.matchAll(/\$\$/g)];
+
+  if (delimiterMatches.length !== 1) {
+    return line;
+  }
+
+  const delimiterIndex = delimiterMatches[0].index ?? -1;
+
+  if (delimiterIndex < 0) {
+    return line;
+  }
+
+  const before = line.slice(0, delimiterIndex);
+  const after = line.slice(delimiterIndex + 2);
+  const trimmedBefore = before.trim();
+  const trimmedAfter = after.trim();
+
+  if (!trimmedBefore && trimmedAfter) {
+    return normalizeDelimitedMath(
+      trimmedAfter,
+      (math) => `$$${math}$$`,
+      cleanUnwrappedMathText(after),
+    );
+  }
+
+  if (trimmedBefore && !trimmedAfter) {
+    return normalizeDelimitedMath(trimmedBefore, (math) => `$$${math}$$`, before);
+  }
+
+  if (trimmedBefore && trimmedAfter) {
+    const normalizedBefore = normalizeDelimitedMath(
+      trimmedBefore,
+      (math) => `$$${math}$$`,
+      before,
+    );
+
+    return `${normalizedBefore}${after}`;
+  }
+
+  return `${before}${after}`;
+}
+
 function normalizeMarkdownMathLine(line: string) {
-  return line
+  return repairUnbalancedDisplayMathLine(line)
     .replace(/\$\$([\s\S]+?)\$\$/g, (_match, rawMath: string) =>
-      `$$${normalizeFormulaSyntax(rawMath)}$$`,
+      normalizeDelimitedMath(rawMath, (math) => `$$${math}$$`),
     )
     .replace(/\\\(([\s\S]+?)\\\)/g, (_match, rawMath: string) =>
-      `\\(${normalizeFormulaSyntax(rawMath)}\\)`,
+      normalizeDelimitedMath(rawMath, (math) => `\\(${math}\\)`),
     )
     .replace(/\\\[([\s\S]+?)\\\]/g, (_match, rawMath: string) =>
-      `$$${normalizeFormulaSyntax(rawMath)}$$`,
+      normalizeDelimitedMath(rawMath, (math) => `$$${math}$$`),
     )
     .replace(/(?<!\\)(?<!\$)\$([^\n$]+?)(?<!\\)\$(?!\$)/g, (match, rawMath: string) => {
-      if (!isLikelyMathExpression(rawMath)) {
+      if (!shouldRenderMathExpression(rawMath)) {
         return match;
       }
 
@@ -285,20 +435,32 @@ function getDisplayMathBlockStart(line: string) {
   const dollarMatch = /^(\s*)\$\$\s*(.*)$/.exec(line);
 
   if (dollarMatch && !hasInlineClosingDelimiter(line.trim(), "$$")) {
+    const firstContent = dollarMatch[2] ?? "";
+
+    if (firstContent.trim() && !shouldRenderMathExpression(firstContent)) {
+      return null;
+    }
+
     return {
       indent: dollarMatch[1] ?? "",
       close: "$$" as const,
-      firstContent: dollarMatch[2] ?? "",
+      firstContent,
     };
   }
 
   const bracketMatch = /^(\s*)\\\[\s*(.*)$/.exec(line);
 
   if (bracketMatch && !hasInlineClosingDelimiter(line.trim(), "\\]")) {
+    const firstContent = bracketMatch[2] ?? "";
+
+    if (firstContent.trim() && !shouldRenderMathExpression(firstContent)) {
+      return null;
+    }
+
     return {
       indent: bracketMatch[1] ?? "",
       close: "\\]" as const,
-      firstContent: bracketMatch[2] ?? "",
+      firstContent,
     };
   }
 
@@ -344,6 +506,7 @@ function isStandaloneFormulaLine(line: string) {
 
   if (
     trimmed.length < 3 ||
+    /(?:\$\$|\\\(|\\\[|(?<!\\)\$)/.test(trimmed) ||
     /^[#>\-*\d.)\s]/.test(trimmed) ||
     /[.!?][\])}"']?$/.test(trimmed) ||
     /\s(?:je|is|are|was|were|and|or|in|on|for|with|kjer|kar|kot)\s/i.test(` ${trimmed} `)
@@ -352,7 +515,7 @@ function isStandaloneFormulaLine(line: string) {
   }
 
   return (
-    isLikelyMathExpression(trimmed) &&
+    shouldRenderMathExpression(trimmed) &&
     /[=<>≤≥≠≈+\-*/^_\\]|(?:->|<-|=>|<=|>=|!=)/.test(trimmed)
   );
 }
@@ -394,8 +557,10 @@ export function normalizeMarkdownMath(markdown: string) {
         contentLines.push(nextLine);
       }
 
+      const content = contentLines.join(" ");
+
       normalizedLines.push(
-        `${displayBlock.indent}$$${normalizeFormulaSyntax(contentLines.join(" "))}$$`,
+        `${displayBlock.indent}${normalizeDelimitedMath(content, (math) => `$$${math}$$`)}`,
       );
       continue;
     }

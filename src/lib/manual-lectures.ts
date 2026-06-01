@@ -51,11 +51,6 @@ import {
 } from "@/lib/link-source-validation";
 import { serializeVector } from "@/lib/utils";
 
-const pdfExtractionSchema = z.object({
-  title: z.string().min(1),
-  text: z.string().min(120),
-});
-
 const pptxVisualExtractionSchema = z.object({
   title: z.string().min(1),
   slides: z.array(
@@ -73,6 +68,7 @@ const LINK_FETCH_TIMEOUT_MS = 10_000;
 const TRANSCRIPT_SEGMENT_INSERT_BATCH_SIZE = 25;
 const OCR_PRIMARY_MAX_OUTPUT_TOKENS = 3500;
 const OCR_RESCUE_MAX_OUTPUT_TOKENS = 6000;
+const PDF_FALLBACK_MAX_OUTPUT_TOKENS = 12000;
 const PPTX_VISUAL_EXTRACTION_MAX_OUTPUT_TOKENS = 9000;
 const OCR_MIN_ACCEPTED_TEXT_CHARS = 120;
 const OCR_THINKING_CONFIG: ThinkingConfig = {
@@ -1078,19 +1074,18 @@ export async function extractTextFromPdf(file: File) {
   }
 
   const fallbackInstructions =
-    "Extract as much readable text from this PDF as possible into plain text. Do not summarize. Preserve the source language, preserve examples and important details, and ignore repeated headers, footers, and page numbers when possible. Return a concise title plus the document text.";
+    "Extract as much readable text from this PDF as possible into plain text. Do not summarize. Preserve the source language, preserve examples and important details, and ignore repeated headers, footers, and page numbers when possible. Return only the extracted document text. Do not include JSON, markdown fences, commentary, or confidence notes.";
   const env = getServerEnv();
-  const fallback = await generateStructuredObjectWithGeminiFile({
-    schema: pdfExtractionSchema,
+  const fallbackText = await generateTextWithGeminiFile({
     instructions: `${fallbackInstructions}\n\nExtract the document text as faithfully and completely as possible so it can be turned into detailed study notes and flashcards.`,
     file,
     model: env.GEMINI_TEXT_MODEL,
-    maxOutputTokens: 7000,
+    maxOutputTokens: PDF_FALLBACK_MAX_OUTPUT_TOKENS,
   });
 
   return {
-    title: fallback.title,
-    text: normalizeWhitespace(fallback.text),
+    title: file.name.replace(/\.pdf$/i, "") || "PDF document",
+    text: normalizeWhitespace(fallbackText),
     pages: [],
   };
 }

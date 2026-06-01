@@ -22,7 +22,12 @@ import {
   isPptxDocument,
   isRtfDocument,
 } from "@/lib/document-files";
+import {
+  attachDocumentImagesToNotes,
+  getStoredDocumentImagesFromMetadata,
+} from "@/lib/document-note-media";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
+import { withNoteEnrichmentStage } from "@/lib/note-enrichment-status";
 import {
   NoReadableScanTextError,
   type ScanOcrAttemptDiagnostics,
@@ -114,14 +119,54 @@ export type ImageOcrContext = {
 let pdfJsPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null =
   null;
 
-async function getPdfJs() {
-  if (!pdfJsPromise) {
-    const pdfGlobal = globalThis as {
-      self?: unknown;
-    };
+let pdfWorkerPromise: Promise<void> | null = null;
 
-    pdfGlobal.self ??= globalThis;
-    pdfJsPromise = import("pdfjs-dist/legacy/build/pdf.mjs");
+async function ensurePdfJsNodeRuntime() {
+  const pdfGlobal = globalThis as {
+    DOMMatrix?: unknown;
+    ImageData?: unknown;
+    Path2D?: unknown;
+    pdfjsWorker?: {
+      WorkerMessageHandler?: {
+        setup: (...args: unknown[]) => void;
+      };
+    };
+    self?: unknown;
+  };
+
+  pdfGlobal.self ??= globalThis;
+
+  if (!pdfGlobal.DOMMatrix || !pdfGlobal.ImageData || !pdfGlobal.Path2D) {
+    const canvas = await import("@napi-rs/canvas");
+    pdfGlobal.DOMMatrix ??= canvas.DOMMatrix;
+    pdfGlobal.ImageData ??= canvas.ImageData;
+    pdfGlobal.Path2D ??= canvas.Path2D;
+  }
+
+  if (!pdfGlobal.pdfjsWorker?.WorkerMessageHandler) {
+    pdfWorkerPromise ??= import("pdfjs-dist/legacy/build/pdf.worker.mjs")
+      .then((worker) => {
+        pdfGlobal.pdfjsWorker = {
+          WorkerMessageHandler: worker.WorkerMessageHandler,
+        };
+      })
+      .catch((error) => {
+        pdfWorkerPromise = null;
+        throw error;
+      });
+
+    await pdfWorkerPromise;
+  }
+}
+
+export async function getPdfJs() {
+  if (!pdfJsPromise) {
+    pdfJsPromise = ensurePdfJsNodeRuntime().then(() =>
+      import("pdfjs-dist/legacy/build/pdf.mjs"),
+    ).catch((error) => {
+      pdfJsPromise = null;
+      throw error;
+    });
   }
 
   return pdfJsPromise;
@@ -144,6 +189,10 @@ function normalizeWhitespace(value: string) {
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function normalizeOcrPlainText(value: string) {
@@ -904,7 +953,7 @@ async function fetchReadableWebpageResponse(targetUrl: URL, redirectCount = 0): 
 
 export async function fetchReadableWebpage(params: { url: string }) {
   const targetUrl = new URL(params.url);
-  const { response } = await fetchReadableWebpageResponse(targetUrl);
+  const { url, response } = await fetchReadableWebpageResponse(targetUrl);
 
   if (!response.ok) {
     throw new Error("The link could not be loaded.");
@@ -933,6 +982,8 @@ export async function fetchReadableWebpage(params: { url: string }) {
   }
 
   return {
+    finalUrl: url.toString(),
+    html,
     title,
     text: composed.slice(0, MAX_LINK_READABLE_TEXT_CHARS),
   };
@@ -945,7 +996,11 @@ export async function extractTextFromPdf(file: File) {
     const loadingTask = pdfjs.getDocument({
       data: fileBytes,
       useWorkerFetch: false,
+      useWasm: false,
       isEvalSupported: false,
+      isOffscreenCanvasSupported: false,
+      isImageDecoderSupported: false,
+      verbosity: pdfjs.VerbosityLevel.ERRORS,
     });
 
     try {
@@ -1017,7 +1072,9 @@ export async function extractTextFromPdf(file: File) {
       await loadingTask.destroy();
     }
   } catch (error) {
-    console.warn("PDF.js extraction failed, falling back to Gemini file extraction.", error);
+    console.info("PDF.js extraction failed, falling back to Gemini file extraction.", {
+      message: toSafeErrorMessage(error),
+    });
   }
 
   const fallbackInstructions =
@@ -1208,6 +1265,51 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
   }
 }
 
+async function updateLectureEnrichmentProcessingStage(params: {
+  lectureId: string;
+  stage: "checking_document_images";
+  title?: string | null;
+  durationSeconds?: number | null;
+}) {
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .from("lectures")
+    .select("processing_metadata")
+    .eq("id", params.lectureId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const row = data as { processing_metadata: unknown } | null;
+  const metadata = isPlainRecord(row?.processing_metadata) ? row.processing_metadata : {};
+
+  const { error: updateError } = await supabase
+    .from("lectures")
+    .update(
+      {
+        status: "generating_notes",
+        title: params.title,
+        duration_seconds: params.durationSeconds,
+        error_message: null,
+        processing_metadata: {
+          ...metadata,
+          processing: {
+            stage: params.stage,
+            updatedAt: new Date().toISOString(),
+            errorMessage: null,
+          },
+        },
+      } as never,
+    )
+    .eq("id", params.lectureId);
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+}
+
 export async function createLectureFromTextSource(params: {
   userId: string;
   sourceType: string;
@@ -1355,6 +1457,11 @@ export async function createLectureFromTextSource(params: {
 
     await requireActiveLecture(lectureId);
 
+    const baseModelMetadata = {
+      ...notes.modelMetadata,
+      ...params.modelMetadata,
+    };
+
     const { error: artifactError } = await supabase
       .from("lecture_artifacts")
       .upsert(
@@ -1363,10 +1470,7 @@ export async function createLectureFromTextSource(params: {
           summary: notes.summary,
           key_topics: notes.keyTopics,
           structured_notes_md: notes.structuredNotesMd,
-          model_metadata: {
-            ...notes.modelMetadata,
-            ...params.modelMetadata,
-          },
+          model_metadata: withNoteEnrichmentStage(baseModelMetadata, "checking_document_images"),
         } as never,
         {
           onConflict: "lecture_id",
@@ -1375,6 +1479,34 @@ export async function createLectureFromTextSource(params: {
 
     if (artifactError) {
       throw new Error(artifactError.message);
+    }
+
+    await updateLectureEnrichmentProcessingStage({
+      lectureId,
+      stage: "checking_document_images",
+      title: notes.title,
+      durationSeconds,
+    });
+
+    const documentImages = getStoredDocumentImagesFromMetadata(params.modelMetadata ?? {});
+
+    if (documentImages.length > 0) {
+      await attachDocumentImagesToNotes({
+        lectureId,
+        structuredNotesMd: notes.structuredNotesMd,
+        documentImages,
+      });
+    }
+
+    const { error: enrichmentCompleteError } = await supabase
+      .from("lecture_artifacts")
+      .update({
+        model_metadata: withNoteEnrichmentStage(baseModelMetadata, "complete"),
+      } as never)
+      .eq("lecture_id", lectureId);
+
+    if (enrichmentCompleteError) {
+      throw new Error(enrichmentCompleteError.message);
     }
 
     if (params.createInitialAudio === true) {

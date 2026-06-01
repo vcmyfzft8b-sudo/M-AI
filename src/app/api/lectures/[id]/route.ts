@@ -5,6 +5,8 @@ import { parseAudioChunkManifest } from "@/lib/audio-processing";
 import { canAccessLectureContent, createBillingRequiredResponse } from "@/lib/billing";
 import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
 import {
+  enqueueLectureDocumentProcessing,
+  enqueueLectureLinkProcessing,
   enqueueLectureNotesGeneration,
   enqueueLectureProcessing,
   enqueueLectureScanProcessing,
@@ -45,6 +47,18 @@ function hasPendingScanImages(processingMetadata: unknown) {
     isRecord(processingMetadata) &&
     Array.isArray(processingMetadata.pendingScanImages) &&
     processingMetadata.pendingScanImages.length > 0
+  );
+}
+
+function hasPendingDocument(processingMetadata: unknown) {
+  return isRecord(processingMetadata) && isRecord(processingMetadata.pendingDocument);
+}
+
+function hasPendingLink(processingMetadata: unknown) {
+  return (
+    isRecord(processingMetadata) &&
+    typeof processingMetadata.pendingLinkUrl === "string" &&
+    processingMetadata.pendingLinkUrl.trim().length > 0
   );
 }
 
@@ -212,6 +226,16 @@ export async function GET(
           return;
         }
 
+        if (hasPendingDocument(detail.lecture.processing_metadata)) {
+          await enqueueLectureDocumentProcessing(detail.lecture.id);
+          return;
+        }
+
+        if (hasPendingLink(detail.lecture.processing_metadata)) {
+          await enqueueLectureLinkProcessing(detail.lecture.id);
+          return;
+        }
+
         if (hasPreparedManualImportText(detail.lecture.processing_metadata)) {
           await enqueueLectureNotesGeneration(detail.lecture.id);
           return;
@@ -272,6 +296,17 @@ export async function DELETE(
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
   }
 
+  const service = createSupabaseServiceRoleClient();
+  const { data: noteMediaRows, error: noteMediaError } = await service
+    .from("lecture_note_media")
+    .select("storage_path")
+    .eq("lecture_id", id)
+    .eq("user_id", user.id);
+
+  if (noteMediaError) {
+    return NextResponse.json({ error: noteMediaError.message }, { status: 500 });
+  }
+
   const { error } = await supabase
     .from("lectures")
     .delete()
@@ -288,15 +323,15 @@ export async function DELETE(
       : null,
   ).map((chunk) => chunk.path);
   const scanImagePaths = extractScanImageStoragePaths(lecture.processing_metadata);
+  const noteMediaPaths = ((noteMediaRows ?? []) as Array<{ storage_path: string | null }>)
+    .map((row) => row.storage_path)
+    .filter((path): path is string => Boolean(path));
   const storagePaths = lecture.storage_path
-    ? [lecture.storage_path, ...chunkPaths, ...scanImagePaths]
-    : [...chunkPaths, ...scanImagePaths];
+    ? [lecture.storage_path, ...chunkPaths, ...scanImagePaths, ...noteMediaPaths]
+    : [...chunkPaths, ...scanImagePaths, ...noteMediaPaths];
 
   if (storagePaths.length > 0) {
-    await createSupabaseServiceRoleClient()
-      .storage
-      .from("lecture-audio")
-      .remove(storagePaths);
+    await service.storage.from("lecture-audio").remove(storagePaths);
   }
 
   return NextResponse.json({ ok: true });

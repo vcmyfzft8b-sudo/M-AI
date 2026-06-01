@@ -2,7 +2,7 @@ import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createBillingRequiredResponse, getUserEntitlementState } from "@/lib/billing";
-import { MAX_DOCUMENT_BYTES } from "@/lib/constants";
+import { MAX_DOCUMENT_BYTES, STORAGE_BUCKET } from "@/lib/constants";
 import {
   isLegacyPowerPointDocument,
   isPdfDocument,
@@ -10,11 +10,7 @@ import {
   isSupportedDocumentFile,
 } from "@/lib/document-files";
 import { validateDocumentFileSignature } from "@/lib/file-validation";
-import { enqueueLectureNotesGeneration } from "@/lib/jobs";
-import {
-  extractTextFromDocument,
-  prepareLectureFromTextSource,
-} from "@/lib/manual-lectures";
+import { enqueueLectureDocumentProcessing } from "@/lib/jobs";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
 import {
@@ -22,7 +18,14 @@ import {
   parseFormDataRequest,
 } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  buildLectureDocumentStoragePath,
+  normalizeUploadDocumentMimeType,
+} from "@/lib/storage";
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceRoleClient,
+} from "@/lib/supabase/server";
 import {
   languageHintSchema,
   optionalDocumentLectureIdSchema,
@@ -138,21 +141,23 @@ export async function POST(request: Request) {
   try {
     const sourceFileName = originalFileName || inputFile.name;
 
-    if (lectureId) {
-      const { data: lecture, error: lectureError } = await supabase
-        .from("lectures")
-        .select("id")
-        .eq("id", lectureId)
-        .eq("user_id", user.id)
-        .maybeSingle();
+    if (!lectureId) {
+      return NextResponse.json({ error: "Manjka ID zapiska." }, { status: 400 });
+    }
 
-      if (lectureError) {
-        throw new Error(lectureError.message);
-      }
+    const { data: lecture, error: lectureError } = await supabase
+      .from("lectures")
+      .select("id")
+      .eq("id", lectureId)
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-      if (!lecture) {
-        return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
-      }
+    if (lectureError) {
+      throw new Error(lectureError.message);
+    }
+
+    if (!lecture) {
+      return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
     }
 
     const sourceType = isPdfDocument(inputFile)
@@ -160,53 +165,70 @@ export async function POST(request: Request) {
       : isPptxDocument(inputFile)
         ? "presentation"
         : "text";
-    let nextLectureId = lectureId;
-    const extracted = await extractTextFromDocument(inputFile);
-    const lectureInput = {
+    const mimeType = normalizeUploadDocumentMimeType({
+      mimeType: inputFile.type || "application/octet-stream",
+      fileName: sourceFileName,
+    });
+    const documentPath = buildLectureDocumentStoragePath({
       userId: user.id,
-      sourceType,
-      text: extracted.text,
-      blocks: extracted.pages.map((page) => ({
-        label: sourceType === "presentation" ? `Prosojnica ${page.pageNumber}` : `Stran ${page.pageNumber}`,
-        pageNumber: page.pageNumber,
-        text: page.text,
-      })),
-      titleHint: extracted.title || sourceFileName.replace(/\.[^.]+$/i, ""),
-      languageHint,
-      createInitialAudio,
-      initialAudioVoice,
-      modelMetadata: {
-        importMode:
-          sourceType === "pdf"
-            ? "pdf"
-            : sourceType === "presentation"
-              ? "presentation"
-              : "document",
-        sourceFileName,
-      },
-    };
+      lectureId,
+      fileName: sourceFileName,
+      mimeType,
+    });
+    const uploadResult = await createSupabaseServiceRoleClient()
+      .storage
+      .from(STORAGE_BUCKET)
+      .upload(documentPath, inputFile, {
+        contentType: mimeType,
+        upsert: true,
+      });
 
-    if (!nextLectureId) {
-      nextLectureId = await prepareLectureFromTextSource({
-        ...lectureInput,
-      });
-    } else {
-      await prepareLectureFromTextSource({
-        ...lectureInput,
-        lectureId: nextLectureId,
-      });
+    if (uploadResult.error) {
+      throw new Error(uploadResult.error.message);
     }
 
-    const queuedLectureId = nextLectureId;
+    const { error: updateError } = await supabase
+      .from("lectures")
+      .update(
+        {
+          source_type: sourceType,
+          status: "queued",
+          error_message: null,
+          title: sourceFileName.replace(/\.[^.]+$/i, ""),
+          language_hint: languageHint,
+          processing_metadata: {
+            createInitialAudio,
+            initialAudioVoice: initialAudioVoice ?? null,
+            pendingDocument: {
+              path: documentPath,
+              mimeType,
+              fileName: sourceFileName,
+              size: inputFile.size,
+            },
+            processing: {
+              stage: "extracting_document_text",
+              updatedAt: new Date().toISOString(),
+              errorMessage: null,
+            },
+          },
+        } as never,
+      )
+      .eq("id", lectureId)
+      .eq("user_id", user.id);
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+
     after(async () => {
       try {
-        await enqueueLectureNotesGeneration(queuedLectureId);
+        await enqueueLectureDocumentProcessing(lectureId);
       } catch (error) {
-        await markLecturePipelineFailed({ lectureId: queuedLectureId, error });
+        await markLecturePipelineFailed({ lectureId, error });
       }
     });
 
-    return NextResponse.json({ lectureId: nextLectureId });
+    return NextResponse.json({ lectureId });
   } catch (error) {
     return NextResponse.json(
       {

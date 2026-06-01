@@ -1,6 +1,8 @@
 import "server-only";
 
 import { inngest } from "@/inngest/client";
+import { processStoredDocumentLecture } from "@/lib/document-processing";
+import { processStoredLinkLecture } from "@/lib/link-processing";
 import {
   generateLectureNotesFromStoredTranscript,
   markLecturePipelineFailed,
@@ -16,6 +18,8 @@ export type LectureProcessingStage = "transcribe" | "generate_notes";
 
 const INTERNAL_LECTURE_PROCESSING_PATH = "/api/internal/lectures/process";
 const INTERNAL_LECTURE_SCAN_PATH = "/api/internal/lectures/scan";
+const INTERNAL_LECTURE_DOCUMENT_PATH = "/api/internal/lectures/document";
+const INTERNAL_LECTURE_LINK_PATH = "/api/internal/lectures/link";
 const INTERNAL_LECTURE_PRACTICE_TEST_PATH = "/api/internal/lectures/practice-test";
 const INTERNAL_LECTURE_STUDY_PATH = "/api/internal/lectures/study";
 const INTERNAL_LECTURE_QUIZ_PATH = "/api/internal/lectures/quiz";
@@ -44,6 +48,10 @@ function buildInternalJobHeaders(env: ReturnType<typeof getServerEnv>) {
 function getInternalJobBaseUrl(publicSiteUrl?: string) {
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    return `http://localhost:${process.env.PORT ?? "3000"}`;
   }
 
   return publicSiteUrl;
@@ -210,6 +218,48 @@ export async function enqueueLectureScanProcessing(lectureId: string) {
 
   try {
     const result = await processStoredScanLecture({ lectureId });
+
+    if (result.needsNotesGeneration) {
+      await enqueueLectureNotesGeneration(lectureId);
+    }
+  } catch (error) {
+    await markLecturePipelineFailed({ lectureId, error });
+  }
+}
+
+export async function enqueueLectureDocumentProcessing(lectureId: string) {
+  if (
+    await tryEnqueueInternalLectureJob({
+      lectureId,
+      path: INTERNAL_LECTURE_DOCUMENT_PATH,
+    })
+  ) {
+    return;
+  }
+
+  try {
+    const result = await processStoredDocumentLecture({ lectureId });
+
+    if (result.needsNotesGeneration) {
+      await enqueueLectureNotesGeneration(lectureId);
+    }
+  } catch (error) {
+    await markLecturePipelineFailed({ lectureId, error });
+  }
+}
+
+export async function enqueueLectureLinkProcessing(lectureId: string) {
+  if (
+    await tryEnqueueInternalLectureJob({
+      lectureId,
+      path: INTERNAL_LECTURE_LINK_PATH,
+    })
+  ) {
+    return;
+  }
+
+  try {
+    const result = await processStoredLinkLecture({ lectureId });
 
     if (result.needsNotesGeneration) {
       await enqueueLectureNotesGeneration(lectureId);

@@ -9301,6 +9301,31 @@ select:disabled {
   -webkit-box-decoration-break: clone;
 }
 
+.lecture-markdown .note-read-math {
+  color: var(--label);
+  font-size: 1em;
+}
+
+.lecture-markdown .note-read-math.inline {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: -0.12em;
+}
+
+.lecture-markdown .note-read-math.display {
+  display: block;
+  max-width: 100%;
+  margin: 0.6rem 0 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.lecture-markdown .katex-display {
+  margin: 0.55rem 0 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .lecture-markdown li > ul,
 .lecture-markdown li > ol,
 .lecture-markdown .markdown li > ul,

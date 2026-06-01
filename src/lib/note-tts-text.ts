@@ -1,3 +1,9 @@
+import {
+  isLikelyMathExpression,
+  normalizeFormulaSyntax,
+  normalizeMarkdownMath,
+} from "@/lib/math-markdown";
+
 export type NoteTtsWord = {
   index: number;
   text: string;
@@ -115,7 +121,7 @@ export function stripLeadingRedundantHeading(markdown: string, title?: string | 
 function cleanMarkdownLine(line: string) {
   const mathSpans: string[] = [];
   const protectedLine = line.replace(
-    /(\$\$[\s\S]+?\$\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\])/g,
+    /(\$\$[\s\S]+?\$\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|(?<!\\)(?<!\$)\$[^\n$]+?(?<!\\)\$(?!\$))/g,
     (match) => {
       const placeholder = `\uE000${mathSpans.length}\uE001`;
       mathSpans.push(match);
@@ -213,8 +219,62 @@ function splitTableCells(line: string) {
   }
 
   const withoutOuterPipes = trimmed.replace(/^\|/, "").replace(/\|$/, "");
+  const cells: string[] = [];
+  let current = "";
+  let mathCloseDelimiter: "$$" | "\\)" | "\\]" | null = null;
 
-  return withoutOuterPipes.split("|").map((cell) => cleanMarkdownLine(cell));
+  for (let index = 0; index < withoutOuterPipes.length; index += 1) {
+    if (mathCloseDelimiter) {
+      if (withoutOuterPipes.startsWith(mathCloseDelimiter, index)) {
+        current += mathCloseDelimiter;
+        index += mathCloseDelimiter.length - 1;
+        mathCloseDelimiter = null;
+      } else {
+        current += withoutOuterPipes[index];
+      }
+
+      continue;
+    }
+
+    if (withoutOuterPipes[index] === "\\" && withoutOuterPipes[index + 1] === "|") {
+      current += "|";
+      index += 1;
+      continue;
+    }
+
+    if (withoutOuterPipes.startsWith("$$", index)) {
+      current += "$$";
+      mathCloseDelimiter = "$$";
+      index += 1;
+      continue;
+    }
+
+    if (withoutOuterPipes.startsWith("\\(", index)) {
+      current += "\\(";
+      mathCloseDelimiter = "\\)";
+      index += 1;
+      continue;
+    }
+
+    if (withoutOuterPipes.startsWith("\\[", index)) {
+      current += "\\[";
+      mathCloseDelimiter = "\\]";
+      index += 1;
+      continue;
+    }
+
+    if (withoutOuterPipes[index] === "|") {
+      cells.push(current);
+      current = "";
+      continue;
+    }
+
+    current += withoutOuterPipes[index];
+  }
+
+  cells.push(current);
+
+  return cells.map((cell) => cleanMarkdownLine(cell));
 }
 
 function tokenizePlainText(text: string, nextWordIndex: number) {
@@ -262,11 +322,61 @@ function tokenizePlainText(text: string, nextWordIndex: number) {
   };
 }
 
+function isEscapedDelimiter(text: string, index: number) {
+  let slashCount = 0;
+
+  for (let cursor = index - 1; cursor >= 0 && text[cursor] === "\\"; cursor -= 1) {
+    slashCount += 1;
+  }
+
+  return slashCount % 2 === 1;
+}
+
+function isSingleDollarDelimiter(text: string, index: number) {
+  return (
+    text[index] === "$" &&
+    text[index - 1] !== "$" &&
+    text[index + 1] !== "$" &&
+    !isEscapedDelimiter(text, index)
+  );
+}
+
+function findInlineDollarMathDelimiter(text: string, startIndex: number) {
+  let openIndex = text.indexOf("$", startIndex);
+
+  while (openIndex >= 0) {
+    if (!isSingleDollarDelimiter(text, openIndex)) {
+      openIndex = text.indexOf("$", openIndex + 1);
+      continue;
+    }
+
+    let closeIndex = text.indexOf("$", openIndex + 1);
+
+    while (closeIndex >= 0 && !isSingleDollarDelimiter(text, closeIndex)) {
+      closeIndex = text.indexOf("$", closeIndex + 1);
+    }
+
+    if (closeIndex === -1) {
+      return null;
+    }
+
+    if (isLikelyMathExpression(text.slice(openIndex + 1, closeIndex))) {
+      return { open: "$", close: "$", index: openIndex };
+    }
+
+    openIndex = text.indexOf("$", closeIndex + 1);
+  }
+
+  return null;
+}
+
 function findNextMathDelimiter(text: string, startIndex: number) {
+  const inlineDollarMath = findInlineDollarMathDelimiter(text, startIndex);
   const candidates = [
     { open: "$$", close: "$$", index: text.indexOf("$$", startIndex) },
     { open: "\\(", close: "\\)", index: text.indexOf("\\(", startIndex) },
     { open: "\\[", close: "\\]", index: text.indexOf("\\[", startIndex) },
+    ...(inlineDollarMath ? [inlineDollarMath] : []),
   ].filter((candidate) => candidate.index >= 0);
 
   return candidates.sort((left, right) => left.index - right.index)[0] ?? null;
@@ -315,8 +425,9 @@ function tokenizeLine(text: string, nextWordIndex: number) {
 
       tokens.push({
         type: "math",
-        text: rawMath,
+        text: normalizeFormulaSyntax(rawMath),
         display:
+          delimiter.open !== "$" &&
           delimiter.open !== "\\(" &&
           trimmed === fullMathSpan &&
           delimiter.index === text.indexOf(trimmed),
@@ -339,7 +450,7 @@ export function parseNoteTtsDocument(markdown: string): NoteTtsDocument {
   let nextWordIndex = 0;
   let inCodeBlock = false;
   let pendingList: NoteTtsListBlock | null = null;
-  const lines = markdown.split(/\r?\n/);
+  const lines = normalizeMarkdownMath(markdown).split(/\r?\n/);
 
   function tokenizeText(text: string) {
     const tokenized = tokenizeLine(text, nextWordIndex);

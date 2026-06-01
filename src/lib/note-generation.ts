@@ -8,9 +8,17 @@ import {
   normalizeNoteLanguage,
   resolveNoteLanguageLabel,
 } from "@/lib/languages";
+import { normalizeMarkdownMath } from "@/lib/math-markdown";
 import type { NoteGenerationResult, TranscriptSegmentInput } from "@/lib/types";
 
 const NOTE_CHUNK_SUMMARY_CONCURRENCY = 2;
+const MATH_FORMATTING_INSTRUCTIONS = `Formula formatting rules:
+- Use valid Markdown math for every formula and variable expression.
+- Put full equations on one display-math line like $$I_{t/0} = \\frac{Y_t}{Y_0} \\cdot 100$$.
+- Use inline math \\(Y_t\\) only for short variables inside a sentence.
+- Use LaTeX subscripts, fractions, exponents, roots, functions, Greek letters, inequalities, arrows, sums, and integrals: \\(Y_t\\), \\(Y_{t-1}\\), \\(I_{t/0}\\), \\frac{a}{b}, x^2, \\sqrt{x}, \\sin(x), \\alpha, \\le, \\to, \\sum, and \\int.
+- For multi-line derivations, use one display math block with an aligned environment inside: $$\\begin{aligned} a &= b \\\\ c &= d \\end{aligned}$$.
+- Never write raw dollar-sign inline math, broken subscripts like $Yt$ or $I{t/0}$, or plain text formulas like Yt / Y0 100.`;
 
 export function countWords(value: string) {
   return value.trim().split(/\s+/).filter(Boolean).length;
@@ -217,7 +225,7 @@ Selection rules:
 - Do not use a fixed word-count target. The note should be as long as needed to explain the important material well and no longer. Dense material can produce longer notes; simple material should stay short.
 - Prefer clear explanations plus a few useful bullets over long prose. Include examples only when they support understanding and are grounded in the source.
 - If the source includes embedded document visual context, use it only when it is useful for studying the same concept. Fold the visual's actual concept into the relevant topic instead of writing a generic caption or separate image section.
-- Preserve mathematical notation as formulas when the source supports it. Use valid Markdown math: inline math as \\(...\\) and display math as $$...$$. Do not output broken dollar signs or formulas as plain text.
+- Preserve mathematical notation as formulas when the source supports it. ${MATH_FORMATTING_INSTRUCTIONS}
 
 Use this stable Structured Plus markdown format with these exact heading labels:
 - Start with "${labels.overview}" containing 2-3 concise sentences that explain the whole material.
@@ -286,8 +294,8 @@ export async function generateNotesFromTranscript(
   const languageLabel = resolveNoteLanguageLabel(params.outputLanguage);
   const chunkInstructions =
     sourceType === "audio"
-      ? `${languageInstruction} You create source cards from spoken lecture transcript chunks. Identify the study-worthy material in this chunk: definitions, mechanisms, sequences, comparisons, formulas, examples, clarifications, caveats, and exam-relevant details. Preserve technical terms and explain abbreviated or implied ideas when the transcript supports them. Skip filler, repeated phrases, low-value asides, and examples that add no new understanding. Never invent facts. Bullet points must be complete study points, not fragments. Preserve formulas with valid Markdown math using \\(...\\) or $$...$$.`
-      : `${languageInstruction} You create source cards from lecture-style source material. Identify the study-worthy material in this chunk: definitions, mechanisms, sequences, comparisons, formulas, caveats, examples already present in the source, and exam-relevant details. Skip filler, repeated wording, low-value details, and examples that add no new understanding. Never invent facts. Bullet points must be complete study points, not fragments. Preserve formulas with valid Markdown math using \\(...\\) or $$...$$.`;
+      ? `${languageInstruction} You create source cards from spoken lecture transcript chunks. Identify the study-worthy material in this chunk: definitions, mechanisms, sequences, comparisons, formulas, examples, clarifications, caveats, and exam-relevant details. Preserve technical terms and explain abbreviated or implied ideas when the transcript supports them. Skip filler, repeated phrases, low-value asides, and examples that add no new understanding. Never invent facts. Bullet points must be complete study points, not fragments. ${MATH_FORMATTING_INSTRUCTIONS}`
+      : `${languageInstruction} You create source cards from lecture-style source material. Identify the study-worthy material in this chunk: definitions, mechanisms, sequences, comparisons, formulas, caveats, examples already present in the source, and exam-relevant details. Skip filler, repeated wording, low-value details, and examples that add no new understanding. Never invent facts. Bullet points must be complete study points, not fragments. ${MATH_FORMATTING_INSTRUCTIONS}`;
   const structuredPlusInstructions = buildStructuredPlusInstructions({
     outputLanguage: params.outputLanguage,
     recommendedTopicCount: targets.recommendedTopicCount,
@@ -330,8 +338,8 @@ export async function generateNotesFromTranscript(
     ),
   });
 
-  const normalizedStructuredNotesMd = normalizeStudyListSections(
-    stripHtmlFromNotes(result.structuredNotesMd),
+  const normalizedStructuredNotesMd = normalizeMarkdownMath(
+    normalizeStudyListSections(stripHtmlFromNotes(result.structuredNotesMd)),
   );
 
   const normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);

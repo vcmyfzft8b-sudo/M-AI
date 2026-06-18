@@ -6,9 +6,17 @@ import {
   getStripeClient,
   getViewerAppState,
 } from "@/lib/billing";
+import { isMemoIosAppUserAgent } from "@/lib/native-platform";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
+  if (isMemoIosAppUserAgent(request.headers.get("user-agent"))) {
+    return NextResponse.json(
+      { error: "Stripe portal ni na voljo v iOS aplikaciji. Naročnino upravljaj v App Store." },
+      { status: 403 },
+    );
+  }
+
   const appState = await getViewerAppState();
 
   if (!appState) {

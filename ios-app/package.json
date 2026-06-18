@@ -1,0 +1,22 @@
+{
+  "name": "memoai-ios-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Separate iOS shell for Memo AI.",
+  "scripts": {
+    "sync": "cap sync ios",
+    "open": "cap open ios",
+    "doctor": "cap doctor ios",
+    "verify": "node scripts/verify-ios-readiness.mjs"
+  },
+  "dependencies": {
+    "@capacitor/app": "^8.0.1",
+    "@capacitor/core": "^8.4.0",
+    "@capacitor/ios": "^8.4.0",
+    "@capacitor/splash-screen": "^8.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.4.0",
+    "typescript": "^5.9.3"
+  }
+}

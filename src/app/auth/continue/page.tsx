@@ -1,15 +1,26 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 import { BrandLogo } from "@/components/brand-logo";
 import { LandingAuthOptions } from "@/components/landing-auth-options";
-import { getAuthProviderAvailability } from "@/lib/auth-providers";
+import {
+  getAuthProviderAvailability,
+  getIosAppReviewSafeAuthProviders,
+} from "@/lib/auth-providers";
 import { getOptionalUser } from "@/lib/auth";
-import { BRAND_NAME } from "@/lib/brand";
+import {
+  BRAND_NAME,
+  PUBLIC_PRIVACY_POLICY_PATH,
+  PUBLIC_TERMS_OF_USE_PATH,
+} from "@/lib/brand";
+import { isMemoIosAppUserAgent } from "@/lib/native-platform";
 import { hasPublicSupabaseEnv } from "@/lib/public-env";
 
 export default async function ContinuePage() {
   const isVercelPreview = process.env.VERCEL_ENV === "preview";
+  const requestHeaders = await headers();
+  const isIosApp = isMemoIosAppUserAgent(requestHeaders.get("user-agent"));
 
   if (hasPublicSupabaseEnv) {
     const user = await getOptionalUser();
@@ -18,9 +29,12 @@ export default async function ContinuePage() {
     }
   }
 
-  const providers = hasPublicSupabaseEnv
+  const authProviders = hasPublicSupabaseEnv
     ? await getAuthProviderAvailability()
     : { apple: false, email: false, google: false };
+  const providers = isIosApp
+    ? getIosAppReviewSafeAuthProviders(authProviders)
+    : authProviders;
 
   return (
     <main className="landing-shell landing-auth-page">
@@ -38,8 +52,8 @@ export default async function ContinuePage() {
 
         <p className="landing-auth-legal">
           Z nadaljevanjem se strinjaš s {`${BRAND_NAME}`}{" "}
-          <Link href="/app/support/terms-of-use">pogoji uporabe</Link> in{" "}
-          <Link href="/app/support/privacy-policy">politiko zasebnosti</Link>, vključno z AI
+          <Link href={PUBLIC_TERMS_OF_USE_PATH}>pogoji uporabe</Link> in{" "}
+          <Link href={PUBLIC_PRIVACY_POLICY_PATH}>politiko zasebnosti</Link>, vključno z AI
           obdelavo zvoka, besedila, dokumentov in povezav. Potrjuješ tudi, da imaš
           potrebna dovoljenja za snemanje, nalaganje in uporabo gradiva, ki ga pošlješ
           v Memo.

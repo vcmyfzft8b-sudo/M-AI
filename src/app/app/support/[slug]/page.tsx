@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { getHelpArticle } from "@/lib/help-center";
+import { isMemoIosAppUserAgent } from "@/lib/native-platform";
 
 export default async function SupportArticlePage({
   params,
@@ -9,7 +11,10 @@ export default async function SupportArticlePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const article = getHelpArticle(slug);
+  const requestHeaders = await headers();
+  const article = getHelpArticle(slug, {
+    iosApp: isMemoIosAppUserAgent(requestHeaders.get("user-agent")),
+  });
 
   if (!article) {
     notFound();

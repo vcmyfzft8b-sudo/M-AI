@@ -2,6 +2,10 @@ import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { parseAudioChunkManifest } from "@/lib/audio-processing";
+import {
+  collectLectureStorageObjectPaths,
+  removeLectureStorageObjects,
+} from "@/lib/account-data-cleanup";
 import { canAccessLectureContent, createBillingRequiredResponse } from "@/lib/billing";
 import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
 import {
@@ -15,7 +19,6 @@ import { isRecord } from "@/lib/lecture-source-metadata";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { extractScanImageStoragePaths } from "@/lib/scan-image-uploads";
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { lectureTitleSchema, routeIdParamSchema } from "@/lib/validation";
 
@@ -297,14 +300,19 @@ export async function DELETE(
   }
 
   const service = createSupabaseServiceRoleClient();
-  const { data: noteMediaRows, error: noteMediaError } = await service
-    .from("lecture_note_media")
-    .select("storage_path")
-    .eq("lecture_id", id)
-    .eq("user_id", user.id);
+  let cleanup: Awaited<ReturnType<typeof collectLectureStorageObjectPaths>>;
 
-  if (noteMediaError) {
-    return NextResponse.json({ error: noteMediaError.message }, { status: 500 });
+  try {
+    cleanup = await collectLectureStorageObjectPaths({
+      service,
+      userId: user.id,
+      lectureIds: [id],
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Zapiska ni bilo mogoče pripraviti za brisanje." },
+      { status: 500 },
+    );
   }
 
   const { error } = await supabase
@@ -317,21 +325,13 @@ export async function DELETE(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const chunkPaths = parseAudioChunkManifest(
-    lecture.processing_metadata && typeof lecture.processing_metadata === "object"
-      ? (lecture.processing_metadata as Record<string, unknown>).audioChunks
-      : null,
-  ).map((chunk) => chunk.path);
-  const scanImagePaths = extractScanImageStoragePaths(lecture.processing_metadata);
-  const noteMediaPaths = ((noteMediaRows ?? []) as Array<{ storage_path: string | null }>)
-    .map((row) => row.storage_path)
-    .filter((path): path is string => Boolean(path));
-  const storagePaths = lecture.storage_path
-    ? [lecture.storage_path, ...chunkPaths, ...scanImagePaths, ...noteMediaPaths]
-    : [...chunkPaths, ...scanImagePaths, ...noteMediaPaths];
-
-  if (storagePaths.length > 0) {
-    await service.storage.from("lecture-audio").remove(storagePaths);
+  try {
+    await removeLectureStorageObjects({
+      service,
+      storagePaths: cleanup.storagePaths,
+    });
+  } catch (storageError) {
+    console.error("Failed to remove deleted lecture storage objects", { error: storageError });
   }
 
   return NextResponse.json({ ok: true });

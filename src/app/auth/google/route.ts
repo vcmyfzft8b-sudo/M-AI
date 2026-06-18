@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getAuthProviderAvailability } from "@/lib/auth-providers";
+import {
+  getAuthProviderAvailability,
+  getIosAppReviewSafeAuthProviders,
+} from "@/lib/auth-providers";
+import { isMemoIosAppUserAgent } from "@/lib/native-platform";
 import { parseFormDataRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { resolveSiteUrl } from "@/lib/site-url";
@@ -17,12 +21,20 @@ function resolveNextPath(request: NextRequest, value?: FormDataEntryValue | null
 
 async function startGoogleAuth(request: NextRequest, next: string) {
   const providers = await getAuthProviderAvailability();
+  const safeProviders = isMemoIosAppUserAgent(request.headers.get("user-agent"))
+    ? getIosAppReviewSafeAuthProviders(providers)
+    : providers;
 
-  if (!providers.google) {
+  if (!safeProviders.google) {
     const errorUrl = request.nextUrl.clone();
     errorUrl.pathname = "/auth/error";
     errorUrl.search = "";
-    errorUrl.searchParams.set("message", "Google sign-in is not enabled for this project.");
+    errorUrl.searchParams.set(
+      "message",
+      providers.google
+        ? "Google prijava v iOS aplikaciji ni na voljo brez e-poštne ali Apple prijave."
+        : "Google sign-in is not enabled for this project.",
+    );
     return NextResponse.redirect(errorUrl, { status: 303 });
   }
 

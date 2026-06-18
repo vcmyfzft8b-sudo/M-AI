@@ -12,6 +12,7 @@ import {
   hasStripeSubscriptionHistory,
   PURCHASABLE_BILLING_PLAN_IDS,
 } from "@/lib/billing";
+import { isMemoIosAppUserAgent } from "@/lib/native-platform";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
 
@@ -20,6 +21,13 @@ const checkoutSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  if (isMemoIosAppUserAgent(request.headers.get("user-agent"))) {
+    return NextResponse.json(
+      { error: "Stripe Checkout ni na voljo v iOS aplikaciji. Uporabi plačilo prek App Store." },
+      { status: 403 },
+    );
+  }
+
   const appState = await getViewerAppState();
 
   if (!appState) {

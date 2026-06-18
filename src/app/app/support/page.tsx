@@ -1,7 +1,15 @@
-import { SupportArticleLink } from "@/components/support-article-link";
-import { HELP_SECTIONS } from "@/lib/help-center";
+import { headers } from "next/headers";
 
-export default function SupportPage() {
+import { SupportArticleLink } from "@/components/support-article-link";
+import { getHelpSections } from "@/lib/help-center";
+import { isMemoIosAppUserAgent } from "@/lib/native-platform";
+
+export default async function SupportPage() {
+  const requestHeaders = await headers();
+  const helpSections = getHelpSections({
+    iosApp: isMemoIosAppUserAgent(requestHeaders.get("user-agent")),
+  });
+
   return (
     <main className="home-dashboard pb-8">
       <section className="dashboard-section">
@@ -12,7 +20,7 @@ export default function SupportPage() {
         </div>
       </section>
 
-      {HELP_SECTIONS.map((section) => (
+      {helpSections.map((section) => (
         <section key={section.title} className="dashboard-section">
           <div className="dashboard-section-heading">
             <h2 className="dashboard-section-title">{section.title}</h2>

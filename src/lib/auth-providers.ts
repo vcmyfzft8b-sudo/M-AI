@@ -13,6 +13,19 @@ export type AuthProviderAvailability = {
   google: boolean;
 };
 
+export function getIosAppReviewSafeAuthProviders(
+  providers: AuthProviderAvailability,
+): AuthProviderAvailability {
+  if (!providers.google || providers.apple || providers.email) {
+    return providers;
+  }
+
+  return {
+    ...providers,
+    google: false,
+  };
+}
+
 export async function getAuthProviderAvailability(): Promise<AuthProviderAvailability> {
   const env = getPublicEnv();
   const apiKey =

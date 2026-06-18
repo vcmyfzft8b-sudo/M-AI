@@ -1,11 +1,20 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import type { ReactNode } from "react";
+import { headers } from "next/headers";
 
-import { getAuthProviderAvailability } from "@/lib/auth-providers";
+import {
+  getAuthProviderAvailability,
+  getIosAppReviewSafeAuthProviders,
+} from "@/lib/auth-providers";
 import { BrandLogo } from "@/components/brand-logo";
 import { EmailAuthForm } from "@/components/email-auth-form";
-import { BRAND_NAME } from "@/lib/brand";
+import {
+  BRAND_NAME,
+  PUBLIC_PRIVACY_POLICY_PATH,
+  PUBLIC_TERMS_OF_USE_PATH,
+} from "@/lib/brand";
+import { isMemoIosAppUserAgent } from "@/lib/native-platform";
 
 type AuthMode = "login" | "signup";
 
@@ -61,7 +70,11 @@ export async function AuthPageShell(props: {
   next: string;
   prefilledEmail?: string;
 }) {
-  const providers = await getAuthProviderAvailability();
+  const requestHeaders = await headers();
+  const authProviders = await getAuthProviderAvailability();
+  const providers = isMemoIosAppUserAgent(requestHeaders.get("user-agent"))
+    ? getIosAppReviewSafeAuthProviders(authProviders)
+    : authProviders;
   const loginMode = props.mode === "login";
   const title = loginMode ? "Dobrodošel nazaj" : "Ustvari svoj račun";
   const copy = loginMode
@@ -140,8 +153,8 @@ export async function AuthPageShell(props: {
 
             <p className="auth-legal-copy">
               Z nadaljevanjem se strinjaš s {`${BRAND_NAME}`}{" "}
-              <Link href="/app/support/terms-of-use">pogoji uporabe</Link> in{" "}
-              <Link href="/app/support/privacy-policy">politiko zasebnosti</Link>, vključno
+              <Link href={PUBLIC_TERMS_OF_USE_PATH}>pogoji uporabe</Link> in{" "}
+              <Link href={PUBLIC_PRIVACY_POLICY_PATH}>politiko zasebnosti</Link>, vključno
               z obdelavo zvoka, besedila, dokumentov in povezav pri AI ponudnikih. Potrjuješ
               tudi, da imaš potrebna dovoljenja za snemanje, nalaganje in uporabo gradiva,
               ki ga pošlješ v Memo.

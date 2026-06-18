@@ -12,9 +12,11 @@
     "build": "NODE_PATH=./node_modules next build --webpack",
     "start": "NODE_PATH=./node_modules next start",
     "lint": "eslint",
+    "ios:verify": "node ios-app/scripts/verify-ios-readiness.mjs",
     "stripe:setup": "node scripts/setup-stripe-billing.mjs"
   },
   "dependencies": {
+    "@apple/app-store-server-library": "^3.1.0",
     "@ffmpeg/core": "^0.12.10",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",

@@ -31,6 +31,12 @@ const serverEnvSchema = z.object({
   STRIPE_PRICE_WEEKLY: optionalTrimmedString,
   STRIPE_PRICE_MONTHLY: optionalTrimmedString,
   STRIPE_PRICE_YEARLY: optionalTrimmedString,
+  APPLE_APP_STORE_ENVIRONMENT: trimmedString.default("sandbox"),
+  APPLE_BUNDLE_ID: trimmedString.default("eu.memoai.app"),
+  APPLE_APP_APPLE_ID: optionalTrimmedString,
+  APPLE_ROOT_CERTIFICATES_BASE64: optionalTrimmedString,
+  APPLE_IAP_MONTHLY_PRODUCT_ID: trimmedString.default("eu.memoai.pro.monthly"),
+  APPLE_IAP_YEARLY_PRODUCT_ID: trimmedString.default("eu.memoai.pro.yearly"),
 });
 
 export function getServerEnv() {
@@ -57,6 +63,12 @@ export function getServerEnv() {
     STRIPE_PRICE_WEEKLY: process.env.STRIPE_PRICE_WEEKLY,
     STRIPE_PRICE_MONTHLY: process.env.STRIPE_PRICE_MONTHLY,
     STRIPE_PRICE_YEARLY: process.env.STRIPE_PRICE_YEARLY,
+    APPLE_APP_STORE_ENVIRONMENT: process.env.APPLE_APP_STORE_ENVIRONMENT,
+    APPLE_BUNDLE_ID: process.env.APPLE_BUNDLE_ID,
+    APPLE_APP_APPLE_ID: process.env.APPLE_APP_APPLE_ID,
+    APPLE_ROOT_CERTIFICATES_BASE64: process.env.APPLE_ROOT_CERTIFICATES_BASE64,
+    APPLE_IAP_MONTHLY_PRODUCT_ID: process.env.APPLE_IAP_MONTHLY_PRODUCT_ID,
+    APPLE_IAP_YEARLY_PRODUCT_ID: process.env.APPLE_IAP_YEARLY_PRODUCT_ID,
   });
 }
 

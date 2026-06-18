@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { parseAudioChunkManifest } from "@/lib/audio-processing";
+import {
+  collectLectureStorageObjectPaths,
+  removeLectureStorageObjects,
+} from "@/lib/account-data-cleanup";
 import {
   claimTrialLecture,
   createBillingRequiredResponse,
@@ -10,7 +13,6 @@ import {
 import { MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS } from "@/lib/constants";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { extractScanImageStoragePaths } from "@/lib/scan-image-uploads";
 import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
 import {
   buildLectureStoragePath,
@@ -189,36 +191,26 @@ export async function DELETE(request: Request) {
     return parsed.response;
   }
 
-  const { data: ownedLectures, error: ownedLecturesError } = await supabase
-    .from("lectures")
-    .select("id, storage_path, processing_metadata")
-    .eq("user_id", user.id)
-    .in("id", parsed.data.ids);
+  const service = createSupabaseServiceRoleClient();
+  let cleanup: Awaited<ReturnType<typeof collectLectureStorageObjectPaths>>;
 
-  if (ownedLecturesError) {
-    return NextResponse.json({ error: ownedLecturesError.message }, { status: 500 });
+  try {
+    cleanup = await collectLectureStorageObjectPaths({
+      service,
+      userId: user.id,
+      lectureIds: parsed.data.ids,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Zapiskov ni bilo mogoče pripraviti za brisanje." },
+      { status: 500 },
+    );
   }
 
-  const ownedLectureRows = (ownedLectures ?? []) as Array<{
-    id: string;
-    storage_path: string | null;
-    processing_metadata: unknown;
-  }>;
-  const lectureIds = ownedLectureRows.map((lecture) => lecture.id);
+  const lectureIds = cleanup.lectureIds;
 
   if (lectureIds.length === 0) {
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
-  }
-
-  const service = createSupabaseServiceRoleClient();
-  const { data: noteMediaRows, error: noteMediaError } = await service
-    .from("lecture_note_media")
-    .select("storage_path")
-    .eq("user_id", user.id)
-    .in("lecture_id", lectureIds);
-
-  if (noteMediaError) {
-    return NextResponse.json({ error: noteMediaError.message }, { status: 500 });
   }
 
   const { error: deleteError } = await supabase
@@ -231,33 +223,13 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: deleteError.message }, { status: 500 });
   }
 
-  const storagePaths = ownedLectureRows
-    .map((lecture) => lecture.storage_path)
-    .filter((path): path is string => Boolean(path));
-  const chunkPaths = ownedLectureRows.flatMap((lecture) =>
-    parseAudioChunkManifest(
-      lecture.processing_metadata && typeof lecture.processing_metadata === "object"
-        ? (lecture.processing_metadata as Record<string, unknown>).audioChunks
-        : null,
-    ).map((chunk) => chunk.path),
-  );
-  const scanImagePaths = ownedLectureRows.flatMap((lecture) =>
-    extractScanImageStoragePaths(lecture.processing_metadata),
-  );
-  const noteMediaPaths = ((noteMediaRows ?? []) as Array<{ storage_path: string | null }>)
-    .map((row) => row.storage_path)
-    .filter((path): path is string => Boolean(path));
-
-  if (
-    storagePaths.length > 0 ||
-    chunkPaths.length > 0 ||
-    scanImagePaths.length > 0 ||
-    noteMediaPaths.length > 0
-  ) {
-    await service
-      .storage
-      .from("lecture-audio")
-      .remove([...storagePaths, ...chunkPaths, ...scanImagePaths, ...noteMediaPaths]);
+  try {
+    await removeLectureStorageObjects({
+      service,
+      storagePaths: cleanup.storagePaths,
+    });
+  } catch (error) {
+    console.error("Failed to remove deleted lecture storage objects", { error });
   }
 
   return NextResponse.json({ ok: true, deletedCount: lectureIds.length });

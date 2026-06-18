@@ -11,12 +11,13 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { startTransition, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { EmojiIcon } from "@/components/emoji-icon";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
+import { PUBLIC_PRIVACY_POLICY_PATH, PUBLIC_TERMS_OF_USE_PATH } from "@/lib/brand";
 
 type BillingPlanCard = {
   id: "weekly" | "monthly" | "yearly";
@@ -43,6 +44,33 @@ type OnboardingForm = {
   classFocus: string;
   dailyGoal: string;
 };
+
+type NativeCommerceMode = "web" | "ios-app";
+
+type NativeStoreProduct = {
+  id: string;
+  plan: "monthly" | "yearly";
+  displayName?: string;
+  displayPrice?: string;
+};
+
+type NativeStoreKitPlugin = {
+  products: () => Promise<{ products?: NativeStoreProduct[] }>;
+  purchase: (options: { plan: "monthly" | "yearly"; appAccountToken: string }) => Promise<{
+    signedTransactionInfo?: string;
+  }>;
+  restore: () => Promise<{ transactions?: Array<{ signedTransactionInfo?: string }> }>;
+};
+
+declare global {
+  interface Window {
+    Capacitor?: {
+      Plugins?: {
+        MemoStoreKit?: NativeStoreKitPlugin;
+      };
+    };
+  }
+}
 
 const AGE_OPTIONS = [
   { value: "under_16", label: "Manj kot 16" },
@@ -411,12 +439,20 @@ function OnboardingOptionIcon({ icon }: { icon: string }) {
   return <>{icon}</>;
 }
 
-function CheckoutBanner({ state }: { state: string | null }) {
+function CheckoutBanner({
+  state,
+  commerceMode = "web",
+}: {
+  state: string | null;
+  commerceMode?: NativeCommerceMode;
+}) {
   if (state === "success") {
     return (
       <div className="app-start-banner success">
         <Check className="h-4 w-4" />
-        Plačilo prejeto. Stripe trenutno zaključuje aktivacijo naročnine.
+        {commerceMode === "ios-app"
+          ? "Nakup prejet. App Store trenutno zaključuje aktivacijo naročnine."
+          : "Plačilo prejeto. Stripe trenutno zaključuje aktivacijo naročnine."}
       </div>
     );
   }
@@ -440,6 +476,8 @@ export function OnboardingPaywall({
   hasPaidAccess,
   subscriptionTrialEligible = true,
   plans,
+  commerceMode = "web",
+  appAccountToken,
 }: {
   profile: ProfileRow | null;
   subscription: BillingSubscriptionRow | null;
@@ -447,6 +485,8 @@ export function OnboardingPaywall({
   hasPaidAccess: boolean;
   subscriptionTrialEligible?: boolean;
   plans: BillingPlanCard[];
+  commerceMode?: NativeCommerceMode;
+  appAccountToken: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -455,12 +495,50 @@ export function OnboardingPaywall({
   const [selectedPaywallPlan, setSelectedPaywallPlan] = useState<BillingPlanCard["id"]>("yearly");
   const [checkoutPlan, setCheckoutPlan] = useState<BillingPlanCard["id"] | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
+  const [nativeProducts, setNativeProducts] = useState<Record<string, NativeStoreProduct>>({});
   const [homeScreenStep, setHomeScreenStep] = useState(0);
   const [homeScreenDragging, setHomeScreenDragging] = useState(false);
   const homeScreenScrollRef = useRef<HTMLDivElement | null>(null);
   const homeScreenPointerStartXRef = useRef<number | null>(null);
   const homeScreenPointerStartYRef = useRef<number | null>(null);
   const homeScreenPointerIdRef = useRef<number | null>(null);
+  const isIosAppCommerce = commerceMode === "ios-app";
+
+  useEffect(() => {
+    if (!isIosAppCommerce) {
+      return;
+    }
+
+    let cancelled = false;
+    const storeKit = window.Capacitor?.Plugins?.MemoStoreKit;
+
+    if (!storeKit) {
+      return;
+    }
+
+    storeKit
+      .products()
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        setNativeProducts(
+          Object.fromEntries(
+            (result.products ?? []).map((product) => [product.plan, product]),
+          ),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setNativeProducts({});
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isIosAppCommerce]);
   const homeScreenPointerStartScrollLeftRef = useRef(0);
   const homeScreenPointerHasDraggedRef = useRef(false);
   const homeScreenDragAxisRef = useRef<"horizontal" | "vertical" | null>(null);
@@ -1095,6 +1173,11 @@ export function OnboardingPaywall({
   }
 
   async function startCheckout(plan: BillingPlanCard["id"]) {
+    if (isIosAppCommerce) {
+      await startAppStorePurchase(plan);
+      return;
+    }
+
     setBillingError(null);
     setCheckoutPlan(plan);
 
@@ -1117,6 +1200,90 @@ export function OnboardingPaywall({
     } catch (error) {
       setBillingError(
         error instanceof Error ? error.message : "Plačila ni bilo mogoče začeti.",
+      );
+    } finally {
+      setCheckoutPlan(null);
+    }
+  }
+
+  async function syncAppStoreTransaction(signedTransactionInfo: string) {
+    const response = await fetch("/api/billing/apple/transactions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ signedTransactionInfo }),
+    });
+    const payload = (await response.json()) as { error?: string };
+
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Nakupa prek App Store ni bilo mogoče potrditi.");
+    }
+  }
+
+  async function startAppStorePurchase(plan: BillingPlanCard["id"]) {
+    setBillingError(null);
+
+    if (plan === "weekly") {
+      setBillingError("Ta paket v iOS aplikaciji ni na voljo.");
+      return;
+    }
+
+    const storeKit = window.Capacitor?.Plugins?.MemoStoreKit;
+
+    if (!storeKit) {
+      setBillingError("Nakup prek App Store trenutno ni na voljo v tej napravi.");
+      return;
+    }
+
+    setCheckoutPlan(plan);
+
+    try {
+      const result = await storeKit.purchase({ plan, appAccountToken });
+
+      if (!result.signedTransactionInfo) {
+        throw new Error("App Store ni vrnil podatkov za potrditev nakupa.");
+      }
+
+      await syncAppStoreTransaction(result.signedTransactionInfo);
+      router.refresh();
+      router.push("/app");
+    } catch (error) {
+      setBillingError(
+        error instanceof Error ? error.message : "Nakupa prek App Store ni bilo mogoče začeti.",
+      );
+    } finally {
+      setCheckoutPlan(null);
+    }
+  }
+
+  async function restoreAppStorePurchases() {
+    const storeKit = window.Capacitor?.Plugins?.MemoStoreKit;
+
+    if (!storeKit) {
+      setBillingError("Obnovitev nakupov trenutno ni na voljo v tej napravi.");
+      return;
+    }
+
+    setBillingError(null);
+    setCheckoutPlan(selectedPaywallPlan);
+
+    try {
+      const result = await storeKit.restore();
+      const signedTransactions = (result.transactions ?? [])
+        .map((transaction) => transaction.signedTransactionInfo)
+        .filter((transaction): transaction is string => Boolean(transaction));
+
+      if (signedTransactions.length === 0) {
+        throw new Error("Za ta Apple ID ni bilo najdenih aktivnih nakupov.");
+      }
+
+      await syncAppStoreTransaction(signedTransactions[0]);
+      router.refresh();
+      router.push("/app");
+    } catch (error) {
+      setBillingError(
+        error instanceof Error ? error.message : "Nakupov ni bilo mogoče obnoviti.",
       );
     } finally {
       setCheckoutPlan(null);
@@ -1202,7 +1369,7 @@ export function OnboardingPaywall({
         </div>
       ) : null}
 
-      <CheckoutBanner state={searchParams.get("checkout")} />
+      <CheckoutBanner state={searchParams.get("checkout")} commerceMode={commerceMode} />
       {billingError ? <div className="app-start-banner">{billingError}</div> : null}
 
       <div className="memo-paywall-brand">
@@ -1253,19 +1420,21 @@ export function OnboardingPaywall({
         {paywallPlans.map((plan) => {
           const selected = selectedPaywallPlan === plan.id;
           const activePlan = subscription?.plan === plan.id && hasPaidAccess;
+          const nativeProduct = nativeProducts[plan.id];
           const annualizedMonthly = monthlyPlan?.annualizedAmount ?? 0;
           const yearlySavings = annualizedMonthly > plan.annualizedAmount
             ? Math.round((1 - plan.annualizedAmount / annualizedMonthly) * 100)
             : 0;
-          const displayPrice =
-            plan.id === "yearly"
-              ? `€${plan.displayAmount ?? plan.amount}`
-              : `€${plan.displayAmount ?? plan.amount}`;
-          const suffix = "/ mesec";
-          const detail =
+          const webDisplayPrice = `€${plan.displayAmount ?? plan.amount}`;
+          const displayPrice = isIosAppCommerce && nativeProduct?.displayPrice
+            ? nativeProduct.displayPrice
+            : webDisplayPrice;
+          const suffix = isIosAppCommerce && nativeProduct?.displayPrice ? "" : "/ mesec";
+          const webDetail =
             plan.id === "yearly"
               ? `Obračunano letno: €${plan.annualizedAmount}`
               : "Obračunano mesečno";
+          const detail = isIosAppCommerce ? "Plačilo prek App Store" : webDetail;
 
           return (
             <button
@@ -1300,7 +1469,11 @@ export function OnboardingPaywall({
 
       <p className="memo-paywall-due">
         <CircleCheck className="h-5 w-5" />
-        {subscriptionTrialEligible ? "Danes brez plačila" : "Varno plačilo prek Stripe"}
+        {isIosAppCommerce
+          ? "Varno plačilo prek App Store"
+          : subscriptionTrialEligible
+            ? "Danes brez plačila"
+            : "Varno plačilo prek Stripe"}
       </p>
 
       <button
@@ -1316,18 +1489,40 @@ export function OnboardingPaywall({
           <span className="memo-paywall-cta-label">
             {subscription?.plan === selectedPaywallPlan && hasPaidAccess
               ? "Trenutni paket"
-              : subscriptionTrialEligible
+              : isIosAppCommerce
+                ? "Nadaljuj z App Store"
+                : subscriptionTrialEligible
                 ? "Začni 3-dnevni brezplačni preizkus"
                 : "Nadaljuj na plačilo"}
           </span>
         )}
       </button>
 
+      {isIosAppCommerce ? (
+        <p className="memo-paywall-legal">
+          Naročnina se samodejno obnavlja, dokler je ne prekličeš vsaj 24 ur pred koncem
+          trenutnega obdobja. Plačilo bo zaračunano prek Apple ID, naročnino pa lahko upravljaš
+          ali prekličeš v nastavitvah App Store. Z nadaljevanjem se strinjaš s{" "}
+          <a href={PUBLIC_TERMS_OF_USE_PATH}>pogoji uporabe</a> in{" "}
+          <a href={PUBLIC_PRIVACY_POLICY_PATH}>politiko zasebnosti</a>.
+        </p>
+      ) : null}
+
       <div className="memo-paywall-foot">
         <span>
           <CircleCheck className="h-5 w-5" />
           Prekliči kadarkoli
         </span>
+        {isIosAppCommerce ? (
+          <button
+            type="button"
+            className="memo-paywall-restore"
+            onClick={() => restoreAppStorePurchases()}
+            disabled={checkoutPlan !== null}
+          >
+            Obnovi nakupe
+          </button>
+        ) : null}
       </div>
     </section>
   );

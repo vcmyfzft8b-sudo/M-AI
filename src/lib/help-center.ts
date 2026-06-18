@@ -1,8 +1,11 @@
+import { SUPPORT_EMAIL } from "@/lib/brand";
+
 export type HelpArticle = {
   slug: string;
   title: string;
   category: "Pogosto" | "Snemanje in zapiski" | "Račun in dostop";
   content: string;
+  hiddenInIosApp?: boolean;
 };
 
 export const HELP_ARTICLES: HelpArticle[] = [
@@ -74,6 +77,7 @@ Za zdaj ima vsak račun svojo knjižnico zapiskov in zgodovino obdelav.
     slug: "gift-coconote",
     title: "Ali lahko podarim Memo?",
     category: "Pogosto",
+    hiddenInIosApp: true,
     content: `# Podarjanje dostopa
 
 Če imaš promocijsko ali darilno kodo, jo lahko prejemnik uporabi v Stripe Checkout pred zaključkom nakupa.
@@ -108,6 +112,24 @@ Koristno je vključiti:
 - kje si se zataknil
 - kakšen rezultat si pričakoval
 - ali gre za težavo pri zvoku, besedilu, PDF-ju ali povezavi`,
+  },
+  {
+    slug: "contact-support",
+    title: "Kontakt in podpora",
+    category: "Pogosto",
+    content: `# Kontakt in podpora
+
+Za pomoč piši na [${SUPPORT_EMAIL}](mailto:${SUPPORT_EMAIL}).
+
+V sporočilu vključi:
+
+- e-naslov računa, če pišeš iz drugega naslova
+- kaj si želel doseči
+- kaj se je zgodilo
+- približen čas težave
+- ali gre za zvok, dokument, plačilo, prijavo ali drugo funkcijo
+
+Ne pošiljaj gesel, celih osebnih dokumentov ali gradiv, za katera nimaš pravice deljenja.`,
   },
   {
     slug: "video-isnt-working",
@@ -157,6 +179,7 @@ Kakovost prepisa je odvisna od čistosti zvoka, prekrivanja govorcev in izbraneg
     slug: "redeem-code",
     title: "Unovči kodo",
     category: "Račun in dostop",
+    hiddenInIosApp: true,
     content: `# Unovčenje kode
 
 Promocijsko ali darilno kodo lahko uporabiš v Stripe Checkout pred zaključkom nakupa.
@@ -215,7 +238,7 @@ To lahko po potrebi vključuje datoteke, besedilo, zvok in pozive, ki jih pošlj
 
 ## Hramba in brisanje
 
-Vsebina ostane povezana s tvojim računom, dokler je ne izbrišeš v izdelku ali je ne odstranimo prek podpore ali operativnega čiščenja. Če potrebuješ strožje pogoje glede hrambe, brisanja ali pogodbenih določil, se ne zanašaj samo na to privzeto politiko.`,
+Vsebina ostane povezana s tvojim računom, dokler je ne izbrišeš v izdelku ali je ne odstranimo prek podpore ali operativnega čiščenja. Račun lahko izbrišeš v nastavitvah aplikacije. Če potrebuješ strožje pogoje glede hrambe, brisanja ali pogodbenih določil, se ne zanašaj samo na to privzeto politiko.`,
   },
 ];
 
@@ -234,6 +257,29 @@ export const HELP_SECTIONS = [
   },
 ];
 
-export function getHelpArticle(slug: string) {
-  return HELP_ARTICLES.find((article) => article.slug === slug) ?? null;
+export function getVisibleHelpArticles(options?: { iosApp?: boolean }) {
+  return HELP_ARTICLES.filter((article) => !(options?.iosApp && article.hiddenInIosApp));
+}
+
+export function getHelpSections(options?: { iosApp?: boolean }) {
+  const articles = getVisibleHelpArticles(options);
+
+  return [
+    {
+      title: "Pogosto",
+      items: articles.filter((article) => article.category === "Pogosto"),
+    },
+    {
+      title: "Snemanje in zapiski",
+      items: articles.filter((article) => article.category === "Snemanje in zapiski"),
+    },
+    {
+      title: "Račun in dostop",
+      items: articles.filter((article) => article.category === "Račun in dostop"),
+    },
+  ];
+}
+
+export function getHelpArticle(slug: string, options?: { iosApp?: boolean }) {
+  return getVisibleHelpArticles(options).find((article) => article.slug === slug) ?? null;
 }

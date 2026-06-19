@@ -167,6 +167,7 @@ const NoteRow = memo(function NoteRow({
   onOpenDelete,
   attachMenuRef,
 }: NoteRowProps) {
+  const router = useRouter();
   const sourceType = getEffectiveLectureSourceType(lecture);
   const dragRef = useRef<DashboardNoteDragState | null>(null);
   const cleanupDragListenersRef = useRef<(() => void) | null>(null);

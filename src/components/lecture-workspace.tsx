@@ -214,6 +214,8 @@ const NETWORK_REQUEST_ERROR_MESSAGE = "Povezava je bila prekinjena. Poskusi znov
 const FAST_DETAIL_POLL_INTERVAL_MS = 5000;
 const MIN_DETAIL_REFRESH_INTERVAL_MS = 3000;
 const STUDY_SESSION_SAVE_DEBOUNCE_MS = 5000;
+const STUDY_SESSION_FAILED_RETRY_COOLDOWN_MS = 30_000;
+const STUDY_SESSION_KEEPALIVE_MAX_BYTES = 60 * 1024;
 const STUDY_MANAGER_ACTION_REVEAL_PX = 78;
 
 function ignoreBackgroundRequestError() {
@@ -1301,6 +1303,8 @@ export function LectureWorkspace({
   const studySessionWriteInFlightRef = useRef<Promise<void> | null>(null);
   const studySessionWritePayloadRef = useRef<string | null>(null);
   const lastPersistedStudySessionPayloadRef = useRef<string | null>(null);
+  const lastFailedStudySessionPayloadRef = useRef<string | null>(null);
+  const lastFailedStudySessionAtRef = useRef(0);
   const studyDeck = detail.flashcards;
   const flashcardDeckKey = studyDeck.map((flashcard) => flashcard.id).join("|");
   const quizDeckKey = detail.quizQuestions.map((question) => question.id).join("|");
@@ -1371,7 +1375,17 @@ export function LectureWorkspace({
     payload: string,
     options?: { force?: boolean; preferBeacon?: boolean },
   ) => {
-    if (!options?.force && lastPersistedStudySessionPayloadRef.current === payload) {
+    const now = Date.now();
+
+    if (lastPersistedStudySessionPayloadRef.current === payload) {
+      return;
+    }
+
+    if (
+      !options?.force &&
+      lastFailedStudySessionPayloadRef.current === payload &&
+      now - lastFailedStudySessionAtRef.current < STUDY_SESSION_FAILED_RETRY_COOLDOWN_MS
+    ) {
       return;
     }
 
@@ -1382,21 +1396,30 @@ export function LectureWorkspace({
       return;
     }
 
+    const payloadBlob = new Blob([payload], {
+      type: "application/json",
+    });
+    const canUsePageLifecycleTransport = payloadBlob.size <= STUDY_SESSION_KEEPALIVE_MAX_BYTES;
+
     if (
       options?.preferBeacon &&
+      canUsePageLifecycleTransport &&
       typeof navigator !== "undefined" &&
       typeof navigator.sendBeacon === "function"
     ) {
       const queued = navigator.sendBeacon(
         `/api/lectures/${detail.lecture.id}/study-session`,
-        new Blob([payload], {
-          type: "application/json",
-        }),
+        payloadBlob,
       );
 
       if (queued) {
         lastPersistedStudySessionPayloadRef.current = payload;
+        lastFailedStudySessionPayloadRef.current = null;
       }
+      return;
+    }
+
+    if (options?.preferBeacon && !canUsePageLifecycleTransport) {
       return;
     }
 
@@ -1407,14 +1430,21 @@ export function LectureWorkspace({
         "Content-Type": "application/json",
       },
       body: payload,
-      keepalive: true,
+      keepalive: canUsePageLifecycleTransport,
     })
       .then((response) => {
         if (response.ok) {
           lastPersistedStudySessionPayloadRef.current = payload;
+          lastFailedStudySessionPayloadRef.current = null;
+          return;
         }
+
+        lastFailedStudySessionPayloadRef.current = payload;
+        lastFailedStudySessionAtRef.current = Date.now();
       })
       .catch(() => {
+        lastFailedStudySessionPayloadRef.current = payload;
+        lastFailedStudySessionAtRef.current = Date.now();
         ignoreBackgroundRequestError();
       })
       .finally(() => {

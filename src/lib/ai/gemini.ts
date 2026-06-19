@@ -19,6 +19,7 @@ const GEMINI_EMBEDDING_MAX_BATCH_SIZE = 100;
 const GEMINI_EMBEDDING_BATCH_DELAY_MS = 250;
 const GEMINI_GENERATION_TIMEOUT_MS = 90_000;
 const GEMINI_RETRY_BASE_DELAY_MS = 1_500;
+const GEMINI_RETRY_DELAYS_MS = [5_000, 15_000, 45_000];
 
 let geminiClient: GoogleGenAI | undefined;
 
@@ -100,7 +101,7 @@ function isStructuredOutputError(error: unknown) {
 
 function getStructuredGenerationRetryDelayMs(error: unknown, attempt: number) {
   if (isRetryableAiError(error)) {
-    return GEMINI_RETRY_BASE_DELAY_MS * (attempt + 1);
+    return getRetryableAiDelayMs(attempt);
   }
 
   if (isStructuredOutputError(error)) {
@@ -108,6 +109,31 @@ function getStructuredGenerationRetryDelayMs(error: unknown, attempt: number) {
   }
 
   return null;
+}
+
+function getRetryableAiDelayMs(attempt: number) {
+  return GEMINI_RETRY_DELAYS_MS[attempt] ?? GEMINI_RETRY_DELAYS_MS.at(-1) ?? GEMINI_RETRY_BASE_DELAY_MS;
+}
+
+function sanitizeGeminiUploadFileName(fileName: string | undefined, fallback: string) {
+  const rawName = fileName?.trim() || fallback;
+  const extensionMatch = rawName.match(/\.([A-Za-z0-9]{1,12})$/);
+  const extension = extensionMatch ? `.${extensionMatch[1].toLowerCase()}` : "";
+  const baseName = rawName
+    .replace(/\.[^.]*$/, "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[._-]+|[._-]+$/g, "")
+    .slice(0, 72);
+  const safeBaseName = baseName || fallback.replace(/\.[^.]*$/, "") || "document";
+
+  return `${safeBaseName}${extension || ".bin"}`;
+}
+
+function createGeminiTempFilePath(file: File, fallback: string) {
+  return `/tmp/${crypto.randomUUID()}-${sanitizeGeminiUploadFileName(file.name, fallback)}`;
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
@@ -297,7 +323,7 @@ export async function generateStructuredObjectWithGeminiFile<TSchema extends z.Z
   usageContext?: GeminiUsageContext;
 }) {
   const ai = getGeminiClient();
-  const tempPath = `/tmp/${crypto.randomUUID()}-${params.file.name || "document.bin"}`;
+  const tempPath = createGeminiTempFilePath(params.file, "document.bin");
   const bytes = Buffer.from(await params.file.arrayBuffer());
   const fs = await import("node:fs/promises");
   let uploadedFileName: string | null = null;
@@ -440,7 +466,7 @@ export async function generateTextWithGeminiFile(params: {
   usageContext?: GeminiUsageContext;
 }) {
   const ai = getGeminiClient();
-  const tempPath = `/tmp/${crypto.randomUUID()}-${params.file.name || "document.bin"}`;
+  const tempPath = createGeminiTempFilePath(params.file, "document.bin");
   const bytes = Buffer.from(await params.file.arrayBuffer());
   const fs = await import("node:fs/promises");
   let uploadedFileName: string | null = null;
@@ -542,7 +568,7 @@ export async function generateTextWithGeminiFile(params: {
         lastError = error;
 
         if (attempt < maxAttempts - 1 && isRetryableAiError(error)) {
-          await sleep(GEMINI_RETRY_BASE_DELAY_MS * (attempt + 1));
+          await sleep(getRetryableAiDelayMs(attempt));
         }
       }
     }
@@ -591,7 +617,7 @@ export async function createGeminiEmbeddings(texts: string[]) {
         lastError = error;
 
         if (attempt < GEMINI_GENERATION_MAX_ATTEMPTS - 1 && isRetryableAiError(error)) {
-          await sleep(GEMINI_RETRY_BASE_DELAY_MS * (attempt + 1));
+          await sleep(getRetryableAiDelayMs(attempt));
           continue;
         }
 

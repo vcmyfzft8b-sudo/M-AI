@@ -49,6 +49,7 @@ import {
   isUnsupportedVideoContentType,
   UNSUPPORTED_VIDEO_LINK_MESSAGE,
 } from "@/lib/link-source-validation";
+import { ExpectedLectureInputError } from "@/lib/lecture-processing-errors";
 import { serializeVector } from "@/lib/utils";
 
 const pptxVisualExtractionSchema = z.object({
@@ -64,6 +65,7 @@ const pptxVisualExtractionSchema = z.object({
 const MAX_LINK_FETCH_REDIRECTS = 3;
 const MAX_LINK_FETCH_BYTES = 1_000_000;
 const MAX_LINK_READABLE_TEXT_CHARS = 45_000;
+const MAX_PREPARED_SOURCE_TEXT_CHARS = 240_000;
 const LINK_FETCH_TIMEOUT_MS = 10_000;
 const TRANSCRIPT_SEGMENT_INSERT_BATCH_SIZE = 25;
 const OCR_PRIMARY_MAX_OUTPUT_TOKENS = 3500;
@@ -821,12 +823,18 @@ async function assertPublicHostname(hostname: string) {
     normalizedHostname.endsWith(".localhost") ||
     normalizedHostname.endsWith(".local")
   ) {
-    throw new Error("Private network addresses are not allowed.");
+    throw new ExpectedLectureInputError(
+      "Private network addresses are not allowed.",
+      "private_network_link",
+    );
   }
 
   if (isIP(normalizedHostname) !== 0) {
     if (isDisallowedIpAddress(normalizedHostname)) {
-      throw new Error("Private network addresses are not allowed.");
+      throw new ExpectedLectureInputError(
+        "Private network addresses are not allowed.",
+        "private_network_link",
+      );
     }
 
     return;
@@ -838,7 +846,10 @@ async function assertPublicHostname(hostname: string) {
     addresses.length === 0 ||
     addresses.some((entry) => isDisallowedIpAddress(entry.address))
   ) {
-    throw new Error("Private network addresses are not allowed.");
+    throw new ExpectedLectureInputError(
+      "Private network addresses are not allowed.",
+      "private_network_link",
+    );
   }
 }
 
@@ -846,7 +857,10 @@ function resolveRedirectUrl(baseUrl: URL, location: string) {
   try {
     return new URL(location, baseUrl);
   } catch {
-    throw new Error("The link returned an invalid redirect.");
+    throw new ExpectedLectureInputError(
+      "The link returned an invalid redirect.",
+      "invalid_link_redirect",
+    );
   }
 }
 
@@ -854,7 +868,10 @@ async function readResponseBodyWithLimit(response: Response, maxBytes: number) {
   const contentLength = Number(response.headers.get("content-length"));
 
   if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    throw new Error("The linked page is too large to import.");
+    throw new ExpectedLectureInputError(
+      "The linked page is too large to import.",
+      "link_too_large",
+    );
   }
 
   if (!response.body) {
@@ -877,7 +894,10 @@ async function readResponseBodyWithLimit(response: Response, maxBytes: number) {
       totalBytes += value.byteLength;
 
       if (totalBytes > maxBytes) {
-        throw new Error("The linked page is too large to import.");
+        throw new ExpectedLectureInputError(
+          "The linked page is too large to import.",
+          "link_too_large",
+        );
       }
 
       body += decoder.decode(value, { stream: true });
@@ -896,7 +916,10 @@ async function fetchReadableWebpageResponse(targetUrl: URL, redirectCount = 0): 
   response: Response;
 }> {
   if (redirectCount > MAX_LINK_FETCH_REDIRECTS) {
-    throw new Error("Too many redirects. Use the final page URL directly.");
+    throw new ExpectedLectureInputError(
+      "Too many redirects. Use the final page URL directly.",
+      "too_many_link_redirects",
+    );
   }
 
   await assertPublicHostname(targetUrl.hostname);
@@ -920,13 +943,19 @@ async function fetchReadableWebpageResponse(targetUrl: URL, redirectCount = 0): 
       const location = response.headers.get("location");
 
       if (!location) {
-        throw new Error("The link returned an invalid redirect.");
+        throw new ExpectedLectureInputError(
+          "The link returned an invalid redirect.",
+          "invalid_link_redirect",
+        );
       }
 
       const nextUrl = resolveRedirectUrl(targetUrl, location);
 
       if (nextUrl.protocol !== "http:" && nextUrl.protocol !== "https:") {
-        throw new Error("Only http and https links are supported.");
+        throw new ExpectedLectureInputError(
+          "Only http and https links are supported.",
+          "unsupported_link_protocol",
+        );
       }
 
       return fetchReadableWebpageResponse(nextUrl, redirectCount + 1);
@@ -938,7 +967,10 @@ async function fetchReadableWebpageResponse(targetUrl: URL, redirectCount = 0): 
     };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("The link took too long to respond.");
+      throw new ExpectedLectureInputError(
+        "The link took too long to respond.",
+        "link_timeout",
+      );
     }
 
     throw error;
@@ -952,17 +984,28 @@ export async function fetchReadableWebpage(params: { url: string }) {
   const { url, response } = await fetchReadableWebpageResponse(targetUrl);
 
   if (!response.ok) {
-    throw new Error("The link could not be loaded.");
+    throw new ExpectedLectureInputError(
+      response.status === 401 || response.status === 403
+        ? "The link is private or requires permission to view."
+        : "The link could not be loaded.",
+      "link_not_loadable",
+    );
   }
 
   const contentType = response.headers.get("content-type") ?? "";
 
   if (isUnsupportedVideoContentType(contentType)) {
-    throw new Error(UNSUPPORTED_VIDEO_LINK_MESSAGE);
+    throw new ExpectedLectureInputError(
+      UNSUPPORTED_VIDEO_LINK_MESSAGE,
+      "unsupported_video_link",
+    );
   }
 
   if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
-    throw new Error("Only standard web pages are supported for link summaries.");
+    throw new ExpectedLectureInputError(
+      "Only standard web pages are supported for link summaries.",
+      "unsupported_link_content_type",
+    );
   }
 
   const html = await readResponseBodyWithLimit(response, MAX_LINK_FETCH_BYTES);
@@ -974,7 +1017,10 @@ export async function fetchReadableWebpage(params: { url: string }) {
   );
 
   if (composed.length < 200) {
-    throw new Error("This page does not contain enough readable text to summarize.");
+    throw new ExpectedLectureInputError(
+      "This page does not contain enough readable text to summarize.",
+      "link_not_enough_text",
+    );
   }
 
   return {
@@ -1321,7 +1367,17 @@ export async function createLectureFromTextSource(params: {
   const cleanedText = normalizeWhitespace(params.text);
 
   if (cleanedText.length < 120) {
-    throw new Error("Please provide a bit more source material before creating notes.");
+    throw new ExpectedLectureInputError(
+      "Please provide a bit more source material before creating notes.",
+      "source_too_short",
+    );
+  }
+
+  if (cleanedText.length > MAX_PREPARED_SOURCE_TEXT_CHARS) {
+    throw new ExpectedLectureInputError(
+      "This source is too large to process at once. Please split it into smaller parts and try again.",
+      "source_too_large",
+    );
   }
 
   const durationSeconds = estimateTextSourceDurationSeconds(cleanedText);
@@ -1593,7 +1649,17 @@ export async function prepareLectureFromTextSource(params: {
   const cleanedText = normalizeWhitespace(params.text);
 
   if (cleanedText.length < 120) {
-    throw new Error("Please provide a bit more source material before creating notes.");
+    throw new ExpectedLectureInputError(
+      "Please provide a bit more source material before creating notes.",
+      "source_too_short",
+    );
+  }
+
+  if (cleanedText.length > MAX_PREPARED_SOURCE_TEXT_CHARS) {
+    throw new ExpectedLectureInputError(
+      "This source is too large to process at once. Please split it into smaller parts and try again.",
+      "source_too_large",
+    );
   }
 
   const durationSeconds = estimateTextSourceDurationSeconds(cleanedText);

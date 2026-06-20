@@ -1071,22 +1071,21 @@ export async function getOrCreateTtsChunk(params: {
   const reservationUsageDate = reservationResult.usageDate;
   const reservationReservedSeconds = reservationResult.reservedSeconds;
 
-  if (
-    reservationResult.eventId &&
-    (reservationUsageDate === undefined || reservationReservedSeconds === undefined)
-  ) {
-    throw new Error("TTS generation reservation is missing quota metadata.");
-  }
+  let reservation: ReservedTtsGenerationQuota | null = null;
 
-  const reservation: ReservedTtsGenerationQuota | null = reservationResult.eventId
-    ? {
-        eventId: reservationResult.eventId,
-        userId: params.userId,
-        usageDate: reservationUsageDate,
-        reservedSeconds: reservationReservedSeconds,
-        quota: reservationResult.quota,
-      }
-    : null;
+  if (reservationResult.eventId) {
+    if (reservationUsageDate === undefined || reservationReservedSeconds === undefined) {
+      throw new Error("TTS generation reservation is missing quota metadata.");
+    }
+
+    reservation = {
+      eventId: reservationResult.eventId,
+      userId: params.userId,
+      usageDate: reservationUsageDate,
+      reservedSeconds: reservationReservedSeconds,
+      quota: reservationResult.quota,
+    };
+  }
 
   let shouldReleaseReservation = Boolean(reservation);
 

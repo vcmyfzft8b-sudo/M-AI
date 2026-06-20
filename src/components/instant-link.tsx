@@ -21,15 +21,24 @@ export const InstantLink = forwardRef<HTMLAnchorElement, InstantLinkProps>(funct
   ref,
 ) {
   const router = useRouter();
-  const shouldPrefetch = prefetch ?? true;
+  const shouldPrefetchOnMount = prefetch === true;
+  const shouldPrefetchOnIntent = prefetch !== false;
 
-  const prefetchHref = useCallback(() => {
-    if (!shouldPrefetch) {
+  const prefetchHref = useCallback((options?: { force?: boolean }) => {
+    if (!options?.force && !shouldPrefetchOnMount) {
       return;
     }
 
     safeRouterPrefetch(router, href);
-  }, [href, router, shouldPrefetch]);
+  }, [href, router, shouldPrefetchOnMount]);
+
+  const prefetchHrefOnIntent = useCallback(() => {
+    if (!shouldPrefetchOnIntent) {
+      return;
+    }
+
+    safeRouterPrefetch(router, href);
+  }, [href, router, shouldPrefetchOnIntent]);
 
   useEffect(() => {
     prefetchHref();
@@ -44,15 +53,15 @@ export const InstantLink = forwardRef<HTMLAnchorElement, InstantLinkProps>(funct
       scroll={scroll}
       prefetch={false}
       onPointerDown={(event) => {
-        prefetchHref();
+        prefetchHrefOnIntent();
         onPointerDown?.(event);
       }}
       onMouseEnter={(event) => {
-        prefetchHref();
+        prefetchHrefOnIntent();
         onMouseEnter?.(event);
       }}
       onFocus={(event) => {
-        prefetchHref();
+        prefetchHrefOnIntent();
         onFocus?.(event);
       }}
       onClick={(event) => {

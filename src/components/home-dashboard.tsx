@@ -27,7 +27,6 @@ import { LibraryFolderMenu } from "@/components/library-folder-menu";
 import { ViewportPortal } from "@/components/viewport-portal";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
 import { getEffectiveLectureSourceType } from "@/lib/lecture-source-metadata";
-import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 import { formatCalendarDate } from "@/lib/utils";
 
@@ -177,10 +176,6 @@ const NoteRow = memo(function NoteRow({
   const [isOpening, setIsOpening] = useState(false);
   const noteOffset = dragState?.offset ?? (isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0);
   const isSwipeActive = Boolean(dragState || isMenuOpen || noteOffset < 0);
-
-  useEffect(() => {
-    safeRouterPrefetch(router, href);
-  }, [href, router]);
 
   useEffect(
     () => () => {

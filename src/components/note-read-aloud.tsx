@@ -2594,7 +2594,12 @@ export function NoteReadAloud({
           </button>
         )}
       </ViewportPortal>
-      <div ref={contentRef} className="note-read-content" style={readAlongStyle}>
+      <div
+        ref={contentRef}
+        className="note-read-content"
+        style={readAlongStyle}
+        data-sentry-block
+      >
         <ReadAlongMarkdown
           document={document}
           completedWordIndex={completedWordIndex}

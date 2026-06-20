@@ -2,7 +2,7 @@ import "server-only";
 
 import type { PostgrestError } from "@supabase/supabase-js";
 
-import { toUserFacingAiErrorMessage } from "@/lib/ai/errors";
+import { isRetryableAiError, toUserFacingAiErrorMessage } from "@/lib/ai/errors";
 import { chatAnswerSchema } from "@/lib/ai/schemas";
 import { generateStructuredObject } from "@/lib/ai/json";
 import { createEmbeddings } from "@/lib/ai/embeddings";
@@ -12,6 +12,7 @@ import {
   attachDocumentImagesToNotes,
   getStoredDocumentImagesFromMetadata,
 } from "@/lib/document-note-media";
+import { isExpectedLectureInputError } from "@/lib/lecture-processing-errors";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
 import {
   getInitialNoteAudioVoice,
@@ -583,7 +584,9 @@ export async function markLecturePipelineFailed(params: {
   if (
     !(params.error instanceof InvalidAudioFileError) &&
     !(params.error instanceof NoClearSpeechDetectedError) &&
-    !(params.error instanceof NoReadableScanTextError)
+    !(params.error instanceof NoReadableScanTextError) &&
+    !isExpectedLectureInputError(params.error) &&
+    !isRetryableAiError(params.error)
   ) {
     captureRouteError(params.error, {
       route: "lecture-pipeline",

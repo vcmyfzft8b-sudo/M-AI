@@ -48,6 +48,53 @@ function shouldDropInterruptedLoadFailedEvent(event: SentryLikeEvent) {
   return event.breadcrumbs?.some(isInterruptedFetchBreadcrumb) ?? false;
 }
 
+function hasNoStackFrames(
+  exception: NonNullable<NonNullable<SentryLikeEvent["exception"]>["values"]>[number],
+) {
+  return (exception.stacktrace?.frames?.length ?? 0) === 0;
+}
+
+function hasBrowserNavigationBreadcrumb(event: SentryLikeEvent) {
+  return event.breadcrumbs?.some((breadcrumb) => {
+    if (breadcrumb.category === "navigation") {
+      return true;
+    }
+
+    if (breadcrumb.category !== "fetch") {
+      return false;
+    }
+
+    const url = typeof breadcrumb.data?.url === "string" ? breadcrumb.data.url : "";
+    return url.includes("_rsc=") || url.startsWith("/api/lectures/");
+  }) ?? false;
+}
+
+function shouldDropNoStackBrowserNetworkNoise(event: SentryLikeEvent) {
+  const exception = event.exception?.values?.[0];
+
+  if (!exception || !hasNoStackFrames(exception)) {
+    return false;
+  }
+
+  if (
+    exception.type === "TypeError" &&
+    (exception.value === "Load failed" || exception.value === "network error") &&
+    hasBrowserNavigationBreadcrumb(event)
+  ) {
+    return true;
+  }
+
+  if (
+    exception.type === "Error" &&
+    exception.value === "Connection closed." &&
+    hasBrowserNavigationBreadcrumb(event)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 Sentry.init({
   dsn,
   enabled: Boolean(dsn),
@@ -62,12 +109,16 @@ Sentry.init({
       maskAllText: true,
       maskAllInputs: true,
       blockAllMedia: true,
+      block: [".note-read-content", ".lecture-markdown"],
     }),
   ],
   replaysSessionSampleRate: isDevelopment ? 0.1 : 0,
   replaysOnErrorSampleRate: 1.0,
   beforeSend(event) {
-    if (shouldDropInterruptedLoadFailedEvent(event)) {
+    if (
+      shouldDropInterruptedLoadFailedEvent(event) ||
+      shouldDropNoStackBrowserNetworkNoise(event)
+    ) {
       return null;
     }
 

@@ -1421,16 +1421,6 @@ export function NoteSourceModal({
 
   async function prepareDocumentFile(file: File) {
     if (isLegacyPowerPointDocument(file)) {
-      Sentry.captureMessage("Legacy PowerPoint upload rejected", {
-        level: "info",
-        tags: {
-          fileExtension: getLowercaseExtension(file.name) || "unknown",
-          fileType: file.type || "unknown",
-        },
-        extra: {
-          sizeBytes: file.size,
-        },
-      });
       throw new Error("Stare PowerPoint datoteke .ppt še niso podprte. Shrani jo kot .pptx ali PDF in poskusi znova.");
     }
 

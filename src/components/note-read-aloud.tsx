@@ -1533,7 +1533,7 @@ export function NoteReadAloud({
   const pendingArrowMoveFromRectRef = useRef<DOMRect | null>(null);
   const pendingArrowMoveCloneRef = useRef<HTMLElement | null>(null);
   const prefetchedChunksRef = useRef(new Map<string, TtsChunkResponse>());
-  const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse | null>>());
+  const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse>>());
   const prefetchQueueRef = useRef<Promise<void>>(Promise.resolve());
   const playbackRequestIdRef = useRef(0);
   const preparedInitialChunkKeyRef = useRef<string | null>(null);
@@ -2031,14 +2031,10 @@ export function NoteReadAloud({
         return cachedChunk;
       }
 
-      const pendingRequest = pendingChunkRequestsRef.current.get(cacheKey);
+      let request = pendingChunkRequestsRef.current.get(cacheKey);
 
-      if (pendingRequest) {
-        return pendingRequest;
-      }
-
-      const request = (async () => {
-        try {
+      if (!request) {
+        request = (async () => {
           const response = await fetch(`/api/lectures/${lectureId}/tts/chunks`, {
             method: "POST",
             headers: {
@@ -2055,80 +2051,92 @@ export function NoteReadAloud({
           prefetchedChunksRef.current.set(cacheKey, payload);
 
           return payload;
-        } catch (chunkError) {
-          const message =
-            chunkError instanceof Error ? chunkError.message : "Poslušanje ni na voljo.";
-          const requestError = chunkError instanceof TtsRequestError ? chunkError : null;
-          const errorCode = requestError?.code;
-          const currentStatus: TtsStatusResponse | null = requestError?.quota
-            ? {
-                ...(statusRef.current ??
-                  status ?? {
-                    available: true,
-                    reason: null,
-                    tier: requestError.tier ?? "paid",
-                    chunkCount: chunks.length,
-                    totalWords: document.words.length,
-                    limitSeconds: requestError.quota.limitSeconds,
-                    remainingSeconds: requestError.quota.remainingSeconds,
-                    secondsUsed: requestError.quota.secondsUsed,
-                  }),
-                limitSeconds: requestError.quota.limitSeconds,
-                remainingSeconds: requestError.quota.remainingSeconds,
-                secondsUsed: requestError.quota.secondsUsed,
-                hasUnlimitedUsage: requestError.quota.hasUnlimitedUsage,
-              }
-            : statusRef.current ?? status;
-          const isDailyLimit =
-            errorCode === "tts_daily_limit_reached" ||
-            message === "Limit dosežen." ||
-            message === TTS_DAILY_LIMIT_MESSAGE;
-          const canTreatPendingAsCreationLimit =
-            errorCode === "tts_generation_pending" ||
-            errorCode === "tts_provider_rate_limited" ||
-            requestError?.status === 429;
-          const shouldShowCreationLimit =
-            isDailyLimit ||
-            (
-              canTreatPendingAsCreationLimit &&
-              isCreationQuotaUnavailableForChunk(chunkIndex, currentStatus)
-            );
-          const displayMessage = shouldShowCreationLimit
-            ? getDailyLimitDisplayMessage(currentStatus, requestError?.tier)
-            : message;
+        })();
 
-          if (!options?.silent) {
-            setError(displayMessage);
-          }
-
-          if (shouldShowCreationLimit) {
-            setStatus((current) => {
-              const baseStatus = current ?? currentStatus;
-              const nextStatus = baseStatus
-                ? {
-                    ...baseStatus,
-                    remainingSeconds: 0,
-                  }
-                : baseStatus;
-
-              statusRef.current = nextStatus;
-              return nextStatus;
-            });
-
-            if (!options?.silent && (options?.resetToStartOnCreationLimit ?? true)) {
-              resetPlaybackToStart({ preservePreparedChunks: true });
+        pendingChunkRequestsRef.current.set(cacheKey, request);
+        request.then(
+          () => {
+            if (pendingChunkRequestsRef.current.get(cacheKey) === request) {
+              pendingChunkRequestsRef.current.delete(cacheKey);
             }
-          }
+          },
+          () => {
+            if (pendingChunkRequestsRef.current.get(cacheKey) === request) {
+              pendingChunkRequestsRef.current.delete(cacheKey);
+            }
+          },
+        );
+      }
 
-          return null;
-        } finally {
-          pendingChunkRequestsRef.current.delete(cacheKey);
+      try {
+        return await request;
+      } catch (chunkError) {
+        const message =
+          chunkError instanceof Error ? chunkError.message : "Poslušanje ni na voljo.";
+        const requestError = chunkError instanceof TtsRequestError ? chunkError : null;
+        const errorCode = requestError?.code;
+        const currentStatus: TtsStatusResponse | null = requestError?.quota
+          ? {
+              ...(statusRef.current ??
+                status ?? {
+                  available: true,
+                  reason: null,
+                  tier: requestError.tier ?? "paid",
+                  chunkCount: chunks.length,
+                  totalWords: document.words.length,
+                  limitSeconds: requestError.quota.limitSeconds,
+                  remainingSeconds: requestError.quota.remainingSeconds,
+                  secondsUsed: requestError.quota.secondsUsed,
+                }),
+              limitSeconds: requestError.quota.limitSeconds,
+              remainingSeconds: requestError.quota.remainingSeconds,
+              secondsUsed: requestError.quota.secondsUsed,
+              hasUnlimitedUsage: requestError.quota.hasUnlimitedUsage,
+            }
+          : statusRef.current ?? status;
+        const isDailyLimit =
+          errorCode === "tts_daily_limit_reached" ||
+          message === "Limit dosežen." ||
+          message === TTS_DAILY_LIMIT_MESSAGE;
+        const canTreatPendingAsCreationLimit =
+          errorCode === "tts_generation_pending" ||
+          errorCode === "tts_provider_rate_limited" ||
+          requestError?.status === 429;
+        const shouldShowCreationLimit =
+          isDailyLimit ||
+          (
+            canTreatPendingAsCreationLimit &&
+            isCreationQuotaUnavailableForChunk(chunkIndex, currentStatus)
+          );
+        const displayMessage = shouldShowCreationLimit
+          ? getDailyLimitDisplayMessage(currentStatus, requestError?.tier)
+          : message;
+
+        if (!options?.silent) {
+          setError(displayMessage);
         }
-      })();
 
-      pendingChunkRequestsRef.current.set(cacheKey, request);
+        if (shouldShowCreationLimit) {
+          setStatus((current) => {
+            const baseStatus = current ?? currentStatus;
+            const nextStatus = baseStatus
+              ? {
+                  ...baseStatus,
+                  remainingSeconds: 0,
+                }
+              : baseStatus;
 
-      return request;
+            statusRef.current = nextStatus;
+            return nextStatus;
+          });
+
+          if (!options?.silent && (options?.resetToStartOnCreationLimit ?? true)) {
+            resetPlaybackToStart({ preservePreparedChunks: true });
+          }
+        }
+
+        return null;
+      }
     },
     [
       chunks.length,
@@ -2216,6 +2224,7 @@ export function NoteReadAloud({
 
         if (nextChunkIndex < chunks.length) {
           await fetchChunk(nextChunkIndex, {
+            silent: true,
             resetToStartOnCreationLimit: false,
           });
         }

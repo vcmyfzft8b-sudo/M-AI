@@ -4,8 +4,9 @@ import { createHash } from "node:crypto";
 
 import { SonioxNodeClient, type TranscriptToken } from "@soniox/node";
 
+import { getUserEntitlementState } from "@/lib/billing";
 import { STORAGE_BUCKET } from "@/lib/constants";
-import type { Json, LectureTtsChunkRow } from "@/lib/database.types";
+import type { Json, LectureTtsChunkRow, TtsGenerationEventRow } from "@/lib/database.types";
 import { normalizeNoteLanguage } from "@/lib/languages";
 import { DEFAULT_NOTE_TTS_VOICE, type NoteTtsVoice } from "@/lib/note-tts-settings";
 import {
@@ -34,6 +35,50 @@ export type TtsQuotaState = {
   code?: string;
 };
 
+export type TtsQuotaContext = {
+  hasPaidAccess: boolean;
+  hasUnlimitedUsage?: boolean;
+};
+
+export class TtsQuotaLimitError extends Error {
+  constructor(public readonly quota: TtsQuotaState) {
+    super("TTS daily generation limit reached.");
+    this.name = "TtsQuotaLimitError";
+  }
+}
+
+export class TtsGenerationPendingError extends Error {
+  constructor() {
+    super("TTS chunk generation is already in progress.");
+    this.name = "TtsGenerationPendingError";
+  }
+}
+
+type TtsGenerationIdentity = {
+  userId: string;
+  lectureId: string;
+  contentHash: string;
+  chunkIndex: number;
+  language: string;
+  voice: NoteTtsVoice;
+  model: string;
+};
+
+type ReservedTtsGenerationQuota = {
+  eventId: string;
+  userId: string;
+  usageDate: string;
+  reservedSeconds: number;
+  quota: TtsQuotaState;
+};
+
+type TtsGenerationReservationResult = {
+  eventId: string | null;
+  quota: TtsQuotaState;
+  usageDate?: string;
+  reservedSeconds?: number;
+};
+
 export const FREE_TTS_DAILY_LIMIT_SECONDS = 5 * 60;
 export const PAID_TTS_DAILY_LIMIT_SECONDS = 60 * 60;
 export const UNLIMITED_TTS_USAGE_SECONDS = Number.MAX_SAFE_INTEGER;
@@ -45,6 +90,8 @@ const TTS_OUTPUT_MIME_TYPE = "audio/mpeg";
 const TTS_OUTPUT_BITRATE = 64_000;
 const TTS_WAIT_TIMEOUT_MS = 120_000;
 const TTS_WAIT_INTERVAL_MS = 2_000;
+const TTS_CACHE_WAIT_TIMEOUT_MS = 24_000;
+const TTS_GENERATION_RESERVATION_STALE_MS = 10 * 60 * 1000;
 const TTS_PROVIDER_RETRY_DELAYS_MS = [1_500, 3_500] as const;
 
 let sonioxClient: SonioxNodeClient | undefined;
@@ -369,6 +416,17 @@ function isUniqueConstraintError(error: { code?: string } | null) {
   return error?.code === "23505";
 }
 
+export async function getTtsQuotaContext(params: {
+  userId: string;
+}): Promise<TtsQuotaContext> {
+  const entitlement = await getUserEntitlementState(params.userId);
+
+  return {
+    hasPaidAccess: entitlement.hasPaidAccess,
+    hasUnlimitedUsage: hasUnlimitedTtsUsage(entitlement.profile?.email),
+  };
+}
+
 async function readTtsUsageRow(params: { userId: string; usageDate: string }) {
   const { data, error } = await createSupabaseServiceRoleClient()
     .from("tts_daily_usage")
@@ -406,28 +464,6 @@ async function ensureTtsUsageRow(params: {
   }
 }
 
-async function getExistingTtsPlayEvent(params: {
-  userId: string;
-  sessionId: string;
-  contentHash: string;
-  chunkIndex: number;
-}) {
-  const { data, error } = await createSupabaseServiceRoleClient()
-    .from("tts_play_events")
-    .select("id, charged_seconds")
-    .eq("user_id", params.userId)
-    .eq("session_id", params.sessionId)
-    .eq("content_hash", params.contentHash)
-    .eq("chunk_index", params.chunkIndex)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return data as { id: string; charged_seconds: number } | null;
-}
-
 function buildQuotaState(params: {
   allowed: boolean;
   alreadyConsumed?: boolean;
@@ -447,25 +483,53 @@ function buildQuotaState(params: {
   };
 }
 
-async function reserveTtsPlayEvent(params: {
-  userId: string;
-  lectureId: string;
-  sessionId: string;
-  contentHash: string;
-  chunkIndex: number;
+async function getExistingTtsGenerationEvent(identity: TtsGenerationIdentity) {
+  const { data, error } = await createSupabaseServiceRoleClient()
+    .from("tts_generation_events")
+    .select("*")
+    .eq("user_id", identity.userId)
+    .eq("lecture_id", identity.lectureId)
+    .eq("content_hash", identity.contentHash)
+    .eq("chunk_index", identity.chunkIndex)
+    .eq("language", identity.language)
+    .eq("voice", identity.voice)
+    .eq("model", identity.model)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as TtsGenerationEventRow | null;
+}
+
+function isStaleTtsGenerationReservation(event: TtsGenerationEventRow) {
+  return (
+    event.status === "reserved" &&
+    Date.now() - new Date(event.created_at).getTime() > TTS_GENERATION_RESERVATION_STALE_MS
+  );
+}
+
+async function insertTtsGenerationReservation(params: {
+  identity: TtsGenerationIdentity;
   usageDate: string;
+  reservedSeconds: number;
 }) {
   const { data, error } = await createSupabaseServiceRoleClient()
-    .from("tts_play_events")
+    .from("tts_generation_events")
     .insert(
       {
-        user_id: params.userId,
-        lecture_id: params.lectureId,
-        session_id: params.sessionId,
-        content_hash: params.contentHash,
-        chunk_index: params.chunkIndex,
+        user_id: params.identity.userId,
+        lecture_id: params.identity.lectureId,
+        content_hash: params.identity.contentHash,
+        chunk_index: params.identity.chunkIndex,
+        language: params.identity.language,
+        voice: params.identity.voice,
+        model: params.identity.model,
         usage_date: params.usageDate,
+        reserved_seconds: params.reservedSeconds,
         charged_seconds: 0,
+        status: "reserved",
       } as never,
     )
     .select("id")
@@ -482,123 +546,139 @@ async function reserveTtsPlayEvent(params: {
   return (data as { id: string }).id;
 }
 
-async function removeTtsPlayReservation(id: string) {
-  const { error } = await createSupabaseServiceRoleClient()
-    .from("tts_play_events")
-    .delete()
-    .eq("id", id);
-
-  if (error) {
-    throw error;
-  }
-}
-
-async function markTtsPlayEventCharged(params: { id: string; chargedSeconds: number }) {
-  const { error } = await createSupabaseServiceRoleClient()
-    .from("tts_play_events")
-    .update({ charged_seconds: params.chargedSeconds } as never)
-    .eq("id", params.id);
-
-  if (error) {
-    throw error;
-  }
-}
-
-export async function consumeTtsQuota(params: {
+async function adjustTtsDailyUsage(params: {
   userId: string;
-  lectureId: string;
-  sessionId: string;
-  contentHash: string;
-  chunkIndex: number;
-  chargedSeconds: number;
-  hasPaidAccess: boolean;
-  hasUnlimitedUsage?: boolean;
+  usageDate: string;
+  limitSeconds: number;
+  deltaSeconds: number;
 }) {
-  if (params.hasUnlimitedUsage) {
-    return buildQuotaState({
-      allowed: true,
-      secondsUsed: 0,
-      limitSeconds: UNLIMITED_TTS_USAGE_SECONDS,
-      chargedSeconds: 0,
-    });
-  }
-
-  const limitSeconds = getTtsDailyLimitSeconds(params.hasPaidAccess);
-  const usageDate = getLjubljanaUsageDate();
-  const chargedSeconds = Math.max(1, Math.ceil(params.chargedSeconds));
-  const existingEvent = await getExistingTtsPlayEvent({
-    userId: params.userId,
-    sessionId: params.sessionId,
-    contentHash: params.contentHash,
-    chunkIndex: params.chunkIndex,
-  });
-
-  if (existingEvent && existingEvent.charged_seconds > 0) {
-    const usage = await getTtsUsageState({
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const usage = await readTtsUsageRow({
       userId: params.userId,
-      hasPaidAccess: params.hasPaidAccess,
+      usageDate: params.usageDate,
     });
+    const secondsUsed = usage?.seconds_used ?? 0;
+    const nextSecondsUsed = Math.max(0, secondsUsed + params.deltaSeconds);
 
-    return buildQuotaState({
-      allowed: true,
-      alreadyConsumed: true,
-      secondsUsed: usage.secondsUsed,
-      limitSeconds: usage.limitSeconds,
-      chargedSeconds: 0,
-    });
+    const { data, error } = await createSupabaseServiceRoleClient()
+      .from("tts_daily_usage")
+      .update(
+        {
+          seconds_used: nextSecondsUsed,
+          limit_seconds: params.limitSeconds,
+        } as never,
+      )
+      .eq("user_id", params.userId)
+      .eq("usage_date", params.usageDate)
+      .eq("seconds_used", secondsUsed)
+      .select("seconds_used, limit_seconds")
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data) {
+      continue;
+    }
+
+    return data as { seconds_used: number; limit_seconds: number };
   }
 
-  if (existingEvent) {
-    await removeTtsPlayReservation(existingEvent.id);
+  throw new Error("Could not update TTS usage after concurrent updates.");
+}
+
+async function reserveTtsGenerationQuota(params: {
+  identity: TtsGenerationIdentity;
+  estimatedSeconds: number;
+  quotaContext: TtsQuotaContext;
+}): Promise<TtsGenerationReservationResult> {
+  if (params.quotaContext.hasUnlimitedUsage) {
+    return {
+      eventId: null,
+      quota: buildQuotaState({
+        allowed: true,
+        secondsUsed: 0,
+        limitSeconds: UNLIMITED_TTS_USAGE_SECONDS,
+        chargedSeconds: 0,
+      }),
+    };
   }
+
+  const limitSeconds = getTtsDailyLimitSeconds(params.quotaContext.hasPaidAccess);
+  const usageDate = getLjubljanaUsageDate();
+  const reservedSeconds = Math.max(1, Math.ceil(params.estimatedSeconds));
 
   await ensureTtsUsageRow({
-    userId: params.userId,
+    userId: params.identity.userId,
     usageDate,
     limitSeconds,
   });
 
-  const reservationId = await reserveTtsPlayEvent({
-    userId: params.userId,
-    lectureId: params.lectureId,
-    sessionId: params.sessionId,
-    contentHash: params.contentHash,
-    chunkIndex: params.chunkIndex,
+  const reservationId = await insertTtsGenerationReservation({
+    identity: params.identity,
     usageDate,
+    reservedSeconds,
   });
 
   if (!reservationId) {
+    const existingEvent = await getExistingTtsGenerationEvent(params.identity);
+
+    if (existingEvent && isStaleTtsGenerationReservation(existingEvent)) {
+      await releaseTtsGenerationReservation({
+        eventId: existingEvent.id,
+        userId: params.identity.userId,
+        usageDate: existingEvent.usage_date,
+        limitSeconds,
+        reservedSeconds: existingEvent.reserved_seconds,
+      });
+
+      return reserveTtsGenerationQuota(params);
+    }
+
     const usage = await getTtsUsageState({
-      userId: params.userId,
-      hasPaidAccess: params.hasPaidAccess,
+      userId: params.identity.userId,
+      hasPaidAccess: params.quotaContext.hasPaidAccess,
     });
 
-    return buildQuotaState({
-      allowed: true,
-      alreadyConsumed: true,
-      secondsUsed: usage.secondsUsed,
-      limitSeconds: usage.limitSeconds,
-      chargedSeconds: 0,
-    });
+    return {
+      eventId: null,
+      quota: buildQuotaState({
+        allowed: true,
+        alreadyConsumed: true,
+        secondsUsed: usage.secondsUsed,
+        limitSeconds: usage.limitSeconds,
+        chargedSeconds: 0,
+      }),
+    };
   }
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const usage = await readTtsUsageRow({
-      userId: params.userId,
+      userId: params.identity.userId,
       usageDate,
     });
     const secondsUsed = usage?.seconds_used ?? 0;
-    const nextSecondsUsed = secondsUsed + chargedSeconds;
+    const nextSecondsUsed = secondsUsed + reservedSeconds;
 
     if (nextSecondsUsed > limitSeconds) {
-      await removeTtsPlayReservation(reservationId);
-
-      return buildQuotaState({
-        allowed: false,
-        secondsUsed,
+      await releaseTtsGenerationReservation({
+        eventId: reservationId,
+        userId: params.identity.userId,
+        usageDate,
         limitSeconds,
-        code: "tts_daily_limit_reached",
+        reservedSeconds: 0,
       });
+
+      return {
+        eventId: null,
+        quota: buildQuotaState({
+          allowed: false,
+          secondsUsed,
+          limitSeconds,
+          code: "tts_daily_limit_reached",
+        }),
+      };
     }
 
     const { data, error } = await createSupabaseServiceRoleClient()
@@ -609,14 +689,20 @@ export async function consumeTtsQuota(params: {
           limit_seconds: limitSeconds,
         } as never,
       )
-      .eq("user_id", params.userId)
+      .eq("user_id", params.identity.userId)
       .eq("usage_date", usageDate)
       .eq("seconds_used", secondsUsed)
       .select("seconds_used, limit_seconds")
       .maybeSingle();
 
     if (error) {
-      await removeTtsPlayReservation(reservationId);
+      await releaseTtsGenerationReservation({
+        eventId: reservationId,
+        userId: params.identity.userId,
+        usageDate,
+        limitSeconds,
+        reservedSeconds: 0,
+      });
       throw error;
     }
 
@@ -624,23 +710,100 @@ export async function consumeTtsQuota(params: {
       continue;
     }
 
-    await markTtsPlayEventCharged({
-      id: reservationId,
-      chargedSeconds,
-    });
-
     const updatedUsage = data as { seconds_used: number; limit_seconds: number };
 
-    return buildQuotaState({
-      allowed: true,
-      secondsUsed: updatedUsage.seconds_used,
-      limitSeconds: updatedUsage.limit_seconds,
-      chargedSeconds,
-    });
+    return {
+      eventId: reservationId,
+      quota: buildQuotaState({
+        allowed: true,
+        secondsUsed: updatedUsage.seconds_used,
+        limitSeconds: updatedUsage.limit_seconds,
+        chargedSeconds: reservedSeconds,
+      }),
+      usageDate,
+      reservedSeconds,
+    };
   }
 
-  await removeTtsPlayReservation(reservationId);
-  throw new Error("Could not reserve TTS quota after concurrent updates.");
+  await releaseTtsGenerationReservation({
+    eventId: reservationId,
+    userId: params.identity.userId,
+    usageDate,
+    limitSeconds,
+    reservedSeconds: 0,
+  });
+  throw new Error("Could not reserve TTS generation quota after concurrent updates.");
+}
+
+async function finalizeTtsGenerationQuota(params: {
+  reservation: ReservedTtsGenerationQuota | null;
+  actualSeconds: number;
+}) {
+  if (!params.reservation) {
+    return null;
+  }
+
+  const chargedSeconds = Math.max(1, Math.ceil(params.actualSeconds));
+  const deltaSeconds = chargedSeconds - params.reservation.reservedSeconds;
+  const updatedUsage =
+    deltaSeconds === 0
+      ? {
+          seconds_used: params.reservation.quota.secondsUsed,
+          limit_seconds: params.reservation.quota.limitSeconds,
+        }
+      : await adjustTtsDailyUsage({
+          userId: params.reservation.userId,
+          usageDate: params.reservation.usageDate,
+          limitSeconds: params.reservation.quota.limitSeconds,
+          deltaSeconds,
+        });
+
+  const { error } = await createSupabaseServiceRoleClient()
+    .from("tts_generation_events")
+    .update(
+      {
+        charged_seconds: chargedSeconds,
+        status: "charged",
+      } as never,
+    )
+    .eq("id", params.reservation.eventId);
+
+  if (error) {
+    throw error;
+  }
+
+  return buildQuotaState({
+    allowed: true,
+    secondsUsed: updatedUsage.seconds_used,
+    limitSeconds: updatedUsage.limit_seconds,
+    chargedSeconds,
+  });
+}
+
+async function releaseTtsGenerationReservation(params: {
+  eventId: string;
+  userId: string;
+  usageDate: string;
+  limitSeconds: number;
+  reservedSeconds: number;
+}) {
+  const { error } = await createSupabaseServiceRoleClient()
+    .from("tts_generation_events")
+    .delete()
+    .eq("id", params.eventId);
+
+  if (error) {
+    throw error;
+  }
+
+  if (params.reservedSeconds > 0) {
+    await adjustTtsDailyUsage({
+      userId: params.userId,
+      usageDate: params.usageDate,
+      limitSeconds: params.limitSeconds,
+      deltaSeconds: -params.reservedSeconds,
+    });
+  }
 }
 
 function parseStoredAlignment(value: unknown): TtsAlignmentWord[] {
@@ -668,6 +831,59 @@ function parseStoredAlignment(value: unknown): TtsAlignmentWord[] {
 
     return [{ wordIndex, startMs, endMs }];
   });
+}
+
+async function getCachedTtsChunkRow(params: TtsGenerationIdentity) {
+  const { data, error } = await createSupabaseServiceRoleClient()
+    .from("lecture_tts_chunks")
+    .select("*")
+    .eq("lecture_id", params.lectureId)
+    .eq("content_hash", params.contentHash)
+    .eq("chunk_index", params.chunkIndex)
+    .eq("language", params.language)
+    .eq("voice", params.voice)
+    .eq("model", params.model)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as LectureTtsChunkRow | null;
+}
+
+async function signTtsChunk(row: LectureTtsChunkRow) {
+  const { data: signedUrl, error: signedUrlError } =
+    await createSupabaseServiceRoleClient()
+      .storage
+      .from(STORAGE_BUCKET)
+      .createSignedUrl(row.audio_storage_path, 10 * 60);
+
+  if (signedUrlError || !signedUrl?.signedUrl) {
+    throw signedUrlError ?? new Error("Could not create a signed TTS audio URL.");
+  }
+
+  return {
+    row,
+    audioUrl: signedUrl.signedUrl,
+    alignment: parseStoredAlignment(row.alignment_json),
+  };
+}
+
+async function waitForCachedTtsChunkRow(params: TtsGenerationIdentity) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < TTS_CACHE_WAIT_TIMEOUT_MS) {
+    const cached = await getCachedTtsChunkRow(params);
+
+    if (cached) {
+      return cached;
+    }
+
+    await wait(1_500);
+  }
+
+  return null;
 }
 
 async function transcribeGeneratedAudio(params: {
@@ -795,29 +1011,87 @@ export async function getOrCreateTtsChunk(params: {
   allWords: NoteTtsWord[];
   languageHint: string | null;
   voice?: NoteTtsVoice;
+  quotaContext: TtsQuotaContext;
 }) {
   const env = getServerEnv();
   const language = normalizeNoteLanguage(params.languageHint);
   const voice = params.voice ?? DEFAULT_NOTE_TTS_VOICE;
-  const service = createSupabaseServiceRoleClient();
-  const { data: cached, error: cacheError } = await service
-    .from("lecture_tts_chunks")
-    .select("*")
-    .eq("lecture_id", params.lectureId)
-    .eq("content_hash", params.contentHash)
-    .eq("chunk_index", params.chunk.chunkIndex)
-    .eq("language", language)
-    .eq("voice", voice)
-    .eq("model", env.SONIOX_TTS_MODEL)
-    .maybeSingle();
+  const identity: TtsGenerationIdentity = {
+    userId: params.userId,
+    lectureId: params.lectureId,
+    contentHash: params.contentHash,
+    chunkIndex: params.chunk.chunkIndex,
+    language,
+    voice,
+    model: env.SONIOX_TTS_MODEL,
+  };
+  const cached = await getCachedTtsChunkRow(identity);
+  const usage = await getTtsUsageState({
+    userId: params.userId,
+    hasPaidAccess: params.quotaContext.hasPaidAccess,
+    hasUnlimitedUsage: params.quotaContext.hasUnlimitedUsage,
+  });
 
-  if (cacheError) {
-    throw cacheError;
+  if (cached) {
+    return {
+      ...(await signTtsChunk(cached)),
+      quota: buildQuotaState({
+        allowed: true,
+        alreadyConsumed: true,
+        secondsUsed: usage.secondsUsed,
+        limitSeconds: usage.limitSeconds,
+        chargedSeconds: 0,
+      }),
+    };
   }
 
-  const row =
-    ((cached as LectureTtsChunkRow | null) ??
-    (await generateTtsChunk({
+  const reservationResult = await reserveTtsGenerationQuota({
+    identity,
+    estimatedSeconds: params.chunk.estimatedSeconds,
+    quotaContext: params.quotaContext,
+  });
+
+  if (!reservationResult.quota.allowed) {
+    throw new TtsQuotaLimitError(reservationResult.quota);
+  }
+
+  if (!reservationResult.eventId && !params.quotaContext.hasUnlimitedUsage) {
+    const generatedByConcurrentRequest = await waitForCachedTtsChunkRow(identity);
+
+    if (!generatedByConcurrentRequest) {
+      throw new TtsGenerationPendingError();
+    }
+
+    return {
+      ...(await signTtsChunk(generatedByConcurrentRequest)),
+      quota: reservationResult.quota,
+    };
+  }
+
+  const reservationUsageDate = reservationResult.usageDate;
+  const reservationReservedSeconds = reservationResult.reservedSeconds;
+
+  if (
+    reservationResult.eventId &&
+    (reservationUsageDate === undefined || reservationReservedSeconds === undefined)
+  ) {
+    throw new Error("TTS generation reservation is missing quota metadata.");
+  }
+
+  const reservation: ReservedTtsGenerationQuota | null = reservationResult.eventId
+    ? {
+        eventId: reservationResult.eventId,
+        userId: params.userId,
+        usageDate: reservationUsageDate,
+        reservedSeconds: reservationReservedSeconds,
+        quota: reservationResult.quota,
+      }
+    : null;
+
+  let shouldReleaseReservation = Boolean(reservation);
+
+  try {
+    const row = await generateTtsChunk({
       userId: params.userId,
       lectureId: params.lectureId,
       contentHash: params.contentHash,
@@ -825,65 +1099,99 @@ export async function getOrCreateTtsChunk(params: {
       chunkWords: params.allWords.slice(params.chunk.wordStartIndex, params.chunk.wordEndIndex),
       language,
       voice,
-    })));
-  const { data: signedUrl, error: signedUrlError } = await service.storage
-    .from(STORAGE_BUCKET)
-    .createSignedUrl(row.audio_storage_path, 10 * 60);
+    });
 
-  if (signedUrlError || !signedUrl?.signedUrl) {
-    throw signedUrlError ?? new Error("Could not create a signed TTS audio URL.");
+    shouldReleaseReservation = false;
+
+    const finalizedQuota =
+      (await finalizeTtsGenerationQuota({
+        reservation,
+        actualSeconds: Math.max(1, Math.ceil(row.duration_ms / 1000)),
+      })) ?? reservationResult.quota;
+
+    return {
+      ...(await signTtsChunk(row)),
+      quota: finalizedQuota,
+    };
+  } catch (error) {
+    if (reservation && shouldReleaseReservation) {
+      await releaseTtsGenerationReservation({
+        eventId: reservation.eventId,
+        userId: reservation.userId,
+        usageDate: reservation.usageDate,
+        limitSeconds: reservation.quota.limitSeconds,
+        reservedSeconds: reservation.reservedSeconds,
+      });
+    }
+
+    throw error;
   }
-
-  return {
-    row: row as LectureTtsChunkRow,
-    audioUrl: signedUrl.signedUrl,
-    alignment: parseStoredAlignment(row.alignment_json),
-  };
 }
 
-export async function prepareInitialNoteTtsChunk(params: {
+export async function prepareInitialNoteTtsChunks(params: {
   userId: string;
   lectureId: string;
   content: string;
   title?: string | null;
   languageHint: string | null;
   voice?: NoteTtsVoice;
+  quotaContext?: TtsQuotaContext;
+  chunkCount?: number;
 }) {
   const content = stripLeadingRedundantHeading(params.content, params.title).trim();
 
   if (!content) {
-    return null;
+    return [];
   }
 
   const document = parseNoteTtsDocument(content);
   const chunks = buildNoteTtsChunks(document);
-  const firstChunk = chunks[0];
+  const initialChunks = chunks.slice(0, Math.max(1, params.chunkCount ?? 2));
 
-  if (!firstChunk) {
-    return null;
+  if (initialChunks.length === 0) {
+    return [];
   }
 
-  return retryTtsProviderRateLimit(() =>
-    getOrCreateTtsChunk({
-      userId: params.userId,
-      lectureId: params.lectureId,
-      contentHash: hashNoteTtsContent(content),
-      chunk: firstChunk,
-      allWords: document.words,
-      languageHint: params.languageHint,
-      voice: params.voice,
-    }),
-  );
+  const quotaContext =
+    params.quotaContext ?? (await getTtsQuotaContext({ userId: params.userId }));
+  const prepared = [];
+
+  for (const chunk of initialChunks) {
+    try {
+      const result = await retryTtsProviderRateLimit(() =>
+        getOrCreateTtsChunk({
+          userId: params.userId,
+          lectureId: params.lectureId,
+          contentHash: hashNoteTtsContent(content),
+          chunk,
+          allWords: document.words,
+          languageHint: params.languageHint,
+          voice: params.voice,
+          quotaContext,
+        }),
+      );
+
+      prepared.push(result);
+    } catch (error) {
+      if (error instanceof TtsQuotaLimitError || error instanceof TtsGenerationPendingError) {
+        break;
+      }
+
+      throw error;
+    }
+  }
+
+  return prepared;
 }
 
-export async function prepareInitialNoteTtsChunkSafely(
-  params: Parameters<typeof prepareInitialNoteTtsChunk>[0],
+export async function prepareInitialNoteTtsChunksSafely(
+  params: Parameters<typeof prepareInitialNoteTtsChunks>[0],
 ) {
   try {
-    const chunk = await prepareInitialNoteTtsChunk(params);
+    const chunks = await prepareInitialNoteTtsChunks(params);
 
     return {
-      status: chunk ? "ready" : "skipped",
+      status: chunks.length > 0 ? "ready" : "skipped",
       errorMessage: null,
     } as const;
   } catch (error) {

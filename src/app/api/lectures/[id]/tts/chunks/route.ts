@@ -4,11 +4,11 @@ import { z } from "zod";
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
 import {
-  consumeTtsQuota,
   getOrCreateTtsChunk,
-  getTtsUsageState,
   hasUnlimitedTtsUsage,
   hashNoteTtsContent,
+  TtsGenerationPendingError,
+  TtsQuotaLimitError,
 } from "@/lib/note-tts";
 import {
   buildNoteTtsChunks,
@@ -40,7 +40,7 @@ function createTtsLimitResponse(params: {
 }) {
   return NextResponse.json(
     {
-      error: "Porabil si današnje poslušanje.",
+      error: "Porabil si današnje ustvarjanje zvoka.",
       code: "tts_daily_limit_reached",
       secondsUsed: params.secondsUsed,
       remainingSeconds: params.remainingSeconds,
@@ -143,7 +143,7 @@ export async function POST(
 
   if (!access.allowed) {
     return createBillingRequiredResponse(
-      "Pred poslušanjem tega zapiska izberi paket.",
+      "Pred ustvarjanjem zvoka za ta zapisek izberi paket.",
       access.code,
     );
   }
@@ -165,16 +165,6 @@ export async function POST(
     return NextResponse.json({ error: "Zapiski še niso pripravljeni." }, { status: 409 });
   }
 
-  const usageBeforeGeneration = await getTtsUsageState({
-    userId: user.id,
-    hasPaidAccess: access.entitlement.hasPaidAccess,
-    hasUnlimitedUsage,
-  });
-
-  if (usageBeforeGeneration.remainingSeconds <= 0) {
-    return createTtsLimitResponse(usageBeforeGeneration);
-  }
-
   const document = parseNoteTtsDocument(content);
   const chunks = buildNoteTtsChunks(document);
   const chunk = chunks[parsedBody.data.chunkIndex];
@@ -185,7 +175,6 @@ export async function POST(
 
   const contentHash = hashNoteTtsContent(content);
   let generated: Awaited<ReturnType<typeof getOrCreateTtsChunk>>;
-  let quota: Awaited<ReturnType<typeof consumeTtsQuota>>;
 
   try {
     generated = await retryProviderRateLimit(() =>
@@ -197,26 +186,33 @@ export async function POST(
         allWords: document.words,
         languageHint: detail.lecture.language_hint,
         voice: parsedBody.data.voice,
+        quotaContext: {
+          hasPaidAccess: access.entitlement.hasPaidAccess,
+          hasUnlimitedUsage,
+        },
       }),
     );
-    const chargedSeconds = Math.max(1, Math.ceil(generated.row.duration_ms / 1000));
-    quota = await consumeTtsQuota({
-      userId: user.id,
-      lectureId: id,
-      sessionId: parsedBody.data.sessionId,
-      contentHash,
-      chunkIndex: chunk.chunkIndex,
-      chargedSeconds,
-      hasPaidAccess: access.entitlement.hasPaidAccess,
-      hasUnlimitedUsage,
-    });
   } catch (error) {
     console.error("Failed to prepare note TTS chunk", error);
+
+    if (error instanceof TtsQuotaLimitError) {
+      return createTtsLimitResponse(error.quota);
+    }
+
+    if (error instanceof TtsGenerationPendingError) {
+      return NextResponse.json(
+        {
+          error: "Zvok se še pripravlja. Poskusi znova čez trenutek.",
+          code: "tts_generation_pending",
+        },
+        { status: 503 },
+      );
+    }
 
     if (isProviderRateLimitError(error)) {
       return NextResponse.json(
         {
-          error: "Poslušanje se še pripravlja. Poskusi znova čez trenutek.",
+          error: "Zvok se še pripravlja. Poskusi znova čez trenutek.",
           code: "tts_provider_rate_limited",
         },
         { status: 503 },
@@ -227,17 +223,13 @@ export async function POST(
       {
         error:
           process.env.NODE_ENV === "production" || isProviderRateLimitError(error)
-            ? "Poslušanja ni bilo mogoče pripraviti."
+            ? "Zvoka ni bilo mogoče pripraviti."
             : error instanceof Error
               ? error.message
-              : "Poslušanja ni bilo mogoče pripraviti.",
+              : "Zvoka ni bilo mogoče pripraviti.",
       },
       { status: 500 },
     );
-  }
-
-  if (!quota.allowed) {
-    return createTtsLimitResponse(quota);
   }
 
   return NextResponse.json({
@@ -248,9 +240,9 @@ export async function POST(
     wordEndIndex: generated.row.word_end_index,
     durationMs: generated.row.duration_ms,
     alignment: generated.alignment,
-    limitSeconds: quota.limitSeconds,
-    secondsUsed: quota.secondsUsed,
-    remainingSeconds: quota.remainingSeconds,
+    limitSeconds: generated.quota.limitSeconds,
+    secondsUsed: generated.quota.secondsUsed,
+    remainingSeconds: generated.quota.remainingSeconds,
     hasUnlimitedUsage,
   });
 }

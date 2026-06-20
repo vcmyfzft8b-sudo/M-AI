@@ -122,11 +122,11 @@ type ActiveChunk = TtsChunkResponse;
 const AUTO_SCROLL_IDLE_MS = 5_000;
 const NOTE_TTS_RATE_STORAGE_KEY = "memo-note-tts-rate";
 const NOTE_TTS_COLOR_STORAGE_KEY = "memo-note-tts-color";
-const TTS_DAILY_LIMIT_MESSAGE = "Porabil si današnje poslušanje.";
+const TTS_DAILY_LIMIT_MESSAGE = "Porabil si današnje ustvarjanje zvoka.";
 const TTS_FREE_DAILY_LIMIT_MESSAGE =
-  "Porabil si današnje brezplačno poslušanje. Nadgradi za več poslušanja.";
+  "Porabil si današnje brezplačno ustvarjanje zvoka. Nadgradi za več zvoka.";
 const TTS_PAID_DAILY_LIMIT_MESSAGE =
-  "Porabil si današnje poslušanje. Znova lahko poslušaš po ponastavitvi ob 00:00.";
+  "Porabil si današnje ustvarjanje zvoka. Znova lahko ustvarjaš po ponastavitvi ob 00:00.";
 const READ_SETTINGS_SHEET_CLOSE_MS = 180;
 const TTS_GENERATION_PROGRESS_LABEL = "Ustvarjam zvok";
 
@@ -562,14 +562,14 @@ async function parseResponse<T>(response: Response): Promise<T> {
   };
 
   if (!response.ok) {
-    const message = payload.error || "Poslušanja ni bilo mogoče pripraviti.";
+    const message = payload.error || "Zvoka ni bilo mogoče pripraviti.";
 
     if (payload.code === "tts_daily_limit_reached") {
       throw new Error(TTS_DAILY_LIMIT_MESSAGE);
     }
 
     if (response.status === 429 || message.includes("HTTP 429")) {
-      throw new Error("Poslušanje se še pripravlja. Poskusi znova čez trenutek.");
+      throw new Error("Zvok se še pripravlja. Poskusi znova čez trenutek.");
     }
 
     throw new Error(message);
@@ -1938,12 +1938,6 @@ export function NoteReadAloud({
   }, [clearTtsGenerationProgressTimers]);
 
   useEffect(() => {
-    if (status && !status.hasUnlimitedUsage && status.remainingSeconds <= 0) {
-      setError(getDailyLimitDisplayMessage(status));
-    }
-  }, [status]);
-
-  useEffect(() => {
     if (!hasHydratedSettings) {
       return;
     }
@@ -2095,7 +2089,7 @@ export function NoteReadAloud({
 
   const prefetchUpcomingChunks = useCallback(
     (chunkIndex: number) => {
-      if (!status?.available || status.remainingSeconds <= 0) {
+      if (!status?.available) {
         return;
       }
 
@@ -2111,7 +2105,7 @@ export function NoteReadAloud({
         prefetchChunk(nextChunkIndex);
       }
     },
-    [chunks.length, playbackRate, prefetchChunk, status?.available, status?.remainingSeconds],
+    [chunks.length, playbackRate, prefetchChunk, status?.available],
   );
 
   useEffect(() => {
@@ -2119,14 +2113,15 @@ export function NoteReadAloud({
       !autoPrepareFirstChunk ||
       !hasHydratedSettings ||
       !status?.available ||
-      status.remainingSeconds <= 0 ||
       chunks.length === 0
     ) {
       return;
     }
 
-    const cacheKey = getChunkCacheKey(selectedVoice, 0);
-    const warmupKey = `${lectureId}:${cacheKey}:${chunks[0]?.text ?? ""}`;
+    const warmupChunks = chunks.slice(0, 2);
+    const warmupKey = `${lectureId}:${selectedVoice}:${warmupChunks
+      .map((chunk) => `${chunk.chunkIndex}:${chunk.text}`)
+      .join("|")}`;
 
     if (preparedInitialChunkKeyRef.current === warmupKey) {
       return;
@@ -2136,7 +2131,11 @@ export function NoteReadAloud({
 
     let cancelled = false;
 
-    void fetchChunk(0, { silent: true }).then((payload) => {
+    void Promise.all(
+      warmupChunks.map((chunk) => fetchChunk(chunk.chunkIndex, { silent: true })),
+    ).then((payloads) => {
+      const payload = payloads.find((item) => item?.chunkIndex === 0);
+
       if (cancelled || !payload) {
         return;
       }
@@ -2163,7 +2162,6 @@ export function NoteReadAloud({
     lectureId,
     selectedVoice,
     status?.available,
-    status?.remainingSeconds,
   ]);
 
   useEffect(() => {
@@ -2355,11 +2353,6 @@ export function NoteReadAloud({
       return;
     }
 
-    if (!playbackStatus.hasUnlimitedUsage && playbackStatus.remainingSeconds <= 0) {
-      setError(getDailyLimitDisplayMessage(playbackStatus));
-      return;
-    }
-
     await playChunk(activeChunkIndex);
   }, [
     activeChunk,
@@ -2454,21 +2447,7 @@ export function NoteReadAloud({
     const nextChunkIndex = activeChunk.chunkIndex + 1;
 
     if (nextChunkIndex < activeChunk.chunkCount) {
-      if ((status?.remainingSeconds ?? 0) > 0) {
-        void playChunk(nextChunkIndex);
-        return;
-      }
-
-      setError(getDailyLimitDisplayMessage(status));
-      setStatus((current) =>
-        current
-          ? {
-              ...current,
-              remainingSeconds: 0,
-            }
-          : current,
-      );
-      resetPlaybackToStart();
+      void playChunk(nextChunkIndex);
       return;
     }
 
@@ -2481,14 +2460,12 @@ export function NoteReadAloud({
     document.words.length,
     playChunk,
     resetPlaybackWordState,
-    resetPlaybackToStart,
-    status,
   ]);
 
   const disabled =
     isFetchingChunk ||
     isStartingPlayback ||
-    Boolean(status && (!status.available || (!status.hasUnlimitedUsage && status.remainingSeconds <= 0))) ||
+    Boolean(status && !status.available) ||
     chunks.length === 0;
   const isPreparingPlayback = isFetchingChunk || isStartingPlayback;
   const playButtonLabel =

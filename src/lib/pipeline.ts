@@ -29,7 +29,7 @@ import { generateNotesFromTranscript } from "@/lib/note-generation";
 import { withNoteEnrichmentStage } from "@/lib/note-enrichment-status";
 import {
   markInitialNoteAudioPreparing,
-  prepareInitialNoteTtsChunkSafely,
+  prepareInitialNoteTtsChunksSafely,
 } from "@/lib/note-tts";
 import { NoReadableScanTextError } from "@/lib/scan-ocr-errors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -516,7 +516,7 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
       lectureId: lecture.id,
       processingMetadata: lecture.processing_metadata,
     });
-    await prepareInitialNoteTtsChunkSafely({
+    await prepareInitialNoteTtsChunksSafely({
       userId: lecture.user_id,
       lectureId: lecture.id,
       content: notes.structuredNotesMd,

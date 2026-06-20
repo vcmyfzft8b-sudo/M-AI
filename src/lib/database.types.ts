@@ -492,6 +492,53 @@ export type Database = {
           updated_at?: string;
         };
       };
+      tts_generation_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          lecture_id: string;
+          content_hash: string;
+          chunk_index: number;
+          language: string;
+          voice: string;
+          model: string;
+          usage_date: string;
+          reserved_seconds: number;
+          charged_seconds: number;
+          status: "reserved" | "charged";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          lecture_id: string;
+          content_hash: string;
+          chunk_index: number;
+          language: string;
+          voice: string;
+          model: string;
+          usage_date: string;
+          reserved_seconds?: number;
+          charged_seconds?: number;
+          status?: "reserved" | "charged";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          content_hash?: string;
+          chunk_index?: number;
+          language?: string;
+          voice?: string;
+          model?: string;
+          usage_date?: string;
+          reserved_seconds?: number;
+          charged_seconds?: number;
+          status?: "reserved" | "charged";
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       tts_play_events: {
         Row: {
           id: string;
@@ -1006,6 +1053,8 @@ export type LectureTtsChunkRow =
   Database["public"]["Tables"]["lecture_tts_chunks"]["Row"];
 export type TtsDailyUsageRow =
   Database["public"]["Tables"]["tts_daily_usage"]["Row"];
+export type TtsGenerationEventRow =
+  Database["public"]["Tables"]["tts_generation_events"]["Row"];
 export type TtsPlayEventRow =
   Database["public"]["Tables"]["tts_play_events"]["Row"];
 export type ChatMessageRow = Database["public"]["Tables"]["chat_messages"]["Row"];

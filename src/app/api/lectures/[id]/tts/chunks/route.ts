@@ -5,6 +5,7 @@ import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/bill
 import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
 import {
   getOrCreateTtsChunk,
+  getTtsUsageState,
   hasUnlimitedTtsUsage,
   hashNoteTtsContent,
   TtsGenerationPendingError,
@@ -54,6 +55,36 @@ function createTtsLimitResponse(params: {
     },
     { status: 403 },
   );
+}
+
+async function createTtsLimitResponseIfQuotaCannotCreateChunk(params: {
+  userId: string;
+  hasPaidAccess: boolean;
+  hasUnlimitedUsage: boolean;
+  estimatedSeconds: number;
+}) {
+  const usage = await getTtsUsageState({
+    userId: params.userId,
+    hasPaidAccess: params.hasPaidAccess,
+    hasUnlimitedUsage: params.hasUnlimitedUsage,
+  });
+
+  if (usage.hasUnlimitedUsage) {
+    return null;
+  }
+
+  const requiredSeconds = Math.max(1, Math.ceil(params.estimatedSeconds));
+
+  if (usage.remainingSeconds >= requiredSeconds) {
+    return null;
+  }
+
+  return createTtsLimitResponse({
+    secondsUsed: usage.secondsUsed,
+    remainingSeconds: usage.remainingSeconds,
+    limitSeconds: usage.limitSeconds,
+    hasPaidAccess: params.hasPaidAccess,
+  });
 }
 
 function wait(ms: number) {
@@ -209,6 +240,17 @@ export async function POST(
     }
 
     if (error instanceof TtsGenerationPendingError) {
+      const quotaLimitResponse = await createTtsLimitResponseIfQuotaCannotCreateChunk({
+        userId: user.id,
+        hasPaidAccess: access.entitlement.hasPaidAccess,
+        hasUnlimitedUsage,
+        estimatedSeconds: chunk.estimatedSeconds,
+      });
+
+      if (quotaLimitResponse) {
+        return quotaLimitResponse;
+      }
+
       return NextResponse.json(
         {
           error: "Zvok se še pripravlja. Poskusi znova čez trenutek.",
@@ -219,6 +261,17 @@ export async function POST(
     }
 
     if (isProviderRateLimitError(error)) {
+      const quotaLimitResponse = await createTtsLimitResponseIfQuotaCannotCreateChunk({
+        userId: user.id,
+        hasPaidAccess: access.entitlement.hasPaidAccess,
+        hasUnlimitedUsage,
+        estimatedSeconds: chunk.estimatedSeconds,
+      });
+
+      if (quotaLimitResponse) {
+        return quotaLimitResponse;
+      }
+
       return NextResponse.json(
         {
           error: "Zvok se še pripravlja. Poskusi znova čez trenutek.",

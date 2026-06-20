@@ -593,8 +593,10 @@ async function parseResponse<T>(response: Response): Promise<T> {
 
     if (payload.code === "tts_daily_limit_reached") {
       message = TTS_DAILY_LIMIT_MESSAGE;
-    } else if (response.status === 429 || message.includes("HTTP 429")) {
+    } else if (message.includes("HTTP 429")) {
       message = "Zvok se še pripravlja. Poskusi znova čez trenutek.";
+    } else if (response.status === 429 && !payload.error) {
+      message = "Preveč zahtevkov. Poskusi znova čez trenutek.";
     }
 
     const quota =

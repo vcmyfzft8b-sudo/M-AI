@@ -27,5 +27,12 @@ export default async function AppLayout({
     redirect("/app");
   }
 
-  return <AppShell hasPaidAccess={Boolean(appState?.hasPaidAccess)}>{children}</AppShell>;
+  return (
+    <AppShell
+      hasPaidAccess={Boolean(appState?.hasPaidAccess)}
+      initialPathname={pathname}
+    >
+      {children}
+    </AppShell>
+  );
 }

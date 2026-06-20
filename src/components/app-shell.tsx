@@ -68,12 +68,15 @@ function getChrome(pathname: string) {
 export function AppShell({
   children,
   hasPaidAccess,
+  initialPathname,
 }: {
   children: React.ReactNode;
   hasPaidAccess: boolean;
+  initialPathname: string;
 }) {
-  const pathname = usePathname();
+  const clientPathname = usePathname();
   const router = useRouter();
+  const [pathname, setPathname] = useState(initialPathname);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
@@ -93,6 +96,10 @@ export function AppShell({
   const pullThreshold = 168;
   const cappedPullDistance = Math.min(pullDistance, 220);
   const isLecturePage = pathname.startsWith("/app/lectures/");
+
+  useEffect(() => {
+    setPathname(clientPathname);
+  }, [clientPathname]);
 
   useEffect(() => {
     for (const item of TAB_ITEMS) {

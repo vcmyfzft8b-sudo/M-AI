@@ -142,7 +142,7 @@ export async function POST(
 
   const limited = await enforceRateLimit({
     request,
-    route: "api:lectures:tts:chunks",
+    route: "api:lectures:tts:chunks:v2",
     rules: rateLimitPresets.ttsChunk,
     userId: user.id,
   });

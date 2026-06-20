@@ -126,8 +126,8 @@ export const rateLimitPresets = {
     { windowSeconds: 60, maxRequests: 60, scope: "user", storage: "memory" },
   ] satisfies RateLimitRule[],
   ttsChunk: [
-    { windowSeconds: 300, maxRequests: 20, scope: "user" },
-    { windowSeconds: 3600, maxRequests: 120, scope: "user" },
+    { windowSeconds: 300, maxRequests: 120, scope: "user" },
+    { windowSeconds: 3600, maxRequests: 600, scope: "user" },
   ] satisfies RateLimitRule[],
   internal: [
     { windowSeconds: 60, maxRequests: 90, scope: "ip" },

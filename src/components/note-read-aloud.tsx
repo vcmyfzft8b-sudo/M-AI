@@ -2085,7 +2085,8 @@ export function NoteReadAloud({
             message === TTS_DAILY_LIMIT_MESSAGE;
           const canTreatPendingAsCreationLimit =
             errorCode === "tts_generation_pending" ||
-            errorCode === "tts_provider_rate_limited";
+            errorCode === "tts_provider_rate_limited" ||
+            requestError?.status === 429;
           const shouldShowCreationLimit =
             isDailyLimit ||
             (

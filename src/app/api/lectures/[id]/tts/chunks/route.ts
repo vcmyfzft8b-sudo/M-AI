@@ -37,17 +37,22 @@ function createTtsLimitResponse(params: {
   secondsUsed: number;
   remainingSeconds: number;
   limitSeconds: number;
+  hasPaidAccess: boolean;
 }) {
+  const error = params.hasPaidAccess
+    ? "Porabil si današnje ustvarjanje zvoka. Nov zvok bo na voljo po ponastavitvi ob 00:00. Že pripravljene dele lahko še vedno poslušaš."
+    : "Porabil si današnje brezplačno ustvarjanje zvoka. Za več zvoka nadgradi paket ali počakaj do ponastavitve ob 00:00. Že pripravljene dele lahko še vedno poslušaš.";
+
   return NextResponse.json(
     {
-      error:
-        "Porabil si današnje ustvarjanje zvoka. Novega zvoka ne moremo ustvariti, že pripravljene dele pa lahko še vedno poslušaš.",
+      error,
       code: "tts_daily_limit_reached",
+      tier: params.hasPaidAccess ? "paid" : "free",
       secondsUsed: params.secondsUsed,
       remainingSeconds: params.remainingSeconds,
       limitSeconds: params.limitSeconds,
     },
-    { status: 429 },
+    { status: 403 },
   );
 }
 
@@ -197,7 +202,10 @@ export async function POST(
     console.error("Failed to prepare note TTS chunk", error);
 
     if (error instanceof TtsQuotaLimitError) {
-      return createTtsLimitResponse(error.quota);
+      return createTtsLimitResponse({
+        ...error.quota,
+        hasPaidAccess: access.entitlement.hasPaidAccess,
+      });
     }
 
     if (error instanceof TtsGenerationPendingError) {

@@ -124,9 +124,9 @@ const NOTE_TTS_RATE_STORAGE_KEY = "memo-note-tts-rate";
 const NOTE_TTS_COLOR_STORAGE_KEY = "memo-note-tts-color";
 const TTS_DAILY_LIMIT_MESSAGE = "Porabil si današnje ustvarjanje zvoka.";
 const TTS_FREE_DAILY_LIMIT_MESSAGE =
-  "Porabil si današnje brezplačno ustvarjanje zvoka. Novega zvoka ne moremo ustvariti. Že pripravljene dele lahko še vedno poslušaš od začetka do mesta, kjer je zvok pripravljen.";
+  "Porabil si današnje brezplačno ustvarjanje zvoka. Za več zvoka nadgradi paket ali počakaj do ponastavitve ob 00:00. Že pripravljene dele lahko še vedno poslušaš od začetka do mesta, kjer je zvok pripravljen.";
 const TTS_PAID_DAILY_LIMIT_MESSAGE =
-  "Porabil si današnje ustvarjanje zvoka. Novega zvoka ne moremo ustvariti do ponastavitve ob 00:00. Že pripravljene dele lahko še vedno poslušaš od začetka do mesta, kjer je zvok pripravljen.";
+  "Porabil si današnje ustvarjanje zvoka. Nov zvok bo na voljo po ponastavitvi ob 00:00. Že pripravljene dele lahko še vedno poslušaš od začetka do mesta, kjer je zvok pripravljen.";
 const READ_SETTINGS_SHEET_CLOSE_MS = 180;
 const TTS_GENERATION_PROGRESS_LABEL = "Ustvarjam zvok";
 
@@ -195,8 +195,13 @@ function getChunkCacheKey(voice: NoteTtsVoice, chunkIndex: number) {
   return `${voice}:${chunkIndex}`;
 }
 
-function getDailyLimitDisplayMessage(status: TtsStatusResponse | null) {
-  return status?.tier === "free" ? TTS_FREE_DAILY_LIMIT_MESSAGE : TTS_PAID_DAILY_LIMIT_MESSAGE;
+function getDailyLimitDisplayMessage(
+  status: TtsStatusResponse | null,
+  fallbackTier?: TtsStatusResponse["tier"],
+) {
+  return (status?.tier ?? fallbackTier) === "free"
+    ? TTS_FREE_DAILY_LIMIT_MESSAGE
+    : TTS_PAID_DAILY_LIMIT_MESSAGE;
 }
 
 class TtsRequestError extends Error {
@@ -204,6 +209,11 @@ class TtsRequestError extends Error {
     message: string,
     public readonly code: string | undefined,
     public readonly status: number,
+    public readonly tier?: TtsStatusResponse["tier"],
+    public readonly quota?: Pick<
+      TtsChunkResponse,
+      "limitSeconds" | "remainingSeconds" | "secondsUsed" | "hasUnlimitedUsage"
+    >,
   ) {
     super(message);
     this.name = "TtsRequestError";
@@ -571,6 +581,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
   const payload = (await response.json().catch(() => ({}))) as T & {
     code?: string;
     error?: string;
+    hasUnlimitedUsage?: boolean;
+    limitSeconds?: number;
+    remainingSeconds?: number;
+    secondsUsed?: number;
+    tier?: TtsStatusResponse["tier"];
   };
 
   if (!response.ok) {
@@ -582,7 +597,19 @@ async function parseResponse<T>(response: Response): Promise<T> {
       message = "Zvok se še pripravlja. Poskusi znova čez trenutek.";
     }
 
-    throw new TtsRequestError(message, payload.code, response.status);
+    const quota =
+      typeof payload.limitSeconds === "number" &&
+      typeof payload.remainingSeconds === "number" &&
+      typeof payload.secondsUsed === "number"
+        ? {
+            limitSeconds: payload.limitSeconds,
+            remainingSeconds: payload.remainingSeconds,
+            secondsUsed: payload.secondsUsed,
+            hasUnlimitedUsage: payload.hasUnlimitedUsage,
+          }
+        : undefined;
+
+    throw new TtsRequestError(message, payload.code, response.status, payload.tier, quota);
   }
 
   return payload;
@@ -1973,6 +2000,23 @@ export function NoteReadAloud({
     resetPlaybackToStart();
   }, [hasHydratedSettings, resetPlaybackToStart, selectedVoice]);
 
+  const isCreationQuotaUnavailableForChunk = useCallback(
+    (chunkIndex: number, currentStatus: TtsStatusResponse | null) => {
+      if (!currentStatus || currentStatus.hasUnlimitedUsage) {
+        return false;
+      }
+
+      const chunk = chunks[chunkIndex];
+      const requiredSeconds = Math.max(1, Math.ceil(chunk?.estimatedSeconds ?? 1));
+
+      return (
+        currentStatus.remainingSeconds <= 0 ||
+        currentStatus.remainingSeconds < requiredSeconds
+      );
+    },
+    [chunks],
+  );
+
   const fetchChunk = useCallback(
     async (
       chunkIndex: number,
@@ -2012,21 +2056,42 @@ export function NoteReadAloud({
         } catch (chunkError) {
           const message =
             chunkError instanceof Error ? chunkError.message : "Poslušanje ni na voljo.";
-          const errorCode = chunkError instanceof TtsRequestError ? chunkError.code : undefined;
-          const currentStatus = statusRef.current ?? status;
+          const requestError = chunkError instanceof TtsRequestError ? chunkError : null;
+          const errorCode = requestError?.code;
+          const currentStatus: TtsStatusResponse | null = requestError?.quota
+            ? {
+                ...(statusRef.current ??
+                  status ?? {
+                    available: true,
+                    reason: null,
+                    tier: requestError.tier ?? "paid",
+                    chunkCount: chunks.length,
+                    totalWords: document.words.length,
+                    limitSeconds: requestError.quota.limitSeconds,
+                    remainingSeconds: requestError.quota.remainingSeconds,
+                    secondsUsed: requestError.quota.secondsUsed,
+                  }),
+                limitSeconds: requestError.quota.limitSeconds,
+                remainingSeconds: requestError.quota.remainingSeconds,
+                secondsUsed: requestError.quota.secondsUsed,
+                hasUnlimitedUsage: requestError.quota.hasUnlimitedUsage,
+              }
+            : statusRef.current ?? status;
           const isDailyLimit =
             errorCode === "tts_daily_limit_reached" ||
             message === "Limit dosežen." ||
             message === TTS_DAILY_LIMIT_MESSAGE;
+          const canTreatPendingAsCreationLimit =
+            errorCode === "tts_generation_pending" ||
+            errorCode === "tts_provider_rate_limited";
           const shouldShowCreationLimit =
             isDailyLimit ||
             (
-              !currentStatus?.hasUnlimitedUsage &&
-              currentStatus?.remainingSeconds === 0 &&
-              (errorCode === "tts_generation_pending" || errorCode === "tts_provider_rate_limited")
+              canTreatPendingAsCreationLimit &&
+              isCreationQuotaUnavailableForChunk(chunkIndex, currentStatus)
             );
           const displayMessage = shouldShowCreationLimit
-            ? getDailyLimitDisplayMessage(currentStatus)
+            ? getDailyLimitDisplayMessage(currentStatus, requestError?.tier)
             : message;
 
           if (!options?.silent) {
@@ -2035,12 +2100,13 @@ export function NoteReadAloud({
 
           if (shouldShowCreationLimit) {
             setStatus((current) => {
-              const nextStatus = current
+              const baseStatus = current ?? currentStatus;
+              const nextStatus = baseStatus
                 ? {
-                    ...current,
+                    ...baseStatus,
                     remainingSeconds: 0,
                   }
-                : current;
+                : baseStatus;
 
               statusRef.current = nextStatus;
               return nextStatus;
@@ -2061,7 +2127,16 @@ export function NoteReadAloud({
 
       return request;
     },
-    [lectureId, resetPlaybackToStart, selectedVoice, status, updateQuota],
+    [
+      chunks.length,
+      document.words.length,
+      isCreationQuotaUnavailableForChunk,
+      lectureId,
+      resetPlaybackToStart,
+      selectedVoice,
+      status,
+      updateQuota,
+    ],
   );
 
   const loadChunk = useCallback(

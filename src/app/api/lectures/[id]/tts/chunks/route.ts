@@ -40,7 +40,8 @@ function createTtsLimitResponse(params: {
 }) {
   return NextResponse.json(
     {
-      error: "Porabil si današnje ustvarjanje zvoka.",
+      error:
+        "Porabil si današnje ustvarjanje zvoka. Novega zvoka ne moremo ustvariti, že pripravljene dele pa lahko še vedno poslušaš.",
       code: "tts_daily_limit_reached",
       secondsUsed: params.secondsUsed,
       remainingSeconds: params.remainingSeconds,

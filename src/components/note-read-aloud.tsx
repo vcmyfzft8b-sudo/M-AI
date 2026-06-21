@@ -122,16 +122,17 @@ type ActiveChunk = TtsChunkResponse;
 const AUTO_SCROLL_IDLE_MS = 5_000;
 const NOTE_TTS_RATE_STORAGE_KEY = "memo-note-tts-rate";
 const NOTE_TTS_COLOR_STORAGE_KEY = "memo-note-tts-color";
-const TTS_DAILY_LIMIT_MESSAGE = "Porabil si današnje poslušanje.";
+const TTS_DAILY_LIMIT_MESSAGE = "Porabil si današnje ustvarjanje zvoka.";
 const TTS_FREE_DAILY_LIMIT_MESSAGE =
-  "Porabil si današnje brezplačno poslušanje. Nadgradi za več poslušanja.";
+  "Porabil si današnje brezplačno ustvarjanje zvoka. Za več zvoka nadgradi paket ali počakaj do ponastavitve ob 00:00. Že pripravljene dele lahko še vedno poslušaš od začetka do mesta, kjer je zvok pripravljen.";
 const TTS_PAID_DAILY_LIMIT_MESSAGE =
-  "Porabil si današnje poslušanje. Znova lahko poslušaš po ponastavitvi ob 00:00.";
+  "Porabil si današnje ustvarjanje zvoka. Nov zvok bo na voljo po ponastavitvi ob 00:00. Že pripravljene dele lahko še vedno poslušaš od začetka do mesta, kjer je zvok pripravljen.";
 const READ_SETTINGS_SHEET_CLOSE_MS = 180;
 const TTS_GENERATION_PROGRESS_LABEL = "Ustvarjam zvok";
 
-function getTtsGenerationProgressPercent(startedAt: number) {
-  const elapsedSeconds = Math.max(0, (Date.now() - startedAt) / 1000);
+function getTtsGenerationProgressPercent(startedAt: number, workloadChunks = 1) {
+  const workload = Math.max(1, workloadChunks);
+  const elapsedSeconds = Math.max(0, (Date.now() - startedAt) / 1000) / workload;
 
   if (elapsedSeconds < 5) {
     return 5 + (elapsedSeconds / 5) * 14;
@@ -194,8 +195,29 @@ function getChunkCacheKey(voice: NoteTtsVoice, chunkIndex: number) {
   return `${voice}:${chunkIndex}`;
 }
 
-function getDailyLimitDisplayMessage(status: TtsStatusResponse | null) {
-  return status?.tier === "free" ? TTS_FREE_DAILY_LIMIT_MESSAGE : TTS_PAID_DAILY_LIMIT_MESSAGE;
+function getDailyLimitDisplayMessage(
+  status: TtsStatusResponse | null,
+  fallbackTier?: TtsStatusResponse["tier"],
+) {
+  return (status?.tier ?? fallbackTier) === "free"
+    ? TTS_FREE_DAILY_LIMIT_MESSAGE
+    : TTS_PAID_DAILY_LIMIT_MESSAGE;
+}
+
+class TtsRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string | undefined,
+    public readonly status: number,
+    public readonly tier?: TtsStatusResponse["tier"],
+    public readonly quota?: Pick<
+      TtsChunkResponse,
+      "limitSeconds" | "remainingSeconds" | "secondsUsed" | "hasUnlimitedUsage"
+    >,
+  ) {
+    super(message);
+    this.name = "TtsRequestError";
+  }
 }
 
 function getPlaybackWordState(activeChunk: ActiveChunk, currentMs: number) {
@@ -410,14 +432,14 @@ function QuotaUsageMenu({
         role="progressbar"
         aria-label={
           isLimitReached
-            ? "Limit poslušanja dosežen"
+            ? "Limit ustvarjanja zvoka dosežen"
             : status.hasUnlimitedUsage
-              ? "Brez dnevne omejitve poslušanja"
-              : `Preostalo ${remainingPercent} % dnevnega poslušanja, porabljeno ${usedPercent} %`
+              ? "Brez dnevne omejitve ustvarjanja zvoka"
+              : `Preostalo ${remainingPercent} % dnevnega ustvarjanja zvoka, porabljeno ${usedPercent} %`
         }
         aria-valuetext={
           status.hasUnlimitedUsage
-            ? "Brez dnevne omejitve poslušanja"
+            ? "Brez dnevne omejitve ustvarjanja zvoka"
             : `${remainingPercent} % preostalo, ${usedPercent} % porabljeno`
         }
         aria-valuemin={0}
@@ -509,12 +531,12 @@ function QuotaUsageMenu({
           className="note-read-usage-trigger"
           aria-label={
             isLimitReached
-              ? "Limit poslušanja dosežen"
+              ? "Limit ustvarjanja zvoka dosežen"
               : status.hasUnlimitedUsage
-                ? "Brez dnevne omejitve poslušanja"
-              : `Preostalo ${remainingPercent} % dnevnega poslušanja`
+                ? "Brez dnevne omejitve ustvarjanja zvoka"
+              : `Preostalo ${remainingPercent} % dnevnega ustvarjanja zvoka`
           }
-          title="Poraba poslušanja"
+          title="Poraba ustvarjanja zvoka"
         >
           <EmojiIcon
             className="library-folder-chevron note-read-usage-chevron"
@@ -559,20 +581,37 @@ async function parseResponse<T>(response: Response): Promise<T> {
   const payload = (await response.json().catch(() => ({}))) as T & {
     code?: string;
     error?: string;
+    hasUnlimitedUsage?: boolean;
+    limitSeconds?: number;
+    remainingSeconds?: number;
+    secondsUsed?: number;
+    tier?: TtsStatusResponse["tier"];
   };
 
   if (!response.ok) {
-    const message = payload.error || "Poslušanja ni bilo mogoče pripraviti.";
+    let message = payload.error || "Zvoka ni bilo mogoče pripraviti.";
 
     if (payload.code === "tts_daily_limit_reached") {
-      throw new Error(TTS_DAILY_LIMIT_MESSAGE);
+      message = TTS_DAILY_LIMIT_MESSAGE;
+    } else if (message.includes("HTTP 429")) {
+      message = "Zvok se še pripravlja. Poskusi znova čez trenutek.";
+    } else if (response.status === 429 && !payload.error) {
+      message = "Preveč zahtevkov. Poskusi znova čez trenutek.";
     }
 
-    if (response.status === 429 || message.includes("HTTP 429")) {
-      throw new Error("Poslušanje se še pripravlja. Poskusi znova čez trenutek.");
-    }
+    const quota =
+      typeof payload.limitSeconds === "number" &&
+      typeof payload.remainingSeconds === "number" &&
+      typeof payload.secondsUsed === "number"
+        ? {
+            limitSeconds: payload.limitSeconds,
+            remainingSeconds: payload.remainingSeconds,
+            secondsUsed: payload.secondsUsed,
+            hasUnlimitedUsage: payload.hasUnlimitedUsage,
+          }
+        : undefined;
 
-    throw new Error(message);
+    throw new TtsRequestError(message, payload.code, response.status, payload.tier, quota);
   }
 
   return payload;
@@ -1494,13 +1533,14 @@ export function NoteReadAloud({
   const pendingArrowMoveFromRectRef = useRef<DOMRect | null>(null);
   const pendingArrowMoveCloneRef = useRef<HTMLElement | null>(null);
   const prefetchedChunksRef = useRef(new Map<string, TtsChunkResponse>());
-  const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse | null>>());
+  const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse>>());
   const prefetchQueueRef = useRef<Promise<void>>(Promise.resolve());
   const playbackRequestIdRef = useRef(0);
   const preparedInitialChunkKeyRef = useRef<string | null>(null);
   const generationProgressIntervalRef = useRef<number | null>(null);
   const generationProgressDismissRef = useRef<number | null>(null);
   const generationProgressStartedAtRef = useRef(0);
+  const generationProgressWorkloadRef = useRef(1);
   const playbackWordStateRef = useRef<{
     completedWordIndex: number;
     currentWordIndex: number | null;
@@ -1509,6 +1549,7 @@ export function NoteReadAloud({
     currentWordIndex: null,
   });
   const sessionIdRef = useRef<string>(createReadSessionId());
+  const statusRef = useRef<TtsStatusResponse | null>(null);
   const [status, setStatus] = useState<TtsStatusResponse | null>(null);
   const [activeChunk, setActiveChunk] = useState<ActiveChunk | null>(null);
   const [activeChunkIndex, setActiveChunkIndex] = useState(0);
@@ -1743,7 +1784,7 @@ export function NoteReadAloud({
         const payload = await parseResponse<TtsStatusResponse>(response);
 
         if (!cancelled) {
-          setStatus(
+          const nextStatus =
             payload.reason === "notes_not_ready" && chunks.length > 0
               ? {
                   ...payload,
@@ -1752,8 +1793,10 @@ export function NoteReadAloud({
                   chunkCount: chunks.length,
                   totalWords: document.words.length,
                 }
-              : payload,
-          );
+              : payload;
+
+          statusRef.current = nextStatus;
+          setStatus(nextStatus);
           setError(null);
         }
       } catch (statusError) {
@@ -1817,16 +1860,19 @@ export function NoteReadAloud({
   }, [hasHydratedSettings, highlightColorId]);
 
   const updateQuota = useCallback((payload: TtsChunkResponse) => {
-    setStatus((current) =>
-      current
+    setStatus((current) => {
+      const nextStatus = current
         ? {
             ...current,
             limitSeconds: payload.limitSeconds,
             secondsUsed: payload.secondsUsed,
             remainingSeconds: payload.remainingSeconds,
           }
-        : current,
-    );
+        : current;
+
+      statusRef.current = nextStatus;
+      return nextStatus;
+    });
   }, []);
 
   const setPlaybackWordState = useCallback(
@@ -1851,10 +1897,11 @@ export function NoteReadAloud({
   }, []);
 
   const startTtsGenerationProgress = useCallback(
-    () => {
+    (workloadChunks = 1) => {
       clearTtsGenerationProgressTimers();
 
       generationProgressStartedAtRef.current = Date.now();
+      generationProgressWorkloadRef.current = Math.max(1, workloadChunks);
 
       setTtsGenerationProgress({
         label: TTS_GENERATION_PROGRESS_LABEL,
@@ -1869,7 +1916,12 @@ export function NoteReadAloud({
 
           const nextPercent = Math.max(
             current.percent,
-            Math.round(getTtsGenerationProgressPercent(generationProgressStartedAtRef.current)),
+            Math.round(
+              getTtsGenerationProgressPercent(
+                generationProgressStartedAtRef.current,
+                generationProgressWorkloadRef.current,
+              ),
+            ),
           );
 
           return {
@@ -1904,12 +1956,16 @@ export function NoteReadAloud({
     setTtsGenerationProgress(null);
   }, [clearTtsGenerationProgressTimers]);
 
-  const resetPlaybackToStart = useCallback(() => {
+  const resetPlaybackToStart = useCallback((options?: { preservePreparedChunks?: boolean }) => {
     playbackRequestIdRef.current += 1;
     sessionIdRef.current = createReadSessionId();
-    prefetchedChunksRef.current.clear();
-    pendingChunkRequestsRef.current.clear();
-    prefetchQueueRef.current = Promise.resolve();
+
+    if (!options?.preservePreparedChunks) {
+      prefetchedChunksRef.current.clear();
+      pendingChunkRequestsRef.current.clear();
+      prefetchQueueRef.current = Promise.resolve();
+    }
+
     cancelTtsGenerationProgress();
 
     const audio = audioRef.current;
@@ -1938,12 +1994,6 @@ export function NoteReadAloud({
   }, [clearTtsGenerationProgressTimers]);
 
   useEffect(() => {
-    if (status && !status.hasUnlimitedUsage && status.remainingSeconds <= 0) {
-      setError(getDailyLimitDisplayMessage(status));
-    }
-  }, [status]);
-
-  useEffect(() => {
     if (!hasHydratedSettings) {
       return;
     }
@@ -1952,8 +2002,28 @@ export function NoteReadAloud({
     resetPlaybackToStart();
   }, [hasHydratedSettings, resetPlaybackToStart, selectedVoice]);
 
+  const isCreationQuotaUnavailableForChunk = useCallback(
+    (chunkIndex: number, currentStatus: TtsStatusResponse | null) => {
+      if (!currentStatus || currentStatus.hasUnlimitedUsage) {
+        return false;
+      }
+
+      const chunk = chunks[chunkIndex];
+      const requiredSeconds = Math.max(1, Math.ceil(chunk?.estimatedSeconds ?? 1));
+
+      return (
+        currentStatus.remainingSeconds <= 0 ||
+        currentStatus.remainingSeconds < requiredSeconds
+      );
+    },
+    [chunks],
+  );
+
   const fetchChunk = useCallback(
-    async (chunkIndex: number, options?: { silent?: boolean }) => {
+    async (
+      chunkIndex: number,
+      options?: { silent?: boolean; resetToStartOnCreationLimit?: boolean },
+    ) => {
       const cacheKey = getChunkCacheKey(selectedVoice, chunkIndex);
       const cachedChunk = prefetchedChunksRef.current.get(cacheKey);
 
@@ -1961,14 +2031,10 @@ export function NoteReadAloud({
         return cachedChunk;
       }
 
-      const pendingRequest = pendingChunkRequestsRef.current.get(cacheKey);
+      let request = pendingChunkRequestsRef.current.get(cacheKey);
 
-      if (pendingRequest) {
-        return pendingRequest;
-      }
-
-      const request = (async () => {
-        try {
+      if (!request) {
+        request = (async () => {
           const response = await fetch(`/api/lectures/${lectureId}/tts/chunks`, {
             method: "POST",
             headers: {
@@ -1985,45 +2051,103 @@ export function NoteReadAloud({
           prefetchedChunksRef.current.set(cacheKey, payload);
 
           return payload;
-        } catch (chunkError) {
-          const message =
-            chunkError instanceof Error ? chunkError.message : "Poslušanje ni na voljo.";
-          const isDailyLimit =
-            message === "Limit dosežen." || message === TTS_DAILY_LIMIT_MESSAGE;
-          const displayMessage = isDailyLimit
-            ? getDailyLimitDisplayMessage(status)
-            : message;
+        })();
 
-          if (!options?.silent) {
-            setError(displayMessage);
-          }
-
-          if (isDailyLimit) {
-            setStatus((current) =>
-              current
-                ? {
-                    ...current,
-                    remainingSeconds: 0,
-                  }
-                : current,
-            );
-
-            if (!options?.silent) {
-              resetPlaybackToStart();
+        pendingChunkRequestsRef.current.set(cacheKey, request);
+        request.then(
+          () => {
+            if (pendingChunkRequestsRef.current.get(cacheKey) === request) {
+              pendingChunkRequestsRef.current.delete(cacheKey);
             }
-          }
+          },
+          () => {
+            if (pendingChunkRequestsRef.current.get(cacheKey) === request) {
+              pendingChunkRequestsRef.current.delete(cacheKey);
+            }
+          },
+        );
+      }
 
-          return null;
-        } finally {
-          pendingChunkRequestsRef.current.delete(cacheKey);
+      try {
+        return await request;
+      } catch (chunkError) {
+        const message =
+          chunkError instanceof Error ? chunkError.message : "Poslušanje ni na voljo.";
+        const requestError = chunkError instanceof TtsRequestError ? chunkError : null;
+        const errorCode = requestError?.code;
+        const currentStatus: TtsStatusResponse | null = requestError?.quota
+          ? {
+              ...(statusRef.current ??
+                status ?? {
+                  available: true,
+                  reason: null,
+                  tier: requestError.tier ?? "paid",
+                  chunkCount: chunks.length,
+                  totalWords: document.words.length,
+                  limitSeconds: requestError.quota.limitSeconds,
+                  remainingSeconds: requestError.quota.remainingSeconds,
+                  secondsUsed: requestError.quota.secondsUsed,
+                }),
+              limitSeconds: requestError.quota.limitSeconds,
+              remainingSeconds: requestError.quota.remainingSeconds,
+              secondsUsed: requestError.quota.secondsUsed,
+              hasUnlimitedUsage: requestError.quota.hasUnlimitedUsage,
+            }
+          : statusRef.current ?? status;
+        const isDailyLimit =
+          errorCode === "tts_daily_limit_reached" ||
+          message === "Limit dosežen." ||
+          message === TTS_DAILY_LIMIT_MESSAGE;
+        const canTreatPendingAsCreationLimit =
+          errorCode === "tts_generation_pending" ||
+          errorCode === "tts_provider_rate_limited" ||
+          requestError?.status === 429;
+        const shouldShowCreationLimit =
+          isDailyLimit ||
+          (
+            canTreatPendingAsCreationLimit &&
+            isCreationQuotaUnavailableForChunk(chunkIndex, currentStatus)
+          );
+        const displayMessage = shouldShowCreationLimit
+          ? getDailyLimitDisplayMessage(currentStatus, requestError?.tier)
+          : message;
+
+        if (!options?.silent) {
+          setError(displayMessage);
         }
-      })();
 
-      pendingChunkRequestsRef.current.set(cacheKey, request);
+        if (shouldShowCreationLimit) {
+          setStatus((current) => {
+            const baseStatus = current ?? currentStatus;
+            const nextStatus = baseStatus
+              ? {
+                  ...baseStatus,
+                  remainingSeconds: 0,
+                }
+              : baseStatus;
 
-      return request;
+            statusRef.current = nextStatus;
+            return nextStatus;
+          });
+
+          if (!options?.silent && (options?.resetToStartOnCreationLimit ?? true)) {
+            resetPlaybackToStart({ preservePreparedChunks: true });
+          }
+        }
+
+        return null;
+      }
     },
-    [lectureId, resetPlaybackToStart, selectedVoice, status, updateQuota],
+    [
+      chunks.length,
+      document.words.length,
+      isCreationQuotaUnavailableForChunk,
+      lectureId,
+      resetPlaybackToStart,
+      selectedVoice,
+      status,
+      updateQuota,
+    ],
   );
 
   const loadChunk = useCallback(
@@ -2066,6 +2190,65 @@ export function NoteReadAloud({
     ],
   );
 
+  const loadPlaybackStartBuffer = useCallback(
+    async (chunkIndex: number) => {
+      const targetChunkIndexes = [chunkIndex];
+      const nextChunkIndex = chunkIndex + 1;
+
+      if (nextChunkIndex < chunks.length) {
+        targetChunkIndexes.push(nextChunkIndex);
+      }
+
+      const hasMissingChunk = targetChunkIndexes.some(
+        (targetChunkIndex) =>
+          !prefetchedChunksRef.current.has(getChunkCacheKey(selectedVoice, targetChunkIndex)),
+      );
+
+      if (hasMissingChunk) {
+        setIsFetchingChunk(true);
+        startTtsGenerationProgress(targetChunkIndexes.length);
+      }
+
+      setError(null);
+      let payload: TtsChunkResponse | null = null;
+
+      try {
+        payload = await fetchChunk(chunkIndex);
+
+        if (!payload) {
+          return null;
+        }
+
+        setActiveChunk(payload);
+        setActiveChunkIndex(payload.chunkIndex);
+
+        if (nextChunkIndex < chunks.length) {
+          await fetchChunk(nextChunkIndex, {
+            silent: true,
+            resetToStartOnCreationLimit: false,
+          });
+        }
+
+        return payload;
+      } finally {
+        if (hasMissingChunk) {
+          if (!payload) {
+            cancelTtsGenerationProgress();
+          }
+
+          setIsFetchingChunk(false);
+        }
+      }
+    },
+    [
+      cancelTtsGenerationProgress,
+      chunks.length,
+      fetchChunk,
+      selectedVoice,
+      startTtsGenerationProgress,
+    ],
+  );
+
   const prefetchChunk = useCallback(
     (chunkIndex: number) => {
       const cacheKey = getChunkCacheKey(selectedVoice, chunkIndex);
@@ -2095,11 +2278,11 @@ export function NoteReadAloud({
 
   const prefetchUpcomingChunks = useCallback(
     (chunkIndex: number) => {
-      if (!status?.available || status.remainingSeconds <= 0) {
+      if (!status?.available) {
         return;
       }
 
-      const bufferSize = playbackRate >= 1.5 ? 2 : 1;
+      const bufferSize = playbackRate >= 1.5 ? 3 : 2;
 
       for (let offset = 1; offset <= bufferSize; offset += 1) {
         const nextChunkIndex = chunkIndex + offset;
@@ -2111,7 +2294,7 @@ export function NoteReadAloud({
         prefetchChunk(nextChunkIndex);
       }
     },
-    [chunks.length, playbackRate, prefetchChunk, status?.available, status?.remainingSeconds],
+    [chunks.length, playbackRate, prefetchChunk, status?.available],
   );
 
   useEffect(() => {
@@ -2119,14 +2302,15 @@ export function NoteReadAloud({
       !autoPrepareFirstChunk ||
       !hasHydratedSettings ||
       !status?.available ||
-      status.remainingSeconds <= 0 ||
       chunks.length === 0
     ) {
       return;
     }
 
-    const cacheKey = getChunkCacheKey(selectedVoice, 0);
-    const warmupKey = `${lectureId}:${cacheKey}:${chunks[0]?.text ?? ""}`;
+    const warmupChunks = chunks.slice(0, 2);
+    const warmupKey = `${lectureId}:${selectedVoice}:${warmupChunks
+      .map((chunk) => `${chunk.chunkIndex}:${chunk.text}`)
+      .join("|")}`;
 
     if (preparedInitialChunkKeyRef.current === warmupKey) {
       return;
@@ -2136,7 +2320,11 @@ export function NoteReadAloud({
 
     let cancelled = false;
 
-    void fetchChunk(0, { silent: true }).then((payload) => {
+    void Promise.all(
+      warmupChunks.map((chunk) => fetchChunk(chunk.chunkIndex, { silent: true })),
+    ).then((payloads) => {
+      const payload = payloads.find((item) => item?.chunkIndex === 0);
+
       if (cancelled || !payload) {
         return;
       }
@@ -2163,7 +2351,6 @@ export function NoteReadAloud({
     lectureId,
     selectedVoice,
     status?.available,
-    status?.remainingSeconds,
   ]);
 
   useEffect(() => {
@@ -2227,7 +2414,7 @@ export function NoteReadAloud({
   );
 
   const playChunk = useCallback(
-    async (chunkIndex: number) => {
+    async (chunkIndex: number, options?: { warmupNextChunk?: boolean }) => {
       const audio = audioRef.current;
 
       if (!audio) {
@@ -2238,7 +2425,9 @@ export function NoteReadAloud({
       playbackRequestIdRef.current = requestId;
       setIsStartingPlayback(true);
 
-      const payload = await loadChunk(chunkIndex);
+      const payload = options?.warmupNextChunk
+        ? await loadPlaybackStartBuffer(chunkIndex)
+        : await loadChunk(chunkIndex);
 
       if (!payload) {
         if (playbackRequestIdRef.current === requestId) {
@@ -2278,7 +2467,13 @@ export function NoteReadAloud({
         }
       }
     },
-    [finishTtsGenerationProgress, loadChunk, playbackRate, setPlaybackWordState],
+    [
+      finishTtsGenerationProgress,
+      loadChunk,
+      loadPlaybackStartBuffer,
+      playbackRate,
+      setPlaybackWordState,
+    ],
   );
 
   const handlePlayPause = useCallback(async () => {
@@ -2339,8 +2534,9 @@ export function NoteReadAloud({
                 reason: null,
                 chunkCount: chunks.length,
                 totalWords: document.words.length,
-              }
+            }
             : payload;
+        statusRef.current = playbackStatus;
         setStatus(playbackStatus);
       } catch (statusError) {
         setError(statusError instanceof Error ? statusError.message : "Poslušanje ni na voljo.");
@@ -2355,12 +2551,7 @@ export function NoteReadAloud({
       return;
     }
 
-    if (!playbackStatus.hasUnlimitedUsage && playbackStatus.remainingSeconds <= 0) {
-      setError(getDailyLimitDisplayMessage(playbackStatus));
-      return;
-    }
-
-    await playChunk(activeChunkIndex);
+    await playChunk(activeChunkIndex, { warmupNextChunk: true });
   }, [
     activeChunk,
     activeChunkIndex,
@@ -2454,21 +2645,7 @@ export function NoteReadAloud({
     const nextChunkIndex = activeChunk.chunkIndex + 1;
 
     if (nextChunkIndex < activeChunk.chunkCount) {
-      if ((status?.remainingSeconds ?? 0) > 0) {
-        void playChunk(nextChunkIndex);
-        return;
-      }
-
-      setError(getDailyLimitDisplayMessage(status));
-      setStatus((current) =>
-        current
-          ? {
-              ...current,
-              remainingSeconds: 0,
-            }
-          : current,
-      );
-      resetPlaybackToStart();
+      void playChunk(nextChunkIndex);
       return;
     }
 
@@ -2481,14 +2658,12 @@ export function NoteReadAloud({
     document.words.length,
     playChunk,
     resetPlaybackWordState,
-    resetPlaybackToStart,
-    status,
   ]);
 
   const disabled =
     isFetchingChunk ||
     isStartingPlayback ||
-    Boolean(status && (!status.available || (!status.hasUnlimitedUsage && status.remainingSeconds <= 0))) ||
+    Boolean(status && !status.available) ||
     chunks.length === 0;
   const isPreparingPlayback = isFetchingChunk || isStartingPlayback;
   const playButtonLabel =

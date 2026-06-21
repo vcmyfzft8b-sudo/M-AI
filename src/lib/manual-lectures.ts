@@ -36,7 +36,7 @@ import { getServerEnv } from "@/lib/server-env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import {
   markInitialNoteAudioPreparing,
-  prepareInitialNoteTtsChunkSafely,
+  prepareInitialNoteTtsChunksSafely,
 } from "@/lib/note-tts";
 import { type NoteTtsVoice } from "@/lib/note-tts-settings";
 import {
@@ -1575,7 +1575,7 @@ export async function createLectureFromTextSource(params: {
           },
         },
       });
-      await prepareInitialNoteTtsChunkSafely({
+      await prepareInitialNoteTtsChunksSafely({
         userId: params.userId,
         lectureId,
         content: notes.structuredNotesMd,

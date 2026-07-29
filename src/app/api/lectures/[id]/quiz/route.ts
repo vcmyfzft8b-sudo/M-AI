@@ -1,11 +1,11 @@
 import { after, NextResponse } from "next/server";
 
+import { getApiUser } from "@/lib/api-auth";
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
 import { enqueueLectureQuizGeneration } from "@/lib/jobs";
 import { queueLectureQuizGeneration } from "@/lib/quiz";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 
 export const maxDuration = 300;
@@ -14,10 +14,7 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
@@ -71,10 +68,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

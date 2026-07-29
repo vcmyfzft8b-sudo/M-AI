@@ -534,7 +534,11 @@ async function generateCoverageQuiz(params: {
   const { units } = buildSourceUnits({
     lecture: params.lecture,
     transcript: params.transcript,
+    artifact: params.artifact,
   });
+  if (units.length === 0) {
+    throw new Error("The note does not contain enough study material yet.");
+  }
   const plannedCoverage = await createCoveragePlan({
     title: params.lecture.title,
     summary: params.artifact.summary,
@@ -702,10 +706,6 @@ export async function generateLectureQuiz(params: { lectureId: string }) {
 
     if (lectureRow.status !== "ready") {
       throw new Error("Quizzes are available after note processing finishes.");
-    }
-
-    if (transcriptRows.length === 0) {
-      throw new Error("The lecture transcript is empty.");
     }
 
     const coverageQuiz = await generateCoverageQuiz({

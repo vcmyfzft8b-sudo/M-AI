@@ -1,0 +1,93 @@
+{
+  "identifier": "MemoStoreKitConfiguration",
+  "nonRenewingSubscriptions": [],
+  "products": [],
+  "settings": {
+    "_failTransactionsEnabled": false,
+    "_locale": "en_US",
+    "_storefront": "USA",
+    "_storeKitErrors": []
+  },
+  "subscriptionGroups": [
+    {
+      "id": "214B5F8D",
+      "localizations": [
+        {
+          "description": "Memo Pro",
+          "displayName": "Memo Pro",
+          "locale": "en_US"
+        }
+      ],
+      "name": "Memo Pro",
+      "subscriptions": [
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "9.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "E49235E1",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "Weekly access to Memo Pro AI study tools.",
+              "displayName": "Memo Pro Weekly",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "eu.memoai.memo.weekly",
+          "recurringSubscriptionPeriod": "P1W",
+          "referenceName": "Memo Pro Weekly",
+          "subscriptionGroupID": "214B5F8D",
+          "type": "RecurringSubscription"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "18.99",
+          "familyShareable": false,
+          "groupNumber": 2,
+          "internalID": "CEBD9C65",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "Monthly access to Memo Pro AI study tools.",
+              "displayName": "Memo Pro Monthly",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "eu.memoai.memo.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "Memo Pro Monthly",
+          "subscriptionGroupID": "214B5F8D",
+          "type": "RecurringSubscription"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "119.99",
+          "familyShareable": false,
+          "groupNumber": 3,
+          "internalID": "E2B77C34",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "Yearly access to Memo Pro AI study tools.",
+              "displayName": "Memo Pro Yearly",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "eu.memoai.memo.yearly",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Memo Pro Yearly",
+          "subscriptionGroupID": "214B5F8D",
+          "type": "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version": {
+    "major": 4,
+    "minor": 0
+  }
+}

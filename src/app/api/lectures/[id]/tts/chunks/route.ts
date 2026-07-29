@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getApiUser } from "@/lib/api-auth";
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
 import {
@@ -19,7 +20,6 @@ import {
 import { DEFAULT_NOTE_TTS_VOICE, NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -93,7 +93,7 @@ function wait(ms: number) {
   });
 }
 
-function isProviderRateLimitError(error: unknown) {
+function isTransientProviderError(error: unknown) {
   if (!error || typeof error !== "object") {
     return false;
   }
@@ -103,11 +103,28 @@ function isProviderRateLimitError(error: unknown) {
       ? error.statusCode
       : undefined;
   const message = error instanceof Error ? error.message : "";
+  const code = "code" in error && typeof error.code === "string" ? error.code : "";
+  const causeCode =
+    "cause" in error && error.cause && typeof error.cause === "object" &&
+    "code" in error.cause && typeof error.cause.code === "string"
+      ? error.cause.code
+      : "";
 
-  return statusCode === 429 || message.includes("HTTP 429") || message.includes("rate limit");
+  return (
+    statusCode === 408 ||
+    statusCode === 429 ||
+    (statusCode !== undefined && statusCode >= 500) ||
+    code === "network_error" ||
+    causeCode === "ETIMEDOUT" ||
+    causeCode === "ECONNRESET" ||
+    causeCode === "ECONNREFUSED" ||
+    message.includes("fetch failed") ||
+    message.includes("HTTP 429") ||
+    message.includes("rate limit")
+  );
 }
 
-async function retryProviderRateLimit<T>(operation: () => Promise<T>) {
+async function retryTransientProviderFailure<T>(operation: () => Promise<T>) {
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= TTS_PROVIDER_RETRY_DELAYS_MS.length; attempt += 1) {
@@ -116,7 +133,7 @@ async function retryProviderRateLimit<T>(operation: () => Promise<T>) {
     } catch (error) {
       lastError = error;
 
-      if (!isProviderRateLimitError(error) || attempt >= TTS_PROVIDER_RETRY_DELAYS_MS.length) {
+      if (!isTransientProviderError(error) || attempt >= TTS_PROVIDER_RETRY_DELAYS_MS.length) {
         throw error;
       }
 
@@ -131,10 +148,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
@@ -214,7 +228,7 @@ export async function POST(
   let generated: Awaited<ReturnType<typeof getOrCreateTtsChunk>>;
 
   try {
-    generated = await retryProviderRateLimit(() =>
+    generated = await retryTransientProviderFailure(() =>
       getOrCreateTtsChunk({
         userId: user.id,
         lectureId: id,
@@ -260,7 +274,7 @@ export async function POST(
       );
     }
 
-    if (isProviderRateLimitError(error)) {
+    if (isTransientProviderError(error)) {
       const quotaLimitResponse = await createTtsLimitResponseIfQuotaCannotCreateChunk({
         userId: user.id,
         hasPaidAccess: access.entitlement.hasPaidAccess,
@@ -275,7 +289,7 @@ export async function POST(
       return NextResponse.json(
         {
           error: "Zvok se še pripravlja. Poskusi znova čez trenutek.",
-          code: "tts_provider_rate_limited",
+          code: "tts_provider_temporarily_unavailable",
         },
         { status: 503 },
       );
@@ -284,7 +298,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          process.env.NODE_ENV === "production" || isProviderRateLimitError(error)
+          process.env.NODE_ENV === "production" || isTransientProviderError(error)
             ? "Zvoka ni bilo mogoče pripraviti."
             : error instanceof Error
               ? error.message

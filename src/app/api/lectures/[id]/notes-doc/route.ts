@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getApiUser } from "@/lib/api-auth";
 import { canAccessLectureContent, createBillingRequiredResponse } from "@/lib/billing";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import {
@@ -12,7 +13,6 @@ import {
 } from "@/lib/note-doc-server";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 
 const NOTES_DOC_MAX_BYTES = 256 * 1024;
@@ -26,10 +26,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

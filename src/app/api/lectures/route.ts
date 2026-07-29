@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getApiUser } from "@/lib/api-auth";
 import { parseAudioChunkManifest } from "@/lib/audio-processing";
 import {
   claimTrialLecture,
@@ -17,7 +18,7 @@ import {
   isSupportedAudioMimeType,
   normalizeUploadAudioMimeType,
 } from "@/lib/storage";
-import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { createSanitizedStringSchema, languageHintSchema, optionalUploadFileNameSchema } from "@/lib/validation";
 
 const CREATE_LECTURE_MAX_BYTES = 8 * 1024;
@@ -38,10 +39,8 @@ const deleteLecturesSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = createSupabaseServiceRoleClient();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
@@ -161,10 +160,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = createSupabaseServiceRoleClient();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

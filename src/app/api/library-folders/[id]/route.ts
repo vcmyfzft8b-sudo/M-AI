@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getApiUser } from "@/lib/api-auth";
 import {
   deleteLibraryFolder,
   libraryFolderPayloadSchema,
@@ -7,16 +8,12 @@ import {
 } from "@/lib/library-folders";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 
 const LIBRARY_FOLDER_MAX_BYTES = 64 * 1024;
 
-async function getRouteUser() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+async function getRouteUser(request: Request) {
+  const user = await getApiUser(request);
 
   return user;
 }
@@ -25,7 +22,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const user = await getRouteUser();
+  const user = await getRouteUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
@@ -74,7 +71,7 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const user = await getRouteUser();
+  const user = await getRouteUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

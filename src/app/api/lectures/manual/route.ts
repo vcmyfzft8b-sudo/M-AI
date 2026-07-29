@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getApiUser } from "@/lib/api-auth";
 import {
   claimTrialLecture,
   createBillingRequiredResponse,
@@ -8,7 +9,7 @@ import {
 } from "@/lib/billing";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { languageHintSchema } from "@/lib/validation";
 
 const CREATE_MANUAL_LECTURE_MAX_BYTES = 8 * 1024;
@@ -19,10 +20,8 @@ const createManualLectureSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = createSupabaseServiceRoleClient();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

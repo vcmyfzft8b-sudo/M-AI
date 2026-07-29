@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getApiUser } from "@/lib/api-auth";
 import { createBillingRequiredResponse, getUserEntitlementState } from "@/lib/billing";
 import { MAX_SCAN_IMAGE_BYTES, MAX_SCAN_IMAGE_COUNT } from "@/lib/constants";
 import { enqueueLectureNotesGeneration, enqueueLectureScanProcessing } from "@/lib/jobs";
@@ -16,7 +17,7 @@ import {
   isCanonicalLectureScanImageStoragePath,
   isSupportedScanImageMimeType,
 } from "@/lib/storage";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import {
   createSanitizedStringSchema,
   languageHintSchema,
@@ -74,10 +75,8 @@ const storedScanLectureSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = createSupabaseServiceRoleClient();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

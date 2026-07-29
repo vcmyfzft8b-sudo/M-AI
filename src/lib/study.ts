@@ -524,14 +524,15 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
       throw new Error("Flashcards are available after note processing finishes.");
     }
 
-    if (transcriptRows.length === 0) {
-      throw new Error("The lecture transcript is empty.");
-    }
-
     const { units, sections } = buildSourceUnits({
       lecture: lectureRow,
       transcript: transcriptRows,
+      artifact: artifactRow,
     });
+
+    if (units.length === 0) {
+      throw new Error("The note does not contain enough study material yet.");
+    }
 
     await setStudyAssetStatus({
       lectureId: params.lectureId,

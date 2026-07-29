@@ -397,7 +397,11 @@ async function generatePracticeQuestionBank(params: {
   const { units } = buildSourceUnits({
     lecture: params.lecture,
     transcript: params.transcript,
+    artifact: params.artifact,
   });
+  if (units.length === 0) {
+    throw new Error("The note does not contain enough study material yet.");
+  }
   const plannedCoverage = await createCoveragePlan({
     title: params.lecture.title,
     summary: params.artifact.summary,
@@ -530,10 +534,6 @@ export async function generateLecturePracticeTest(params: {
 
     if (lectureRow.status !== "ready") {
       throw new Error("Practice tests are available after note processing finishes.");
-    }
-
-    if (transcriptRows.length === 0) {
-      throw new Error("The lecture transcript is empty.");
     }
 
     const coverage = await generatePracticeQuestionBank({

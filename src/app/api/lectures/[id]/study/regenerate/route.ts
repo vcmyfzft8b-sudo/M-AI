@@ -1,10 +1,11 @@
 import { after, NextResponse } from "next/server";
 
+import { getApiUser } from "@/lib/api-auth";
 import { createBillingRequiredResponse, hasPaidAccessForUserId } from "@/lib/billing";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { enqueueLectureStudyGeneration } from "@/lib/jobs";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 
 export const maxDuration = 300;
@@ -13,10 +14,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

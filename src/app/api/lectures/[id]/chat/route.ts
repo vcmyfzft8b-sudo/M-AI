@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getApiUser } from "@/lib/api-auth";
 import { canSendTrialChatMessage, createBillingRequiredResponse } from "@/lib/billing";
 import { answerLectureChat } from "@/lib/pipeline";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chatQuestionSchema, routeIdParamSchema } from "@/lib/validation";
 
 const chatSchema = z.object({
@@ -20,10 +20,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

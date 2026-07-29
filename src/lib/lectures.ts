@@ -851,11 +851,10 @@ export async function getLectureDetailForUser(params: {
     return null;
   }
 
-  const supabase = await createSupabaseServerClient();
   const service = createSupabaseServiceRoleClient();
 
   const { data: lecture, error: lectureError } = await runPostgrestWithTimeout(
-    supabase
+    service
       .from("lectures")
       .select("*")
       .eq("id", params.lectureId)
@@ -1124,7 +1123,7 @@ export async function getLectureDetailForUser(params: {
 
     try {
       attemptAnswers = await fetchPracticeTestAttemptAnswers({
-        supabase,
+        supabase: service,
         attemptIds,
         timeoutMs: LECTURE_DETAIL_HEAVY_TIMEOUT_MS,
       });
@@ -1221,8 +1220,10 @@ export async function ensureUserOwnsLecture(params: {
     return null;
   }
 
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
+  // The caller supplies an already authenticated user. Using the service
+  // client for this explicitly user-scoped lookup also supports first-party
+  // Bearer-authenticated native clients, which do not have browser cookies.
+  const { data, error } = await createSupabaseServiceRoleClient()
     .from("lectures")
     .select("*")
     .eq("id", params.lectureId)

@@ -1,6 +1,10 @@
 import "server-only";
 
-import type { LectureRow, TranscriptSegmentRow } from "@/lib/database.types";
+import type {
+  LectureArtifactRow,
+  LectureRow,
+  TranscriptSegmentRow,
+} from "@/lib/database.types";
 import { countWords } from "@/lib/note-generation";
 import type { SourceImportance, SourceUnit, StudySectionDraft } from "@/lib/study-models";
 
@@ -303,14 +307,108 @@ function buildDocumentSourceUnits(params: {
   return units;
 }
 
+/**
+ * Older notes and a few imported-source paths can have a complete generated
+ * artifact without transcript rows. The note is still the authoritative study
+ * source shown to the user, so generation must not fail only because the
+ * intermediate transcript table is empty.
+ */
+function buildArtifactSourceUnits(params: {
+  lecture: LectureRow;
+  artifact: LectureArtifactRow;
+}): SourceUnit[] {
+  const preferredMarkdown =
+    params.artifact.editable_notes_md?.trim() ||
+    params.artifact.structured_notes_md?.trim() ||
+    "";
+  const fallbackText = [
+    params.artifact.summary?.trim(),
+    ...(params.artifact.key_topics ?? []).map((topic) => `- ${topic}`),
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+  const source = preferredMarkdown || fallbackText;
+
+  if (!source) {
+    return [];
+  }
+
+  const sections: Array<{ title: string; body: string }> = [];
+  let activeTitle = params.lecture.title?.trim() || "Notes";
+  let activeLines: string[] = [];
+
+  const flush = () => {
+    const body = activeLines.join("\n").trim();
+    if (body) {
+      sections.push({ title: activeTitle, body });
+    }
+    activeLines = [];
+  };
+
+  for (const line of source.split(/\r?\n/)) {
+    const heading = line.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
+    if (heading) {
+      flush();
+      activeTitle = heading[1].trim() || activeTitle;
+    } else {
+      activeLines.push(line);
+    }
+  }
+  flush();
+
+  if (sections.length === 0) {
+    sections.push({ title: activeTitle, body: source });
+  }
+
+  const units: SourceUnit[] = [];
+  for (const [sectionIndex, section] of sections.entries()) {
+    const chunks = splitTextIntoAudioChunks(section.body);
+    for (const [chunkIndex, chunk] of chunks.entries()) {
+      const locatorLabel =
+        chunks.length > 1
+          ? `${section.title} · ${chunkIndex + 1}`
+          : section.title;
+      units.push({
+        lectureId: params.lecture.id,
+        unitIndex: units.length,
+        sectionIndex,
+        sectionTitle: section.title,
+        sourceType: params.lecture.source_type,
+        locatorLabel,
+        startMs: null,
+        endMs: null,
+        pageNumber: null,
+        text: chunk,
+        wordCount: countWords(chunk),
+        importance: inferImportance(chunk),
+        rawSourceRef: {
+          segmentIndexes: [],
+          speakerLabel: `Generated notes ${sectionIndex + 1}.${chunkIndex + 1}`,
+        },
+      });
+    }
+  }
+
+  return units;
+}
+
 export function buildSourceUnits(params: {
   lecture: LectureRow;
   transcript: TranscriptSegmentRow[];
+  artifact?: LectureArtifactRow;
 }) {
-  const units =
+  const transcriptUnits =
     params.lecture.source_type === "audio"
       ? buildAudioSourceUnits(params)
       : buildDocumentSourceUnits(params);
+  const units =
+    transcriptUnits.length > 0 || !params.artifact
+      ? transcriptUnits
+      : buildArtifactSourceUnits({
+          lecture: params.lecture,
+          artifact: params.artifact,
+        });
 
   return {
     units,

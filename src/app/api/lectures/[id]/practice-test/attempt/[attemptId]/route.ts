@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getApiUser } from "@/lib/api-auth";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { getPracticeTestAttemptForUser } from "@/lib/practice-test";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -15,10 +15,7 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ id: string; attemptId: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

@@ -78,15 +78,25 @@ export async function processStoredLinkLecture(params: {
   const webpage = await fetchReadableWebpage({
     url: pendingLinkUrl,
   });
-  const extractedImages = await extractWebpageImages({
-    html: webpage.html,
-    pageUrl: webpage.finalUrl,
-    pageTitle: webpage.title,
-  });
-  const documentImages = await storeDocumentImagesAsNoteMedia({
-    lectureId: lectureRow.id,
-    userId: lectureRow.user_id,
-    images: extractedImages,
+  // Images enrich a link note, but a blocked CDN or an unavailable image model
+  // must not fail the core text-to-notes workflow.
+  const documentImages = await (async () => {
+    const extractedImages = await extractWebpageImages({
+      html: webpage.html,
+      pageUrl: webpage.finalUrl,
+      pageTitle: webpage.title,
+    });
+    return storeDocumentImagesAsNoteMedia({
+      lectureId: lectureRow.id,
+      userId: lectureRow.user_id,
+      images: extractedImages,
+    });
+  })().catch((error) => {
+    console.warn("Link image enrichment failed; continuing with text notes", {
+      lectureId: lectureRow.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
   });
 
   await prepareLectureFromTextSource({

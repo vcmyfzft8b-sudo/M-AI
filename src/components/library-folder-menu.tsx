@@ -823,9 +823,6 @@ export function LibraryFolderMenu({
         onClick={handleToggleMenu}
         aria-expanded={isOpen}
       >
-        <span className="library-folder-trigger-icon">
-          <Folder open={isOpen} size={0.5} />
-        </span>
         <span className="library-folder-trigger-label">
           {selectedFolder?.name ?? "Vsi zapiski"}
         </span>

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/mobile/:path*",
+      "destination": "/api/mobile?__mobile_path=:path*"
+    }
+  ],
+  "functions": {
+    "api/mobile/**/*.ts": {
+      "maxDuration": 300
+    }
+  }
+}

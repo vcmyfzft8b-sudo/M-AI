@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getApiUser } from "@/lib/api-auth";
 import { canUseLectureFeatures } from "@/lib/billing";
 import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
 import {
@@ -9,7 +10,6 @@ import {
 } from "@/lib/note-tts-text";
 import { getTtsUsageState, hasUnlimitedTtsUsage } from "@/lib/note-tts";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -18,10 +18,7 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

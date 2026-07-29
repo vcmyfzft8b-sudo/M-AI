@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getApiUser } from "@/lib/api-auth";
 import { canAccessLectureContent, createBillingRequiredResponse } from "@/lib/billing";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 
 const STUDY_SESSION_MAX_BYTES = 128 * 1024;
@@ -74,14 +75,16 @@ async function updateStudySession(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
   }
+
+  // Ownership and paid-access checks above are authoritative. Use the trusted
+  // route client for the write so first-party native bearer-token requests do
+  // not depend on a browser cookie session for RLS context.
+  const supabase = createSupabaseServiceRoleClient();
 
   const limited = await enforceRateLimit({
     request,

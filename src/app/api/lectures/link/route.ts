@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getApiUser } from "@/lib/api-auth";
 import { createBillingRequiredResponse, getUserEntitlementState } from "@/lib/billing";
 import { enqueueLectureLinkProcessing } from "@/lib/jobs";
 import {
@@ -11,7 +12,7 @@ import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import {
   httpUrlSchema,
   languageHintSchema,
@@ -31,10 +32,8 @@ const createLinkLectureSchema = z.object({
 export const maxDuration = 300;
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = createSupabaseServiceRoleClient();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

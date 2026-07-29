@@ -71,10 +71,13 @@ export async function POST(request: Request) {
       error,
     });
 
-    return NextResponse.json({
-      ok: false,
-      error: error instanceof Error ? error.message : "Povezave ni bilo mogoče obdelati.",
-    });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Povezave ni bilo mogoče obdelati.",
+      },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ ok: true });

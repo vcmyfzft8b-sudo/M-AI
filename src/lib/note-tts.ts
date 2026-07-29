@@ -936,11 +936,21 @@ async function generateTtsChunk(params: {
     audio_format: TTS_OUTPUT_FORMAT,
     bitrate: TTS_OUTPUT_BITRATE,
   });
-  const transcript = await transcribeGeneratedAudio({
-    audio,
-    language: params.language,
-    clientReferenceId: `${params.lectureId}:${params.contentHash}:${params.chunk.chunkIndex}`,
-  });
+  let transcript: Awaited<ReturnType<typeof transcribeGeneratedAudio>> | null = null;
+  try {
+    transcript = await transcribeGeneratedAudio({
+      audio,
+      language: params.language,
+      clientReferenceId: `${params.lectureId}:${params.contentHash}:${params.chunk.chunkIndex}`,
+    });
+  } catch (error) {
+    // Alignment improves word highlighting, but it must not make otherwise
+    // valid generated audio unusable. The alignment helper already supports
+    // interpolating timings without provider tokens, which is also what the
+    // native player needs to keep highlighting and playback responsive when
+    // the secondary transcription request times out.
+    console.warn("TTS alignment transcription failed; using estimated timings.", error);
+  }
   const durationMs = Math.max(
     transcript?.tokens.reduce((max, token) => Math.max(max, token.end_ms), 0) ?? 0,
     params.chunk.estimatedSeconds * 1000,

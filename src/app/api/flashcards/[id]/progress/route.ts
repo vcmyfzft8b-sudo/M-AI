@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getApiUser } from "@/lib/api-auth";
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import type { FlashcardProgressRow } from "@/lib/database.types";
+import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 
 const FLASHCARD_PROGRESS_MAX_BYTES = 4 * 1024;
@@ -18,10 +20,8 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = createSupabaseServiceRoleClient();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
@@ -65,7 +65,13 @@ export async function POST(
 
   const flashcardRow = flashcard as { id: string; lecture_id: string } | null;
 
-  if (!flashcardRow) {
+  // The lookup above runs with the service role, so ownership has to be
+  // checked explicitly instead of relying on the caller's RLS context.
+  const ownedLecture = flashcardRow
+    ? await ensureUserOwnsLecture({ lectureId: flashcardRow.lecture_id, user })
+    : null;
+
+  if (!flashcardRow || !ownedLecture) {
     return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
   }
 

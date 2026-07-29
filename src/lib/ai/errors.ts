@@ -14,8 +14,48 @@ function getErrorText(error: unknown) {
   }
 }
 
+function getNestedErrorDetails(error: unknown, depth = 0): { messages: string[]; codes: string[] } {
+  if (!error || depth > 4) {
+    return { messages: [], codes: [] };
+  }
+
+  if (typeof error === "string") {
+    return { messages: [error], codes: [] };
+  }
+
+  if (typeof error !== "object") {
+    return { messages: [], codes: [] };
+  }
+
+  const record = error as {
+    message?: unknown;
+    code?: unknown;
+    cause?: unknown;
+    errors?: unknown;
+  };
+  const details = {
+    messages: typeof record.message === "string" ? [record.message] : [],
+    codes: typeof record.code === "string" ? [record.code] : [],
+  };
+  const children = [record.cause];
+
+  if (Array.isArray(record.errors)) {
+    children.push(...record.errors);
+  }
+
+  for (const child of children) {
+    const nested = getNestedErrorDetails(child, depth + 1);
+    details.messages.push(...nested.messages);
+    details.codes.push(...nested.codes);
+  }
+
+  return details;
+}
+
 export function isRetryableAiError(error: unknown) {
-  const message = getErrorText(error).toLowerCase();
+  const details = getNestedErrorDetails(error);
+  const message = [getErrorText(error), ...details.messages].join(" ").toLowerCase();
+  const codes = new Set(details.codes.map((code) => code.toUpperCase()));
 
   if (
     message.includes("statement timeout") ||
@@ -36,7 +76,16 @@ export function isRetryableAiError(error: unknown) {
     message.includes("temporarily unavailable") ||
     message.includes("deadline exceeded") ||
     message.includes("timed out") ||
-    message.includes("timeout")
+    message.includes("timeout") ||
+    message.includes("fetch failed") ||
+    message.includes("network error") ||
+    message.includes("terminated") ||
+    codes.has("ETIMEDOUT") ||
+    codes.has("ECONNRESET") ||
+    codes.has("ECONNREFUSED") ||
+    codes.has("EAI_AGAIN") ||
+    codes.has("UND_ERR_CONNECT_TIMEOUT") ||
+    codes.has("UND_ERR_SOCKET")
   );
 }
 

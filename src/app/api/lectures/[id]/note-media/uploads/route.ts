@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getApiUser } from "@/lib/api-auth";
 import { canAccessLectureContent, createBillingRequiredResponse } from "@/lib/billing";
 import { MAX_SCAN_IMAGE_BYTES, STORAGE_BUCKET } from "@/lib/constants";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
@@ -11,7 +12,7 @@ import {
   inferScanImageMimeTypeFromFile,
   isSupportedScanImageMimeType,
 } from "@/lib/storage";
-import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 
 const NOTE_MEDIA_UPLOAD_MAX_BYTES = 16 * 1024;
@@ -26,10 +27,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

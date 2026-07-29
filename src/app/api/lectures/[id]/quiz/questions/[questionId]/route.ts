@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 import { z } from "zod";
 
+import { getApiUser } from "@/lib/api-auth";
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import type { QuizQuestionRow } from "@/lib/database.types";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 
 const QUIZ_QUESTION_MUTATION_MAX_BYTES = 48 * 1024;
@@ -58,10 +59,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string; questionId: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
@@ -141,10 +139,7 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string; questionId: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

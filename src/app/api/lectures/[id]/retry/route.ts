@@ -1,5 +1,6 @@
 import { after, NextResponse } from "next/server";
 
+import { getApiUser } from "@/lib/api-auth";
 import { canAccessLectureContent, createBillingRequiredResponse } from "@/lib/billing";
 import {
   enqueueLectureDocumentProcessing,
@@ -17,7 +18,7 @@ import {
 import { fetchReadableWebpage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 
 export const maxDuration = 300;
@@ -58,10 +59,8 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = createSupabaseServiceRoleClient();
+  const user = await getApiUser(request);
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

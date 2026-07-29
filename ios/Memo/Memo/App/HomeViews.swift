@@ -22,7 +22,10 @@ struct AppRootView: View {
                 }
             }
         }
-        .preferredColorScheme(debugColorScheme ?? appModel.themePreference.colorScheme)
+        .preferredColorScheme(appModel.themePreference.colorScheme)
+        .task {
+            applyDebugThemeIfNeeded()
+        }
         .task(id: appModel.session?.user.id) {
             while !Task.isCancelled, appModel.session != nil {
                 try? await Task.sleep(for: .seconds(60))
@@ -38,18 +41,16 @@ struct AppRootView: View {
         }
     }
 
-    /// `MEMO_DEBUG_THEME=light|dark` pins the color scheme for screenshot runs,
-    /// which the simulator's own appearance switch does not always apply to an
-    /// already-installed app.
-    private var debugColorScheme: ColorScheme? {
+    /// `MEMO_DEBUG_THEME=system|light|dark` selects the theme once at launch for
+    /// screenshot runs, because the simulator's own appearance switch does not
+    /// always reach an already-installed app. It seeds the same preference the
+    /// Settings picker writes, so tapping a theme afterwards still wins.
+    private func applyDebugThemeIfNeeded() {
         #if DEBUG
-        switch ProcessInfo.processInfo.environment["MEMO_DEBUG_THEME"] {
-        case "light": return .light
-        case "dark": return .dark
-        default: return nil
-        }
-        #else
-        return nil
+        guard let raw = ProcessInfo.processInfo.environment["MEMO_DEBUG_THEME"],
+              let preference = ThemePreference(rawValue: raw),
+              appModel.themePreference != preference else { return }
+        appModel.themePreference = preference
         #endif
     }
 

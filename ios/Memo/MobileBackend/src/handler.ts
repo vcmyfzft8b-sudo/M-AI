@@ -3956,6 +3956,14 @@ async function downloadStorageObject(env: MobileEnv, bucket: string, path: strin
   return buffer.byteLength <= maxBytes ? buffer : null;
 }
 
+/// Copies bytes into an ArrayBuffer-backed view, which is what `fetch` accepts
+/// as a body under the DOM lib types.
+function toRequestBytes(data: Buffer) {
+  const bytes = new Uint8Array(data.byteLength);
+  bytes.set(data);
+  return bytes;
+}
+
 async function uploadStorageObject(
   env: MobileEnv,
   bucket: string,
@@ -3971,9 +3979,9 @@ async function uploadStorageObject(
       "Content-Type": contentType,
       "x-upsert": "true",
     },
-    // `Buffer` is not a `BodyInit` under the DOM lib types; the underlying
-    // bytes are, so hand fetch a plain view over the same memory.
-    body: new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+    // A `Buffer` (or a view onto one) is not a `BodyInit` under the DOM lib
+    // types, which require the bytes to be backed by a plain ArrayBuffer.
+    body: toRequestBytes(data),
   });
   if (!response.ok) {
     const parsed = safeJSON(await response.text());

@@ -3971,7 +3971,9 @@ async function uploadStorageObject(
       "Content-Type": contentType,
       "x-upsert": "true",
     },
-    body: data,
+    // `Buffer` is not a `BodyInit` under the DOM lib types; the underlying
+    // bytes are, so hand fetch a plain view over the same memory.
+    body: new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
   });
   if (!response.ok) {
     const parsed = safeJSON(await response.text());

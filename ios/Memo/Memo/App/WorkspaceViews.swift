@@ -429,7 +429,7 @@ struct LectureWorkspaceView: View {
 
     private var topBar: some View {
         HStack(spacing: 0) {
-            MemoBrandBanner(height: 44)
+            MemoBrandBanner(height: 40)
             Spacer()
         }
         .padding(.horizontal, 16)

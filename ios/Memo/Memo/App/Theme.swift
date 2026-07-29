@@ -48,8 +48,10 @@ struct MemoTheme {
     let purple: Color
     let navBackground: Color
     let sheetBackground: Color
-    /// Navigation dock chrome. Deliberately darker than `surfaceSolid` so the
-    /// floating dock separates from the light canvas instead of blending in.
+    /// Navigation dock chrome. A graphite capsule that sits off the canvas in
+    /// both themes — darker than the light canvas, lighter than the dark one.
+    /// The two surfaces are picked for the same ~5.8:1 contrast against their
+    /// canvas, so the dock separates equally hard in light and dark mode.
     let dockSurface: Color
     let dockBorder: Color
     let dockPressed: Color
@@ -79,9 +81,9 @@ struct MemoTheme {
         purple: Color(hex: 0xBF5AF2),
         navBackground: Color.white.opacity(0.72),
         sheetBackground: .white,
-        dockSurface: Color(hex: 0x2B2B31),
-        dockBorder: Color.white.opacity(0.14),
-        dockPressed: Color.white.opacity(0.16),
+        dockSurface: Color(hex: 0x3C3C42),
+        dockBorder: Color.white.opacity(0.16),
+        dockPressed: Color.white.opacity(0.20),
         pressed: Color.black.opacity(0.05),
         closeFill: Color.black.opacity(0.08),
         folderColor: Color(hex: 0x70A1FF),
@@ -109,9 +111,9 @@ struct MemoTheme {
         purple: Color(hex: 0xBF5AF2),
         navBackground: Color(hex: 0x1C1C1E).opacity(0.72),
         sheetBackground: Color(hex: 0x1C1C1E),
-        dockSurface: Color(hex: 0x3A3A3C),
-        dockBorder: Color.white.opacity(0.32),
-        dockPressed: Color.white.opacity(0.14),
+        dockSurface: Color(hex: 0xAAAAAF),
+        dockBorder: Color.black.opacity(0.08),
+        dockPressed: Color.black.opacity(0.10),
         pressed: Color.white.opacity(0.08),
         closeFill: Color.white.opacity(0.12),
         folderColor: Color(hex: 0x70A1FF),

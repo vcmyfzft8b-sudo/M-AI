@@ -22,7 +22,7 @@ struct AppRootView: View {
                 }
             }
         }
-        .preferredColorScheme(appModel.themePreference.colorScheme)
+        .preferredColorScheme(debugColorScheme ?? appModel.themePreference.colorScheme)
         .task(id: appModel.session?.user.id) {
             while !Task.isCancelled, appModel.session != nil {
                 try? await Task.sleep(for: .seconds(60))
@@ -36,6 +36,21 @@ struct AppRootView: View {
                 await appModel.maintainSession()
             }
         }
+    }
+
+    /// `MEMO_DEBUG_THEME=light|dark` pins the color scheme for screenshot runs,
+    /// which the simulator's own appearance switch does not always apply to an
+    /// already-installed app.
+    private var debugColorScheme: ColorScheme? {
+        #if DEBUG
+        switch ProcessInfo.processInfo.environment["MEMO_DEBUG_THEME"] {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
+        }
+        #else
+        return nil
+        #endif
     }
 
     private var bypassOnboardingForDebugLaunch: Bool {
@@ -242,7 +257,7 @@ struct MainShellView: View {
 
     private var shellTopBar: some View {
         HStack {
-            MemoBrandBanner(height: 44)
+            MemoBrandBanner(height: 40)
             Spacer()
         }
         .padding(.horizontal, 16)
@@ -530,7 +545,7 @@ struct HomeDashboardView: View {
 
     private var topBar: some View {
         HStack(spacing: 11) {
-            MemoBrandBanner(height: 44)
+            MemoBrandBanner(height: 40)
             Spacer()
             if !appModel.hasPaidAccess {
                 Button {

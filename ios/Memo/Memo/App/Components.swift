@@ -244,7 +244,9 @@ private struct MemoClassicNavigationDockModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(theme.dockSurface, in: Capsule())
-            .overlay(Capsule().stroke(theme.dockBorder, lineWidth: 1))
+            // `strokeBorder` keeps the full line inside the capsule; a centered
+            // stroke would lose half its width to the dock's own clip shape.
+            .overlay(Capsule().strokeBorder(theme.dockBorder, lineWidth: 1.5))
     }
 }
 

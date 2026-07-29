@@ -246,7 +246,7 @@ private struct MemoClassicNavigationDockModifier: ViewModifier {
             .background(theme.dockSurface, in: Capsule())
             // `strokeBorder` keeps the full line inside the capsule; a centered
             // stroke would lose half its width to the dock's own clip shape.
-            .overlay(Capsule().strokeBorder(theme.dockBorder, lineWidth: 1.5))
+            .overlay(Capsule().strokeBorder(theme.dockBorder, lineWidth: 1))
     }
 }
 

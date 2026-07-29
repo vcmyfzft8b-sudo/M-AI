@@ -90,8 +90,22 @@ export const PURCHASABLE_BILLING_PLANS = PURCHASABLE_BILLING_PLAN_IDS.map(
   (planId) => BILLING_PLANS[planId],
 );
 
-export function hasPaidAccess(subscription: BillingSubscriptionRow | null) {
-  return Boolean(subscription && ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status));
+function subscriptionPeriodAllowsAccess(subscription: BillingSubscriptionRow, nowMs = Date.now()) {
+  if (!subscription.current_period_end) {
+    return true;
+  }
+
+  const periodEndMs = Date.parse(subscription.current_period_end);
+
+  return Number.isFinite(periodEndMs) && periodEndMs > nowMs;
+}
+
+export function hasPaidAccess(subscription: BillingSubscriptionRow | null, nowMs = Date.now()) {
+  return Boolean(
+    subscription &&
+      ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status) &&
+      subscriptionPeriodAllowsAccess(subscription, nowMs),
+  );
 }
 
 export function hasPriorSubscriptionHistory(
@@ -160,12 +174,13 @@ export async function hasStripeSubscriptionHistory(params: {
 export function getActiveSubscription(
   subscriptions: BillingSubscriptionRow[],
 ): BillingSubscriptionRow | null {
+  const nowMs = Date.now();
   const sorted = [...subscriptions].sort((left, right) =>
     right.updated_at.localeCompare(left.updated_at),
   );
 
   return (
-    sorted.find((subscription) => ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status)) ??
+    sorted.find((subscription) => hasPaidAccess(subscription, nowMs)) ??
     sorted[0] ??
     null
   );

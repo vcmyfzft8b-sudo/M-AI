@@ -28,6 +28,7 @@ import type {
   PracticeTestHistorySummary,
 } from "@/lib/types";
 import { getAiProvider, getServerEnv } from "@/lib/server-env";
+import { toPresentableErrorMessage } from "@/lib/ai/errors";
 
 const PRACTICE_TEST_CONCURRENCY = 3;
 const RECENT_ATTEMPT_MEMORY = 3;
@@ -74,7 +75,13 @@ const gradingSchema = z.object({
   confidence: z.string().min(2).max(40),
 });
 
+/// The generators store this text on the asset row and both clients render
+/// it verbatim, so provider payloads must never survive to the UI.
 function toErrorMessage(error: unknown) {
+  return toPresentableErrorMessage(rawErrorMessage(error), 'Testa ni bilo mogoče ustvariti. Poskusi znova.');
+}
+
+function rawErrorMessage(error: unknown) {
   if (error instanceof z.ZodError) {
     return error.issues
       .slice(0, 3)

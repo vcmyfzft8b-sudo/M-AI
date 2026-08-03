@@ -18,6 +18,7 @@ import type { CoverageCardDraft, CoverageUnitPlan, SourceUnit, StudySectionDraft
 import { buildSourceUnits } from "@/lib/study-source-units";
 import { validateCoverage } from "@/lib/study-validation";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { toPresentableErrorMessage } from "@/lib/ai/errors";
 
 const COVERAGE_TARGET = 0.9;
 const CRITICAL_COVERAGE_TARGET = 1;
@@ -38,7 +39,13 @@ type StudyStorageCapabilities = {
   supportsFlashcardCoverageFields: boolean;
 };
 
+/// The generators store this text on the asset row and both clients render
+/// it verbatim, so provider payloads must never survive to the UI.
 function toErrorMessage(error: unknown) {
+  return toPresentableErrorMessage(rawErrorMessage(error), 'Učnega gradiva ni bilo mogoče ustvariti. Poskusi znova.');
+}
+
+function rawErrorMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message;
   }

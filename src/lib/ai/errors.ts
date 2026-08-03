@@ -97,6 +97,13 @@ const GENERIC_FAILURE_MESSAGE =
 /// Supabase blob is meaningless to a student and exposes internals, so anything
 /// that does not look like a sentence written for a person is replaced with a
 /// generic message. The original error still reaches Sentry.
+/// Replace anything that is not a sentence written for a person with a generic
+/// message. Every generator that stores an error the UI renders should pass its
+/// text through this, otherwise provider payloads reach the failed-note card.
+export function toPresentableErrorMessage(message: string, fallback = GENERIC_FAILURE_MESSAGE) {
+  return isPresentableMessage(message) ? message.trim() : fallback;
+}
+
 function isPresentableMessage(message: string) {
   const trimmed = message.trim();
 

@@ -17,6 +17,7 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { createCoveragePlan, MAX_STUDY_ITEMS } from "@/lib/study-coverage";
 import type { CoverageConcept, CoverageUnitPlan, SourceUnit } from "@/lib/study-models";
 import { buildSourceUnits } from "@/lib/study-source-units";
+import { toPresentableErrorMessage } from "@/lib/ai/errors";
 
 const QUIZ_CONCURRENCY = 4;
 
@@ -57,7 +58,13 @@ const quizQuestionBatchSchema = z.object({
   questions: z.array(quizQuestionSchema).min(0).max(32),
 });
 
+/// The generators store this text on the asset row and both clients render
+/// it verbatim, so provider payloads must never survive to the UI.
 function toErrorMessage(error: unknown) {
+  return toPresentableErrorMessage(rawErrorMessage(error), 'Kviza ni bilo mogoče ustvariti. Poskusi znova.');
+}
+
+function rawErrorMessage(error: unknown) {
   if (error instanceof z.ZodError) {
     return error.issues
       .slice(0, 3)

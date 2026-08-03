@@ -33,7 +33,9 @@ jobs:
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pin the CLI so setup does not depend on GitHub's rate-limited
+          # "latest release" lookup during a production deployment.
+          version: 2.111.0
 
       - name: Verify production credentials are configured
         shell: bash

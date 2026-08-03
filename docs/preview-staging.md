@@ -28,6 +28,20 @@ The staging branch is a separate Supabase environment. It has its own Auth, REST
 
 Vercel environment changes affect new deployments only. Redeploy the PR after correcting Preview configuration.
 
+## Sentry Automation And Missed Runs
+
+The local Sentry automation is scheduled every two hours, but it uses a durable successful-scan cursor rather than assuming every scheduled run happened.
+
+- normally the next window is approximately two hours
+- if the Mac was off for one run, the next window is approximately four hours
+- longer outages produce a correspondingly longer catch-up window
+- the query includes a 10-minute overlap and deduplicates Sentry event and issue IDs
+- unresolved actionable issues without a fix PR remain in the backlog and are revisited even when their latest event is older than the current window
+
+The cursor advances only after all required Sentry pages for the interval were retrieved and triaged. A failed or partial Sentry query leaves the cursor unchanged so the next run retries the interval. Staging or Preview failures are tracked separately and do not erase successful Sentry coverage.
+
+Reports state the exact UTC start and end plus the human-readable covered duration. A normal no-bug report says no new or regressed production bugs were found in the last two hours; after missed runs it states the actual four-hour, six-hour, or longer interval.
+
 ## Safe Staging Verification
 
 Staging is a branch under the production Supabase project, not a top-level project. Discover it with:

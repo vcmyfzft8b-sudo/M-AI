@@ -36,6 +36,13 @@
 - After a migration PR is merged, `.github/workflows/supabase-migrations.yml` applies the migration files from `main` to production. Do not run a production migration from an unmerged PR or a Preview deployment.
 - Follow [docs/preview-staging.md](/Users/nacevalencic/Desktop/note_taking_app_slo/docs/preview-staging.md) for safe verification, staging synchronization, migration testing, and production release rules.
 
+## Automated Sentry Triage
+
+- The local Sentry automation is scheduled every two hours, but its query window must start at the last successful Sentry scan cursor, not at a fixed two-hour offset.
+- If the Mac missed scheduled runs, the next run must cover the full elapsed interval since that cursor, with a small overlap and event/issue deduplication.
+- Advance the cursor only after the complete authenticated Sentry query and triage succeed. Keep actionable issues without a dedicated fix PR in the durable backlog and revisit them on every run regardless of age.
+- A staging, Preview, CI, or implementation failure must not create a gap in Sentry coverage or cause a completed Sentry interval to be scanned as if it failed.
+
 ## Documentation
 
 - Follow the workflow in [docs/development-workflow.md](/Users/nacevalencic/Desktop/note_taking_app_slo/docs/development-workflow.md) for branching, GitHub pushes, Vercel previews, and merging to production.

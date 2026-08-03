@@ -89,6 +89,31 @@ export function isRetryableAiError(error: unknown) {
   );
 }
 
+const GENERIC_FAILURE_MESSAGE =
+  "Zapiska ni bilo mogoče obdelati. Poskusi znova ali naloži gradivo še enkrat.";
+
+/// Provider payloads leak into `lectures.error_message`, which both the website
+/// and the iOS app print verbatim on the failed-note card. A raw Gemini or
+/// Supabase blob is meaningless to a student and exposes internals, so anything
+/// that does not look like a sentence written for a person is replaced with a
+/// generic message. The original error still reaches Sentry.
+function isPresentableMessage(message: string) {
+  const trimmed = message.trim();
+
+  if (trimmed.length === 0 || trimmed.length > 200) {
+    return false;
+  }
+
+  // Serialised payloads, stack frames, URLs and bare API/provider identifiers.
+  if (/[{}[\]]|"\s*:|https?:\/\/|\bat\s+\w+\s*\(|\n/.test(trimmed)) {
+    return false;
+  }
+
+  return !/\bapi[_ ]?key\b|\btoken\b|googleapis|supabase|postgres|invalid_argument|permission_denied/i.test(
+    trimmed,
+  );
+}
+
 export function toUserFacingAiErrorMessage(error: unknown) {
   const message = getErrorText(error).toLowerCase();
 
@@ -96,20 +121,20 @@ export function toUserFacingAiErrorMessage(error: unknown) {
     message.includes("statement timeout") ||
     message.includes("canceling statement due to statement timeout")
   ) {
-    return "The note took too long to save. Please retry this note in a minute.";
+    return "Shranjevanje zapiska je trajalo predolgo. Poskusi znova čez minuto.";
   }
 
   if (isRetryableAiError(error)) {
-    return "The AI provider is temporarily overloaded. Please retry this note in a minute.";
+    return "Storitev je trenutno preobremenjena. Poskusi znova čez minuto.";
   }
 
-  if (error instanceof Error && error.message.trim().length > 0) {
+  if (error instanceof Error && isPresentableMessage(error.message)) {
     return error.message;
   }
 
-  if (typeof error === "string" && error.trim().length > 0) {
+  if (typeof error === "string" && isPresentableMessage(error)) {
     return error;
   }
 
-  return "Unknown processing error.";
+  return GENERIC_FAILURE_MESSAGE;
 }

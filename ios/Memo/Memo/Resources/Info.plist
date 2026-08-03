@@ -69,10 +69,21 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
+	<!-- The launch screen has to match the first frame the app draws, which is
+	     the themed canvas (#E9E9ED light / black dark) with the Memo logo.
+	     Pointing this at AccentColor paints a dark green screen on every cold
+	     launch, because AccentColor is the brand green, not a background. -->
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
-		<string>AccentColor</string>
+		<string>LaunchBackground</string>
+		<!-- A dedicated 92pt rendition: UILaunchScreen draws UIImageName at the
+		     asset's natural size, so pointing it at the full-resolution
+		     MemoLogo fills the screen edge to edge and clips. -->
+		<key>UIImageName</key>
+		<string>LaunchLogo</string>
+		<key>UIImageRespectsSafeAreaInsets</key>
+		<true/>
 	</dict>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>

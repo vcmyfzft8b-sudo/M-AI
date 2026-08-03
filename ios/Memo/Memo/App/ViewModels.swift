@@ -450,14 +450,19 @@ final class AppModel: ObservableObject {
             return nil
         }
         return await runReturning {
-            let size = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber
-            if (size?.int64Value ?? 0) > 4 * 1024 * 1024 {
-                throw MemoError.unsupported("Datoteka dokumenta je prevelika. Trenutna omejitev je 4 MB.")
-            }
             let didAccess = url.startAccessingSecurityScopedResource()
             defer {
                 if didAccess {
                     url.stopAccessingSecurityScopedResource()
+                }
+            }
+            // The web client shrinks oversized documents before upload rather
+            // than refusing them, so the native app has to do the same or it
+            // rejects course material the website happily accepts.
+            let uploadURL = try DocumentCompressor.compressedDocumentIfNeeded(at: url)
+            defer {
+                if uploadURL != url {
+                    try? FileManager.default.removeItem(at: uploadURL)
                 }
             }
             let draft = try await api.createManualLecture(sourceType: .pdf, languageHint: languageHint, session: session)
@@ -465,7 +470,7 @@ final class AppModel: ObservableObject {
             do {
                 try await api.uploadDocument(
                     lectureID: draft.lectureId,
-                    fileURL: url,
+                    fileURL: uploadURL,
                     languageHint: languageHint,
                     createInitialAudio: createInitialAudio,
                     initialAudioVoice: initialAudioVoice,

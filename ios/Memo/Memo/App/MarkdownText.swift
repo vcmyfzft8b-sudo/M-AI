@@ -585,8 +585,22 @@ private enum NativeNoteAttributedBuilder {
             case .code(let text):
                 append(text, font: .monospacedSystemFont(ofSize: 13, weight: .regular), paragraphSpacing: 13, blockID: blockID, to: result, wordRanges: &wordRanges, blockIDs: &blockIDs)
             case .table(let rows):
-                for row in rows {
-                    append(row.joined(separator: "    "), font: .systemFont(ofSize: 14), paragraphSpacing: 6, blockID: blockID, to: result, wordRanges: &wordRanges, blockIDs: &blockIDs)
+                // Highlighting needs one continuous text view, so a table
+                // cannot be laid out as a real grid here the way `MarkdownText`
+                // does. Joining cells with plain spaces ran the header and the
+                // data together into unreadable prose, so mark the header row
+                // and separate cells with a visible divider instead.
+                for (rowIndex, row) in rows.enumerated() {
+                    let isHeader = rowIndex == 0
+                    append(
+                        row.joined(separator: "  ·  "),
+                        font: .systemFont(ofSize: 14, weight: isHeader ? .semibold : .regular),
+                        paragraphSpacing: isHeader ? 8 : 6,
+                        blockID: blockID,
+                        to: result,
+                        wordRanges: &wordRanges,
+                        blockIDs: &blockIDs
+                    )
                 }
             case .divider:
                 append("────────────", font: .systemFont(ofSize: 12), paragraphSpacing: 10, blockID: blockID, to: result, wordRanges: &wordRanges, blockIDs: &blockIDs)

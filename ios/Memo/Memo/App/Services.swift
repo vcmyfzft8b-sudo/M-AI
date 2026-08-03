@@ -1,6 +1,7 @@
 import AuthenticationServices
 import CryptoKit
 import Foundation
+import PDFKit
 import Security
 import StoreKit
 import UIKit
@@ -79,6 +80,24 @@ struct AppConfiguration {
             throw MemoError.missingConfiguration("MEMO_SUPABASE_ANON_KEY")
         }
         return supabaseAnonKey
+    }
+}
+
+extension URLRequest {
+    /// Vercel preview deployments sit behind deployment protection, which
+    /// answers every API call with an SSO redirect instead of JSON. Testing the
+    /// app against a preview therefore needs the project's automation bypass
+    /// secret. Debug-only: release builds talk to the unprotected production
+    /// host and must never carry this header.
+    mutating func applyDebugPreviewBypass() {
+        #if DEBUG
+        guard let secret = UserDefaults.standard.string(forKey: "MEMO_DEBUG_PREVIEW_BYPASS"),
+              !secret.isEmpty else {
+            return
+        }
+        setValue(secret, forHTTPHeaderField: "x-vercel-protection-bypass")
+        setValue("true", forHTTPHeaderField: "x-vercel-set-bypass-cookie")
+        #endif
     }
 }
 
@@ -1360,6 +1379,7 @@ final class MemoAPIClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("ios-native", forHTTPHeaderField: "X-Memo-Client")
+        request.applyDebugPreviewBypass()
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             var sanitizedBody: [String: Any] = [:]
@@ -1414,6 +1434,7 @@ final class MemoAPIClient {
         request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("ios-native", forHTTPHeaderField: "X-Memo-Client")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.applyDebugPreviewBypass()
         request.httpBody = body
 
         let (data, response) = try await urlSession.data(for: request)
@@ -1626,6 +1647,136 @@ private struct AnyEncodable: Encodable {
 
     func encode(to encoder: Encoder) throws {
         try encodeClosure(encoder)
+    }
+}
+
+/// Mirrors the web client's `compressDocumentForUpload` (`src/lib/file-compression-client.ts`).
+///
+/// Both clients upload through the same 4 MB `MAX_DOCUMENT_BYTES` route, but the
+/// web never rejects a large PDF outright: it re-renders the pages as JPEG and
+/// rebuilds an image-only PDF, stepping down through a fixed ladder of
+/// resolution/quality profiles until the result fits. Without this the native
+/// app refused ordinary course material that the website accepts.
+enum DocumentCompressor {
+    static let maxDocumentBytes = 4 * 1024 * 1024
+    /// Matches the web's `MAX_COMPRESSIBLE_DOCUMENT_BYTES`.
+    static let maxCompressibleBytes = 250 * 1024 * 1024
+
+    /// Same ladder as the web's `PDF_PROFILES`, so both clients degrade a
+    /// document in the same way and produce comparable OCR input.
+    private static let profiles: [(maxDimension: CGFloat, quality: CGFloat)] = [
+        (1500, 0.72), (1200, 0.62), (1000, 0.54), (820, 0.46),
+        (640, 0.36), (520, 0.30), (420, 0.24), (320, 0.18),
+        (240, 0.13), (180, 0.10), (120, 0.08), (90, 0.06)
+    ]
+
+    static let tooLargeMessage = "Datoteka dokumenta je prevelika. Trenutna omejitev je 4 MB."
+
+    /// Returns the URL to upload: the original when it already fits, otherwise a
+    /// compressed copy written to the temporary directory.
+    static func compressedDocumentIfNeeded(at url: URL) throws -> URL {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let size = (attributes?[.size] as? NSNumber)?.intValue ?? 0
+
+        if size <= maxDocumentBytes {
+            return url
+        }
+
+        guard size <= maxCompressibleBytes,
+              url.pathExtension.lowercased() == "pdf",
+              let document = PDFDocument(url: url),
+              document.pageCount > 0 else {
+            throw MemoError.unsupported(tooLargeMessage)
+        }
+
+        for profile in profiles {
+            guard let data = imageOnlyPDF(from: document, profile: profile) else {
+                continue
+            }
+            if data.count <= maxDocumentBytes {
+                let name = url.deletingPathExtension().lastPathComponent
+                let output = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("\(name.isEmpty ? "dokument" : name)-compressed.pdf")
+                try? FileManager.default.removeItem(at: output)
+                try data.write(to: output, options: .atomic)
+                return output
+            }
+        }
+
+        throw MemoError.unsupported(tooLargeMessage)
+    }
+
+    private static func imageOnlyPDF(
+        from document: PDFDocument,
+        profile: (maxDimension: CGFloat, quality: CGFloat)
+    ) -> Data? {
+        var pages: [(image: CGImage, bounds: CGRect)] = []
+
+        for index in 0..<document.pageCount {
+            guard let page = document.page(at: index) else { continue }
+            let bounds = page.bounds(for: .mediaBox)
+            guard bounds.width > 0, bounds.height > 0 else { continue }
+
+            let longest = max(bounds.width, bounds.height)
+            let scale = min(3, profile.maxDimension / longest)
+            let pixelSize = CGSize(
+                width: max(1, (bounds.width * scale).rounded()),
+                height: max(1, (bounds.height * scale).rounded())
+            )
+
+            let format = UIGraphicsImageRendererFormat.default()
+            format.scale = 1
+            format.opaque = true
+            let rendered = UIGraphicsImageRenderer(size: pixelSize, format: format).image { context in
+                UIColor.white.setFill()
+                context.fill(CGRect(origin: .zero, size: pixelSize))
+                context.cgContext.translateBy(x: 0, y: pixelSize.height)
+                context.cgContext.scaleBy(
+                    x: pixelSize.width / bounds.width,
+                    y: -pixelSize.height / bounds.height
+                )
+                context.cgContext.translateBy(x: -bounds.origin.x, y: -bounds.origin.y)
+                page.draw(with: .mediaBox, to: context.cgContext)
+            }
+
+            // Round-tripping through a JPEG data provider keeps the encoded JPEG
+            // bytes, so the PDF context embeds them with DCTDecode instead of
+            // re-compressing the decoded bitmap and undoing the size saving.
+            guard let jpeg = rendered.jpegData(compressionQuality: profile.quality),
+                  let provider = CGDataProvider(data: jpeg as CFData),
+                  let image = CGImage(
+                      jpegDataProviderSource: provider,
+                      decode: nil,
+                      shouldInterpolate: true,
+                      intent: .defaultIntent
+                  ) else {
+                return nil
+            }
+            pages.append((image, CGRect(origin: .zero, size: bounds.size)))
+        }
+
+        guard let first = pages.first else { return nil }
+
+        let data = NSMutableData()
+        guard let consumer = CGDataConsumer(data: data as CFMutableData) else { return nil }
+        var mediaBox = first.bounds
+        guard let context = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else { return nil }
+
+        for page in pages {
+            var pageBox = page.bounds
+            let info = [
+                kCGPDFContextMediaBox as String: Data(
+                    bytes: &pageBox,
+                    count: MemoryLayout<CGRect>.size
+                )
+            ] as CFDictionary
+            context.beginPDFPage(info)
+            context.draw(page.image, in: page.bounds)
+            context.endPDFPage()
+        }
+        context.closePDF()
+
+        return data as Data
     }
 }
 

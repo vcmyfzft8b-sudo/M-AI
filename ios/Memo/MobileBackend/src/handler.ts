@@ -1034,6 +1034,12 @@ async function handleAccountDelete(params: {
     await removeStorageObjects(params.env, "lecture-audio", storagePaths);
   }
 
+  // Referenced paths alone are not enough for Apple 5.1.1(v): an upload whose
+  // finalize never ran leaves bytes in the bucket while its lecture row still
+  // has a null storage_path, so those objects would outlive the account. Sweep
+  // everything under the user's own prefix as well.
+  await removeStorageObjectsUnderPrefix(params.env, "lecture-audio", params.user.id);
+
   await Promise.all([
     deleteByUser(params.env, "mobile_app_store_entitlements", params.user.id).catch(ignoreMissingTable),
     deleteByUser(params.env, "billing_subscriptions", params.user.id),
@@ -3493,6 +3499,56 @@ async function removeStorageObjects(env: MobileEnv, bucket: string, paths: strin
   if (!response.ok) {
     const parsed = safeJSON(await response.text());
     throw new HttpError(response.status, errorMessage(parsed) ?? "Could not delete uploaded files.");
+  }
+}
+
+/// Delete every object stored under `<prefix>/` in a bucket, paging through the
+/// listing until it is exhausted. Used by account deletion so uploads that were
+/// never linked back to a lecture row still go away with the account.
+async function removeStorageObjectsUnderPrefix(
+  env: MobileEnv,
+  bucket: string,
+  prefix: string,
+) {
+  const pageSize = 100;
+  // Bound the sweep so a pathological account cannot spin forever; each pass
+  // deletes what it lists, so the listing shrinks on every iteration.
+  for (let pass = 0; pass < 100; pass += 1) {
+    const response = await fetch(`${env.supabaseURL}/storage/v1/object/list/${bucket}`, {
+      method: "POST",
+      headers: {
+        apikey: env.supabaseServiceRoleKey,
+        Authorization: `Bearer ${env.supabaseServiceRoleKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ prefix, limit: pageSize, offset: 0 }),
+    });
+
+    if (!response.ok) {
+      // Storage cleanup must not block deleting the account itself; the
+      // relational rows and the auth user are the parts a user can observe.
+      return;
+    }
+
+    const parsed = safeJSON(await response.text());
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return;
+    }
+
+    const paths = parsed
+      .map((entry) => (isRecord(entry) && typeof entry.name === "string" ? `${prefix}/${entry.name}` : null))
+      .filter((path): path is string => Boolean(path));
+
+    if (paths.length === 0) {
+      return;
+    }
+
+    await removeStorageObjects(env, bucket, paths);
+
+    if (parsed.length < pageSize) {
+      return;
+    }
   }
 }
 

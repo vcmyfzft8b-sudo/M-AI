@@ -501,6 +501,16 @@ function getLatexEnvironmentStart(line: string) {
   };
 }
 
+/// A GitHub-flavoured markdown table row or its `|---|---|` separator.
+///
+/// These must never be promoted to display math: a data row often contains a
+/// slash (a date range like `1848/1850`, a ratio, a unit), which reads as a
+/// fraction, and wrapping the row in `$$…$$` destroys the whole table — the
+/// remaining rows lose their alignment row and degrade to loose paragraphs.
+function isMarkdownTableLine(value: string) {
+  return value.startsWith("|") || /^[\s:|-]+$/.test(value);
+}
+
 function isStandaloneFormulaLine(line: string) {
   const trimmed = line.trim();
 
@@ -508,6 +518,7 @@ function isStandaloneFormulaLine(line: string) {
     trimmed.length < 3 ||
     /(?:\$\$|\\\(|\\\[|(?<!\\)\$)/.test(trimmed) ||
     /^[#>\-*\d.)\s]/.test(trimmed) ||
+    isMarkdownTableLine(trimmed) ||
     /[.!?][\])}"']?$/.test(trimmed) ||
     /\s(?:je|is|are|was|were|and|or|in|on|for|with|kjer|kar|kot)\s/i.test(` ${trimmed} `)
   ) {

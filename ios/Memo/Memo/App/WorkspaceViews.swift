@@ -106,7 +106,16 @@ struct LectureWorkspaceView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
-                    .padding(.bottom, 116)
+                    .padding(.bottom, 16)
+                }
+                // The dock and the action pill float over this scroll view. A
+                // trailing content padding is not enough: panels that size
+                // themselves to the viewport (the flashcard reviewer) then lay
+                // their controls out underneath the pill, so "Good" and "next"
+                // were only half tappable. Reserving the strip as safe area
+                // shrinks the viewport instead, which every panel respects.
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    Color.clear.frame(height: workspaceOverlayHeight)
                 }
             }
 
@@ -198,6 +207,9 @@ struct LectureWorkspaceView: View {
         }
         return MemoMarkdown.strippingRedundantLeadingHeading(markdown, title: currentLecture.title)
     }
+
+    /// Height of the floating dock/pill strip that sits over the scroll view.
+    private var workspaceOverlayHeight: CGFloat { 72 }
 
     private var workspaceBottomOverlay: some View {
         HStack(alignment: .bottom, spacing: 12) {

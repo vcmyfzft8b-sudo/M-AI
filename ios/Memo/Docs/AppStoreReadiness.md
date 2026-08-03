@@ -145,7 +145,16 @@ The native app includes Sign in with Apple and uses nonce-backed token exchange.
 
 ### 8. Background Modes
 
-This project does not enable background modes. Add `UIBackgroundModes` only if Memo truly supports a background behavior, such as recording while the app is backgrounded. Avoid adding broad capabilities preemptively.
+The app declares exactly one background mode, `audio`, and uses it: the lecture
+recorder activates a `.playAndRecord` / `.spokenAudio` `AVAudioSession` so a
+recording keeps running when the student locks the phone or switches apps
+mid-lecture, and a Live Activity (`NSSupportsLiveActivities`) shows the running
+timer. Say this in the App Review notes — background audio is scrutinised, and
+the justification is that abandoning the recording on backgrounding would lose
+the lecture.
+
+Do not add further background modes (`fetch`, `processing`, `location`)
+preemptively; generation runs server-side and needs no background execution.
 
 ## Submission Notes
 

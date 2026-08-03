@@ -759,7 +759,11 @@ struct FlashcardsView: View {
                 .foregroundStyle(theme.tint)
         }
         .padding(20)
-        .frame(maxWidth: .infinity, minHeight: 300)
+        // The reviewer fills the workspace without scrolling, so the card has
+        // to leave room for the Again/Good row underneath to sit clear of the
+        // floating dock and action pill. At 300 the row ran under them and the
+        // Good button was only half tappable.
+        .frame(maxWidth: .infinity, minHeight: 240)
         .background(theme.surfaceSolid)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(

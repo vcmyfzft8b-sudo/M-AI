@@ -231,6 +231,46 @@ async function syncStripeSubscriptionsForCustomer(customerId: string) {
   } while (startingAfter);
 }
 
+/// True when the user has a live App Store subscription.
+///
+/// iOS bills through StoreKit, never Stripe, so an App Store purchase lands in
+/// `mobile_app_store_entitlements` and leaves `billing_subscriptions` empty.
+/// Without this check a subscriber who paid through Apple would keep getting
+/// 402s from every feature route — they would pay and receive nothing.
+async function hasActiveAppStoreEntitlement(userId: string, nowMs = Date.now()) {
+  const { data, error } = await createSupabaseServiceRoleClient()
+    .from("mobile_app_store_entitlements")
+    .select("status,expires_at,revoked_at")
+    .eq("user_id", userId)
+    .eq("status", "active");
+
+  if (error) {
+    // The table only exists once the mobile migrations are applied. Treat a
+    // missing table as "no Apple entitlement" rather than failing the request,
+    // so web-only deployments keep working.
+    console.error("App Store entitlement lookup failed", { userId, error });
+    return false;
+  }
+
+  return (data ?? []).some((row) => {
+    const entitlement = row as {
+      expires_at: string | null;
+      revoked_at: string | null;
+    };
+
+    if (entitlement.revoked_at) {
+      return false;
+    }
+
+    if (!entitlement.expires_at) {
+      return true;
+    }
+
+    const expiresMs = Date.parse(entitlement.expires_at);
+    return Number.isFinite(expiresMs) && expiresMs > nowMs;
+  });
+}
+
 async function resolveUserSubscriptionState(params: {
   userId: string;
   stripeCustomerId: string | null;
@@ -253,10 +293,15 @@ async function resolveUserSubscriptionState(params: {
     }
   }
 
+  const stripeAccess = hasPaidAccess(subscription);
+  // Either billing rail grants the same access, so a subscription bought on the
+  // website works on iPhone and an App Store subscription works on the website.
+  const appStoreAccess = stripeAccess ? false : await hasActiveAppStoreEntitlement(params.userId);
+
   return {
     subscriptions,
     subscription,
-    hasPaidAccess: hasPaidAccess(subscription),
+    hasPaidAccess: stripeAccess || appStoreAccess,
   };
 }
 

@@ -166,13 +166,31 @@ In Vercel:
 
 Production values should remain configured for the production environment.
 
-Preview deployments may also need environment variables. In Vercel, set the required variables for:
+Preview deployments use Vercel's global Preview environment. The shared Supabase values point to the data-empty staging branch described in [preview-staging.md](./preview-staging.md).
 
-- Production
-- Preview
-- Development, if needed
+- do not copy production secrets into Preview
+- do not add branch-specific Supabase overrides
+- use test-mode or restricted Preview credentials for external providers
+- redeploy a Preview after changing its environment configuration
 
 If a preview deployment is missing env vars, the branch may build but not work correctly.
+
+## Database Migration Workflow
+
+Database schema is migration-as-code. `supabase/migrations` is the source of truth for staging and production.
+
+For a database change:
+
+1. create a new ordered migration file on the PR branch
+2. replay the full migration chain locally with `supabase db reset --no-seed`
+3. commit the migration in the same PR as the code that depends on it
+4. test it on shared staging only as a coordinated, serialized exception
+5. review and merge the PR into `main`
+6. require the `Supabase production migrations` GitHub Action to pass
+
+The production workflow runs `supabase db push` from the merged `main` checkout. It applies only migrations that are missing from production's migration history and never includes seed data.
+
+Do not create schema changes only in a Supabase dashboard. If a dashboard is used to prototype a change, capture it in a migration before review and restore shared staging to the `main` baseline.
 
 ## Rule For Agents
 
@@ -183,17 +201,9 @@ When an agent works on this repository, it should:
 3. test locally first
 4. prepare the branch for user review and wait for the user to push it
 5. use the Vercel preview deployment for browser testing
-6. merge to `main` only when the work is ready for production
+6. verify that the Preview uses shared staging and not production
+7. commit every schema change as a migration file
+8. merge to `main` only when the work is ready for production
+9. treat a release with migrations as incomplete until the production migration workflow passes
 
-## Optional Future Upgrade
-
-If the team later wants a more structured flow, it can add:
-
-- `develop` as a shared staging branch
-
-For now, the recommended workflow is simpler:
-
-- one repo
-- `main` for production
-- short-lived feature/fix branches
-- Vercel previews for testing
+See [preview-staging.md](./preview-staging.md) for the exact environment mapping and safety checks.

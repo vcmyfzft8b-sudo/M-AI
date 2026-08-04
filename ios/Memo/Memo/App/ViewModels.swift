@@ -560,6 +560,26 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Open Stripe Checkout for `plan` and refresh entitlement when the user
+    /// comes back. Used when `BillingMode.current == .stripeCheckout`.
+    func startStripeCheckout(plan: BillingPlan) async -> URL? {
+        guard let session else {
+            return nil
+        }
+        do {
+            return try await api.createStripeCheckout(plan: plan, session: session)
+        } catch {
+            errorMessage = "Plačila ni bilo mogoče začeti. Poskusi znova."
+            return nil
+        }
+    }
+
+    /// Re-read entitlement after returning from the hosted checkout page; the
+    /// Stripe webhook writes the subscription, so the app just refetches.
+    func refreshEntitlementAfterCheckout() async {
+        await refreshAppState()
+    }
+
     func restorePurchases() async {
         await store.restorePurchases()
         await syncStoreKitReceipts()

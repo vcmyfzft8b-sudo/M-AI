@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { cache } from "react";
 import Stripe from "stripe";
 
+import { getApiUser } from "@/lib/api-auth";
 import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 import { getServerEnv } from "@/lib/server-env";
@@ -534,6 +535,28 @@ export const getViewerAppState = cache(async function getViewerAppState() {
     ...entitlement,
   };
 });
+
+/// Same as `getViewerAppState`, but also accepts the `Authorization: Bearer`
+/// token the native client sends. Billing routes were cookie-only, so the iOS
+/// app could not start a checkout through the website's own route.
+export async function getViewerAppStateForRequest(request: Request) {
+  const cookieState = await getViewerAppState();
+
+  if (cookieState) {
+    return cookieState;
+  }
+
+  const user = await getApiUser(request);
+
+  if (!user) {
+    return null;
+  }
+
+  return {
+    user,
+    ...(await getUserEntitlementState(user.id)),
+  };
+}
 
 export function getPlanFromPriceId(priceId: string | null | undefined): BillingPlan | null {
   if (!priceId) {

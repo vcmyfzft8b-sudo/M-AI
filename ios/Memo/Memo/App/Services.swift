@@ -1355,6 +1355,23 @@ final class MemoAPIClient {
         )
     }
 
+    /// Start a Stripe Checkout session through the website's own billing route,
+    /// so an iOS subscription is the same product, price and Stripe customer as
+    /// one bought on the web. Returns the hosted checkout URL to open.
+    func createStripeCheckout(plan: BillingPlan, session: MemoSession) async throws -> URL {
+        struct CheckoutResponse: Decodable { let url: String }
+        let response: CheckoutResponse = try await jsonRequest(
+            path: "billing/checkout",
+            method: "POST",
+            body: ["plan": plan.rawValue],
+            session: session
+        )
+        guard let url = URL(string: response.url) else {
+            throw MemoError.invalidResponse
+        }
+        return url
+    }
+
     func deleteAccount(session: MemoSession) async throws {
         let _: EmptyResponse = try await jsonRequest(
             path: "account",

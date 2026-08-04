@@ -1,9 +1,23 @@
+import SafariServices
 import StoreKit
 import SwiftUI
 
 // Native paywall matching the web `memo-paywall-shell` design.
-// Purchases run through StoreKit in-app purchase (App Store rule 3.1.1) —
-// never through Stripe checkout on iOS.
+
+/// Which billing rail the paywall drives.
+///
+/// `.storeKit` is what App Review expects: guideline 3.1.1 requires in-app
+/// purchase for digital content and forbids sending users to an outside
+/// payment flow. `.stripeCheckout` opens the website's own Stripe Checkout so
+/// an iOS subscription is the identical product, price and Stripe customer as
+/// one bought on the web — chosen deliberately, and the switch to flip back if
+/// review objects.
+enum BillingMode {
+    case storeKit
+    case stripeCheckout
+
+    static let current: BillingMode = .stripeCheckout
+}
 
 struct PaywallView: View {
     @EnvironmentObject private var appModel: AppModel
@@ -12,6 +26,7 @@ struct PaywallView: View {
     @State private var selectedPlan: BillingPlan = .yearly
     @State private var isPurchasing = false
     @State private var isRestoring = false
+    @State private var checkoutURL: URL?
 
     private let purple = Color(hex: 0x7C5CFF)
 
@@ -46,7 +61,24 @@ struct PaywallView: View {
         }
         .preferredColorScheme(.dark)
         .task {
-            await appModel.store.refresh()
+            if BillingMode.current == .storeKit {
+                await appModel.store.refresh()
+            }
+        }
+        .sheet(item: $checkoutURL) { url in
+            // Stripe Checkout is a hosted page, so it runs in Safari rather
+            // than a plain web view; the user needs the address bar and
+            // Apple Pay / autofill to trust it with card details.
+            SafariSheet(url: url)
+                .ignoresSafeArea()
+                .onDisappear {
+                    Task {
+                        await appModel.refreshEntitlementAfterCheckout()
+                        if appModel.hasPaidAccess {
+                            onClose?()
+                        }
+                    }
+                }
         }
     }
 
@@ -295,7 +327,9 @@ struct PaywallView: View {
                 if isRestoring {
                     ProgressView().tint(.white.opacity(0.7))
                 } else {
-                    Text("Obnovi nakupe")
+                    Text(BillingMode.current == .stripeCheckout
+                         ? "Že imam naročnino"
+                         : "Obnovi nakupe")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.7))
                         .underline()
@@ -317,6 +351,23 @@ struct PaywallView: View {
     }
 
     private func purchase() {
+        switch BillingMode.current {
+        case .stripeCheckout:
+            startStripeCheckout()
+        case .storeKit:
+            startStoreKitPurchase()
+        }
+    }
+
+    private func startStripeCheckout() {
+        isPurchasing = true
+        Task {
+            checkoutURL = await appModel.startStripeCheckout(plan: selectedPlan)
+            isPurchasing = false
+        }
+    }
+
+    private func startStoreKitPurchase() {
         guard let product = storeProduct(for: selectedPlan) else {
             appModel.errorMessage = "Paketi trenutno niso na voljo. Poskusi znova pozneje."
             return
@@ -334,11 +385,34 @@ struct PaywallView: View {
     private func restore() {
         isRestoring = true
         Task {
-            await appModel.restorePurchases()
+            switch BillingMode.current {
+            case .stripeCheckout:
+                // Nothing to restore from StoreKit; a web subscription just
+                // needs the entitlement re-read.
+                await appModel.refreshEntitlementAfterCheckout()
+            case .storeKit:
+                await appModel.restorePurchases()
+            }
             isRestoring = false
             if appModel.hasPaidAccess {
                 onClose?()
             }
         }
     }
+}
+
+/// `URL` is not `Identifiable`, which `.sheet(item:)` requires.
+extension URL: @retroactive Identifiable {
+    public var id: String { absoluteString }
+}
+
+/// Hosted Stripe Checkout, presented in `SFSafariViewController`.
+private struct SafariSheet: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
 }

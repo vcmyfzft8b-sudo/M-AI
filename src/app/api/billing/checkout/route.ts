@@ -8,7 +8,7 @@ import {
   getBillingSuccessUrl,
   getPriceIdForPlan,
   getStripeClient,
-  getViewerAppState,
+  getViewerAppStateForRequest,
   hasStripeSubscriptionHistory,
   PURCHASABLE_BILLING_PLAN_IDS,
 } from "@/lib/billing";
@@ -20,7 +20,7 @@ const checkoutSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const appState = await getViewerAppState();
+  const appState = await getViewerAppStateForRequest(request);
 
   if (!appState) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

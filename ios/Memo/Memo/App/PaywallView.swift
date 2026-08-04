@@ -124,12 +124,9 @@ struct PaywallView: View {
 
     private var header: some View {
         VStack(spacing: 16) {
-            HStack(spacing: 12) {
-                BrandLogo(size: 66)
-                Text("Memo AI")
-                    .font(.system(size: 40, weight: .black))
-                    .foregroundStyle(.white)
-            }
+            // The combined artwork the signed-in headers already use, rather
+            // than re-composing the logo and wordmark by hand.
+            MemoBrandBanner(height: 66)
             Text("Nadgradi in ustvarjaj več zapiskov")
                 .font(.system(size: 29, weight: .black))
                 .foregroundStyle(.white)

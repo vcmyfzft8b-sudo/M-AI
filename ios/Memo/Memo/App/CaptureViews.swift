@@ -1028,6 +1028,15 @@ struct CameraPicker: UIViewControllerRepresentable {
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
             picker.sourceType = .camera
         }
+        #if DEBUG
+        // The simulator advertises a camera but its shutter never returns an
+        // image, so the scan flow cannot be exercised there. This lets a test
+        // run pick a real photo instead and drive the same capture callback.
+        if ProcessInfo.processInfo.environment["MEMO_DEBUG_SCAN_FROM_LIBRARY"] == "1",
+           UIImagePickerController.isSourceTypeAvailable(.photoLibrary) {
+            picker.sourceType = .photoLibrary
+        }
+        #endif
         picker.delegate = context.coordinator
         return picker
     }

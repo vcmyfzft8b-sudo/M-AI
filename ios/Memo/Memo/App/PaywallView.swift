@@ -277,7 +277,11 @@ struct PaywallView: View {
         HStack(spacing: 7) {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 15, weight: .semibold))
-            Text(trialEligible ? "Danes brez plačila" : "Varno plačilo prek App Store")
+            Text(trialEligible
+                 ? "Danes brez plačila"
+                 : BillingMode.current == .stripeCheckout
+                   ? "Varno plačilo prek Stripe"
+                   : "Varno plačilo prek App Store")
                 .font(.system(size: 14, weight: .semibold))
         }
         .foregroundStyle(.white.opacity(0.8))

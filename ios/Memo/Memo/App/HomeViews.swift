@@ -178,6 +178,9 @@ struct MainShellView: View {
                let parsed = AppTab(rawValue: tab) {
                 activeTab = parsed
             }
+            if ProcessInfo.processInfo.environment["MEMO_DEBUG_PAYWALL"] == "1" {
+                showPaywall = true
+            }
             if let rawMode = ProcessInfo.processInfo.environment["MEMO_DEBUG_CREATE_MODE"],
                let mode = CaptureMode(rawValue: rawMode) {
                 createMode = mode

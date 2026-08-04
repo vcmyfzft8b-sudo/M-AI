@@ -34,18 +34,28 @@ struct PaywallView: View {
         ZStack(alignment: .topTrailing) {
             background
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 13) {
-                    header
-                    benefits
-                    planGrid
-                    reassurance
-                    ctaButton
-                    footer
+            // The offer now fits a phone screen, so it is centred in the
+            // viewport rather than pinned to the top with dead space beneath.
+            // Keeping the scroll view means it still scrolls on small devices
+            // or at large accessibility text sizes.
+            GeometryReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 13) {
+                        header
+                        benefits
+                        planGrid
+                        reassurance
+                        ctaButton
+                        footer
+                    }
+                    // Keep the stack at its natural height, otherwise the
+                    // plan cards absorb the spare space and their prices drift
+                    // to the bottom of a half-empty card.
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 18)
+                    .frame(maxWidth: .infinity, minHeight: proxy.size.height)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 14)
             }
 
             if let onClose {

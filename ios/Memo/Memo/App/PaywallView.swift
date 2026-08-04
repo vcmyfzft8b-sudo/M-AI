@@ -35,7 +35,7 @@ struct PaywallView: View {
             background
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 22) {
+                VStack(spacing: 13) {
                     header
                     benefits
                     planGrid
@@ -43,9 +43,9 @@ struct PaywallView: View {
                     ctaButton
                     footer
                 }
-                .padding(.horizontal, 22)
-                .padding(.top, 54)
-                .padding(.bottom, 30)
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 14)
             }
 
             if let onClose {
@@ -100,22 +100,22 @@ struct PaywallView: View {
     }
 
     private var header: some View {
-        VStack(spacing: 16) {
-            HStack(spacing: 12) {
-                BrandLogo(size: 66)
+        VStack(spacing: 9) {
+            HStack(spacing: 10) {
+                BrandLogo(size: 44)
                 Text("Memo AI")
-                    .font(.system(size: 40, weight: .black))
+                    .font(.system(size: 29, weight: .black))
                     .foregroundStyle(.white)
             }
             Text("Nadgradi in ustvarjaj več zapiskov")
-                .font(.system(size: 29, weight: .black))
+                .font(.system(size: 21, weight: .black))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
         }
     }
 
     private var benefits: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 7) {
             benefitCard(emoji: "📝", title: "Neomejeni zapiski", copy: "Naloži neomejeno PDF-jev in zvoka")
             benefitCard(emoji: "💡", title: "Pametna učna orodja", copy: "Personalizirane vaje za boljše rezultate")
             benefitCard(emoji: "⚡", title: "Uči se 10x hitreje", copy: "Pospeši učenje z AI podporo")
@@ -123,23 +123,23 @@ struct PaywallView: View {
     }
 
     private func benefitCard(emoji: String, title: String, copy: String) -> some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 11) {
             Text(emoji)
-                .font(.system(size: 24))
-                .frame(width: 48, height: 48)
+                .font(.system(size: 18))
+                .frame(width: 36, height: 36)
                 .background(.white.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.white)
                 Text(copy)
-                    .font(.system(size: 13.5))
+                    .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.65))
             }
             Spacer(minLength: 0)
         }
-        .padding(14)
+        .padding(10)
         .background(.white.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
@@ -155,7 +155,7 @@ struct PaywallView: View {
             planCard(.yearly)
             planCard(.monthly)
         }
-        .padding(.top, 12)
+        .padding(.top, 4)
     }
 
     private func planCard(_ plan: BillingPlan) -> some View {
@@ -182,7 +182,7 @@ struct PaywallView: View {
                 Spacer(minLength: 6)
 
                 Text(monthlyPriceText(plan))
-                    .font(.system(size: 30, weight: .black))
+                    .font(.system(size: 25, weight: .black))
                     .foregroundStyle(.white)
                 Text("/ mesec")
                     .font(.system(size: 13))
@@ -203,8 +203,8 @@ struct PaywallView: View {
                         .padding(.top, 4)
                 }
             }
-            .padding(15)
-            .frame(maxWidth: .infinity, minHeight: 175, alignment: .topLeading)
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
             .background(
                 selected
                     ? AnyShapeStyle(LinearGradient(
@@ -318,7 +318,7 @@ struct PaywallView: View {
     }
 
     private var footer: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 9) {
             HStack(spacing: 7) {
                 Image(systemName: "checkmark.circle")
                     .font(.system(size: 14, weight: .semibold))

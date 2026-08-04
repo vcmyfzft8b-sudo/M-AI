@@ -142,7 +142,11 @@ async function ensurePdfJsNodeRuntime() {
   }
 
   if (!pdfGlobal.pdfjsWorker?.WorkerMessageHandler) {
-    pdfWorkerPromise ??= import("pdfjs-dist/legacy/build/pdf.worker.mjs")
+    // The PDF.js worker bundle mutates built-in globals during initialization.
+    // Let Node load the vendor ESM file directly instead of webpack rewriting
+    // it into a Next.js server chunk, which breaks those initialization guards.
+    const workerModulePath = "pdfjs-dist/legacy/build/pdf.worker.mjs";
+    pdfWorkerPromise ??= import(/* webpackIgnore: true */ workerModulePath)
       .then((worker) => {
         pdfGlobal.pdfjsWorker = {
           WorkerMessageHandler: worker.WorkerMessageHandler,
@@ -159,12 +163,18 @@ async function ensurePdfJsNodeRuntime() {
 
 export async function getPdfJs() {
   if (!pdfJsPromise) {
-    pdfJsPromise = ensurePdfJsNodeRuntime().then(() =>
-      import("pdfjs-dist/legacy/build/pdf.mjs"),
-    ).catch((error) => {
-      pdfJsPromise = null;
-      throw error;
-    });
+    const pdfModulePath = "pdfjs-dist/legacy/build/pdf.mjs";
+    pdfJsPromise = ensurePdfJsNodeRuntime()
+      .then(
+        () =>
+          import(
+            /* webpackIgnore: true */ pdfModulePath
+          ) as Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")>,
+      )
+      .catch((error) => {
+        pdfJsPromise = null;
+        throw error;
+      });
   }
 
   return pdfJsPromise;

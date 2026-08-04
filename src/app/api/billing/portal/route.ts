@@ -7,8 +7,16 @@ import {
   getViewerAppState,
 } from "@/lib/billing";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
+import { isIOSWebWrapperUserAgent } from "@/lib/ios-web-wrapper";
 
 export async function POST(request: Request) {
+  if (isIOSWebWrapperUserAgent(request.headers.get("user-agent"))) {
+    return NextResponse.json(
+      { error: "Upravljanje spletne naročnine v aplikaciji iOS ni na voljo." },
+      { status: 403 },
+    );
+  }
+
   const appState = await getViewerAppState();
 
   if (!appState) {

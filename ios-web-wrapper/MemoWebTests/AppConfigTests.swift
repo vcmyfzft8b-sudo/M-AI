@@ -2,8 +2,8 @@ import XCTest
 @testable import MemoWeb
 
 final class AppConfigTests: XCTestCase {
-    func testProductionURLUsesCanonicalDomain() {
-        XCTAssertEqual(AppConfig.productionURL.absoluteString, "https://memoai.eu")
+    func testProductionURLUsesCanonicalSignInGateway() {
+        XCTAssertEqual(AppConfig.productionURL.absoluteString, "https://memoai.eu/auth/continue")
     }
 
     func testCanonicalAndRedirectedHostsStayInsideApp() throws {
@@ -14,6 +14,14 @@ final class AppConfigTests: XCTestCase {
     func testAuthenticationProvidersStayInsideWebSession() throws {
         XCTAssertTrue(AppConfig.isAuthenticationURL(try XCTUnwrap(URL(string: "https://accounts.google.com/o/oauth2/v2/auth"))))
         XCTAssertTrue(AppConfig.isAuthenticationURL(try XCTUnwrap(URL(string: "https://example.supabase.co/auth/v1/authorize"))))
+    }
+
+    func testMarketingRootIsAlwaysReplacedBySignInGateway() throws {
+        let rootURL = try XCTUnwrap(URL(string: "https://memoai.eu/"))
+        XCTAssertEqual(AppConfig.embeddedURL(for: rootURL), AppConfig.productionURL)
+
+        let appURL = try XCTUnwrap(URL(string: "https://memoai.eu/app"))
+        XCTAssertEqual(AppConfig.embeddedURL(for: appURL), appURL)
     }
 
     func testUserInitiatedExternalLinksOpenOutsideApp() throws {

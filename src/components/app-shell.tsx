@@ -69,10 +69,12 @@ export function AppShell({
   children,
   hasPaidAccess,
   initialPathname,
+  suppressPurchaseActions,
 }: {
   children: React.ReactNode;
   hasPaidAccess: boolean;
   initialPathname: string;
+  suppressPurchaseActions: boolean;
 }) {
   const clientPathname = usePathname();
   const router = useRouter();
@@ -91,7 +93,8 @@ export function AppShell({
   const createHref = "/app?mode=record";
   const subscribeHref = "/app/start";
   const showCreateCta = !shouldHideNavigation;
-  const showSubscribeCta = !hasPaidAccess && showCreateCta && isHomePage;
+  const showSubscribeCta =
+    !suppressPurchaseActions && !hasPaidAccess && showCreateCta && isHomePage;
   const subscribeLabel = "Kupi";
   const pullThreshold = 168;
   const cappedPullDistance = Math.min(pullDistance, 220);

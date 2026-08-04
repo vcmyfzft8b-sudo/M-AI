@@ -13,6 +13,7 @@ import {
   PURCHASABLE_BILLING_PLAN_IDS,
 } from "@/lib/billing";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
+import { isIOSWebWrapperUserAgent } from "@/lib/ios-web-wrapper";
 import { parseJsonRequest } from "@/lib/request-validation";
 
 const checkoutSchema = z.object({
@@ -20,6 +21,13 @@ const checkoutSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  if (isIOSWebWrapperUserAgent(request.headers.get("user-agent"))) {
+    return NextResponse.json(
+      { error: "Nakup v aplikaciji iOS ni na voljo." },
+      { status: 403 },
+    );
+  }
+
   const appState = await getViewerAppState();
 
   if (!appState) {

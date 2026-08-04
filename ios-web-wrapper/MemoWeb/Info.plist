@@ -24,8 +24,17 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.education</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSAllowsLocalNetworking</key>
+		<false/>
+	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Memo AI potrebuje dostop do kamere za skeniranje in nalaganje učnega gradiva.</string>
 	<key>NSMicrophoneUsageDescription</key>

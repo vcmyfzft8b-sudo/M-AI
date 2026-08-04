@@ -248,13 +248,15 @@
 }
 
 html {
+  min-height: 100%;
   overscroll-behavior-y: none;
   scroll-behavior: smooth;
+  background-color: var(--canvas);
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 100dvh;
   overscroll-behavior-y: none;
   background-color: var(--canvas);
   color: var(--label);
@@ -4563,6 +4565,31 @@ select:disabled {
   font-size: 0.78rem;
   line-height: 1.35;
   text-align: right;
+}
+
+.settings-danger-action {
+  color: var(--red);
+}
+
+.settings-danger-card {
+  border-color: color-mix(in srgb, var(--red) 24%, var(--separator));
+}
+
+.settings-billing-note {
+  max-width: 22rem;
+  text-align: right;
+}
+
+.ios-companion-card {
+  width: min(100%, 42rem);
+  margin: auto;
+}
+
+.ios-companion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
 }
 
 .theme-choice-grid {

@@ -2,11 +2,22 @@ import SwiftUI
 import UIKit
 import WebKit
 
+private extension UIColor {
+    static let memoCanvas = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? .black
+            : UIColor(red: 233 / 255, green: 233 / 255, blue: 237 / 255, alpha: 1)
+    }
+}
+
 struct WebContainerView: View {
     @ObservedObject var store: WebViewStore
 
     var body: some View {
         ZStack {
+            Color(uiColor: .memoCanvas)
+                .ignoresSafeArea()
+
             MemoWebView(store: store)
 
             if let errorMessage = store.errorMessage {
@@ -22,7 +33,8 @@ struct WebContainerView: View {
                     .tint(Color(red: 0.22, green: 0.48, blue: 0.97))
             }
         }
-        .background(Color(uiColor: .systemBackground))
+        .background(Color(uiColor: .memoCanvas))
+        .ignoresSafeArea(.container, edges: .all)
     }
 }
 
@@ -50,7 +62,7 @@ private struct ConnectionErrorView: View {
         }
         .padding(28)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(uiColor: .systemBackground))
+        .background(Color(uiColor: .memoCanvas))
         .accessibilityIdentifier("ConnectionErrorView")
     }
 }
@@ -72,6 +84,9 @@ struct MemoWebView: UIViewRepresentable {
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.isOpaque = false
+        webView.backgroundColor = .memoCanvas
+        webView.scrollView.backgroundColor = .memoCanvas
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
@@ -182,6 +197,13 @@ struct MemoWebView: UIViewRepresentable {
                 return
             }
 
+            let embeddedURL = AppConfig.embeddedURL(for: url)
+            if embeddedURL != url {
+                webView.load(URLRequest(url: embeddedURL))
+                decisionHandler(.cancel)
+                return
+            }
+
             if navigationAction.shouldPerformDownload {
                 decisionHandler(.download)
                 return
@@ -219,11 +241,12 @@ struct MemoWebView: UIViewRepresentable {
         ) -> WKWebView? {
             guard let url = navigationAction.request.url else { return nil }
             let userInitiated = navigationAction.navigationType == .linkActivated
+            let embeddedURL = AppConfig.embeddedURL(for: url)
 
             if AppConfig.shouldOpenExternally(url, userInitiated: userInitiated) {
                 UIApplication.shared.open(url)
             } else {
-                webView.load(navigationAction.request)
+                webView.load(URLRequest(url: embeddedURL))
             }
             return nil
         }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { BillingPortalButton } from "@/components/billing-portal-button";
+import { DeleteAccountButton } from "@/components/delete-account-button";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { LogoutForm } from "@/components/logout-form";
 import { ThemeSettings } from "@/components/theme-settings";
@@ -8,6 +9,7 @@ import { getViewerAppState } from "@/lib/billing";
 import { requireUser } from "@/lib/auth";
 import { BRAND_NAME } from "@/lib/brand";
 import { formatCalendarDate } from "@/lib/utils";
+import { isIOSWebWrapperRequest } from "@/lib/ios-web-wrapper";
 
 function SettingsLinkCard(props: {
   href: string;
@@ -52,6 +54,7 @@ function SettingsExternalCard(props: {
 export default async function SettingsPage() {
   const user = await requireUser();
   const appState = await getViewerAppState();
+  const isIOSWebWrapper = await isIOSWebWrapperRequest();
   const email = user.email ?? user.user_metadata.email ?? "Prijavljen uporabnik";
   const subscription = appState?.subscription ?? null;
 
@@ -88,7 +91,11 @@ export default async function SettingsPage() {
             </p>
           </div>
 
-          {subscription ? (
+          {isIOSWebWrapper ? (
+            <p className="ios-row-subtitle settings-billing-note">
+              Naročnino upravljaj tam, kjer je bila sklenjena.
+            </p>
+          ) : subscription ? (
             <BillingPortalButton />
           ) : (
             <Link href="/app/start" className="settings-inline-action">
@@ -124,6 +131,22 @@ export default async function SettingsPage() {
             icon="🔒"
             title="Zasebnost"
           />
+          <SettingsLinkCard
+            href="/app/support/terms-of-use"
+            icon="📄"
+            title="Pogoji uporabe"
+          />
+        </div>
+
+        <div className="dashboard-surface-card settings-account-card settings-danger-card">
+          <div className="min-w-0">
+            <p className="dashboard-overline">Trajno dejanje</p>
+            <p className="settings-account-value">Izbris računa in vseh podatkov</p>
+            <p className="ios-row-subtitle mt-1">
+              Izbris prekliče aktivno spletno naročnino ter odstrani zapiske in naložene datoteke.
+            </p>
+          </div>
+          <DeleteAccountButton />
         </div>
       </section>
 

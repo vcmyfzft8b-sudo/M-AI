@@ -4,7 +4,7 @@ This is a separate iOS app that embeds the production Memo AI mobile web app in 
 
 ## Architecture
 
-- `https://memoai.eu` is the single centrally configured start URL.
+- `https://memoai.eu/auth/continue` is the single centrally configured start URL. It shows sign-in to logged-out users and redirects an existing session directly into the app.
 - Persistent WebKit storage keeps login sessions and web preferences across launches.
 - The wrapper grants microphone/camera web permissions only to Memo AI production hosts.
 - Native WebKit file inputs provide camera, photo-library, and Files pickers.
@@ -34,8 +34,8 @@ xcodebuild \
   test
 ```
 
-The unit tests validate URL/session routing rules. The UI smoke test loads the live production site and follows its sign-in flow.
+The unit tests validate URL/session routing rules. The UI smoke tests verify that the live production app opens directly on sign-in and does not expose Google login unless Apple login is also available.
 
 ## App Store note
 
-Apple may reject apps that are only repackaged websites under App Review Guideline 4.2. This project deliberately remains a web wrapper as requested; review metadata should clearly explain the value of the recording, document-upload, study, and accessibility workflows.
+Apple may reject apps that are only repackaged websites under App Review Guideline 4.2. This project deliberately remains a web wrapper as requested; review metadata should clearly explain the value of the recording, document-upload, study, and accessibility workflows. See `AppStoreSubmission.md` for the required submission and service configuration checklist.

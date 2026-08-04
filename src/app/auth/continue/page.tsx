@@ -6,10 +6,12 @@ import { LandingAuthOptions } from "@/components/landing-auth-options";
 import { getAuthProviderAvailability } from "@/lib/auth-providers";
 import { getOptionalUser } from "@/lib/auth";
 import { BRAND_NAME } from "@/lib/brand";
+import { isIOSWebWrapperRequest } from "@/lib/ios-web-wrapper";
 import { hasPublicSupabaseEnv } from "@/lib/public-env";
 
 export default async function ContinuePage() {
   const isVercelPreview = process.env.VERCEL_ENV === "preview";
+  const isIOSWebWrapper = await isIOSWebWrapperRequest();
 
   if (hasPublicSupabaseEnv) {
     const user = await getOptionalUser();
@@ -21,6 +23,10 @@ export default async function ContinuePage() {
   const providers = hasPublicSupabaseEnv
     ? await getAuthProviderAvailability()
     : { apple: false, email: false, google: false };
+  const visibleProviders =
+    isIOSWebWrapper && !providers.apple
+      ? { ...providers, google: false }
+      : providers;
 
   return (
     <main className="landing-shell landing-auth-page">
@@ -34,7 +40,7 @@ export default async function ContinuePage() {
           <p className="landing-auth-copy">Prijavi se ali ustvari nov račun.</p>
         </section>
 
-        <LandingAuthOptions providers={providers} next="/app/start" />
+        <LandingAuthOptions providers={visibleProviders} next="/app/start" />
 
         <p className="landing-auth-legal">
           Z nadaljevanjem se strinjaš s {`${BRAND_NAME}`}{" "}

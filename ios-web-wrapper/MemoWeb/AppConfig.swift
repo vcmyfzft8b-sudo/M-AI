@@ -1,7 +1,9 @@
 import Foundation
 
 enum AppConfig {
-    static let productionURL = URL(string: "https://memoai.eu")!
+    // The auth gateway redirects an existing session to /app and otherwise
+    // renders the sign-in screen. The marketing landing page is never shown.
+    static let productionURL = URL(string: "https://memoai.eu/auth/continue")!
 
     private static let memoHosts: Set<String> = [
         "memoai.eu",
@@ -23,6 +25,14 @@ enum AppConfig {
         return authenticationHosts.contains(host)
             || host.hasSuffix(".supabase.co")
             || host.hasSuffix(".supabase.com")
+    }
+
+    static func embeddedURL(for url: URL) -> URL {
+        guard isMemoURL(url), url.path.isEmpty || url.path == "/" else {
+            return url
+        }
+
+        return productionURL
     }
 
     static func shouldOpenExternally(_ url: URL, userInitiated: Bool) -> Bool {

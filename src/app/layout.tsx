@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 
 import { ThemeController } from "@/components/theme-controller";
@@ -13,6 +13,12 @@ import "katex/dist/katex.min.css";
 import "./globals.css";
 
 const siteTitle = `${SEO_BRAND_NAME} | ${BRAND_SHORTLINE}`;
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(SEO_SITE_URL),

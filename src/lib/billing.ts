@@ -540,22 +540,21 @@ export const getViewerAppState = cache(async function getViewerAppState() {
 /// token the native client sends. Billing routes were cookie-only, so the iOS
 /// app could not start a checkout through the website's own route.
 export async function getViewerAppStateForRequest(request: Request) {
-  const cookieState = await getViewerAppState();
-
-  if (cookieState) {
-    return cookieState;
-  }
-
+  // `getApiUser` resolves a real identity from either the browser cookies or
+  // the native client's bearer token. It has to run first: on a preview
+  // deployment `getViewerAppState` falls back to the synthetic
+  // PREVIEW_AUTH_BYPASS user, which would otherwise shadow the signed-in
+  // caller and fail the onboarding check with someone else's empty profile.
   const user = await getApiUser(request);
 
-  if (!user) {
-    return null;
+  if (user) {
+    return {
+      user,
+      ...(await getUserEntitlementState(user.id)),
+    };
   }
 
-  return {
-    user,
-    ...(await getUserEntitlementState(user.id)),
-  };
+  return getViewerAppState();
 }
 
 export function getPlanFromPriceId(priceId: string | null | undefined): BillingPlan | null {

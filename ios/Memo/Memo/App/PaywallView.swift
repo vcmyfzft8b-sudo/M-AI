@@ -27,6 +27,7 @@ struct PaywallView: View {
     @State private var isPurchasing = false
     @State private var isRestoring = false
     @State private var checkoutURL: URL?
+    @State private var contentHeight: CGFloat = 0
 
     private let purple = Color(hex: 0x7C5CFF)
 
@@ -34,29 +35,27 @@ struct PaywallView: View {
         ZStack(alignment: .topTrailing) {
             background
 
-            // The offer now fits a phone screen, so it is centred in the
-            // viewport rather than pinned to the top with dead space beneath.
-            // Keeping the scroll view means it still scrolls on small devices
-            // or at large accessibility text sizes.
+            // The layout mirrors the web paywall, so rather than re-tuning any
+            // of its sizes for a phone the whole thing is scaled down just
+            // enough to fit. Proportions stay identical to the web; only the
+            // overall size changes, and only when it would otherwise overflow.
             GeometryReader { proxy in
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 13) {
-                        header
-                        benefits
-                        planGrid
-                        reassurance
-                        ctaButton
-                        footer
-                    }
-                    // Keep the stack at its natural height, otherwise the
-                    // plan cards absorb the spare space and their prices drift
-                    // to the bottom of a half-empty card.
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 18)
-                    .frame(maxWidth: .infinity, minHeight: proxy.size.height)
-                }
+                let scale = contentHeight > 0
+                    ? min(1, proxy.size.height / contentHeight)
+                    : 1
+                paywallContent
+                    .background(
+                        GeometryReader { measured in
+                            Color.clear.preference(
+                                key: PaywallContentHeightKey.self,
+                                value: measured.size.height
+                            )
+                        }
+                    )
+                    .scaleEffect(scale, anchor: .center)
+                    .frame(width: proxy.size.width, height: proxy.size.height)
             }
+            .onPreferenceChange(PaywallContentHeightKey.self) { contentHeight = $0 }
 
             if let onClose {
                 MemoCloseButton(
@@ -92,6 +91,20 @@ struct PaywallView: View {
         }
     }
 
+    private var paywallContent: some View {
+        VStack(spacing: 22) {
+            header
+            benefits
+            planGrid
+            reassurance
+            ctaButton
+            footer
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 54)
+        .padding(.bottom, 30)
+    }
+
     private var background: some View {
         ZStack {
             LinearGradient(
@@ -110,22 +123,26 @@ struct PaywallView: View {
     }
 
     private var header: some View {
-        VStack(spacing: 9) {
-            HStack(spacing: 10) {
-                BrandLogo(size: 44)
+        VStack(spacing: 16) {
+            HStack(spacing: 12) {
+                BrandLogo(size: 66)
                 Text("Memo AI")
-                    .font(.system(size: 29, weight: .black))
+                    .font(.system(size: 40, weight: .black))
                     .foregroundStyle(.white)
             }
             Text("Nadgradi in ustvarjaj več zapiskov")
-                .font(.system(size: 21, weight: .black))
+                .font(.system(size: 29, weight: .black))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
+                // Measuring the stack for the fit-scale proposes an unbounded
+                // height; without this the headline collapses to one truncated
+                // line instead of wrapping the way it does on the web.
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var benefits: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 10) {
             benefitCard(emoji: "📝", title: "Neomejeni zapiski", copy: "Naloži neomejeno PDF-jev in zvoka")
             benefitCard(emoji: "💡", title: "Pametna učna orodja", copy: "Personalizirane vaje za boljše rezultate")
             benefitCard(emoji: "⚡", title: "Uči se 10x hitreje", copy: "Pospeši učenje z AI podporo")
@@ -133,23 +150,23 @@ struct PaywallView: View {
     }
 
     private func benefitCard(emoji: String, title: String, copy: String) -> some View {
-        HStack(spacing: 11) {
+        HStack(spacing: 14) {
             Text(emoji)
-                .font(.system(size: 18))
-                .frame(width: 36, height: 36)
+                .font(.system(size: 24))
+                .frame(width: 48, height: 48)
                 .background(.white.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.white)
                 Text(copy)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13.5))
                     .foregroundStyle(.white.opacity(0.65))
             }
             Spacer(minLength: 0)
         }
-        .padding(10)
+        .padding(14)
         .background(.white.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
@@ -165,7 +182,7 @@ struct PaywallView: View {
             planCard(.yearly)
             planCard(.monthly)
         }
-        .padding(.top, 4)
+        .padding(.top, 12)
     }
 
     private func planCard(_ plan: BillingPlan) -> some View {
@@ -192,7 +209,7 @@ struct PaywallView: View {
                 Spacer(minLength: 6)
 
                 Text(monthlyPriceText(plan))
-                    .font(.system(size: 25, weight: .black))
+                    .font(.system(size: 30, weight: .black))
                     .foregroundStyle(.white)
                 Text("/ mesec")
                     .font(.system(size: 13))
@@ -213,8 +230,8 @@ struct PaywallView: View {
                         .padding(.top, 4)
                 }
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
+            .padding(15)
+            .frame(maxWidth: .infinity, minHeight: 175, alignment: .topLeading)
             .background(
                 selected
                     ? AnyShapeStyle(LinearGradient(
@@ -328,7 +345,7 @@ struct PaywallView: View {
     }
 
     private var footer: some View {
-        VStack(spacing: 9) {
+        VStack(spacing: 14) {
             HStack(spacing: 7) {
                 Image(systemName: "checkmark.circle")
                     .font(.system(size: 14, weight: .semibold))
@@ -429,4 +446,12 @@ private struct SafariSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+}
+
+private struct PaywallContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
 }

@@ -459,19 +459,20 @@ a:visited {
   line-height: 1;
 }
 
-.memo-paywall-logo {
-  display: inline-flex;
-  width: 4.7rem;
-  height: 4.25rem;
-  align-items: center;
-  justify-content: center;
+.memo-paywall-brand .brand-logo {
+  gap: 0.75rem;
 }
 
-.memo-paywall-logo img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+.memo-paywall-brand .brand-logo-mark {
+  width: 4.7rem;
+  height: 4.25rem;
+}
+
+.memo-paywall-brand .brand-logo-copy strong {
+  color: var(--memo-paywall-text);
+  font-size: clamp(2.25rem, 10vw, 3.3rem);
+  font-weight: 900;
+  letter-spacing: 0;
 }
 
 .memo-paywall-title {
@@ -2077,9 +2078,13 @@ a:visited {
     height: 2.25rem;
   }
 
-  .memo-paywall-logo {
+  .memo-paywall-brand .brand-logo-mark {
     width: clamp(3.65rem, 10vw, 4.25rem);
     height: clamp(3.3rem, 9vw, 3.85rem);
+  }
+
+  .memo-paywall-brand .brand-logo-copy strong {
+    font-size: clamp(2.05rem, 8.8vw, 2.75rem);
   }
 
   .memo-paywall-title {
@@ -2279,9 +2284,13 @@ a:visited {
     font-size: clamp(2rem, 4.4vw, 2.7rem);
   }
 
-  .memo-paywall-logo {
+  .memo-paywall-brand .brand-logo-mark {
     width: 3.65rem;
     height: 3.3rem;
+  }
+
+  .memo-paywall-brand .brand-logo-copy strong {
+    font-size: clamp(2rem, 4.4vw, 2.7rem);
   }
 
   .memo-paywall-title {
@@ -2793,9 +2802,13 @@ select:disabled {
     font-size: clamp(2.35rem, 8.5vw, 3.05rem);
   }
 
-  .memo-paywall-logo {
+  .memo-paywall-brand .brand-logo-mark {
     width: clamp(4rem, 10.8vw, 4.55rem);
     height: clamp(3.6rem, 9.6vw, 4.1rem);
+  }
+
+  .memo-paywall-brand .brand-logo-copy strong {
+    font-size: clamp(2.35rem, 8.5vw, 3.05rem);
   }
 
   .memo-paywall-title {
@@ -11175,21 +11188,31 @@ select:disabled {
   bottom: -1.35rem;
   z-index: 4;
   display: inline-flex;
-  width: 3rem;
+  width: auto;
   height: 3rem;
   align-items: center;
   justify-content: center;
-  padding: 0.48rem;
+  padding: 0.42rem 0.68rem 0.42rem 0.48rem;
   border-radius: 0.85rem;
   background: white;
   box-shadow: 0 1rem 2.4rem rgba(0, 0, 0, 0.22);
   transform: translateX(-50%);
 }
 
-.landing-study-story-floating-logo img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+.landing-study-story-floating-logo .brand-logo {
+  gap: 0.42rem;
+}
+
+.landing-study-story-floating-logo .brand-logo-mark {
+  width: 2rem;
+  height: 1.8rem;
+}
+
+.landing-study-story-floating-logo .brand-logo-copy strong {
+  color: #070707;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
 }
 
 .landing-study-story-controls {

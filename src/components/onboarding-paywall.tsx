@@ -15,6 +15,7 @@ import { startTransition, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { BrandLogo } from "@/components/brand-logo";
 import { EmojiIcon } from "@/components/emoji-icon";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 
@@ -1206,17 +1207,7 @@ export function OnboardingPaywall({
       {billingError ? <div className="app-start-banner">{billingError}</div> : null}
 
       <div className="memo-paywall-brand">
-        <span className="memo-paywall-logo" aria-hidden="true">
-          <Image
-            src="/memo-logo.png"
-            alt=""
-            width={3651}
-            height={3285}
-            sizes="(max-width: 420px) 4.25rem, 4.7rem"
-            priority
-          />
-        </span>
-        <span>Memo AI</span>
+        <BrandLogo compact imageSizes="(max-width: 420px) 4.25rem, 4.7rem" priority />
       </div>
 
       <h1 className="memo-paywall-title">Nadgradi in ustvarjaj več zapiskov</h1>

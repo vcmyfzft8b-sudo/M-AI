@@ -4,6 +4,8 @@ import Image from "next/image";
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
 
+import { BrandLogo } from "@/components/brand-logo";
+
 const STORY_SLIDES = [
   {
     kind: "notes",
@@ -108,7 +110,7 @@ export function LandingStoryPreview() {
         </div>
 
         <span className="landing-study-story-floating-logo" aria-hidden="true">
-          <Image src="/memo-logo.png" alt="" width={3651} height={3285} sizes="3.6rem" />
+          <BrandLogo compact imageSizes="2rem" />
         </span>
 
         <div className="landing-study-story-controls" aria-label="Story navigacija">

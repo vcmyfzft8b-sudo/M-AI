@@ -12,6 +12,10 @@ import {
   normalizeUploadScanImageMimeType,
 } from "@/lib/storage";
 import {
+  getStorageDownloadErrorMessage,
+  isTransientStorageDownloadError,
+} from "@/lib/storage-download-errors";
+import {
   NoReadableScanTextError,
   type ScanOcrImageDiagnostics,
 } from "@/lib/scan-ocr-errors";
@@ -114,56 +118,6 @@ function sleep(ms: number) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
-}
-
-function getStorageDownloadErrorMessage(error: unknown) {
-  if (isRecord(error) && typeof error.message === "string") {
-    return error.message;
-  }
-
-  return null;
-}
-
-function getStorageDownloadStatus(error: unknown) {
-  if (!isRecord(error)) {
-    return null;
-  }
-
-  const status = error.status ?? error.statusCode;
-
-  if (typeof status === "number") {
-    return status;
-  }
-
-  if (typeof status === "string") {
-    const parsedStatus = Number.parseInt(status, 10);
-    return Number.isFinite(parsedStatus) ? parsedStatus : null;
-  }
-
-  return null;
-}
-
-function isTransientStorageDownloadError(error: unknown) {
-  const status = getStorageDownloadStatus(error);
-
-  if (status != null) {
-    return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
-  }
-
-  const message = getStorageDownloadErrorMessage(error)?.toLowerCase() ?? "";
-
-  return [
-    "bad gateway",
-    "connection",
-    "econnreset",
-    "fetch failed",
-    "gateway",
-    "network",
-    "service unavailable",
-    "timeout",
-    "temporarily",
-    "upstream",
-  ].some((fragment) => message.includes(fragment));
 }
 
 async function downloadStoredScanImage(image: StoredScanImage) {

@@ -43,6 +43,13 @@
 - Advance the cursor only after the complete authenticated Sentry query and triage succeed. Keep actionable issues without a dedicated fix PR in the durable backlog and revisit them on every run regardless of age.
 - A staging, Preview, CI, or implementation failure must not create a gap in Sentry coverage or cause a completed Sentry interval to be scanned as if it failed.
 
+## iOS
+
+- Memo ships one iOS app: the `WKWebView` wrapper in `ios-web-wrapper/`. The native SwiftUI app is retired; do not reintroduce a second iOS app.
+- The wrapper bundles no web assets — it loads `https://memoai.eu`, so every production deploy reaches iOS users immediately, with no App Store release and no App Review.
+- Recording is the one native part, because `MediaRecorder` in `WKWebView` cannot survive the screen locking.
+- Before changing the web recorder, TTS playback, brand markup, or auth domains, read [docs/ios-wrapper.md](docs/ios-wrapper.md): each has an injected native script that depends on it and fails silently.
+
 ## Documentation
 
 - Follow the workflow in [docs/development-workflow.md](/Users/nacevalencic/Desktop/note_taking_app_slo/docs/development-workflow.md) for branching, GitHub pushes, Vercel previews, and merging to production.

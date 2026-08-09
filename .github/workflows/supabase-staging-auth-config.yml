@@ -5,10 +5,14 @@ name: Supabase staging auth email config
 # repository's email templates to that branch so Preview sends the same typed
 # sign-in code as production instead of Supabase's default magic-link email.
 #
-# The job needs SUPABASE_ACCESS_TOKEN to be readable without the Production
-# environment, because staging must be configurable before a branch is merged.
-# When the secret is missing, a push logs how to run the sync by hand instead
-# of failing; a manual run fails loudly because it was asked for explicitly.
+# The Supabase access token is deliberately read from the branch-protected
+# `Production` environment rather than a repository-wide secret. A personal
+# access token can administer every project on the account, so it must not be
+# readable by a workflow run from an arbitrary branch. The cost of that choice
+# is that this workflow only runs from `main`; to configure a project before a
+# branch is merged, run the script locally with a short-lived token:
+#
+#   SUPABASE_ACCESS_TOKEN=... npm run supabase:auth-emails -- --project-ref <ref>
 
 on:
   push:
@@ -43,6 +47,7 @@ jobs:
     name: Sync auth email templates
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: Production
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       PROJECT_REF: ${{ inputs.project_ref || 'yviipoccwsndxyrhtcjm' }}
@@ -56,36 +61,13 @@ jobs:
         with:
           node-version: 20
 
-      - name: Check whether the Supabase access token is available
-        id: token
+      - name: Verify the Supabase access token is available
         shell: bash
-        run: |
-          if [ -n "$SUPABASE_ACCESS_TOKEN" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+        run: test -n "$SUPABASE_ACCESS_TOKEN"
 
-          echo "available=false" >> "$GITHUB_OUTPUT"
-          {
-            echo "### Supabase staging auth email config skipped"
-            echo
-            echo "\`SUPABASE_ACCESS_TOKEN\` is not readable by this workflow."
-            echo "Add it as a repository secret, or run the sync locally:"
-            echo
-            echo "\`\`\`bash"
-            echo "SUPABASE_ACCESS_TOKEN=... node scripts/sync-supabase-auth-emails.mjs --project-ref $PROJECT_REF"
-            echo "\`\`\`"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "SUPABASE_ACCESS_TOKEN is not available to this workflow."
-            exit 1
-          fi
-
-          echo "SUPABASE_ACCESS_TOKEN is not available; skipping the sync."
-
+      # The script refuses to write to the production project unless it is
+      # given --allow-production, which this workflow never passes.
       - name: Sync auth email configuration
-        if: steps.token.outputs.available == 'true'
         shell: bash
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then

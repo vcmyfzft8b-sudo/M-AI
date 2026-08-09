@@ -86,7 +86,7 @@ The repository is the source of truth:
 updated with the Management API sync script:
 
 ```bash
-SUPABASE_ACCESS_TOKEN=... node scripts/sync-supabase-auth-emails.mjs \
+SUPABASE_ACCESS_TOKEN=... npm run supabase:auth-emails -- \
   --project-ref yviipoccwsndxyrhtcjm
 ```
 
@@ -94,13 +94,27 @@ Add `--dry-run` to print the pending changes without writing them. The script
 reads the project's current auth config, sends only the keys that differ, then
 reads the config back and fails if a required template did not apply. It
 refuses to write to the production project unless `--allow-production` is
-passed.
+passed, and it only sends email-related keys, so `site_url`, the redirect
+allow list, and provider settings are left untouched.
 
-`.github/workflows/supabase-staging-auth-config.yml` runs the same script for
-staging on a push to `main` that touches the templates, the config, or the
-script, and can also be started manually with a different project ref. It needs
-`SUPABASE_ACCESS_TOKEN` to be available to the workflow; without that secret,
-run the command above locally instead.
+### Token Handling
+
+A Supabase personal access token can administer every project on the account,
+so it is never stored as a repository-wide secret that any branch push could
+read. There are two supported ways to run the sync:
+
+- locally, with a token created for the task and revoked afterwards at
+  https://supabase.com/dashboard/account/tokens
+- from `main`, through
+  `.github/workflows/supabase-staging-auth-config.yml`, which reads
+  `SUPABASE_ACCESS_TOKEN` from the branch-protected `Production` GitHub
+  environment
+
+The workflow runs on a push to `main` that touches the templates, the config,
+or the script, and can also be dispatched manually from `main` with a different
+project ref. Because the token lives in a protected environment, the workflow
+cannot run from an unmerged branch; configure a project before merge with the
+local command above.
 
 Staging has no custom SMTP, so it uses Supabase's built-in sender. That sender
 only delivers to project team member addresses and is rate limited to a couple

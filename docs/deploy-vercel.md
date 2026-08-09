@@ -89,8 +89,10 @@ For Google sign-in in Supabase:
 If you want in-app email code entry instead of magic links, the Supabase email template has to send the OTP token placeholder like `{{ .Token }}`. Every Supabase project keeps its own templates, including the staging branch behind Vercel Preview, so push the repository templates to a project with:
 
 ```bash
-SUPABASE_ACCESS_TOKEN=... node scripts/sync-supabase-auth-emails.mjs --project-ref <ref>
+SUPABASE_ACCESS_TOKEN=... npm run supabase:auth-emails -- --project-ref <ref>
 ```
+
+Create the token for the run and revoke it afterwards; it is never stored as a repository secret.
 
 See [docs/preview-staging.md](/Users/nacevalencic/Desktop/note_taking_app_slo/docs/preview-staging.md) for the Preview and staging details.
 

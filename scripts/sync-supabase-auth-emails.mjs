@@ -350,6 +350,16 @@ async function main() {
   }
 
   if (fatal.length > 0) {
+    // A field the API silently ignores is almost always a renamed key, so list
+    // the mail-related names the project actually reports.
+    const candidates = Object.keys(applied)
+      .filter((key) => /mailer|template|smtp/i.test(key))
+      .sort();
+
+    if (candidates.length > 0) {
+      console.error(`Mail-related keys reported by the project: ${candidates.join(", ")}`);
+    }
+
     fail("Required auth email settings were not applied.");
   }
 

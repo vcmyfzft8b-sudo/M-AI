@@ -4,12 +4,16 @@ name: Supabase staging auth email config
 # branch, which keeps its own Auth configuration. This workflow pushes the
 # repository's email templates to that branch so Preview sends the same typed
 # sign-in code as production instead of Supabase's default magic-link email.
+#
+# The job needs SUPABASE_ACCESS_TOKEN to be readable without the Production
+# environment, because staging must be configurable before a branch is merged.
+# When the secret is missing, a push logs how to run the sync by hand instead
+# of failing; a manual run fails loudly because it was asked for explicitly.
 
 on:
   push:
     branches:
       - main
-      - claude/preview-login-email-code-lfouiu
     paths:
       - "supabase/templates/**"
       - "supabase/config.toml"
@@ -52,17 +56,36 @@ jobs:
         with:
           node-version: 20
 
-      - name: Verify the Supabase access token is available
+      - name: Check whether the Supabase access token is available
+        id: token
         shell: bash
         run: |
-          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
-            echo "SUPABASE_ACCESS_TOKEN is not available to this workflow."
+          if [ -n "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "available=false" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Supabase staging auth email config skipped"
+            echo
+            echo "\`SUPABASE_ACCESS_TOKEN\` is not readable by this workflow."
             echo "Add it as a repository secret, or run the sync locally:"
-            echo "  SUPABASE_ACCESS_TOKEN=... node scripts/sync-supabase-auth-emails.mjs --project-ref $PROJECT_REF"
+            echo
+            echo "\`\`\`bash"
+            echo "SUPABASE_ACCESS_TOKEN=... node scripts/sync-supabase-auth-emails.mjs --project-ref $PROJECT_REF"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "SUPABASE_ACCESS_TOKEN is not available to this workflow."
             exit 1
           fi
 
+          echo "SUPABASE_ACCESS_TOKEN is not available; skipping the sync."
+
       - name: Sync auth email configuration
+        if: steps.token.outputs.available == 'true'
         shell: bash
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then

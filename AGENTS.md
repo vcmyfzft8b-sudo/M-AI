@@ -31,6 +31,7 @@
 - Production uses Supabase project `zrcwmhuwwvguiekzmcdj`. Never point a Preview deployment or Preview test at that project.
 - Do not create branch-specific overrides for `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, or `SUPABASE_SERVICE_ROLE_KEY`. A branch override would bypass the shared staging policy.
 - Preview testing must use synthetic accounts and data. Never clone production data into staging or use customer data in a Preview.
+- Supabase Auth email templates are per project and are not inherited by the staging branch. Keep them in `supabase/templates` and push them with `npm run supabase:auth-emails -- --project-ref <ref>`; a project without them sends Supabase's default magic-link email and the in-app code screen cannot be completed.
 - Database schema changes must be committed as ordered SQL files in `supabase/migrations`. Do not make an uncaptured schema change in the staging or production dashboard.
 - A database-changing PR must replay its migration locally before merge. Shared staging may test an unmerged migration only as a serialized, coordinated exception because it otherwise must match `main`.
 - After a migration PR is merged, `.github/workflows/supabase-migrations.yml` applies the migration files from `main` to production. Do not run a production migration from an unmerged PR or a Preview deployment.

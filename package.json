@@ -12,7 +12,8 @@
     "build": "NODE_PATH=./node_modules next build --webpack",
     "start": "NODE_PATH=./node_modules next start",
     "lint": "eslint",
-    "stripe:setup": "node scripts/setup-stripe-billing.mjs"
+    "stripe:setup": "node scripts/setup-stripe-billing.mjs",
+    "supabase:auth-emails": "node scripts/sync-supabase-auth-emails.mjs"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.10",

@@ -113,7 +113,13 @@ Enable the auth providers you need in Supabase:
 - Google
 - Apple
 
-For the in-app email code flow, use an email template that includes `{{ .Token }}` so users receive a code they can type into the app. Local templates live in [supabase/templates/magic-link.html](/Users/nacevalencic/Desktop/note_taking_app_slo/supabase/templates/magic-link.html) and [supabase/templates/confirmation.html](/Users/nacevalencic/Desktop/note_taking_app_slo/supabase/templates/confirmation.html).
+For the in-app email code flow, use an email template that includes `{{ .Token }}` so users receive a code they can type into the app. Templates live in [supabase/templates/magic-link.html](/Users/nacevalencic/Desktop/note_taking_app_slo/supabase/templates/magic-link.html) and [supabase/templates/confirmation.html](/Users/nacevalencic/Desktop/note_taking_app_slo/supabase/templates/confirmation.html), and `supabase/config.toml` applies them to the local stack only.
+
+Hosted projects keep their own copy of the templates, so push them explicitly. Without this, a project falls back to Supabase's default magic-link email and the code screen can never be completed:
+
+```bash
+SUPABASE_ACCESS_TOKEN=... npm run supabase:auth-emails -- --project-ref <ref>
+```
 
 For production:
 

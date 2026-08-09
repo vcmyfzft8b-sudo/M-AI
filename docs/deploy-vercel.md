@@ -86,7 +86,13 @@ For Google sign-in in Supabase:
 - add Supabase's Google callback URL from the Supabase dashboard to the Google OAuth authorized redirect URIs
 - paste the Google client ID and secret into Supabase Auth provider settings
 
-If you want in-app email code entry instead of magic links, update the Supabase email template to send the OTP token placeholder like `{{ .Token }}`.
+If you want in-app email code entry instead of magic links, the Supabase email template has to send the OTP token placeholder like `{{ .Token }}`. Every Supabase project keeps its own templates, including the staging branch behind Vercel Preview, so push the repository templates to a project with:
+
+```bash
+SUPABASE_ACCESS_TOKEN=... node scripts/sync-supabase-auth-emails.mjs --project-ref <ref>
+```
+
+See [docs/preview-staging.md](/Users/nacevalencic/Desktop/note_taking_app_slo/docs/preview-staging.md) for the Preview and staging details.
 
 Temporary testing note: if you wire SMTP with a personal sender for short-term testing, replace it before production with a branded sender on a verified domain such as `no-reply@your-domain`. Do not ship live auth email from a personal mailbox.
 

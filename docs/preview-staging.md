@@ -64,6 +64,52 @@ https://yviipoccwsndxyrhtcjm.supabase.co
 
 Output only the comparison result. Never retrieve or print the Preview anon key, service-role key, database connection string, or a broad environment dump.
 
+## Auth Email Configuration For Preview Sign-In
+
+The app signs users in with an email code: `/auth/email` requests a one-time
+password and `/auth/email/verify` exchanges the typed code for a session. That
+flow only works when the Supabase project sends an email containing the
+`{{ .Token }}` placeholder.
+
+Supabase stores email templates per project, and the staging branch does not
+inherit them from production. A branch that was never configured falls back to
+Supabase's default magic-link email ("Your sign-in link"), which contains a
+link and no code, so Preview sign-in cannot complete.
+
+The repository is the source of truth:
+
+- subjects and OTP length and expiry live in `supabase/config.toml`
+- bodies live in `supabase/templates/magic-link.html` and
+  `supabase/templates/confirmation.html`
+
+`supabase/config.toml` only configures the local stack, so hosted projects are
+updated with the Management API sync script:
+
+```bash
+SUPABASE_ACCESS_TOKEN=... node scripts/sync-supabase-auth-emails.mjs \
+  --project-ref yviipoccwsndxyrhtcjm
+```
+
+Add `--dry-run` to print the pending changes without writing them. The script
+reads the project's current auth config, sends only the keys that differ, then
+reads the config back and fails if a required template did not apply. It
+refuses to write to the production project unless `--allow-production` is
+passed.
+
+`.github/workflows/supabase-staging-auth-config.yml` runs the same script for
+staging on a push to `main` that touches the templates, the config, or the
+script, and can also be started manually with a different project ref. It needs
+`SUPABASE_ACCESS_TOKEN` to be available to the workflow; without that secret,
+run the command above locally instead.
+
+Staging has no custom SMTP, so it uses Supabase's built-in sender. That sender
+only delivers to project team member addresses and is rate limited to a couple
+of messages per hour, which is enough for manual Preview testing. To point
+staging at a real provider, export `SUPABASE_SMTP_HOST`, `SUPABASE_SMTP_PORT`,
+`SUPABASE_SMTP_USER`, `SUPABASE_SMTP_PASS`, `SUPABASE_SMTP_ADMIN_EMAIL`, and
+`SUPABASE_SMTP_SENDER_NAME` before running the script. Never commit those
+values.
+
 ## Keeping Staging Aligned With Production
 
 The scheduled Sentry workflow synchronizes staging from a clean `origin/main` worktree before each two-hour triage run:

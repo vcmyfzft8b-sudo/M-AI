@@ -14,22 +14,27 @@ export function BrandLogo({
   priority?: boolean;
 }) {
   return (
+    // One artwork file carries the mark and the "Memo AI" lettering together,
+    // rather than pairing the brain with live text. The iOS wrapper shows the
+    // same file, so the two stay identical without the app having to restyle
+    // the page.
     <span className={`brand-logo ${compact ? "compact" : ""}`}>
-      <span className="brand-logo-mark" aria-hidden="true">
+      <span className="brand-logo-mark">
         <Image
-          src="/memo-logo.png"
-          alt=""
-          width={3651}
-          height={3285}
+          src="/memo-wordmark.png"
+          alt={SEO_BRAND_NAME}
+          width={480}
+          height={148}
           className="brand-logo-image"
-          sizes={imageSizes ?? (compact ? "2.2rem" : "2.55rem")}
+          sizes={imageSizes ?? (compact ? "(max-width: 768px) 10rem, 22rem" : "9rem")}
           priority={priority}
         />
       </span>
-      <span className="brand-logo-copy">
-        <strong>{SEO_BRAND_NAME}</strong>
-        {!compact ? <small>{subtitle}</small> : null}
-      </span>
+      {!compact && subtitle ? (
+        <span className="brand-logo-copy">
+          <small>{subtitle}</small>
+        </span>
+      ) : null}
     </span>
   );
 }

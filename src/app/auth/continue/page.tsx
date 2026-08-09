@@ -23,10 +23,13 @@ export default async function ContinuePage() {
   const providers = hasPublicSupabaseEnv
     ? await getAuthProviderAvailability()
     : { apple: false, email: false, google: false };
-  const visibleProviders =
-    isIOSWebWrapper && !providers.apple
-      ? { ...providers, google: false }
-      : providers;
+  // Google refuses OAuth inside an embedded web view (`disallowed_useragent`),
+  // so the iOS app never offers it — previously only while Apple was
+  // unavailable, which would have put a permanently broken button back on the
+  // sign-in screen the moment Apple was enabled. Apple and email remain.
+  const visibleProviders = isIOSWebWrapper
+    ? { ...providers, google: false }
+    : providers;
 
   return (
     <main className="landing-shell landing-auth-page">

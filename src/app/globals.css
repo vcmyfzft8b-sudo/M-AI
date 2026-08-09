@@ -464,8 +464,7 @@ a:visited {
 }
 
 .memo-paywall-brand .brand-logo-mark {
-  width: 4.7rem;
-  height: 4.25rem;
+  width: clamp(11rem, 26vw, 13.5rem);
 }
 
 .memo-paywall-brand .brand-logo-copy strong {
@@ -2079,8 +2078,7 @@ a:visited {
   }
 
   .memo-paywall-brand .brand-logo-mark {
-    width: clamp(3.65rem, 10vw, 4.25rem);
-    height: clamp(3.3rem, 9vw, 3.85rem);
+    width: clamp(9rem, 24vw, 11rem);
   }
 
   .memo-paywall-brand .brand-logo-copy strong {
@@ -2285,8 +2283,7 @@ a:visited {
   }
 
   .memo-paywall-brand .brand-logo-mark {
-    width: 3.65rem;
-    height: 3.3rem;
+    width: clamp(8.5rem, 22vw, 9.5rem);
   }
 
   .memo-paywall-brand .brand-logo-copy strong {
@@ -2804,8 +2801,7 @@ select:disabled {
   }
 
   .memo-paywall-brand .brand-logo-mark {
-    width: clamp(4rem, 10.8vw, 4.55rem);
-    height: clamp(3.6rem, 9.6vw, 4.1rem);
+    width: clamp(10rem, 26vw, 11.5rem);
   }
 
   .memo-paywall-brand .brand-logo-copy strong {
@@ -10205,8 +10201,7 @@ select:disabled {
 }
 
 .landing-auth-brand .brand-logo.compact .brand-logo-mark {
-  width: clamp(4.6rem, 11vw, 7rem);
-  height: clamp(3.8rem, 9vw, 5.8rem);
+  width: clamp(13rem, 30vw, 20rem);
   filter: saturate(1.15);
   transform: none;
 }
@@ -10370,8 +10365,7 @@ select:disabled {
 }
 
 .landing-public-brand .brand-logo-mark {
-  width: clamp(2.58rem, 5.07vw, 3.8rem);
-  height: clamp(2.28rem, 4.47vw, 3.35rem);
+  width: clamp(8rem, 16vw, 11rem);
 }
 
 .landing-public-brand .brand-logo-copy strong {
@@ -11205,8 +11199,7 @@ select:disabled {
 }
 
 .landing-study-story-floating-logo .brand-logo-mark {
-  width: 2rem;
-  height: 1.8rem;
+  width: 6rem;
 }
 
 .landing-study-story-floating-logo .brand-logo-copy strong {
@@ -12068,8 +12061,7 @@ select:disabled {
   }
 
   .landing-auth-brand .brand-logo.compact .brand-logo-mark {
-    width: clamp(2.9rem, 13vw, 3.8rem);
-    height: clamp(2.55rem, 11.4vw, 3.35rem);
+    width: clamp(10rem, 42vw, 13rem);
   }
 
   .landing-auth-title {
@@ -14242,8 +14234,7 @@ select:disabled {
   }
 
   .desktop-brandline-brand .brand-logo-mark {
-    width: clamp(2.58rem, 5.07vw, 3.8rem);
-    height: clamp(2.28rem, 4.47vw, 3.35rem);
+    width: clamp(8rem, 14vw, 11rem);
   }
 
   .desktop-brandline-brand .brand-logo-copy strong {

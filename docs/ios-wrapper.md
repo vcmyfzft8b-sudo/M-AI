@@ -60,7 +60,7 @@ deploy lands.
 Retired 2026-08-09, not deleted. PR #143 was closed; the branch
 `codex/ios-native-app` remains on GitHub (`git switch codex/ios-native-app`).
 It was never merged to `main`. A local archive at
-`~/Desktop/memo-native-ios-archive/` holds the parts that existed nowhere else —
+`~/Developer/memo-archives/native-ios-app/` holds the parts that existed nowhere else —
 the local branch had drifted 13 commits behind origin while carrying one
 unpushed commit and uncommitted edits. Its README explains what is what.
 

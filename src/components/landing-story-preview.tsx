@@ -4,7 +4,6 @@ import Image from "next/image";
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
 
-import { BrandLogo } from "@/components/brand-logo";
 
 const STORY_SLIDES = [
   {
@@ -109,8 +108,18 @@ export function LandingStoryPreview() {
           ))}
         </div>
 
+        {/* The badge overlapping the phone is too small for the wordmark's
+            lettering to stay legible, so it shows the mark on its own, drawn
+            from the full-resolution source. */}
         <span className="landing-study-story-floating-logo" aria-hidden="true">
-          <BrandLogo compact imageSizes="2rem" />
+          <Image
+            src="/memo-logo.png"
+            alt=""
+            width={3651}
+            height={3285}
+            className="landing-study-story-floating-mark"
+            sizes="(max-width: 768px) 3rem, 3.6rem"
+          />
         </span>
 
         <div className="landing-study-story-controls" aria-label="Story navigacija">

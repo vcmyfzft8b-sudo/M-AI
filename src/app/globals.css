@@ -11194,19 +11194,11 @@ select:disabled {
   transform: translateX(-50%);
 }
 
-.landing-study-story-floating-logo .brand-logo {
-  gap: 0.42rem;
-}
-
-.landing-study-story-floating-logo .brand-logo-mark {
-  width: 6rem;
-}
-
-.landing-study-story-floating-logo .brand-logo-copy strong {
-  color: #070707;
-  font-size: 0.9rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
+.landing-study-story-floating-mark {
+  display: block;
+  width: clamp(3rem, 7vw, 3.6rem);
+  height: auto;
+  object-fit: contain;
 }
 
 .landing-study-story-controls {

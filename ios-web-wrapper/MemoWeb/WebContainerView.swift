@@ -12,13 +12,14 @@ private extension UIColor {
 
 struct WebContainerView: View {
     @ObservedObject var store: WebViewStore
+    @ObservedObject var recordingBridge: RecordingBridge
 
     var body: some View {
         ZStack {
             Color(uiColor: .memoCanvas)
                 .ignoresSafeArea()
 
-            MemoWebView(store: store)
+            MemoWebView(store: store, recordingBridge: recordingBridge)
 
             if let errorMessage = store.errorMessage {
                 ConnectionErrorView(message: errorMessage) {
@@ -69,9 +70,10 @@ private struct ConnectionErrorView: View {
 
 struct MemoWebView: UIViewRepresentable {
     @ObservedObject var store: WebViewStore
+    @ObservedObject var recordingBridge: RecordingBridge
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(store: store)
+        Coordinator(store: store, recordingBridge: recordingBridge)
     }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -82,6 +84,14 @@ struct MemoWebView: UIViewRepresentable {
         configuration.mediaTypesRequiringUserActionForPlayback = []
         configuration.applicationNameForUserAgent = "MemoAI-iOS/1.0"
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
+        configuration.setURLSchemeHandler(context.coordinator, forURLScheme: EmbeddedBranding.resourceScheme)
+        configuration.userContentController.addUserScript(EmbeddedBranding.userScript)
+        configuration.userContentController.addUserScript(RecordingBridge.userScript)
+        configuration.userContentController.addUserScript(NowPlaying.userScript())
+        configuration.userContentController.add(
+            recordingBridge,
+            name: RecordingBridge.messageHandlerName
+        )
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.isOpaque = false
@@ -93,6 +103,8 @@ struct MemoWebView: UIViewRepresentable {
         webView.allowsLinkPreview = false
         webView.scrollView.keyboardDismissMode = .interactive
         webView.scrollView.contentInsetAdjustmentBehavior = .automatic
+        webView.inputAssistantItem.leadingBarButtonGroups = []
+        webView.inputAssistantItem.trailingBarButtonGroups = []
         webView.accessibilityIdentifier = "MemoWebView"
 
 #if DEBUG
@@ -110,6 +122,7 @@ struct MemoWebView: UIViewRepresentable {
         webView.scrollView.refreshControl = refreshControl
 
         context.coordinator.connect(to: webView)
+        recordingBridge.attach(to: webView)
         webView.load(URLRequest(url: AppConfig.productionURL))
         return webView
     }
@@ -117,14 +130,16 @@ struct MemoWebView: UIViewRepresentable {
     func updateUIView(_ webView: WKWebView, context: Context) {}
 
     @MainActor
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKURLSchemeHandler {
         private let store: WebViewStore
+        private let recordingBridge: RecordingBridge
         private weak var webView: WKWebView?
         private var progressObservation: NSKeyValueObservation?
         private var downloads: [ObjectIdentifier: URL] = [:]
 
-        init(store: WebViewStore) {
+        init(store: WebViewStore, recordingBridge: RecordingBridge) {
             self.store = store
+            self.recordingBridge = recordingBridge
         }
 
         func connect(to webView: WKWebView) {
@@ -153,9 +168,64 @@ struct MemoWebView: UIViewRepresentable {
             refreshControl.endRefreshing()
         }
 
+        func webView(_ webView: WKWebView, start urlSchemeTask: any WKURLSchemeTask) {
+            guard let url = urlSchemeTask.request.url else {
+                urlSchemeTask.didFailWithError(URLError(.badURL))
+                return
+            }
+
+            switch url.host {
+            case EmbeddedBranding.wordmarkHost:
+                guard let image = UIImage(named: "MemoWordmark"), let data = image.pngData() else {
+                    urlSchemeTask.didFailWithError(URLError(.resourceUnavailable))
+                    return
+                }
+                respond(to: urlSchemeTask, url: url, data: data, mimeType: "image/png")
+            case RecordingBridge.recordingHost:
+                // Hands the finished lecture to the page. Reading it into memory
+                // matches what the page did with `MediaRecorder` chunks before.
+                guard let file = recordingBridge.recordingFileURL(forName: url.lastPathComponent),
+                      let data = try? Data(contentsOf: file) else {
+                    urlSchemeTask.didFailWithError(URLError(.resourceUnavailable))
+                    return
+                }
+                respond(to: urlSchemeTask, url: url, data: data, mimeType: "audio/mp4")
+            default:
+                urlSchemeTask.didFailWithError(URLError(.unsupportedURL))
+            }
+        }
+
+        private func respond(
+            to urlSchemeTask: any WKURLSchemeTask,
+            url: URL,
+            data: Data,
+            mimeType: String
+        ) {
+            let response = URLResponse(
+                url: url,
+                mimeType: mimeType,
+                expectedContentLength: data.count,
+                textEncodingName: nil
+            )
+            urlSchemeTask.didReceive(response)
+            urlSchemeTask.didReceive(data)
+            urlSchemeTask.didFinish()
+        }
+
+        func webView(_ webView: WKWebView, stop urlSchemeTask: any WKURLSchemeTask) {}
+
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation?) {
             store.isLoading = true
             store.errorMessage = nil
+            // A full page load tears down the page's recorder. In-app SPA routing
+            // does not reach here, so an ongoing recording survives navigation
+            // inside the study flow.
+            recordingBridge.webContentDidReset()
+        }
+
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            recordingBridge.webContentDidReset()
+            webView.reload()
         }
 
         func webView(_ webView: WKWebView, didCommit navigation: WKNavigation?) {

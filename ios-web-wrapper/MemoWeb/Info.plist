@@ -43,6 +43,12 @@
 	<string>Memo AI lahko shrani izvoženo učno gradivo v vašo knjižnico.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Memo AI potrebuje dostop do fotografij za nalaganje učnega gradiva.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -10,11 +10,22 @@
 		010000000000000000000001 /* MemoWebApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000001 /* MemoWebApp.swift */; };
 		010000000000000000000002 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000002 /* AppConfig.swift */; };
 		010000000000000000000003 /* WebViewStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000003 /* WebViewStore.swift */; };
+		01E000000000000000000001 /* EmbeddedBranding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02E000000000000000000001 /* EmbeddedBranding.swift */; };
 		010000000000000000000004 /* WebContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000004 /* WebContainerView.swift */; };
 		010000000000000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000006 /* Assets.xcassets */; };
 		010000000000000000000006 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000007 /* PrivacyInfo.xcprivacy */; };
 		010000000000000000000007 /* AppConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000008 /* AppConfigTests.swift */; };
 		010000000000000000000008 /* MemoWebSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000009 /* MemoWebSmokeTests.swift */; };
+		010000000000000000000009 /* RecordingBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000000000000000000000E /* RecordingBridge.swift */; };
+		01000000000000000000000A /* RecordingBridgeScript.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02000000000000000000000F /* RecordingBridgeScript.swift */; };
+		01000000000000000000000B /* RecordingActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000010 /* RecordingActivityAttributes.swift */; };
+		01A000000000000000000001 /* RecordingActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000010 /* RecordingActivityAttributes.swift */; };
+		01A000000000000000000002 /* RecordingLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000011 /* RecordingLiveActivity.swift */; };
+		01A000000000000000000003 /* RecordingLiveActivityBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000012 /* RecordingLiveActivityBundle.swift */; };
+		01A000000000000000000004 /* RecordingAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000013 /* RecordingAssets.xcassets */; };
+		01000000000000000000000C /* NativeAudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000016 /* NativeAudioRecorder.swift */; };
+		01000000000000000000000D /* NowPlaying.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020000000000000000000017 /* NowPlaying.swift */; };
+		01A000000000000000000005 /* MemoWebRecordingLiveActivity.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 020000000000000000000015 /* MemoWebRecordingLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -32,12 +43,34 @@
 			remoteGlobalIDString = 070000000000000000000001;
 			remoteInfo = MemoWeb;
 		};
+		030000000000000000000003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 080000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 070000000000000000000004;
+			remoteInfo = MemoWebRecordingLiveActivity;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		0E0000000000000000000001 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				01A000000000000000000005 /* MemoWebRecordingLiveActivity.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		020000000000000000000001 /* MemoWebApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoWebApp.swift; sourceTree = "<group>"; };
 		020000000000000000000002 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		020000000000000000000003 /* WebViewStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewStore.swift; sourceTree = "<group>"; };
+		02E000000000000000000001 /* EmbeddedBranding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddedBranding.swift; sourceTree = "<group>"; };
 		020000000000000000000004 /* WebContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebContainerView.swift; sourceTree = "<group>"; };
 		020000000000000000000005 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		020000000000000000000006 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -48,6 +81,16 @@
 		02000000000000000000000B /* MemoWebTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MemoWebTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		02000000000000000000000C /* MemoWebUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MemoWebUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		02000000000000000000000D /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		02000000000000000000000E /* RecordingBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingBridge.swift; sourceTree = "<group>"; };
+		02000000000000000000000F /* RecordingBridgeScript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingBridgeScript.swift; sourceTree = "<group>"; };
+		020000000000000000000010 /* RecordingActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingActivityAttributes.swift; sourceTree = "<group>"; };
+		020000000000000000000011 /* RecordingLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingLiveActivity.swift; sourceTree = "<group>"; };
+		020000000000000000000012 /* RecordingLiveActivityBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingLiveActivityBundle.swift; sourceTree = "<group>"; };
+		020000000000000000000013 /* RecordingAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = RecordingAssets.xcassets; sourceTree = "<group>"; };
+		020000000000000000000014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		020000000000000000000016 /* NativeAudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAudioRecorder.swift; sourceTree = "<group>"; };
+		020000000000000000000017 /* NowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlaying.swift; sourceTree = "<group>"; };
+		020000000000000000000015 /* MemoWebRecordingLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MemoWebRecordingLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -72,6 +115,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		040000000000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -79,6 +129,7 @@
 			isa = PBXGroup;
 			children = (
 				050000000000000000000002 /* MemoWeb */,
+				050000000000000000000006 /* MemoWebRecordingLiveActivity */,
 				050000000000000000000003 /* MemoWebTests */,
 				050000000000000000000004 /* MemoWebUITests */,
 				02000000000000000000000D /* README.md */,
@@ -92,12 +143,29 @@
 				020000000000000000000001 /* MemoWebApp.swift */,
 				020000000000000000000002 /* AppConfig.swift */,
 				020000000000000000000003 /* WebViewStore.swift */,
+				02E000000000000000000001 /* EmbeddedBranding.swift */,
 				020000000000000000000004 /* WebContainerView.swift */,
+				020000000000000000000016 /* NativeAudioRecorder.swift */,
+				020000000000000000000017 /* NowPlaying.swift */,
+				02000000000000000000000E /* RecordingBridge.swift */,
+				02000000000000000000000F /* RecordingBridgeScript.swift */,
+				020000000000000000000010 /* RecordingActivityAttributes.swift */,
 				020000000000000000000006 /* Assets.xcassets */,
 				020000000000000000000007 /* PrivacyInfo.xcprivacy */,
 				020000000000000000000005 /* Info.plist */,
 			);
 			path = MemoWeb;
+			sourceTree = "<group>";
+		};
+		050000000000000000000006 /* MemoWebRecordingLiveActivity */ = {
+			isa = PBXGroup;
+			children = (
+				020000000000000000000011 /* RecordingLiveActivity.swift */,
+				020000000000000000000012 /* RecordingLiveActivityBundle.swift */,
+				020000000000000000000013 /* RecordingAssets.xcassets */,
+				020000000000000000000014 /* Info.plist */,
+			);
+			path = MemoWebRecordingLiveActivity;
 			sourceTree = "<group>";
 		};
 		050000000000000000000003 /* MemoWebTests */ = {
@@ -120,6 +188,7 @@
 			isa = PBXGroup;
 			children = (
 				02000000000000000000000A /* MemoWeb.app */,
+				020000000000000000000015 /* MemoWebRecordingLiveActivity.appex */,
 				02000000000000000000000B /* MemoWebTests.xctest */,
 				02000000000000000000000C /* MemoWebUITests.xctest */,
 			);
@@ -136,10 +205,12 @@
 				0A0000000000000000000001 /* Sources */,
 				040000000000000000000001 /* Frameworks */,
 				090000000000000000000001 /* Resources */,
+				0E0000000000000000000001 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				0C0000000000000000000003 /* PBXTargetDependency */,
 			);
 			name = MemoWeb;
 			productName = MemoWeb;
@@ -182,6 +253,23 @@
 			productReference = 02000000000000000000000C /* MemoWebUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		070000000000000000000004 /* MemoWebRecordingLiveActivity */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0B0000000000000000000005 /* Build configuration list for PBXNativeTarget "MemoWebRecordingLiveActivity" */;
+			buildPhases = (
+				0A0000000000000000000004 /* Sources */,
+				040000000000000000000004 /* Frameworks */,
+				090000000000000000000004 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MemoWebRecordingLiveActivity;
+			productName = MemoWebRecordingLiveActivity;
+			productReference = 020000000000000000000015 /* MemoWebRecordingLiveActivity.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -203,6 +291,9 @@
 						CreatedOnToolsVersion = 26.5;
 						TestTargetID = 070000000000000000000001;
 					};
+					070000000000000000000004 = {
+						CreatedOnToolsVersion = 26.5;
+					};
 				};
 			};
 			buildConfigurationList = 0B0000000000000000000001 /* Build configuration list for PBXProject "MemoWeb" */;
@@ -221,6 +312,7 @@
 			projectRoot = "";
 			targets = (
 				070000000000000000000001 /* MemoWeb */,
+				070000000000000000000004 /* MemoWebRecordingLiveActivity */,
 				070000000000000000000002 /* MemoWebTests */,
 				070000000000000000000003 /* MemoWebUITests */,
 			);
@@ -251,6 +343,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		090000000000000000000004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				01A000000000000000000004 /* RecordingAssets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -261,7 +361,13 @@
 				010000000000000000000001 /* MemoWebApp.swift in Sources */,
 				010000000000000000000002 /* AppConfig.swift in Sources */,
 				010000000000000000000003 /* WebViewStore.swift in Sources */,
+				01E000000000000000000001 /* EmbeddedBranding.swift in Sources */,
 				010000000000000000000004 /* WebContainerView.swift in Sources */,
+				01000000000000000000000C /* NativeAudioRecorder.swift in Sources */,
+				01000000000000000000000D /* NowPlaying.swift in Sources */,
+				010000000000000000000009 /* RecordingBridge.swift in Sources */,
+				01000000000000000000000A /* RecordingBridgeScript.swift in Sources */,
+				01000000000000000000000B /* RecordingActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -281,6 +387,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		0A0000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				01A000000000000000000001 /* RecordingActivityAttributes.swift in Sources */,
+				01A000000000000000000002 /* RecordingLiveActivity.swift in Sources */,
+				01A000000000000000000003 /* RecordingLiveActivityBundle.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -293,6 +409,11 @@
 			isa = PBXTargetDependency;
 			target = 070000000000000000000001 /* MemoWeb */;
 			targetProxy = 030000000000000000000002 /* PBXContainerItemProxy */;
+		};
+		0C0000000000000000000003 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 070000000000000000000004 /* MemoWebRecordingLiveActivity */;
+			targetProxy = 030000000000000000000003 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -455,6 +576,56 @@
 			};
 			name = Release;
 		};
+		0D0000000000000000000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MemoWebRecordingLiveActivity/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.memoai.web.RecordingLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0D000000000000000000000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MemoWebRecordingLiveActivity/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.memoai.web.RecordingLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -490,6 +661,15 @@
 			buildConfigurations = (
 				0D0000000000000000000007 /* Debug */,
 				0D0000000000000000000008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0B0000000000000000000005 /* Build configuration list for PBXNativeTarget "MemoWebRecordingLiveActivity" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0D0000000000000000000009 /* Debug */,
+				0D000000000000000000000A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

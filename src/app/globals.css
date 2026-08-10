@@ -2,6 +2,9 @@
 
 :root,
 :root[data-theme="light"] {
+  /* Shared content column for every landing section, so the nav, hero and
+     sections all line up with the same gutter on the left and the right. */
+  --landing-max-width: 68rem;
   --font-sans:
     -apple-system,
     BlinkMacSystemFont,
@@ -459,10 +462,15 @@ a:visited {
 
 .memo-paywall-logo {
   display: inline-flex;
-  width: 4.7rem;
-  height: 4.25rem;
+  max-width: 100%;
   align-items: center;
   justify-content: center;
+  /* Both axes are explicit and derived from one variable. Safari collapses a
+     flex item to zero width when it has to resolve width from aspect-ratio,
+     which blanked the logo; nothing here is left to infer. */
+  --lockup-h: clamp(4rem, 16.5vw, 5.15rem);
+  width: calc(var(--lockup-h) * 480 / 148);
+  height: var(--lockup-h);
 }
 
 .memo-paywall-logo img {
@@ -2076,8 +2084,7 @@ a:visited {
   }
 
   .memo-paywall-logo {
-    width: clamp(3.65rem, 10vw, 4.25rem);
-    height: clamp(3.3rem, 9vw, 3.85rem);
+    --lockup-h: clamp(3.6rem, 10.5vw, 4.45rem);
   }
 
   .memo-paywall-title {
@@ -2278,8 +2285,7 @@ a:visited {
   }
 
   .memo-paywall-logo {
-    width: 3.65rem;
-    height: 3.3rem;
+    --lockup-h: clamp(3.4rem, 5vw, 4rem);
   }
 
   .memo-paywall-title {
@@ -2618,18 +2624,30 @@ select:disabled {
   gap: clamp(0.58rem, 1.13vw, 0.85rem);
 }
 
+.brand-logo.with-subtitle {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+/* The mark is the full "brain + Memo AI" lockup image: set its height only and
+   let the aspect ratio drive the width so the artwork never distorts. */
 .brand-logo-mark {
   display: inline-flex;
-  width: 2.55rem;
-  height: 2.1rem;
+  max-width: 100%;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
+  /* Both axes are explicit and derived from one variable. Safari collapses a
+     flex item to zero width when it has to resolve width from aspect-ratio,
+     which blanked the logo; nothing here is left to infer. */
+  --lockup-h: 2.2rem;
+  width: calc(var(--lockup-h) * 480 / 148);
+  height: var(--lockup-h);
 }
 
 .brand-logo.compact .brand-logo-mark {
-  width: clamp(2.58rem, 5.07vw, 3.8rem);
-  height: clamp(2.28rem, 4.47vw, 3.35rem);
+  --lockup-h: clamp(2.35rem, 4.35vw, 3.45rem);
 }
 
 .brand-logo-image {
@@ -2643,21 +2661,6 @@ select:disabled {
   display: inline-flex;
   min-width: 0;
   flex-direction: column;
-}
-
-.brand-logo-copy strong {
-  display: block;
-  color: var(--label);
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: -0.05em;
-  line-height: 1.04;
-}
-
-.brand-logo.compact .brand-logo-copy strong {
-  font-size: clamp(1.19rem, 2.33vw, 1.75rem);
-  line-height: 1;
-  padding-bottom: 0.08em;
 }
 
 .brand-logo-copy small {
@@ -2792,8 +2795,7 @@ select:disabled {
   }
 
   .memo-paywall-logo {
-    width: clamp(4rem, 10.8vw, 4.55rem);
-    height: clamp(3.6rem, 9.6vw, 4.1rem);
+    --lockup-h: clamp(4rem, 13.7vw, 4.8rem);
   }
 
   .memo-paywall-title {
@@ -10157,15 +10159,8 @@ select:disabled {
   gap: 0.68rem;
 }
 
-.landing-auth-brand .brand-logo.compact .brand-logo-copy strong {
-  color: var(--label);
-  font-size: clamp(3.2rem, 8vw, 5.2rem);
-  line-height: 1;
-}
-
 .landing-auth-brand .brand-logo.compact .brand-logo-mark {
-  width: clamp(4.6rem, 11vw, 7rem);
-  height: clamp(3.8rem, 9vw, 5.8rem);
+  --lockup-h: clamp(4.6rem, 9vw, 7rem);
   filter: saturate(1.15);
   transform: none;
 }
@@ -10304,9 +10299,10 @@ select:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  width: min(100%, 78rem);
-  margin: 0 auto;
-  padding: 1.1rem 1.25rem;
+  /* Full-bleed bar so the sticky background spans the window, with the logo and
+     CTA pushed onto the same column as every other landing section. */
+  width: 100%;
+  padding: 1.1rem max(1.25rem, calc((100% - var(--landing-max-width)) / 2 + 1.25rem));
   background: color-mix(in srgb, var(--canvas) 88%, transparent);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
@@ -10329,13 +10325,7 @@ select:disabled {
 }
 
 .landing-public-brand .brand-logo-mark {
-  width: clamp(2.58rem, 5.07vw, 3.8rem);
-  height: clamp(2.28rem, 4.47vw, 3.35rem);
-}
-
-.landing-public-brand .brand-logo-copy strong {
-  font-size: clamp(1.19rem, 2.33vw, 1.75rem);
-  line-height: 1;
+  --lockup-h: clamp(2.35rem, 4.35vw, 3.45rem);
 }
 
 .landing-public-brand .brand-logo-copy small {
@@ -10387,7 +10377,7 @@ select:disabled {
   align-content: center;
   align-items: center;
   gap: 4rem;
-  width: min(100%, 78rem);
+  width: min(100%, var(--landing-max-width));
   min-height: inherit;
   margin: 0 auto;
   padding: 2rem 1.25rem 5rem;
@@ -10559,9 +10549,242 @@ select:disabled {
 }
 
 .landing-public-section {
-  width: min(100%, 78rem);
+  width: min(100%, var(--landing-max-width));
   margin: 0 auto;
   padding: 5.5rem 1.25rem;
+}
+
+.landing-public-footer {
+  width: min(100%, var(--landing-max-width));
+  margin: 2rem auto 0;
+  padding: 0 1.25rem 2.5rem;
+}
+
+/* Public legal documents — see src/app/legal/[slug]/page.tsx */
+.legal-page {
+  width: min(100%, var(--landing-max-width));
+  margin: 0 auto;
+  padding: 3rem 1.25rem 4rem;
+}
+
+.legal-page-title {
+  margin: 0 0 1.75rem;
+  font-size: clamp(2rem, 5vw, 2.9rem);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1.08;
+}
+
+.legal-page-body {
+  max-width: 46rem;
+  color: var(--secondary-label);
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.legal-page-body h2,
+.legal-page-body h3 {
+  margin: 2rem 0 0.6rem;
+  color: var(--label);
+}
+
+/* 404 / error boundaries — see src/components/error-screen.tsx */
+.error-screen {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 2rem 1.25rem;
+  background: color-mix(in srgb, var(--canvas) 90%, var(--surface-solid));
+  color: var(--label);
+}
+
+.error-screen-inner {
+  display: grid;
+  width: min(100%, 32rem);
+  justify-items: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.error-screen-brand {
+  display: inline-flex;
+  max-width: 100%;
+  margin-bottom: 1.4rem;
+  /* Both axes are explicit and derived from one variable. Safari collapses a
+     flex item to zero width when it has to resolve width from aspect-ratio,
+     which blanked the logo; nothing here is left to infer. */
+  --lockup-h: clamp(2.6rem, 6vw, 3.4rem);
+  width: calc(var(--lockup-h) * 480 / 148);
+  height: var(--lockup-h);
+}
+
+.error-screen-brand img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.error-screen-code {
+  margin: 0;
+  color: var(--secondary-label);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+}
+
+.error-screen-title {
+  margin: 0;
+  font-size: clamp(1.9rem, 6vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1.08;
+}
+
+.error-screen-copy {
+  max-width: 26rem;
+  margin: 0.35rem 0 0;
+  color: var(--secondary-label);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.error-screen-actions {
+  display: grid;
+  width: min(100%, 20rem);
+  justify-items: stretch;
+  gap: 0.7rem;
+  margin-top: 1.9rem;
+}
+
+.error-screen-primary,
+.error-screen-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0 1.4rem;
+  border: 0;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    opacity 0.16s ease;
+}
+
+.error-screen-primary {
+  background: var(--label);
+  color: var(--canvas);
+}
+
+.error-screen-secondary {
+  border: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
+  background: transparent;
+  color: var(--label);
+}
+
+.error-screen-primary:hover,
+.error-screen-secondary:hover {
+  transform: translateY(-1px);
+  opacity: 0.92;
+}
+
+.error-screen-digest {
+  margin: 0.4rem 0 0;
+  color: var(--secondary-label);
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+.landing-public-footer-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 2.5rem;
+  padding: 2.75rem 0 2.25rem;
+  border-top: 1px solid color-mix(in srgb, var(--separator) 55%, transparent);
+}
+
+.landing-public-footer-brand {
+  display: grid;
+  gap: 0.85rem;
+  align-content: start;
+  min-width: 0;
+}
+
+.landing-public-footer-brand p {
+  max-width: 22rem;
+  margin: 0;
+  color: var(--secondary-label);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.landing-public-footer-nav {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 2rem;
+}
+
+.landing-public-footer-group {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+}
+
+.landing-public-footer-group h2 {
+  margin: 0 0 0.15rem;
+  color: var(--label);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.landing-public-footer-group a {
+  color: var(--secondary-label);
+  font-size: 0.92rem;
+  line-height: 1.35;
+  text-decoration: none;
+  transition: color 0.18s ease;
+  justify-self: start;
+  overflow-wrap: anywhere;
+}
+
+.landing-public-footer-group a:hover,
+.landing-public-footer-group a:focus-visible {
+  color: var(--label);
+}
+
+.landing-public-footer-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid color-mix(in srgb, var(--separator) 40%, transparent);
+}
+
+.landing-public-footer-bottom p {
+  margin: 0;
+  color: var(--secondary-label);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 639px) {
+  .landing-public-footer-top {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+  }
+
+  .landing-public-footer-bottom {
+    justify-content: flex-start;
+  }
 }
 
 .landing-public-section-heading {
@@ -12012,13 +12235,8 @@ select:disabled {
     gap: 0.5rem;
   }
 
-  .landing-auth-brand .brand-logo.compact .brand-logo-copy strong {
-    font-size: clamp(2.05rem, 9.2vw, 2.65rem);
-  }
-
   .landing-auth-brand .brand-logo.compact .brand-logo-mark {
-    width: clamp(2.9rem, 13vw, 3.8rem);
-    height: clamp(2.55rem, 11.4vw, 3.35rem);
+    --lockup-h: clamp(3rem, 13.3vw, 3.85rem);
   }
 
   .landing-auth-title {
@@ -12492,7 +12710,10 @@ select:disabled {
   }
 }
 
-@media (max-width: 767px) {
+/* Mobile layout, used for phones and tablets alike — there is no separate
+   tablet design. The desktop shell takes over at 1100px, where the sidebar
+   grid appears, so this stops one pixel short of it. */
+@media (max-width: 1099px) {
   .ios-content {
     padding-left: 0.95rem;
     padding-right: 0.95rem;
@@ -12996,6 +13217,12 @@ select:disabled {
   .mobile-study-manage-pill-icon {
     flex: 0 0 auto;
     opacity: 1;
+  }
+
+  /* The ➕ is a colour emoji, so `color` has no effect — knock it to white so
+     it reads against the pill instead of staying dark. */
+  .mobile-new-note-pill-icon {
+    filter: brightness(0) invert(1);
   }
 
   .mobile-new-note-pill-label,
@@ -13984,7 +14211,7 @@ select:disabled {
   }
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1100px) {
   .ios-content {
     padding: 1.4rem 1.5rem calc(env(safe-area-inset-bottom) + 9.1rem);
   }
@@ -14191,13 +14418,7 @@ select:disabled {
   }
 
   .desktop-brandline-brand .brand-logo-mark {
-    width: clamp(2.58rem, 5.07vw, 3.8rem);
-    height: clamp(2.28rem, 4.47vw, 3.35rem);
-  }
-
-  .desktop-brandline-brand .brand-logo-copy strong {
-    font-size: clamp(1.19rem, 2.33vw, 1.75rem);
-    line-height: 1;
+  --lockup-h: clamp(2.35rem, 4.35vw, 3.45rem);
   }
 
   .desktop-brandline-brand .brand-logo-copy small {
@@ -14249,4 +14470,202 @@ select:disabled {
     "Segoe UI Emoji",
     "Noto Color Emoji",
     sans-serif;
+}
+
+/* ---------------------------------------------------------------------------
+   Note action dock (Poslušaj/Pause, annotation tools).
+
+   Rendered twice by note-read-aloud.tsx: one copy portalled to <body> for
+   mobile, one left inside the note card for desktop. Exactly one is shown.
+
+   Mobile keeps the original fixed pills anchored to the window — see the
+   `@media (max-width: 767px)` block above. Desktop anchors to the note card
+   instead, because the note column is capped at 1320px and centred inside a
+   310px-sidebar grid, so a window-anchored pill drifts hundreds of pixels to
+   the right of the card on wide screens.
+--------------------------------------------------------------------------- */
+.note-dock-desktop {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  .note-dock-mobile {
+    display: none;
+  }
+
+  /* Sticky, not absolute: the note card can be many screens tall, so an
+     absolutely-placed dock would sit below the fold. Sticky keeps it pinned
+     just above the viewport bottom while the note is on screen, and lets it
+     settle at the note's end. Zero height + negative margin so it overlays the
+     text instead of reserving a row. */
+  .note-dock-desktop {
+    display: flex;
+    justify-content: flex-end;
+    position: sticky;
+    bottom: 1.15rem;
+    z-index: 12;
+    height: 3rem;
+    margin-top: -3rem;
+    margin-right: 0.15rem;
+    pointer-events: none;
+  }
+
+  .note-dock-desktop > * {
+    pointer-events: auto;
+  }
+
+  .note-dock-desktop .mobile-note-read-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 3rem;
+    min-width: 10.5rem;
+    padding: 0 1.15rem;
+    border: 0;
+    border-radius: 999px;
+    color: white;
+    font-size: 0.96rem;
+    font-weight: 650;
+    cursor: pointer;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.28);
+    transition:
+      transform var(--motion-duration-fast) var(--motion-curve-soft),
+      box-shadow 0.18s ease,
+      opacity 0.15s ease;
+  }
+
+  .note-dock-desktop .mobile-note-read-pill:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-raised);
+  }
+
+  .note-dock-desktop .mobile-note-read-pill:disabled {
+    cursor: not-allowed;
+    opacity: 0.58;
+  }
+
+  .note-dock-desktop .mobile-note-read-pill-icon {
+    flex: 0 0 auto;
+  }
+
+  .note-dock-desktop .mobile-note-read-pill-label {
+    white-space: nowrap;
+  }
+
+  /* Selecting text swaps the pill for the annotation tools, same as mobile. */
+  .note-dock-desktop .mobile-note-annotation-pill {
+    display: inline-flex;
+    max-width: min(28rem, 100%);
+  }
+
+  .note-dock-desktop .note-annotation-toolbar {
+    display: inline-flex;
+    align-items: center;
+    min-height: 3rem;
+    padding: 0 0.58rem 0 0.82rem;
+    gap: 0.22rem;
+    border: 0;
+    border-radius: 999px;
+    color: white;
+    background: linear-gradient(135deg, #ea580c, #f97316);
+    box-shadow: 0 12px 24px rgba(234, 88, 12, 0.34);
+  }
+
+  .note-dock-desktop .note-annotation-toolbar button {
+    min-width: 2.35rem;
+    min-height: 2.55rem;
+    padding: 0 0.46rem;
+    border: 0;
+    border-radius: 999px;
+    color: #ffffff;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .note-dock-desktop .note-annotation-toolbar button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.14);
+    transform: none;
+  }
+
+  .note-dock-desktop .note-annotation-toolbar .primary {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 0.58rem;
+  }
+
+  .note-dock-desktop .note-annotation-toolbar .primary span {
+    white-space: nowrap;
+  }
+
+  .note-dock-desktop .note-annotation-colors {
+    flex: 0 0 auto;
+    gap: 0.32rem;
+    padding-right: 0.2rem;
+  }
+
+  .note-dock-desktop .note-annotation-colors button {
+    width: 1.74rem;
+    min-width: 1.74rem;
+    height: 1.74rem;
+    min-height: 1.74rem;
+    padding: 0;
+    border: 2px solid color-mix(in srgb, var(--separator) 76%, transparent);
+    background: var(--note-annotation-color) !important;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.68);
+    color: transparent;
+  }
+
+  /* The inline copies would duplicate the dock; photo lives in the
+     annotation dock, so it is not needed as a separate toolbar button. */
+  .note-read-toolbar .note-read-button,
+  .note-read-toolbar > .note-annotation-toolbar,
+  .note-photo-toolbar-button {
+    display: none;
+  }
+
+  /* "Nazaj" is redundant on desktop — the sidebar and the brand logo both go
+     home — so the brandline copy is dropped. Mobile keeps its own back button
+     in the topbar, where it is the only way back. */
+  .desktop-brandline-back {
+    display: none;
+  }
+
+  /* "Uredi" matches the green pill it is on mobile. It stays in the study
+     header, which is always on screen since the study shell does not scroll
+     like a long note. */
+  .lecture-study-header-actions .lecture-study-manage-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.85rem;
+    padding: 0 1.15rem;
+    border: 0;
+    border-radius: 999px;
+    color: white;
+    font-size: 0.94rem;
+    font-weight: 650;
+    background: linear-gradient(135deg, #22c55e, #15803d);
+    box-shadow: 0 12px 24px rgba(34, 197, 94, 0.26);
+    transition:
+      transform var(--motion-duration-fast) var(--motion-curve-soft),
+      box-shadow 0.18s ease;
+  }
+
+  .lecture-study-header-actions .lecture-study-manage-button:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-raised);
+  }
+
+  .lecture-study-header-actions .lecture-study-manage-button svg {
+    width: 1.05rem;
+    height: 1.05rem;
+  }
+
+  /* Leave room so the dock never covers the last line of the note. */
+  .lecture-notes-card .note-read-content {
+    padding-bottom: 3.4rem;
+  }
 }

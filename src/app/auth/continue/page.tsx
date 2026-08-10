@@ -26,7 +26,7 @@ export default async function ContinuePage() {
     <main className="landing-shell landing-auth-page">
       <div className="landing-auth-wrap">
         <Link href="/" className="landing-auth-brand" aria-label={`Domov ${BRAND_NAME}`}>
-          <BrandLogo compact imageSizes="(max-width: 768px) 4.6rem, 7rem" priority />
+          <BrandLogo compact priority />
         </Link>
 
         <section className="landing-auth-hero">
@@ -38,8 +38,8 @@ export default async function ContinuePage() {
 
         <p className="landing-auth-legal">
           Z nadaljevanjem se strinjaš s {`${BRAND_NAME}`}{" "}
-          <Link href="/app/support/terms-of-use">pogoji uporabe</Link> in{" "}
-          <Link href="/app/support/privacy-policy">politiko zasebnosti</Link>, vključno z AI
+          <Link href="/legal/terms-of-use">pogoji uporabe</Link> in{" "}
+          <Link href="/legal/privacy-policy">politiko zasebnosti</Link>, vključno z AI
           obdelavo zvoka, besedila, dokumentov in povezav. Potrjuješ tudi, da imaš
           potrebna dovoljenja za snemanje, nalaganje in uporabo gradiva, ki ga pošlješ
           v Memo.

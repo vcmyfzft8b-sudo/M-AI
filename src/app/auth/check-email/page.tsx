@@ -46,7 +46,7 @@ export default async function CheckEmailPage({
 
       <section className="landing-auth-wrap check-email-wrap">
         <Link href="/" className="landing-auth-brand check-email-brand" aria-label={`Domov ${BRAND_NAME}`}>
-          <BrandLogo compact imageSizes="(max-width: 768px) 4.6rem, 7rem" priority />
+          <BrandLogo compact priority />
         </Link>
 
         <div className="check-email-hero">

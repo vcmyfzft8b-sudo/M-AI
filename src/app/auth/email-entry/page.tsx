@@ -41,7 +41,7 @@ export default async function EmailEntryPage({
       <section className="landing-auth-wrap email-entry-wrap">
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a href="/" className="landing-auth-brand email-entry-brand" aria-label={`Domov ${BRAND_NAME}`}>
-          <BrandLogo compact imageSizes="(max-width: 768px) 4.6rem, 7rem" priority />
+          <BrandLogo compact priority />
         </a>
 
         <div className="landing-auth-hero email-entry-copy">

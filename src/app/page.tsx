@@ -10,6 +10,8 @@ import { LandingStoryPreview } from "@/components/landing-story-preview";
 import { getOptionalUser } from "@/lib/auth";
 import {
   BRAND_NAME,
+  BRAND_SUPPORT_EMAIL,
+  BRAND_TAGLINE,
   SEO_BRAND_NAME,
   SEO_SITE_DESCRIPTION,
   SEO_SITE_URL,
@@ -258,6 +260,38 @@ export default async function HomePage() {
         </div>
       </section>
 
+      <footer className="landing-public-footer">
+        <div className="landing-public-footer-top">
+          <div className="landing-public-footer-brand">
+            <BrandLogo subtitle="" />
+            <p>{BRAND_TAGLINE}</p>
+          </div>
+
+          <nav className="landing-public-footer-nav" aria-label="Noga">
+            <div className="landing-public-footer-group">
+              <h2>Produkt</h2>
+              <Link href="#examples">Primeri</Link>
+              <LandingLoadingLink href="/auth/continue" className="landing-public-footer-link">
+                Preizkusi za 0 €
+              </LandingLoadingLink>
+            </div>
+
+            <div className="landing-public-footer-group">
+              <h2>Podpora</h2>
+              <a href={`mailto:${BRAND_SUPPORT_EMAIL}`}>{BRAND_SUPPORT_EMAIL}</a>
+              <Link href="/legal/terms-of-use">Pogoji uporabe</Link>
+              <Link href="/legal/privacy-policy">Politika zasebnosti</Link>
+            </div>
+          </nav>
+        </div>
+
+        <div className="landing-public-footer-bottom">
+          <p>
+            © {new Date().getFullYear()} {SEO_BRAND_NAME}
+          </p>
+          <p>Narejeno v Sloveniji 🇸🇮</p>
+        </div>
+      </footer>
     </main>
   );
 }

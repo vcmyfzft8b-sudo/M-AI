@@ -120,7 +120,7 @@ export default async function SettingsPage() {
             title="Unovči kodo"
           />
           <SettingsLinkCard
-            href="/app/support/privacy-policy"
+            href="/legal/privacy-policy"
             icon="🔒"
             title="Zasebnost"
           />

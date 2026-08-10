@@ -2683,6 +2683,29 @@ export function NoteReadAloud({
       <Play className={className} />
     );
 
+  const renderNoteDock = () =>
+    annotationActive && annotationToolbar ? (
+      <div className="mobile-note-annotation-pill">{annotationToolbar}</div>
+    ) : (
+      <button
+        type="button"
+        className="mobile-note-read-pill"
+        onClick={() => {
+          window.dispatchEvent(new Event("memoai:mobile-dock-close"));
+          void handlePlayPause();
+        }}
+        disabled={disabled}
+        aria-label={playButtonLabel}
+      >
+        <EmojiIcon
+          symbol={isPreparingPlayback ? "⏳" : isPlaying ? "⏸️" : "🎧"}
+          size="1.12rem"
+          className="mobile-note-read-pill-icon"
+        />
+        <span className="mobile-note-read-pill-label">{playButtonLabel}</span>
+      </button>
+    );
+
   return (
     <>
       <div className="note-read-toolbar">
@@ -2746,28 +2769,16 @@ export function NoteReadAloud({
         }}
         className="note-read-audio"
       />
+      {/*
+        The dock is rendered twice on purpose. Mobile portals it to <body> so it
+        can sit fixed above the tab bar. Desktop keeps it in the note card and
+        positions it absolutely, so it hugs the card's corner instead of the
+        window's — the note column is capped and centred, so a viewport-anchored
+        pill drifts far to its right on wide screens. Exactly one is visible at
+        any width; see the `note-dock-*` rules in globals.css.
+      */}
       <ViewportPortal>
-        {annotationActive && annotationToolbar ? (
-          <div className="mobile-note-annotation-pill">{annotationToolbar}</div>
-        ) : (
-          <button
-            type="button"
-            className="mobile-note-read-pill"
-            onClick={() => {
-              window.dispatchEvent(new Event("memoai:mobile-dock-close"));
-              void handlePlayPause();
-            }}
-            disabled={disabled}
-            aria-label={playButtonLabel}
-          >
-            <EmojiIcon
-              symbol={isPreparingPlayback ? "⏳" : isPlaying ? "⏸️" : "🎧"}
-              size="1.12rem"
-              className="mobile-note-read-pill-icon"
-            />
-            <span className="mobile-note-read-pill-label">{playButtonLabel}</span>
-          </button>
-        )}
+        <div className="note-dock note-dock-mobile">{renderNoteDock()}</div>
       </ViewportPortal>
       <div
         ref={contentRef}
@@ -2791,6 +2802,7 @@ export function NoteReadAloud({
           onDeleteMedia={onDeleteMedia}
         />
       </div>
+      <div className="note-dock note-dock-desktop">{renderNoteDock()}</div>
     </>
   );
 }

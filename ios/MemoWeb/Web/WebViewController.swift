@@ -116,10 +116,17 @@ final class WebViewController: UIViewController {
             preconditionFailure("bridge.js is missing from the app bundle")
         }
 
+        // The browser-path list is passed in rather than duplicated in JavaScript, so the native
+        // policy and the click interceptor cannot drift apart.
+        let browserPaths = NativeRouting.browserPathPrefixes
+            .map { "\"\($0)\"" }
+            .joined(separator: ", ")
+
         let config = """
         window.__MEMO_NATIVE_CONFIG__ = {
           appVersion: "\(AppConfig.appVersion)",
-          buildNumber: "\(AppConfig.buildNumber)"
+          buildNumber: "\(AppConfig.buildNumber)",
+          browserPathPrefixes: [\(browserPaths)]
         };
         """
 
@@ -286,6 +293,14 @@ extension WebViewController: WKNavigationDelegate {
                 webView.load(URLRequest(url: replacement))
                 return
             }
+
+            // Terms and privacy open in the browser, not in the app.
+            if isMainFrame, NativeRouting.opensInBrowser(url, productHost: AppConfig.productHost) {
+                decisionHandler(.cancel)
+                openInBrowser(url)
+                return
+            }
+
             decisionHandler(.allow)
         case .openInBrowser(let target):
             decisionHandler(.cancel)

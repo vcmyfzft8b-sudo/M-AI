@@ -60,6 +60,26 @@ final class NativeRoutingTests: XCTestCase {
         XCTAssertNil(NativeRouting.redirectAwayFromLandingPage(url("https://memoai.eu/legal/privacy"), productHost: host))
     }
 
+    // MARK: - Legal pages
+
+    func testLegalPagesOpenInTheBrowser() {
+        XCTAssertTrue(NativeRouting.opensInBrowser(url("https://memoai.eu/legal/terms-of-use"), productHost: host))
+        XCTAssertTrue(NativeRouting.opensInBrowser(url("https://memoai.eu/legal/privacy-policy"), productHost: host))
+        XCTAssertTrue(NativeRouting.opensInBrowser(url("https://memoai.eu/legal"), productHost: host))
+    }
+
+    func testProductPagesDoNotOpenInTheBrowser() {
+        XCTAssertFalse(NativeRouting.opensInBrowser(url("https://memoai.eu/app"), productHost: host))
+        XCTAssertFalse(NativeRouting.opensInBrowser(url("https://memoai.eu/auth/continue"), productHost: host))
+        // Prefix matching must stop at a path boundary.
+        XCTAssertFalse(NativeRouting.opensInBrowser(url("https://memoai.eu/legalese"), productHost: host))
+    }
+
+    func testForeignLegalPathsAreNotOurConcern() {
+        // Off-host URLs are already routed by NavigationPolicy; this rule must not double-handle.
+        XCTAssertFalse(NativeRouting.opensInBrowser(url("https://example.com/legal/terms"), productHost: host))
+    }
+
     func testThirdPartyRootsAreLeftAlone() {
         // Rewriting an OAuth provider's root would break the sign-in redirect chain.
         XCTAssertNil(NativeRouting.redirectAwayFromLandingPage(url("https://accounts.google.com/"), productHost: host))

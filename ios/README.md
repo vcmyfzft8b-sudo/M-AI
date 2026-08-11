@@ -82,6 +82,18 @@ round trip.
 render in-app (`AppConfig.inAppDomains`). Everything else gets `SFSafariViewController`, so
 third-party pages keep the address bar and trust indicators.
 
+**Legal pages open in Safari too**, even though the product serves them — the address bar
+showing `memoai.eu` is what makes the consent on the sign-in screen meaningful. This one needs
+handling in two places, because the terms and privacy links are Next.js `<Link>` components:
+the App Router navigates with `history.pushState`, so WebKit never issues a navigation action
+and the native delegate never sees the click. `NativeRouting.opensInBrowser` covers real page
+loads, and a capture-phase click listener in `bridge.js` covers client-side routing. The path
+list lives in `NativeRouting.browserPathPrefixes` and is injected into the bridge, so the two
+cannot drift apart.
+
+The same caveat applies to anything else you want to route natively: **a same-origin link
+handled by the Next.js router will not reach `WKNavigationDelegate`.**
+
 ## The `window.MemoNative` bridge
 
 `bridge.js` runs at document start on the main frame. Its presence is the signal that the page

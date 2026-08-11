@@ -56,6 +56,60 @@
   document.documentElement.setAttribute("data-memo-native", "ios");
 
   /*
+   * Legal pages open in the browser, not in the app.
+   *
+   * The native navigation policy covers full page loads, but these links are Next.js <Link>
+   * components: the App Router navigates with history.pushState and re-renders in place, so
+   * WebKit never issues a navigation action and the native delegate is never consulted. The
+   * click has to be caught here instead.
+   *
+   * Capture phase with stopPropagation, so React's delegated handler on the root container
+   * never sees the event and the client-side route change does not happen.
+   */
+  var browserPathPrefixes = config.browserPathPrefixes || [];
+
+  function opensInBrowser(pathname) {
+    for (var i = 0; i < browserPathPrefixes.length; i += 1) {
+      var prefix = browserPathPrefixes[i];
+      if (pathname === prefix || pathname.indexOf(prefix + "/") === 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  document.addEventListener(
+    "click",
+    function (event) {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.button !== 0) {
+        return;
+      }
+
+      var anchor = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+      if (!anchor || anchor.target === "_blank") {
+        return; // New windows are already routed natively.
+      }
+
+      var target;
+      try {
+        target = new URL(anchor.href, location.href);
+      } catch (error) {
+        return;
+      }
+
+      // Off-origin links reach WebKit as real navigations, so the native policy handles them.
+      if (target.origin !== location.origin || !opensInBrowser(target.pathname)) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      post({ type: "openExternal", url: target.href });
+    },
+    true
+  );
+
+  /*
    * WebKit cannot download blob:/data: URLs through WKDownloadDelegate, so anchors that generate
    * a file client-side (note exports, generated PDFs) are intercepted and handed to native as a
    * data URL instead. Capture phase, so the web app's own handlers still run.

@@ -19,8 +19,27 @@ enum NativeRouting {
     /// it sends an already-signed-in visitor on to `/app`, so it can never loop with `startPath`.
     static let signInPath = "/auth/continue"
 
+    /// Paths that belong in the browser even though the product serves them.
+    ///
+    /// Terms and privacy are reference documents, not part of the app's flow. Opening them in
+    /// Safari's chrome — with the address bar showing `memoai.eu` — is both the convention and
+    /// what makes the consent meaningful: the user can see what site they are agreeing with.
+    static let browserPathPrefixes = ["/legal"]
+
     static func startURL(baseURL: URL = AppConfig.baseURL) -> URL {
         url(path: startPath, basedOn: baseURL)
+    }
+
+    /// Whether a product-host page should be handed to the browser rather than rendered in-app.
+    static func opensInBrowser(_ url: URL, productHost: String) -> Bool {
+        guard let host = url.host?.lowercased() else { return false }
+
+        let productHost = productHost.lowercased()
+        guard host == productHost || host.hasSuffix(".\(productHost)") else { return false }
+
+        return browserPathPrefixes.contains { prefix in
+            url.path == prefix || url.path.hasPrefix("\(prefix)/")
+        }
     }
 
     /// Returns a replacement URL when `url` would render the marketing landing page, else `nil`.

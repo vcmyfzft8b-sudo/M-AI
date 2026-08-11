@@ -14861,3 +14861,19 @@ select:disabled {
   font: inherit;
   font-weight: 650;
 }
+
+.memo-onboarding-ready {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 8rem;
+  padding: 1rem 0;
+  text-align: center;
+}
+
+.memo-onboarding-ready p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--text-secondary, rgba(60, 60, 67, 0.72));
+}

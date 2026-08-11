@@ -959,6 +959,21 @@ export function OnboardingPaywall({
       };
     }
 
+    // Inside the iOS app the "add to home screen" walkthrough is nonsense — the app is already
+    // installed, and the screenshots show Safari's share menu. Same step, different content, so
+    // the step count and the closing action stay exactly as they are.
+    if (!allowPurchases) {
+      return {
+        title: "Vse je pripravljeno",
+        body: (
+          <div className="memo-onboarding-ready">
+            <p>Začni s prvim zapiskom — posnemi predavanje ali naloži gradivo.</p>
+          </div>
+        ),
+        action: "Končaj",
+      };
+    }
+
     return {
       title: "Dodaj Memo AI na homescreen",
       body: (

@@ -142,9 +142,11 @@ if (window.MemoNative) {
 `document.documentElement` also carries `data-memo-native="ios"`, so CSS alone can hide
 browser-only affordances.
 
-**Worth wiring up on the web side:** the onboarding paywall has an "add to home screen" step
-(`src/components/onboarding-paywall.tsx`) that makes no sense inside the app. Gating it on
-`data-memo-native` would remove a confusing step for every app user.
+Server-side, the same thing is detected from the user agent — see `src/lib/native-app.ts`. Use
+that for anything the page must get right on first render or that an API route has to enforce;
+the bridge only exists once JavaScript has run, and never on the server. Purchase gating uses
+it, and so does the onboarding flow, which swaps its "add to home screen" walkthrough for a
+closing step in the app, where those Safari instructions make no sense.
 
 ## Native recording
 
@@ -214,27 +216,85 @@ Once both exist, no Swift change is needed.
 ## Before the first App Store submission
 
 Signing is not configured — `DEVELOPMENT_TEAM` is deliberately empty so the project builds for
-anyone. Set your team in Xcode's Signing & Capabilities tab, and register the bundle ID
-`eu.memoai.app`.
+anyone. Set your team in Xcode's Signing & Capabilities tab and register both bundle IDs:
+`eu.memoai.app` and `eu.memoai.app.widgets`.
 
-Then work through these, in order of how likely they are to cost you a rejection:
+### Guideline work already done
 
-1. **Payments — Guideline 3.1.1.** The paywall sends users to Stripe Checkout
-   (`src/app/api/billing/checkout/route.ts`). Selling access to app features through anything
-   other than In-App Purchase is rejected, and "it's a web view" is not an exemption. Either
-   gate the purchase UI behind `data-memo-native` and sell only outside the app, or implement
-   StoreKit. **This is the blocker to resolve first** — it is not something the wrapper can fix.
-2. **Minimum functionality — Guideline 4.2.** A pure web wrapper is explicitly called out. The
-   native recording, share, download, offline and deep-link behaviour here is the argument
-   against that; be ready to make it in the review notes. Adding push notifications or native
-   audio capture would strengthen it considerably.
-3. **Sign-in credentials.** Give App Review a working account in the review notes. Without one
-   they see only the sign-in screen.
-4. **Privacy answers.** `MemoWeb/Resources/PrivacyInfo.xcprivacy` declares email, user content
-   and audio, collected for app functionality, no tracking. The App Store Connect privacy
-   questionnaire must match what the *web app* actually collects.
-5. **Account deletion — Guideline 5.1.1(v).** Apps with account creation must offer in-app
-   account deletion. Confirm the web app has it.
+| Guideline | Requirement | Where |
+| --- | --- | --- |
+| 3.1.1 | No purchasing outside IAP in the app | Paywall hides plans/price/checkout and `/api/billing/checkout` returns 403 for native callers, both driven by `src/lib/native-app.ts` |
+| 5.1.1(v) | In-app account deletion | Settings → Izbriši račun (`src/components/delete-account-card.tsx`, `src/app/api/account/delete/route.ts`) |
+| 2.1 | Reviewer must be able to sign in | `/auth/password` — unlinked, noindex, for the demo account |
+| 2.5.13 | Privacy manifest | `MemoWeb/Resources/PrivacyInfo.xcprivacy` |
+
+### Still to do — needs the Apple Developer account
+
+1. **Sign in with Apple (Guideline 4.8).** Offering Google means Apple must be offered too. The
+   code already supports it (`src/app/auth/apple/route.ts`); the button appears on its own once
+   `providers.apple` turns true. Create a Services ID and a Sign in with Apple key in the
+   developer portal, then fill in Team ID / Services ID / Key ID / `.p8` in Supabase →
+   Authentication → Providers → Apple, with the Supabase `/auth/v1/callback` as the return URL.
+   This lights it up on web and iOS at once.
+2. **A demo account with a password**, given to review in the notes. Create the account, then set
+   a password for it — for example through the Supabase dashboard, or:
+   ```
+   curl -X PUT "$SUPABASE_URL/auth/v1/admin/users/<user-id>" \
+     -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+     -H "content-type: application/json" -d '{"password":"<strong-password>"}'
+   ```
+   Give it paid access so the reviewer can exercise the whole app.
+3. **App Store Connect record**: name, category (Education), privacy policy URL
+   (`/legal/privacy-policy`), support URL, screenshots.
+4. **Privacy answers** must match `PrivacyInfo.xcprivacy`: email address, user content and audio,
+   all for app functionality, no tracking.
+
+### Review notes — draft
+
+Paste something like this into App Store Connect, adjusting the account line:
+
+> Demo account: `appreview@memoai.eu` / `<password>` — sign in at the "Nadaljuj z e-pošto"
+> screen, or directly at https://memoai.eu/auth/password
+>
+> Memo AI turns lectures into notes, transcripts, flashcards and quizzes. The app records
+> lectures natively (AVAudioRecorder), so recording continues when the screen is locked, and
+> shows a Live Activity with elapsed time on the Lock Screen and Dynamic Island while it does.
+> It also supports document and photo import, file downloads via the share sheet, offline
+> handling, and `memo://` deep links.
+>
+> Subscriptions are not sold in the app. No purchase or payment UI is presented on iOS.
+
+The second paragraph exists to answer Guideline 4.2 (minimum functionality) before it is asked.
+
+### Screenshots
+
+Capture on a 6.9" device (iPhone 17 Pro Max or similar) in the simulator:
+
+```bash
+xcrun simctl boot "iPhone 17 Pro Max"
+xcrun simctl io booted screenshot shot.png
+```
+
+Apple wants 6.9" and 6.5" sets; the 6.9" set can usually be reused for 6.5". Good candidates:
+the note list, a note with its summary, the recording sheet mid-recording, and the Lock Screen
+Live Activity.
+
+### Release hygiene
+
+`main` is the single source of truth for both web and iOS — `ios/**` is outside the Next build,
+so web deploys ignore it, and the [iOS workflow](../.github/workflows/ios-app.yml) only runs on
+iOS changes. Tag each submission so it is always clear what shipped:
+
+```bash
+git tag ios-v1.0.0 && git push origin ios-v1.0.0
+```
+
+Bump `MARKETING_VERSION` for a user-visible release and `CURRENT_PROJECT_VERSION` for every
+upload (App Store Connect rejects a duplicate build number).
+
+Because the binary is frozen while the web keeps deploying, native capabilities are always
+feature-detected — `getNativeRecorder()` returns `null` against an older web build and recording
+falls back to `MediaRecorder`. Keep that pattern for anything new.
 
 ## Known limitations
 

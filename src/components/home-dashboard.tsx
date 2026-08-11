@@ -17,16 +17,19 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 
 import { NoteSourceModal, type NoteSourceMode } from "@/components/note-source-modal";
 import { StatusBadge } from "@/components/status-badge";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { InstantLink } from "@/components/instant-link";
+import { LectureWorkspaceLoading } from "@/components/lecture-loading";
 import { LibraryFolderMenu } from "@/components/library-folder-menu";
 import { ViewportPortal } from "@/components/viewport-portal";
+import { getVisibleAppHeaderBottom } from "@/lib/app-header-offset";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
 import { getEffectiveLectureSourceType } from "@/lib/lecture-source-metadata";
+import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 import { formatCalendarDate } from "@/lib/utils";
 
@@ -172,22 +175,97 @@ const NoteRow = memo(function NoteRow({
   const dragRef = useRef<DashboardNoteDragState | null>(null);
   const cleanupDragListenersRef = useRef<(() => void) | null>(null);
   const suppressClickRef = useRef(false);
+  const openFrameRef = useRef<number | null>(null);
   const [dragState, setDragState] = useState<DashboardNoteDragState | null>(null);
   const [isOpening, setIsOpening] = useState(false);
+  const [overlayTop, setOverlayTop] = useState(0);
   const noteOffset = dragState?.offset ?? (isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0);
   const isSwipeActive = Boolean(dragState || isMenuOpen || noteOffset < 0);
 
   useEffect(
     () => () => {
       cleanupDragListenersRef.current?.();
+
+      if (openFrameRef.current != null) {
+        window.cancelAnimationFrame(openFrameRef.current);
+      }
     },
     [],
   );
 
+  // Release the overlay if the navigation never lands, so a failed push cannot
+  // leave the note trapped behind a skeleton.
+  useEffect(() => {
+    if (!isOpening) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsOpening(false);
+    }, 12000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isOpening]);
+
+  function openLecture() {
+    if (isOpening) {
+      return;
+    }
+
+    setOverlayTop(getVisibleAppHeaderBottom());
+    setIsOpening(true);
+
+    // Hand the browser a frame to paint the skeleton before the router starts
+    // fetching the note, otherwise the tap reads as a dead press.
+    openFrameRef.current = window.requestAnimationFrame(() => {
+      openFrameRef.current = window.requestAnimationFrame(() => {
+        openFrameRef.current = null;
+        router.push(href);
+      });
+    });
+  }
+
+  // Locked notes route to the paywall instead, where a note skeleton would lie
+  // about what is coming.
+  const navigationOverlay = isOpening && href.startsWith("/app/lectures/")
+    ? createPortal(
+        <div
+          className="navigation-loading-overlay"
+          role="status"
+          style={{ top: `${overlayTop}px` }}
+        >
+          <LectureWorkspaceLoading />
+        </div>,
+        document.body,
+      )
+    : null;
+
   if (!useSwipeActions) {
     return (
       <div className={`ios-row-note-card ${isMenuOpen ? "menu-open" : ""}`}>
-        <InstantLink href={href} className="ios-row-note-card-link">
+        {navigationOverlay}
+        <InstantLink
+          href={href}
+          className="ios-row-note-card-link"
+          aria-busy={isOpening}
+          onClick={(event) => {
+            if (
+              event.defaultPrevented ||
+              event.button !== 0 ||
+              event.metaKey ||
+              event.altKey ||
+              event.ctrlKey ||
+              event.shiftKey
+            ) {
+              return;
+            }
+
+            event.preventDefault();
+            openLecture();
+          }}
+        >
           <div className="ios-row-icon" style={{ backgroundColor: "var(--surface-muted)" }}>
             <SourceIcon sourceType={sourceType} />
           </div>
@@ -312,6 +390,12 @@ const NoteRow = memo(function NoteRow({
 
     cleanupDragListenersRef.current?.();
 
+    // Warm the note route on touch-down so the skeleton has real content to
+    // swap in by the time the tap completes.
+    if (!isMenuOpen) {
+      safeRouterPrefetch(router, href);
+    }
+
     const nextDrag = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -346,11 +430,6 @@ const NoteRow = memo(function NoteRow({
     };
   }
 
-  function openLecture() {
-    setIsOpening(true);
-    router.push(href);
-  }
-
   function handleSurfaceClick(event: ReactMouseEvent<HTMLElement>) {
     if (suppressClickRef.current) {
       event.preventDefault();
@@ -377,6 +456,7 @@ const NoteRow = memo(function NoteRow({
         isMenuOpen ? "menu-open" : ""
       } ${isSwipeActive ? "is-swiping" : ""} ${dragState ? "is-dragging" : ""} ${isOpening ? "is-opening" : ""}`}
     >
+      {navigationOverlay}
       <div
         ref={isMenuOpen ? attachMenuRef : undefined}
         className="dashboard-note-actions"

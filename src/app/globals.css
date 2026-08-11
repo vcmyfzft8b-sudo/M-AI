@@ -13027,7 +13027,7 @@ select:disabled {
   }
 
   .mobile-new-note-pill {
-    border: 2px solid color-mix(in srgb, var(--label) 72%, transparent);
+    border: 2px solid color-mix(in srgb, var(--label) 34%, transparent);
     background: linear-gradient(135deg, #ff6d68, #f45f5a);
     box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
   }
@@ -14064,7 +14064,7 @@ select:disabled {
     z-index: 2;
     width: 3.2rem;
     height: 3.2rem;
-    border: 2px solid color-mix(in srgb, var(--label) 72%, transparent);
+    border: 2px solid color-mix(in srgb, var(--label) 34%, transparent);
     border-radius: 999px;
     background: color-mix(in srgb, var(--surface-solid) 98%, transparent);
     color: var(--label);

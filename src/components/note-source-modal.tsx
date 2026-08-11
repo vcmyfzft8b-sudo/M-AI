@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 
 import { EmojiIcon } from "@/components/emoji-icon";
 import { LiveAudioWave } from "@/components/live-audio-wave";
+import { useInstantNavigation } from "@/components/navigation-loading";
 import { ViewportPortal } from "@/components/viewport-portal";
 import { createAudioLectureWithProcessingChunks } from "@/lib/audio-lecture-upload";
 import { getNativeRecorder, type NativeRecorder } from "@/lib/native-recorder";
@@ -320,6 +321,7 @@ export function NoteSourceModal({
   canCreateNotes?: boolean;
 }) {
   const router = useRouter();
+  const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
@@ -1099,7 +1101,7 @@ export function NoteSourceModal({
       processingStarted = true;
       createdLectureIdRef.current = null;
       onClose();
-      router.push(`/app/lectures/${result.lectureId}`);
+      navigateWithFeedback(`/app/lectures/${result.lectureId}`);
       router.refresh();
     } catch (submitError) {
       if (redirectToBillingIfNeeded({ error: submitError, router })) {
@@ -1165,7 +1167,7 @@ export function NoteSourceModal({
 
       onClose();
       createdLectureIdRef.current = null;
-      router.push(`/app/lectures/${lectureId}`);
+      navigateWithFeedback(`/app/lectures/${lectureId}`);
       router.refresh();
     } catch (submitError) {
       await deleteCreatedLecture();
@@ -1303,7 +1305,7 @@ export function NoteSourceModal({
 
       onClose();
       createdLectureIdRef.current = null;
-      router.push(`/app/lectures/${lectureId}`);
+      navigateWithFeedback(`/app/lectures/${lectureId}`);
       router.refresh();
     } catch (submitError) {
       await deleteCreatedLecture();
@@ -1371,7 +1373,7 @@ export function NoteSourceModal({
 
       onClose();
       createdLectureIdRef.current = null;
-      router.push(`/app/lectures/${lectureId}`);
+      navigateWithFeedback(`/app/lectures/${lectureId}`);
       router.refresh();
     } catch (submitError) {
       await deleteCreatedLecture();
@@ -1701,7 +1703,7 @@ export function NoteSourceModal({
 
       onClose();
       createdLectureIdRef.current = null;
-      router.push(`/app/lectures/${lectureId}`);
+      navigateWithFeedback(`/app/lectures/${lectureId}`);
       router.refresh();
     } catch (submitError) {
       await deleteCreatedLecture();
@@ -2514,5 +2516,10 @@ export function NoteSourceModal({
     </>
   );
 
-  return <ViewportPortal>{modalContent}</ViewportPortal>;
+  return (
+    <>
+      {navigationOverlay}
+      <ViewportPortal>{modalContent}</ViewportPortal>
+    </>
+  );
 }

@@ -9,6 +9,7 @@ import { AUDIO_FILE_INPUT_ACCEPT, MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS } from "@/l
 import { getExtensionForMimeType, normalizeMimeType } from "@/lib/storage";
 import { cn, formatTimestamp } from "@/lib/utils";
 import { LiveAudioWave } from "@/components/live-audio-wave";
+import { useInstantNavigation } from "@/components/navigation-loading";
 
 type CaptureSource = {
   file: File;
@@ -87,6 +88,7 @@ export function CaptureStudio({
   initialMode?: CaptureMode;
 }) {
   const router = useRouter();
+  const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -319,7 +321,7 @@ export function CaptureStudio({
 
       processingStarted = true;
       createdLectureIdRef.current = null;
-      router.push(`/app/lectures/${result.lectureId}`);
+      navigateWithFeedback(`/app/lectures/${result.lectureId}`);
       router.refresh();
     } catch (submitError) {
       if (createdLectureIdRef.current && !processingStarted) {
@@ -364,6 +366,7 @@ export function CaptureStudio({
 
   return (
     <div className="space-y-6">
+      {navigationOverlay}
       <section className="surface-card-strong p-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <button

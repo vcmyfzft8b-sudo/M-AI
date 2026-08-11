@@ -24,9 +24,14 @@ import { StatusBadge } from "@/components/status-badge";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { InstantLink } from "@/components/instant-link";
 import { LibraryFolderMenu } from "@/components/library-folder-menu";
+import {
+  shouldHandleLinkNavigation,
+  useInstantNavigation,
+} from "@/components/navigation-loading";
 import { ViewportPortal } from "@/components/viewport-portal";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
 import { getEffectiveLectureSourceType } from "@/lib/lecture-source-metadata";
+import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 import { formatCalendarDate } from "@/lib/utils";
 
@@ -168,12 +173,16 @@ const NoteRow = memo(function NoteRow({
   attachMenuRef,
 }: NoteRowProps) {
   const router = useRouter();
+  const {
+    navigateWithFeedback,
+    overlay: navigationOverlay,
+    isNavigating: isOpening,
+  } = useInstantNavigation();
   const sourceType = getEffectiveLectureSourceType(lecture);
   const dragRef = useRef<DashboardNoteDragState | null>(null);
   const cleanupDragListenersRef = useRef<(() => void) | null>(null);
   const suppressClickRef = useRef(false);
   const [dragState, setDragState] = useState<DashboardNoteDragState | null>(null);
-  const [isOpening, setIsOpening] = useState(false);
   const noteOffset = dragState?.offset ?? (isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0);
   const isSwipeActive = Boolean(dragState || isMenuOpen || noteOffset < 0);
 
@@ -184,10 +193,31 @@ const NoteRow = memo(function NoteRow({
     [],
   );
 
+  function openLecture() {
+    if (isOpening) {
+      return;
+    }
+
+    navigateWithFeedback(href);
+  }
+
   if (!useSwipeActions) {
     return (
       <div className={`ios-row-note-card ${isMenuOpen ? "menu-open" : ""}`}>
-        <InstantLink href={href} className="ios-row-note-card-link">
+        {navigationOverlay}
+        <InstantLink
+          href={href}
+          className="ios-row-note-card-link"
+          aria-busy={isOpening}
+          onClick={(event) => {
+            if (!shouldHandleLinkNavigation(event)) {
+              return;
+            }
+
+            event.preventDefault();
+            openLecture();
+          }}
+        >
           <div className="ios-row-icon" style={{ backgroundColor: "var(--surface-muted)" }}>
             <SourceIcon sourceType={sourceType} />
           </div>
@@ -312,6 +342,12 @@ const NoteRow = memo(function NoteRow({
 
     cleanupDragListenersRef.current?.();
 
+    // Warm the note route on touch-down so the skeleton has real content to
+    // swap in by the time the tap completes.
+    if (!isMenuOpen) {
+      safeRouterPrefetch(router, href);
+    }
+
     const nextDrag = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -346,11 +382,6 @@ const NoteRow = memo(function NoteRow({
     };
   }
 
-  function openLecture() {
-    setIsOpening(true);
-    router.push(href);
-  }
-
   function handleSurfaceClick(event: ReactMouseEvent<HTMLElement>) {
     if (suppressClickRef.current) {
       event.preventDefault();
@@ -377,6 +408,7 @@ const NoteRow = memo(function NoteRow({
         isMenuOpen ? "menu-open" : ""
       } ${isSwipeActive ? "is-swiping" : ""} ${dragState ? "is-dragging" : ""} ${isOpening ? "is-opening" : ""}`}
     >
+      {navigationOverlay}
       <div
         ref={isMenuOpen ? attachMenuRef : undefined}
         className="dashboard-note-actions"

@@ -8,12 +8,16 @@ import {
   useInstantNavigation,
 } from "@/components/navigation-loading";
 
-export function SupportArticleLink({
+export function SettingsLinkCard({
   href,
+  icon,
   title,
+  detail,
 }: {
   href: string;
+  icon: string;
   title: string;
+  detail?: string;
 }) {
   const { navigateWithFeedback, overlay, isNavigating } = useInstantNavigation();
 
@@ -21,8 +25,7 @@ export function SupportArticleLink({
     <>
       <Link
         href={href}
-        prefetch={false}
-        className="dashboard-link-card"
+        className="dashboard-link-card settings-link-card"
         aria-busy={isNavigating}
         onClick={(event) => {
           if (!shouldHandleLinkNavigation(event)) {
@@ -33,8 +36,14 @@ export function SupportArticleLink({
           navigateWithFeedback(href);
         }}
       >
-        <p className="dashboard-link-card-title">{title}</p>
-        <EmojiIcon className="ios-chevron" symbol="›" size="1.1rem" />
+        <span className="note-action-card-icon">
+          <EmojiIcon symbol={icon} size="1.2rem" />
+        </span>
+        <span className="note-action-card-copy">
+          <span className="note-action-card-label">{title}</span>
+          {detail ? <span className="note-action-card-detail">{detail}</span> : null}
+        </span>
+        <EmojiIcon className="note-action-card-chevron" symbol="›" size="1.1rem" />
       </Link>
 
       {overlay}

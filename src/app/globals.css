@@ -4633,7 +4633,9 @@ select:disabled {
   margin: 0 auto;
 }
 
-.navigation-loading-overlay .lecture-workspace {
+.navigation-loading-overlay .lecture-workspace,
+.navigation-loading-overlay .home-dashboard,
+.navigation-loading-overlay .app-loading-shell {
   width: min(100%, 900px);
   margin: 0 auto;
 }
@@ -4647,6 +4649,11 @@ select:disabled {
     width: 100%;
     max-width: 1320px;
   }
+}
+
+.settings-loading-card {
+  display: grid;
+  gap: 0.8rem;
 }
 
 .dashboard-toolbar {

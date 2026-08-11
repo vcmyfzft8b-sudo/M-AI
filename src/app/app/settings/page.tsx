@@ -3,31 +3,12 @@ import Link from "next/link";
 import { BillingPortalButton } from "@/components/billing-portal-button";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { LogoutForm } from "@/components/logout-form";
+import { SettingsLinkCard } from "@/components/settings-link-card";
 import { ThemeSettings } from "@/components/theme-settings";
 import { getViewerAppState } from "@/lib/billing";
 import { requireUser } from "@/lib/auth";
 import { BRAND_NAME } from "@/lib/brand";
 import { formatCalendarDate } from "@/lib/utils";
-
-function SettingsLinkCard(props: {
-  href: string;
-  icon: string;
-  title: string;
-  detail?: string;
-}) {
-  return (
-    <Link href={props.href} className="dashboard-link-card settings-link-card">
-      <span className="note-action-card-icon">
-        <EmojiIcon symbol={props.icon} size="1.2rem" />
-      </span>
-      <span className="note-action-card-copy">
-        <span className="note-action-card-label">{props.title}</span>
-        {props.detail ? <span className="note-action-card-detail">{props.detail}</span> : null}
-      </span>
-      <EmojiIcon className="note-action-card-chevron" symbol="›" size="1.1rem" />
-    </Link>
-  );
-}
 
 function SettingsExternalCard(props: {
   href: string;

@@ -14642,7 +14642,7 @@ select:disabled {
     gap: 0.5rem;
     min-height: 2.85rem;
     padding: 0 1.15rem;
-    border: 0;
+    border: 2px solid color-mix(in srgb, var(--label) 20%, transparent);
     border-radius: 999px;
     color: white;
     font-size: 0.94rem;

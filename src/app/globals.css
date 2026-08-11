@@ -13221,8 +13221,11 @@ select:disabled {
   }
 
   /* The ➕ is a colour emoji, so `color` has no effect — knock it to white so
-     it reads against the pill instead of staying dark. */
+     it reads against the pill instead of staying dark. The glyph also paints
+     high in its em box, so nudge it down to optically centre it. */
   .mobile-new-note-pill-icon {
+    position: relative;
+    top: 0.09em;
     filter: brightness(0) invert(1);
   }
 

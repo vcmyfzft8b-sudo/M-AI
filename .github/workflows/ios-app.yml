@@ -1,0 +1,62 @@
+name: iOS app
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-app.yml"
+  pull_request:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    # macOS runners bill at a higher rate than Linux ones, so the path filters above keep this
+    # job off every web-only change.
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Report toolchain
+        run: xcodebuild -version
+
+      - name: Pick a simulator
+        id: sim
+        # Runner images change their bundled devices between releases; resolve one at run time
+        # instead of pinning a name that will rot.
+        run: |
+          udid=$(xcrun simctl list devices available --json \
+            | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for v in d.values() for x in v if x['name'].startswith('iPhone')))")
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl list devices available | grep -m1 "$udid"
+
+      - name: Build and test
+        working-directory: ios
+        # No signing identity exists on a runner, and the simulator does not need one.
+        run: |
+          xcodebuild test \
+            -scheme MemoWeb \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcresult
+          path: ios/TestResults.xcresult
+          retention-days: 7

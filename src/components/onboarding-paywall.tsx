@@ -447,6 +447,7 @@ export function OnboardingPaywall({
   hasPaidAccess,
   subscriptionTrialEligible = true,
   plans,
+  allowPurchases = true,
 }: {
   profile: ProfileRow | null;
   subscription: BillingSubscriptionRow | null;
@@ -454,6 +455,13 @@ export function OnboardingPaywall({
   hasPaidAccess: boolean;
   subscriptionTrialEligible?: boolean;
   plans: BillingPlanCard[];
+  /**
+   * False inside the iOS app. App Store Guideline 3.1.1 requires digital content used in an
+   * app to be sold through In-App Purchase, so no purchase surface may appear there. Apple's
+   * anti-steering rules also mean not linking out to buy, hence a plain statement and a way
+   * onward rather than a "subscribe on our website" call to action.
+   */
+  allowPurchases?: boolean;
 }) {
   const router = useRouter();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
@@ -1256,86 +1264,102 @@ export function OnboardingPaywall({
         ))}
       </div>
 
-      <div className="memo-paywall-plan-grid" role="radiogroup" aria-label="Izberi paket">
-        {paywallPlans.map((plan) => {
-          const selected = selectedPaywallPlan === plan.id;
-          const activePlan = subscription?.plan === plan.id && hasPaidAccess;
-          const annualizedMonthly = monthlyPlan?.annualizedAmount ?? 0;
-          const yearlySavings = annualizedMonthly > plan.annualizedAmount
-            ? Math.round((1 - plan.annualizedAmount / annualizedMonthly) * 100)
-            : 0;
-          const displayPrice =
-            plan.id === "yearly"
-              ? `€${plan.displayAmount ?? plan.amount}`
-              : `€${plan.displayAmount ?? plan.amount}`;
-          const suffix = "/ mesec";
-          const detail =
-            plan.id === "yearly"
-              ? `Obračunano letno: €${plan.annualizedAmount}`
-              : "Obračunano mesečno";
+      {allowPurchases ? (
+        <>
+        <div className="memo-paywall-plan-grid" role="radiogroup" aria-label="Izberi paket">
+          {paywallPlans.map((plan) => {
+            const selected = selectedPaywallPlan === plan.id;
+            const activePlan = subscription?.plan === plan.id && hasPaidAccess;
+            const annualizedMonthly = monthlyPlan?.annualizedAmount ?? 0;
+            const yearlySavings = annualizedMonthly > plan.annualizedAmount
+              ? Math.round((1 - plan.annualizedAmount / annualizedMonthly) * 100)
+              : 0;
+            const displayPrice =
+              plan.id === "yearly"
+                ? `€${plan.displayAmount ?? plan.amount}`
+                : `€${plan.displayAmount ?? plan.amount}`;
+            const suffix = "/ mesec";
+            const detail =
+              plan.id === "yearly"
+                ? `Obračunano letno: €${plan.annualizedAmount}`
+                : "Obračunano mesečno";
 
-          return (
-            <button
-              type="button"
-              key={plan.id}
-              className={`memo-paywall-plan ${selected ? "selected" : ""}`}
-              onClick={() => setSelectedPaywallPlan(plan.id)}
-              role="radio"
-              aria-checked={selected}
-            >
-              {plan.id === "yearly" ? (
-                <span className="memo-paywall-plan-badge">Najbolj priljubljeno</span>
-              ) : null}
-              <span className="memo-paywall-plan-header">
-                <strong>{plan.label}</strong>
-                <span className="memo-paywall-radio" aria-hidden="true">
-                  {selected || activePlan ? <span /> : null}
+            return (
+              <button
+                type="button"
+                key={plan.id}
+                className={`memo-paywall-plan ${selected ? "selected" : ""}`}
+                onClick={() => setSelectedPaywallPlan(plan.id)}
+                role="radio"
+                aria-checked={selected}
+              >
+                {plan.id === "yearly" ? (
+                  <span className="memo-paywall-plan-badge">Najbolj priljubljeno</span>
+                ) : null}
+                <span className="memo-paywall-plan-header">
+                  <strong>{plan.label}</strong>
+                  <span className="memo-paywall-radio" aria-hidden="true">
+                    {selected || activePlan ? <span /> : null}
+                  </span>
                 </span>
-              </span>
-              <span className="memo-paywall-plan-price">
-                {displayPrice}
-                <small>{suffix}</small>
-              </span>
-              <span className="memo-paywall-plan-detail">{detail}</span>
-              {plan.id === "yearly" && yearlySavings > 0 ? (
-                <span className="memo-paywall-save">Prihrani {yearlySavings}%</span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
+                <span className="memo-paywall-plan-price">
+                  {displayPrice}
+                  <small>{suffix}</small>
+                </span>
+                <span className="memo-paywall-plan-detail">{detail}</span>
+                {plan.id === "yearly" && yearlySavings > 0 ? (
+                  <span className="memo-paywall-save">Prihrani {yearlySavings}%</span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
 
-      <p className="memo-paywall-due">
-        <CircleCheck className="h-5 w-5" />
-        {subscriptionTrialEligible ? "Danes brez plačila" : "Varno plačilo prek Stripe"}
-      </p>
-
-      <button
-        type="button"
-        className={`memo-paywall-cta ${checkoutPlan === selectedPaywallPlan ? "loading" : ""}`}
-        onClick={() => startCheckout(selectedPaywallPlan)}
-        disabled={checkoutPlan !== null || (subscription?.plan === selectedPaywallPlan && hasPaidAccess)}
-      >
-        {checkoutPlan === selectedPaywallPlan ? (
-          <Loader2 className="memo-paywall-cta-spinner animate-spin" />
-        ) : null}
-        {checkoutPlan === selectedPaywallPlan ? null : (
-          <span className="memo-paywall-cta-label">
-            {subscription?.plan === selectedPaywallPlan && hasPaidAccess
-              ? "Trenutni paket"
-              : subscriptionTrialEligible
-                ? "Začni 3-dnevni brezplačni preizkus"
-                : "Nadaljuj na plačilo"}
-          </span>
-        )}
-      </button>
-
-      <div className="memo-paywall-foot">
-        <span>
+        <p className="memo-paywall-due">
           <CircleCheck className="h-5 w-5" />
-          Prekliči kadarkoli
-        </span>
-      </div>
+          {subscriptionTrialEligible ? "Danes brez plačila" : "Varno plačilo prek Stripe"}
+        </p>
+
+        <button
+          type="button"
+          className={`memo-paywall-cta ${checkoutPlan === selectedPaywallPlan ? "loading" : ""}`}
+          onClick={() => startCheckout(selectedPaywallPlan)}
+          disabled={checkoutPlan !== null || (subscription?.plan === selectedPaywallPlan && hasPaidAccess)}
+        >
+          {checkoutPlan === selectedPaywallPlan ? (
+            <Loader2 className="memo-paywall-cta-spinner animate-spin" />
+          ) : null}
+          {checkoutPlan === selectedPaywallPlan ? null : (
+            <span className="memo-paywall-cta-label">
+              {subscription?.plan === selectedPaywallPlan && hasPaidAccess
+                ? "Trenutni paket"
+                : subscriptionTrialEligible
+                  ? "Začni 3-dnevni brezplačni preizkus"
+                  : "Nadaljuj na plačilo"}
+            </span>
+          )}
+        </button>
+
+        <div className="memo-paywall-foot">
+          <span>
+            <CircleCheck className="h-5 w-5" />
+            Prekliči kadarkoli
+          </span>
+        </div>
+        </>
+      ) : (
+        <div className="memo-paywall-native-notice">
+          <p>Nakup naročnine v aplikaciji ni na voljo.</p>
+          <p>Če naročnino že imaš, se prijavi z istim računom.</p>
+          <button
+            type="button"
+            className="memo-paywall-cta"
+            onClick={() => navigateWithFeedback("/app")}
+          >
+            <span className="memo-paywall-cta-label">Nadaljuj</span>
+          </button>
+        </div>
+      )}
     </section>
   );
 }

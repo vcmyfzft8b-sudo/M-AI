@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { BillingPortalButton } from "@/components/billing-portal-button";
+import { DeleteAccountCard } from "@/components/delete-account-card";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { LogoutForm } from "@/components/logout-form";
 import { SettingsLinkCard } from "@/components/settings-link-card";
@@ -93,6 +94,8 @@ export default async function SettingsPage() {
 
           <LogoutForm />
         </div>
+
+        <DeleteAccountCard />
 
         <div className="note-action-grid">
           <SettingsLinkCard

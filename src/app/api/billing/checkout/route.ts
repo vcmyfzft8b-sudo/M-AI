@@ -12,6 +12,7 @@ import {
   hasStripeSubscriptionHistory,
   PURCHASABLE_BILLING_PLAN_IDS,
 } from "@/lib/billing";
+import { isNativeAppFetchRequest } from "@/lib/native-app";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
 
@@ -20,6 +21,16 @@ const checkoutSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  // App Store Guideline 3.1.1: digital content used inside an iOS app must be sold through
+  // In-App Purchase. The app hides every purchase surface, and this is the backstop — a
+  // client-side check alone would leave the endpoint reachable from the web view.
+  if (isNativeAppFetchRequest(request)) {
+    return NextResponse.json(
+      { error: "Nakup ni na voljo v aplikaciji." },
+      { status: 403 },
+    );
+  }
+
   const appState = await getViewerAppState();
 
   if (!appState) {

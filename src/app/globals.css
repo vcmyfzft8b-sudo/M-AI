@@ -718,6 +718,26 @@ a:visited {
   white-space: nowrap;
 }
 
+.memo-paywall-native-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: center;
+  padding: 0.5rem 0 0;
+}
+
+.memo-paywall-native-notice p {
+  margin: 0;
+  color: var(--memo-paywall-muted, rgba(255, 255, 255, 0.72));
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.memo-paywall-native-notice .memo-paywall-cta {
+  margin-top: 0.75rem;
+}
+
 .memo-paywall-foot {
   width: min(100%, 31rem);
   gap: 1.2rem;
@@ -14735,4 +14755,109 @@ select:disabled {
   .lecture-notes-card .note-read-content {
     padding-bottom: 3.4rem;
   }
+}
+
+.settings-danger-card .note-action-card-label {
+  color: var(--danger, #d93025);
+}
+
+.settings-danger-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.15rem;
+}
+
+.settings-danger-panel h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: var(--danger, #d93025);
+}
+
+.settings-danger-panel p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-secondary, rgba(60, 60, 67, 0.72));
+}
+
+.settings-danger-panel label {
+  font-size: 0.85rem;
+  color: var(--text-secondary, rgba(60, 60, 67, 0.72));
+}
+
+.settings-danger-panel input {
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--separator-strong, rgba(60, 60, 67, 0.22));
+  background: var(--surface-solid, #fff);
+  color: inherit;
+  font: inherit;
+  letter-spacing: 0.06em;
+}
+
+.settings-danger-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+}
+
+.settings-danger-actions button {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--separator-strong, rgba(60, 60, 67, 0.22));
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+}
+
+.settings-danger-actions .settings-danger-confirm {
+  border-color: transparent;
+  background: var(--danger, #d93025);
+  color: #fff;
+}
+
+.settings-danger-actions button:disabled {
+  opacity: 0.5;
+}
+
+.landing-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+  max-width: 22rem;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.landing-auth-form label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary, rgba(60, 60, 67, 0.72));
+}
+
+.landing-auth-form input {
+  padding: 0.8rem 0.9rem;
+  margin-bottom: 0.4rem;
+  border-radius: 12px;
+  border: 1px solid var(--separator-strong, rgba(60, 60, 67, 0.22));
+  background: var(--surface-solid, #fff);
+  color: inherit;
+  font: inherit;
+}
+
+.landing-auth-submit {
+  margin-top: 0.6rem;
+  padding: 0.9rem 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tint, #0b57d0);
+  color: #fff;
+  font: inherit;
+  font-weight: 650;
 }

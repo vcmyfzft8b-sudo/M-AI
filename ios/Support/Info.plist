@@ -89,6 +89,10 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Memo potrebuje dostop do fotografij, da lahko naložiš slike zapiskov in dokumentov.</string>
 
+	<!-- Lock Screen / Dynamic Island recording activity. -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>

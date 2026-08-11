@@ -6,15 +6,28 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		1A000000000000000000002F /* RecordingActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000002E /* RecordingActivityAttributes.swift */; };
+		1A0000000000000000000030 /* RecordingActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000002E /* RecordingActivityAttributes.swift */; };
+		1A0000000000000000000032 /* RecordingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000033 /* RecordingSession.swift */; };
+		1A0000000000000000000034 /* RecordingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000033 /* RecordingSession.swift */; };
+		1A000000000000000000002A /* MemoWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000021 /* MemoWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		1A0000000000000000000005 /* MemoWeb.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MemoWeb.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A0000000000000000000011 /* MemoWebTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MemoWebTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A0000000000000000000021 /* MemoWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MemoWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A000000000000000000001C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		1A0000000000000000000031 /* MemoWidgets-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "MemoWidgets-Info.plist"; sourceTree = "<group>"; };
+		1A000000000000000000002E /* RecordingActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingActivityAttributes.swift; sourceTree = "<group>"; };
+		1A0000000000000000000033 /* RecordingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingSession.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		1A0000000000000000000009 /* MemoWeb */ = {isa = PBXFileSystemSynchronizedRootGroup; path = MemoWeb; sourceTree = "<group>"; };
 		1A0000000000000000000015 /* MemoWebTests */ = {isa = PBXFileSystemSynchronizedRootGroup; path = MemoWebTests; sourceTree = "<group>"; };
+		1A0000000000000000000025 /* MemoWidgets */ = {isa = PBXFileSystemSynchronizedRootGroup; path = MemoWidgets; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -32,14 +45,37 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		1A0000000000000000000023 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		1A0000000000000000000029 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				1A000000000000000000002A /* MemoWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXGroup section */
 		1A0000000000000000000002 = {
 			isa = PBXGroup;
 			children = (
 				1A0000000000000000000009 /* MemoWeb */,
+				1A0000000000000000000025 /* MemoWidgets */,
 				1A0000000000000000000015 /* MemoWebTests */,
+				1A000000000000000000002D /* Shared */,
 				1A000000000000000000001B /* Support */,
 				1A0000000000000000000003 /* Products */,
 			);
@@ -49,6 +85,7 @@
 			isa = PBXGroup;
 			children = (
 				1A0000000000000000000005 /* MemoWeb.app */,
+				1A0000000000000000000021 /* MemoWidgets.appex */,
 				1A0000000000000000000011 /* MemoWebTests.xctest */,
 			);
 			name = Products;
@@ -58,8 +95,18 @@
 			isa = PBXGroup;
 			children = (
 				1A000000000000000000001C /* Info.plist */,
+				1A0000000000000000000031 /* MemoWidgets-Info.plist */,
 			);
 			path = Support;
+			sourceTree = "<group>";
+		};
+		1A000000000000000000002D /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				1A000000000000000000002E /* RecordingActivityAttributes.swift */,
+				1A0000000000000000000033 /* RecordingSession.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -72,10 +119,12 @@
 				1A0000000000000000000006 /* Sources */,
 				1A0000000000000000000008 /* Frameworks */,
 				1A0000000000000000000007 /* Resources */,
+				1A0000000000000000000029 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				1A000000000000000000002B /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				1A0000000000000000000009 /* MemoWeb */,
@@ -105,6 +154,26 @@
 			productName = MemoWebTests;
 			productReference = 1A0000000000000000000011 /* MemoWebTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		1A0000000000000000000020 /* MemoWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A0000000000000000000026 /* Build configuration list for PBXNativeTarget "MemoWidgets" */;
+			buildPhases = (
+				1A0000000000000000000022 /* Sources */,
+				1A0000000000000000000023 /* Frameworks */,
+				1A0000000000000000000024 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				1A0000000000000000000025 /* MemoWidgets */,
+			);
+			name = MemoWidgets;
+			productName = MemoWidgets;
+			productReference = 1A0000000000000000000021 /* MemoWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -141,6 +210,7 @@
 			projectRoot = "";
 			targets = (
 				1A0000000000000000000004 /* MemoWeb */,
+				1A0000000000000000000020 /* MemoWidgets */,
 				1A0000000000000000000010 /* MemoWebTests */,
 			);
 		};
@@ -161,6 +231,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		1A0000000000000000000024 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -168,6 +245,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1A000000000000000000002F /* RecordingActivityAttributes.swift in Sources */,
+				1A0000000000000000000032 /* RecordingSession.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -175,6 +254,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A0000000000000000000022 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A0000000000000000000030 /* RecordingActivityAttributes.swift in Sources */,
+				1A0000000000000000000034 /* RecordingSession.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -186,6 +274,11 @@
 			target = 1A0000000000000000000004 /* MemoWeb */;
 			targetProxy = 1A000000000000000000001A /* PBXContainerItemProxy */;
 		};
+		1A000000000000000000002B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1A0000000000000000000020 /* MemoWidgets */;
+			targetProxy = 1A000000000000000000002C /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin PBXContainerItemProxy section */
@@ -195,6 +288,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 1A0000000000000000000004;
 			remoteInfo = MemoWeb;
+		};
+		1A000000000000000000002C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1A0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1A0000000000000000000020;
+			remoteInfo = MemoWidgets;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -248,7 +348,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -302,7 +402,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -353,6 +453,52 @@
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.memoai.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		1A0000000000000000000027 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Support/MemoWidgets-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.memoai.app.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		1A0000000000000000000028 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Support/MemoWidgets-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.memoai.app.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -409,6 +555,15 @@
 			buildConfigurations = (
 				1A000000000000000000000E /* Debug */,
 				1A000000000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1A0000000000000000000026 /* Build configuration list for PBXNativeTarget "MemoWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A0000000000000000000027 /* Debug */,
+				1A0000000000000000000028 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

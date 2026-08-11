@@ -19,6 +19,7 @@ final class WebViewController: UIViewController {
     private let progressView = UIProgressView(progressViewStyle: .bar)
     private let refreshControl = UIRefreshControl()
 
+    private let recordingActivity = RecordingActivityController()
     private var observations: [NSKeyValueObservation] = []
     private var statusBarStyle: UIStatusBarStyle = .default
     private var hasCommittedContent = false
@@ -203,6 +204,11 @@ final class WebViewController: UIViewController {
             webView.observe(\.underPageBackgroundColor, options: [.new, .initial]) { [weak self] webView, _ in
                 self?.applyPageBackground(webView.underPageBackgroundColor)
             },
+            // The page's own getUserMedia track is the source of truth for whether a recording is
+            // running, so the Lock Screen activity needs no cooperation from the web app.
+            webView.observe(\.microphoneCaptureState, options: [.new]) { [weak self] webView, _ in
+                self?.applyMicrophoneState(webView.microphoneCaptureState)
+            },
         ]
     }
 
@@ -218,6 +224,21 @@ final class WebViewController: UIViewController {
         guard style != statusBarStyle else { return }
         statusBarStyle = style
         setNeedsStatusBarAppearanceUpdate()
+    }
+
+    private func applyMicrophoneState(_ state: WKMediaCaptureState) {
+        log.notice("Microphone capture state: \(String(describing: state), privacy: .public)")
+
+        switch state {
+        case .active:
+            recordingActivity.captureStarted()
+        case .muted:
+            recordingActivity.capturePaused()
+        case .none:
+            recordingActivity.captureStopped()
+        @unknown default:
+            recordingActivity.captureStopped()
+        }
     }
 
     private func updateProgress(_ progress: Double, isLoading: Bool) {

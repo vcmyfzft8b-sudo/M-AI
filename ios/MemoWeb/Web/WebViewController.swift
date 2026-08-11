@@ -140,12 +140,20 @@ final class WebViewController: UIViewController {
     private func installWebView() {
         view.addSubview(webView)
 
-        // Pinned to the safe area rather than the full screen: the web app was designed for
-        // mobile Safari, where the page never sits under the notch or the home indicator. The
-        // exposed bands take the page's own background colour (see `underPageBackgroundColor`).
+        // Edge to edge at the bottom, inset below the status bar at the top.
+        //
+        // The bottom is deliberately not inset: the page's own CSS already pads for the home
+        // indicator with `env(safe-area-inset-bottom)` (which resolves for real only under
+        // `viewport-fit=cover`, guaranteed by `bridge.js`), so insetting here would double the
+        // padding and leave a dead band of background colour below the list.
+        //
+        // The top is inset because `.app-topbar` — unlike the landing and auth shells — has no
+        // `env(safe-area-inset-top)` handling, so an edge-to-edge top puts the brand mark
+        // underneath the clock. WebKit reports the web view's own safe-area insets to the page,
+        // so pinning here makes `env(safe-area-inset-top)` 0 and nothing double-pads.
         NSLayoutConstraint.activate([
             webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])

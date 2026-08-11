@@ -56,6 +56,42 @@
   document.documentElement.setAttribute("data-memo-native", "ios");
 
   /*
+   * The web view runs edge to edge, so the page must opt into `viewport-fit=cover` or
+   * `env(safe-area-inset-*)` stays 0 and content renders under the notch and the home indicator.
+   * The stylesheet already uses those variables in ~55 places; this just turns them on.
+   *
+   * Next injects its own viewport meta, so patch whichever tag exists and keep watching until
+   * the document is parsed in case ours is replaced.
+   */
+  function ensureViewportFitCover() {
+    var meta = document.querySelector('meta[name="viewport"]');
+
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.setAttribute("name", "viewport");
+      meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
+      (document.head || document.documentElement).appendChild(meta);
+      return;
+    }
+
+    var content = meta.getAttribute("content") || "";
+    if (content.indexOf("viewport-fit") === -1) {
+      meta.setAttribute("content", content + ", viewport-fit=cover");
+    }
+  }
+
+  ensureViewportFitCover();
+
+  if (typeof MutationObserver === "function") {
+    var observer = new MutationObserver(ensureViewportFitCover);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    document.addEventListener("DOMContentLoaded", function () {
+      ensureViewportFitCover();
+      observer.disconnect();
+    });
+  }
+
+  /*
    * Legal pages open in the browser, not in the app.
    *
    * The native navigation policy covers full page loads, but these links are Next.js <Link>

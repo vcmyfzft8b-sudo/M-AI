@@ -11,13 +11,23 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     ) {
         guard let windowScene = scene as? UIWindowScene else { return }
 
-        let root = WebViewController()
-        rootViewController = root
-
         let window = UIWindow(windowScene: windowScene)
-        window.rootViewController = root
-        window.makeKeyAndVisible()
         self.window = window
+        let root = installRoot(in: window)
+        window.makeKeyAndVisible()
+
+        #if DEBUG
+        // Switching servers has to rebuild the controller: the navigation policy and the allowed
+        // hosts are fixed when it is created.
+        NotificationCenter.default.addObserver(
+            forName: DebugEnvironment.didChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, let window = self.window else { return }
+            _ = self.installRoot(in: window)
+        }
+        #endif
 
         // A cold launch from a link: resolve before the first load so the deep link is the
         // initial navigation rather than a redirect after the home screen renders.
@@ -27,6 +37,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if let launchURL, let resolved = DeepLink.resolve(launchURL) {
             root.load(resolved)
         }
+    }
+
+    @discardableResult
+    private func installRoot(in window: UIWindow) -> WebViewController {
+        let root = WebViewController()
+        rootViewController = root
+        window.rootViewController = root
+        return root
     }
 
     /// `memo://` custom-scheme links while the app is already running.

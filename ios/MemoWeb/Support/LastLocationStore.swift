@@ -27,10 +27,14 @@ struct LastLocationStore {
         defaults.set(Date().timeIntervalSince1970, forKey: Key.savedAt)
     }
 
-    func restore(matching policy: NavigationPolicy) -> URL? {
+    /// - Parameter host: the host the app is currently pointed at. A location saved against a
+    ///   different one is discarded — otherwise repointing the build (at a dev server, a preview,
+    ///   or a renamed production domain) would resurrect the previous server on the next launch.
+    func restore(matching policy: NavigationPolicy, host: String) -> URL? {
         guard
             let raw = defaults.string(forKey: Key.url),
             let url = URL(string: raw),
+            url.host?.lowercased() == host.lowercased(),
             policy.isInAppHost(url)
         else { return nil }
 

@@ -6,14 +6,20 @@ import Foundation
 /// retargeted (for example at a Vercel preview) without touching code. Debug builds may also
 /// override it at runtime with the `-MemoBaseURL <url>` launch argument.
 enum AppConfig {
-    static let baseURL: URL = {
+    /// Computed rather than stored, so the Debug environment switcher can repoint a running app
+    /// without a rebuild.
+    static var baseURL: URL {
         #if DEBUG
-        if let override = UserDefaults.standard.string(forKey: "MemoBaseURL"),
-           let url = URL(string: override), url.scheme?.hasPrefix("http") == true {
-            return url
+        if let override = DebugEnvironment.current {
+            return override
         }
         #endif
 
+        return productionURL
+    }
+
+    /// The URL baked into this build, ignoring any Debug override.
+    static var productionURL: URL {
         guard
             let raw = Bundle.main.object(forInfoDictionaryKey: "MemoBaseURL") as? String,
             let url = URL(string: raw)
@@ -21,7 +27,7 @@ enum AppConfig {
             preconditionFailure("MemoBaseURL is missing or malformed in Info.plist")
         }
         return url
-    }()
+    }
 
     /// Custom scheme registered in `Info.plist`, used for `memo://` deep links.
     static let customScheme = "memo"

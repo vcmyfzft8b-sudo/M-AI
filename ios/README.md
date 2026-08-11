@@ -46,17 +46,49 @@ CI runs the same tests on every change under `ios/` — see
 `NavigationPolicy`, `NativeRouting` and `DeepLink` are deliberately free of UIKit so the rules
 that decide where a tap goes are unit tested rather than verified by hand in the simulator.
 
+## Working against local web code
+
+The app is a shell around a web app, so most iOS work needs a web app to point at — and waiting
+for a change to reach production is not a workflow. A Debug build can be pointed anywhere.
+
+Start the web server in the repo root, then:
+
+```bash
+ios/scripts/run-local.sh          # against http://localhost:3000
+ios/scripts/run-local.sh 3001     # another port
+ios/scripts/run-local.sh https://your-branch.vercel.app
+```
+
+It boots the simulator, builds, installs and launches against that server, and tails the log.
+
+**Or switch from inside the app: shake the device** (Simulator: Device ▸ Shake, or `⌃⌘Z`) for a
+sheet listing Production, the usual local ports, and Custom… for anything else. The choice
+persists across launches, so you can leave a build pointed at your dev server. A `-MemoBaseURL`
+launch argument outranks it, so a scripted run always lands where you asked.
+
+Three things make this work, all Debug-only or harmless in Release:
+
+- `NSAllowsLocalNetworking` in `Support/Info.plist` — without it ATS blocks cleartext to
+  `localhost` and, unhelpfully, WebKit reports no error at all.
+- `AppConfig.allowedDomains` always contains the current base URL's host, so the navigation
+  policy does not bounce your own dev server out to Safari.
+- The saved last-location is scoped to the host that saved it, so switching servers cannot
+  resurrect the previous one on next launch.
+
+Debug builds also allow `*.vercel.app` so a preview deployment renders in-app; Release does not.
+
+A physical device cannot reach the Mac on `localhost` — use the LAN address, which
+`run-local.sh` prints on start, via Custom…
+
+**Note that a native capability needs its web half deployed.** `getNativeRecorder()` returns
+`null` against a web build that predates it, and recording quietly falls back to `MediaRecorder`
+— which is correct behaviour, but it means testing native recording against production only
+works once the web change is live.
+
 ## Configuration
 
-The target URL lives in `Support/Info.plist` under `MemoBaseURL`. Debug builds can be pointed
-elsewhere without editing anything — add a launch argument in the scheme:
-
-```
--MemoBaseURL https://your-branch-preview.vercel.app
-```
-
-Debug builds also allow `*.vercel.app` in the navigation policy so a preview deployment renders
-in-app; Release builds do not.
+The shipping URL lives in `Support/Info.plist` under `MemoBaseURL`. That is the only place to
+change it for Release; everything above affects Debug only.
 
 ## Behaviour worth knowing
 

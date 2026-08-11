@@ -44,10 +44,83 @@ final class WebViewController: UIViewController {
         }
         NetworkMonitor.shared.start()
 
-        load(pendingURL ?? lastLocation.restore(matching: policy) ?? NativeRouting.startURL())
+        load(pendingURL ?? lastLocation.restore(matching: policy, host: AppConfig.productHost) ?? NativeRouting.startURL())
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { statusBarStyle }
+
+    #if DEBUG
+    // Shake to switch between production and a local dev server. Debug only — a shipping app
+    // must never be repointable.
+    override var canBecomeFirstResponder: Bool { true }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        becomeFirstResponder()
+    }
+
+    override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
+        guard motion == .motionShake else { return }
+        presentEnvironmentSwitcher()
+    }
+
+    private func presentEnvironmentSwitcher() {
+        guard presentedViewController == nil else { return }
+
+        let message = DebugEnvironment.isPinnedByLaunchArgument
+            ? "Pinned by the -MemoBaseURL launch argument.\nNow: \(AppConfig.baseURL.absoluteString)"
+            : "Now: \(AppConfig.baseURL.absoluteString)"
+
+        let sheet = UIAlertController(title: "Server", message: message, preferredStyle: .actionSheet)
+
+        for choice in DebugEnvironment.choices {
+            sheet.addAction(UIAlertAction(title: choice.title, style: .default) { _ in
+                DebugEnvironment.select(choice.url)
+            })
+        }
+
+        sheet.addAction(UIAlertAction(title: "Custom…", style: .default) { [weak self] _ in
+            self?.presentCustomEnvironmentPrompt()
+        })
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        // iPad and Mac Catalyst require an anchor; harmless on iPhone.
+        sheet.popoverPresentationController?.sourceView = view
+        sheet.popoverPresentationController?.sourceRect = CGRect(
+            x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0
+        )
+        present(sheet, animated: true)
+    }
+
+    private func presentCustomEnvironmentPrompt() {
+        let alert = UIAlertController(
+            title: "Custom server",
+            // A physical device cannot reach the Mac on `localhost`; it needs the LAN address,
+            // which `ios/scripts/run-local.sh` prints on start.
+            message: "e.g. http://192.168.1.20:3000 or a Vercel preview URL",
+            preferredStyle: .alert
+        )
+        alert.addTextField {
+            $0.placeholder = "http://localhost:3000"
+            $0.keyboardType = .URL
+            $0.autocapitalizationType = .none
+            $0.autocorrectionType = .no
+            $0.text = AppConfig.baseURL.absoluteString
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Use", style: .default) { [weak alert] _ in
+            guard
+                let raw = alert?.textFields?.first?.text?.trimmingCharacters(in: .whitespaces),
+                let url = URL(string: raw),
+                url.scheme?.hasPrefix("http") == true,
+                url.host != nil
+            else { return }
+
+            DebugEnvironment.select(url)
+        })
+        present(alert, animated: true)
+    }
+    #endif
 
     // MARK: - Public entry points
 
@@ -67,7 +140,7 @@ final class WebViewController: UIViewController {
 
         // A failed first load leaves the web view with no back-forward list to reload from.
         if webView.url == nil {
-            load(lastLocation.restore(matching: policy) ?? NativeRouting.startURL())
+            load(lastLocation.restore(matching: policy, host: AppConfig.productHost) ?? NativeRouting.startURL())
         } else {
             webView.reload()
         }

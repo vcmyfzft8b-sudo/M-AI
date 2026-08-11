@@ -439,15 +439,6 @@ export function AppShell({
                 <div className="app-topbar-subtitle">{chrome.subtitle}</div>
               </div>
 
-              {chrome.backHref ? (
-                <div className="ios-nav-actions">
-                  <InstantLink href={chrome.backHref} className="app-back-button">
-                    <ChevronLeft className="h-5 w-5" />
-                    Nazaj
-                  </InstantLink>
-                </div>
-              ) : null}
-
               {showSubscribeCta ? (
                 <div className="ios-nav-actions app-topbar-subscribe-actions">
                   <InstantLink href={subscribeHref} className="app-subscribe-cta" aria-label={subscribeLabel}>

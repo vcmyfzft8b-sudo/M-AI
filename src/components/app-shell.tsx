@@ -7,6 +7,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { InstantLink } from "@/components/instant-link";
+import {
+  shouldHandleLinkNavigation,
+  useInstantNavigation,
+} from "@/components/navigation-loading";
 import { BRAND_NAME } from "@/lib/brand";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 
@@ -76,6 +80,7 @@ export function AppShell({
 }) {
   const clientPathname = usePathname();
   const router = useRouter();
+  const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const [pathname, setPathname] = useState(initialPathname);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -87,6 +92,7 @@ export function AppShell({
   const mobileDockRef = useRef<HTMLElement | null>(null);
   const shouldHideNavigation = pathname === "/app/start";
   const chrome = getChrome(pathname);
+  const backHref = chrome.backHref;
   const isHomePage = pathname === "/app";
   const createHref = "/app?mode=record";
   const subscribeHref = "/app/start";
@@ -313,11 +319,20 @@ export function AppShell({
   function handleMobileDockToggle() {
     if (isMobileDockOpen) {
       setIsMobileDockOpen(false);
-      router.push(mobileDockToggleItem.href);
+      navigateWithFeedback(mobileDockToggleItem.href);
       return;
     }
 
     setIsMobileDockOpen((current) => !current);
+  }
+
+  function handleNavLinkClick(event: React.MouseEvent<HTMLAnchorElement>, href: string) {
+    if (!shouldHandleLinkNavigation(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    navigateWithFeedback(href);
   }
 
   function renderPullToRefreshIndicator() {
@@ -355,6 +370,7 @@ export function AppShell({
   if (shouldHideNavigation) {
     return (
       <div className="ios-app-shell">
+        {navigationOverlay}
         {renderPullToRefreshIndicator()}
         <div className="app-shell-pull-content" style={mobilePullContentStyle}>
           <main className="ios-content app-shell-content app-shell-content-start">{children}</main>
@@ -365,15 +381,24 @@ export function AppShell({
 
   return (
     <div className="ios-app-shell desktop-shell">
+      {navigationOverlay}
       {renderPullToRefreshIndicator()}
       <div className="desktop-brandline">
-        <InstantLink href="/app" className="desktop-brandline-brand">
+        <InstantLink
+          href="/app"
+          className="desktop-brandline-brand"
+          onClick={(event) => handleNavLinkClick(event, "/app")}
+        >
           <BrandLogo subtitle="" />
         </InstantLink>
 
         <div className="desktop-brandline-actions">
-          {chrome.backHref ? (
-            <InstantLink href={chrome.backHref} className="app-back-button desktop-brandline-back">
+          {backHref ? (
+            <InstantLink
+              href={backHref}
+              className="app-back-button desktop-brandline-back"
+              onClick={(event) => handleNavLinkClick(event, backHref)}
+            >
               <ChevronLeft className="h-5 w-5" />
               Nazaj
             </InstantLink>
@@ -390,12 +415,20 @@ export function AppShell({
 
       <aside className="desktop-sidebar">
         <div className="desktop-sidebar-inner">
-          <InstantLink href="/app" className="nota-sidebar-brand">
+          <InstantLink
+            href="/app"
+            className="nota-sidebar-brand"
+            onClick={(event) => handleNavLinkClick(event, "/app")}
+          >
             <BrandLogo />
           </InstantLink>
 
           {showCreateCta ? (
-            <InstantLink href={createHref} className="nota-sidebar-cta">
+            <InstantLink
+              href={createHref}
+              className="nota-sidebar-cta"
+              onClick={(event) => handleNavLinkClick(event, createHref)}
+            >
               <EmojiIcon symbol="➕" size="1rem" />
             Nov zapisek
             </InstantLink>
@@ -414,6 +447,7 @@ export function AppShell({
                   href={item.href}
                   className={`desktop-sidebar-link ${active ? "active" : ""}`}
                   aria-current={active ? "page" : undefined}
+                  onClick={(event) => handleNavLinkClick(event, item.href)}
                 >
                   <span className="desktop-sidebar-link-icon">
                     <EmojiIcon symbol={item.icon} size="1rem" />
@@ -430,7 +464,12 @@ export function AppShell({
         <div className="app-shell-pull-content" style={mobilePullContentStyle}>
           <header className="ios-nav app-topbar">
             <div className="ios-nav-inner app-topbar-inner">
-              <InstantLink href="/app" className="app-topbar-brand" aria-label={`Domov ${BRAND_NAME}`}>
+              <InstantLink
+                href="/app"
+                className="app-topbar-brand"
+                aria-label={`Domov ${BRAND_NAME}`}
+                onClick={(event) => handleNavLinkClick(event, "/app")}
+              >
                 <BrandLogo compact />
               </InstantLink>
 
@@ -450,7 +489,11 @@ export function AppShell({
 
               {showCreateCta ? (
                 <div className="ios-nav-actions app-topbar-actions">
-                  <InstantLink href={createHref} className="app-topbar-cta">
+                  <InstantLink
+                    href={createHref}
+                    className="app-topbar-cta"
+                    onClick={(event) => handleNavLinkClick(event, createHref)}
+                  >
                     <EmojiIcon symbol="➕" size="1rem" />
                     <span>Nov zapisek</span>
                   </InstantLink>
@@ -496,7 +539,7 @@ export function AppShell({
                 onClick={(event) => {
                   event.preventDefault();
                   setIsMobileDockOpen(false);
-                  router.push(item.href);
+                  navigateWithFeedback(item.href);
                 }}
               >
                 <span className="ios-tab-item-icon">

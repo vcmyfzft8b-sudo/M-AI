@@ -16,6 +16,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { EmojiIcon } from "@/components/emoji-icon";
+import { useInstantNavigation } from "@/components/navigation-loading";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -455,6 +456,7 @@ export function OnboardingPaywall({
   plans: BillingPlanCard[];
 }) {
   const router = useRouter();
+  const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const searchParams = useSearchParams();
   const [step, setStep] = useState(0);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -1195,12 +1197,13 @@ export function OnboardingPaywall({
 
   return (
     <section className="app-start-panel app-start-panel-paywall memo-paywall-shell">
+      {navigationOverlay}
       {effectiveOnboardingComplete ? (
         <div className="app-start-dismiss-row">
           <button
             type="button"
             className="app-start-close-button"
-            onClick={() => router.push("/app")}
+            onClick={() => navigateWithFeedback("/app")}
             aria-label="Zapri ponudbo naročnine"
           >
             <X className="h-5 w-5" />

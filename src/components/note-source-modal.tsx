@@ -24,6 +24,7 @@ import { EmojiIcon } from "@/components/emoji-icon";
 import { LiveAudioWave } from "@/components/live-audio-wave";
 import { ViewportPortal } from "@/components/viewport-portal";
 import { createAudioLectureWithProcessingChunks } from "@/lib/audio-lecture-upload";
+import { getNativeRecorder, type NativeRecorder } from "@/lib/native-recorder";
 import {
   AUDIO_FILE_INPUT_ACCEPT,
   DOCUMENT_FILE_INPUT_ACCEPT,
@@ -324,6 +325,7 @@ export function NoteSourceModal({
   const scanInputRef = useRef<HTMLInputElement | null>(null);
   const inlineTextAreaRef = useRef<HTMLTextAreaElement | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const nativeRecorderRef = useRef<NativeRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
@@ -624,7 +626,11 @@ export function NoteSourceModal({
   }, [deleteCreatedLecture]);
 
   useEffect(() => {
-    setRecordingSupported(typeof window !== "undefined" && "MediaRecorder" in window);
+    // The iOS app records natively, so it does not need MediaRecorder at all.
+    setRecordingSupported(
+      typeof window !== "undefined" &&
+        (Boolean(getNativeRecorder()) || "MediaRecorder" in window),
+    );
   }, []);
 
   useEffect(() => {
@@ -719,6 +725,38 @@ export function NoteSourceModal({
       return;
     }
 
+    // In the iOS app, record natively. MediaRecorder there stops the moment the screen locks or
+    // the user switches apps, which truncates the lecture without telling anyone.
+    const nativeRecorder = getNativeRecorder();
+
+    if (nativeRecorder) {
+      try {
+        await nativeRecorder.start();
+        nativeRecorderRef.current = nativeRecorder;
+        setIsRecording(true);
+        setIsPaused(false);
+        setElapsedSeconds(0);
+        elapsedRef.current = 0;
+        setError(null);
+        timerRef.current = window.setInterval(() => {
+          setElapsedSeconds((value) => {
+            const nextValue = value + 1;
+            elapsedRef.current = nextValue;
+            return nextValue;
+          });
+        }, 1000);
+      } catch (recordError) {
+        nativeRecorderRef.current = null;
+        setError(
+          recordError instanceof Error
+            ? recordError.message
+            : "Snemanja ni bilo mogoče začeti.",
+        );
+      }
+
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -788,6 +826,39 @@ export function NoteSourceModal({
   }
 
   const stopRecording = useCallback(async () => {
+    const nativeRecorder = nativeRecorderRef.current;
+
+    if (nativeRecorder) {
+      nativeRecorderRef.current = null;
+      setIsRecording(false);
+      setIsPaused(false);
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      try {
+        // Native hands back a File, so this rejoins exactly the path a browser recording takes.
+        const recording = await nativeRecorder.stop();
+        const file = await nativeRecorder.toFile(recording);
+
+        await replaceAudioSource({
+          file,
+          durationSeconds: recording.durationSeconds,
+          previewUrl: URL.createObjectURL(file),
+          origin: "recording",
+        });
+      } catch (stopError) {
+        setError(
+          stopError instanceof Error
+            ? stopError.message
+            : "Posnetka ni bilo mogoče shraniti.",
+        );
+      }
+
+      return;
+    }
+
     recorderRef.current?.stop();
     recorderRef.current = null;
     setIsRecording(false);
@@ -797,9 +868,21 @@ export function NoteSourceModal({
       window.clearInterval(timerRef.current);
       timerRef.current = null;
     }
-  }, []);
+  }, [replaceAudioSource]);
 
   const pauseRecording = useCallback(() => {
+    if (nativeRecorderRef.current) {
+      void nativeRecorderRef.current.pause();
+      setIsPaused(true);
+
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      return;
+    }
+
     if (!recorderRef.current || recorderRef.current.state !== "recording") {
       return;
     }
@@ -814,6 +897,23 @@ export function NoteSourceModal({
   }, []);
 
   const resumeRecording = useCallback(() => {
+    if (nativeRecorderRef.current) {
+      void nativeRecorderRef.current.resume();
+      setIsPaused(false);
+
+      if (!timerRef.current) {
+        timerRef.current = window.setInterval(() => {
+          setElapsedSeconds((value) => {
+            const nextValue = value + 1;
+            elapsedRef.current = nextValue;
+            return nextValue;
+          });
+        }, 1000);
+      }
+
+      return;
+    }
+
     if (!recorderRef.current || recorderRef.current.state !== "paused") {
       return;
     }

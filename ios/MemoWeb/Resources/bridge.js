@@ -22,6 +22,15 @@
     }
   }
 
+  /** Fire-and-wait counterpart to `post`, for the handlers that reply. */
+  function send(message) {
+    try {
+      return window.webkit.messageHandlers.memoRecorder.postMessage(message);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
   /**
    * Public surface for the web app. `window.MemoNative` existing at all is the signal that the
    * page is running inside the iOS shell, so web code can hide browser-only affordances such as
@@ -50,6 +59,55 @@
     /** Opens a URL outside the wrapper, in Safari. */
     openExternal: function (url) {
       post({ type: "openExternal", url: String(url) });
+    },
+
+    /**
+     * Native audio capture. Present only in the app, so web code can feature-detect it and fall
+     * back to MediaRecorder in a browser.
+     *
+     * Unlike MediaRecorder, this keeps recording when the screen locks or the user switches
+     * apps, and it drives the Lock Screen activity.
+     *
+     *   await MemoNative.recorder.start();
+     *   const result = await MemoNative.recorder.stop();
+     *   const file = await MemoNative.recorder.toFile(result);
+     */
+    recorder: {
+      start: function () {
+        return send({ action: "start" });
+      },
+      pause: function () {
+        return send({ action: "pause" });
+      },
+      resume: function () {
+        return send({ action: "resume" });
+      },
+      cancel: function () {
+        return send({ action: "cancel" });
+      },
+      state: function () {
+        return send({ action: "state" });
+      },
+      stop: function () {
+        return send({ action: "stop" });
+      },
+
+      /**
+       * Pulls the finished recording into the page as a File, then releases the native copy.
+       * The bytes come over a custom scheme rather than the message bridge, because a long
+       * lecture is tens of megabytes and base64 would inflate it by a third.
+       */
+      toFile: function (result) {
+        return fetch(result.url)
+          .then(function (response) {
+            return response.blob();
+          })
+          .then(function (blob) {
+            var file = new File([blob], result.fileName, { type: result.mimeType });
+            send({ action: "release", url: result.url });
+            return file;
+          });
+      },
     },
   });
 

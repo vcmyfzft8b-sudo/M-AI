@@ -20,6 +20,8 @@ final class WebViewController: UIViewController {
     private let refreshControl = UIRefreshControl()
 
     private let recordingActivity = RecordingActivityController()
+    private let recordingFiles = RecordingSchemeHandler()
+    private lazy var recordingBridge = RecordingBridge(files: recordingFiles, activity: recordingActivity)
     private var observations: [NSKeyValueObservation] = []
     private var statusBarStyle: UIStatusBarStyle = .default
     private var hasCommittedContent = false
@@ -76,10 +78,17 @@ final class WebViewController: UIViewController {
     private func makeWebView() -> WKWebView {
         let controller = WKUserContentController()
         controller.add(WeakScriptMessageHandler(target: self), name: "memoNative")
+        controller.addScriptMessageHandler(
+            recordingBridge,
+            contentWorld: .page,
+            name: RecordingBridge.messageName
+        )
         controller.addUserScript(makeBridgeScript())
 
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = controller
+        // Serves a finished native recording back to the page as a fetchable URL.
+        configuration.setURLSchemeHandler(recordingFiles, forURLScheme: RecordingSchemeHandler.scheme)
         // The default (persistent) store is what keeps the Supabase session cookie across launches.
         configuration.websiteDataStore = .default()
         configuration.applicationNameForUserAgent = AppConfig.userAgentApplicationName
@@ -204,11 +213,6 @@ final class WebViewController: UIViewController {
             webView.observe(\.underPageBackgroundColor, options: [.new, .initial]) { [weak self] webView, _ in
                 self?.applyPageBackground(webView.underPageBackgroundColor)
             },
-            // The page's own getUserMedia track is the source of truth for whether a recording is
-            // running, so the Lock Screen activity needs no cooperation from the web app.
-            webView.observe(\.microphoneCaptureState, options: [.new]) { [weak self] webView, _ in
-                self?.applyMicrophoneState(webView.microphoneCaptureState)
-            },
         ]
     }
 
@@ -224,21 +228,6 @@ final class WebViewController: UIViewController {
         guard style != statusBarStyle else { return }
         statusBarStyle = style
         setNeedsStatusBarAppearanceUpdate()
-    }
-
-    private func applyMicrophoneState(_ state: WKMediaCaptureState) {
-        log.notice("Microphone capture state: \(String(describing: state), privacy: .public)")
-
-        switch state {
-        case .active:
-            recordingActivity.captureStarted()
-        case .muted:
-            recordingActivity.capturePaused()
-        case .none:
-            recordingActivity.captureStopped()
-        @unknown default:
-            recordingActivity.captureStopped()
-        }
     }
 
     private func updateProgress(_ progress: Double, isLoading: Bool) {
@@ -371,6 +360,11 @@ extension WebViewController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         hasCommittedContent = true
         errorView.hide()
+
+        // A full page load means the recording UI that owned this capture is gone, so there is
+        // nobody left to stop it or collect the file. (An in-app route change is client side and
+        // does not land here, so an ongoing recording survives normal navigation.)
+        recordingBridge.cancelIfRunning()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

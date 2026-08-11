@@ -114,34 +114,55 @@ browser-only affordances.
 (`src/components/onboarding-paywall.tsx`) that makes no sense inside the app. Gating it on
 `data-memo-native` would remove a confusing step for every app user.
 
-## Lock Screen recording activity — built, but dormant
+## Native recording
+
+Recording is captured natively with `AVAudioRecorder`, not by the page. The web app's recording
+UI is untouched — same sheet, same controls, same timer — only the engine underneath is
+different, because `MediaRecorder` in a `WKWebView` stops the instant the web view stops being
+frontmost. Locking the phone or pressing Home truncated the lecture silently; measured before
+the change, a recording finalised at exactly the second the screen locked.
+
+The split is deliberate: **native owns capture, the web app owns everything else.** When
+recording stops, `RecordingSchemeHandler` serves the finished file over a custom
+`memo-recording://` scheme, the page fetches it into a `File`, and hands it to the same
+`replaceAudioSource` call a browser recording used. Lecture creation, the signed upload,
+billing and processing therefore have exactly one implementation, in the web app.
+
+Passing the bytes through the message bridge was the alternative and is not viable — an hour of
+audio is ~29 MB and base64 inflates it by a third before it reaches JS.
+
+Web code opts in by feature detection, so a browser is unaffected:
+
+```ts
+import { getNativeRecorder } from "@/lib/native-recorder";
+
+const recorder = getNativeRecorder();   // null outside the iOS app
+```
+
+Verified end to end against a local build of the web app: 85.0 s captured against 85.1 s of wall
+clock, across ~35 s with the screen locked, arriving in the page as a 716 KB `audio/mp4` File.
+
+`AudioCaptureController` also handles interruptions — a phone call or Siri pauses the recorder
+and resumes it afterwards, rather than leaving the UI claiming to record silence.
+
+## Lock Screen recording activity
 
 `MemoWidgets` is a WidgetKit app extension carrying the Live Activity ported from the archived
 native SwiftUI app (`~/Developer/memo-ios-archive`): the same Lock Screen card, Dynamic Island
 expanded / compact / minimal layouts, brand mark, wordmark and live timer.
 
-It needs no cooperation from the web app. `RecordingActivityController` observes
-`WKWebView.microphoneCaptureState`, which WebKit flips to `.active` the moment the page's
-`getUserMedia` track goes live — so the activity is driven off the real capture state rather
-than a bridge call the web app would have to make.
+It is driven by `AudioCaptureController` through `RecordingActivityController`, so it shows
+exactly what the recorder is doing — running, paused by a phone call, or stopped.
+`RecordingSession` keeps the pause/resume arithmetic in a pure value type so the timer is unit
+tested rather than eyeballed on a Lock Screen.
 
-**It cannot appear in production, and the reason is not the widget.** A Live Activity is only
-ever visible when the app is *not* frontmost — and, per the limitation above, that is the exact
-moment WebKit ends the microphone track. Capture stops, so the activity ends, in the same
-instant it would have become visible. The two events are ~0 ms apart.
+This only works because capture is native. Driving it from the page's `getUserMedia` track
+(`WKWebView.microphoneCaptureState`) was the first attempt and cannot work: a Live Activity is
+only visible while the app is *not* frontmost, and that is precisely when WebKit ends the web
+track — the activity would end in the same instant it became visible.
 
-The widget itself is verified good. `-MemoDebugKeepActivity 1` (Debug only) holds the activity
-open after capture ends, which is how it was confirmed rendering correctly on the Lock Screen
-with a live timer.
-
-**To make this work for real, recording has to become native.** Once an `AVAudioRecorder`-based
-capture path exists, point `RecordingActivityController` at it instead of at
-`microphoneCaptureState` and the activity works as it did in the native app — the timing logic,
-the widget, the target and the embedding are all already here and tested.
-
-Until then this is dead weight: an extra target, an iOS 16.2 deployment floor (`ActivityContent`
-requires it) and `NSSupportsLiveActivities` in the app's `Info.plist` for a feature no user will
-see. Removing it is one target and one folder if you would rather ship without it.
+`-MemoDebugKeepActivity 1` (Debug only) holds the activity open after capture ends, which is
+useful for inspecting the widget's rendering without recording for a minute first.
 
 ## Deep links
 
@@ -185,19 +206,9 @@ Then work through these, in order of how likely they are to cost you a rejection
 
 ## Known limitations
 
-- **Recording stops the moment the app leaves the foreground** — locking the screen *or* just
-  going to the Home screen. WebKit ends the `getUserMedia` track when the web view stops being
-  frontmost, so a long lecture is silently truncated. `UIBackgroundModes: audio` keeps
-  text-to-speech playing but does not fix capture. Measured in the simulator against production:
-
-  ```
-  13:28:00  microphoneCaptureState = .active   ← recording started
-  13:28:07  microphoneCaptureState = .none     ← Home pressed; capture over
-  ```
-
-  The web app already works around this — the record sheet offers "save the recording and
-  upload it here later". The only real fix is native capture (`AVAudioRecorder`) with a bridge
-  handing the finished file to the upload flow. **This also blocks the Live Activity below.**
+- **A recording is tied to the app staying installed and not force-quit.** Native capture
+  survives locking and backgrounding, but a force-quit ends it and the partial file in `tmp` is
+  not recovered on next launch. Long lectures would benefit from resumable state.
 - **Google sign-in depends on Google's tolerance of web views.** It works today — verified in
   the simulator against production, no `disallowed_useragent` error — because the user agent is
   Safari-shaped. Google's policy discourages embedded web views and they have tightened it

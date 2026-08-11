@@ -93,6 +93,18 @@
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 
+	<!--
+		Permits cleartext to local hostnames only, so a Debug build can be pointed at a dev
+		server with `-MemoBaseURL http://localhost:3000`. Without it ATS blocks the load and
+		WebKit reports no error at all, which is a miserable thing to debug. Internet traffic is
+		still held to full ATS.
+	-->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>

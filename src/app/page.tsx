@@ -1,14 +1,20 @@
 import type { Metadata } from "next";
-import type { CSSProperties } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { BrandLogo } from "@/components/brand-logo";
+import { LandingFaq } from "@/components/landing/landing-faq";
+import { LandingFeatureShowcase } from "@/components/landing/landing-feature-showcase";
+import { LandingFlowDemo } from "@/components/landing/landing-flow-demo";
+import { LandingNav } from "@/components/landing/landing-nav";
+import { MemoAppPreview } from "@/components/landing/memo-app-preview";
 import { LandingLoadingLink } from "@/components/landing-loading-link";
 import { LandingScrollReveal } from "@/components/landing-scroll-reveal";
-import { LandingStoryPreview } from "@/components/landing-story-preview";
 import { getOptionalUser } from "@/lib/auth";
 import {
+  BRAND_LOCKUP_HEIGHT,
+  BRAND_LOCKUP_SRC,
+  BRAND_LOCKUP_WIDTH,
   BRAND_NAME,
   BRAND_SUPPORT_EMAIL,
   BRAND_TAGLINE,
@@ -18,85 +24,7 @@ import {
 } from "@/lib/brand";
 import { hasPublicSupabaseEnv } from "@/lib/public-env";
 
-const WORKFLOW_STEPS = [
-  {
-    icon: "🎙️",
-    title: "1. Posnemi ali naloži",
-    detail: "Predavanja, PDF-je, dokumente, povezave in besedilo.",
-  },
-  {
-    icon: "📝",
-    title: "2. Dobi zapiske",
-    detail: "Urejeni zapiski in prepis so pripravljeni v istem prostoru.",
-  },
-  {
-    icon: "🧠",
-    title: "3. Ponavljaj snov",
-    detail: "Flashcardi, kvizi, testi in AI chat z zapiski.",
-  },
-] as const;
-
-const STUDY_EXAMPLES = [
-  {
-    label: "Flashcard",
-    title: "Kaj je aktivni transport?",
-    detail: "Premik snovi skozi membrano proti koncentracijskemu gradientu, zato porabi energijo.",
-    meta: "Pokaži odgovor",
-  },
-  {
-    label: "Kviz",
-    title: "Encimi najpogosteje delujejo kot ...",
-    detail: "Biološki katalizatorji, ki znižajo aktivacijsko energijo reakcije.",
-    meta: "Pravilno",
-  },
-  {
-    label: "Test",
-    title: "Primerjaj mitozo in mejozo.",
-    detail: "Odgovor naj razloži število delitev, nastale celice in genetsko raznolikost.",
-    meta: "Vaja za izpit",
-  },
-  {
-    label: "Klepet",
-    title: "Zakaj je to pomembno za izpit?",
-    detail: "Ker se isti pojmi pogosto pojavijo v nalogah razlage, primerjave in uporabe.",
-    meta: "Vprašaj gradivo",
-  },
-] as const;
-
-const FEATURE_CARDS = [
-  {
-    icon: "🎙️",
-    title: "Posnemi ali naloži",
-    detail: "Predavanja, PDF-je, dokumente, povezave in prilepljeno besedilo.",
-  },
-  {
-    icon: "🗒️",
-    title: "Dobi clean zapiske",
-    detail: "Urejeni zapiski in prepisi brez ročnega prepisovanja.",
-  },
-  {
-    icon: "🧠",
-    title: "Flashcardi",
-    detail: "Ključni pojmi se spremenijo v kartice za hitro ponavljanje.",
-  },
-  {
-    icon: "✅",
-    title: "Kvizi",
-    detail: "Preveri razumevanje z vprašanji iz svojega gradiva.",
-  },
-  {
-    icon: "🧪",
-    title: "Testi",
-    detail: "Vadi daljše odgovore in pripravo na preverjanje znanja.",
-  },
-  {
-    icon: "🎧",
-    title: "Poslušaj zapiske",
-    detail: "Aplikacija ti zapiske prebere na glas, da jih lahko ponavljaš tudi brez gledanja v ekran.",
-  },
-] as const;
-
-const HERO_PROOF_ITEMS = ["Prepisi", "Flashcardi", "Kvizi", "Testi", "AI chat"] as const;
+import "./landing.css";
 
 export const metadata: Metadata = {
   alternates: {
@@ -138,7 +66,7 @@ export default async function HomePage() {
   }
 
   return (
-    <main className="landing-shell landing-public-page">
+    <main className="landing-v2">
       <LandingScrollReveal />
       <script
         type="application/ld+json"
@@ -146,137 +74,93 @@ export default async function HomePage() {
           __html: JSON.stringify(HOMEPAGE_JSON_LD).replace(/</g, "\\u003c"),
         }}
       />
-      <header className="landing-public-nav">
-        <Link href="/" className="landing-public-brand" aria-label={`Domov ${BRAND_NAME}`}>
-          <BrandLogo subtitle="" priority />
-        </Link>
-        <nav className="landing-public-links" aria-label="Glavna navigacija">
-          <LandingLoadingLink href="/auth/continue" className="landing-public-nav-cta">
-            Preizkusi za 0 €
-          </LandingLoadingLink>
-        </nav>
-      </header>
 
-      <section className="landing-public-hero" aria-labelledby="landing-public-title">
-        <div className="landing-public-hero-inner">
-          <div className="landing-public-hero-copy">
-            <div className="landing-hero-proof" aria-label="Prednosti">
-              <div className="landing-hero-proof-track">
-                <div className="landing-hero-proof-group">
-                  {HERO_PROOF_ITEMS.map((item) => (
-                    <span key={item}>{item}</span>
-                  ))}
-                </div>
-                <div className="landing-hero-proof-group" aria-hidden="true">
-                  {HERO_PROOF_ITEMS.map((item) => (
-                    <span key={item}>{item}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <h1 id="landing-public-title">Nikoli več ne piši zapiskov!</h1>
-            <p>
-              Memo AI je tvoj AI notetaker za predavanja. Iz audio posnetkov,
-              PDF-jev, dokumentov in povezav pripravi zapiske, prepise,
-              flashcarde, kvize, teste in AI chat.
+      <LandingNav />
+
+      <section id="top" className="landing-v2-hero" aria-labelledby="landing-public-title">
+        <div className="landing-v2-hero-inner">
+          <div className="landing-v2-hero-copy">
+            <h1 id="landing-public-title" className="landing-v2-hero-title">
+              Nikoli več ne piši zapiskov!
+            </h1>
+            <p className="landing-v2-hero-lead">
+              Memo AI je tvoj AI notetaker za predavanja. Iz audio posnetkov, PDF-jev, dokumentov in
+              povezav pripravi zapiske, prepise, flashcarde, kvize, teste in AI chat.
             </p>
-            <div className="landing-public-actions">
-              <LandingLoadingLink href="/auth/continue" className="landing-public-cta primary">
+            <div className="landing-v2-hero-actions">
+              <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-light">
                 Preizkusi za 0 €
               </LandingLoadingLink>
-              <LandingLoadingLink href="/auth/continue" className="landing-public-cta secondary">
+              <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-dark">
                 Prijavi se
               </LandingLoadingLink>
             </div>
           </div>
-          <LandingStoryPreview />
+
+          <div className="landing-v2-hero-preview" aria-label={`Predogled aplikacije ${SEO_BRAND_NAME}`}>
+            <p className="landing-v2-try-callout">
+              Preizkusi kar tukaj{" "}
+              <span className="landing-v2-try-finger" aria-hidden="true">
+                👇
+              </span>
+            </p>
+            <MemoAppPreview />
+          </div>
         </div>
       </section>
 
-      <section className="landing-public-section" aria-labelledby="landing-workflow-title">
-        <div className="landing-public-section-heading" data-scroll-reveal>
-          <p className="landing-section-pill">Kako deluje</p>
-          <h2 id="landing-workflow-title">Memo vse poenostavi.</h2>
+      <section className="landing-v2-section" aria-labelledby="landing-workflow-title">
+        <div className="landing-v2-section-head" data-scroll-reveal="">
+          <h2 id="landing-workflow-title" className="landing-v2-section-title">
+            Memo AI vse poenostavi.
+          </h2>
+        </div>
+        <LandingFlowDemo />
+      </section>
+
+      <section className="landing-v2-section" aria-labelledby="landing-feature-title">
+        <div className="landing-v2-section-head" data-scroll-reveal="">
+          <h2 id="landing-feature-title" className="landing-v2-section-title">
+            Zajemi, uredi in se uči hitreje
+          </h2>
+        </div>
+        <LandingFeatureShowcase />
+      </section>
+
+      <section id="examples" className="landing-v2-section" aria-labelledby="landing-faq-title">
+        <div className="landing-v2-section-head" data-scroll-reveal="" style={{ marginBottom: "2.75rem" }}>
+          <h2 id="landing-faq-title" className="landing-v2-section-title">
+            Pogosta vprašanja
+          </h2>
         </div>
 
-        <div className="landing-workflow-grid">
-          {WORKFLOW_STEPS.map((step, index) => (
-            <article
-              key={step.title}
-              className="landing-workflow-item"
-              data-scroll-reveal
-              style={{ "--reveal-delay": `${index * 80}ms` } as CSSProperties}
-            >
-              <span className="landing-workflow-icon">{step.icon}</span>
-              <h3>{step.title}</h3>
-              <p>{step.detail}</p>
-            </article>
-          ))}
+        <LandingFaq />
+
+        <div className="landing-v2-final-cta" data-scroll-reveal="">
+          <h2>Naloži prvo predavanje.</h2>
+          <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-light">
+            Preizkusi za 0 €
+          </LandingLoadingLink>
+          <p className="landing-v2-final-cta-note">3 dni brezplačno</p>
         </div>
       </section>
 
-      <section className="landing-public-section landing-feature-section" aria-labelledby="landing-feature-title">
-        <div className="landing-public-section-heading" data-scroll-reveal>
-          <p className="landing-section-pill">Funkcije</p>
-          <h2 id="landing-feature-title">Zajemi, uredi in se uči hitreje</h2>
-        </div>
-
-        <div className="landing-feature-grid">
-          {FEATURE_CARDS.map((feature, index) => (
-            <article
-              key={feature.title}
-              className="landing-feature-large-card"
-              data-scroll-reveal
-              style={{ "--reveal-delay": `${index * 55}ms` } as CSSProperties}
-            >
-              <span className="landing-feature-large-icon">{feature.icon}</span>
-              <h3>{feature.title}</h3>
-              <p>{feature.detail}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="landing-public-section" id="examples" aria-labelledby="landing-examples-title">
-        <div className="landing-public-section-heading" data-scroll-reveal>
-          <p className="landing-section-pill">Učno gradivo</p>
-          <h2 id="landing-examples-title">Flashcardi, kvizi, testi in AI chat iz istega zapiska.</h2>
-        </div>
-
-        <div className="landing-example-grid">
-          {STUDY_EXAMPLES.map((example, index) => (
-            <article
-              key={example.label}
-              className="landing-example-card"
-              data-scroll-reveal
-              style={{ "--reveal-delay": `${index * 70}ms` } as CSSProperties}
-            >
-              <p className="landing-example-label">{example.label}</p>
-              <h3>{example.title}</h3>
-              <p>{example.detail}</p>
-              <span>{example.meta}</span>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <footer className="landing-public-footer">
-        <div className="landing-public-footer-top">
-          <div className="landing-public-footer-brand">
-            <BrandLogo subtitle="" />
+      <footer className="landing-v2-footer">
+        <div className="landing-v2-footer-top">
+          <div className="landing-v2-footer-brand">
+            <span className="landing-v2-lockup">
+              <Image
+                src={BRAND_LOCKUP_SRC}
+                alt={SEO_BRAND_NAME}
+                width={BRAND_LOCKUP_WIDTH}
+                height={BRAND_LOCKUP_HEIGHT}
+              />
+            </span>
             <p>{BRAND_TAGLINE}</p>
           </div>
 
-          <nav className="landing-public-footer-nav" aria-label="Noga">
-            <div className="landing-public-footer-group">
-              <h2>Produkt</h2>
-              <Link href="#examples">Primeri</Link>
-              <LandingLoadingLink href="/auth/continue" className="landing-public-footer-link">
-                Preizkusi za 0 €
-              </LandingLoadingLink>
-            </div>
-
-            <div className="landing-public-footer-group">
+          <nav className="landing-v2-footer-nav" aria-label="Noga">
+            <div className="landing-v2-footer-group">
               <h2>Podpora</h2>
               <a href={`mailto:${BRAND_SUPPORT_EMAIL}`}>{BRAND_SUPPORT_EMAIL}</a>
               <Link href="/legal/terms-of-use">Pogoji uporabe</Link>
@@ -285,11 +169,10 @@ export default async function HomePage() {
           </nav>
         </div>
 
-        <div className="landing-public-footer-bottom">
+        <div className="landing-v2-footer-bottom">
           <p>
             © {new Date().getFullYear()} {SEO_BRAND_NAME}
           </p>
-          <p>Narejeno v Sloveniji 🇸🇮</p>
         </div>
       </footer>
     </main>

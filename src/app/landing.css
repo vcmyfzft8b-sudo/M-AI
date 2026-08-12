@@ -1,0 +1,962 @@
+/* Landing page (public marketing site) — ported from the bundled design.
+   Tokens are scoped to .landing-v2 and follow the site theme:
+   data-theme="light"/"dark" wins, otherwise prefers-color-scheme. */
+
+.landing-v2 {
+  --l-page: #ebebef;
+  --l-canvas: #e9e9ed;
+  --l-nav: rgba(233, 233, 237, 0.88);
+  --l-surface: #ffffff;
+  --l-surface-76: rgba(255, 255, 255, 0.76);
+  --l-surface-62: rgba(255, 255, 255, 0.62);
+  --l-label: #000000;
+  --l-second: #86868b;
+  --l-line: rgba(0, 0, 0, 0.067);
+  --l-line-soft: rgba(0, 0, 0, 0.044);
+  --l-line-faint: rgba(0, 0, 0, 0.032);
+  --l-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  --l-tint: #0066cc;
+  --l-flow: #d9552f;
+  --l-flow-soft: rgba(217, 85, 47, 0.14);
+  --l-green: #34c759;
+  --l-red: #ff3b30;
+
+  /* Phone-preview (mockup) tokens */
+  --m-canvas: #e9e9ed;
+  --m-surface: #ffffff;
+  --m-muted: #f5f5f7;
+  --m-sheet: #ffffff;
+  --m-label: #000000;
+  --m-second: #86868b;
+  --m-third: #d2d2d7;
+  --m-sep: rgba(0, 0, 0, 0.08);
+  --m-sep-strong: rgba(0, 0, 0, 0.16);
+  --m-tint: #0066cc;
+  --m-tint-soft: rgba(0, 102, 204, 0.1);
+  --m-green: #34c759;
+  --m-green-soft: rgba(52, 199, 89, 0.12);
+  --m-red: #ff3b30;
+  --m-red-soft: rgba(255, 59, 48, 0.12);
+  --m-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  --m-nav: rgba(255, 255, 255, 0.72);
+  --m-card-grad: linear-gradient(180deg, #ffffff, #fafafb);
+  --m-hl-blue: rgba(88, 140, 255, 0.32);
+  --m-hl-orange: rgba(232, 132, 52, 0.4);
+  --m-hl-deep: rgba(226, 86, 32, 0.4);
+  --m-dock-toggle: rgba(255, 255, 255, 0.98);
+  --m-dock-toggle-color: #000000;
+  --m-tab-active: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.52));
+  --m-tab-active-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58), 0 12px 24px rgba(0, 0, 0, 0.1);
+  --m-action-card: #f7f7f9;
+  --m-card-border: rgba(0, 0, 0, 0.058);
+  --m-icon-surface: rgba(255, 255, 255, 0.92);
+  --m-callout: color-mix(in srgb, #fef3c7 44%, var(--m-surface));
+  --m-read-now: rgba(251, 146, 60, 0.85);
+  --phone-shadow: 0 18px 44px rgba(0, 0, 0, 0.16), 0 3px 8px rgba(0, 0, 0, 0.06),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+
+  min-height: 100vh;
+  margin: 0;
+  background: var(--l-page);
+  color: var(--l-label);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  box-sizing: border-box;
+}
+
+:root[data-theme="dark"] .landing-v2 {
+  --l-page: #030303;
+  --l-canvas: #000000;
+  --l-nav: rgba(0, 0, 0, 0.88);
+  --l-surface: #1c1c1e;
+  --l-surface-76: rgba(28, 28, 30, 0.76);
+  --l-surface-62: rgba(28, 28, 30, 0.62);
+  --l-label: #ffffff;
+  --l-second: #86868b;
+  --l-line: rgba(255, 255, 255, 0.105);
+  --l-line-soft: rgba(255, 255, 255, 0.082);
+  --l-line-faint: rgba(255, 255, 255, 0.06);
+  --l-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  --l-tint: #0a84ff;
+  --l-flow: #ff7d4d;
+  --l-flow-soft: rgba(255, 125, 77, 0.16);
+  --l-green: #32d74b;
+  --l-red: #ff453a;
+
+  --m-canvas: #000000;
+  --m-surface: #1c1c1e;
+  --m-muted: #2c2c2e;
+  --m-sheet: #1c1c1e;
+  --m-label: #ffffff;
+  --m-second: #86868b;
+  --m-third: #636366;
+  --m-sep: rgba(255, 255, 255, 0.15);
+  --m-sep-strong: rgba(255, 255, 255, 0.25);
+  --m-tint: #0a84ff;
+  --m-tint-soft: rgba(10, 132, 255, 0.15);
+  --m-green: #32d74b;
+  --m-green-soft: rgba(50, 215, 75, 0.15);
+  --m-red: #ff453a;
+  --m-red-soft: rgba(255, 69, 58, 0.15);
+  --m-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  --m-nav: rgba(28, 28, 30, 0.72);
+  --m-card-grad: linear-gradient(180deg, #1c1c1e, #232325);
+  --m-hl-blue: rgba(88, 140, 255, 0.42);
+  --m-hl-orange: rgba(232, 132, 52, 0.5);
+  --m-hl-deep: rgba(226, 86, 32, 0.55);
+  --m-dock-toggle: linear-gradient(135deg, #1b1b1f, #2a2a30);
+  --m-dock-toggle-color: #ffffff;
+  --m-tab-active: linear-gradient(180deg, rgba(54, 54, 58, 0.72), rgba(34, 34, 38, 0.66));
+  --m-tab-active-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 4px 12px rgba(0, 0, 0, 0.16);
+  --m-action-card: #2a2a2c;
+  --m-card-border: rgba(255, 255, 255, 0.108);
+  --m-icon-surface: rgba(28, 28, 30, 0.92);
+  --m-callout: color-mix(in srgb, #b45309 22%, var(--m-surface));
+  --m-read-now: #c2410c;
+  --phone-shadow: 0 1.6rem 4rem rgba(0, 0, 0, 0.42), 0 2px 6px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .landing-v2,
+  :root[data-theme="system"] .landing-v2 {
+    --l-page: #030303;
+    --l-canvas: #000000;
+    --l-nav: rgba(0, 0, 0, 0.88);
+    --l-surface: #1c1c1e;
+    --l-surface-76: rgba(28, 28, 30, 0.76);
+    --l-surface-62: rgba(28, 28, 30, 0.62);
+    --l-label: #ffffff;
+    --l-second: #86868b;
+    --l-line: rgba(255, 255, 255, 0.105);
+    --l-line-soft: rgba(255, 255, 255, 0.082);
+    --l-line-faint: rgba(255, 255, 255, 0.06);
+    --l-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    --l-tint: #0a84ff;
+    --l-flow: #ff7d4d;
+    --l-flow-soft: rgba(255, 125, 77, 0.16);
+    --l-green: #32d74b;
+    --l-red: #ff453a;
+
+    --m-canvas: #000000;
+    --m-surface: #1c1c1e;
+    --m-muted: #2c2c2e;
+    --m-sheet: #1c1c1e;
+    --m-label: #ffffff;
+    --m-second: #86868b;
+    --m-third: #636366;
+    --m-sep: rgba(255, 255, 255, 0.15);
+    --m-sep-strong: rgba(255, 255, 255, 0.25);
+    --m-tint: #0a84ff;
+    --m-tint-soft: rgba(10, 132, 255, 0.15);
+    --m-green: #32d74b;
+    --m-green-soft: rgba(50, 215, 75, 0.15);
+    --m-red: #ff453a;
+    --m-red-soft: rgba(255, 69, 58, 0.15);
+    --m-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    --m-nav: rgba(28, 28, 30, 0.72);
+    --m-card-grad: linear-gradient(180deg, #1c1c1e, #232325);
+    --m-hl-blue: rgba(88, 140, 255, 0.42);
+    --m-hl-orange: rgba(232, 132, 52, 0.5);
+    --m-hl-deep: rgba(226, 86, 32, 0.55);
+    --m-dock-toggle: linear-gradient(135deg, #1b1b1f, #2a2a30);
+    --m-dock-toggle-color: #ffffff;
+    --m-tab-active: linear-gradient(180deg, rgba(54, 54, 58, 0.72), rgba(34, 34, 38, 0.66));
+    --m-tab-active-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 4px 12px rgba(0, 0, 0, 0.16);
+    --m-action-card: #2a2a2c;
+    --m-card-border: rgba(255, 255, 255, 0.108);
+    --m-icon-surface: rgba(28, 28, 30, 0.92);
+    --m-callout: color-mix(in srgb, #b45309 22%, var(--m-surface));
+    --m-read-now: #c2410c;
+    --phone-shadow: 0 1.6rem 4rem rgba(0, 0, 0, 0.42), 0 2px 6px rgba(0, 0, 0, 0.28),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  }
+}
+
+.landing-v2 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ── Keyframes ─────────────────────────────────────────────── */
+@keyframes memo-node-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(10, 132, 255, 0.35); }
+  100% { box-shadow: 0 0 0 14px rgba(10, 132, 255, 0); }
+}
+@keyframes memo-card-nudge {
+  0%, 46% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  62% { transform: translate3d(34px, 0, 0) rotate(2.2deg); }
+  78%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+}
+@keyframes memo-card-peek {
+  0%, 8% { transform: rotateY(0deg); }
+  24% { transform: rotateY(-26deg); }
+  40%, 100% { transform: rotateY(0deg); }
+}
+@keyframes memo-note-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes memo-try-bob {
+  0%, 100% { transform: rotate(-1.5deg) translateY(0); }
+  50% { transform: rotate(-1.5deg) translateY(-5px); }
+}
+@keyframes memo-try-point {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(2.5px); }
+}
+@keyframes memo-fx-bar {
+  0%, 100% { transform: scaleY(0.22); }
+  50% { transform: scaleY(1); }
+}
+@keyframes memo-fx-write {
+  0%, 4% { clip-path: inset(0 100% 0 0); }
+  17%, 100% { clip-path: inset(0 0 0 0); }
+}
+@keyframes memo-fx-flip {
+  0%, 14% { transform: rotateY(0deg); }
+  28%, 50% { transform: rotateY(180deg); }
+  55%, 100% { transform: rotateY(0deg); }
+}
+@keyframes memo-fx-throw {
+  0%, 40% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); opacity: 1; }
+  42% { transform: translate3d(8%, -0.6%, 0) rotate(1.2deg) scale(1.015); opacity: 1; }
+  44% { transform: translate3d(26%, -1.2%, 0) rotate(3.2deg) scale(1.015); opacity: 1; }
+  46% { transform: translate3d(58%, -2%, 0) rotate(6deg) scale(1.008); opacity: 1; }
+  48% { transform: translate3d(104%, -2.8%, 0) rotate(9deg) scale(1); opacity: 0.6; }
+  50% { transform: translate3d(162%, -3.6%, 0) rotate(12deg) scale(0.98); opacity: 0; }
+  51%, 58% { transform: translate3d(0, 34px, 0) rotate(0deg) scale(0.9); opacity: 0; }
+  64% { transform: translate3d(0, 15px, 0) rotate(0deg) scale(0.95); opacity: 0.6; }
+  70% { transform: translate3d(0, 4px, 0) rotate(0deg) scale(0.99); opacity: 0.94; }
+  75%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); opacity: 1; }
+}
+@keyframes memo-fx-known {
+  0%, 36% { opacity: 0; }
+  39%, 47% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+@keyframes memo-fx-pick {
+  0%, 14% { background: var(--l-surface); border-color: var(--l-line); }
+  60%, 92% { background: rgba(50, 215, 75, 0.18); border-color: #32d74b; }
+  96%, 100% { background: var(--l-surface); border-color: rgba(255, 255, 255, 0.15); }
+}
+@keyframes memo-fx-type {
+  0%, 6% { width: 0ch; }
+  52%, 100% { width: 22.3ch; }
+}
+@keyframes memo-fx-fade {
+  0%, 55% { opacity: 0; }
+  70%, 92% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes memo-fx-read {
+  0%, 4% { background: transparent; color: var(--l-label); box-shadow: none; }
+  8%, 14% { background: rgba(251, 146, 60, 0.85); color: var(--l-label); box-shadow: 0 0 0 1.8px rgba(251, 146, 60, 0.36); }
+  20%, 88% { background: rgba(251, 146, 60, 0.22); color: var(--l-label); box-shadow: none; }
+  94%, 100% { background: transparent; color: var(--l-label); box-shadow: none; }
+}
+@keyframes memo-caret {
+  0%, 45% { opacity: 1; }
+  55%, 100% { opacity: 0; }
+}
+@keyframes memo-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes memo-tap-a {
+  0% { transform: translate3d(-50%, -50%, 0) scale(0.72); opacity: 0; }
+  25% { opacity: 0.5; }
+  100% { transform: translate3d(-50%, -50%, 0) scale(1.05); opacity: 0; }
+}
+@keyframes memo-tap-b {
+  0% { transform: translate3d(-50%, -50%, 0) scale(0.72); opacity: 0; }
+  25% { opacity: 0.5; }
+  100% { transform: translate3d(-50%, -50%, 0) scale(1.05); opacity: 0; }
+}
+@keyframes memo-sheet-in {
+  from { transform: translateY(18%); }
+  to { transform: translateY(0); }
+}
+
+[data-fx-still="true"] * {
+  animation: none !important;
+}
+
+[data-memo-app],
+[data-memo-app] * {
+  box-sizing: border-box;
+}
+
+/* ── Nav ───────────────────────────────────────────────────── */
+.landing-v2-nav {
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0;
+  transition: padding 560ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.landing-v2-nav.is-scrolled {
+  padding: 0.7rem 0;
+}
+
+.landing-v2-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 1.1rem clamp(1rem, 2.4vw, 2.2rem);
+  border-radius: 0;
+  border: 1px solid transparent;
+  background: var(--l-nav);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  will-change: max-width, padding, border-radius;
+  transition: max-width 560ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 560ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 460ms cubic-bezier(0.22, 1, 0.36, 1), background 340ms ease,
+    box-shadow 460ms ease, border-color 340ms ease;
+}
+
+.landing-v2-nav.is-scrolled .landing-v2-navbar {
+  max-width: min(1088px, calc(100vw - 36px));
+  padding: 0.5rem 0.6rem 0.5rem 1.15rem;
+  border-radius: 999px;
+  border-color: var(--l-line);
+  background: var(--l-surface-76);
+  box-shadow: var(--l-shadow), 0 18px 40px rgba(0, 0, 0, 0.14);
+}
+
+.landing-v2-brand {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  color: var(--l-label);
+}
+
+.landing-v2-lockup {
+  display: inline-flex;
+  height: clamp(2.35rem, 4.35vw, 3.45rem);
+  width: calc(clamp(2.35rem, 4.35vw, 3.45rem) * 480 / 148);
+}
+
+.landing-v2-lockup img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* ── Glossy pill CTAs ──────────────────────────────────────── */
+.landing-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.landing-cta-hero {
+  min-width: 12.5rem;
+  min-height: 3.65rem;
+  padding: 0 1.35rem;
+  font-size: 1.02rem;
+}
+
+.landing-cta-nav {
+  min-width: 8.4rem;
+  min-height: 2.75rem;
+  padding: 0 1.05rem;
+  font-size: 0.95rem;
+}
+
+.landing-v2 .landing-cta-light {
+  background: linear-gradient(180deg, #ffffff 0%, #fdfdfd 55%, #f2f2f4 100%);
+  color: #232326;
+  box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.9), inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    inset 0 -3px 5px rgba(0, 0, 0, 0.07), 0 0 5px rgba(255, 255, 255, 0.1),
+    0 10px 18px rgba(0, 0, 0, 0.45), 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+.landing-v2 .landing-cta-light:hover {
+  transform: translateY(-1px);
+  color: #232326;
+  box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.95), inset 0 0 0 1px rgba(255, 255, 255, 0.55),
+    inset 0 -3px 5px rgba(0, 0, 0, 0.07), 0 0 8px rgba(255, 255, 255, 0.14),
+    0 14px 24px rgba(0, 0, 0, 0.5), 0 4px 8px rgba(0, 0, 0, 0.34);
+}
+
+.landing-v2 .landing-cta-light:active {
+  transform: translateY(1.5px);
+  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.08), 0 5px 10px rgba(0, 0, 0, 0.4);
+}
+
+.landing-v2 .landing-cta-dark {
+  background: linear-gradient(180deg, #38383b 0%, #2c2c2f 55%, #232326 100%);
+  color: #f7f7f9;
+  box-shadow: inset 0 1.5px 1.5px rgba(255, 255, 255, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.09),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.5), 0 0 6px rgba(255, 255, 255, 0.07),
+    0 10px 18px rgba(0, 0, 0, 0.5), 0 3px 6px rgba(0, 0, 0, 0.34);
+}
+
+.landing-v2 .landing-cta-dark:hover {
+  transform: translateY(-1px);
+  color: #f7f7f9;
+  box-shadow: inset 0 1.5px 1.5px rgba(255, 255, 255, 0.26), inset 0 0 0 1px rgba(255, 255, 255, 0.11),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.5), 0 0 9px rgba(255, 255, 255, 0.09),
+    0 14px 24px rgba(0, 0, 0, 0.55), 0 4px 8px rgba(0, 0, 0, 0.38);
+}
+
+.landing-v2 .landing-cta-dark:active {
+  transform: translateY(1.5px);
+  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.5), 0 5px 10px rgba(0, 0, 0, 0.45);
+}
+
+.landing-cta .landing-loading-link-spinner {
+  width: 1rem;
+  height: 1rem;
+  animation: memo-spin 0.85s linear infinite;
+}
+
+/* ── Hero ──────────────────────────────────────────────────── */
+.landing-v2-hero {
+  position: relative;
+  display: grid;
+  min-height: 41rem;
+  overflow: hidden;
+}
+
+.landing-v2-hero-inner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  align-items: center;
+  justify-items: center;
+  gap: 3rem;
+  width: min(100%, 68rem);
+  min-height: inherit;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 3rem 1.25rem 5rem;
+}
+
+@media (max-width: 639px) {
+  .landing-v2-hero-inner {
+    padding: 2.6rem 1rem 3rem;
+  }
+}
+
+@media (min-width: 800px) {
+  .landing-v2-hero-inner {
+    grid-template-columns: minmax(0, 1fr) minmax(17rem, 21.5rem);
+    justify-items: stretch;
+    gap: 3.25rem;
+    padding: 2rem 1.25rem 5rem;
+  }
+}
+
+.landing-v2-hero-copy {
+  display: grid;
+  gap: 1.25rem;
+  align-content: center;
+}
+
+.landing-v2-hero-title {
+  margin: 0;
+  max-width: 36rem;
+  color: var(--l-label);
+  font-size: 4rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.03;
+  text-wrap: balance;
+}
+
+@media (max-width: 639px) {
+  .landing-v2-hero-title {
+    font-size: 3.1rem;
+  }
+}
+
+@media (min-width: 1100px) {
+  .landing-v2-hero-title {
+    font-size: 5rem;
+  }
+}
+
+.landing-v2-hero-lead {
+  margin: 0;
+  max-width: 35rem;
+  color: var(--l-second);
+  font-size: 1.15rem;
+  line-height: 1.65;
+}
+
+@media (max-width: 639px) {
+  .landing-v2-hero-lead {
+    font-size: 1rem;
+  }
+}
+
+.landing-v2-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 1.15rem;
+}
+
+.landing-v2-hero-preview {
+  position: relative;
+  display: grid;
+  align-items: center;
+  justify-items: stretch;
+  gap: 1.15rem;
+}
+
+.landing-v2-try-callout {
+  position: relative;
+  justify-self: center;
+  margin: 0 0 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1rem;
+  border: 2px solid var(--l-label);
+  border-radius: 999px;
+  background: var(--l-canvas);
+  box-shadow: 3px 3px 0 var(--l-label);
+  color: var(--l-label);
+  font-size: 0.88rem;
+  font-weight: 650;
+  white-space: nowrap;
+  transform: rotate(-1.5deg);
+  animation: memo-try-bob 2.4s ease-in-out infinite;
+}
+
+/* Reserve the phone's footprint before it is measured (it mirrors the scale
+   math in memo-app-preview.tsx), so revealing it causes no layout shift. */
+.landing-v2-phone-host {
+  min-height: min(calc(100vw * 0.68 * 2.13), calc(883px * 0.82));
+}
+
+/* Stacked hero: the phone sits flat on the page, so the drop shadow only
+   reads as a smudge. Keep the rim highlight, drop the cast shadow.
+   Selectors match the theme blocks' specificity and come later, so they win. */
+@media (max-width: 799px) {
+  :root .landing-v2,
+  :root[data-theme] .landing-v2 {
+    --phone-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  }
+}
+
+@media (min-width: 800px) {
+  .landing-v2-phone-host {
+    min-height: min(calc(883px * 0.82), calc(100vh - 250px));
+  }
+}
+
+.landing-v2-try-callout .landing-v2-try-finger {
+  display: inline-block;
+  font-size: 0.82rem;
+  animation: memo-try-point 1.2s ease-in-out infinite;
+}
+
+/* ── Sections ──────────────────────────────────────────────── */
+.landing-v2-section {
+  width: min(100%, 68rem);
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 5.5rem 1.25rem;
+}
+
+.landing-v2-section-head {
+  display: grid;
+  justify-items: start;
+  gap: 1.35rem;
+  margin-bottom: 3.25rem;
+  text-align: left;
+}
+
+.landing-v2-section-title {
+  margin: 0;
+  max-width: 48rem;
+  color: var(--l-label);
+  font-size: 4rem;
+  font-weight: 700;
+  line-height: 1.03;
+  text-wrap: balance;
+}
+
+@media (max-width: 639px) {
+  .landing-v2-section-title {
+    font-size: 2.45rem;
+  }
+}
+
+/* ── Flow demo ─────────────────────────────────────────────── */
+.landing-v2-flow-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2.2rem;
+}
+
+.landing-v2-flow-chip {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+  width: 6.6rem;
+  padding: 0.35rem;
+  color: var(--l-label);
+  text-align: center;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  /* Lets a touch drag carry the source instead of scrolling the page. */
+  touch-action: none;
+}
+
+.landing-v2-flow-chip-icon {
+  position: relative;
+  display: grid;
+  align-content: end;
+  justify-items: center;
+  width: 3.5rem;
+  height: 4.4rem;
+  padding: 0 0 0.5rem;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #fdfdfe 0%, #ececed 100%);
+  clip-path: polygon(0 0, 66% 0, 100% 24%, 100% 100%, 0 100%);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
+}
+
+.landing-v2-flow-chip-fold {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 34%;
+  height: 24%;
+  background: linear-gradient(135deg, #cfcfd3 0%, #b9b9bf 100%);
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+}
+
+.landing-v2-flow-chip-kind {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.landing-v2-flow-chip-name {
+  max-width: 100%;
+  padding: 0.1rem 0.35rem;
+  border-radius: 5px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--l-label);
+  overflow-wrap: anywhere;
+}
+
+.landing-v2-flow-chip-sub {
+  font-size: 0.72rem;
+  line-height: 1.2;
+  color: var(--l-second);
+}
+
+/* Phones: shrink the sources so all three sit in one row. */
+@media (max-width: 599px) {
+  .landing-v2-flow-chips {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .landing-v2-flow-chip {
+    width: 100%;
+    gap: 0.3rem;
+    padding: 0.2rem 0;
+  }
+
+  .landing-v2-flow-chip-icon {
+    width: 2.6rem;
+    height: 3.3rem;
+    padding: 0 0 0.35rem;
+  }
+
+  .landing-v2-flow-chip-kind {
+    font-size: 0.52rem;
+  }
+
+  .landing-v2-flow-chip-name {
+    padding: 0.1rem 0.2rem;
+    font-size: 0.7rem;
+  }
+
+  .landing-v2-flow-chip-sub {
+    font-size: 0.62rem;
+  }
+}
+
+.landing-v2-flow-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.45rem;
+}
+
+@media (min-width: 544px) {
+  .landing-v2-flow-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Two-column wrap: center the third step so the trio forms a triangle. */
+  .landing-v2-flow-grid > article:nth-of-type(3) {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: calc(50% - 0.725rem);
+  }
+}
+
+@media (min-width: 806px) {
+  .landing-v2-flow-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .landing-v2-flow-grid > article:nth-of-type(3) {
+    grid-column: auto;
+    justify-self: stretch;
+    width: auto;
+  }
+}
+
+.landing-v2-flow-fill {
+  position: absolute;
+  top: 0.44rem;
+  left: 16%;
+  height: 1px;
+  background: var(--l-flow);
+  transition: width 950ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* The connector line assumes all three nodes sit on one row. */
+@media (max-width: 805px) {
+  .landing-v2-flow-fill {
+    opacity: 0;
+  }
+}
+
+/* ── Feature showcase ──────────────────────────────────────── */
+.landing-v2-fx-layout {
+  --fx-scale: 1.05;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2rem;
+  align-items: stretch;
+}
+
+.landing-v2-fx-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 20rem;
+  align-self: stretch;
+  height: 100%;
+  padding: 1rem 0.75rem;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+/* Mobile / tablet: the demo plays inline under the feature it belongs to,
+   so it is visible without hunting for a stage further down the page. */
+.landing-v2-fx-inline {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 260ms ease;
+}
+
+.landing-v2-fx-inline[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.landing-v2-fx-inline-panel {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.landing-v2-fx-inline[data-open="true"] .landing-v2-fx-inline-panel {
+  padding: 1.6rem 0.5rem 2rem;
+}
+
+@media (min-width: 900px) {
+  .landing-v2-fx-layout {
+    --fx-scale: 1.22;
+    grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+    gap: 3.5rem;
+  }
+
+  .landing-v2-fx-stage {
+    min-height: 100%;
+    padding: 1.5rem;
+  }
+
+  .landing-v2-fx-inline {
+    display: none;
+  }
+}
+
+@media (max-width: 899px) {
+  .landing-v2-fx-stage {
+    display: none;
+  }
+}
+
+/* ── Final CTA ─────────────────────────────────────────────── */
+.landing-v2-final-cta {
+  display: grid;
+  justify-items: center;
+  gap: 1.4rem;
+  margin: 4rem auto 0;
+  padding: 0 1rem;
+  text-align: center;
+}
+
+.landing-v2-final-cta h2 {
+  margin: 0;
+  max-width: 24rem;
+  color: var(--l-label);
+  font-size: clamp(1.9rem, 3.6vw, 2.7rem);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.landing-v2-final-cta-note {
+  margin: 0;
+  color: var(--l-second);
+  font-size: 0.85rem;
+}
+
+/* ── Footer ────────────────────────────────────────────────── */
+.landing-v2-footer {
+  width: min(100%, 68rem);
+  margin: 2rem auto 0;
+  box-sizing: border-box;
+  padding: 0 1.25rem 2.5rem;
+}
+
+.landing-v2-footer-top {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 2.5rem;
+  padding: 2.75rem 0 2.25rem;
+  border-top: 1px solid var(--l-line-soft);
+}
+
+.landing-v2-footer-brand {
+  display: grid;
+  gap: 0.85rem;
+  align-content: start;
+  min-width: 0;
+}
+
+.landing-v2-footer-brand p {
+  max-width: 22rem;
+  margin: 0;
+  color: var(--l-second);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.landing-v2-footer-nav {
+  display: grid;
+  justify-items: end;
+  gap: 2rem;
+}
+
+/* Stacked footer: keep the support column aligned with the brand above it
+   instead of hanging off the right edge. */
+@media (max-width: 639px) {
+  .landing-v2-footer-top {
+    gap: 2rem;
+  }
+
+  .landing-v2-footer-nav {
+    justify-items: start;
+  }
+}
+
+.landing-v2-footer-group {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+  justify-items: start;
+  text-align: left;
+}
+
+.landing-v2-footer-group h2 {
+  justify-self: start;
+  margin: 0 0 0.15rem;
+  color: var(--l-label);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.landing-v2-footer-group a {
+  justify-self: start;
+  color: var(--l-second);
+  font-size: 0.92rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.landing-v2-footer-group a:hover {
+  color: var(--l-label);
+}
+
+.landing-v2-footer-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--l-line-faint);
+}
+
+.landing-v2-footer-bottom p {
+  margin: 0;
+  color: var(--l-second);
+  font-size: 0.82rem;
+}

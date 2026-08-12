@@ -1382,13 +1382,16 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
           background: "var(--m-muted)",
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={src}
-          alt=""
-          loading="lazy"
-          style={{ display: "block", width: "100%", height: "208px", objectFit: "contain", background: "#ffffff", pointerEvents: "none" }}
-        />
+        <span style={{ position: "relative", display: "block", width: "100%", height: "208px", background: "#ffffff" }}>
+          <Image
+            src={src}
+            alt=""
+            fill
+            loading="lazy"
+            sizes="400px"
+            style={{ objectFit: "contain", pointerEvents: "none" }}
+          />
+        </span>
         <figcaption
           style={{
             position: "absolute",
@@ -1444,28 +1447,28 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
 
         {themeKey === "is"
           ? figure(
-              "https://commons.wikimedia.org/wiki/Special:FilePath/Four-Level-Pyramid-model.png?width=900",
+              "/notes/is-pyramid.png",
               "https://commons.wikimedia.org/wiki/File:Four-Level-Pyramid-model.png",
               "Ravni informacijskih sistemov · Wikimedia Commons, CC BY-SA 3.0",
             )
           : null}
         {themeKey === "micro"
           ? figure(
-              "https://commons.wikimedia.org/wiki/Special:FilePath/Price%20elasticity%20of%20demand.svg?width=900",
+              "/notes/micro-elasticity.png",
               "https://commons.wikimedia.org/wiki/File:Price_elasticity_of_demand.svg",
               "Krivulji ponudbe in povpraševanja · Wikimedia Commons, CC BY-SA 3.0",
             )
           : null}
         {themeKey === "anatomy"
           ? figure(
-              "https://commons.wikimedia.org/wiki/Special:FilePath/Complete%20neuron%20cell%20diagram%20en.svg?width=900",
+              "/notes/anatomy-neuron.png",
               "https://commons.wikimedia.org/wiki/File:Complete_neuron_cell_diagram_en.svg",
               "Zgradba nevrona · Wikimedia Commons, javna last",
             )
           : null}
         {themeKey === "stats"
           ? figure(
-              "https://commons.wikimedia.org/wiki/Special:FilePath/P-value%20in%20statistical%20significance%20testing.svg?width=900",
+              "/notes/stats-p-value.png",
               "https://commons.wikimedia.org/wiki/File:P-value_in_statistical_significance_testing.svg",
               "P-vrednost pri testiranju značilnosti · Wikimedia Commons, CC BY-SA 4.0",
             )
@@ -1506,21 +1509,21 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
         <p style={{ margin: 0, fontSize: "16.96px", lineHeight: 1.82, color: "var(--m-label)" }}>{body.why}</p>
         {themeKey === "is"
           ? figure(
-              "https://commons.wikimedia.org/wiki/Special:FilePath/ERP%20modules.svg?width=900",
+              "/notes/is-erp-modules.png",
               "https://commons.wikimedia.org/wiki/File:ERP_modules.svg",
               "Moduli ERP · Wikimedia Commons, CC BY-SA 3.0",
             )
           : null}
         {themeKey === "micro"
           ? figure(
-              "https://commons.wikimedia.org/wiki/Special:FilePath/InelasticDemand.svg?width=900",
+              "/notes/micro-inelastic-demand.png",
               "https://commons.wikimedia.org/wiki/File:InelasticDemand.svg",
               "Neelastično povpraševanje · Wikimedia Commons, CC BY-SA 4.0",
             )
           : null}
         {themeKey === "stats"
           ? figure(
-              "https://commons.wikimedia.org/wiki/Special:FilePath/Normal%20Distribution%20Sigma.svg?width=900",
+              "/notes/stats-normal-distribution.png",
               "https://commons.wikimedia.org/wiki/File:Normal_Distribution_Sigma.svg",
               "Normalna porazdelitev in standardni odkloni · Wikimedia Commons, CC BY-SA 3.0",
             )

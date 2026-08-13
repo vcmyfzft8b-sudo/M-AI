@@ -19,7 +19,8 @@ const FLOW_SOURCES: FlowSource[] = [
     id: "audio",
     icon: "🎙️",
     kind: "mp3",
-    kindColor: "#e8663d",
+    // Deeper than the brand orange, which only reached 3:1 on the white chip.
+    kindColor: "#b4431d",
     label: "predavanje-4.mp3",
     sub: "Zvok · 48:12",
     noteTitle: "Predavanje IS – 4. teden",
@@ -117,6 +118,39 @@ const STATUS_BASE: CSSProperties = {
 
 const NOTE_IN = "memo-note-in 260ms cubic-bezier(0.22,1,0.36,1) both";
 
+/* Must track landing.css: the grid goes three-across at min-width 806px.
+   Below that the steps wrap, so they need the per-step scroll gating. */
+const STEPS_SIDE_BY_SIDE = 806;
+
+const STEP_THRESHOLDS = [0, 0.25, 0.5, 0.75, 1];
+
+/* How much of a step must be on screen before it animates. A card taller than
+   the viewport can never show a large fraction of itself, so the bar drops to
+   what that step can actually reach — otherwise the story waits on a ratio
+   that will never arrive and freezes. */
+function stepGate(el: Element): number {
+  const height = el.getBoundingClientRect().height;
+  if (height <= 0) return 0.5;
+  return Math.min(0.5, (window.innerHeight * 0.6) / height);
+}
+
+function visibleRatio(el: Element): number {
+  const rect = el.getBoundingClientRect();
+  if (rect.height <= 0) return 0;
+  const shown = Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0);
+  return Math.max(0, shown) / rect.height;
+}
+
+/* A step that has been on screen this long counts as read even if it never
+   cleared the gate. */
+const STEP_STALL_MS = 2500;
+
+/* Absolute backstop, timed from the moment the story starts. Whatever went
+   wrong — an observer that never reported, a scroll that outran it — the
+   remaining steps play rather than leaving the demo frozen half-finished,
+   which reads as a broken product. */
+const STEP_SAFETY_MS = 15_000;
+
 type FlowGhost = {
   icon: string;
   label: string;
@@ -200,21 +234,80 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
   private stepEls: Array<HTMLElement | null> = [];
   private stepObserver: IntersectionObserver | null = null;
   private stepVisible: Record<number, boolean> = {};
+  private stepOnScreen: Record<number, boolean> = {};
+  private stallTimer: number | undefined;
+  private safetyTimer: number | undefined;
+  private measureFrame: number | undefined;
   private advancing = false;
 
   componentDidMount() {
     this.setupFlow();
     this.setupStepObserver();
+    // Observers are a notification, not the source of truth — see measure().
+    window.addEventListener("scroll", this.onViewportChange, { passive: true });
+    window.addEventListener("resize", this.onViewportChange, { passive: true });
+    document.addEventListener("visibilitychange", this.onViewportChange);
+    this.measure();
   }
 
   componentWillUnmount() {
     this.clearFlowTimers();
     window.clearTimeout(this.studyTimer);
+    window.clearTimeout(this.stallTimer);
+    window.clearTimeout(this.safetyTimer);
+    window.clearTimeout(this.measureFrame);
     if (this.flowObserver) this.flowObserver.disconnect();
     if (this.stepObserver) this.stepObserver.disconnect();
+    window.removeEventListener("scroll", this.onViewportChange);
+    window.removeEventListener("resize", this.onViewportChange);
+    document.removeEventListener("visibilitychange", this.onViewportChange);
     window.removeEventListener("pointermove", this.onChipPointerMove);
     window.removeEventListener("pointerup", this.onChipPointerUp);
     window.removeEventListener("pointercancel", this.onChipPointerUp);
+  }
+
+  /* Throttled on a timer rather than requestAnimationFrame: frames stop on a
+     hidden page, which is one of the cases this fallback exists to cover. */
+  onViewportChange = () => {
+    if (this.measureFrame !== undefined) return;
+    this.measureFrame = window.setTimeout(() => {
+      this.measureFrame = undefined;
+      this.measure();
+    }, 120);
+  };
+
+  /* Measures the steps directly instead of trusting IntersectionObserver
+     entries. A backgrounded tab delivers no entries at all, and a fast scroll
+     can skip the ratios the gates want, either of which used to leave the
+     story stuck on step 1 for the rest of the visit. The observers and the
+     scroll listener now only say "look again"; this decides. */
+  measure() {
+    if (!this.isCompact()) {
+      this.maybeStart();
+      return;
+    }
+    this.stepEls.forEach((el) => {
+      if (!el) return;
+      const step = Number(el.getAttribute("data-flow-step"));
+      const ratio = visibleRatio(el);
+      this.stepOnScreen[step] = ratio > 0;
+      this.stepVisible[step] = ratio >= stepGate(el);
+    });
+    this.maybeAdvance();
+  }
+
+  /* Wide layouts play the whole timeline at once, so the trigger is the grid
+     rather than any single step. */
+  maybeStart() {
+    if (this.flowStarted || this.flowUserActed || !this.flowWrap) return;
+    const rect = this.flowWrap.getBoundingClientRect();
+    // A grid taller than the viewport can never reach full visibility.
+    const needed = rect.height > window.innerHeight * 0.9 ? 0.6 : 0.9;
+    if (visibleRatio(this.flowWrap) < needed) return;
+    this.flowStarted = true;
+    this.flowObserver?.disconnect();
+    this.flowObserver = null;
+    this.flowLater(() => this.autoFlow(), 400);
   }
 
   // Stacked layouts show one step at a time, so each step waits for its own
@@ -222,17 +315,9 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
   // are already finished by the time the user scrolls to them.
   setupStepObserver() {
     if (!this.isCompact() || !("IntersectionObserver" in window)) return;
-    this.stepObserver = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const step = Number(entry.target.getAttribute("data-flow-step"));
-          // Mostly on screen, so a step below the fold does not count as seen.
-          this.stepVisible[step] = entry.isIntersecting && entry.intersectionRatio >= 0.75;
-        });
-        this.maybeAdvance();
-      },
-      { threshold: [0.25, 0.5, 0.75, 0.9, 1] },
-    );
+    this.stepObserver = new IntersectionObserver(() => this.measure(), {
+      threshold: STEP_THRESHOLDS,
+    });
     this.stepEls.forEach((el) => el && this.stepObserver?.observe(el));
   }
 
@@ -241,11 +326,18 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
     const stage = this.state.flowStage;
     // Step 1 on screen: drop the file into the card and start the story.
     if (stage === 0 && this.stepVisible[1] && !this.flowStarted && !this.flowUserActed) {
+      this.clearStall();
       this.flowStarted = true;
+      this.armSafety();
       this.flowLater(() => this.autoFlow(), 400);
       return;
     }
+    if (stage === 0) {
+      this.armStall(1);
+      return;
+    }
     if (stage === 1 && this.stepVisible[2]) {
+      this.clearStall();
       this.advancing = true;
       [180, 620, 1040, 1400, 1720, 2020, 2320].forEach((ms, i) =>
         this.flowLater(() => this.setState({ noteStep: i + 1 }), ms),
@@ -256,9 +348,48 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
       }, 2480);
       return;
     }
-    if (stage === 2 && this.stepVisible[3]) {
-      this.flowLater(() => this.setState({ flowStage: 3 }), 400);
+    if (stage === 1) {
+      this.armStall(2);
+      return;
     }
+    if (stage === 2 && this.stepVisible[3]) {
+      this.clearStall();
+      this.flowLater(() => this.setState({ flowStage: 3 }), 400);
+      return;
+    }
+    if (stage === 2) this.armStall(3);
+  }
+
+  /* The gate above can miss — a step wider than it is tall, an observer that
+     stops reporting mid-scroll — and the story would then sit unfinished for
+     the rest of the visit. Once the step has been on screen for a while,
+     treat it as seen and carry on. */
+  armStall(step: number) {
+    if (this.stallTimer !== undefined || !this.stepOnScreen[step] || this.flowUserActed) return;
+    this.stallTimer = window.setTimeout(() => {
+      this.stallTimer = undefined;
+      if (!this.stepOnScreen[step]) return;
+      this.stepVisible[step] = true;
+      this.maybeAdvance();
+    }, STEP_STALL_MS);
+  }
+
+  clearStall() {
+    window.clearTimeout(this.stallTimer);
+    this.stallTimer = undefined;
+  }
+
+  /* Runs once the story has started. If it has not reached the end by then,
+     every remaining step is treated as seen and the timeline finishes on its
+     own — the visitor gets a complete demo instead of a frozen one. */
+  armSafety() {
+    if (this.safetyTimer !== undefined) return;
+    this.safetyTimer = window.setTimeout(() => {
+      this.safetyTimer = undefined;
+      if (this.flowUserActed || this.advancing || this.state.flowStage >= 3) return;
+      this.stepVisible = { 1: true, 2: true, 3: true };
+      this.maybeAdvance();
+    }, STEP_SAFETY_MS);
   }
 
   clearFlowTimers() {
@@ -270,11 +401,13 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
     this.flowTimers.push(window.setTimeout(fn, ms));
   }
 
-  // Below the two-column breakpoint the steps stack, so scrolling through the
-  // section would restart the story mid-read. There it plays once and stays on
-  // the finished state, ready to be used; desktop keeps looping.
+  // Below the three-across breakpoint the steps wrap onto separate rows, so a
+  // single timeline would animate steps the reader cannot see yet; there each
+  // step waits for its own card. Must stay in step with landing.css — while
+  // this read 900px, the 806–899px band drew all three side by side and still
+  // waited for a scroll that never came, freezing the story on step 1.
   isCompact() {
-    return typeof window !== "undefined" && window.innerWidth < 900;
+    return typeof window !== "undefined" && window.innerWidth < STEPS_SIDE_BY_SIDE;
   }
 
   setupFlow() {
@@ -285,21 +418,9 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
     }
     // The story plays once, and only after the steps are properly on screen —
     // never while they are half out of view, and never on a loop.
-    this.flowObserver = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (this.flowUserActed || this.flowStarted || !entry.isIntersecting) return;
-          // A grid taller than the viewport can never reach full visibility.
-          const needed = entry.boundingClientRect.height > window.innerHeight * 0.9 ? 0.6 : 0.9;
-          if (entry.intersectionRatio < needed) return;
-          this.flowStarted = true;
-          this.flowObserver?.disconnect();
-          this.flowObserver = null;
-          this.flowLater(() => this.autoFlow(), 400);
-        });
-      },
-      { threshold: [0.25, 0.5, 0.6, 0.75, 0.9, 1] },
-    );
+    this.flowObserver = new IntersectionObserver(() => this.maybeStart(), {
+      threshold: [0.25, 0.5, 0.6, 0.75, 0.9, 1],
+    });
     if (this.isCompact()) {
       this.flowObserver.disconnect();
       this.flowObserver = null;
@@ -340,7 +461,9 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
     });
     if (this.isCompact()) {
       this.advancing = false;
-      window.setTimeout(() => this.maybeAdvance(), 0);
+      // Re-measure rather than reuse: the reader may have scrolled on to the
+      // next step while the source was animating into the first one.
+      window.setTimeout(() => this.measure(), 0);
       return;
     }
     [180, 620, 1040, 1400, 1720, 2020, 2320].forEach((ms, i) =>
@@ -764,7 +887,9 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                 boxSizing: "border-box",
                 border: "1px solid var(--l-line)",
                 background: "var(--l-surface-62)",
-                opacity: 0.6,
+                // Recedes behind the live row without dropping its label text
+                // below the AA threshold, which 0.6 did.
+                opacity: 0.9,
               }}
             >
               <span
@@ -935,7 +1060,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                 textAlign: "left",
               }}
             >
-              <span style={{ fontSize: "10.6px", fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--l-second)" }}>
+              <span style={{ fontSize: "10.6px", fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--l-label)" }}>
                 Ključno
               </span>
               <span style={{ fontSize: "12.4px", lineHeight: 1.45, color: "var(--l-label)" }}>

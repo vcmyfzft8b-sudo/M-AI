@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Inter_Tight } from "next/font/google";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -7,6 +8,8 @@ import { LandingFaq } from "@/components/landing/landing-faq";
 import { LandingFeatureShowcase } from "@/components/landing/landing-feature-showcase";
 import { LandingFlowDemo } from "@/components/landing/landing-flow-demo";
 import { LandingNav } from "@/components/landing/landing-nav";
+import { LandingTryCallout } from "@/components/landing/landing-try-callout";
+import { LandingUserCount } from "@/components/landing/landing-user-count";
 import { MemoAppPreview } from "@/components/landing/memo-app-preview";
 import { LandingLoadingLink } from "@/components/landing-loading-link";
 import { LandingScrollReveal } from "@/components/landing-scroll-reveal";
@@ -25,6 +28,17 @@ import {
 import { hasPublicSupabaseEnv } from "@/lib/public-env";
 
 import "./landing.css";
+
+const interTight = Inter_Tight({
+  subsets: ["latin", "latin-ext"], // latin-ext carries č/š/ž
+  display: "swap",
+  variable: "--font-inter-tight",
+});
+
+/* Photos of real Memo AI users, used with their permission. Anyone replacing
+   these needs the same: consent from the person shown, not a stock or
+   generated face — the banner presents them as actual users. */
+const HERO_AVATARS = ["/avatars/student-1.jpg", "/avatars/student-3.jpg", "/avatars/student-2.jpg"];
 
 export const metadata: Metadata = {
   alternates: {
@@ -66,7 +80,7 @@ export default async function HomePage() {
   }
 
   return (
-    <main className="landing-v2">
+    <main className={`landing-v2 ${interTight.variable}`}>
       <LandingScrollReveal />
       <script
         type="application/ld+json"
@@ -80,6 +94,16 @@ export default async function HomePage() {
       <section id="top" className="landing-v2-hero" aria-labelledby="landing-public-title">
         <div className="landing-v2-hero-inner">
           <div className="landing-v2-hero-copy">
+            <p className="landing-v2-hero-banner">
+              {/* Decorative: the count beside them carries the meaning, so
+                  screen readers get the sentence and skip the portraits. */}
+              <span className="landing-v2-hero-banner-avatars" aria-hidden="true">
+                {HERO_AVATARS.map((src) => (
+                  <Image key={src} src={src} alt="" width={56} height={56} />
+                ))}
+              </span>
+              <LandingUserCount />
+            </p>
             <h1 id="landing-public-title" className="landing-v2-hero-title">
               Nikoli več ne piši zapiskov!
             </h1>
@@ -98,19 +122,14 @@ export default async function HomePage() {
           </div>
 
           <div className="landing-v2-hero-preview" aria-label={`Predogled aplikacije ${SEO_BRAND_NAME}`}>
-            <p className="landing-v2-try-callout">
-              Preizkusi kar tukaj{" "}
-              <span className="landing-v2-try-finger" aria-hidden="true">
-                👇
-              </span>
-            </p>
+            <LandingTryCallout />
             <MemoAppPreview />
           </div>
         </div>
       </section>
 
       <section className="landing-v2-section" aria-labelledby="landing-workflow-title">
-        <div className="landing-v2-section-head" data-scroll-reveal="">
+        <div className="landing-v2-section-head landing-v2-section-head-center" data-scroll-reveal="">
           <h2 id="landing-workflow-title" className="landing-v2-section-title">
             Memo AI vse poenostavi.
           </h2>
@@ -138,10 +157,19 @@ export default async function HomePage() {
 
         <div className="landing-v2-final-cta" data-scroll-reveal="">
           <h2>Naloži prvo predavanje.</h2>
+          <p className="landing-v2-final-cta-lead">
+            Uro dolgo predavanje je obdelano v nekaj minutah – prepis, zapiski, flashcarde in kviz
+            nastanejo skupaj.
+          </p>
           <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-light">
             Preizkusi za 0 €
           </LandingLoadingLink>
-          <p className="landing-v2-final-cta-note">3 dni brezplačno</p>
+          <p className="landing-v2-final-cta-note">3 dni brezplačno · plačaš šele, če nadaljuješ</p>
+          <ul className="landing-v2-final-cta-points">
+            <li>Deluje v slovenščini</li>
+            <li>Zvok, PDF, dokumenti in povezave</li>
+            <li>Posnetki ostanejo tvoji</li>
+          </ul>
         </div>
       </section>
 

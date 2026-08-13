@@ -515,13 +515,13 @@ export function LandingFeatureShowcase() {
                 >
                   {feature.title}
                 </span>
+                {/* The title's colour already marks the active row; dimming
+                    this line as well pushed it under 3:1 against the page. */}
                 <span
                   style={{
                     color: "var(--l-second)",
                     fontSize: "0.9rem",
                     lineHeight: 1.45,
-                    opacity: on ? 1 : 0.6,
-                    transition: "opacity 260ms ease",
                   }}
                 >
                   {feature.desc}

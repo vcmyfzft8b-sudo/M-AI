@@ -10,6 +10,8 @@ import { Component } from "react";
 
 import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, SEO_BRAND_NAME } from "@/lib/brand";
 
+import { PREVIEW_STOP_TOUR_EVENT, PREVIEW_TOUR_STOPPED_EVENT } from "./memo-app-preview-events";
+
 import {
   completionAction,
   completionBadge,
@@ -111,6 +113,20 @@ type PreviewState = {
   sourceVariant: number;
   language: string;
 };
+
+/* Eased rather than linear, and fully clear ~26px before the element ends, so
+   rows dissolve into the screen instead of meeting the bezel at a hard edge.
+   The stops are in the mockup's own (unscaled) pixel space. */
+const APP_MAIN_FEATHER = [
+  "linear-gradient(to bottom",
+  "transparent 0",
+  "#000 18px",
+  "#000 calc(100% - 172px)",
+  "rgba(0, 0, 0, 0.78) calc(100% - 128px)",
+  "rgba(0, 0, 0, 0.4) calc(100% - 86px)",
+  "rgba(0, 0, 0, 0.12) calc(100% - 52px)",
+  "transparent calc(100% - 26px))",
+].join(", ");
 
 const SHEET_BACKDROP: CSSProperties = {
   position: "absolute",
@@ -313,10 +329,16 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
   private resizeObserver: ResizeObserver | null = null;
   private viewObserver: IntersectionObserver | null = null;
   private tourStarted = false;
+  private tourDismissed = false;
   private onResize: (() => void) | null = null;
+  private onStopRequest: (() => void) | null = null;
 
   componentDidMount() {
     this.measure();
+    // The hero callout sits outside this component, so it asks for the
+    // handover by event rather than by reaching into the instance.
+    this.onStopRequest = () => this.dismissTour();
+    window.addEventListener(PREVIEW_STOP_TOUR_EVENT, this.onStopRequest);
     // Start the guided tour only once the mockup is actually in view —
     // on mobile it sits below the fold, so it should not play unseen.
     if (this.mount && typeof IntersectionObserver !== "undefined") {
@@ -356,6 +378,23 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
     this.viewObserver?.disconnect();
     this.resizeObserver?.disconnect();
     if (this.onResize) window.removeEventListener("resize", this.onResize);
+    if (this.onStopRequest) window.removeEventListener(PREVIEW_STOP_TOUR_EVENT, this.onStopRequest);
+  }
+
+  /* Hand the mockup over to the visitor. Safe to call before the tour has
+     started (it sits behind an IntersectionObserver): the tour is then
+     cancelled outright rather than stopped after the fact. */
+  dismissTour() {
+    if (this.tourDismissed) return;
+    this.tourDismissed = true;
+    this.tourStarted = true;
+    this.viewObserver?.disconnect();
+    this.viewObserver = null;
+    if (this.stopTour) {
+      this.stopTour();
+    } else {
+      window.dispatchEvent(new Event(PREVIEW_TOUR_STOPPED_EVENT));
+    }
   }
 
   measure() {
@@ -386,13 +425,14 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
   }
 
   startAutoTour() {
-    if (this.props.autoTour === false || !this.mount) return;
+    if (this.props.autoTour === false || !this.mount || this.tourDismissed) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     this.touring = true;
     this.tourTimers = [];
     this.stopTour = () => {
       if (!this.touring) return;
       this.touring = false;
+      this.tourDismissed = true;
       this.tourTimers.forEach((id) => window.clearTimeout(id));
       this.tourTimers = [];
       if (this.cardTourRaf) {
@@ -414,6 +454,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
         readPaused: c.reading || c.readPaused,
         reading: false,
       }));
+      window.dispatchEvent(new Event(PREVIEW_TOUR_STOPPED_EVENT));
     };
     (["pointerdown", "wheel", "keydown", "touchstart"] as const).forEach((type) =>
       this.mount?.addEventListener(type, this.stopTour as EventListener, { passive: true }),
@@ -3533,7 +3574,18 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                   </span>
                 </header>
 
-                <div data-app-main style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: "9.6px 15.2px 130px" }}>
+                <div
+                  data-app-main
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    overflowY: "auto",
+                    overflowX: "hidden",
+                    padding: "9.6px 15.2px 130px",
+                    maskImage: APP_MAIN_FEATHER,
+                    WebkitMaskImage: APP_MAIN_FEATHER,
+                  }}
+                >
                   {s.screen === "home" ? this.renderHome(filtered) : null}
                   {s.screen === "note" ? this.renderNote() : null}
                   {s.screen === "support" ? this.renderSupport() : null}

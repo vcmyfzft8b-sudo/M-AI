@@ -10,6 +10,15 @@ import {
 import { z } from "zod";
 
 import { isRetryableAiError } from "@/lib/ai/errors";
+import {
+  GeminiTruncatedOutputError,
+  buildStructuredRetryInstruction,
+  isTruncatedFinishReason,
+  parseStructuredText,
+  resolveStructuredMaxOutputTokens,
+  stripCodeFences,
+  toErrorMessage,
+} from "@/lib/ai/structured-output";
 import { logGeminiUsageEvent, type GeminiUsageContext } from "@/lib/ai/usage-logging";
 import { requireGeminiEnv } from "@/lib/server-env";
 
@@ -28,51 +37,6 @@ export class GeminiEmptyTextOutputError extends Error {
     super("Model returned empty text output.");
     this.name = "GeminiEmptyTextOutputError";
   }
-}
-
-function stripCodeFences(value: string) {
-  return value.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-}
-
-function extractJsonPayload(value: string) {
-  const stripped = stripCodeFences(value);
-  const objectStart = stripped.indexOf("{");
-  const arrayStart = stripped.indexOf("[");
-  const candidateStarts = [objectStart, arrayStart].filter((index) => index >= 0);
-
-  if (candidateStarts.length === 0) {
-    return stripped;
-  }
-
-  const start = Math.min(...candidateStarts);
-  const openingChar = stripped[start];
-  const closingChar = openingChar === "[" ? "]" : "}";
-  const end = stripped.lastIndexOf(closingChar);
-
-  if (end <= start) {
-    return stripped.slice(start).trim();
-  }
-
-  return stripped.slice(start, end + 1).trim();
-}
-
-function parseStructuredText<TSchema extends z.ZodTypeAny>(schema: TSchema, text: string) {
-  return schema.parse(JSON.parse(extractJsonPayload(text)));
-}
-
-function toErrorMessage(error: unknown) {
-  if (error instanceof z.ZodError) {
-    return error.issues
-      .slice(0, 3)
-      .map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`)
-      .join("; ");
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return String(error);
 }
 
 function isGeminiSchemaTooComplexError(error: unknown) {
@@ -104,7 +68,7 @@ function getStructuredGenerationRetryDelayMs(error: unknown, attempt: number) {
     return getRetryableAiDelayMs(attempt);
   }
 
-  if (isStructuredOutputError(error)) {
+  if (error instanceof GeminiTruncatedOutputError || isStructuredOutputError(error)) {
     return Math.round((GEMINI_RETRY_BASE_DELAY_MS / 3) * (attempt + 1));
   }
 
@@ -216,17 +180,14 @@ export async function generateStructuredObjectWithGemini<TSchema extends z.ZodTy
   const maxAttempts = resolveMaxAttempts(params.maxAttempts);
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const retryInstruction =
-      attempt === 0 || !lastError
-        ? ""
-        : `\n\nPrevious attempt failed because the JSON was invalid: ${toErrorMessage(
-            lastError,
-          )}. Return exactly one valid JSON object matching the schema.`;
+    const retryInstruction = buildStructuredRetryInstruction(lastError);
 
     try {
-      const maxOutputTokens = params.maxOutputTokens
-        ? Math.round(params.maxOutputTokens * (attempt === 0 ? 1 : 1 + attempt * 0.4))
-        : undefined;
+      const maxOutputTokens = resolveStructuredMaxOutputTokens(
+        params.maxOutputTokens,
+        attempt,
+        lastError,
+      );
       let response:
         | Awaited<ReturnType<typeof ai.models.generateContent>>
         | undefined;
@@ -254,12 +215,27 @@ ${params.input}`,
         );
 
         const outputText = stripCodeFences(response.text ?? "");
+        const truncated = isTruncatedFinishReason(response.candidates?.[0]?.finishReason);
 
         if (!outputText) {
+          if (truncated) {
+            throw new GeminiTruncatedOutputError(maxOutputTokens);
+          }
+
           throw new Error("Model returned empty structured output.");
         }
 
-        const parsed = parseStructuredText(params.schema, outputText);
+        let parsed: z.infer<TSchema>;
+
+        try {
+          parsed = parseStructuredText(params.schema, outputText);
+        } catch (parseError) {
+          if (truncated) {
+            throw new GeminiTruncatedOutputError(maxOutputTokens);
+          }
+
+          throw parseError;
+        }
         await logGenerationAttempt({
           model: params.model,
           stage: "gemini_structured_text",
@@ -345,17 +321,14 @@ export async function generateStructuredObjectWithGeminiFile<TSchema extends z.Z
     uploadedFileName = uploaded.name ?? null;
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const retryInstruction =
-        attempt === 0 || !lastError
-          ? ""
-          : `\n\nPrevious attempt failed because the JSON was invalid: ${toErrorMessage(
-              lastError,
-            )}. Return exactly one valid JSON object matching the schema.`;
+      const retryInstruction = buildStructuredRetryInstruction(lastError);
 
       try {
-        const maxOutputTokens = params.maxOutputTokens
-          ? Math.round(params.maxOutputTokens * (attempt === 0 ? 1 : 1 + attempt * 0.4))
-          : undefined;
+        const maxOutputTokens = resolveStructuredMaxOutputTokens(
+          params.maxOutputTokens,
+          attempt,
+          lastError,
+        );
         let response:
           | Awaited<ReturnType<typeof ai.models.generateContent>>
           | undefined;
@@ -387,12 +360,27 @@ ${JSON.stringify(responseSchema)}`,
           );
 
           const outputText = stripCodeFences(response.text ?? "");
+          const truncated = isTruncatedFinishReason(response.candidates?.[0]?.finishReason);
 
           if (!outputText) {
+            if (truncated) {
+              throw new GeminiTruncatedOutputError(maxOutputTokens);
+            }
+
             throw new Error("Model returned empty structured output.");
           }
 
-          const parsed = parseStructuredText(params.schema, outputText);
+          let parsed: z.infer<TSchema>;
+
+          try {
+            parsed = parseStructuredText(params.schema, outputText);
+          } catch (parseError) {
+            if (truncated) {
+              throw new GeminiTruncatedOutputError(maxOutputTokens);
+            }
+
+            throw parseError;
+          }
           await logGenerationAttempt({
             model: params.model,
             stage: "gemini_structured_file",

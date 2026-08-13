@@ -10,7 +10,8 @@
   --l-surface-76: rgba(255, 255, 255, 0.76);
   --l-surface-62: rgba(255, 255, 255, 0.62);
   --l-label: #000000;
-  --l-second: #86868b;
+  /* Darker than the mockup's #86868b: that grey is only 2.9:1 on --l-page. */
+  --l-second: #66666d;
   --l-line: rgba(0, 0, 0, 0.067);
   --l-line-soft: rgba(0, 0, 0, 0.044);
   --l-line-faint: rgba(0, 0, 0, 0.032);
@@ -27,7 +28,7 @@
   --m-muted: #f5f5f7;
   --m-sheet: #ffffff;
   --m-label: #000000;
-  --m-second: #86868b;
+  --m-second: #66666d;
   --m-third: #d2d2d7;
   --m-sep: rgba(0, 0, 0, 0.08);
   --m-sep-strong: rgba(0, 0, 0, 0.16);
@@ -55,72 +56,54 @@
   --phone-shadow: 0 18px 44px rgba(0, 0, 0, 0.16), 0 3px 8px rgba(0, 0, 0, 0.06),
     inset 0 0 0 1px rgba(255, 255, 255, 0.16);
 
+  /* Mesh-gradient backdrop: soft blobs lifted off / sunk into --l-page. */
+  --l-mesh-lift: rgba(255, 255, 255, 0.95);
+  --l-mesh-sink: rgba(163, 163, 186, 0.5);
+
+  /* Overrides the colour-scheme the app's theme script puts on <html>, so
+     scrollbars and native controls inside the page match its own tokens. */
+  color-scheme: light;
+  position: relative;
+  /* Keep the backdrop's negative z-index scoped to the page, so it layers
+     over --l-page instead of falling behind the document background. */
+  isolation: isolate;
   min-height: 100vh;
   margin: 0;
   background: var(--l-page);
   color: var(--l-label);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI",
-    sans-serif;
+  font-family: var(--font-inter-tight), -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "SF Pro Display", "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   box-sizing: border-box;
 }
 
-:root[data-theme="dark"] .landing-v2 {
-  --l-page: #030303;
-  --l-canvas: #000000;
-  --l-nav: rgba(0, 0, 0, 0.88);
-  --l-surface: #1c1c1e;
-  --l-surface-76: rgba(28, 28, 30, 0.76);
-  --l-surface-62: rgba(28, 28, 30, 0.62);
-  --l-label: #ffffff;
-  --l-second: #86868b;
-  --l-line: rgba(255, 255, 255, 0.105);
-  --l-line-soft: rgba(255, 255, 255, 0.082);
-  --l-line-faint: rgba(255, 255, 255, 0.06);
-  --l-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-  --l-tint: #0a84ff;
-  --l-flow: #ff7d4d;
-  --l-flow-soft: rgba(255, 125, 77, 0.16);
-  --l-green: #32d74b;
-  --l-red: #ff453a;
-
-  --m-canvas: #000000;
-  --m-surface: #1c1c1e;
-  --m-muted: #2c2c2e;
-  --m-sheet: #1c1c1e;
-  --m-label: #ffffff;
-  --m-second: #86868b;
-  --m-third: #636366;
-  --m-sep: rgba(255, 255, 255, 0.15);
-  --m-sep-strong: rgba(255, 255, 255, 0.25);
-  --m-tint: #0a84ff;
-  --m-tint-soft: rgba(10, 132, 255, 0.15);
-  --m-green: #32d74b;
-  --m-green-soft: rgba(50, 215, 75, 0.15);
-  --m-red: #ff453a;
-  --m-red-soft: rgba(255, 69, 58, 0.15);
-  --m-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-  --m-nav: rgba(28, 28, 30, 0.72);
-  --m-card-grad: linear-gradient(180deg, #1c1c1e, #232325);
-  --m-hl-blue: rgba(88, 140, 255, 0.42);
-  --m-hl-orange: rgba(232, 132, 52, 0.5);
-  --m-hl-deep: rgba(226, 86, 32, 0.55);
-  --m-dock-toggle: linear-gradient(135deg, #1b1b1f, #2a2a30);
-  --m-dock-toggle-color: #ffffff;
-  --m-tab-active: linear-gradient(180deg, rgba(54, 54, 58, 0.72), rgba(34, 34, 38, 0.66));
-  --m-tab-active-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 4px 12px rgba(0, 0, 0, 0.16);
-  --m-action-card: #2a2a2c;
-  --m-card-border: rgba(255, 255, 255, 0.108);
-  --m-icon-surface: rgba(28, 28, 30, 0.92);
-  --m-callout: color-mix(in srgb, #b45309 22%, var(--m-surface));
-  --m-read-now: #c2410c;
-  --phone-shadow: 0 1.6rem 4rem rgba(0, 0, 0, 0.42), 0 2px 6px rgba(0, 0, 0, 0.28),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+/* Fixed rather than tall-and-scrolling: the blobs read as ambience behind
+   the page, and one viewport-sized layer never stretches over 4000px. */
+.landing-v2::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(58% 44% at 18% 10%, var(--l-mesh-lift) 0%, transparent 68%),
+    radial-gradient(48% 38% at 84% 20%, var(--l-mesh-sink) 0%, transparent 64%),
+    radial-gradient(54% 40% at 32% 44%, var(--l-mesh-lift) 0%, transparent 66%),
+    radial-gradient(64% 46% at 90% 60%, var(--l-mesh-sink) 0%, transparent 62%),
+    radial-gradient(50% 42% at 8% 76%, var(--l-mesh-lift) 0%, transparent 66%),
+    radial-gradient(60% 44% at 64% 94%, var(--l-mesh-sink) 0%, transparent 64%);
 }
 
+/* The marketing page follows the operating system only — deliberately not
+   data-theme. That attribute carries the app's saved preference, and a
+   visitor who once picked dark inside the app would otherwise land on a dark
+   homepage on a light Mac. There is no theme switch out here to correct it
+   with, so the OS is the only signal that matches what the visitor sees. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) .landing-v2,
-  :root[data-theme="system"] .landing-v2 {
+  .landing-v2 {
+    color-scheme: dark;
+    --l-mesh-lift: rgba(64, 64, 72, 0.5);
+    --l-mesh-sink: rgba(0, 0, 0, 0.85);
     --l-page: #030303;
     --l-canvas: #000000;
     --l-nav: rgba(0, 0, 0, 0.88);
@@ -128,7 +111,7 @@
     --l-surface-76: rgba(28, 28, 30, 0.76);
     --l-surface-62: rgba(28, 28, 30, 0.62);
     --l-label: #ffffff;
-    --l-second: #86868b;
+    --l-second: #a1a1a8;
     --l-line: rgba(255, 255, 255, 0.105);
     --l-line-soft: rgba(255, 255, 255, 0.082);
     --l-line-faint: rgba(255, 255, 255, 0.06);
@@ -144,7 +127,7 @@
     --m-muted: #2c2c2e;
     --m-sheet: #1c1c1e;
     --m-label: #ffffff;
-    --m-second: #86868b;
+    --m-second: #a1a1a8;
     --m-third: #636366;
     --m-sep: rgba(255, 255, 255, 0.15);
     --m-sep-strong: rgba(255, 255, 255, 0.25);
@@ -312,17 +295,37 @@
   margin: 0 auto;
   box-sizing: border-box;
   padding: 1.1rem clamp(1rem, 2.4vw, 2.2rem);
+  position: relative;
   border-radius: 0;
   border: 1px solid transparent;
-  background: var(--l-nav);
+  background: transparent;
   box-shadow: 0 0 0 rgba(0, 0, 0, 0);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
   will-change: max-width, padding, border-radius;
   transition: max-width 560ms cubic-bezier(0.22, 1, 0.36, 1),
     padding 560ms cubic-bezier(0.22, 1, 0.36, 1),
     border-radius 460ms cubic-bezier(0.22, 1, 0.36, 1), background 340ms ease,
     box-shadow 460ms ease, border-color 340ms ease;
+}
+
+/* At the top of the page the bar has no edges of its own: a full-bleed slab
+   would cut a hard rectangle out of the page's mesh backdrop. The tint and
+   the blur live on their own layer so they can fade out downwards while the
+   logo and CTA above them stay fully opaque. */
+.landing-v2-navbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--l-nav);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  mask-image: linear-gradient(180deg, #000 0%, #000 52%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 52%, transparent 100%);
+  transition: opacity 340ms ease;
+}
+
+.landing-v2-navbar > * {
+  position: relative;
 }
 
 .landing-v2-nav.is-scrolled .landing-v2-navbar {
@@ -332,6 +335,13 @@
   border-color: var(--l-line);
   background: var(--l-surface-76);
   box-shadow: var(--l-shadow), 0 18px 40px rgba(0, 0, 0, 0.14);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+/* The scrolled pill has its own contained shape, so the fading slab retires. */
+.landing-v2-nav.is-scrolled .landing-v2-navbar::before {
+  opacity: 0;
 }
 
 .landing-v2-brand {
@@ -475,6 +485,58 @@
   align-content: center;
 }
 
+/* Social-proof eyebrow above the headline. The avatars are abstract on
+   purpose — stock portraits would present invented people as customers. */
+.landing-v2-hero-banner {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  color: var(--l-second);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* Stacked hero: the copy column is centred as a block, so left-anchored
+   contents read as off to one side. Matches the 800px two-column breakpoint,
+   above which the copy sits beside the phone and goes back to left-aligned. */
+@media (max-width: 799px) {
+  .landing-v2-hero-banner {
+    justify-self: center;
+  }
+
+  .landing-v2-hero-title,
+  .landing-v2-hero-lead {
+    /* The max-widths on these would otherwise pin them left of centre. */
+    margin-inline: auto;
+    text-align: center;
+  }
+}
+
+.landing-v2-hero-banner strong {
+  color: var(--l-label);
+  font-weight: 750;
+}
+
+.landing-v2-hero-banner-avatars {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.landing-v2-hero-banner-avatars img {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  object-fit: cover;
+  /* Ring in the page colour so overlapping portraits stay separable. */
+  box-shadow: 0 0 0 2px var(--l-page);
+}
+
+.landing-v2-hero-banner-avatars img + img {
+  margin-left: -0.55rem;
+}
+
 .landing-v2-hero-title {
   margin: 0;
   max-width: 36rem;
@@ -541,11 +603,31 @@
   background: var(--l-canvas);
   box-shadow: 3px 3px 0 var(--l-label);
   color: var(--l-label);
+  font-family: inherit;
   font-size: 0.88rem;
   font-weight: 650;
   white-space: nowrap;
+  cursor: pointer;
   transform: rotate(-1.5deg);
   animation: memo-try-bob 2.4s ease-in-out infinite;
+}
+
+.landing-v2-try-callout:hover {
+  box-shadow: 4px 4px 0 var(--l-label);
+}
+
+.landing-v2-try-callout:active {
+  box-shadow: 1px 1px 0 var(--l-label);
+}
+
+/* Once the mockup is handed over the invitation is spent. Fade it rather
+   than unmount it so the phone below does not jump up the page. */
+.landing-v2-try-callout[data-handed-over] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  animation: none;
+  transition: opacity 260ms ease, visibility 0s linear 260ms;
 }
 
 /* Reserve the phone's footprint before it is measured (it mirrors the scale
@@ -590,6 +672,11 @@
   gap: 1.35rem;
   margin-bottom: 3.25rem;
   text-align: left;
+}
+
+.landing-v2-section-head-center {
+  justify-items: center;
+  text-align: center;
 }
 
 .landing-v2-section-title {
@@ -840,12 +927,28 @@
 
 /* ── Final CTA ─────────────────────────────────────────────── */
 .landing-v2-final-cta {
+  position: relative;
+  isolation: isolate;
   display: grid;
   justify-items: center;
-  gap: 1.4rem;
-  margin: 4rem auto 0;
-  padding: 0 1rem;
+  gap: 1.15rem;
+  margin: 4.5rem auto 0;
+  padding: clamp(2.75rem, 6vw, 4rem) clamp(1.25rem, 4vw, 3rem);
   text-align: center;
+}
+
+/* Warm pool of light centred on the button, to pull the eye down the page. */
+.landing-v2-final-cta::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 58%;
+  width: min(44rem, 130%);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, var(--l-flow-soft) 0%, transparent 65%);
+  pointer-events: none;
 }
 
 .landing-v2-final-cta h2 {
@@ -859,10 +962,43 @@
   text-wrap: balance;
 }
 
+.landing-v2-final-cta-lead {
+  margin: -0.35rem 0 0.15rem;
+  max-width: 32rem;
+  color: var(--l-second);
+  font-size: 1.02rem;
+  line-height: 1.5;
+  text-wrap: balance;
+}
+
 .landing-v2-final-cta-note {
   margin: 0;
   color: var(--l-second);
   font-size: 0.85rem;
+}
+
+.landing-v2-final-cta-points {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem 1.35rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--l-second);
+  font-size: 0.85rem;
+}
+
+.landing-v2-final-cta-points li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.landing-v2-final-cta-points li::before {
+  content: "✓";
+  color: var(--l-green);
+  font-weight: 800;
 }
 
 /* ── Footer ────────────────────────────────────────────────── */

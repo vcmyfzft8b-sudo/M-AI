@@ -1,99 +1,9 @@
 import * as Sentry from "@sentry/nextjs";
 
+import { shouldDropClientErrorEvent } from "@/lib/sentry-client-filters";
+
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 const isDevelopment = process.env.NODE_ENV === "development";
-
-type SentryLikeEvent = {
-  breadcrumbs?: Array<{
-    category?: string;
-    data?: Record<string, unknown>;
-    level?: string;
-    message?: string | null;
-  }>;
-  exception?: {
-    values?: Array<{
-      stacktrace?: {
-        frames?: unknown[];
-      };
-      type?: string;
-      value?: string;
-    }>;
-  };
-};
-
-function isInterruptedFetchBreadcrumb(breadcrumb: NonNullable<SentryLikeEvent["breadcrumbs"]>[number]) {
-  const method = typeof breadcrumb.data?.method === "string" ? breadcrumb.data.method : null;
-  const url = typeof breadcrumb.data?.url === "string" ? breadcrumb.data.url : null;
-
-  return (
-    breadcrumb.category === "fetch" &&
-    breadcrumb.level === "error" &&
-    method != null &&
-    url != null &&
-    breadcrumb.data?.status_code == null
-  );
-}
-
-function shouldDropInterruptedLoadFailedEvent(event: SentryLikeEvent) {
-  const exception = event.exception?.values?.[0];
-
-  if (
-    exception?.type !== "TypeError" ||
-    exception.value !== "Load failed" ||
-    (exception.stacktrace?.frames?.length ?? 0) > 0
-  ) {
-    return false;
-  }
-
-  return event.breadcrumbs?.some(isInterruptedFetchBreadcrumb) ?? false;
-}
-
-function hasNoStackFrames(
-  exception: NonNullable<NonNullable<SentryLikeEvent["exception"]>["values"]>[number],
-) {
-  return (exception.stacktrace?.frames?.length ?? 0) === 0;
-}
-
-function hasBrowserNavigationBreadcrumb(event: SentryLikeEvent) {
-  return event.breadcrumbs?.some((breadcrumb) => {
-    if (breadcrumb.category === "navigation") {
-      return true;
-    }
-
-    if (breadcrumb.category !== "fetch") {
-      return false;
-    }
-
-    const url = typeof breadcrumb.data?.url === "string" ? breadcrumb.data.url : "";
-    return url.includes("_rsc=") || url.startsWith("/api/lectures/");
-  }) ?? false;
-}
-
-function shouldDropNoStackBrowserNetworkNoise(event: SentryLikeEvent) {
-  const exception = event.exception?.values?.[0];
-
-  if (!exception || !hasNoStackFrames(exception)) {
-    return false;
-  }
-
-  if (
-    exception.type === "TypeError" &&
-    (exception.value === "Load failed" || exception.value === "network error") &&
-    hasBrowserNavigationBreadcrumb(event)
-  ) {
-    return true;
-  }
-
-  if (
-    exception.type === "Error" &&
-    exception.value === "Connection closed." &&
-    hasBrowserNavigationBreadcrumb(event)
-  ) {
-    return true;
-  }
-
-  return false;
-}
 
 Sentry.init({
   dsn,
@@ -115,10 +25,7 @@ Sentry.init({
   replaysSessionSampleRate: isDevelopment ? 0.1 : 0,
   replaysOnErrorSampleRate: 1.0,
   beforeSend(event) {
-    if (
-      shouldDropInterruptedLoadFailedEvent(event) ||
-      shouldDropNoStackBrowserNetworkNoise(event)
-    ) {
+    if (shouldDropClientErrorEvent(event)) {
       return null;
     }
 

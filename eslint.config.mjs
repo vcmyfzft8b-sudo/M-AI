@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "public/vendor/**",
     "ios-app/**",
     "next-env.d.ts",
+    // Agent scratch checkouts. Untracked, but present locally and otherwise
+    // linted as if they were project source.
+    ".claude/**",
   ]),
 ]);
 

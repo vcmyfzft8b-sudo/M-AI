@@ -11,10 +11,7 @@ import {
   isSupportedScanImageMimeType,
   normalizeUploadScanImageMimeType,
 } from "@/lib/storage";
-import {
-  getStorageDownloadErrorMessage,
-  isTransientStorageDownloadError,
-} from "@/lib/storage-download-errors";
+import { isTransientStorageDownloadError } from "@/lib/storage-download-errors";
 import {
   NoReadableScanTextError,
   type ScanOcrImageDiagnostics,
@@ -99,17 +96,30 @@ async function mapWithConcurrency<TInput, TOutput>(
   mapper: (value: TInput, index: number) => Promise<TOutput>,
 ) {
   const results = new Array<TOutput>(values.length);
+  const failures: unknown[] = [];
   let nextIndex = 0;
 
+  // Workers settle instead of rejecting. Promise.all resolves on the first rejection
+  // and leaves any later one unhandled, which takes down the whole invocation.
   const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
-    while (nextIndex < values.length) {
+    while (nextIndex < values.length && failures.length === 0) {
       const currentIndex = nextIndex;
       nextIndex += 1;
-      results[currentIndex] = await mapper(values[currentIndex], currentIndex);
+
+      try {
+        results[currentIndex] = await mapper(values[currentIndex], currentIndex);
+      } catch (error) {
+        failures.push(error);
+        return;
+      }
     }
   });
 
   await Promise.all(workers);
+
+  if (failures.length > 0) {
+    throw failures[0];
+  }
 
   return results;
 }
@@ -154,9 +164,9 @@ async function downloadStoredScanImage(image: StoredScanImage) {
     await sleep(SCAN_STORAGE_DOWNLOAD_RETRY_DELAYS_MS[attempt - 1] ?? 1500);
   }
 
-  throw new Error(
-    getStorageDownloadErrorMessage(lastDownloadError) ?? "Fotografije ni bilo mogoče prebrati.",
-  );
+  // error_message is shown to the user, so keep it Slovenian rather than forwarding
+  // Supabase's English text. The original error rides along for Sentry.
+  throw new Error("Fotografije ni bilo mogoče prebrati.", { cause: lastDownloadError });
 }
 
 export async function processStoredScanLecture(

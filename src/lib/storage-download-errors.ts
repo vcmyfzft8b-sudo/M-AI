@@ -21,7 +21,7 @@ const TRANSIENT_MESSAGE_FRAGMENTS = [
 // rather than the status alone: a missing bucket or a bad path share the same status.
 const MISSING_OBJECT_MESSAGE_FRAGMENTS = ["object not found", "the resource was not found"];
 
-export function getStorageDownloadErrorMessage(error: unknown) {
+function getStorageDownloadErrorMessage(error: unknown) {
   if (isRecord(error) && typeof error.message === "string") {
     return error.message;
   }

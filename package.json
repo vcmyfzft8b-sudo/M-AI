@@ -11,6 +11,7 @@
     "dev:turbopack": "NODE_PATH=./node_modules next dev",
     "build": "NODE_PATH=./node_modules next build --webpack",
     "start": "NODE_PATH=./node_modules next start",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "lint": "eslint",
     "stripe:setup": "node scripts/setup-stripe-billing.mjs"
   },

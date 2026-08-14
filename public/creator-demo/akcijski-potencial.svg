@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700" role="img" aria-label="Potek akcijskega potenciala v času">
+  <rect width="1200" height="700" fill="#f7f5f0"/>
+
+  <g stroke="#e0dcd2" stroke-width="1">
+    <path d="M300 90V600M480 90V600M660 90V600M840 90V600M1020 90V600"/>
+    <path d="M140 170H1100M140 270H1100M140 370H1100M140 470H1100"/>
+  </g>
+
+  <path d="M140 90V600H1100" stroke="#3f3a33" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <text x="60" y="100" font-family="Georgia, serif" font-size="28" fill="#3f3a33">mV</text>
+  <text x="1040" y="656" font-family="Georgia, serif" font-size="28" fill="#3f3a33">čas</text>
+
+  <g stroke="#7a736a" stroke-width="3" stroke-dasharray="12 10" fill="none">
+    <path d="M140 470H1100"/>
+    <path d="M140 400H1100"/>
+  </g>
+  <text x="1110" y="478" font-family="Georgia, serif" font-size="24" fill="#7a736a">−70</text>
+  <text x="1110" y="408" font-family="Georgia, serif" font-size="24" fill="#7a736a">−55</text>
+
+  <path d="M160 470H330C360 470 372 430 392 400C430 340 450 150 500 150C548 150 566 330 600 420C620 470 640 530 680 530C740 530 760 480 820 470H1080"
+        stroke="#c0392b" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <circle cx="392" cy="400" r="12" fill="#f7f5f0" stroke="#3f3a33" stroke-width="5"/>
+
+  <g font-family="Georgia, serif" font-size="27" fill="#3f3a33">
+    <text x="176" y="530">mirovni potencial</text>
+    <text x="176" y="356">prag vzdraženosti</text>
+    <text x="424" y="120">depolarizacija (Na⁺ vstopa)</text>
+    <text x="612" y="330">repolarizacija (K⁺ izstopa)</text>
+    <text x="660" y="590">hiperpolarizacija</text>
+    <text x="860" y="440">refraktorna doba</text>
+  </g>
+
+  <g stroke="#7a736a" stroke-width="3" fill="none" stroke-dasharray="8 8">
+    <path d="M310 348H384"/>
+    <path d="M470 132V146"/>
+    <path d="M700 566V540"/>
+  </g>
+</svg>

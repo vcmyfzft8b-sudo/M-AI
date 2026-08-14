@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-label="Graf ponudbe in povpraševanja z ravnovesno točko">
+  <rect width="1200" height="800" fill="#f7f5f0"/>
+  <g stroke="#e6e2d8" stroke-width="1">
+    <path d="M320 140V680M460 140V680M600 140V680M740 140V680M880 140V680"/>
+    <path d="M180 200H1040M180 290H1040M180 380H1040M180 470H1040M180 560H1040"/>
+  </g>
+
+  <path d="M180 120V680H1060" stroke="#3f3a33" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M180 116l-13 28h26z" fill="#3f3a33"/>
+  <path d="M1064 680l-28-13v26z" fill="#3f3a33"/>
+
+  <text x="62" y="152" font-family="Georgia, serif" font-size="34" fill="#3f3a33">Cena</text>
+  <text x="946" y="748" font-family="Georgia, serif" font-size="34" fill="#3f3a33">Količina</text>
+
+  <path d="M250 200C430 320 630 470 960 640" stroke="#c0392b" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <path d="M250 640C430 520 630 370 960 200" stroke="#1f5f8b" stroke-width="8" fill="none" stroke-linecap="round"/>
+
+  <g stroke="#3f3a33" stroke-width="3" stroke-dasharray="12 10" fill="none">
+    <path d="M180 420H605"/>
+    <path d="M605 420V680"/>
+  </g>
+  <circle cx="605" cy="420" r="15" fill="#f7f5f0" stroke="#3f3a33" stroke-width="7"/>
+
+  <g font-family="Georgia, serif" font-weight="bold" font-size="40">
+    <text x="978" y="652" fill="#c0392b">D</text>
+    <text x="978" y="212" fill="#1f5f8b">S</text>
+  </g>
+
+  <text x="640" y="392" font-family="Georgia, serif" font-size="32" fill="#3f3a33">Ravnovesje</text>
+  <text x="120" y="432" font-family="Georgia, serif" font-size="32" fill="#3f3a33">P*</text>
+  <text x="586" y="726" font-family="Georgia, serif" font-size="32" fill="#3f3a33">Q*</text>
+
+  <text x="250" y="176" font-family="Georgia, serif" font-size="32" fill="#c0392b">Povpraševanje</text>
+  <text x="240" y="726" font-family="Georgia, serif" font-size="32" fill="#1f5f8b">Ponudba</text>
+</svg>

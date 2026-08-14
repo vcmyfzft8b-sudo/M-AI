@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, startTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { BrandLogo } from "@/components/brand-logo";
+import { useCreatorDemoBasePath } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { InstantLink } from "@/components/instant-link";
 import {
@@ -12,6 +13,7 @@ import {
   useInstantNavigation,
 } from "@/components/navigation-loading";
 import { BRAND_NAME } from "@/lib/brand";
+import { unmapDemoPathname } from "@/lib/creator-demo/paths";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 
 const TAB_ITEMS = [
@@ -78,10 +80,13 @@ export function AppShell({
   hasPaidAccess: boolean;
   initialPathname: string;
 }) {
-  const clientPathname = usePathname();
+  const demoBasePath = useCreatorDemoBasePath();
+  const clientPathname = unmapDemoPathname(usePathname(), demoBasePath);
   const router = useRouter();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
-  const [pathname, setPathname] = useState(initialPathname);
+  const [pathname, setPathname] = useState(() =>
+    unmapDemoPathname(initialPathname, demoBasePath),
+  );
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700" role="img" aria-label="Primerjava elastičnega in neelastičnega povpraševanja">
+  <rect width="1200" height="700" fill="#f7f5f0"/>
+
+  <g>
+    <text x="120" y="70" font-family="Georgia, serif" font-size="34" fill="#3f3a33" font-weight="bold">Elastično</text>
+    <path d="M120 120V560H560" stroke="#3f3a33" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M160 200C260 300 400 460 520 530" stroke="#c0392b" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <g stroke="#7a736a" stroke-width="3" stroke-dasharray="10 8">
+      <path d="M120 250H235"/>
+      <path d="M235 250V560"/>
+      <path d="M120 300H300"/>
+      <path d="M300 300V560"/>
+    </g>
+    <text x="60" y="262" font-family="Georgia, serif" font-size="26" fill="#3f3a33">P₁</text>
+    <text x="60" y="312" font-family="Georgia, serif" font-size="26" fill="#3f3a33">P₂</text>
+    <text x="215" y="600" font-family="Georgia, serif" font-size="26" fill="#3f3a33">Q₁</text>
+    <text x="285" y="600" font-family="Georgia, serif" font-size="26" fill="#3f3a33">Q₂</text>
+    <text x="120" y="650" font-family="Georgia, serif" font-size="27" fill="#7a736a">majhna sprememba cene →</text>
+    <text x="120" y="682" font-family="Georgia, serif" font-size="27" fill="#7a736a">velika sprememba količine</text>
+    <text x="480" y="180" font-family="Georgia, serif" font-size="32" fill="#c0392b" font-weight="bold">|E| &gt; 1</text>
+  </g>
+
+  <path d="M620 60V660" stroke="#e0dcd2" stroke-width="3"/>
+
+  <g>
+    <text x="700" y="70" font-family="Georgia, serif" font-size="34" fill="#3f3a33" font-weight="bold">Neelastično</text>
+    <path d="M700 120V560H1140" stroke="#3f3a33" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M880 150C900 280 920 420 950 545" stroke="#1f5f8b" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <g stroke="#7a736a" stroke-width="3" stroke-dasharray="10 8">
+      <path d="M700 250H898"/>
+      <path d="M898 250V560"/>
+      <path d="M700 430H930"/>
+      <path d="M930 430V560"/>
+    </g>
+    <text x="640" y="262" font-family="Georgia, serif" font-size="26" fill="#3f3a33">P₁</text>
+    <text x="640" y="442" font-family="Georgia, serif" font-size="26" fill="#3f3a33">P₂</text>
+    <text x="878" y="600" font-family="Georgia, serif" font-size="26" fill="#3f3a33">Q₁</text>
+    <text x="936" y="600" font-family="Georgia, serif" font-size="26" fill="#3f3a33">Q₂</text>
+    <text x="700" y="650" font-family="Georgia, serif" font-size="27" fill="#7a736a">velika sprememba cene →</text>
+    <text x="700" y="682" font-family="Georgia, serif" font-size="27" fill="#7a736a">majhna sprememba količine</text>
+    <text x="1000" y="200" font-family="Georgia, serif" font-size="32" fill="#1f5f8b" font-weight="bold">|E| &lt; 1</text>
+  </g>
+</svg>

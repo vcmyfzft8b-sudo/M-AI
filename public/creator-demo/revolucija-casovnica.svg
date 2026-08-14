@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" width="1200" height="620" role="img" aria-label="Časovnica francoske revolucije od 1789 do 1799">
+  <rect width="1200" height="620" fill="#f7f5f0"/>
+
+  <path d="M90 310H1110" stroke="#3f3a33" stroke-width="6" stroke-linecap="round"/>
+
+  <g fill="#c0392b">
+    <circle cx="170" cy="310" r="18"/>
+    <circle cx="404" cy="310" r="18"/>
+    <circle cx="638" cy="310" r="18"/>
+    <circle cx="872" cy="310" r="18"/>
+    <circle cx="1060" cy="310" r="18"/>
+  </g>
+
+  <g stroke="#9aa5ad" stroke-width="3">
+    <path d="M170 292V196M404 328V424M638 292V196M872 328V424M1060 292V196"/>
+  </g>
+
+  <g font-family="Georgia, serif" text-anchor="middle">
+    <text x="170" y="176" font-size="34" fill="#c0392b" font-weight="bold">1789</text>
+    <text x="170" y="132" font-size="26" fill="#3f3a33">Generalni stani,</text>
+    <text x="170" y="100" font-size="26" fill="#3f3a33">padec Bastilje</text>
+
+    <text x="404" y="470" font-size="34" fill="#c0392b" font-weight="bold">1791</text>
+    <text x="404" y="510" font-size="26" fill="#3f3a33">Prva ustava,</text>
+    <text x="404" y="542" font-size="26" fill="#3f3a33">ustavna monarhija</text>
+
+    <text x="638" y="176" font-size="34" fill="#c0392b" font-weight="bold">1792</text>
+    <text x="638" y="132" font-size="26" fill="#3f3a33">Razglasitev</text>
+    <text x="638" y="100" font-size="26" fill="#3f3a33">republike</text>
+
+    <text x="872" y="470" font-size="34" fill="#c0392b" font-weight="bold">1793–94</text>
+    <text x="872" y="510" font-size="26" fill="#3f3a33">Jakobinska</text>
+    <text x="872" y="542" font-size="26" fill="#3f3a33">diktatura in teror</text>
+
+    <text x="1060" y="176" font-size="34" fill="#c0392b" font-weight="bold">1799</text>
+    <text x="1060" y="132" font-size="26" fill="#3f3a33">Napoleonov</text>
+    <text x="1060" y="100" font-size="26" fill="#3f3a33">državni udar</text>
+  </g>
+
+  <text x="90" y="600" font-family="Georgia, serif" font-size="26" fill="#7a736a">Od stanovske družbe do republike v desetih letih.</text>
+</svg>

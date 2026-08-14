@@ -20,6 +20,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 
+import { useCreatorDemoBasePath } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { LiveAudioWave } from "@/components/live-audio-wave";
 import { useInstantNavigation } from "@/components/navigation-loading";
@@ -37,6 +38,8 @@ import {
   STORAGE_BUCKET,
 } from "@/lib/constants";
 import { parseApiResponse, redirectToBillingIfNeeded } from "@/lib/billing-client";
+import { mapAppHref } from "@/lib/creator-demo/paths";
+import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import {
   createSafeTransportFileName,
   getLowercaseExtension,
@@ -193,6 +196,36 @@ function sheetDescription() {
   return "";
 }
 
+/**
+ * Creator demo: each source opens with a file already staged, so a recording
+ * can go straight to "Ustvari". These are empty placeholder files — the demo
+ * never reads a file's contents, it only shows its name.
+ */
+const DEMO_STAGED_SOURCES = {
+  recording: {
+    fileName: "posnetek-predavanje-4.m4a",
+    mimeType: "audio/mp4",
+    durationSeconds: 2842,
+  },
+  audio: {
+    fileName: "Predavanje-mikroekonomija-5.m4a",
+    mimeType: "audio/mp4",
+    durationSeconds: 2842,
+  },
+  document: {
+    fileName: "Anatomija-zivcevje-skripta.pdf",
+    mimeType: "application/pdf",
+  },
+  link: "https://www.finance.si/erp-sistemi-v-praksi",
+} as const;
+
+function createDemoStagedFile(fileName: string, mimeType: string) {
+  return new File([new Uint8Array(0)], fileName, { type: mimeType });
+}
+
+/** How long the demo spends on the "processing" stages before the note opens. */
+const DEMO_CREATE_TOTAL_MS = 3000;
+
 const DOCUMENT_OR_IMAGE_INPUT_ACCEPT = `${DOCUMENT_FILE_INPUT_ACCEPT},${SCAN_IMAGE_INPUT_ACCEPT}`;
 const LOCAL_API_REQUEST_TIMEOUT_MS = 30_000;
 const SCAN_PREVIEW_TIMEOUT_MS = 18_000;
@@ -320,6 +353,8 @@ export function NoteSourceModal({
   canCreateNotes?: boolean;
 }) {
   const router = useRouter();
+  const demoBasePath = useCreatorDemoBasePath();
+  const isCreatorDemo = demoBasePath != null;
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
@@ -339,6 +374,7 @@ export function NoteSourceModal({
   const sourceSheetSuppressClickRef = useRef(false);
   const photoSourcesRef = useRef<PhotoSource[]>([]);
   const photoPreviewQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const demoStagedModesRef = useRef<Set<NoteSourceMode>>(new Set());
 
   const recordingMimeType = useMemo(() => pickRecorderMimeType(), []);
 
@@ -385,6 +421,57 @@ export function NoteSourceModal({
       setIsTextEditorOpen(false);
     }
   }, [isTextEditorOpen, selectedMode]);
+
+  // Creator demo: stage a file for the visible source, so the creator can hit
+  // "Ustvari" immediately. Picking their own file — or recording for real —
+  // still wins, and staging never runs mid-recording.
+  useEffect(() => {
+    if (!open || !isCreatorDemo || isRecording) {
+      return;
+    }
+
+    // Record and upload share one audio slot, so each stages a clip of its own
+    // origin: switching tabs must never leave a mode with a disabled button.
+    if (selectedMode === "record" || selectedMode === "upload") {
+      const origin = selectedMode === "record" ? "recording" : "upload";
+      const staged =
+        selectedMode === "record" ? DEMO_STAGED_SOURCES.recording : DEMO_STAGED_SOURCES.audio;
+
+      setAudioSource((current) =>
+        current?.origin === origin
+          ? current
+          : {
+              file: createDemoStagedFile(staged.fileName, staged.mimeType),
+              durationSeconds: staged.durationSeconds,
+              previewUrl: "",
+              origin,
+            },
+      );
+      return;
+    }
+
+    if (demoStagedModesRef.current.has(selectedMode)) {
+      return;
+    }
+
+    demoStagedModesRef.current.add(selectedMode);
+
+    if (selectedMode === "text") {
+      setPdfSource((current) =>
+        current || photoSourcesRef.current.length > 0
+          ? current
+          : createDemoStagedFile(
+              DEMO_STAGED_SOURCES.document.fileName,
+              DEMO_STAGED_SOURCES.document.mimeType,
+            ),
+      );
+      return;
+    }
+
+    if (selectedMode === "link") {
+      setLinkValue((current) => current || DEMO_STAGED_SOURCES.link);
+    }
+  }, [isCreatorDemo, isRecording, open, selectedMode]);
 
   useEffect(() => {
     if (!isTextEditorOpen || typeof window === "undefined") {
@@ -573,6 +660,7 @@ export function NoteSourceModal({
     activeRequestControllerRef.current = null;
     createdLectureIdRef.current = null;
     cancelRequestedRef.current = false;
+    demoStagedModesRef.current.clear();
   }, [clearAudioSource]);
 
   const deleteCreatedLecture = useCallback(async () => {
@@ -968,9 +1056,96 @@ export function NoteSourceModal({
     requestCloseRef.current = requestClose;
   }, [requestClose]);
 
+  /**
+   * Creator demo only: nothing is uploaded and the picked file is never read.
+   * The stage labels are replayed over roughly `DEMO_CREATE_TOTAL_MS` so the
+   * recording shows a believable processing beat, then a ready-made note is
+   * added to the demo library.
+   */
+  async function createDemoNote(
+    kind: "record" | "upload" | "text" | "pdf" | "photo" | "link",
+    stages: string[],
+  ) {
+    cancelRequestedRef.current = false;
+    setError(null);
+
+    // The middle stage carries the upload/read work in the real flow, so it
+    // holds longest; the rest split what is left evenly.
+    const stageDurations = stages.map((_, index) =>
+      stages.length > 2 && index === 1
+        ? DEMO_CREATE_TOTAL_MS * 0.44
+        : (DEMO_CREATE_TOTAL_MS * (stages.length > 2 ? 0.56 : 1)) /
+          Math.max(1, stages.length - (stages.length > 2 ? 1 : 0)),
+    );
+
+    const stopProcessing = () => {
+      setBusyLabel(null);
+      setIsCancelling(false);
+    };
+
+    try {
+      const { prepareDemoLecture } = await import("@/lib/creator-demo/store");
+      const pendingLecture = prepareDemoLecture(kind);
+      const href = mapAppHref(`/app/lectures/${pendingLecture.id}`, demoBasePath);
+
+      // Warm the note route while the stages play, so the jump at the end is a
+      // single cut with no loading screen in between.
+      safeRouterPrefetch(router, href);
+
+      for (const [index, stage] of stages.entries()) {
+        if (cancelRequestedRef.current) {
+          stopProcessing();
+          return;
+        }
+
+        setBusyLabel(stage);
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, Math.round(stageDurations[index])),
+        );
+      }
+
+      if (cancelRequestedRef.current) {
+        stopProcessing();
+        return;
+      }
+
+      pendingLecture.commit();
+
+      // The sheet stays up — and stays in its processing state — until the
+      // route swap unmounts it. Closing it or clearing the busy label here
+      // would show the library, or the sheet's idle "Ustvari" state, in the gap
+      // before the note renders.
+      // When the sheet came from a `?mode=` link, the note replaces that entry
+      // so going back lands on the library instead of reopening the sheet.
+      const openedFromUrl = new URLSearchParams(window.location.search).has("mode");
+
+      if (openedFromUrl) {
+        router.replace(href);
+      } else {
+        router.push(href);
+      }
+    } catch (createError) {
+      stopProcessing();
+      setError(
+        createError instanceof Error
+          ? createError.message
+          : "Zapiska ni bilo mogoče ustvariti.",
+      );
+    }
+  }
+
   async function createAudioLecture() {
     if (!audioSource) {
       setError("Najprej izberi ali posnemi zvok.");
+      return;
+    }
+
+    if (isCreatorDemo) {
+      await createDemoNote(audioSource.origin === "recording" ? "record" : "upload", [
+        "Pripravljam...",
+        "Nalagam zvok...",
+        "Dodajam v vrsto...",
+      ]);
       return;
     }
 
@@ -1030,6 +1205,11 @@ export function NoteSourceModal({
   async function createTextLecture() {
     if (combinedTextSource.length < 120) {
       setError("Prilepi vsaj krajši vzorec besedila.");
+      return;
+    }
+
+    if (isCreatorDemo) {
+      await createDemoNote("text", ["Pripravljam...", "Dodajam v vrsto..."]);
       return;
     }
 
@@ -1093,6 +1273,17 @@ export function NoteSourceModal({
   async function createPhotoLecture() {
     if (photoSources.length === 0) {
       setError("Najprej dodaj fotografijo.");
+      return;
+    }
+
+    if (isCreatorDemo) {
+      await createDemoNote("photo", [
+        "Pripravljam...",
+        photoSources.length === 1
+          ? "Nalagam fotografijo..."
+          : `Nalagam fotografije (${photoSources.length})...`,
+        "Dodajam v vrsto...",
+      ]);
       return;
     }
 
@@ -1236,6 +1427,11 @@ export function NoteSourceModal({
 
     if (linkVideoError) {
       setError(linkVideoError);
+      return;
+    }
+
+    if (isCreatorDemo) {
+      await createDemoNote("link", ["Pripravljam...", "Berem povezavo...", "Dodajam v vrsto..."]);
       return;
     }
 
@@ -1558,6 +1754,11 @@ export function NoteSourceModal({
   async function createPdfLecture() {
     if (!pdfSource) {
       setError("Najprej izberi dokument.");
+      return;
+    }
+
+    if (isCreatorDemo) {
+      await createDemoNote("pdf", ["Pripravljam...", "Nalagam dokument...", "Dodajam v vrsto..."]);
       return;
     }
 
@@ -1982,17 +2183,19 @@ export function NoteSourceModal({
                             generateIcon: "📄",
                           })}
 
-                          <button
-                            type="button"
-                            className="ios-secondary-button"
-                            disabled={Boolean(busyLabel)}
-                            onClick={() => {
-                              clearAudioSource();
-                              void startRecording();
-                            }}
-                          >
-                            Posnemi znova
-                          </button>
+                          {isCreatorDemo ? null : (
+                            <button
+                              type="button"
+                              className="ios-secondary-button"
+                              disabled={Boolean(busyLabel)}
+                              onClick={() => {
+                                clearAudioSource();
+                                void startRecording();
+                              }}
+                            >
+                              Posnemi znova
+                            </button>
+                          )}
                         </>
                       ) : null}
 
@@ -2034,10 +2237,11 @@ export function NoteSourceModal({
                         className="hidden"
                       />
 
-                      <button
-                        type="button"
-                        disabled={Boolean(busyLabel)}
-                        className="ios-secondary-button"
+                      {isCreatorDemo ? null : (
+                        <button
+                          type="button"
+                          disabled={Boolean(busyLabel)}
+                          className="ios-secondary-button"
                           onClick={() => {
                             if (!canCreateNotes) {
                               redirectToPaywall();
@@ -2046,10 +2250,11 @@ export function NoteSourceModal({
 
                             uploadInputRef.current?.click();
                           }}
-                      >
-                        <EmojiIcon symbol="📤" size="1rem" />
-                        {preparedUpload ? "Izberi drugo zvočno datoteko" : "Izberi zvočno datoteko"}
-                      </button>
+                        >
+                          <EmojiIcon symbol="📤" size="1rem" />
+                          {preparedUpload ? "Izberi drugo zvočno datoteko" : "Izberi zvočno datoteko"}
+                        </button>
+                      )}
 
                       {renderBusyOrGenerateButton({
                         canGenerate: Boolean(preparedUpload),
@@ -2069,6 +2274,7 @@ export function NoteSourceModal({
                           <EmojiIcon symbol="🔎" size="0.95rem" />
                           <input
                             value={linkValue}
+                            readOnly={isCreatorDemo}
                             onChange={(event) => {
                               setLinkValue(event.target.value);
                               setError(null);
@@ -2106,6 +2312,7 @@ export function NoteSourceModal({
                           <textarea
                             ref={inlineTextAreaRef}
                             value={textValue}
+                            readOnly={isCreatorDemo}
                             onChange={(event) => {
                               setTextValue(event.target.value);
                             }}
@@ -2190,41 +2397,43 @@ export function NoteSourceModal({
                         className="hidden"
                       />
 
-                      <div className="note-source-docs-actions note-source-docs-actions-bottom">
-                        <button
-                          type="button"
-                          className="ios-secondary-button note-source-docs-action-button"
-                          disabled={Boolean(busyLabel)}
-                          onClick={() => {
-                            if (!canCreateNotes) {
-                              redirectToPaywall();
-                              return;
-                            }
+                      {isCreatorDemo ? null : (
+                        <div className="note-source-docs-actions note-source-docs-actions-bottom">
+                          <button
+                            type="button"
+                            className="ios-secondary-button note-source-docs-action-button"
+                            disabled={Boolean(busyLabel)}
+                            onClick={() => {
+                              if (!canCreateNotes) {
+                                redirectToPaywall();
+                                return;
+                              }
 
-                            pdfInputRef.current?.click();
-                          }}
-                        >
-                          <EmojiIcon symbol="📤" size="1rem" />
-                          Datoteka
-                        </button>
+                              pdfInputRef.current?.click();
+                            }}
+                          >
+                            <EmojiIcon symbol="📤" size="1rem" />
+                            Datoteka
+                          </button>
 
-                        <button
-                          type="button"
-                          className="ios-secondary-button note-source-docs-action-button"
-                          disabled={Boolean(busyLabel)}
-                          onClick={() => {
-                            if (!canCreateNotes) {
-                              redirectToPaywall();
-                              return;
-                            }
+                          <button
+                            type="button"
+                            className="ios-secondary-button note-source-docs-action-button"
+                            disabled={Boolean(busyLabel)}
+                            onClick={() => {
+                              if (!canCreateNotes) {
+                                redirectToPaywall();
+                                return;
+                              }
 
-                            scanInputRef.current?.click();
-                          }}
-                        >
-                          <EmojiIcon symbol="📷" size="1rem" />
-                          Skeniraj
-                        </button>
-                      </div>
+                              scanInputRef.current?.click();
+                            }}
+                          >
+                            <EmojiIcon symbol="📷" size="1rem" />
+                            Skeniraj
+                          </button>
+                        </div>
+                      )}
 
                       {renderBusyOrGenerateButton({
                         canGenerate: canGenerateText,
@@ -2354,6 +2563,7 @@ export function NoteSourceModal({
 
                   <textarea
                     value={textValue}
+                    readOnly={isCreatorDemo}
                     onChange={(event) => {
                       const nextValue = event.target.value;
 

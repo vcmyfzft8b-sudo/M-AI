@@ -21,6 +21,7 @@ import type {
 } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { NoteReadAloud } from "@/components/note-read-aloud";
 import { StudyCompletionCard } from "@/components/study-completion-card";
@@ -1152,6 +1153,7 @@ export function LectureWorkspace({
   initialTrialChatMessagesRemaining: number;
 }) {
   const router = useRouter();
+  const isCreatorDemo = useIsCreatorDemo();
   const [detail, setDetail] = useState(initialDetail);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("notes");
   const [question, setQuestion] = useState("");
@@ -3890,20 +3892,22 @@ export function LectureWorkspace({
           >
             <Palette aria-hidden="true" />
           </button>
-          <button
-            type="button"
-            className="note-annotation-photo"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => notePhotoInputRef.current?.click()}
-            disabled={isSavingNoteDoc || !selectedNoteBlockId}
-            aria-label="Dodaj fotografijo"
-            title="Dodaj fotografijo"
-          >
-            <ImagePlus aria-hidden="true" />
-          </button>
+          {isCreatorDemo ? null : (
+            <button
+              type="button"
+              className="note-annotation-photo"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => notePhotoInputRef.current?.click()}
+              disabled={isSavingNoteDoc || !selectedNoteBlockId}
+              aria-label="Dodaj fotografijo"
+              title="Dodaj fotografijo"
+            >
+              <ImagePlus aria-hidden="true" />
+            </button>
+          )}
         </div>
       ) : null;
-      const photoToolbar = selectedNoteBlockId && !noteSelection ? (
+      const photoToolbar = selectedNoteBlockId && !noteSelection && !isCreatorDemo ? (
         <button
           type="button"
           className="note-photo-toolbar-button"

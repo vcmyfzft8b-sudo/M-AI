@@ -110,7 +110,12 @@ const CHIP_BASE: CSSProperties = {
 
 const STATUS_BASE: CSSProperties = {
   margin: 0,
-  minHeight: "1.2rem",
+  /* Fixed, not a minimum: an empty status sat at the minimum while one with
+     text rendered a couple of pixels taller, and the card above it — the
+     row that flexes — absorbed the difference every time the wording
+     changed. */
+  height: "1.4rem",
+  lineHeight: "1.4rem",
   fontSize: "0.88rem",
   fontWeight: 500,
   transition: "color 300ms ease, opacity 300ms ease",
@@ -1038,29 +1043,33 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
               </span>
               <span style={{ fontSize: "12.5px", lineHeight: 1.3, color: "var(--l-second)" }}>{dropSubtitle}</span>
             </span>
-            {stage === 1 ? (
-              <span
-                style={{
-                  flexBasis: "100%",
-                  minWidth: 0,
-                  marginTop: "2px",
-                  padding: "4px 9px",
-                  borderRadius: "999px",
-                  background: "var(--l-line)",
-                  color: "var(--l-second)",
-                  fontSize: "9.2px",
-                  fontWeight: 700,
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  textAlign: "center",
-                }}
-              >
-                Ustvarjanje zapiskov
-              </span>
-            ) : null}
+            {/* Laid out in every stage, shown only while the source is being
+                processed. Adding and removing it changed this card's height,
+                and since all three sit in one grid row, the other two grew
+                and shrank with it. */}
+            <span
+              aria-hidden={stage === 1 ? undefined : true}
+              style={{
+                flexBasis: "100%",
+                minWidth: 0,
+                marginTop: "2px",
+                padding: "4px 9px",
+                borderRadius: "999px",
+                background: "var(--l-line)",
+                color: "var(--l-second)",
+                fontSize: "9.2px",
+                fontWeight: 700,
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                textAlign: "center",
+                visibility: stage === 1 ? "visible" : "hidden",
+              }}
+            >
+              Ustvarjanje zapiskov
+            </span>
           </div>
           {PAST_NOTES.map((row) => (
             <div

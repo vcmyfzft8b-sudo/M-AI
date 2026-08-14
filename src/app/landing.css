@@ -63,6 +63,11 @@
   /* Overrides the colour-scheme the app's theme script puts on <html>, so
      scrollbars and native controls inside the page match its own tokens. */
   color-scheme: light;
+  /* Nothing may drag the page sideways: decoration that bleeds past the text
+     column — the closing glow is 130% wide — otherwise leaves a phone able to
+     scroll horizontally, and the layout no longer reads as centred. `clip`
+     rather than `hidden`, which would break the sticky nav. */
+  overflow-x: clip;
   position: relative;
   /* Keep the backdrop's negative z-index scoped to the page, so it layers
      over --l-page instead of falling behind the document background. */
@@ -245,6 +250,10 @@
 }
 @keyframes memo-spin {
   to { transform: rotate(360deg); }
+}
+@keyframes memo-cta-shine {
+  0%, 45% { left: -55%; }
+  85%, 100% { left: 120%; }
 }
 @keyframes memo-tap-a {
   0% { transform: translate3d(-50%, -50%, 0) scale(0.72); opacity: 0; }
@@ -512,6 +521,12 @@
     margin-inline: auto;
     text-align: center;
   }
+
+  /* Side by side on a tablet, stacked full-width on a phone — either way they
+     belong under the centred copy rather than against its left edge. */
+  .landing-v2-hero-actions {
+    justify-content: center;
+  }
 }
 
 .landing-v2-hero-banner strong {
@@ -677,6 +692,16 @@
 .landing-v2-section-head-center {
   justify-items: center;
   text-align: center;
+}
+
+/* Phone and tablet portrait: the page is one centred column below the
+   two-column hero breakpoint, so a left-anchored section heading sits off to
+   one side of everything under it. Wider layouts keep the left edge. */
+@media (max-width: 799px) {
+  .landing-v2-section-head {
+    justify-items: center;
+    text-align: center;
+  }
 }
 
 .landing-v2-section-title {
@@ -969,6 +994,40 @@
   font-size: 1.02rem;
   line-height: 1.5;
   text-wrap: balance;
+}
+
+/* Highlight travelling across the closing button — the last thing on the
+   page, so it earns a visible sweep rather than a faint glint. Still idles
+   between passes, and only runs for readers who have not asked for less
+   motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .landing-v2-final-cta .landing-cta {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .landing-v2-final-cta .landing-cta::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -55%;
+    width: 48%;
+    /* The button face is already white, so a white-on-white sweep would be
+       invisible. The faint dark flanks are what make the bright core read —
+       together they pass over as a glare rather than a wash. */
+    background: linear-gradient(
+      100deg,
+      transparent 0%,
+      rgba(0, 0, 0, 0.055) 32%,
+      rgba(255, 255, 255, 0.95) 50%,
+      rgba(0, 0, 0, 0.055) 68%,
+      transparent 100%
+    );
+    transform: skewX(-18deg);
+    pointer-events: none;
+    animation: memo-cta-shine 3.4s ease-in-out 0.9s infinite;
+  }
 }
 
 .landing-v2-final-cta-note {

@@ -67,6 +67,109 @@ test("drops injected-script errors even when some frame locations are unknown", 
   assert.equal(shouldDropWebViewInjectedScriptError(event), true);
 });
 
+// Raw (pre-symbolication) payload of the event MEMOAI-WEB-2F recorded on 2026-08-14, i.e.
+// exactly what beforeSend saw with the injected-script filter already deployed. Instagram's
+// logger registered a beforeunload listener, Sentry's browserApiErrors integration wrapped it,
+// and the SDK shim shows up as an opaque first-party-looking chunk above the injected frames.
+function sdkWrappedInstagramEvent() {
+  return {
+    exception: {
+      values: [
+        {
+          type: "Error",
+          value: "Error invoking postMessage: Java object is gone",
+          mechanism: {
+            type: "auto.browser.browserapierrors.addEventListener",
+            handled: false,
+            data: { handler: "<anonymous>", target: "EventTarget" },
+          },
+          stacktrace: {
+            frames: [
+              { filename: "app:///_next/static/chunks/8105-ee2560ebd354b3cf.js", function: "n" },
+              { filename: "app://navigation_performance_logger_android", function: null },
+              {
+                filename: "app://navigation_performance_logger_android",
+                function: "sendBeforeUnloadMessage",
+              },
+              {
+                filename: "app://navigation_performance_logger_android",
+                function: "sendDataToNative",
+              },
+            ],
+          },
+        },
+      ],
+    },
+  };
+}
+
+test("drops injected-script errors thrown through a listener Sentry wrapped (MEMOAI-WEB-2F)", () => {
+  const event = sdkWrappedInstagramEvent();
+  assert.equal(shouldDropWebViewInjectedScriptError(event), true);
+  assert.equal(shouldDropClientErrorEvent(event), true);
+});
+
+test("only the SDK shim frame is excused — real app frames below it still keep the event", () => {
+  // Same wrapper mechanism, but our own code is genuinely on the stack under the shim.
+  const event = sdkWrappedInstagramEvent();
+  event.exception.values[0].stacktrace.frames.splice(1, 0, {
+    filename: "app:///_next/static/chunks/app/page-def456.js",
+    function: "onBeforeUnload",
+  });
+  assert.equal(shouldDropWebViewInjectedScriptError(event), false);
+  assert.equal(shouldDropClientErrorEvent(event), false);
+});
+
+test("an app-code frame is not excused when the mechanism is not an SDK-wrapped callback", () => {
+  // Without the browserApiErrors mechanism, frames[0] is ordinary app code and vetoes the drop.
+  const event = sdkWrappedInstagramEvent();
+  event.exception.values[0].mechanism = { type: "auto.browser.global_handlers.onerror" };
+  assert.equal(shouldDropWebViewInjectedScriptError(event), false);
+  assert.equal(shouldDropClientErrorEvent(event), false);
+});
+
+test("an SDK-wrapped callback failing purely in our own code is still reported", () => {
+  const event = {
+    exception: {
+      values: [
+        {
+          type: "TypeError",
+          value: "Cannot read properties of undefined (reading 'id')",
+          mechanism: { type: "auto.browser.browserapierrors.addEventListener" },
+          stacktrace: {
+            frames: [
+              { filename: "app:///_next/static/chunks/8105-ee2560ebd354b3cf.js", function: "n" },
+              { filename: "app:///_next/static/chunks/app/page-def456.js", function: "onClick" },
+            ],
+          },
+        },
+      ],
+    },
+  };
+  assert.equal(shouldDropWebViewInjectedScriptError(event), false);
+  assert.equal(shouldDropClientErrorEvent(event), false);
+});
+
+test("the SDK shim alone is never enough to drop an event", () => {
+  const event = {
+    exception: {
+      values: [
+        {
+          type: "Error",
+          value: "Error invoking postMessage: Java object is gone",
+          mechanism: { type: "auto.browser.browserapierrors.setTimeout" },
+          stacktrace: {
+            frames: [
+              { filename: "app:///_next/static/chunks/8105-ee2560ebd354b3cf.js", function: "n" },
+            ],
+          },
+        },
+      ],
+    },
+  };
+  assert.equal(shouldDropWebViewInjectedScriptError(event), false);
+});
+
 test("keeps errors that touch our own code, even if an injected frame is on the stack", () => {
   const event = {
     exception: {

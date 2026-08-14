@@ -10,6 +10,7 @@ export type SentryLikeEvent = {
   }>;
   exception?: {
     values?: Array<{
+      mechanism?: { type?: string } | null;
       stacktrace?: {
         frames?: Array<{ filename?: string | null }>;
       };
@@ -107,20 +108,37 @@ export function shouldDropNoStackBrowserNetworkNoise(event: SentryLikeEvent) {
 // frame always keeps its /_next path.
 const INJECTED_SCRIPT_URL = /^app:\/\/(?:[^/]|$)/;
 
+// When an injected script registers a listener, Sentry's own browserApiErrors integration
+// wraps it, so a throw from that listener is reported with the SDK's `sentryWrapped` shim as
+// the outermost frame — above the injected script's own frames. At beforeSend time that shim
+// is still an unresolved bundle URL ("app:///_next/static/chunks/8105-<hash>.js"); Sentry only
+// resolves it to node_modules/@sentry/browser server-side, so we cannot recognize it by
+// filename. What does identify it is the mechanism: these types are set exclusively by the SDK
+// when it catches a throw out of a callback it wrapped (addEventListener, handleEvent,
+// setTimeout, requestAnimationFrame, XHR handlers). Such a frame is instrumentation, not our
+// code, so it must not count as "our code is on the stack".
+const SDK_WRAPPED_CALLBACK_MECHANISM = /^auto\.browser\.browserapierrors(?:\.|$)/;
+
 function isFrameLocationUnknown(filename: string) {
   return filename === "" || filename === "<anonymous>" || filename === "[native code]";
 }
 
 export function shouldDropWebViewInjectedScriptError(event: SentryLikeEvent) {
-  const frames = event.exception?.values?.[0]?.stacktrace?.frames;
+  const exception = event.exception?.values?.[0];
+  const frames = exception?.stacktrace?.frames;
 
   if (!frames || frames.length === 0) {
     return false;
   }
 
+  // Frames run outermost-caller first, so the SDK shim — when there is one — is frames[0].
+  const callerFrames = SDK_WRAPPED_CALLBACK_MECHANISM.test(exception?.mechanism?.type ?? "")
+    ? frames.slice(1)
+    : frames;
+
   let sawInjectedFrame = false;
 
-  for (const frame of frames) {
+  for (const frame of callerFrames) {
     const filename = typeof frame?.filename === "string" ? frame.filename : "";
 
     if (INJECTED_SCRIPT_URL.test(filename)) {

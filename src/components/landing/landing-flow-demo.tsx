@@ -151,6 +151,38 @@ const STEP_STALL_MS = 2500;
    which reads as a broken product. */
 const STEP_SAFETY_MS = 15_000;
 
+/* How much of the opening drag's length to keep when the reader has already
+   scrolled past the first step. Short enough not to delay the card in front
+   of them, long enough to still read as a drag rather than a cut. The flick
+   figure is for someone throwing the page past the section — barely a blink,
+   but the file is still seen to move. */
+const DRAG_HURRY = 0.4;
+const DRAG_FLICK = 0.16;
+
+/* Scroll speed at which an arrival counts as a flick rather than a brisk
+   read. Well above HURRIED_PX_PER_S below, which only shortens the note. */
+const FLICK_PX_PER_S = 3000;
+
+/* Longest gap between two scroll samples that still says something about
+   speed. Above it the page was idle, not moving slowly. */
+const SCROLL_SAMPLE_MAX_GAP_MS = 400;
+
+/* How far below the fold a step starts animating, in viewport heights. One
+   screen of warning is enough for the note to be written by the time a reader
+   scrolling at a normal pace actually gets to it. Stacked layouts only —
+   wide ones play the whole timeline at once. */
+const STEP_LOOKAHEAD = 1;
+
+/* When the note is written out, line by line. */
+const NOTE_SCHEDULE = [180, 620, 1040, 1400, 1720, 2020, 2320];
+const NOTE_SCHEDULE_END = 2480;
+
+/* Above this scroll speed the reader is moving through the page rather than
+   reading it, and the unhurried timeline above would still be filling in the
+   note well after they have gone past. */
+const HURRIED_PX_PER_S = 1200;
+const HURRIED_SCALE = 0.35;
+
 type FlowGhost = {
   icon: string;
   label: string;
@@ -234,10 +266,30 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
   private stepEls: Array<HTMLElement | null> = [];
   private stepObserver: IntersectionObserver | null = null;
   private stepVisible: Record<number, boolean> = {};
+  /* Latched once a step comes within a screen of the fold — what starts its
+     animation. stepVisible stays the stricter "on screen now" test. */
+  private stepReached: Record<number, boolean> = {};
   private stepOnScreen: Record<number, boolean> = {};
   private stallTimer: number | undefined;
   private safetyTimer: number | undefined;
   private measureFrame: number | undefined;
+  /* Set synchronously when the opening drag is scheduled. state.flowGhost
+     cannot do this job: a scroll fires several measure() passes in a row, and
+     one of them lands before the ghost's setState has committed — which used
+     to clear the drag's own timer and skip it. */
+  private dragging = false;
+  /* The reader arrived below the first step. The opening drag still plays,
+     but compressed, and the card in front of them reveals quickly — they are
+     already looking at it and should not wait out an intro they scrolled
+     past. */
+  private hurried = false;
+  /* Captured once, when the catch-up fires. Reading it live would let the
+     duration change mid-flight as the scroll decays, which the ghost's own
+     CSS transition would then re-time under itself. */
+  private hurryScale = 1;
+  private lastScrollY = 0;
+  private lastScrollAt = 0;
+  private scrollSpeed = 0;
   private advancing = false;
 
   componentDidMount() {
@@ -281,17 +333,56 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
      can skip the ratios the gates want, either of which used to leave the
      story stuck on step 1 for the rest of the visit. The observers and the
      scroll listener now only say "look again"; this decides. */
+  /* Recent scroll speed in px/s, smoothed so one jumpy sample cannot decide
+     the pacing on its own. */
+  trackScroll() {
+    const now = Date.now();
+    const y = window.scrollY;
+    if (this.lastScrollAt) {
+      const dt = now - this.lastScrollAt;
+      /* A gap this long means the page sat still and has just started moving
+         again — dividing the whole jump by that idle time reports a fling as
+         a crawl. The distance is real but its duration is unknown, so this
+         sample only seeds the baseline and the next one measures. */
+      if (dt > SCROLL_SAMPLE_MAX_GAP_MS) {
+        this.scrollSpeed = 0;
+      } else if (dt > 0) {
+        const speed = (Math.abs(y - this.lastScrollY) / dt) * 1000;
+        this.scrollSpeed = this.scrollSpeed * 0.4 + speed * 0.6;
+      }
+    }
+    this.lastScrollY = y;
+    this.lastScrollAt = now;
+  }
+
+  /* How much to compress the step timeline. A reader moving fast gets the
+     short version — the point is that they see the note appear, not that
+     they watch it being typed. */
+  paceScale(): number {
+    return this.scrollSpeed > HURRIED_PX_PER_S ? HURRIED_SCALE : 1;
+  }
+
   measure() {
+    this.trackScroll();
     if (!this.isCompact()) {
       this.maybeStart();
       return;
     }
+    const lookahead = window.innerHeight * STEP_LOOKAHEAD;
     this.stepEls.forEach((el) => {
       if (!el) return;
       const step = Number(el.getAttribute("data-flow-step"));
       const ratio = visibleRatio(el);
+      const rect = el.getBoundingClientRect();
       this.stepOnScreen[step] = ratio > 0;
       this.stepVisible[step] = ratio >= stepGate(el);
+      /* Animating starts while the card is still below the fold, so it has
+         played by the time the reader reaches it — a card that begins blank
+         when it comes into view reads as broken. Kept separate from
+         stepVisible, which still means "actually on screen" and decides which
+         card the reader is looking at. */
+      this.stepReached[step] =
+        this.stepReached[step] || rect.top < window.innerHeight + lookahead;
     });
     this.maybeAdvance();
   }
@@ -304,10 +395,9 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
     // A grid taller than the viewport can never reach full visibility.
     const needed = rect.height > window.innerHeight * 0.9 ? 0.6 : 0.9;
     if (visibleRatio(this.flowWrap) < needed) return;
-    this.flowStarted = true;
     this.flowObserver?.disconnect();
     this.flowObserver = null;
-    this.flowLater(() => this.autoFlow(), 400);
+    this.beginStory(400, false);
   }
 
   // Stacked layouts show one step at a time, so each step waits for its own
@@ -321,40 +411,106 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
     this.stepEls.forEach((el) => el && this.stepObserver?.observe(el));
   }
 
+  /* The step the reader is actually looking at. */
+  furthestVisible(): number {
+    if (this.stepVisible[3]) return 3;
+    if (this.stepVisible[2]) return 2;
+    if (this.stepVisible[1]) return 1;
+    return 0;
+  }
+
+  /* A quick scroll can land the reader on a step the story has not reached —
+     they skimmed past the earlier cards, which on a stacked layout is one
+     flick. Everything before the card in front of them completes at once, so
+     it is live the moment they arrive instead of showing an empty card while
+     the steps they already scrolled past play out in order. */
+  catchUpTo(step: number): boolean {
+    const stage = this.state.flowStage;
+    const ahead = (step === 3 && stage < 2) || (step === 2 && stage < 1);
+    if (!ahead) return false;
+
+    /* The source being dragged into the first step is the demo's opening
+       move — it explains what the three steps are about. It plays once even
+       for a reader who arrived further down the section, rather than the file
+       simply being there already. */
+    if (!this.flowStarted) {
+      this.beginStory(0, true);
+      return true;
+    }
+    // Let that drag finish before anything skips ahead of it.
+    if (this.dragging) return true;
+
+    this.clearFlowTimers();
+    this.clearStall();
+    this.flowStarted = true;
+    this.advancing = false;
+    /* Pace follows what the reader is doing now, not how they entered the
+       section — someone who read the first step and then flicked wants the
+       card in front of them straight away. */
+    if (this.scrollSpeed > HURRIED_PX_PER_S) {
+      this.hurried = true;
+      this.hurryScale = this.scrollSpeed > FLICK_PX_PER_S ? DRAG_FLICK : DRAG_HURRY;
+    }
+    const source = this.state.flowSource ?? FLOW_SOURCES[0];
+    this.setState(
+      {
+        // Landing on step 3 means the note is old news; on step 2 the source
+        // is in and the writing starts straight away.
+        flowStage: step === 3 ? 3 : 1,
+        noteStep: step === 3 ? 7 : 0,
+        flowSource: source,
+        flowLabel: source.label,
+        flowGhost: null,
+        flowOver: false,
+      },
+      () => this.maybeAdvance(),
+    );
+    return true;
+  }
+
   maybeAdvance() {
-    if (!this.isCompact() || this.advancing) return;
+    if (!this.isCompact()) return;
+    /* A reader moving fast can overtake the note being written: they are
+       already at the study card while step two is still filling in. That
+       catch-up interrupts the run in progress, which a reader who is actually
+       reading must not have done to them — hence the speed test. */
+    const mayInterrupt = !this.advancing || this.scrollSpeed > HURRIED_PX_PER_S;
+    if (!this.flowUserActed && mayInterrupt && this.catchUpTo(this.furthestVisible())) return;
+    if (this.advancing) return;
     const stage = this.state.flowStage;
     // Step 1 on screen: drop the file into the card and start the story.
+    /* Step one is the exception to the look-ahead: its animation is the
+       source being dragged into the card, which is the thing worth seeing.
+       Starting that a screen early would have it finished before the reader
+       arrives, so it waits until the card is actually in front of them. */
     if (stage === 0 && this.stepVisible[1] && !this.flowStarted && !this.flowUserActed) {
-      this.clearStall();
-      this.flowStarted = true;
-      this.armSafety();
-      this.flowLater(() => this.autoFlow(), 400);
+      this.beginStory(400, false);
       return;
     }
     if (stage === 0) {
       this.armStall(1);
       return;
     }
-    if (stage === 1 && this.stepVisible[2]) {
+    if (stage === 1 && this.stepReached[2]) {
       this.clearStall();
       this.advancing = true;
-      [180, 620, 1040, 1400, 1720, 2020, 2320].forEach((ms, i) =>
-        this.flowLater(() => this.setState({ noteStep: i + 1 }), ms),
+      const scale = this.paceScale();
+      NOTE_SCHEDULE.forEach((ms, i) =>
+        this.flowLater(() => this.setState({ noteStep: i + 1 }), ms * scale),
       );
       this.flowLater(() => {
         this.advancing = false;
         this.setState({ flowStage: 2 }, () => this.maybeAdvance());
-      }, 2480);
+      }, NOTE_SCHEDULE_END * scale);
       return;
     }
     if (stage === 1) {
       this.armStall(2);
       return;
     }
-    if (stage === 2 && this.stepVisible[3]) {
+    if (stage === 2 && this.stepReached[3]) {
       this.clearStall();
-      this.flowLater(() => this.setState({ flowStage: 3 }), 400);
+      this.flowLater(() => this.setState({ flowStage: 3 }), 400 * this.paceScale());
       return;
     }
     if (stage === 2) this.armStall(3);
@@ -370,6 +526,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
       this.stallTimer = undefined;
       if (!this.stepOnScreen[step]) return;
       this.stepVisible[step] = true;
+      this.stepReached[step] = true;
       this.maybeAdvance();
     }, STEP_STALL_MS);
   }
@@ -388,6 +545,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
       this.safetyTimer = undefined;
       if (this.flowUserActed || this.advancing || this.state.flowStage >= 3) return;
       this.stepVisible = { 1: true, 2: true, 3: true };
+      this.stepReached = { 1: true, 2: true, 3: true };
       this.maybeAdvance();
     }, STEP_SAFETY_MS);
   }
@@ -431,6 +589,8 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
 
   runFlow(source: FlowSource, byUser: boolean) {
     this.clearFlowTimers();
+    // The opening drag is over by the time a source actually lands.
+    this.dragging = false;
     if (byUser) this.flowUserActed = true;
     // A new source restarts the whole story, study material included, so the
     // deck animates in from the first card again.
@@ -473,6 +633,33 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
     this.flowLater(() => this.setState({ flowStage: 3 }), 3100);
   }
 
+  /* The drag runs at full length for a reader working down the section, and
+     compressed for one who has already scrolled past the first step — it
+     still reads as the file being carried in, without holding up the card
+     they are actually looking at. */
+  dragScale() {
+    return this.hurried ? this.hurryScale : 1;
+  }
+
+  /* Single entry point for starting the story, so the drag is paced the same
+     way however the reader got here. `arrivedBelow` means they are already
+     looking at a later step; otherwise the pace comes from how fast they were
+     moving when the first step came into view — a fling past the section
+     compresses just as much as skipping it outright. */
+  beginStory(delayMs: number, arrivedBelow: boolean) {
+    this.clearStall();
+    this.flowStarted = true;
+    this.dragging = true;
+    this.hurried = arrivedBelow || this.scrollSpeed > HURRIED_PX_PER_S;
+    this.hurryScale = !this.hurried
+      ? 1
+      : this.scrollSpeed > FLICK_PX_PER_S
+        ? DRAG_FLICK
+        : DRAG_HURRY;
+    this.armSafety();
+    this.flowLater(() => this.autoFlow(), delayMs * this.dragScale());
+  }
+
   autoFlow() {
     if (this.flowUserActed) return;
     // The story runs once, so it always demonstrates the first source.
@@ -483,6 +670,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
       this.runFlow(src, false);
       return;
     }
+    const drag = this.dragScale();
     const wr = this.flowWrap.getBoundingClientRect();
     const cr = chip.getBoundingClientRect();
     const tr = this.flowTile.getBoundingClientRect();
@@ -501,7 +689,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
     this.flowLater(
       () =>
         this.setState((s) => (s.flowGhost ? { flowGhost: { ...s.flowGhost, opacity: 1 } } : null)),
-      70,
+      70 * drag,
     );
     this.flowLater(
       () =>
@@ -517,20 +705,20 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
               }
             : null,
         ),
-      260,
+      260 * drag,
     );
-    this.flowLater(() => this.setState({ flowOver: true }), 860);
+    this.flowLater(() => this.setState({ flowOver: true }), 860 * drag);
     this.flowLater(
       () =>
         this.setState((s) =>
           s.flowGhost ? { flowGhost: { ...s.flowGhost, opacity: 0, scale: 0.4 } } : null,
         ),
-      1020,
+      1020 * drag,
     );
     this.flowLater(() => {
       this.setState({ flowGhost: null });
       this.runFlow(src, false);
-    }, 1180);
+    }, 1180 * drag);
   }
 
   studyTouch() {
@@ -937,10 +1125,22 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
     const stage = s.flowStage;
     const noteVis = stage >= 2 ? 7 : stage === 1 ? s.noteStep : 0;
 
+    /* Every line is in the layout from the start and only becomes visible when
+       it is written, so the note fills in downwards from the top and nothing
+       already on screen moves. Rendering the lines as they arrive instead
+       would re-centre the block on each one, which reads as the earlier lines
+       animating a second time. */
+    const written = (shown: boolean): CSSProperties => ({
+      animation: shown ? NOTE_IN : "none",
+      visibility: shown ? "visible" : "hidden",
+    });
+
     const noteCardStyle: CSSProperties = {
       display: "grid",
       gap: "9px",
-      alignContent: "start",
+      // The note never fills the card's 23rem, so centring the block leaves
+      // equal space above and below rather than a gap under the last line.
+      alignContent: "center",
       width: "100%",
       maxWidth: "100%",
       minWidth: 0,
@@ -955,10 +1155,10 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
       boxShadow: "var(--l-shadow)",
     };
 
-    const bullet = (bold: string, rest: string) => (
+    const bullet = (shown: boolean, bold: string, rest: string) => (
       <span
         style={{
-          animation: NOTE_IN,
+          ...written(shown),
           display: "grid",
           gridTemplateColumns: "12px 1fr",
           fontSize: "12.6px",
@@ -995,25 +1195,31 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
           Dobi zapiske
         </h3>
         <div style={noteCardStyle}>
-          {noteVis >= 1 ? (
-            <span
-              style={{
-                animation: NOTE_IN,
-                display: "inline-block",
-                justifySelf: "start",
-                padding: "1.6px 5.1px",
-                borderRadius: "6.7px",
-                background: "rgba(37,99,235,0.42)",
-                fontSize: "15px",
-                fontWeight: 700,
-                color: "var(--l-label)",
-              }}
-            >
-              Hiter pregled
-            </span>
-          ) : null}
-          {noteVis >= 2 ? (
-            <p style={{ animation: NOTE_IN, margin: 0, fontSize: "13.5px", lineHeight: 1.62, color: "var(--l-label)", textAlign: "left" }}>
+          <span
+            style={{
+              ...written(noteVis >= 1),
+              display: "inline-block",
+              justifySelf: "start",
+              padding: "1.6px 5.1px",
+              borderRadius: "6.7px",
+              background: "rgba(37,99,235,0.42)",
+              fontSize: "15px",
+              fontWeight: 700,
+              color: "var(--l-label)",
+            }}
+          >
+            Hiter pregled
+          </span>
+          <p
+            style={{
+              ...written(noteVis >= 2),
+              margin: 0,
+              fontSize: "13.5px",
+              lineHeight: 1.62,
+              color: "var(--l-label)",
+              textAlign: "left",
+            }}
+          >
               <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "rgba(232,132,52,0.42)" }}>
                 Poslovni informacijski sistemi
               </span>{" "}
@@ -1023,63 +1229,59 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
               </span>
               .
             </p>
-          ) : null}
-          {noteVis >= 3 ? (
-            <span
-              style={{
-                animation: NOTE_IN,
-                display: "inline-block",
-                justifySelf: "start",
-                padding: "1.6px 5.1px",
-                borderRadius: "6.7px",
-                background: "rgba(37,99,235,0.42)",
-                fontSize: "13.4px",
-                fontWeight: 700,
-                color: "var(--l-label)",
-              }}
-            >
-              Vrste sistemov
-            </span>
-          ) : null}
+          <span
+            style={{
+              ...written(noteVis >= 3),
+              display: "inline-block",
+              justifySelf: "start",
+              padding: "1.6px 5.1px",
+              borderRadius: "6.7px",
+              background: "rgba(37,99,235,0.42)",
+              fontSize: "13.4px",
+              fontWeight: 700,
+              color: "var(--l-label)",
+            }}
+          >
+            Vrste sistemov
+          </span>
           <div style={{ display: "grid", gap: "5.5px", textAlign: "left" }}>
-            {noteVis >= 4 ? bullet("Transakcijski", "– zajema dnevne poslovne dogodke.") : null}
-            {noteVis >= 5 ? bullet("Odločitveni", "– analize za vodstvo in scenarije.") : null}
-            {noteVis >= 6 ? bullet("ERP", "– poveže procese v enoten podatkovni model.") : null}
+            {bullet(noteVis >= 4, "Transakcijski", "– zajema dnevne poslovne dogodke.")}
+            {bullet(noteVis >= 5, "Odločitveni", "– analize za vodstvo in scenarije.")}
+            {bullet(noteVis >= 6, "ERP", "– poveže procese v enoten podatkovni model.")}
           </div>
-          {noteVis >= 7 ? (
-            <div
-              style={{
-                animation: NOTE_IN,
-                display: "grid",
-                gap: "2px",
-                padding: "8px 10px",
-                border: "1px solid rgba(245,158,11,0.3)",
-                borderLeft: "3px solid #f59e0b",
-                borderRadius: "10px",
-                background: "rgba(180,83,9,0.22)",
-                textAlign: "left",
-              }}
-            >
-              <span style={{ fontSize: "10.6px", fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--l-label)" }}>
-                Ključno
-              </span>
-              <span style={{ fontSize: "12.4px", lineHeight: 1.45, color: "var(--l-label)" }}>
-                Brez kakovostnih podatkov tudi najboljši sistem ne da dobrih odločitev.
-              </span>
-            </div>
-          ) : null}
-          {stage === 1 && noteVis < 7 ? (
-            <span
-              style={{
-                justifySelf: "start",
-                width: "8px",
-                height: "14px",
-                borderRadius: "2px",
-                background: "var(--l-label)",
-                animation: "memo-caret 900ms steps(1, end) infinite",
-              }}
-            />
-          ) : null}
+          <div
+            style={{
+              ...written(noteVis >= 7),
+              display: "grid",
+              gap: "2px",
+              padding: "8px 10px",
+              border: "1px solid rgba(245,158,11,0.3)",
+              borderLeft: "3px solid #f59e0b",
+              borderRadius: "10px",
+              background: "rgba(180,83,9,0.22)",
+              textAlign: "left",
+            }}
+          >
+            <span style={{ fontSize: "10.6px", fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--l-label)" }}>
+              Ključno
+            </span>
+            <span style={{ fontSize: "12.4px", lineHeight: 1.45, color: "var(--l-label)" }}>
+              Brez kakovostnih podatkov tudi najboljši sistem ne da dobrih odločitev.
+            </span>
+          </div>
+          {/* Reserved like the lines above it, so the note does not settle
+              when the caret retires at the end of the writing. */}
+          <span
+            style={{
+              visibility: stage === 1 && noteVis < 7 ? "visible" : "hidden",
+              justifySelf: "start",
+              width: "8px",
+              height: "14px",
+              borderRadius: "2px",
+              background: "var(--l-label)",
+              animation: "memo-caret 900ms steps(1, end) infinite",
+            }}
+          />
         </div>
         <p style={{ ...STATUS_BASE, color: stage >= 2 ? "var(--l-label)" : "var(--l-second)" }}>
           {stage >= 2 ? "Zapiski pripravljeni" : stage === 1 ? "Pišem zapiske…" : ""}
@@ -1286,7 +1488,11 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
       opacity: done3 ? 1 : 0,
       transform: done3 ? "translateY(0)" : "translateY(8px)",
       pointerEvents: done3 ? "auto" : "none",
-      transition: "opacity 520ms ease, transform 620ms cubic-bezier(0.22,1,0.36,1)",
+      /* A reader who scrolled straight to this card is looking at it now, so
+         it resolves in a beat rather than easing in behind them — and the
+         harder they flicked, the less of that beat is left. Floored so the
+         fastest arrival still fades rather than popping. */
+      transition: `opacity ${Math.max(140, Math.round(520 * this.dragScale()))}ms ease, transform ${Math.max(160, Math.round(620 * this.dragScale()))}ms cubic-bezier(0.22,1,0.36,1)`,
     };
 
     const cardStyle: CSSProperties = {
@@ -1678,7 +1884,9 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
               top: `${ghost.top}px`,
               opacity: ghost.opacity,
               transform: `translate3d(${ghost.dx}px,${ghost.dy}px,0) scale(${ghost.scale})`,
-              transition: "transform 700ms cubic-bezier(0.4,0,0.2,1), opacity 240ms ease",
+              // Must track the drag's own timings above, or a compressed run
+              // would unmount the ghost before it arrives at the card.
+              transition: `transform ${Math.round(700 * this.dragScale())}ms cubic-bezier(0.4,0,0.2,1), opacity ${Math.round(240 * this.dragScale())}ms ease`,
               willChange: "transform",
             }}
           >

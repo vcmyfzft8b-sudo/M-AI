@@ -108,6 +108,29 @@ export function shouldDropNoStackBrowserNetworkNoise(event: SentryLikeEvent) {
 // frame always keeps its /_next path.
 const INJECTED_SCRIPT_URL = /^app:\/\/(?:[^/]|$)/;
 
+// The other shape the same problem takes, and the one iOS WebView hosts produce. A script
+// evaluated *in* the page rather than loaded from a URL has no source URL of its own, so the
+// engine attributes its frames to the HTML document — which rewriteFrames then renames like
+// any other same-origin URL, giving "app:///" or "app:///app" or "app:///app/lectures/<id>".
+// Both known cases are the iOS counterparts of the app://<script-name> noise above: the
+// Instagram in-app browser's sendDataToNative logger (MEMOAI-WEB-2D) and Chrome on iOS
+// blowing its stack inside its own injected bundle (MEMOAI-WEB-2G).
+//
+// Every script we actually ship is a bundle under /_next/static/**.js, and the one piece of
+// JavaScript inlined in our documents is the ~10-line theme-restore snippet in the root
+// layout, whose whole body sits inside a try/catch. So a frame pointing at the document
+// itself is never our code: the failing script was put there by the browser.
+const REWRITTEN_FIRST_PARTY_URL = /^app:\/\/\//;
+
+function isHtmlDocumentFrame(filename: string) {
+  if (!REWRITTEN_FIRST_PARTY_URL.test(filename)) {
+    return false;
+  }
+
+  const path = filename.slice("app://".length).split(/[?#]/)[0];
+  return !path.endsWith(".js");
+}
+
 // When an injected script registers a listener, Sentry's own browserApiErrors integration
 // wraps it, so a throw from that listener is reported with the SDK's `sentryWrapped` shim as
 // the outermost frame — above the injected script's own frames. At beforeSend time that shim
@@ -141,7 +164,7 @@ export function shouldDropWebViewInjectedScriptError(event: SentryLikeEvent) {
   for (const frame of callerFrames) {
     const filename = typeof frame?.filename === "string" ? frame.filename : "";
 
-    if (INJECTED_SCRIPT_URL.test(filename)) {
+    if (INJECTED_SCRIPT_URL.test(filename) || isHtmlDocumentFrame(filename)) {
       sawInjectedFrame = true;
     } else if (!isFrameLocationUnknown(filename)) {
       // A frame from a real script (https, or our rewritten app:///_next bundle) means

@@ -253,6 +253,124 @@ test("keeps our own errors after Sentry's rewriteFrames renames bundle URLs to a
   assert.equal(shouldDropWebViewInjectedScriptError(mixedStack), false);
 });
 
+// Exact frames of MEMOAI-WEB-2G, recorded 2026-08-14 on Chrome Mobile iOS 151: two functions
+// injected by the browser recursing into each other until the stack blew. They are attributed
+// to the HTML document (loaded at /app, hence "app:///app" after rewriteFrames) at lines our
+// 14-line document does not have — no script of ours is on the stack.
+function chromeIosInjectedScriptEvent() {
+  return {
+    exception: {
+      values: [
+        {
+          type: "RangeError",
+          value: "Maximum call stack size exceeded.",
+          mechanism: { type: "auto.browser.global_handlers.onerror", handled: false },
+          stacktrace: {
+            frames: [
+              { filename: "app:///app", function: null, lineNo: 195, colNo: 349 },
+              { filename: "app:///app", function: "Gk", lineNo: 224, colNo: 25 },
+              { filename: "app:///app", function: "Ik", lineNo: 224, colNo: 408 },
+              { filename: "app:///app", function: "Gk", lineNo: 224, colNo: 63 },
+            ],
+          },
+        },
+      ],
+    },
+  };
+}
+
+test("drops browser-injected script errors attributed to the document (MEMOAI-WEB-2G)", () => {
+  const event = chromeIosInjectedScriptEvent();
+  assert.equal(shouldDropWebViewInjectedScriptError(event), true);
+  assert.equal(shouldDropClientErrorEvent(event), true);
+});
+
+test("document-attributed frames are foreign whatever route the document was loaded at", () => {
+  for (const filename of ["app:///", "app:///app/lectures/fa0bf303-fc89-4cea-b181-ab3e59306b02"]) {
+    const event = chromeIosInjectedScriptEvent();
+    for (const frame of event.exception.values[0].stacktrace.frames) {
+      frame.filename = filename;
+    }
+    assert.equal(shouldDropWebViewInjectedScriptError(event), true);
+  }
+});
+
+test("drops the iOS Instagram browser's logger, the same noise class as 2F/2E (MEMOAI-WEB-2D)", () => {
+  // Identical injected logger to the Android events above — note sendDataToNative — but the
+  // iOS in-app browser evaluates it in the page, so its frames carry the document URL
+  // ("app:///", the landing page) instead of an app://<script-name> pseudo-URL.
+  const event = {
+    exception: {
+      values: [
+        {
+          type: "TypeError",
+          value: "undefined is not an object (evaluating 'window.webkit.messageHandlers')",
+          mechanism: { type: "auto.browser.global_handlers.onerror", handled: false },
+          stacktrace: {
+            frames: [
+              { filename: "app:///", function: null, lineNo: 1, colNo: 5421 },
+              { filename: "app:///", function: "sendPageHideMessage", lineNo: 1, colNo: 3712 },
+              { filename: "app:///", function: "sendDataToNative", lineNo: 1, colNo: 1142 },
+            ],
+          },
+        },
+      ],
+    },
+  };
+  assert.equal(shouldDropWebViewInjectedScriptError(event), true);
+  assert.equal(shouldDropClientErrorEvent(event), true);
+});
+
+test("a document frame does not excuse our own bundle frames on the same stack", () => {
+  // The document-frame rule must never swallow a real error that merely passed through
+  // injected code — a single /_next bundle frame still vetoes the drop.
+  const event = chromeIosInjectedScriptEvent();
+  event.exception.values[0].stacktrace.frames.push({
+    filename: "app:///_next/static/chunks/app/page-def456.js",
+    function: "renderLecture",
+  });
+  assert.equal(shouldDropWebViewInjectedScriptError(event), false);
+  assert.equal(shouldDropClientErrorEvent(event), false);
+});
+
+test("our own bundle URLs are never mistaken for the document, query strings included", () => {
+  for (const filename of [
+    "app:///_next/static/chunks/main-abc123.js",
+    "app:///_next/static/chunks/app/page-def456.js?dpl=abc",
+    "app:///_next/static/chunks/app/page-def456.js#sourceURL",
+  ]) {
+    const event = chromeIosInjectedScriptEvent();
+    for (const frame of event.exception.values[0].stacktrace.frames) {
+      frame.filename = filename;
+    }
+    assert.equal(shouldDropWebViewInjectedScriptError(event), false, filename);
+    assert.equal(shouldDropClientErrorEvent(event), false, filename);
+  }
+});
+
+test("keeps a genuine stack overflow in our own code", () => {
+  // Same error class, but the recursion is in a bundle we ship — that is a real bug.
+  const event = {
+    exception: {
+      values: [
+        {
+          type: "RangeError",
+          value: "Maximum call stack size exceeded.",
+          mechanism: { type: "auto.browser.global_handlers.onerror", handled: false },
+          stacktrace: {
+            frames: [
+              { filename: "app:///_next/static/chunks/app/page-def456.js", function: "walk" },
+              { filename: "app:///_next/static/chunks/app/page-def456.js", function: "walk" },
+            ],
+          },
+        },
+      ],
+    },
+  };
+  assert.equal(shouldDropWebViewInjectedScriptError(event), false);
+  assert.equal(shouldDropClientErrorEvent(event), false);
+});
+
 test("keeps ordinary application errors", () => {
   const event = {
     exception: {

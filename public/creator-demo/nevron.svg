@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" width="1200" height="620" role="img" aria-label="Zgradba nevrona z dendriti, telesom, aksonom in končnimi gumbki">
+  <rect width="1200" height="620" fill="#f7f5f0"/>
+
+  <g stroke="#3f3a33" stroke-width="6" fill="none" stroke-linecap="round">
+    <path d="M210 300L120 200M210 300L96 296M210 300L124 402M170 250L118 244M170 350L120 356"/>
+  </g>
+
+  <circle cx="262" cy="300" r="62" fill="#f0d9b5" stroke="#3f3a33" stroke-width="6"/>
+  <circle cx="262" cy="300" r="22" fill="#c49a6c" stroke="#3f3a33" stroke-width="4"/>
+
+  <path d="M324 300H980" stroke="#3f3a33" stroke-width="10" fill="none" stroke-linecap="round"/>
+
+  <g fill="#cfe3ef" stroke="#1f5f8b" stroke-width="5">
+    <rect x="392" y="272" width="132" height="56" rx="28"/>
+    <rect x="560" y="272" width="132" height="56" rx="28"/>
+    <rect x="728" y="272" width="132" height="56" rx="28"/>
+  </g>
+
+  <g stroke="#3f3a33" stroke-width="6" fill="none" stroke-linecap="round">
+    <path d="M980 300L1058 236M980 300L1074 300M980 300L1058 364"/>
+  </g>
+  <g fill="#c0392b">
+    <circle cx="1068" cy="230" r="18"/>
+    <circle cx="1086" cy="300" r="18"/>
+    <circle cx="1068" cy="370" r="18"/>
+  </g>
+
+  <g font-family="Georgia, serif" font-size="30" fill="#3f3a33">
+    <text x="60" y="150">Dendriti</text>
+    <text x="200" y="430">Celično telo</text>
+    <text x="352" y="216">Mielinska ovojnica</text>
+    <text x="528" y="404">Ranvierjeve zožitve</text>
+    <text x="700" y="216">Akson</text>
+    <text x="984" y="470">Končni gumbki</text>
+  </g>
+
+  <g stroke="#7a736a" stroke-width="3" fill="none" stroke-dasharray="8 8">
+    <path d="M470 226V266"/>
+    <path d="M600 396V336"/>
+    <path d="M760 226V266"/>
+    <path d="M1060 452L1078 328"/>
+    <path d="M262 414V368"/>
+  </g>
+
+  <g>
+    <path d="M330 500h300" stroke="#c0392b" stroke-width="5" marker-end="url(#arrow)"/>
+    <text x="330" y="552" font-family="Georgia, serif" font-size="28" fill="#c0392b">smer akcijskega potenciala</text>
+  </g>
+  <defs>
+    <marker id="arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0L12 6L0 12z" fill="#c0392b"/>
+    </marker>
+  </defs>
+</svg>

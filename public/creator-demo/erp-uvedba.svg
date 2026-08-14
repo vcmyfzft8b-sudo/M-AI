@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 460" width="1200" height="460" role="img" aria-label="Faze uvedbe ERP sistema">
+  <rect width="1200" height="460" fill="#f7f5f0"/>
+
+  <g>
+    <path d="M60 150h240l46 60-46 60H60l46-60z" fill="#e8eef3" stroke="#1f5f8b" stroke-width="4"/>
+    <path d="M300 150h240l46 60-46 60H300l46-60z" fill="#dbe6ee" stroke="#1f5f8b" stroke-width="4"/>
+    <path d="M540 150h240l46 60-46 60H540l46-60z" fill="#cfdfe9" stroke="#1f5f8b" stroke-width="4"/>
+    <path d="M780 150h240l46 60-46 60H780l46-60z" fill="#c2d7e4" stroke="#1f5f8b" stroke-width="4"/>
+  </g>
+
+  <g font-family="Georgia, serif" text-anchor="middle" fill="#1f3d52">
+    <text x="192" y="202" font-size="30">1 · Analiza</text>
+    <text x="192" y="240" font-size="23" fill="#5c7181">popis procesov</text>
+
+    <text x="432" y="202" font-size="30">2 · Konfiguracija</text>
+    <text x="432" y="240" font-size="23" fill="#5c7181">migracija podatkov</text>
+
+    <text x="672" y="202" font-size="30">3 · Testiranje</text>
+    <text x="672" y="240" font-size="23" fill="#5c7181">izobraževanje</text>
+
+    <text x="912" y="202" font-size="30">4 · Zagon</text>
+    <text x="912" y="240" font-size="23" fill="#5c7181">stabilizacija</text>
+  </g>
+
+  <text x="60" y="80" font-family="Georgia, serif" font-size="34" fill="#3f3a33" font-weight="bold">Uvedba po fazah</text>
+  <text x="60" y="360" font-family="Georgia, serif" font-size="27" fill="#7a736a">Najprej finance (najbolj standardizirano), proizvodnja zadnja (najbolj specifična).</text>
+  <text x="60" y="400" font-family="Georgia, serif" font-size="27" fill="#c0392b">Vsaka prilagoditev standardne rešitve podraži tudi vse prihodnje nadgradnje.</text>
+</svg>

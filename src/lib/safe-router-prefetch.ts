@@ -1,3 +1,5 @@
+import { mapAppHrefForClient } from "@/lib/creator-demo/paths";
+
 type PrefetchRouter = {
   prefetch: (href: string) => void | Promise<void>;
 };
@@ -12,7 +14,7 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
 
 export function safeRouterPrefetch(router: PrefetchRouter, href: string) {
   try {
-    const result = router.prefetch(href);
+    const result = router.prefetch(mapAppHrefForClient(href));
 
     if (isPromiseLike(result)) {
       void Promise.resolve(result).catch(() => null);

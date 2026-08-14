@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="1200" height="760" role="img" aria-label="Moduli ERP sistema okoli skupne podatkovne baze">
+  <rect width="1200" height="760" fill="#f7f5f0"/>
+
+  <g stroke="#9aa5ad" stroke-width="4">
+    <path d="M600 300V190M600 460V570M470 380H330M730 380H870M505 320L392 240M695 320L808 240M505 440L392 520M695 440L808 520"/>
+  </g>
+
+  <circle cx="600" cy="380" r="112" fill="#1f5f8b"/>
+  <text x="600" y="368" text-anchor="middle" font-family="Georgia, serif" font-size="30" fill="#ffffff">Skupna</text>
+  <text x="600" y="408" text-anchor="middle" font-family="Georgia, serif" font-size="30" fill="#ffffff">baza</text>
+
+  <g fill="#ffffff" stroke="#3f3a33" stroke-width="4">
+    <rect x="466" y="80" width="268" height="110" rx="18"/>
+    <rect x="466" y="570" width="268" height="110" rx="18"/>
+    <rect x="62" y="325" width="268" height="110" rx="18"/>
+    <rect x="870" y="325" width="268" height="110" rx="18"/>
+    <rect x="140" y="150" width="252" height="96" rx="18"/>
+    <rect x="808" y="150" width="252" height="96" rx="18"/>
+    <rect x="140" y="514" width="252" height="96" rx="18"/>
+    <rect x="808" y="514" width="252" height="96" rx="18"/>
+  </g>
+
+  <g font-family="Georgia, serif" font-size="30" fill="#3f3a33" text-anchor="middle">
+    <text x="600" y="130">Finance</text>
+    <text x="600" y="168" font-size="23" fill="#7a736a">glavna knjiga</text>
+
+    <text x="600" y="620">Proizvodnja</text>
+    <text x="600" y="658" font-size="23" fill="#7a736a">delovni nalogi</text>
+
+    <text x="196" y="370">Nabava</text>
+    <text x="196" y="408" font-size="23" fill="#7a736a">naročila, zaloge</text>
+
+    <text x="1004" y="370">Prodaja</text>
+    <text x="1004" y="408" font-size="23" fill="#7a736a">ponudbe, računi</text>
+
+    <text x="266" y="196">Kadri</text>
+    <text x="266" y="228" font-size="23" fill="#7a736a">plače</text>
+
+    <text x="934" y="196">Logistika</text>
+    <text x="934" y="228" font-size="23" fill="#7a736a">dobave</text>
+
+    <text x="266" y="560">Vzdrževanje</text>
+    <text x="266" y="592" font-size="23" fill="#7a736a">osnovna sredstva</text>
+
+    <text x="934" y="560">Poročila</text>
+    <text x="934" y="592" font-size="23" fill="#7a736a">kazalniki</text>
+  </g>
+
+  <text x="600" y="726" text-anchor="middle" font-family="Georgia, serif" font-size="27" fill="#7a736a">Vsak podatek se vnese enkrat in je takoj viden vsem modulom.</text>
+</svg>

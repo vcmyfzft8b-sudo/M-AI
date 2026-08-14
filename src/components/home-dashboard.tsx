@@ -19,6 +19,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { flushSync } from "react-dom";
 
+import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
 import { NoteSourceModal, type NoteSourceMode } from "@/components/note-source-modal";
 import { StatusBadge } from "@/components/status-badge";
 import { EmojiIcon } from "@/components/emoji-icon";
@@ -502,6 +503,8 @@ export function HomeDashboard({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const homeHref = useAppHref("/app");
+  const isCreatorDemo = useIsCreatorDemo();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const mobileCreateMenuDragStartYRef = useRef<number | null>(null);
   const mobileCreateMenuDragOffsetRef = useRef(0);
@@ -552,11 +555,12 @@ export function HomeDashboard({
     }
 
     setShowLocalDevDashboard(
-      window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1" ||
-        window.location.hostname === "::1",
+      !isCreatorDemo &&
+        (window.location.hostname === "localhost" ||
+          window.location.hostname === "127.0.0.1" ||
+          window.location.hostname === "::1"),
     );
-  }, []);
+  }, [isCreatorDemo]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 767px)");
@@ -625,7 +629,7 @@ export function HomeDashboard({
   function closeModal() {
     setManualModal(null);
     if (searchModal) {
-      router.replace("/app", { scroll: false });
+      router.replace(homeHref, { scroll: false });
     }
   }
 

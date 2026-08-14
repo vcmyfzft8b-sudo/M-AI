@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { useAppHref } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
 import {
   shouldHandleLinkNavigation,
@@ -9,12 +10,13 @@ import {
 } from "@/components/navigation-loading";
 
 export function SupportArticleLink({
-  href,
+  href: rawHref,
   title,
 }: {
   href: string;
   title: string;
 }) {
+  const href = useAppHref(rawHref);
   const { navigateWithFeedback, overlay, isNavigating } = useInstantNavigation();
 
   return (

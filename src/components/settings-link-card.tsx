@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { useAppHref } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
 import {
   shouldHandleLinkNavigation,
@@ -9,7 +10,7 @@ import {
 } from "@/components/navigation-loading";
 
 export function SettingsLinkCard({
-  href,
+  href: rawHref,
   icon,
   title,
   detail,
@@ -19,6 +20,7 @@ export function SettingsLinkCard({
   title: string;
   detail?: string;
 }) {
+  const href = useAppHref(rawHref);
   const { navigateWithFeedback, overlay, isNavigating } = useInstantNavigation();
 
   return (

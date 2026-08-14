@@ -11,6 +11,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
+import { useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { Folder } from "@/components/folder";
 import { ViewportPortal } from "@/components/viewport-portal";
@@ -143,6 +144,7 @@ export function LibraryFolderMenu({
   selectedFolderId: string | null;
   onSelectFolder: (folderId: string | null, lectureIds: string[] | null) => void;
 }) {
+  const isCreatorDemo = useIsCreatorDemo();
   const shellRef = useRef<HTMLDivElement | null>(null);
   const hasRestoredSelectionRef = useRef(false);
   const hasMigratedLocalFoldersRef = useRef(false);
@@ -296,7 +298,10 @@ export function LibraryFolderMenu({
   }, [liveFolders, onSelectFolder, selectedFolderId, userId]);
 
   useEffect(() => {
-    if (hasMigratedLocalFoldersRef.current) {
+    // The creator demo runs under a synthetic user id. Migrating there would
+    // pull the visitor's own un-migrated legacy folders into the demo library
+    // and then delete them locally, so it must never run.
+    if (isCreatorDemo || hasMigratedLocalFoldersRef.current) {
       return;
     }
 
@@ -364,7 +369,7 @@ export function LibraryFolderMenu({
       .catch(() => {
         hasMigratedLocalFoldersRef.current = false;
       });
-  }, [lectureIdSet, onSelectFolder, userId]);
+  }, [isCreatorDemo, lectureIdSet, onSelectFolder, userId]);
 
   function handleToggleMenu() {
     setIsOpen((currentValue) => !currentValue);

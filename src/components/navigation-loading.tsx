@@ -8,7 +8,9 @@ import { DashboardLoading } from "@/components/dashboard-loading";
 import { LectureWorkspaceLoading } from "@/components/lecture-loading";
 import { SettingsLoading } from "@/components/settings-loading";
 import { SupportArticleLoading, SupportIndexLoading } from "@/components/support-loading";
+import { useCreatorDemoBasePath } from "@/components/creator-demo/creator-demo-context";
 import { getVisibleAppHeaderBottom } from "@/lib/app-header-offset";
+import { mapAppHref, unmapDemoPathname } from "@/lib/creator-demo/paths";
 
 /**
  * If a navigation never lands (offline, crashed transition), release the
@@ -22,8 +24,8 @@ function getPathnameFromHref(href: string) {
 }
 
 /** Skeleton matching what the target route will render, or null if it has none. */
-function getNavigationSkeleton(href: string): ReactNode | null {
-  const pathname = getPathnameFromHref(href);
+function getNavigationSkeleton(href: string, demoBasePath: string | null): ReactNode | null {
+  const pathname = unmapDemoPathname(getPathnameFromHref(href), demoBasePath);
 
   if (pathname.startsWith("/app/lectures/")) {
     return <LectureWorkspaceLoading />;
@@ -69,6 +71,7 @@ export function shouldHandleLinkNavigation(event: MouseEvent<HTMLAnchorElement>)
 export function useInstantNavigation() {
   const router = useRouter();
   const currentPathname = usePathname();
+  const demoBasePath = useCreatorDemoBasePath();
   const frameRef = useRef<number | null>(null);
   const [pending, setPending] = useState<{ href: string; top: number } | null>(null);
 
@@ -100,12 +103,13 @@ export function useInstantNavigation() {
     [],
   );
 
-  function navigateWithFeedback(href: string) {
+  function navigateWithFeedback(rawHref: string) {
+    const href = mapAppHref(rawHref, demoBasePath);
     const targetPathname = getPathnameFromHref(href);
 
     // Same page (e.g. only the query changes) or a route without a skeleton:
     // navigate normally, an overlay would flash or lie about the destination.
-    if (targetPathname === currentPathname || !getNavigationSkeleton(href)) {
+    if (targetPathname === currentPathname || !getNavigationSkeleton(href, demoBasePath)) {
       router.push(href);
       return;
     }
@@ -121,7 +125,7 @@ export function useInstantNavigation() {
     });
   }
 
-  const skeleton = pending ? getNavigationSkeleton(pending.href) : null;
+  const skeleton = pending ? getNavigationSkeleton(pending.href, demoBasePath) : null;
   const overlay =
     pending && skeleton
       ? createPortal(

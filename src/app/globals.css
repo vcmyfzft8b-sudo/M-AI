@@ -13285,11 +13285,10 @@ select:disabled {
   }
 
   /* The ➕ is a colour emoji, so `color` has no effect — knock it to white so
-     it reads against the pill instead of staying dark. The glyph also paints
-     high in its em box, so nudge it down to optically centre it. */
+     it reads against the pill instead of staying dark. Vertical centring is
+     handled once by `.emoji-icon`; this used to nudge the glyph down a further
+     0.09em, which overshot and left the plus sitting low in the pill. */
   .mobile-new-note-pill-icon {
-    position: relative;
-    top: 0.09em;
     filter: brightness(0) invert(1);
   }
 
@@ -14528,11 +14527,19 @@ select:disabled {
 
 }
 
+/* Emoji and glyph icons are placed off their baseline, not their centre, so a
+   flex-centred box still renders them low. Measured in Apple Color Emoji at
+   16px: ink runs 17px above the baseline to 5px below, so its centre sits
+   0.375em above the baseline while the line box puts the baseline 0.0625em
+   lower than that — the glyph lands 1px under the box centre at 16px, and the
+   same holds for text glyphs like "›". Lifting the box by that 0.0625em
+   optically centres every icon in its button. */
 .emoji-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
+  transform: translateY(-0.0625em);
   font-family:
     "Apple Color Emoji",
     "Segoe UI Emoji",

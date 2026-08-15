@@ -295,7 +295,7 @@ test("document-attributed frames are foreign whatever route the document was loa
   }
 });
 
-test("drops the iOS Instagram browser's logger, the same noise class as 2F/2E (MEMOAI-WEB-2D)", () => {
+test("drops the iOS Instagram browser's logger, the same noise class as 2F/2E (MEMOAI-WEB-2C)", () => {
   // Identical injected logger to the Android events above — note sendDataToNative — but the
   // iOS in-app browser evaluates it in the page, so its frames carry the document URL
   // ("app:///", the landing page) instead of an app://<script-name> pseudo-URL.
@@ -340,6 +340,69 @@ test("our own bundle URLs are never mistaken for the document, query strings inc
     "app:///_next/static/chunks/app/page-def456.js#sourceURL",
   ]) {
     const event = chromeIosInjectedScriptEvent();
+    for (const frame of event.exception.values[0].stacktrace.frames) {
+      frame.filename = filename;
+    }
+    assert.equal(shouldDropWebViewInjectedScriptError(event), false, filename);
+    assert.equal(shouldDropClientErrorEvent(event), false, filename);
+  }
+});
+
+// Exact frames of MEMOAI-WEB-2H, recorded 2026-08-14 on desktop Chrome 151. The console
+// breadcrumbs immediately before it ("Could not assign Exodus provider to window.solana",
+// ...window.phantom.solana, ...window.phantom.ethereum) identify the author: the Exodus wallet
+// extension, whose injected provider lost a race and rejected while reading `.M_ID`. Nothing at
+// /executors/200.js is served by us — that path 404s on the site — but the SDK strips origins
+// off third-party URLs too, so the frame arrives dressed as first-party.
+function extensionInjectedScriptEvent() {
+  return {
+    exception: {
+      values: [
+        {
+          type: "TypeError",
+          value: "Cannot read properties of undefined (reading 'M_ID')",
+          mechanism: { type: "auto.browser.global_handlers.onunhandledrejection", handled: false },
+          stacktrace: {
+            frames: [
+              { filename: "app:///executors/200.js", function: "X", lineNo: 1, colNo: 1442 },
+              { filename: "app:///executors/200.js", function: "F", lineNo: 1, colNo: 761 },
+            ],
+          },
+        },
+      ],
+    },
+    breadcrumbs: [
+      { category: "navigation", data: { from: "[Filtered]", to: "[Filtered]" } },
+      { category: "console", message: "Could not assign Exodus provider to window.solana" },
+    ],
+  };
+}
+
+test("drops an extension's injected script error after origin stripping (MEMOAI-WEB-2H)", () => {
+  const event = extensionInjectedScriptEvent();
+  assert.equal(shouldDropWebViewInjectedScriptError(event), true);
+  assert.equal(shouldDropClientErrorEvent(event), true);
+});
+
+test("an extension frame does not excuse our own bundle frames on the same stack", () => {
+  const event = extensionInjectedScriptEvent();
+  event.exception.values[0].stacktrace.frames.push({
+    filename: "app:///_next/static/chunks/app/page-def456.js",
+    function: "submitEmail",
+  });
+  assert.equal(shouldDropWebViewInjectedScriptError(event), false);
+  assert.equal(shouldDropClientErrorEvent(event), false);
+});
+
+test("the non-bundle scripts we do serve ourselves stay first-party", () => {
+  // Both are ours: the Vercel analytics beacon injected by <Analytics />, and the ffmpeg core
+  // we serve out of public/vendor. Neither lives under /_next, so neither may be read as
+  // foreign just because its path is not a bundle path.
+  for (const filename of [
+    "app:///_vercel/insights/script.js",
+    "app:///vendor/ffmpeg/ffmpeg-core.js",
+  ]) {
+    const event = extensionInjectedScriptEvent();
     for (const frame of event.exception.values[0].stacktrace.frames) {
       frame.filename = filename;
     }

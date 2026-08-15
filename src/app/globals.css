@@ -46,12 +46,13 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.42),
     0 10px 20px rgba(0, 0, 0, 0.08);
   --sheet-background: #ffffff;
-  /* The colour iOS Safari paints its bottom bar. It is not something a page can
-     set — Safari picks it, either by reading the page's pixels at load or by
-     following the document background colour, and which of the two wins varies
-     between loads. What a page can do is make both answers identical: every
-     screen ends on this colour, and BrowserChromeColor puts the same value on
-     the document. Measured on iOS 26.5 as the tint Safari settles on. */
+  /* The colour iOS Safari paints its bottom bar over a screen with a sheet up.
+     It is not something a page can set — Safari picks it, either by reading the
+     page's pixels at load or by following the document background colour, and
+     which of the two wins varies between loads. What a page can do is make both
+     answers identical, which is what BrowserChromeColor arranges. Measured on
+     iOS 26.5 as the tint Safari raises to for any document colour that is not
+     the canvas. */
   --browser-bar-surface: #f6f6f8;
   --pressed: rgba(0, 0, 0, 0.05);
   --close-fill: rgba(0, 0, 0, 0.08);
@@ -307,6 +308,14 @@ div {
     height: calc(env(safe-area-inset-bottom) + 1.5rem);
     z-index: 2147483000;
     pointer-events: none;
+    background: none;
+  }
+
+  /* A sheet is up, so the bar sits on its raised tint and the sliver shades into
+     it. Without this the page keeps its own background all the way down and the
+     bar stays on the canvas colour, which is what a screen with no sheet wants —
+     black in dark mode, and no gradient to see. */
+  :root.browser-bar-raised .browser-chrome-tint {
     background: linear-gradient(to bottom, transparent, var(--browser-bar-surface) 85%);
   }
 }

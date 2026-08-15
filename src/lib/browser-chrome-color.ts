@@ -205,6 +205,16 @@ export function readBottomEdgeColor(): string | null {
 }
 
 /**
+ * Normalises a CSS colour to the same `#rrggbb` form `readBottomEdgeColor`
+ * returns, so the two can be compared.
+ */
+export function toComparableHex(input: string): string | null {
+  const parsed = parseCssColor(input);
+
+  return parsed && parsed.a > 0 ? toHex(parsed) : null;
+}
+
+/**
  * Writes the colour into a `theme-color` meta tag kept at the very top of the
  * head. It is created here rather than through Next's viewport metadata so
  * React never claims the tag back during hydration.

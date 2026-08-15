@@ -2,7 +2,6 @@
 
 import * as Sentry from "@sentry/nextjs";
 import {
-  ChevronLeft,
   ChevronDown,
   Loader2,
   Trash2,
@@ -1953,18 +1952,9 @@ export function NoteSourceModal({
             />
             <div className="ios-sheet-header note-source-header">
               <div className="note-source-header-main">
-                {showAudioImportGuide ? (
-                  <button
-                    type="button"
-                    className="note-source-back-button"
-                    onClick={() => setShowAudioImportGuide(false)}
-                    disabled={Boolean(busyLabel) || isCancelling}
-                    aria-label="Nazaj na možnosti zvoka"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                    Nazaj
-                  </button>
-                ) : null}
+                {/* No back button: the close button and the drag-down gesture
+                    both route through requestClose, which steps back out of the
+                    guide to the audio options rather than closing the sheet. */}
                 <h2 className="ios-sheet-title">
                   {showAudioImportGuide ? "Uvozi zvok iz telefona" : sheetTitle(selectedMode)}
                 </h2>

@@ -1785,18 +1785,34 @@ export function LectureWorkspace({
     const isAnnotationPaletteExpanded =
       activeTab === "notes" && Boolean(noteSelection) && isHighlightPaletteOpen;
 
+    // The note dock is rendered twice — once portalled for mobile, once inside
+    // the card for desktop — and the hidden copy still matches the selector with
+    // an all-zero rect. Measuring that one never overlaps anything, so pick the
+    // copy that is actually laid out.
+    function findVisibleAnnotationToolbar() {
+      const toolbars = document.querySelectorAll(
+        ".mobile-note-annotation-pill .note-annotation-toolbar",
+      );
+
+      for (const toolbar of toolbars) {
+        if (toolbar instanceof HTMLElement && toolbar.offsetParent !== null) {
+          return toolbar;
+        }
+      }
+
+      return null;
+    }
+
     function updateDockOverlapState() {
       if (!isAnnotationPaletteExpanded) {
         delete document.body.dataset.noteAnnotationDockOverlap;
         return;
       }
 
-      const annotationToolbar = document.querySelector(
-        ".mobile-note-annotation-pill .note-annotation-toolbar",
-      );
+      const annotationToolbar = findVisibleAnnotationToolbar();
       const mobileDockToggle = document.querySelector(".mobile-dock-toggle");
 
-      if (!(annotationToolbar instanceof HTMLElement) || !(mobileDockToggle instanceof HTMLElement)) {
+      if (!annotationToolbar || !(mobileDockToggle instanceof HTMLElement)) {
         delete document.body.dataset.noteAnnotationDockOverlap;
         return;
       }
@@ -1818,10 +1834,24 @@ export function LectureWorkspace({
     window.addEventListener("resize", updateDockOverlapState);
     window.visualViewport?.addEventListener("resize", updateDockOverlapState);
 
+    // The pill widens over 220ms when the palette opens, so the collision only
+    // exists once that transition has run. Watch the element instead of trusting
+    // a single measurement taken while it is still narrow.
+    const toolbar = isAnnotationPaletteExpanded ? findVisibleAnnotationToolbar() : null;
+    let resizeObserver: ResizeObserver | null = null;
+
+    if (toolbar) {
+      resizeObserver = new ResizeObserver(updateDockOverlapState);
+      resizeObserver.observe(toolbar);
+      toolbar.addEventListener("transitionend", updateDockOverlapState);
+    }
+
     return () => {
       window.cancelAnimationFrame(animationFrame);
       window.removeEventListener("resize", updateDockOverlapState);
       window.visualViewport?.removeEventListener("resize", updateDockOverlapState);
+      resizeObserver?.disconnect();
+      toolbar?.removeEventListener("transitionend", updateDockOverlapState);
       delete document.body.dataset.noteAnnotationDockOverlap;
     };
   }, [activeTab, isHighlightPaletteOpen, noteSelection]);

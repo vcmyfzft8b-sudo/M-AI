@@ -26,7 +26,7 @@ export default async function CreatorDemoLayout({
 
   return (
     <CreatorDemoProvider seed={getCreatorDemoSeed()}>
-      <AppShell hasPaidAccess initialPathname={pathname}>
+      <AppShell hasPaidAccess initialPathname={pathname} className="creator-demo-shell">
         {children}
       </AppShell>
     </CreatorDemoProvider>

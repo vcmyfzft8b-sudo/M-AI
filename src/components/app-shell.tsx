@@ -75,10 +75,13 @@ export function AppShell({
   children,
   hasPaidAccess,
   initialPathname,
+  className = "",
 }: {
   children: React.ReactNode;
   hasPaidAccess: boolean;
   initialPathname: string;
+  /** Extra class on the shell root, for surface-specific styling. */
+  className?: string;
 }) {
   const demoBasePath = useCreatorDemoBasePath();
   const clientPathname = unmapDemoPathname(usePathname(), demoBasePath);
@@ -374,7 +377,7 @@ export function AppShell({
 
   if (shouldHideNavigation) {
     return (
-      <div className="ios-app-shell">
+      <div className={`ios-app-shell ${className}`.trim()}>
         {navigationOverlay}
         {renderPullToRefreshIndicator()}
         <div className="app-shell-pull-content" style={mobilePullContentStyle}>
@@ -385,7 +388,7 @@ export function AppShell({
   }
 
   return (
-    <div className="ios-app-shell desktop-shell">
+    <div className={`ios-app-shell desktop-shell ${className}`.trim()}>
       {navigationOverlay}
       {renderPullToRefreshIndicator()}
       <div className="desktop-brandline">

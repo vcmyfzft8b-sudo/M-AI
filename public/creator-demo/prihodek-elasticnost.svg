@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-label="Skupni prihodek je najvišji tam, kjer je elastičnost enaka 1">
+  <rect width="1200" height="800" fill="#f7f5f0"/>
+  <g stroke="#e6e2d8" stroke-width="1">
+    <path d="M320 140V680M460 140V680M600 140V680M740 140V680M880 140V680"/>
+    <path d="M180 200H1040M180 290H1040M180 380H1040M180 470H1040M180 560H1040"/>
+  </g>
+
+  <path d="M180 120V680H1060" stroke="#3f3a33" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M180 116l-13 28h26z" fill="#3f3a33"/>
+  <path d="M1064 680l-28-13v26z" fill="#3f3a33"/>
+
+  <text x="26" y="152" font-family="Georgia, serif" font-size="34" fill="#3f3a33">Prihodek</text>
+  <text x="946" y="748" font-family="Georgia, serif" font-size="34" fill="#3f3a33">Količina</text>
+
+  <path d="M200 660C360 300 500 220 610 220C720 220 860 300 1020 660" stroke="#7c3aed" stroke-width="9" fill="none" stroke-linecap="round"/>
+
+  <g stroke="#3f3a33" stroke-width="3" stroke-dasharray="12 10" fill="none">
+    <path d="M610 220V680"/>
+    <path d="M180 220H610"/>
+  </g>
+  <circle cx="610" cy="220" r="16" fill="#f7f5f0" stroke="#7c3aed" stroke-width="8"/>
+
+  <text x="640" y="192" font-family="Georgia, serif" font-size="34" font-weight="bold" fill="#7c3aed">E = 1</text>
+  <text x="640" y="242" font-family="Georgia, serif" font-size="30" fill="#3f3a33">največji prihodek</text>
+
+  <g font-family="Georgia, serif" font-size="30" fill="#3f3a33">
+    <text x="222" y="474" fill="#c0392b">E &gt; 1 elastično</text>
+    <text x="222" y="516" font-size="27" opacity="0.8">podražitev zniža prihodek</text>
+    <text x="742" y="474" fill="#1f5f8b">E &lt; 1 neelastično</text>
+    <text x="742" y="516" font-size="27" opacity="0.8">podražitev zviša prihodek</text>
+  </g>
+
+  <g stroke-width="6" fill="none" stroke-linecap="round">
+    <path d="M236 398h96" stroke="#c0392b"/>
+    <path d="M236 398l22-16M236 398l22 16" stroke="#c0392b"/>
+    <path d="M852 398h-96" stroke="#1f5f8b"/>
+    <path d="M852 398l-22-16M852 398l-22 16" stroke="#1f5f8b"/>
+  </g>
+</svg>

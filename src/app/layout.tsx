@@ -120,14 +120,6 @@ export default function RootLayout({
                   meta.setAttribute("${THEME_COLOR_META_ATTRIBUTE}", "");
                   meta.setAttribute("content", canvas);
                   document.head.prepend(meta);
-                  // Start the document on the canvas colour, always. iOS
-                  // Safari's bar only switches to following this value once it
-                  // *changes* after load — before that it keeps whatever it read
-                  // off the page's pixels. A page that loads straight into a
-                  // sheet would otherwise never produce that change, and would
-                  // sit on a different colour from one where the sheet was
-                  // opened later.
-                  document.documentElement.style.backgroundColor = canvas;
                 } catch (error) {}
               })();
             `,
@@ -137,9 +129,6 @@ export default function RootLayout({
       <body>
         <ThemeController />
         {children}
-        {/* After the children: its tint strip has to be appended to the body
-            behind the sheets' own portals to stay the last thing painted along
-            the bottom edge, which is what the browser bar picks up. */}
         <BrowserChromeColor />
         <Analytics />
       </body>

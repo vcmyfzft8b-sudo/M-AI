@@ -3,8 +3,14 @@
  *
  * It is built from the very note the demo's record flow creates
  * (`DEMO_CREATE_PACKS.record`), so the note a creator watches being written is
- * the note that opens when they stop the recording — same markdown, same
- * figures, in the same order.
+ * the note that opens when they stop the recording — same markdown, in the same
+ * order.
+ *
+ * Figures and highlights are the one deliberate difference. The finished note
+ * carries two figures anchored to the sections that explain them; a recording
+ * wants more of them, sooner, so this module adds college-only figures and
+ * pulls them all forward. None of that touches the shared content pack, so
+ * `/creator` is unaffected.
  *
  * Nothing here is generated at runtime and nothing is transcribed: this is a
  * scripted playback for video, and it only exists under `/creator/college`.
@@ -17,18 +23,100 @@ export type LiveNoteSegment =
 
 const RECORD_PACK_KEY = DEMO_CREATE_PACKS.record[0];
 
-/**
- * Where each figure drops in during the live write-up.
- *
- * The finished note anchors its figures to the sections that explain them; a
- * recording cannot wait that long, so the takeover pulls both forward to the
- * opening of the note. Keyed by the figure's file, and an entry that no longer
- * matches falls back to the pack's own anchor.
- */
-const EARLY_FIGURE_ANCHORS: Record<string, string> = {
-  "ponudba-povprasevanje.svg": "Ko se spremeni katerikoli dejavnik razen cene",
-  "elasticnost.svg": "Elastičnost meri občutljivost količine na spremembo cene",
+type LiveFigure = {
+  file: string;
+  fileName: string;
+  alt: string;
+  /** A distinctive phrase; the figure lands at the end of that paragraph. */
+  anchor: string;
 };
+
+/**
+ * Every figure the write-up shows, in note order. The first two are the pack's
+ * own, re-anchored to the opening so a short clip still catches one; the rest
+ * exist only here, so a long take keeps getting something new to land. Seven
+ * across the note means roughly one every section.
+ */
+const LIVE_FIGURES: LiveFigure[] = [
+  {
+    file: "ponudba-povprasevanje.svg",
+    fileName: "graf-ravnovesje.png",
+    alt: "Graf ponudbe in povpraševanja z ravnovesno točko",
+    anchor: "Ko se spremeni katerikoli dejavnik razen cene",
+  },
+  {
+    file: "elasticnost.svg",
+    fileName: "elasticnost-primerjava.png",
+    alt: "Primerjava elastičnega in neelastičnega povpraševanja",
+    anchor: "Elastičnost meri občutljivost količine na spremembo cene",
+  },
+  {
+    file: "premik-krivulje.svg",
+    fileName: "premik-povprasevanja.png",
+    alt: "Premik krivulje povpraševanja v desno in novo ravnovesje",
+    anchor: "Krivulja povpraševanja pada, ker vsaka dodatna enota",
+  },
+  {
+    file: "substituti-komplementi.svg",
+    fileName: "substituti-in-komplementi.png",
+    alt: "Substituti se nadomeščata, komplementa se uporabljata skupaj",
+    anchor: "dobrini, ki se med seboj nadomeščata",
+  },
+  {
+    file: "premik-ponudbe.svg",
+    fileName: "premik-ponudbe.png",
+    alt: "Premik krivulje ponudbe v desno zaradi nižjih stroškov",
+    anchor: "Stroški dela in surovin premaknejo krivuljo ponudbe",
+  },
+  {
+    file: "presezek-primanjkljaj.svg",
+    fileName: "presezek-in-primanjkljaj.png",
+    alt: "Presežek ponudbe nad ravnovesno ceno in primanjkljaj pod njo",
+    anchor: "Če je cena previsoka, ostane blago neprodano",
+  },
+  {
+    file: "prihodek-elasticnost.svg",
+    fileName: "prihodek-in-elasticnost.png",
+    alt: "Skupni prihodek je najvišji tam, kjer je elastičnost enaka 1",
+    anchor: "Kadar je rezultat po absolutni vrednosti večji od 1",
+  },
+];
+
+export type LiveHighlightColor = "green" | "purple";
+
+/**
+ * Phrases the app marks as it writes them, with the colour it reaches for.
+ *
+ * Matched against the rendered text, so a highlight can only appear once its
+ * phrase is fully written — which is what makes it read as the app deciding
+ * that line mattered, rather than as formatting that was always there.
+ *
+ * Kept deliberately short — eight lines across the whole note. A marked-up page
+ * only reads as "these are the bits that matter" while most of it is unmarked;
+ * past that it just looks like decoration.
+ *
+ * Two colours carry the distinction: green for what a thing *is* (definitions,
+ * conditions) and purple for what it *does* (mechanisms and the exam traps).
+ * Every phrase is verified to occur exactly once in the pack's markdown, so
+ * none of them can silently mis-mark or go missing.
+ */
+export const LIVE_NOTE_HIGHLIGHTS: Array<{ phrase: string; color: LiveHighlightColor }> = [
+  { phrase: "Ta točka je tržno ravnovesje", color: "green" },
+  { phrase: "Cena ne premakne krivulje", color: "purple" },
+  { phrase: "Povpraševana količina je količina pri eni sami ceni", color: "green" },
+  {
+    phrase: "Ravnovesje je edina cena, pri kateri ni ne presežka ne primanjkljaja",
+    color: "green",
+  },
+  { phrase: "Premik po krivulji sproži samo sprememba cene", color: "purple" },
+  { phrase: "malo substitutov, kratek rok, nujne dobrine", color: "green" },
+  { phrase: "prihodek je največji tam, kjer je elastičnost enaka 1", color: "purple" },
+  {
+    phrase:
+      "Najpogostejša napaka na izpitu je zamenjava premika krivulje s premikom po krivulji",
+    color: "purple",
+  },
+];
 
 /**
  * Splits the note markdown at each figure's anchor phrase, so a figure lands
@@ -37,36 +125,33 @@ const EARLY_FIGURE_ANCHORS: Record<string, string> = {
  */
 function buildSegments(): LiveNoteSegment[] {
   const pack = getDemoNotePack(RECORD_PACK_KEY);
-  const anchors = pack.images
-    .map((image) => {
-      const earlyAnchor = EARLY_FIGURE_ANCHORS[image.file];
-      const earlyIndex = earlyAnchor ? pack.notesMd.indexOf(earlyAnchor) : -1;
-
-      return {
-        image,
-        index: earlyIndex >= 0 ? earlyIndex : pack.notesMd.indexOf(image.afterText),
-        anchorLength: earlyIndex >= 0 ? earlyAnchor!.length : image.afterText.length,
-      };
-    })
+  const anchors = LIVE_FIGURES.map((figure) => ({
+    figure,
+    index: pack.notesMd.indexOf(figure.anchor),
+  }))
     .filter((entry) => entry.index >= 0)
     .sort((a, b) => a.index - b.index);
 
   const segments: LiveNoteSegment[] = [];
   let cursor = 0;
 
-  for (const { image, index, anchorLength } of anchors) {
+  for (const { figure, index } of anchors) {
     // Cut at the end of the paragraph the anchor phrase belongs to, so the
     // figure never lands mid-sentence.
-    const paragraphEnd = pack.notesMd.indexOf("\n\n", index + anchorLength);
+    const paragraphEnd = pack.notesMd.indexOf("\n\n", index + figure.anchor.length);
     const cut = paragraphEnd === -1 ? pack.notesMd.length : paragraphEnd;
+
+    if (cut <= cursor) {
+      continue;
+    }
 
     segments.push({ kind: "markdown", text: pack.notesMd.slice(cursor, cut) });
     segments.push({
       kind: "figure",
-      src: `/creator-demo/${image.file}`,
-      alt: image.alt,
-      fileName: image.fileName,
-      widthPercent: image.widthPercent ?? 100,
+      src: `/creator-demo/${figure.file}`,
+      alt: figure.alt,
+      fileName: figure.fileName,
+      widthPercent: 100,
     });
 
     cursor = cut;
@@ -98,6 +183,6 @@ export const LIVE_NOTE_STATUS_STEPS = [
   "Razumem povedano",
   "Pišem zapiske",
   "Dodajam sliko",
-  "Urejam strukturo",
+  "Označujem ključno",
   "Pripravljam kartice",
 ] as const;

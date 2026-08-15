@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-label="Substituti se nadomeščata, komplementa se uporabljata skupaj">
+  <rect width="1200" height="800" fill="#f7f5f0"/>
+
+  <g font-family="Georgia, serif" fill="#3f3a33">
+    <text x="90" y="118" font-size="42" font-weight="bold">Substituti</text>
+    <text x="90" y="168" font-size="30" opacity="0.75">nadomeščata drug drugega</text>
+  </g>
+
+  <rect x="90" y="210" width="440" height="180" rx="26" fill="none" stroke="#c0392b" stroke-width="5"/>
+  <text x="160" y="322" font-family="Georgia, serif" font-size="46" fill="#c0392b">Čaj</text>
+  <text x="380" y="322" font-family="Georgia, serif" font-size="46" fill="#c0392b">Kava</text>
+
+  <g stroke="#c0392b" stroke-width="6" fill="none" stroke-linecap="round">
+    <path d="M268 278h84"/>
+    <path d="M352 278l-24-14M352 278l-24 14"/>
+    <path d="M352 322h-84"/>
+    <path d="M268 322l24-14M268 322l24 14"/>
+  </g>
+
+  <text x="90" y="452" font-family="Georgia, serif" font-size="29" fill="#3f3a33">Čaj se podraži &#8594; kupci posežejo po kavi</text>
+
+  <path d="M90 520h1020" stroke="#e6e2d8" stroke-width="3"/>
+
+  <g font-family="Georgia, serif" fill="#3f3a33">
+    <text x="640" y="118" font-size="42" font-weight="bold">Komplementa</text>
+    <text x="640" y="168" font-size="30" opacity="0.75">uporabljata se skupaj</text>
+  </g>
+
+  <rect x="640" y="210" width="470" height="180" rx="26" fill="none" stroke="#1f5f8b" stroke-width="5"/>
+  <text x="676" y="322" font-family="Georgia, serif" font-size="42" fill="#1f5f8b">Tiskalnik</text>
+  <text x="946" y="322" font-family="Georgia, serif" font-size="42" fill="#1f5f8b">Kartuše</text>
+
+  <g stroke="#1f5f8b" stroke-width="6" fill="none" stroke-linecap="round">
+    <path d="M878 300h58"/>
+    <path d="M907 272v56"/>
+  </g>
+
+  <text x="640" y="452" font-family="Georgia, serif" font-size="29" fill="#3f3a33">Tiskalnik se podraži &#8594; manj kartuš</text>
+
+  <g font-family="Georgia, serif" font-size="34" fill="#3f3a33">
+    <text x="90" y="596" font-weight="bold">Inferiorna dobrina</text>
+    <text x="90" y="652" font-size="28" opacity="0.85">povpraševanje pade, ko dohodek zraste</text>
+    <text x="640" y="596" font-weight="bold">Normalna dobrina</text>
+    <text x="640" y="652" font-size="28" opacity="0.85">povpraševanje zraste z dohodkom</text>
+  </g>
+
+  <path d="M90 706h1020" stroke="#e6e2d8" stroke-width="3"/>
+  <text x="90" y="762" font-family="Georgia, serif" font-size="28" fill="#3f3a33" opacity="0.7">Nobeden od teh dejavnikov ni cena dobrine same — vsi premaknejo celo krivuljo.</text>
+</svg>

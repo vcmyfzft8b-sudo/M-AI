@@ -19,9 +19,9 @@ import remarkMath from "remark-math";
 
 import { BrandLogo } from "@/components/brand-logo";
 import { CollegeRainbowWave } from "@/components/creator-demo/college-rainbow-wave";
-import { EmojiIcon } from "@/components/emoji-icon";
 import { ViewportPortal } from "@/components/viewport-portal";
 import {
+  LIVE_NOTE_HIGHLIGHTS,
   LIVE_NOTE_SEGMENTS,
   LIVE_NOTE_STATUS_STEPS,
   LIVE_NOTE_TITLE,
@@ -29,7 +29,7 @@ import {
 } from "@/lib/creator-demo/college-live-note";
 import { mapAppHref } from "@/lib/creator-demo/paths";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
-import { formatCalendarDate, formatTimestamp } from "@/lib/utils";
+import { formatTimestamp } from "@/lib/utils";
 
 /**
  * The `/creator/college` live-recording takeover.
@@ -48,14 +48,13 @@ import { formatCalendarDate, formatTimestamp } from "@/lib/utils";
  * talks, not as a machine dumping text: ~20 characters a second, with a beat at
  * the end of every sentence and a longer one between blocks.
  */
-const MS_PER_CHAR = 44;
-const SENTENCE_PAUSE_MS = 360;
-const PARAGRAPH_PAUSE_MS = 700;
-const HEADING_PAUSE_MS = 520;
+const MS_PER_CHAR = 35;
+const SENTENCE_PAUSE_MS = 290;
+const PARAGRAPH_PAUSE_MS = 560;
+const HEADING_PAUSE_MS = 415;
 /** Table rows land whole: a half-drawn table row reads as a glitch. */
-const TABLE_ROW_MS = 260;
+const TABLE_ROW_MS = 210;
 const TYPING_TICK_MS = 50;
-const PHOTO_TOAST_MS = 3200;
 /**
  * Figures run narrower than in the finished note. The pane is half a screen and
  * the note is the star: a full-width figure pushes the writing off camera.
@@ -70,13 +69,6 @@ const FINISH_STAGES = [
   "Ustvarjam kartice in kviz...",
 ] as const;
 const FINISH_STAGE_MS = 520;
-
-const NOTE_TABS = [
-  { id: "notes", label: "Zapiski", icon: "📝" },
-  { id: "study", label: "Učenje", icon: "🧠" },
-  { id: "chat", label: "Klepet", icon: "💬" },
-  { id: "transcript", label: "Prepis", icon: "📜" },
-] as const;
 
 type LiveBlock =
   | { kind: "markdown"; text: string; start: number; end: number }
@@ -147,7 +139,7 @@ function buildSchedule(blocks: LiveBlock[]): RevealStep[] {
       // Word by word: the note fills the way someone writes it down, not
       // character by character like a terminal.
       for (const word of splitWords(line.text)) {
-        clock += Math.max(90, word.text.length * MS_PER_CHAR);
+        clock += Math.max(72, word.text.length * MS_PER_CHAR);
 
         if (/[.!?:]["»]?\s*$/.test(word.text)) {
           clock += SENTENCE_PAUSE_MS;
@@ -156,7 +148,7 @@ function buildSchedule(blocks: LiveBlock[]): RevealStep[] {
         steps.push({ at: clock, chars: block.start + line.start + word.end });
       }
 
-      clock += isHeading ? HEADING_PAUSE_MS : 120;
+      clock += isHeading ? HEADING_PAUSE_MS : 96;
     }
 
     clock += isHeading ? 0 : PARAGRAPH_PAUSE_MS;
@@ -194,6 +186,118 @@ const SCRIPT = buildBlocks();
 const SCHEDULE = buildSchedule(SCRIPT.blocks);
 const SCRIPT_DURATION_MS = SCHEDULE[SCHEDULE.length - 1]?.at ?? 0;
 
+/** How many characters are written by `elapsed` milliseconds into the playback. */
+function charsWrittenAt(elapsed: number) {
+  let chars = 0;
+
+  for (const step of SCHEDULE) {
+    if (step.at > elapsed) {
+      break;
+    }
+
+    chars = step.chars;
+  }
+
+  return chars;
+}
+
+/**
+ * The takeover opens fifteen seconds into the write-up rather than on an empty
+ * page: a creator hitting record should find a note already going, not wait for
+ * it to build. Everything past this point is still written on camera.
+ */
+const HEAD_START_MS = 15_000;
+
+/**
+ * Marks the script's key phrases with the app's own highlight styling, the way
+ * a reader would with a marker pen.
+ *
+ * It runs at parse time, so a phrase can only match once it has been fully
+ * written — the highlight lands the instant the sentence completes, which is
+ * what makes it read as a decision rather than as pre-set formatting. Hand-
+ * rolled over hast rather than pulled from a util, because it only ever walks
+ * text nodes and splits them.
+ */
+function rehypeHighlightKeyPhrases() {
+  return (tree: HastParent) => {
+    visit(tree);
+  };
+
+  function visit(node: HastParent) {
+    if (!Array.isArray(node.children)) {
+      return;
+    }
+
+    const next: HastNode[] = [];
+
+    for (const child of node.children) {
+      if (child.type === "element") {
+        visit(child as HastParent);
+        next.push(child);
+        continue;
+      }
+
+      if (child.type !== "text" || typeof child.value !== "string") {
+        next.push(child);
+        continue;
+      }
+
+      next.push(...splitHighlights(child.value));
+    }
+
+    node.children = next;
+  }
+}
+
+function splitHighlights(value: string): HastNode[] {
+  // Earliest match wins, not first-in-list: the phrase order in the script is
+  // editorial, and taking them out of document order would split a text node
+  // around a later phrase and lose an earlier one inside the head.
+  let match: { phrase: string; color: string; at: number } | null = null;
+
+  for (const candidate of LIVE_NOTE_HIGHLIGHTS) {
+    const at = value.indexOf(candidate.phrase);
+
+    if (at >= 0 && (!match || at < match.at)) {
+      match = { phrase: candidate.phrase, color: candidate.color, at };
+    }
+  }
+
+  if (!match) {
+    return [{ type: "text", value }];
+  }
+
+  const parts: HastNode[] = [];
+
+  if (match.at > 0) {
+    parts.push({ type: "text", value: value.slice(0, match.at) });
+  }
+
+  parts.push({
+    type: "element",
+    tagName: "mark",
+    properties: {
+      className: ["college-live-highlight", `college-live-highlight-${match.color}`],
+    },
+    children: [{ type: "text", value: match.phrase }],
+  });
+
+  // The tail can hold another phrase, so it goes back through the same split.
+  parts.push(...splitHighlights(value.slice(match.at + match.phrase.length)));
+
+  return parts.filter((part) => part.type !== "text" || part.value !== "");
+}
+
+type HastNode = {
+  type: string;
+  value?: string;
+  tagName?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNode[];
+};
+
+type HastParent = HastNode & { children: HastNode[] };
+
 /**
  * The app renders notes through its read-along view, not raw markdown, so the
  * live note mirrors that markup: top-level headings get the blue highlight
@@ -226,7 +330,7 @@ const MarkdownBlock = memo(function MarkdownBlock({ text }: { text: string }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
+      rehypePlugins={[rehypeKatex, rehypeHighlightKeyPhrases]}
       components={NOTE_MARKDOWN_COMPONENTS}
     >
       {text}
@@ -262,12 +366,12 @@ export function CollegeLiveRecording({
   const pendingLectureRef = useRef<{ id: string; commit: () => string } | null>(null);
   const followScrollRef = useRef(true);
 
-  const [typedChars, setTypedChars] = useState(0);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [typedChars, setTypedChars] = useState(() => charsWrittenAt(HEAD_START_MS));
+  const [elapsedSeconds, setElapsedSeconds] = useState(() =>
+    Math.round(HEAD_START_MS / 1000),
+  );
   const [statusStep, setStatusStep] = useState(0);
-  const [photoToast, setPhotoToast] = useState<string | null>(null);
   const [finishStage, setFinishStage] = useState<string | null>(null);
-  const [createdAt] = useState(() => new Date().toISOString());
 
   const isComplete = typedChars >= SCRIPT.totalChars;
 
@@ -314,7 +418,9 @@ export function CollegeLiveRecording({
       return;
     }
 
-    const startedAt = performance.now();
+    // Rewind the clock by the head start, so playback continues from the text
+    // that is already on screen instead of rewriting it.
+    const startedAt = performance.now() - HEAD_START_MS;
     let stepIndex = 0;
 
     // An interval rather than a frame loop: reveals are word-sized, so 20 checks
@@ -366,17 +472,6 @@ export function CollegeLiveRecording({
   }, [typedChars]);
 
   const visibleFigureCount = visibleBlocks.filter((entry) => entry.node.kind === "figure").length;
-
-  useEffect(() => {
-    if (visibleFigureCount === 0) {
-      return;
-    }
-
-    setPhotoToast("Slika dodana v zapiske");
-    const timeoutId = window.setTimeout(() => setPhotoToast(null), PHOTO_TOAST_MS);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [visibleFigureCount]);
 
   const scrollNoteToBottom = useCallback(() => {
     const element = noteScrollRef.current;
@@ -474,78 +569,40 @@ export function CollegeLiveRecording({
             <BrandLogo subtitle="" />
           </span>
 
+          {/* Timer only. The recording badge and a close button both read as
+              app chrome on camera; the stage already says it is listening, and
+              the stop button below is the way out (Escape also closes). */}
           <div className="college-live-header-meta">
-            <span className="college-live-rec">
-              <span className="college-live-rec-dot" aria-hidden="true" />
-              Snemam
-            </span>
             <span className="college-live-timer">{formatTimestamp(elapsedSeconds * 1000)}</span>
           </div>
-
-          <button
-            type="button"
-            className="app-close-button college-live-close"
-            onClick={onClose}
-            disabled={Boolean(finishStage)}
-            aria-label="Zapri"
-          >
-            <EmojiIcon symbol="✖️" size="1rem" />
-          </button>
         </header>
 
         <div className="college-live-body">
+          {/* The note and nothing else: no title, no date, no tab strip. On
+              camera the writing is the whole story, and every bit of chrome
+              around it competes with the wave for attention. */}
           {isDesktop ? (
             <section className="college-live-note-pane" aria-label="Zapiski nastajajo v živo">
-              {/* The app's own lecture chrome, so the pane reads as the note
-                  screen the creator already knows. It sits outside the scroller
-                  so the title and tabs stay on camera while the note fills. */}
-              <div className="lecture-workspace lecture-workspace-full college-live-note-chrome">
-                <div className="workspace-panel-stack lecture-main-column">
-                  <div className="lecture-header">
-                    <div className="lecture-header-row">
-                      <div className="ios-title-block lecture-title-block">
-                        <h1 className="ios-large-title">{LIVE_NOTE_TITLE}</h1>
-                        <div className="lecture-meta-row">
-                          <span className="lecture-meta-copy">{formatCalendarDate(createdAt)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <p className="ios-info lecture-inline-note">
-                      {isComplete
-                        ? "Zapiski so pripravljeni. Ustavi snemanje in jih odpri."
-                        : "Snemanje poteka. Zapiski nastajajo sproti."}
-                    </p>
-                  </div>
-
-                  <div className="ios-segmented lecture-segmented">
-                    {NOTE_TABS.map((tab) => (
-                      <span
-                        key={tab.id}
-                        className={`ios-segment lecture-tab-button ${tab.id === "notes" ? "active" : ""}`}
-                        title={tab.label}
-                      >
-                        <span className="lecture-tab-button-content">
-                          <EmojiIcon symbol={tab.icon} size="1rem" />
-                          <span className="lecture-tab-button-label">{tab.label}</span>
-                        </span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div
-                className="college-live-note-scroll"
-                ref={noteScrollRef}
-                onScroll={handleNoteScroll}
-              >
+              <div className="college-live-note-scroll">
                 <div className="lecture-workspace lecture-workspace-full">
                   <div className="workspace-panel-stack lecture-main-column">
                     <div className="workspace-panel-stack lecture-panel-stack">
-                      <div className="ios-card lecture-notes-card">
+                      {/* The card is the scroller, not its container: that keeps
+                          its box exactly the height of the stage beside it
+                          instead of growing past the screen as the note fills. */}
+                      <div
+                        className="ios-card lecture-notes-card"
+                        ref={noteScrollRef}
+                        onScroll={handleNoteScroll}
+                      >
                         <div className="markdown lecture-markdown">
                           <div className="markdown text-sm text-stone-700 sm:text-[15px]">
+                            {/* The note's title, in the app's own large-title
+                                style, sitting on the page the way a document
+                                heading does — no date, no tab strip. */}
+                            <h1 className="ios-large-title college-live-note-title">
+                              {LIVE_NOTE_TITLE}
+                            </h1>
                             {visibleBlocks.map((entry) =>
                               entry.node.kind === "figure" ? (
                                 <figure
@@ -584,13 +641,6 @@ export function CollegeLiveRecording({
                   </div>
                 </div>
               </div>
-
-              {photoToast ? (
-                <div className="college-live-photo-toast" role="status">
-                  <EmojiIcon symbol="🖼️" size="1rem" />
-                  {photoToast}
-                </div>
-              ) : null}
             </section>
           ) : null}
 
@@ -625,19 +675,14 @@ export function CollegeLiveRecording({
               {finishStage}
             </p>
           ) : (
-            <>
-              <button
-                type="button"
-                className="college-live-stop"
-                onClick={() => void finishRecording()}
-              >
-                <span className="college-live-stop-icon" aria-hidden="true" />
-                Ustavi snemanje in odpri zapiske
-              </button>
-              <p className="college-live-footer-hint">
-                Predstavitveni način – mikrofon ni vklopljen.
-              </p>
-            </>
+            <button
+              type="button"
+              className="college-live-stop"
+              onClick={() => void finishRecording()}
+            >
+              <span className="college-live-stop-icon" aria-hidden="true" />
+              Ustavi snemanje in odpri zapiske
+            </button>
           )}
         </footer>
       </div>

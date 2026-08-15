@@ -484,7 +484,7 @@ export function CollegeLiveRecording({
 
           <button
             type="button"
-            className="college-live-close"
+            className="app-close-button college-live-close"
             onClick={onClose}
             disabled={Boolean(finishStage)}
             aria-label="Zapri"

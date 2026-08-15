@@ -14854,15 +14854,15 @@ select:disabled {
   font-weight: 700;
 }
 
+/* The app's own close button, so the glyph sits exactly where it does in every
+   other close in the product; only the size is trimmed for this compact row. */
 .college-live-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 999px;
-  background: var(--close-fill);
-  color: var(--label);
+  width: 2.6rem;
+  height: 2.6rem;
+}
+
+.college-live-close:disabled {
+  opacity: 0.45;
 }
 
 .college-live-body {
@@ -15220,8 +15220,8 @@ select:disabled {
   }
 
   .college-live-close {
-    width: 2.1rem;
-    height: 2.1rem;
+    width: 2.3rem;
+    height: 2.3rem;
   }
 
   .college-live-stop {

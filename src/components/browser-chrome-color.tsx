@@ -17,6 +17,14 @@ import { subscribeToThemePreference } from "@/lib/theme";
  * — hence the tint strip, which simply continues the bottom-most colour into
  * that sliver. It is invisible in the page itself: it is painted in the exact
  * colour of what sits underneath it.
+ *
+ * Known limit: that toolbar reads the strip once, when the page loads, and
+ * ignores every later change. Measured on iOS 26.5 — re-painting the strip,
+ * removing and re-inserting it, scrolling, and collapsing the toolbar all leave
+ * the tint where it was. So a screen loaded straight into a sheet gets a
+ * matching bar, but a sheet opened afterwards keeps the bar the page loaded
+ * with. The sampling still runs regardless, so the meta stays correct and the
+ * browsers that read it follow along.
  */
 export function BrowserChromeColor() {
   useEffect(() => {

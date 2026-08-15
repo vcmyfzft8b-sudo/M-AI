@@ -186,6 +186,15 @@ export function readBottomEdgeColor(): string | null {
     node = node.parentElement;
   }
 
+  // Nothing under the point — `elementFromPoint` returns null whenever the
+  // sample lands outside the layout viewport, which happens for a frame while
+  // Safari's toolbar collapses and the viewport grows. Reporting the default
+  // canvas here would flash a white strip across a dark app, so say nothing and
+  // let the caller keep the colour it already has.
+  if (layers.length === 0) {
+    return null;
+  }
+
   let result = DEFAULT_CANVAS;
 
   for (let index = layers.length - 1; index >= 0; index -= 1) {

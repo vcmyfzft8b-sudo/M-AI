@@ -4563,6 +4563,13 @@ select:disabled {
   transform: translate3d(0, 0, 0);
 }
 
+.settings-inline-link {
+  color: var(--label);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
 .settings-action-stack {
   display: grid;
   justify-items: end;
@@ -10639,11 +10646,12 @@ select:disabled {
 .legal-page {
   width: min(100%, var(--landing-max-width));
   margin: 0 auto;
-  padding: 3rem 1.25rem 4rem;
+  padding: 3.5rem 1.25rem 5rem;
 }
 
 .legal-page-title {
-  margin: 0 0 1.75rem;
+  max-width: 42rem;
+  margin: 0 0 1.5rem;
   font-size: clamp(2rem, 5vw, 2.9rem);
   font-weight: 800;
   letter-spacing: -0.045em;
@@ -10651,16 +10659,130 @@ select:disabled {
 }
 
 .legal-page-body {
-  max-width: 46rem;
+  max-width: 42rem;
   color: var(--secondary-label);
+}
+
+/*
+ * The shared .markdown rules leave paragraphs with no margin and Tailwind's
+ * preflight drops the list markers, which is fine inside a note card but turns
+ * a 24-section legal document into an unreadable wall. Everything below is
+ * scoped to .legal-page-body so note rendering stays untouched.
+ */
+.legal-page-body p,
+.legal-page-body li {
   font-size: 1rem;
-  line-height: 1.65;
+  line-height: 1.72;
+}
+
+.legal-page-body p {
+  margin: 0 0 1.15rem;
+}
+
+.legal-page-body > .markdown > *:last-child {
+  margin-bottom: 0;
+}
+
+/* The standfirst paragraph that opens every document. */
+.legal-page-body > .markdown > p:first-child {
+  margin-bottom: 1.75rem;
+  color: var(--label);
+  font-size: 1.08rem;
+  line-height: 1.6;
 }
 
 .legal-page-body h2,
 .legal-page-body h3 {
-  margin: 2rem 0 0.6rem;
   color: var(--label);
+  letter-spacing: -0.02em;
+}
+
+.legal-page-body h2 {
+  margin: 2.75rem 0 0.9rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--separator) 30%, transparent);
+  font-size: 1.22rem;
+  font-weight: 700;
+}
+
+.legal-page-body h3 {
+  margin: 1.9rem 0 0.6rem;
+  font-size: 1.02rem;
+  font-weight: 650;
+}
+
+.legal-page-body ul,
+.legal-page-body ol {
+  margin: 0 0 1.15rem;
+  padding-left: 1.3rem;
+}
+
+.legal-page-body ul {
+  list-style: disc;
+}
+
+.legal-page-body ol {
+  list-style: decimal;
+}
+
+.legal-page-body li {
+  margin-bottom: 0.45rem;
+  padding-left: 0.2rem;
+}
+
+.legal-page-body li::marker {
+  color: color-mix(in srgb, var(--secondary-label) 50%, transparent);
+}
+
+.legal-page-body strong {
+  color: var(--label);
+  font-weight: 650;
+}
+
+/*
+ * Statutory fine print. Split out of the document body in the legal route and
+ * parked below the footer: it has to stay on the page, but it should read as
+ * a footnote rather than compete with the numbered sections above it.
+ */
+.legal-page-fineprint {
+  width: min(100%, var(--landing-max-width));
+  margin: 0 auto;
+  padding: 0 1.25rem 2.5rem;
+}
+
+.legal-page-fineprint p {
+  margin: 0;
+  max-width: 52rem;
+  color: color-mix(in srgb, var(--secondary-label) 60%, transparent);
+  font-size: 0.62rem;
+  line-height: 1.5;
+}
+
+/* Reads as one continuous run of small text — no bold lead-in, no link styling. */
+.legal-page-fineprint strong {
+  font-weight: inherit;
+}
+
+.legal-page-fineprint a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.legal-page-body a {
+  color: var(--label);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+@media (max-width: 639px) {
+  .legal-page {
+    padding: 2.5rem 1.25rem 3.5rem;
+  }
+
+  .legal-page-body h2 {
+    margin-top: 2.25rem;
+    padding-top: 1.4rem;
+  }
 }
 
 /* 404 / error boundaries — see src/components/error-screen.tsx */
@@ -10849,6 +10971,12 @@ select:disabled {
   margin: 0;
   color: var(--secondary-label);
   font-size: 0.82rem;
+}
+
+.landing-public-footer-legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
 }
 
 @media (max-width: 639px) {

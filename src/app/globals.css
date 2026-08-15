@@ -14527,19 +14527,20 @@ select:disabled {
 
 }
 
-/* Emoji and glyph icons are placed off their baseline, not their centre, so a
-   flex-centred box still renders them low. Measured in Apple Color Emoji at
-   16px: ink runs 17px above the baseline to 5px below, so its centre sits
-   0.375em above the baseline while the line box puts the baseline 0.0625em
-   lower than that — the glyph lands 1px under the box centre at 16px, and the
-   same holds for text glyphs like "›". Lifting the box by that 0.0625em
-   optically centres every icon in its button. */
+/* An emoji glyph does not sit centred in its own box: it is placed off the
+   baseline, and the line box around it is not symmetric. Measured by
+   rasterising the glyph through this exact rule and reading the painted
+   pixels — ➕, ⚙️, 🏠 and 📄 all agree — the ink centre lands 0.039em *above*
+   the box centre, so a flex-centred icon renders slightly high in its button.
+   Pushing the box down by that measured amount puts the ink on the centre.
+   (Text needs no such correction: the same measurement puts a label's ink
+   centre at 0.000em. A word with a descender sits lower, which is correct.) */
 .emoji-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
-  transform: translateY(-0.0625em);
+  transform: translateY(0.039em);
   font-family:
     "Apple Color Emoji",
     "Segoe UI Emoji",

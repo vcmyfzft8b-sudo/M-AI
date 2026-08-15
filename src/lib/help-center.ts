@@ -551,7 +551,7 @@ Ta politika pojasnjuje, kdaj vrnemo plačilo za naročnino Memo AI, v kakšnem d
 - **zahteva po 5 dneh od plačila** — vračila ni
 - **preklic naročnine** — kadar koli; dostop ostane do konca plačanega obdobja
 - **naša napaka ali dvojna bremenitev** — vrnemo v celoti
-- **zakonska pravica potrošnika do odstopa** — velja poleg te politike in ima prednost pred njo; podrobnosti so v pogojih uporabe
+- **zakonska pravica potrošnika do odstopa** — velja poleg te politike in ima prednost pred njo
 
 ## 2. Za kaj velja
 

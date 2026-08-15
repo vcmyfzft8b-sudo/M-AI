@@ -6,33 +6,20 @@ import { readBottomEdgeColor, setThemeColorMeta } from "@/lib/browser-chrome-col
 import { subscribeToThemePreference } from "@/lib/theme";
 
 /**
- * Makes the browser's own chrome take on the colour the app paints at the
- * bottom of the screen, so a sheet that runs to the bottom flows into the
- * browser bar instead of ending in a seam.
+ * Keeps `theme-color` on the colour the app paints at the bottom of the screen,
+ * for the browsers that read it — Chrome, older iOS Safari, installed web apps.
  *
- * Two things are needed, because browsers disagree on where that colour comes
- * from. `theme-color` covers the ones that read it (Chrome, older iOS Safari,
- * installed web apps). iOS 26's floating Safari toolbar ignores it and
- * instead takes on whatever the page paints in the last sliver of the viewport
- * — hence the tint strip, which simply continues the bottom-most colour into
- * that sliver. It is invisible in the page itself: it is painted in the exact
- * colour of what sits underneath it.
- *
- * Known limit: that toolbar reads the strip once, when the page loads, and
- * ignores every later change. Measured on iOS 26.5 — re-painting the strip,
- * removing and re-inserting it, scrolling, and collapsing the toolbar all leave
- * the tint where it was. So a screen loaded straight into a sheet gets a
- * matching bar, but a sheet opened afterwards keeps the bar the page loaded
- * with. The sampling still runs regardless, so the meta stays correct and the
- * browsers that read it follow along.
+ * iOS 26's Safari toolbar ignores `theme-color` and takes its tint from what
+ * the page paints in the last sliver of the viewport instead, and it reads that
+ * once at page load: measured on iOS 26.5, re-painting, re-inserting, scrolling
+ * and collapsing the toolbar all leave the tint where it was. So nothing here
+ * can move that bar after load. `.browser-chrome-tint` in globals.css handles it
+ * from the other side, by running the bottom of every screen into --canvas so
+ * the bar only ever needs one colour.
  */
 export function BrowserChromeColor() {
   useEffect(() => {
     let frame = 0;
-    const tint = document.createElement("div");
-    tint.className = "browser-chrome-tint";
-    tint.setAttribute("aria-hidden", "true");
-    document.body.appendChild(tint);
 
     function sample() {
       frame = 0;
@@ -44,10 +31,7 @@ export function BrowserChromeColor() {
       }
 
       setThemeColorMeta(color);
-
-      if (tint.style.backgroundColor !== color) {
-        tint.style.backgroundColor = color;
-      }
+      document.documentElement.style.backgroundColor = color;
     }
 
     // A frame is the natural granularity here: dragging a sheet fires a flood
@@ -96,7 +80,6 @@ export function BrowserChromeColor() {
         window.cancelAnimationFrame(frame);
       }
 
-      tint.remove();
       observer.disconnect();
       unsubscribeFromTheme();
       colorSchemeQuery.removeEventListener("change", schedule);

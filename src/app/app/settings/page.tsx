@@ -78,6 +78,14 @@ export default async function SettingsPage() {
             </Link>
           )}
         </div>
+
+        <p className="ios-row-subtitle">
+          Preklic in vračila ureja{" "}
+          <Link href="/legal/refund-policy" className="settings-inline-link">
+            politika vračil
+          </Link>
+          .
+        </p>
       </section>
 
       <section className="dashboard-section">

@@ -86,6 +86,15 @@ export async function POST(request: Request) {
       cancel_url: getBillingCancelUrl(request),
       allow_promotion_codes: true,
       billing_address_collection: "auto",
+      // The refund policy leans on the buyer expressly asking for the service to
+      // start before the 14-day withdrawal period runs out; that request has to
+      // be captured at the moment of purchase, not at sign-up.
+      custom_text: {
+        submit: {
+          message:
+            "Z nakupom izrecno zahtevaš, da se izvajanje storitve začne takoj in pred iztekom 14-dnevnega odstopnega roka. Če kot potrošnik med tem rokom odstopiš, ti vrnemo plačilo, zmanjšano za sorazmerni del že opravljene storitve. Veljata tudi pogoji uporabe in politika vračil na memoai.eu/legal.",
+        },
+      },
       customer_update: {
         address: "auto",
         name: "auto",

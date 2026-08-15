@@ -5,16 +5,16 @@ import { notFound } from "next/navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { BRAND_NAME, SEO_BRAND_NAME } from "@/lib/brand";
-import { getHelpArticle } from "@/lib/help-center";
+import { getHelpArticle, splitArticleFinePrint } from "@/lib/help-center";
 
 /**
  * Public home for the legal documents. They also exist under /app/support, but
  * that whole tree sits behind requireUser(), so signed-out visitors following a
  * "Pogoji uporabe" link were bounced into onboarding. These routes live outside
- * /app and are deliberately limited to the two documents below — no other help
+ * /app and are deliberately limited to the documents below — no other help
  * article is reachable here.
  */
-const PUBLIC_LEGAL_SLUGS = ["terms-of-use", "privacy-policy"] as const;
+const PUBLIC_LEGAL_SLUGS = ["terms-of-use", "privacy-policy", "refund-policy"] as const;
 
 function getPublicLegalArticle(slug: string) {
   if (!PUBLIC_LEGAL_SLUGS.includes(slug as (typeof PUBLIC_LEGAL_SLUGS)[number])) {
@@ -60,6 +60,7 @@ export default async function LegalPage({
   }
 
   const content = article.content.replace(/^# .+\n+/, "");
+  const { body, finePrint } = splitArticleFinePrint(content);
 
   return (
     <main className="landing-shell landing-public-page">
@@ -77,7 +78,7 @@ export default async function LegalPage({
       <article className="legal-page">
         <h1 className="legal-page-title">{article.title}</h1>
         <div className="legal-page-body markdown">
-          <MarkdownRenderer content={content} />
+          <MarkdownRenderer content={body} />
         </div>
       </article>
 
@@ -86,19 +87,28 @@ export default async function LegalPage({
           <p>
             © {new Date().getFullYear()} {SEO_BRAND_NAME}
           </p>
-          <p>
-            <Link href={otherLegalHref(article.slug)}>{otherLegalLabel(article.slug)}</Link>
+          <p className="landing-public-footer-legal-links">
+            {otherLegalArticles(article.slug).map((other) => (
+              <Link key={other.slug} href={`/legal/${other.slug}`}>
+                {other.title}
+              </Link>
+            ))}
           </p>
         </div>
       </footer>
+
+      {finePrint ? (
+        <aside className="legal-page-fineprint markdown">
+          <MarkdownRenderer content={finePrint} />
+        </aside>
+      ) : null}
     </main>
   );
 }
 
-function otherLegalHref(slug: string) {
-  return slug === "terms-of-use" ? "/legal/privacy-policy" : "/legal/terms-of-use";
-}
-
-function otherLegalLabel(slug: string) {
-  return slug === "terms-of-use" ? "Politika zasebnosti" : "Pogoji uporabe";
+/** Every public legal document except the one being read, for the footer cross-links. */
+function otherLegalArticles(currentSlug: string) {
+  return PUBLIC_LEGAL_SLUGS.filter((slug) => slug !== currentSlug)
+    .map((slug) => getHelpArticle(slug))
+    .filter((article) => article !== null);
 }

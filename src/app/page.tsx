@@ -193,6 +193,7 @@ export default async function HomePage() {
               <a href={`mailto:${BRAND_SUPPORT_EMAIL}`}>{BRAND_SUPPORT_EMAIL}</a>
               <Link href="/legal/terms-of-use">Pogoji uporabe</Link>
               <Link href="/legal/privacy-policy">Politika zasebnosti</Link>
+              <Link href="/legal/refund-policy">Politika vračil</Link>
             </div>
           </nav>
         </div>

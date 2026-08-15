@@ -2651,14 +2651,14 @@ select:disabled {
 }
 
 /* Creator demo only. The logo is the thing a UGC video is selling, so it runs
-   as large as the top bar allows instead of the app's restrained size: 3.05rem
-   against a 3.35rem bar leaves ~2px of breathing room top and bottom, so the
-   bar keeps its height. That is ~30% up on the 2.35rem the app uses. Only the
-   compact lockup is raised — the desktop brandline already sits at 3.45rem,
-   which fills its row. Scoped to `.creator-demo-shell`, which only
+   right up to what the top bar allows instead of the app's restrained size:
+   3.25rem (52px) against the 3.35rem (53.6px) bar, so the bar keeps its height
+   with under a pixel to spare. That is ~38% up on the 2.35rem the app uses.
+   Only the compact lockup is raised — the desktop brandline already sits at
+   3.45rem, which fills its row. Scoped to `.creator-demo-shell`, which only
    `/creator` passes to AppShell, so the real app is untouched. */
 .creator-demo-shell .brand-logo.compact .brand-logo-mark {
-  --lockup-h: clamp(3.05rem, 4.35vw, 3.45rem);
+  --lockup-h: clamp(3.25rem, 4.35vw, 3.45rem);
 }
 
 .brand-logo-image {
@@ -14497,6 +14497,20 @@ select:disabled {
 
   .desktop-brandline-brand .brand-logo-mark {
   --lockup-h: clamp(2.35rem, 4.35vw, 3.45rem);
+  }
+
+  /* Creator demo only: the logo carries the brand in a UGC recording, so it
+     runs larger than the app's 3.45rem — but not mobile's 97% of the bar,
+     which on a 97px desktop row is overbearing. 4.4rem against evened-out
+     0.8rem padding lands at ~73% of the same 97px row: a clear step up with
+     room left to breathe, and the row keeps its height so nothing shifts. */
+  .creator-demo-shell.desktop-shell .desktop-brandline {
+    padding-top: 0.8rem;
+    padding-bottom: 0.8rem;
+  }
+
+  .creator-demo-shell .desktop-brandline-brand .brand-logo-mark {
+    --lockup-h: 4.4rem;
   }
 
   .desktop-brandline-brand .brand-logo-copy small {

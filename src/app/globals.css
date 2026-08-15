@@ -46,13 +46,6 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.42),
     0 10px 20px rgba(0, 0, 0, 0.08);
   --sheet-background: #ffffff;
-  /* The colour iOS Safari paints its bottom bar. It is not something a page can
-     set — Safari picks it, either by reading the page's pixels at load or by
-     following the document background colour, and which of the two wins varies
-     between loads. What a page can do is make both answers identical: every
-     screen ends on this colour, and BrowserChromeColor puts the same value on
-     the document. Measured on iOS 26.5 as the tint Safari settles on. */
-  --browser-bar-surface: #f6f6f8;
   --pressed: rgba(0, 0, 0, 0.05);
   --close-fill: rgba(0, 0, 0, 0.08);
   --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.04);
@@ -112,7 +105,6 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.02),
     0 3px 10px rgba(0, 0, 0, 0.12);
   --sheet-background: #1c1c1e;
-  --browser-bar-surface: #2b2b2d;
   --pressed: rgba(255, 255, 255, 0.08);
   --close-fill: rgba(255, 255, 255, 0.12);
   --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.4);
@@ -174,7 +166,6 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.02),
       0 3px 10px rgba(0, 0, 0, 0.12);
     --sheet-background: #1c1c1e;
-    --browser-bar-surface: #2b2b2d;
     --pressed: rgba(255, 255, 255, 0.08);
     --close-fill: rgba(255, 255, 255, 0.12);
     --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.4);
@@ -280,35 +271,6 @@ main,
 section,
 div {
   -webkit-overflow-scrolling: touch;
-}
-
-/* The last sliver of every screen, shaded into the colour the browser bar sits
-   at, so the app runs into the bar with nothing to see between them.
-
-   This is a constant rather than something that follows the screen, and that is
-   the point. Safari reaches its bar colour two ways — reading the page's pixels
-   at load, or following the document background colour — and which one wins is
-   not stable between loads. Both are fed the same value here, so it stops
-   mattering which one it picks.
-
-   Deliberately free of transform, filter, opacity and will-change: those would
-   promote it to its own compositing layer, and layers promoted that way are not
-   picked up by the pixel reading. */
-.browser-chrome-tint {
-  display: none;
-}
-
-/* Only touch devices get a browser bar over the page. */
-@media (pointer: coarse) {
-  .browser-chrome-tint {
-    display: block;
-    position: fixed;
-    inset: auto 0 0 0;
-    height: calc(env(safe-area-inset-bottom) + 1.5rem);
-    z-index: 2147483000;
-    pointer-events: none;
-    background: linear-gradient(to bottom, transparent, var(--browser-bar-surface) 85%);
-  }
 }
 
 a {
@@ -14718,24 +14680,20 @@ select:disabled {
 
 }
 
-/* Apple Color Emoji draws taller than its own em box, and the overflow hangs
-   below: measured in iOS Safari at the ~1rem the app actually uses, ⚙️ paints
-   from the line box's top edge to 7.8 device pixels past its bottom, putting
-   the ink centre 3.5 device pixels (0.069em) below the button's centre. Lifting
-   the box by that much puts the ink on the centre.
-
-   Measure before touching this number — it has been wrong in both directions.
-   Rasterise the glyph through these exact rules at the size in question and
-   read the painted pixels against the box's centre line; do not reason about
-   font metrics. The overflow is not proportional, so the value is tuned for
-   ~1rem and is near-exact for every icon in the app, which all sit at
-   1rem–1.05rem. (Text needs no correction: a label's ink centres at 0.000em.) */
+/* An emoji glyph does not sit centred in its own box: it is placed off the
+   baseline, and the line box around it is not symmetric. Measured by
+   rasterising the glyph through this exact rule and reading the painted
+   pixels — ➕, ⚙️, 🏠 and 📄 all agree — the ink centre lands 0.039em *above*
+   the box centre, so a flex-centred icon renders slightly high in its button.
+   Pushing the box down by that measured amount puts the ink on the centre.
+   (Text needs no such correction: the same measurement puts a label's ink
+   centre at 0.000em. A word with a descender sits lower, which is correct.) */
 .emoji-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
-  transform: translateY(-0.0625em);
+  transform: translateY(0.039em);
   font-family:
     "Apple Color Emoji",
     "Segoe UI Emoji",

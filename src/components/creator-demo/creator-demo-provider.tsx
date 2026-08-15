@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useState } from "react";
 
 import { CreatorDemoBasePathProvider } from "@/components/creator-demo/creator-demo-context";
 import { createCreatorDemoFetch } from "@/lib/creator-demo/api";
-import { CREATOR_DEMO_BASE_PATH, setCreatorDemoClientActive } from "@/lib/creator-demo/paths";
+import { CREATOR_DEMO_BASE_PATH, setCreatorDemoClientBasePath } from "@/lib/creator-demo/paths";
 import {
   getCreatorDemoState,
   hydrateCreatorDemoFromSession,
@@ -28,13 +28,13 @@ let originalSendBeacon: typeof navigator.sendBeacon | null = null;
  * later wrapper) has replaced our patch, this puts it back. The demo must never
  * end up issuing real `/api` calls with a signed-in visitor's cookies.
  */
-function installCreatorDemoRuntime(seed: CreatorDemoState) {
+function installCreatorDemoRuntime(seed: CreatorDemoState, basePath: string) {
   if (typeof window === "undefined") {
     return;
   }
 
   initCreatorDemoState(seed);
-  setCreatorDemoClientActive(true);
+  setCreatorDemoClientBasePath(basePath);
 
   if (window.fetch !== demoFetch) {
     originalFetch = window.fetch.bind(window);
@@ -55,7 +55,7 @@ function uninstallCreatorDemoRuntime() {
     return;
   }
 
-  setCreatorDemoClientActive(false);
+  setCreatorDemoClientBasePath(null);
 
   if (originalFetch && window.fetch === demoFetch) {
     window.fetch = originalFetch;
@@ -73,26 +73,26 @@ function uninstallCreatorDemoRuntime() {
 
 export function CreatorDemoProvider({
   seed,
+  basePath = CREATOR_DEMO_BASE_PATH,
   children,
 }: {
   seed: CreatorDemoState;
+  basePath?: string;
   children: React.ReactNode;
 }) {
-  installCreatorDemoRuntime(seed);
+  installCreatorDemoRuntime(seed, basePath);
 
   // Re-assert on mount so an effect remount that skips render (StrictMode,
   // bfcache-style restores) can't leave the demo talking to the real API.
   useLayoutEffect(() => {
-    installCreatorDemoRuntime(seed);
+    installCreatorDemoRuntime(seed, basePath);
     hydrateCreatorDemoFromSession();
     return uninstallCreatorDemoRuntime;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [basePath]);
 
   return (
-    <CreatorDemoBasePathProvider value={CREATOR_DEMO_BASE_PATH}>
-      {children}
-    </CreatorDemoBasePathProvider>
+    <CreatorDemoBasePathProvider value={basePath}>{children}</CreatorDemoBasePathProvider>
   );
 }
 

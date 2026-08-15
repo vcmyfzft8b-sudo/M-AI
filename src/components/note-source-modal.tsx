@@ -20,7 +20,11 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 
-import { useCreatorDemoBasePath } from "@/components/creator-demo/creator-demo-context";
+import { CollegeLiveRecording } from "@/components/creator-demo/college-live-recording";
+import {
+  useCreatorDemoBasePath,
+  useIsCollegeCreatorDemo,
+} from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { LiveAudioWave } from "@/components/live-audio-wave";
 import { useInstantNavigation } from "@/components/navigation-loading";
@@ -355,6 +359,7 @@ export function NoteSourceModal({
   const router = useRouter();
   const demoBasePath = useCreatorDemoBasePath();
   const isCreatorDemo = demoBasePath != null;
+  const isCollegeCreatorDemo = useIsCollegeCreatorDemo();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
@@ -1908,6 +1913,13 @@ export function NoteSourceModal({
 
   if (!open || !mode) {
     return null;
+  }
+
+  // `/creator/college` only: the record sheet is replaced by the live-writing
+  // takeover. Every other source keeps the normal sheet, and no other tree —
+  // `/creator`, `/app` — ever reaches this branch.
+  if (isCollegeCreatorDemo && selectedMode === "record") {
+    return <CollegeLiveRecording basePath={demoBasePath} onClose={onClose} />;
   }
 
   const modalContent = (

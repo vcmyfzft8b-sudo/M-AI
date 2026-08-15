@@ -14897,3 +14897,481 @@ select:disabled {
     padding-bottom: 3.4rem;
   }
 }
+
+/* ==========================================================================
+   /creator/college live-recording takeover
+   --------------------------------------------------------------------------
+   Scoped entirely to `.college-live*`, which only the college creator demo
+   renders. The real app and `/creator` never mount any of this.
+
+   The left half is deliberately the app's own chrome on the app's own canvas —
+   a creator filming this should see the product, not a bespoke screen. Only
+   the listening stage on the right is its own thing.
+   ========================================================================== */
+
+.college-live {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  background: var(--canvas);
+  color: var(--label);
+}
+
+.college-live-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.7rem clamp(1rem, 2.6vw, 2rem);
+  border-bottom: 1px solid var(--separator);
+  background: var(--nav-background);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* The logo is what a UGC video is selling, so it runs as large as the row
+   allows — well past the app's already-raised creator lockup. */
+.college-live-brand .brand-logo-mark {
+  --lockup-h: clamp(3.25rem, 5vw, 4.4rem);
+}
+
+.college-live-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-left: auto;
+}
+
+.college-live-rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.42rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--red) 45%, transparent);
+  background: var(--red-soft);
+  font-size: 0.82rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+
+.college-live-rec-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--red);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--red) 70%, transparent);
+  animation: college-live-rec-pulse 1.6s ease-out infinite;
+}
+
+@keyframes college-live-rec-pulse {
+  70% {
+    box-shadow: 0 0 0 0.75rem rgba(255, 59, 48, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
+  }
+}
+
+.college-live-timer {
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(1.05rem, 2vw, 1.4rem);
+  font-weight: 700;
+}
+
+/* The app's own close button, so the glyph sits exactly where it does in every
+   other close in the product; only the size is trimmed for this compact row. */
+.college-live-close {
+  width: 2.6rem;
+  height: 2.6rem;
+}
+
+.college-live-close:disabled {
+  opacity: 0.45;
+}
+
+.college-live-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}
+
+@media (min-width: 1024px) {
+  .college-live-body {
+    /* The note is the point of the demo, so it gets the larger half; the
+       stage still reads as big because its wave scales to its own width. */
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    gap: clamp(1rem, 2vw, 1.6rem);
+    padding: clamp(0.8rem, 1.6vw, 1.4rem);
+  }
+}
+
+/* ---- Left: the note writing itself, in the app's own chrome ------------- */
+
+.college-live-note-pane {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+/* Title, date and tab strip stay put while the note fills underneath, so the
+   app's own chrome is on camera for the whole take. */
+.college-live-note-chrome {
+  flex: 0 0 auto;
+  padding: 0 clamp(0.5rem, 1.4vw, 1.4rem);
+}
+
+.college-live-note-chrome .lecture-header {
+  padding-bottom: 0;
+}
+
+.college-live-note-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.9rem clamp(0.5rem, 1.4vw, 1.4rem) 2rem;
+  /* No scrollbar: it would sit in frame for the whole recording. */
+  scrollbar-width: none;
+}
+
+.college-live-note-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* The note title runs a little tighter than the app's own page, because the
+   pane is half a screen rather than a full one. */
+.college-live-note-chrome .ios-large-title {
+  font-size: clamp(1.5rem, 2.6vw, 2.1rem);
+}
+
+/* The tab strip is a still prop here — it must not read as clickable. */
+.college-live-note-chrome .lecture-segmented .lecture-tab-button {
+  cursor: default;
+}
+
+.college-live-figure {
+  animation: college-live-figure-in 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  cursor: default;
+}
+
+/* Shorter than the note's own cap, so a figure never fills the pane and pushes
+   the writing out of frame. */
+.college-live-figure img {
+  max-height: 260px;
+}
+
+@keyframes college-live-figure-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+}
+
+.college-live-figure-caption {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #e2e8f0;
+  font-size: 0.74rem;
+}
+
+.college-live-photo-toast {
+  position: absolute;
+  z-index: 2;
+  right: clamp(1rem, 2vw, 1.8rem);
+  bottom: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--separator);
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-soft);
+  font-size: 0.88rem;
+  font-weight: 600;
+  animation: college-live-toast-in 320ms ease both;
+}
+
+@keyframes college-live-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* ---- Right: the rainbow listening stage -------------------------------- */
+
+.college-live-stage {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1rem, 2.5vh, 2rem);
+  overflow: hidden;
+  padding: clamp(1rem, 3vh, 2.5rem) 1rem;
+  background:
+    radial-gradient(120% 80% at 12% 0%, rgba(88, 28, 135, 0.6), transparent 60%),
+    radial-gradient(100% 70% at 92% 10%, rgba(14, 116, 144, 0.55), transparent 62%),
+    linear-gradient(165deg, #080a1a 0%, #0d0720 52%, #05070f 100%);
+  color: #f8fafc;
+  isolation: isolate;
+}
+
+@media (min-width: 1024px) {
+  .college-live-stage {
+    border-radius: 28px;
+    box-shadow: var(--shadow-soft);
+  }
+}
+
+/* Slow rainbow sweep behind the wave, so even a still frame has colour. */
+.college-live-aurora {
+  position: absolute;
+  inset: -30%;
+  z-index: 0;
+  opacity: 0.3;
+  filter: blur(90px);
+  background: conic-gradient(
+    from 0deg,
+    #f43f5e,
+    #f59e0b,
+    #22c55e,
+    #06b6d4,
+    #6366f1,
+    #d946ef,
+    #f43f5e
+  );
+  animation: college-live-spin 26s linear infinite;
+}
+
+.college-live-halo {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  width: min(78vmin, 32rem);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 999px;
+  opacity: 0.42;
+  filter: blur(48px);
+  background: conic-gradient(
+    from 0deg,
+    rgba(244, 63, 94, 0.8),
+    rgba(245, 158, 11, 0.8),
+    rgba(34, 197, 94, 0.8),
+    rgba(6, 182, 212, 0.8),
+    rgba(99, 102, 241, 0.8),
+    rgba(217, 70, 239, 0.8),
+    rgba(244, 63, 94, 0.8)
+  );
+  animation: college-live-spin 12s linear infinite;
+}
+
+.college-live-canvas {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: clamp(14rem, 40vh, 25rem);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.college-live-stage-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  text-align: center;
+}
+
+.college-live-stage-status {
+  font-size: clamp(1.5rem, 3.4vw, 2.4rem);
+  font-weight: 720;
+  letter-spacing: -0.02em;
+  background: linear-gradient(100deg, #fca5a5, #fde68a, #86efac, #67e8f9, #c4b5fd, #fca5a5);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: college-live-gradient-slide 7s linear infinite;
+}
+
+@keyframes college-live-gradient-slide {
+  to {
+    background-position: 300% 0;
+  }
+}
+
+.college-live-stage-hint {
+  font-size: clamp(0.9rem, 1.6vw, 1.05rem);
+  color: rgba(226, 232, 240, 0.72);
+}
+
+.college-live-equalizer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  height: 2.6rem;
+}
+
+.college-live-equalizer span {
+  width: 0.42rem;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f472b6, #38bdf8);
+  transform-origin: bottom;
+  animation: college-live-equalize 1.1s ease-in-out infinite alternate;
+}
+
+.college-live-equalizer span:nth-child(3n) {
+  background: linear-gradient(180deg, #fbbf24, #34d399);
+}
+
+.college-live-equalizer span:nth-child(3n + 1) {
+  background: linear-gradient(180deg, #a78bfa, #22d3ee);
+}
+
+@keyframes college-live-equalize {
+  from {
+    transform: scaleY(0.18);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes college-live-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* ---- Footer ------------------------------------------------------------ */
+
+.college-live-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: clamp(0.8rem, 2vh, 1.4rem) 1rem
+    calc(clamp(0.8rem, 2vh, 1.4rem) + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--separator);
+  background: var(--nav-background);
+}
+
+.college-live-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.9rem 1.9rem;
+  border-radius: 999px;
+  border: 0;
+  background: linear-gradient(120deg, #f43f5e, #d946ef 45%, #6366f1);
+  color: #fff;
+  font-size: clamp(0.98rem, 1.8vw, 1.12rem);
+  font-weight: 680;
+  box-shadow: 0 16px 34px rgba(217, 70, 239, 0.3);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.college-live-stop:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 22px 46px rgba(217, 70, 239, 0.4);
+}
+
+.college-live-stop-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 3px;
+  background: #fff;
+}
+
+.college-live-footer-hint {
+  font-size: 0.8rem;
+  color: var(--secondary-label);
+}
+
+.college-live-finishing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: clamp(1rem, 2vw, 1.15rem);
+  font-weight: 650;
+}
+
+.college-live-finishing-spinner {
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--label) 25%, transparent);
+  border-top-color: var(--label);
+  animation: college-live-spin 0.8s linear infinite;
+}
+
+/* Phones get the wave alone, so the only job here is fitting the chrome onto a
+   narrow row: the lockup stays as large as the row allows, and the recording
+   pill drops to its dot. */
+@media (max-width: 639px) {
+  .college-live-header {
+    gap: 0.55rem;
+    padding: 0.55rem 0.8rem;
+  }
+
+  .college-live-brand .brand-logo-mark {
+    --lockup-h: 2.9rem;
+  }
+
+  .college-live-header-meta {
+    gap: 0.5rem;
+  }
+
+  .college-live-rec {
+    padding: 0.4rem;
+    font-size: 0;
+    letter-spacing: 0;
+  }
+
+  .college-live-timer {
+    font-size: 1.05rem;
+  }
+
+  .college-live-close {
+    width: 2.3rem;
+    height: 2.3rem;
+  }
+
+  .college-live-stop {
+    max-width: 100%;
+    padding: 0.85rem 1.25rem;
+    font-size: 0.95rem;
+    text-align: center;
+  }
+
+  .college-live-footer-hint {
+    font-size: 0.74rem;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .college-live-aurora,
+  .college-live-halo,
+  .college-live-stage-status,
+  .college-live-equalizer span,
+  .college-live-rec-dot {
+    animation-duration: 0.001s;
+    animation-iteration-count: 1;
+  }
+}

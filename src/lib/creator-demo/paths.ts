@@ -11,19 +11,40 @@
  */
 export const CREATOR_DEMO_BASE_PATH = "/creator";
 
-let clientDemoActive = false;
+/**
+ * A second mount of the same demo, for recordings aimed at students. It is
+ * identical to `/creator` apart from the live-recording takeover, so it needs
+ * its own base path to keep its notes and links inside its own tree.
+ */
+export const CREATOR_COLLEGE_DEMO_BASE_PATH = "/creator/college";
+
+export type CreatorDemoVariant = "standard" | "college";
+
+/** Which demo mount a request is inside. Nested paths win over `/creator`. */
+export function resolveCreatorDemoBasePath(pathname: string) {
+  return pathname === CREATOR_COLLEGE_DEMO_BASE_PATH ||
+    pathname.startsWith(`${CREATOR_COLLEGE_DEMO_BASE_PATH}/`)
+    ? CREATOR_COLLEGE_DEMO_BASE_PATH
+    : CREATOR_DEMO_BASE_PATH;
+}
+
+export function creatorDemoVariantForBasePath(basePath: string | null): CreatorDemoVariant {
+  return basePath === CREATOR_COLLEGE_DEMO_BASE_PATH ? "college" : "standard";
+}
+
+let clientBasePath: string | null = null;
 
 /** Client-only. Never call this while rendering on the server. */
-export function setCreatorDemoClientActive(active: boolean) {
+export function setCreatorDemoClientBasePath(basePath: string | null) {
   if (typeof window === "undefined") {
     return;
   }
 
-  clientDemoActive = active;
+  clientBasePath = basePath;
 }
 
 export function isCreatorDemoClientActive() {
-  return clientDemoActive;
+  return clientBasePath != null;
 }
 
 /** `/app/lectures/1` -> `/creator/lectures/1` for the given base path. */
@@ -58,5 +79,5 @@ export function unmapDemoPathname(pathname: string, basePath: string | null) {
 
 /** Imperative variant for helpers that run outside the React tree. */
 export function mapAppHrefForClient(href: string) {
-  return mapAppHref(href, clientDemoActive ? CREATOR_DEMO_BASE_PATH : null);
+  return mapAppHref(href, clientBasePath);
 }

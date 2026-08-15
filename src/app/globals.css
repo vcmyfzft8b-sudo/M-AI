@@ -273,6 +273,32 @@ div {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Continues the app's bottom-most colour into the last sliver of the viewport.
+   iOS 26's floating Safari toolbar takes its tint from whatever the page paints
+   there, so this is what stops a bottom sheet from ending in a seam above the
+   browser bar. Its colour is set from JS by BrowserChromeColor to match what it
+   covers, which is why it is invisible in the page itself.
+
+   Deliberately free of transform, filter, opacity and will-change: those would
+   promote it to its own compositing layer, and layers promoted that way are not
+   picked up by that toolbar sampling. */
+.browser-chrome-tint {
+  display: none;
+}
+
+/* Only touch devices get a browser bar over the page, and only there is it
+   worth painting over the last few pixels of the layout. */
+@media (pointer: coarse) {
+  .browser-chrome-tint {
+    display: block;
+    position: fixed;
+    inset: auto 0 0 0;
+    height: 10px;
+    z-index: 2147483000;
+    pointer-events: none;
+  }
+}
+
 a {
   color: inherit;
   text-decoration: none;

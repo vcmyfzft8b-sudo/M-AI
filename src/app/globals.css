@@ -14680,20 +14680,27 @@ select:disabled {
 
 }
 
-/* An emoji glyph does not sit centred in its own box: it is placed off the
-   baseline, and the line box around it is not symmetric. Measured by
-   rasterising the glyph through this exact rule and reading the painted
-   pixels — ➕, ⚙️, 🏠 and 📄 all agree — the ink centre lands 0.039em *above*
-   the box centre, so a flex-centred icon renders slightly high in its button.
-   Pushing the box down by that measured amount puts the ink on the centre.
-   (Text needs no such correction: the same measurement puts a label's ink
-   centre at 0.000em. A word with a descender sits lower, which is correct.) */
+/* Apple Color Emoji draws taller than its own em box, and the overflow hangs
+   below the line box rather than being shared with the top. Rasterised in iOS
+   Safari through these exact rules at the ~1rem the app uses: ⚙️ paints from the
+   line box's top edge to 7.8 device pixels past its bottom, putting its ink
+   centre 0.069em below the centre of a flex-centred button. Lifting the box by
+   that much puts the ink on the centre.
+
+   Measure before changing this number — it has been wrong in both directions
+   already. Rasterise the glyph through these rules at the size in question and
+   read the painted pixels against the box's centre line; do not reason from
+   font metrics, which is what produced the two earlier values. The overflow is
+   not proportional to size, so this is tuned for the 1rem–1.05rem every icon in
+   the app is rendered at. (Text needs no correction: the same measurement puts
+   a label's ink centre at 0.000em. A word with a descender sits lower, which is
+   correct.) */
 .emoji-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
-  transform: translateY(0.039em);
+  transform: translateY(-0.0625em);
   font-family:
     "Apple Color Emoji",
     "Segoe UI Emoji",

@@ -224,7 +224,7 @@ function createDemoStagedFile(fileName: string, mimeType: string) {
 }
 
 /** How long the demo spends on the "processing" stages before the note opens. */
-const DEMO_CREATE_TOTAL_MS = 3000;
+const DEMO_CREATE_TOTAL_MS = 1500;
 
 const DOCUMENT_OR_IMAGE_INPUT_ACCEPT = `${DOCUMENT_FILE_INPUT_ACCEPT},${SCAN_IMAGE_INPUT_ACCEPT}`;
 const LOCAL_API_REQUEST_TIMEOUT_MS = 30_000;

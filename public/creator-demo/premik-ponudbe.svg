@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-label="Premik krivulje ponudbe v desno zaradi nižjih stroškov">
+  <rect width="1200" height="800" fill="#f7f5f0"/>
+  <g stroke="#e6e2d8" stroke-width="1">
+    <path d="M320 140V680M460 140V680M600 140V680M740 140V680M880 140V680"/>
+    <path d="M180 200H1040M180 290H1040M180 380H1040M180 470H1040M180 560H1040"/>
+  </g>
+
+  <path d="M180 120V680H1060" stroke="#3f3a33" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M180 116l-13 28h26z" fill="#3f3a33"/>
+  <path d="M1064 680l-28-13v26z" fill="#3f3a33"/>
+
+  <text x="62" y="152" font-family="Georgia, serif" font-size="34" fill="#3f3a33">Cena</text>
+  <text x="946" y="748" font-family="Georgia, serif" font-size="34" fill="#3f3a33">Količina</text>
+
+  <path d="M250 200C430 320 630 470 960 640" stroke="#c0392b" stroke-width="8" fill="none" stroke-linecap="round"/>
+
+  <path d="M250 620C430 500 630 350 940 180" stroke="#1f5f8b" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="16 12" opacity="0.55"/>
+  <path d="M370 660C550 540 750 390 1050 225" stroke="#1f5f8b" stroke-width="8" fill="none" stroke-linecap="round"/>
+
+  <path d="M470 480h150" stroke="#3f3a33" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M628 480l-30-14v28z" fill="#3f3a33"/>
+
+  <g stroke="#3f3a33" stroke-width="3" stroke-dasharray="12 10" fill="none" opacity="0.75">
+    <path d="M180 408H578"/>
+    <path d="M578 408V680"/>
+  </g>
+  <circle cx="578" cy="408" r="13" fill="#f7f5f0" stroke="#3f3a33" stroke-width="6"/>
+
+  <g stroke="#1f5f8b" stroke-width="3" stroke-dasharray="12 10" fill="none">
+    <path d="M180 470H676"/>
+    <path d="M676 470V680"/>
+  </g>
+  <circle cx="676" cy="470" r="15" fill="#f7f5f0" stroke="#1f5f8b" stroke-width="7"/>
+
+  <g font-family="Georgia, serif" font-weight="bold" font-size="40">
+    <text x="944" y="168" fill="#1f5f8b" opacity="0.6">S₁</text>
+    <text x="1058" y="214" fill="#1f5f8b">S₂</text>
+    <text x="978" y="652" fill="#c0392b">D</text>
+  </g>
+
+  <g font-family="Georgia, serif" font-size="32" fill="#3f3a33">
+    <text x="120" y="420" opacity="0.75">P₁</text>
+    <text x="120" y="482" fill="#1f5f8b">P₂</text>
+    <text x="558" y="726" opacity="0.75">Q₁</text>
+    <text x="656" y="726" fill="#1f5f8b">Q₂</text>
+    <text x="352" y="448">Nižji stroški</text>
+  </g>
+</svg>

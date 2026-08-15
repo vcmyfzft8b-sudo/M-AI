@@ -14956,10 +14956,17 @@ select:disabled {
   backdrop-filter: saturate(180%) blur(20px);
 }
 
-/* The logo is what a UGC video is selling, so it runs as large as the row
-   allows — well past the app's already-raised creator lockup. */
+/* Exactly the sizes `/creator` runs the lockup at, on both breakpoints: the
+   compact top-bar size below 1100px, the desktop brandline size above it. Keep
+   these in step with the two `.creator-demo-shell` lockup rules. */
 .college-live-brand .brand-logo-mark {
-  --lockup-h: clamp(3.25rem, 5vw, 4.4rem);
+  --lockup-h: clamp(3.25rem, 4.35vw, 3.45rem);
+}
+
+@media (min-width: 1100px) {
+  .college-live-brand .brand-logo-mark {
+    --lockup-h: 4.4rem;
+  }
 }
 
 .college-live-header-meta {
@@ -14969,54 +14976,10 @@ select:disabled {
   margin-left: auto;
 }
 
-.college-live-rec {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.42rem 0.95rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--red) 45%, transparent);
-  background: var(--red-soft);
-  font-size: 0.82rem;
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--red);
-}
-
-.college-live-rec-dot {
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 999px;
-  background: var(--red);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--red) 70%, transparent);
-  animation: college-live-rec-pulse 1.6s ease-out infinite;
-}
-
-@keyframes college-live-rec-pulse {
-  70% {
-    box-shadow: 0 0 0 0.75rem rgba(255, 59, 48, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
-  }
-}
-
 .college-live-timer {
   font-variant-numeric: tabular-nums;
   font-size: clamp(1.05rem, 2vw, 1.4rem);
   font-weight: 700;
-}
-
-/* The app's own close button, so the glyph sits exactly where it does in every
-   other close in the product; only the size is trimmed for this compact row. */
-.college-live-close {
-  width: 2.6rem;
-  height: 2.6rem;
-}
-
-.college-live-close:disabled {
-  opacity: 0.45;
 }
 
 .college-live-body {
@@ -15027,9 +14990,9 @@ select:disabled {
 
 @media (min-width: 1024px) {
   .college-live-body {
-    /* The note is the point of the demo, so it gets the larger half; the
+    /* The note is the point of the demo, so it takes the bulk of the row; the
        stage still reads as big because its wave scales to its own width. */
-    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 2.18fr) minmax(0, 1fr);
     gap: clamp(1rem, 2vw, 1.6rem);
     padding: clamp(0.8rem, 1.6vw, 1.4rem);
   }
@@ -15044,39 +15007,153 @@ select:disabled {
   flex-direction: column;
 }
 
-/* Title, date and tab strip stay put while the note fills underneath, so the
-   app's own chrome is on camera for the whole take. */
-.college-live-note-chrome {
-  flex: 0 0 auto;
-  padding: 0 clamp(0.5rem, 1.4vw, 1.4rem);
-}
-
-.college-live-note-chrome .lecture-header {
-  padding-bottom: 0;
+/* The note title, at the head of the note itself. A touch tighter than the
+   app's own page, because this pane is not a full screen. */
+.college-live-note-title {
+  margin-bottom: 1.1rem;
+  font-size: clamp(1.6rem, 2.7vw, 2.2rem);
+  line-height: 1.15;
 }
 
 .college-live-note-scroll {
   min-height: 0;
   flex: 1;
-  overflow-y: auto;
-  padding: 0.9rem clamp(0.5rem, 1.4vw, 1.4rem) 2rem;
-  /* No scrollbar: it would sit in frame for the whole recording. */
-  scrollbar-width: none;
-}
-
-.college-live-note-scroll::-webkit-scrollbar {
-  display: none;
+  overflow: hidden;
 }
 
 /* The note title runs a little tighter than the app's own page, because the
    pane is half a screen rather than a full one. */
-.college-live-note-chrome .ios-large-title {
-  font-size: clamp(1.5rem, 2.6vw, 2.1rem);
+/* The note runs ~30% larger than in the app. A creator's viewer is watching a
+   half-screen pane in a compressed video, not reading a note on their own
+   monitor, so the app's reading size does not survive the trip. `.lecture-markdown`
+   sets absolute sizes, so each one is restated rather than scaled from a parent;
+   markers and math are already in `em` and follow on their own. */
+.college-live-note-scroll .lecture-markdown > .markdown {
+  font-size: 1.35rem;
 }
 
-/* The tab strip is a still prop here — it must not read as clickable. */
-.college-live-note-chrome .lecture-segmented .lecture-tab-button {
-  cursor: default;
+.college-live-note-scroll .lecture-markdown h1 {
+  font-size: 2.15rem;
+}
+
+.college-live-note-scroll .lecture-markdown h2 {
+  font-size: 1.72rem;
+}
+
+.college-live-note-scroll .lecture-markdown h3 {
+  font-size: 1.48rem;
+}
+
+.college-live-note-scroll .lecture-markdown p,
+.college-live-note-scroll .lecture-markdown li,
+.college-live-note-scroll .lecture-markdown blockquote,
+.college-live-note-scroll .lecture-markdown th,
+.college-live-note-scroll .lecture-markdown td {
+  font-size: 1.38rem;
+}
+
+/* The note card is a full-height sheet from the first character, so the writing
+   fills a box that is already there instead of the box growing line by line —
+   and it stays exactly as tall as the stage beside it, however long the note
+   gets, because the overflow scrolls inside the card.
+
+   `minmax(0, 1fr)` rather than `1fr` is what caps it: `1fr` is
+   `minmax(auto, 1fr)`, whose content-based minimum would let the row grow past
+   the column again and put the card's bottom edge off screen. */
+.college-live-note-scroll > .lecture-workspace,
+.college-live-note-scroll .lecture-main-column,
+.college-live-note-scroll .lecture-panel-stack {
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.college-live-note-scroll .lecture-notes-card {
+  min-height: 0;
+  overflow-y: auto;
+  /* No scrollbar: it would sit in frame for the whole recording. */
+  scrollbar-width: none;
+}
+
+.college-live-note-scroll .lecture-notes-card::-webkit-scrollbar {
+  display: none;
+}
+
+/* Key phrases the write-up marks as it finishes them. Green comes from the
+   app's own highlight palette (`NOTE_TTS_HIGHLIGHT_COLORS`); purple is built to
+   match it, off the app's `--purple`, because the palette has no purple entry.
+
+   Two tints only — green for what a thing is, purple for what it does — so the
+   marking reads as a system rather than as a rainbow.
+
+   Each highlight sweeps in left to right instead of snapping on, so the eye
+   catches the moment the line is marked. The sweep animates background-size,
+   which is why the tint is painted as a gradient image rather than a colour. */
+.college-live-highlight {
+  --college-live-highlight-bg: #dcfce7;
+  --college-live-highlight-fg: #14532d;
+  padding: 0.03rem 0.16rem;
+  border-radius: 0.3rem;
+  background-color: transparent;
+  background-image: linear-gradient(
+    var(--college-live-highlight-bg),
+    var(--college-live-highlight-bg)
+  );
+  background-repeat: no-repeat;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  color: var(--college-live-highlight-fg);
+  animation: college-live-highlight-in 460ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+
+
+
+
+.college-live-highlight-purple {
+  --college-live-highlight-bg: #f3e8ff;
+  --college-live-highlight-fg: #581c87;
+}
+
+/* Dark uses the palette's translucent tints with light text, the way the app's
+   own read-aloud highlighting does — a solid pastel would blow out the card. */
+:root[data-theme="dark"] .college-live-highlight {
+  --college-live-highlight-bg: rgba(74, 222, 128, 0.24);
+  --college-live-highlight-fg: #bbf7d0;
+}
+
+:root[data-theme="dark"] .college-live-highlight-purple {
+  --college-live-highlight-bg: rgba(192, 132, 252, 0.26);
+  --college-live-highlight-fg: #e9d5ff;
+}
+
+
+
+
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .college-live-highlight {
+    --college-live-highlight-bg: rgba(74, 222, 128, 0.24);
+    --college-live-highlight-fg: #bbf7d0;
+  }
+
+  :root:not([data-theme="light"]) .college-live-highlight-purple {
+    --college-live-highlight-bg: rgba(192, 132, 252, 0.26);
+    --college-live-highlight-fg: #e9d5ff;
+  }
+
+
+
+
+}
+
+@keyframes college-live-highlight-in {
+  from {
+    background-size: 0% 100%;
+  }
+  to {
+    background-size: 100% 100%;
+  }
 }
 
 .college-live-figure {
@@ -15103,31 +15180,6 @@ select:disabled {
   background: rgba(15, 23, 42, 0.72);
   color: #e2e8f0;
   font-size: 0.74rem;
-}
-
-.college-live-photo-toast {
-  position: absolute;
-  z-index: 2;
-  right: clamp(1rem, 2vw, 1.8rem);
-  bottom: 1rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1rem;
-  border-radius: 999px;
-  border: 1px solid var(--separator);
-  background: var(--surface-solid);
-  box-shadow: var(--shadow-soft);
-  font-size: 0.88rem;
-  font-weight: 600;
-  animation: college-live-toast-in 320ms ease both;
-}
-
-@keyframes college-live-toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
 }
 
 /* ---- Right: the rainbow listening stage -------------------------------- */
@@ -15324,11 +15376,6 @@ select:disabled {
   background: #fff;
 }
 
-.college-live-footer-hint {
-  font-size: 0.8rem;
-  color: var(--secondary-label);
-}
-
 .college-live-finishing {
   display: inline-flex;
   align-items: center;
@@ -15355,27 +15402,12 @@ select:disabled {
     padding: 0.55rem 0.8rem;
   }
 
-  .college-live-brand .brand-logo-mark {
-    --lockup-h: 2.9rem;
-  }
-
   .college-live-header-meta {
     gap: 0.5rem;
   }
 
-  .college-live-rec {
-    padding: 0.4rem;
-    font-size: 0;
-    letter-spacing: 0;
-  }
-
   .college-live-timer {
     font-size: 1.05rem;
-  }
-
-  .college-live-close {
-    width: 2.3rem;
-    height: 2.3rem;
   }
 
   .college-live-stop {
@@ -15385,18 +15417,14 @@ select:disabled {
     text-align: center;
   }
 
-  .college-live-footer-hint {
-    font-size: 0.74rem;
-    text-align: center;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .college-live-aurora,
   .college-live-halo,
   .college-live-stage-status,
-  .college-live-equalizer span,
-  .college-live-rec-dot {
+  .college-live-highlight,
+  .college-live-equalizer span {
     animation-duration: 0.001s;
     animation-iteration-count: 1;
   }

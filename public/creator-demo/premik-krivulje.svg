@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-label="Premik krivulje povpraševanja v desno in novo ravnovesje">
+  <rect width="1200" height="800" fill="#f7f5f0"/>
+  <g stroke="#e6e2d8" stroke-width="1">
+    <path d="M320 140V680M460 140V680M600 140V680M740 140V680M880 140V680"/>
+    <path d="M180 200H1040M180 290H1040M180 380H1040M180 470H1040M180 560H1040"/>
+  </g>
+
+  <path d="M180 120V680H1060" stroke="#3f3a33" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M180 116l-13 28h26z" fill="#3f3a33"/>
+  <path d="M1064 680l-28-13v26z" fill="#3f3a33"/>
+
+  <text x="62" y="152" font-family="Georgia, serif" font-size="34" fill="#3f3a33">Cena</text>
+  <text x="946" y="748" font-family="Georgia, serif" font-size="34" fill="#3f3a33">Količina</text>
+
+  <path d="M250 640C430 520 630 370 960 200" stroke="#1f5f8b" stroke-width="8" fill="none" stroke-linecap="round"/>
+
+  <path d="M230 190C400 305 590 450 900 615" stroke="#c0392b" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="16 12" opacity="0.55"/>
+  <path d="M360 200C530 315 720 460 1030 625" stroke="#c0392b" stroke-width="8" fill="none" stroke-linecap="round"/>
+
+  <path d="M470 300h150" stroke="#3f3a33" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M628 300l-30-14v28z" fill="#3f3a33"/>
+
+  <g stroke="#3f3a33" stroke-width="3" stroke-dasharray="12 10" fill="none" opacity="0.75">
+    <path d="M180 430H556"/>
+    <path d="M556 430V680"/>
+  </g>
+  <circle cx="556" cy="430" r="13" fill="#f7f5f0" stroke="#3f3a33" stroke-width="6"/>
+
+  <g stroke="#c0392b" stroke-width="3" stroke-dasharray="12 10" fill="none">
+    <path d="M180 372H668"/>
+    <path d="M668 372V680"/>
+  </g>
+  <circle cx="668" cy="372" r="15" fill="#f7f5f0" stroke="#c0392b" stroke-width="7"/>
+
+  <g font-family="Georgia, serif" font-weight="bold" font-size="40">
+    <text x="912" y="666" fill="#c0392b" opacity="0.6">D₁</text>
+    <text x="1042" y="676" fill="#c0392b">D₂</text>
+    <text x="978" y="212" fill="#1f5f8b">S</text>
+  </g>
+
+  <g font-family="Georgia, serif" font-size="32" fill="#3f3a33">
+    <text x="120" y="442" opacity="0.75">P₁</text>
+    <text x="120" y="384" fill="#c0392b">P₂</text>
+    <text x="536" y="726" opacity="0.75">Q₁</text>
+    <text x="648" y="726" fill="#c0392b">Q₂</text>
+    <text x="410" y="268">Dohodek zraste</text>
+  </g>
+</svg>

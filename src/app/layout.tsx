@@ -113,14 +113,21 @@ export default function RootLayout({
                 // created here rather than through Next's viewport metadata so
                 // React never claims it back during hydration.
                 try {
+                  var canvas =
+                    resolved === "dark" ? "${CANVAS_COLOR_DARK}" : "${CANVAS_COLOR_LIGHT}";
                   var meta = document.createElement("meta");
                   meta.setAttribute("name", "theme-color");
                   meta.setAttribute("${THEME_COLOR_META_ATTRIBUTE}", "");
-                  meta.setAttribute(
-                    "content",
-                    resolved === "dark" ? "${CANVAS_COLOR_DARK}" : "${CANVAS_COLOR_LIGHT}",
-                  );
+                  meta.setAttribute("content", canvas);
                   document.head.prepend(meta);
+                  // Start the document on the canvas colour, always. iOS
+                  // Safari's bar only switches to following this value once it
+                  // *changes* after load — before that it keeps whatever it read
+                  // off the page's pixels. A page that loads straight into a
+                  // sheet would otherwise never produce that change, and would
+                  // sit on a different colour from one where the sheet was
+                  // opened later.
+                  document.documentElement.style.backgroundColor = canvas;
                 } catch (error) {}
               })();
             `,

@@ -46,12 +46,6 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.42),
     0 10px 20px rgba(0, 0, 0, 0.08);
   --sheet-background: #ffffff;
-  /* What iOS Safari actually paints its bottom bar as when a sheet's colour is
-     on the document underneath it. It does not reproduce that colour: it snaps
-     to one system tint per appearance. Measured on iOS 26.5 — see the sheet
-     ramp further down, which lands the sheet's bottom edge on this exact
-     value. */
-  --browser-bar-surface: #f6f6f8;
   --pressed: rgba(0, 0, 0, 0.05);
   --close-fill: rgba(0, 0, 0, 0.08);
   --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.04);
@@ -111,11 +105,6 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.02),
     0 3px 10px rgba(0, 0, 0, 0.12);
   --sheet-background: #1c1c1e;
-  /* The dark counterpart. Measured against #111113, #1b1b1d and #555558 on the
-     document, which all render the bar as this one grey. Pure black is the
-     exception and stays black, which is why a screen with no sheet open still
-     gets a black bar. */
-  --browser-bar-surface: #2a2a2c;
   --pressed: rgba(255, 255, 255, 0.08);
   --close-fill: rgba(255, 255, 255, 0.12);
   --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.4);
@@ -177,7 +166,6 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.02),
       0 3px 10px rgba(0, 0, 0, 0.12);
     --sheet-background: #1c1c1e;
-    --browser-bar-surface: #2a2a2c;
     --pressed: rgba(255, 255, 255, 0.08);
     --close-fill: rgba(255, 255, 255, 0.12);
     --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.4);
@@ -283,26 +271,6 @@ main,
 section,
 div {
   -webkit-overflow-scrolling: touch;
-}
-
-/* Bottom sheets on mobile run to the very bottom of the viewport, where iOS
-   Safari's bar sits. BrowserChromeColor puts the sheet's colour on the document
-   so the bar reacts to it, but the bar does not reproduce that colour — it
-   snaps to one system tint per appearance. So the last sliver of the sheet ramps
-   into that tint, and the two meet on the same value instead of stepping. The
-   ramp lives inside the bottom padding these sheets already carry, so it never
-   touches their content. */
-@media (pointer: coarse) {
-  .mobile-draggable-sheet::after,
-  .library-folder-mobile-sheet::after,
-  .mobile-create-menu::after {
-    content: "";
-    position: absolute;
-    inset: auto 0 0 0;
-    height: calc(env(safe-area-inset-bottom) + 1.25rem);
-    pointer-events: none;
-    background: linear-gradient(to bottom, transparent, var(--browser-bar-surface));
-  }
 }
 
 a {

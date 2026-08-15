@@ -44,7 +44,13 @@ export function BrowserChromeColor() {
       frame = window.requestAnimationFrame(sample);
     }
 
-    sample();
+    // Safari starts following the document colour only once it changes after
+    // load; before that it sits on whatever it read off the page's pixels. Nudge
+    // it off its starting value so the first sample always counts as a change.
+    // The document colour is never visible — body paints --canvas over its own
+    // box — so the nudge cannot be seen.
+    document.documentElement.style.backgroundColor = "#010101";
+    schedule();
 
     const observer = new MutationObserver(schedule);
     observer.observe(document.documentElement, {

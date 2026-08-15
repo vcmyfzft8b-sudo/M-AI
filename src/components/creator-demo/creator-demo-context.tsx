@@ -2,12 +2,17 @@
 
 import { createContext, useContext } from "react";
 
-import { mapAppHref, unmapDemoPathname } from "@/lib/creator-demo/paths";
+import {
+  creatorDemoVariantForBasePath,
+  mapAppHref,
+  unmapDemoPathname,
+} from "@/lib/creator-demo/paths";
 
 /**
- * Null everywhere except inside the `/creator` demo tree, where it holds the
- * demo base path. Kept in context (not a module global) so server and client
- * renders agree on every href.
+ * Null everywhere except inside a creator demo tree, where it holds the demo
+ * base path (`/creator`, or `/creator/college` for the student cut). Kept in
+ * context (not a module global) so server and client renders agree on every
+ * href.
  */
 const CreatorDemoBasePathContext = createContext<string | null>(null);
 
@@ -20,6 +25,14 @@ export function useCreatorDemoBasePath() {
 /** True inside the creator demo tree. */
 export function useIsCreatorDemo() {
   return useContext(CreatorDemoBasePathContext) != null;
+}
+
+/**
+ * True only under `/creator/college`, which swaps the record flow for the live
+ * note-writing takeover. Never true in the real app.
+ */
+export function useIsCollegeCreatorDemo() {
+  return creatorDemoVariantForBasePath(useContext(CreatorDemoBasePathContext)) === "college";
 }
 
 /** Rewrites an `/app` href to the demo base path when inside the demo. */

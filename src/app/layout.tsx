@@ -113,13 +113,12 @@ export default function RootLayout({
                 // created here rather than through Next's viewport metadata so
                 // React never claims it back during hydration.
                 try {
+                  var canvas =
+                    resolved === "dark" ? "${CANVAS_COLOR_DARK}" : "${CANVAS_COLOR_LIGHT}";
                   var meta = document.createElement("meta");
                   meta.setAttribute("name", "theme-color");
                   meta.setAttribute("${THEME_COLOR_META_ATTRIBUTE}", "");
-                  meta.setAttribute(
-                    "content",
-                    resolved === "dark" ? "${CANVAS_COLOR_DARK}" : "${CANVAS_COLOR_LIGHT}",
-                  );
+                  meta.setAttribute("content", canvas);
                   document.head.prepend(meta);
                 } catch (error) {}
               })();
@@ -130,9 +129,6 @@ export default function RootLayout({
       <body>
         <ThemeController />
         {children}
-        {/* After the children: its tint strip has to be appended to the body
-            behind the sheets' own portals to stay the last thing painted along
-            the bottom edge, which is what the browser bar picks up. */}
         <BrowserChromeColor />
         <Analytics />
       </body>

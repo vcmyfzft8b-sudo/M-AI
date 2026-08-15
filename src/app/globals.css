@@ -46,11 +46,12 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.42),
     0 10px 20px rgba(0, 0, 0, 0.08);
   --sheet-background: #ffffff;
-  /* What iOS Safari actually paints its bottom bar as when a sheet's colour is
-     on the document underneath it. It does not reproduce that colour: it snaps
-     to one system tint per appearance. Measured on iOS 26.5 — see the sheet
-     ramp further down, which lands the sheet's bottom edge on this exact
-     value. */
+  /* The colour iOS Safari paints its bottom bar. It is not something a page can
+     set — Safari picks it, either by reading the page's pixels at load or by
+     following the document background colour, and which of the two wins varies
+     between loads. What a page can do is make both answers identical: every
+     screen ends on this colour, and BrowserChromeColor puts the same value on
+     the document. Measured on iOS 26.5 as the tint Safari settles on. */
   --browser-bar-surface: #f6f6f8;
   --pressed: rgba(0, 0, 0, 0.05);
   --close-fill: rgba(0, 0, 0, 0.08);
@@ -111,11 +112,7 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.02),
     0 3px 10px rgba(0, 0, 0, 0.12);
   --sheet-background: #1c1c1e;
-  /* The dark counterpart. Measured against #111113, #1b1b1d and #555558 on the
-     document, which all render the bar as this one grey. Pure black is the
-     exception and stays black, which is why a screen with no sheet open still
-     gets a black bar. */
-  --browser-bar-surface: #2a2a2c;
+  --browser-bar-surface: #2b2b2d;
   --pressed: rgba(255, 255, 255, 0.08);
   --close-fill: rgba(255, 255, 255, 0.12);
   --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.4);
@@ -177,7 +174,7 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.02),
       0 3px 10px rgba(0, 0, 0, 0.12);
     --sheet-background: #1c1c1e;
-    --browser-bar-surface: #2a2a2c;
+    --browser-bar-surface: #2b2b2d;
     --pressed: rgba(255, 255, 255, 0.08);
     --close-fill: rgba(255, 255, 255, 0.12);
     --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.4);
@@ -285,23 +282,32 @@ div {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Bottom sheets on mobile run to the very bottom of the viewport, where iOS
-   Safari's bar sits. BrowserChromeColor puts the sheet's colour on the document
-   so the bar reacts to it, but the bar does not reproduce that colour — it
-   snaps to one system tint per appearance. So the last sliver of the sheet ramps
-   into that tint, and the two meet on the same value instead of stepping. The
-   ramp lives inside the bottom padding these sheets already carry, so it never
-   touches their content. */
+/* The last sliver of every screen, shaded into the colour the browser bar sits
+   at, so the app runs into the bar with nothing to see between them.
+
+   This is a constant rather than something that follows the screen, and that is
+   the point. Safari reaches its bar colour two ways — reading the page's pixels
+   at load, or following the document background colour — and which one wins is
+   not stable between loads. Both are fed the same value here, so it stops
+   mattering which one it picks.
+
+   Deliberately free of transform, filter, opacity and will-change: those would
+   promote it to its own compositing layer, and layers promoted that way are not
+   picked up by the pixel reading. */
+.browser-chrome-tint {
+  display: none;
+}
+
+/* Only touch devices get a browser bar over the page. */
 @media (pointer: coarse) {
-  .mobile-draggable-sheet::after,
-  .library-folder-mobile-sheet::after,
-  .mobile-create-menu::after {
-    content: "";
-    position: absolute;
+  .browser-chrome-tint {
+    display: block;
+    position: fixed;
     inset: auto 0 0 0;
-    height: calc(env(safe-area-inset-bottom) + 1.25rem);
+    height: calc(env(safe-area-inset-bottom) + 1.5rem);
+    z-index: 2147483000;
     pointer-events: none;
-    background: linear-gradient(to bottom, transparent, var(--browser-bar-surface));
+    background: linear-gradient(to bottom, transparent, var(--browser-bar-surface) 85%);
   }
 }
 

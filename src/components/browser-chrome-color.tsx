@@ -6,16 +6,23 @@ import { readBottomEdgeColor, setThemeColorMeta } from "@/lib/browser-chrome-col
 import { subscribeToThemePreference } from "@/lib/theme";
 
 /**
- * Keeps `theme-color` on the colour the app paints at the bottom of the screen,
- * for the browsers that read it — Chrome, older iOS Safari, installed web apps.
+ * Settles the colour of the browser's own bottom bar.
  *
- * iOS 26's Safari toolbar ignores `theme-color` and takes its tint from what
- * the page paints in the last sliver of the viewport instead, and it reads that
- * once at page load: measured on iOS 26.5, re-painting, re-inserting, scrolling
- * and collapsing the toolbar all leave the tint where it was. So nothing here
- * can move that bar after load. `.browser-chrome-tint` in globals.css handles it
- * from the other side, by running the bottom of every screen into --canvas so
- * the bar only ever needs one colour.
+ * A page cannot set that colour. iOS 26 Safari ignores `theme-color` outright,
+ * and picks the bar's tint one of two ways instead: by reading the page's pixels
+ * once at load, or by following the document background colour. Which one wins
+ * is not stable — the same build, page and device produced a black bar on one
+ * load and a grey one on the next.
+ *
+ * So rather than trying to steer it, both inputs are given the same answer. The
+ * `.browser-chrome-tint` strip in globals.css ends every screen on
+ * --browser-bar-surface, and the document background is set to that same value
+ * here. Whichever path Safari takes, it arrives at the colour the app already
+ * ends on.
+ *
+ * `theme-color` is still kept in step with what the app actually paints at the
+ * bottom, for the browsers that do read it: Chrome, older iOS Safari, and
+ * installed web apps.
  */
 export function BrowserChromeColor() {
   useEffect(() => {
@@ -26,12 +33,18 @@ export function BrowserChromeColor() {
 
       const color = readBottomEdgeColor();
 
-      if (!color) {
-        return;
+      if (color) {
+        setThemeColorMeta(color);
       }
 
-      setThemeColorMeta(color);
-      document.documentElement.style.backgroundColor = color;
+      const barSurface = window
+        .getComputedStyle(document.documentElement)
+        .getPropertyValue("--browser-bar-surface")
+        .trim();
+
+      if (barSurface && document.documentElement.style.backgroundColor !== barSurface) {
+        document.documentElement.style.backgroundColor = barSurface;
+      }
     }
 
     // A frame is the natural granularity here: dragging a sheet fires a flood
@@ -91,5 +104,5 @@ export function BrowserChromeColor() {
     };
   }, []);
 
-  return null;
+  return <div className="browser-chrome-tint" aria-hidden="true" />;
 }

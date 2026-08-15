@@ -108,27 +108,36 @@ export function shouldDropNoStackBrowserNetworkNoise(event: SentryLikeEvent) {
 // frame always keeps its /_next path.
 const INJECTED_SCRIPT_URL = /^app:\/\/(?:[^/]|$)/;
 
-// The other shape the same problem takes, and the one iOS WebView hosts produce. A script
-// evaluated *in* the page rather than loaded from a URL has no source URL of its own, so the
-// engine attributes its frames to the HTML document — which rewriteFrames then renames like
-// any other same-origin URL, giving "app:///" or "app:///app" or "app:///app/lectures/<id>".
-// Both known cases are the iOS counterparts of the app://<script-name> noise above: the
-// Instagram in-app browser's sendDataToNative logger (MEMOAI-WEB-2D) and Chrome on iOS
-// blowing its stack inside its own injected bundle (MEMOAI-WEB-2G).
+// The other shape the same problem takes: a frame that reaches beforeSend as "app:///<path>".
+// Two unrelated kinds of foreign code end up looking like that.
 //
-// Every script we actually ship is a bundle under /_next/static/**.js, and the one piece of
-// JavaScript inlined in our documents is the ~10-line theme-restore snippet in the root
-// layout, whose whole body sits inside a try/catch. So a frame pointing at the document
-// itself is never our code: the failing script was put there by the browser.
-const REWRITTEN_FIRST_PARTY_URL = /^app:\/\/\//;
+//   * A script evaluated *in* the page rather than loaded from a URL has no source URL of its
+//     own, so the engine attributes its frames to the HTML document — which rewriteFrames then
+//     renames like any other same-origin URL, giving "app:///", "app:///app" or
+//     "app:///app/lectures/<id>". This is what iOS WebView hosts produce: the Instagram in-app
+//     browser's sendDataToNative logger (MEMOAI-WEB-2C), and Chrome on iOS blowing its stack
+//     inside its own injected bundle (MEMOAI-WEB-2G).
+//   * A script loaded from a URL that is not ours at all. The Next.js SDK's frame normalization
+//     runs `new URL(filename)` and replaces whatever origin it finds with "app://" — *every*
+//     well-formed URL, not only same-origin ones. So a browser extension's injected script at
+//     <some-origin>/executors/200.js arrives as "app:///executors/200.js", wearing the exact
+//     scheme our own bundles wear (MEMOAI-WEB-2H, the Exodus wallet extension's provider).
+//
+// One question answers both: is the path something we actually serve? Every script we ship
+// lives under /_next (our bundles), /_vercel (the Vercel analytics beacon) or /vendor (the
+// ffmpeg core in public/) — and the one piece of JavaScript inlined in our documents is the
+// ~10-line theme-restore snippet in the root layout, whose whole body sits inside a try/catch.
+// An app:/// frame pointing anywhere else is therefore never our code, whatever it ends in.
+const REWRITTEN_ORIGIN_URL = /^app:\/\/\//;
+const OUR_SCRIPT_PATH = /^\/(?:_next|_vercel|vendor)\//;
 
-function isHtmlDocumentFrame(filename: string) {
-  if (!REWRITTEN_FIRST_PARTY_URL.test(filename)) {
+function isForeignRewrittenFrame(filename: string) {
+  if (!REWRITTEN_ORIGIN_URL.test(filename)) {
     return false;
   }
 
   const path = filename.slice("app://".length).split(/[?#]/)[0];
-  return !path.endsWith(".js");
+  return !OUR_SCRIPT_PATH.test(path);
 }
 
 // When an injected script registers a listener, Sentry's own browserApiErrors integration
@@ -164,10 +173,10 @@ export function shouldDropWebViewInjectedScriptError(event: SentryLikeEvent) {
   for (const frame of callerFrames) {
     const filename = typeof frame?.filename === "string" ? frame.filename : "";
 
-    if (INJECTED_SCRIPT_URL.test(filename) || isHtmlDocumentFrame(filename)) {
+    if (INJECTED_SCRIPT_URL.test(filename) || isForeignRewrittenFrame(filename)) {
       sawInjectedFrame = true;
     } else if (!isFrameLocationUnknown(filename)) {
-      // A frame from a real script (https, or our rewritten app:///_next bundle) means
+      // A frame from a script we serve (https, or our rewritten app:///_next bundle) means
       // our code is on the stack — keep the event.
       return false;
     }

@@ -23,7 +23,14 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+// Generating a chunk means synthesizing the audio, transcribing it back for word alignment,
+// uploading it and recording the row — measured at 90-119s in production. At the 120s this route
+// used to allow, that ran right up against the ceiling, and an invocation Vercel kills runs no
+// catch block: the quota reservation taken at the start was never released, so it stayed held for
+// TTS_GENERATION_RESERVATION_STALE_MS and every request for that chunk over the following ten
+// minutes waited on a generation that was already dead and then 503'd. Every other route doing
+// comparable work already allows 300s; this one was the outlier, and the only one being killed.
+export const maxDuration = 300;
 
 const TTS_CHUNK_REQUEST_MAX_BYTES = 4 * 1024;
 const TTS_PROVIDER_RETRY_DELAYS_MS = [1_500, 3_500];

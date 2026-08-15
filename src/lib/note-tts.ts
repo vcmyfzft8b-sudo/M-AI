@@ -88,15 +88,13 @@ const UNLIMITED_TTS_USAGE_EMAILS = new Set(["nace.valencic@gmail.com"]);
 const TTS_OUTPUT_FORMAT = "mp3";
 const TTS_OUTPUT_MIME_TYPE = "audio/mpeg";
 const TTS_OUTPUT_BITRATE = 64_000;
-// The alignment transcription is the long pole in generateTtsChunk, but it is not the only
-// thing that has to fit inside the route's maxDuration (120s): synthesis runs before it, and
-// the storage upload, row insert and quota finalization run after it. Giving the transcription
-// the *whole* 120s budget meant a slow one ran until Vercel killed the invocation — which skips
-// every catch block, so the quota reservation was never released and stayed held for
-// TTS_GENERATION_RESERVATION_STALE_MS. Every request for that chunk in the following ten minutes
-// then took the waiter path and 503'd. Cap the transcription well short of the invocation budget
-// so a slow one fails as a normal error we can clean up after, instead of as a hard kill.
-const TTS_WAIT_TIMEOUT_MS = 75_000;
+// The alignment transcription is the long pole in generateTtsChunk, and it is not the only thing
+// that has to fit inside the calling route's maxDuration: synthesis runs before it, and the
+// storage upload, row insert and quota finalization run after it. This must therefore stay
+// comfortably below the smallest maxDuration that reaches here — see the note on the read-aloud
+// chunk route, which was raised to 300s precisely so a slow transcription still lands inside its
+// invocation instead of being killed partway through.
+const TTS_WAIT_TIMEOUT_MS = 120_000;
 const TTS_WAIT_INTERVAL_MS = 2_000;
 const TTS_CACHE_WAIT_TIMEOUT_MS = 24_000;
 const TTS_GENERATION_RESERVATION_STALE_MS = 10 * 60 * 1000;

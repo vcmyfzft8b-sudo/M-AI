@@ -46,6 +46,12 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.42),
     0 10px 20px rgba(0, 0, 0, 0.08);
   --sheet-background: #ffffff;
+  /* What iOS Safari actually paints its bottom bar as when a sheet's colour is
+     on the document underneath it. It does not reproduce that colour: it snaps
+     to one system tint per appearance. Measured on iOS 26.5 — see the sheet
+     ramp further down, which lands the sheet's bottom edge on this exact
+     value. */
+  --browser-bar-surface: #f6f6f8;
   --pressed: rgba(0, 0, 0, 0.05);
   --close-fill: rgba(0, 0, 0, 0.08);
   --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.04);
@@ -105,6 +111,11 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.02),
     0 3px 10px rgba(0, 0, 0, 0.12);
   --sheet-background: #1c1c1e;
+  /* The dark counterpart. Measured against #111113, #1b1b1d and #555558 on the
+     document, which all render the bar as this one grey. Pure black is the
+     exception and stays black, which is why a screen with no sheet open still
+     gets a black bar. */
+  --browser-bar-surface: #2a2a2c;
   --pressed: rgba(255, 255, 255, 0.08);
   --close-fill: rgba(255, 255, 255, 0.12);
   --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.4);
@@ -166,6 +177,7 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.02),
       0 3px 10px rgba(0, 0, 0, 0.12);
     --sheet-background: #1c1c1e;
+    --browser-bar-surface: #2a2a2c;
     --pressed: rgba(255, 255, 255, 0.08);
     --close-fill: rgba(255, 255, 255, 0.12);
     --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.4);
@@ -273,29 +285,23 @@ div {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Continues the app's bottom-most colour into the last sliver of the viewport.
-   iOS 26's floating Safari toolbar takes its tint from whatever the page paints
-   there, so this is what stops a bottom sheet from ending in a seam above the
-   browser bar. Its colour is set from JS by BrowserChromeColor to match what it
-   covers, which is why it is invisible in the page itself.
-
-   Deliberately free of transform, filter, opacity and will-change: those would
-   promote it to its own compositing layer, and layers promoted that way are not
-   picked up by that toolbar sampling. */
-.browser-chrome-tint {
-  display: none;
-}
-
-/* Only touch devices get a browser bar over the page, and only there is it
-   worth painting over the last few pixels of the layout. */
+/* Bottom sheets on mobile run to the very bottom of the viewport, where iOS
+   Safari's bar sits. BrowserChromeColor puts the sheet's colour on the document
+   so the bar reacts to it, but the bar does not reproduce that colour — it
+   snaps to one system tint per appearance. So the last sliver of the sheet ramps
+   into that tint, and the two meet on the same value instead of stepping. The
+   ramp lives inside the bottom padding these sheets already carry, so it never
+   touches their content. */
 @media (pointer: coarse) {
-  .browser-chrome-tint {
-    display: block;
-    position: fixed;
+  .mobile-draggable-sheet::after,
+  .library-folder-mobile-sheet::after,
+  .mobile-create-menu::after {
+    content: "";
+    position: absolute;
     inset: auto 0 0 0;
-    height: 10px;
-    z-index: 2147483000;
+    height: calc(env(safe-area-inset-bottom) + 1.25rem);
     pointer-events: none;
+    background: linear-gradient(to bottom, transparent, var(--browser-bar-surface));
   }
 }
 
@@ -14706,20 +14712,24 @@ select:disabled {
 
 }
 
-/* An emoji glyph does not sit centred in its own box: it is placed off the
-   baseline, and the line box around it is not symmetric. Measured by
-   rasterising the glyph through this exact rule and reading the painted
-   pixels — ➕, ⚙️, 🏠 and 📄 all agree — the ink centre lands 0.039em *above*
-   the box centre, so a flex-centred icon renders slightly high in its button.
-   Pushing the box down by that measured amount puts the ink on the centre.
-   (Text needs no such correction: the same measurement puts a label's ink
-   centre at 0.000em. A word with a descender sits lower, which is correct.) */
+/* Apple Color Emoji draws taller than its own em box, and the overflow hangs
+   below: measured in iOS Safari at the ~1rem the app actually uses, ⚙️ paints
+   from the line box's top edge to 7.8 device pixels past its bottom, putting
+   the ink centre 3.5 device pixels (0.069em) below the button's centre. Lifting
+   the box by that much puts the ink on the centre.
+
+   Measure before touching this number — it has been wrong in both directions.
+   Rasterise the glyph through these exact rules at the size in question and
+   read the painted pixels against the box's centre line; do not reason about
+   font metrics. The overflow is not proportional, so the value is tuned for
+   ~1rem and is near-exact for every icon in the app, which all sit at
+   1rem–1.05rem. (Text needs no correction: a label's ink centres at 0.000em.) */
 .emoji-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
-  transform: translateY(0.039em);
+  transform: translateY(-0.0625em);
   font-family:
     "Apple Color Emoji",
     "Segoe UI Emoji",

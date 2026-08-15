@@ -3756,20 +3756,6 @@ select:disabled {
   padding-left: 2.75rem;
 }
 
-.note-source-back-button {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--secondary-label);
-  font-size: 0.9rem;
-  font-weight: 600;
-  justify-self: start;
-}
-
 .note-source-description {
   margin: 1rem auto 0;
   max-width: 34rem;
@@ -14700,12 +14686,61 @@ select:disabled {
   align-items: center;
   justify-content: center;
   line-height: 1;
-  transform: translateY(-0.0625em);
+  transform: translateY(calc(-0.0625em + var(--emoji-nudge, 0em)));
   font-family:
     "Apple Color Emoji",
     "Segoe UI Emoji",
     "Noto Color Emoji",
     sans-serif;
+}
+
+/* The lift above is the average, and it leaves most glyphs inside half a pixel.
+   A few sit far enough off their own box's centre to see, because Apple Color
+   Emoji does not place ink consistently from glyph to glyph. These are the
+   measured exceptions, taken the same way — rasterised at 1rem in iOS Safari
+   and read against the box's centre line — and expressed as the correction on
+   top of the lift.
+
+   Add an entry only when a glyph is visibly off, and only from a measurement.
+   Everything not listed is already within ~0.7 CSS px, which is under a device
+   pixel on a 3x screen. */
+.emoji-icon[data-symbol="\2716\FE0F"] {
+  --emoji-nudge: 0.094em;
+}
+
+.emoji-icon[data-symbol="\2705"] {
+  --emoji-nudge: 0.094em;
+}
+
+.emoji-icon[data-symbol="\267B\FE0F"] {
+  --emoji-nudge: 0.198em;
+}
+
+.emoji-icon[data-symbol="\1F50E"] {
+  --emoji-nudge: 0.073em;
+}
+
+.emoji-icon[data-symbol="\1F4F7"] {
+  --emoji-nudge: -0.073em;
+}
+
+.emoji-icon[data-symbol="\203A"] {
+  --emoji-nudge: -0.052em;
+}
+
+.emoji-icon[data-symbol="\25BE"] {
+  --emoji-nudge: -0.0625em;
+}
+
+.emoji-icon[data-symbol="\270F\FE0F"],
+.emoji-icon[data-symbol="\1F9FE"],
+.emoji-icon[data-symbol="\1F6AA"],
+.emoji-icon[data-symbol="\26A0\FE0F"] {
+  --emoji-nudge: 0.042em;
+}
+
+.emoji-icon[data-symbol="\1F3E0"] {
+  --emoji-nudge: -0.042em;
 }
 
 /* ---------------------------------------------------------------------------

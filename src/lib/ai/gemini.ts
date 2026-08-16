@@ -10,6 +10,7 @@ import {
 import { z } from "zod";
 
 import { isRetryableAiError } from "@/lib/ai/errors";
+import { resolvePartMediaResolution } from "@/lib/ai/gemini-models";
 import {
   GeminiTruncatedOutputError,
   buildStructuredRetryInstruction,
@@ -307,6 +308,7 @@ export async function generateStructuredObjectWithGeminiFile<TSchema extends z.Z
   let useResponseSchema = true;
   const responseSchema = z.toJSONSchema(params.schema);
   const maxAttempts = resolveMaxAttempts(params.maxAttempts);
+  const mediaResolution = resolvePartMediaResolution(params.model, params.mediaResolution);
 
   await fs.writeFile(tempPath, bytes);
 
@@ -345,7 +347,7 @@ ${JSON.stringify(responseSchema)}`,
                 createPartFromUri(
                   uploaded.uri ?? "",
                   uploaded.mimeType ?? params.file.type ?? "application/octet-stream",
-                  params.mediaResolution,
+                  mediaResolution,
                 ),
               ],
               config: {
@@ -391,7 +393,7 @@ ${JSON.stringify(responseSchema)}`,
             metadata: {
               fileMimeType: uploaded.mimeType ?? params.file.type ?? "application/octet-stream",
               maxOutputTokens,
-              mediaResolution: params.mediaResolution,
+              mediaResolution,
               responseMimeType: "application/json",
               responseSchema: useResponseSchema,
             },
@@ -409,7 +411,7 @@ ${JSON.stringify(responseSchema)}`,
             metadata: {
               fileMimeType: uploaded.mimeType ?? params.file.type ?? "application/octet-stream",
               maxOutputTokens,
-              mediaResolution: params.mediaResolution,
+              mediaResolution,
               responseMimeType: "application/json",
               responseSchema: useResponseSchema,
             },
@@ -460,6 +462,7 @@ export async function generateTextWithGeminiFile(params: {
   let uploadedFileName: string | null = null;
   let lastError: unknown = null;
   const maxAttempts = resolveMaxAttempts(params.maxAttempts);
+  const mediaResolution = resolvePartMediaResolution(params.model, params.mediaResolution);
 
   await fs.writeFile(tempPath, bytes);
 
@@ -498,7 +501,7 @@ export async function generateTextWithGeminiFile(params: {
                 createPartFromUri(
                   uploaded.uri ?? "",
                   uploaded.mimeType ?? params.file.type ?? "application/octet-stream",
-                  params.mediaResolution,
+                  mediaResolution,
                 ),
               ],
               config: {
@@ -527,7 +530,7 @@ export async function generateTextWithGeminiFile(params: {
             metadata: {
               fileMimeType: uploaded.mimeType ?? params.file.type ?? "application/octet-stream",
               maxOutputTokens,
-              mediaResolution: params.mediaResolution,
+              mediaResolution,
               responseMimeType: "text/plain",
             },
           });
@@ -544,7 +547,7 @@ export async function generateTextWithGeminiFile(params: {
             metadata: {
               fileMimeType: uploaded.mimeType ?? params.file.type ?? "application/octet-stream",
               maxOutputTokens,
-              mediaResolution: params.mediaResolution,
+              mediaResolution,
               responseMimeType: "text/plain",
             },
             error,

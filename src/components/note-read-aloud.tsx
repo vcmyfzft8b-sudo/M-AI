@@ -26,6 +26,10 @@ import {
   type NoteTtsVoice,
 } from "@/lib/note-tts-settings";
 import {
+  getTtsChunkRetryDelayMs,
+  shouldRetryTtsChunkRequest,
+} from "@/lib/note-tts-retry";
+import {
   buildNoteTtsChunks,
   parseNoteTtsDocument,
   type NoteTtsBlock,
@@ -218,6 +222,17 @@ class TtsRequestError extends Error {
     super(message);
     this.name = "TtsRequestError";
   }
+}
+
+// The retry policy itself lives in @/lib/note-tts-retry so it can be tested without a DOM.
+function toTtsChunkFailure(error: unknown) {
+  return error instanceof TtsRequestError ? { code: error.code, status: error.status } : null;
+}
+
+function waitMs(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function getPlaybackWordState(activeChunk: ActiveChunk, currentMs: number) {
@@ -2035,22 +2050,43 @@ export function NoteReadAloud({
 
       if (!request) {
         request = (async () => {
-          const response = await fetch(`/api/lectures/${lectureId}/tts/chunks`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              sessionId: sessionIdRef.current,
-              chunkIndex,
-              voice: selectedVoice,
-            }),
-          });
-          const payload = await parseResponse<TtsChunkResponse>(response);
-          updateQuota(payload);
-          prefetchedChunksRef.current.set(cacheKey, payload);
+          const startedAt = Date.now();
+          // Playback resets bump this, which is our signal that nobody is waiting on this chunk
+          // any more — stop re-asking rather than retrying into an abandoned session.
+          const playbackRequestId = playbackRequestIdRef.current;
 
-          return payload;
+          for (let attempt = 0; ; attempt += 1) {
+            try {
+              const response = await fetch(`/api/lectures/${lectureId}/tts/chunks`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  sessionId: sessionIdRef.current,
+                  chunkIndex,
+                  voice: selectedVoice,
+                }),
+              });
+              const payload = await parseResponse<TtsChunkResponse>(response);
+              updateQuota(payload);
+              prefetchedChunksRef.current.set(cacheKey, payload);
+
+              return payload;
+            } catch (error) {
+              const shouldRetry = shouldRetryTtsChunkRequest({
+                failure: toTtsChunkFailure(error),
+                elapsedMs: Date.now() - startedAt,
+                cancelled: playbackRequestIdRef.current !== playbackRequestId,
+              });
+
+              if (!shouldRetry) {
+                throw error;
+              }
+
+              await waitMs(getTtsChunkRetryDelayMs(attempt));
+            }
+          }
         })();
 
         pendingChunkRequestsRef.current.set(cacheKey, request);

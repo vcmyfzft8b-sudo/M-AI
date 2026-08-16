@@ -88,6 +88,12 @@ const UNLIMITED_TTS_USAGE_EMAILS = new Set(["nace.valencic@gmail.com"]);
 const TTS_OUTPUT_FORMAT = "mp3";
 const TTS_OUTPUT_MIME_TYPE = "audio/mpeg";
 const TTS_OUTPUT_BITRATE = 64_000;
+// The alignment transcription is the long pole in generateTtsChunk, and it is not the only thing
+// that has to fit inside the calling route's maxDuration: synthesis runs before it, and the
+// storage upload, row insert and quota finalization run after it. This must therefore stay
+// comfortably below the smallest maxDuration that reaches here — see the note on the read-aloud
+// chunk route, which was raised to 300s precisely so a slow transcription still lands inside its
+// invocation instead of being killed partway through.
 const TTS_WAIT_TIMEOUT_MS = 120_000;
 const TTS_WAIT_INTERVAL_MS = 2_000;
 const TTS_CACHE_WAIT_TIMEOUT_MS = 24_000;

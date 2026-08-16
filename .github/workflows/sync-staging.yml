@@ -1,0 +1,40 @@
+name: Sync staging with main
+
+# The staging branch exists only to give the staging environment a stable URL
+# (memoai-staging.vercel.app) that always serves what production serves, but runs against the
+# staging Supabase project rather than the production one. Keeping it in lockstep with main is
+# therefore the whole point: anything that lands on main should be reachable there without
+# someone remembering to move the branch by hand.
+#
+# This overwrites staging rather than merging into it. That is deliberate — staging is a mirror
+# of main, not somewhere to park work. Anything pushed to staging directly will be replaced the
+# next time main moves, so test feature branches on their own PR preview instead.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-staging
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Fast-forward staging to main
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # Pushing the exact commit main is at, rather than the branch name, keeps this correct if
+      # further commits land on main while this run is queued: the concurrency group serialises
+      # runs, and each one points staging at the commit that triggered it.
+      - name: Point staging at main
+        run: git push origin "${{ github.sha }}:refs/heads/staging" --force

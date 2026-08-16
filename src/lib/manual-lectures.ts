@@ -30,6 +30,7 @@ import {
   attachDocumentImagesToNotes,
   getStoredDocumentImagesFromMetadata,
 } from "@/lib/document-note-media";
+import { captureBackgroundError } from "@/lib/monitoring";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
 import { withNoteEnrichmentStage } from "@/lib/note-enrichment-status";
 import {
@@ -503,6 +504,10 @@ async function extractTextFromPptx(file: File) {
       });
     } catch (error) {
       console.warn("PPTX visual extraction failed; using editable slide text only.", error);
+      captureBackgroundError(error, {
+        operation: "pptx_visual_extraction",
+        extra: { slideCount, mediaCount: mediaPaths.length, fileSize: file.size },
+      });
     }
   }
 

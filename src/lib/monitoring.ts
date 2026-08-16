@@ -58,6 +58,41 @@ export function captureRouteError(
   });
 }
 
+type CaptureBackgroundErrorContext = {
+  operation: string;
+  tags?: Record<string, string>;
+  extra?: Record<string, unknown>;
+};
+
+/**
+ * Reports a failure that the caller deliberately swallows, so the import still finishes on a
+ * degraded result. These never reach captureRouteError — nothing throws to a route — which is how
+ * PPTX visual extraction (#101) and document image descriptions (#138) each stayed broken for
+ * months behind a console.warn nobody read.
+ * Sent as a warning: the request succeeded, but a piece of it silently did not.
+ */
+export function captureBackgroundError(
+  error: unknown,
+  { operation, tags, extra }: CaptureBackgroundErrorContext,
+) {
+  Sentry.withScope((scope) => {
+    scope.setLevel("warning");
+    scope.setTag("operation", operation);
+
+    if (tags) {
+      for (const [key, value] of Object.entries(tags)) {
+        scope.setTag(key, value);
+      }
+    }
+
+    if (extra) {
+      scope.setContext("background", extra);
+    }
+
+    Sentry.captureException(toError(error));
+  });
+}
+
 function toError(error: unknown) {
   if (error instanceof Error) {
     return error;

@@ -17,6 +17,7 @@ import {
   isPptxDocument,
 } from "@/lib/document-files";
 import { getPdfJs } from "@/lib/manual-lectures";
+import { captureBackgroundError } from "@/lib/monitoring";
 import { getServerEnv } from "@/lib/server-env";
 import { buildLectureNoteMediaStoragePath } from "@/lib/storage";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -283,9 +284,11 @@ async function describeDocumentImage(image: ExtractedDocumentImage) {
   const contextHint = image.contextText
     ? `\nNearby document text: ${image.contextText.slice(0, 700)}`
     : "";
+  let model: string | null = null;
 
   try {
     const env = getServerEnv();
+    model = env.GEMINI_TEXT_MODEL;
     const description = await generateTextWithGeminiFile({
       instructions: `Decide if this embedded document image is useful for studying the nearby source material. Keep diagrams, charts, process illustrations, network layouts, tables, UI examples, screenshots that teach a concept, and concrete photos that explain the topic. Reject decorative icons, logos, stock filler, watermarks, repeated small symbols, or images that do not add study value.
 
@@ -308,6 +311,19 @@ Return plain text only.${contextHint}`,
     return normalized.replace(/^useful\s*:\s*/i, "").slice(0, 360);
   } catch (error) {
     console.warn("Document image description failed.", error);
+    captureBackgroundError(error, {
+      operation: "document_image_description",
+      extra: {
+        model,
+        sourcePartLabel: image.sourcePartLabel,
+        mimeType: image.mimeType,
+        width: image.width,
+        height: image.height,
+        byteSize: image.bytes.length,
+        hasContextText: Boolean(image.contextText),
+      },
+    });
+
     return undefined;
   }
 }

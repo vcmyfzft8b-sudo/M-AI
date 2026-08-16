@@ -17,6 +17,10 @@ import {
   stripLeadingRedundantHeading,
 } from "@/lib/note-tts-text";
 import { DEFAULT_NOTE_TTS_VOICE, NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
+import {
+  TTS_CHUNK_LEGACY_PENDING_STATUS,
+  TTS_CHUNK_PENDING_STATUS,
+} from "@/lib/note-tts-retry";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -39,6 +43,9 @@ const ttsChunkRequestSchema = z.object({
   sessionId: z.string().trim().min(8).max(128),
   chunkIndex: z.number().int().nonnegative(),
   voice: z.enum(NOTE_TTS_VOICES).default(DEFAULT_NOTE_TTS_VOICE),
+  // Set by clients that understand a 202 "still generating" answer. Absent from bundles that
+  // predate it, which still need the 503 — see TTS_CHUNK_PENDING_STATUS.
+  acceptsPendingStatus: z.boolean().default(false),
 });
 
 function createTtsLimitResponse(params: {
@@ -92,6 +99,27 @@ async function createTtsLimitResponseIfQuotaCannotCreateChunk(params: {
     limitSeconds: usage.limitSeconds,
     hasPaidAccess: params.hasPaidAccess,
   });
+}
+
+// The audio is on its way; the caller should ask again shortly. That is an accepted request, not a
+// failed one, so it answers 202 — a 503 here counted against the production error rate and made a
+// working generation look like an outage. Clients that predate the 202 still get the 503.
+function createPendingResponse(
+  code: "tts_generation_pending" | "tts_provider_rate_limited",
+  acceptsPendingStatus: boolean,
+) {
+  return NextResponse.json(
+    {
+      error: "Zvok se še pripravlja. Poskusi znova čez trenutek.",
+      code,
+    },
+    {
+      status: acceptsPendingStatus
+        ? TTS_CHUNK_PENDING_STATUS
+        : TTS_CHUNK_LEGACY_PENDING_STATUS,
+      headers: { "Cache-Control": "no-store" },
+    },
+  );
 }
 
 function wait(ms: number) {
@@ -261,13 +289,7 @@ export async function POST(
         return quotaLimitResponse;
       }
 
-      return NextResponse.json(
-        {
-          error: "Zvok se še pripravlja. Poskusi znova čez trenutek.",
-          code: "tts_generation_pending",
-        },
-        { status: 503 },
-      );
+      return createPendingResponse("tts_generation_pending", parsedBody.data.acceptsPendingStatus);
     }
 
     if (isProviderRateLimitError(error)) {
@@ -282,12 +304,9 @@ export async function POST(
         return quotaLimitResponse;
       }
 
-      return NextResponse.json(
-        {
-          error: "Zvok se še pripravlja. Poskusi znova čez trenutek.",
-          code: "tts_provider_rate_limited",
-        },
-        { status: 503 },
+      return createPendingResponse(
+        "tts_provider_rate_limited",
+        parsedBody.data.acceptsPendingStatus,
       );
     }
 

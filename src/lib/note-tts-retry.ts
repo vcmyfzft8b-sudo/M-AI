@@ -10,6 +10,25 @@
 
 export const TTS_CHUNK_PENDING_CODES = ["tts_generation_pending", "tts_provider_rate_limited"];
 
+// "The audio is still being made, ask again" is an accepted request, not a broken service, so the
+// route answers 202 rather than 503. It used to answer 503, which every dashboard counts as a
+// server error: five of them made the production error rate read 1.12% for a five-minute bucket
+// while nothing was actually wrong — the reader never saw a failure, because the client retries
+// these on its own.
+//
+// A client that predates this still expects the 503, and a 202 would sail past its `response.ok`
+// check and be mistaken for a chunk with no audio in it. So the client opts in by sending
+// `acceptsPendingStatus`, and anyone still running the old bundle keeps getting the 503 until they
+// reload. Once no old bundles are left, the flag and the 503 branch can both go.
+export const TTS_CHUNK_PENDING_STATUS = 202;
+export const TTS_CHUNK_LEGACY_PENDING_STATUS = 503;
+
+// Because the pending answer now arrives on a 2xx, "did this response carry audio or a promise of
+// audio" can no longer be read off the status code alone.
+export function isTtsChunkPendingPayload(payload: { code?: string } | null | undefined) {
+  return TTS_CHUNK_PENDING_CODES.includes(payload?.code ?? "");
+}
+
 // Generation runs to roughly 100s, and each server-side wait absorbs ~24s of that before
 // answering, so this budget covers a full generation with room for the tail.
 export const TTS_CHUNK_PENDING_RETRY_BUDGET_MS = 150_000;

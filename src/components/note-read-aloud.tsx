@@ -29,6 +29,7 @@ import {
   applyTtsCreationQuotaExhausted,
   canCreateTtsChunk,
   getTtsChunkRetryDelayMs,
+  isTtsChunkPendingPayload,
   shouldRetryTtsChunkRequest,
 } from "@/lib/note-tts-retry";
 import {
@@ -604,6 +605,17 @@ async function parseResponse<T>(response: Response): Promise<T> {
     secondsUsed?: number;
     tier?: TtsStatusResponse["tier"];
   };
+
+  // "Still generating, ask again" now arrives on a 202 so it stops counting against the production
+  // error rate. It carries no audio, so it has to leave through the same throw as before — the
+  // retry policy keys off the code, not the status.
+  if (response.ok && isTtsChunkPendingPayload(payload)) {
+    throw new TtsRequestError(
+      payload.error || "Zvok se še pripravlja. Poskusi znova čez trenutek.",
+      payload.code,
+      response.status,
+    );
+  }
 
   if (!response.ok) {
     let message = payload.error || "Zvoka ni bilo mogoče pripraviti.";
@@ -2086,6 +2098,9 @@ export function NoteReadAloud({
                   sessionId: sessionIdRef.current,
                   chunkIndex,
                   voice: selectedVoice,
+                  // Tells the route this bundle understands a 202 "still generating" answer, so it
+                  // does not have to report one as a 503 server error. See TTS_CHUNK_PENDING_STATUS.
+                  acceptsPendingStatus: true,
                 }),
               });
               const payload = await parseResponse<TtsChunkResponse>(response);

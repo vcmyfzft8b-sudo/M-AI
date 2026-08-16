@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  TTS_CHUNK_LEGACY_PENDING_STATUS,
   TTS_CHUNK_PENDING_RETRY_BUDGET_MS,
+  TTS_CHUNK_PENDING_STATUS,
   applyTtsCreationQuotaExhausted,
   canCreateTtsChunk,
   getTtsChunkRetryDelayMs,
   isTtsChunkPendingFailure,
+  isTtsChunkPendingPayload,
   shouldRetryTtsChunkRequest,
 } from "../src/lib/note-tts-retry.ts";
 
@@ -85,6 +88,53 @@ test("backs off progressively so an instant rate limit is not hammered", () => {
 
   assert.ok(delays[0] >= 1_000, "first retry should not be immediate");
   assert.ok(Math.max(...delays) <= 8_000, "delay must stay bounded so retries keep up");
+});
+
+// "Still generating" answered 503 for a while, and every dashboard counts a 503 as a server error:
+// five of them read as a 1.12% production error rate for a five-minute bucket while nothing was
+// wrong. It is an accepted request awaiting a result, so it belongs on a 2xx.
+test("the pending answer is a success status, not a server error", () => {
+  assert.equal(TTS_CHUNK_PENDING_STATUS, 202);
+  assert.ok(
+    TTS_CHUNK_PENDING_STATUS >= 200 && TTS_CHUNK_PENDING_STATUS < 300,
+    "a pending answer must not count against the error rate",
+  );
+});
+
+// Bundles served before the 202 existed check `response.ok` and would read a 202 as a chunk with no
+// audio in it, so the route keeps answering them the way they expect until they reload.
+test("clients that predate the 202 still get the status they can handle", () => {
+  assert.equal(TTS_CHUNK_LEGACY_PENDING_STATUS, 503);
+  assert.notEqual(TTS_CHUNK_PENDING_STATUS, TTS_CHUNK_LEGACY_PENDING_STATUS);
+});
+
+// With the answer on a 2xx, the status code no longer distinguishes audio from a promise of audio,
+// so the payload has to be inspected before it is treated as a chunk.
+test("a pending payload is recognised whatever status carried it", () => {
+  assert.equal(isTtsChunkPendingPayload({ code: "tts_generation_pending" }), true);
+  assert.equal(isTtsChunkPendingPayload({ code: "tts_provider_rate_limited" }), true);
+});
+
+test("a real chunk is never mistaken for a pending answer", () => {
+  assert.equal(isTtsChunkPendingPayload({ audioUrl: "https://example.test/a.mp3" }), false);
+  assert.equal(isTtsChunkPendingPayload({ code: "tts_daily_limit_reached" }), false);
+  assert.equal(isTtsChunkPendingPayload({}), false);
+  assert.equal(isTtsChunkPendingPayload(null), false);
+  assert.equal(isTtsChunkPendingPayload(undefined), false);
+});
+
+// The retry policy keys off the code, so moving the answer from 503 to 202 must not change whether
+// the client comes back for the audio.
+test("moving the pending answer to 202 keeps it retryable", () => {
+  const onPending = { code: "tts_generation_pending", status: TTS_CHUNK_PENDING_STATUS };
+  const onLegacy = { code: "tts_generation_pending", status: TTS_CHUNK_LEGACY_PENDING_STATUS };
+
+  assert.equal(isTtsChunkPendingFailure(onPending), true);
+  assert.equal(isTtsChunkPendingFailure(onLegacy), true);
+  assert.equal(
+    shouldRetryTtsChunkRequest({ failure: onPending, elapsedMs: 0, cancelled: false }),
+    true,
+  );
 });
 
 // Recording "the allowance is spent" used to hand back a new status object every time, and the

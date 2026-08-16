@@ -47,3 +47,42 @@ export function shouldRetryTtsChunkRequest(params: {
 
   return params.elapsedMs < TTS_CHUNK_PENDING_RETRY_BUDGET_MS;
 }
+
+// The daily-allowance slice of the read-aloud status the client keeps for the note being read.
+export type TtsCreationQuota = {
+  remainingSeconds: number;
+  hasUnlimitedUsage?: boolean;
+} | null;
+
+// Asking for a chunk the remaining allowance cannot pay for always comes back "daily limit
+// reached", so the prefetcher checks this before queueing rather than learning it from a 403.
+export function canCreateTtsChunk(params: {
+  quota: TtsCreationQuota;
+  estimatedSeconds: number;
+}) {
+  if (!params.quota || params.quota.hasUnlimitedUsage) {
+    return true;
+  }
+
+  return params.quota.remainingSeconds >= Math.max(1, Math.ceil(params.estimatedSeconds));
+}
+
+// Writing "the allowance is spent" into status has to be idempotent. React only skips a re-render
+// when the next state is the *same object*, and the prefetch effect is rebuilt whenever the status
+// object's identity changes. Handing back a fresh `{...current, remainingSeconds: 0}` for every
+// rejected request therefore re-armed that effect, which sent another request, which produced
+// another fresh object: in production this re-asked the chunk route roughly every 2.7s for as long
+// as the reader left the note open, hundreds of 403s per session.
+export function applyTtsCreationQuotaExhausted<T extends { remainingSeconds: number }>(
+  current: T | null | undefined,
+): T | null {
+  if (!current) {
+    return current ?? null;
+  }
+
+  if (current.remainingSeconds <= 0) {
+    return current;
+  }
+
+  return { ...current, remainingSeconds: 0 };
+}

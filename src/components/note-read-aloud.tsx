@@ -26,6 +26,8 @@ import {
   type NoteTtsVoice,
 } from "@/lib/note-tts-settings";
 import {
+  applyTtsCreationQuotaExhausted,
+  canCreateTtsChunk,
   getTtsChunkRetryDelayMs,
   shouldRetryTtsChunkRequest,
 } from "@/lib/note-tts-retry";
@@ -1550,6 +1552,10 @@ export function NoteReadAloud({
   const prefetchedChunksRef = useRef(new Map<string, TtsChunkResponse>());
   const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse>>());
   const prefetchQueueRef = useRef<Promise<void>>(Promise.resolve());
+  // The voice the chunk route last refused on a spent daily allowance, so the look-ahead buffer
+  // stops asking for chunks it already knows will be refused. Cleared as soon as a request comes
+  // back with allowance left.
+  const creationLimitReachedVoiceRef = useRef<NoteTtsVoice | null>(null);
   const playbackRequestIdRef = useRef(0);
   const preparedInitialChunkKeyRef = useRef<string | null>(null);
   const generationProgressIntervalRef = useRef<number | null>(null);
@@ -1810,6 +1816,10 @@ export function NoteReadAloud({
                 }
               : payload;
 
+          if (nextStatus.hasUnlimitedUsage || nextStatus.remainingSeconds > 0) {
+            creationLimitReachedVoiceRef.current = null;
+          }
+
           statusRef.current = nextStatus;
           setStatus(nextStatus);
           setError(null);
@@ -1875,15 +1885,32 @@ export function NoteReadAloud({
   }, [hasHydratedSettings, highlightColorId]);
 
   const updateQuota = useCallback((payload: TtsChunkResponse) => {
+    // A request that got through with allowance left means the refusal we remembered no longer
+    // holds — the day rolled over, or the chunk was served from cache. Let the buffer fill again.
+    if (payload.hasUnlimitedUsage || payload.remainingSeconds > 0) {
+      creationLimitReachedVoiceRef.current = null;
+    }
+
     setStatus((current) => {
-      const nextStatus = current
-        ? {
-            ...current,
-            limitSeconds: payload.limitSeconds,
-            secondsUsed: payload.secondsUsed,
-            remainingSeconds: payload.remainingSeconds,
-          }
-        : current;
+      // Keep the same object when the numbers have not moved: the prefetch effect is rebuilt on
+      // every change of this object's identity, so a gratuitously new one costs a round of
+      // re-renders and re-queued prefetches per chunk.
+      if (
+        !current ||
+        (current.limitSeconds === payload.limitSeconds &&
+          current.secondsUsed === payload.secondsUsed &&
+          current.remainingSeconds === payload.remainingSeconds)
+      ) {
+        statusRef.current = current;
+        return current;
+      }
+
+      const nextStatus = {
+        ...current,
+        limitSeconds: payload.limitSeconds,
+        secondsUsed: payload.secondsUsed,
+        remainingSeconds: payload.remainingSeconds,
+      };
 
       statusRef.current = nextStatus;
       return nextStatus;
@@ -2019,17 +2046,10 @@ export function NoteReadAloud({
 
   const isCreationQuotaUnavailableForChunk = useCallback(
     (chunkIndex: number, currentStatus: TtsStatusResponse | null) => {
-      if (!currentStatus || currentStatus.hasUnlimitedUsage) {
-        return false;
-      }
-
-      const chunk = chunks[chunkIndex];
-      const requiredSeconds = Math.max(1, Math.ceil(chunk?.estimatedSeconds ?? 1));
-
-      return (
-        currentStatus.remainingSeconds <= 0 ||
-        currentStatus.remainingSeconds < requiredSeconds
-      );
+      return !canCreateTtsChunk({
+        quota: currentStatus,
+        estimatedSeconds: chunks[chunkIndex]?.estimatedSeconds ?? 1,
+      });
     },
     [chunks],
   );
@@ -2113,23 +2133,22 @@ export function NoteReadAloud({
         const errorCode = requestError?.code;
         const currentStatus: TtsStatusResponse | null = requestError?.quota
           ? {
-              ...(statusRef.current ??
-                status ?? {
-                  available: true,
-                  reason: null,
-                  tier: requestError.tier ?? "paid",
-                  chunkCount: chunks.length,
-                  totalWords: document.words.length,
-                  limitSeconds: requestError.quota.limitSeconds,
-                  remainingSeconds: requestError.quota.remainingSeconds,
-                  secondsUsed: requestError.quota.secondsUsed,
-                }),
+              ...(statusRef.current ?? {
+                available: true,
+                reason: null,
+                tier: requestError.tier ?? "paid",
+                chunkCount: chunks.length,
+                totalWords: document.words.length,
+                limitSeconds: requestError.quota.limitSeconds,
+                remainingSeconds: requestError.quota.remainingSeconds,
+                secondsUsed: requestError.quota.secondsUsed,
+              }),
               limitSeconds: requestError.quota.limitSeconds,
               remainingSeconds: requestError.quota.remainingSeconds,
               secondsUsed: requestError.quota.secondsUsed,
               hasUnlimitedUsage: requestError.quota.hasUnlimitedUsage,
             }
-          : statusRef.current ?? status;
+          : statusRef.current;
         const isDailyLimit =
           errorCode === "tts_daily_limit_reached" ||
           message === "Limit dosežen." ||
@@ -2153,14 +2172,10 @@ export function NoteReadAloud({
         }
 
         if (shouldShowCreationLimit) {
+          creationLimitReachedVoiceRef.current = selectedVoice;
+
           setStatus((current) => {
-            const baseStatus = current ?? currentStatus;
-            const nextStatus = baseStatus
-              ? {
-                  ...baseStatus,
-                  remainingSeconds: 0,
-                }
-              : baseStatus;
+            const nextStatus = applyTtsCreationQuotaExhausted(current ?? currentStatus);
 
             statusRef.current = nextStatus;
             return nextStatus;
@@ -2174,6 +2189,8 @@ export function NoteReadAloud({
         return null;
       }
     },
+    // `status` is deliberately absent: this reads the live value through `statusRef`, and taking
+    // the state object as a dependency made every quota update rebuild the prefetch effect.
     [
       chunks.length,
       document.words.length,
@@ -2181,7 +2198,6 @@ export function NoteReadAloud({
       lectureId,
       resetPlaybackToStart,
       selectedVoice,
-      status,
       updateQuota,
     ],
   );
@@ -2327,10 +2343,26 @@ export function NoteReadAloud({
           break;
         }
 
+        // Once the route has told us the allowance is spent, every chunk that still has to be
+        // generated will answer the same way, so filling the buffer just runs the route once per
+        // chunk for the rest of the note. Stop asking. This waits for an actual rejection rather
+        // than pre-judging from the remaining seconds, because a chunk generated on an earlier day
+        // is served from cache and costs no allowance — those keep prefetching normally, and only
+        // the first one that genuinely needs generating pays a wasted request.
+        if (
+          creationLimitReachedVoiceRef.current === selectedVoice &&
+          !prefetchedChunksRef.current.has(getChunkCacheKey(selectedVoice, nextChunkIndex))
+        ) {
+          break;
+        }
+
         prefetchChunk(nextChunkIndex);
       }
     },
-    [chunks.length, playbackRate, prefetchChunk, status?.available],
+    // Only primitives off `status`, never the object: the effect that calls this is rebuilt on
+    // every dependency change, so depending on the object's identity is what let a rejected
+    // prefetch re-trigger itself.
+    [chunks.length, playbackRate, prefetchChunk, selectedVoice, status?.available],
   );
 
   useEffect(() => {

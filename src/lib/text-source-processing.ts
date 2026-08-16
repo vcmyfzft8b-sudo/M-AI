@@ -1,3 +1,4 @@
+import { stripUnstorableCharacters } from "@/lib/database-text";
 import type { TranscriptSegmentInput } from "@/lib/types";
 
 export type StructuredSourceBlock = {
@@ -9,7 +10,7 @@ export type StructuredSourceBlock = {
 const DOCUMENT_SOURCE_MAX_CHARS = 560;
 
 function normalizeWhitespace(value: string) {
-  return value
+  return stripUnstorableCharacters(value)
     .replace(/\r\n/g, "\n")
     .replace(/\u00a0/g, " ")
     .replace(/[ \t]+\n/g, "\n")
@@ -92,7 +93,7 @@ function normalizeStructuredBlocks(blocks: StructuredSourceBlock[]) {
     }
 
     return splitLongBlock(normalizedText, DOCUMENT_SOURCE_MAX_CHARS).map((chunk) => ({
-      label: block.label?.trim() || null,
+      label: stripUnstorableCharacters(block.label ?? "").trim() || null,
       pageNumber: block.pageNumber ?? null,
       text: chunk,
     }));

@@ -8,6 +8,7 @@ import { generateStructuredObject } from "@/lib/ai/json";
 import { createEmbeddings } from "@/lib/ai/embeddings";
 import { parseAudioChunkManifest } from "@/lib/audio-processing";
 import { CHAT_MATCH_COUNT } from "@/lib/constants";
+import { sanitizeJsonForDatabase } from "@/lib/database-text";
 import {
   attachDocumentImagesToNotes,
   getStoredDocumentImagesFromMetadata,
@@ -91,10 +92,13 @@ async function updateLectureProcessingState(params: {
   const metadata = parseProcessingMetadata(params.processingMetadata);
   const status = params.stage === "checking_document_images" ? "generating_notes" : params.stage;
 
+  // An error message can quote the source text, and the metadata we merge back carries
+  // extractor output, so both can carry characters Postgres refuses. This write is how a
+  // failure is recorded, so it must never be the thing that fails.
   const { error } = await supabase
     .from("lectures")
     .update(
-      {
+      sanitizeJsonForDatabase({
         status,
         error_message: params.errorMessage ?? null,
         duration_seconds: params.durationSeconds,
@@ -107,7 +111,7 @@ async function updateLectureProcessingState(params: {
             errorMessage: params.errorMessage ?? null,
           },
         },
-      } as never,
+      }) as never,
     )
     .eq("id", params.lectureId);
 

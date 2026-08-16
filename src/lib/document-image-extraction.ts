@@ -10,6 +10,7 @@ import sharp from "sharp";
 
 import { generateTextWithGeminiFile } from "@/lib/ai/gemini";
 import { MAX_SCAN_IMAGE_BYTES, STORAGE_BUCKET } from "@/lib/constants";
+import { stripUnstorableCharacters } from "@/lib/database-text";
 import {
   isDocxDocument,
   isPdfDocument,
@@ -57,7 +58,7 @@ export type StoredDocumentNoteImage = {
 };
 
 function normalizeWhitespace(value: string) {
-  return value.replace(/\s+/g, " ").trim();
+  return stripUnstorableCharacters(value).replace(/\s+/g, " ").trim();
 }
 
 function decodeXmlText(value: string) {

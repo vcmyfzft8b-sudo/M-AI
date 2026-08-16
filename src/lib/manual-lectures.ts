@@ -15,6 +15,10 @@ import {
   generateTextWithGeminiFile,
 } from "@/lib/ai/gemini";
 import {
+  sanitizeJsonForDatabase,
+  stripUnstorableCharacters,
+} from "@/lib/database-text";
+import {
   isDocxDocument,
   isHtmlDocument,
   isPdfDocument,
@@ -180,7 +184,7 @@ function isPdfTextItem(
 }
 
 function normalizeWhitespace(value: string) {
-  return value
+  return stripUnstorableCharacters(value)
     .replace(/\r\n/g, "\n")
     .replace(/\u00a0/g, " ")
     .replace(/[ \t]+\n/g, "\n")
@@ -1663,12 +1667,15 @@ export async function prepareLectureFromTextSource(params: {
   }
 
   const durationSeconds = estimateTextSourceDurationSeconds(cleanedText);
-  const processingMetadata = {
+  const titleHint = params.titleHint == null ? null : stripUnstorableCharacters(params.titleHint);
+  // Blocks, the title hint and model metadata reach us straight from the extractor, so clean
+  // the whole payload here rather than trusting every producer to have done it.
+  const processingMetadata = sanitizeJsonForDatabase({
     createInitialAudio: params.createInitialAudio === true,
     initialAudioVoice: params.initialAudioVoice ?? null,
     manualImport: {
       sourceType: params.sourceType,
-      titleHint: params.titleHint ?? null,
+      titleHint,
       modelMetadata: params.modelMetadata ?? {},
       text: cleanedText,
       blocks: params.blocks ?? null,
@@ -1678,7 +1685,7 @@ export async function prepareLectureFromTextSource(params: {
       updatedAt: new Date().toISOString(),
       errorMessage: null,
     },
-  };
+  });
 
   if (params.lectureId) {
     const { data: lecture, error } = await supabase
@@ -1690,7 +1697,7 @@ export async function prepareLectureFromTextSource(params: {
           language_hint: params.languageHint ?? "sl",
           duration_seconds: durationSeconds,
           error_message: null,
-          title: params.titleHint ?? null,
+          title: titleHint,
           processing_metadata: processingMetadata,
         } as never,
       )
@@ -1732,7 +1739,7 @@ export async function prepareLectureFromTextSource(params: {
         status: "queued",
         language_hint: params.languageHint ?? "sl",
         duration_seconds: durationSeconds,
-        title: params.titleHint ?? null,
+        title: titleHint,
         processing_metadata: processingMetadata,
       } as never,
     )

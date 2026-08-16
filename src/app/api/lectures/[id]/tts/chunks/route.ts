@@ -237,7 +237,10 @@ export async function POST(
       }),
     );
   } catch (error) {
-    console.error("Failed to prepare note TTS chunk", error);
+    // A spent daily allowance and a generation that is still running are answers, not faults: the
+    // route reports them as 403/503 and the client acts on them. Logging them at error level with
+    // a stack put hundreds of entries a day into the error stream and buried the failures that do
+    // need looking at — the 500 below stays logged.
 
     if (error instanceof TtsQuotaLimitError) {
       return createTtsLimitResponse({
@@ -287,6 +290,8 @@ export async function POST(
         { status: 503 },
       );
     }
+
+    console.error("Failed to prepare note TTS chunk", error);
 
     return NextResponse.json(
       {

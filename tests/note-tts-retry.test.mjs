@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   TTS_CHUNK_PENDING_RETRY_BUDGET_MS,
+  applyTtsCreationQuotaExhausted,
+  canCreateTtsChunk,
   getTtsChunkRetryDelayMs,
   isTtsChunkPendingFailure,
   shouldRetryTtsChunkRequest,
@@ -83,6 +85,59 @@ test("backs off progressively so an instant rate limit is not hammered", () => {
 
   assert.ok(delays[0] >= 1_000, "first retry should not be immediate");
   assert.ok(Math.max(...delays) <= 8_000, "delay must stay bounded so retries keep up");
+});
+
+// Recording "the allowance is spent" used to hand back a new status object every time, and the
+// prefetch effect keys off that object's identity. Each rejected request therefore re-armed the
+// effect, which sent the next request: production logged one 403 every ~2.7s, for minutes, per
+// reader. Returning the same object when nothing changed is what stops the loop.
+test("recording an exhausted allowance twice does not produce a new object", () => {
+  const spent = { remainingSeconds: 0, secondsUsed: 900, limitSeconds: 900 };
+
+  assert.equal(applyTtsCreationQuotaExhausted(spent), spent);
+  assert.equal(applyTtsCreationQuotaExhausted(applyTtsCreationQuotaExhausted(spent)), spent);
+});
+
+test("recording an exhausted allowance still zeroes an allowance that had time left", () => {
+  const current = { remainingSeconds: 120, secondsUsed: 780, limitSeconds: 900 };
+  const next = applyTtsCreationQuotaExhausted(current);
+
+  assert.notEqual(next, current);
+  assert.equal(next.remainingSeconds, 0);
+  assert.equal(next.secondsUsed, 780, "unrelated fields must survive");
+  assert.equal(current.remainingSeconds, 120, "must not mutate in place");
+});
+
+test("recording an exhausted allowance tolerates a status that has not loaded yet", () => {
+  assert.equal(applyTtsCreationQuotaExhausted(null), null);
+  assert.equal(applyTtsCreationQuotaExhausted(undefined), null);
+});
+
+// The prefetcher asks this before queueing, so that a spent allowance stops the buffer instead of
+// being rediscovered through a 403 for every remaining chunk of the note.
+test("a chunk is only worth requesting when the allowance can pay for it", () => {
+  assert.equal(canCreateTtsChunk({ quota: { remainingSeconds: 60 }, estimatedSeconds: 30 }), true);
+  assert.equal(canCreateTtsChunk({ quota: { remainingSeconds: 30 }, estimatedSeconds: 30 }), true);
+  assert.equal(canCreateTtsChunk({ quota: { remainingSeconds: 29 }, estimatedSeconds: 30 }), false);
+  assert.equal(canCreateTtsChunk({ quota: { remainingSeconds: 0 }, estimatedSeconds: 30 }), false);
+});
+
+test("a fractional chunk length is rounded up before it is charged against the allowance", () => {
+  assert.equal(canCreateTtsChunk({ quota: { remainingSeconds: 30 }, estimatedSeconds: 30.4 }), false);
+  // Even a chunk estimated at almost nothing costs a second, matching what the route reserves.
+  assert.equal(canCreateTtsChunk({ quota: { remainingSeconds: 0 }, estimatedSeconds: 0.2 }), false);
+  assert.equal(canCreateTtsChunk({ quota: { remainingSeconds: 1 }, estimatedSeconds: 0.2 }), true);
+});
+
+test("an unlimited or not-yet-loaded allowance never blocks a request", () => {
+  assert.equal(
+    canCreateTtsChunk({
+      quota: { remainingSeconds: 0, hasUnlimitedUsage: true },
+      estimatedSeconds: 300,
+    }),
+    true,
+  );
+  assert.equal(canCreateTtsChunk({ quota: null, estimatedSeconds: 300 }), true);
 });
 
 // The pending answer arrives after a ~24s server-side wait, so the retries themselves cost almost

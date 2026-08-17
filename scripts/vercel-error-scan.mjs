@@ -71,9 +71,12 @@ function resolveLauncher() {
 
 // `vercel logs` defaults to filtering by the current git branch, which silently
 // returns nothing from a worktree or a detached CI checkout -- hence --no-branch.
-function runVercelLogs({ since, until, extra }) {
-  const launcher = resolveLauncher()
-  const argv = [
+//
+// The token has to be passed as a flag: the CLI does not authenticate from the
+// VERCEL_TOKEN environment variable, and on a clean CI runner with no auth.json it
+// fails with "No existing credentials found" before it ever reads the env.
+export function buildLogsArgs({ since, until, extra, token }) {
+  return [
     'logs',
     '--json',
     '--no-follow',
@@ -86,8 +89,14 @@ function runVercelLogs({ since, until, extra }) {
     until.toISOString(),
     '--limit',
     String(PAGE_LIMIT),
+    ...(token ? ['--token', token] : []),
     ...extra,
   ]
+}
+
+function runVercelLogs({ since, until, extra }) {
+  const launcher = resolveLauncher()
+  const argv = buildLogsArgs({ since, until, extra, token: process.env.VERCEL_TOKEN })
   const result = spawnSync(launcher.command, [...launcher.prefix, ...argv], {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,

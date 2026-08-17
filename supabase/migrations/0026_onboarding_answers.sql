@@ -57,12 +57,12 @@ begin
 end
 $$;
 
--- The survey never asked for an age: the onboarding route was the only writer
--- of age_range and it always wrote the same hardcoded bucket, so every stored
--- value is fabricated. The route no longer writes the column at all.
-update public.profiles
-set age_range = null
-where age_range = '19_22';
+-- The current survey has no age step, so the onboarding route no longer writes
+-- age_range at all. An earlier revision of this migration also cleared every
+-- '19_22' row on the assumption that the hardcoded value was the only source of
+-- that bucket. It was not — an older version of the survey did ask for an age —
+-- so that statement destroyed real answers when it ran against production on
+-- 2026-08-17 and has been removed. Do not reintroduce it.
 
 create index if not exists profiles_onboarding_heard_from_idx
   on public.profiles (onboarding_heard_from)

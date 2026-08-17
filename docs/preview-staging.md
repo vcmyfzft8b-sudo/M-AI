@@ -28,19 +28,21 @@ The staging branch is a separate Supabase environment. It has its own Auth, REST
 
 Vercel environment changes affect new deployments only. Redeploy the PR after correcting Preview configuration.
 
-## Sentry Automation And Missed Runs
+## Error Triage Automation And Missed Runs
 
-The local Sentry automation is scheduled every two hours, but it uses a durable successful-scan cursor rather than assuming every scheduled run happened.
+The `Error triage` GitHub Actions workflow is scheduled every three hours. It runs in GitHub's cloud, so the Mac being off no longer skips runs, but it still uses a durable successful-scan cursor rather than assuming every scheduled run happened.
 
-- normally the next window is approximately two hours
-- if the Mac was off for one run, the next window is approximately four hours
-- longer outages produce a correspondingly longer catch-up window
-- the query includes a 10-minute overlap and deduplicates Sentry event and issue IDs
-- unresolved actionable issues without a fix PR remain in the backlog and are revisited even when their latest event is older than the current window
+- normally the next window is approximately three hours
+- if a run was skipped or failed, the next window covers the full elapsed interval
+- the catch-up window is capped at 24 hours, because Vercel runtime log retention is shorter than that
+- the query includes a 10-minute overlap and deduplicates Vercel log record IDs and Sentry issue IDs
+- actionable errors without a fix PR remain in the backlog and are revisited even when their latest occurrence is older than the current window
 
-The cursor advances only after all required Sentry pages for the interval were retrieved and triaged. A failed or partial Sentry query leaves the cursor unchanged so the next run retries the interval. Staging or Preview failures are tracked separately and do not erase successful Sentry coverage.
+The cursor advances only after the interval was retrieved and triaged completely. A failed or partial scan leaves the cursor unchanged so the next run retries the interval. Staging or Preview failures are tracked separately and do not erase successful coverage.
 
-Reports state the exact UTC start and end plus the human-readable covered duration. A normal no-bug report says no new or regressed production bugs were found in the last two hours; after missed runs it states the actual four-hour, six-hour, or longer interval.
+Reports state the exact UTC start and end plus the human-readable covered duration. A normal no-bug report says no new or regressed production errors were found in the last three hours; after missed runs it states the actual six-hour, nine-hour, or longer interval.
+
+Full setup and behaviour: [error-triage-automation.md](/docs/error-triage-automation.md).
 
 ## Safe Staging Verification
 
@@ -66,7 +68,7 @@ Output only the comparison result. Never retrieve or print the Preview anon key,
 
 ## Keeping Staging Aligned With Production
 
-The scheduled Sentry workflow synchronizes staging from a clean `origin/main` worktree before each two-hour triage run:
+Staging must stay aligned with the migration files already released on `main`. Synchronize it from a clean `origin/main` checkout:
 
 1. fetch `origin/main`
 2. obtain the staging branch connection without printing it
@@ -75,7 +77,7 @@ The scheduled Sentry workflow synchronizes staging from a clean `origin/main` wo
 5. verify Auth, REST, and Storage health
 6. confirm that no branch-specific Vercel Supabase override exists
 
-This keeps staging aligned with the migration files already released on `main`, without copying production records. Because the scheduler runs locally, synchronization resumes on the next run if the Mac was off.
+This keeps staging aligned with the migration files already released on `main`, without copying production records. The error-triage automation does not synchronize staging and never writes a migration; a database-changing fix is handed to a human instead.
 
 ## Creating A Database Migration
 

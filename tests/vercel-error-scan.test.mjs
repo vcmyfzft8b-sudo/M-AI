@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  buildLogsArgs,
   classify,
   normalizeMessage,
   normalizePath,
@@ -52,6 +53,41 @@ test('a handled error that returned a non-error status is not actionable', () =>
 
 test('a real 5xx in the live shape is actionable', () => {
   assert.equal(classify({ ...LIVE_RECORD, responseStatusCode: 500 }), 'server_error')
+})
+
+const WINDOW = {
+  since: new Date('2026-08-18T09:00:00Z'),
+  until: new Date('2026-08-18T10:00:00Z'),
+  extra: ['--level', 'error'],
+}
+
+test('the token is passed as a flag, because the CLI ignores VERCEL_TOKEN', () => {
+  // A clean CI runner has no auth.json, and the CLI fails with "No existing
+  // credentials found" before it ever looks at the environment.
+  const args = buildLogsArgs({ ...WINDOW, token: 'secret-value' })
+  const at = args.indexOf('--token')
+  assert.ok(at !== -1, 'expected --token in the argument list')
+  assert.equal(args[at + 1], 'secret-value')
+})
+
+test('the window is passed as explicit ISO bounds', () => {
+  const args = buildLogsArgs({ ...WINDOW, token: 't' })
+  assert.equal(args[args.indexOf('--since') + 1], '2026-08-18T09:00:00.000Z')
+  assert.equal(args[args.indexOf('--until') + 1], '2026-08-18T10:00:00.000Z')
+})
+
+test('branch auto-detection is disabled, or a CI checkout returns nothing', () => {
+  assert.ok(buildLogsArgs({ ...WINDOW, token: 't' }).includes('--no-branch'))
+  assert.ok(buildLogsArgs({ ...WINDOW, token: 't' }).includes('--no-follow'))
+})
+
+test('only production logs are requested', () => {
+  const args = buildLogsArgs({ ...WINDOW, token: 't' })
+  assert.equal(args[args.indexOf('--environment') + 1], 'production')
+})
+
+test('no token flag is emitted when there is no token to pass', () => {
+  assert.ok(!buildLogsArgs({ ...WINDOW, token: undefined }).includes('--token'))
 })
 
 test('classify treats 5xx responses as server errors', () => {

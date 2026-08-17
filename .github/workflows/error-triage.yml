@@ -167,7 +167,8 @@ jobs:
         run: npm ci
 
       - name: Configure git identity
-        if: steps.scan.outputs.actionable == 'true'
+        # Not gated on the scan: "Save triage state" runs even on a no-work run and
+        # cannot commit without an identity.
         run: |
           git config --global user.name "memo-error-triage[bot]"
           git config --global user.email "error-triage@users.noreply.github.com"

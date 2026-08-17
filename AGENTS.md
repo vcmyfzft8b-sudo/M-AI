@@ -43,7 +43,8 @@
 - The query window must start at the last successful scan cursor, not at a fixed three-hour offset. If runs were skipped, the next window covers the full elapsed interval, with a 10-minute overlap and record deduplication, capped at 24 hours.
 - Advance the cursor only after a complete scan and triage succeed. Keep actionable errors without a dedicated fix PR in the durable backlog and revisit them on every run regardless of age.
 - A staging, Preview, CI, or implementation failure must not create a gap in error coverage or cause a completed interval to be scanned as if it failed.
-- The automation opens pull requests and never merges them. It must not push to `main`, exceed one fix PR per run, or write a database migration.
+- The automation fixes every actionable error in the window, giving each its own branch and its own pull request so they can be reviewed and reverted independently. A run is bounded by `TRIAGE_MAX_FIXES` (default 5) and the job timeout; anything not reached is deferred to the backlog and named explicitly in the run summary.
+- The automation opens pull requests and never merges them. It must not push to `main`, stack one fix branch on another, or write a database migration.
 - The operating procedure is [.claude/skills/error-triage/SKILL.md](/.claude/skills/error-triage/SKILL.md); setup and troubleshooting are in [docs/error-triage-automation.md](/docs/error-triage-automation.md).
 
 ## Documentation

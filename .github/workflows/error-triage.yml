@@ -1,8 +1,12 @@
 name: Error triage
 
-# Scans Vercel production logs (enriched with Sentry) every three hours, fixes one
-# actionable error, verifies the fix on that branch's Vercel preview, and opens a PR.
-# It never merges and never pushes to main. See docs/error-triage-automation.md.
+# Scans Vercel production logs (enriched with Sentry) every three hours, fixes every
+# actionable error it finds, verifies each fix on its own Vercel preview, and opens
+# one PR per fix. It never merges and never pushes to main.
+# See docs/error-triage-automation.md.
+#
+# The scan runs before `npm ci` and before Claude starts, so a run that finds nothing
+# costs about a minute instead of several. Most runs find nothing.
 #
 # GitHub only runs scheduled workflows from the default branch, so this file has to
 # be on `main` before the cron fires.
@@ -14,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       since:
-        description: "Override the scan start (ISO 8601 or relative like 6h). Ignores the stored cursor."
+        description: "Override the scan start (ISO 8601 or relative like 6h). Ignores the stored cursor and does not advance it."
         required: false
         type: string
       dry_run:
@@ -22,6 +26,11 @@ on:
         required: false
         type: boolean
         default: false
+      max_fixes:
+        description: "Maximum fixes to attempt in this run."
+        required: false
+        type: string
+        default: "5"
 
 # Two triage runs at once would fight over the state branch and could open duplicate PRs.
 concurrency:
@@ -40,9 +49,10 @@ env:
 
 jobs:
   triage:
-    name: Scan, fix, verify, open PR
+    name: Scan, fix, verify, open PRs
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Room for several fix-verify cycles; each one waits on a real preview build.
+    timeout-minutes: 120
 
     steps:
       - name: Check out
@@ -50,7 +60,7 @@ jobs:
         with:
           fetch-depth: 0
           # A PAT rather than GITHUB_TOKEN, so pushes from this job trigger the CI
-          # workflow on the resulting PR.
+          # workflow on the resulting PRs.
           token: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
 
       - name: Set up Node
@@ -58,9 +68,6 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Install the pinned Vercel CLI
         # A day-long catch-up scan is ~48 CLI invocations; installing once beats
@@ -88,20 +95,91 @@ jobs:
             echo "No state branch yet; seeded a fresh one."
           fi
 
+      - name: Plan the window
+        id: window
+        run: |
+          set -euo pipefail
+          node scripts/triage-state.mjs plan \
+            --state .triage-state/state.json \
+            --since-override "${{ inputs.since }}" > /tmp/window.json
+          cat /tmp/window.json
+          {
+            echo "since=$(jq -r .since /tmp/window.json)"
+            echo "until=$(jq -r .until /tmp/window.json)"
+            echo "may_advance=$(jq -r .mayAdvanceCursor /tmp/window.json)"
+          } >> "$GITHUB_OUTPUT"
+
+      # Runs before `npm ci` on purpose: both scanners use only Node built-ins.
+      - name: Scan Vercel and Sentry
+        id: scan
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_BASE_URL: ${{ secrets.SENTRY_BASE_URL }}
+        run: |
+          set -uo pipefail
+          node scripts/vercel-error-scan.mjs \
+            --since "${{ steps.window.outputs.since }}" \
+            --until "${{ steps.window.outputs.until }}" \
+            --out /tmp/vercel-report.json
+          rc=$?
+          # 0 = complete window, 3 = partially unreadable but still worth triaging.
+          # Anything else (2 = misconfigured, 1 = crash) must fail the job loudly:
+          # treating it as "no errors found" would advance the cursor over a window
+          # nobody actually read.
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 3 ]; then
+            echo "::error::Vercel scan exited $rc; refusing to advance the cursor."
+            exit "$rc"
+          fi
+
+          # Sentry is enrichment. Losing it degrades the run; it does not fail it.
+          node scripts/sentry-error-scan.mjs \
+            --since "${{ steps.window.outputs.since }}" \
+            --until "${{ steps.window.outputs.until }}" \
+            --out /tmp/sentry-report.json || echo "::warning::Sentry scan failed; continuing on Vercel data alone."
+
+          node scripts/triage-state.mjs gate \
+            --vercel /tmp/vercel-report.json \
+            --sentry /tmp/sentry-report.json \
+            --backlog .triage-state/backlog.json > /tmp/gate.json
+          cat /tmp/gate.json
+          echo "actionable=$(jq -r .actionable /tmp/gate.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Nothing to do
+        if: steps.scan.outputs.actionable != 'true'
+        run: |
+          set -euo pipefail
+          echo "No new or regressed production errors between ${{ steps.window.outputs.since }} and ${{ steps.window.outputs.until }}."
+          if [ "${{ steps.window.outputs.may_advance }}" = "true" ]; then
+            node scripts/triage-state.mjs commit \
+              --state .triage-state/state.json \
+              --until "${{ steps.window.outputs.until }}" --status ok
+          else
+            echo "Hand-dispatched window; leaving the cursor where it was."
+          fi
+
+      - name: Install dependencies
+        if: steps.scan.outputs.actionable == 'true'
+        run: npm ci
+
       - name: Configure git identity
+        if: steps.scan.outputs.actionable == 'true'
         run: |
           git config --global user.name "memo-error-triage[bot]"
           git config --global user.email "error-triage@users.noreply.github.com"
 
-      - name: Run triage
+      - name: Fix, verify, and open PRs
+        if: steps.scan.outputs.actionable == 'true'
         uses: anthropics/claude-code-action@v1
         env:
-          # Vercel: runtime logs and preview deployment status.
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-          # Sentry: stack traces and source context for the same window.
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
@@ -110,7 +188,14 @@ jobs:
           # without it the run verifies what it can and flags the rest for a human.
           PREVIEW_TEST_EMAIL: ${{ secrets.PREVIEW_TEST_EMAIL }}
           PREVIEW_TEST_PASSWORD: ${{ secrets.PREVIEW_TEST_PASSWORD }}
-          TRIAGE_SINCE_OVERRIDE: ${{ inputs.since }}
+          # Everything the scan already worked out, so the agent does not redo it.
+          TRIAGE_SINCE: ${{ steps.window.outputs.since }}
+          TRIAGE_UNTIL: ${{ steps.window.outputs.until }}
+          TRIAGE_MAY_ADVANCE_CURSOR: ${{ steps.window.outputs.may_advance }}
+          TRIAGE_VERCEL_REPORT: /tmp/vercel-report.json
+          TRIAGE_SENTRY_REPORT: /tmp/sentry-report.json
+          TRIAGE_GATE: /tmp/gate.json
+          TRIAGE_MAX_FIXES: ${{ inputs.max_fixes || '5' }}
           TRIAGE_DRY_RUN: ${{ inputs.dry_run }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -118,7 +203,7 @@ jobs:
           prompt: "/error-triage"
           claude_args: |
             --model claude-opus-5
-            --max-turns 120
+            --max-turns 300
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
 
       - name: Save triage state

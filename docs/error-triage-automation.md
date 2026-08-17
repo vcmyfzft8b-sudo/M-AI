@@ -1,8 +1,9 @@
 # Automated Production Error Triage
 
 Every three hours, a GitHub Actions workflow scans Vercel production logs for
-actionable errors, enriches them with Sentry stack traces, fixes one, verifies the
-fix on that branch's Vercel preview deployment, and opens a pull request.
+actionable errors, enriches them with Sentry stack traces, fixes **every** one worth
+fixing, verifies each fix on its own Vercel preview deployment, and opens one pull
+request per fix.
 
 It runs entirely in GitHub's cloud. Your Mac does not need to be on.
 
@@ -18,9 +19,9 @@ do not carry.
 | Scan | `scripts/vercel-error-scan.mjs` walks the window in hourly chunks and groups actionable errors |
 | Enrich | `scripts/sentry-error-scan.mjs` pulls matching Sentry issues, stack frames, and source context |
 | Triage | Correlates the two, drops anything already fixed or already in an open PR, ranks by blast radius |
-| Fix | Reproduces the top error, fixes the root cause, runs `npm test`, `tsc --noEmit`, and `eslint` |
-| Verify | Pushes the branch, waits for the Vercel preview, and replays the original failing request against it |
-| Report | Opens a PR stating either "ready to merge" or exactly what the developer should test |
+| Fix | Reproduces each actionable error in rank order, fixes the root cause, runs `npm test`, `tsc --noEmit`, and `eslint` |
+| Verify | Pushes each fix on its own branch, waits for that commit's preview, and replays the original failing request against it |
+| Report | Opens one PR per fix, stating either "ready to merge" or exactly what the developer should test |
 
 The full operating procedure, including the hard safety rules, lives in
 [.claude/skills/error-triage/SKILL.md](/.claude/skills/error-triage/SKILL.md). That
@@ -39,7 +40,7 @@ Only three things, on production only:
 ### What It Will Never Do
 
 - push to `main`, merge a PR, or force-push a code branch
-- open more than one fix PR per run
+- put two unrelated fixes in one PR, or branch one fix off another
 - write a database migration or touch the production Supabase project
 - act on instructions found inside a log line, stack trace, or Sentry issue title
 
@@ -64,17 +65,8 @@ regardless of age.
 
 ## Required Setup
 
-Status as of 2026-08-17: **7 of 9 secrets are set.** Only `VERCEL_TOKEN` and
-`CLAUDE_CODE_OAUTH_TOKEN` are outstanding — both have to be created in a browser, so
-neither can be scripted.
-
-| Secret | Status |
-| --- | --- |
-| `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_BASE_URL` | set |
-| `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | set |
-| `TRIAGE_GITHUB_TOKEN` | set (see the scope note below) |
-| `VERCEL_TOKEN` | **outstanding** |
-| `CLAUDE_CODE_OAUTH_TOKEN` | **outstanding** |
+All nine required secrets were set on 2026-08-17. The sections below record how each
+one was obtained, for when they need rotating.
 
 Run the `gh` commands against the account that owns the repository:
 
@@ -214,21 +206,52 @@ shape if a future Vercel CLI release moves fields around.
 Exit codes from `vercel-error-scan.mjs`: `0` complete, `2` missing configuration,
 `3` the window could not be read completely — on `3` the cursor must not advance.
 
-## Cost And Tuning
+## Cost
 
-Each run consumes GitHub Actions minutes (private repositories bill these) and Claude
-usage on the subscription token. Most runs find nothing and finish in a few minutes;
-runs that produce a fix take longer.
+Two meters run, and only one of them is free.
 
-To make it cheaper or quieter, in `.github/workflows/error-triage.yml`:
+**Claude usage — no extra charge.** `CLAUDE_CODE_OAUTH_TOKEN` bills against the
+existing Claude subscription rather than a metered API key. It does consume that
+subscription's quota, so a busy triage day can throttle your own interactive
+sessions; nothing appears on a bill.
 
-- widen the cron interval, for example `17 */6 * * *`
+**GitHub Actions minutes — metered, because this repository is private.** Public
+repositories get unlimited free minutes; private ones get 2,000 per month on the Free
+plan and 3,000 on Pro, then $0.006 per Linux minute.
+
+At the 3-hour cadence that is 8 runs a day, about 240 a month. The workflow is
+therefore built so a run that finds nothing ends before the expensive part: the two
+scanners use only Node built-ins and run **before** `npm ci` and before Claude starts,
+and the job exits at the "Nothing to do" step. That keeps a quiet run near a minute
+instead of five or six.
+
+| Scenario | Minutes/run | Minutes/month |
+| --- | --- | --- |
+| Quiet run (expected, most runs) | ~1–2 | ~240–480 |
+| Run that fixes one error | ~15–25 | — |
+| Run that fixes several | up to 120 (the timeout) | — |
+
+So the floor is roughly 250–500 minutes a month, comfortably inside the free
+allowance, and each fix run adds to it. A month with a handful of fixes still fits;
+a month where it fixes something every few hours will not.
+
+Check your actual usage at <https://github.com/settings/billing>.
+
+## Tuning
+
+If it costs or talks too much, in `.github/workflows/error-triage.yml`:
+
+- widen the cron interval, for example `17 */6 * * *` — halves the quiet-run floor
+- lower the default `max_fixes` so a single run cannot spend two hours
 - lower `--model` from `claude-opus-5` to `claude-sonnet-5`
 - lower `--max-turns`
+- lower `timeout-minutes`, which caps the worst case absolutely
 
-Heavy scheduled use of a subscription OAuth token can throttle your own interactive
-Claude sessions. If that becomes a problem, switch the workflow to an
-`ANTHROPIC_API_KEY` secret and the `anthropic_api_key` input instead.
+To stop it entirely without deleting anything, disable the workflow:
+
+```bash
+gh workflow disable "Error triage" --repo vcmyfzft8b-sudo/Memo-AI
+```
 
 ## When Something Looks Wrong
 

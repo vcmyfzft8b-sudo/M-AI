@@ -24,6 +24,26 @@ import {
   SEO_BRAND_NAME,
 } from "@/lib/brand";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
+import {
+  AUDIENCE_OPTIONS,
+  CLASS_FOCUS_OPTIONS,
+  DAILY_GOAL_OPTIONS,
+  EDUCATION_OPTIONS,
+  ELEMENTARY_SCHOOL_OPTIONS,
+  ELEMENTARY_YEAR_OPTIONS,
+  FEATURE_OPTIONS,
+  HIGH_SCHOOL_FOUR_YEAR_OPTIONS,
+  HIGH_SCHOOL_OPTIONS,
+  HIGH_SCHOOL_YEAR_OPTIONS,
+  MOTIVATION_OPTIONS,
+  ROLE_OPTIONS,
+  SCHOOL_OPTIONS,
+  SOURCE_OPTIONS,
+  SUBJECT_OPTIONS,
+  UNIVERSITY_SCHOOL_OPTIONS,
+  UNIVERSITY_YEAR_OPTIONS,
+  type GradeScale,
+} from "@/lib/onboarding-options";
 
 type BillingPlanCard = {
   id: "weekly" | "monthly" | "yearly";
@@ -50,174 +70,6 @@ type OnboardingForm = {
   classFocus: string;
   dailyGoal: string;
 };
-
-const AGE_OPTIONS = [
-  { value: "under_16", label: "Manj kot 16" },
-  { value: "16_18", label: "16-18" },
-  { value: "19_22", label: "19-22" },
-  { value: "23_29", label: "23-29" },
-  { value: "30_plus", label: "30+" },
-] as const;
-
-const EDUCATION_OPTIONS = [
-  { value: "high_school", label: "Srednja šola" },
-  { value: "university", label: "Fakulteta" },
-  { value: "masters", label: "Magisterij" },
-  { value: "self_study", label: "Samostojno učenje" },
-  { value: "other", label: "Drugo" },
-] as const;
-
-const SOURCE_OPTIONS = [
-  { value: "instagram_reels", label: "Instagram Reels", icon: "instagram" },
-  { value: "tiktok", label: "TikTok", icon: "tiktok" },
-  { value: "chatgpt", label: "ChatGPT", icon: "chatgpt" },
-  { value: "friend", label: "Prijatelj", icon: "💬" },
-  { value: "other", label: "Drugo", icon: "✏️" },
-] as const;
-
-const AUDIENCE_OPTIONS = [
-  { value: "me", label: "Zame", icon: "🌱" },
-  { value: "me_family", label: "Zame + družina", icon: "🌳" },
-  { value: "someone_else", label: "Za nekoga drugega (ne zame)", icon: "🎁" },
-] as const;
-
-const ROLE_OPTIONS = [
-  {
-    value: "working_professional",
-    label: "Zaposlen/a",
-    description: "Sestanki, glasovni zapiski in drugo",
-    icon: "💼",
-  },
-  {
-    value: "elementary_student",
-    label: "Osnovnošolec",
-    description: "Učenje, domače naloge in priprava na teste",
-    icon: "📘",
-  },
-  {
-    value: "high_school_student",
-    label: "Dijak",
-    description: "Zapiski, testi in matura",
-    icon: "📚",
-  },
-  {
-    value: "university_student",
-    label: "Študent",
-    description: "Predavanja, izpiti/testi in študijsko gradivo",
-    icon: "🎓",
-  },
-  {
-    value: "parent",
-    label: "Starš",
-    description: "Preizkus za otroka ali darilo naročnine",
-    icon: "👨‍👩‍👧",
-  },
-  {
-    value: "teacher",
-    label: "Učitelj/profesor",
-    description: "Snemanje predavanj, deljenje zapiskov ali drugo",
-    icon: "🧑‍🏫",
-  },
-] as const;
-
-const ELEMENTARY_SCHOOL_OPTIONS = [
-  { value: "elementary_school", label: "Osnovna šola", icon: "🏫" },
-  { value: "other", label: "Nekaj drugega", icon: "✍️" },
-] as const;
-
-const HIGH_SCHOOL_OPTIONS = [
-  { value: "high_school", label: "Gimnazija", icon: "📘" },
-  { value: "technical_school", label: "Srednja strokovna šola", icon: "🧰" },
-  { value: "vocational_school", label: "Poklicna šola", icon: "🔧" },
-  { value: "other", label: "Nekaj drugega", icon: "✍️" },
-] as const;
-
-const UNIVERSITY_SCHOOL_OPTIONS = [
-  { value: "university", label: "Fakulteta / univerza", icon: "📚" },
-  { value: "college", label: "Višja šola", icon: "🎓" },
-  { value: "other", label: "Nekaj drugega", icon: "✍️" },
-] as const;
-
-const SCHOOL_OPTIONS = [
-  { value: "elementary_school", label: "Osnovna šola", icon: "🏫" },
-  { value: "high_school", label: "Srednja šola", icon: "📘" },
-  { value: "university", label: "Fakulteta / univerza", icon: "📚" },
-  { value: "other", label: "Nekaj drugega", icon: "✍️" },
-] as const;
-
-const ELEMENTARY_YEAR_OPTIONS = [
-  { value: "grade_1", label: "1. razred", icon: "🌱" },
-  { value: "grade_2", label: "2. razred", icon: "🌿" },
-  { value: "grade_3", label: "3. razred", icon: "🪴" },
-  { value: "grade_4", label: "4. razred", icon: "🌳" },
-  { value: "grade_5", label: "5. razred", icon: "📗" },
-  { value: "grade_6", label: "6. razred", icon: "📘" },
-  { value: "grade_7", label: "7. razred", icon: "📙" },
-  { value: "grade_8", label: "8. razred", icon: "📕" },
-  { value: "grade_9", label: "9. razred", icon: "🎒" },
-] as const;
-
-const HIGH_SCHOOL_YEAR_OPTIONS = [
-  { value: "year_1", label: "1. letnik", icon: "🌱" },
-  { value: "year_2", label: "2. letnik", icon: "🌿" },
-  { value: "year_3", label: "3. letnik", icon: "🪴" },
-  { value: "year_4", label: "4. letnik", icon: "🌳" },
-  { value: "year_5", label: "5. letnik", icon: "🍂" },
-] as const;
-
-const HIGH_SCHOOL_FOUR_YEAR_OPTIONS = HIGH_SCHOOL_YEAR_OPTIONS.slice(0, 4);
-
-const UNIVERSITY_YEAR_OPTIONS = [
-  { value: "senior", label: "4. letnik ali več", icon: "🌳" },
-  { value: "junior", label: "3. letnik", icon: "🪴" },
-  { value: "sophomore", label: "2. letnik", icon: "🌿" },
-  { value: "freshman", label: "1. letnik", icon: "🌱" },
-  { value: "graduate", label: "Podiplomski študij", icon: "🍂" },
-] as const;
-
-const SUBJECT_OPTIONS = [
-  { value: "arts_humanities", label: "Umetnost in humanistika", icon: "🎨" },
-  { value: "business_economics", label: "Ekonomija", icon: "💼" },
-  { value: "computer_science", label: "Računalništvo", icon: "💻" },
-  { value: "maths", label: "Matematika", icon: "📐" },
-  { value: "education", label: "Pedagoške smeri", icon: "📚" },
-  { value: "engineering_technology", label: "Inženirstvo in tehnologija", icon: "⚙️" },
-  { value: "health_medicine", label: "Zdravstvo in medicina", icon: "🏥" },
-  { value: "law_criminal_justice", label: "Pravo", icon: "⚖️" },
-  { value: "life_physical_sciences", label: "Naravoslovje", icon: "🔬" },
-  { value: "social_sciences", label: "Družboslovje", icon: "🌍" },
-] as const;
-
-const MOTIVATION_OPTIONS = [
-  { value: "improve_marks", label: "Izboljšati ocene", icon: "💯" },
-  { value: "learn_faster", label: "Učiti se 10x hitreje", icon: "📗" },
-  { value: "focus_better", label: "Bolje slediti predavanjem", icon: "🎙️" },
-  { value: "never_miss_detail", label: "Ne zamuditi podrobnosti na predavanju", icon: "📈" },
-  { value: "something_else", label: "Nekaj drugega", icon: "✍️" },
-] as const;
-
-const FEATURE_OPTIONS = [
-  { value: "audio_notes", label: "Audio zapiski", icon: "🎧" },
-  { value: "quizzes", label: "Kvizi", icon: "📝" },
-  { value: "flashcards", label: "Flashcards", icon: "🃏" },
-  { value: "record_lectures", label: "Personalizacija zapiskov", icon: "✨" },
-  { value: "tests", label: "Testi", icon: "✅" },
-  { value: "ai_chat_notes", label: "Branje zapiskov", icon: "🔊" },
-] as const;
-
-const CLASS_FOCUS_OPTIONS = [
-  { value: "specific_class", label: "Da, določen predmet", icon: "📗" },
-  { value: "upcoming_exam", label: "Da, prihajajoči izpit/test", icon: "📅" },
-  { value: "something_else", label: "Da, nekaj drugega", icon: "👀" },
-  { value: "general_help", label: "Ne, pomagaj mi na splošno", icon: "📈" },
-] as const;
-
-const DAILY_GOAL_OPTIONS = [
-  { value: "casual", label: "Sproščeno - 10 min / dan", icon: "🍃" },
-  { value: "regular", label: "Redno - 20 min / dan", icon: "🌱" },
-  { value: "serious", label: "Resno - 60 min / dan", icon: "🌿" },
-  { value: "intensive", label: "Intenzivno - 90+ min / dan", icon: "🌳" },
-] as const;
 
 const HOME_SCREEN_STEPS = [
   {
@@ -476,6 +328,9 @@ export function OnboardingPaywall({
     targetGrade: false,
     currentAverageGrade: false,
   });
+  // The survey branches and pre-fills defaults, so a value in `form` is not
+  // proof the user picked it. Only keys tracked here are stored as answers.
+  const [answered, setAnswered] = useState<Partial<Record<keyof OnboardingForm, boolean>>>({});
   const [form, setForm] = useState<OnboardingForm>({
     heardFrom: SOURCE_OPTIONS[0].value,
     audience: AUDIENCE_OPTIONS[0].value,
@@ -495,6 +350,10 @@ export function OnboardingPaywall({
     classFocus: "",
     dailyGoal: "",
   });
+
+  function markAnswered(key: keyof OnboardingForm) {
+    setAnswered((current) => ({ ...current, [key]: true }));
+  }
 
   function goNext(roleOverride = form.role) {
     setStep((current) => getNextOnboardingStep(current, roleOverride));
@@ -561,6 +420,16 @@ export function OnboardingPaywall({
         targetGrade: false,
         currentAverageGrade: false,
       });
+      // Picking a role or school resets the steps below it back to defaults,
+      // and going back to change a role can skip those steps entirely.
+      setAnswered((current) => ({
+        ...current,
+        [key]: true,
+        schoolYear: false,
+        ...(key === "role" ? { schoolLevel: false, subject: false } : {}),
+      }));
+    } else {
+      markAnswered(key);
     }
 
     setForm((current) => {
@@ -616,8 +485,11 @@ export function OnboardingPaywall({
     const focusLabel = findLabel(CLASS_FOCUS_OPTIONS, currentForm.classFocus || "general_help");
     const dailyLabel = findLabel(DAILY_GOAL_OPTIONS, currentForm.dailyGoal || "regular");
 
+    const gradeScale: GradeScale = usesTenPointGrades(currentForm.schoolLevel) ? 10 : 5;
+    const answeredValue = (key: keyof OnboardingForm) =>
+      answered[key] ? (currentForm[key] as string) : null;
+
     return {
-      ageRange: AGE_OPTIONS[2].value,
       educationLevel: mapEducationLevel(currentForm.schoolLevel),
       currentAverageGrade: formatSlovenianGrade(currentForm.currentAverageGrade),
       targetGrade: formatSlovenianGrade(currentForm.targetGrade),
@@ -628,6 +500,26 @@ export function OnboardingPaywall({
         `${focusLabel}.`,
         `${dailyLabel}.`,
       ].join(" ").slice(0, 240),
+      // Every answer exactly as the user gave it; a step that was skipped or
+      // never shown stays null instead of reporting its pre-filled default.
+      answers: {
+        heardFrom: answeredValue("heardFrom"),
+        audience: answeredValue("audience"),
+        role: answeredValue("role"),
+        schoolLevel: answeredValue("schoolLevel"),
+        schoolYear: answeredValue("schoolYear"),
+        subject: answeredValue("subject"),
+        motivation: answeredValue("motivation"),
+        feature: answeredValue("feature"),
+        classFocus: answeredValue("classFocus"),
+        dailyGoal: answeredValue("dailyGoal"),
+        currentAverageGrade: gradeTouched.currentAverageGrade
+          ? currentForm.currentAverageGrade
+          : null,
+        targetGrade: gradeTouched.targetGrade ? currentForm.targetGrade : null,
+        gradeScale:
+          gradeTouched.currentAverageGrade || gradeTouched.targetGrade ? gradeScale : null,
+      },
     };
   }
 
@@ -691,6 +583,7 @@ export function OnboardingPaywall({
                   return;
                 }
 
+                markAnswered(key);
                 setForm((current) => ({ ...current, [key]: option.value }));
               }}
             >
@@ -899,7 +792,10 @@ export function OnboardingPaywall({
                 key={option.value}
                 type="button"
                 className={`memo-onboarding-feature ${form.feature === option.value ? "selected" : ""}`}
-                onClick={() => setForm((current) => ({ ...current, feature: option.value }))}
+                onClick={() => {
+                  markAnswered("feature");
+                  setForm((current) => ({ ...current, feature: option.value }));
+                }}
               >
                 <span aria-hidden="true">{option.icon}</span>
                 <strong>{option.label}</strong>
@@ -931,6 +827,7 @@ export function OnboardingPaywall({
                 className={`memo-onboarding-option ${form.dailyGoal === option.value ? "selected" : ""}`}
                 onClick={() => {
                   const nextForm = { ...form, dailyGoal: option.value };
+                  markAnswered("dailyGoal");
                   setForm(nextForm);
                   window.setTimeout(() => {
                     setStep(15);

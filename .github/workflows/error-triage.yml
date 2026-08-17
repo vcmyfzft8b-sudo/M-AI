@@ -63,6 +63,14 @@ jobs:
           # workflow on the resulting PRs.
           token: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
 
+      - name: Configure git identity
+        # Early and ungated on purpose. "Save triage state" runs on every outcome,
+        # and a step placed after one that can fail is skipped, which previously
+        # left the state commit with no identity.
+        run: |
+          git config --global user.name "memo-error-triage[bot]"
+          git config --global user.email "error-triage@users.noreply.github.com"
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -170,13 +178,6 @@ jobs:
       - name: Install dependencies
         if: steps.scan.outputs.actionable == 'true'
         run: npm ci
-
-      - name: Configure git identity
-        # Not gated on the scan: "Save triage state" runs even on a no-work run and
-        # cannot commit without an identity.
-        run: |
-          git config --global user.name "memo-error-triage[bot]"
-          git config --global user.email "error-triage@users.noreply.github.com"
 
       - name: Fix, verify, and open PRs
         if: steps.scan.outputs.actionable == 'true'

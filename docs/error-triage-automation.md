@@ -64,8 +64,19 @@ regardless of age.
 
 ## Required Setup
 
-The workflow will not run until these are in place. Run the `gh` commands against
-the account that owns the repository:
+Status as of 2026-08-17: **7 of 9 secrets are set.** Only `VERCEL_TOKEN` and
+`CLAUDE_CODE_OAUTH_TOKEN` are outstanding — both have to be created in a browser, so
+neither can be scripted.
+
+| Secret | Status |
+| --- | --- |
+| `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_BASE_URL` | set |
+| `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | set |
+| `TRIAGE_GITHUB_TOKEN` | set (see the scope note below) |
+| `VERCEL_TOKEN` | **outstanding** |
+| `CLAUDE_CODE_OAUTH_TOKEN` | **outstanding** |
+
+Run the `gh` commands against the account that owns the repository:
 
 ```bash
 gh auth switch --user vcmyfzft8b-sudo
@@ -80,18 +91,34 @@ the subscription rather than a metered API key:
 claude setup-token
 ```
 
+It opens a browser, and then waits for you to paste the authorization code back into
+the terminal — so it has to be run interactively; it cannot be scripted. Paste the
+token it prints into:
+
 ```bash
 gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo vcmyfzft8b-sudo/Memo-AI
 ```
 
-### 2. GitHub token
+Alternative if you would rather not spend subscription usage on this: create an API
+key at <https://console.anthropic.com>, store it as `ANTHROPIC_API_KEY`, and change
+the workflow's `claude_code_oauth_token:` input to `anthropic_api_key:`. That bills
+per token instead.
 
-A fine-grained personal access token for `vcmyfzft8b-sudo/Memo-AI` with **Contents:
-read and write**, **Pull requests: read and write**, and **Issues: read and write**.
+### 2. GitHub token
 
 A personal token rather than the built-in `GITHUB_TOKEN` is required: GitHub does not
 trigger workflows on commits pushed with `GITHUB_TOKEN`, so CI would never run on the
 automation's own pull requests.
+
+This is currently set to the **`gh` CLI's own OAuth token** for `vcmyfzft8b-sudo`,
+because GitHub has no API for creating a personal access token — they can only be made
+in the web UI. It works, but its scopes (`repo`, `workflow`, `gist`, `read:org`) reach
+**every repository the account can see**, not just this one.
+
+Worth replacing when convenient with a fine-grained token limited to
+`vcmyfzft8b-sudo/Memo-AI` with **Contents: read and write**, **Pull requests: read and
+write**, and **Issues: read and write**, created at
+<https://github.com/settings/personal-access-tokens>:
 
 ```bash
 gh secret set TRIAGE_GITHUB_TOKEN --repo vcmyfzft8b-sudo/Memo-AI

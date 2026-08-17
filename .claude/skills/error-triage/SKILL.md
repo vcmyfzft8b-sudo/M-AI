@@ -245,10 +245,20 @@ that recurred. Prune `fixed` entries whose `updatedAt` is older than 30 days.
 Then move the cursor — but only if the scan was complete and this was not a
 hand-dispatched window:
 
+There are three cases, and they are not interchangeable. "The run failed" and "the
+cursor must not move" are different things: recording a healthy hand-dispatched run as
+a failure inflates `consecutiveFailures` and hides a real outage.
+
 ```bash
-# complete scan, scheduled window:
+# Complete scan on a scheduled window — the normal case. Cursor moves.
 node scripts/triage-state.mjs commit --state .triage-state/state.json --until "$TRIAGE_UNTIL" --status ok
-# lossy scan, or TRIAGE_MAY_ADVANCE_CURSOR=false:
+
+# Healthy run, but TRIAGE_MAY_ADVANCE_CURSOR=false (someone dispatched a custom
+# window). Cursor stays; the run is still a success.
+node scripts/triage-state.mjs commit --state .triage-state/state.json --until "$TRIAGE_UNTIL" --status ok --no-advance
+
+# The scan could not read its whole window (report "lossy": true). A genuine failure:
+# cursor stays and the failure count rises so repeated breakage is visible.
 node scripts/triage-state.mjs commit --state .triage-state/state.json --until "$TRIAGE_UNTIL" --status failed
 ```
 

@@ -154,12 +154,17 @@ jobs:
         run: |
           set -euo pipefail
           echo "No new or regressed production errors between ${{ steps.window.outputs.since }} and ${{ steps.window.outputs.until }}."
+          # A hand-dispatched window is still a healthy run; it just must not move
+          # the cursor, or an ad-hoc investigation would erase scheduled coverage.
           if [ "${{ steps.window.outputs.may_advance }}" = "true" ]; then
             node scripts/triage-state.mjs commit \
               --state .triage-state/state.json \
               --until "${{ steps.window.outputs.until }}" --status ok
           else
-            echo "Hand-dispatched window; leaving the cursor where it was."
+            echo "Hand-dispatched window; recording the run but leaving the cursor where it was."
+            node scripts/triage-state.mjs commit \
+              --state .triage-state/state.json \
+              --until "${{ steps.window.outputs.until }}" --status ok --no-advance
           fi
 
       - name: Install dependencies

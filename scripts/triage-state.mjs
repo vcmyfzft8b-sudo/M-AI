@@ -151,6 +151,21 @@ export function gate({ vercel, sentry, backlog }) {
   }
 }
 
+// "Did the run succeed?" and "may the cursor move?" are two different questions.
+// A hand-dispatched window succeeds but must not move the cursor, and recording it
+// as a failure would inflate consecutiveFailures and hide a real outage.
+export function nextState(state, { until, status, noAdvance, now }) {
+  const failed = status === 'failed'
+  const advance = !noAdvance && !failed
+  return {
+    ...state,
+    cursor: advance ? new Date(until).toISOString() : (state.cursor ?? null),
+    lastRunAt: now,
+    lastStatus: failed ? 'failed' : 'ok',
+    consecutiveFailures: failed ? Number(state.consecutiveFailures ?? 0) + 1 : 0,
+  }
+}
+
 function main(argv) {
   const [subcommand, ...rest] = argv
   const flags = parseFlags(rest)
@@ -179,16 +194,12 @@ function main(argv) {
 
   if (subcommand === 'commit') {
     const state = readJson(flags.state, {})
-    const failed = flags.status === 'failed'
-    const advance = !flags['no-advance'] && !failed
-
-    const next = {
-      ...state,
-      cursor: advance ? new Date(flags.until).toISOString() : (state.cursor ?? null),
-      lastRunAt: new Date().toISOString(),
-      lastStatus: failed ? 'failed' : 'ok',
-      consecutiveFailures: failed ? Number(state.consecutiveFailures ?? 0) + 1 : 0,
-    }
+    const next = nextState(state, {
+      until: flags.until,
+      status: flags.status,
+      noAdvance: Boolean(flags['no-advance']),
+      now: new Date().toISOString(),
+    })
     writeFileSync(flags.state, `${JSON.stringify(next, null, 2)}\n`)
     console.log(JSON.stringify({ cursorAdvanced: advance, cursor: next.cursor }))
     return 0

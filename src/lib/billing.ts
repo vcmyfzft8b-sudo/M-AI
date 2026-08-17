@@ -189,7 +189,6 @@ export function getActiveSubscription(
 function hasCompletedOnboardingProfile(profile: ProfileRow | null) {
   return Boolean(
     profile?.onboarding_completed_at &&
-      profile.age_range &&
       profile.education_level &&
       profile.current_average_grade &&
       profile.target_grade &&

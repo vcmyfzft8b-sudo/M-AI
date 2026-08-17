@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { gate, isFresh, planWindow, resolveInstant } from '../scripts/triage-state.mjs'
+import { gate, isFresh, nextState, planWindow, resolveInstant } from '../scripts/triage-state.mjs'
 
 const NOW = Date.parse('2026-08-18T12:00:00.000Z')
 
@@ -114,4 +114,36 @@ test('a lossy scan opens the gate even with nothing fresh, so the gap gets repor
   const decision = gate({ vercel: { groups: [], lossy: true }, backlog: { entries: [] } })
   assert.equal(decision.actionable, true)
   assert.match(decision.reason, /could not read the whole window/)
+})
+
+test('a normal scheduled run moves the cursor and clears the failure count', () => {
+  const next = nextState(
+    { cursor: '2026-08-18T09:00:00.000Z', consecutiveFailures: 2 },
+    { until: '2026-08-18T12:00:00.000Z', status: 'ok', noAdvance: false, now: 'N' },
+  )
+  assert.equal(next.cursor, '2026-08-18T12:00:00.000Z')
+  assert.equal(next.lastStatus, 'ok')
+  assert.equal(next.consecutiveFailures, 0)
+})
+
+test('a hand-dispatched run is a success that leaves the cursor alone', () => {
+  // Recording this as a failure would inflate consecutiveFailures and mask a real
+  // outage, which is exactly the bug the first live dry run exposed.
+  const next = nextState(
+    { cursor: '2026-08-18T09:00:00.000Z', consecutiveFailures: 0 },
+    { until: '2026-08-18T12:00:00.000Z', status: 'ok', noAdvance: true, now: 'N' },
+  )
+  assert.equal(next.cursor, '2026-08-18T09:00:00.000Z')
+  assert.equal(next.lastStatus, 'ok')
+  assert.equal(next.consecutiveFailures, 0)
+})
+
+test('a lossy scan is a real failure: cursor holds and the count rises', () => {
+  const next = nextState(
+    { cursor: '2026-08-18T09:00:00.000Z', consecutiveFailures: 1 },
+    { until: '2026-08-18T12:00:00.000Z', status: 'failed', noAdvance: false, now: 'N' },
+  )
+  assert.equal(next.cursor, '2026-08-18T09:00:00.000Z')
+  assert.equal(next.lastStatus, 'failed')
+  assert.equal(next.consecutiveFailures, 2)
 })

@@ -201,7 +201,13 @@ function main(argv) {
       now: new Date().toISOString(),
     })
     writeFileSync(flags.state, `${JSON.stringify(next, null, 2)}\n`)
-    console.log(JSON.stringify({ cursorAdvanced: advance, cursor: next.cursor }))
+    console.log(
+      JSON.stringify({
+        cursorAdvanced: next.cursor !== (state.cursor ?? null),
+        cursor: next.cursor,
+        lastStatus: next.lastStatus,
+      }),
+    )
     return 0
   }
 

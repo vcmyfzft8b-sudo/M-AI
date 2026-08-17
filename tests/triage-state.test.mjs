@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 
 import { gate, isFresh, nextState, planWindow, resolveInstant } from '../scripts/triage-state.mjs'
 
@@ -146,4 +151,54 @@ test('a lossy scan is a real failure: cursor holds and the count rises', () => {
   assert.equal(next.cursor, '2026-08-18T09:00:00.000Z')
   assert.equal(next.lastStatus, 'failed')
   assert.equal(next.consecutiveFailures, 2)
+})
+
+// The tests above call nextState() directly. These run the CLI the workflow
+// actually invokes, which is where a refactor once left a dangling reference that
+// every unit test sailed past and the first live run hit immediately.
+function runCommit(state, args) {
+  const file = join(mkdtempSync(join(tmpdir(), 'triage-')), 'state.json')
+  writeFileSync(file, JSON.stringify(state))
+  const result = spawnSync(
+    process.execPath,
+    [fileURLToPath(new URL('../scripts/triage-state.mjs', import.meta.url)), 'commit', '--state', file, ...args],
+    { encoding: 'utf8' },
+  )
+  return { result, state: JSON.parse(readFileSync(file, 'utf8')) }
+}
+
+test('the commit command runs clean and reports what it did', () => {
+  const { result, state } = runCommit(
+    { cursor: '2026-08-18T09:00:00.000Z' },
+    ['--until', '2026-08-18T12:00:00.000Z', '--status', 'ok'],
+  )
+  assert.equal(result.status, 0, `stderr: ${result.stderr}`)
+  assert.equal(state.cursor, '2026-08-18T12:00:00.000Z')
+  assert.deepEqual(JSON.parse(result.stdout), {
+    cursorAdvanced: true,
+    cursor: '2026-08-18T12:00:00.000Z',
+    lastStatus: 'ok',
+  })
+})
+
+test('the commit command honours --no-advance without calling the run a failure', () => {
+  const { result, state } = runCommit(
+    { cursor: '2026-08-18T09:00:00.000Z' },
+    ['--until', '2026-08-18T12:00:00.000Z', '--status', 'ok', '--no-advance'],
+  )
+  assert.equal(result.status, 0, `stderr: ${result.stderr}`)
+  assert.equal(state.cursor, '2026-08-18T09:00:00.000Z')
+  assert.equal(JSON.parse(result.stdout).cursorAdvanced, false)
+  assert.equal(state.lastStatus, 'ok')
+})
+
+test('the plan and gate commands run clean too', () => {
+  const script = fileURLToPath(new URL('../scripts/triage-state.mjs', import.meta.url))
+  const plan = spawnSync(process.execPath, [script, 'plan', '--since-override', ''], { encoding: 'utf8' })
+  assert.equal(plan.status, 0, `stderr: ${plan.stderr}`)
+  assert.ok(JSON.parse(plan.stdout).since)
+
+  const gateRun = spawnSync(process.execPath, [script, 'gate'], { encoding: 'utf8' })
+  assert.equal(gateRun.status, 0, `stderr: ${gateRun.stderr}`)
+  assert.equal(JSON.parse(gateRun.stdout).actionable, false)
 })

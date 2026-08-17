@@ -26,6 +26,11 @@ import {
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 import {
   AUDIENCE_OPTIONS,
+  buildOnboardingPayload,
+  formatSlovenianGrade,
+  getGradeDefaults,
+  isStudentRole,
+  usesTenPointGrades,
   CLASS_FOCUS_OPTIONS,
   DAILY_GOAL_OPTIONS,
   EDUCATION_OPTIONS,
@@ -42,7 +47,7 @@ import {
   SUBJECT_OPTIONS,
   UNIVERSITY_SCHOOL_OPTIONS,
   UNIVERSITY_YEAR_OPTIONS,
-  type GradeScale,
+  type OnboardingForm,
 } from "@/lib/onboarding-options";
 
 type BillingPlanCard = {
@@ -54,21 +59,6 @@ type BillingPlanCard = {
   billingNote?: string;
   annualizedAmount: number;
   blurb: string;
-};
-
-type OnboardingForm = {
-  heardFrom: string;
-  audience: string;
-  role: string;
-  schoolLevel: string;
-  schoolYear: string;
-  subject: string;
-  motivation: string;
-  targetGrade: number;
-  currentAverageGrade: number;
-  feature: string;
-  classFocus: string;
-  dailyGoal: string;
 };
 
 const HOME_SCREEN_STEPS = [
@@ -104,53 +94,6 @@ const HOME_SCREEN_DRAG_LOCK_THRESHOLD_PX = 6;
 const HOME_SCREEN_SWIPE_THRESHOLD_PX = 18;
 
 const ONBOARDING_STEP_COUNT = 16;
-
-function formatSlovenianGrade(value: number) {
-  return value.toFixed(1).replace(".", ",");
-}
-
-function usesTenPointGrades(schoolLevel: string) {
-  return schoolLevel === "university" || schoolLevel === "college";
-}
-
-function getGradeDefaults(schoolLevel: string) {
-  if (usesTenPointGrades(schoolLevel)) {
-    return {
-      currentAverageGrade: 6,
-      targetGrade: 8,
-    };
-  }
-
-  return {
-    currentAverageGrade: 3.5,
-    targetGrade: 4.5,
-  };
-}
-
-function findLabel(options: readonly { value: string; label: string }[], value: string) {
-  return options.find((option) => option.value === value)?.label ?? value;
-}
-
-function mapEducationLevel(schoolLevel: string): (typeof EDUCATION_OPTIONS)[number]["value"] {
-  if (
-    schoolLevel === "elementary_school" ||
-    schoolLevel === "high_school" ||
-    schoolLevel === "technical_school" ||
-    schoolLevel === "vocational_school"
-  ) {
-    return "high_school";
-  }
-
-  if (schoolLevel === "college") {
-    return "university";
-  }
-
-  if (schoolLevel === "other") {
-    return "other";
-  }
-
-  return "university";
-}
 
 function getSchoolOptionsForRole(role: string) {
   if (role === "elementary_student") {
@@ -190,14 +133,6 @@ function getYearQuestionForRole(role: string) {
   }
 
   return "Kateri letnik si?";
-}
-
-function isStudentRole(role: string) {
-  return (
-    role === "elementary_student" ||
-    role === "high_school_student" ||
-    role === "university_student"
-  );
 }
 
 function getNextOnboardingStep(currentStep: number, role: string) {
@@ -477,50 +412,7 @@ export function OnboardingPaywall({
   }
 
   function buildProfilePayload(currentForm = form) {
-    const subjectLabel = isStudentRole(currentForm.role)
-      ? findLabel(SUBJECT_OPTIONS, currentForm.subject).toLowerCase()
-      : findLabel(ROLE_OPTIONS, currentForm.role).toLowerCase();
-    const motivationLabel = findLabel(MOTIVATION_OPTIONS, currentForm.motivation || "improve_marks");
-    const featureLabel = findLabel(FEATURE_OPTIONS, currentForm.feature || "instant_notes");
-    const focusLabel = findLabel(CLASS_FOCUS_OPTIONS, currentForm.classFocus || "general_help");
-    const dailyLabel = findLabel(DAILY_GOAL_OPTIONS, currentForm.dailyGoal || "regular");
-
-    const gradeScale: GradeScale = usesTenPointGrades(currentForm.schoolLevel) ? 10 : 5;
-    const answeredValue = (key: keyof OnboardingForm) =>
-      answered[key] ? (currentForm[key] as string) : null;
-
-    return {
-      educationLevel: mapEducationLevel(currentForm.schoolLevel),
-      currentAverageGrade: formatSlovenianGrade(currentForm.currentAverageGrade),
-      targetGrade: formatSlovenianGrade(currentForm.targetGrade),
-      studyGoal: [
-        `${motivationLabel}.`,
-        `${featureLabel}.`,
-        `${subjectLabel}.`,
-        `${focusLabel}.`,
-        `${dailyLabel}.`,
-      ].join(" ").slice(0, 240),
-      // Every answer exactly as the user gave it; a step that was skipped or
-      // never shown stays null instead of reporting its pre-filled default.
-      answers: {
-        heardFrom: answeredValue("heardFrom"),
-        audience: answeredValue("audience"),
-        role: answeredValue("role"),
-        schoolLevel: answeredValue("schoolLevel"),
-        schoolYear: answeredValue("schoolYear"),
-        subject: answeredValue("subject"),
-        motivation: answeredValue("motivation"),
-        feature: answeredValue("feature"),
-        classFocus: answeredValue("classFocus"),
-        dailyGoal: answeredValue("dailyGoal"),
-        currentAverageGrade: gradeTouched.currentAverageGrade
-          ? currentForm.currentAverageGrade
-          : null,
-        targetGrade: gradeTouched.targetGrade ? currentForm.targetGrade : null,
-        gradeScale:
-          gradeTouched.currentAverageGrade || gradeTouched.targetGrade ? gradeScale : null,
-      },
-    };
+    return buildOnboardingPayload({ form: currentForm, answered, gradeTouched });
   }
 
   async function submitOnboarding(formOverride?: typeof form) {

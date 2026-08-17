@@ -36,12 +36,15 @@
 - After a migration PR is merged, `.github/workflows/supabase-migrations.yml` applies the migration files from `main` to production. Do not run a production migration from an unmerged PR or a Preview deployment.
 - Follow [docs/preview-staging.md](/Users/nacevalencic/Desktop/note_taking_app_slo/docs/preview-staging.md) for safe verification, staging synchronization, migration testing, and production release rules.
 
-## Automated Sentry Triage
+## Automated Production Error Triage
 
-- The local Sentry automation is scheduled every two hours, but its query window must start at the last successful Sentry scan cursor, not at a fixed two-hour offset.
-- If the Mac missed scheduled runs, the next run must cover the full elapsed interval since that cursor, with a small overlap and event/issue deduplication.
-- Advance the cursor only after the complete authenticated Sentry query and triage succeed. Keep actionable issues without a dedicated fix PR in the durable backlog and revisit them on every run regardless of age.
-- A staging, Preview, CI, or implementation failure must not create a gap in Sentry coverage or cause a completed Sentry interval to be scanned as if it failed.
+- One automation covers production errors: the `Error triage` GitHub Actions workflow, scheduled every three hours. It runs in GitHub's cloud and does not depend on the Mac being on. The earlier local two-hourly Sentry job is retired; do not recreate it.
+- Vercel production logs define the scan window and what counts as actionable: 5xx responses, function timeouts, and uncaught runtime exceptions. Sentry is read on every run to enrich those findings with stack traces and source context, and to catch client-side exceptions that never produce a 5xx.
+- The query window must start at the last successful scan cursor, not at a fixed three-hour offset. If runs were skipped, the next window covers the full elapsed interval, with a 10-minute overlap and record deduplication, capped at 24 hours.
+- Advance the cursor only after a complete scan and triage succeed. Keep actionable errors without a dedicated fix PR in the durable backlog and revisit them on every run regardless of age.
+- A staging, Preview, CI, or implementation failure must not create a gap in error coverage or cause a completed interval to be scanned as if it failed.
+- The automation opens pull requests and never merges them. It must not push to `main`, exceed one fix PR per run, or write a database migration.
+- The operating procedure is [.claude/skills/error-triage/SKILL.md](/.claude/skills/error-triage/SKILL.md); setup and troubleshooting are in [docs/error-triage-automation.md](/docs/error-triage-automation.md).
 
 ## Documentation
 

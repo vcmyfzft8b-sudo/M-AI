@@ -1,0 +1,133 @@
+name: Error triage
+
+# Scans Vercel production logs (enriched with Sentry) every three hours, fixes one
+# actionable error, verifies the fix on that branch's Vercel preview, and opens a PR.
+# It never merges and never pushes to main. See docs/error-triage-automation.md.
+#
+# GitHub only runs scheduled workflows from the default branch, so this file has to
+# be on `main` before the cron fires.
+
+on:
+  schedule:
+    # Every three hours, off the hour so it does not land with everyone else's cron.
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "Override the scan start (ISO 8601 or relative like 6h). Ignores the stored cursor."
+        required: false
+        type: string
+      dry_run:
+        description: "Scan and report only: no branch, no fix, no PR."
+        required: false
+        type: boolean
+        default: false
+
+# Two triage runs at once would fight over the state branch and could open duplicate PRs.
+concurrency:
+  group: error-triage
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+  actions: read
+
+env:
+  STATE_BRANCH: automation/error-triage-state
+
+jobs:
+  triage:
+    name: Scan, fix, verify, open PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # A PAT rather than GITHUB_TOKEN, so pushes from this job trigger the CI
+          # workflow on the resulting PR.
+          token: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Restore triage state
+        env:
+          TRIAGE_GITHUB_TOKEN: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          remote="https://x-access-token:${TRIAGE_GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$remote" "$STATE_BRANCH" >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch "$STATE_BRANCH" "$remote" .triage-state
+            echo "Restored existing triage state."
+          else
+            # First run: start an orphan history so state never touches main.
+            mkdir -p .triage-state
+            cd .triage-state
+            git init --quiet
+            git checkout --quiet -b "$STATE_BRANCH"
+            git remote add origin "$remote"
+            echo '{}' > state.json
+            echo '{"entries":[]}' > backlog.json
+            echo "No state branch yet; seeded a fresh one."
+          fi
+
+      - name: Configure git identity
+        run: |
+          git config --global user.name "memo-error-triage[bot]"
+          git config --global user.email "error-triage@users.noreply.github.com"
+
+      - name: Run triage
+        uses: anthropics/claude-code-action@v1
+        env:
+          # Vercel: runtime logs and preview deployment status.
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          # Sentry: stack traces and source context for the same window.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_BASE_URL: ${{ secrets.SENTRY_BASE_URL }}
+          # Synthetic staging account for authenticated preview checks. Optional:
+          # without it the run verifies what it can and flags the rest for a human.
+          PREVIEW_TEST_EMAIL: ${{ secrets.PREVIEW_TEST_EMAIL }}
+          PREVIEW_TEST_PASSWORD: ${{ secrets.PREVIEW_TEST_PASSWORD }}
+          TRIAGE_SINCE_OVERRIDE: ${{ inputs.since }}
+          TRIAGE_DRY_RUN: ${{ inputs.dry_run }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
+          prompt: "/error-triage"
+          claude_args: |
+            --model claude-opus-5
+            --max-turns 120
+            --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
+
+      - name: Save triage state
+        if: always()
+        env:
+          TRIAGE_GITHUB_TOKEN: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd .triage-state
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Triage state unchanged; nothing to push."
+            exit 0
+          fi
+          git commit --quiet -m "Error triage state after run ${GITHUB_RUN_ID}"
+          git push --quiet origin "HEAD:${STATE_BRANCH}"
+          echo "Pushed updated triage state."

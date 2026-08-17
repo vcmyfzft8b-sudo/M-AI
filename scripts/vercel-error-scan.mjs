@@ -54,11 +54,26 @@ export function resolveInstant(value, fallback) {
   return parsed
 }
 
+// A full day's scan is ~48 CLI invocations. Resolving the package through npx
+// every time dominates the runtime, so prefer an already-installed binary at the
+// pinned version and fall back to npx only when there isn't one.
+let cachedLauncher = null
+function resolveLauncher() {
+  if (cachedLauncher) return cachedLauncher
+  const probe = spawnSync('vercel', ['--version'], { encoding: 'utf8' })
+  if (probe.status === 0 && (probe.stdout || '').trim().endsWith(PINNED_CLI)) {
+    cachedLauncher = { command: 'vercel', prefix: [] }
+  } else {
+    cachedLauncher = { command: 'npx', prefix: ['--yes', `vercel@${PINNED_CLI}`] }
+  }
+  return cachedLauncher
+}
+
 // `vercel logs` defaults to filtering by the current git branch, which silently
 // returns nothing from a worktree or a detached CI checkout -- hence --no-branch.
 function runVercelLogs({ since, until, extra }) {
+  const launcher = resolveLauncher()
   const argv = [
-    `vercel@${PINNED_CLI}`,
     'logs',
     '--json',
     '--no-follow',
@@ -73,7 +88,7 @@ function runVercelLogs({ since, until, extra }) {
     String(PAGE_LIMIT),
     ...extra,
   ]
-  const result = spawnSync('npx', ['--yes', ...argv], {
+  const result = spawnSync(launcher.command, [...launcher.prefix, ...argv], {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
     env: {
@@ -127,9 +142,20 @@ export function recordId(record, index) {
 }
 
 export function recordStatus(record) {
-  const raw = pick(record, ['statusCode', 'status', 'proxy.statusCode', 'response.statusCode'])
+  const raw = pick(record, [
+    'responseStatusCode', // what the CLI actually emits as of 50.35.0
+    'statusCode',
+    'status',
+    'proxy.statusCode',
+    'response.statusCode',
+  ])
   const parsed = Number(raw)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+export function recordMethod(record) {
+  const raw = pick(record, ['requestMethod', 'method', 'proxy.method'])
+  return typeof raw === 'string' ? raw.toUpperCase() : null
 }
 
 export function recordMessage(record) {
@@ -147,7 +173,7 @@ export function recordMessage(record) {
 }
 
 export function recordPath(record) {
-  const raw = pick(record, ['path', 'requestPath', 'proxy.path', 'url', 'proxy.url', 'route'])
+  const raw = pick(record, ['requestPath', 'path', 'proxy.path', 'url', 'proxy.url', 'route'])
   if (typeof raw !== 'string') return ''
   try {
     return new URL(raw, 'https://memoai.eu').pathname
@@ -287,7 +313,10 @@ function main() {
 
     const path = normalizePath(recordPath(record))
     const message = recordMessage(record)
-    const fingerprint = `${type}:${path}:${normalizeMessage(message)}`
+    const method = recordMethod(record)
+    // Method belongs in the fingerprint: a GET and a POST failing on the same
+    // route are usually two different bugs.
+    const fingerprint = `${type}:${method ?? '-'} ${path}:${normalizeMessage(message)}`
     const timestamp = recordTimestamp(record)
 
     let group = groups.get(fingerprint)
@@ -295,13 +324,16 @@ function main() {
       group = {
         fingerprint,
         type,
+        method,
         path,
         normalizedMessage: normalizeMessage(message),
         count: 0,
         firstSeen: null,
         lastSeen: null,
         statusCodes: new Set(),
-        requestIds: [],
+        // traceIds let a human find the exact request in the Vercel dashboard.
+        traceIds: [],
+        deploymentIds: new Set(),
         sample: record,
       }
       groups.set(fingerprint, group)
@@ -310,8 +342,10 @@ function main() {
     group.count += 1
     const status = recordStatus(record)
     if (status !== null) group.statusCodes.add(status)
-    const requestId = pick(record, ['requestId', 'proxy.requestId', 'id'])
-    if (requestId && group.requestIds.length < 5) group.requestIds.push(String(requestId))
+    const traceId = pick(record, ['traceId', 'requestId', 'proxy.requestId'])
+    if (traceId && group.traceIds.length < 5) group.traceIds.push(String(traceId))
+    const deploymentId = pick(record, ['deploymentId', 'proxy.deploymentId'])
+    if (deploymentId) group.deploymentIds.add(String(deploymentId))
     if (timestamp) {
       if (!group.firstSeen || timestamp < group.firstSeen) group.firstSeen = timestamp
       if (!group.lastSeen || timestamp > group.lastSeen) group.lastSeen = timestamp
@@ -332,6 +366,7 @@ function main() {
       .map((group) => ({
         ...group,
         statusCodes: [...group.statusCodes].sort((a, b) => a - b),
+        deploymentIds: [...group.deploymentIds],
         firstSeen: group.firstSeen ? group.firstSeen.toISOString() : null,
         lastSeen: group.lastSeen ? group.lastSeen.toISOString() : null,
       })),

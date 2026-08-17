@@ -62,6 +62,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install the pinned Vercel CLI
+        # A day-long catch-up scan is ~48 CLI invocations; installing once beats
+        # letting npx resolve the package every time.
+        run: npm install -g vercel@50.35.0
+
       - name: Restore triage state
         env:
           TRIAGE_GITHUB_TOKEN: ${{ secrets.TRIAGE_GITHUB_TOKEN }}

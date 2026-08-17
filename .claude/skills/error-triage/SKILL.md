@@ -86,6 +86,22 @@ Drop from consideration any group whose `fingerprint` is in `backlog.json` with
 status `fixed`, `open-pr`, or `wontfix` — **unless** it regressed, meaning its
 `lastSeen` is after the recorded `updatedAt`. A regression is worth a new PR.
 
+**Drop anything a deploy already fixed.** This is the most common false positive:
+the window reaches back before a release that fixed the bug, so a dead error looks
+live. Get the current production deployment and compare it to the group's `lastSeen`:
+
+```bash
+curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
+  "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&target=production&state=READY&limit=1" \
+  | python3 -c "import json,sys; d=json.load(sys.stdin)['deployments'][0]; print(d['uid'], d['created'])"
+```
+
+If a group's `lastSeen` predates that deployment's `created` time, the running code
+is not the code that produced the error. Record it in the backlog as `fixed` with a
+note naming the deployment, and move on. Only reconsider it if it recurs *after* that
+deployment. The group's own `deploymentIds` are corroborating evidence: if they
+contain only deployments that are no longer live, that is the same signal.
+
 Check for an existing PR before opening another:
 
 ```bash

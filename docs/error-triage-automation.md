@@ -99,12 +99,17 @@ gh secret set TRIAGE_GITHUB_TOKEN --repo vcmyfzft8b-sudo/Memo-AI
 
 ### 3. Vercel access
 
-Create the token from the Vercel account that owns the `memo-ai` project, at
-<https://vercel.com/account/tokens>, scoped to that team.
+`memo-ai` belongs to the Vercel account **`nacevalencic-1988`**, team
+**`nace-valencics-projects`** (`team_M7dIKgcG5cpfNBndEjvN9fqn`). Create the token
+while signed in as that account, at <https://vercel.com/account/tokens>, scoped to
+that team.
 
-> The `vercel` CLI on this Mac is currently signed in as `nace-6121`, whose teams are
-> `ParakeetAI` and `ParakeetAi`. Neither can see `memo-ai`, so a token minted from
-> that session will not work. Use the account that actually owns the project.
+> There is a second Vercel account on this Mac, `nace-6121`, whose teams are
+> `ParakeetAI` and `ParakeetAi`. Neither can see `memo-ai`. A token minted from that
+> session returns `forbidden` for the project, and `vercel logs` fails with
+> *"Could not retrieve Project Settings. To link your Project, remove the `.vercel`
+> directory"* — which is misleading: `.vercel/project.json` is correct, the account
+> just lacks access. Do not delete it. Check `vercel whoami` first.
 
 ```bash
 gh secret set VERCEL_TOKEN --repo vcmyfzft8b-sudo/Memo-AI

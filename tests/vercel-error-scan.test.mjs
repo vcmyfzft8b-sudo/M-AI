@@ -8,13 +8,54 @@ import {
   pick,
   recordId,
   recordMessage,
+  recordMethod,
   recordPath,
   recordStatus,
   recordTimestamp,
   resolveInstant,
 } from '../scripts/vercel-error-scan.mjs'
 
+// Captured verbatim from `vercel logs --json` (CLI 50.35.0) against production.
+// If a future CLI release renames a field, this fixture is what will catch it.
+const LIVE_RECORD = {
+  id: 'tqdj8-1786993219955-2199954017b3',
+  timestamp: 1786993219955,
+  deploymentId: 'dpl_25kJ898Er4Qib9EunQubx9f153pj',
+  projectId: 'prj_tYSLuzeXWSnRDwXzYUxATzPIAQg3',
+  level: 'error',
+  message:
+    "Rate limit check failed; allowing request {\n  route: 'auth:google:post',\n  error: Error [TimeoutError]: Rate limit check timed out after 1200ms\n}",
+  source: 'serverless-middleware',
+  domain: 'www.memoai.eu',
+  requestMethod: 'POST',
+  requestPath: '/auth/google',
+  responseStatusCode: 303,
+  environment: 'production',
+  branch: 'main',
+  cache: 'MISS',
+  traceId: '01ff60d81ee326c5741c10d6f6826d38',
+}
+
+test('the live CLI record shape is read correctly field by field', () => {
+  assert.equal(recordId(LIVE_RECORD, 0), 'tqdj8-1786993219955-2199954017b3')
+  assert.equal(recordStatus(LIVE_RECORD), 303)
+  assert.equal(recordMethod(LIVE_RECORD), 'POST')
+  assert.equal(recordPath(LIVE_RECORD), '/auth/google')
+  assert.equal(recordTimestamp(LIVE_RECORD).toISOString(), new Date(1786993219955).toISOString())
+})
+
+test('a handled error that returned a non-error status is not actionable', () => {
+  // The app caught this, logged it, and served the request. Flagging it would
+  // send the automation chasing a warning.
+  assert.equal(classify(LIVE_RECORD), null)
+})
+
+test('a real 5xx in the live shape is actionable', () => {
+  assert.equal(classify({ ...LIVE_RECORD, responseStatusCode: 500 }), 'server_error')
+})
+
 test('classify treats 5xx responses as server errors', () => {
+  assert.equal(classify({ responseStatusCode: 500, message: 'POST /api/notes' }), 'server_error')
   assert.equal(classify({ statusCode: 500, message: 'POST /api/notes' }), 'server_error')
   assert.equal(classify({ proxy: { statusCode: 503 } }), 'server_error')
 })

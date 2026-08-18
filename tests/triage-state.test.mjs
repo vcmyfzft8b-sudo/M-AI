@@ -104,6 +104,50 @@ test('the gate opens for a Sentry issue with no Vercel counterpart', () => {
   assert.equal(decision.freshSentryIssues, 1)
 })
 
+test('the gate names the fresh Sentry issues, not just the count', () => {
+  // With no Vercel counterpart, freshFingerprints is empty -- the agent has to be
+  // told which Sentry issue woke the run or it may triage the wrong one.
+  const decision = gate({
+    vercel: { groups: [] },
+    sentry: {
+      issues: [
+        { id: '123', lastSeen: '2026-08-18T11:00:00Z' },
+        { id: '456', lastSeen: '2026-08-18T10:00:00Z' },
+      ],
+    },
+    backlog: {
+      entries: [{ fingerprint: 'x', sentryIssues: ['456'], status: 'open-pr', updatedAt: '2026-08-18T11:00:00Z' }],
+    },
+  })
+  assert.deepEqual(decision.freshSentryIssueIds, ['123'])
+  assert.deepEqual(decision.freshFingerprints, [])
+})
+
+test('a fresh issue past the enrichment cap still opens the gate', () => {
+  // The report enriches only the highest-frequency issues; a brand-new low-count
+  // issue lands in `additional`, which is exactly the one that must not be missed.
+  const decision = gate({
+    vercel: { groups: [] },
+    sentry: {
+      issues: [],
+      additional: [{ id: '789', lastSeen: '2026-08-18T11:00:00Z' }],
+    },
+    backlog: { entries: [] },
+  })
+  assert.equal(decision.actionable, true)
+  assert.deepEqual(decision.freshSentryIssueIds, ['789'])
+  assert.equal(decision.sentryIssues, 1)
+})
+
+test('a missing Sentry report is flagged but does not wake the agent by itself', () => {
+  // The workflow holds the cursor on sentryMissing; running the expensive half
+  // with no data to act on would not help.
+  const decision = gate({ vercel: { groups: [] }, sentry: null, backlog: { entries: [] } })
+  assert.equal(decision.actionable, false)
+  assert.equal(decision.sentryMissing, true)
+  assert.match(decision.reason, /Sentry scan produced no report/)
+})
+
 test('a known Sentry issue tracked on the backlog does not reopen the gate', () => {
   const decision = gate({
     vercel: { groups: [] },

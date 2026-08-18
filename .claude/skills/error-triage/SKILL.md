@@ -1,6 +1,6 @@
 ---
 name: error-triage
-description: Scan Vercel production logs (enriched with Sentry) for 5xx, timeouts and uncaught exceptions, fix every actionable one, verify each on its own Vercel preview, and open a PR per fix. Runs unattended every 3 hours from GitHub Actions.
+description: Scan Vercel production logs and Sentry issues for 5xx, timeouts and uncaught exceptions, fix every actionable one, verify each on its own Vercel preview, and open a PR per fix. Runs unattended every 3 hours from GitHub Actions.
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
 
@@ -44,7 +44,7 @@ not need to repeat them. Read these environment variables:
 | `TRIAGE_SINCE` / `TRIAGE_UNTIL` | the exact UTC window, already cursor-aware |
 | `TRIAGE_VERCEL_REPORT` | path to the Vercel scan JSON |
 | `TRIAGE_SENTRY_REPORT` | path to the Sentry scan JSON (may be missing if Sentry failed) |
-| `TRIAGE_GATE` | path to the gate decision, including which fingerprints are new |
+| `TRIAGE_GATE` | path to the gate decision: `freshFingerprints` names the new Vercel groups, `freshSentryIssueIds` the new Sentry issues |
 | `TRIAGE_MAX_FIXES` | how many fixes this run may attempt (default 5) |
 | `TRIAGE_MAY_ADVANCE_CURSOR` | `false` on a hand-dispatched window; do not advance then |
 | `TRIAGE_DRY_RUN` | `true` means report only: no branch, no commit, no PR |
@@ -58,15 +58,36 @@ Actions variables (`TRIAGE_STATE`, `TRIAGE_BACKLOG`) — there is no state branc
 Statuses: `open`, `needs-human`, `open-pr`, `fixed`, `wontfix`.
 
 If the Vercel report has `"lossy": true`, it could not read the whole window. Triage
-what it did return, but treat the run as failed for cursor purposes.
+what it did return, but treat the run as failed for cursor purposes. The same rule
+applies when the Sentry report file is missing (the Sentry scan failed): the Sentry
+half of the window went unread, so triage the Vercel data but commit with
+`--status failed` so the next run re-reads the window.
 
 ## Step 1 — Correlate and rank
 
 **Correlate Vercel with Sentry.** Vercel says a route returned 500; Sentry usually
 says which line threw. Match a Vercel group to a Sentry issue by comparing the
 group's `path` to the issue's `culprit` and `request.url`, and the timing to
-`lastSeen`. Sentry issues with **no** Vercel counterpart still count — a client-side
-exception never produces a 5xx.
+`lastSeen`. Sentry issues with **no** Vercel counterpart are full errors in their
+own right, not leftovers — a client-side exception, or a server error the route
+handled before responding (a caught pipeline failure, a 200 with an error body),
+never produces a 5xx and exists only in Sentry. The gate names them in
+`freshSentryIssueIds`; every id listed there must be triaged like any Vercel group.
+
+Two mechanics for Sentry-only errors:
+
+- The report enriches only the highest-frequency issues; the rest sit in
+  `additional` with just their heads. If a fresh id is only in `additional`, pull
+  its detail yourself before triaging:
+
+  ```bash
+  curl -s -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+    "$SENTRY_BASE_URL/api/0/issues/<id>/events/latest/"
+  ```
+
+- In the backlog, give a Sentry-only error a fingerprint of `sentry:<issueId>` and
+  **always** record the id in its `sentryIssues` array — that array is how the gate
+  recognises the error as handled; an entry without it reopens the gate every run.
 
 **Drop anything a deploy already fixed.** This is the most common false positive: the
 window reaches back before a release that fixed the bug, so a dead error looks live.

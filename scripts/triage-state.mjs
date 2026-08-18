@@ -124,30 +124,41 @@ export function gate({ vercel, sentry, backlog }) {
   const freshVercel = (vercel?.groups ?? []).filter((group) =>
     isFresh(entries.get(group.fingerprint), group.lastSeen),
   )
-  const freshSentry = (sentry?.issues ?? []).filter((issue) =>
-    isFresh(entries.get(`sentry:${issue.id}`), issue.lastSeen),
+  // Sentry is a detection source in its own right, not just enrichment: an error
+  // handled inside a route (or thrown client-side) never produces a 5xx, so it
+  // exists nowhere else. Issues past the enrichment cap land in `additional` --
+  // sorted by frequency, which is exactly where a brand-new low-count issue sits
+  // -- so they gate too.
+  const freshSentry = [...(sentry?.issues ?? []), ...(sentry?.additional ?? [])].filter(
+    (issue) => isFresh(entries.get(`sentry:${issue.id}`), issue.lastSeen),
   )
 
   // A scan that could not read its whole window is itself a reason to run: the
-  // agent reports the gap and the cursor stays put.
+  // agent reports the gap and the cursor stays put. A missing Sentry report means
+  // the Sentry half of the window went unread -- the workflow holds the cursor
+  // for it, but it does not wake the agent on its own.
   const lossy = Boolean(vercel?.lossy)
+  const sentryMissing = !sentry
   const actionable = freshVercel.length > 0 || freshSentry.length > 0 || lossy
 
   let reason
   if (lossy) reason = 'the Vercel scan could not read the whole window'
   else if (actionable)
     reason = `${freshVercel.length} new or regressed Vercel group(s), ${freshSentry.length} Sentry issue(s)`
+  else if (sentryMissing) reason = 'nothing new from Vercel, and the Sentry scan produced no report'
   else reason = 'nothing new since the last run'
 
   return {
     actionable,
     reason,
     lossy,
+    sentryMissing,
     vercelGroups: vercel?.groups?.length ?? 0,
-    sentryIssues: sentry?.issues?.length ?? 0,
+    sentryIssues: (sentry?.issues?.length ?? 0) + (sentry?.additional?.length ?? 0),
     freshVercelGroups: freshVercel.length,
     freshSentryIssues: freshSentry.length,
     freshFingerprints: freshVercel.map((group) => group.fingerprint),
+    freshSentryIssueIds: freshSentry.map((issue) => issue.id),
   }
 }
 

@@ -1,23 +1,24 @@
 # Automated Production Error Triage
 
-Every three hours, a GitHub Actions workflow scans Vercel production logs for
-actionable errors, enriches them with Sentry stack traces, fixes **every** one worth
-fixing, verifies each fix on its own Vercel preview deployment, and opens one pull
-request per fix.
+Every three hours, a GitHub Actions workflow scans Vercel production logs and Sentry
+issues for actionable errors, fixes **every** one worth fixing, verifies each fix on
+its own Vercel preview deployment, and opens one pull request per fix.
 
 It runs entirely in GitHub's cloud. Your Mac does not need to be on.
 
 This replaces the earlier local Sentry triage job. There is now one error-triage
-automation, not two. Vercel defines the scan window and what counts as actionable;
-Sentry is read on every run for the stack traces and source context that Vercel logs
-do not carry.
+automation, not two. Both scans share one window and one cursor, and either can wake
+the run on its own: Vercel catches 5xx and timeouts, while Sentry also catches what
+never produces a 5xx — client-side exceptions and server errors a route handled
+before responding. Sentry additionally carries the stack traces and source context
+that Vercel logs do not.
 
 ## What It Does
 
 | Stage | What happens |
 | --- | --- |
 | Scan | `scripts/vercel-error-scan.mjs` walks the window in hourly chunks and groups actionable errors |
-| Enrich | `scripts/sentry-error-scan.mjs` pulls matching Sentry issues, stack frames, and source context |
+| Scan Sentry | `scripts/sentry-error-scan.mjs` pulls the window's Sentry issues, stack frames, and source context — including issues with no Vercel counterpart |
 | Triage | Correlates the two, drops anything already fixed or already in an open PR, ranks by blast radius |
 | Fix | Reproduces each actionable error in rank order, fixes the root cause, runs `npm test`, `tsc --noEmit`, and `eslint` |
 | Verify | Pushes each fix on its own branch, waits for that commit's preview, and replays the original failing request against it |
@@ -29,11 +30,13 @@ file is the automation's actual instructions — edit it to change the behaviour
 
 ### What Counts As Actionable
 
-Only three things, on production only:
+Only these, on production only:
 
 - HTTP 5xx responses
 - function timeouts (`FUNCTION_INVOCATION_TIMEOUT`, `Task timed out after ...`)
 - uncaught runtime exceptions at error or fatal level
+- unresolved Sentry issues with events in the window, even when nothing in the
+  Vercel logs matches them
 
 4xx responses, warnings, and preview-deployment noise are deliberately ignored.
 

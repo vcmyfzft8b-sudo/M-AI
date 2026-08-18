@@ -1,6 +1,10 @@
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
+import {
+  getInvocationBudgetMs,
+  runWithinInvocationBudget,
+} from "@/lib/invocation-budget";
 import type { LectureProcessingStage } from "@/lib/jobs";
 import {
   generateLectureNotesFromStoredTranscript,
@@ -18,6 +22,9 @@ const requestSchema = z.object({
 
 export const maxDuration = 300;
 const INTERNAL_JOB_MAX_BYTES = 8 * 1024;
+// Ends up verbatim in the lecture's error_message, so keep it about what the user can do. Which
+// stage ran out of time is in the Sentry event markLecturePipelineFailed sends.
+const STAGE_BUDGET_MESSAGE = "Obdelava je trajala predolgo in se je ustavila. Poskusi znova.";
 
 function getSecretFromRequest(request: Request) {
   const headerSecret = request.headers.get("x-internal-job-secret");
@@ -57,6 +64,7 @@ async function runLectureStage(params: {
 }
 
 export async function POST(request: Request) {
+  const invocationStartedAt = Date.now();
   const env = getServerEnv();
   const limited = await enforceRateLimit({
     request,
@@ -84,7 +92,17 @@ export async function POST(request: Request) {
 
   after(async () => {
     try {
-      await runLectureStage(parsed.data);
+      // The stage cannot be cancelled, so it keeps running after the budget rejects. That is fine:
+      // the failure is recorded first, and a stage that still lands in the remaining seconds
+      // overwrites the row with its own state.
+      await runWithinInvocationBudget({
+        run: () => runLectureStage(parsed.data),
+        budgetMs: getInvocationBudgetMs({
+          maxDurationSeconds: maxDuration,
+          elapsedMs: Date.now() - invocationStartedAt,
+        }),
+        deadlineMessage: STAGE_BUDGET_MESSAGE,
+      });
     } catch (error) {
       await markLecturePipelineFailed({
         lectureId: parsed.data.lectureId,

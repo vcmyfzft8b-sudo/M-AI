@@ -54,7 +54,11 @@ import {
   isUnsupportedVideoContentType,
   UNSUPPORTED_VIDEO_LINK_MESSAGE,
 } from "@/lib/link-source-validation";
-import { ExpectedLectureInputError } from "@/lib/lecture-processing-errors";
+import {
+  ExpectedLectureInputError,
+  isExpectedLectureInputError,
+} from "@/lib/lecture-processing-errors";
+import { describeLinkFetchFailure } from "@/lib/link-fetch-errors";
 import { serializeVector } from "@/lib/utils";
 
 const pptxVisualExtractionSchema = z.object({
@@ -980,6 +984,14 @@ async function fetchReadableWebpageResponse(targetUrl: URL, redirectCount = 0): 
         "The link took too long to respond.",
         "link_timeout",
       );
+    }
+
+    if (!isExpectedLectureInputError(error)) {
+      const fetchFailure = describeLinkFetchFailure(error);
+
+      if (fetchFailure) {
+        throw new ExpectedLectureInputError(fetchFailure.message, fetchFailure.code);
+      }
     }
 
     throw error;

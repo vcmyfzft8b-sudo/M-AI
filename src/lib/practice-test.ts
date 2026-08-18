@@ -189,6 +189,30 @@ async function setPracticeTestAssetStatus(params: {
   }
 }
 
+// Generation normally records its own failure from the catch in generateLecturePracticeTest, but a
+// generation killed by the platform timeout never gets there and leaves the asset on "generating"
+// — a status the workspace polls forever, waiting for a bank nothing is still building. The caller
+// that saw the deadline records it instead. Scoped to a bank that is still in flight so a
+// generation that finished in the meantime keeps its own state.
+export async function markStalledPracticeTestGenerationFailed(params: {
+  lectureId: string;
+  errorMessage: string;
+}) {
+  const supabase = createSupabaseServiceRoleClient();
+  const { error } = await supabase
+    .from("lecture_practice_test_assets")
+    .update({
+      status: "failed",
+      error_message: params.errorMessage,
+    } as never)
+    .eq("lecture_id", params.lectureId)
+    .in("status", ["queued", "generating"]);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function queueLecturePracticeTestGeneration(lectureId: string) {
   await setPracticeTestAssetStatus({
     lectureId,

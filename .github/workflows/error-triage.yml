@@ -44,9 +44,6 @@ permissions:
   id-token: write
   actions: read
 
-env:
-  STATE_BRANCH: automation/error-triage-state
-
 jobs:
   triage:
     name: Scan, fix, verify, open PRs
@@ -83,25 +80,29 @@ jobs:
         run: npm install -g vercel@50.35.0
 
       - name: Restore triage state
+        # State lives in the repository's Actions variables (TRIAGE_STATE,
+        # TRIAGE_BACKLOG), not on a branch. A state branch got a push every run,
+        # which made GitHub nag "had recent pushes" forever and offer a PR that
+        # must never be opened.
         env:
-          TRIAGE_GITHUB_TOKEN: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          remote="https://x-access-token:${TRIAGE_GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          if git ls-remote --exit-code --heads "$remote" "$STATE_BRANCH" >/dev/null 2>&1; then
-            git clone --quiet --depth 1 --branch "$STATE_BRANCH" "$remote" .triage-state
-            echo "Restored existing triage state."
-          else
-            # First run: start an orphan history so state never touches main.
-            mkdir -p .triage-state
-            cd .triage-state
-            git init --quiet
-            git checkout --quiet -b "$STATE_BRANCH"
-            git remote add origin "$remote"
-            echo '{}' > state.json
-            echo '{"entries":[]}' > backlog.json
-            echo "No state branch yet; seeded a fresh one."
-          fi
+          mkdir -p .triage-state
+          # Listing first separates "variable does not exist yet" (fine, seed
+          # defaults) from "cannot reach the API" (fail loudly: silently seeding
+          # an empty state would reset the cursor and orphan the backlog).
+          names="$(gh variable list --repo "$GITHUB_REPOSITORY" --json name --jq '.[].name')"
+          for pair in "TRIAGE_STATE:state.json:{}" 'TRIAGE_BACKLOG:backlog.json:{"entries":[]}'; do
+            var="${pair%%:*}"; rest="${pair#*:}"; file="${rest%%:*}"; seed="${rest#*:}"
+            if grep -qx "$var" <<< "$names"; then
+              gh variable get "$var" --repo "$GITHUB_REPOSITORY" > ".triage-state/$file"
+            else
+              printf '%s\n' "$seed" > ".triage-state/$file"
+              echo "No $var yet; seeded a default."
+            fi
+          done
+          echo "state: $(wc -c < .triage-state/state.json) bytes, backlog: $(wc -c < .triage-state/backlog.json) bytes"
 
       - name: Plan the window
         id: window
@@ -216,15 +217,19 @@ jobs:
       - name: Save triage state
         if: always()
         env:
-          TRIAGE_GITHUB_TOKEN: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          cd .triage-state
-          git add -A
-          if git diff --cached --quiet; then
-            echo "Triage state unchanged; nothing to push."
+          if [ ! -s .triage-state/state.json ]; then
+            echo "No state files to save (restore never ran); leaving the stored state alone."
             exit 0
           fi
-          git commit --quiet -m "Error triage state after run ${GITHUB_RUN_ID}"
-          git push --quiet origin "HEAD:${STATE_BRANCH}"
-          echo "Pushed updated triage state."
+          # Variables cap at 48KB. The playbook prunes the backlog; this is the
+          # loud alarm if that ever stops being enough.
+          size="$(wc -c < .triage-state/backlog.json)"
+          if [ "$size" -gt 45000 ]; then
+            echo "::warning::backlog.json is ${size} bytes, near the 48KB variable cap; pruning is falling behind."
+          fi
+          gh variable set TRIAGE_STATE --repo "$GITHUB_REPOSITORY" < .triage-state/state.json
+          gh variable set TRIAGE_BACKLOG --repo "$GITHUB_REPOSITORY" < .triage-state/backlog.json
+          echo "Saved triage state to repository variables."

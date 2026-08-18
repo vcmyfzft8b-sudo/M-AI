@@ -48,10 +48,22 @@ Every fix reaches production only when you press merge.
 
 ## Durable State
 
-State lives on the orphan branch `automation/error-triage-state`, never on `main`:
+State lives in two GitHub Actions repository variables, never on a branch and never
+on `main`:
 
-- `state.json` — the successful-scan cursor, last run time and status
-- `backlog.json` — every error group seen, keyed by fingerprint, with its status
+- `TRIAGE_STATE` — the successful-scan cursor, last run time and status
+- `TRIAGE_BACKLOG` — every error group seen, keyed by fingerprint, with its status
+
+Read them any time with:
+
+```bash
+gh variable get TRIAGE_STATE --repo vcmyfzft8b-sudo/Memo-AI
+```
+
+(State originally lived on an orphan branch, `automation/error-triage-state`, but a
+branch pushed every three hours makes GitHub permanently nag "had recent pushes" and
+offer a pull request that must never be opened. The branch was retired on
+2026-08-18; if it ever reappears, something is running an old workflow.)
 
 The window always starts at the last **successful** cursor with a 10-minute overlap,
 not at a fixed three-hour offset. If GitHub skipped runs or a run failed, the next
@@ -257,7 +269,7 @@ gh workflow disable "Error triage" --repo vcmyfzft8b-sudo/Memo-AI
 
 - **No PR and no errors reported** — the normal outcome. The run summary states the
   exact UTC window it covered.
-- **The same error keeps coming back** — check `backlog.json` on the state branch. An
+- **The same error keeps coming back** — read `gh variable get TRIAGE_BACKLOG`. An
   entry stuck at `needs-human` is the automation telling you it could not reproduce
   or could not fix it safely.
 - **A PR is open as a draft** — verification was incomplete. The PR body says which

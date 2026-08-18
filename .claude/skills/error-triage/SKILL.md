@@ -49,8 +49,8 @@ not need to repeat them. Read these environment variables:
 | `TRIAGE_MAY_ADVANCE_CURSOR` | `false` on a hand-dispatched window; do not advance then |
 | `TRIAGE_DRY_RUN` | `true` means report only: no branch, no commit, no PR |
 
-State lives in `.triage-state/`, checked out from the `automation/error-triage-state`
-branch:
+State lives in `.triage-state/`, restored by the workflow from the repository's
+Actions variables (`TRIAGE_STATE`, `TRIAGE_BACKLOG`) — there is no state branch:
 
 - `state.json` — cursor, last run time and status
 - `backlog.json` — `{ "entries": [ { fingerprint, type, path, summary, status, firstSeen, lastSeen, occurrences, sentryIssues, prUrl, notes, updatedAt } ] }`
@@ -262,8 +262,10 @@ node scripts/triage-state.mjs commit --state .triage-state/state.json --until "$
 node scripts/triage-state.mjs commit --state .triage-state/state.json --until "$TRIAGE_UNTIL" --status failed
 ```
 
-The workflow commits and pushes `.triage-state/` afterwards. Write the files; do not
-run git commands against the state branch yourself.
+The workflow saves `.triage-state/` back to the repository variables afterwards.
+Just write the files — no git operations on state. Variables cap at 48KB, so keep the
+backlog pruned: besides the 30-day rule, if `backlog.json` approaches ~40KB drop the
+oldest handled entries first.
 
 Finally, print a summary to the run log:
 

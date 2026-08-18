@@ -8,6 +8,7 @@ import {
   getTtsUsageState,
   hasUnlimitedTtsUsage,
   hashNoteTtsContent,
+  LectureRemovedDuringTtsError,
   TtsGenerationPendingError,
   TtsQuotaLimitError,
 } from "@/lib/note-tts";
@@ -290,6 +291,14 @@ export async function POST(
       }
 
       return createPendingResponse("tts_generation_pending", parsedBody.data.acceptsPendingStatus);
+    }
+
+    // The note existed when this request checked it, two minutes ago, and the reader deleted it
+    // while the audio was being synthesized. The same answer the route gives when it is gone from
+    // the start — a 500 said the server had broken, and put a stack in the error stream for a
+    // deletion that worked exactly as intended.
+    if (error instanceof LectureRemovedDuringTtsError) {
+      return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
     }
 
     if (isProviderRateLimitError(error)) {

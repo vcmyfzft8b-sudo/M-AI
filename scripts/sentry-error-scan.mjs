@@ -2,8 +2,9 @@
 // Pull Sentry issues for a time window, with the stack trace Vercel logs do not carry.
 //
 // Vercel tells you a route returned 500; Sentry usually tells you which line threw.
-// This is the enrichment half of the triage run -- it is not a separate scan, and
-// its cursor is the same cursor.
+// Sentry is also a detection source of its own: a client-side exception, or a server
+// error a route handled before responding, never produces a 5xx and exists only
+// here. The cursor is the same cursor as the Vercel scan's.
 //
 // Usage:
 //   node scripts/sentry-error-scan.mjs --since 2026-08-17T09:00:00Z [--until ISO] [--out FILE]

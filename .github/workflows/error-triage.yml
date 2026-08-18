@@ -1,8 +1,10 @@
 name: Error triage
 
-# Scans Vercel production logs (enriched with Sentry) every three hours, fixes every
+# Scans Vercel production logs and Sentry issues every three hours, fixes every
 # actionable error it finds, verifies each fix on its own Vercel preview, and opens
-# one PR per fix. It never merges and never pushes to main.
+# one PR per fix. Both scans can wake the run on their own: a handled route error
+# or client-side exception exists only in Sentry, never as a Vercel 5xx. It never
+# merges and never pushes to main.
 # See docs/error-triage-automation.md.
 #
 # The scan runs before `npm ci` and before Claude starts, so a run that finds nothing
@@ -145,11 +147,21 @@ jobs:
             exit "$rc"
           fi
 
-          # Sentry is enrichment. Losing it degrades the run; it does not fail it.
-          node scripts/sentry-error-scan.mjs \
+          # Sentry is a detection source of its own, not just enrichment -- a
+          # handled route error or a client-side exception never produces a
+          # Vercel 5xx. If this scan fails, the Sentry half of the window went
+          # unread: keep triaging on Vercel data, but the cursor must not
+          # advance over the unread gap (handled below and in the playbook).
+          if node scripts/sentry-error-scan.mjs \
             --since "${{ steps.window.outputs.since }}" \
             --until "${{ steps.window.outputs.until }}" \
-            --out /tmp/sentry-report.json || echo "::warning::Sentry scan failed; continuing on Vercel data alone."
+            --out /tmp/sentry-report.json; then
+            echo "sentry_ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Sentry scan failed; continuing on Vercel data alone and holding the cursor."
+            rm -f /tmp/sentry-report.json
+            echo "sentry_ok=false" >> "$GITHUB_OUTPUT"
+          fi
 
           node scripts/triage-state.mjs gate \
             --vercel /tmp/vercel-report.json \
@@ -165,7 +177,16 @@ jobs:
           echo "No new or regressed production errors between ${{ steps.window.outputs.since }} and ${{ steps.window.outputs.until }}."
           # A hand-dispatched window is still a healthy run; it just must not move
           # the cursor, or an ad-hoc investigation would erase scheduled coverage.
-          if [ "${{ steps.window.outputs.may_advance }}" = "true" ]; then
+          if [ "${{ steps.scan.outputs.sentry_ok }}" != "true" ]; then
+            # The Sentry half of the window was never read, so "nothing found"
+            # is not a complete answer. Advancing the cursor would skip whatever
+            # Sentry-only errors happened in it; record a failed run and let the
+            # next one re-read the window.
+            echo "Sentry scan failed; holding the cursor so the window is re-read."
+            node scripts/triage-state.mjs commit \
+              --state .triage-state/state.json \
+              --until "${{ steps.window.outputs.until }}" --status failed
+          elif [ "${{ steps.window.outputs.may_advance }}" = "true" ]; then
             node scripts/triage-state.mjs commit \
               --state .triage-state/state.json \
               --until "${{ steps.window.outputs.until }}" --status ok

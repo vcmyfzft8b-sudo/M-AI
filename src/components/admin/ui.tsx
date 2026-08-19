@@ -1,5 +1,6 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
+
+import { PendingLink } from "./pending-link";
 
 import { percentChange } from "@/lib/admin/ranges";
 
@@ -229,15 +230,14 @@ export function RangeTabs({
         params.set("range", value);
 
         return (
-          <Link
+          <PendingLink
             key={value}
             href={`${basePath}?${params.toString()}`}
             className="admin-range-item"
             data-active={value === active}
-            prefetch={false}
           >
             {label}
-          </Link>
+          </PendingLink>
         );
       })}
     </nav>

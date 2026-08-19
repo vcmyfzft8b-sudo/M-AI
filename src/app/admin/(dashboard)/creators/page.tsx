@@ -28,9 +28,10 @@ import {
   VALUE_BASELINE_DAYS,
 } from "@/lib/admin/campaign-value";
 import {
+  computeCost,
   computeEconomics,
-  describePayModel,
-  payModelFor,
+  describePayTerms,
+  payTermsFor,
 } from "@/lib/admin/creator-economics";
 import {
   normalizeRangePreset,
@@ -190,9 +191,8 @@ export default async function CreatorsPage({
 
   const economicsFor = (creator: (typeof creators)[number]) => {
     const entry = metrics.get(creator.id);
-    const model = payModelFor(creator);
 
-    return computeEconomics(model, {
+    return computeEconomics(payTermsFor(creator), {
       videos: entry?.videosPosted ?? 0,
       views: entry?.viewsGained ?? 0,
       codeRevenue: codeUsage?.get(creator.id)?.revenue ?? 0,
@@ -203,22 +203,26 @@ export default async function CreatorsPage({
   const owedThisMonth = (creator: (typeof creators)[number]) => {
     const month = monthByCreator.get(creator.id) ?? { views: 0, videos: 0 };
 
-    return computeEconomics(payModelFor(creator), {
+    return computeCost(payTermsFor(creator), {
       videos: month.videos,
       views: month.views,
       codeRevenue: monthCodeUsage?.get(creator.id)?.revenue ?? 0,
-      revenue: null,
-    }).cost;
+    });
   };
 
   const totalCost = creators.reduce(
-    (sum, creator) => sum + economicsFor(creator).cost,
+    (sum, creator) => sum + economicsFor(creator).cost.total,
     0,
   );
-  const totalOwed = creators.reduce(
-    (sum, creator) => sum + owedThisMonth(creator),
+  const totalOwedBase = creators.reduce(
+    (sum, creator) => sum + owedThisMonth(creator).basePay,
     0,
   );
+  const totalOwedBonus = creators.reduce(
+    (sum, creator) => sum + owedThisMonth(creator).codeBonus,
+    0,
+  );
+  const totalOwed = totalOwedBase + totalOwedBonus;
 
   const link = (overrides: Record<string, string | undefined>) => {
     const next = new URLSearchParams();
@@ -384,7 +388,9 @@ export default async function CreatorsPage({
           {
             key: "cost",
             value: formatMoney(totalCost),
-            hint: `${formatMoney(totalOwed)} owed this month`,
+            hint: `${formatMoney(totalOwed)} owed this month · ${formatMoney(
+              totalOwedBase,
+            )} base + ${formatMoney(totalOwedBonus)} bonus`,
             chartable: false,
           },
           {
@@ -496,14 +502,21 @@ export default async function CreatorsPage({
                   <th>Accounts</th>
                   <th className="admin-num">Views</th>
                   <th className="admin-num">Videos</th>
-                  <th className="admin-num">Avg / video</th>
                   <th className="admin-num">Engagement</th>
                   <th className="admin-num">Followers</th>
                   <th className="admin-num" title="Paid checkouts using this creator's codes, within the selected period.">
                     Codes used
                   </th>
                   <th className="admin-num">Est. revenue</th>
-                  <th className="admin-num">Cost</th>
+                  <th className="admin-num" title="Flat fee for the posts in this period.">
+                    Base pay
+                  </th>
+                  <th
+                    className="admin-num"
+                    title="Their share of what their own code sold in this period."
+                  >
+                    Code bonus
+                  </th>
                   <th className="admin-num">Margin</th>
                   <th className="admin-num">Owed this month</th>
                 </tr>
@@ -574,9 +587,6 @@ export default async function CreatorsPage({
                       <td className="admin-num">{formatCount(views)}</td>
                       <td className="admin-num">{formatExact(videos)}</td>
                       <td className="admin-num">
-                        {videos > 0 ? formatCount(views / videos) : "—"}
-                      </td>
-                      <td className="admin-num">
                         {entry && entry.viewsGained > 0
                           ? formatPercent(entry.engagementRate)
                           : "—"}
@@ -619,37 +629,64 @@ export default async function CreatorsPage({
                       </td>
                       <td
                         className="admin-num"
-                        title={describePayModel(economics.model, (minor) =>
+                        title={describePayTerms(economics.terms, (minor) =>
                           formatMoney(minor),
                         )}
                       >
-                        {economics.model.kind === "unpaid"
+                        {economics.terms.unpaid || !economics.terms.baseFee
                           ? "—"
-                          : formatMoney(economics.cost)}
+                          : formatMoney(economics.cost.basePay)}
+                      </td>
+                      <td
+                        className="admin-num"
+                        title={describePayTerms(economics.terms, (minor) =>
+                          formatMoney(minor),
+                        )}
+                      >
+                        {economics.terms.unpaid ||
+                        economics.terms.revenueSharePercent === null
+                          ? "—"
+                          : formatMoney(economics.cost.codeBonus)}
                       </td>
                       <td className="admin-num">
                         {economics.margin === null ? (
                           "—"
                         ) : (
-                          <span
-                            className="admin-delta"
-                            data-direction={
-                              economics.margin > 0
-                                ? "up"
-                                : economics.margin < 0
-                                  ? "down"
-                                  : "flat"
-                            }
-                          >
-                            {formatMoney(economics.margin)}
-                          </span>
+                          <>
+                            <span
+                              className="admin-delta"
+                              data-direction={
+                                economics.margin > 0
+                                  ? "up"
+                                  : economics.margin < 0
+                                    ? "down"
+                                    : "flat"
+                              }
+                            >
+                              {formatMoney(economics.margin)}
+                            </span>
+                            {economics.marginRate !== null && (
+                              <>
+                                <br />
+                                <span className="admin-creator-handle">
+                                  {formatPercent(economics.marginRate, 0)}
+                                </span>
+                              </>
+                            )}
+                          </>
                         )}
                       </td>
                       <td className="admin-num">
-                        {economics.model.kind === "unpaid" ? (
+                        {economics.terms.unpaid ? (
                           <span className="admin-help">not paid</span>
                         ) : (
-                          <strong>{formatMoney(owed)}</strong>
+                          <strong
+                            title={`${formatMoney(owed.basePay)} base + ${formatMoney(
+                              owed.codeBonus,
+                            )} bonus`}
+                          >
+                            {formatMoney(owed.total)}
+                          </strong>
                         )}
                       </td>
                     </tr>

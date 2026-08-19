@@ -1090,6 +1090,7 @@ export type Database = {
           rate_amount: number | null;
           rate_currency: string;
           rate_kind: UgcRateKind | null;
+          revenue_share_percent: number | null;
           started_at: string | null;
           created_at: string;
           updated_at: string;
@@ -1107,6 +1108,7 @@ export type Database = {
           rate_amount?: number | null;
           rate_currency?: string;
           rate_kind?: UgcRateKind | null;
+          revenue_share_percent?: number | null;
           started_at?: string | null;
           created_by?: string | null;
         };
@@ -1121,6 +1123,7 @@ export type Database = {
           rate_amount?: number | null;
           rate_currency?: string;
           rate_kind?: UgcRateKind | null;
+          revenue_share_percent?: number | null;
           started_at?: string | null;
         };
       };

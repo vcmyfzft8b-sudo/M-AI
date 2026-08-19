@@ -145,6 +145,20 @@ function readOptional(formData: FormData, key: string): string | null {
   return value.length > 0 ? value : null;
 }
 
+
+/** Percentage share of code revenue, or null when they get none. */
+function readSharePercent(formData: FormData): number | null {
+  const raw = readOptional(formData, "revenue_share_percent");
+
+  if (!raw) {
+    return null;
+  }
+
+  const value = Number(raw);
+
+  return Number.isFinite(value) && value > 0 && value <= 100 ? value : null;
+}
+
 // ---------------------------------------------------------------- creators --
 
 export async function createCreatorAction(
@@ -191,6 +205,7 @@ export async function createCreatorAction(
       promo_codes: readPromoCodes(readOptional(formData, "promo_codes")),
       rate_amount: rateAmount,
       rate_kind: rateKind?.success ? (rateKind.data as UgcRateKind) : null,
+      revenue_share_percent: readSharePercent(formData),
       started_at: readOptional(formData, "started_at"),
       created_by: context.user.email ?? null,
     })
@@ -283,6 +298,7 @@ export async function updateCreatorAction(
       rate_amount:
         rateAmount !== null && Number.isFinite(rateAmount) ? rateAmount : null,
       rate_kind: rateKind?.success ? (rateKind.data as UgcRateKind) : null,
+      revenue_share_percent: readSharePercent(formData),
       started_at: readOptional(formData, "started_at"),
     })
     .eq("id", id);

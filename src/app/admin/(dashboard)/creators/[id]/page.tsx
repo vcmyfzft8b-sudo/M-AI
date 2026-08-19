@@ -24,8 +24,8 @@ import {
 import { VideoReviewList } from "@/components/admin/video-review";
 import {
   computeEconomics,
-  describePayModel,
-  payModelFor,
+  describePayTerms,
+  payTermsFor,
 } from "@/lib/admin/creator-economics";
 import {
   computeViewValue,
@@ -104,7 +104,7 @@ export default async function CreatorDetailPage({
   });
   const estimated = estimateRevenue(entry?.viewsGained ?? 0, viewValue);
 
-  const economics = computeEconomics(payModelFor(creator), {
+  const economics = computeEconomics(payTermsFor(creator), {
     videos: entry?.videosPosted ?? 0,
     views: entry?.viewsGained ?? 0,
     codeRevenue: codes?.revenue ?? 0,
@@ -176,16 +176,50 @@ export default async function CreatorDetailPage({
           }
         />
         <StatCard
-          label="Cost"
+          label="Base pay"
           value={
-            economics.model.kind === "unpaid" ? "—" : formatMoney(economics.cost)
+            economics.terms.unpaid || !economics.terms.baseFee
+              ? "—"
+              : formatMoney(economics.cost.basePay)
           }
-          meta={describePayModel(economics.model, (minor) => formatMoney(minor))}
+          meta={
+            economics.terms.unpaid
+              ? "Our own account — not paid"
+              : economics.terms.baseFee
+                ? describePayTerms(
+                    { ...economics.terms, revenueSharePercent: null },
+                    (minor) => formatMoney(minor),
+                  )
+                : "No flat fee"
+          }
+        />
+        <StatCard
+          label="Code bonus"
+          value={
+            economics.terms.unpaid || economics.terms.revenueSharePercent === null
+              ? "—"
+              : formatMoney(economics.cost.codeBonus)
+          }
+          meta={
+            economics.terms.unpaid
+              ? "Our own account — not paid"
+              : economics.terms.revenueSharePercent === null
+                ? "No share of code revenue"
+                : `${economics.terms.revenueSharePercent}% of ${formatMoney(
+                    codes?.revenue ?? 0,
+                  )} sold through their code`
+          }
         />
         <StatCard
           label="Margin"
           value={
-            economics.margin === null ? "—" : formatMoney(economics.margin)
+            economics.margin === null
+              ? "—"
+              : `${formatMoney(economics.margin)}${
+                  economics.marginRate === null
+                    ? ""
+                    : ` · ${formatPercent(economics.marginRate, 0)}`
+                }`
           }
           meta={
             economics.marginRate === null

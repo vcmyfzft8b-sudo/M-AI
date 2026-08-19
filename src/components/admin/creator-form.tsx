@@ -135,8 +135,28 @@ export function AddCreatorForm() {
             <option value="per_video">Per video</option>
             <option value="per_month">Per month</option>
             <option value="per_1k_views">Per 1000 views</option>
-            <option value="revenue_share">Revenue share</option>
           </select>
+        </div>
+
+        <div className="admin-field">
+          <label className="admin-label" htmlFor="creator-share">
+            Code bonus %
+          </label>
+          <input
+            id="creator-share"
+            className="admin-input"
+            type="number"
+            step="1"
+            min="0"
+            max="100"
+            name="revenue_share_percent"
+            
+            placeholder="e.g. 20"
+          />
+          <span className="admin-help">
+            Their share of what their own code sells. Stacks with the rate
+            above; leave empty for a flat fee only.
+          </span>
         </div>
       </div>
 
@@ -284,8 +304,28 @@ export function EditCreatorForm({ creator }: { creator: UgcCreatorRow }) {
             <option value="per_video">Per video</option>
             <option value="per_month">Per month</option>
             <option value="per_1k_views">Per 1000 views</option>
-            <option value="revenue_share">Revenue share</option>
           </select>
+        </div>
+
+        <div className="admin-field">
+          <label className="admin-label" htmlFor="edit-share">
+            Code bonus %
+          </label>
+          <input
+            id="edit-share"
+            className="admin-input"
+            type="number"
+            step="1"
+            min="0"
+            max="100"
+            name="revenue_share_percent"
+            defaultValue={creator.revenue_share_percent ?? ""}
+            placeholder="e.g. 20"
+          />
+          <span className="admin-help">
+            Their share of what their own code sells. Stacks with the rate
+            above; leave empty for a flat fee only.
+          </span>
         </div>
       </div>
 

@@ -93,19 +93,28 @@ is exactly why it should not be silently averaged into "per creator" figures.
 
 ## What each creator costs
 
-Three arrangements run at once, stored per creator as `rate_kind` and
-`rate_amount` and editable from their page:
+Pay has **two independent parts**, and a creator can be on either, both or
+neither. They were originally one exclusive choice, which could not express the
+real arrangement and silently underpaid anyone on both.
 
-| Arrangement | Cost | Who |
-| --- | --- | --- |
-| `per_video` | fee × Memo AI posts | Ema, Martin & David, Mavija, Milos (€5); Lara (€22) |
-| `revenue_share` | percentage of their code's revenue | everyone else (20%) |
-| unpaid | nothing, ever | our own accounts |
+| Part | Column | Stored as | Who |
+| --- | --- | --- | --- |
+| Flat fee | **Base pay** | `rate_kind` + `rate_amount` | Ema, Martin & David, Mavija, Milos (€5/video); Lara (€22/video) |
+| Share of their code | **Code bonus** | `revenue_share_percent` | everyone except Lara and our own accounts (20%) |
 
-From that the table derives **cost**, **margin** (estimated revenue less cost),
-margin rate and return on spend. A creator who costs nothing has no return *on
-spend* to report, so that reads as "—" rather than as infinity or a misleading
-zero.
+Both are editable from a creator's page, and the two are shown as separate
+columns so a payout can be explained line by line rather than as one number.
+
+Worked example from the live data: Martin & David posted 5 videos and their
+codes sold €160, so they are owed **€25 base + €32 bonus = €57**. Lara posted 2
+videos at €22 and takes no share, so her bonus column reads "—" rather than €0 —
+the distinction being "no such arrangement" versus "nothing earned yet".
+
+From that the table derives **margin** (estimated revenue less both parts) with
+its percentage, and return on spend. A creator who costs nothing has no return
+*on spend* to report, so that reads as "—" rather than as infinity or a
+misleading zero, and a creator with no measurable revenue shows no margin
+percentage rather than dividing by zero.
 
 **Owed this month** is always month-to-date, whatever range is selected —
 payouts happen at the end of the calendar month, and showing a seven-day figure

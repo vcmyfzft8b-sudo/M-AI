@@ -11805,6 +11805,17 @@ select:disabled {
   color: var(--label);
 }
 
+/* Signing out is a full page load, so the button says it is working rather
+   than sitting there looking unpressed until the new page arrives. */
+.landing-auth-signout[data-pending] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  opacity: 0.65;
+  pointer-events: none;
+  text-decoration: none;
+}
+
 .auth-provider-form {
   display: block;
 }

@@ -8,6 +8,7 @@ import {
 import type { UgcCreatorRow } from "@/lib/database.types";
 
 import { ActionForm, SubmitButton } from "./forms";
+import { PayTermsFields } from "./pay-terms-fields";
 
 /** Explains what each account mode does, since it decides what gets counted. */
 function ContentModeField({
@@ -106,58 +107,7 @@ export function AddCreatorForm() {
           />
         </div>
 
-        <div className="admin-field">
-          <label className="admin-label" htmlFor="creator-rate">
-            Rate
-          </label>
-          <input
-            id="creator-rate"
-            className="admin-input"
-            type="number"
-            step="0.01"
-            min="0"
-            name="rate_amount"
-            placeholder="optional"
-          />
-        </div>
-
-        <div className="admin-field">
-          <label className="admin-label" htmlFor="creator-rate-kind">
-            Rate type
-          </label>
-          <select
-            id="creator-rate-kind"
-            name="rate_kind"
-            className="admin-select"
-            defaultValue=""
-          >
-            <option value="">—</option>
-            <option value="per_video">Per video</option>
-            <option value="per_month">Per month</option>
-            <option value="per_1k_views">Per 1000 views</option>
-          </select>
-        </div>
-
-        <div className="admin-field">
-          <label className="admin-label" htmlFor="creator-share">
-            Code bonus %
-          </label>
-          <input
-            id="creator-share"
-            className="admin-input"
-            type="number"
-            step="1"
-            min="0"
-            max="100"
-            name="revenue_share_percent"
-            
-            placeholder="e.g. 20"
-          />
-          <span className="admin-help">
-            Their share of what their own code sells. Stacks with the rate
-            above; leave empty for a flat fee only.
-          </span>
-        </div>
+        <PayTermsFields idPrefix="creator" />
       </div>
 
       <div className="admin-field" style={{ marginTop: "0.875rem" }}>
@@ -275,58 +225,12 @@ export function EditCreatorForm({ creator }: { creator: UgcCreatorRow }) {
           />
         </div>
 
-        <div className="admin-field">
-          <label className="admin-label" htmlFor="edit-rate">
-            Rate
-          </label>
-          <input
-            id="edit-rate"
-            className="admin-input"
-            type="number"
-            step="0.01"
-            min="0"
-            name="rate_amount"
-            defaultValue={creator.rate_amount ?? ""}
-          />
-        </div>
-
-        <div className="admin-field">
-          <label className="admin-label" htmlFor="edit-rate-kind">
-            Rate type
-          </label>
-          <select
-            id="edit-rate-kind"
-            name="rate_kind"
-            className="admin-select"
-            defaultValue={creator.rate_kind ?? ""}
-          >
-            <option value="">—</option>
-            <option value="per_video">Per video</option>
-            <option value="per_month">Per month</option>
-            <option value="per_1k_views">Per 1000 views</option>
-          </select>
-        </div>
-
-        <div className="admin-field">
-          <label className="admin-label" htmlFor="edit-share">
-            Code bonus %
-          </label>
-          <input
-            id="edit-share"
-            className="admin-input"
-            type="number"
-            step="1"
-            min="0"
-            max="100"
-            name="revenue_share_percent"
-            defaultValue={creator.revenue_share_percent ?? ""}
-            placeholder="e.g. 20"
-          />
-          <span className="admin-help">
-            Their share of what their own code sells. Stacks with the rate
-            above; leave empty for a flat fee only.
-          </span>
-        </div>
+        <PayTermsFields
+          idPrefix="edit"
+          rateKind={creator.rate_kind}
+          rateAmount={creator.rate_amount}
+          sharePercent={creator.revenue_share_percent}
+        />
       </div>
 
       <div className="admin-field" style={{ marginTop: "0.875rem" }}>

@@ -58,6 +58,22 @@
   color: var(--secondary-label);
 }
 
+/* Every control in the dashboard, as far as a finger is concerned.
+   `manipulation` drops the browser's wait for a possible double-tap, which is
+   what made taps here feel a beat behind the click on a desktop; the tap
+   highlight is removed because each control draws its own pressed state. */
+.admin-nav-link,
+.admin-tile,
+.admin-button,
+.admin-range-item,
+.admin-topbar-button,
+.admin-creator-cell,
+.admin-link,
+.admin-filter select {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .admin-nav {
   display: flex;
   flex-direction: column;
@@ -78,7 +94,15 @@
     color var(--motion-duration-fast) var(--motion-curve-standard);
 }
 
-.admin-nav-link:hover {
+@media (hover: hover) {
+  .admin-nav-link:hover {
+    background: var(--pressed);
+    color: var(--label);
+  }
+}
+
+/* Touch has no hover to preview with, so the press itself has to answer. */
+.admin-nav-link:active {
   background: var(--pressed);
   color: var(--label);
 }
@@ -162,8 +186,20 @@
   border-top: 1px solid var(--separator);
 }
 
-.admin-filters[data-pending="true"] {
+/* Only the select that was just changed is marked. Dimming the whole row left
+   the admin unable to see which control they had actually touched. */
+.admin-filter[data-pending] select {
   opacity: 0.55;
+}
+
+.admin-filter[data-pending]::after {
+  border: 1.5px solid var(--separator-strong);
+  border-top-color: var(--secondary-label);
+  border-radius: 50%;
+  width: 0.625rem;
+  height: 0.625rem;
+  transform: none;
+  animation: admin-spin 0.9s linear infinite;
 }
 
 .sr-only {
@@ -240,8 +276,15 @@
     background var(--motion-duration-fast) var(--motion-curve-standard);
 }
 
-.admin-tile:hover:not([data-static="true"]) {
+@media (hover: hover) {
+  .admin-tile:hover:not([data-static="true"]) {
+    background: var(--pressed);
+  }
+}
+
+.admin-tile:active:not([data-static="true"]) {
   background: var(--pressed);
+  transform: scale(0.99);
 }
 
 /* The charted metric is the one selected tile, as in a spreadsheet toolbar. */
@@ -446,6 +489,12 @@
   border-bottom: none;
 }
 
+@media (hover: none) {
+  .admin-table tbody tr:hover {
+    background: transparent;
+  }
+}
+
 .admin-table tbody tr:hover {
   background: var(--pressed);
 }
@@ -544,8 +593,10 @@
     transform var(--motion-duration-fast) var(--motion-curve-standard);
 }
 
-.admin-button:hover:not(:disabled) {
-  background: var(--surface-muted);
+@media (hover: hover) {
+  .admin-button:hover:not(:disabled) {
+    background: var(--surface-muted);
+  }
 }
 
 .admin-button:active:not(:disabled) {
@@ -563,8 +614,10 @@
   color: #fff;
 }
 
-.admin-button[data-variant="primary"]:hover:not(:disabled) {
-  background: var(--tint-strong);
+@media (hover: hover) {
+  .admin-button[data-variant="primary"]:hover:not(:disabled) {
+    background: var(--tint-strong);
+  }
 }
 
 .admin-button[data-variant="danger"] {
@@ -578,9 +631,11 @@
   color: var(--secondary-label);
 }
 
-.admin-button[data-variant="ghost"]:hover:not(:disabled) {
-  background: var(--pressed);
-  color: var(--label);
+@media (hover: hover) {
+  .admin-button[data-variant="ghost"]:hover:not(:disabled) {
+    background: var(--pressed);
+    color: var(--label);
+  }
 }
 
 .admin-button[data-size="sm"] {
@@ -609,6 +664,18 @@
   outline-offset: -1px;
 }
 
+/* Safari on iOS zooms the whole page when a field under 16px takes focus, and
+   never zooms back out — which left the admin pinching their way around the
+   form after every tap. 16px is the threshold, so touch gets 16px. */
+@media (pointer: coarse) {
+  .admin-input,
+  .admin-select,
+  .admin-textarea,
+  .admin-filter select {
+    font-size: 1rem;
+  }
+}
+
 .admin-textarea {
   min-height: 4.5rem;
   resize: vertical;
@@ -633,8 +700,40 @@
 
 .admin-form-grid {
   display: grid;
-  gap: 0.875rem;
+  gap: 0.875rem 1rem;
   grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  /* Fields carry help text of very different lengths. Stretching them made a
+     short field's input float in the middle of a tall row, so every row read
+     as misaligned; starting them keeps every input on the row's top line. */
+  align-items: start;
+}
+
+/* A set of fields that only make sense together — the pay terms, where the
+   arrangement decides which of the other two even apply. */
+.admin-fieldset {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0.875rem;
+  border: 1px solid var(--separator);
+  border-radius: 0.75rem;
+  background: var(--surface-muted);
+}
+
+.admin-fieldset-legend {
+  padding: 0 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--label);
+}
+
+/* `auto-fill`, not `auto-fit`, so the columns stay put as fields appear and
+   disappear with the arrangement. Under `auto-fit` the empty tracks collapse,
+   and picking "code bonus only" stretched the lone select across the whole
+   panel — the row appeared to change shape rather than just lose a field.
+   `min()` keeps the track from outgrowing a phone. */
+.admin-fieldset .admin-form-grid {
+  gap: 0.75rem 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
 }
 
 .admin-form-actions {
@@ -670,6 +769,12 @@
   background: var(--surface-solid);
   color: var(--label);
   box-shadow: var(--shadow-soft);
+}
+
+/* The segmented control answers the press before the server does. */
+.admin-range-item:active {
+  background: var(--pressed);
+  color: var(--label);
 }
 
 /* --------------------------------------------------------------- chart --- */
@@ -1009,8 +1114,10 @@
   font-weight: 550;
 }
 
-.admin-link:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .admin-link:hover {
+    text-decoration: underline;
+  }
 }
 
 /* --------------------------------------------------------------- mobile -- */
@@ -1019,6 +1126,10 @@
    always visible. */
 .admin-topbar {
   display: none;
+}
+
+.admin-topbar-button:active {
+  background: var(--pressed);
 }
 
 .admin-topbar-button {
@@ -1152,10 +1263,44 @@
     gap: 0.25rem;
   }
 
+  /* A finger needs a target, not a 24px strip of text. */
   .admin-range-item {
     flex: 1 1 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.25rem;
     text-align: center;
     padding: 0.4375rem 0.5rem;
+  }
+
+  .admin-button {
+    min-height: 2.25rem;
+    padding: 0.5rem 0.875rem;
+  }
+
+  .admin-button[data-size="sm"] {
+    min-height: 2rem;
+    padding: 0.375rem 0.625rem;
+  }
+
+  .admin-nav-link {
+    min-height: 2.75rem;
+  }
+
+  /* A submit button hugging the right edge of a phone is easy to miss and
+     awkward to reach; it gets the full width instead. */
+  .admin-form-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .admin-form-actions .admin-button {
+    width: 100%;
+  }
+
+  .admin-fieldset {
+    padding: 0.75rem;
   }
 
   .admin-tiles {
@@ -1309,8 +1454,24 @@
 .admin-range-item:has(.admin-pending-marker),
 .admin-tile:has(.admin-pending-marker),
 .admin-button:has(.admin-pending-marker),
-.admin-creator-cell:has(.admin-pending-marker) {
+.admin-creator-cell:has(.admin-pending-marker),
+.admin-link:has(.admin-pending-marker),
+.admin-topbar-brand:has(.admin-pending-marker) {
   opacity: 0.55;
+}
+
+/* A control already working on the last press must not take another one. */
+.admin-range-item:has(.admin-pending-marker),
+.admin-tile:has(.admin-pending-marker),
+.admin-button:has(.admin-pending-marker),
+.admin-button[data-pending] {
+  pointer-events: none;
+}
+
+/* Buttons that leave the page entirely — sign out, search — report through an
+   attribute, since no link status exists to read. */
+.admin-button[data-pending] {
+  opacity: 0.65;
 }
 
 .admin-nav-link:has(.admin-pending-marker) {
@@ -1352,5 +1513,14 @@
   }
   100% {
     transform: scaleX(0.95);
+  }
+}
+
+/* Without motion the bar cannot crawl, so it simply stands there while the
+   page is on its way — still the one thing on screen that says "working". */
+@media (prefers-reduced-motion: reduce) {
+  .admin-progress::after {
+    animation: none;
+    transform: none;
   }
 }

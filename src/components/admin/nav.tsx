@@ -10,11 +10,13 @@ import {
   Video,
   X,
 } from "lucide-react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { BrandLogo } from "@/components/brand-logo";
+
+import { NativeSubmitButton } from "./native-submit";
+import { PendingLink } from "./pending-link";
 
 export const ADMIN_LINKS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
@@ -45,7 +47,7 @@ function NavLinks({
         const Icon = link.icon;
 
         return (
-          <Link
+          <PendingLink
             key={link.href}
             href={link.href}
             className="admin-nav-link"
@@ -62,7 +64,7 @@ function NavLinks({
                 {reviewCount > 99 ? "99+" : reviewCount}
               </span>
             )}
-          </Link>
+          </PendingLink>
         );
       })}
     </nav>
@@ -78,11 +80,15 @@ function AccountFooter({ email, role }: { email: string; role: string }) {
     <div className="admin-sidebar-footer">
       <span className="admin-sidebar-email">{email}</span>
       <span>{role}</span>
-      <form action="/auth/logout" method="post">
-        <button type="submit" className="admin-button" data-variant="ghost" data-size="sm">
-          Sign out
-        </button>
-      </form>
+      <NativeSubmitButton
+        action="/auth/logout"
+        className="admin-button"
+        data-variant="ghost"
+        data-size="sm"
+        pendingLabel="Signing out…"
+      >
+        Sign out
+      </NativeSubmitButton>
     </div>
   );
 }
@@ -156,9 +162,13 @@ export function AdminMobileNav({
           <Menu size={20} strokeWidth={2} aria-hidden="true" />
         </button>
 
-        <Link href="/admin" className="admin-topbar-brand" aria-label="Memo AI admin">
+        <PendingLink
+          href="/admin"
+          className="admin-topbar-brand"
+          aria-label="Memo AI admin"
+        >
           <BrandLogo compact />
-        </Link>
+        </PendingLink>
 
         <span className="admin-topbar-current">{current}</span>
 

@@ -150,17 +150,58 @@ function readOptional(formData: FormData, key: string): string | null {
 }
 
 
-/** Percentage share of code revenue, or null when they get none. */
-function readSharePercent(formData: FormData): number | null {
-  const raw = readOptional(formData, "revenue_share_percent");
+/**
+ * The pay arrangement, as the two columns that store it.
+ *
+ * The form picks an arrangement by name and submits only the amounts that
+ * arrangement uses, so a missing field means "not part of this deal" rather
+ * than "left blank". The pairs are therefore normalised together: a fee kind
+ * with no amount pays nothing and a stray amount with no kind is dead weight,
+ * and both used to be saved without complaint — the creator then read as free
+ * reach on every payout screen.
+ */
+type PayTerms = {
+  rateKind: UgcRateKind | null;
+  rateAmount: number | null;
+  sharePercent: number | null;
+};
 
-  if (!raw) {
-    return null;
+function readPayTerms(formData: FormData): PayTerms | { error: string } {
+  const rateKindRaw = readOptional(formData, "rate_kind");
+  const parsed = rateKindRaw ? rateKindSchema.safeParse(rateKindRaw) : null;
+  const rateKind =
+    parsed?.success && parsed.data !== "revenue_share"
+      ? (parsed.data as UgcRateKind)
+      : null;
+
+  const amountRaw = readOptional(formData, "rate_amount");
+  const amount = amountRaw === null ? null : Number(amountRaw);
+
+  if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
+    return { error: "The flat fee has to be a positive number." };
   }
 
-  const value = Number(raw);
+  if (rateKind && (amount === null || amount <= 0)) {
+    return { error: "Enter the flat fee for the arrangement you picked." };
+  }
 
-  return Number.isFinite(value) && value > 0 && value <= 100 ? value : null;
+  const shareRaw = readOptional(formData, "revenue_share_percent");
+  const share = shareRaw === null ? null : Number(shareRaw);
+
+  if (
+    share !== null &&
+    (!Number.isFinite(share) || share <= 0 || share > 100)
+  ) {
+    return { error: "The code bonus has to be between 1 and 100 percent." };
+  }
+
+  return {
+    rateKind,
+    // An amount without a kind cannot be charged for anything, so it is not
+    // kept: it would sit in the row looking like agreed terms.
+    rateAmount: rateKind ? amount : null,
+    sharePercent: share,
+  };
 }
 
 // ---------------------------------------------------------------- creators --
@@ -189,13 +230,10 @@ export async function createCreatorAction(
   }
 
   const contentMode = contentModeSchema.safeParse(readString(formData, "content_mode"));
-  const rateKindRaw = readOptional(formData, "rate_kind");
-  const rateKind = rateKindRaw ? rateKindSchema.safeParse(rateKindRaw) : null;
-  const rateAmountRaw = readOptional(formData, "rate_amount");
-  const rateAmount = rateAmountRaw ? Number(rateAmountRaw) : null;
+  const pay = readPayTerms(formData);
 
-  if (rateAmount !== null && (!Number.isFinite(rateAmount) || rateAmount < 0)) {
-    return fail("The rate has to be a positive number.");
+  if ("error" in pay) {
+    return fail(pay.error);
   }
 
   const slug = await uniqueSlug(slugify(name));
@@ -207,9 +245,9 @@ export async function createCreatorAction(
       contact_email: readOptional(formData, "contact_email"),
       notes: readOptional(formData, "notes"),
       promo_codes: readPromoCodes(readOptional(formData, "promo_codes")),
-      rate_amount: rateAmount,
-      rate_kind: rateKind?.success ? (rateKind.data as UgcRateKind) : null,
-      revenue_share_percent: readSharePercent(formData),
+      rate_amount: pay.rateAmount,
+      rate_kind: pay.rateKind,
+      revenue_share_percent: pay.sharePercent,
       started_at: readOptional(formData, "started_at"),
       created_by: context.user.email ?? null,
     })
@@ -288,10 +326,11 @@ export async function updateCreatorAction(
   }
 
   const status = statusSchema.safeParse(readString(formData, "status"));
-  const rateKindRaw = readOptional(formData, "rate_kind");
-  const rateKind = rateKindRaw ? rateKindSchema.safeParse(rateKindRaw) : null;
-  const rateAmountRaw = readOptional(formData, "rate_amount");
-  const rateAmount = rateAmountRaw ? Number(rateAmountRaw) : null;
+  const pay = readPayTerms(formData);
+
+  if ("error" in pay) {
+    return fail(pay.error);
+  }
 
   const { error } = await updateIn(serviceRole, "ugc_creators", {
       name,
@@ -299,10 +338,9 @@ export async function updateCreatorAction(
       contact_email: readOptional(formData, "contact_email"),
       notes: readOptional(formData, "notes"),
       promo_codes: readPromoCodes(readOptional(formData, "promo_codes")),
-      rate_amount:
-        rateAmount !== null && Number.isFinite(rateAmount) ? rateAmount : null,
-      rate_kind: rateKind?.success ? (rateKind.data as UgcRateKind) : null,
-      revenue_share_percent: readSharePercent(formData),
+      rate_amount: pay.rateAmount,
+      rate_kind: pay.rateKind,
+      revenue_share_percent: pay.sharePercent,
       started_at: readOptional(formData, "started_at"),
     })
     .eq("id", id);

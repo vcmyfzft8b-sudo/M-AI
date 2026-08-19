@@ -1,7 +1,6 @@
-import Link from "next/link";
-
 import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { AreaChart } from "@/components/admin/chart";
+import { PendingLink } from "@/components/admin/pending-link";
 import {
   Alert,
   Avatar,
@@ -122,9 +121,9 @@ export default async function AdminOverviewPage({
       {needsSetup && (
         <Alert tone="info">
           No creators yet.{" "}
-          <Link className="admin-link" href="/admin/creators">
+          <PendingLink className="admin-link" href="/admin/creators">
             Add your creators
-          </Link>{" "}
+          </PendingLink>{" "}
           to start tracking the campaign.
         </Alert>
       )}
@@ -133,9 +132,9 @@ export default async function AdminOverviewPage({
         <Alert tone="info">
           {reviewCount} video{reviewCount === 1 ? "" : "s"} had an unclear Memo AI
           signal and are not being counted.{" "}
-          <Link className="admin-link" href="/admin/creators">
+          <PendingLink className="admin-link" href="/admin/creators">
             Review them
-          </Link>
+          </PendingLink>
           .
         </Alert>
       )}
@@ -189,9 +188,9 @@ export default async function AdminOverviewPage({
         title="Campaign views per day"
         hint="Views gained each day across every creator's Memo AI posts."
         actions={
-          <Link className="admin-button" data-size="sm" href="/admin/creators">
+          <PendingLink className="admin-button" data-size="sm" href="/admin/creators">
             Creator detail
-          </Link>
+          </PendingLink>
         }
       >
         {noViewData ? (
@@ -227,7 +226,7 @@ export default async function AdminOverviewPage({
             <div className="admin-list">
               {topCreators.map(({ creator, entry }) => (
                 <div className="admin-list-row" key={creator.id}>
-                  <Link
+                  <PendingLink
                     href={`/admin/creators/${creator.id}`}
                     className="admin-creator-cell"
                     style={{ textDecoration: "none", color: "inherit", flex: 1 }}
@@ -245,7 +244,7 @@ export default async function AdminOverviewPage({
                         engagement
                       </span>
                     </span>
-                  </Link>
+                  </PendingLink>
                   <span className="admin-list-value">
                     {formatCount(entry?.viewsGained ?? 0)}
                   </span>

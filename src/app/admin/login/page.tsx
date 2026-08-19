@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { NativeSubmitButton } from "@/components/admin/native-submit";
 import { BrandLogo } from "@/components/brand-logo";
 import { LandingAuthOptions } from "@/components/landing-auth-options";
 import { getAdminContext } from "@/lib/admin/auth";
@@ -66,11 +67,14 @@ export default async function AdminLoginPage() {
 
         {result.reason === "not_allowlisted" ? (
           // `/auth/logout` only accepts POST, so this has to be a form.
-          <form action="/auth/logout" method="post" className="landing-auth-legal">
-            <button type="submit" className="landing-auth-signout">
-              Odjavi se in uporabi drug račun
-            </button>
-          </form>
+          <NativeSubmitButton
+            action="/auth/logout"
+            formClassName="landing-auth-legal"
+            className="landing-auth-signout"
+            pendingLabel="Odjavljam…"
+          >
+            Odjavi se in uporabi drug račun
+          </NativeSubmitButton>
         ) : (
           <p className="landing-auth-legal">
             Dostop imajo samo e-naslovi na seznamu skrbnikov.

@@ -1,4 +1,4 @@
-import { AutoRefresh, RefreshedLabel } from "@/components/admin/auto-refresh";
+import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { AreaChart } from "@/components/admin/chart";
 import {
   Badge,

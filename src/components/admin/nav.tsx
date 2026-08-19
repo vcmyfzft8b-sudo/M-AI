@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { BrandLogo } from "@/components/brand-logo";
 
@@ -106,13 +106,16 @@ export function AdminMobileNav({
   email: string;
   role: string;
 }) {
-  const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  // Close on navigation, so returning to a page does not reveal a stale drawer.
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
+  // The drawer remembers which page it was opened on, and is open only while
+  // that is still the current page. Navigating therefore closes it on its own —
+  // including via browser back — without an effect that sets state on every
+  // route change and triggers a cascading render.
+  const [openedOn, setOpenedOn] = useState<string | null>(null);
+  const open = openedOn === pathname;
+
+  const close = useCallback(() => setOpenedOn(null), []);
 
   // A drawer over the page must not leave the page scrolling behind it.
   useEffect(() => {
@@ -125,7 +128,7 @@ export function AdminMobileNav({
 
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setOpen(false);
+        close();
       }
     };
 
@@ -135,7 +138,7 @@ export function AdminMobileNav({
       document.body.style.overflow = previous;
       window.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, close]);
 
   const current =
     ADMIN_LINKS.find((link) => isActive(link.href, pathname))?.label ?? "Admin";
@@ -148,7 +151,7 @@ export function AdminMobileNav({
           className="admin-topbar-button"
           aria-label="Open menu"
           aria-expanded={open}
-          onClick={() => setOpen(true)}
+          onClick={() => setOpenedOn(pathname)}
         >
           <Menu size={20} strokeWidth={2} aria-hidden="true" />
         </button>
@@ -168,8 +171,14 @@ export function AdminMobileNav({
 
       {open && (
         <div className="admin-drawer" role="dialog" aria-modal="true" aria-label="Admin menu">
-          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */}
-          <div className="admin-drawer-scrim" onClick={() => setOpen(false)} />
+          {/* A button rather than a div, so tapping outside is reachable by
+              keyboard and announced as a control. */}
+          <button
+            type="button"
+            className="admin-drawer-scrim"
+            aria-label="Close menu"
+            onClick={close}
+          />
           <div className="admin-drawer-panel">
             <div className="admin-drawer-head">
               <BrandLogo compact />
@@ -177,13 +186,13 @@ export function AdminMobileNav({
                 type="button"
                 className="admin-topbar-button"
                 aria-label="Close menu"
-                onClick={() => setOpen(false)}
+                onClick={close}
               >
                 <X size={20} strokeWidth={2} aria-hidden="true" />
               </button>
             </div>
 
-            <NavLinks reviewCount={reviewCount} onNavigate={() => setOpen(false)} />
+            <NavLinks reviewCount={reviewCount} onNavigate={close} />
 
             <AccountFooter email={email} role={role} />
           </div>

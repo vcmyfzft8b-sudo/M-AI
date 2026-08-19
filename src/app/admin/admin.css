@@ -1060,7 +1060,11 @@
 .admin-drawer-scrim {
   position: absolute;
   inset: 0;
+  width: 100%;
+  border: none;
+  padding: 0;
   background: rgba(0, 0, 0, 0.55);
+  cursor: pointer;
 }
 
 .admin-drawer-panel {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { AreaChart } from "@/components/admin/chart";
 import {
   Alert,
@@ -114,6 +115,9 @@ export default async function AdminOverviewPage({
         </div>
         <RangeTabs active={preset} basePath="/admin" />
       </header>
+
+      {/* The overview carries the live online count, so it polls faster too. */}
+      <AutoRefresh live />
 
       {needsSetup && (
         <Alert tone="info">

@@ -22,14 +22,21 @@ import {
   StatCard,
 } from "@/components/admin/ui";
 import { VideoReviewList } from "@/components/admin/video-review";
+import {
+  computeViewValue,
+  estimateRevenue,
+  VALUE_BASELINE_DAYS,
+} from "@/lib/admin/campaign-value";
 import { normalizeRangePreset, resolveRange } from "@/lib/admin/ranges";
 import {
   creatorRevenue,
   formatMoney,
+  getRevenueBetween,
   loadSalesData,
   promoCodeStats,
 } from "@/lib/admin/sales";
 import {
+  getBaselineCampaignViews,
   getCreator,
   getCreatorMetrics,
   getDailyDeltas,
@@ -65,15 +72,32 @@ export default async function CreatorDetailPage({
   const [metrics, deltas, videos] = await Promise.all([
     getCreatorMetrics([creator], range),
     getDailyDeltas(range, { creatorId: id, onlyMemo: true }),
-    listVideos({ creatorId: id, limit: 100 }),
+    // Scoped to the selected range: listing every post while the tiles above
+    // were windowed made the two disagree and looked like a bug.
+    listVideos({ creatorId: id, limit: 200, range }),
   ]);
 
   const entry = metrics.get(creator.id);
   const series = toDailySeries(deltas, range);
 
-  const revenue = await loadSalesData({ historyDays: 400 })
-    .then((data) => creatorRevenue([creator], promoCodeStats(data, range)).get(creator.id))
+  const codes = await loadSalesData({ historyDays: 400 })
+    .then((data) =>
+      creatorRevenue([creator], promoCodeStats(data, range), data.codeRedemptions).get(
+        creator.id,
+      ),
+    )
     .catch(() => null);
+
+  const baseline = await getBaselineCampaignViews(VALUE_BASELINE_DAYS);
+  const baselineRevenue = await getRevenueBetween(baseline.from, baseline.to).catch(
+    () => 0,
+  );
+  const viewValue = computeViewValue({
+    revenue: baselineRevenue,
+    views: baseline.views,
+    days: VALUE_BASELINE_DAYS,
+  });
+  const estimated = estimateRevenue(entry?.viewsGained ?? 0, viewValue);
 
   const memoVideos = videos.filter((video) => video.classification === "memo");
   const otherVideos = videos.filter((video) => video.classification !== "memo");
@@ -118,13 +142,24 @@ export default async function CreatorDetailPage({
           )} comments`}
         />
         <StatCard
-          label="Revenue attributed"
-          value={revenue ? formatMoney(revenue.revenue) : "n/a"}
+          label="Est. revenue"
+          value={estimated === null ? "—" : formatMoney(estimated)}
           meta={
-            revenue
-              ? `${revenue.payments} payment${revenue.payments === 1 ? "" : "s"} via ${
-                  creator.promo_codes.join(", ") || "no code"
-                }`
+            viewValue.revenuePerMille === null
+              ? "Not enough campaign data yet"
+              : `Their views at ${formatMoney(
+                  Math.round(viewValue.revenuePerMille),
+                )} per 1K campaign views`
+          }
+        />
+        <StatCard
+          label="Codes used"
+          value={codes ? formatExact(codes.redemptions) : "—"}
+          meta={
+            codes
+              ? `${codes.customers} paying customer${
+                  codes.customers === 1 ? "" : "s"
+                } this period via ${creator.promo_codes.join(", ") || "no code"}`
               : "Stripe unavailable"
           }
         />

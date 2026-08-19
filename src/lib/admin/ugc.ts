@@ -434,3 +434,26 @@ export async function setVideoClassification(options: {
 export function todayKey() {
   return todayInReportZone();
 }
+
+/**
+ * Campaign views over a rolling baseline window, for valuing a view.
+ *
+ * Deliberately independent of the range the admin is looking at: the rate
+ * should not lurch when someone switches to "today", and a longer window is a
+ * steadier divisor.
+ */
+export async function getBaselineCampaignViews(days: number): Promise<{
+  views: number;
+  from: string;
+  to: string;
+}> {
+  const to = todayInReportZone();
+  const from = addDays(to, -(days - 1));
+  const rows = await getDailyDeltas({ from, to }, { onlyMemo: true });
+
+  return {
+    views: rows.reduce((sum, row) => sum + Number(row.views ?? 0), 0),
+    from,
+    to,
+  };
+}

@@ -3,6 +3,7 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 
 import { addDays, dayStartIso, eachDay, REPORT_TIME_ZONE } from "@/lib/admin/ranges";
+import { DASHBOARD_REFRESH_SECONDS } from "@/lib/admin/refresh";
 
 /**
  * Historical traffic from Vercel Web Analytics.
@@ -21,7 +22,7 @@ import { addDays, dayStartIso, eachDay, REPORT_TIME_ZONE } from "@/lib/admin/ran
 const BASE_URL = "https://vercel.com/api/web-analytics/v2";
 
 /** Cached because the dashboard hits it on several panels of the same page. */
-const CACHE_SECONDS = 300;
+const CACHE_SECONDS = DASHBOARD_REFRESH_SECONDS;
 
 export type VercelTrafficDay = {
   day: string;

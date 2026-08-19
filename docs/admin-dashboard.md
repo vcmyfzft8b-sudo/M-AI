@@ -43,7 +43,25 @@ written server-side with the service role after the allowlist check.
 | `/admin/settings` | Admin allowlist, Memo AI detection rules, collection status |
 
 Every page has a Today / 7 days / 30 days / This month / All time switch, and
-each figure is compared against the equally long window before it.
+each figure is compared against the equally long window before it. Everything on
+a page shares that window — including the post lists on a creator's page, so the
+tiles and the posts behind them can never disagree.
+
+### Staying current
+
+A dashboard left open refreshes itself, on a cadence set per source in
+`src/lib/admin/refresh.ts`:
+
+| Source | Cadence | Why |
+| --- | --- | --- |
+| Supabase (creators, posts, users) | every page load | Our own database, and cheap |
+| Stripe and Vercel | 15 minutes | Paginated third-party calls taking seconds; revenue does not move minute to minute |
+| Online now | 60 seconds | Worthless if it is stale |
+| TikTok posts | daily cron | Billed per post scraped, so a page view must never trigger one |
+
+Refreshing pauses while the tab is hidden and catches up on return, so a
+dashboard left open in a background tab does not spend Stripe and Vercel calls
+all day for nobody to read.
 
 ## Adding a creator
 
@@ -236,13 +254,34 @@ mirrors what the webhook has seen.
 - **Trial conversion rate** is measured over trials that have already *ended*. A
   trial still running has not had its chance to convert and would drag the rate
   down if counted.
-- **Projected revenue today** is `trials ending today × conversion rate ×
-  average converted value`. The Sales page also charts this forward over the
-  next 14 days, one bar per day, from the trials due to end on each. Every input
-  is recomputed from Stripe on load, so the forecast moves as trials start and
-  end and as the measured conversion rate changes.
-- **Revenue by discount code** reads the promotion code off each paid invoice's
-  discount, then rolls codes up to the creator that owns them.
+- **Projected revenue** values every trial due to end at **its own subscription
+  price times the conversion rate measured for its own plan**, then sums them.
+  Plans differ on both counts — in the live data yearly converts at 27.4% and
+  monthly at 41.6%, at €130 and €20 — so a single blended "trials × rate ×
+  average price" produced a figure matching no actual customer and moving with
+  the plan mix rather than the money. A plan with fewer than 20 finished trials
+  falls back to the overall rate rather than trusting a thin sample. The Sales
+  page charts this forward for 14 days and shows the per-plan breakdown behind
+  it.
+- **Codes used** counts redemptions of each creator's promotion codes. It
+  measures *tracked* signups and is deliberately **not** used as their revenue:
+  most people who see a video and subscribe never type the code, so code
+  revenue is a floor, not a measure.
+
+### What a view is worth
+
+Creator revenue is derived from views instead. Campaign revenue over a rolling
+30-day baseline, divided by campaign views over the same days, gives a revenue
+per thousand views; a creator's share is their own views at that rate.
+
+At the time of writing that is **€5.63 per 1,000 views** — €1,665 from 295,556
+views. It is the same figure behind "10,000 views is worth about €56" on the
+Sales page, and it sharpens on its own as the window fills with more days.
+
+The rate is withheld entirely until there is both revenue and a meaningful
+number of views behind it (`MIN_VIEWS_FOR_RATE`), because a handful of views
+against a month of revenue produces an absurd per-view figure that would then be
+multiplied across every creator.
 
 If Stripe is unreachable the rest of the dashboard still renders; only the
 revenue panels show as unavailable.

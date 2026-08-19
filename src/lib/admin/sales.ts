@@ -4,6 +4,7 @@ import { revalidateTag, unstable_cache } from "next/cache";
 import type Stripe from "stripe";
 
 import { addDays, parseDay, todayInReportZone } from "@/lib/admin/ranges";
+import { DASHBOARD_REFRESH_SECONDS } from "@/lib/admin/refresh";
 import type {
   PaymentSnapshot,
   SalesData,
@@ -199,6 +200,7 @@ async function loadPayments(stripe: Stripe, sinceUnix: number) {
 
 async function loadPromotionCodes(stripe: Stripe) {
   const codes = new Map<string, string>();
+  const redemptions = new Map<string, number>();
   let startingAfter: string | undefined;
 
   for (let page = 0; page < 10; page += 1) {
@@ -209,6 +211,10 @@ async function loadPromotionCodes(stripe: Stripe) {
 
     for (const code of result.data) {
       codes.set(code.id, code.code);
+      redemptions.set(
+        code.code.toUpperCase(),
+        (redemptions.get(code.code.toUpperCase()) ?? 0) + (code.times_redeemed ?? 0),
+      );
     }
 
     if (!result.has_more) {
@@ -222,7 +228,7 @@ async function loadPromotionCodes(stripe: Stripe) {
     }
   }
 
-  return codes;
+  return { codes, redemptions };
 }
 
 /**
@@ -231,10 +237,10 @@ async function loadPromotionCodes(stripe: Stripe) {
  * Fetching every subscription, invoice and promotion code takes several seconds
  * of serial pagination, and each dashboard page needs the same data. Without
  * this, opening the overview meant a fresh full scan every time. Revenue does
- * not move minute to minute, so a short cache costs nothing in accuracy and
- * turns a 15-second page load into an instant one.
+ * not move minute to minute, so caching on the dashboard's refresh beat costs
+ * nothing in accuracy and turns a 15-second page load into an instant one.
  */
-const SALES_CACHE_SECONDS = 300;
+const SALES_CACHE_SECONDS = DASHBOARD_REFRESH_SECONDS;
 
 async function fetchSalesData(historyDays: number): Promise<SalesData> {
   const stripe = getStripeClient();
@@ -253,7 +259,8 @@ async function fetchSalesData(historyDays: number): Promise<SalesData> {
     payments: paymentResult.payments,
     // A Map does not survive the cache's serialisation, so it is stored as
     // entries and rebuilt on the way out.
-    promotionCodes: Array.from(promotionCodes.entries()) as never,
+    promotionCodes: Array.from(promotionCodes.codes.entries()) as never,
+    codeRedemptions: Array.from(promotionCodes.redemptions.entries()) as never,
     truncated: subscriptionResult.truncated || paymentResult.truncated,
   };
 }
@@ -280,7 +287,25 @@ export async function loadSalesData(options?: {
     promotionCodes: new Map(
       data.promotionCodes as unknown as Array<[string, string]>,
     ),
+    codeRedemptions: new Map(
+      data.codeRedemptions as unknown as Array<[string, number]>,
+    ),
   };
+}
+
+/** Paid revenue between two reporting days, in minor units. */
+export async function getRevenueBetween(
+  from: string,
+  to: string,
+): Promise<number> {
+  const data = await loadSalesData({ historyDays: 400 });
+
+  return data.payments
+    .filter((payment) => {
+      const day = todayInReportZone(new Date(payment.created * 1000));
+      return day >= from && day <= to;
+    })
+    .reduce((sum, payment) => sum + payment.amount, 0);
 }
 
 /** Drops the cached Stripe read, for a "refresh now" control. */

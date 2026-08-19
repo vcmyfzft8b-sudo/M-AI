@@ -9,16 +9,23 @@ import {
   RangeTabs,
   StatCard,
 } from "@/components/admin/ui";
+import {
+  computeViewValue,
+  estimateRevenue,
+  VALUE_BASELINE_DAYS,
+  viewsForRevenue,
+} from "@/lib/admin/campaign-value";
 import { normalizeRangePreset, resolveRange } from "@/lib/admin/ranges";
 import {
   formatMoney,
+  getRevenueBetween,
   loadSalesData,
   promoCodeStats,
   revenueSeries,
   summarizeSales,
   trialForecast,
 } from "@/lib/admin/sales";
-import { listCreators } from "@/lib/admin/ugc";
+import { getBaselineCampaignViews, listCreators } from "@/lib/admin/ugc";
 
 type SearchParams = Promise<{ range?: string }>;
 
@@ -57,6 +64,20 @@ export default async function SalesPage({
   const codes = promoCodeStats(data, range);
   const forecast = trialForecast(data, { days: 14 });
   const creators = await listCreators({ includeArchived: true }).catch(() => []);
+
+  const baseline = await getBaselineCampaignViews(VALUE_BASELINE_DAYS).catch(() => ({
+    views: 0,
+    from: range.from,
+    to: range.to,
+  }));
+  const baselineRevenue = await getRevenueBetween(baseline.from, baseline.to).catch(
+    () => 0,
+  );
+  const viewValue = computeViewValue({
+    revenue: baselineRevenue,
+    views: baseline.views,
+    days: VALUE_BASELINE_DAYS,
+  });
 
   // Map each promo code back to the creator who owns it, so the table reads as
   // "who drove this revenue" rather than a list of bare codes.
@@ -114,12 +135,9 @@ export default async function SalesPage({
         <StatCard
           label="Projected today"
           value={formatMoney(summary.trials.projectedRevenueToday, summary.currency)}
-          meta={`${summary.trials.trialsEndingToday} × ${formatPercent(
-            summary.trials.conversionRate,
-          )} × ${formatMoney(
-            Math.round(summary.trials.averageConvertedValue),
-            summary.currency,
-          )}`}
+          meta={`${summary.trials.trialsEndingToday} trial${
+            summary.trials.trialsEndingToday === 1 ? "" : "s"
+          } ending, each at its own plan price × that plan's conversion rate`}
         />
       </div>
 
@@ -143,13 +161,51 @@ export default async function SalesPage({
       </Section>
 
       <Section
+        title="What a view is worth"
+        hint={`Campaign revenue over the last ${VALUE_BASELINE_DAYS} days divided by the campaign views over the same days. This is what the creator revenue figures are built on, and it sharpens on its own as more days accumulate.`}
+      >
+        {viewValue.revenuePerMille === null ? (
+          <EmptyState title="Not enough campaign data yet">
+            The rate needs both revenue and a meaningful number of tracked views
+            before it means anything.
+          </EmptyState>
+        ) : (
+          <div className="admin-list">
+            <div className="admin-list-row">
+              <span className="admin-list-label">Revenue per 1,000 views</span>
+              <span className="admin-list-value">
+                {formatMoney(Math.round(viewValue.revenuePerMille), summary.currency)}
+              </span>
+            </div>
+            <div className="admin-list-row">
+              <span className="admin-list-label">Measured over</span>
+              <span className="admin-list-value">
+                {formatMoney(viewValue.revenue, summary.currency)} from{" "}
+                {formatExact(viewValue.views)} views · {viewValue.days} days
+              </span>
+            </div>
+            <div className="admin-list-row">
+              <span className="admin-list-label">10,000 views is worth about</span>
+              <span className="admin-list-value">
+                {formatMoney(
+                  estimateRevenue(10_000, viewValue) ?? 0,
+                  summary.currency,
+                )}
+              </span>
+            </div>
+            <div className="admin-list-row">
+              <span className="admin-list-label">Views needed for €1,000</span>
+              <span className="admin-list-value">
+                {formatExact(viewsForRevenue(100_000, viewValue) ?? 0)}
+              </span>
+            </div>
+          </div>
+        )}
+      </Section>
+
+      <Section
         title="Projected revenue from trials"
-        hint={`Each day's figure is the trials due to end that day, multiplied by the measured conversion rate (${formatPercent(
-          forecast.conversionRate,
-        )}) and the average converted value (${formatMoney(
-          Math.round(forecast.averageValue),
-          summary.currency,
-        )}). It moves as trials start and end and as that rate changes.`}
+        hint="Every trial due to end is valued at its own subscription price multiplied by the conversion rate measured for its own plan, then summed. A yearly trial and a monthly trial are worth very different amounts and do not convert alike, so they are never averaged together."
       >
         {forecast.days.some((day) => day.trialsEnding > 0) ? (
           <>
@@ -166,22 +222,64 @@ export default async function SalesPage({
                 formatMoney(Math.round(value), summary.currency)
               }
             />
-            <p className="admin-help" style={{ marginTop: "0.75rem" }}>
-              {formatExact(
-                forecast.days.reduce((sum, day) => sum + day.trialsEnding, 0),
-              )}{" "}
-              trials end in the next 14 days, worth about{" "}
-              <strong>
-                {formatMoney(
-                  forecast.days.reduce(
-                    (sum, day) => sum + day.projectedRevenue,
-                    0,
-                  ),
-                  summary.currency,
-                )}
-              </strong>{" "}
-              at the current conversion rate.
-            </p>
+            <div className="admin-table-wrap" style={{ marginTop: "1rem" }}>
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Plan</th>
+                    <th className="admin-num">Trials ending</th>
+                    <th className="admin-num">Price</th>
+                    <th className="admin-num">Converts at</th>
+                    <th className="admin-num">Projected</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {forecast.planBreakdown.map((row) => (
+                    <tr key={row.plan}>
+                      <td>{row.plan}</td>
+                      <td className="admin-num">{formatExact(row.trials)}</td>
+                      <td className="admin-num">
+                        {formatMoney(row.unitAmount, summary.currency)}
+                      </td>
+                      <td className="admin-num">{formatPercent(row.rate)}</td>
+                      <td className="admin-num">
+                        {formatMoney(row.projected, summary.currency)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td>
+                      <strong>Next 14 days</strong>
+                    </td>
+                    <td className="admin-num">
+                      <strong>
+                        {formatExact(
+                          forecast.days.reduce(
+                            (sum, day) => sum + day.trialsEnding,
+                            0,
+                          ),
+                        )}
+                      </strong>
+                    </td>
+                    <td />
+                    <td />
+                    <td className="admin-num">
+                      <strong>
+                        {formatMoney(
+                          forecast.days.reduce(
+                            (sum, day) => sum + day.projectedRevenue,
+                            0,
+                          ),
+                          summary.currency,
+                        )}
+                      </strong>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </>
         ) : (
           <EmptyState title="No trials are due to end in the next 14 days" />
@@ -224,15 +322,18 @@ export default async function SalesPage({
                 {formatExact(summary.trials.conversionSampleSize)} finished trials
               </span>
             </div>
-            <div className="admin-list-row">
-              <span className="admin-list-label">Average converted value</span>
-              <span className="admin-list-value">
-                {formatMoney(
-                  Math.round(summary.trials.averageConvertedValue),
-                  summary.currency,
-                )}
-              </span>
-            </div>
+            {Array.from(summary.trials.ratesByPlan.byPlan.entries()).map(
+              ([plan, entry]) => (
+                <div className="admin-list-row" key={plan}>
+                  <span className="admin-list-label">
+                    {plan} conversion rate
+                  </span>
+                  <span className="admin-list-value">
+                    {formatPercent(entry.rate)} over {entry.sample} trials
+                  </span>
+                </div>
+              ),
+            )}
             <div className="admin-list-row">
               <span className="admin-list-label">Projected from this window</span>
               <span className="admin-list-value">

@@ -22,14 +22,21 @@ import {
   Section,
 } from "@/components/admin/ui";
 import { VideoReviewList } from "@/components/admin/video-review";
+import {
+  computeViewValue,
+  estimateRevenue,
+  VALUE_BASELINE_DAYS,
+} from "@/lib/admin/campaign-value";
 import { normalizeRangePreset, resolveRange } from "@/lib/admin/ranges";
 import {
   creatorRevenue,
   formatMoney,
+  getRevenueBetween,
   loadSalesData,
   promoCodeStats,
 } from "@/lib/admin/sales";
 import {
+  getBaselineCampaignViews,
   getCreatorMetrics,
   getDailyDeltas,
   getEarliestDataDay,
@@ -109,31 +116,28 @@ export default async function CreatorsPage({
     ? toDailySeries(scopedPrevious, range.previous)
     : [];
 
-  const revenueByCreator = await loadSalesData({ historyDays: 400 })
-    .then((data) => creatorRevenue(creators, promoCodeStats(data, range)))
+  // Code usage is kept as a measure of *tracked* signups, but revenue is no
+  // longer attributed that way: most people who see a video and subscribe never
+  // type the code, so code revenue is a floor rather than a measure.
+  const codeUsage = await loadSalesData({ historyDays: 400 })
+    .then((data) =>
+      creatorRevenue(creators, promoCodeStats(data, range), data.codeRedemptions),
+    )
     .catch(() => null);
 
-  const totalRevenue = revenueByCreator
-    ? Array.from(revenueByCreator.values()).reduce(
-        (sum, entry) => sum + entry.revenue,
-        0,
-      )
-    : null;
+  // What a view is worth: campaign revenue over a rolling baseline window
+  // divided by campaign views over the same window.
+  const baseline = await getBaselineCampaignViews(VALUE_BASELINE_DAYS);
+  const baselineRevenue = await getRevenueBetween(baseline.from, baseline.to).catch(
+    () => 0,
+  );
+  const viewValue = computeViewValue({
+    revenue: baselineRevenue,
+    views: baseline.views,
+    days: VALUE_BASELINE_DAYS,
+  });
 
-  // Cost per 1000 views, but only where a rate is actually recorded.
-  const costPerMille =
-    totals.viewsGained > 0
-      ? (creators.reduce((sum, creator) => {
-          const rate = Number(creator.rate_amount ?? 0);
-          if (!rate || creator.rate_kind !== "per_video") {
-            return sum;
-          }
-          return sum + rate * (metrics.get(creator.id)?.videosPosted ?? 0);
-        }, 0) *
-          100 *
-          1000) /
-        totals.viewsGained
-      : 0;
+  const totalRevenue = estimateRevenue(totals.viewsGained, viewValue);
 
   const link = (overrides: Record<string, string | undefined>) => {
     const next = new URLSearchParams();
@@ -278,9 +282,11 @@ export default async function CreatorsPage({
           },
           {
             key: "revenue",
-            value: totalRevenue === null ? "n/a" : formatMoney(totalRevenue),
+            value: totalRevenue === null ? "—" : formatMoney(totalRevenue),
             hint:
-              costPerMille > 0 ? `${formatMoney(Math.round(costPerMille))} CPM` : undefined,
+              viewValue.revenuePerMille === null
+                ? "needs more data"
+                : `${formatMoney(Math.round(viewValue.revenuePerMille))} per 1K views`,
             chartable: false,
           },
         ]}
@@ -372,7 +378,8 @@ export default async function CreatorsPage({
                   <th className="admin-num">Avg / video</th>
                   <th className="admin-num">Engagement</th>
                   <th className="admin-num">Followers</th>
-                  <th className="admin-num">Revenue</th>
+                  <th className="admin-num">Codes used</th>
+                  <th className="admin-num">Est. revenue</th>
                 </tr>
               </thead>
               <tbody>
@@ -380,7 +387,8 @@ export default async function CreatorsPage({
                   const entry = metrics.get(creator.id);
                   const views = entry?.viewsGained ?? 0;
                   const videos = entry?.videosPosted ?? 0;
-                  const revenue = revenueByCreator?.get(creator.id);
+                  const codes = codeUsage?.get(creator.id);
+                  const estimated = estimateRevenue(views, viewValue);
 
                   return (
                     <tr key={creator.id}>
@@ -456,12 +464,18 @@ export default async function CreatorsPage({
                           </>
                         )}
                       </td>
+                      <td
+                        className="admin-num"
+                        title={
+                          codes
+                            ? `${codes.redemptions} lifetime redemptions · ${codes.customers} paying customers in this period`
+                            : undefined
+                        }
+                      >
+                        {codes ? formatExact(codes.redemptions) : "—"}
+                      </td>
                       <td className="admin-num">
-                        {revenue && revenue.revenue > 0
-                          ? formatMoney(revenue.revenue)
-                          : revenueByCreator
-                            ? "—"
-                            : "n/a"}
+                        {estimated === null ? "—" : formatMoney(estimated)}
                       </td>
                     </tr>
                   );

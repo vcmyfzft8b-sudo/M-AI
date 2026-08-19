@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { AdminNav } from "@/components/admin/nav";
 import { BrandLogo } from "@/components/brand-logo";
 import { requireAdmin, touchAdminLastSeen } from "@/lib/admin/auth";
@@ -45,7 +46,10 @@ export default async function AdminDashboardLayout({
         </div>
       </aside>
 
-      <main className="admin-main">{children}</main>
+      <main className="admin-main">
+        <AutoRefresh />
+        {children}
+      </main>
     </div>
   );
 }

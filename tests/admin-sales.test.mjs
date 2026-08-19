@@ -3,7 +3,9 @@ import test from "node:test";
 
 import { resolveRange } from "../src/lib/admin/ranges.ts";
 import {
+  conversionRatesByPlan,
   creatorRevenue,
+  projectTrials,
   promoCodeStats,
   revenueSeries,
   summarizeSales,
@@ -53,6 +55,7 @@ function salesData(overrides = {}) {
     subscriptions: [],
     payments: [],
     promotionCodes: new Map(),
+    codeRedemptions: new Map(),
     truncated: false,
     ...overrides,
   };
@@ -195,7 +198,7 @@ test("projected revenue multiplies trials ending today by rate and value", () =>
 
   assert.equal(summary.trials.trialsEndingToday, 4);
   assert.equal(summary.trials.conversionRate, 0.5);
-  // 4 trials x 50% x €20.00
+  // Each trial at its own €20.00 price x the 50% rate, summed: 4 x 1000.
   assert.equal(summary.trials.projectedRevenueToday, 4000);
 });
 
@@ -388,8 +391,7 @@ test("the daily forecast is trials ending that day at the current rate", async (
 
   const forecast = trialForecast(data, { days: 5, now: NOW });
 
-  assert.equal(forecast.conversionRate, 0.5);
-  assert.equal(forecast.averageValue, 2000);
+  assert.equal(forecast.rates.overall, 0.5);
   assert.equal(forecast.days.length, 5);
   assert.equal(forecast.days[0].day, "2026-08-19");
 
@@ -440,7 +442,7 @@ test("a better conversion rate raises the forecast with no other change", async 
     { days: 3, now: NOW },
   );
 
-  assert.ok(good.conversionRate > poor.conversionRate);
+  assert.ok(good.rates.overall > poor.rates.overall);
 
   const poorDay = poor.days.find((day) => day.day === "2026-08-20");
   const goodDay = good.days.find((day) => day.day === "2026-08-20");
@@ -467,4 +469,106 @@ test("a trial that already ended is not forecast again", async () => {
     forecast.days.reduce((sum, day) => sum + day.trialsEnding, 0),
     0,
   );
+});
+
+test("a yearly and a monthly trial are valued separately, never averaged", () => {
+  // The bug this guards: projecting `trials x rate x mean price` valued a
+  // €130 yearly trial and a €20 monthly one at the same blended €75, which
+  // matches no actual customer and moves with the mix rather than the money.
+  const finished = (id, plan, amount, converted) =>
+    subscription({
+      id,
+      customerId: `cus_${id}`,
+      plan,
+      unitAmount: amount,
+      status: converted ? "active" : "canceled",
+      trialEnd: at("2026-08-13T10:00:00Z"),
+    });
+
+  // 30 finished monthly trials, 15 converted -> 50%.
+  const monthlyFinished = Array.from({ length: 30 }, (_, index) =>
+    finished(`m${index}`, "monthly", 2000, index < 15),
+  );
+  // 20 finished yearly trials, 5 converted -> 25%.
+  const yearlyFinished = Array.from({ length: 20 }, (_, index) =>
+    finished(`y${index}`, "yearly", 13000, index < 5),
+  );
+
+  const payments = [...monthlyFinished, ...yearlyFinished]
+    .filter((s) => s.status === "active")
+    .map((s, index) =>
+      payment({ id: `p${index}`, customerId: s.customerId, amount: s.unitAmount }),
+    );
+
+  const upcoming = [
+    subscription({
+      id: "up-m",
+      customerId: "cus_up_m",
+      plan: "monthly",
+      unitAmount: 2000,
+      status: "trialing",
+      trialEnd: at("2026-08-19T16:00:00Z"),
+    }),
+    subscription({
+      id: "up-y",
+      customerId: "cus_up_y",
+      plan: "yearly",
+      unitAmount: 13000,
+      status: "trialing",
+      trialEnd: at("2026-08-19T16:00:00Z"),
+    }),
+  ];
+
+  const data = salesData({
+    subscriptions: [...monthlyFinished, ...yearlyFinished, ...upcoming],
+    payments,
+  });
+
+  const rates = conversionRatesByPlan(data);
+  assert.equal(rates.byPlan.get("monthly").rate, 0.5);
+  assert.equal(rates.byPlan.get("yearly").rate, 0.25);
+
+  // €20.00 x 50% + €130.00 x 25% = €10.00 + €32.50
+  assert.equal(projectTrials(upcoming, rates), 1000 + 3250);
+
+  const summary = summarizeSales(data, RANGE);
+  assert.equal(summary.trials.projectedRevenueToday, 4250);
+});
+
+test("a plan with too little history falls back to the overall rate", () => {
+  const finished = (id, converted) =>
+    subscription({
+      id,
+      customerId: `cus_${id}`,
+      plan: "monthly",
+      unitAmount: 2000,
+      status: converted ? "active" : "canceled",
+      trialEnd: at("2026-08-13T10:00:00Z"),
+    });
+
+  const monthly = Array.from({ length: 30 }, (_, index) =>
+    finished(`m${index}`, index < 15),
+  );
+
+  // One weekly trial upcoming, with no weekly history at all to learn from.
+  const weekly = subscription({
+    id: "w",
+    customerId: "cus_w",
+    plan: "weekly",
+    unitAmount: 1000,
+    status: "trialing",
+    trialEnd: at("2026-08-19T16:00:00Z"),
+  });
+
+  const data = salesData({
+    subscriptions: [...monthly, weekly],
+    payments: monthly
+      .filter((s) => s.status === "active")
+      .map((s, index) => payment({ id: `p${index}`, customerId: s.customerId })),
+  });
+
+  const rates = conversionRatesByPlan(data);
+  assert.equal(rates.byPlan.has("weekly"), false, "too small a sample to trust");
+  // Falls back to the overall 50%: €10.00 x 50%.
+  assert.equal(projectTrials([weekly], rates), 500);
 });

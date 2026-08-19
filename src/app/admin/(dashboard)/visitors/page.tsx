@@ -1,3 +1,4 @@
+import { AutoRefresh, RefreshedLabel } from "@/components/admin/auto-refresh";
 import { AreaChart } from "@/components/admin/chart";
 import {
   Badge,
@@ -95,6 +96,9 @@ export default async function VisitorsPage({
         </div>
         <RangeTabs active={preset} basePath="/admin/visitors" />
       </header>
+
+      {/* Presence is only useful if it is current, so this page polls faster. */}
+      <AutoRefresh live />
 
       <div className="admin-grid">
         <StatCard

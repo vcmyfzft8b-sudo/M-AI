@@ -56,6 +56,8 @@ export type SalesData = {
   subscriptions: SubscriptionSnapshot[];
   payments: PaymentSnapshot[];
   promotionCodes: Map<string, string>;
+  /** Lifetime redemption count per code, keyed by the uppercased code. */
+  codeRedemptions: Map<string, number>;
   /** True when a page cap was hit and the figures are therefore partial. */
   truncated: boolean;
 };
@@ -65,6 +67,94 @@ const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
   "trialing",
   "past_due",
 ]);
+
+export type PlanConversionRates = {
+  /** Rate per plan id, only where the sample was large enough to trust. */
+  byPlan: Map<string, { rate: number; sample: number }>;
+  /** Fallback for plans with too little history of their own. */
+  overall: number;
+  overallSample: number;
+};
+
+/** Below this many finished trials, a plan's own rate is too noisy to use. */
+const MIN_PLAN_SAMPLE = 20;
+
+/**
+ * Conversion rate per plan.
+ *
+ * A yearly trial and a monthly trial do not convert at the same rate, and they
+ * are worth very different amounts, so blending them into one average and one
+ * mean price gives a number that matches no actual customer. Plans with too
+ * little history of their own fall back to the overall rate.
+ */
+export function conversionRatesByPlan(data: SalesData): PlanConversionRates {
+  const nowUnix = Math.floor(Date.now() / 1000);
+
+  const payingCustomerIds = new Set(
+    data.payments
+      .filter((payment) => payment.customerId)
+      .map((payment) => payment.customerId as string),
+  );
+
+  const finished = data.subscriptions.filter(
+    (subscription) =>
+      subscription.trialEnd !== null && subscription.trialEnd <= nowUnix,
+  );
+
+  const tally = new Map<string, { finished: number; converted: number }>();
+
+  for (const subscription of finished) {
+    const plan = subscription.plan ?? "unknown";
+    const entry = tally.get(plan) ?? { finished: 0, converted: 0 };
+    entry.finished += 1;
+
+    if (subscription.customerId && payingCustomerIds.has(subscription.customerId)) {
+      entry.converted += 1;
+    }
+
+    tally.set(plan, entry);
+  }
+
+  const totalConverted = Array.from(tally.values()).reduce(
+    (sum, entry) => sum + entry.converted,
+    0,
+  );
+  const overall = finished.length > 0 ? totalConverted / finished.length : 0;
+
+  const byPlan = new Map<string, { rate: number; sample: number }>();
+
+  for (const [plan, entry] of tally) {
+    if (entry.finished >= MIN_PLAN_SAMPLE) {
+      byPlan.set(plan, { rate: entry.converted / entry.finished, sample: entry.finished });
+    }
+  }
+
+  return { byPlan, overall, overallSample: finished.length };
+}
+
+export function rateFor(plan: string | null, rates: PlanConversionRates): number {
+  return rates.byPlan.get(plan ?? "unknown")?.rate ?? rates.overall;
+}
+
+/**
+ * Expected revenue from a set of trials, in minor units.
+ *
+ * Each trial is valued at its own subscription price times the conversion rate
+ * for its own plan, and the results are summed — rather than counting the
+ * trials and multiplying by one blended average price.
+ */
+export function projectTrials(
+  trials: SubscriptionSnapshot[],
+  rates: PlanConversionRates,
+): number {
+  return Math.round(
+    trials.reduce(
+      (sum, subscription) =>
+        sum + subscription.unitAmount * rateFor(subscription.plan, rates),
+      0,
+    ),
+  );
+}
 
 export type TrialProjection = {
   /** Trials that have not yet ended. */
@@ -79,6 +169,8 @@ export type TrialProjection = {
   conversionSampleSize: number;
   /** Mean minor-unit value of a converting subscription. */
   averageConvertedValue: number;
+  /** Conversion rate per plan, and the sample each was measured over. */
+  ratesByPlan: PlanConversionRates;
   /** trialsEndingToday x conversionRate x averageConvertedValue, minor units. */
   projectedRevenueToday: number;
   /** Same projection across every trial ending in the window. */
@@ -172,13 +264,15 @@ export function summarizeSales(data: SalesData, range: DateRange): SalesSummary 
       .map((payment) => payment.customerId as string),
   );
 
-  const convertedTrials = finishedTrials.filter(
-    (subscription) =>
-      subscription.customerId && payingCustomerIds.has(subscription.customerId),
-  );
+  const converted = (subscription: SubscriptionSnapshot) =>
+    Boolean(subscription.customerId && payingCustomerIds.has(subscription.customerId));
+
+  const convertedTrials = finishedTrials.filter(converted);
 
   const conversionRate =
     finishedTrials.length > 0 ? convertedTrials.length / finishedTrials.length : 0;
+
+  const rates = conversionRatesByPlan(data);
 
   const averageConvertedValue =
     convertedTrials.length > 0
@@ -195,13 +289,13 @@ export function summarizeSales(data: SalesData, range: DateRange): SalesSummary 
       subscription.trialEnd > nowUnix,
   );
 
-  const trialsEndingToday = activeTrials.filter(
+  const endingToday = activeTrials.filter(
     (subscription) => unixDay(subscription.trialEnd as number) === today,
-  ).length;
+  );
 
-  const trialsEndingInRange = activeTrials.filter((subscription) =>
+  const endingInRange = activeTrials.filter((subscription) =>
     inRange(subscription.trialEnd),
-  ).length;
+  );
 
   return {
     revenue,
@@ -219,17 +313,14 @@ export function summarizeSales(data: SalesData, range: DateRange): SalesSummary 
     truncated: data.truncated,
     trials: {
       activeTrials: activeTrials.length,
-      trialsEndingInRange,
-      trialsEndingToday,
+      trialsEndingInRange: endingInRange.length,
+      trialsEndingToday: endingToday.length,
       conversionRate,
       conversionSampleSize: finishedTrials.length,
       averageConvertedValue,
-      projectedRevenueToday: Math.round(
-        trialsEndingToday * conversionRate * averageConvertedValue,
-      ),
-      projectedRevenueInRange: Math.round(
-        trialsEndingInRange * conversionRate * averageConvertedValue,
-      ),
+      ratesByPlan: rates,
+      projectedRevenueToday: projectTrials(endingToday, rates),
+      projectedRevenueInRange: projectTrials(endingInRange, rates),
       currency,
     },
   };
@@ -290,45 +381,32 @@ export type ForecastDay = {
 export function trialForecast(
   data: SalesData,
   options: { days?: number; now?: Date } = {},
-): { days: ForecastDay[]; conversionRate: number; averageValue: number } {
+): {
+  days: ForecastDay[];
+  rates: PlanConversionRates;
+  /** Plans represented in the upcoming trials, with what each is worth. */
+  planBreakdown: Array<{
+    plan: string;
+    trials: number;
+    unitAmount: number;
+    rate: number;
+    projected: number;
+  }>;
+} {
   const horizon = options.days ?? 14;
   const now = options.now ?? new Date();
   const nowUnix = Math.floor(now.getTime() / 1000);
   const today = todayInReportZone(now);
 
-  const finishedTrials = data.subscriptions.filter(
-    (subscription) =>
-      subscription.trialEnd !== null && subscription.trialEnd <= nowUnix,
-  );
+  const rates = conversionRatesByPlan(data);
 
-  const payingCustomerIds = new Set(
-    data.payments
-      .filter((payment) => payment.customerId)
-      .map((payment) => payment.customerId as string),
-  );
-
-  const convertedTrials = finishedTrials.filter(
-    (subscription) =>
-      subscription.customerId && payingCustomerIds.has(subscription.customerId),
-  );
-
-  const conversionRate =
-    finishedTrials.length > 0 ? convertedTrials.length / finishedTrials.length : 0;
-
-  const averageValue =
-    convertedTrials.length > 0
-      ? convertedTrials.reduce(
-          (sum, subscription) => sum + subscription.unitAmount,
-          0,
-        ) / convertedTrials.length
-      : 0;
-
-  const byDay = new Map<string, ForecastDay>();
+  const byDay = new Map<string, { day: string; trials: SubscriptionSnapshot[] }>();
 
   for (let offset = 0; offset < horizon; offset += 1) {
-    const day = addDays(today, offset);
-    byDay.set(day, { day, trialsEnding: 0, projectedRevenue: 0 });
+    byDay.set(addDays(today, offset), { day: addDays(today, offset), trials: [] });
   }
+
+  const upcoming: SubscriptionSnapshot[] = [];
 
   for (const subscription of data.subscriptions) {
     if (
@@ -344,17 +422,43 @@ export function trialForecast(
     );
 
     if (entry) {
-      entry.trialsEnding += 1;
+      entry.trials.push(subscription);
+      upcoming.push(subscription);
     }
   }
 
-  for (const entry of byDay.values()) {
-    entry.projectedRevenue = Math.round(
-      entry.trialsEnding * conversionRate * averageValue,
-    );
+  const planTally = new Map<
+    string,
+    { plan: string; trials: number; total: number }
+  >();
+
+  for (const subscription of upcoming) {
+    const plan = subscription.plan ?? "unknown";
+    const entry = planTally.get(plan) ?? { plan, trials: 0, total: 0 };
+    entry.trials += 1;
+    entry.total += subscription.unitAmount;
+    planTally.set(plan, entry);
   }
 
-  return { days: Array.from(byDay.values()), conversionRate, averageValue };
+  return {
+    days: Array.from(byDay.values()).map((entry) => ({
+      day: entry.day,
+      trialsEnding: entry.trials.length,
+      projectedRevenue: projectTrials(entry.trials, rates),
+    })),
+    rates,
+    planBreakdown: Array.from(planTally.values())
+      .map((entry) => ({
+        plan: entry.plan,
+        trials: entry.trials,
+        // Mean price of the trials on this plan, which is exact when a plan has
+        // one price and still meaningful when it has several.
+        unitAmount: Math.round(entry.total / entry.trials),
+        rate: rateFor(entry.plan, rates),
+        projected: Math.round(entry.total * rateFor(entry.plan, rates)),
+      }))
+      .sort((a, b) => b.projected - a.projected),
+  };
 }
 
 export type PromoCodeStats = {
@@ -445,27 +549,41 @@ export function promoCodeStats(
   return stats;
 }
 
-/** Rolls promo-code stats up to the creator that owns the codes. */
+/**
+ * Rolls promo-code usage up to the creator that owns the codes.
+ *
+ * This measures *tracked* signups, not earnings. Most people who see a video
+ * and subscribe never type the code, so `revenue` here is a floor and is
+ * deliberately not what the dashboard reports as a creator's revenue — see
+ * `campaign-value.ts` for that.
+ */
 export function creatorRevenue(
   creators: Array<{ id: string; promo_codes: string[] }>,
   stats: Map<string, PromoCodeStats>,
-): Map<string, { revenue: number; payments: number; customers: number }> {
+  redemptions?: Map<string, number>,
+): Map<
+  string,
+  { revenue: number; payments: number; customers: number; redemptions: number }
+> {
   const byCreator = new Map<
     string,
-    { revenue: number; payments: number; customers: number }
+    { revenue: number; payments: number; customers: number; redemptions: number }
   >();
 
   for (const creator of creators) {
-    const entry = { revenue: 0, payments: 0, customers: 0 };
+    const entry = { revenue: 0, payments: 0, customers: 0, redemptions: 0 };
 
     for (const code of creator.promo_codes ?? []) {
-      const codeStats = stats.get(code.toUpperCase());
+      const key = code.toUpperCase();
+      const codeStats = stats.get(key);
 
       if (codeStats) {
         entry.revenue += codeStats.revenue;
         entry.payments += codeStats.payments;
         entry.customers += codeStats.customers;
       }
+
+      entry.redemptions += redemptions?.get(key) ?? 0;
     }
 
     byCreator.set(creator.id, entry);

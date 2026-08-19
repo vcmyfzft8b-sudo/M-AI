@@ -162,7 +162,7 @@ export function Disclosure({
         )}
       </button>
 
-      {open && <div style={{ marginTop: "1rem" }}>{children}</div>}
+      {open && <div className="admin-disclosure-panel">{children}</div>}
     </div>
   );
 }

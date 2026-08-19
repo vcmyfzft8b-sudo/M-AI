@@ -82,14 +82,38 @@ The important field is **what kind of account it is**:
 creator, and a creator's own code appearing in a caption is the single strongest
 signal that the post is Memo AI content.
 
-### The brand's own account
+### Our own accounts
 
-`@memo_ai_si` is tracked alongside the creators but marked `kind = 'owned'`. Its
-views and the revenue they drive are real and belong in the totals, but it is
-not a creator's work, so it is badged in the table and can be filtered out with
-**Creators only**. It is currently the single largest channel — 104K views over
-30 days against Ema's 72K — which is exactly why it should not be silently
-averaged into "per creator" figures.
+`@memo_ai_si` and `@rubissiti` (Klara) are tracked alongside the creators but
+marked `kind = 'owned'`. Their views and the revenue they drive are real and
+belong in the totals, but they are not a creator's work and they are never paid,
+so they are badged **ours** and can be filtered out. `@memo_ai_si` is currently
+the single largest channel — 104K views over 30 days against Ema's 72K — which
+is exactly why it should not be silently averaged into "per creator" figures.
+
+## What each creator costs
+
+Three arrangements run at once, stored per creator as `rate_kind` and
+`rate_amount` and editable from their page:
+
+| Arrangement | Cost | Who |
+| --- | --- | --- |
+| `per_video` | fee × Memo AI posts | Ema, Martin & David, Mavija, Milos (€5); Lara (€22) |
+| `revenue_share` | percentage of their code's revenue | everyone else (20%) |
+| unpaid | nothing, ever | our own accounts |
+
+From that the table derives **cost**, **margin** (estimated revenue less cost),
+margin rate and return on spend. A creator who costs nothing has no return *on
+spend* to report, so that reads as "—" rather than as infinity or a misleading
+zero.
+
+**Owed this month** is always month-to-date, whatever range is selected —
+payouts happen at the end of the calendar month, and showing a seven-day figure
+in a column people pay from would be dangerous. Per-video creators accrue on
+posts; revenue-share creators accrue only when their code actually sells.
+
+**Codes used** counts paid checkouts carrying that creator's codes **inside the
+selected range**. The lifetime redemption count is in the cell's tooltip.
 
 New creators are picked up by the next sync automatically. Follower counts and
 the avatar are filled in immediately from the public TikTok profile page, which

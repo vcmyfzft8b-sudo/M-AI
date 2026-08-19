@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/ugc-sync",
-      "schedule": "0 3 * * *"
+      "schedule": "50 21 * * *"
     }
   ]
 }

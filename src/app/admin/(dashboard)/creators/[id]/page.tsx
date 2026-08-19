@@ -23,6 +23,11 @@ import {
 } from "@/components/admin/ui";
 import { VideoReviewList } from "@/components/admin/video-review";
 import {
+  computeEconomics,
+  describePayModel,
+  payModelFor,
+} from "@/lib/admin/creator-economics";
+import {
   computeViewValue,
   estimateRevenue,
   VALUE_BASELINE_DAYS,
@@ -99,6 +104,13 @@ export default async function CreatorDetailPage({
   });
   const estimated = estimateRevenue(entry?.viewsGained ?? 0, viewValue);
 
+  const economics = computeEconomics(payModelFor(creator), {
+    videos: entry?.videosPosted ?? 0,
+    views: entry?.viewsGained ?? 0,
+    codeRevenue: codes?.revenue ?? 0,
+    revenue: estimated,
+  });
+
   const memoVideos = videos.filter((video) => video.classification === "memo");
   const otherVideos = videos.filter((video) => video.classification !== "memo");
 
@@ -154,13 +166,35 @@ export default async function CreatorDetailPage({
         />
         <StatCard
           label="Codes used"
-          value={codes ? formatExact(codes.redemptions) : "—"}
+          value={codes ? formatExact(codes.payments) : "—"}
           meta={
             codes
-              ? `${codes.customers} paying customer${
-                  codes.customers === 1 ? "" : "s"
-                } this period via ${creator.promo_codes.join(", ") || "no code"}`
+              ? `Paid checkouts this period via ${
+                  creator.promo_codes.join(", ") || "no code"
+                } · ${codes.redemptions} all time`
               : "Stripe unavailable"
+          }
+        />
+        <StatCard
+          label="Cost"
+          value={
+            economics.model.kind === "unpaid" ? "—" : formatMoney(economics.cost)
+          }
+          meta={describePayModel(economics.model, (minor) => formatMoney(minor))}
+        />
+        <StatCard
+          label="Margin"
+          value={
+            economics.margin === null ? "—" : formatMoney(economics.margin)
+          }
+          meta={
+            economics.marginRate === null
+              ? "Needs a measurable campaign rate"
+              : `${formatPercent(economics.marginRate, 0)} of their estimated revenue${
+                  economics.returnOnSpend === null
+                    ? ""
+                    : ` · ${economics.returnOnSpend.toFixed(1)}× on spend`
+                }`
           }
         />
       </div>

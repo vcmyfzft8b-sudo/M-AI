@@ -22,6 +22,7 @@ import {
   isRunFinished,
   readRunDataset,
   startTikTokRun,
+  waitForRun,
 } from "@/lib/ugc/apify";
 import {
   type AiClassificationInput,
@@ -41,12 +42,16 @@ type UgcVideoInsert = Database["public"]["Tables"]["ugc_videos"]["Insert"];
 /**
  * How many recent posts to pull per creator on each run.
  *
- * Apify bills per post scraped, so this is the main cost lever: 14 accounts at
- * 30 posts costs roughly $0.60 a run. Raise it for a one-off deep backfill,
- * lower it for cheaper daily upkeep. Older posts already in the database keep
- * their history either way; they simply stop being re-read for fresh counts.
+ * Apify bills per post scraped, so this is the main cost lever. Seven is chosen
+ * deliberately: a TikTok older than about a week trickles ten or twenty views a
+ * day, which is noise against a campaign measured in hundreds of thousands.
+ * Paying to re-read it every night buys nothing.
+ *
+ * Posts already collected keep their history regardless — a lower number only
+ * means older ones stop being re-read for fresh counts. Raise it with `posts=`
+ * on the cron endpoint for a one-off deep backfill.
  */
-const DEFAULT_VIDEOS_PER_PROFILE = 20;
+const DEFAULT_VIDEOS_PER_PROFILE = 7;
 
 function videosPerProfile(): number {
   const configured = Number(process.env.UGC_SYNC_POSTS_PER_PROFILE);
@@ -258,6 +263,50 @@ export async function startSync(options: {
 
     return { started: false, reason: message, syncRunId };
   }
+}
+
+export type SyncNowResult = {
+  started: SyncStartResult;
+  /** Null when the run was still going when the time budget ran out. */
+  ingested: SyncPollResult | null;
+  timedOut: boolean;
+};
+
+/**
+ * Starts a collection and sees it through to ingestion in one call.
+ *
+ * The nightly job has to finish inside its own invocation. Starting a run and
+ * leaving the next night's call to ingest it would land each day's numbers a
+ * day late, and stamp them with the wrong date: `captured_on` is taken at
+ * ingest time, so a run collected on the 19th but ingested on the 20th would
+ * credit the 19th's views to the 20th.
+ *
+ * If the budget runs out the run is left pending rather than abandoned — the
+ * scrape is already paid for, and the next call picks it up.
+ */
+export async function runSyncNow(options: {
+  trigger: "manual" | "cron";
+  startedBy: string;
+  postsPerProfile?: number;
+  handles?: string[];
+  budgetMs: number;
+}): Promise<SyncNowResult> {
+  const startedAt = Date.now();
+  const started = await startSync(options);
+
+  if (!started.started) {
+    return { started, ingested: null, timedOut: false };
+  }
+
+  const run = await waitForRun(started.apifyRunId, {
+    budgetMs: Math.max(options.budgetMs - (Date.now() - startedAt), 0),
+  });
+
+  if (!isRunFinished(run.status)) {
+    return { started, ingested: null, timedOut: true };
+  }
+
+  return { started, ingested: await pollAndIngest(), timedOut: false };
 }
 
 /**
@@ -518,15 +567,25 @@ export async function ingestBatch(
       shares: video.shares,
       saves: video.saves,
       last_synced_at: now,
-      ...(keepManual
-        ? {}
-        : {
-            classification: classification.classification,
-            classification_source: classification.source,
-            classification_confidence: classification.confidence,
-            classification_reason: classification.reason,
-            classified_at: now,
-          }),
+      // Every row in a chunk must carry the same keys. PostgREST fills a key
+      // that is missing from one row of a bulk upsert with NULL rather than the
+      // column default, so omitting these for a manually-locked video wrote a
+      // null classification and the insert failed on the not-null constraint.
+      // The pinned decision is therefore restated rather than left out.
+      classification: keepManual
+        ? (existing?.classification ?? "unknown")
+        : classification.classification,
+      classification_source: keepManual
+        ? (existing?.classification_source ?? "manual")
+        : classification.source,
+      classification_confidence: keepManual
+        ? (existing?.classification_confidence ?? null)
+        : classification.confidence,
+      classification_reason: keepManual
+        ? (existing?.classification_reason ?? null)
+        : classification.reason,
+      classified_at: keepManual ? (existing?.classified_at ?? now) : now,
+      classification_locked: keepManual,
     });
 
     statsByPlatformId.set(video.platformVideoId, {

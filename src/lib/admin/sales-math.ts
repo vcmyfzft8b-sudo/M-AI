@@ -87,8 +87,11 @@ const MIN_PLAN_SAMPLE = 20;
  * mean price gives a number that matches no actual customer. Plans with too
  * little history of their own fall back to the overall rate.
  */
-export function conversionRatesByPlan(data: SalesData): PlanConversionRates {
-  const nowUnix = Math.floor(Date.now() / 1000);
+export function conversionRatesByPlan(
+  data: SalesData,
+  now: Date = new Date(),
+): PlanConversionRates {
+  const nowUnix = Math.floor(now.getTime() / 1000);
 
   const payingCustomerIds = new Set(
     data.payments
@@ -212,9 +215,17 @@ function unixDay(unix: number): string {
   return todayInReportZone(new Date(unix * 1000));
 }
 
-export function summarizeSales(data: SalesData, range: DateRange): SalesSummary {
-  const today = todayInReportZone();
-  const nowUnix = Math.floor(Date.now() / 1000);
+export function summarizeSales(
+  data: SalesData,
+  range: DateRange,
+  // Injectable so the arithmetic can be tested against fixed fixtures: dating a
+  // trial "today at 16:00" otherwise flips from pending to finished as the real
+  // clock passes it, and the test starts failing on its own.
+  options: { now?: Date } = {},
+): SalesSummary {
+  const now = options.now ?? new Date();
+  const today = todayInReportZone(now);
+  const nowUnix = Math.floor(now.getTime() / 1000);
 
   const inRange = (unix: number | null) => {
     if (unix === null) {
@@ -272,7 +283,7 @@ export function summarizeSales(data: SalesData, range: DateRange): SalesSummary 
   const conversionRate =
     finishedTrials.length > 0 ? convertedTrials.length / finishedTrials.length : 0;
 
-  const rates = conversionRatesByPlan(data);
+  const rates = conversionRatesByPlan(data, now);
 
   const averageConvertedValue =
     convertedTrials.length > 0
@@ -398,7 +409,7 @@ export function trialForecast(
   const nowUnix = Math.floor(now.getTime() / 1000);
   const today = todayInReportZone(now);
 
-  const rates = conversionRatesByPlan(data);
+  const rates = conversionRatesByPlan(data, now);
 
   const byDay = new Map<string, { day: string; trials: SubscriptionSnapshot[] }>();
 

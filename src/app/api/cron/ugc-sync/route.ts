@@ -6,21 +6,30 @@ import {
   getPendingSyncRun,
   pollAndIngest,
   reclassifyAll,
-  startSync,
+  runSyncNow,
 } from "@/lib/ugc/sync";
 
 /**
  * Scheduled TikTok collection.
  *
- * Each call does two things: finish any run that Apify has completed since last
- * time, then queue a fresh one if none is in flight. Running it a few times a
- * day gives the dashboard one snapshot per creator per day, which is what the
- * day-over-day view deltas are built on.
+ * Runs once a night, late enough to capture the day that is ending and early
+ * enough to still be that day locally. It collects, waits, and ingests inside
+ * the one invocation, so the day's views are stamped with the day they belong
+ * to and appear on the chart immediately.
+ *
+ * Any run left pending by an earlier call is ingested first, so a scrape that
+ * outlived its budget is never lost.
  *
  * Wired up in `vercel.json`. Vercel Cron sends `Authorization: Bearer
  * $CRON_SECRET`; `INTERNAL_JOB_SECRET` is accepted too so the job can be
  * triggered from the existing tooling.
  */
+
+/**
+ * Time allowed for collect-and-ingest, kept under the function's own limit so
+ * the handler can still return a useful answer rather than being killed.
+ */
+const SYNC_BUDGET_MS = 240_000;
 
 /**
  * Minimum gap between two collections started by this endpoint.
@@ -120,23 +129,41 @@ export async function GET(request: NextRequest) {
       ? Math.floor(postsParam)
       : undefined;
 
-  const started = pending
-    ? { started: false as const, reason: "A collection run is already in flight." }
-    : tooSoon && !force
-      ? {
-          started: false as const,
-          reason: "A collection ran recently; skipping to avoid a duplicate spend.",
-        }
-      : await startSync({
-          trigger: "cron",
-          startedBy: force ? "cron:forced" : "cron",
-          postsPerProfile,
-          handles: handles.length > 0 ? handles : undefined,
-        });
+  if (pending) {
+    return NextResponse.json({
+      ok: true,
+      ingested,
+      started: {
+        started: false,
+        reason: "A collection run is already in flight.",
+      },
+    });
+  }
+
+  if (tooSoon && !force) {
+    return NextResponse.json({
+      ok: true,
+      ingested,
+      started: {
+        started: false,
+        reason: "A collection ran recently; skipping to avoid a duplicate spend.",
+      },
+    });
+  }
+
+  const result = await runSyncNow({
+    trigger: "cron",
+    startedBy: force ? "cron:forced" : "cron",
+    postsPerProfile,
+    handles: handles.length > 0 ? handles : undefined,
+    budgetMs: SYNC_BUDGET_MS,
+  });
 
   return NextResponse.json({
     ok: true,
-    ingested,
-    started,
+    ingested: result.ingested ?? ingested,
+    started: result.started,
+    // A run that outlived the budget is picked up by the next call.
+    stillRunning: result.timedOut,
   });
 }

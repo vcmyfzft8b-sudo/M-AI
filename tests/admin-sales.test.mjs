@@ -70,7 +70,7 @@ test("revenue counts only invoices inside the window", () => {
     ],
   });
 
-  const summary = summarizeSales(data, RANGE);
+  const summary = summarizeSales(data, RANGE, { now: NOW });
 
   assert.equal(summary.revenue, 2000);
 });
@@ -83,7 +83,7 @@ test("the comparison window is the seven days before, not overlapping", () => {
     ],
   });
 
-  const summary = summarizeSales(data, RANGE);
+  const summary = summarizeSales(data, RANGE, { now: NOW });
 
   assert.equal(summary.revenue, 2000);
   assert.equal(summary.previousRevenue, 5000);
@@ -98,7 +98,7 @@ test("MRR normalises weekly and yearly plans to a monthly figure", () => {
     ],
   });
 
-  const summary = summarizeSales(data, RANGE);
+  const summary = summarizeSales(data, RANGE, { now: NOW });
 
   // 2000 + 13000/12 + 1000*52/12
   assert.equal(Math.round(summary.mrr), Math.round(2000 + 13000 / 12 + (1000 * 52) / 12));
@@ -116,7 +116,7 @@ test("a trialing subscription is live access but not yet MRR", () => {
     ],
   });
 
-  const summary = summarizeSales(data, RANGE);
+  const summary = summarizeSales(data, RANGE, { now: NOW });
 
   assert.equal(summary.activeSubscriptions, 1);
   assert.equal(summary.payingSubscriptions, 0);
@@ -155,7 +155,7 @@ test("conversion rate is measured over finished trials only", () => {
     payments: [payment({ customerId: "cus_a", amount: 2000 })],
   });
 
-  const summary = summarizeSales(data, RANGE);
+  const summary = summarizeSales(data, RANGE, { now: NOW });
 
   assert.equal(summary.trials.conversionSampleSize, 2, "only finished trials count");
   assert.equal(summary.trials.conversionRate, 0.5);
@@ -194,7 +194,7 @@ test("projected revenue multiplies trials ending today by rate and value", () =>
     payments: [payment({ customerId: "cus_x", amount: 2000 })],
   });
 
-  const summary = summarizeSales(data, RANGE);
+  const summary = summarizeSales(data, RANGE, { now: NOW });
 
   assert.equal(summary.trials.trialsEndingToday, 4);
   assert.equal(summary.trials.conversionRate, 0.5);
@@ -213,7 +213,7 @@ test("projection is zero rather than NaN when nothing has converted yet", () => 
     ],
   });
 
-  const summary = summarizeSales(data, RANGE);
+  const summary = summarizeSales(data, RANGE, { now: NOW });
 
   assert.equal(summary.trials.conversionRate, 0);
   assert.equal(summary.trials.projectedRevenueToday, 0);
@@ -344,7 +344,7 @@ test("cancellations are counted by the day they were cancelled", () => {
     ],
   });
 
-  assert.equal(summarizeSales(data, RANGE).canceledInRange, 1);
+  assert.equal(summarizeSales(data, RANGE, { now: NOW }).canceledInRange, 1);
 });
 
 test("the daily forecast is trials ending that day at the current rate", async () => {
@@ -524,14 +524,14 @@ test("a yearly and a monthly trial are valued separately, never averaged", () =>
     payments,
   });
 
-  const rates = conversionRatesByPlan(data);
+  const rates = conversionRatesByPlan(data, NOW);
   assert.equal(rates.byPlan.get("monthly").rate, 0.5);
   assert.equal(rates.byPlan.get("yearly").rate, 0.25);
 
   // €20.00 x 50% + €130.00 x 25% = €10.00 + €32.50
   assert.equal(projectTrials(upcoming, rates), 1000 + 3250);
 
-  const summary = summarizeSales(data, RANGE);
+  const summary = summarizeSales(data, RANGE, { now: NOW });
   assert.equal(summary.trials.projectedRevenueToday, 4250);
 });
 
@@ -567,7 +567,7 @@ test("a plan with too little history falls back to the overall rate", () => {
       .map((s, index) => payment({ id: `p${index}`, customerId: s.customerId })),
   });
 
-  const rates = conversionRatesByPlan(data);
+  const rates = conversionRatesByPlan(data, NOW);
   assert.equal(rates.byPlan.has("weekly"), false, "too small a sample to trust");
   // Falls back to the overall 50%: €10.00 x 50%.
   assert.equal(projectTrials([weekly], rates), 500);

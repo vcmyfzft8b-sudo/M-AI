@@ -196,6 +196,30 @@ export async function abortRun(runId: string): Promise<void> {
   );
 }
 
+/**
+ * Waits for a run to settle, polling until it does or the budget runs out.
+ *
+ * Returns the last known run either way, so a caller that runs out of time can
+ * still record the run id and pick it up later rather than losing the scrape it
+ * already paid for.
+ */
+export async function waitForRun(
+  runId: string,
+  options: { budgetMs: number; pollMs?: number },
+): Promise<ApifyRun> {
+  const pollMs = options.pollMs ?? 5_000;
+  const deadline = Date.now() + options.budgetMs;
+
+  let run = await getRun(runId);
+
+  while (!isRunFinished(run.status) && Date.now() + pollMs < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    run = await getRun(runId);
+  }
+
+  return run;
+}
+
 export function isRunFinished(status: ApifyRunStatus): boolean {
   return !["READY", "RUNNING", "ABORTING", "TIMING-OUT"].includes(status);
 }

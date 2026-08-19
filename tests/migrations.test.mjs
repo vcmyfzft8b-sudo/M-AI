@@ -401,3 +401,43 @@ test("a creator's videos and history are removed with them", options, async () =
   assert.equal(videos, 0);
   assert.equal(stats, 0);
 });
+
+test("a bulk upsert of mixed-shape rows would null a not-null column", options, async () => {
+  const { db, query } = await migratedDatabase();
+
+  const [creator] = await query(
+    `insert into public.ugc_creators (name, slug) values ('Ema','ema') returning id`,
+  );
+  const [account] = await query(
+    `insert into public.ugc_creator_accounts (creator_id, platform, handle, profile_url)
+     values ($1,'tiktok','h','https://x') returning id`,
+    [creator.id],
+  );
+
+  // The shape ingestion writes: `classification` is not nullable, so a row that
+  // omits it must still fall back to the column default rather than NULL. This
+  // is what PostgREST does *not* do for a bulk insert with differing keys,
+  // which is why the ingest builds uniformly-shaped rows.
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into public.ugc_videos
+           (account_id, creator_id, platform, platform_video_id, url, classification)
+         values ($1,$2,'tiktok','v1','https://x', null)`,
+        [account.id, creator.id],
+      ),
+    /not-null constraint|null value/,
+  );
+
+  // Omitting it entirely is fine; the default applies.
+  await query(
+    `insert into public.ugc_videos (account_id, creator_id, platform, platform_video_id, url)
+     values ($1,$2,'tiktok','v2','https://x')`,
+    [account.id, creator.id],
+  );
+
+  const [row] = await query(
+    `select classification from public.ugc_videos where platform_video_id = 'v2'`,
+  );
+  assert.equal(row.classification, "unknown");
+});

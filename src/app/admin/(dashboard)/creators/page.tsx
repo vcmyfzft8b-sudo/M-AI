@@ -27,7 +27,16 @@ import {
   estimateRevenue,
   VALUE_BASELINE_DAYS,
 } from "@/lib/admin/campaign-value";
-import { normalizeRangePreset, resolveRange } from "@/lib/admin/ranges";
+import {
+  computeEconomics,
+  describePayModel,
+  payModelFor,
+} from "@/lib/admin/creator-economics";
+import {
+  normalizeRangePreset,
+  resolveRange,
+  todayInReportZone,
+} from "@/lib/admin/ranges";
 import {
   creatorRevenue,
   formatMoney,
@@ -145,6 +154,72 @@ export default async function CreatorsPage({
 
   const totalRevenue = estimateRevenue(totals.viewsGained, viewValue);
 
+  // Payouts happen at the end of the calendar month, so what is owed is always
+  // month-to-date regardless of the range being viewed. Anything else would
+  // have someone paying out a seven-day figure by accident.
+  const today = todayInReportZone();
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const monthRange = { from: monthStart, to: today };
+
+  const [monthDeltas, monthCodeUsage] = await Promise.all([
+    getDailyDeltas(monthRange, { onlyMemo: true }),
+    loadSalesData({ historyDays: 400 })
+      .then((data) =>
+        creatorRevenue(
+          creators,
+          promoCodeStats(data, {
+            ...range,
+            from: monthRange.from,
+            to: monthRange.to,
+            previous: null,
+          }),
+          data.codeRedemptions,
+        ),
+      )
+      .catch(() => null),
+  ]);
+
+  const monthByCreator = new Map<string, { views: number; videos: number }>();
+
+  for (const row of monthDeltas) {
+    const entry = monthByCreator.get(row.creator_id) ?? { views: 0, videos: 0 };
+    entry.views += Number(row.views ?? 0);
+    entry.videos += Number(row.videos_posted ?? 0);
+    monthByCreator.set(row.creator_id, entry);
+  }
+
+  const economicsFor = (creator: (typeof creators)[number]) => {
+    const entry = metrics.get(creator.id);
+    const model = payModelFor(creator);
+
+    return computeEconomics(model, {
+      videos: entry?.videosPosted ?? 0,
+      views: entry?.viewsGained ?? 0,
+      codeRevenue: codeUsage?.get(creator.id)?.revenue ?? 0,
+      revenue: estimateRevenue(entry?.viewsGained ?? 0, viewValue),
+    });
+  };
+
+  const owedThisMonth = (creator: (typeof creators)[number]) => {
+    const month = monthByCreator.get(creator.id) ?? { views: 0, videos: 0 };
+
+    return computeEconomics(payModelFor(creator), {
+      videos: month.videos,
+      views: month.views,
+      codeRevenue: monthCodeUsage?.get(creator.id)?.revenue ?? 0,
+      revenue: null,
+    }).cost;
+  };
+
+  const totalCost = creators.reduce(
+    (sum, creator) => sum + economicsFor(creator).cost,
+    0,
+  );
+  const totalOwed = creators.reduce(
+    (sum, creator) => sum + owedThisMonth(creator),
+    0,
+  );
+
   const link = (overrides: Record<string, string | undefined>) => {
     const next = new URLSearchParams();
     next.set("range", preset);
@@ -246,10 +321,10 @@ export default async function CreatorsPage({
           },
           {
             name: "kind",
-            allLabel: "Creators and brand",
+            allLabel: "Paid creators and our own",
             options: [
-              { value: "creator", label: "Creators only" },
-              { value: "owned", label: "Brand account only" },
+              { value: "creator", label: "Paid creators only" },
+              { value: "owned", label: "Our own accounts only" },
             ],
           },
           {
@@ -304,6 +379,24 @@ export default async function CreatorsPage({
             key: "engagement",
             value: formatPercent(totals.engagementRate),
             hint: "per view",
+            chartable: false,
+          },
+          {
+            key: "cost",
+            value: formatMoney(totalCost),
+            hint: `${formatMoney(totalOwed)} owed this month`,
+            chartable: false,
+          },
+          {
+            key: "margin",
+            value:
+              totalRevenue === null
+                ? "—"
+                : formatMoney(totalRevenue - totalCost),
+            hint:
+              totalRevenue && totalRevenue > 0
+                ? `${formatPercent((totalRevenue - totalCost) / totalRevenue, 0)} margin`
+                : undefined,
             chartable: false,
           },
           {
@@ -406,8 +499,13 @@ export default async function CreatorsPage({
                   <th className="admin-num">Avg / video</th>
                   <th className="admin-num">Engagement</th>
                   <th className="admin-num">Followers</th>
-                  <th className="admin-num">Codes used</th>
+                  <th className="admin-num" title="Paid checkouts using this creator's codes, within the selected period.">
+                    Codes used
+                  </th>
                   <th className="admin-num">Est. revenue</th>
+                  <th className="admin-num">Cost</th>
+                  <th className="admin-num">Margin</th>
+                  <th className="admin-num">Owed this month</th>
                 </tr>
               </thead>
               <tbody>
@@ -417,6 +515,8 @@ export default async function CreatorsPage({
                   const videos = entry?.videosPosted ?? 0;
                   const codes = codeUsage?.get(creator.id);
                   const estimated = estimateRevenue(views, viewValue);
+                  const economics = economicsFor(creator);
+                  const owed = owedThisMonth(creator);
 
                   return (
                     <tr key={creator.id}>
@@ -435,7 +535,7 @@ export default async function CreatorsPage({
                             {creator.kind === "owned" && (
                               <>
                                 {" "}
-                                <Badge tone="blue">brand</Badge>
+                                <Badge tone="blue">ours</Badge>
                               </>
                             )}
                             {creator.status !== "active" && (
@@ -502,14 +602,55 @@ export default async function CreatorsPage({
                         className="admin-num"
                         title={
                           codes
-                            ? `${codes.redemptions} lifetime redemptions · ${codes.customers} paying customers in this period`
+                            ? `${codes.payments} paid checkout${
+                                codes.payments === 1 ? "" : "s"
+                              } used one of their codes in this period, from ${
+                                codes.customers
+                              } customer${codes.customers === 1 ? "" : "s"} · ${
+                                codes.redemptions
+                              } redemptions all time`
                             : undefined
                         }
                       >
-                        {codes ? formatExact(codes.redemptions) : "—"}
+                        {codes ? formatExact(codes.payments) : "—"}
                       </td>
                       <td className="admin-num">
                         {estimated === null ? "—" : formatMoney(estimated)}
+                      </td>
+                      <td
+                        className="admin-num"
+                        title={describePayModel(economics.model, (minor) =>
+                          formatMoney(minor),
+                        )}
+                      >
+                        {economics.model.kind === "unpaid"
+                          ? "—"
+                          : formatMoney(economics.cost)}
+                      </td>
+                      <td className="admin-num">
+                        {economics.margin === null ? (
+                          "—"
+                        ) : (
+                          <span
+                            className="admin-delta"
+                            data-direction={
+                              economics.margin > 0
+                                ? "up"
+                                : economics.margin < 0
+                                  ? "down"
+                                  : "flat"
+                            }
+                          >
+                            {formatMoney(economics.margin)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="admin-num">
+                        {economics.model.kind === "unpaid" ? (
+                          <span className="admin-help">not paid</span>
+                        ) : (
+                          <strong>{formatMoney(owed)}</strong>
+                        )}
                       </td>
                     </tr>
                   );

@@ -34,7 +34,7 @@
 - Database schema changes must be committed as ordered SQL files in `supabase/migrations`. Do not make an uncaptured schema change in the staging or production dashboard.
 - A database-changing PR must replay its migration locally before merge. Shared staging may test an unmerged migration only as a serialized, coordinated exception because it otherwise must match `main`.
 - After a migration PR is merged, `.github/workflows/supabase-migrations.yml` applies the migration files from `main` to production. Do not run a production migration from an unmerged PR or a Preview deployment.
-- Follow [docs/preview-staging.md](/Users/nacevalencic/Desktop/note_taking_app_slo/docs/preview-staging.md) for safe verification, staging synchronization, migration testing, and production release rules.
+- Follow [docs/preview-staging.md](/docs/preview-staging.md) for safe verification, staging synchronization, migration testing, and production release rules.
 
 ## Automated Production Error Triage
 
@@ -57,4 +57,4 @@
 
 ## Documentation
 
-- Follow the workflow in [docs/development-workflow.md](/Users/nacevalencic/Desktop/note_taking_app_slo/docs/development-workflow.md) for branching, GitHub pushes, Vercel previews, and merging to production.
+- Follow the workflow in [docs/development-workflow.md](/docs/development-workflow.md) for branching, GitHub pushes, Vercel previews, and merging to production.

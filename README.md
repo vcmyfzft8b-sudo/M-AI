@@ -113,7 +113,7 @@ Enable the auth providers you need in Supabase:
 - Google
 - Apple
 
-For the in-app email code flow, use an email template that includes `{{ .Token }}` so users receive a code they can type into the app. Local templates live in [supabase/templates/magic-link.html](/Users/nacevalencic/Desktop/note_taking_app_slo/supabase/templates/magic-link.html) and [supabase/templates/confirmation.html](/Users/nacevalencic/Desktop/note_taking_app_slo/supabase/templates/confirmation.html).
+For the in-app email code flow, use an email template that includes `{{ .Token }}` so users receive a code they can type into the app. Local templates live in [supabase/templates/magic-link.html](/supabase/templates/magic-link.html) and [supabase/templates/confirmation.html](/supabase/templates/confirmation.html).
 
 For production:
 
@@ -185,16 +185,16 @@ npx eslint src
 
 Deployment guides:
 
-- [docs/development-workflow.md](/Users/nacevalencic/Desktop/note_taking_app_slo/docs/development-workflow.md)
-- [docs/deploy-vercel.md](/Users/nacevalencic/Desktop/note_taking_app_slo/docs/deploy-vercel.md)
-- [docs/deploy.md](/Users/nacevalencic/Desktop/note_taking_app_slo/docs/deploy.md)
+- [docs/development-workflow.md](/docs/development-workflow.md)
+- [docs/deploy-vercel.md](/docs/deploy-vercel.md)
+- [docs/deploy.md](/docs/deploy.md)
 
 Relevant deployment files:
 
-- [Dockerfile](/Users/nacevalencic/Desktop/note_taking_app_slo/Dockerfile)
-- [docker-compose.production.yml](/Users/nacevalencic/Desktop/note_taking_app_slo/docker-compose.production.yml)
-- [next.config.ts](/Users/nacevalencic/Desktop/note_taking_app_slo/next.config.ts)
-- [.env.production.example](/Users/nacevalencic/Desktop/note_taking_app_slo/.env.production.example)
+- [Dockerfile](/Dockerfile)
+- [docker-compose.production.yml](/docker-compose.production.yml)
+- [next.config.ts](/next.config.ts)
+- [.env.production.example](/.env.production.example)
 
 When deploying, prefer `NEXT_PUBLIC_SITE_URL=https://memoai.eu` for production unless you are intentionally targeting another domain.
 

@@ -33,8 +33,25 @@ export type VercelTrafficDay = {
 
 export type VercelBreakdownRow = { value: string; hits: number; visitors: number };
 
+/**
+ * One hourly bucket, kept alongside the daily fold.
+ *
+ * A single-day range folds down to one point, which draws as a lone dot. The
+ * buckets Vercel returns are hourly to begin with, so they are carried through
+ * unfolded and the day view charts those instead.
+ */
+export type VercelTrafficHour = {
+  /** Calendar day in the reporting zone, `YYYY-MM-DD`. */
+  day: string;
+  /** Hour of that day in the reporting zone, 0-23. */
+  hour: number;
+  visitors: number;
+  pageViews: number;
+};
+
 export type VercelTraffic = {
   series: VercelTrafficDay[];
+  hours: VercelTrafficHour[];
   visitors: number;
   pageViews: number;
   paths: VercelBreakdownRow[];
@@ -136,14 +153,36 @@ function bucketDay(key: string): string | null {
   }).format(date);
 }
 
+/** The hour of the day a bucket belongs to, in the reporting timezone. */
+function bucketHour(key: string): number | null {
+  const date = new Date(key);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const hour = new Intl.DateTimeFormat("en-GB", {
+    timeZone: REPORT_TIME_ZONE,
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(date);
+
+  const parsed = Number.parseInt(hour, 10);
+
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 async function fetchVercelTraffic(
   from: string,
   to: string,
-): Promise<VercelTraffic | null> {
+): Promise<VercelTraffic> {
   const config = getVercelAnalyticsConfig();
 
+  // Callers rule this out before reaching the cache. Throwing rather than
+  // returning null keeps an unconfigured render out of the cached value, which
+  // would otherwise outlive the misconfiguration by a full revalidate window.
   if (!config) {
-    return null;
+    throw new Error("Vercel analytics is not configured");
   }
 
   const window = {
@@ -164,6 +203,9 @@ async function fetchVercelTraffic(
 
   // Vercel returns hourly buckets, so they are folded into calendar days here.
   const byDay = new Map<string, VercelTrafficDay>();
+  // Keyed `YYYY-MM-DDTH`. Left sparse: only hours Vercel actually reported land
+  // here, and callers fill the gaps for the window they are drawing.
+  const byHour = new Map<string, VercelTrafficHour>();
 
   for (const day of eachDay(from, to)) {
     byDay.set(day, { day, visitors: 0, pageViews: 0 });
@@ -184,15 +226,32 @@ async function fetchVercelTraffic(
       const day = bucketDay(entry.key);
       const point = day ? byDay.get(day) : undefined;
 
-      if (!point) {
+      if (!day || !point) {
         continue;
       }
 
-      point.pageViews += typeof entry.total === "number" ? entry.total : 0;
+      const pageViews = typeof entry.total === "number" ? entry.total : 0;
+      const visitors = typeof entry.devices === "number" ? entry.devices : 0;
+
+      point.pageViews += pageViews;
       // Vercel counts distinct devices per bucket. Summing hourly buckets
       // double counts anyone who spans two hours, so this is an upper bound on
       // daily visitors rather than an exact figure.
-      point.visitors += typeof entry.devices === "number" ? entry.devices : 0;
+      point.visitors += visitors;
+
+      const hour = bucketHour(entry.key);
+
+      if (hour !== null) {
+        const key = `${day}T${hour}`;
+        const existing = byHour.get(key);
+
+        if (existing) {
+          existing.pageViews += pageViews;
+          existing.visitors += visitors;
+        } else {
+          byHour.set(key, { day, hour, visitors, pageViews });
+        }
+      }
     }
   }
 
@@ -200,6 +259,9 @@ async function fetchVercelTraffic(
 
   return {
     series: Array.from(byDay.values()),
+    hours: Array.from(byHour.values()).sort(
+      (a, b) => a.day.localeCompare(b.day) || a.hour - b.hour,
+    ),
     // Window totals come from the breakdowns, which are deduplicated across the
     // whole window by Vercel and are therefore more accurate than summing days.
     visitors: countryRows.reduce((sum, row) => sum + row.visitors, 0),
@@ -226,8 +288,9 @@ const cachedVercelTraffic = unstable_cache(fetchVercelTraffic, ["vercel-traffic"
 async function fetchRealtimeVisitors(): Promise<number | null> {
   const config = getVercelAnalyticsConfig();
 
+  // Thrown rather than returned, for the same reason as the traffic lookup.
   if (!config) {
-    return null;
+    throw new Error("Vercel analytics is not configured");
   }
 
   const payload = (await call(config, "realtime", {})) as {
@@ -255,9 +318,14 @@ const cachedRealtime = unstable_cache(fetchRealtimeVisitors, ["vercel-realtime"]
 });
 
 export async function getRealtimeVisitors(): Promise<number | null> {
+  if (!getVercelAnalyticsConfig()) {
+    return null;
+  }
+
   try {
     return await cachedRealtime();
-  } catch {
+  } catch (error) {
+    console.error("Vercel analytics realtime lookup failed", error);
     return null;
   }
 }
@@ -267,9 +335,20 @@ export async function getVercelTraffic(range: {
   from: string;
   to: string;
 }): Promise<VercelTraffic | null> {
+  // Checked out here, outside the cache: a `null` cached for a missing token
+  // would keep this range on the beacon for the whole revalidate window even
+  // after the token was added, which is exactly what happened when the token
+  // first shipped.
+  if (!getVercelAnalyticsConfig()) {
+    return null;
+  }
+
   try {
     return await cachedVercelTraffic(range.from, range.to);
-  } catch {
+  } catch (error) {
+    // Logged, not swallowed: without this a rejected token and an absent one
+    // look identical from the outside.
+    console.error("Vercel analytics traffic lookup failed", error);
     return null;
   }
 }

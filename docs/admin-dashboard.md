@@ -215,10 +215,21 @@ Set `APIFY_TOKEN` in the environment. Without it the dashboard still works —
 creators, manual classification and every other panel are unaffected — but the
 Sync button reports that collection is not configured.
 
-Runs are queued asynchronously and polled, because fourteen accounts comfortably
-exceed the serverless time budget. The daily cron in `vercel.json` finishes any
-completed run and then starts the next one; **Sync now** in the dashboard does
-the same on demand.
+The nightly cron in `vercel.json` is the **only** thing that reads TikTok. It
+collects, waits and ingests inside one invocation, so the day's views are
+stamped with the day they belong to.
+
+There is deliberately no button that starts a scrape. Collection is billed per
+post, and a control anyone could press turns a fixed nightly cost into an
+unpredictable one — as well as being able to write a second snapshot for a day
+that already has one. The two controls on the panel touch TikTok not at all:
+
+- **Re-check detection** re-scores posts already stored, for after a rule change.
+- **Finish ingesting** appears only if a nightly run outlived its time budget,
+  and stores what that run already collected. It never scrapes again.
+
+A one-off collection can still be run deliberately from the cron endpoint with
+`force=1`, which is a considered act with a secret rather than a button.
 
 ### Cost
 

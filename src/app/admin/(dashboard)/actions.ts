@@ -25,7 +25,11 @@ import {
   parseTikTokProfile,
   resolveShortLink,
 } from "@/lib/ugc/tiktok";
-import { pollAndIngest, reclassifyAll, refreshAccountProfile, startSync } from "@/lib/ugc/sync";
+import {
+  pollAndIngest,
+  reclassifyAll,
+  refreshAccountProfile,
+} from "@/lib/ugc/sync";
 
 /**
  * Server actions behind the admin dashboard.
@@ -498,32 +502,6 @@ export async function classifyVideoAction(
 }
 
 // -------------------------------------------------------------------- sync --
-
-export async function startSyncAction(
-  _previous: ActionState,
-  _formData: FormData,
-): Promise<ActionState> {
-  const context = await requireAdmin();
-
-  // Ingest anything that finished since the last visit before starting more.
-  await pollAndIngest().catch(() => undefined);
-
-  const result = await startSync({
-    trigger: "manual",
-    startedBy: context.user.email ?? "admin",
-  });
-
-  revalidatePath("/admin/creators");
-  revalidatePath("/admin/settings");
-
-  return result.started
-    ? ok(
-        `Sync started for ${result.handles.length} account${
-          result.handles.length === 1 ? "" : "s"
-        }. It usually takes a couple of minutes — refresh to see the results.`,
-      )
-    : fail(result.reason);
-}
 
 export async function pollSyncAction(
   _previous: ActionState,

@@ -5,7 +5,7 @@ import {
   Alert,
   Avatar,
   Badge,
-  Card,
+  Section,
   EmptyState,
   formatCount,
   formatExact,
@@ -162,37 +162,35 @@ export default async function AdminOverviewPage({
         />
       </div>
 
-      <div className="admin-section">
-        <Card
-          title="Campaign views per day"
-          hint="Views gained each day across every creator's Memo AI posts."
-          actions={
-            <Link className="admin-button" data-size="sm" href="/admin/creators">
-              Creator detail
-            </Link>
-          }
-        >
-          {noViewData ? (
-            <EmptyState title="No view data yet">
-              {needsSetup
-                ? "Add your creators, then run a sync."
-                : "Run a sync from the Creators page to pull each account's posts."}
-            </EmptyState>
-          ) : (
-            <AreaChart
-              points={series.map((point) => ({
-                day: point.day,
-                value: point.views,
-                detail: `${point.videosPosted} posted · ${formatCount(point.likes)} likes`,
-              }))}
-              label="views"
-            />
-          )}
-        </Card>
-      </div>
+      <Section
+        title="Campaign views per day"
+        hint="Views gained each day across every creator's Memo AI posts."
+        actions={
+          <Link className="admin-button" data-size="sm" href="/admin/creators">
+            Creator detail
+          </Link>
+        }
+      >
+        {noViewData ? (
+          <EmptyState title="No view data yet">
+            {needsSetup
+              ? "Add your creators, then run a sync."
+              : "Run a sync from the Creators page to pull each account's posts."}
+          </EmptyState>
+        ) : (
+          <AreaChart
+            points={series.map((point) => ({
+              day: point.day,
+              value: point.views,
+              detail: `${point.videosPosted} posted · ${formatCount(point.likes)} likes`,
+            }))}
+            label="views"
+          />
+        )}
+      </Section>
 
       <div className="admin-section admin-two-col">
-        <Card
+        <Section
           title="Top creators"
           hint={`By views generated ${range.label.toLowerCase()}.`}
         >
@@ -228,9 +226,9 @@ export default async function AdminOverviewPage({
               ))}
             </div>
           )}
-        </Card>
+        </Section>
 
-        <Card title="Traffic and users">
+        <Section title="Traffic and users">
           <div className="admin-list">
             <div className="admin-list-row">
               <span className="admin-list-label">Visits</span>
@@ -269,7 +267,7 @@ export default async function AdminOverviewPage({
               </span>
             </div>
           </div>
-        </Card>
+        </Section>
       </div>
     </>
   );

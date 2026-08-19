@@ -1,7 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { isApifyConfigured } from "@/lib/ugc/apify";
-import { getPendingSyncRun, pollAndIngest, startSync } from "@/lib/ugc/sync";
+import {
+  getLatestSyncRun,
+  getPendingSyncRun,
+  pollAndIngest,
+  startSync,
+} from "@/lib/ugc/sync";
 
 /**
  * Scheduled TikTok collection.
@@ -15,6 +20,15 @@ import { getPendingSyncRun, pollAndIngest, startSync } from "@/lib/ugc/sync";
  * $CRON_SECRET`; `INTERNAL_JOB_SECRET` is accepted too so the job can be
  * triggered from the existing tooling.
  */
+
+/**
+ * Minimum gap between two collections started by this endpoint.
+ *
+ * The schedule is daily, so this never trips in normal operation. It exists
+ * because every run costs Apify credit: without it, triggering the endpoint by
+ * hand — to settle a finished run, say — would immediately start another one.
+ */
+const MIN_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -75,10 +89,36 @@ export async function GET(request: NextRequest) {
 
   // A run that is still going must not be followed by a second one.
   const pending = await getPendingSyncRun();
+  const latest = await getLatestSyncRun();
+
+  const finishedAt = latest?.finished_at
+    ? new Date(latest.finished_at).getTime()
+    : null;
+  const tooSoon =
+    finishedAt !== null && Date.now() - finishedAt < MIN_INTERVAL_MS;
+
+  // `force=1` overrides the debounce and `posts=` widens the per-creator pull,
+  // which is how a one-off deep backfill is run without changing the schedule
+  // or the steady-state cost. Both are behind the same secret as the job.
+  const force = request.nextUrl.searchParams.get("force") === "1";
+  const postsParam = Number(request.nextUrl.searchParams.get("posts"));
+  const postsPerProfile =
+    Number.isFinite(postsParam) && postsParam > 0 && postsParam <= 200
+      ? Math.floor(postsParam)
+      : undefined;
 
   const started = pending
     ? { started: false as const, reason: "A collection run is already in flight." }
-    : await startSync({ trigger: "cron", startedBy: "cron" });
+    : tooSoon && !force
+      ? {
+          started: false as const,
+          reason: "A collection ran recently; skipping to avoid a duplicate spend.",
+        }
+      : await startSync({
+          trigger: "cron",
+          startedBy: force ? "cron:forced" : "cron",
+          postsPerProfile,
+        });
 
   return NextResponse.json({
     ok: true,

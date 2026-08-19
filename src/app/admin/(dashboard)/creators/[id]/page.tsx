@@ -12,7 +12,7 @@ import { ActionForm, Disclosure, InlineAction, SubmitButton } from "@/components
 import {
   Avatar,
   Badge,
-  Card,
+  Section,
   EmptyState,
   formatCount,
   formatExact,
@@ -130,25 +130,23 @@ export default async function CreatorDetailPage({
         />
       </div>
 
-      <div className="admin-section">
-        <Card title="Views per day" hint="Views gained each day across this creator's Memo AI posts.">
-          {series.some((point) => point.views > 0) ? (
-            <AreaChart
-              points={series.map((point) => ({
-                day: point.day,
-                value: point.views,
-                detail: `${point.videosPosted} posted`,
-              }))}
-              label="views"
-            />
-          ) : (
-            <EmptyState title="No view history for this window" />
-          )}
-        </Card>
-      </div>
+      <Section title="Views per day" hint="Views gained each day across this creator's Memo AI posts.">
+        {series.some((point) => point.views > 0) ? (
+          <AreaChart
+            points={series.map((point) => ({
+              day: point.day,
+              value: point.views,
+              detail: `${point.videosPosted} posted`,
+            }))}
+            label="views"
+          />
+        ) : (
+          <EmptyState title="No view history for this window" />
+        )}
+      </Section>
 
       <div className="admin-section admin-two-col">
-        <Card
+        <Section
           title="Accounts"
           hint="A dedicated account counts everything; a mixed one is checked post by post."
         >
@@ -251,39 +249,33 @@ export default async function CreatorDetailPage({
           <Disclosure label="Add another account">
             <AddAccountForm creatorId={creator.id} />
           </Disclosure>
-        </Card>
+        </Section>
 
-        <Card title="Details">
+        <Section title="Details">
           <EditCreatorForm creator={creator} />
-        </Card>
+        </Section>
       </div>
 
-      <div className="admin-section">
-        <Card
-          title={`Memo AI posts (${memoVideos.length})`}
-          hint="Everything counted toward this creator's campaign numbers."
-          bodyless
-        >
-          {memoVideos.length === 0 ? (
-            <EmptyState title="No Memo AI posts detected yet">
-              Run a sync, or mark a post below as Memo AI by hand.
-            </EmptyState>
-          ) : (
-            <VideoReviewList videos={memoVideos} showCreator={false} />
-          )}
-        </Card>
-      </div>
+      <Section
+        title={`Memo AI posts (${memoVideos.length})`}
+        hint="Everything counted toward this creator's campaign numbers."
+      >
+        {memoVideos.length === 0 ? (
+          <EmptyState title="No Memo AI posts detected yet">
+            Run a sync, or mark a post below as Memo AI by hand.
+          </EmptyState>
+        ) : (
+          <VideoReviewList videos={memoVideos} showCreator={false} />
+        )}
+      </Section>
 
       {otherVideos.length > 0 && (
-        <div className="admin-section">
-          <Card
-            title={`Not counted (${otherVideos.length})`}
-            hint="Personal posts and anything still unclear. Reclassify any row to move it."
-            bodyless
-          >
-            <VideoReviewList videos={otherVideos} showCreator={false} />
-          </Card>
-        </div>
+        <Section
+          title={`Not counted (${otherVideos.length})`}
+          hint="Personal posts and anything still unclear. Reclassify any row to move it."
+        >
+          <VideoReviewList videos={otherVideos} showCreator={false} />
+        </Section>
       )}
     </>
   );

@@ -6,7 +6,7 @@ import {
 import type { UgcSyncRunRow } from "@/lib/database.types";
 
 import { ActionForm, SubmitButton } from "./forms";
-import { Badge, Card, formatRelative } from "./ui";
+import { Badge, formatRelative, Section } from "./ui";
 
 /** Collection status plus the manual controls for running one. */
 export function SyncPanel({ syncRun }: { syncRun: UgcSyncRunRow | null }) {
@@ -14,7 +14,7 @@ export function SyncPanel({ syncRun }: { syncRun: UgcSyncRunRow | null }) {
   const apifyConfigured = Boolean(process.env.APIFY_TOKEN);
 
   return (
-    <Card
+    <Section
       title="TikTok collection"
       hint={
         apifyConfigured
@@ -99,6 +99,6 @@ export function SyncPanel({ syncRun }: { syncRun: UgcSyncRunRow | null }) {
           does the same automatically.
         </p>
       )}
-    </Card>
+    </Section>
   );
 }

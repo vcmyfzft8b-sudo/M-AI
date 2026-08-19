@@ -1,5 +1,6 @@
 import "server-only";
 
+import { revalidateTag, unstable_cache } from "next/cache";
 import type Stripe from "stripe";
 
 import { addDays, parseDay, todayInReportZone } from "@/lib/admin/ranges";
@@ -17,6 +18,8 @@ import { getStripeClient } from "@/lib/billing";
  * seen, so revenue is read from Stripe itself. Volumes are small (a few hundred
  * subscriptions), which is what makes full pagination affordable here.
  */
+
+export const SALES_CACHE_TAG = "admin-sales";
 
 /** Hard page caps so a runaway account can never hang a dashboard request. */
 const MAX_SUBSCRIPTION_PAGES = 20;
@@ -223,16 +226,18 @@ async function loadPromotionCodes(stripe: Stripe) {
 }
 
 /**
- * Pulls everything the sales views need in one go.
+ * How long a Stripe read is reused.
  *
- * `historySince` bounds the invoice scan; it needs to reach far enough back to
- * cover the widest window the dashboard offers.
+ * Fetching every subscription, invoice and promotion code takes several seconds
+ * of serial pagination, and each dashboard page needs the same data. Without
+ * this, opening the overview meant a fresh full scan every time. Revenue does
+ * not move minute to minute, so a short cache costs nothing in accuracy and
+ * turns a 15-second page load into an instant one.
  */
-export async function loadSalesData(options?: {
-  historyDays?: number;
-}): Promise<SalesData> {
+const SALES_CACHE_SECONDS = 300;
+
+async function fetchSalesData(historyDays: number): Promise<SalesData> {
   const stripe = getStripeClient();
-  const historyDays = options?.historyDays ?? 400;
   const sinceUnix = Math.floor(
     parseDay(addDays(todayInReportZone(), -historyDays)).getTime() / 1000,
   );
@@ -246,12 +251,46 @@ export async function loadSalesData(options?: {
   return {
     subscriptions: subscriptionResult.subscriptions,
     payments: paymentResult.payments,
-    promotionCodes,
+    // A Map does not survive the cache's serialisation, so it is stored as
+    // entries and rebuilt on the way out.
+    promotionCodes: Array.from(promotionCodes.entries()) as never,
     truncated: subscriptionResult.truncated || paymentResult.truncated,
   };
 }
 
+const cachedSalesData = unstable_cache(
+  fetchSalesData,
+  ["admin-sales-data"],
+  { revalidate: SALES_CACHE_SECONDS, tags: [SALES_CACHE_TAG] },
+);
+
+/**
+ * Pulls everything the sales views need in one go.
+ *
+ * `historyDays` bounds the invoice scan; it needs to reach far enough back to
+ * cover the widest window the dashboard offers.
+ */
+export async function loadSalesData(options?: {
+  historyDays?: number;
+}): Promise<SalesData> {
+  const data = await cachedSalesData(options?.historyDays ?? 400);
+
+  return {
+    ...data,
+    promotionCodes: new Map(
+      data.promotionCodes as unknown as Array<[string, string]>,
+    ),
+  };
+}
+
+/** Drops the cached Stripe read, for a "refresh now" control. */
+export async function refreshSalesData() {
+  // Next 16 requires the cache profile alongside the tag.
+  revalidateTag(SALES_CACHE_TAG, "max");
+}
+
 export type {
+  ForecastDay,
   PaymentSnapshot,
   SubscriptionStatus,
   PromoCodeStats,
@@ -263,6 +302,7 @@ export type {
 } from "@/lib/admin/sales-math";
 export {
   creatorRevenue,
+  trialForecast,
   formatMoney,
   promoCodeStats,
   revenueSeries,

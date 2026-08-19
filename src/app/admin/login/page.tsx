@@ -1,113 +1,81 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { BrandLogo } from "@/components/brand-logo";
+import { LandingAuthOptions } from "@/components/landing-auth-options";
 import { getAdminContext } from "@/lib/admin/auth";
 import { getAuthProviderAvailability } from "@/lib/auth-providers";
-
-type SearchParams = Promise<{ denied?: string }>;
+import { BRAND_NAME } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminLoginPage({
-  searchParams,
-}: {
-  searchParams?: SearchParams;
-}) {
+/**
+ * The admin sign-in screen.
+ *
+ * Deliberately the same page users see at `/auth/continue` — same brand mark,
+ * same provider buttons, same layout — so there is one login design to keep up
+ * rather than two. The only differences are the copy, the `next` target, and
+ * the notice explaining why an attempt was turned away.
+ */
+export default async function AdminLoginPage() {
   const result = await getAdminContext();
 
   if (result.ok) {
     redirect("/admin");
   }
 
-  const params = await searchParams;
   const providers = await getAuthProviderAvailability();
 
-  // Two different failures land here: nobody is signed in, or somebody is
-  // signed in with an account that is not on the allowlist. Saying which one
-  // it is saves a confusing loop of re-entering the same address.
-  const denied = params?.denied === "1" || result.reason === "not_allowlisted";
-  const signedInEmail = result.reason === "not_allowlisted" ? result.email : null;
+  // Three different things land here and they need different wording: nobody is
+  // signed in, somebody is signed in with an address that is not allowlisted,
+  // or the allowlist itself could not be read. Reporting that last one as "you
+  // are not allowed" sends people hunting for a permissions problem that does
+  // not exist.
+  const notice =
+    result.reason === "lookup_failed" ? (
+      <p className="landing-auth-notice" data-tone="error" role="status">
+        <strong>Seznama skrbnikov ni bilo mogoče prebrati.</strong> To je napaka
+        v nastavitvah, ne v tvojem računu — najverjetneje migracija{" "}
+        <code>0027</code> še ni bila izvedena na tej bazi.
+      </p>
+    ) : result.reason === "not_allowlisted" ? (
+      <p className="landing-auth-notice" data-tone="error" role="status">
+        Prijavljen si kot <strong>{result.email}</strong>, ki nima skrbniškega
+        dostopa. Prijavi se z dovoljenim e-naslovom ali prosi lastnika, da doda
+        tvojega.
+      </p>
+    ) : null;
 
   return (
-    <main className="admin-login">
-      <div className="admin-login-card">
-        <h1 className="admin-login-title">Memo AI admin</h1>
-        <p className="admin-login-sub">
-          {denied
-            ? "This account does not have admin access. Sign in with an allowlisted address, or ask the owner to add yours."
-            : "Sign in with an allowlisted address to open the dashboard."}
-        </p>
+    <main className="landing-shell landing-auth-page">
+      <div className="landing-auth-wrap">
+        <Link href="/" className="landing-auth-brand" aria-label={`Domov ${BRAND_NAME}`}>
+          <BrandLogo compact priority />
+        </Link>
 
-        {denied && signedInEmail && (
-          <div className="admin-alert" data-tone="error">
-            <span>
-              Signed in as <strong>{signedInEmail}</strong>, which is not on the
-              admin allowlist.
-            </span>
-          </div>
-        )}
+        <section className="landing-auth-hero">
+          <h1 className="landing-auth-title">Prijava</h1>
+          <p className="landing-auth-copy">
+            Nadzorna plošča za kampanjo, prodajo in uporabnike.
+          </p>
+        </section>
 
-        {providers.google && (
-          <>
-            <form action="/auth/google" method="post">
-              <input type="hidden" name="next" value="/admin" />
-              <button
-                type="submit"
-                className="admin-button"
-                data-variant="primary"
-                style={{ width: "100%" }}
-              >
-                Continue with Google
-              </button>
-            </form>
-            {providers.email && (
-              <div className="admin-login-divider">or</div>
-            )}
-          </>
-        )}
+        {notice}
 
-        {providers.email && (
-          <form
-            action="/auth/email"
-            method="post"
-            style={{ display: "grid", gap: "0.625rem" }}
-          >
-            <input type="hidden" name="mode" value="login" />
-            <input type="hidden" name="next" value="/admin" />
-            <div className="admin-field">
-              <label className="admin-label" htmlFor="admin-email">
-                Email
-              </label>
-              <input
-                id="admin-email"
-                className="admin-input"
-                type="email"
-                name="email"
-                autoComplete="email"
-                required
-                placeholder="you@example.com"
-              />
-            </div>
-            <button type="submit" className="admin-button">
-              Email me a sign-in code
+        <LandingAuthOptions providers={providers} next="/admin" mode="login" />
+
+        {result.reason === "not_allowlisted" ? (
+          // `/auth/logout` only accepts POST, so this has to be a form.
+          <form action="/auth/logout" method="post" className="landing-auth-legal">
+            <button type="submit" className="landing-auth-signout">
+              Odjavi se in uporabi drug račun
             </button>
           </form>
+        ) : (
+          <p className="landing-auth-legal">
+            Dostop imajo samo e-naslovi na seznamu skrbnikov.
+          </p>
         )}
-
-        <div className="admin-help" style={{ marginTop: "1.25rem" }}>
-          {denied ? (
-            // `/auth/logout` only accepts POST, so this has to be a form.
-            <form action="/auth/logout" method="post">
-              <button type="submit" className="admin-button" data-variant="ghost" data-size="sm">
-                Sign out and use another account
-              </button>
-            </form>
-          ) : (
-            <Link className="admin-link" href="/">
-              Back to memoai.eu
-            </Link>
-          )}
-        </div>
       </div>
     </main>
   );

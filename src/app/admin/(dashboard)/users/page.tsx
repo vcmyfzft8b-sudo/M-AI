@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AreaChart } from "@/components/admin/chart";
 import {
   Badge,
-  Card,
+  Section,
   EmptyState,
   formatCount,
   formatDate,
@@ -110,22 +110,20 @@ export default async function UsersPage({
         <StatCard label="On trial" value={formatExact(totals.trialingNow)} />
       </div>
 
-      <div className="admin-section">
-        <Card title="Sign-ups per day">
-          {growth.some((point) => point.signups > 0) ? (
-            <AreaChart
-              points={growth.map((point) => ({
-                day: point.day,
-                value: point.signups,
-                detail: `${point.onboarded} finished onboarding`,
-              }))}
-              label="sign-ups"
-            />
-          ) : (
-            <EmptyState title="No sign-ups in this window" />
-          )}
-        </Card>
-      </div>
+      <Section title="Sign-ups per day">
+        {growth.some((point) => point.signups > 0) ? (
+          <AreaChart
+            points={growth.map((point) => ({
+              day: point.day,
+              value: point.signups,
+              detail: `${point.onboarded} finished onboarding`,
+            }))}
+            label="sign-ups"
+          />
+        ) : (
+          <EmptyState title="No sign-ups in this window" />
+        )}
+      </Section>
 
       <div className="admin-toolbar">
         <form method="get" style={{ display: "flex", gap: "0.5rem" }}>
@@ -160,7 +158,7 @@ export default async function UsersPage({
         </div>
       </div>
 
-      <Card bodyless>
+      <Section>
         {result.users.length === 0 ? (
           <EmptyState title="No users match this view" />
         ) : (
@@ -226,7 +224,7 @@ export default async function UsersPage({
             </table>
           </div>
         )}
-      </Card>
+      </Section>
 
       {totalPages > 1 && (
         <div

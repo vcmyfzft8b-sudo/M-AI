@@ -47,10 +47,16 @@ export function LandingAuthOptions(props: {
     google: boolean;
   };
   next: string;
+  /**
+   * Which email flow the "continue with email" button opens. The landing page
+   * wants `signup` so a new visitor gets an account; the admin login wants
+   * `login`, which must not create one for an address nobody has allowlisted.
+   */
+  mode?: "login" | "signup";
 }) {
   const router = useRouter();
   const [pendingTarget, setPendingTarget] = useState<PendingTarget>(null);
-  const emailHref = `/auth/email-entry?mode=signup&next=${encodeURIComponent(props.next)}`;
+  const emailHref = `/auth/email-entry?mode=${props.mode ?? "signup"}&next=${encodeURIComponent(props.next)}`;
 
   function isPending(target: Exclude<PendingTarget, null>) {
     return pendingTarget === target;

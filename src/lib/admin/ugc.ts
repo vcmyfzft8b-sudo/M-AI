@@ -30,6 +30,11 @@ export type CreatorMetrics = {
   /** Lifetime views across every Memo AI video, regardless of window. */
   totalViews: number;
   totalVideos: number;
+  /**
+   * Lifetime saves. TikTok's collect count is not part of the daily snapshot
+   * deltas, so this is a running total rather than a windowed figure.
+   */
+  totalSaves: number;
   followers: number;
   followersGained: number;
   /** Interactions per view across the window, as a fraction. */
@@ -176,6 +181,7 @@ export async function getCreatorMetrics(
       videosPosted: 0,
       totalViews: 0,
       totalVideos: 0,
+      totalSaves: 0,
       followers: creator.accounts.reduce(
         (sum, account) => sum + (account.follower_count ?? 0),
         0,
@@ -202,10 +208,14 @@ export async function getCreatorMetrics(
   // Lifetime Memo AI totals, independent of the selected window.
   const { data: lifetime } = await serviceRole
     .from("ugc_videos")
-    .select("creator_id, views")
+    .select("creator_id, views, saves")
     .eq("classification", "memo");
 
-  for (const row of (lifetime ?? []) as Array<{ creator_id: string; views: number }>) {
+  for (const row of (lifetime ?? []) as Array<{
+    creator_id: string;
+    views: number;
+    saves: number;
+  }>) {
     const entry = metrics.get(row.creator_id);
 
     if (!entry) {
@@ -213,6 +223,7 @@ export async function getCreatorMetrics(
     }
 
     entry.totalViews += Number(row.views ?? 0);
+    entry.totalSaves += Number(row.saves ?? 0);
     entry.totalVideos += 1;
   }
 
@@ -340,6 +351,7 @@ export type CampaignTotals = {
   videosPosted: number;
   activeCreators: number;
   totalFollowers: number;
+  totalSaves: number;
   engagementRate: number;
 };
 
@@ -354,6 +366,7 @@ export function sumMetrics(
     videosPosted: 0,
     activeCreators: 0,
     totalFollowers: 0,
+    totalSaves: 0,
     engagementRate: 0,
   };
 
@@ -364,6 +377,7 @@ export function sumMetrics(
     totals.sharesGained += entry.sharesGained;
     totals.videosPosted += entry.videosPosted;
     totals.totalFollowers += entry.followers;
+    totals.totalSaves += entry.totalSaves;
 
     // "Active" means the creator actually moved a number in this window.
     if (entry.viewsGained > 0 || entry.videosPosted > 0) {

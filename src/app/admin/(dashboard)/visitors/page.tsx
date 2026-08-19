@@ -2,7 +2,7 @@ import { AreaChart } from "@/components/admin/chart";
 import {
   Badge,
   BarRow,
-  Card,
+  Section,
   EmptyState,
   formatCount,
   formatExact,
@@ -94,85 +94,80 @@ export default async function VisitorsPage({
         />
       </div>
 
-      <div className="admin-section">
-        <Card title="Visits per day">
-          {hasTraffic ? (
-            <AreaChart
-              points={summary.series.map((point) => ({
-                day: point.day,
-                value: point.visitors,
-                detail: `${point.pageViews} page views · ${point.newVisitors} new`,
-              }))}
-              label="visits"
-            />
-          ) : (
-            <EmptyState title="No traffic recorded yet">
-              Traffic starts appearing as soon as this build is live and someone
-              visits memoai.eu.
-            </EmptyState>
-          )}
-        </Card>
-      </div>
+      <Section title="Visits per day">
+        {hasTraffic ? (
+          <AreaChart
+            points={summary.series.map((point) => ({
+              day: point.day,
+              value: point.visitors,
+              detail: `${point.pageViews} page views · ${point.newVisitors} new`,
+            }))}
+            label="visits"
+          />
+        ) : (
+          <EmptyState title="No traffic recorded yet">
+            Traffic starts appearing as soon as this build is live and someone
+            visits memoai.eu.
+          </EmptyState>
+        )}
+      </Section>
 
-      <div className="admin-section">
-        <Card
-          title={`Who is online (${online.length})`}
-          hint={`Anyone active in the last ${ONLINE_WINDOW_MINUTES} minutes.`}
-          bodyless
-        >
-          {online.length === 0 ? (
-            <EmptyState title="Nobody on the site right now" />
-          ) : (
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Visitor</th>
-                    <th>On page</th>
-                    <th>Country</th>
-                    <th>Device</th>
-                    <th className="admin-num">Pages</th>
-                    <th>Last seen</th>
+      <Section
+        title={`Who is online (${online.length})`}
+        hint={`Anyone active in the last ${ONLINE_WINDOW_MINUTES} minutes.`}
+      >
+        {online.length === 0 ? (
+          <EmptyState title="Nobody on the site right now" />
+        ) : (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Visitor</th>
+                  <th>On page</th>
+                  <th>Country</th>
+                  <th>Device</th>
+                  <th className="admin-num">Pages</th>
+                  <th>Last seen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {online.map((visitor) => (
+                  <tr key={visitor.sessionId}>
+                    <td>
+                      {visitor.email ? (
+                        <>
+                          <span className="admin-creator-name">
+                            {visitor.fullName || visitor.email}
+                          </span>
+                          {visitor.fullName && (
+                            <>
+                              <br />
+                              <span className="admin-creator-handle">
+                                {visitor.email}
+                              </span>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <Badge tone="grey">anonymous</Badge>
+                      )}
+                    </td>
+                    <td className="admin-mono">{visitor.lastPath ?? "—"}</td>
+                    <td>{visitor.country ?? "—"}</td>
+                    <td>{visitor.deviceType ?? "—"}</td>
+                    <td className="admin-num">{visitor.pageViews}</td>
+                    <td>{formatRelative(visitor.lastSeenAt)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {online.map((visitor) => (
-                    <tr key={visitor.sessionId}>
-                      <td>
-                        {visitor.email ? (
-                          <>
-                            <span className="admin-creator-name">
-                              {visitor.fullName || visitor.email}
-                            </span>
-                            {visitor.fullName && (
-                              <>
-                                <br />
-                                <span className="admin-creator-handle">
-                                  {visitor.email}
-                                </span>
-                              </>
-                            )}
-                          </>
-                        ) : (
-                          <Badge tone="grey">anonymous</Badge>
-                        )}
-                      </td>
-                      <td className="admin-mono">{visitor.lastPath ?? "—"}</td>
-                      <td>{visitor.country ?? "—"}</td>
-                      <td>{visitor.deviceType ?? "—"}</td>
-                      <td className="admin-num">{visitor.pageViews}</td>
-                      <td>{formatRelative(visitor.lastSeenAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-      </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
 
       <div className="admin-section admin-two-col">
-        <Card title="Top pages">
+        <Section title="Top pages">
           {breakdown.paths.length === 0 ? (
             <EmptyState title="No page views yet" />
           ) : (
@@ -187,9 +182,9 @@ export default async function VisitorsPage({
               ))}
             </div>
           )}
-        </Card>
+        </Section>
 
-        <Card title="Where they came from">
+        <Section title="Where they came from">
           {breakdown.referrers.length === 0 ? (
             <EmptyState title="No referrers yet" />
           ) : (
@@ -204,9 +199,9 @@ export default async function VisitorsPage({
               ))}
             </div>
           )}
-        </Card>
+        </Section>
 
-        <Card title="Countries">
+        <Section title="Countries">
           {breakdown.countries.length === 0 ? (
             <EmptyState title="No country data yet" />
           ) : (
@@ -221,9 +216,9 @@ export default async function VisitorsPage({
               ))}
             </div>
           )}
-        </Card>
+        </Section>
 
-        <Card title="Devices">
+        <Section title="Devices">
           {breakdown.devices.length === 0 ? (
             <EmptyState title="No device data yet" />
           ) : (
@@ -238,7 +233,7 @@ export default async function VisitorsPage({
               ))}
             </div>
           )}
-        </Card>
+        </Section>
       </div>
     </>
   );

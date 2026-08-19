@@ -343,3 +343,128 @@ test("cancellations are counted by the day they were cancelled", () => {
 
   assert.equal(summarizeSales(data, RANGE).canceledInRange, 1);
 });
+
+test("the daily forecast is trials ending that day at the current rate", async () => {
+  const { trialForecast } = await import("../src/lib/admin/sales-math.ts");
+
+  const data = salesData({
+    subscriptions: [
+      // Two finished trials, one converted: a 50% rate at €20.
+      subscription({
+        id: "done-yes",
+        customerId: "cus_x",
+        trialStart: at("2026-08-10T10:00:00Z"),
+        trialEnd: at("2026-08-13T10:00:00Z"),
+      }),
+      subscription({
+        id: "done-no",
+        customerId: "cus_y",
+        status: "canceled",
+        trialStart: at("2026-08-10T10:00:00Z"),
+        trialEnd: at("2026-08-13T10:00:00Z"),
+      }),
+      // Three still running: two end tomorrow, one in three days.
+      subscription({
+        id: "t1",
+        customerId: "cus_1",
+        status: "trialing",
+        trialEnd: at("2026-08-20T16:00:00Z"),
+      }),
+      subscription({
+        id: "t2",
+        customerId: "cus_2",
+        status: "trialing",
+        trialEnd: at("2026-08-20T18:00:00Z"),
+      }),
+      subscription({
+        id: "t3",
+        customerId: "cus_3",
+        status: "trialing",
+        trialEnd: at("2026-08-22T09:00:00Z"),
+      }),
+    ],
+    payments: [payment({ customerId: "cus_x", amount: 2000 })],
+  });
+
+  const forecast = trialForecast(data, { days: 5, now: NOW });
+
+  assert.equal(forecast.conversionRate, 0.5);
+  assert.equal(forecast.averageValue, 2000);
+  assert.equal(forecast.days.length, 5);
+  assert.equal(forecast.days[0].day, "2026-08-19");
+
+  const tomorrow = forecast.days.find((day) => day.day === "2026-08-20");
+  assert.equal(tomorrow.trialsEnding, 2);
+  // 2 trials x 50% x €20.00
+  assert.equal(tomorrow.projectedRevenue, 2000);
+
+  const later = forecast.days.find((day) => day.day === "2026-08-22");
+  assert.equal(later.trialsEnding, 1);
+  assert.equal(later.projectedRevenue, 1000);
+});
+
+test("a better conversion rate raises the forecast with no other change", async () => {
+  const { trialForecast } = await import("../src/lib/admin/sales-math.ts");
+
+  const upcoming = subscription({
+    id: "t1",
+    customerId: "cus_1",
+    status: "trialing",
+    trialEnd: at("2026-08-20T16:00:00Z"),
+  });
+
+  const finished = (id, converted) =>
+    subscription({
+      id,
+      customerId: `cus_${id}`,
+      status: converted ? "active" : "canceled",
+      trialEnd: at("2026-08-13T10:00:00Z"),
+    });
+
+  const poor = trialForecast(
+    salesData({
+      subscriptions: [upcoming, finished("a", true), finished("b", false), finished("c", false)],
+      payments: [payment({ customerId: "cus_a", amount: 2000 })],
+    }),
+    { days: 3, now: NOW },
+  );
+
+  const good = trialForecast(
+    salesData({
+      subscriptions: [upcoming, finished("a", true), finished("b", true), finished("c", false)],
+      payments: [
+        payment({ id: "p1", customerId: "cus_a", amount: 2000 }),
+        payment({ id: "p2", customerId: "cus_b", amount: 2000 }),
+      ],
+    }),
+    { days: 3, now: NOW },
+  );
+
+  assert.ok(good.conversionRate > poor.conversionRate);
+
+  const poorDay = poor.days.find((day) => day.day === "2026-08-20");
+  const goodDay = good.days.find((day) => day.day === "2026-08-20");
+  assert.ok(goodDay.projectedRevenue > poorDay.projectedRevenue);
+});
+
+test("a trial that already ended is not forecast again", async () => {
+  const { trialForecast } = await import("../src/lib/admin/sales-math.ts");
+
+  const forecast = trialForecast(
+    salesData({
+      subscriptions: [
+        subscription({
+          id: "past",
+          status: "trialing",
+          trialEnd: at("2026-08-01T10:00:00Z"),
+        }),
+      ],
+    }),
+    { days: 5, now: NOW },
+  );
+
+  assert.equal(
+    forecast.days.reduce((sum, day) => sum + day.trialsEnding, 0),
+    0,
+  );
+});

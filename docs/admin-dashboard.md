@@ -87,8 +87,9 @@ stored post.
 A decision made by hand always wins and is never overwritten by a later
 automatic pass. Use the **Auto** button on a post to hand it back.
 
-Measured against the live campaign (163 posts across all 14 accounts), the rules
-classified every post without needing a human decision.
+Measured against the live campaign — 284 posts across all 14 accounts, covering
+more than a month — the rules classified every post without needing a human
+decision: 48 counted as Memo AI, 236 as personal, none left ambiguous.
 
 Two known limits:
 
@@ -96,7 +97,10 @@ Two known limits:
   read as personal. Mark it by hand.
 - Only the most recent N posts per account are re-read on each run, so a Memo AI
   post older than that window is not discovered until you raise
-  `UGC_SYNC_POSTS_PER_PROFILE` for one run.
+  `UGC_SYNC_POSTS_PER_PROFILE`, or use `posts=` on the cron endpoint, for one
+  run. Leila is the live example: `LEILA50` has real redemptions in Stripe, but
+  her Memo AI posts sit further back than her last 60 posts, so none are counted
+  yet.
 
 ## Collecting TikTok stats
 
@@ -116,16 +120,30 @@ the same on demand.
 
 ### Cost
 
-Apify bills per post scraped. **One run over 14 accounts at 30 posts each cost
-$0.61.** The Apify free plan includes $5 of credit per month, which is about
+Apify bills per post scraped. **One run over 14 accounts cost $0.46 at 20 posts
+each, and $1.05 at 60.** The Apify free plan includes $5 of credit per month, which is about
 eight runs — not enough for a daily refresh.
 
-- The cron is set to **once a day** (`0 3 * * *`), roughly $18/month at 30 posts
+- The cron is set to **once a day** (`0 3 * * *`), roughly $14/month at 20 posts
   per account. That needs a paid Apify plan.
 - `UGC_SYNC_POSTS_PER_PROFILE` (default 20) is the cost lever. Lower it for
   cheaper daily upkeep; raise it temporarily for a deep backfill.
 - To stay inside the free plan, change the cron to every third or fourth day and
   accept a coarser view history.
+- The cron endpoint will not start a second collection within six hours of the
+  last one finishing. The schedule never trips this; it exists so triggering the
+  endpoint by hand cannot double-spend by accident.
+
+For a one-off deep pull, both guards can be overridden on the endpoint:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" \
+  "https://memoai.eu/api/cron/ugc-sync?force=1&posts=60"
+```
+
+`force=1` skips the debounce and `posts=` widens the per-creator pull for that
+run only, leaving the daily schedule and its cost untouched. Call the endpoint
+again without parameters a minute later to ingest the result.
 
 Posts already collected keep their history regardless — lowering the number only
 means older posts stop being re-read for fresh view counts.
@@ -179,7 +197,10 @@ mirrors what the webhook has seen.
   trial still running has not had its chance to convert and would drag the rate
   down if counted.
 - **Projected revenue today** is `trials ending today × conversion rate ×
-  average converted value`.
+  average converted value`. The Sales page also charts this forward over the
+  next 14 days, one bar per day, from the trials due to end on each. Every input
+  is recomputed from Stripe on load, so the forecast moves as trials start and
+  end and as the measured conversion rate changes.
 - **Revenue by discount code** reads the promotion code off each paid invoice's
   discount, then rolls codes up to the creator that owns them.
 
@@ -198,7 +219,7 @@ revenue panels show as unavailable.
 3. Seed the campaign roster and backfill:
 
    ```bash
-   node --experimental-strip-types scripts/seed-ugc-creators.mjs --sync --days 14
+   node --experimental-strip-types scripts/seed-ugc-creators.mjs --sync --days 30
    ```
 
    Without `--sync` it only writes the creator rows, which is the safe default.

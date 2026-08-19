@@ -2,6 +2,7 @@ import "server-only";
 
 import { todayInReportZone } from "@/lib/admin/ranges";
 import type {
+  Database,
   Json,
   UgcClassificationRuleRow,
   UgcCreatorAccountRow,
@@ -27,6 +28,8 @@ import {
   type ClassificationRule,
 } from "@/lib/ugc/classification";
 import { fetchTikTokProfileSnapshot } from "@/lib/ugc/tiktok";
+
+type UgcVideoInsert = Database["public"]["Tables"]["ugc_videos"]["Insert"];
 
 /**
  * How many recent posts to pull per creator on each run.
@@ -145,6 +148,8 @@ const STALE_RUN_MS = 60 * 60 * 1000;
 export async function startSync(options: {
   trigger: "manual" | "cron";
   startedBy: string;
+  /** Overrides the configured per-creator pull, for a one-off deep backfill. */
+  postsPerProfile?: number;
 }): Promise<SyncStartResult> {
   if (!isApifyConfigured()) {
     return {
@@ -204,7 +209,7 @@ export async function startSync(options: {
   try {
     const run = await startTikTokRun({
       handles,
-      maxPerProfile: videosPerProfile(),
+      maxPerProfile: options.postsPerProfile ?? videosPerProfile(),
     });
 
     await updateIn(serviceRole, "ugc_sync_runs", {
@@ -410,6 +415,14 @@ export async function ingestBatch(batch: CollectedBatch): Promise<IngestResult> 
     }
   }
 
+  const videoRows: UgcVideoInsert[] = [];
+  const statsByPlatformId = new Map<
+    string,
+    { views: number; likes: number; comments: number; shares: number; saves: number }
+  >();
+
+  const now = new Date().toISOString();
+
   for (const video of batch.videos) {
     const account = accountsByHandle.get(video.handle.toLowerCase());
 
@@ -439,7 +452,7 @@ export async function ingestBatch(batch: CollectedBatch): Promise<IngestResult> 
     // move a video an admin has already judged.
     const keepManual = existing?.classification_locked === true;
 
-    const videoRow = {
+    videoRows.push({
       account_id: account.id,
       creator_id: account.creator_id,
       platform: "tiktok" as const,
@@ -456,7 +469,7 @@ export async function ingestBatch(batch: CollectedBatch): Promise<IngestResult> 
       comments: video.comments,
       shares: video.shares,
       saves: video.saves,
-      last_synced_at: new Date().toISOString(),
+      last_synced_at: now,
       ...(keepManual
         ? {}
         : {
@@ -464,43 +477,90 @@ export async function ingestBatch(batch: CollectedBatch): Promise<IngestResult> 
             classification_source: classification.source,
             classification_confidence: classification.confidence,
             classification_reason: classification.reason,
-            classified_at: new Date().toISOString(),
+            classified_at: now,
           }),
-    };
+    });
 
-    const { data: upserted, error: upsertError } = await upsertInto(serviceRole, "ugc_videos", videoRow, { onConflict: "platform,platform_video_id" })
-      .select("id")
-      .single();
-
-    if (upsertError || !upserted) {
-      continue;
-    }
+    statsByPlatformId.set(video.platformVideoId, {
+      views: video.views,
+      likes: video.likes,
+      comments: video.comments,
+      shares: video.shares,
+      saves: video.saves,
+    });
 
     if (existing) {
       result.videosUpdated += 1;
     } else {
       result.videosCreated += 1;
     }
+  }
 
-    const videoId = (upserted as { id: string }).id;
+  // Written in chunks rather than one row at a time. A per-video round trip
+  // meant roughly three sequential requests per post, so a normal run of ~160
+  // posts spent minutes in request latency alone and risked outliving the
+  // serverless budget.
+  const CHUNK = 100;
+  const idByPlatformId = new Map<string, string>();
 
-    // One snapshot per video per day. Re-running on the same day overwrites it,
-    // so the latest read of the day is the one that counts.
-    await upsertInto(serviceRole, "ugc_video_stats", 
-      {
+  for (let index = 0; index < videoRows.length; index += CHUNK) {
+    const chunk = videoRows.slice(index, index + CHUNK);
+
+    const { data, error } = await upsertInto(
+      serviceRole,
+      "ugc_videos",
+      chunk,
+      { onConflict: "platform,platform_video_id" },
+    ).select("id, platform_video_id");
+
+    if (error) {
+      throw new Error(`Could not store videos: ${error.message}`);
+    }
+
+    for (const row of (data ?? []) as Array<{
+      id: string;
+      platform_video_id: string;
+    }>) {
+      idByPlatformId.set(row.platform_video_id, row.id);
+    }
+  }
+
+  // One snapshot per video per day. Re-running on the same day overwrites it,
+  // so the latest read of the day is the one that counts.
+  const statRows = Array.from(statsByPlatformId.entries())
+    .map(([platformVideoId, stats]) => {
+      const videoId = idByPlatformId.get(platformVideoId);
+      const account = accountsByHandle.get(
+        (batch.videos.find((v) => v.platformVideoId === platformVideoId)?.handle ?? "")
+          .toLowerCase(),
+      );
+
+      if (!videoId || !account) {
+        return null;
+      }
+
+      return {
         video_id: videoId,
         account_id: account.id,
         creator_id: account.creator_id,
         captured_on: capturedOn,
-        views: video.views,
-        likes: video.likes,
-        comments: video.comments,
-        shares: video.shares,
-        saves: video.saves,
-        captured_at: new Date().toISOString(),
-      },
+        captured_at: now,
+        ...stats,
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
+
+  for (let index = 0; index < statRows.length; index += CHUNK) {
+    const { error } = await upsertInto(
+      serviceRole,
+      "ugc_video_stats",
+      statRows.slice(index, index + CHUNK),
       { onConflict: "video_id,captured_on" },
     );
+
+    if (error) {
+      throw new Error(`Could not store video stats: ${error.message}`);
+    }
   }
 
   for (const collected of batch.accounts) {

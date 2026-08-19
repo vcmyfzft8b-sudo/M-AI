@@ -2,7 +2,7 @@ import { BarChart } from "@/components/admin/chart";
 import {
   Alert,
   BarRow,
-  Card,
+  Section,
   EmptyState,
   formatExact,
   formatPercent,
@@ -16,6 +16,7 @@ import {
   promoCodeStats,
   revenueSeries,
   summarizeSales,
+  trialForecast,
 } from "@/lib/admin/sales";
 import { listCreators } from "@/lib/admin/ugc";
 
@@ -54,6 +55,7 @@ export default async function SalesPage({
   const summary = summarizeSales(data, range);
   const series = revenueSeries(data, range);
   const codes = promoCodeStats(data, range);
+  const forecast = trialForecast(data, { days: 14 });
   const creators = await listCreators({ includeArchived: true }).catch(() => []);
 
   // Map each promo code back to the creator who owns it, so the table reads as
@@ -121,29 +123,73 @@ export default async function SalesPage({
         />
       </div>
 
-      <div className="admin-section">
-        <Card
-          title="Revenue per day"
-          hint="Paid invoices only. Trial starts and 100%-off comps show as zero."
-        >
-          {series.some((point) => point.revenue > 0) ? (
+      <Section
+        title="Revenue per day"
+        hint="Paid invoices only. Trial starts and 100%-off comps show as zero."
+      >
+        {series.some((point) => point.revenue > 0) ? (
+          <BarChart
+            points={series.map((point) => ({
+              day: point.day,
+              value: point.revenue,
+              detail: `${point.newSubscriptions} new subs · ${point.trialsStarted} trials started`,
+            }))}
+            label="revenue"
+            formatter={(value) => formatMoney(Math.round(value), summary.currency)}
+          />
+        ) : (
+          <EmptyState title="No paid invoices in this window" />
+        )}
+      </Section>
+
+      <Section
+        title="Projected revenue from trials"
+        hint={`Each day's figure is the trials due to end that day, multiplied by the measured conversion rate (${formatPercent(
+          forecast.conversionRate,
+        )}) and the average converted value (${formatMoney(
+          Math.round(forecast.averageValue),
+          summary.currency,
+        )}). It moves as trials start and end and as that rate changes.`}
+      >
+        {forecast.days.some((day) => day.trialsEnding > 0) ? (
+          <>
             <BarChart
-              points={series.map((point) => ({
-                day: point.day,
-                value: point.revenue,
-                detail: `${point.newSubscriptions} new subs · ${point.trialsStarted} trials started`,
+              points={forecast.days.map((day) => ({
+                day: day.day,
+                value: day.projectedRevenue,
+                detail: `${day.trialsEnding} trial${
+                  day.trialsEnding === 1 ? "" : "s"
+                } ending`,
               }))}
-              label="revenue"
-              formatter={(value) => formatMoney(Math.round(value), summary.currency)}
+              label="projected"
+              formatter={(value) =>
+                formatMoney(Math.round(value), summary.currency)
+              }
             />
-          ) : (
-            <EmptyState title="No paid invoices in this window" />
-          )}
-        </Card>
-      </div>
+            <p className="admin-help" style={{ marginTop: "0.75rem" }}>
+              {formatExact(
+                forecast.days.reduce((sum, day) => sum + day.trialsEnding, 0),
+              )}{" "}
+              trials end in the next 14 days, worth about{" "}
+              <strong>
+                {formatMoney(
+                  forecast.days.reduce(
+                    (sum, day) => sum + day.projectedRevenue,
+                    0,
+                  ),
+                  summary.currency,
+                )}
+              </strong>{" "}
+              at the current conversion rate.
+            </p>
+          </>
+        ) : (
+          <EmptyState title="No trials are due to end in the next 14 days" />
+        )}
+      </Section>
 
       <div className="admin-section admin-two-col">
-        <Card
+        <Section
           title="Trial pipeline"
           hint="The conversion rate is measured over trials that have already ended."
         >
@@ -197,9 +243,9 @@ export default async function SalesPage({
               </span>
             </div>
           </div>
-        </Card>
+        </Section>
 
-        <Card title="Subscriptions">
+        <Section title="Subscriptions">
           <div className="admin-list">
             <div className="admin-list-row">
               <span className="admin-list-label">Live subscriptions</span>
@@ -238,85 +284,80 @@ export default async function SalesPage({
               </span>
             </div>
           </div>
-        </Card>
+        </Section>
       </div>
 
-      <div className="admin-section">
-        <Card
-          title="Revenue by discount code"
-          hint="Every paid invoice carrying a creator's code counts as revenue they drove."
-          bodyless
-        >
-          {rankedCodes.length === 0 ? (
-            <EmptyState title="No discounted payments in this window" />
-          ) : (
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Code</th>
-                    <th>Creator</th>
-                    <th className="admin-num">Revenue</th>
-                    <th className="admin-num">Payments</th>
-                    <th className="admin-num">Customers</th>
-                    <th style={{ width: "30%" }}>Share</th>
+      <Section
+        title="Revenue by discount code"
+        hint="Every paid invoice carrying a creator's code counts as revenue they drove."
+      >
+        {rankedCodes.length === 0 ? (
+          <EmptyState title="No discounted payments in this window" />
+        ) : (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Creator</th>
+                  <th className="admin-num">Revenue</th>
+                  <th className="admin-num">Payments</th>
+                  <th className="admin-num">Customers</th>
+                  <th style={{ width: "30%" }}>Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rankedCodes.map((entry) => (
+                  <tr key={entry.code}>
+                    <td className="admin-mono">{entry.code}</td>
+                    <td>{ownerByCode.get(entry.code) ?? "—"}</td>
+                    <td className="admin-num">
+                      {formatMoney(entry.revenue, summary.currency)}
+                    </td>
+                    <td className="admin-num">{formatExact(entry.payments)}</td>
+                    <td className="admin-num">{formatExact(entry.customers)}</td>
+                    <td>
+                      <span className="admin-bar-track">
+                        <span
+                          className="admin-bar-fill"
+                          style={{
+                            width: `${
+                              maxCodeRevenue > 0
+                                ? Math.max((entry.revenue / maxCodeRevenue) * 100, 2)
+                                : 0
+                            }%`,
+                          }}
+                        />
+                      </span>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {rankedCodes.map((entry) => (
-                    <tr key={entry.code}>
-                      <td className="admin-mono">{entry.code}</td>
-                      <td>{ownerByCode.get(entry.code) ?? "—"}</td>
-                      <td className="admin-num">
-                        {formatMoney(entry.revenue, summary.currency)}
-                      </td>
-                      <td className="admin-num">{formatExact(entry.payments)}</td>
-                      <td className="admin-num">{formatExact(entry.customers)}</td>
-                      <td>
-                        <span className="admin-bar-track">
-                          <span
-                            className="admin-bar-fill"
-                            style={{
-                              width: `${
-                                maxCodeRevenue > 0
-                                  ? Math.max((entry.revenue / maxCodeRevenue) * 100, 2)
-                                  : 0
-                              }%`,
-                            }}
-                          />
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-      </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
 
       {rankedCodes.length > 0 && (
-        <div className="admin-section">
-          <Card title="Top codes by payments">
-            <div className="admin-list">
-              {[...rankedCodes]
-                .sort((a, b) => b.payments - a.payments)
-                .slice(0, 8)
-                .map((entry) => (
-                  <BarRow
-                    key={entry.code}
-                    label={`${entry.code}${
-                      ownerByCode.has(entry.code)
-                        ? ` · ${ownerByCode.get(entry.code)}`
-                        : ""
-                    }`}
-                    value={entry.payments}
-                    max={Math.max(...rankedCodes.map((row) => row.payments))}
-                  />
-                ))}
-            </div>
-          </Card>
-        </div>
+        <Section title="Top codes by payments">
+          <div className="admin-list">
+            {[...rankedCodes]
+              .sort((a, b) => b.payments - a.payments)
+              .slice(0, 8)
+              .map((entry) => (
+                <BarRow
+                  key={entry.code}
+                  label={`${entry.code}${
+                    ownerByCode.has(entry.code)
+                      ? ` · ${ownerByCode.get(entry.code)}`
+                      : ""
+                  }`}
+                  value={entry.payments}
+                  max={Math.max(...rankedCodes.map((row) => row.payments))}
+                />
+              ))}
+          </div>
+        </Section>
       )}
     </>
   );

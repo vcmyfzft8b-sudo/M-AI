@@ -9,6 +9,7 @@
 // Relative rather than the `@/` alias: this module is imported directly by the
 // unit tests, which run under plain Node and cannot resolve the alias.
 import {
+  addDays,
   type DateRange,
   eachDay,
   todayInReportZone,
@@ -269,6 +270,91 @@ export function revenueSeries(data: SalesData, range: DateRange): RevenueDay[] {
   }
 
   return Array.from(byDay.values());
+}
+
+export type ForecastDay = {
+  day: string;
+  /** Trials whose trial_end falls on this day. */
+  trialsEnding: number;
+  /** trialsEnding x conversionRate x averageConvertedValue, in minor units. */
+  projectedRevenue: number;
+};
+
+/**
+ * Expected revenue per day from trials that are due to end.
+ *
+ * Recomputed from Stripe on every load, so it moves as trials start and end and
+ * as the measured conversion rate changes: the same trial pipeline against a
+ * better conversion rate forecasts more money, with no other input.
+ */
+export function trialForecast(
+  data: SalesData,
+  options: { days?: number; now?: Date } = {},
+): { days: ForecastDay[]; conversionRate: number; averageValue: number } {
+  const horizon = options.days ?? 14;
+  const now = options.now ?? new Date();
+  const nowUnix = Math.floor(now.getTime() / 1000);
+  const today = todayInReportZone(now);
+
+  const finishedTrials = data.subscriptions.filter(
+    (subscription) =>
+      subscription.trialEnd !== null && subscription.trialEnd <= nowUnix,
+  );
+
+  const payingCustomerIds = new Set(
+    data.payments
+      .filter((payment) => payment.customerId)
+      .map((payment) => payment.customerId as string),
+  );
+
+  const convertedTrials = finishedTrials.filter(
+    (subscription) =>
+      subscription.customerId && payingCustomerIds.has(subscription.customerId),
+  );
+
+  const conversionRate =
+    finishedTrials.length > 0 ? convertedTrials.length / finishedTrials.length : 0;
+
+  const averageValue =
+    convertedTrials.length > 0
+      ? convertedTrials.reduce(
+          (sum, subscription) => sum + subscription.unitAmount,
+          0,
+        ) / convertedTrials.length
+      : 0;
+
+  const byDay = new Map<string, ForecastDay>();
+
+  for (let offset = 0; offset < horizon; offset += 1) {
+    const day = addDays(today, offset);
+    byDay.set(day, { day, trialsEnding: 0, projectedRevenue: 0 });
+  }
+
+  for (const subscription of data.subscriptions) {
+    if (
+      subscription.status !== "trialing" ||
+      subscription.trialEnd === null ||
+      subscription.trialEnd <= nowUnix
+    ) {
+      continue;
+    }
+
+    const entry = byDay.get(
+      todayInReportZone(new Date(subscription.trialEnd * 1000)),
+    );
+
+    if (entry) {
+      entry.trialsEnding += 1;
+    }
+  }
+
+  for (const entry of byDay.values()) {
+    entry.projectedRevenue = Math.round(
+      entry.trialsEnding * conversionRate * averageValue,
+    );
+  }
+
+  return { days: Array.from(byDay.values()), conversionRate, averageValue };
 }
 
 export type PromoCodeStats = {

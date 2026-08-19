@@ -15,7 +15,15 @@ export type AdminContext = {
   isOwner: boolean;
 };
 
-export type AdminDenialReason = "unauthenticated" | "not_allowlisted";
+export type AdminDenialReason =
+  | "unauthenticated"
+  | "not_allowlisted"
+  /**
+   * The allowlist itself could not be read — the table is missing or the
+   * database is unreachable. Kept distinct from `not_allowlisted` so a
+   * misconfiguration is not reported to the operator as a permissions problem.
+   */
+  | "lookup_failed";
 
 export function normalizeAdminEmail(value: string) {
   return value.trim().toLowerCase();
@@ -60,7 +68,11 @@ export const getAdminContext = cache(async function getAdminContext(): Promise<
     .ilike("email", email)
     .maybeSingle();
 
-  if (error || !data) {
+  if (error) {
+    return { ok: false, reason: "lookup_failed", email };
+  }
+
+  if (!data) {
     return { ok: false, reason: "not_allowlisted", email };
   }
 
@@ -108,9 +120,18 @@ export async function requireAdminApi(): Promise<
         error:
           result.reason === "unauthenticated"
             ? "Sign in to use the admin API."
-            : "This account is not allowed to use the admin API.",
+            : result.reason === "lookup_failed"
+              ? "The admin allowlist could not be read."
+              : "This account is not allowed to use the admin API.",
       },
-      { status: result.reason === "unauthenticated" ? 401 : 403 },
+      {
+        status:
+          result.reason === "unauthenticated"
+            ? 401
+            : result.reason === "lookup_failed"
+              ? 503
+              : 403,
+      },
     ),
   };
 }

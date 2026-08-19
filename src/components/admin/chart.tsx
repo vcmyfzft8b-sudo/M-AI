@@ -5,22 +5,22 @@ import { formatCount } from "./ui";
 /**
  * Inline SVG charts.
  *
- * Hand-rolled rather than pulled from a charting library: these are two simple
- * shapes, and the project has no chart dependency to reuse. Rendering server
- * side keeps the dashboard free of client JavaScript for the visuals, with
+ * Hand-rolled rather than pulled from a charting library: these are simple
+ * shapes and the project has no chart dependency to reuse. Rendering on the
+ * server keeps the dashboard free of client JavaScript for the visuals, with
  * native `<title>` tooltips carrying the per-day values.
  */
 
 export type ChartPoint = {
   day: string;
   value: number;
-  /** Extra lines for the hover tooltip. */
+  /** Extra line for the hover tooltip. */
   detail?: string;
 };
 
-const VIEW_WIDTH = 900;
-const VIEW_HEIGHT = 240;
-const PADDING = { top: 16, right: 12, bottom: 26, left: 44 };
+const VIEW_WIDTH = 1000;
+const VIEW_HEIGHT = 300;
+const PADDING = { top: 18, right: 14, bottom: 28, left: 52 };
 
 const PLOT_WIDTH = VIEW_WIDTH - PADDING.left - PADDING.right;
 const PLOT_HEIGHT = VIEW_HEIGHT - PADDING.top - PADDING.bottom;
@@ -44,50 +44,85 @@ function labelIndices(count: number): Set<number> {
     return new Set([0]);
   }
 
-  const target = Math.min(count, 7);
+  const target = Math.min(count, 8);
   const stride = Math.max(1, Math.round((count - 1) / (target - 1)));
-  const indices = new Set<number>();
+  const indices: number[] = [];
 
   for (let index = 0; index < count; index += stride) {
-    indices.add(index);
+    indices.push(index);
   }
 
-  // Always anchor the last day so the axis ends where the data does.
-  indices.add(count - 1);
+  const last = count - 1;
 
-  return indices;
+  // The axis must end where the data does, but the strided run rarely lands on
+  // the final day. Adding it blindly printed two labels on top of each other,
+  // so a penultimate label that would collide is dropped instead.
+  if (indices[indices.length - 1] !== last) {
+    if (last - indices[indices.length - 1] < stride * 0.6) {
+      indices.pop();
+    }
+
+    indices.push(last);
+  }
+
+  return new Set(indices);
+}
+
+/** Running total, for the cumulative view. */
+export function toCumulative(points: ChartPoint[]): ChartPoint[] {
+  let total = 0;
+
+  return points.map((point) => {
+    total += point.value;
+    return { ...point, value: total };
+  });
 }
 
 export function AreaChart({
   points,
   label,
   formatter = formatCount,
+  /** The same metric over the preceding window, drawn as a dashed line. */
+  comparison,
+  comparisonLabel = "previous period",
 }: {
   points: ChartPoint[];
   label: string;
   formatter?: (value: number) => string;
+  comparison?: ChartPoint[];
+  comparisonLabel?: string;
 }) {
   if (points.length === 0) {
     return null;
   }
 
-  const max = niceMax(Math.max(...points.map((point) => point.value)));
+  // Both series share one scale, otherwise the comparison would be misleading.
+  const peak = Math.max(
+    ...points.map((point) => point.value),
+    ...(comparison ?? []).map((point) => point.value),
+  );
+  const max = niceMax(peak);
   const labels = labelIndices(points.length);
 
   // A single-day range has no width to interpolate across, so the point is
   // centred instead of pinned to the left edge.
-  const xFor = (index: number) =>
-    points.length === 1
+  const xFor = (index: number, count = points.length) =>
+    count === 1
       ? PADDING.left + PLOT_WIDTH / 2
-      : PADDING.left + (index / (points.length - 1)) * PLOT_WIDTH;
+      : PADDING.left + (index / (count - 1)) * PLOT_WIDTH;
 
   const yFor = (value: number) =>
     PADDING.top + PLOT_HEIGHT - (value / max) * PLOT_HEIGHT;
 
-  const line = points
-    .map((point, index) => `${index === 0 ? "M" : "L"}${xFor(index)},${yFor(point.value)}`)
-    .join(" ");
+  const path = (series: ChartPoint[]) =>
+    series
+      .map(
+        (point, index) =>
+          `${index === 0 ? "M" : "L"}${xFor(index, series.length)},${yFor(point.value)}`,
+      )
+      .join(" ");
 
+  const line = path(points);
   const area = `${line} L${xFor(points.length - 1)},${PADDING.top + PLOT_HEIGHT} L${xFor(0)},${
     PADDING.top + PLOT_HEIGHT
   } Z`;
@@ -105,7 +140,7 @@ export function AreaChart({
     >
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--tint)" stopOpacity="0.24" />
+          <stop offset="0%" stopColor="var(--tint)" stopOpacity="0.26" />
           <stop offset="100%" stopColor="var(--tint)" stopOpacity="0" />
         </linearGradient>
       </defs>
@@ -129,6 +164,12 @@ export function AreaChart({
           </text>
         </g>
       ))}
+
+      {comparison && comparison.length > 0 && (
+        <path className="admin-chart-line-compare" d={path(comparison)}>
+          <title>{comparisonLabel}</title>
+        </path>
+      )}
 
       <path d={area} fill={`url(#${gradientId})`} />
       <path className="admin-chart-line" d={line} />
@@ -166,7 +207,7 @@ export function AreaChart({
             key={`label-${point.day}`}
             className="admin-chart-axis"
             x={xFor(index)}
-            y={VIEW_HEIGHT - 8}
+            y={VIEW_HEIGHT - 9}
             textAnchor={
               index === 0 ? "start" : index === points.length - 1 ? "end" : "middle"
             }
@@ -257,7 +298,7 @@ export function BarChart({
             key={`label-${point.day}`}
             className="admin-chart-axis"
             x={PADDING.left + index * slot + slot / 2}
-            y={VIEW_HEIGHT - 8}
+            y={VIEW_HEIGHT - 9}
             textAnchor="middle"
           >
             {formatDayLabel(point.day)}

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { AdminNav } from "@/components/admin/nav";
+import { BrandLogo } from "@/components/brand-logo";
 import { requireAdmin, touchAdminLastSeen } from "@/lib/admin/auth";
 import { countVideosNeedingReview } from "@/lib/admin/ugc";
 
@@ -21,10 +22,10 @@ export default async function AdminDashboardLayout({
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar">
-        <div className="admin-brand">
-          <span className="admin-brand-badge">M</span>
-          <span>Memo AI admin</span>
-        </div>
+        <a className="admin-brand" href="/admin" aria-label="Memo AI admin">
+          <BrandLogo compact />
+          <span className="admin-brand-label">admin</span>
+        </a>
 
         <AdminNav reviewCount={reviewCount} />
 

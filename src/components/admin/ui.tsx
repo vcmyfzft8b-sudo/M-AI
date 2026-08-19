@@ -129,32 +129,38 @@ export function StatCard({
   );
 }
 
-export function Card({
+/**
+ * A titled block of the page.
+ *
+ * Deliberately flat: a hairline under the heading and whitespace around it,
+ * rather than a bordered card. A dense analytics page reads as a wall of boxes
+ * otherwise.
+ */
+export function Section({
   title,
   hint,
   actions,
   children,
-  bodyless,
+  id,
 }: {
   title?: ReactNode;
   hint?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
-  /** Skip the padded body wrapper, for tables that should reach the edges. */
-  bodyless?: boolean;
+  id?: string;
 }) {
   return (
-    <section className="admin-card">
+    <section className="admin-section" id={id}>
       {(title || actions) && (
-        <header className="admin-card-header">
+        <header className="admin-section-head">
           <div>
-            {title && <h2 className="admin-card-title">{title}</h2>}
-            {hint && <p className="admin-card-hint">{hint}</p>}
+            {title && <h2 className="admin-section-title">{title}</h2>}
+            {hint && <p className="admin-section-hint">{hint}</p>}
           </div>
-          {actions}
+          {actions && <div className="admin-section-actions">{actions}</div>}
         </header>
       )}
-      {bodyless ? children : <div className="admin-card-body">{children}</div>}
+      {children}
     </section>
   );
 }

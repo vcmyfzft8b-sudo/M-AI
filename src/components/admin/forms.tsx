@@ -144,7 +144,7 @@ export function Disclosure({
   const [open, setOpen] = useState(false);
 
   return (
-    <div>
+    <div className="admin-disclosure">
       <button
         type="button"
         className="admin-button"

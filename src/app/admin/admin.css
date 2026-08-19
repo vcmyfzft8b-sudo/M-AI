@@ -249,18 +249,28 @@
 /* An opened disclosure is a whole form, not a header control. Left in the
    header's right-hand slot it was pushed against the right edge and squeezed
    into whatever width the section title happened to leave, so it takes the full
-   width of the section instead and centres itself. */
-.admin-section-actions:has(> .admin-disclosure-panel) {
+   width of the section instead and centres itself.
+
+   `Disclosure` wraps its button and panel in `.admin-disclosure`, so the panel
+   is a grandchild of the actions box, not a child. A `:has(> ...)` here matched
+   nothing and the form stayed off to the right. */
+.admin-section-actions:has(.admin-disclosure-panel) {
   flex: 1 0 100%;
-  justify-content: center;
+}
+
+.admin-section-actions:has(.admin-disclosure-panel) > .admin-disclosure {
+  flex: 1 0 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .admin-disclosure-panel {
-  flex: 1 0 100%;
-  /* Wide enough for the three-column field grid above to stay three columns,
-     narrow enough that the inputs do not stretch across a whole desktop. */
+  width: 100%;
+  /* Wide enough for the three-column field grid to stay three columns, narrow
+     enough that the inputs do not stretch across a whole desktop. */
   max-width: 52rem;
-  margin: 1rem auto 0;
+  margin-top: 1rem;
 }
 
 /* ---------------------------------------------------------------- tiles -- */

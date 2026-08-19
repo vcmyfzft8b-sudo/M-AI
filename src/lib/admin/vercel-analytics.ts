@@ -242,10 +242,21 @@ async function fetchRealtimeVisitors(): Promise<number | null> {
   return typeof payload?.total === "number" ? payload.total : null;
 }
 
+/**
+ * Briefly cached rather than uncached.
+ *
+ * It has to stay live to be worth showing, but an uncached call put a Vercel
+ * round trip on the critical path of every overview and visitors render. Thirty
+ * seconds is well inside the minute the page polls on, so the number is never
+ * visibly stale.
+ */
+const cachedRealtime = unstable_cache(fetchRealtimeVisitors, ["vercel-realtime"], {
+  revalidate: 30,
+});
+
 export async function getRealtimeVisitors(): Promise<number | null> {
   try {
-    // Deliberately uncached: "online now" is only useful if it is live.
-    return await fetchRealtimeVisitors();
+    return await cachedRealtime();
   } catch {
     return null;
   }

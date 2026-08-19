@@ -43,7 +43,7 @@ export default async function SalesPage({
   let data;
 
   try {
-    data = await loadSalesData({ historyDays: 400 });
+    data = await loadSalesData();
   } catch (error) {
     return (
       <>

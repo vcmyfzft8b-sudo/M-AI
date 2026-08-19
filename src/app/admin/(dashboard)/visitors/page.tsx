@@ -1,6 +1,7 @@
 import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { AreaChart } from "@/components/admin/chart";
 import {
+  Alert,
   Badge,
   BarRow,
   Section,
@@ -100,6 +101,28 @@ export default async function VisitorsPage({
       {/* Presence is only useful if it is current, so this page polls faster. */}
       <AutoRefresh live />
 
+      {!usingVercel && (
+        <Alert tone="info">
+          <span>
+            <strong>Only showing traffic since the beacon shipped.</strong> Vercel
+            Web Analytics holds the full history for memoai.eu, but{" "}
+            <code className="admin-mono">VERCEL_ANALYTICS_TOKEN</code> is not set,
+            so the figures and the chart below start from today rather than
+            months back. Create a token at{" "}
+            <a
+              className="admin-link"
+              href="https://vercel.com/account/tokens"
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              vercel.com/account/tokens
+            </a>{" "}
+            and add it to the project&apos;s Production environment. Who is online
+            below is unaffected.
+          </span>
+        </Alert>
+      )}
+
       <div className="admin-grid">
         <StatCard
           label="Online now"
@@ -153,7 +176,7 @@ export default async function VisitorsPage({
         hint={
           usingVercel
             ? "From Vercel Web Analytics, which has recorded memoai.eu since March. Daily visitor counts are summed from hourly buckets, so someone spanning two hours counts twice; the window total above is deduplicated and exact."
-            : "From the on-site beacon, which only knows about traffic since it shipped. Set VERCEL_ANALYTICS_TOKEN to chart the full history."
+            : "From the on-site beacon only, so this begins the day it shipped rather than months back."
         }
       >
         {hasTraffic ? (

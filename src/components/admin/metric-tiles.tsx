@@ -1,5 +1,6 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
+
+import { PendingLink } from "./pending-link";
 
 /**
  * The selectable KPI strip above the chart.
@@ -88,16 +89,15 @@ export function MetricTiles({
         }
 
         return (
-          <Link
+          <PendingLink
             key={tile.key}
             href={hrefFor(tile.key)}
             className="admin-tile"
             data-active={tile.key === active}
-            prefetch={false}
             aria-current={tile.key === active ? "true" : undefined}
           >
             {content}
-          </Link>
+          </PendingLink>
         );
       })}
     </div>

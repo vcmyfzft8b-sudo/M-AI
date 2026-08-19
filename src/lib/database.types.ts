@@ -23,6 +23,22 @@ export type StudyAssetStatus =
 export type FlashcardDifficulty = "easy" | "medium" | "hard";
 export type FlashcardConfidenceBucket = "again" | "good" | "easy";
 
+export type AdminRole = "owner" | "admin";
+
+export type UgcPlatform = "tiktok" | "instagram" | "youtube";
+export type UgcStatus = "active" | "paused" | "archived";
+export type UgcContentMode = "dedicated" | "mixed" | "personal";
+export type UgcClassification = "memo" | "personal" | "unknown";
+export type UgcClassificationSource = "manual" | "account_default" | "rule" | "ai";
+export type UgcRuleKind = "keyword" | "hashtag" | "mention" | "link";
+export type UgcRateKind =
+  | "per_video"
+  | "per_month"
+  | "per_1k_views"
+  | "revenue_share";
+
+export type SiteDeviceType = "mobile" | "tablet" | "desktop" | "bot" | "unknown";
+
 export interface Citation {
   idx: number;
   startMs: number;
@@ -1033,9 +1049,494 @@ export type Database = {
           updated_at?: string;
         };
       };
+      admin_users: {
+        Row: {
+          id: string;
+          email: string;
+          role: AdminRole;
+          label: string | null;
+          created_at: string;
+          updated_at: string;
+          created_by: string | null;
+          last_seen_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          email: string;
+          role?: AdminRole;
+          label?: string | null;
+          created_by?: string | null;
+          last_seen_at?: string | null;
+        };
+        Update: {
+          email?: string;
+          role?: AdminRole;
+          label?: string | null;
+          last_seen_at?: string | null;
+        };
+      };
+      ugc_creators: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          status: UgcStatus;
+          contact_email: string | null;
+          notes: string | null;
+          promo_codes: string[];
+          rate_amount: number | null;
+          rate_currency: string;
+          rate_kind: UgcRateKind | null;
+          started_at: string | null;
+          created_at: string;
+          updated_at: string;
+          created_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          status?: UgcStatus;
+          contact_email?: string | null;
+          notes?: string | null;
+          promo_codes?: string[];
+          rate_amount?: number | null;
+          rate_currency?: string;
+          rate_kind?: UgcRateKind | null;
+          started_at?: string | null;
+          created_by?: string | null;
+        };
+        Update: {
+          name?: string;
+          slug?: string;
+          status?: UgcStatus;
+          contact_email?: string | null;
+          notes?: string | null;
+          promo_codes?: string[];
+          rate_amount?: number | null;
+          rate_currency?: string;
+          rate_kind?: UgcRateKind | null;
+          started_at?: string | null;
+        };
+      };
+      ugc_creator_accounts: {
+        Row: {
+          id: string;
+          creator_id: string;
+          platform: UgcPlatform;
+          handle: string;
+          profile_url: string;
+          content_mode: UgcContentMode;
+          status: UgcStatus;
+          display_name: string | null;
+          avatar_url: string | null;
+          bio: string | null;
+          platform_account_id: string | null;
+          sec_uid: string | null;
+          follower_count: number | null;
+          following_count: number | null;
+          total_likes: number | null;
+          video_count: number | null;
+          last_synced_at: string | null;
+          last_sync_status: "ok" | "error" | "pending" | null;
+          last_sync_error: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          creator_id: string;
+          platform?: UgcPlatform;
+          handle: string;
+          profile_url: string;
+          content_mode?: UgcContentMode;
+          status?: UgcStatus;
+          display_name?: string | null;
+          avatar_url?: string | null;
+          bio?: string | null;
+          platform_account_id?: string | null;
+          sec_uid?: string | null;
+          follower_count?: number | null;
+          following_count?: number | null;
+          total_likes?: number | null;
+          video_count?: number | null;
+          last_synced_at?: string | null;
+          last_sync_status?: "ok" | "error" | "pending" | null;
+          last_sync_error?: string | null;
+        };
+        Update: {
+          creator_id?: string;
+          platform?: UgcPlatform;
+          handle?: string;
+          profile_url?: string;
+          content_mode?: UgcContentMode;
+          status?: UgcStatus;
+          display_name?: string | null;
+          avatar_url?: string | null;
+          bio?: string | null;
+          platform_account_id?: string | null;
+          sec_uid?: string | null;
+          follower_count?: number | null;
+          following_count?: number | null;
+          total_likes?: number | null;
+          video_count?: number | null;
+          last_synced_at?: string | null;
+          last_sync_status?: "ok" | "error" | "pending" | null;
+          last_sync_error?: string | null;
+        };
+      };
+      ugc_videos: {
+        Row: {
+          id: string;
+          account_id: string;
+          creator_id: string;
+          platform: UgcPlatform;
+          platform_video_id: string;
+          url: string;
+          caption: string | null;
+          hashtags: string[];
+          mentions: string[];
+          cover_url: string | null;
+          duration_seconds: number | null;
+          posted_at: string | null;
+          views: number;
+          likes: number;
+          comments: number;
+          shares: number;
+          saves: number;
+          classification: UgcClassification;
+          classification_source: UgcClassificationSource;
+          classification_confidence: number | null;
+          classification_reason: string | null;
+          classified_at: string | null;
+          classification_locked: boolean;
+          first_seen_at: string;
+          last_synced_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          creator_id: string;
+          platform?: UgcPlatform;
+          platform_video_id: string;
+          url: string;
+          caption?: string | null;
+          hashtags?: string[];
+          mentions?: string[];
+          cover_url?: string | null;
+          duration_seconds?: number | null;
+          posted_at?: string | null;
+          views?: number;
+          likes?: number;
+          comments?: number;
+          shares?: number;
+          saves?: number;
+          classification?: UgcClassification;
+          classification_source?: UgcClassificationSource;
+          classification_confidence?: number | null;
+          classification_reason?: string | null;
+          classified_at?: string | null;
+          classification_locked?: boolean;
+          last_synced_at?: string | null;
+        };
+        Update: {
+          caption?: string | null;
+          hashtags?: string[];
+          mentions?: string[];
+          cover_url?: string | null;
+          duration_seconds?: number | null;
+          posted_at?: string | null;
+          views?: number;
+          likes?: number;
+          comments?: number;
+          shares?: number;
+          saves?: number;
+          classification?: UgcClassification;
+          classification_source?: UgcClassificationSource;
+          classification_confidence?: number | null;
+          classification_reason?: string | null;
+          classified_at?: string | null;
+          classification_locked?: boolean;
+          last_synced_at?: string | null;
+        };
+      };
+      ugc_video_stats: {
+        Row: {
+          id: string;
+          video_id: string;
+          account_id: string;
+          creator_id: string;
+          captured_on: string;
+          views: number;
+          likes: number;
+          comments: number;
+          shares: number;
+          saves: number;
+          captured_at: string;
+        };
+        Insert: {
+          id?: string;
+          video_id: string;
+          account_id: string;
+          creator_id: string;
+          captured_on: string;
+          views?: number;
+          likes?: number;
+          comments?: number;
+          shares?: number;
+          saves?: number;
+          captured_at?: string;
+        };
+        Update: {
+          views?: number;
+          likes?: number;
+          comments?: number;
+          shares?: number;
+          saves?: number;
+          captured_at?: string;
+        };
+      };
+      ugc_account_stats: {
+        Row: {
+          id: string;
+          account_id: string;
+          creator_id: string;
+          captured_on: string;
+          follower_count: number | null;
+          total_likes: number | null;
+          video_count: number | null;
+          captured_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          creator_id: string;
+          captured_on: string;
+          follower_count?: number | null;
+          total_likes?: number | null;
+          video_count?: number | null;
+          captured_at?: string;
+        };
+        Update: {
+          follower_count?: number | null;
+          total_likes?: number | null;
+          video_count?: number | null;
+          captured_at?: string;
+        };
+      };
+      ugc_classification_rules: {
+        Row: {
+          id: string;
+          kind: UgcRuleKind;
+          pattern: string;
+          weight: number;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          kind: UgcRuleKind;
+          pattern: string;
+          weight?: number;
+          active?: boolean;
+        };
+        Update: {
+          kind?: UgcRuleKind;
+          pattern?: string;
+          weight?: number;
+          active?: boolean;
+        };
+      };
+      ugc_sync_runs: {
+        Row: {
+          id: string;
+          source: "apify" | "manual" | "push" | "profile";
+          trigger: "manual" | "cron" | "push";
+          status: "running" | "ok" | "partial" | "error";
+          accounts_total: number;
+          accounts_synced: number;
+          videos_seen: number;
+          videos_created: number;
+          videos_updated: number;
+          error: string | null;
+          detail: Json | null;
+          started_at: string;
+          finished_at: string | null;
+          started_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          source: "apify" | "manual" | "push" | "profile";
+          trigger?: "manual" | "cron" | "push";
+          status?: "running" | "ok" | "partial" | "error";
+          accounts_total?: number;
+          accounts_synced?: number;
+          videos_seen?: number;
+          videos_created?: number;
+          videos_updated?: number;
+          error?: string | null;
+          detail?: Json | null;
+          finished_at?: string | null;
+          started_by?: string | null;
+        };
+        Update: {
+          status?: "running" | "ok" | "partial" | "error";
+          accounts_total?: number;
+          accounts_synced?: number;
+          videos_seen?: number;
+          videos_created?: number;
+          videos_updated?: number;
+          error?: string | null;
+          detail?: Json | null;
+          finished_at?: string | null;
+        };
+      };
+      site_sessions: {
+        Row: {
+          id: string;
+          session_key: string;
+          user_id: string | null;
+          first_seen_at: string;
+          last_seen_at: string;
+          page_views: number;
+          entry_path: string | null;
+          last_path: string | null;
+          referrer_host: string | null;
+          utm_source: string | null;
+          utm_medium: string | null;
+          utm_campaign: string | null;
+          country: string | null;
+          region: string | null;
+          city: string | null;
+          device_type: SiteDeviceType | null;
+          browser: string | null;
+          os: string | null;
+          is_bot: boolean;
+        };
+        Insert: {
+          id?: string;
+          session_key: string;
+          user_id?: string | null;
+          page_views?: number;
+          entry_path?: string | null;
+          last_path?: string | null;
+          referrer_host?: string | null;
+          utm_source?: string | null;
+          utm_medium?: string | null;
+          utm_campaign?: string | null;
+          country?: string | null;
+          region?: string | null;
+          city?: string | null;
+          device_type?: SiteDeviceType | null;
+          browser?: string | null;
+          os?: string | null;
+          is_bot?: boolean;
+        };
+        Update: {
+          user_id?: string | null;
+          last_seen_at?: string;
+          page_views?: number;
+          last_path?: string | null;
+        };
+      };
+      site_page_views: {
+        Row: {
+          id: string;
+          session_id: string;
+          user_id: string | null;
+          path: string;
+          referrer_host: string | null;
+          country: string | null;
+          device_type: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          user_id?: string | null;
+          path: string;
+          referrer_host?: string | null;
+          country?: string | null;
+          device_type?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          path?: string;
+        };
+      };
     };
     Views: Record<string, never>;
     Functions: {
+      record_site_visit: {
+        Args: {
+          p_session_key: string;
+          p_user_id: string | null;
+          p_path: string;
+          p_referrer_host: string | null;
+          p_utm_source: string | null;
+          p_utm_medium: string | null;
+          p_utm_campaign: string | null;
+          p_country: string | null;
+          p_region: string | null;
+          p_city: string | null;
+          p_device_type: string | null;
+          p_browser: string | null;
+          p_os: string | null;
+          p_is_bot: boolean;
+          p_count_page_view: boolean;
+        };
+        Returns: string;
+      };
+      site_traffic_daily: {
+        Args: {
+          p_from: string;
+          p_to: string;
+        };
+        Returns: {
+          day: string;
+          visitors: number;
+          page_views: number;
+          signed_in_visitors: number;
+          new_visitors: number;
+        }[];
+      };
+      site_traffic_breakdown: {
+        Args: {
+          p_from: string;
+          p_to: string;
+          p_limit?: number;
+        };
+        Returns: {
+          dimension: string;
+          value: string;
+          hits: number;
+        }[];
+      };
+      prune_site_analytics: {
+        Args: {
+          p_days?: number;
+        };
+        Returns: number;
+      };
+      ugc_daily_view_deltas: {
+        Args: {
+          p_from: string;
+          p_to: string;
+          p_only_memo?: boolean;
+        };
+        Returns: {
+          day: string;
+          creator_id: string;
+          views: number;
+          likes: number;
+          comments: number;
+          shares: number;
+          videos_posted: number;
+        }[];
+      };
       match_transcript_segments: {
         Args: {
           filter_lecture_id: string;
@@ -1117,3 +1618,19 @@ export type PracticeTestAttemptRow =
   Database["public"]["Tables"]["practice_test_attempts"]["Row"];
 export type PracticeTestAttemptAnswerRow =
   Database["public"]["Tables"]["practice_test_attempt_answers"]["Row"];
+
+export type AdminUserRow = Database["public"]["Tables"]["admin_users"]["Row"];
+export type UgcCreatorRow = Database["public"]["Tables"]["ugc_creators"]["Row"];
+export type UgcCreatorAccountRow =
+  Database["public"]["Tables"]["ugc_creator_accounts"]["Row"];
+export type UgcVideoRow = Database["public"]["Tables"]["ugc_videos"]["Row"];
+export type UgcVideoStatRow =
+  Database["public"]["Tables"]["ugc_video_stats"]["Row"];
+export type UgcAccountStatRow =
+  Database["public"]["Tables"]["ugc_account_stats"]["Row"];
+export type UgcClassificationRuleRow =
+  Database["public"]["Tables"]["ugc_classification_rules"]["Row"];
+export type UgcSyncRunRow = Database["public"]["Tables"]["ugc_sync_runs"]["Row"];
+export type SiteSessionRow = Database["public"]["Tables"]["site_sessions"]["Row"];
+export type SitePageViewRow =
+  Database["public"]["Tables"]["site_page_views"]["Row"];

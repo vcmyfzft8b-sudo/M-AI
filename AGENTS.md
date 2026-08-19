@@ -47,6 +47,14 @@
 - The automation opens pull requests and never merges them. It must not push to `main`, stack one fix branch on another, or write a database migration.
 - The operating procedure is [.claude/skills/error-triage/SKILL.md](/.claude/skills/error-triage/SKILL.md); setup and troubleshooting are in [docs/error-triage-automation.md](/docs/error-triage-automation.md).
 
+## Admin Dashboard
+
+- The admin dashboard is at `/admin`, gated by the `public.admin_users` email allowlist rather than a role on the user account. `PREVIEW_AUTH_BYPASS` deliberately does not open it.
+- Its tables are service-role only: RLS is enabled with no policies, and every read and write goes through the server after the allowlist check. Server actions re-check the allowlist themselves.
+- TikTok per-video stats come from Apify and are billed per post scraped, so the cron frequency and `UGC_SYNC_POSTS_PER_PROFILE` are cost decisions, not just tuning.
+- Reporting days are Europe/Ljubljana everywhere, in both the SQL aggregates and `src/lib/admin/ranges.ts`. Do not bucket a date by UTC in this area.
+- Setup, cost, detection rules and the limits of historical backfill are in [docs/admin-dashboard.md](/docs/admin-dashboard.md).
+
 ## Documentation
 
 - Follow the workflow in [docs/development-workflow.md](/Users/nacevalencic/Desktop/note_taking_app_slo/docs/development-workflow.md) for branching, GitHub pushes, Vercel previews, and merging to production.

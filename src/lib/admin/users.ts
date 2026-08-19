@@ -96,8 +96,10 @@ export async function listUsers(options: {
     } else {
       const subscribed = [...paying, ...trialing];
 
-      // `not.in` with an empty list is not valid PostgREST, and with nobody
-      // subscribed every account is free anyway.
+      // With nobody subscribed every account is free, so the exclusion has
+      // nothing to exclude. PostgREST does accept an empty `not.in.()` and
+      // returns everything, so this is for clarity rather than to avoid an
+      // error.
       if (subscribed.length > 0) {
         query = query.not("id", "in", `(${subscribed.join(",")})`);
       }

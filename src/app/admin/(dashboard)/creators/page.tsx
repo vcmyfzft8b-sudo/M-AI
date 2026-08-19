@@ -27,15 +27,16 @@ import {
   VALUE_BASELINE_DAYS,
 } from "@/lib/admin/campaign-value";
 import {
-  computeCost,
   computeEconomics,
+  type CostBreakdown,
   describePayTerms,
+  type PayTerms,
   payTermsFor,
 } from "@/lib/admin/creator-economics";
 import {
+  monthsCovered,
   normalizeRangePreset,
   resolveRange,
-  todayInReportZone,
 } from "@/lib/admin/ranges";
 import {
   creatorRevenue,
@@ -67,6 +68,30 @@ type SearchParams = Promise<{
 }>;
 
 export const dynamic = "force-dynamic";
+
+/**
+ * What the owed figure is actually made of, in this creator's own terms.
+ *
+ * Two things needed saying here. The base and bonus columns to the left cover
+ * the selected period while this column covers the calendar month, so the three
+ * figures legitimately do not add up and looked like an arithmetic error. And
+ * the split shows the arrangement being honoured: a creator on a flat fee never
+ * gets a bonus line, a code-only creator never gets a base one, because
+ * `computeCost` only fills in the side their terms actually carry.
+ */
+function describeOwed(terms: PayTerms, owed: CostBreakdown): string {
+  const parts: string[] = [];
+
+  if (terms.baseFee) {
+    parts.push(`${formatMoney(owed.basePay)} base`);
+  }
+
+  if (terms.revenueSharePercent !== null) {
+    parts.push(`${formatMoney(owed.codeBonus)} bonus`);
+  }
+
+  return parts.length > 0 ? parts.join(" + ") : "no terms agreed";
+}
 
 export default async function CreatorsPage({
   searchParams,
@@ -154,40 +179,6 @@ export default async function CreatorsPage({
 
   const totalRevenue = estimateRevenue(totals.viewsGained, viewValue);
 
-  // Payouts happen at the end of the calendar month, so what is owed is always
-  // month-to-date regardless of the range being viewed. Anything else would
-  // have someone paying out a seven-day figure by accident.
-  const today = todayInReportZone();
-  const monthStart = `${today.slice(0, 7)}-01`;
-  const monthRange = { from: monthStart, to: today };
-
-  const [monthDeltas, monthCodeUsage] = await Promise.all([
-    getDailyDeltas(monthRange, { onlyMemo: true }),
-    loadSalesData()
-      .then((data) =>
-        creatorRevenue(
-          creators,
-          promoCodeStats(data, {
-            ...range,
-            from: monthRange.from,
-            to: monthRange.to,
-            previous: null,
-          }),
-          data.codeRedemptions,
-        ),
-      )
-      .catch(() => null),
-  ]);
-
-  const monthByCreator = new Map<string, { views: number; videos: number }>();
-
-  for (const row of monthDeltas) {
-    const entry = monthByCreator.get(row.creator_id) ?? { views: 0, videos: 0 };
-    entry.views += Number(row.views ?? 0);
-    entry.videos += Number(row.videos_posted ?? 0);
-    monthByCreator.set(row.creator_id, entry);
-  }
-
   const economicsFor = (creator: (typeof creators)[number]) => {
     const entry = metrics.get(creator.id);
 
@@ -196,16 +187,9 @@ export default async function CreatorsPage({
       views: entry?.viewsGained ?? 0,
       codeRevenue: codeUsage?.get(creator.id)?.revenue ?? 0,
       revenue: estimateRevenue(entry?.viewsGained ?? 0, viewValue),
-    });
-  };
-
-  const owedThisMonth = (creator: (typeof creators)[number]) => {
-    const month = monthByCreator.get(creator.id) ?? { views: 0, videos: 0 };
-
-    return computeCost(payTermsFor(creator), {
-      videos: month.videos,
-      views: month.views,
-      codeRevenue: monthCodeUsage?.get(creator.id)?.revenue ?? 0,
+      // Without this a monthly retainer bills a whole month however short the
+      // window is, so "today" would have claimed a full retainer was owed.
+      monthFraction: monthsCovered(range.days),
     });
   };
 
@@ -214,14 +198,13 @@ export default async function CreatorsPage({
     0,
   );
   const totalOwedBase = creators.reduce(
-    (sum, creator) => sum + owedThisMonth(creator).basePay,
+    (sum, creator) => sum + economicsFor(creator).cost.basePay,
     0,
   );
   const totalOwedBonus = creators.reduce(
-    (sum, creator) => sum + owedThisMonth(creator).codeBonus,
+    (sum, creator) => sum + economicsFor(creator).cost.codeBonus,
     0,
   );
-  const totalOwed = totalOwedBase + totalOwedBonus;
 
   const link = (overrides: Record<string, string | undefined>) => {
     const next = new URLSearchParams();
@@ -387,9 +370,9 @@ export default async function CreatorsPage({
           {
             key: "cost",
             value: formatMoney(totalCost),
-            hint: `${formatMoney(totalOwed)} owed this month · ${formatMoney(
-              totalOwedBase,
-            )} base + ${formatMoney(totalOwedBonus)} bonus`,
+            hint: `${formatMoney(totalOwedBase)} base + ${formatMoney(
+              totalOwedBonus,
+            )} bonus`,
             chartable: false,
           },
           {
@@ -514,7 +497,12 @@ export default async function CreatorsPage({
                     Code bonus
                   </th>
                   <th className="admin-num">Margin</th>
-                  <th className="admin-num">Owed this month</th>
+                  <th
+                    className="admin-num"
+                    title="Base pay plus code bonus for the selected period, on the terms this creator is on. Payouts run monthly, so select This month before paying anyone."
+                  >
+                    Owed · {range.label.toLowerCase()}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -525,7 +513,7 @@ export default async function CreatorsPage({
                   const codes = codeUsage?.get(creator.id);
                   const estimated = estimateRevenue(views, viewValue);
                   const economics = economicsFor(creator);
-                  const owed = owedThisMonth(creator);
+                  const owed = economics.cost;
 
                   return (
                     <tr key={creator.id}>
@@ -676,13 +664,13 @@ export default async function CreatorsPage({
                         {economics.terms.unpaid ? (
                           <span className="admin-help">not paid</span>
                         ) : (
-                          <strong
-                            title={`${formatMoney(owed.basePay)} base + ${formatMoney(
-                              owed.codeBonus,
-                            )} bonus`}
-                          >
-                            {formatMoney(owed.total)}
-                          </strong>
+                          <>
+                            <strong>{formatMoney(owed.total)}</strong>
+                            <br />
+                            <span className="admin-creator-handle">
+                              {describeOwed(economics.terms, owed)}
+                            </span>
+                          </>
                         )}
                       </td>
                     </tr>

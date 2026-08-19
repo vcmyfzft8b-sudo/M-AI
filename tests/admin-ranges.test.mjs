@@ -8,6 +8,7 @@ import {
   eachDay,
   formatHourLabel,
   hourInReportZone,
+  monthsCovered,
   normalizeRangePreset,
   percentChange,
   rangeToTimestamps,
@@ -141,4 +142,30 @@ test("formatHourLabel pads to a stable two-digit axis label", () => {
   assert.equal(formatHourLabel(0), "00:00");
   assert.equal(formatHourLabel(9), "09:00");
   assert.equal(formatHourLabel(23), "23:00");
+});
+
+/**
+ * A monthly retainer is pro-rated by this, so an error here quietly pays a
+ * creator the wrong amount. The point of counting per day is that a day is not
+ * a fixed fraction of a month: February days are worth more than March days.
+ */
+test("monthsCovered pro-rates a retainer by real month lengths", () => {
+  const august = eachDay("2026-08-01", "2026-08-31");
+  assert.equal(monthsCovered(august), 1);
+
+  // 2026 is not a leap year, so February is 28 days and still one whole month.
+  const february = eachDay("2026-02-01", "2026-02-28");
+  assert.equal(monthsCovered(february), 1);
+
+  // A seven-day window inside a 31-day month.
+  assert.equal(monthsCovered(eachDay("2026-08-13", "2026-08-19")), 7 / 31);
+
+  // Spanning a month boundary: one February day plus one March day, each worth
+  // its own month's fraction rather than a shared average.
+  assert.equal(
+    monthsCovered(eachDay("2026-02-28", "2026-03-01")),
+    1 / 28 + 1 / 31,
+  );
+
+  assert.equal(monthsCovered([]), 0);
 });

@@ -191,6 +191,39 @@ export function formatDayLabel(day: string): string {
   }).format(parseDay(day));
 }
 
+/**
+ * How many whole months a set of days adds up to.
+ *
+ * A monthly retainer is owed per calendar month, so any window that is not a
+ * whole month has to be pro-rated. Each day is counted as its own fraction
+ * rather than dividing the total by an average month length, because a day in
+ * February is worth 1/28 of a retainer and a day in March 1/31 -- and a window
+ * spanning both would otherwise be wrong in a way nobody would spot.
+ */
+export function monthsCovered(days: string[]): number {
+  const countedPerMonth = new Map<string, number>();
+
+  for (const day of days) {
+    const month = day.slice(0, 7);
+    countedPerMonth.set(month, (countedPerMonth.get(month) ?? 0) + 1);
+  }
+
+  let total = 0;
+
+  // Counted per month and divided once, rather than adding a day's fraction at
+  // a time: summing 1/31 thirty-one times lands on 0.9999999999999993, and a
+  // whole month has to come out as exactly one whole retainer.
+  for (const [month, counted] of countedPerMonth) {
+    const [year, monthNumber] = month.split("-").map(Number);
+    // Day 0 of the next month is the last day of this one.
+    const lengthOfMonth = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+
+    total += counted / lengthOfMonth;
+  }
+
+  return total;
+}
+
 /** The current hour, 0-23, in the reporting timezone. */
 export function hourInReportZone(now: Date = new Date()): number {
   const hour = new Intl.DateTimeFormat("en-GB", {

@@ -56,6 +56,7 @@ function salesData(overrides = {}) {
     payments: [],
     promotionCodes: new Map(),
     codeRedemptions: new Map(),
+    customerCodes: new Map(),
     truncated: false,
     ...overrides,
   };
@@ -571,4 +572,91 @@ test("a plan with too little history falls back to the overall rate", () => {
   assert.equal(rates.byPlan.has("weekly"), false, "too small a sample to trust");
   // Falls back to the overall 50%: €10.00 x 50%.
   assert.equal(projectTrials([weekly], rates), 500);
+});
+
+test("a conversion after a trial is credited even when the coupon was used up", () => {
+  // The bug this guards: `memo50-first-cycle` is a once-only coupon, so it is
+  // consumed by the customer's zero-amount trial invoice. Their first real
+  // payment then carries no discount at all, and attributing purely by what is
+  // stamped on the invoice paid the creator nothing for a genuine sale. On the
+  // live account this was €460 of revenue no code was credited with.
+  const data = salesData({
+    promotionCodes: new Map([["promo_leila", "LEILA50"]]),
+    // Learned from the €0 trial invoice, which never appears as a payment.
+    customerCodes: new Map([["cus_converted", "promo_leila"]]),
+    payments: [
+      payment({
+        id: "first-real-payment",
+        customerId: "cus_converted",
+        amount: 6500,
+        created: at("2026-08-18T10:00:00Z"),
+        promotionCodeIds: [],
+      }),
+    ],
+  });
+
+  const stats = promoCodeStats(data, RANGE);
+
+  assert.equal(stats.get("LEILA50").revenue, 6500);
+  assert.equal(stats.get("LEILA50").payments, 1);
+  assert.equal(stats.get("LEILA50").customers, 1);
+});
+
+test("renewals after that first payment are not the creator's", () => {
+  const data = salesData({
+    promotionCodes: new Map([["promo_leila", "LEILA50"]]),
+    customerCodes: new Map([["cus_converted", "promo_leila"]]),
+    payments: [
+      payment({
+        id: "first",
+        customerId: "cus_converted",
+        amount: 2000,
+        created: at("2026-08-14T10:00:00Z"),
+        promotionCodeIds: [],
+      }),
+      payment({
+        id: "renewal",
+        customerId: "cus_converted",
+        amount: 2000,
+        created: at("2026-08-18T10:00:00Z"),
+        promotionCodeIds: [],
+      }),
+    ],
+  });
+
+  const stats = promoCodeStats(data, RANGE);
+
+  // Only the first paying invoice counts, not the recurring one after it.
+  assert.equal(stats.get("LEILA50").payments, 1);
+  assert.equal(stats.get("LEILA50").revenue, 2000);
+});
+
+test("a stamped invoice is credited once, not twice", () => {
+  const data = salesData({
+    promotionCodes: new Map([["promo_ema", "EMA50"]]),
+    customerCodes: new Map([["cus_1", "promo_ema"]]),
+    payments: [
+      payment({
+        id: "stamped",
+        customerId: "cus_1",
+        amount: 1000,
+        promotionCodeIds: ["promo_ema"],
+      }),
+    ],
+  });
+
+  const stats = promoCodeStats(data, RANGE);
+
+  assert.equal(stats.get("EMA50").payments, 1);
+  assert.equal(stats.get("EMA50").revenue, 1000);
+});
+
+test("a customer who never used a code is never attributed to one", () => {
+  const data = salesData({
+    promotionCodes: new Map([["promo_ema", "EMA50"]]),
+    customerCodes: new Map(),
+    payments: [payment({ id: "organic", customerId: "cus_organic", amount: 2000 })],
+  });
+
+  assert.equal(promoCodeStats(data, RANGE).size, 0);
 });

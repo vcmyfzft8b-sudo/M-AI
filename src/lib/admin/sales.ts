@@ -146,6 +146,10 @@ async function loadSubscriptions(stripe: Stripe) {
 
 async function loadPayments(stripe: Stripe, sinceUnix: number) {
   const payments: PaymentSnapshot[] = [];
+  // Which promotion code a customer used, learned from any invoice carrying one
+  // — including the zero-amount trial invoice that usually consumes a
+  // once-only coupon.
+  const customerCodes = new Map<string, string>();
   let startingAfter: string | undefined;
   let truncated = false;
 
@@ -159,6 +163,20 @@ async function loadPayments(stripe: Stripe, sinceUnix: number) {
     });
 
     for (const invoice of result.data) {
+      const codeIds = (invoice.discounts ?? [])
+        .map(readPromotionCodeId)
+        .filter((id): id is string => Boolean(id));
+
+      const customerId =
+        typeof invoice.customer === "string"
+          ? invoice.customer
+          : (invoice.customer?.id ?? null);
+
+      // Remember the association even when the invoice itself is worth nothing.
+      if (customerId && codeIds.length > 0 && !customerCodes.has(customerId)) {
+        customerCodes.set(customerId, codeIds[0]);
+      }
+
       // Zero-amount invoices are trial starts and 100%-off comps. They are real
       // conversions but not revenue, so they must not inflate the totals.
       if ((invoice.amount_paid ?? 0) <= 0) {
@@ -170,24 +188,19 @@ async function loadPayments(stripe: Stripe, sinceUnix: number) {
         created: invoice.created,
         amount: invoice.amount_paid ?? 0,
         currency: invoice.currency ?? "eur",
-        customerId:
-          typeof invoice.customer === "string"
-            ? invoice.customer
-            : (invoice.customer?.id ?? null),
-        promotionCodeIds: (invoice.discounts ?? [])
-          .map(readPromotionCodeId)
-          .filter((id): id is string => Boolean(id)),
+        customerId,
+        promotionCodeIds: codeIds,
       });
     }
 
     if (!result.has_more) {
-      return { payments, truncated };
+      return { payments, customerCodes, truncated };
     }
 
     startingAfter = result.data[result.data.length - 1]?.id;
 
     if (!startingAfter) {
-      return { payments, truncated };
+      return { payments, customerCodes, truncated };
     }
 
     if (page === MAX_INVOICE_PAGES - 1) {
@@ -195,7 +208,7 @@ async function loadPayments(stripe: Stripe, sinceUnix: number) {
     }
   }
 
-  return { payments, truncated };
+  return { payments, customerCodes, truncated };
 }
 
 async function loadPromotionCodes(stripe: Stripe) {
@@ -261,6 +274,7 @@ async function fetchSalesData(historyDays: number): Promise<SalesData> {
     // entries and rebuilt on the way out.
     promotionCodes: Array.from(promotionCodes.codes.entries()) as never,
     codeRedemptions: Array.from(promotionCodes.redemptions.entries()) as never,
+    customerCodes: Array.from(paymentResult.customerCodes.entries()) as never,
     truncated: subscriptionResult.truncated || paymentResult.truncated,
   };
 }
@@ -289,6 +303,9 @@ export async function loadSalesData(options?: {
     ),
     codeRedemptions: new Map(
       data.codeRedemptions as unknown as Array<[string, number]>,
+    ),
+    customerCodes: new Map(
+      data.customerCodes as unknown as Array<[string, string]>,
     ),
   };
 }

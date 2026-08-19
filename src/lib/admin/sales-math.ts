@@ -58,6 +58,12 @@ export type SalesData = {
   promotionCodes: Map<string, string>;
   /** Lifetime redemption count per code, keyed by the uppercased code. */
   codeRedemptions: Map<string, number>;
+  /**
+   * Which promotion code id a customer used, learned from any invoice carrying
+   * one — including the zero-amount trial invoice that consumes a once-only
+   * coupon and leaves the real payment un-coded.
+   */
+  customerCodes: Map<string, string>;
   /** True when a page cap was hit and the figures are therefore partial. */
   truncated: boolean;
 };
@@ -510,6 +516,42 @@ export function promoCodeStats(
 
   const customersByCode = new Map<string, Set<string>>();
 
+  // A once-only coupon is consumed by the customer's first invoice, which for a
+  // trial is the zero-amount one. Their first *real* payment then carries no
+  // discount at all, so attributing purely by what is stamped on the invoice
+  // credited the creator with nothing for a sale they genuinely made. The first
+  // paying invoice from a customer known to have used a code counts as that
+  // code's sale; renewals afterwards do not.
+  const firstPaidByCustomer = new Map<string, { id: string; created: number }>();
+
+  for (const payment of data.payments) {
+    if (!payment.customerId) {
+      continue;
+    }
+
+    const seen = firstPaidByCustomer.get(payment.customerId);
+
+    if (!seen || payment.created < seen.created) {
+      firstPaidByCustomer.set(payment.customerId, {
+        id: payment.id,
+        created: payment.created,
+      });
+    }
+  }
+
+  const credit = (code: string, payment: PaymentSnapshot) => {
+    const entry = ensure(code);
+    entry.revenue += payment.amount;
+    entry.payments += 1;
+
+    if (payment.customerId) {
+      const key = code.toUpperCase();
+      const set = customersByCode.get(key) ?? new Set<string>();
+      set.add(payment.customerId);
+      customersByCode.set(key, set);
+    }
+  };
+
   for (const payment of data.payments) {
     const day = unixDay(payment.created);
 
@@ -517,23 +559,37 @@ export function promoCodeStats(
       continue;
     }
 
-    for (const promotionCodeId of payment.promotionCodeIds) {
-      const code = data.promotionCodes.get(promotionCodeId);
+    const stamped = payment.promotionCodeIds
+      .map((id) => data.promotionCodes.get(id))
+      .filter((code): code is string => Boolean(code));
 
-      if (!code) {
-        continue;
+    if (stamped.length > 0) {
+      for (const code of stamped) {
+        credit(code, payment);
       }
 
-      const entry = ensure(code);
-      entry.revenue += payment.amount;
-      entry.payments += 1;
+      continue;
+    }
 
-      if (payment.customerId) {
-        const key = code.toUpperCase();
-        const set = customersByCode.get(key) ?? new Set<string>();
-        set.add(payment.customerId);
-        customersByCode.set(key, set);
-      }
+    // Nothing stamped on the invoice: fall back to the code this customer used,
+    // but only for their first paying invoice.
+    const customerId = payment.customerId;
+
+    if (!customerId) {
+      continue;
+    }
+
+    const first = firstPaidByCustomer.get(customerId);
+
+    if (!first || first.id !== payment.id) {
+      continue;
+    }
+
+    const codeId = data.customerCodes.get(customerId);
+    const code = codeId ? data.promotionCodes.get(codeId) : undefined;
+
+    if (code) {
+      credit(code, payment);
     }
   }
 

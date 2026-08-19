@@ -112,8 +112,26 @@ payouts happen at the end of the calendar month, and showing a seven-day figure
 in a column people pay from would be dangerous. Per-video creators accrue on
 posts; revenue-share creators accrue only when their code actually sells.
 
-**Codes used** counts paid checkouts carrying that creator's codes **inside the
-selected range**. The lifetime redemption count is in the cell's tooltip.
+**Codes used** counts paid checkouts attributed to that creator's codes **inside
+the selected range**. The lifetime redemption count is in the cell's tooltip,
+and the two differ a lot: `EMA50` has been redeemed 34 times but produced two
+paying invoices. A redemption means the code was applied at checkout; only a
+paid invoice above zero means money arrived. Trial starts are €0 invoices and
+never count.
+
+### Attributing a conversion after a trial
+
+`memo50-first-cycle` is a **once**-only coupon, so it is consumed by the
+customer's first invoice — which for a trial is the €0 one. Their first real
+payment then carries no discount at all, and attributing purely by what is
+stamped on the invoice credited the creator with nothing for a genuine sale. On
+the live account that was 16 customers and €460 of revenue no code was credited
+with.
+
+So attribution has two paths: a code stamped on the invoice, or — for a customer
+known to have used a code, learned from any invoice including the €0 one — their
+**first paying invoice**. Renewals after that are not the creator's, and an
+invoice already stamped is never counted twice.
 
 New creators are picked up by the next sync automatically. Follower counts and
 the avatar are filled in immediately from the public TikTok profile page, which

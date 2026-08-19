@@ -191,6 +191,22 @@ export function formatDayLabel(day: string): string {
   }).format(parseDay(day));
 }
 
+/** The current hour, 0-23, in the reporting timezone. */
+export function hourInReportZone(now: Date = new Date()): number {
+  const hour = new Intl.DateTimeFormat("en-GB", {
+    timeZone: REPORT_TIME_ZONE,
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(now);
+
+  return Number.parseInt(hour, 10);
+}
+
+/** `14:00`, for the hourly x axis on a single-day range. */
+export function formatHourLabel(hour: number): string {
+  return `${String(hour).padStart(2, "0")}:00`;
+}
+
 /** Percentage change, or `null` when there is no baseline to compare against. */
 export function percentChange(current: number, previous: number): number | null {
   if (previous === 0) {

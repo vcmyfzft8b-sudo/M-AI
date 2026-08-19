@@ -21,6 +21,11 @@ export type ChartPoint = {
   value: number;
   /** Extra rows shown in the hover tooltip, below the charted value. */
   rows?: ChartTooltipRow[];
+  /**
+   * Axis and tooltip caption, when the point is not a whole day. An hourly
+   * series repeats the same `day` across every point, so it labels itself.
+   */
+  label?: string;
 };
 
 const VIEW_WIDTH = 1000;
@@ -106,7 +111,7 @@ function buildSurfacePoints(
     return {
       x: xFor(index),
       y: yFor(point.value),
-      title: formatDayLabel(point.day),
+      title: point.label ?? formatDayLabel(point.day),
       rows,
     };
   });
@@ -215,7 +220,7 @@ export function AreaChart({
       {points.map((point, index) =>
         labels.has(index) ? (
           <text
-            key={`label-${point.day}`}
+            key={`label-${index}`}
             className="admin-chart-axis"
             x={xFor(index)}
             y={VIEW_HEIGHT - 9}
@@ -223,7 +228,7 @@ export function AreaChart({
               index === 0 ? "start" : index === points.length - 1 ? "end" : "middle"
             }
           >
-            {formatDayLabel(point.day)}
+            {point.label ?? formatDayLabel(point.day)}
           </text>
         ) : null,
       )}
@@ -287,7 +292,7 @@ export function BarChart({
 
         return (
           <rect
-            key={point.day}
+            key={`bar-${index}`}
             className="admin-chart-bar"
             x={xFor(index) - barWidth / 2}
             y={point.value > 0 ? y : PADDING.top + PLOT_HEIGHT - 1}
@@ -301,13 +306,13 @@ export function BarChart({
       {points.map((point, index) =>
         labels.has(index) ? (
           <text
-            key={`label-${point.day}`}
+            key={`label-${index}`}
             className="admin-chart-axis"
             x={xFor(index)}
             y={VIEW_HEIGHT - 9}
             textAnchor="middle"
           >
-            {formatDayLabel(point.day)}
+            {point.label ?? formatDayLabel(point.day)}
           </text>
         ) : null,
       )}

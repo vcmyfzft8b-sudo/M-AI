@@ -1,5 +1,5 @@
 import { AutoRefresh } from "@/components/admin/auto-refresh";
-import { AreaChart } from "@/components/admin/chart";
+import { AreaChart, type ChartPoint } from "@/components/admin/chart";
 import {
   Alert,
   Badge,
@@ -18,13 +18,46 @@ import {
   getTrafficSummary,
   ONLINE_WINDOW_MINUTES,
 } from "@/lib/admin/analytics";
-import { normalizeRangePreset, resolveRange } from "@/lib/admin/ranges";
+import {
+  formatHourLabel,
+  hourInReportZone,
+  normalizeRangePreset,
+  REPORT_TIME_ZONE,
+  resolveRange,
+} from "@/lib/admin/ranges";
 import {
   getRealtimeVisitors,
   getVercelTraffic,
+  type VercelTrafficHour,
 } from "@/lib/admin/vercel-analytics";
 
 type SearchParams = Promise<{ range?: string }>;
+
+/**
+ * The day view, charted by hour.
+ *
+ * A one-day range folds to a single daily point, which draws as a lone dot with
+ * nothing to interpolate across. Vercel's buckets are hourly before they are
+ * folded into days, so the day is redrawn straight from those: hours that saw
+ * no traffic are filled back in so the line stays continuous, and hours that
+ * have not happened yet are left off rather than plotted as zero.
+ */
+function hourlyPoints(hours: VercelTrafficHour[], day: string): ChartPoint[] {
+  const byHour = new Map(
+    hours.filter((entry) => entry.day === day).map((entry) => [entry.hour, entry]),
+  );
+
+  return Array.from({ length: hourInReportZone() + 1 }, (_, hour) => {
+    const entry = byHour.get(hour);
+
+    return {
+      day,
+      label: formatHourLabel(hour),
+      value: entry?.visitors ?? 0,
+      rows: [{ label: "Page views", value: formatExact(entry?.pageViews ?? 0) }],
+    };
+  });
+}
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +109,13 @@ export default async function VisitorsPage({
       }
     : ownBreakdown;
 
+  // Vercel files traffic with no referrer under an empty key, which `readRows`
+  // normalises to "unknown". On a card that reads as a failure rather than as
+  // what it is.
+  const topReferrer = breakdown.referrers[0] ?? null;
+  const topReferrerLabel =
+    topReferrer && topReferrer.value !== "unknown" ? topReferrer.value : "Direct";
+
   const signedIn = online.filter((visitor) => visitor.userId);
 
   // Vercel sees every visitor; our beacon only sees the ones it can name. Trust
@@ -83,7 +123,18 @@ export default async function VisitorsPage({
   const onlineCount = liveNow ?? online.length;
   const anonymous = Math.max(onlineCount - signedIn.length, 0);
 
-  const hasTraffic = series.some((point) => point.visitors > 0);
+  // Only the day view goes hourly; every other range is already wide enough to
+  // draw a line, and Vercel is the only source with sub-daily buckets.
+  const hourlyView = usingVercel && preset === "today";
+  const chartPoints = hourlyView
+    ? hourlyPoints(vercel.hours, range.to)
+    : series.map((point) => ({
+        day: point.day,
+        value: point.visitors,
+        rows: [{ label: "Page views", value: formatExact(point.pageViews) }],
+      }));
+
+  const hasTraffic = chartPoints.some((point) => point.value > 0);
 
   return (
     <>
@@ -160,36 +211,41 @@ export default async function VisitorsPage({
               : undefined
           }
         />
+        {/*
+         * This slot held "New visitors" until it turned out nothing could fill
+         * it honestly. The beacon counted a new visitor as a `site_sessions`
+         * row whose `first_seen_at` fell in the window, and the `memo-visit`
+         * cookie behind those rows expires after 24 hours -- so the same person
+         * returning tomorrow was counted new again. No amount of accumulated
+         * history fixes that, and Vercel does not break new against returning
+         * down at all. Top referrer is the most useful thing either source can
+         * actually answer for the selected window.
+         */}
         <StatCard
-          label="New visitors"
-          value={formatCount(summary.newVisitors)}
+          label="Top referrer"
+          value={topReferrerLabel}
           meta={
-            usingVercel
-              ? "First-time, from the on-site beacon"
-              : "First time on the site"
+            topReferrer
+              ? usingVercel && visitors > 0
+                ? `${Math.round((topReferrer.hits / visitors) * 100)}% of visits`
+                : `${formatExact(topReferrer.hits)} page views`
+              : "Nothing recorded for this window"
           }
         />
       </div>
 
       <Section
-        title="Visits per day"
+        title={hourlyView ? "Visits per hour" : "Visits per day"}
         hint={
-          usingVercel
-            ? "From Vercel Web Analytics, which has recorded memoai.eu since March. Daily visitor counts are summed from hourly buckets, so someone spanning two hours counts twice; the window total above is deduplicated and exact."
-            : "From the on-site beacon only, so this begins the day it shipped rather than months back."
+          hourlyView
+            ? `From Vercel Web Analytics, by hour in ${REPORT_TIME_ZONE.split("/")[1]} time. Each hour counts distinct devices, so someone active across two hours counts in both; the day total above is deduplicated and exact.`
+            : usingVercel
+              ? "From Vercel Web Analytics, which has recorded memoai.eu since March. Daily visitor counts are summed from hourly buckets, so someone spanning two hours counts twice; the window total above is deduplicated and exact."
+              : "From the on-site beacon only, so this begins the day it shipped rather than months back."
         }
       >
         {hasTraffic ? (
-          <AreaChart
-            points={series.map((point) => ({
-              day: point.day,
-              value: point.visitors,
-              rows: [
-                { label: "Page views", value: formatExact(point.pageViews) },
-              ],
-            }))}
-            label="visits"
-          />
+          <AreaChart points={chartPoints} label="visits" />
         ) : (
           <EmptyState title="No traffic recorded yet">
             Traffic starts appearing as soon as this build is live and someone

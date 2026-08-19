@@ -6,6 +6,8 @@ import {
   dayStartIso,
   daysBetween,
   eachDay,
+  formatHourLabel,
+  hourInReportZone,
   normalizeRangePreset,
   percentChange,
   rangeToTimestamps,
@@ -116,4 +118,27 @@ test("percent change reports no baseline rather than dividing by zero", () => {
   assert.equal(percentChange(0, 0), 0);
   // Growth from nothing has no meaningful percentage.
   assert.equal(percentChange(10, 0), null);
+});
+
+/**
+ * The day view charts hourly buckets, and the hour a bucket belongs to is the
+ * hour in Ljubljana, not in UTC. Getting this wrong shifts the whole chart by
+ * one or two hours depending on the season, which is exactly the kind of thing
+ * nobody notices until the evening traffic looks like afternoon traffic.
+ */
+test("hourInReportZone reads the hour in Ljubljana, not UTC", () => {
+  // Central European Summer Time, UTC+2.
+  assert.equal(hourInReportZone(new Date("2026-08-19T19:45:21Z")), 21);
+  // Central European Time, UTC+1.
+  assert.equal(hourInReportZone(new Date("2026-01-15T19:45:21Z")), 20);
+  // Crossing midnight locally while UTC is still on the previous day.
+  assert.equal(hourInReportZone(new Date("2026-08-19T22:30:00Z")), 0);
+  // Midnight itself, so the hourly axis starts at 00 rather than 24.
+  assert.equal(hourInReportZone(new Date("2026-08-19T00:15:00Z")), 2);
+});
+
+test("formatHourLabel pads to a stable two-digit axis label", () => {
+  assert.equal(formatHourLabel(0), "00:00");
+  assert.equal(formatHourLabel(9), "09:00");
+  assert.equal(formatHourLabel(23), "23:00");
 });

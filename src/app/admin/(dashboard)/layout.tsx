@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
 
 import { AutoRefresh } from "@/components/admin/auto-refresh";
-import { AdminNav } from "@/components/admin/nav";
+import {
+  AccountFooter,
+  AdminMobileNav,
+  AdminNav,
+} from "@/components/admin/nav";
 import { BrandLogo } from "@/components/brand-logo";
 import { requireAdmin, touchAdminLastSeen } from "@/lib/admin/auth";
 import { countVideosNeedingReview } from "@/lib/admin/ugc";
@@ -30,21 +34,17 @@ export default async function AdminDashboardLayout({
 
         <AdminNav reviewCount={reviewCount} />
 
-        <div className="admin-sidebar-footer">
-          <span className="admin-sidebar-email">{context.user.email}</span>
-          <span>{context.isOwner ? "Owner" : "Admin"}</span>
-          <form action="/auth/logout" method="post">
-            <button
-              type="submit"
-              className="admin-button"
-              data-variant="ghost"
-              data-size="sm"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
+        <AccountFooter
+          email={context.user.email ?? ""}
+          role={context.isOwner ? "Owner" : "Admin"}
+        />
       </aside>
+
+      <AdminMobileNav
+        reviewCount={reviewCount}
+        email={context.user.email ?? ""}
+        role={context.isOwner ? "Owner" : "Admin"}
+      />
 
       <main className="admin-main">
         <AutoRefresh />

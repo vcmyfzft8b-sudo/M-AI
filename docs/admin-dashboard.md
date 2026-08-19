@@ -386,6 +386,19 @@ revenue panels show as unavailable.
 4. Open `/admin`, check the review queue, and correct any account whose mode was
    guessed wrong.
 
+## On a phone
+
+Below 60rem the sidebar is replaced by a header with a hamburger and a drawer.
+That is not only for space: the sidebar previously collapsed into a horizontally
+scrolling strip of links whose footer was hidden, which took the signed-in
+address and the only **Sign out** control with it.
+
+The range switcher wraps rather than scrolling, because a fifth option clipped
+at the screen edge gives no hint that it is there. Charts get a taller aspect
+ratio, since at the desktop 10:3 they collapsed to about 100px on a phone. Wide
+tables keep their columns and scroll horizontally inside their own container
+rather than being crushed.
+
 ## Tests
 
 - `tests/migrations.test.mjs` replays every migration in an in-process Postgres

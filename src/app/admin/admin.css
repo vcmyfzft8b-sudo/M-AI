@@ -733,6 +733,9 @@
   height: auto;
   display: block;
   overflow: visible;
+  /* The SVG does not preserve its aspect ratio, so CSS has to give it one.
+     Without this it collapsed to about 100px on a phone. */
+  aspect-ratio: 10 / 3;
 }
 
 .admin-chart-grid {
@@ -1012,38 +1015,160 @@
 
 /* --------------------------------------------------------------- mobile -- */
 
+/* The mobile header and its drawer. Hidden on desktop, where the sidebar is
+   always visible. */
+.admin-topbar {
+  display: none;
+}
+
+.admin-topbar-button {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--separator);
+  border-radius: 0.625rem;
+  background: transparent;
+  color: var(--label);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.admin-topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.admin-topbar-brand .brand-logo.compact .brand-logo-mark {
+  --lockup-h: 1.75rem;
+}
+
+.admin-topbar-current {
+  margin-left: auto;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--secondary-label);
+}
+
+.admin-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.admin-drawer-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.admin-drawer-panel {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: min(17rem, 82vw);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1rem;
+  background: var(--surface-strong);
+  border-right: 1px solid var(--separator);
+  overflow-y: auto;
+  animation: admin-drawer-in var(--motion-duration-base) var(--motion-curve-soft);
+}
+
+@keyframes admin-drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-drawer-panel {
+    animation: none;
+  }
+}
+
+.admin-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.admin-drawer .admin-nav-link {
+  padding: 0.6875rem 0.75rem;
+  font-size: 0.875rem;
+}
+
 @media (max-width: 60rem) {
   .admin-shell {
     grid-template-columns: 1fr;
   }
 
+  /* Replaced on mobile by the drawer, which keeps sign-out reachable. */
   .admin-sidebar {
-    position: static;
-    height: auto;
-    flex-direction: row;
-    align-items: center;
-    gap: 1rem;
-    overflow-x: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--separator);
-    padding: 0.75rem 1rem;
-  }
-
-  .admin-nav {
-    flex-direction: row;
-    gap: 0.25rem;
-  }
-
-  .admin-nav-link {
-    white-space: nowrap;
-  }
-
-  .admin-sidebar-footer {
     display: none;
+  }
+
+  .admin-topbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--surface-strong);
+    border-bottom: 1px solid var(--separator);
+    position: sticky;
+    top: 0;
+    z-index: 40;
   }
 
   .admin-main {
     padding: 1.25rem 1rem 3rem;
+  }
+
+  .admin-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  /* A squat chart is unreadable; give it room to breathe on a phone. */
+  .admin-chart {
+    aspect-ratio: 4 / 3;
+  }
+
+  /* Five options do not fit across a phone. Wrapping shows all of them at
+     once, where a horizontal scroll left "All time" clipped at the edge with
+     nothing to suggest it was there. */
+  .admin-range {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 0.25rem;
+  }
+
+  .admin-range-item {
+    flex: 1 1 auto;
+    text-align: center;
+    padding: 0.4375rem 0.5rem;
+  }
+
+  .admin-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-two-col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Tables stay wide and scroll horizontally rather than being crushed. */
+  .admin-table {
+    min-width: 44rem;
   }
 }
 

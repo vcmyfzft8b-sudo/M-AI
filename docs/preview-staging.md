@@ -79,6 +79,58 @@ Staging must stay aligned with the migration files already released on `main`. S
 
 This keeps staging aligned with the migration files already released on `main`, without copying production records. The error-triage automation does not synchronize staging and never writes a migration; a database-changing fix is handed to a human instead.
 
+### The command, and the two things that go wrong
+
+`supabase db push` has **no `--project-ref` flag**. It defaults to `--linked`, and the
+linked project is *production*. Targeting staging means passing `--db-url` explicitly,
+so never run a bare `supabase db push` while intending to hit staging.
+
+The connection string comes from the branch itself. Take `POSTGRES_URL` (the pooler),
+not `POSTGRES_URL_NON_POOLING` — the direct `db.<ref>.supabase.co` host resolves to
+IPv6 only and fails with `dial tcp [2a05:...]:5432: connect: no route to host` from a
+normal machine. Then move the pooler off its transaction port (`6543`) onto the session
+port (`5432`); migrations need session mode.
+
+```bash
+URL=$(supabase branches get yviipoccwsndxyrhtcjm --output json | python3 -c "
+import sys, json, urllib.parse as u
+d = json.load(sys.stdin)
+p = u.urlparse(d['POSTGRES_URL'])
+assert 'yviipoccwsndxyrhtcjm' in p.username, 'not staging'
+print(u.urlunparse(p._replace(netloc=f'{p.username}:{u.quote(p.password, safe=\"\")}@{p.hostname}:5432')))
+")
+
+# Refuse to continue if that is not the staging branch.
+case "$URL" in *zrcwmhuwwvguiekzmcdj*) echo 'ABORT: production'; exit 1;; esac
+
+supabase db push --db-url "$URL" --dry-run   # always first
+supabase db push --db-url "$URL" --yes
+```
+
+Keep `$URL` in the shell variable. It carries the staging database password, so do not
+echo it, and filter it out of any output you quote: `sed -E 's#postgres(ql)?://[^ ]*#<redacted>#g'`.
+
+The dry run is not a formality — it prints exactly which migrations are missing. If it
+lists more than you expect, staging has drifted further than you thought; if it errors
+with "Remote migration versions not found in local migrations directory", a remote-only
+version is blocking the chain and must be restored as a file rather than repaired.
+
+### History
+
+Staging was synchronized on 2026-08-19, when it was found to be missing `0027`-`0029`
+(the admin dashboard schema, shipped in #203). Every preview build of `/admin` had been
+returning 500 on `site_sessions` and `ugc_creators` since that PR merged, and the failure
+reached Sentry as `MEMOAI-WEB-2P` with a preview URL in it. Production was never affected.
+
+Two things made that slow to diagnose, both worth knowing:
+
+- `scripts/sentry-error-scan.mjs` queries `is:unresolved` with **no environment filter**,
+  so preview-only issues reach the triage gate even though the Vercel half of the scan is
+  production-only. A Sentry issue is not evidence of a production problem until you have
+  checked the URL on the event.
+- Nothing about the staging branch appears in `supabase projects list`, which reads as
+  "this database is not mine" if you have not read the section above.
+
 ## Creating A Database Migration
 
 Never make a schema change only in staging or production. The reviewed migration file is the deployable artifact.

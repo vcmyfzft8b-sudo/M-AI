@@ -238,13 +238,6 @@ export default async function UsersPage({
           </span>
         </div>
       )}
-
-      {filter !== "all" && (
-        <p className="admin-help" style={{ marginTop: "0.75rem" }}>
-          The plan filter is applied to the current page of results, so the count
-          above describes all matching accounts rather than the filtered rows.
-        </p>
-      )}
     </>
   );
 }

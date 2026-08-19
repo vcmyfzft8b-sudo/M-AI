@@ -2,6 +2,12 @@ import "server-only";
 
 import { type DateRange, eachDay, rangeToTimestamps, todayInReportZone } from "@/lib/admin/ranges";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
+import {
+  ACTIVE_STATUS_LIST,
+  ACTIVE_STATUSES,
+  classifyPlanMembership,
+  type PlanMembership,
+} from "@/lib/admin/user-plans";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 export type AdminUserListItem = {
@@ -27,17 +33,36 @@ export type UserListResult = {
   pageSize: number;
 };
 
-const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
-  "active",
-  "trialing",
-  "past_due",
-]);
-
 export const USER_FILTERS = ["all", "paying", "trialing", "free"] as const;
 export type UserFilter = (typeof USER_FILTERS)[number];
 
 export function normalizeUserFilter(value: string | null | undefined): UserFilter {
   return USER_FILTERS.includes(value as UserFilter) ? (value as UserFilter) : "all";
+}
+
+/**
+ * Every live subscription, classified.
+ *
+ * Reading them all to filter one page is only reasonable because there are a
+ * few hundred against a few thousand profiles. If paid subscriptions ever
+ * approach the same order as profiles this wants to become a database-side
+ * join, since the ids travel to PostgREST on the query string.
+ */
+async function loadPlanMembership(
+  serviceRole: ReturnType<typeof createSupabaseServiceRoleClient>,
+): Promise<PlanMembership> {
+  const { data, error } = await serviceRole
+    .from("billing_subscriptions")
+    .select("user_id, status")
+    .in("status", [...ACTIVE_STATUS_LIST]);
+
+  if (error) {
+    throw new Error(`Could not load subscription plans: ${error.message}`);
+  }
+
+  return classifyPlanMembership(
+    (data ?? []) as Array<{ user_id: string; status: string }>,
+  );
 }
 
 export async function listUsers(options: {
@@ -56,6 +81,28 @@ export async function listUsers(options: {
     .from("profiles")
     .select("*", { count: "exact" })
     .order("created_at", { ascending: false });
+
+  // Narrow before paginating, not after. Filtering the page that came back
+  // returned an empty table on every plan except "all" -- profiles are ordered
+  // newest first, and the newest few dozen signups are almost never paying --
+  // while the count carried on describing all accounts.
+  if (filter !== "all") {
+    const { paying, trialing } = await loadPlanMembership(serviceRole);
+
+    if (filter === "paying") {
+      query = query.in("id", [...paying]);
+    } else if (filter === "trialing") {
+      query = query.in("id", [...trialing]);
+    } else {
+      const subscribed = [...paying, ...trialing];
+
+      // `not.in` with an empty list is not valid PostgREST, and with nobody
+      // subscribed every account is free anyway.
+      if (subscribed.length > 0) {
+        query = query.not("id", "in", `(${subscribed.join(",")})`);
+      }
+    }
+  }
 
   if (search) {
     // Escape the PostgREST `or` filter separators so a comma or paren in the
@@ -135,26 +182,10 @@ export async function listUsers(options: {
     };
   });
 
-  // The status filter is applied after the join because subscription state is
-  // not a column on `profiles`. Counts therefore describe the current page.
-  const filtered =
-    filter === "all"
-      ? users
-      : users.filter((user) => {
-          if (filter === "paying") {
-            return user.hasPaidAccess && user.subscriptionStatus !== "trialing";
-          }
-
-          if (filter === "trialing") {
-            return user.subscriptionStatus === "trialing";
-          }
-
-          return !user.hasPaidAccess;
-        });
-
   return {
-    users: filtered,
-    total: count ?? filtered.length,
+    users,
+    // Now describes the filtered set, because the filter reached the query.
+    total: count ?? users.length,
     page,
     pageSize,
   };
@@ -243,27 +274,12 @@ export async function getUserTotals(range: DateRange): Promise<UserTotals> {
     serviceRole
       .from("billing_subscriptions")
       .select("user_id, status")
-      .in("status", ["active", "trialing", "past_due"]),
+      .in("status", [...ACTIVE_STATUS_LIST]),
   ]);
 
-  const paying = new Set<string>();
-  const trialing = new Set<string>();
-
-  for (const row of (subscriptions.data ?? []) as Array<{
-    user_id: string;
-    status: string;
-  }>) {
-    if (row.status === "trialing") {
-      trialing.add(row.user_id);
-    } else {
-      paying.add(row.user_id);
-    }
-  }
-
-  // Someone holding both a live paid sub and a trial row counts as paying.
-  for (const id of paying) {
-    trialing.delete(id);
-  }
+  const { paying, trialing } = classifyPlanMembership(
+    (subscriptions.data ?? []) as Array<{ user_id: string; status: string }>,
+  );
 
   return {
     total: total.count ?? 0,

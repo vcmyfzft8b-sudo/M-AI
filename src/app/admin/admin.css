@@ -1492,6 +1492,20 @@
   pointer-events: none;
 }
 
+/* On a phone the bar is the only feedback there is: the drawer closes as it is
+   tapped, taking the dimmed nav link away with it, so nothing else on screen
+   says the tap landed. It carries more weight here than on desktop, where the
+   pressed control dims alongside it.
+
+   This has to sit after the rule above rather than in the mobile block further
+   up: both are one class deep, so source order decides, and up there the 2px
+   simply won back. */
+@media (max-width: 60rem) {
+  .admin-progress {
+    height: 3px;
+  }
+}
+
 .admin-progress::after {
   content: "";
   position: absolute;

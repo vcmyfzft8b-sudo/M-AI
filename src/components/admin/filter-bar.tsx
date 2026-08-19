@@ -1,7 +1,9 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
+
+import { startNavigation } from "./pending-link";
 
 /**
  * The filter row above the chart.
@@ -34,6 +36,9 @@ export function FilterBar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  // Which select was changed, so only that one is marked rather than the whole
+  // row going grey and leaving the admin to work out what they just touched.
+  const [changing, setChanging] = useState<string | null>(null);
 
   function update(name: string, value: string) {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
@@ -46,13 +51,15 @@ export function FilterBar({
 
     params.delete("page");
 
+    setChanging(name);
+    startNavigation();
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}`);
     });
   }
 
   return (
-    <div className="admin-filters" data-pending={isPending}>
+    <div className="admin-filters">
       {filters.map((filter) => {
         const current = searchParams?.get(filter.name) ?? "";
 
@@ -61,11 +68,13 @@ export function FilterBar({
             className="admin-filter"
             key={filter.name}
             data-set={current !== ""}
+            data-pending={(isPending && changing === filter.name) || undefined}
           >
             <span className="sr-only">{filter.allLabel}</span>
             <select
               value={current}
               aria-label={filter.allLabel}
+              disabled={isPending}
               onChange={(event) => update(filter.name, event.target.value)}
             >
               <option value="">{filter.allLabel}</option>

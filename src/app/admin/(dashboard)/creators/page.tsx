@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { AreaChart, type ChartPoint, toCumulative } from "@/components/admin/chart";
 import { AddCreatorForm } from "@/components/admin/creator-form";
 import { FilterBar } from "@/components/admin/filter-bar";
@@ -10,6 +8,7 @@ import {
   type MetricKey,
   normalizeMetric,
 } from "@/components/admin/metric-tiles";
+import { PendingLink } from "@/components/admin/pending-link";
 import { SyncPanel } from "@/components/admin/sync-panel";
 import {
   Avatar,
@@ -343,14 +342,14 @@ export default async function CreatorsPage({
         ]}
       >
         {(creatorFilter || modeFilter || kindFilter) && (
-          <Link
+          <PendingLink
             className="admin-button"
             data-variant="ghost"
             data-size="sm"
             href={link({ creator: undefined, mode: undefined, kind: undefined })}
           >
             Clear filters
-          </Link>
+          </PendingLink>
         )}
       </FilterBar>
 
@@ -421,34 +420,31 @@ export default async function CreatorsPage({
 
       <div className="admin-chart-bar-row">
         <nav className="admin-range">
-          <Link
+          <PendingLink
             className="admin-range-item"
             data-active={!cumulative}
             href={link({ view: undefined })}
-            prefetch={false}
           >
             Daily
-          </Link>
-          <Link
+          </PendingLink>
+          <PendingLink
             className="admin-range-item"
             data-active={cumulative}
             href={link({ view: "cumulative" })}
-            prefetch={false}
           >
             Cumulative
-          </Link>
+          </PendingLink>
         </nav>
 
         {range.previous && (
-          <Link
+          <PendingLink
             className="admin-button"
             data-variant={compare ? "default" : "ghost"}
             data-size="sm"
             href={link({ compare: compare ? "off" : undefined })}
-            prefetch={false}
           >
             {compare ? "Hide previous period" : "Compare previous period"}
-          </Link>
+          </PendingLink>
         )}
 
         <span className="admin-toolbar-spacer" />
@@ -534,7 +530,7 @@ export default async function CreatorsPage({
                   return (
                     <tr key={creator.id}>
                       <td>
-                        <Link
+                        <PendingLink
                           href={`/admin/creators/${creator.id}`}
                           className="admin-creator-cell"
                           style={{ textDecoration: "none", color: "inherit" }}
@@ -564,7 +560,7 @@ export default async function CreatorsPage({
                                 : "no promo code"}
                             </span>
                           </span>
-                        </Link>
+                        </PendingLink>
                       </td>
                       <td>
                         <span className="admin-handle-list">

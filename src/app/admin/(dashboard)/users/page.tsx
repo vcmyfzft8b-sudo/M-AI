@@ -1,6 +1,6 @@
-import Link from "next/link";
-
 import { AreaChart } from "@/components/admin/chart";
+import { PendingLink } from "@/components/admin/pending-link";
+import { SearchForm } from "@/components/admin/search-form";
 import {
   Badge,
   Section,
@@ -128,34 +128,22 @@ export default async function UsersPage({
       </Section>
 
       <div className="admin-toolbar">
-        <form method="get" style={{ display: "flex", gap: "0.5rem" }}>
-          <input type="hidden" name="range" value={preset} />
-          {filter !== "all" && <input type="hidden" name="filter" value={filter} />}
-          <input
-            className="admin-input"
-            type="search"
-            name="q"
-            defaultValue={search}
-            placeholder="Search email or name"
-            style={{ width: "16rem" }}
-            aria-label="Search users"
-          />
-          <button type="submit" className="admin-button">
-            Search
-          </button>
-        </form>
+        <SearchForm
+          label="Search users"
+          placeholder="Search email or name"
+          defaultValue={search}
+        />
 
         <div className="admin-range">
           {USER_FILTERS.map((value) => (
-            <Link
+            <PendingLink
               key={value}
               href={linkTo({ filter: value, page: 1 })}
               className="admin-range-item"
               data-active={value === filter}
-              prefetch={false}
             >
               {FILTER_LABELS[value]}
-            </Link>
+            </PendingLink>
           ))}
         </div>
       </div>
@@ -238,14 +226,14 @@ export default async function UsersPage({
           </span>
           <span style={{ display: "flex", gap: "0.5rem" }}>
             {page > 1 && (
-              <Link className="admin-button" href={linkTo({ page: page - 1 })} prefetch={false}>
+              <PendingLink className="admin-button" href={linkTo({ page: page - 1 })}>
                 Previous
-              </Link>
+              </PendingLink>
             )}
             {page < totalPages && (
-              <Link className="admin-button" href={linkTo({ page: page + 1 })} prefetch={false}>
+              <PendingLink className="admin-button" href={linkTo({ page: page + 1 })}>
                 Next
-              </Link>
+              </PendingLink>
             )}
           </span>
         </div>

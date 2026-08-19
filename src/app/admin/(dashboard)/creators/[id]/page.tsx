@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
@@ -9,6 +8,7 @@ import {
 import { AreaChart } from "@/components/admin/chart";
 import { AddAccountForm, EditCreatorForm } from "@/components/admin/creator-form";
 import { ActionForm, Disclosure, InlineAction, SubmitButton } from "@/components/admin/forms";
+import { PendingLink } from "@/components/admin/pending-link";
 import {
   Avatar,
   Badge,
@@ -119,9 +119,9 @@ export default async function CreatorDetailPage({
       <header className="admin-header">
         <div>
           <p className="admin-subtitle" style={{ marginBottom: "0.25rem" }}>
-            <Link className="admin-link" href="/admin/creators">
+            <PendingLink className="admin-link" href="/admin/creators">
               ← All creators
-            </Link>
+            </PendingLink>
           </p>
           <h1 className="admin-title">{creator.name}</h1>
           <p className="admin-subtitle">

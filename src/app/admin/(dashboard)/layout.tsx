@@ -6,6 +6,7 @@ import {
   AdminMobileNav,
   AdminNav,
 } from "@/components/admin/nav";
+import { NavigationProgress } from "@/components/admin/pending-link";
 import { BrandLogo } from "@/components/brand-logo";
 import { requireAdmin, touchAdminLastSeen } from "@/lib/admin/auth";
 import { countVideosNeedingReview } from "@/lib/admin/ugc";
@@ -26,6 +27,10 @@ export default async function AdminDashboardLayout({
 
   return (
     <div className="admin-shell">
+      {/* One bar for the whole dashboard, so it survives the controls that
+          unmount as they navigate — the mobile drawer closes on tap. */}
+      <NavigationProgress />
+
       <aside className="admin-sidebar">
         <a className="admin-brand" href="/admin" aria-label="Memo AI admin">
           <BrandLogo compact />

@@ -8,6 +8,7 @@ import { getUserEntitlementState } from "@/lib/billing";
 import { STORAGE_BUCKET } from "@/lib/constants";
 import type { Json, LectureTtsChunkRow, TtsGenerationEventRow } from "@/lib/database.types";
 import { normalizeNoteLanguage } from "@/lib/languages";
+import { INITIAL_NOTE_AUDIO_STAGE } from "@/lib/note-audio-stage";
 import { DEFAULT_NOTE_TTS_VOICE, type NoteTtsVoice } from "@/lib/note-tts-settings";
 import {
   buildNoteTtsChunks,
@@ -186,7 +187,7 @@ export async function markInitialNoteAudioPreparing(params: {
         processing_metadata: {
           ...metadata,
           processing: {
-            stage: "preparing_audio",
+            stage: INITIAL_NOTE_AUDIO_STAGE,
             updatedAt: new Date().toISOString(),
             errorMessage: null,
           },

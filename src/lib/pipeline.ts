@@ -26,6 +26,7 @@ import {
   type StructuredSourceBlock,
 } from "@/lib/text-source-processing";
 import type { ChatMessageWithCitations } from "@/lib/types";
+import { isPreparingInitialNoteAudio } from "@/lib/note-audio-stage";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
 import { withNoteEnrichmentStage } from "@/lib/note-enrichment-status";
 import {
@@ -539,6 +540,11 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
   });
 }
 
+/**
+ * Records a pipeline failure on the lecture row. Returns `{ recorded: false }` when the failure
+ * arrived too late to matter — the notes were already finished — and the lecture was left ready
+ * instead; a caller that would otherwise rethrow should treat that as a success.
+ */
 export async function markLecturePipelineFailed(params: {
   lectureId: string;
   error: unknown;
@@ -585,6 +591,29 @@ export async function markLecturePipelineFailed(params: {
     }
   }
 
+  // The notes are already written and the artifact already marked complete before the optional
+  // initial audio starts, which is why `prepareInitialNoteTtsChunksSafely` swallows its own
+  // failures. The invocation budget is the one thing that still escapes it: it rejects the caller's
+  // `Promise.race`, not the pipeline, so a deadline reached during that optional step arrives here
+  // and buries a finished lecture under "processing failed" — where `reconcileLectureWithArtifact`
+  // will never rescue it, because it refuses to touch a failed row. Nothing the learner is waiting
+  // for is outstanding at this stage, so keep the lecture ready and let the note player prepare its
+  // first audio chunk on demand.
+  if (isPreparingInitialNoteAudio(metadata)) {
+    console.warn("Lecture pipeline failed after the notes were finished", {
+      lectureId: params.lectureId,
+      error: params.error,
+    });
+
+    await updateLectureProcessingState({
+      lectureId: params.lectureId,
+      processingMetadata: nextMetadata,
+      stage: "ready",
+    });
+
+    return { recorded: false };
+  }
+
   if (
     !(params.error instanceof InvalidAudioFileError) &&
     !(params.error instanceof NoClearSpeechDetectedError) &&
@@ -617,6 +646,8 @@ export async function markLecturePipelineFailed(params: {
     stage: "failed",
     errorMessage: toErrorMessage(params.error),
   });
+
+  return { recorded: true };
 }
 
 export async function runLecturePipeline(params: { lectureId: string }) {

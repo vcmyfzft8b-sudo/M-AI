@@ -63,14 +63,20 @@ export const processLectureFunction = inngest.createFunction(
         }),
       );
     } catch (error) {
-      await step.run("mark-lecture-failed", async () => {
-        await markLecturePipelineFailed({
+      const outcome = await step.run("mark-lecture-failed", () =>
+        markLecturePipelineFailed({
           lectureId: event.data.lectureId,
           error,
-        });
-      });
+        }),
+      );
 
-      throw error;
+      // The budget can also run out after the notes are finished, while the optional initial note
+      // audio is still being prepared. markLecturePipelineFailed reports that by leaving the
+      // lecture ready and returning `recorded: false`; failing the step then would make Inngest
+      // regenerate the finished notes from scratch four more times.
+      if (outcome.recorded) {
+        throw error;
+      }
     }
   },
 );
@@ -88,14 +94,16 @@ export const processLectureNotesFunction = inngest.createFunction(
         }),
       );
     } catch (error) {
-      await step.run("mark-lecture-failed", async () => {
-        await markLecturePipelineFailed({
+      const outcome = await step.run("mark-lecture-failed", () =>
+        markLecturePipelineFailed({
           lectureId: event.data.lectureId,
           error,
-        });
-      });
+        }),
+      );
 
-      throw error;
+      if (outcome.recorded) {
+        throw error;
+      }
     }
   },
 );

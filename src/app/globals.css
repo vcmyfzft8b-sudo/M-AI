@@ -11755,6 +11755,56 @@ select:disabled {
   margin-top: 1.5rem;
 }
 
+/* Sign-in notice on the auth page, e.g. an admin access denial. */
+.landing-auth-notice {
+  width: 100%;
+  max-width: 30rem;
+  margin: 0 auto;
+  text-align: left;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  border: 1px solid transparent;
+  background: var(--surface-muted);
+  color: var(--secondary-label);
+}
+
+.landing-auth-notice strong {
+  color: var(--label);
+  font-weight: 600;
+}
+
+.landing-auth-notice code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85em;
+}
+
+.landing-auth-notice[data-tone="error"] {
+  background: var(--red-soft);
+  border-color: var(--red-soft);
+  color: var(--red);
+}
+
+.landing-auth-notice[data-tone="error"] strong {
+  color: var(--red);
+}
+
+/* Sign-out link rendered in place of the legal copy on the admin login page. */
+.landing-auth-signout {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.landing-auth-signout:hover {
+  color: var(--label);
+}
+
 .auth-provider-form {
   display: block;
 }

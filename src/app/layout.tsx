@@ -3,6 +3,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import { ThemeController } from "@/components/theme-controller";
+import { VisitTracker } from "@/components/visit-tracker";
 import {
   BRAND_SHORTLINE,
   SEO_BRAND_NAME,
@@ -105,6 +106,7 @@ export default function RootLayout({
       <body>
         <ThemeController />
         {children}
+        <VisitTracker />
         <Analytics />
         <SpeedInsights />
       </body>

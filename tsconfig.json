@@ -9,6 +9,10 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    // Lets a server module import a sibling by its real filename, so the same
+    // file can also be loaded directly by the Node test runner, which cannot
+    // resolve the "@/" alias or extensionless specifiers.
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",

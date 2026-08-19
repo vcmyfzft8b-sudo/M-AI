@@ -82,6 +82,15 @@ The important field is **what kind of account it is**:
 creator, and a creator's own code appearing in a caption is the single strongest
 signal that the post is Memo AI content.
 
+### The brand's own account
+
+`@memo_ai_si` is tracked alongside the creators but marked `kind = 'owned'`. Its
+views and the revenue they drive are real and belong in the totals, but it is
+not a creator's work, so it is badged in the table and can be filtered out with
+**Creators only**. It is currently the single largest channel — 104K views over
+30 days against Ema's 72K — which is exactly why it should not be silently
+averaged into "per creator" figures.
+
 New creators are picked up by the next sync automatically. Follower counts and
 the avatar are filled in immediately from the public TikTok profile page, which
 is free and needs no API key.
@@ -184,8 +193,10 @@ curl -H "Authorization: Bearer $CRON_SECRET" \
 ```
 
 `force=1` skips the debounce and `posts=` widens the per-creator pull for that
-run only, leaving the daily schedule and its cost untouched. Call the endpoint
-again without parameters a minute later to ingest the result.
+run only, leaving the daily schedule and its cost untouched. Add `handle=` (once
+per account) to scope the run, which is how a newly added creator is collected
+without paying to re-read the other fourteen. Call the endpoint again without
+parameters a minute later to ingest the result.
 
 Posts already collected keep their history regardless — lowering the number only
 means older posts stop being re-read for fresh view counts.
@@ -271,11 +282,14 @@ mirrors what the webhook has seen.
 ### What a view is worth
 
 Creator revenue is derived from views instead. Campaign revenue over a rolling
-30-day baseline, divided by campaign views over the same days, gives a revenue
-per thousand views; a creator's share is their own views at that rate.
+30-day baseline, divided by tracked views over the same days, gives a revenue
+per thousand views; a creator's share is their own views at that rate. The
+denominator includes the brand account, because the revenue in the numerator
+comes from every channel — excluding those views while keeping their revenue
+would inflate the rate for everyone else.
 
-At the time of writing that is **€5.63 per 1,000 views** — €1,665 from 295,556
-views. It is the same figure behind "10,000 views is worth about €56" on the
+At the time of writing that is **€4.17 per 1,000 tracked views** — €1,665 from
+399,251 views. It is the same figure behind "10,000 views is worth about €56" on the
 Sales page, and it sharpens on its own as the window fills with more days.
 
 The rate is withheld entirely until there is both revenue and a meaningful
@@ -325,3 +339,5 @@ revenue panels show as unavailable.
   Europe/Ljubljana day boundaries.
 - `tests/ugc-tiktok-links.test.mjs` parses all 14 campaign links exactly as
   pasted from the TikTok share sheet.
+- `tests/admin-campaign-value.test.mjs` covers the revenue-per-view rate,
+  including the guard that withholds it until there is enough data.

@@ -1,21 +1,26 @@
 import { formatDayLabel } from "@/lib/admin/ranges";
 
+import {
+  ChartSurface,
+  type ChartTooltipRow,
+  type SurfacePoint,
+} from "./chart-surface";
 import { formatCount } from "./ui";
 
 /**
  * Inline SVG charts.
  *
  * Hand-rolled rather than pulled from a charting library: these are simple
- * shapes and the project has no chart dependency to reuse. Rendering on the
- * server keeps the dashboard free of client JavaScript for the visuals, with
- * native `<title>` tooltips carrying the per-day values.
+ * shapes and the project has no chart dependency to reuse. The geometry and
+ * every displayed number are computed on the server; only pointer tracking runs
+ * on the client, in `ChartSurface`.
  */
 
 export type ChartPoint = {
   day: string;
   value: number;
-  /** Extra line for the hover tooltip. */
-  detail?: string;
+  /** Extra rows shown in the hover tooltip, below the charted value. */
+  rows?: ChartTooltipRow[];
 };
 
 const VIEW_WIDTH = 1000;
@@ -78,19 +83,46 @@ export function toCumulative(points: ChartPoint[]): ChartPoint[] {
   });
 }
 
+function buildSurfacePoints(
+  points: ChartPoint[],
+  label: string,
+  formatter: (value: number) => string,
+  xFor: (index: number) => number,
+  yFor: (value: number) => number,
+  comparison?: ChartPoint[],
+): SurfacePoint[] {
+  return points.map((point, index) => {
+    const rows: ChartTooltipRow[] = [
+      { label, value: formatter(point.value) },
+      ...(point.rows ?? []),
+    ];
+
+    const previous = comparison?.[index];
+
+    if (previous) {
+      rows.push({ label: "Previous period", value: formatter(previous.value) });
+    }
+
+    return {
+      x: xFor(index),
+      y: yFor(point.value),
+      title: formatDayLabel(point.day),
+      rows,
+    };
+  });
+}
+
 export function AreaChart({
   points,
   label,
   formatter = formatCount,
   /** The same metric over the preceding window, drawn as a dashed line. */
   comparison,
-  comparisonLabel = "previous period",
 }: {
   points: ChartPoint[];
   label: string;
   formatter?: (value: number) => string;
   comparison?: ChartPoint[];
-  comparisonLabel?: string;
 }) {
   if (points.length === 0) {
     return null;
@@ -131,12 +163,20 @@ export function AreaChart({
   const gradientId = `admin-area-${label.replace(/\W+/g, "-").toLowerCase()}`;
 
   return (
-    <svg
-      className="admin-chart"
-      viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
-      role="img"
-      aria-label={`${label} over time`}
-      preserveAspectRatio="none"
+    <ChartSurface
+      viewWidth={VIEW_WIDTH}
+      viewHeight={VIEW_HEIGHT}
+      plotTop={PADDING.top}
+      plotHeight={PLOT_HEIGHT}
+      showDots={points.length <= 45}
+      points={buildSurfacePoints(
+        points,
+        label,
+        formatter,
+        (index) => xFor(index),
+        yFor,
+        comparison,
+      )}
     >
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -166,40 +206,11 @@ export function AreaChart({
       ))}
 
       {comparison && comparison.length > 0 && (
-        <path className="admin-chart-line-compare" d={path(comparison)}>
-          <title>{comparisonLabel}</title>
-        </path>
+        <path className="admin-chart-line-compare" d={path(comparison)} />
       )}
 
       <path d={area} fill={`url(#${gradientId})`} />
       <path className="admin-chart-line" d={line} />
-
-      {points.map((point, index) => (
-        <g key={point.day}>
-          {/* A wide invisible target makes the tooltip reachable on any day. */}
-          <rect
-            x={xFor(index) - PLOT_WIDTH / Math.max(points.length, 1) / 2}
-            y={PADDING.top}
-            width={PLOT_WIDTH / Math.max(points.length, 1)}
-            height={PLOT_HEIGHT}
-            fill="transparent"
-          >
-            <title>
-              {`${formatDayLabel(point.day)} · ${formatter(point.value)} ${label}${
-                point.detail ? `\n${point.detail}` : ""
-              }`}
-            </title>
-          </rect>
-          {points.length <= 45 && (
-            <circle
-              cx={xFor(index)}
-              cy={yFor(point.value)}
-              r="2.5"
-              fill="var(--tint)"
-            />
-          )}
-        </g>
-      ))}
 
       {points.map((point, index) =>
         labels.has(index) ? (
@@ -216,7 +227,7 @@ export function AreaChart({
           </text>
         ) : null,
       )}
-    </svg>
+    </ChartSurface>
   );
 }
 
@@ -238,16 +249,18 @@ export function BarChart({
   const slot = PLOT_WIDTH / points.length;
   const barWidth = Math.max(Math.min(slot * 0.62, 34), 2);
 
+  const xFor = (index: number) => PADDING.left + index * slot + slot / 2;
   const yFor = (value: number) =>
     PADDING.top + PLOT_HEIGHT - (value / max) * PLOT_HEIGHT;
 
   return (
-    <svg
-      className="admin-chart"
-      viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
-      role="img"
-      aria-label={`${label} over time`}
-      preserveAspectRatio="none"
+    <ChartSurface
+      viewWidth={VIEW_WIDTH}
+      viewHeight={VIEW_HEIGHT}
+      plotTop={PADDING.top}
+      plotHeight={PLOT_HEIGHT}
+      showDots={false}
+      points={buildSurfacePoints(points, label, formatter, xFor, yFor)}
     >
       {[0, 0.5, 1].map((ratio) => (
         <g key={ratio}>
@@ -270,25 +283,18 @@ export function BarChart({
       ))}
 
       {points.map((point, index) => {
-        const x = PADDING.left + index * slot + (slot - barWidth) / 2;
         const y = yFor(point.value);
 
         return (
           <rect
             key={point.day}
             className="admin-chart-bar"
-            x={x}
+            x={xFor(index) - barWidth / 2}
             y={point.value > 0 ? y : PADDING.top + PLOT_HEIGHT - 1}
             width={barWidth}
             height={point.value > 0 ? PADDING.top + PLOT_HEIGHT - y : 1}
             rx="2"
-          >
-            <title>
-              {`${formatDayLabel(point.day)} · ${formatter(point.value)} ${label}${
-                point.detail ? `\n${point.detail}` : ""
-              }`}
-            </title>
-          </rect>
+          />
         );
       })}
 
@@ -297,7 +303,7 @@ export function BarChart({
           <text
             key={`label-${point.day}`}
             className="admin-chart-axis"
-            x={PADDING.left + index * slot + slot / 2}
+            x={xFor(index)}
             y={VIEW_HEIGHT - 9}
             textAnchor="middle"
           >
@@ -305,6 +311,6 @@ export function BarChart({
           </text>
         ) : null,
       )}
-    </svg>
+    </ChartSurface>
   );
 }

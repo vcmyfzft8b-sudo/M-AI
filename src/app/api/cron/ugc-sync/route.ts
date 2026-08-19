@@ -110,6 +110,10 @@ export async function GET(request: NextRequest) {
   // which is how a one-off deep backfill is run without changing the schedule
   // or the steady-state cost. Both are behind the same secret as the job.
   const force = request.nextUrl.searchParams.get("force") === "1";
+  const handles = request.nextUrl.searchParams
+    .getAll("handle")
+    .map((handle) => handle.trim().replace(/^@/, ""))
+    .filter(Boolean);
   const postsParam = Number(request.nextUrl.searchParams.get("posts"));
   const postsPerProfile =
     Number.isFinite(postsParam) && postsParam > 0 && postsParam <= 200
@@ -127,6 +131,7 @@ export async function GET(request: NextRequest) {
           trigger: "cron",
           startedBy: force ? "cron:forced" : "cron",
           postsPerProfile,
+          handles: handles.length > 0 ? handles : undefined,
         });
 
   return NextResponse.json({

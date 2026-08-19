@@ -52,6 +52,7 @@ type SearchParams = Promise<{
   metric?: string;
   creator?: string;
   mode?: string;
+  kind?: string;
   view?: string;
   compare?: string;
 }>;
@@ -70,6 +71,7 @@ export default async function CreatorsPage({
   const compare = params?.compare !== "off";
   const creatorFilter = params?.creator ?? "";
   const modeFilter = params?.mode ?? "";
+  const kindFilter = params?.kind ?? "";
 
   const earliest = await getEarliestDataDay();
   const range = resolveRange(preset, { earliestDay: earliest });
@@ -80,6 +82,10 @@ export default async function CreatorsPage({
   // the chart and the table can never disagree about what is being shown.
   const creators = allCreators.filter((creator) => {
     if (creatorFilter && creator.id !== creatorFilter) {
+      return false;
+    }
+
+    if (kindFilter && creator.kind !== kindFilter) {
       return false;
     }
 
@@ -145,6 +151,7 @@ export default async function CreatorsPage({
     if (metric !== "views") next.set("metric", metric);
     if (creatorFilter) next.set("creator", creatorFilter);
     if (modeFilter) next.set("mode", modeFilter);
+    if (kindFilter) next.set("kind", kindFilter);
     if (cumulative) next.set("view", "cumulative");
     if (!compare) next.set("compare", "off");
 
@@ -175,7 +182,12 @@ export default async function CreatorsPage({
               : key === "videos"
                 ? point.videosPosted
                 : point.views,
-      detail: `${point.videosPosted} posted · ${formatCount(point.views)} views`,
+      rows: [
+        { label: "Videos posted", value: formatExact(point.videosPosted) },
+        { label: "Likes", value: formatCount(point.likes) },
+        { label: "Comments", value: formatCount(point.comments) },
+        { label: "Shares", value: formatCount(point.shares) },
+      ],
     }));
 
   const chartable: MetricKey[] = ["views", "likes", "comments", "shares", "videos"];
@@ -204,7 +216,7 @@ export default async function CreatorsPage({
         <div>
           <h1 className="admin-title">Creators</h1>
           <p className="admin-subtitle">
-            {creators.length} of {allCreators.length} creators ·{" "}
+            {creators.length} of {allCreators.length} accounts ·{" "}
             {range.label.toLowerCase()}
           </p>
         </div>
@@ -215,6 +227,7 @@ export default async function CreatorsPage({
             metric: metric !== "views" ? metric : undefined,
             creator: creatorFilter || undefined,
             mode: modeFilter || undefined,
+            kind: kindFilter || undefined,
             view: cumulative ? "cumulative" : undefined,
             compare: compare ? undefined : "off",
           }}
@@ -232,6 +245,14 @@ export default async function CreatorsPage({
             })),
           },
           {
+            name: "kind",
+            allLabel: "Creators and brand",
+            options: [
+              { value: "creator", label: "Creators only" },
+              { value: "owned", label: "Brand account only" },
+            ],
+          },
+          {
             name: "mode",
             allLabel: "All account types",
             options: [
@@ -242,8 +263,13 @@ export default async function CreatorsPage({
           },
         ]}
       >
-        {(creatorFilter || modeFilter) && (
-          <Link className="admin-button" data-variant="ghost" data-size="sm" href={link({ creator: undefined, mode: undefined })}>
+        {(creatorFilter || modeFilter || kindFilter) && (
+          <Link
+            className="admin-button"
+            data-variant="ghost"
+            data-size="sm"
+            href={link({ creator: undefined, mode: undefined, kind: undefined })}
+          >
             Clear filters
           </Link>
         )}
@@ -286,7 +312,9 @@ export default async function CreatorsPage({
             hint:
               viewValue.revenuePerMille === null
                 ? "needs more data"
-                : `${formatMoney(Math.round(viewValue.revenuePerMille))} per 1K views`,
+                : `${formatMoney(
+                    Math.round(viewValue.revenuePerMille),
+                  )} per 1K tracked views`,
             chartable: false,
           },
         ]}
@@ -404,6 +432,12 @@ export default async function CreatorsPage({
                           />
                           <span style={{ minWidth: 0 }}>
                             <span className="admin-creator-name">{creator.name}</span>
+                            {creator.kind === "owned" && (
+                              <>
+                                {" "}
+                                <Badge tone="blue">brand</Badge>
+                              </>
+                            )}
                             {creator.status !== "active" && (
                               <>
                                 {" "}

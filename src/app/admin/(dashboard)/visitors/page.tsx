@@ -161,7 +161,9 @@ export default async function VisitorsPage({
             points={series.map((point) => ({
               day: point.day,
               value: point.visitors,
-              detail: `${point.pageViews} page views`,
+              rows: [
+                { label: "Page views", value: formatExact(point.pageViews) },
+              ],
             }))}
             label="visits"
           />

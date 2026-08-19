@@ -674,6 +674,60 @@
 
 /* --------------------------------------------------------------- chart --- */
 
+/* Hover tooltip layer ------------------------------------------------------ */
+
+.admin-chart-surface {
+  position: relative;
+  width: 100%;
+}
+
+.admin-chart-crosshair {
+  stroke: var(--separator-strong);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+
+.admin-chart-tooltip {
+  position: absolute;
+  top: 0.5rem;
+  transform: translateX(0.75rem);
+  min-width: 9rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.625rem;
+  background: var(--surface-strong);
+  border: 1px solid var(--separator-strong);
+  box-shadow: var(--shadow-float);
+  font-size: 0.75rem;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Near the right edge the tooltip is flipped so it stays inside the chart. */
+.admin-chart-tooltip[data-flip="true"] {
+  transform: translateX(calc(-100% - 0.75rem));
+}
+
+.admin-chart-tooltip-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: var(--label);
+}
+
+.admin-chart-tooltip-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--secondary-label);
+  line-height: 1.5;
+}
+
+.admin-chart-tooltip-row strong {
+  color: var(--label);
+  font-variant-numeric: tabular-nums;
+}
+
 .admin-chart {
   width: 100%;
   height: auto;

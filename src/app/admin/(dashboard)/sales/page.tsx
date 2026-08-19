@@ -150,7 +150,10 @@ export default async function SalesPage({
             points={series.map((point) => ({
               day: point.day,
               value: point.revenue,
-              detail: `${point.newSubscriptions} new subs · ${point.trialsStarted} trials started`,
+              rows: [
+                { label: "New subscriptions", value: formatExact(point.newSubscriptions) },
+                { label: "Trials started", value: formatExact(point.trialsStarted) },
+              ],
             }))}
             label="revenue"
             formatter={(value) => formatMoney(Math.round(value), summary.currency)}
@@ -213,9 +216,9 @@ export default async function SalesPage({
               points={forecast.days.map((day) => ({
                 day: day.day,
                 value: day.projectedRevenue,
-                detail: `${day.trialsEnding} trial${
-                  day.trialsEnding === 1 ? "" : "s"
-                } ending`,
+                rows: [
+                  { label: "Trials ending", value: formatExact(day.trialsEnding) },
+                ],
               }))}
               label="projected"
               formatter={(value) =>

@@ -157,6 +157,11 @@ export async function startSync(options: {
   startedBy: string;
   /** Overrides the configured per-creator pull, for a one-off deep backfill. */
   postsPerProfile?: number;
+  /**
+   * Restricts the run to these handles. Scraping is billed per post, so adding
+   * one account should not mean paying to re-read every other one.
+   */
+  handles?: string[];
 }): Promise<SyncStartResult> {
   if (!isApifyConfigured()) {
     return {
@@ -190,7 +195,16 @@ export async function startSync(options: {
   }
 
   const accounts = await loadSyncableAccounts();
-  const handles = Array.from(new Set(accounts.map((account) => account.handle)));
+  const wanted = options.handles?.map((handle) => handle.toLowerCase());
+  const handles = Array.from(
+    new Set(
+      accounts
+        .filter(
+          (account) => !wanted || wanted.includes(account.handle.toLowerCase()),
+        )
+        .map((account) => account.handle),
+    ),
+  );
 
   if (handles.length === 0) {
     return { started: false, reason: "There are no active TikTok accounts to sync." };
@@ -338,7 +352,7 @@ export async function pollAndIngest(): Promise<SyncPollResult> {
   }
 
   const batch = await readRunDataset(run.defaultDatasetId || detail.datasetId || "");
-  const ingested = await ingestBatch(batch);
+  const ingested = await ingestBatch(batch, { expectedHandles: detail.handles });
 
   // Any video seen for the first time gets its history seeded at its post date,
   // so a first sync does not pile a whole back catalogue onto today.
@@ -385,7 +399,17 @@ export type IngestResult = {
  * Writes a collected batch into the database: video rows, a dated stats
  * snapshot per video, and refreshed account counters.
  */
-export async function ingestBatch(batch: CollectedBatch): Promise<IngestResult> {
+export async function ingestBatch(
+  batch: CollectedBatch,
+  options?: {
+    /**
+     * The handles this run actually asked for. A run scoped to one account
+     * would otherwise report every account it never requested as "skipped",
+     * and be marked partial for no reason.
+     */
+    expectedHandles?: string[];
+  },
+): Promise<IngestResult> {
   const serviceRole = createSupabaseServiceRoleClient();
   const accounts = await loadSyncableAccounts();
   const rules = await loadClassificationRules();
@@ -621,8 +645,18 @@ export async function ingestBatch(batch: CollectedBatch): Promise<IngestResult> 
     result.accountsSynced += 1;
   }
 
+  const expected = options?.expectedHandles?.map((handle) => handle.toLowerCase());
+
   result.skippedHandles = accounts
-    .filter((account) => !seenHandles.has(account.handle.toLowerCase()))
+    .filter((account) => {
+      const handle = account.handle.toLowerCase();
+
+      if (expected && !expected.includes(handle)) {
+        return false;
+      }
+
+      return !seenHandles.has(handle);
+    })
     .map((account) => account.handle);
 
   return result;

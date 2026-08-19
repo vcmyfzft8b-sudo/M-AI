@@ -171,7 +171,11 @@ export default async function CreatorDetailPage({
             points={series.map((point) => ({
               day: point.day,
               value: point.views,
-              detail: `${point.videosPosted} posted`,
+              rows: [
+                { label: "Videos posted", value: formatExact(point.videosPosted) },
+                { label: "Likes", value: formatCount(point.likes) },
+                { label: "Comments", value: formatCount(point.comments) },
+              ],
             }))}
             label="views"
           />

@@ -27,6 +27,8 @@ export type AdminRole = "owner" | "admin";
 
 export type UgcPlatform = "tiktok" | "instagram" | "youtube";
 export type UgcStatus = "active" | "paused" | "archived";
+/** `owned` is the brand's own account, kept countable but separable. */
+export type UgcCreatorKind = "creator" | "owned";
 export type UgcContentMode = "dedicated" | "mixed" | "personal";
 export type UgcClassification = "memo" | "personal" | "unknown";
 export type UgcClassificationSource = "manual" | "account_default" | "rule" | "ai";
@@ -1081,6 +1083,7 @@ export type Database = {
           name: string;
           slug: string;
           status: UgcStatus;
+          kind: UgcCreatorKind;
           contact_email: string | null;
           notes: string | null;
           promo_codes: string[];
@@ -1097,6 +1100,7 @@ export type Database = {
           name: string;
           slug: string;
           status?: UgcStatus;
+          kind?: UgcCreatorKind;
           contact_email?: string | null;
           notes?: string | null;
           promo_codes?: string[];
@@ -1110,6 +1114,7 @@ export type Database = {
           name?: string;
           slug?: string;
           status?: UgcStatus;
+          kind?: UgcCreatorKind;
           contact_email?: string | null;
           notes?: string | null;
           promo_codes?: string[];

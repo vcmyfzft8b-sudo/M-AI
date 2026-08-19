@@ -116,7 +116,9 @@ export default async function UsersPage({
             points={growth.map((point) => ({
               day: point.day,
               value: point.signups,
-              detail: `${point.onboarded} finished onboarding`,
+              rows: [
+                { label: "Finished onboarding", value: formatExact(point.onboarded) },
+              ],
             }))}
             label="sign-ups"
           />

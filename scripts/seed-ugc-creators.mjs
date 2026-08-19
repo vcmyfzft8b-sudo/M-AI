@@ -37,6 +37,15 @@ const APIFY_ACTOR = "clockworks~tiktok-scraper";
  * blank on purpose rather than guessed; add theirs from the creator's page.
  */
 const CREATORS = [
+  // The brand's own account. Marked `owned` so its very real views and revenue
+  // stay countable without being ranked against the creators being paid to post.
+  {
+    name: "Memo AI (brand)",
+    links: ["https://www.tiktok.com/@memo_ai_si"],
+    mode: "dedicated",
+    kind: "owned",
+    promoCodes: ["MEMO50"],
+  },
   // MAVIJA50 exists in Stripe but has not appeared in a caption yet; unconfirmed.
   { name: "Mavija", links: ["https://www.tiktok.com/@mavija94"], mode: "mixed", promoCodes: ["MAVIJA50"] },
   { name: "Maja", links: ["https://www.tiktok.com/@mt_memoai"], mode: "dedicated", promoCodes: ["MAJA50"] },
@@ -128,6 +137,7 @@ async function seedCreators(supabase) {
         name: entry.name,
         slug: slugify(entry.name),
         status: "active",
+        kind: entry.kind ?? "creator",
         promo_codes: entry.promoCodes,
         created_by: "script:seed-ugc-creators",
       })

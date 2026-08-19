@@ -16,6 +16,7 @@ import {
   type NoteTtsChunkPlan,
   type NoteTtsWord,
 } from "@/lib/note-tts-text";
+import { isMissingLectureReferenceError } from "@/lib/postgres-errors";
 import { getServerEnv, requireSonioxEnv } from "@/lib/server-env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
@@ -51,6 +52,16 @@ export class TtsGenerationPendingError extends Error {
   constructor() {
     super("TTS chunk generation is already in progress.");
     this.name = "TtsGenerationPendingError";
+  }
+}
+
+// Synthesizing a chunk takes 90-119 seconds, and the reader can delete the note in that time. The
+// row then has nothing to hang off and the write fails on the cascade's foreign key — an answer
+// ("the note is gone"), not a fault, and the only reason to tell the two apart at the route.
+export class LectureRemovedDuringTtsError extends Error {
+  constructor() {
+    super("The lecture was deleted while its audio was being generated.");
+    this.name = "LectureRemovedDuringTtsError";
   }
 }
 
@@ -1003,6 +1014,15 @@ async function generateTtsChunk(params: {
     .single();
 
   if (error) {
+    if (isMissingLectureReferenceError(error)) {
+      // The note was deleted mid-generation. Its own delete removed the audio it knew about, which
+      // could not include this object — it lands seconds later — so clear it here rather than
+      // leaving a deleted note's audio in the bucket.
+      await service.storage.from(STORAGE_BUCKET).remove([audioStoragePath]);
+
+      throw new LectureRemovedDuringTtsError();
+    }
+
     throw error;
   }
 

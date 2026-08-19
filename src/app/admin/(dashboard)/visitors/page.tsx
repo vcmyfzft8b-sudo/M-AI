@@ -17,6 +17,10 @@ import {
   ONLINE_WINDOW_MINUTES,
 } from "@/lib/admin/analytics";
 import { normalizeRangePreset, resolveRange } from "@/lib/admin/ranges";
+import {
+  getRealtimeVisitors,
+  getVercelTraffic,
+} from "@/lib/admin/vercel-analytics";
 
 type SearchParams = Promise<{ range?: string }>;
 
@@ -31,16 +35,53 @@ export default async function VisitorsPage({
   const preset = normalizeRangePreset(params?.range);
   const range = resolveRange(preset);
 
-  const [summary, breakdown, online] = await Promise.all([
+  const [summary, ownBreakdown, online, vercel, previousVercel, liveNow] =
+    await Promise.all([
     getTrafficSummary(range),
     getTrafficBreakdown(range),
     getOnlineVisitors(),
+    getVercelTraffic(range),
+    range.previous ? getVercelTraffic(range.previous) : Promise.resolve(null),
+    getRealtimeVisitors(),
   ]);
 
-  const signedIn = online.filter((visitor) => visitor.userId);
-  const anonymous = online.length - signedIn.length;
+  // Vercel Web Analytics has been recording since long before our own beacon
+  // shipped, so it is the source for history. The beacon still owns "who is
+  // online", which Vercel does not expose.
+  const usingVercel = vercel !== null;
+  const series = usingVercel ? vercel.series : summary.series;
+  const visitors = usingVercel ? vercel.visitors : summary.visitors;
+  const pageViews = usingVercel ? vercel.pageViews : summary.pageViews;
+  const previousVisitors = usingVercel
+    ? (previousVercel?.visitors ?? 0)
+    : summary.previousVisitors;
 
-  const hasTraffic = summary.series.some((point) => point.visitors > 0);
+  const breakdown = usingVercel
+    ? {
+        paths: vercel.paths.map((row) => ({ value: row.value, hits: row.visitors })),
+        referrers: vercel.referrers.map((row) => ({
+          value: row.value,
+          hits: row.visitors,
+        })),
+        countries: vercel.countries.map((row) => ({
+          value: row.value,
+          hits: row.visitors,
+        })),
+        devices: vercel.browsers.map((row) => ({
+          value: row.value,
+          hits: row.visitors,
+        })),
+      }
+    : ownBreakdown;
+
+  const signedIn = online.filter((visitor) => visitor.userId);
+
+  // Vercel sees every visitor; our beacon only sees the ones it can name. Trust
+  // Vercel for the count and treat the difference as unidentified.
+  const onlineCount = liveNow ?? online.length;
+  const anonymous = Math.max(onlineCount - signedIn.length, 0);
+
+  const hasTraffic = series.some((point) => point.visitors > 0);
 
   return (
     <>
@@ -48,7 +89,8 @@ export default async function VisitorsPage({
         <div>
           <h1 className="admin-title">Visitors</h1>
           <p className="admin-subtitle">
-            memoai.eu traffic · {range.label.toLowerCase()}
+            memoai.eu traffic · {range.label.toLowerCase()} ·{" "}
+            {usingVercel ? "Vercel Web Analytics" : "on-site beacon"}
           </p>
         </div>
         <RangeTabs active={preset} basePath="/admin/visitors" />
@@ -59,8 +101,8 @@ export default async function VisitorsPage({
           label="Online now"
           value={
             <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-              {formatExact(online.length)}
-              {online.length > 0 && (
+              {formatExact(onlineCount)}
+              {onlineCount > 0 && (
                 <span
                   className="admin-dot"
                   data-pulse="true"
@@ -69,38 +111,53 @@ export default async function VisitorsPage({
               )}
             </span>
           }
-          meta={`${signedIn.length} signed in · ${anonymous} anonymous`}
+          meta={
+            liveNow === null
+              ? `${signedIn.length} signed in · ${anonymous} anonymous`
+              : `${signedIn.length} identified · ${anonymous} anonymous · live from Vercel`
+          }
         />
         <StatCard
           label="Visits"
-          value={formatCount(summary.visitors)}
-          current={summary.visitors}
-          previous={range.previous ? summary.previousVisitors : undefined}
-          meta={`${formatExact(summary.visitors)} exact`}
+          value={formatCount(visitors)}
+          current={visitors}
+          previous={range.previous ? previousVisitors : undefined}
+          meta={`${formatExact(visitors)} exact`}
         />
         <StatCard
           label="Page views"
-          value={formatCount(summary.pageViews)}
+          value={formatCount(pageViews)}
           meta={
-            summary.visitors > 0
-              ? `${(summary.pageViews / summary.visitors).toFixed(1)} per visit`
+            visitors > 0
+              ? `${(pageViews / visitors).toFixed(1)} per visit`
               : undefined
           }
         />
         <StatCard
           label="New visitors"
           value={formatCount(summary.newVisitors)}
-          meta="First time on the site"
+          meta={
+            usingVercel
+              ? "First-time, from the on-site beacon"
+              : "First time on the site"
+          }
         />
       </div>
 
-      <Section title="Visits per day">
+      <Section
+        title="Visits per day"
+        hint={
+          usingVercel
+            ? "From Vercel Web Analytics, which has recorded memoai.eu since March. Daily visitor counts are summed from hourly buckets, so someone spanning two hours counts twice; the window total above is deduplicated and exact."
+            : "From the on-site beacon, which only knows about traffic since it shipped. Set VERCEL_ANALYTICS_TOKEN to chart the full history."
+        }
+      >
         {hasTraffic ? (
           <AreaChart
-            points={summary.series.map((point) => ({
+            points={series.map((point) => ({
               day: point.day,
               value: point.visitors,
-              detail: `${point.pageViews} page views · ${point.newVisitors} new`,
+              detail: `${point.pageViews} page views`,
             }))}
             label="visits"
           />
@@ -218,7 +275,7 @@ export default async function VisitorsPage({
           )}
         </Section>
 
-        <Section title="Devices">
+        <Section title={usingVercel ? "Browsers" : "Devices"}>
           {breakdown.devices.length === 0 ? (
             <EmptyState title="No device data yet" />
           ) : (

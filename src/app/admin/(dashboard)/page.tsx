@@ -15,6 +15,10 @@ import {
   StatCard,
 } from "@/components/admin/ui";
 import { getOnlineVisitors, getTrafficSummary } from "@/lib/admin/analytics";
+import {
+  getRealtimeVisitors,
+  getVercelTraffic,
+} from "@/lib/admin/vercel-analytics";
 import { normalizeRangePreset, resolveRange } from "@/lib/admin/ranges";
 import {
   formatMoney,
@@ -53,8 +57,10 @@ export default async function AdminOverviewPage({
   const [
     metrics,
     deltas,
-    traffic,
+    beaconTraffic,
     online,
+    vercelTraffic,
+    liveNow,
     userTotals,
     reviewCount,
     syncRun,
@@ -64,6 +70,8 @@ export default async function AdminOverviewPage({
     getDailyDeltas(range, { onlyMemo: true }),
     getTrafficSummary(range),
     getOnlineVisitors(),
+    getVercelTraffic(range),
+    getRealtimeVisitors(),
     getUserTotals(range),
     countVideosNeedingReview(),
     getLatestSyncRun(),
@@ -76,6 +84,17 @@ export default async function AdminOverviewPage({
 
   const totals = sumMetrics(metrics);
   const series = toDailySeries(deltas, range);
+
+  // Vercel Web Analytics holds the traffic history; the beacon only knows what
+  // it has seen since shipping, and only it can name who is online.
+  const traffic = vercelTraffic
+    ? {
+        visitors: vercelTraffic.visitors,
+        pageViews: vercelTraffic.pageViews,
+        newVisitors: beaconTraffic.newVisitors,
+      }
+    : beaconTraffic;
+  const onlineCount = liveNow ?? online.length;
 
   const topCreators = [...creators]
     .map((creator) => ({ creator, entry: metrics.get(creator.id) }))
@@ -148,8 +167,8 @@ export default async function AdminOverviewPage({
           label="Online now"
           value={
             <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-              {formatExact(online.length)}
-              {online.length > 0 && (
+              {formatExact(onlineCount)}
+              {onlineCount > 0 && (
                 <span
                   className="admin-dot"
                   data-pulse="true"

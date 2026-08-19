@@ -81,15 +81,39 @@ reaches 1.0 on its own. Weaker signals such as the bare word "memo" contribute
 partially, so an ambiguous post is queued for a human rather than silently
 counted.
 
+On a `mixed` account the caption is then read by **Gemini** as well, and the
+model's verdict is what gets stored. Keyword rules cannot tell "this app saved
+me" from "this memo from my boss", and they miss a promotion written without any
+of the expected tokens — on an account that mixes real campaign posts with
+everyday video, that is the difference between a trustworthy number and a guess.
+The rules still run first: they are shown to the model as a prior, and they are
+the fallback when `GEMINI_API_KEY` is not set or a call fails.
+
+`dedicated` and `personal` accounts skip the model entirely. Their mode already
+decides every post, so paying to confirm it would be waste.
+
+The model answers `memo`, `personal` or `unclear` directly rather than a boolean
+with a confidence score. That matters: models report low confidence on a clear
+negative just as readily as on a genuine toss-up, so scoring confidence pushed
+obviously personal videos — a family post with two million views — into the
+review queue. Only an explicit `unclear` now goes to a human.
+
 Rules are editable in **Settings**, and changing one re-runs detection over every
-stored post.
+stored post, model pass included. That can also be triggered directly:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" \
+  "https://memoai.eu/api/cron/ugc-sync?reclassify=1"
+```
 
 A decision made by hand always wins and is never overwritten by a later
 automatic pass. Use the **Auto** button on a post to hand it back.
 
 Measured against the live campaign — 284 posts across all 14 accounts, covering
-more than a month — the rules classified every post without needing a human
-decision: 48 counted as Memo AI, 236 as personal, none left ambiguous.
+more than a month — the model and the rules agreed exactly: 48 counted as Memo
+AI, 236 as personal, none left ambiguous. The difference is that each of those
+verdicts has now been reached by reading the caption rather than by matching a
+token.
 
 Two known limits:
 
@@ -170,12 +194,28 @@ video that already has real history.
 
 ## Visitor analytics
 
-Traffic is measured by our own beacon (`/api/track`, fired by
-`components/visit-tracker.tsx`) rather than Vercel Analytics, whose API is not
-queryable on this plan and cannot answer "who is online right now".
+Two sources, each doing what the other cannot.
+
+**Vercel Web Analytics** owns the history. It has been recording memoai.eu since
+March, so it supplies visits, page views, top paths, referrers, countries and
+browsers, plus the live "online now" count. Set `VERCEL_ANALYTICS_TOKEN` to a
+Vercel API token; `VERCEL_PROJECT_ID` and `VERCEL_TEAM_ID` are injected
+automatically on Vercel and only need setting for local development. The
+endpoints used are the ones Vercel's own dashboard calls rather than documented
+public API, so every response is parsed defensively and any failure falls back
+to the beacon instead of breaking the page.
+
+One caveat: Vercel returns hourly buckets for short windows and daily ones for
+long windows. Daily visitor counts are summed from those buckets, so a visitor
+spanning two hours is counted twice; the window totals come from Vercel's own
+deduplicated breakdowns and are exact.
+
+**Our own beacon** (`/api/track`, fired by `components/visit-tracker.tsx`) is
+what can name a signed-in visitor, which Vercel never exposes. It supplies the
+"who is online" table and the first-time-visitor count.
 
 - One `view` per navigation, then a `heartbeat` every 60s while the tab is
-  visible, which is what keeps the "online now" panel accurate.
+  visible, which is what keeps the "who is online" table accurate.
 - A session is "online" for 5 minutes after its last beacon.
 - No IP address and no raw user agent is stored — only country, device class,
   browser and OS.
@@ -216,6 +256,9 @@ revenue panels show as unavailable.
    - `CRON_SECRET` — required; the cron endpoint refuses to run without a secret
      configured, because a run spends money.
    - `UGC_SYNC_POSTS_PER_PROFILE` — optional, defaults to 20.
+   - `VERCEL_ANALYTICS_TOKEN` — for visitor history and the live online count.
+   - `GEMINI_API_KEY` — already set for the app; it also powers the AI review of
+     mixed-account posts.
 3. Seed the campaign roster and backfill:
 
    ```bash

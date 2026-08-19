@@ -24,6 +24,13 @@ import {
   startTikTokRun,
 } from "@/lib/ugc/apify";
 import {
+  type AiClassificationInput,
+  classifyWithAi,
+  isAiClassificationConfigured,
+  toClassificationResult,
+} from "@/lib/ugc/ai-classification";
+import {
+  type ClassificationResult,
   classifyVideo,
   type ClassificationRule,
 } from "@/lib/ugc/classification";
@@ -416,6 +423,10 @@ export async function ingestBatch(batch: CollectedBatch): Promise<IngestResult> 
   }
 
   const videoRows: UgcVideoInsert[] = [];
+  // Posts on mixed accounts get a second opinion from the model. Dedicated and
+  // personal accounts are settled by their mode alone, so they are skipped.
+  const aiCandidates: AiClassificationInput[] = [];
+  const ruleVerdicts = new Map<string, ClassificationResult>();
   const statsByPlatformId = new Map<
     string,
     { views: number; likes: number; comments: number; shares: number; saves: number }
@@ -451,6 +462,19 @@ export async function ingestBatch(batch: CollectedBatch): Promise<IngestResult> 
     // A manual decision is final: re-running the classifier must never quietly
     // move a video an admin has already judged.
     const keepManual = existing?.classification_locked === true;
+
+    if (!keepManual && account.content_mode === "mixed") {
+      ruleVerdicts.set(video.platformVideoId, classification);
+      aiCandidates.push({
+        id: video.platformVideoId,
+        caption: video.caption,
+        hashtags: video.hashtags,
+        mentions: video.mentions,
+        creatorName: account.handle,
+        promoCodes,
+        ruleVerdict: classification,
+      });
+    }
 
     videoRows.push({
       account_id: account.id,
@@ -493,6 +517,29 @@ export async function ingestBatch(batch: CollectedBatch): Promise<IngestResult> 
       result.videosUpdated += 1;
     } else {
       result.videosCreated += 1;
+    }
+  }
+
+  // The model reviews every mixed-account post before anything is written, so
+  // the stored classification is the final one and the dashboard never briefly
+  // shows a keyword guess.
+  if (aiCandidates.length > 0 && isAiClassificationConfigured()) {
+    const verdicts = await classifyWithAi(aiCandidates);
+
+    for (const row of videoRows) {
+      const platformVideoId = row.platform_video_id;
+      const verdict = verdicts.get(platformVideoId);
+      const ruleVerdict = ruleVerdicts.get(platformVideoId);
+
+      if (!verdict || !ruleVerdict) {
+        continue;
+      }
+
+      const resolved = toClassificationResult(verdict, ruleVerdict);
+      row.classification = resolved.classification;
+      row.classification_source = resolved.source;
+      row.classification_confidence = resolved.confidence;
+      row.classification_reason = resolved.reason;
     }
   }
 
@@ -795,7 +842,13 @@ export async function backfillPostedSnapshots(options?: {
   return { seeded: pending.length, skipped: videos.length - pending.length };
 }
 
-/** Re-runs the classifier over stored videos, respecting manual locks. */
+/**
+ * Re-runs detection over stored videos, respecting manual locks.
+ *
+ * Mixed accounts go through the model as well as the rules, which is the whole
+ * point of the button: after editing a rule or flipping an account's mode, the
+ * stored verdicts should be as trustworthy as a fresh sync's.
+ */
 export async function reclassifyAll(): Promise<{ updated: number }> {
   const serviceRole = createSupabaseServiceRoleClient();
   const rules = await loadClassificationRules();
@@ -816,41 +869,76 @@ export async function reclassifyAll(): Promise<{ updated: number }> {
     .select("*")
     .eq("classification_locked", false);
 
-  let updated = 0;
+  const videos = (videoRows ?? []) as UgcVideoRow[];
+  const resolved = new Map<string, ClassificationResult>();
+  const aiCandidates: AiClassificationInput[] = [];
 
-  for (const video of (videoRows ?? []) as UgcVideoRow[]) {
+  for (const video of videos) {
     const account = accountsById.get(video.account_id);
 
     if (!account) {
       continue;
     }
 
+    const promoCodes = account.creator?.promo_codes ?? [];
     const result = classifyVideo(
       {
         caption: video.caption,
         hashtags: video.hashtags,
         mentions: video.mentions,
         contentMode: account.content_mode,
-        promoCodes: account.creator?.promo_codes ?? [],
+        promoCodes,
       },
       rules,
     );
 
+    resolved.set(video.id, result);
+
+    if (account.content_mode === "mixed") {
+      aiCandidates.push({
+        id: video.id,
+        caption: video.caption,
+        hashtags: video.hashtags,
+        mentions: video.mentions,
+        creatorName: account.handle,
+        promoCodes,
+        ruleVerdict: result,
+      });
+    }
+  }
+
+  if (aiCandidates.length > 0 && isAiClassificationConfigured()) {
+    const verdicts = await classifyWithAi(aiCandidates);
+
+    for (const [videoId, verdict] of verdicts) {
+      const ruleVerdict = resolved.get(videoId);
+
+      if (ruleVerdict) {
+        resolved.set(videoId, toClassificationResult(verdict, ruleVerdict));
+      }
+    }
+  }
+
+  let updated = 0;
+
+  for (const video of videos) {
+    const result = resolved.get(video.id);
+
     if (
-      result.classification === video.classification &&
-      result.source === video.classification_source
+      !result ||
+      (result.classification === video.classification &&
+        result.source === video.classification_source)
     ) {
       continue;
     }
 
     await updateIn(serviceRole, "ugc_videos", {
-        classification: result.classification,
-        classification_source: result.source,
-        classification_confidence: result.confidence,
-        classification_reason: result.reason,
-        classified_at: new Date().toISOString(),
-      })
-      .eq("id", video.id);
+      classification: result.classification,
+      classification_source: result.source,
+      classification_confidence: result.confidence,
+      classification_reason: result.reason,
+      classified_at: new Date().toISOString(),
+    }).eq("id", video.id);
 
     updated += 1;
   }

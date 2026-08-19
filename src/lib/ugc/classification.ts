@@ -227,3 +227,41 @@ export function extractMentions(caption: string | null): string[] {
     ),
   );
 }
+
+/**
+ * What the model answered for one post.
+ *
+ * A three-way verdict rather than a boolean plus a confidence score: models
+ * report low confidence for a clear negative just as readily as for a genuine
+ * toss-up, so scoring confidence pushed plainly personal videos into the review
+ * queue. Asking for the three outcomes directly lets "unclear" mean what it
+ * says.
+ */
+export type AiVerdict = {
+  verdict: "memo" | "personal" | "unclear";
+  reason: string;
+};
+
+/** Folds an AI verdict into the shape the rest of the pipeline stores. */
+export function toClassificationResult(
+  verdict: AiVerdict,
+  ruleVerdict: ClassificationResult,
+): ClassificationResult {
+  if (verdict.verdict === "unclear") {
+    return {
+      classification: "unknown",
+      source: "ai",
+      confidence: 0.5,
+      reason: `AI could not tell: ${verdict.reason}`,
+      matches: ruleVerdict.matches,
+    };
+  }
+
+  return {
+    classification: verdict.verdict === "memo" ? "memo" : "personal",
+    source: "ai",
+    confidence: 1,
+    reason: `AI: ${verdict.reason}`,
+    matches: ruleVerdict.matches,
+  };
+}

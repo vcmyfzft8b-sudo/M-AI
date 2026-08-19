@@ -5,6 +5,7 @@ import {
   getLatestSyncRun,
   getPendingSyncRun,
   pollAndIngest,
+  reclassifyAll,
   startSync,
 } from "@/lib/ugc/sync";
 
@@ -75,6 +76,14 @@ export async function GET(request: NextRequest) {
       { ok: false, reason: "APIFY_TOKEN is not configured." },
       { status: 200 },
     );
+  }
+
+  // `reclassify=1` re-runs detection over everything already stored, including
+  // the AI pass on mixed accounts. Useful after a rule change without paying
+  // for a fresh scrape.
+  if (request.nextUrl.searchParams.get("reclassify") === "1") {
+    const result = await reclassifyAll();
+    return NextResponse.json({ ok: true, reclassified: result });
   }
 
   const ingested = await pollAndIngest().catch((error: unknown) => ({

@@ -179,6 +179,12 @@ export default async function CreatorsPage({
 
   const totalRevenue = estimateRevenue(totals.viewsGained, viewValue);
 
+  // Without this a monthly retainer bills a whole month however short the
+  // window is, so "today" would have claimed a full retainer was owed. Computed
+  // once: it depends only on the range, and `economicsFor` runs several times
+  // per creator.
+  const monthFraction = monthsCovered(range.days);
+
   const economicsFor = (creator: (typeof creators)[number]) => {
     const entry = metrics.get(creator.id);
 
@@ -187,9 +193,7 @@ export default async function CreatorsPage({
       views: entry?.viewsGained ?? 0,
       codeRevenue: codeUsage?.get(creator.id)?.revenue ?? 0,
       revenue: estimateRevenue(entry?.viewsGained ?? 0, viewValue),
-      // Without this a monthly retainer bills a whole month however short the
-      // window is, so "today" would have claimed a full retainer was owed.
-      monthFraction: monthsCovered(range.days),
+      monthFraction,
     });
   };
 

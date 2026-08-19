@@ -135,7 +135,7 @@ export default async function CreatorsPage({
   // Code usage is kept as a measure of *tracked* signups, but revenue is no
   // longer attributed that way: most people who see a video and subscribe never
   // type the code, so code revenue is a floor rather than a measure.
-  const codeUsage = await loadSalesData({ historyDays: 400 })
+  const codeUsage = await loadSalesData()
     .then((data) =>
       creatorRevenue(creators, promoCodeStats(data, range), data.codeRedemptions),
     )
@@ -164,7 +164,7 @@ export default async function CreatorsPage({
 
   const [monthDeltas, monthCodeUsage] = await Promise.all([
     getDailyDeltas(monthRange, { onlyMemo: true }),
-    loadSalesData({ historyDays: 400 })
+    loadSalesData()
       .then((data) =>
         creatorRevenue(
           creators,

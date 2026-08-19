@@ -286,15 +286,18 @@ const cachedSalesData = unstable_cache(
 );
 
 /**
- * Pulls everything the sales views need in one go.
+ * How far back the invoice scan reaches.
  *
- * `historyDays` bounds the invoice scan; it needs to reach far enough back to
- * cover the widest window the dashboard offers.
+ * Deliberately a constant rather than a per-page option. `historyDays` is part
+ * of the cache key, so a page asking for a different window paid for a second
+ * full pagination of the account instead of sharing the first — moving between
+ * the overview and the creators page ran two complete scans.
  */
-export async function loadSalesData(options?: {
-  historyDays?: number;
-}): Promise<SalesData> {
-  const data = await cachedSalesData(options?.historyDays ?? 400);
+const SALES_HISTORY_DAYS = 400;
+
+/** Pulls everything the sales views need in one go. */
+export async function loadSalesData(): Promise<SalesData> {
+  const data = await cachedSalesData(SALES_HISTORY_DAYS);
 
   return {
     ...data,
@@ -315,7 +318,7 @@ export async function getRevenueBetween(
   from: string,
   to: string,
 ): Promise<number> {
-  const data = await loadSalesData({ historyDays: 400 });
+  const data = await loadSalesData();
 
   return data.payments
     .filter((payment) => {

@@ -78,7 +78,7 @@ export default async function AdminOverviewPage({
     getLatestSyncRun(),
     // Stripe is the one dependency that can be slow or down; the overview has
     // to render without it.
-    loadSalesData({ historyDays: 120 })
+    loadSalesData()
       .then((data) => summarizeSales(data, range))
       .catch(() => null as SalesSummary | null),
   ]);

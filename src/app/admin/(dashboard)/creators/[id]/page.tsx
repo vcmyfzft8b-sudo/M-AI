@@ -85,7 +85,7 @@ export default async function CreatorDetailPage({
   const entry = metrics.get(creator.id);
   const series = toDailySeries(deltas, range);
 
-  const codes = await loadSalesData({ historyDays: 400 })
+  const codes = await loadSalesData()
     .then((data) =>
       creatorRevenue([creator], promoCodeStats(data, range), data.codeRedemptions).get(
         creator.id,

@@ -244,13 +244,20 @@ export default async function FinancePage({
             summary.currency,
           )} bonus`}
         />
+        {/* The rate leads and the money follows: 89% says how healthy the
+            window was at a glance, which is what a margin tile is for. */}
         <StatCard
           label="Margin"
-          value={formatMoney(margin, summary.currency)}
+          value={
+            marginRate === null ? "—" : formatPercent(marginRate, 0)
+          }
           meta={
             marginRate === null
               ? "no revenue in this window"
-              : `${formatPercent(marginRate, 0)} of revenue, after creator costs`
+              : `${formatMoney(
+                  margin,
+                  summary.currency,
+                )} of revenue left after creator costs`
           }
         />
         <StatCard

@@ -211,12 +211,21 @@ export default async function FinancePage({
           value={formatExact(summary.trials.activeTrials)}
           meta={`${summary.trials.trialsEndingToday} converting today`}
         />
+        {/*
+         * Follows the range like every other tile. It used to report today
+         * whatever window was selected, so picking Yesterday left a figure for
+         * a different day sitting next to yesterday's revenue, inviting a
+         * comparison between two unrelated numbers.
+         */}
         <StatCard
-          label="Projected today"
-          value={formatMoney(summary.trials.projectedRevenueToday, summary.currency)}
-          meta={`${summary.trials.trialsEndingToday} trial${
-            summary.trials.trialsEndingToday === 1 ? "" : "s"
-          } ending, each at its own plan price × that plan's conversion rate`}
+          label={`Projected ${range.label.toLowerCase()}`}
+          value={formatMoney(
+            summary.trials.projectedRevenueInRange,
+            summary.currency,
+          )}
+          meta={`${summary.trials.trialsEndingInRange} trial${
+            summary.trials.trialsEndingInRange === 1 ? "" : "s"
+          } ending · forecast on ${formatDayLabel(summary.trials.projectedFrom)}`}
         />
       </div>
 

@@ -178,6 +178,20 @@ export default async function CreatorsPage({
     days: VALUE_BASELINE_DAYS,
   });
 
+  /**
+   * Everything Stripe took in this window, whoever it came from.
+   *
+   * The context the other two revenue figures were missing: code revenue says
+   * what these creators can be proven to have brought in, and the estimate says
+   * what their views are modelled to be worth, but neither says how big the
+   * business was over the same days. Cheap to ask for -- `loadSalesData` is
+   * cached on one key, so this shares the pagination the code figures already
+   * paid for.
+   */
+  const windowRevenue = await getRevenueBetween(range.from, range.to).catch(
+    () => null,
+  );
+
   const totalRevenue = estimateRevenue(totals.viewsGained, viewValue);
 
   /**
@@ -413,6 +427,20 @@ export default async function CreatorsPage({
               codeUsage === null
                 ? "Stripe unavailable"
                 : "actually taken, via their codes",
+            chartable: false,
+          },
+          {
+            key: "totalRevenue",
+            value: windowRevenue === null ? "—" : formatMoney(windowRevenue),
+            hint:
+              windowRevenue === null
+                ? "Stripe unavailable"
+                : windowRevenue > 0
+                  ? `all Stripe payments · codes were ${formatPercent(
+                      totalCodeRevenue / windowRevenue,
+                      0,
+                    )}`
+                  : "all Stripe payments",
             chartable: false,
           },
           {

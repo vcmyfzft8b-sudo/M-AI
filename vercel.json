@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/cron/ugc-sync",
+      "path": "/api/cron/ugc-sync?force=1",
       "schedule": "50 21 * * *"
     }
   ]

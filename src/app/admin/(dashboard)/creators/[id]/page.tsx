@@ -221,13 +221,11 @@ export default async function CreatorDetailPage({
         <StatCard
           label="Margin"
           value={
-            economics.margin === null
-              ? "—"
-              : `${formatMoney(economics.margin)}${
-                  economics.marginRate === null
-                    ? ""
-                    : ` · ${formatPercent(economics.marginRate, 0)}`
-                }`
+            `${formatMoney(economics.margin)}${
+              economics.marginRate === null
+                ? ""
+                : ` · ${formatPercent(economics.marginRate, 0)}`
+            }`
           }
           meta={
             economics.marginRate === null

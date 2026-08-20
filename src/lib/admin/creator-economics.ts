@@ -141,13 +141,25 @@ export function computeCost(terms: PayTerms, inputs: CostInputs): CostBreakdown 
 export type CreatorEconomics = {
   terms: PayTerms;
   cost: CostBreakdown;
-  /** Minor units; null when the campaign rate is not measurable yet. */
+  /**
+   * Views multiplied by the campaign rate. Minor units, null when the rate is
+   * not measurable yet. A model of what the views are worth, not money taken,
+   * so it is reported but never used as the basis of a margin.
+   */
   revenue: number | null;
-  /** revenue - cost. Null when revenue is unknown. */
-  margin: number | null;
-  /** margin / revenue, as a fraction. Null when revenue is unknown or zero. */
+  /**
+   * Money actually taken through this creator's codes, minor units.
+   *
+   * The real figure the margin is built on. It is a floor rather than a
+   * measure: most people who buy after seeing a video never type a code, so
+   * anything it attributes did happen, while plenty that it misses did too.
+   */
+  codeRevenue: number;
+  /** codeRevenue - cost. Real money in, real money out. */
+  margin: number;
+  /** margin / codeRevenue, as a fraction. Null when no code revenue. */
   marginRate: number | null;
-  /** revenue / cost. Null when nothing was spent, since that is not "infinite". */
+  /** codeRevenue / cost. Null when nothing was spent, since that is not "infinite". */
   returnOnSpend: number | null;
   /** Cost per 1000 views, minor units. Null with no views. */
   costPerMille: number | null;
@@ -159,20 +171,24 @@ export function computeEconomics(
 ): CreatorEconomics {
   const cost = computeCost(terms, inputs);
   const revenue = inputs.revenue;
-  const margin = revenue === null ? null : revenue - cost.total;
+  // Margin is real money in minus real money out. It used to be struck against
+  // the view-based estimate, which meant it could look healthy on a creator who
+  // had never produced a sale -- the estimate rises with views whether or not
+  // anyone buys, so it could only ever flatter the arrangement.
+  const codeRevenue = inputs.codeRevenue;
+  const margin = codeRevenue - cost.total;
 
   return {
     terms,
     cost,
     revenue,
+    codeRevenue,
     margin,
-    marginRate:
-      revenue === null || revenue === 0 ? null : (margin as number) / revenue,
+    marginRate: codeRevenue === 0 ? null : margin / codeRevenue,
     // A creator who costs nothing has no return *on spend* to report; showing
     // infinity, or a bare "0x", would both read as a failure rather than as
     // free reach.
-    returnOnSpend:
-      revenue === null || cost.total === 0 ? null : revenue / cost.total,
+    returnOnSpend: cost.total === 0 ? null : codeRevenue / cost.total,
     costPerMille: inputs.views > 0 ? (cost.total / inputs.views) * 1000 : null,
   };
 }

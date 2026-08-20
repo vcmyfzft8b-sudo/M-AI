@@ -15,7 +15,7 @@ import {
   VALUE_BASELINE_DAYS,
   viewsForRevenue,
 } from "@/lib/admin/campaign-value";
-import { normalizeRangePreset, resolveRange } from "@/lib/admin/ranges";
+import { formatDayLabel, normalizeRangePreset, resolveRange } from "@/lib/admin/ranges";
 import {
   formatMoney,
   getRevenueBetween,
@@ -338,7 +338,18 @@ export default async function SalesPage({
               ),
             )}
             <div className="admin-list-row">
-              <span className="admin-list-label">Projected from this window</span>
+              <span className="admin-list-label">
+                Projected from this window
+                {summary.trials.projectedFrom !== range.to && (
+                  <>
+                    {" "}
+                    <span className="admin-help">
+                      · forecast on {formatDayLabel(summary.trials.projectedFrom)},
+                      before the window opened
+                    </span>
+                  </>
+                )}
+              </span>
               <span className="admin-list-value">
                 {formatMoney(
                   summary.trials.projectedRevenueInRange,

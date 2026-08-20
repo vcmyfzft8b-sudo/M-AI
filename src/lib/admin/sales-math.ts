@@ -11,6 +11,7 @@
 import {
   addDays,
   type DateRange,
+  dayStartIso,
   eachDay,
   todayInReportZone,
 } from "./ranges.ts";
@@ -99,9 +100,15 @@ export function conversionRatesByPlan(
 ): PlanConversionRates {
   const nowUnix = Math.floor(now.getTime() / 1000);
 
+  // Only payments taken by `now` count. Without the bound the rate is measured
+  // with hindsight: asked what the conversion rate was on a past date, it still
+  // counted customers who paid afterwards, so a projection struck from it
+  // already knew how the trials it was projecting turned out. Harmless while
+  // `now` really is now -- every payment is in the past -- and the whole
+  // difference when a past date is asked about.
   const payingCustomerIds = new Set(
     data.payments
-      .filter((payment) => payment.customerId)
+      .filter((payment) => payment.customerId && payment.created <= nowUnix)
       .map((payment) => payment.customerId as string),
   );
 
@@ -182,8 +189,18 @@ export type TrialProjection = {
   ratesByPlan: PlanConversionRates;
   /** trialsEndingToday x conversionRate x averageConvertedValue, minor units. */
   projectedRevenueToday: number;
-  /** Same projection across every trial ending in the window. */
+  /**
+   * The same projection across every trial ending in the window, struck from
+   * the conversion rate as it stood the day the window opened.
+   *
+   * A forecast, in other words, rather than a restatement of what happened:
+   * comparing it against the revenue actually taken says how good the
+   * prediction was. Using today's rate would have compared the outcome with
+   * itself.
+   */
   projectedRevenueInRange: number;
+  /** The day `projectedRevenueInRange` was struck from, `YYYY-MM-DD`. */
+  projectedFrom: string;
   currency: string;
 };
 
@@ -291,6 +308,13 @@ export function summarizeSales(
 
   const rates = conversionRatesByPlan(data, now);
 
+  // What the rate looked like before the window opened. For a window that
+  // includes today there is no "before" to reach back to, so it stays as now.
+  const forecastAsOf = new Date(dayStartIso(range.from));
+  const forecastDay = forecastAsOf < now ? range.from : today;
+  const forecastRates =
+    forecastAsOf < now ? conversionRatesByPlan(data, forecastAsOf) : rates;
+
   const averageConvertedValue =
     convertedTrials.length > 0
       ? convertedTrials.reduce(
@@ -337,7 +361,8 @@ export function summarizeSales(
       averageConvertedValue,
       ratesByPlan: rates,
       projectedRevenueToday: projectTrials(endingToday, rates),
-      projectedRevenueInRange: projectTrials(endingInRange, rates),
+      projectedRevenueInRange: projectTrials(endingInRange, forecastRates),
+      projectedFrom: forecastDay,
       currency,
     },
   };

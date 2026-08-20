@@ -260,9 +260,9 @@ export default async function AdminOverviewPage({
           label="Active trials"
           value={sales ? formatExact(sales.trials.activeTrials) : "n/a"}
           meta={
-            // The projection is about today only, so it reads as noise under
-            // any other window.
-            preset === "today" && sales && projectedToday
+            // The projection always speaks about today, whatever window the
+            // rest of the page is on — the trials due are due today either way.
+            sales && projectedToday
               ? `${formatMoney(
                   projectedToday.projectedRevenue,
                   sales.currency,

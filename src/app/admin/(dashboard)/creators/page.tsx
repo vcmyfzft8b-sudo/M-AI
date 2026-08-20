@@ -34,8 +34,9 @@ import {
   payTermsFor,
 } from "@/lib/admin/creator-economics";
 import {
+  CREATOR_RANGE_PRESETS,
+  creatorRangePreset,
   monthsCovered,
-  normalizeRangePreset,
   resolveRange,
 } from "@/lib/admin/ranges";
 import {
@@ -99,7 +100,7 @@ export default async function CreatorsPage({
   searchParams?: SearchParams;
 }) {
   const params = await searchParams;
-  const preset = normalizeRangePreset(params?.range);
+  const preset = creatorRangePreset(params?.range);
   const metric = normalizeMetric(params?.metric);
   const cumulative = params?.view === "cumulative";
   const compare = params?.compare !== "off";
@@ -288,6 +289,7 @@ export default async function CreatorsPage({
         <RangeTabs
           active={preset}
           basePath="/admin/creators"
+          presets={CREATOR_RANGE_PRESETS}
           extraParams={{
             metric: metric !== "views" ? metric : undefined,
             creator: creatorFilter || undefined,

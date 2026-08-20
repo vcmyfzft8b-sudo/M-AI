@@ -198,10 +198,53 @@ test("projected revenue multiplies trials ending today by rate and value", () =>
 
   const summary = summarizeSales(data, RANGE, { now: NOW });
 
-  assert.equal(summary.trials.trialsEndingToday, 4);
+  assert.equal(summary.trials.trialsDueToday, 4);
   assert.equal(summary.trials.conversionRate, 0.5);
   // Each trial at its own €20.00 price x the 50% rate, summed: 4 x 1000.
   assert.equal(summary.trials.projectedRevenueToday, 4000);
+});
+
+test("a trial whose user already cancelled is active but not due to convert", () => {
+  // Cancelling mid-trial leaves the subscription `trialing` until the trial
+  // runs out: Stripe records the request in `canceled_at` and schedules the
+  // cancellation for the trial's end. The dashboard once counted these as
+  // "converting today" — 18 claimed on a day only 5 trials could still bill.
+  const data = salesData({
+    subscriptions: [
+      subscription({
+        id: "will-bill",
+        customerId: "cus_1",
+        status: "trialing",
+        trialStart: at("2026-08-16T10:00:00Z"),
+        trialEnd: at("2026-08-19T16:00:00Z"),
+      }),
+      subscription({
+        id: "opted-out",
+        customerId: "cus_2",
+        status: "trialing",
+        trialStart: at("2026-08-16T11:00:00Z"),
+        trialEnd: at("2026-08-19T17:00:00Z"),
+        canceledAt: at("2026-08-17T09:00:00Z"),
+      }),
+      // The older flow flags the same intent on `cancel_at_period_end`.
+      subscription({
+        id: "opted-out-legacy",
+        customerId: "cus_3",
+        status: "trialing",
+        trialStart: at("2026-08-16T12:00:00Z"),
+        trialEnd: at("2026-08-19T18:00:00Z"),
+        cancelAtPeriodEnd: true,
+      }),
+    ],
+  });
+
+  const summary = summarizeSales(data, RANGE, { now: NOW });
+
+  // All three still hold trial access...
+  assert.equal(summary.trials.activeTrials, 3);
+  // ...but only the un-cancelled one can convert.
+  assert.equal(summary.trials.trialsDueToday, 1);
+  assert.equal(summary.trials.trialsDueInRange, 1);
 });
 
 test("projection is zero rather than NaN when nothing has converted yet", () => {
@@ -506,12 +549,12 @@ test("the daily forecast is trials ending that day at the current rate", async (
   assert.equal(forecast.days[0].day, "2026-08-19");
 
   const tomorrow = forecast.days.find((day) => day.day === "2026-08-20");
-  assert.equal(tomorrow.trialsEnding, 2);
+  assert.equal(tomorrow.trialsDue, 2);
   // 2 trials x 50% x €20.00
   assert.equal(tomorrow.projectedRevenue, 2000);
 
   const later = forecast.days.find((day) => day.day === "2026-08-22");
-  assert.equal(later.trialsEnding, 1);
+  assert.equal(later.trialsDue, 1);
   assert.equal(later.projectedRevenue, 1000);
 });
 
@@ -559,6 +602,34 @@ test("a better conversion rate raises the forecast with no other change", async 
   assert.ok(goodDay.projectedRevenue > poorDay.projectedRevenue);
 });
 
+test("a trial whose user already cancelled is not forecast as revenue", async () => {
+  const { trialForecast } = await import("../src/lib/admin/sales-math.ts");
+
+  const forecast = trialForecast(
+    salesData({
+      subscriptions: [
+        subscription({
+          id: "still-on",
+          customerId: "cus_1",
+          status: "trialing",
+          trialEnd: at("2026-08-20T16:00:00Z"),
+        }),
+        subscription({
+          id: "opted-out",
+          customerId: "cus_2",
+          status: "trialing",
+          trialEnd: at("2026-08-20T17:00:00Z"),
+          canceledAt: at("2026-08-18T10:00:00Z"),
+        }),
+      ],
+    }),
+    { days: 3, now: NOW },
+  );
+
+  const tomorrow = forecast.days.find((day) => day.day === "2026-08-20");
+  assert.equal(tomorrow.trialsDue, 1);
+});
+
 test("a trial that already ended is not forecast again", async () => {
   const { trialForecast } = await import("../src/lib/admin/sales-math.ts");
 
@@ -576,7 +647,7 @@ test("a trial that already ended is not forecast again", async () => {
   );
 
   assert.equal(
-    forecast.days.reduce((sum, day) => sum + day.trialsEnding, 0),
+    forecast.days.reduce((sum, day) => sum + day.trialsDue, 0),
     0,
   );
 });

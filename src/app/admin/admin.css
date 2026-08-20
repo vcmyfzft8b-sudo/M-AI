@@ -526,16 +526,18 @@
   background: var(--pressed);
 }
 
+/* Centred, heading and figures alike, so each column reads as one block.
+   `tabular-nums` stays: digits keep an equal width, so the figures still line
+   up with each other within the column. */
 .admin-num {
-  text-align: right;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
 /* `.admin-table th` sets `text-align: left` and outranks `.admin-num` on
-   specificity, so every numeric heading sat left while its figures sat right
-   and no column label lined up with the column it named. */
+   specificity, so without this the heading drifts away from its own column. */
 .admin-table th.admin-num {
-  text-align: right;
+  text-align: center;
 }
 
 .admin-empty {

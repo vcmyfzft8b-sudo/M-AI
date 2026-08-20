@@ -386,7 +386,11 @@ export default async function CreatorsPage({
           {
             key: "saves",
             value: formatCount(totals.totalSaves),
-            hint: "lifetime",
+            // The one figure on the row that is not windowed: TikTok's collect
+            // count is absent from the daily snapshots, so it can only be a
+            // running total. Said plainly, because "lifetime" alone reads like
+            // a footnote next to eight windowed metrics.
+            hint: "lifetime, not this window",
             chartable: false,
           },
           {
@@ -397,7 +401,7 @@ export default async function CreatorsPage({
           {
             key: "engagement",
             value: formatPercent(totals.engagementRate),
-            hint: "per view",
+            hint: "likes, comments and shares per view",
             chartable: false,
           },
           {
@@ -593,6 +597,14 @@ export default async function CreatorsPage({
                   const estimated = estimateRevenue(views, viewValue);
                   const economics = economicsFor(creator);
                   const owed = economics.cost;
+                  /*
+                   * With Stripe unreachable there is no code revenue to read,
+                   * and `?? 0` turned that into a confident zero: every creator
+                   * showing no sales, no bonus, and a loss-making margin. An
+                   * outage is not a fact about the creators, so the cells that
+                   * depend on it say nothing instead.
+                   */
+                  const salesKnown = codeUsage !== null;
 
                   return (
                     <tr key={creator.id}>
@@ -688,7 +700,7 @@ export default async function CreatorsPage({
                         {codes ? formatExact(codes.payments) : "—"}
                       </td>
                       <td className="admin-num">
-                        {codes ? formatMoney(codes.revenue) : "—"}
+                        {salesKnown && codes ? formatMoney(codes.revenue) : "—"}
                       </td>
                       <td className="admin-num">
                         {estimated === null ? "—" : formatMoney(estimated)}
@@ -710,35 +722,47 @@ export default async function CreatorsPage({
                         )}
                       >
                         {economics.terms.unpaid ||
-                        economics.terms.revenueSharePercent === null
+                        economics.terms.revenueSharePercent === null ||
+                        !salesKnown
                           ? "—"
                           : formatMoney(economics.cost.codeBonus)}
                       </td>
                       <td className="admin-num">
-                        <span
-                          className="admin-delta"
-                          data-direction={
-                            economics.margin > 0
-                              ? "up"
-                              : economics.margin < 0
-                                ? "down"
-                                : "flat"
-                          }
-                        >
-                          {formatMoney(economics.margin)}
-                        </span>
-                        {economics.marginRate !== null && (
+                        {!salesKnown ? (
+                          "—"
+                        ) : (
                           <>
-                            <br />
-                            <span className="admin-creator-handle">
-                              {formatPercent(economics.marginRate, 0)}
+                            <span
+                              className="admin-delta"
+                              data-direction={
+                                economics.margin > 0
+                                  ? "up"
+                                  : economics.margin < 0
+                                    ? "down"
+                                    : "flat"
+                              }
+                            >
+                              {formatMoney(economics.margin)}
                             </span>
+                            {economics.marginRate !== null && (
+                              <>
+                                <br />
+                                <span className="admin-creator-handle">
+                                  {formatPercent(economics.marginRate, 0)}
+                                </span>
+                              </>
+                            )}
                           </>
                         )}
                       </td>
                       <td className="admin-num">
                         {economics.terms.unpaid ? (
                           <span className="admin-help">not paid</span>
+                        ) : !salesKnown &&
+                          economics.terms.revenueSharePercent !== null ? (
+                          // Half of what they are owed is a share of code
+                          // revenue, so without Stripe the total is not known.
+                          <span className="admin-help">Stripe unavailable</span>
                         ) : (
                           <>
                             <strong>{formatMoney(owed.total)}</strong>

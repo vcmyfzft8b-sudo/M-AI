@@ -3,6 +3,7 @@ import { formatDayLabel } from "@/lib/admin/ranges";
 import {
   ChartSurface,
   type ChartTooltipRow,
+  type SurfaceLabel,
   type SurfacePoint,
 } from "./chart-surface";
 import { formatCount } from "./ui";
@@ -174,6 +175,20 @@ export function AreaChart({
       plotTop={PADDING.top}
       plotHeight={PLOT_HEIGHT}
       showDots={points.length <= 45}
+      xLabels={points
+        .map((point, index) =>
+          labels.has(index)
+            ? {
+                at: (xFor(index) / VIEW_WIDTH) * 100,
+                text: point.label ?? formatDayLabel(point.day),
+              }
+            : null,
+        )
+        .filter((entry): entry is SurfaceLabel => entry !== null)}
+      yLabels={gridValues.map((value) => ({
+        at: (yFor(value) / VIEW_HEIGHT) * 100,
+        text: formatter(value),
+      }))}
       points={buildSurfacePoints(
         points,
         label,
@@ -191,23 +206,14 @@ export function AreaChart({
       </defs>
 
       {gridValues.map((value) => (
-        <g key={value}>
-          <line
-            className="admin-chart-grid"
-            x1={PADDING.left}
-            x2={VIEW_WIDTH - PADDING.right}
-            y1={yFor(value)}
-            y2={yFor(value)}
-          />
-          <text
-            className="admin-chart-axis"
-            x={PADDING.left - 8}
-            y={yFor(value) + 3}
-            textAnchor="end"
-          >
-            {formatter(value)}
-          </text>
-        </g>
+        <line
+          key={value}
+          className="admin-chart-grid"
+          x1={PADDING.left}
+          x2={VIEW_WIDTH - PADDING.right}
+          y1={yFor(value)}
+          y2={yFor(value)}
+        />
       ))}
 
       {comparison && comparison.length > 0 && (
@@ -216,22 +222,6 @@ export function AreaChart({
 
       <path d={area} fill={`url(#${gradientId})`} />
       <path className="admin-chart-line" d={line} />
-
-      {points.map((point, index) =>
-        labels.has(index) ? (
-          <text
-            key={`label-${index}`}
-            className="admin-chart-axis"
-            x={xFor(index)}
-            y={VIEW_HEIGHT - 9}
-            textAnchor={
-              index === 0 ? "start" : index === points.length - 1 ? "end" : "middle"
-            }
-          >
-            {point.label ?? formatDayLabel(point.day)}
-          </text>
-        ) : null,
-      )}
     </ChartSurface>
   );
 }
@@ -265,26 +255,31 @@ export function BarChart({
       plotTop={PADDING.top}
       plotHeight={PLOT_HEIGHT}
       showDots={false}
+      xLabels={points
+        .map((point, index) =>
+          labels.has(index)
+            ? {
+                at: (xFor(index) / VIEW_WIDTH) * 100,
+                text: point.label ?? formatDayLabel(point.day),
+              }
+            : null,
+        )
+        .filter((entry): entry is SurfaceLabel => entry !== null)}
+      yLabels={[0, 0.5, 1].map((ratio) => ({
+        at: (yFor(max * ratio) / VIEW_HEIGHT) * 100,
+        text: formatter(max * ratio),
+      }))}
       points={buildSurfacePoints(points, label, formatter, xFor, yFor)}
     >
       {[0, 0.5, 1].map((ratio) => (
-        <g key={ratio}>
-          <line
-            className="admin-chart-grid"
-            x1={PADDING.left}
-            x2={VIEW_WIDTH - PADDING.right}
-            y1={yFor(max * ratio)}
-            y2={yFor(max * ratio)}
-          />
-          <text
-            className="admin-chart-axis"
-            x={PADDING.left - 8}
-            y={yFor(max * ratio) + 3}
-            textAnchor="end"
-          >
-            {formatter(max * ratio)}
-          </text>
-        </g>
+        <line
+          key={ratio}
+          className="admin-chart-grid"
+          x1={PADDING.left}
+          x2={VIEW_WIDTH - PADDING.right}
+          y1={yFor(max * ratio)}
+          y2={yFor(max * ratio)}
+        />
       ))}
 
       {points.map((point, index) => {
@@ -302,20 +297,6 @@ export function BarChart({
           />
         );
       })}
-
-      {points.map((point, index) =>
-        labels.has(index) ? (
-          <text
-            key={`label-${index}`}
-            className="admin-chart-axis"
-            x={xFor(index)}
-            y={VIEW_HEIGHT - 9}
-            textAnchor="middle"
-          >
-            {point.label ?? formatDayLabel(point.day)}
-          </text>
-        ) : null,
-      )}
     </ChartSurface>
   );
 }

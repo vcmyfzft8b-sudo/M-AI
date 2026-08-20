@@ -21,6 +21,19 @@ export type SurfacePoint = {
   rows: ChartTooltipRow[];
 };
 
+/**
+ * An axis label, placed as a percentage of the surface.
+ *
+ * Labels are HTML rather than SVG `<text>`. The chart is drawn with
+ * `preserveAspectRatio="none"` so the line stretches to whatever box it is
+ * given, which is right for a trend line and wrong for lettering: on a phone,
+ * where the box is far taller relative to its width than the viewBox, text
+ * inside the SVG was squashed to about a third of its width. Out here it is
+ * ordinary text at an ordinary size on every screen, and the chart can be
+ * resized without touching the type.
+ */
+export type SurfaceLabel = { at: number; text: string };
+
 export function ChartSurface({
   viewWidth,
   viewHeight,
@@ -29,6 +42,8 @@ export function ChartSurface({
   points,
   children,
   showDots,
+  xLabels,
+  yLabels,
 }: {
   viewWidth: number;
   viewHeight: number;
@@ -37,6 +52,10 @@ export function ChartSurface({
   points: SurfacePoint[];
   children: React.ReactNode;
   showDots: boolean;
+  /** `at` is a percentage across the surface. */
+  xLabels?: SurfaceLabel[];
+  /** `at` is a percentage down the surface. */
+  yLabels?: SurfaceLabel[];
 }) {
   const [active, setActive] = useState<number | null>(null);
 
@@ -115,6 +134,34 @@ export function ChartSurface({
           <circle cx={point.x} cy={point.y} r="4" fill="var(--tint)" />
         )}
       </svg>
+
+      {yLabels && yLabels.length > 0 && (
+        <div className="admin-chart-y-labels" aria-hidden="true">
+          {yLabels.map((label, index) => (
+            <span
+              key={index}
+              className="admin-chart-axis-label"
+              style={{ top: `${label.at}%` }}
+            >
+              {label.text}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {xLabels && xLabels.length > 0 && (
+        <div className="admin-chart-x-labels" aria-hidden="true">
+          {xLabels.map((label, index) => (
+            <span
+              key={index}
+              className="admin-chart-axis-label"
+              style={{ left: `${label.at}%` }}
+            >
+              {label.text}
+            </span>
+          ))}
+        </div>
+      )}
 
       {point && (
         <div

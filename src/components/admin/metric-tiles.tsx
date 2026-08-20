@@ -18,6 +18,7 @@ export type MetricKey =
   | "videos"
   | "engagement"
   | "revenue"
+  | "codeRevenue"
   | "cost"
   | "margin";
 
@@ -30,6 +31,7 @@ export const METRIC_KEYS: MetricKey[] = [
   "videos",
   "engagement",
   "revenue",
+  "codeRevenue",
   "cost",
   "margin",
 ];
@@ -42,7 +44,8 @@ export const METRIC_LABELS: Record<MetricKey, string> = {
   saves: "Saves",
   videos: "Videos",
   engagement: "Engagement",
-  revenue: "Revenue",
+  revenue: "Est. revenue",
+  codeRevenue: "Code revenue",
   cost: "Creator cost",
   margin: "Margin",
 };

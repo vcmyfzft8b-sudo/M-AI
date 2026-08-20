@@ -180,6 +180,19 @@ export default async function CreatorsPage({
 
   const totalRevenue = estimateRevenue(totals.viewsGained, viewValue);
 
+  /**
+   * Money actually taken through these creators' promo codes in this window.
+   *
+   * Reported next to the estimate rather than instead of it: most people who
+   * buy after seeing a video never type a code, so this is a floor on what the
+   * creators brought in, not a measure of it. It is real money though, which
+   * the estimate is not, and it is what payouts are settled on.
+   */
+  const totalCodeRevenue = creators.reduce(
+    (sum, creator) => sum + (codeUsage?.get(creator.id)?.revenue ?? 0),
+    0,
+  );
+
   // Without this a monthly retainer bills a whole month however short the
   // window is, so "today" would have claimed a full retainer was owed. Computed
   // once: it depends only on the range, and `economicsFor` runs several times
@@ -394,14 +407,23 @@ export default async function CreatorsPage({
             chartable: false,
           },
           {
+            key: "codeRevenue",
+            value: codeUsage === null ? "—" : formatMoney(totalCodeRevenue),
+            hint:
+              codeUsage === null
+                ? "Stripe unavailable"
+                : "actually taken, via their codes",
+            chartable: false,
+          },
+          {
             key: "revenue",
             value: totalRevenue === null ? "—" : formatMoney(totalRevenue),
             hint:
               viewValue.revenuePerMille === null
                 ? "needs more data"
-                : `${formatMoney(
+                : `estimated · ${formatMoney(
                     Math.round(viewValue.revenuePerMille),
-                  )} per 1K tracked views`,
+                  )} per 1K views`,
             chartable: false,
           },
         ]}

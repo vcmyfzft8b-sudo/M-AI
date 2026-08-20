@@ -220,7 +220,7 @@ export default async function FinancePage({
         <StatCard
           label="Active trials"
           value={formatExact(summary.trials.activeTrials)}
-          meta={`${summary.trials.trialsEndingToday} converting today`}
+          meta={`${summary.trials.trialsDueToday} due to convert today`}
         />
         {dayProjection && (
           <StatCard
@@ -471,16 +471,16 @@ export default async function FinancePage({
 
       <Section
         title="Projected revenue from trials"
-        hint="Every trial due to end is valued at its own subscription price multiplied by the conversion rate measured for its own plan, then summed. A yearly trial and a monthly trial are worth very different amounts and do not convert alike, so they are never averaged together."
+        hint="Every trial still set to convert is valued at its own subscription price multiplied by the conversion rate measured for its own plan, then summed. Trials whose user already requested cancellation are left out, and a yearly trial and a monthly trial are never averaged together."
       >
-        {forecast.days.some((day) => day.trialsEnding > 0) ? (
+        {forecast.days.some((day) => day.trialsDue > 0) ? (
           <>
             <BarChart
               points={forecast.days.map((day) => ({
                 day: day.day,
                 value: day.projectedRevenue,
                 rows: [
-                  { label: "Trials ending", value: formatExact(day.trialsEnding) },
+                  { label: "Due to convert", value: formatExact(day.trialsDue) },
                 ],
               }))}
               label="projected"
@@ -493,7 +493,7 @@ export default async function FinancePage({
                 <thead>
                   <tr>
                     <th>Plan</th>
-                    <th className="admin-num">Trials ending</th>
+                    <th className="admin-num">Due to convert</th>
                     <th className="admin-num">Price</th>
                     <th className="admin-num">Converts at</th>
                     <th className="admin-num">Projected</th>
@@ -523,7 +523,7 @@ export default async function FinancePage({
                       <strong>
                         {formatExact(
                           forecast.days.reduce(
-                            (sum, day) => sum + day.trialsEnding,
+                            (sum, day) => sum + day.trialsDue,
                             0,
                           ),
                         )}
@@ -548,7 +548,7 @@ export default async function FinancePage({
             </div>
           </>
         ) : (
-          <EmptyState title="No trials are due to end in the next 14 days" />
+          <EmptyState title="No trials are due to convert in the next 14 days" />
         )}
       </Section>
 
@@ -565,15 +565,15 @@ export default async function FinancePage({
               </span>
             </div>
             <div className="admin-list-row">
-              <span className="admin-list-label">Ending today</span>
+              <span className="admin-list-label">Due to convert today</span>
               <span className="admin-list-value">
-                {formatExact(summary.trials.trialsEndingToday)}
+                {formatExact(summary.trials.trialsDueToday)}
               </span>
             </div>
             <div className="admin-list-row">
-              <span className="admin-list-label">Ending in this window</span>
+              <span className="admin-list-label">Due to convert in this window</span>
               <span className="admin-list-value">
-                {formatExact(summary.trials.trialsEndingInRange)}
+                {formatExact(summary.trials.trialsDueInRange)}
               </span>
             </div>
             <div className="admin-list-row">

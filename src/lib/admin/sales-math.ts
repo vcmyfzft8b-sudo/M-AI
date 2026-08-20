@@ -175,10 +175,13 @@ export function projectTrials(
 export type TrialProjection = {
   /** Trials that have not yet ended. */
   activeTrials: number;
-  /** Trials whose `trial_end` falls inside the selected window. */
-  trialsEndingInRange: number;
-  /** Trials ending today, in the reporting timezone. */
-  trialsEndingToday: number;
+  /**
+   * Trials due to convert inside the selected window: `trial_end` falls in the
+   * window and no cancellation has been requested.
+   */
+  trialsDueInRange: number;
+  /** Trials due to convert today, in the reporting timezone. */
+  trialsDueToday: number;
   /** Fraction of finished trials that produced a paid invoice. */
   conversionRate: number;
   /** Finished trials the rate was computed from. */
@@ -187,7 +190,7 @@ export type TrialProjection = {
   averageConvertedValue: number;
   /** Conversion rate per plan, and the sample each was measured over. */
   ratesByPlan: PlanConversionRates;
-  /** trialsEndingToday x conversionRate x averageConvertedValue, minor units. */
+  /** The trials due today, each valued at its price x its plan's rate. */
   projectedRevenueToday: number;
   /**
    * The same projection across every trial ending in the window, struck from
@@ -236,6 +239,21 @@ function monthlyValue(subscription: SubscriptionSnapshot): number {
 
 function unixDay(unix: number): string {
   return todayInReportZone(new Date(unix * 1000));
+}
+
+/**
+ * True while a trial is still set to bill when it ends.
+ *
+ * A user who cancels mid-trial keeps access until the trial runs out, so
+ * Stripe leaves the subscription `trialing` and records the request in
+ * `canceled_at` (with `cancel_at` pinned to the trial's end; the current
+ * cancellation flow never sets `cancel_at_period_end`). Such a trial still
+ * *ends*, but it lapses rather than converts — counting it as "converting"
+ * is how the live tile once claimed 18 conversions on a day only 5 trials
+ * were actually going to bill.
+ */
+function stillSetToConvert(subscription: SubscriptionSnapshot): boolean {
+  return !subscription.cancelAtPeriodEnd && subscription.canceledAt === null;
 }
 
 export type DayProjection = {
@@ -379,11 +397,15 @@ export function summarizeSales(
       subscription.trialEnd > nowUnix,
   );
 
-  const endingToday = activeTrials.filter(
+  // Only trials still set to bill count towards conversion: a trial whose
+  // user has already requested cancellation ends, but converts nothing.
+  const convertibleTrials = activeTrials.filter(stillSetToConvert);
+
+  const dueToday = convertibleTrials.filter(
     (subscription) => unixDay(subscription.trialEnd as number) === today,
   );
 
-  const endingInRange = activeTrials.filter((subscription) =>
+  const dueInRange = convertibleTrials.filter((subscription) =>
     inRange(subscription.trialEnd),
   );
 
@@ -403,14 +425,14 @@ export function summarizeSales(
     truncated: data.truncated,
     trials: {
       activeTrials: activeTrials.length,
-      trialsEndingInRange: endingInRange.length,
-      trialsEndingToday: endingToday.length,
+      trialsDueInRange: dueInRange.length,
+      trialsDueToday: dueToday.length,
       conversionRate,
       conversionSampleSize: finishedTrials.length,
       averageConvertedValue,
       ratesByPlan: rates,
-      projectedRevenueToday: projectTrials(endingToday, rates),
-      projectedRevenueInRange: projectTrials(endingInRange, forecastRates),
+      projectedRevenueToday: projectTrials(dueToday, rates),
+      projectedRevenueInRange: projectTrials(dueInRange, forecastRates),
       projectedFrom: forecastDay,
       currency,
     },
@@ -456,18 +478,20 @@ export function revenueSeries(data: SalesData, range: DateRange): RevenueDay[] {
 
 export type ForecastDay = {
   day: string;
-  /** Trials whose trial_end falls on this day. */
-  trialsEnding: number;
-  /** trialsEnding x conversionRate x averageConvertedValue, in minor units. */
+  /** Trials due to convert on this day: still set to bill when they end. */
+  trialsDue: number;
+  /** Those trials, each valued at its price x its plan's rate, minor units. */
   projectedRevenue: number;
 };
 
 /**
- * Expected revenue per day from trials that are due to end.
+ * Expected revenue per day from trials that are due to convert.
  *
- * Recomputed from Stripe on every load, so it moves as trials start and end and
- * as the measured conversion rate changes: the same trial pipeline against a
- * better conversion rate forecasts more money, with no other input.
+ * Trials whose user has already requested cancellation are left out: they end,
+ * but bill nothing. Recomputed from Stripe on every load, so it moves as
+ * trials start and end and as the measured conversion rate changes: the same
+ * trial pipeline against a better conversion rate forecasts more money, with
+ * no other input.
  */
 export function trialForecast(
   data: SalesData,
@@ -503,7 +527,8 @@ export function trialForecast(
     if (
       subscription.status !== "trialing" ||
       subscription.trialEnd === null ||
-      subscription.trialEnd <= nowUnix
+      subscription.trialEnd <= nowUnix ||
+      !stillSetToConvert(subscription)
     ) {
       continue;
     }
@@ -534,7 +559,7 @@ export function trialForecast(
   return {
     days: Array.from(byDay.values()).map((entry) => ({
       day: entry.day,
-      trialsEnding: entry.trials.length,
+      trialsDue: entry.trials.length,
       projectedRevenue: projectTrials(entry.trials, rates),
     })),
     rates,

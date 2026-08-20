@@ -221,13 +221,23 @@ export default async function AdminOverviewPage({
       )}
 
       <div className="admin-grid">
-        <StatCard
-          label="Campaign views"
-          value={formatCount(totals.viewsGained)}
-          meta={`${totals.videosPosted} video${
-            totals.videosPosted === 1 ? "" : "s"
-          } posted`}
-        />
+        {preset === "today" ? (
+          // Views only land in the nightly scrape, so today's count reads zero
+          // for almost the whole day. Sign-ups actually move during the day.
+          <StatCard
+            label="New sign-ups"
+            value={formatExact(userTotals.newInRange)}
+            meta={`${formatExact(userTotals.total)} users in total`}
+          />
+        ) : (
+          <StatCard
+            label="Campaign views"
+            value={formatCount(totals.viewsGained)}
+            meta={`${totals.videosPosted} video${
+              totals.videosPosted === 1 ? "" : "s"
+            } posted`}
+          />
+        )}
         <StatCard
           label="Revenue"
           value={sales ? formatMoney(sales.revenue, sales.currency) : "n/a"}

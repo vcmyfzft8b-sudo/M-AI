@@ -660,3 +660,61 @@ test("a customer who never used a code is never attributed to one", () => {
 
   assert.equal(promoCodeStats(data, RANGE).size, 0);
 });
+
+/**
+ * A conversion rate asked about a past date must not know what happened after
+ * it. Without the bound, a projection struck from that rate already knew how
+ * the trials it was projecting turned out, which makes "how close was the
+ * forecast" a comparison of the outcome with itself.
+ */
+test("an as-of conversion rate ignores payments taken after that date", () => {
+  const trials = [1, 2, 3, 4].map((n) =>
+    subscription({
+      id: `s${n}`,
+      customerId: `cus_${n}`,
+      plan: "monthly",
+      unitAmount: 2000,
+      status: "active",
+      trialEnd: at("2026-08-10T10:00:00Z"),
+    }),
+  );
+
+  const data = salesData({
+    subscriptions: trials,
+    payments: [
+      // One converted before the cut-off...
+      payment({
+        id: "early",
+        customerId: "cus_1",
+        created: at("2026-08-11T10:00:00Z"),
+        amount: 2000,
+      }),
+      // ...and two more only afterwards.
+      payment({
+        id: "late_a",
+        customerId: "cus_2",
+        created: at("2026-08-19T10:00:00Z"),
+        amount: 2000,
+      }),
+      payment({
+        id: "late_b",
+        customerId: "cus_3",
+        created: at("2026-08-19T11:00:00Z"),
+        amount: 2000,
+      }),
+    ],
+  });
+
+  // Four trials, all finished before either cut-off. Asserted on `overall`
+  // rather than the per-plan rate: a plan needs MIN_PLAN_SAMPLE finished
+  // trials before it is reported on its own, and four is well under it.
+  const asOf12th = conversionRatesByPlan(data, new Date("2026-08-12T00:00:00Z"));
+  assert.equal(asOf12th.overallSample, 4);
+  // Only the first conversion had happened by then: 1 of 4.
+  assert.equal(asOf12th.overall, 0.25);
+
+  // Asked today, all three have: 3 of 4.
+  const asOfNow = conversionRatesByPlan(data, new Date("2026-08-20T00:00:00Z"));
+  assert.equal(asOfNow.overallSample, 4);
+  assert.equal(asOfNow.overall, 0.75);
+});

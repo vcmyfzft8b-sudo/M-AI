@@ -107,7 +107,7 @@ test("a zero or blank share is not a share", () => {
   assert.equal(payTermsFor(creator({ revenue_share_percent: "20" })).revenueSharePercent, 20);
 });
 
-test("margin is revenue less the whole cost, both parts included", () => {
+test("margin is code revenue less the whole cost, both parts included", () => {
   const terms = payTermsFor(
     creator({ rate_kind: "per_video", rate_amount: 5, revenue_share_percent: 20 }),
   );
@@ -122,8 +122,27 @@ test("margin is revenue less the whole cost, both parts included", () => {
   assert.equal(economics.cost.basePay, 3000);
   assert.equal(economics.cost.codeBonus, 2000);
   assert.equal(economics.cost.total, 5000);
-  assert.equal(economics.margin, 25_170);
-  assert.ok(Math.abs(economics.returnOnSpend - 30_170 / 5000) < 1e-9);
+  // Real money in less real money out: 10,000 taken, 5,000 paid.
+  assert.equal(economics.margin, 5000);
+  assert.equal(economics.marginRate, 0.5);
+  assert.ok(Math.abs(economics.returnOnSpend - 10_000 / 5000) < 1e-9);
+  // The estimate is still reported, just never used to strike the margin.
+  assert.equal(economics.revenue, 30_170);
+});
+
+test("a creator with plenty of views but no sales shows a loss", () => {
+  // The whole reason margin moved off the estimate. On views alone this looked
+  // like a healthy margin; nobody actually bought anything.
+  const economics = computeEconomics(
+    payTermsFor(creator({ rate_kind: "per_video", rate_amount: 5 })),
+    { videos: 4, views: 500_000, codeRevenue: 0, revenue: 200_000 },
+  );
+
+  assert.equal(economics.cost.total, 2000);
+  assert.equal(economics.margin, -2000);
+  // No code revenue is nothing to take a percentage of.
+  assert.equal(economics.marginRate, null);
+  assert.equal(economics.returnOnSpend, 0);
 });
 
 test("free reach reports no return on spend rather than infinity", () => {
@@ -133,18 +152,22 @@ test("free reach reports no return on spend rather than infinity", () => {
   );
 
   assert.equal(economics.cost.total, 0);
-  assert.equal(economics.margin, 43_244);
+  // Costs nothing and sold nothing, so it neither made nor lost money.
+  assert.equal(economics.margin, 0);
   assert.equal(economics.returnOnSpend, null);
 });
 
-test("an unmeasurable campaign rate leaves margin unknown, not zero", () => {
+test("an unmeasurable campaign rate no longer leaves the margin unknown", () => {
+  // The estimate can be unavailable; what was paid and what the codes took are
+  // both known regardless, so the margin is still a real number.
   const economics = computeEconomics(
     payTermsFor(creator({ rate_kind: "per_video", rate_amount: 5 })),
     { videos: 2, views: 100, codeRevenue: 0, revenue: null },
   );
 
   assert.equal(economics.cost.total, 1000);
-  assert.equal(economics.margin, null);
+  assert.equal(economics.revenue, null);
+  assert.equal(economics.margin, -1000);
   assert.equal(economics.marginRate, null);
 });
 

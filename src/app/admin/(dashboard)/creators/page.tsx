@@ -410,14 +410,21 @@ export default async function CreatorsPage({
           },
           {
             key: "margin",
+            // Struck against code revenue, not the estimate: what was actually
+            // taken through these creators, less what they were actually paid.
             value:
-              totalRevenue === null
+              codeUsage === null
                 ? "—"
-                : formatMoney(totalRevenue - totalCost),
+                : formatMoney(totalCodeRevenue - totalCost),
             hint:
-              totalRevenue && totalRevenue > 0
-                ? `${formatPercent((totalRevenue - totalCost) / totalRevenue, 0)} margin`
-                : undefined,
+              codeUsage === null
+                ? "Stripe unavailable"
+                : totalCodeRevenue > 0
+                  ? `${formatPercent(
+                      (totalCodeRevenue - totalCost) / totalCodeRevenue,
+                      0,
+                    )} on code revenue`
+                  : "no code revenue in this window",
             chartable: false,
           },
           {
@@ -563,7 +570,12 @@ export default async function CreatorsPage({
                   >
                     Code bonus
                   </th>
-                  <th className="admin-num">Margin</th>
+                  <th
+                    className="admin-num"
+                    title="Code revenue less what this creator is paid. Real money both ways, so it ignores the view-based estimate."
+                  >
+                    Margin
+                  </th>
                   <th
                     className="admin-num"
                     title="Base pay plus code bonus for the selected period, on the terms this creator is on. Payouts run monthly, so select This month before paying anyone."
@@ -703,30 +715,24 @@ export default async function CreatorsPage({
                           : formatMoney(economics.cost.codeBonus)}
                       </td>
                       <td className="admin-num">
-                        {economics.margin === null ? (
-                          "—"
-                        ) : (
+                        <span
+                          className="admin-delta"
+                          data-direction={
+                            economics.margin > 0
+                              ? "up"
+                              : economics.margin < 0
+                                ? "down"
+                                : "flat"
+                          }
+                        >
+                          {formatMoney(economics.margin)}
+                        </span>
+                        {economics.marginRate !== null && (
                           <>
-                            <span
-                              className="admin-delta"
-                              data-direction={
-                                economics.margin > 0
-                                  ? "up"
-                                  : economics.margin < 0
-                                    ? "down"
-                                    : "flat"
-                              }
-                            >
-                              {formatMoney(economics.margin)}
+                            <br />
+                            <span className="admin-creator-handle">
+                              {formatPercent(economics.marginRate, 0)}
                             </span>
-                            {economics.marginRate !== null && (
-                              <>
-                                <br />
-                                <span className="admin-creator-handle">
-                                  {formatPercent(economics.marginRate, 0)}
-                                </span>
-                              </>
-                            )}
                           </>
                         )}
                       </td>

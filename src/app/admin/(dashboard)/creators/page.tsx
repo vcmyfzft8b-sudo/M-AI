@@ -514,7 +514,18 @@ export default async function CreatorsPage({
                   <th className="admin-num" title="Paid checkouts using this creator's codes, within the selected period.">
                     Codes used
                   </th>
-                  <th className="admin-num">Est. revenue</th>
+                  <th
+                    className="admin-num"
+                    title="Money actually taken through this creator's codes in this period, from Stripe."
+                  >
+                    Code revenue
+                  </th>
+                  <th
+                    className="admin-num"
+                    title="Views multiplied by the campaign rate. An estimate, not money received."
+                  >
+                    Est. revenue
+                  </th>
                   <th className="admin-num" title="Flat fee for the posts in this period.">
                     Base pay
                   </th>
@@ -635,6 +646,9 @@ export default async function CreatorsPage({
                         }
                       >
                         {codes ? formatExact(codes.payments) : "—"}
+                      </td>
+                      <td className="admin-num">
+                        {codes ? formatMoney(codes.revenue) : "—"}
                       </td>
                       <td className="admin-num">
                         {estimated === null ? "—" : formatMoney(estimated)}

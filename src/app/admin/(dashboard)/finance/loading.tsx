@@ -6,11 +6,11 @@ import {
   AdminSkeletonStats,
 } from "@/components/admin/skeletons";
 
-export default function SalesLoading() {
+export default function FinanceLoading() {
   return (
     <div className="admin-loading" role="status" aria-label="Loading">
       <AdminSkeletonHeader />
-      <AdminSkeletonStats count={4} />
+      <AdminSkeletonStats count={8} />
       <AdminSkeletonChart />
       <AdminSkeletonSection>
         <AdminSkeletonList rows={4} />

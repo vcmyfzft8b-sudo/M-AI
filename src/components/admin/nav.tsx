@@ -21,7 +21,7 @@ import { PendingLink } from "./pending-link";
 export const ADMIN_LINKS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/creators", label: "Creators", icon: Video, badge: "review" },
-  { href: "/admin/sales", label: "Sales", icon: CreditCard },
+  { href: "/admin/finance", label: "Finance", icon: CreditCard },
   { href: "/admin/visitors", label: "Visitors", icon: BarChart3 },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/settings", label: "Settings", icon: Settings },

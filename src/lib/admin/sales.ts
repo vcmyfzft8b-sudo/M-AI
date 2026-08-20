@@ -335,6 +335,7 @@ export async function refreshSalesData() {
 }
 
 export type {
+  DayProjection,
   ForecastDay,
   PaymentSnapshot,
   SubscriptionStatus,
@@ -349,6 +350,7 @@ export {
   creatorRevenue,
   trialForecast,
   formatMoney,
+  projectionAtDayStart,
   promoCodeStats,
   revenueSeries,
   summarizeSales,

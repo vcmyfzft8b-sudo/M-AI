@@ -238,6 +238,55 @@ function unixDay(unix: number): string {
   return todayInReportZone(new Date(unix * 1000));
 }
 
+export type DayProjection = {
+  day: string;
+  /** Trials that were due to end on `day`, as that day began. */
+  trialsDue: number;
+  /** Those trials valued at their plan price × their plan's rate, minor units. */
+  projectedRevenue: number;
+};
+
+/**
+ * The projection for one day, frozen at that day's start.
+ *
+ * The live projection only counts subscriptions still `trialing`, so it
+ * shrinks as the day plays out: every trial that converts or cancels falls out
+ * of it, and by evening the tile reports whatever has not happened yet rather
+ * than what the day was expected to bring. Asked about yesterday it reads
+ * zero, because nothing is still trialing in the past.
+ *
+ * This projection instead admits only facts knowable when the day began: the
+ * subscription existed, it had not been cancelled yet, and its trial was due
+ * to end inside the day. Stripe keeps `trial_end` on a subscription whatever
+ * happens to it afterwards, so a trial that converted an hour later still
+ * counts, the number reads the same all day, and the same question asked about
+ * yesterday reproduces yesterday morning's answer. The conversion rates are
+ * struck as of the day's start too, so the day's own outcomes never leak into
+ * the forecast they are being compared against.
+ */
+export function projectionAtDayStart(
+  data: SalesData,
+  day: string,
+): DayProjection {
+  const dayStart = new Date(dayStartIso(day));
+  const dayStartUnix = Math.floor(dayStart.getTime() / 1000);
+
+  const due = data.subscriptions.filter(
+    (subscription) =>
+      subscription.trialEnd !== null &&
+      unixDay(subscription.trialEnd) === day &&
+      subscription.created < dayStartUnix &&
+      (subscription.canceledAt === null ||
+        subscription.canceledAt >= dayStartUnix),
+  );
+
+  return {
+    day,
+    trialsDue: due.length,
+    projectedRevenue: projectTrials(due, conversionRatesByPlan(data, dayStart)),
+  };
+}
+
 export function summarizeSales(
   data: SalesData,
   range: DateRange,

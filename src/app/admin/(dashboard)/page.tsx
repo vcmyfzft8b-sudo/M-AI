@@ -23,12 +23,17 @@ import {
   getRealtimeVisitors,
   getVercelTraffic,
 } from "@/lib/admin/vercel-analytics";
-import { normalizeRangePreset, resolveRange } from "@/lib/admin/ranges";
+import {
+  normalizeRangePreset,
+  resolveRange,
+  todayInReportZone,
+} from "@/lib/admin/ranges";
 import {
   formatMoney,
   getRevenueBetween,
   loadSalesData,
-  type SalesSummary,
+  projectionAtDayStart,
+  type SalesData,
   summarizeSales,
 } from "@/lib/admin/sales";
 import {
@@ -70,7 +75,7 @@ export default async function AdminOverviewPage({
     userTotals,
     reviewCount,
     syncRun,
-    sales,
+    salesData,
   ] = await Promise.all([
     getCreatorMetrics(creators, range),
     getDailyDeltas(range, { onlyMemo: true }),
@@ -83,10 +88,15 @@ export default async function AdminOverviewPage({
     getLatestSyncRun(),
     // Stripe is the one dependency that can be slow or down; the overview has
     // to render without it.
-    loadSalesData()
-      .then((data) => summarizeSales(data, range))
-      .catch(() => null as SalesSummary | null),
+    loadSalesData().catch(() => null as SalesData | null),
   ]);
+
+  const sales = salesData ? summarizeSales(salesData, range) : null;
+  // Frozen at the start of today, so it reads the same all day however many of
+  // the trials have already converted or lapsed by now.
+  const projectedToday = salesData
+    ? projectionAtDayStart(salesData, todayInReportZone())
+    : null;
 
   const totals = sumMetrics(metrics);
   const series = toDailySeries(deltas, range);
@@ -179,9 +189,9 @@ export default async function AdminOverviewPage({
           label="Active trials"
           value={sales ? formatExact(sales.trials.activeTrials) : "n/a"}
           meta={
-            sales
+            sales && projectedToday
               ? `${formatMoney(
-                  sales.trials.projectedRevenueToday,
+                  projectedToday.projectedRevenue,
                   sales.currency,
                 )} projected today`
               : undefined
@@ -254,14 +264,12 @@ export default async function AdminOverviewPage({
           </div>
           <div className="admin-list-row">
             <span className="admin-list-label">
-              Projected from trials ending in this window
+              Projected from trials due today{" "}
+              <span className="admin-help">· frozen at the start of the day</span>
             </span>
             <span className="admin-list-value">
-              {sales
-                ? formatMoney(
-                    sales.trials.projectedRevenueInRange,
-                    sales.currency,
-                  )
+              {sales && projectedToday
+                ? formatMoney(projectedToday.projectedRevenue, sales.currency)
                 : "Stripe unavailable"}
             </span>
           </div>

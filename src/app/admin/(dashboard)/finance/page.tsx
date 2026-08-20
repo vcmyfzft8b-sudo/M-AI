@@ -31,6 +31,7 @@ import {
   formatMoney,
   getRevenueBetween,
   loadSalesData,
+  projectionAtDayStart,
   promoCodeStats,
   revenueSeries,
   summarizeSales,
@@ -76,6 +77,16 @@ export default async function FinancePage({
 
   const summary = summarizeSales(data, range);
   const series = revenueSeries(data, range);
+
+  // The projection is a per-day figure, frozen at that day's start, so it only
+  // exists for the two single-day windows: Today shows what this morning
+  // expected of today, Yesterday reproduces yesterday morning's answer. A
+  // multi-day window gets no projected tile — averaging frozen mornings across
+  // a week answers no question anyone is asking.
+  const dayProjection =
+    preset === "today" || preset === "yesterday"
+      ? projectionAtDayStart(data, range.from)
+      : null;
   const codes = promoCodeStats(data, range);
   const forecast = trialForecast(data, { days: 14 });
   const allCreators = await listCreators({ includeArchived: true }).catch(
@@ -211,22 +222,17 @@ export default async function FinancePage({
           value={formatExact(summary.trials.activeTrials)}
           meta={`${summary.trials.trialsEndingToday} converting today`}
         />
-        {/*
-         * Follows the range like every other tile. It used to report today
-         * whatever window was selected, so picking Yesterday left a figure for
-         * a different day sitting next to yesterday's revenue, inviting a
-         * comparison between two unrelated numbers.
-         */}
-        <StatCard
-          label={`Projected ${range.label.toLowerCase()}`}
-          value={formatMoney(
-            summary.trials.projectedRevenueInRange,
-            summary.currency,
-          )}
-          meta={`${summary.trials.trialsEndingInRange} trial${
-            summary.trials.trialsEndingInRange === 1 ? "" : "s"
-          } ending · forecast on ${formatDayLabel(summary.trials.projectedFrom)}`}
-        />
+        {dayProjection && (
+          <StatCard
+            label={
+              preset === "today" ? "Projected today" : "Projected yesterday"
+            }
+            value={formatMoney(dayProjection.projectedRevenue, summary.currency)}
+            meta={`${dayProjection.trialsDue} trial${
+              dayProjection.trialsDue === 1 ? "" : "s"
+            } due to convert · frozen at the start of the day`}
+          />
+        )}
       </div>
 
       <div className="admin-grid">

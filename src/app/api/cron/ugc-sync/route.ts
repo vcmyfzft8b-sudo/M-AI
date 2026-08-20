@@ -20,9 +20,10 @@ import {
  * Any run left pending by an earlier call is ingested first, so a scrape that
  * outlived its budget is never lost.
  *
- * Wired up in `vercel.json`. Vercel Cron sends `Authorization: Bearer
- * $CRON_SECRET`; `INTERNAL_JOB_SECRET` is accepted too so the job can be
- * triggered from the existing tooling.
+ * Wired up in `vercel.json`, which calls it with `force=1` so the night's
+ * collection is never skipped by the manual-trigger debounce. Vercel Cron sends
+ * `Authorization: Bearer $CRON_SECRET`; `INTERNAL_JOB_SECRET` is accepted too so
+ * the job can be triggered from the existing tooling.
  */
 
 /**
@@ -34,9 +35,20 @@ const SYNC_BUDGET_MS = 240_000;
 /**
  * Minimum gap between two collections started by this endpoint.
  *
- * The schedule is daily, so this never trips in normal operation. It exists
- * because every run costs Apify credit: without it, triggering the endpoint by
- * hand — to settle a finished run, say — would immediately start another one.
+ * It exists because every run costs Apify credit: without it, triggering the
+ * endpoint by hand — to settle a finished run, say — would immediately start
+ * another one.
+ *
+ * It does not apply to the nightly job, which passes `force=1`. The claim that
+ * "the schedule is daily, so this never trips" was wrong: a hand-triggered run
+ * any time in the six hours before 21:50 UTC silently cancels that night's
+ * collection, and the endpoint answers 200 while doing so, so nothing looks
+ * wrong until a day is missing from the chart. That is exactly what happened on
+ * 2026-08-19, when an afternoon run finished at 15:58:54 and the cron fired at
+ * 21:50:43 — eight minutes inside the window.
+ *
+ * The in-flight check above is what actually prevents two concurrent Apify
+ * runs, and `force=1` does not bypass it.
  */
 const MIN_INTERVAL_MS = 6 * 60 * 60 * 1000;
 

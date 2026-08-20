@@ -1,5 +1,5 @@
 import { AutoRefresh } from "@/components/admin/auto-refresh";
-import { AreaChart } from "@/components/admin/chart";
+import { AreaChart, type ChartPoint } from "@/components/admin/chart";
 import { PendingLink } from "@/components/admin/pending-link";
 import {
   Alert,
@@ -24,6 +24,8 @@ import {
   getVercelTraffic,
 } from "@/lib/admin/vercel-analytics";
 import {
+  formatHourLabel,
+  hourInReportZone,
   normalizeRangePreset,
   resolveRange,
   todayInReportZone,
@@ -32,6 +34,7 @@ import {
   formatMoney,
   getRevenueBetween,
   loadSalesData,
+  type PaymentSnapshot,
   projectionAtDayStart,
   type SalesData,
   summarizeSales,
@@ -50,6 +53,50 @@ import { getUserTotals } from "@/lib/admin/users";
 import { getLatestSyncRun } from "@/lib/ugc/sync";
 
 type SearchParams = Promise<{ range?: string }>;
+
+/**
+ * Stripe payments on the given day, bucketed by report-zone hour.
+ *
+ * Views arrive in one nightly scrape, so a single-day window has nothing
+ * intraday to chart — but payments carry real timestamps, so revenue does.
+ * On today, hours that have not happened yet are left off rather than drawn
+ * as zero.
+ */
+function hourlyRevenuePoints(
+  payments: PaymentSnapshot[],
+  day: string,
+  isToday: boolean,
+): ChartPoint[] {
+  const byHour = new Map<number, { amount: number; count: number }>();
+
+  for (const payment of payments) {
+    const at = new Date(payment.created * 1000);
+
+    if (todayInReportZone(at) !== day) {
+      continue;
+    }
+
+    const hour = hourInReportZone(at);
+    const bucket = byHour.get(hour) ?? { amount: 0, count: 0 };
+
+    bucket.amount += payment.amount;
+    bucket.count += 1;
+    byHour.set(hour, bucket);
+  }
+
+  const hours = isToday ? hourInReportZone() + 1 : 24;
+
+  return Array.from({ length: hours }, (_, hour) => {
+    const bucket = byHour.get(hour);
+
+    return {
+      day,
+      label: formatHourLabel(hour),
+      value: bucket?.amount ?? 0,
+      rows: [{ label: "Payments", value: formatExact(bucket?.count ?? 0) }],
+    };
+  });
+}
 
 export const dynamic = "force-dynamic";
 
@@ -127,14 +174,28 @@ export default async function AdminOverviewPage({
     : beaconTraffic;
   const onlineCount = liveNow ?? online.length;
 
+  // Today's views only land with the nightly scrape, so the today window would
+  // rank every creator at zero. Yesterday is the freshest day that has data.
+  const creatorWindow =
+    preset === "today"
+      ? resolveRange("yesterday", { earliestDay: earliest })
+      : range;
+  const creatorMetrics =
+    preset === "today"
+      ? await getCreatorMetrics(creators, creatorWindow)
+      : metrics;
+
   const topCreators = [...creators]
-    .map((creator) => ({ creator, entry: metrics.get(creator.id) }))
+    .map((creator) => ({ creator, entry: creatorMetrics.get(creator.id) }))
     .filter((row) => (row.entry?.viewsGained ?? 0) > 0)
     .sort((a, b) => (b.entry?.viewsGained ?? 0) - (a.entry?.viewsGained ?? 0))
     .slice(0, 6);
 
   const needsSetup = creators.length === 0;
   const noViewData = !series.some((point) => point.views > 0);
+  // Views arrive in one nightly scrape, so a single-day window has no intraday
+  // shape to draw — the per-day chart only means something across days.
+  const singleDayWindow = preset === "today" || preset === "yesterday";
 
   return (
     <>
@@ -171,13 +232,23 @@ export default async function AdminOverviewPage({
       )}
 
       <div className="admin-grid">
-        <StatCard
-          label="Campaign views"
-          value={formatCount(totals.viewsGained)}
-          meta={`${totals.videosPosted} video${
-            totals.videosPosted === 1 ? "" : "s"
-          } posted`}
-        />
+        {preset === "today" ? (
+          // Views only land in the nightly scrape, so today's count reads zero
+          // for almost the whole day. Sign-ups actually move during the day.
+          <StatCard
+            label="New sign-ups"
+            value={formatExact(userTotals.newInRange)}
+            meta={`${formatExact(userTotals.total)} users in total`}
+          />
+        ) : (
+          <StatCard
+            label="Campaign views"
+            value={formatCount(totals.viewsGained)}
+            meta={`${totals.videosPosted} video${
+              totals.videosPosted === 1 ? "" : "s"
+            } posted`}
+          />
+        )}
         <StatCard
           label="Revenue"
           value={sales ? formatMoney(sales.revenue, sales.currency) : "n/a"}
@@ -189,7 +260,9 @@ export default async function AdminOverviewPage({
           label="Active trials"
           value={sales ? formatExact(sales.trials.activeTrials) : "n/a"}
           meta={
-            sales && projectedToday
+            // The projection is about today only, so it reads as noise under
+            // any other window.
+            preset === "today" && sales && projectedToday
               ? `${formatMoney(
                   projectedToday.projectedRevenue,
                   sales.currency,
@@ -215,36 +288,74 @@ export default async function AdminOverviewPage({
         />
       </div>
 
-      <Section
-        title="Campaign views per day"
-        hint="Views gained each day across every creator's Memo AI posts."
-        actions={
-          <PendingLink className="admin-button" data-size="sm" href="/admin/creators">
-            Creator detail
-          </PendingLink>
-        }
-      >
-        {noViewData ? (
-          <EmptyState title="No view data yet">
-            {needsSetup
-              ? "Add your creators, then run a sync."
-              : "Run a sync from the Creators page to pull each account's posts."}
-          </EmptyState>
-        ) : (
-          <AreaChart
-            points={series.map((point) => ({
-              day: point.day,
-              value: point.views,
-              rows: [
-                { label: "Videos posted", value: formatExact(point.videosPosted) },
-                { label: "Likes", value: formatCount(point.likes) },
-                { label: "Comments", value: formatCount(point.comments) },
-              ],
-            }))}
-            label="views"
-          />
-        )}
-      </Section>
+      {singleDayWindow ? (
+        <Section
+          title="Revenue by hour"
+          hint={`Stripe payments through ${
+            preset === "today" ? "today" : "yesterday"
+          }, hour by hour. Views only land in the nightly scrape, so they have no intraday chart.`}
+          actions={
+            <PendingLink className="admin-button" data-size="sm" href="/admin/finance">
+              Finance detail
+            </PendingLink>
+          }
+        >
+          {salesData === null ? (
+            <EmptyState title="Stripe unavailable" />
+          ) : (
+            (() => {
+              const points = hourlyRevenuePoints(
+                salesData.payments,
+                range.to,
+                preset === "today",
+              );
+
+              return !points.some((point) => point.value > 0) ? (
+                <EmptyState title="No payments in this window yet" />
+              ) : (
+                <AreaChart
+                  points={points}
+                  label="revenue"
+                  formatter={(value) =>
+                    formatMoney(Math.round(value), sales?.currency)
+                  }
+                />
+              );
+            })()
+          )}
+        </Section>
+      ) : (
+        <Section
+          title="Campaign views per day"
+          hint="Views gained each day across every creator's Memo AI posts."
+          actions={
+            <PendingLink className="admin-button" data-size="sm" href="/admin/creators">
+              Creator detail
+            </PendingLink>
+          }
+        >
+          {noViewData ? (
+            <EmptyState title="No view data yet">
+              {needsSetup
+                ? "Add your creators, then run a sync."
+                : "Run a sync from the Creators page to pull each account's posts."}
+            </EmptyState>
+          ) : (
+            <AreaChart
+              points={series.map((point) => ({
+                day: point.day,
+                value: point.views,
+                rows: [
+                  { label: "Videos posted", value: formatExact(point.videosPosted) },
+                  { label: "Likes", value: formatCount(point.likes) },
+                  { label: "Comments", value: formatCount(point.comments) },
+                ],
+              }))}
+              label="views"
+            />
+          )}
+        </Section>
+      )}
 
       <Section
         title="Finance at a glance"
@@ -262,17 +373,19 @@ export default async function AdminOverviewPage({
               {sales ? formatMoney(sales.revenue, sales.currency) : "Stripe unavailable"}
             </span>
           </div>
-          <div className="admin-list-row">
-            <span className="admin-list-label">
-              Projected from trials due today{" "}
-              <span className="admin-help">· frozen at the start of the day</span>
-            </span>
-            <span className="admin-list-value">
-              {sales && projectedToday
-                ? formatMoney(projectedToday.projectedRevenue, sales.currency)
-                : "Stripe unavailable"}
-            </span>
-          </div>
+          {preset === "today" && (
+            <div className="admin-list-row">
+              <span className="admin-list-label">
+                Projected from trials due today{" "}
+                <span className="admin-help">· frozen at the start of the day</span>
+              </span>
+              <span className="admin-list-value">
+                {sales && projectedToday
+                  ? formatMoney(projectedToday.projectedRevenue, sales.currency)
+                  : "Stripe unavailable"}
+              </span>
+            </div>
+          )}
           <div className="admin-list-row">
             <span className="admin-list-label">Revenue per 1,000 views</span>
             <span className="admin-list-value">
@@ -290,7 +403,11 @@ export default async function AdminOverviewPage({
       <div className="admin-section admin-two-col">
         <Section
           title="Top creators"
-          hint={`By views generated ${range.label.toLowerCase()}.`}
+          hint={
+            preset === "today"
+              ? "By views generated yesterday — today's views arrive with the nightly scrape."
+              : `By views generated ${range.label.toLowerCase()}.`
+          }
         >
           {topCreators.length === 0 ? (
             <EmptyState title="No creator activity in this window" />

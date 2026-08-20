@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   addDays,
+  CREATOR_RANGE_PRESETS,
+  creatorRangePreset,
   dayStartIso,
   daysBetween,
   eachDay,
@@ -168,4 +170,51 @@ test("monthsCovered pro-rates a retainer by real month lengths", () => {
   );
 
   assert.equal(monthsCovered([]), 0);
+});
+
+/**
+ * The creator pages read TikTok data collected once a night, so "today" is
+ * empty until the scrape runs. These guard the window that replaced it.
+ */
+test("yesterday is a single day that stops before today", () => {
+  // 10:00 in Ljubljana on 20 Aug.
+  const now = new Date("2026-08-20T08:00:00Z");
+  const range = resolveRange("yesterday", { now });
+
+  assert.equal(range.from, "2026-08-19");
+  assert.equal(range.to, "2026-08-19");
+  assert.deepEqual(range.days, ["2026-08-19"]);
+  assert.equal(range.label, "Yesterday");
+  // Today must not be in the window; that is the whole point of the preset.
+  assert.equal(range.days.includes("2026-08-20"), false);
+});
+
+test("yesterday compares against the day before it", () => {
+  const now = new Date("2026-08-20T08:00:00Z");
+  const range = resolveRange("yesterday", { now });
+
+  assert.deepEqual(range.previous, { from: "2026-08-18", to: "2026-08-18" });
+});
+
+test("today still ends today, so the other pages are unaffected", () => {
+  const now = new Date("2026-08-20T08:00:00Z");
+  const range = resolveRange("today", { now });
+
+  assert.equal(range.from, "2026-08-20");
+  assert.equal(range.to, "2026-08-20");
+  assert.equal(range.label, "Today");
+});
+
+test("a creator link asking for today lands on yesterday instead", () => {
+  assert.equal(creatorRangePreset("today"), "yesterday");
+  assert.equal(creatorRangePreset("yesterday"), "yesterday");
+  // Anything else is left alone, including the default for junk input.
+  assert.equal(creatorRangePreset("30d"), "30d");
+  assert.equal(creatorRangePreset(undefined), "7d");
+  assert.equal(creatorRangePreset("nonsense"), "7d");
+});
+
+test("the creator tabs never offer today", () => {
+  assert.equal(CREATOR_RANGE_PRESETS.includes("today"), false);
+  assert.equal(CREATOR_RANGE_PRESETS[0], "yesterday");
 });

@@ -200,6 +200,7 @@ export function EmptyState({
 
 export const RANGE_LABELS: Record<string, string> = {
   today: "Today",
+  yesterday: "Yesterday",
   "7d": "7 days",
   "30d": "30 days",
   month: "This month",
@@ -211,14 +212,25 @@ export function RangeTabs({
   active,
   basePath,
   extraParams,
+  presets,
 }: {
   active: string;
   basePath: string;
   extraParams?: Record<string, string | undefined>;
+  /**
+   * Which ranges to offer, in order. Defaults to all of them. A page whose data
+   * cannot answer for a given window should leave that window out rather than
+   * offer a tab that can only come back empty.
+   */
+  presets?: readonly string[];
 }) {
+  const entries = presets
+    ? presets.map((value) => [value, RANGE_LABELS[value] ?? value] as const)
+    : Object.entries(RANGE_LABELS);
+
   return (
     <nav className="admin-range">
-      {Object.entries(RANGE_LABELS).map(([value, label]) => {
+      {entries.map(([value, label]) => {
         const params = new URLSearchParams();
 
         for (const [key, param] of Object.entries(extraParams ?? {})) {

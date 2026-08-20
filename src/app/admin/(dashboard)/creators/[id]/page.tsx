@@ -32,7 +32,11 @@ import {
   estimateRevenue,
   VALUE_BASELINE_DAYS,
 } from "@/lib/admin/campaign-value";
-import { normalizeRangePreset, resolveRange } from "@/lib/admin/ranges";
+import {
+  CREATOR_RANGE_PRESETS,
+  creatorRangePreset,
+  resolveRange,
+} from "@/lib/admin/ranges";
 import {
   creatorRevenue,
   formatMoney,
@@ -64,7 +68,7 @@ export default async function CreatorDetailPage({
 }) {
   const { id } = await params;
   const search = await searchParams;
-  const preset = normalizeRangePreset(search?.range);
+  const preset = creatorRangePreset(search?.range);
   const earliest = await getEarliestDataDay();
   const range = resolveRange(preset, { earliestDay: earliest });
 
@@ -130,7 +134,11 @@ export default async function CreatorDetailPage({
             {creator.promo_codes.length > 0 && ` · ${creator.promo_codes.join(", ")}`}
           </p>
         </div>
-        <RangeTabs active={preset} basePath={`/admin/creators/${creator.id}`} />
+        <RangeTabs
+          active={preset}
+          basePath={`/admin/creators/${creator.id}`}
+          presets={CREATOR_RANGE_PRESETS}
+        />
       </header>
 
       <div className="admin-grid">

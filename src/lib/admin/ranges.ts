@@ -9,7 +9,14 @@
 
 export const REPORT_TIME_ZONE = "Europe/Ljubljana";
 
-export const RANGE_PRESETS = ["today", "7d", "30d", "month", "all"] as const;
+export const RANGE_PRESETS = [
+  "today",
+  "yesterday",
+  "7d",
+  "30d",
+  "month",
+  "all",
+] as const;
 export type RangePreset = (typeof RANGE_PRESETS)[number];
 
 export type DateRange = {
@@ -71,6 +78,30 @@ export function normalizeRangePreset(value: string | undefined | null): RangePre
     : "7d";
 }
 
+/**
+ * The ranges the TikTok data can actually answer.
+ *
+ * Views, likes and the rest are collected once a night, after the day has
+ * finished, so "today" holds nothing until roughly midnight and then holds what
+ * is really yesterday's number anyway. Offering the tab only produced a blank
+ * chart, so the window that ends yesterday takes its place on the creator
+ * pages.
+ */
+export const CREATOR_RANGE_PRESETS = [
+  "yesterday",
+  "7d",
+  "30d",
+  "month",
+  "all",
+] as const;
+
+/** Old links and bookmarks pointing at `today` land on the window that has data. */
+export function creatorRangePreset(value: string | undefined | null): RangePreset {
+  const preset = normalizeRangePreset(value);
+
+  return preset === "today" ? "yesterday" : preset;
+}
+
 /** The earliest day the dashboard will chart when the preset is `all`. */
 const ALL_TIME_FLOOR_DAYS = 365;
 
@@ -81,12 +112,21 @@ export function resolveRange(
   const today = todayInReportZone(options?.now);
 
   let from = today;
+  // Every range but `yesterday` runs up to and including today.
+  let to = today;
   let label = "Today";
 
   switch (preset) {
     case "today":
       from = today;
       label = "Today";
+      break;
+    case "yesterday":
+      // A window that deliberately excludes today, for data that only exists
+      // once a day has finished.
+      from = addDays(today, -1);
+      to = from;
+      label = "Yesterday";
       break;
     case "7d":
       from = addDays(today, -6);
@@ -109,13 +149,13 @@ export function resolveRange(
     }
   }
 
-  const span = daysBetween(from, today);
+  const span = daysBetween(from, to);
 
   return {
     preset,
     from,
-    to: today,
-    days: eachDay(from, today),
+    to,
+    days: eachDay(from, to),
     label,
     // An all-time window has no comparable window before it.
     previous:

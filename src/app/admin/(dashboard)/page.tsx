@@ -174,8 +174,19 @@ export default async function AdminOverviewPage({
     : beaconTraffic;
   const onlineCount = liveNow ?? online.length;
 
+  // Today's views only land with the nightly scrape, so the today window would
+  // rank every creator at zero. Yesterday is the freshest day that has data.
+  const creatorWindow =
+    preset === "today"
+      ? resolveRange("yesterday", { earliestDay: earliest })
+      : range;
+  const creatorMetrics =
+    preset === "today"
+      ? await getCreatorMetrics(creators, creatorWindow)
+      : metrics;
+
   const topCreators = [...creators]
-    .map((creator) => ({ creator, entry: metrics.get(creator.id) }))
+    .map((creator) => ({ creator, entry: creatorMetrics.get(creator.id) }))
     .filter((row) => (row.entry?.viewsGained ?? 0) > 0)
     .sort((a, b) => (b.entry?.viewsGained ?? 0) - (a.entry?.viewsGained ?? 0))
     .slice(0, 6);
@@ -392,7 +403,11 @@ export default async function AdminOverviewPage({
       <div className="admin-section admin-two-col">
         <Section
           title="Top creators"
-          hint={`By views generated ${range.label.toLowerCase()}.`}
+          hint={
+            preset === "today"
+              ? "By views generated yesterday — today's views arrive with the nightly scrape."
+              : `By views generated ${range.label.toLowerCase()}.`
+          }
         >
           {topCreators.length === 0 ? (
             <EmptyState title="No creator activity in this window" />

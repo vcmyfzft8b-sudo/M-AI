@@ -866,8 +866,15 @@
   display: block;
   overflow: visible;
   /* The SVG does not preserve its aspect ratio, so CSS has to give it one.
-     Without this it collapsed to about 100px on a phone. */
-  aspect-ratio: 10 / 3;
+     Without this it collapsed to about 100px on a phone.
+
+     Wide and shallow: a trend is read left to right, and the tall box made the
+     page scroll for one chart. Safe to set freely now that the axis lettering
+     is HTML and no longer stretches with the drawing. */
+  aspect-ratio: 7 / 1;
+  /* 7:1 is right on a wide screen and squat on a narrow one, where it worked
+     out at around 140px. The floor only bites below roughly 1200px. */
+  min-height: 11rem;
 }
 
 .admin-chart-grid {
@@ -892,10 +899,44 @@
   opacity: 0.75;
 }
 
-.admin-chart-axis {
-  fill: var(--secondary-label);
-  font-size: 10px;
-  font-family: var(--font-sans);
+/* Axis lettering lives in HTML over the chart rather than inside the SVG, so it
+   keeps its size and shape whatever box the drawing is stretched into. */
+.admin-chart-x-labels,
+.admin-chart-y-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.admin-chart-axis-label {
+  position: absolute;
+  font-size: 0.6875rem;
+  line-height: 1;
+  color: var(--secondary-label);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.admin-chart-x-labels .admin-chart-axis-label {
+  bottom: 0;
+  transform: translateX(-50%);
+}
+
+/* The first and last dates are pulled inside the plot so neither is clipped. */
+.admin-chart-x-labels .admin-chart-axis-label:first-child {
+  transform: none;
+}
+
+.admin-chart-x-labels .admin-chart-axis-label:last-child {
+  transform: translateX(-100%);
+}
+
+/* Right-aligned into the gutter the plot leaves on its left. The 5.2% is
+   `PADDING.left / VIEW_WIDTH` from chart.tsx; keep the two in step. */
+.admin-chart-y-labels .admin-chart-axis-label {
+  left: 5.2%;
+  padding-right: 0.5rem;
+  transform: translate(-100%, -50%);
 }
 
 .admin-chart-bar {
@@ -1277,7 +1318,13 @@
 
   /* A squat chart is unreadable; give it room to breathe on a phone. */
   .admin-chart {
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 3 / 2;
+  }
+
+  /* Eight dates will not fit across a phone. Every other one is dropped, but
+     never the last, so the axis still ends where the data does. */
+  .admin-chart-x-labels .admin-chart-axis-label:nth-child(even):not(:last-child) {
+    display: none;
   }
 
   /* Five options do not fit across a phone. Wrapping shows all of them at

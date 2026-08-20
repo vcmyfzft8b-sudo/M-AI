@@ -1,4 +1,8 @@
-import { AreaChart, type ChartPoint, toCumulative } from "@/components/admin/chart";
+import {
+  AreaChart,
+  type ChartPoint,
+  toCumulative,
+} from "@/components/admin/chart";
 import { AddCreatorForm } from "@/components/admin/creator-form";
 import { FilterBar } from "@/components/admin/filter-bar";
 import { Disclosure } from "@/components/admin/forms";
@@ -125,7 +129,9 @@ export default async function CreatorsPage({
     }
 
     if (modeFilter) {
-      return creator.accounts.some((account) => account.content_mode === modeFilter);
+      return creator.accounts.some(
+        (account) => account.content_mode === modeFilter,
+      );
     }
 
     return true;
@@ -133,22 +139,30 @@ export default async function CreatorsPage({
 
   const creatorIds = new Set(creators.map((creator) => creator.id));
 
-  const [metrics, deltas, previousDeltas, previousMetrics, reviewQueue, syncRun] =
-    await Promise.all([
-      getCreatorMetrics(creators, range),
-      getDailyDeltas(range, { onlyMemo: true }),
-      range.previous
-        ? getDailyDeltas(range.previous, { onlyMemo: true })
-        : Promise.resolve([]),
-      range.previous
-        ? getCreatorMetrics(creators, range.previous)
-        : Promise.resolve(null),
-      listVideos({ classification: "unknown", limit: 25 }),
-      getLatestSyncRun(),
-    ]);
+  const [
+    metrics,
+    deltas,
+    previousDeltas,
+    previousMetrics,
+    reviewQueue,
+    syncRun,
+  ] = await Promise.all([
+    getCreatorMetrics(creators, range),
+    getDailyDeltas(range, { onlyMemo: true }),
+    range.previous
+      ? getDailyDeltas(range.previous, { onlyMemo: true })
+      : Promise.resolve([]),
+    range.previous
+      ? getCreatorMetrics(creators, range.previous)
+      : Promise.resolve(null),
+    listVideos({ classification: "unknown", limit: 25 }),
+    getLatestSyncRun(),
+  ]);
 
   const scoped = deltas.filter((row) => creatorIds.has(row.creator_id));
-  const scopedPrevious = previousDeltas.filter((row) => creatorIds.has(row.creator_id));
+  const scopedPrevious = previousDeltas.filter((row) =>
+    creatorIds.has(row.creator_id),
+  );
 
   const totals = sumMetrics(metrics);
   const previousTotals = previousMetrics ? sumMetrics(previousMetrics) : null;
@@ -162,16 +176,21 @@ export default async function CreatorsPage({
   // type the code, so code revenue is a floor rather than a measure.
   const codeUsage = await loadSalesData()
     .then((data) =>
-      creatorRevenue(creators, promoCodeStats(data, range), data.codeRedemptions),
+      creatorRevenue(
+        creators,
+        promoCodeStats(data, range),
+        data.codeRedemptions,
+      ),
     )
     .catch(() => null);
 
   // What a view is worth: campaign revenue over a rolling baseline window
   // divided by campaign views over the same window.
   const baseline = await getBaselineCampaignViews(VALUE_BASELINE_DAYS);
-  const baselineRevenue = await getRevenueBetween(baseline.from, baseline.to).catch(
-    () => 0,
-  );
+  const baselineRevenue = await getRevenueBetween(
+    baseline.from,
+    baseline.to,
+  ).catch(() => 0);
   const viewValue = computeViewValue({
     revenue: baselineRevenue,
     views: baseline.views,
@@ -283,7 +302,13 @@ export default async function CreatorsPage({
       ],
     }));
 
-  const chartable: MetricKey[] = ["views", "likes", "comments", "shares", "videos"];
+  const chartable: MetricKey[] = [
+    "views",
+    "likes",
+    "comments",
+    "shares",
+    "videos",
+  ];
   const chartMetric = chartable.includes(metric) ? metric : "views";
 
   const primary = cumulative
@@ -300,7 +325,8 @@ export default async function CreatorsPage({
 
   const sorted = [...creators].sort(
     (a, b) =>
-      (metrics.get(b.id)?.viewsGained ?? 0) - (metrics.get(a.id)?.viewsGained ?? 0),
+      (metrics.get(b.id)?.viewsGained ?? 0) -
+      (metrics.get(a.id)?.viewsGained ?? 0),
   );
 
   return (
@@ -362,7 +388,11 @@ export default async function CreatorsPage({
             className="admin-button"
             data-variant="ghost"
             data-size="sm"
-            href={link({ creator: undefined, mode: undefined, kind: undefined })}
+            href={link({
+              creator: undefined,
+              mode: undefined,
+              kind: undefined,
+            })}
           >
             Clear filters
           </PendingLink>
@@ -468,63 +498,74 @@ export default async function CreatorsPage({
         ]}
       />
 
-      <div className="admin-chart-bar-row">
-        <nav className="admin-range">
-          <PendingLink
-            className="admin-range-item"
-            data-active={!cumulative}
-            href={link({ view: undefined })}
-          >
-            Daily
-          </PendingLink>
-          <PendingLink
-            className="admin-range-item"
-            data-active={cumulative}
-            href={link({ view: "cumulative" })}
-          >
-            Cumulative
-          </PendingLink>
-        </nav>
+      {/*
+       * A one-day window plots a single dot: no trend, no comparison worth
+       * drawing, and the controls beneath it all act on a line that is not
+       * there. TikTok is collected once a night, so a day can never be more
+       * than one point however the chart is drawn.
+       */}
+      {range.days.length > 1 && (
+        <>
+          <div className="admin-chart-bar-row">
+            <nav className="admin-range">
+              <PendingLink
+                className="admin-range-item"
+                data-active={!cumulative}
+                href={link({ view: undefined })}
+              >
+                Daily
+              </PendingLink>
+              <PendingLink
+                className="admin-range-item"
+                data-active={cumulative}
+                href={link({ view: "cumulative" })}
+              >
+                Cumulative
+              </PendingLink>
+            </nav>
 
-        {range.previous && (
-          <PendingLink
-            className="admin-button"
-            data-variant={compare ? "default" : "ghost"}
-            data-size="sm"
-            href={link({ compare: compare ? "off" : undefined })}
-          >
-            {compare ? "Hide previous period" : "Compare previous period"}
-          </PendingLink>
-        )}
+            {range.previous && (
+              <PendingLink
+                className="admin-button"
+                data-variant={compare ? "default" : "ghost"}
+                data-size="sm"
+                href={link({ compare: compare ? "off" : undefined })}
+              >
+                {compare ? "Hide previous period" : "Compare previous period"}
+              </PendingLink>
+            )}
 
-        <span className="admin-toolbar-spacer" />
+            <span className="admin-toolbar-spacer" />
 
-        <span className="admin-legend">
-          <span className="admin-legend-swatch" />
-          {METRIC_LABELS[chartMetric]}
-        </span>
-        {secondary && (
-          <span className="admin-legend">
-            <span className="admin-legend-swatch" data-variant="compare" />
-            Previous period
-          </span>
-        )}
-      </div>
+            <span className="admin-legend">
+              <span className="admin-legend-swatch" />
+              {METRIC_LABELS[chartMetric]}
+            </span>
+            {secondary && (
+              <span className="admin-legend">
+                <span className="admin-legend-swatch" data-variant="compare" />
+                Previous period
+              </span>
+            )}
+          </div>
 
-      <div className="admin-chart-wrap">
-        {hasData ? (
-          <AreaChart
-            points={primary}
-            comparison={secondary}
-            label={METRIC_LABELS[chartMetric].toLowerCase()}
-            formatter={chartMetric === "videos" ? formatExact : formatCount}
-          />
-        ) : (
-          <EmptyState title="No history for this view">
-            Run a sync to pull each creator&apos;s posts, or widen the range.
-          </EmptyState>
-        )}
-      </div>
+          <div className="admin-chart-wrap">
+            {hasData ? (
+              <AreaChart
+                points={primary}
+                comparison={secondary}
+                label={METRIC_LABELS[chartMetric].toLowerCase()}
+                formatter={chartMetric === "videos" ? formatExact : formatCount}
+              />
+            ) : (
+              <EmptyState title="No history for this view">
+                Run a sync to pull each creator&apos;s posts, or widen the
+                range.
+              </EmptyState>
+            )}
+          </div>
+        </>
+      )}
 
       <Section
         title="Per creator"
@@ -537,7 +578,8 @@ export default async function CreatorsPage({
       >
         {sorted.length === 0 ? (
           <EmptyState title="No creators match this view">
-            Clear the filters, or use “Add creator” to paste in their TikTok links.
+            Clear the filters, or use “Add creator” to paste in their TikTok
+            links.
           </EmptyState>
         ) : (
           <div className="admin-table-wrap">
@@ -550,7 +592,10 @@ export default async function CreatorsPage({
                   <th className="admin-num">Videos</th>
                   <th className="admin-num">Engagement</th>
                   <th className="admin-num">Followers</th>
-                  <th className="admin-num" title="Paid checkouts using this creator's codes, within the selected period.">
+                  <th
+                    className="admin-num"
+                    title="Paid checkouts using this creator's codes, within the selected period."
+                  >
                     Codes used
                   </th>
                   <th
@@ -565,7 +610,10 @@ export default async function CreatorsPage({
                   >
                     Est. revenue
                   </th>
-                  <th className="admin-num" title="Flat fee for the posts in this period.">
+                  <th
+                    className="admin-num"
+                    title="Flat fee for the posts in this period."
+                  >
                     Base pay
                   </th>
                   <th
@@ -619,7 +667,9 @@ export default async function CreatorsPage({
                             name={creator.name}
                           />
                           <span style={{ minWidth: 0 }}>
-                            <span className="admin-creator-name">{creator.name}</span>
+                            <span className="admin-creator-name">
+                              {creator.name}
+                            </span>
                             {creator.kind === "owned" && (
                               <>
                                 {" "}

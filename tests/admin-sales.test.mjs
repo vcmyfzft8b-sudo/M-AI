@@ -5,6 +5,7 @@ import { resolveRange } from "../src/lib/admin/ranges.ts";
 import {
   conversionRatesByPlan,
   creatorRevenue,
+  projectionAtDayStart,
   projectTrials,
   promoCodeStats,
   revenueSeries,
@@ -219,6 +220,114 @@ test("projection is zero rather than NaN when nothing has converted yet", () => 
   assert.equal(summary.trials.conversionRate, 0);
   assert.equal(summary.trials.projectedRevenueToday, 0);
   assert.ok(Number.isFinite(summary.trials.averageConvertedValue));
+});
+
+// Ljubljana is UTC+2 in August, so 2026-08-19 begins at 2026-08-18T22:00:00Z.
+test("the day-start projection is frozen: the day's own outcomes change nothing", () => {
+  const data = salesData({
+    subscriptions: [
+      // The rate the morning knew: one converted, one lapsed, so 50%.
+      subscription({
+        id: "old-yes",
+        customerId: "cus_x",
+        trialStart: at("2026-08-10T10:00:00Z"),
+        trialEnd: at("2026-08-13T10:00:00Z"),
+      }),
+      subscription({
+        id: "old-no",
+        customerId: "cus_y",
+        status: "canceled",
+        trialStart: at("2026-08-10T10:00:00Z"),
+        trialEnd: at("2026-08-13T10:00:00Z"),
+      }),
+      // Due today and already converted by noon: still counts.
+      subscription({
+        id: "t-converted",
+        customerId: "cus_t1",
+        status: "active",
+        trialStart: at("2026-08-16T08:00:00Z"),
+        trialEnd: at("2026-08-19T08:00:00Z"),
+      }),
+      // Due today and cancelled mid-morning: still counts.
+      subscription({
+        id: "t-cancelled",
+        customerId: "cus_t2",
+        status: "canceled",
+        trialStart: at("2026-08-16T09:00:00Z"),
+        trialEnd: at("2026-08-19T09:00:00Z"),
+        canceledAt: at("2026-08-19T09:00:00Z"),
+      }),
+      // Due today and still pending: counts, of course.
+      subscription({
+        id: "t-pending",
+        customerId: "cus_t3",
+        status: "trialing",
+        trialStart: at("2026-08-16T16:00:00Z"),
+        trialEnd: at("2026-08-19T16:00:00Z"),
+      }),
+      // Cancelled the day before: already dead when the day began.
+      subscription({
+        id: "t-dead",
+        customerId: "cus_t4",
+        status: "canceled",
+        trialStart: at("2026-08-16T12:00:00Z"),
+        trialEnd: at("2026-08-19T12:00:00Z"),
+        canceledAt: at("2026-08-18T12:00:00Z"),
+      }),
+    ],
+    payments: [
+      // The conversion that set the morning's rate.
+      payment({ customerId: "cus_x", created: at("2026-08-18T10:00:00Z") }),
+      // Taken during the day itself: must not sharpen the frozen rate.
+      payment({
+        id: "in_today",
+        customerId: "cus_t1",
+        created: at("2026-08-19T09:00:00Z"),
+      }),
+    ],
+  });
+
+  const projection = projectionAtDayStart(data, "2026-08-19");
+
+  assert.equal(projection.trialsDue, 3);
+  // Three trials at €20.00 x the 50% rate the morning knew: 3 x 1000.
+  assert.equal(projection.projectedRevenue, 3000);
+});
+
+test("asked about yesterday, the projection reproduces yesterday morning's answer", () => {
+  const data = salesData({
+    subscriptions: [
+      subscription({
+        id: "old-yes",
+        customerId: "cus_a",
+        trialStart: at("2026-08-08T10:00:00Z"),
+        trialEnd: at("2026-08-11T10:00:00Z"),
+      }),
+      // Ended yesterday and converted the same afternoon. Live logic would
+      // report zero for yesterday, because nothing is still trialing there.
+      subscription({
+        id: "t-yesterday",
+        customerId: "cus_b",
+        status: "active",
+        trialStart: at("2026-08-15T09:00:00Z"),
+        trialEnd: at("2026-08-18T09:00:00Z"),
+      }),
+    ],
+    payments: [
+      payment({ customerId: "cus_a", created: at("2026-08-12T10:00:00Z") }),
+      payment({
+        id: "in_b",
+        customerId: "cus_b",
+        created: at("2026-08-18T11:00:00Z"),
+      }),
+    ],
+  });
+
+  const projection = projectionAtDayStart(data, "2026-08-18");
+
+  assert.equal(projection.trialsDue, 1);
+  // One trial at €20.00 x the 100% rate as it stood when the 18th began.
+  assert.equal(projection.projectedRevenue, 2000);
 });
 
 test("the daily series covers every day in the window, zero-filled", () => {

@@ -26,12 +26,21 @@ import {
 } from "@/components/admin/ui";
 import { VideoReviewList } from "@/components/admin/video-review";
 import {
+  computeCost,
+  type CostBreakdown,
+  describePayTerms,
+  type PayTerms,
+  payTermsFor,
+} from "@/lib/admin/creator-economics";
+import {
   CREATOR_RANGE_PRESETS,
   creatorRangePreset,
+  monthsCovered,
   resolveRange,
 } from "@/lib/admin/ranges";
 import {
   creatorRevenue,
+  formatMoney,
   loadSalesData,
   promoCodeStats,
 } from "@/lib/admin/sales";
@@ -57,6 +66,27 @@ type SearchParams = Promise<{
 }>;
 
 export const dynamic = "force-dynamic";
+
+/**
+ * What the owed figure is actually made of, in this creator's own terms.
+ *
+ * The split shows the arrangement being honoured: a creator on a flat fee
+ * never gets a bonus line, a code-only creator never gets a base one, because
+ * `computeCost` only fills in the side their terms actually carry.
+ */
+function describeOwed(terms: PayTerms, owed: CostBreakdown): string {
+  const parts: string[] = [];
+
+  if (terms.baseFee) {
+    parts.push(`${formatMoney(owed.basePay)} base`);
+  }
+
+  if (terms.revenueSharePercent !== null) {
+    parts.push(`${formatMoney(owed.codeBonus)} bonus`);
+  }
+
+  return parts.length > 0 ? parts.join(" + ") : "no terms agreed";
+}
 
 export default async function CreatorsPage({
   searchParams,
@@ -148,6 +178,29 @@ export default async function CreatorsPage({
     (sum, creator) => sum + (codeUsage?.get(creator.id)?.payments ?? 0),
     0,
   );
+
+  // Without this a monthly retainer bills a whole month however short the
+  // window is, so a single-day view would have claimed a full retainer was
+  // owed. Depends only on the range, so it is computed once.
+  const monthFraction = monthsCovered(range.days);
+
+  // What each creator is owed for this window, on their own terms — the same
+  // arithmetic the Finance payout table runs, kept here so the figure sits
+  // next to the creator it belongs to.
+  const owedFor = (creator: (typeof creators)[number]) => {
+    const entry = metrics.get(creator.id);
+    const terms = payTermsFor(creator);
+
+    return {
+      terms,
+      cost: computeCost(terms, {
+        videos: entry?.videosPosted ?? 0,
+        views: entry?.viewsGained ?? 0,
+        codeRevenue: codeUsage?.get(creator.id)?.revenue ?? 0,
+        monthFraction,
+      }),
+    };
+  };
 
   const link = (overrides: Record<string, string | undefined>) => {
     const next = new URLSearchParams();
@@ -434,9 +487,15 @@ export default async function CreatorsPage({
                   <th className="admin-num">Followers</th>
                   <th
                     className="admin-num"
-                    title="Paid checkouts using this creator's codes, within the selected period. Revenue, payouts and margin are on the Finance page."
+                    title="Paid checkouts using this creator's codes, within the selected period. Revenue and margin detail is on the Finance page."
                   >
                     Codes used
+                  </th>
+                  <th
+                    className="admin-num"
+                    title="Base pay plus code bonus for the selected period, on the terms this creator is on. Payouts run monthly, so select This month before paying anyone."
+                  >
+                    Owed · {range.label.toLowerCase()}
                   </th>
                 </tr>
               </thead>
@@ -446,6 +505,14 @@ export default async function CreatorsPage({
                   const views = entry?.viewsGained ?? 0;
                   const videos = entry?.videosPosted ?? 0;
                   const codes = codeUsage?.get(creator.id);
+                  const { terms, cost: owed } = owedFor(creator);
+                  /*
+                   * With Stripe unreachable there is no code revenue to read,
+                   * and `?? 0` would turn that into a confident zero for any
+                   * creator on a revenue share. An outage is not a fact about
+                   * the creators, so the owed cell says so instead.
+                   */
+                  const salesKnown = codeUsage !== null;
 
                   return (
                     <tr key={creator.id}>
@@ -541,6 +608,29 @@ export default async function CreatorsPage({
                         }
                       >
                         {codes ? formatExact(codes.payments) : "—"}
+                      </td>
+                      <td
+                        className="admin-num"
+                        title={describePayTerms(terms, (minor) =>
+                          formatMoney(minor),
+                        )}
+                      >
+                        {terms.unpaid ? (
+                          <span className="admin-help">not paid</span>
+                        ) : !salesKnown &&
+                          terms.revenueSharePercent !== null ? (
+                          // Half of what they are owed is a share of code
+                          // revenue, so without Stripe the total is not known.
+                          <span className="admin-help">Stripe unavailable</span>
+                        ) : (
+                          <>
+                            <strong>{formatMoney(owed.total)}</strong>
+                            <br />
+                            <span className="admin-creator-handle">
+                              {describeOwed(terms, owed)}
+                            </span>
+                          </>
+                        )}
                       </td>
                     </tr>
                   );

@@ -26,32 +26,16 @@ import {
 } from "@/components/admin/ui";
 import { VideoReviewList } from "@/components/admin/video-review";
 import {
-  computeViewValue,
-  estimateRevenue,
-  VALUE_BASELINE_DAYS,
-} from "@/lib/admin/campaign-value";
-import {
-  computeEconomics,
-  type CostBreakdown,
-  describePayTerms,
-  type PayTerms,
-  payTermsFor,
-} from "@/lib/admin/creator-economics";
-import {
   CREATOR_RANGE_PRESETS,
   creatorRangePreset,
-  monthsCovered,
   resolveRange,
 } from "@/lib/admin/ranges";
 import {
   creatorRevenue,
-  formatMoney,
-  getRevenueBetween,
   loadSalesData,
   promoCodeStats,
 } from "@/lib/admin/sales";
 import {
-  getBaselineCampaignViews,
   getCreatorMetrics,
   getDailyDeltas,
   getEarliestDataDay,
@@ -73,30 +57,6 @@ type SearchParams = Promise<{
 }>;
 
 export const dynamic = "force-dynamic";
-
-/**
- * What the owed figure is actually made of, in this creator's own terms.
- *
- * Two things needed saying here. The base and bonus columns to the left cover
- * the selected period while this column covers the calendar month, so the three
- * figures legitimately do not add up and looked like an arithmetic error. And
- * the split shows the arrangement being honoured: a creator on a flat fee never
- * gets a bonus line, a code-only creator never gets a base one, because
- * `computeCost` only fills in the side their terms actually carry.
- */
-function describeOwed(terms: PayTerms, owed: CostBreakdown): string {
-  const parts: string[] = [];
-
-  if (terms.baseFee) {
-    parts.push(`${formatMoney(owed.basePay)} base`);
-  }
-
-  if (terms.revenueSharePercent !== null) {
-    parts.push(`${formatMoney(owed.codeBonus)} bonus`);
-  }
-
-  return parts.length > 0 ? parts.join(" + ") : "no terms agreed";
-}
 
 export default async function CreatorsPage({
   searchParams,
@@ -171,9 +131,9 @@ export default async function CreatorsPage({
     ? toDailySeries(scopedPrevious, range.previous)
     : [];
 
-  // Code usage is kept as a measure of *tracked* signups, but revenue is no
-  // longer attributed that way: most people who see a video and subscribe never
-  // type the code, so code revenue is a floor rather than a measure.
+  // Code usage stays here as a measure of *tracked* conversions per creator.
+  // The money side — code revenue, costs, payouts and margin — lives on the
+  // Finance page now, where it sits next to the rest of the Stripe figures.
   const codeUsage = await loadSalesData()
     .then((data) =>
       creatorRevenue(
@@ -184,76 +144,8 @@ export default async function CreatorsPage({
     )
     .catch(() => null);
 
-  // What a view is worth: campaign revenue over a rolling baseline window
-  // divided by campaign views over the same window.
-  const baseline = await getBaselineCampaignViews(VALUE_BASELINE_DAYS);
-  const baselineRevenue = await getRevenueBetween(
-    baseline.from,
-    baseline.to,
-  ).catch(() => 0);
-  const viewValue = computeViewValue({
-    revenue: baselineRevenue,
-    views: baseline.views,
-    days: VALUE_BASELINE_DAYS,
-  });
-
-  /**
-   * Everything Stripe took in this window, whoever it came from.
-   *
-   * The context the other two revenue figures were missing: code revenue says
-   * what these creators can be proven to have brought in, and the estimate says
-   * what their views are modelled to be worth, but neither says how big the
-   * business was over the same days. Cheap to ask for -- `loadSalesData` is
-   * cached on one key, so this shares the pagination the code figures already
-   * paid for.
-   */
-  const windowRevenue = await getRevenueBetween(range.from, range.to).catch(
-    () => null,
-  );
-
-  const totalRevenue = estimateRevenue(totals.viewsGained, viewValue);
-
-  /**
-   * Money actually taken through these creators' promo codes in this window.
-   *
-   * Reported next to the estimate rather than instead of it: most people who
-   * buy after seeing a video never type a code, so this is a floor on what the
-   * creators brought in, not a measure of it. It is real money though, which
-   * the estimate is not, and it is what payouts are settled on.
-   */
-  const totalCodeRevenue = creators.reduce(
-    (sum, creator) => sum + (codeUsage?.get(creator.id)?.revenue ?? 0),
-    0,
-  );
-
-  // Without this a monthly retainer bills a whole month however short the
-  // window is, so "today" would have claimed a full retainer was owed. Computed
-  // once: it depends only on the range, and `economicsFor` runs several times
-  // per creator.
-  const monthFraction = monthsCovered(range.days);
-
-  const economicsFor = (creator: (typeof creators)[number]) => {
-    const entry = metrics.get(creator.id);
-
-    return computeEconomics(payTermsFor(creator), {
-      videos: entry?.videosPosted ?? 0,
-      views: entry?.viewsGained ?? 0,
-      codeRevenue: codeUsage?.get(creator.id)?.revenue ?? 0,
-      revenue: estimateRevenue(entry?.viewsGained ?? 0, viewValue),
-      monthFraction,
-    });
-  };
-
-  const totalCost = creators.reduce(
-    (sum, creator) => sum + economicsFor(creator).cost.total,
-    0,
-  );
-  const totalOwedBase = creators.reduce(
-    (sum, creator) => sum + economicsFor(creator).cost.basePay,
-    0,
-  );
-  const totalOwedBonus = creators.reduce(
-    (sum, creator) => sum + economicsFor(creator).cost.codeBonus,
+  const totalCodesUsed = creators.reduce(
+    (sum, creator) => sum + (codeUsage?.get(creator.id)?.payments ?? 0),
     0,
   );
 
@@ -435,64 +327,12 @@ export default async function CreatorsPage({
             chartable: false,
           },
           {
-            key: "cost",
-            value: formatMoney(totalCost),
-            hint: `${formatMoney(totalOwedBase)} base + ${formatMoney(
-              totalOwedBonus,
-            )} bonus`,
-            chartable: false,
-          },
-          {
-            key: "margin",
-            // Struck against code revenue, not the estimate: what was actually
-            // taken through these creators, less what they were actually paid.
-            value:
-              codeUsage === null
-                ? "—"
-                : formatMoney(totalCodeRevenue - totalCost),
+            key: "codes",
+            value: codeUsage === null ? "—" : formatExact(totalCodesUsed),
             hint:
               codeUsage === null
                 ? "Stripe unavailable"
-                : totalCodeRevenue > 0
-                  ? `${formatPercent(
-                      (totalCodeRevenue - totalCost) / totalCodeRevenue,
-                      0,
-                    )} on code revenue`
-                  : "no code revenue in this window",
-            chartable: false,
-          },
-          {
-            key: "codeRevenue",
-            value: codeUsage === null ? "—" : formatMoney(totalCodeRevenue),
-            hint:
-              codeUsage === null
-                ? "Stripe unavailable"
-                : "actually taken, via their codes",
-            chartable: false,
-          },
-          {
-            key: "totalRevenue",
-            value: windowRevenue === null ? "—" : formatMoney(windowRevenue),
-            hint:
-              windowRevenue === null
-                ? "Stripe unavailable"
-                : windowRevenue > 0
-                  ? `all Stripe payments · codes were ${formatPercent(
-                      totalCodeRevenue / windowRevenue,
-                      0,
-                    )}`
-                  : "all Stripe payments",
-            chartable: false,
-          },
-          {
-            key: "revenue",
-            value: totalRevenue === null ? "—" : formatMoney(totalRevenue),
-            hint:
-              viewValue.revenuePerMille === null
-                ? "needs more data"
-                : `estimated · ${formatMoney(
-                    Math.round(viewValue.revenuePerMille),
-                  )} per 1K views`,
+                : "paid checkouts through their codes · money detail is on Finance",
             chartable: false,
           },
         ]}
@@ -594,45 +434,9 @@ export default async function CreatorsPage({
                   <th className="admin-num">Followers</th>
                   <th
                     className="admin-num"
-                    title="Paid checkouts using this creator's codes, within the selected period."
+                    title="Paid checkouts using this creator's codes, within the selected period. Revenue, payouts and margin are on the Finance page."
                   >
                     Codes used
-                  </th>
-                  <th
-                    className="admin-num"
-                    title="Money actually taken through this creator's codes in this period, from Stripe."
-                  >
-                    Code revenue
-                  </th>
-                  <th
-                    className="admin-num"
-                    title="Views multiplied by the campaign rate. An estimate, not money received."
-                  >
-                    Est. revenue
-                  </th>
-                  <th
-                    className="admin-num"
-                    title="Flat fee for the posts in this period."
-                  >
-                    Base pay
-                  </th>
-                  <th
-                    className="admin-num"
-                    title="Their share of what their own code sold in this period."
-                  >
-                    Code bonus
-                  </th>
-                  <th
-                    className="admin-num"
-                    title="Code revenue less what this creator is paid. Real money both ways, so it ignores the view-based estimate."
-                  >
-                    Margin
-                  </th>
-                  <th
-                    className="admin-num"
-                    title="Base pay plus code bonus for the selected period, on the terms this creator is on. Payouts run monthly, so select This month before paying anyone."
-                  >
-                    Owed · {range.label.toLowerCase()}
                   </th>
                 </tr>
               </thead>
@@ -642,17 +446,6 @@ export default async function CreatorsPage({
                   const views = entry?.viewsGained ?? 0;
                   const videos = entry?.videosPosted ?? 0;
                   const codes = codeUsage?.get(creator.id);
-                  const estimated = estimateRevenue(views, viewValue);
-                  const economics = economicsFor(creator);
-                  const owed = economics.cost;
-                  /*
-                   * With Stripe unreachable there is no code revenue to read,
-                   * and `?? 0` turned that into a confident zero: every creator
-                   * showing no sales, no bonus, and a loss-making margin. An
-                   * outage is not a fact about the creators, so the cells that
-                   * depend on it say nothing instead.
-                   */
-                  const salesKnown = codeUsage !== null;
 
                   return (
                     <tr key={creator.id}>
@@ -748,80 +541,6 @@ export default async function CreatorsPage({
                         }
                       >
                         {codes ? formatExact(codes.payments) : "—"}
-                      </td>
-                      <td className="admin-num">
-                        {salesKnown && codes ? formatMoney(codes.revenue) : "—"}
-                      </td>
-                      <td className="admin-num">
-                        {estimated === null ? "—" : formatMoney(estimated)}
-                      </td>
-                      <td
-                        className="admin-num"
-                        title={describePayTerms(economics.terms, (minor) =>
-                          formatMoney(minor),
-                        )}
-                      >
-                        {economics.terms.unpaid || !economics.terms.baseFee
-                          ? "—"
-                          : formatMoney(economics.cost.basePay)}
-                      </td>
-                      <td
-                        className="admin-num"
-                        title={describePayTerms(economics.terms, (minor) =>
-                          formatMoney(minor),
-                        )}
-                      >
-                        {economics.terms.unpaid ||
-                        economics.terms.revenueSharePercent === null ||
-                        !salesKnown
-                          ? "—"
-                          : formatMoney(economics.cost.codeBonus)}
-                      </td>
-                      <td className="admin-num">
-                        {!salesKnown ? (
-                          "—"
-                        ) : (
-                          <>
-                            <span
-                              className="admin-delta"
-                              data-direction={
-                                economics.margin > 0
-                                  ? "up"
-                                  : economics.margin < 0
-                                    ? "down"
-                                    : "flat"
-                              }
-                            >
-                              {formatMoney(economics.margin)}
-                            </span>
-                            {economics.marginRate !== null && (
-                              <>
-                                <br />
-                                <span className="admin-creator-handle">
-                                  {formatPercent(economics.marginRate, 0)}
-                                </span>
-                              </>
-                            )}
-                          </>
-                        )}
-                      </td>
-                      <td className="admin-num">
-                        {economics.terms.unpaid ? (
-                          <span className="admin-help">not paid</span>
-                        ) : !salesKnown &&
-                          economics.terms.revenueSharePercent !== null ? (
-                          // Half of what they are owed is a share of code
-                          // revenue, so without Stripe the total is not known.
-                          <span className="admin-help">Stripe unavailable</span>
-                        ) : (
-                          <>
-                            <strong>{formatMoney(owed.total)}</strong>
-                            <br />
-                            <span className="admin-creator-handle">
-                              {describeOwed(economics.terms, owed)}
-                            </span>
-                          </>
-                        )}
                       </td>
                     </tr>
                   );

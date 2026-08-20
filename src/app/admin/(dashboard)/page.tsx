@@ -16,18 +16,24 @@ import {
 } from "@/components/admin/ui";
 import { getOnlineVisitors, getTrafficSummary } from "@/lib/admin/analytics";
 import {
+  computeViewValue,
+  VALUE_BASELINE_DAYS,
+} from "@/lib/admin/campaign-value";
+import {
   getRealtimeVisitors,
   getVercelTraffic,
 } from "@/lib/admin/vercel-analytics";
 import { normalizeRangePreset, resolveRange } from "@/lib/admin/ranges";
 import {
   formatMoney,
+  getRevenueBetween,
   loadSalesData,
   type SalesSummary,
   summarizeSales,
 } from "@/lib/admin/sales";
 import {
   countVideosNeedingReview,
+  getBaselineCampaignViews,
   getCreatorMetrics,
   getDailyDeltas,
   getEarliestDataDay,
@@ -84,6 +90,21 @@ export default async function AdminOverviewPage({
 
   const totals = sumMetrics(metrics);
   const series = toDailySeries(deltas, range);
+
+  // What a view is worth, for the finance summary below. Both halves degrade
+  // to "not enough data" rather than taking the overview down with them.
+  const baseline = await getBaselineCampaignViews(VALUE_BASELINE_DAYS).catch(
+    () => ({ views: 0, from: range.from, to: range.to }),
+  );
+  const baselineRevenue = await getRevenueBetween(
+    baseline.from,
+    baseline.to,
+  ).catch(() => 0);
+  const viewValue = computeViewValue({
+    revenue: baselineRevenue,
+    views: baseline.views,
+    days: VALUE_BASELINE_DAYS,
+  });
 
   // Vercel Web Analytics holds the traffic history; the beacon only knows what
   // it has seen since shipping, and only it can name who is online.
@@ -213,6 +234,49 @@ export default async function AdminOverviewPage({
             label="views"
           />
         )}
+      </Section>
+
+      <Section
+        title="Finance at a glance"
+        hint="The headline money figures. The full picture — payouts, margin, codes — is on the Finance page."
+        actions={
+          <PendingLink className="admin-button" data-size="sm" href="/admin/finance">
+            Finance detail
+          </PendingLink>
+        }
+      >
+        <div className="admin-list">
+          <div className="admin-list-row">
+            <span className="admin-list-label">Revenue this window</span>
+            <span className="admin-list-value">
+              {sales ? formatMoney(sales.revenue, sales.currency) : "Stripe unavailable"}
+            </span>
+          </div>
+          <div className="admin-list-row">
+            <span className="admin-list-label">
+              Projected from trials ending in this window
+            </span>
+            <span className="admin-list-value">
+              {sales
+                ? formatMoney(
+                    sales.trials.projectedRevenueInRange,
+                    sales.currency,
+                  )
+                : "Stripe unavailable"}
+            </span>
+          </div>
+          <div className="admin-list-row">
+            <span className="admin-list-label">Revenue per 1,000 views</span>
+            <span className="admin-list-value">
+              {viewValue.revenuePerMille === null
+                ? "needs more campaign data"
+                : formatMoney(
+                    Math.round(viewValue.revenuePerMille),
+                    sales?.currency,
+                  )}
+            </span>
+          </div>
+        </div>
       </Section>
 
       <div className="admin-section admin-two-col">

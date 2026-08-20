@@ -17,11 +17,7 @@ export type MetricKey =
   | "saves"
   | "videos"
   | "engagement"
-  | "revenue"
-  | "codeRevenue"
-  | "totalRevenue"
-  | "cost"
-  | "margin";
+  | "codes";
 
 export const METRIC_KEYS: MetricKey[] = [
   "views",
@@ -31,11 +27,7 @@ export const METRIC_KEYS: MetricKey[] = [
   "saves",
   "videos",
   "engagement",
-  "revenue",
-  "codeRevenue",
-  "totalRevenue",
-  "cost",
-  "margin",
+  "codes",
 ];
 
 export const METRIC_LABELS: Record<MetricKey, string> = {
@@ -46,11 +38,7 @@ export const METRIC_LABELS: Record<MetricKey, string> = {
   saves: "Saves",
   videos: "Videos",
   engagement: "Engagement",
-  revenue: "Est. revenue",
-  codeRevenue: "Code revenue",
-  totalRevenue: "Total revenue",
-  cost: "Creator cost",
-  margin: "Margin",
+  codes: "Codes used",
 };
 
 export function normalizeMetric(value: string | undefined | null): MetricKey {

@@ -531,6 +531,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* `.admin-table th` sets `text-align: left` and outranks `.admin-num` on
+   specificity, so every numeric heading sat left while its figures sat right
+   and no column label lined up with the column it named. */
+.admin-table th.admin-num {
+  text-align: right;
+}
+
 .admin-empty {
   padding: 2.5rem 1.25rem;
   text-align: center;

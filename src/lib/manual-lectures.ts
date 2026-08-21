@@ -58,7 +58,10 @@ import {
   ExpectedLectureInputError,
   isExpectedLectureInputError,
 } from "@/lib/lecture-processing-errors";
-import { describeLinkFetchFailure } from "@/lib/link-fetch-errors";
+import {
+  describeHostResolutionFailure,
+  describeLinkFetchFailure,
+} from "@/lib/link-fetch-errors";
 import { serializeVector } from "@/lib/utils";
 
 const pptxVisualExtractionSchema = z.object({
@@ -828,6 +831,26 @@ function isDisallowedIpAddress(value: string) {
   return true;
 }
 
+// The guard runs before the fetch, so a resolver rejection here never reaches the
+// classifier in `fetchReadableWebpageResponse` and would otherwise page us as an
+// unexpected error for what is only an unresolvable hostname in the user's link.
+async function resolveHostAddresses(hostname: string) {
+  try {
+    return await lookup(hostname, { all: true, verbatim: true });
+  } catch (error) {
+    const resolutionFailure = describeHostResolutionFailure(error);
+
+    if (resolutionFailure) {
+      throw new ExpectedLectureInputError(
+        resolutionFailure.message,
+        resolutionFailure.code,
+      );
+    }
+
+    throw error;
+  }
+}
+
 async function assertPublicHostname(hostname: string) {
   const normalizedHostname = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
 
@@ -853,7 +876,7 @@ async function assertPublicHostname(hostname: string) {
     return;
   }
 
-  const addresses = await lookup(normalizedHostname, { all: true, verbatim: true });
+  const addresses = await resolveHostAddresses(normalizedHostname);
 
   if (
     addresses.length === 0 ||

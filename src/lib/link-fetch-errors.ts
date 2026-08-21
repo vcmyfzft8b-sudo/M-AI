@@ -22,6 +22,11 @@ const TLS_ERROR_CODES = new Set([
 
 const DNS_ERROR_CODES = new Set(["EAI_AGAIN", "ENOTFOUND"]);
 
+const HOST_NOT_FOUND_FAILURE: LinkFetchFailure = {
+  message: "The link's site could not be found.",
+  code: "link_host_not_found",
+};
+
 const CONNECTION_ERROR_CODES = new Set([
   "ECONNREFUSED",
   "ECONNRESET",
@@ -98,10 +103,7 @@ export function describeLinkFetchFailure(error: unknown): LinkFetchFailure | nul
   }
 
   if (codes.some((code) => DNS_ERROR_CODES.has(code))) {
-    return {
-      message: "The link's site could not be found.",
-      code: "link_host_not_found",
-    };
+    return HOST_NOT_FOUND_FAILURE;
   }
 
   if (codes.some((code) => CONNECTION_ERROR_CODES.has(code))) {
@@ -112,4 +114,20 @@ export function describeLinkFetchFailure(error: unknown): LinkFetchFailure | nul
   }
 
   return null;
+}
+
+/**
+ * Classifies a failed hostname lookup, for the resolver call the SSRF guard makes before
+ * it fetches anything. Every getaddrinfo rejection means we could not resolve the host in
+ * the user's link, whichever code the platform's resolver picked -- production has seen
+ * EBUSY alongside the ENOTFOUND and EAI_AGAIN that `describeLinkFetchFailure` knows about
+ * -- so match on the syscall rather than on a list of codes. Returns null for anything
+ * that is not a resolver rejection, so genuine defects keep surfacing.
+ */
+export function describeHostResolutionFailure(error: unknown): LinkFetchFailure | null {
+  if (!isRecord(error) || error.syscall !== "getaddrinfo") {
+    return null;
+  }
+
+  return HOST_NOT_FOUND_FAILURE;
 }

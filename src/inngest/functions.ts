@@ -6,6 +6,7 @@ import {
 import {
   generateLectureNotesFromStoredTranscript,
   markLecturePipelineFailed,
+  runLectureStage,
   transcribeLectureContent,
 } from "@/lib/pipeline";
 import { generateLecturePracticeTest } from "@/lib/practice-test";
@@ -47,13 +48,24 @@ export const processLectureFunction = inngest.createFunction(
   { event: "lecture/process.requested" },
   async ({ event, step }) => {
     try {
-      await step.run("transcribe-lecture", () =>
-        withStepBudget(async () => {
-          await transcribeLectureContent({
+      const transcription = await step.run("transcribe-lecture", () =>
+        withStepBudget(() =>
+          runLectureStage({
             lectureId: event.data.lectureId,
-          });
-        }),
+            run: () =>
+              transcribeLectureContent({
+                lectureId: event.data.lectureId,
+              }),
+          }),
+        ),
       );
+
+      // A recording with no speech in it is not a failed step: runLectureStage has already marked
+      // the lecture failed with the message the learner needs, and there is no transcript for the
+      // notes to be generated from.
+      if (!transcription.completed) {
+        return;
+      }
 
       await step.run("generate-lecture-notes", () =>
         withStepBudget(async () => {

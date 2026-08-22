@@ -13,7 +13,7 @@ import {
   attachDocumentImagesToNotes,
   getStoredDocumentImagesFromMetadata,
 } from "@/lib/document-note-media";
-import { isExpectedLectureInputError } from "@/lib/lecture-processing-errors";
+import { isExpectedLectureInputFailure } from "@/lib/lecture-processing-errors";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
 import {
   getInitialNoteAudioVoice,
@@ -38,10 +38,7 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { normalizeMimeType } from "@/lib/storage";
 import { serializeVector } from "@/lib/utils";
 import { getTranscriptionProvider } from "@/lib/transcription/provider";
-import {
-  InvalidAudioFileError,
-  NoClearSpeechDetectedError,
-} from "@/lib/transcription/types";
+import { NoClearSpeechDetectedError } from "@/lib/transcription/types";
 
 const transcriptionProvider = getTranscriptionProvider();
 const EMBEDDING_BATCH_SIZE = 100;
@@ -614,13 +611,7 @@ export async function markLecturePipelineFailed(params: {
     return { recorded: false };
   }
 
-  if (
-    !(params.error instanceof InvalidAudioFileError) &&
-    !(params.error instanceof NoClearSpeechDetectedError) &&
-    !(params.error instanceof NoReadableScanTextError) &&
-    !isExpectedLectureInputError(params.error) &&
-    !isRetryableAiError(params.error)
-  ) {
+  if (!isExpectedLectureInputFailure(params.error) && !isRetryableAiError(params.error)) {
     captureRouteError(params.error, {
       route: "lecture-pipeline",
       operation: "markLecturePipelineFailed",
@@ -648,6 +639,43 @@ export async function markLecturePipelineFailed(params: {
   });
 
   return { recorded: true };
+}
+
+/**
+ * Runs one pipeline stage inside its Inngest step, so a failure that is the recording itself is
+ * recognised on the throwing side of the step boundary.
+ *
+ * Inngest only hands the error to the function body once the step has spent its retries, and by
+ * then it is a `StepError` rebuilt from `{ name: "Error", message, stack }`. markLecturePipelineFailed
+ * cannot tell a silent recording from a defect through that, so it reports one to Sentry with a
+ * lecture whose learner has already been told to check their audio, and the rethrow that follows
+ * fails the run — the uncaught `Error: V zvoku ni bilo mogoče zaznati dovolj jasnega govora` on
+ * POST /api/inngest. Recording the failure here also lets the step succeed, so Inngest stops
+ * retrying a transcription that will never find speech that is not in the file.
+ *
+ * Anything else — a retryable AI error, a broken query, a timeout — still throws, and still fails
+ * the step so it can be retried and reported.
+ */
+export async function runLectureStage(params: {
+  lectureId: string;
+  run: () => Promise<void>;
+}): Promise<{ completed: boolean }> {
+  try {
+    await params.run();
+
+    return { completed: true };
+  } catch (error) {
+    if (!isExpectedLectureInputFailure(error)) {
+      throw error;
+    }
+
+    await markLecturePipelineFailed({
+      lectureId: params.lectureId,
+      error,
+    });
+
+    return { completed: false };
+  }
 }
 
 export async function runLecturePipeline(params: { lectureId: string }) {

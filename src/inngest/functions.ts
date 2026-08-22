@@ -6,6 +6,7 @@ import {
 import {
   generateLectureNotesFromStoredTranscript,
   markLecturePipelineFailed,
+  runLectureStage,
   transcribeLectureContent,
 } from "@/lib/pipeline";
 import { generateLecturePracticeTest } from "@/lib/practice-test";
@@ -47,13 +48,31 @@ export const processLectureFunction = inngest.createFunction(
   { event: "lecture/process.requested" },
   async ({ event, step }) => {
     try {
-      await step.run("transcribe-lecture", () =>
-        withStepBudget(async () => {
-          await transcribeLectureContent({
+      const transcription = await step.run("transcribe-lecture", () =>
+        withStepBudget(() =>
+          runLectureStage({
             lectureId: event.data.lectureId,
-          });
-        }),
+            run: () =>
+              transcribeLectureContent({
+                lectureId: event.data.lectureId,
+              }),
+          }),
+        ),
       );
+
+      // A recording with no speech in it is not a failed step: runLectureStage has already marked
+      // the lecture failed with the message the learner needs, and there is no transcript for the
+      // notes to be generated from.
+      //
+      // Compared against `false` rather than tested for truthiness because a run that was already
+      // in flight when this shipped replays its memoized `transcribe-lecture` output, and the step
+      // returned nothing before this change -- Inngest stores that as `null` (`undefinedToNull` in
+      // components/execution/v1.ts). Reading `.completed` off it would throw, burying a lecture
+      // whose transcript is fine. An older run has no `completed` to read, and its notes still
+      // need generating, so it falls through here exactly as it used to.
+      if (transcription?.completed === false) {
+        return;
+      }
 
       await step.run("generate-lecture-notes", () =>
         withStepBudget(async () => {

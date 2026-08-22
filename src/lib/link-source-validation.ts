@@ -1,5 +1,7 @@
+import { parseYoutubeVideoId } from "./youtube-url.ts";
+
 export const UNSUPPORTED_VIDEO_LINK_MESSAGE =
-  "Ta povezava izgleda kot video. MemoAI trenutno ustvarja zapiske iz spletnih strani, člankov, blogov in drugih besedilnih strani, ne pa iz videov. Prilepi povezavo do besedilne strani.";
+  "Ta povezava izgleda kot video. MemoAI podpira YouTube videe s podnapisi ter besedilne strani (članke, bloge, spletne strani). Za druge video platforme prilepi povezavo do besedilne strani ali YouTube videa.";
 
 const DIRECT_VIDEO_FILE_EXTENSIONS = [
   ".3g2",
@@ -63,6 +65,12 @@ function isYoutubeVideoUrl(url: URL, hostname: string) {
 
 function isKnownVideoPlatformUrl(url: URL, hostname: string) {
   const pathname = url.pathname.toLowerCase().replace(/\/+$/, "");
+
+  // A YouTube video with a parseable id is now ingested via its captions; only the shapes with
+  // no single transcript (playlists, channels, clips) stay unsupported.
+  if (parseYoutubeVideoId(url.toString())) {
+    return false;
+  }
 
   if (isYoutubeVideoUrl(url, hostname)) {
     return true;

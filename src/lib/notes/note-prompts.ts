@@ -196,8 +196,16 @@ function normalizeClaimKey(value: string) {
     .trim();
 }
 
+// Tokens are stemmed to their first six characters: Slovenian inflection otherwise makes
+// "kalcij" and "kalcija" different tokens, and the same claim worded across two extraction
+// passes escapes the merge — which is how duplicate flashcards reached real decks.
 function claimTokens(value: string) {
-  return new Set(normalizeClaimKey(value).split(" ").filter((token) => token.length > 3));
+  return new Set(
+    normalizeClaimKey(value)
+      .split(" ")
+      .filter((token) => token.length > 3)
+      .map((token) => token.slice(0, 6)),
+  );
 }
 
 function tokenOverlap(left: Set<string>, right: Set<string>) {

@@ -17,6 +17,11 @@ import {
   type UnitKnowledgeItem,
 } from "@/lib/notes/study-item-mapping";
 import {
+  dedupeCardDraftsByContent,
+  dedupePracticeDraftsByContent,
+  dedupeQuizDraftsByContent,
+} from "@/lib/notes/study-dedupe";
+import {
   buildFlashcardInstructions,
   buildPracticeTestInstructions,
   buildQuizInstructions,
@@ -329,7 +334,7 @@ export async function generateItemCardDrafts(params: {
     },
   });
 
-  return { drafts, uncoveredItemIds };
+  return { drafts: dedupeCardDraftsByContent(drafts), uncoveredItemIds };
 }
 
 export type ItemQuizQuestionDraft = {
@@ -393,7 +398,7 @@ export async function generateItemQuizDrafts(params: {
     },
   });
 
-  return { drafts, uncoveredItemIds };
+  return { drafts: dedupeQuizDraftsByContent(drafts), uncoveredItemIds };
 }
 
 export type ItemPracticeQuestionDraft = {
@@ -461,7 +466,7 @@ export async function generateItemPracticeDrafts(params: {
     },
   });
 
-  return { drafts, uncoveredItemIds };
+  return { drafts: dedupePracticeDraftsByContent(drafts), uncoveredItemIds };
 }
 
 export function buildItemPlans(items: UnitKnowledgeItem[], units: SourceUnit[]) {

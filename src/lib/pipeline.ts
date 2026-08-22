@@ -748,6 +748,7 @@ export async function answerLectureChat(params: {
 
   const answer = await generateStructuredObject({
     schema: chatAnswerSchema,
+    stage: "chat",
     instructions: `${buildGeneratedContentLanguageInstruction(lectureRow?.language_hint)} Answer the student using only the supplied lecture context. If the answer is not fully supported, say that the lecture does not clearly state it. Cite only transcript chunks that are genuinely relevant.`,
     input: JSON.stringify(
       {

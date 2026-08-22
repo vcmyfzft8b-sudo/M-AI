@@ -183,39 +183,35 @@ const DUPLICATE_CLAIM_OVERLAP = 0.8;
  * boosting there flattens the scale: it pushed 70% of items to importance 5 and left nothing for
  * a later stage to triage on.
  */
-export function dedupeKnowledgeItems(
-  items: IndexedKnowledgeItem[],
+export function dedupeKnowledgeItems<TItem extends IndexedKnowledgeItem>(
+  items: TItem[],
   options: { boostRepeats?: boolean } = {},
-) {
+): TItem[] {
   const boostRepeats = options.boostRepeats ?? false;
-  const kept: Array<IndexedKnowledgeItem & { tokens: Set<string> }> = [];
+  const kept: Array<{ item: TItem; tokens: Set<string> }> = [];
 
   for (const item of items) {
     const tokens = claimTokens(item.claim);
     const duplicate = kept.find(
       (existing) =>
-        existing.kind === item.kind && tokenOverlap(existing.tokens, tokens) >= DUPLICATE_CLAIM_OVERLAP,
+        existing.item.kind === item.kind &&
+        tokenOverlap(existing.tokens, tokens) >= DUPLICATE_CLAIM_OVERLAP,
     );
 
     if (duplicate) {
-      duplicate.importance = Math.min(
+      duplicate.item.importance = Math.min(
         5,
-        Math.max(duplicate.importance, item.importance) + (boostRepeats ? 1 : 0),
+        Math.max(duplicate.item.importance, item.importance) + (boostRepeats ? 1 : 0),
       );
       continue;
     }
 
-    kept.push({ ...item, tokens });
+    // The item is kept whole (spread, not rebuilt field-by-field) so callers that carry extra
+    // fields — unit attribution, for one — do not lose them in the merge.
+    kept.push({ item: { ...item }, tokens });
   }
 
-  return kept.map((item) => ({
-    id: item.id,
-    claim: item.claim,
-    kind: item.kind,
-    importance: item.importance,
-    terms: item.terms,
-    sectionTitle: item.sectionTitle,
-  }));
+  return kept.map((entry) => entry.item);
 }
 
 export function buildKnowledgeExtractionInstructions(params: {

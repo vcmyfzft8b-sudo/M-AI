@@ -15,7 +15,7 @@ const serverEnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: trimmedString.min(1),
   GEMINI_API_KEY: optionalTrimmedString,
   GEMINI_TEXT_MODEL: trimmedString.default("gemini-2.5-flash-lite"),
-  GEMINI_OCR_MODEL: trimmedString.default("gemini-3.1-flash-lite"),
+  GEMINI_OCR_MODEL: trimmedString.default("gemini-3.5-flash-lite"),
   GEMINI_OCR_RESCUE_MODEL: trimmedString.default("gemini-3-flash-preview"),
   GEMINI_EMBEDDING_MODEL: trimmedString.default("gemini-embedding-001"),
   SONIOX_API_KEY: optionalTrimmedString,

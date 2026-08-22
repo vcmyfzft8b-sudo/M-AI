@@ -3,7 +3,9 @@ import "server-only";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
-import { PartMediaResolutionLevel, type ThinkingConfig } from "@google/genai";
+import { PartMediaResolutionLevel } from "@google/genai";
+
+import { resolveMinimalThinkingConfig } from "@/lib/ai/gemini-models";
 import JSZip from "jszip";
 import mammoth from "mammoth";
 import { z } from "zod";
@@ -85,10 +87,8 @@ const OCR_RESCUE_MAX_OUTPUT_TOKENS = 6000;
 const PDF_FALLBACK_MAX_OUTPUT_TOKENS = 12000;
 const PPTX_VISUAL_EXTRACTION_MAX_OUTPUT_TOKENS = 9000;
 const OCR_MIN_ACCEPTED_TEXT_CHARS = 120;
-const OCR_THINKING_CONFIG: ThinkingConfig = {
-  includeThoughts: false,
-  thinkingBudget: 0,
-};
+// Thinking suppression is version-specific (3.5+ rejects thinkingBudget with a bare 400), so
+// the config is resolved from the model right before each call instead of being a constant.
 const OCR_FAILURE_PATTERNS = [
   /\b(can(?:not|'t)\s+(?:read|extract|see)|unable\s+to\s+(?:read|extract|see))\b/i,
   /\b(no|without)\s+(?:readable\s+)?text\b/i,
@@ -1169,10 +1169,13 @@ export async function extractTextFromPdf(file: File) {
   let fallbackText: string;
 
   try {
+    // A PDF with no readable text layer is OCR work, not text work: the OCR benchmark
+    // (scripts/ocr-eval.mjs) disqualified the cheap text model on exactly this input.
     fallbackText = await generateTextWithGeminiFile({
       instructions: `${fallbackInstructions}\n\nExtract the document text as faithfully and completely as possible so it can be turned into detailed study notes and flashcards.`,
       file,
-      model: env.GEMINI_TEXT_MODEL,
+      model: env.GEMINI_OCR_MODEL,
+      thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_MODEL),
       maxOutputTokens: PDF_FALLBACK_MAX_OUTPUT_TOKENS,
     });
   } catch (error) {
@@ -1263,7 +1266,7 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
       model: env.GEMINI_OCR_MODEL,
       maxOutputTokens: OCR_PRIMARY_MAX_OUTPUT_TOKENS,
       maxAttempts: 1,
-      thinkingConfig: OCR_THINKING_CONFIG,
+      thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_MODEL),
       mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM,
       usageContext: buildImageOcrUsageContext({
         context,
@@ -1309,7 +1312,7 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
       model: env.GEMINI_OCR_RESCUE_MODEL,
       maxOutputTokens: OCR_RESCUE_MAX_OUTPUT_TOKENS,
       maxAttempts: 1,
-      thinkingConfig: OCR_THINKING_CONFIG,
+      thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_RESCUE_MODEL),
       mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH,
       usageContext: buildImageOcrUsageContext({
         context,

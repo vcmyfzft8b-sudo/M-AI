@@ -12,7 +12,8 @@ const resolve = (stage, env = {}, fallbackModel = "gemini-3.5-flash-lite") =>
   resolveStageModelConfig({ stage, env, fallbackModel });
 
 test("a 2.5 model never receives a thinking level, because it cannot think", () => {
-  const config = resolve("note_write", {}, "gemini-2.5-flash-lite");
+  // note_outline has no stage default model, so it actually lands on the 2.5 fallback.
+  const config = resolve("note_outline", {}, "gemini-2.5-flash-lite");
 
   assert.equal(supportsThinkingLevel("gemini-2.5-flash-lite"), false);
   assert.equal(config.thinkingLevel, null);
@@ -120,4 +121,16 @@ test("dedupe keeps claims that merely share vocabulary but state different facts
   ];
 
   assert.equal(dedupeKnowledgeItems(items).length, 2);
+});
+
+test("note writing defaults to the premium model even when the shared fallback is cheap", () => {
+  // The one stage the sweep found worth paying for: everything else inherits the fallback.
+  assert.equal(resolve("note_write", {}, "gemini-2.5-flash-lite").model, "gemini-3.5-flash-lite");
+  assert.equal(resolve("note_extract", {}, "gemini-2.5-flash-lite").model, "gemini-2.5-flash-lite");
+  // An explicit env override still wins over the stage default.
+  assert.equal(
+    resolve("note_write", { GEMINI_NOTE_WRITE_MODEL: "gemini-3.6-flash" }, "gemini-2.5-flash-lite")
+      .model,
+    "gemini-3.6-flash",
+  );
 });

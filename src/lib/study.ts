@@ -13,6 +13,12 @@ import type {
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
 import { countWords } from "@/lib/notes/note-prompts";
 import { createCoveragePlan, MAX_STUDY_ITEMS } from "@/lib/study-coverage";
+import {
+  buildItemPlans,
+  extractStudyItems,
+  generateItemCardDrafts,
+  resolveStudyPipelineMode,
+} from "@/lib/study-items";
 import { generateCoverageCards, repairCoverageCards } from "@/lib/study-cards";
 import type { CoverageCardDraft, CoverageUnitPlan, SourceUnit, StudySectionDraft } from "@/lib/study-models";
 import { buildSourceUnits } from "@/lib/study-source-units";
@@ -219,6 +225,14 @@ function trimCardsToPlanBudget(params: {
     }
   }
 
+  // The deck is bounded by what the plan asked for, floored at the legacy global cap. Legacy
+  // plans are budgeted to at most 70 items upstream, so their behaviour is unchanged; item-driven
+  // plans size themselves from the source, and clamping them back to 70 would silently reintroduce
+  // the hard limit the item pipeline exists to remove.
+  const maxCards = Math.max(
+    MAX_STUDY_ITEMS,
+    [...targetCountByConcept.values()].reduce((total, count) => total + count, 0),
+  );
   const selectedCountByConcept = new Map<string, number>();
   const rankedCards = [...params.cards].sort((left, right) => {
     return (
@@ -230,7 +244,7 @@ function trimCardsToPlanBudget(params: {
   const selected: CoverageCardDraft[] = [];
 
   for (const card of rankedCards) {
-    if (selected.length >= MAX_STUDY_ITEMS) {
+    if (selected.length >= maxCards) {
       break;
     }
 
@@ -472,13 +486,15 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
   const supabase = createSupabaseServiceRoleClient();
   const startedAt = Date.now();
   const storage = await detectStudyStorageCapabilities();
+  const studyMode = resolveStudyPipelineMode();
+  const pipelineLabel = studyMode === "items" ? "flashcards-v5-items" : "flashcards-v4";
 
   await setStudyAssetStatus({
     lectureId: params.lectureId,
     status: "generating",
     modelMetadata: {
       stage: "building_sections",
-      pipeline: "flashcards-v4",
+      pipeline: pipelineLabel,
       storageMode: storage.mode,
     },
   });
@@ -538,18 +554,29 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
       status: "generating",
       modelMetadata: {
         stage: "planning_coverage",
-        pipeline: "flashcards-v4",
+        pipeline: pipelineLabel,
         storageMode: storage.mode,
         sourceUnitCount: units.length,
         sectionCount: sections.length,
       },
     });
-    const plannedCoverage = await createCoveragePlan({
-      title: lectureRow.title,
-      summary: artifactRow.summary,
-      keyTopics: artifactRow.key_topics,
-      units,
-    });
+    const studyItems =
+      studyMode === "items"
+        ? await extractStudyItems({
+            units,
+            sourceType: lectureRow.source_type === "audio" ? "audio" : "document",
+            outputLanguage: lectureRow.language_hint,
+            usageContext: { lectureId: params.lectureId, userId: lectureRow.user_id },
+          })
+        : null;
+    const plannedCoverage = studyItems
+      ? buildItemPlans(studyItems, units)
+      : await createCoveragePlan({
+          title: lectureRow.title,
+          summary: artifactRow.summary,
+          keyTopics: artifactRow.key_topics,
+          units,
+        });
     const planByUnit = new Map(plannedCoverage.map((plan) => [plan.unitIndex, plan]));
     const effectiveUnits = units.map((unit) => ({
       ...unit,
@@ -561,7 +588,7 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
       status: "generating",
       modelMetadata: {
         stage: "generating_cards",
-        pipeline: "flashcards-v4",
+        pipeline: pipelineLabel,
         storageMode: storage.mode,
         sourceUnitCount: effectiveUnits.length,
         sectionCount: sections.length,
@@ -569,14 +596,23 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
       },
     });
 
-    let generatedCards = await generateCoverageCards({
-      title: lectureRow.title,
-      summary: artifactRow.summary,
-      keyTopics: artifactRow.key_topics,
-      units: effectiveUnits,
-      plans: plannedCoverage,
-      outputLanguage: lectureRow.language_hint,
-    });
+    let generatedCards = studyItems
+      ? (
+          await generateItemCardDrafts({
+            items: studyItems,
+            units: effectiveUnits,
+            outputLanguage: lectureRow.language_hint,
+            usageContext: { lectureId: params.lectureId, userId: lectureRow.user_id },
+          })
+        ).drafts
+      : await generateCoverageCards({
+          title: lectureRow.title,
+          summary: artifactRow.summary,
+          keyTopics: artifactRow.key_topics,
+          units: effectiveUnits,
+          plans: plannedCoverage,
+          outputLanguage: lectureRow.language_hint,
+        });
 
     let validation = validateCoverage({
       units: effectiveUnits,
@@ -584,7 +620,9 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
       cards: generatedCards,
     });
 
-    for (let repairPass = 0; repairPass < MAX_REPAIR_PASSES; repairPass += 1) {
+    // Items mode retries skipped items inside generateItemCardDrafts; the legacy repair loop
+    // re-prompts with concept-planner prompts that do not exist in that mode.
+    for (let repairPass = 0; repairPass < (studyItems ? 0 : MAX_REPAIR_PASSES); repairPass += 1) {
       if (
         validation.coverageRatio >= COVERAGE_TARGET &&
         validation.criticalCoverageRatio >= CRITICAL_COVERAGE_TARGET &&
@@ -598,7 +636,7 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
         status: "generating",
         modelMetadata: {
           stage: "repairing_coverage",
-          pipeline: "flashcards-v4",
+          pipeline: pipelineLabel,
           storageMode: storage.mode,
           repairPass: repairPass + 1,
           uncoveredUnitIndexes: validation.uncoveredUnitIndexes,
@@ -686,7 +724,7 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
       status: "generating",
       modelMetadata: {
         stage: "publishing_deck",
-        pipeline: "flashcards-v4",
+        pipeline: pipelineLabel,
         storageMode: storage.mode,
         coverageRatio: finalValidation.coverageRatio,
         criticalCoverageRatio: finalValidation.criticalCoverageRatio,
@@ -791,7 +829,7 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
       status: "ready",
       modelMetadata: {
         stage: "ready",
-        pipeline: "flashcards-v4",
+        pipeline: pipelineLabel,
         storageMode: storage.mode,
         sourceUnitCount: effectiveUnits.length,
         sectionCount: sections.length,
@@ -825,7 +863,7 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
       status: "failed",
       errorMessage: toErrorMessage(error),
       modelMetadata: {
-        pipeline: "flashcards-v4",
+        pipeline: pipelineLabel,
         stage: "failed",
       },
     });

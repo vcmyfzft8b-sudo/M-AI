@@ -23,6 +23,13 @@ type StageDefaults = {
    * trigger the retry ladder in structured-output.ts.
    */
   outputHeadroom: number;
+  /**
+   * A stage names its own model only when the measurement said the shared default is not good
+   * enough for it. The per-stage sweep (scripts/model-sweep.sh, 2026-08-22) found exactly one
+   * such stage: note writing, where the cheap model holds every fact but bloats to 130% of the
+   * source length while 3.5-flash-lite holds 73%.
+   */
+  defaultModel?: string;
 };
 
 const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
@@ -32,7 +39,11 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
   // here and this is the only place global importance is judged.
   note_outline: { thinkingLevel: "medium", outputHeadroom: 2.5 },
   // The single hardest call in the product, and one per source.
-  note_write: { thinkingLevel: "high", outputHeadroom: 2.5 },
+  note_write: {
+    thinkingLevel: "high",
+    outputHeadroom: 2.5,
+    defaultModel: "gemini-3.5-flash-lite",
+  },
   coverage_plan: { thinkingLevel: "low", outputHeadroom: 1.6 },
   study_items: { thinkingLevel: "low", outputHeadroom: 1.6 },
   chat: { thinkingLevel: "minimal", outputHeadroom: 1 },
@@ -89,7 +100,9 @@ export function resolveStageModelConfig(params: {
 }): StageModelConfig {
   const defaults = STAGE_DEFAULTS[params.stage];
   const model =
-    params.env[STAGE_MODEL_ENV_KEYS[params.stage]]?.trim() || params.fallbackModel;
+    params.env[STAGE_MODEL_ENV_KEYS[params.stage]]?.trim() ||
+    defaults.defaultModel ||
+    params.fallbackModel;
   const thinkingCapable = supportsThinkingLevel(model);
   const thinkingLevel = thinkingCapable
     ? (parseThinkingLevel(params.env[STAGE_THINKING_ENV_KEYS[params.stage]]) ?? defaults.thinkingLevel)

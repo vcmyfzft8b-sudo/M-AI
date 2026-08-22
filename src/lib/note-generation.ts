@@ -5,129 +5,38 @@ import { generateStructuredObject } from "@/lib/ai/json";
 import { buildTranscriptWindows } from "@/lib/chunking";
 import {
   buildGeneratedContentLanguageInstruction,
-  normalizeNoteLanguage,
   resolveNoteLanguageLabel,
 } from "@/lib/languages";
 import {
+  buildKnowledgeExtractionInstructions,
+  buildLegacyAudioNoteTargets,
+  buildLegacyNoteTargets,
+  buildLegacyStructuredPlusInstructions,
+  buildNoteOutlineInstructions,
+  buildNoteWritingInstructions,
   countWords,
+  dedupeKnowledgeItems,
+  formatOutlineForWriting,
+  KNOWLEDGE_EXTRACTION_PASS_WINDOWS,
+  knowledgeExtractionSchema,
+  MATH_FORMATTING_INSTRUCTIONS,
+  noteOutlineSchema,
+  noteWriteSchema,
   normalizeGeneratedNoteMarkdown,
+  type IndexedKnowledgeItem,
 } from "@/lib/notes/note-prompts";
 import type { NoteGenerationResult, TranscriptSegmentInput } from "@/lib/types";
 
 const NOTE_CHUNK_SUMMARY_CONCURRENCY = 2;
-const MATH_FORMATTING_INSTRUCTIONS = `Formula formatting rules:
-- Use valid Markdown math for every formula and variable expression.
-- Put full equations on one display-math line like $$I_{t/0} = \\frac{Y_t}{Y_0} \\cdot 100$$.
-- Use inline math \\(Y_t\\) only for short variables inside a sentence.
-- Use LaTeX subscripts, fractions, exponents, roots, functions, Greek letters, inequalities, arrows, sums, and integrals: \\(Y_t\\), \\(Y_{t-1}\\), \\(I_{t/0}\\), \\frac{a}{b}, x^2, \\sqrt{x}, \\sin(x), \\alpha, \\le, \\to, \\sum, and \\int.
-- For multi-line derivations, use one display math block with an aligned environment inside: $$\\begin{aligned} a &= b \\\\ c &= d \\end{aligned}$$.
-- Never write raw dollar-sign inline math, broken subscripts like $Yt$ or $I{t/0}$, or plain text formulas like Yt / Y0 100.`;
+const NOTE_EXTRACTION_CONCURRENCY = 3;
 
-function buildNoteTargets(sourceWordCount: number, chunkCount: number) {
-  const targetNoteWordCount = Math.max(700, Math.min(3200, Math.round(sourceWordCount * 0.42)));
-
-  return {
-    targetNoteWordCount,
-    minNoteWordCount: Math.max(700, Math.round(targetNoteWordCount * 0.88)),
-    maxNoteWordCount: Math.max(900, Math.min(2400, Math.round(targetNoteWordCount * 1.18))),
-    minSectionCount: Math.max(4, Math.min(12, chunkCount)),
-    recommendedTopicCount: Math.max(4, Math.min(9, Math.ceil(chunkCount / 1.8))),
-  };
-}
-
-function buildAudioNoteTargets(sourceWordCount: number, chunkCount: number) {
-  const targetNoteWordCount = Math.max(1200, Math.min(5200, Math.round(sourceWordCount * 0.58)));
-
-  return {
-    targetNoteWordCount,
-    minNoteWordCount: Math.max(1100, Math.round(targetNoteWordCount * 0.86)),
-    maxNoteWordCount: Math.max(1500, Math.min(5600, Math.round(targetNoteWordCount * 1.18))),
-    minSectionCount: Math.max(6, Math.min(18, Math.ceil(chunkCount * 1.15))),
-    recommendedTopicCount: Math.max(6, Math.min(14, Math.ceil(chunkCount / 1.5))),
-  };
-}
-
-function getStructuredPlusLabels(outputLanguage?: string | null) {
-  const languageCode = normalizeNoteLanguage(outputLanguage);
-
-  if (languageCode === "sl") {
-    return {
-      overview: "## Hiter pregled",
-      keyThings: "## Ključne stvari, ki jih moraš znati",
-      topicExample: "## 1. Ime teme",
-      coreIdea: "### Glavna ideja",
-      detailedNotes: "### Podrobni zapiski",
-      keyTerms: "### Ključni pojmi",
-      example: "### Primer",
-      compare: "### Primerjava",
-      process: "### Proces",
-      checkYourself: "### Preveri svoje znanje",
-      finalReview: "## Končni pregled",
-      definition: "Definicija",
-      commonMistake: "Pogosta napaka",
-      keyTakeaway: "Ključno",
-    };
-  }
-
-  return {
-    overview: "## Quick Overview",
-    keyThings: "## Key Things To Know",
-    topicExample: "## 1. Topic name",
-    coreIdea: "### Core Idea",
-    detailedNotes: "### Detailed Notes",
-    keyTerms: "### Key Terms",
-    example: "### Example",
-    compare: "### Compare",
-    process: "### Process",
-    checkYourself: "### Check Yourself",
-    finalReview: "## Final Review",
-    definition: "Definition",
-    commonMistake: "Common mistake",
-    keyTakeaway: "Key takeaway",
-  };
-}
-
-function buildStructuredPlusInstructions(params: {
-  outputLanguage?: string | null;
-  recommendedTopicCount: number;
-}) {
-  const labels = getStructuredPlusLabels(params.outputLanguage);
-
-  return `Use a selective expert study-notes style: read the source section by section, decide what the learner actually needs to know, and turn that into clear summarized notes with explanations. Cover the material by concepts and learning value, not by rewriting every sentence.
-
-Selection rules:
-- For each source section or chunk, identify the important learning points: central concepts, definitions, rules, formulas, processes, comparisons, causes and effects, exceptions, caveats, and source examples that make a concept easier to understand.
-- Omit filler, repeated explanations, transitions, obvious restatements, low-value details, and examples that do not add new understanding.
-- Merge duplicate ideas across chunks. If a later section repeats an idea that is already explained, only add genuinely new nuance.
-- If a source section is mostly low-value, skip or merge it after preserving any useful concept it contains.
-- Summarize meaningfully. Do not copy every fact, sentence, bullet, or tiny detail from the source.
-- Do not use a fixed word-count target. The note should be as long as needed to explain the important material well and no longer. Dense material can produce longer notes; simple material should stay short.
-- Prefer clear explanations plus a few useful bullets over long prose. Include examples only when they support understanding and are grounded in the source.
-- If the source includes embedded document visual context, use it only when it is useful for studying the same concept. Fold the visual's actual concept into the relevant topic instead of writing a generic caption or separate image section.
-- Preserve mathematical notation as formulas when the source supports it. ${MATH_FORMATTING_INSTRUCTIONS}
-
-Use this stable Structured Plus markdown format with these exact heading labels:
-- Start with "${labels.overview}" containing 2-3 concise sentences that explain the whole material.
-- Immediately after "${labels.overview}", add exactly one semantic blockquote callout in this form: "> **${labels.keyTakeaway}:** ...". This creates the main visual highlight.
-- Add "${labels.keyThings}" with 5-8 complete bullet points for the main ideas.
-- After "${labels.keyThings}", include exactly one concise GFM markdown table when the source contains at least three comparable concepts, categories, systems, components, terms, steps, or cause-effect relationships. Most lecture/course materials have at least one logical table, so include the table unless the source truly has no comparable set.
-- Then create about ${params.recommendedTopicCount} numbered topic sections such as "${labels.topicExample}". Merge related chunks into one topic instead of creating a section for every chunk. Never create more than ${params.recommendedTopicCount + 1} numbered topic sections.
-- Inside each substantial topic, use "${labels.coreIdea}" and "${labels.detailedNotes}". Use "${labels.keyTerms}", "${labels.example}", "${labels.compare}", "${labels.process}", or "${labels.checkYourself}" only when they add real study value.
-- "${labels.coreIdea}" must be exactly 1 sentence.
-- "${labels.detailedNotes}" should usually contain 1 short explanatory paragraph plus 2-3 hyphen bullets. Use 4 bullets only when the section contains a true component list or process. Do not force every concept into a bullet.
-- Use hyphen bullet lists only when the material is naturally list-like: steps, components, causes, benefits, risks, grouped examples, questions, takeaways, or direct comparisons. This follows good study-note design by segmenting related ideas so learners can scan, compare, and self-test more easily.
-- Avoid nested bullet lists unless the source contains an actual component list or process. If nested bullets are needed, keep them short and do not use more than one nested list in a topic.
-- Use labeled bullets only when the label is semantically important, for example "- **${labels.definition}:** ...", "- **${labels.keyTakeaway}:** ...", "- **${labels.example}:** ...", "- **Razlika:** ...", "- **Korak:** ...", "- **Pazi:** ...". Do not label every ordinary bullet just for style.
-- When a concept has multiple examples, use a short hyphen list under the concept. Do not write examples as several standalone paragraphs.
-- Use normal paragraphs for "${labels.overview}", "${labels.coreIdea}", short explanations, and semantic callouts. Avoid long runs of paragraph after paragraph, but do not overuse bullets.
-- For unordered lists, always use "- " as the Markdown bullet marker. Do not use "*" or "+" bullets.
-- Use GFM markdown tables only when they make terminology, comparisons, categories, formulas, steps, or cause-effect relationships shorter and easier to understand than prose. Use exactly 1 table total for normal course notes when there is any logical comparison/classification/process; never use more than 2. Tables must compress information, not duplicate the surrounding bullets. Format every table with leading and trailing pipes in the header, separator, and body rows.
-- Use semantic blockquote callouts in the selected language for visible highlighting where it actually helps learning: include exactly 2 callouts in a normal note and at most 3 in a complex note. One must be the top "${labels.keyTakeaway}" callout; the second should be a genuinely important "${labels.definition}", "${labels.commonMistake}", or "${labels.keyTakeaway}" later in the notes. Do not turn every example into a callout. Supported forms: "> **${labels.definition}:** ...", "> **${labels.example}:** ...", "> **${labels.commonMistake}:** ...", or "> **${labels.keyTakeaway}:** ...".
-- Include source-grounded examples or worked explanations only when they clarify a difficult concept and the source supports them. Most examples should be normal text under "${labels.example}", not blockquote callouts. Skip generic examples.
-- Add "${labels.checkYourself}" only once near the end unless the source is long and complex. Format it as a hyphen bullet list with 3-5 short questions that are answerable from the notes.
-- End with "${labels.finalReview}" formatted as a hyphen bullet list containing 4-7 tight takeaways and any confusing points or common mistakes supported by the source.
-
-Return markdown only. Do not use HTML tags. Do not include decorative color instructions or unsupported facts. Use 2-5 logical emojis total in major section headings or the top callout to improve scanning, for example one emoji before a few numbered topic headings. Do not use emojis on every bullet or make the notes feel childish.`;
+/**
+ * "content" is the measured default: extract every testable claim, outline what the note keeps,
+ * then write exactly that (evals/, scripts/note-eval.mjs). "legacy" restores the previous
+ * chunk-summary pipeline as a production rollback switch, not a supported mode.
+ */
+function resolveNotesPipelineMode() {
+  return process.env.NOTES_PIPELINE?.trim().toLowerCase() === "legacy" ? "legacy" : "content";
 }
 
 async function mapWithConcurrency<TInput, TOutput>(
@@ -152,37 +61,224 @@ async function mapWithConcurrency<TInput, TOutput>(
   return results;
 }
 
-export async function generateNotesFromTranscript(
+/* -------------------------------------------------------------------------- */
+/* Content-driven pipeline (default)                                          */
+/* -------------------------------------------------------------------------- */
+
+type ExtractionWindow = {
+  passIndex: number;
+  label: string;
+  text: string;
+};
+
+// buildTranscriptWindows sizes by characters; the measured pass sizes are in words.
+const APPROX_CHARS_PER_WORD = 6.5;
+
+function buildExtractionWindows(segments: TranscriptSegmentInput[]): ExtractionWindow[] {
+  return KNOWLEDGE_EXTRACTION_PASS_WINDOWS.flatMap((windowWords, passIndex) => {
+    const windows = buildTranscriptWindows(
+      segments,
+      Math.round(windowWords * APPROX_CHARS_PER_WORD),
+    );
+
+    return windows.map((window, index) => ({
+      passIndex,
+      label: `Chunk ${index + 1} of ${windows.length}`,
+      text: window.text,
+    }));
+  });
+}
+
+/**
+ * Reads the source twice at different granularities and merges. One pass is not stable — the same
+ * source yields visibly different item counts run to run — and everything downstream is capped by
+ * what extraction catches. A claim straddling a window boundary in one pass sits inside a window
+ * in the other; duplicates collapse in the merge. Repeats are only importance evidence within a
+ * single pass; across passes every claim is expected twice and a boost would flatten the scale.
+ */
+export async function extractKnowledgeItems(params: {
+  segments: TranscriptSegmentInput[];
+  sourceType: "audio" | "document";
+  outputLanguage?: string | null;
+  usageContext?: { userId?: string | null; lectureId?: string | null };
+}): Promise<IndexedKnowledgeItem[]> {
+  const windows = buildExtractionWindows(params.segments);
+  const instructions = buildKnowledgeExtractionInstructions({
+    outputLanguage: params.outputLanguage,
+    sourceType: params.sourceType,
+  });
+
+  const extractions = await mapWithConcurrency(
+    windows,
+    NOTE_EXTRACTION_CONCURRENCY,
+    async (window) => {
+      const extraction = await generateStructuredObject({
+        schema: knowledgeExtractionSchema,
+        maxOutputTokens: 1800,
+        stage: "note_extract",
+        instructions,
+        input: `${window.label}.\n\n${window.text}`,
+        usageContext: params.usageContext,
+      });
+
+      return { ...extraction, passIndex: window.passIndex };
+    },
+  );
+
+  const byPass = new Map<number, IndexedKnowledgeItem[]>();
+
+  for (const extraction of extractions) {
+    const items = extraction.items.map((item, id) => ({
+      ...item,
+      id,
+      sectionTitle: extraction.sectionTitle,
+    }));
+    byPass.set(extraction.passIndex, [...(byPass.get(extraction.passIndex) ?? []), ...items]);
+  }
+
+  const perPass = [...byPass.values()].flatMap((items) =>
+    dedupeKnowledgeItems(
+      items.map((item, id) => ({ ...item, id })),
+      { boostRepeats: true },
+    ),
+  );
+
+  return dedupeKnowledgeItems(perPass.map((item, id) => ({ ...item, id }))).map((item, id) => ({
+    ...item,
+    id,
+  }));
+}
+
+async function generateNotesContentDriven(
   segments: TranscriptSegmentInput[],
   params: {
     sourceLabel: string;
     pipelineName: string;
-    sourceType?: "audio" | "document";
+    sourceType: "audio" | "document";
+    outputLanguage?: string | null;
+    sourceTitleHint?: string | null;
+    usageContext?: { userId?: string | null; lectureId?: string | null };
+  },
+): Promise<NoteGenerationResult> {
+  const sourceWordCount = segments.reduce((total, segment) => total + countWords(segment.text), 0);
+  const items = await extractKnowledgeItems({
+    segments,
+    sourceType: params.sourceType,
+    outputLanguage: params.outputLanguage,
+    usageContext: params.usageContext,
+  });
+
+  if (items.length === 0) {
+    throw new Error("Knowledge extraction found no study-worthy content in the source.");
+  }
+
+  const outline = await generateStructuredObject({
+    schema: noteOutlineSchema,
+    maxOutputTokens: Math.max(2600, items.length * 60),
+    stage: "note_outline",
+    instructions: buildNoteOutlineInstructions({ outputLanguage: params.outputLanguage }),
+    input: JSON.stringify(
+      {
+        sourceType: params.sourceType,
+        sourceLabel: params.sourceLabel,
+        sourceTitleHint: params.sourceTitleHint ?? null,
+        items: items.map(({ id, claim, kind, importance, sectionTitle }) => ({
+          id,
+          claim,
+          kind,
+          importance,
+          sectionTitle,
+        })),
+      },
+      null,
+      2,
+    ),
+    usageContext: params.usageContext,
+  });
+
+  const retainedItemCount = outline.topics.reduce(
+    (total, topic) => total + topic.itemIds.length,
+    0,
+  );
+  const sourceText = segments.map((segment) => segment.text).join("\n\n");
+
+  // Budgeted from the retained items rather than from a word target: length follows the content,
+  // and so does the budget for writing it.
+  const written = await generateStructuredObject({
+    schema: noteWriteSchema,
+    maxOutputTokens: Math.max(4000, retainedItemCount * 170),
+    stage: "note_write",
+    instructions: buildNoteWritingInstructions({ outputLanguage: params.outputLanguage }),
+    input: `Outline to teach:\n${JSON.stringify(
+      {
+        title: outline.title,
+        summary: outline.summary,
+        topics: formatOutlineForWriting({ outline, items }),
+      },
+      null,
+      2,
+    )}\n\nFull source text:\n${sourceText}`,
+    usageContext: params.usageContext,
+  });
+
+  const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(written.structuredNotesMd);
+  const normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
+
+  return {
+    title: outline.title,
+    summary: outline.summary,
+    keyTopics: outline.keyTopics,
+    structuredNotesMd: normalizedStructuredNotesMd,
+    modelMetadata: {
+      pipeline: params.pipelineName,
+      notesMode: "content",
+      sourceType: params.sourceType,
+      sourceWordCount,
+      noteWordCount: normalizedNoteWordCount,
+      coverageRatio:
+        sourceWordCount > 0
+          ? Number((normalizedNoteWordCount / sourceWordCount).toFixed(3))
+          : null,
+      extractedItemCount: items.length,
+      retainedItemCount,
+      droppedItemCount: outline.droppedItemIds.length,
+      topicCount: outline.topics.length,
+    },
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Legacy pipeline (rollback switch)                                          */
+/* -------------------------------------------------------------------------- */
+
+async function generateNotesLegacy(
+  segments: TranscriptSegmentInput[],
+  params: {
+    sourceLabel: string;
+    pipelineName: string;
+    sourceType: "audio" | "document";
     outputLanguage?: string | null;
     sourceTitleHint?: string | null;
   },
 ): Promise<NoteGenerationResult> {
-  const sourceType = params.sourceType ?? "audio";
+  const sourceType = params.sourceType;
   const windows = buildTranscriptWindows(segments, sourceType === "audio" ? 2200 : 3200);
   const sourceWordCount = segments.reduce((total, segment) => total + countWords(segment.text), 0);
   const targets =
     sourceType === "audio"
-      ? buildAudioNoteTargets(sourceWordCount, windows.length)
-      : buildNoteTargets(sourceWordCount, windows.length);
+      ? buildLegacyAudioNoteTargets(sourceWordCount, windows.length)
+      : buildLegacyNoteTargets(sourceWordCount, windows.length);
   const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
   const languageLabel = resolveNoteLanguageLabel(params.outputLanguage);
   const chunkInstructions =
     sourceType === "audio"
       ? `${languageInstruction} You create source cards from spoken lecture transcript chunks. Identify the study-worthy material in this chunk: definitions, mechanisms, sequences, comparisons, formulas, examples, clarifications, caveats, and exam-relevant details. Preserve technical terms and explain abbreviated or implied ideas when the transcript supports them. Skip filler, repeated phrases, low-value asides, and examples that add no new understanding. Never invent facts. Bullet points must be complete study points, not fragments. ${MATH_FORMATTING_INSTRUCTIONS}`
       : `${languageInstruction} You create source cards from lecture-style source material. Identify the study-worthy material in this chunk: definitions, mechanisms, sequences, comparisons, formulas, caveats, examples already present in the source, and exam-relevant details. Skip filler, repeated wording, low-value details, and examples that add no new understanding. Never invent facts. Bullet points must be complete study points, not fragments. ${MATH_FORMATTING_INSTRUCTIONS}`;
-  const structuredPlusInstructions = buildStructuredPlusInstructions({
+  const structuredPlusInstructions = buildLegacyStructuredPlusInstructions({
     outputLanguage: params.outputLanguage,
     recommendedTopicCount: targets.recommendedTopicCount,
   });
-  const finalInstructions =
-    sourceType === "audio"
-      ? `${languageInstruction} You are preparing final study notes in ${languageLabel} from ${params.sourceLabel}. Produce a title, summary, key topics, and student-ready notes that cover the important material in the source without unnecessary text. This is a spoken lecture transcript, so reconstruct the material into clean, structured notes and merge repeated spoken ideas. Work section by section through the lecture: decide what the learner needs to know, explain it clearly, and skip filler or repetition. Include important definitions, steps, relationships, formulas, examples, clarifications, and lecturer-added context when supported by the transcript. Do not turn the lecture into a shallow recap and do not rewrite every detail; turn it into concise study notes that preserve the important ideas. Explain the logic behind processes and relationships, preserve technical terms, and include examples only when they help understanding and are supported by the source material. Every chunk summary should contribute only its non-duplicate substantive content to the final notes. Build about ${targets.recommendedTopicCount} substantial sections when the material supports it. ${structuredPlusInstructions}`
-      : `${languageInstruction} You are preparing final study notes in ${languageLabel} from ${params.sourceLabel}. Produce a title, summary, key topics, and student-ready notes that cover the important material in the source without unnecessary text. Work section by section through the material: decide what the learner needs to know, explain it clearly, and skip filler or repetition. Do not turn the material into a shallow recap and do not rewrite every detail; turn it into concise study notes that preserve the important concepts, formulas, relationships, processes, visual references, and examples. Explain the logic behind processes and relationships, preserve technical terms, and include examples only when they help understanding and are supported by the source material. Every chunk summary should contribute only its non-duplicate substantive content to the final notes. Build about ${targets.recommendedTopicCount} substantial sections when the material supports it. ${structuredPlusInstructions}`;
+  const finalInstructions = `${languageInstruction} You are preparing final study notes in ${languageLabel} from ${params.sourceLabel}. Produce a title, summary, key topics, and student-ready notes that cover the important material in the source without unnecessary text. Work section by section through the material: decide what the learner needs to know, explain it clearly, and skip filler or repetition. Every chunk summary should contribute only its non-duplicate substantive content to the final notes. Build about ${targets.recommendedTopicCount} substantial sections when the material supports it. ${structuredPlusInstructions}`;
 
   const chunkOutputs = await mapWithConcurrency(
     windows,
@@ -218,7 +314,6 @@ export async function generateNotesFromTranscript(
   });
 
   const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(result.structuredNotesMd);
-
   const normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
 
   return {
@@ -236,6 +331,27 @@ export async function generateNotesFromTranscript(
       recommendedTopicCount: targets.recommendedTopicCount,
       sourceType,
       pipeline: params.pipelineName,
+      notesMode: "legacy",
     },
   };
+}
+
+export async function generateNotesFromTranscript(
+  segments: TranscriptSegmentInput[],
+  params: {
+    sourceLabel: string;
+    pipelineName: string;
+    sourceType?: "audio" | "document";
+    outputLanguage?: string | null;
+    sourceTitleHint?: string | null;
+    usageContext?: { userId?: string | null; lectureId?: string | null };
+  },
+): Promise<NoteGenerationResult> {
+  const sourceType = params.sourceType ?? "audio";
+
+  if (resolveNotesPipelineMode() === "legacy") {
+    return generateNotesLegacy(segments, { ...params, sourceType });
+  }
+
+  return generateNotesContentDriven(segments, { ...params, sourceType });
 }

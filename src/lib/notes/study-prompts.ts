@@ -42,6 +42,8 @@ export const generatedQuizQuestionSchema = z.object({
   question: z.string().min(10).max(300),
   options: z.array(z.string().min(1).max(200)).length(4),
   correctIndex: z.number().int().min(0).max(3),
+  // One sentence a learner reads after answering: why the correct option is correct.
+  explanation: z.string().min(6).max(400),
   difficulty: z.enum(["easy", "medium", "hard"]),
 });
 
@@ -105,6 +107,8 @@ Exactly four options, exactly one correct.
 
 The question must be answerable before the options are read — a learner who knows the material should be able to say the answer, then find it in the list.
 
+explanation is one sentence a learner reads after answering: why the correct option is correct, stated from the material rather than "as stated above".
+
 The three wrong options are the heart of the question. Each must be a real thing from the same subject that a learner who half-knows the material might pick: the neighbouring term, the other side of the comparison, the plausible wrong value. Never filler, never obviously absurd, never a repeat of the correct answer in other words.
 
 All four options must be the same kind of thing, the same grammatical shape and roughly the same length, so the correct one cannot be spotted by its form alone. Never use "all of the above", "none of the above", or an option that negates another.
@@ -141,8 +145,11 @@ export function formatItemsForStudyGeneration(items: IndexedKnowledgeItem[]) {
   }));
 }
 
-export function chunkStudyItems(items: IndexedKnowledgeItem[], batchSize = STUDY_ITEM_BATCH_SIZE) {
-  const batches: IndexedKnowledgeItem[][] = [];
+export function chunkStudyItems<TItem extends IndexedKnowledgeItem>(
+  items: TItem[],
+  batchSize = STUDY_ITEM_BATCH_SIZE,
+) {
+  const batches: TItem[][] = [];
 
   for (let index = 0; index < items.length; index += batchSize) {
     batches.push(items.slice(index, index + batchSize));

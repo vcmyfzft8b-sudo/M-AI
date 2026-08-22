@@ -1183,7 +1183,7 @@ export async function extractTextFromPdf(file: File) {
     // failing the lecture with "Model returned empty text output." and paging us about it.
     if (error instanceof GeminiEmptyTextOutputError) {
       throw new ExpectedLectureInputError(
-        "No readable text could be found in this PDF. If it is a scan, upload the pages as photos so they can be read with OCR.",
+        "V tem PDF-ju ni bilo mogoče najti berljivega besedila. Če gre za skeniran dokument, strani naloži kot fotografije, da jih lahko preberemo.",
         "pdf_no_text",
       );
     }

@@ -31,7 +31,7 @@ function geminiEmptyTextOutputError() {
 
 function unreadablePdfError() {
   return new ExpectedLectureInputError(
-    "No readable text could be found in this PDF. If it is a scan, upload the pages as photos so they can be read with OCR.",
+    "V tem PDF-ju ni bilo mogoče najti berljivega besedila. Če gre za skeniran dokument, strani naloži kot fotografije, da jih lahko preberemo.",
     "pdf_no_text",
   );
 }
@@ -73,7 +73,11 @@ test("a PDF with no readable text is the learner's file to fix, not a defect", (
 
   assert.equal(isExpectedLectureInputFailure(unreadablePdfError()), true);
   assert.deepEqual(recorder.captured, [], "an unreadable file must never reach Sentry");
-  assert.match(recorder.messages[0], /scan/, "the learner is told what to do with a scanned PDF");
+  assert.match(
+    recorder.messages[0],
+    /fotografije/,
+    "the learner is told what to do with a scanned PDF, in the language the app speaks",
+  );
 });
 
 // Both halves of the guard in markLecturePipelineFailed said no, which is why every one of these

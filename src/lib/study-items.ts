@@ -3,7 +3,10 @@ import "server-only";
 import { generateStructuredObject } from "@/lib/ai/json";
 import {
   buildKnowledgeExtractionInstructions,
+  collapseDuplicateItems,
   dedupeKnowledgeItems,
+  DUPLICATE_JUDGE_INSTRUCTIONS,
+  duplicateVerdictSchema,
   KNOWLEDGE_EXTRACTION_PASS_WINDOWS,
   knowledgeExtractionSchema,
   type IndexedKnowledgeItem,
@@ -72,6 +75,45 @@ async function mapWithConcurrency<TInput, TOutput>(
 
 type StudyUsageContext = { userId?: string | null; lectureId?: string | null };
 
+const DUPLICATE_JUDGE_MAX_ITEMS = 300;
+
+/**
+ * One cheap judge call collapses concept duplicates the mechanical merge cannot see —
+ * cross-spelling and cross-angle restatements of one fact. Judge failure degrades to the
+ * mechanically deduped list: a deck with some duplicates beats a failed generation.
+ */
+export async function judgeCollapseDuplicateItems<TItem extends IndexedKnowledgeItem>(
+  items: TItem[],
+  usageContext?: StudyUsageContext,
+): Promise<TItem[]> {
+  if (items.length < 2 || items.length > DUPLICATE_JUDGE_MAX_ITEMS) {
+    return items;
+  }
+
+  try {
+    const result = await generateStructuredObject({
+      schema: duplicateVerdictSchema,
+      maxOutputTokens: Math.min(16_000, items.length * 16 + 600),
+      stage: "note_extract",
+      instructions: DUPLICATE_JUDGE_INSTRUCTIONS,
+      input: items.map((item, index) => `${index}. ${item.claim.slice(0, 130)}`).join("\n"),
+      usageContext: { ...(usageContext ?? {}), stage: "item_dedupe" },
+    });
+
+    // Judge indices refer to list positions; collapse works on positional ids.
+    const positional = items.map((item, index) => ({ ...item, id: index }));
+    const survivors = collapseDuplicateItems(positional, result.verdicts);
+    const surviving = new Set(survivors.map((item) => item.id));
+
+    return items
+      .map((item, index) => ({ item, index, importance: survivors.find((s) => s.id === index)?.importance }))
+      .filter(({ index }) => surviving.has(index))
+      .map(({ item, importance }) => ({ ...item, importance: importance ?? item.importance }));
+  } catch {
+    return items;
+  }
+}
+
 const storedKnowledgeItemSchema = {
   isValid(value: unknown): value is Omit<IndexedKnowledgeItem, "id"> {
     if (typeof value !== "object" || value === null) {
@@ -100,10 +142,11 @@ const storedKnowledgeItemSchema = {
  * different set of facts than the notes teach, which is precisely the divergence the shared item
  * list exists to prevent.
  */
-export function resolveStoredStudyItems(params: {
+export async function resolveStoredStudyItems(params: {
   artifactModelMetadata: unknown;
   units: SourceUnit[];
-}): UnitKnowledgeItem[] | null {
+  usageContext?: StudyUsageContext;
+}): Promise<UnitKnowledgeItem[] | null> {
   const metadata = params.artifactModelMetadata;
 
   if (typeof metadata !== "object" || metadata === null) {
@@ -125,10 +168,23 @@ export function resolveStoredStudyItems(params: {
   const unitByIndex = new Map(params.units.map((unit) => [unit.unitIndex, unit]));
   const allUnitIndexes = params.units.map((unit) => unit.unitIndex);
 
-  return items.map((item, id) => ({
+  // Items stored by an earlier pipeline version may predate the duplicate merges, and a deck
+  // generated from them re-inherits every near-duplicate. Deduping on load — mechanically and
+  // through the judge — makes reuse safe regardless of which version wrote the artifact.
+  const deduped = await judgeCollapseDuplicateItems(
+    dedupeKnowledgeItems(
+      items.map((item, id) => ({
+        ...item,
+        id,
+        importance: Math.max(1, Math.min(5, Math.round(item.importance))),
+      })),
+    ),
+    params.usageContext,
+  );
+
+  return deduped.map((item, id) => ({
     ...item,
     id,
-    importance: Math.max(1, Math.min(5, Math.round(item.importance))),
     coveredUnitIndexes: allUnitIndexes,
     primaryUnitIdx: resolvePrimaryUnitIdx(item.claim, allUnitIndexes, unitByIndex),
   }));
@@ -143,9 +199,10 @@ export async function extractStudyItems(params: {
   artifactModelMetadata?: unknown;
 }): Promise<UnitKnowledgeItem[]> {
   if (params.artifactModelMetadata != null) {
-    const stored = resolveStoredStudyItems({
+    const stored = await resolveStoredStudyItems({
       artifactModelMetadata: params.artifactModelMetadata,
       units: params.units,
+      usageContext: params.usageContext,
     });
 
     if (stored) {
@@ -205,7 +262,12 @@ export async function extractStudyItems(params: {
   );
   const merged = dedupeKnowledgeItems(perPass.map((item, id) => ({ ...item, id })));
 
-  return merged.map((item, id) => ({
+  const judged = await judgeCollapseDuplicateItems(
+    merged.map((item, id) => ({ ...item, id })),
+    params.usageContext,
+  );
+
+  return judged.map((item, id) => ({
     ...item,
     id,
     primaryUnitIdx: resolvePrimaryUnitIdx(item.claim, item.coveredUnitIndexes, unitByIndex),

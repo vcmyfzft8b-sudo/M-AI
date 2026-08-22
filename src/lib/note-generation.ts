@@ -26,6 +26,7 @@ import {
   splitTextForExtraction,
   type IndexedKnowledgeItem,
 } from "@/lib/notes/note-prompts";
+import { judgeCollapseDuplicateItems } from "@/lib/study-items";
 import type { NoteGenerationResult, TranscriptSegmentInput } from "@/lib/types";
 
 const NOTE_CHUNK_SUMMARY_CONCURRENCY = 2;
@@ -147,10 +148,13 @@ export async function extractKnowledgeItems(params: {
     ),
   );
 
-  return dedupeKnowledgeItems(perPass.map((item, id) => ({ ...item, id }))).map((item, id) => ({
-    ...item,
-    id,
-  }));
+  const merged = dedupeKnowledgeItems(perPass.map((item, id) => ({ ...item, id })));
+  const judged = await judgeCollapseDuplicateItems(
+    merged.map((item, id) => ({ ...item, id })),
+    params.usageContext,
+  );
+
+  return judged.map((item, id) => ({ ...item, id }));
 }
 
 async function generateNotesContentDriven(

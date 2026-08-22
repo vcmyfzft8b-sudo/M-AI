@@ -266,6 +266,80 @@ export function dedupeKnowledgeItems<TItem extends IndexedKnowledgeItem>(
   return kept.map((entry) => entry.item);
 }
 
+export const duplicateVerdictSchema = z.object({
+  verdicts: z.array(
+    z.object({
+      index: z.number().int().nonnegative(),
+      duplicateOf: z.number().int().nullable(),
+    }),
+  ),
+});
+
+export const DUPLICATE_JUDGE_INSTRUCTIONS =
+  "For each knowledge item, decide whether it states the SAME single fact as another item in the list — same subject, same relationship, same value, merely worded, spelled or angled differently. If so, duplicateOf is that item's index; otherwise null. Two different facts about the same subject are NOT duplicates: 'X uses base-period quantities' and 'X overstates inflation' are different facts about X. Judge each item independently and be precise.";
+
+/**
+ * Collapses items using duplicate links from a judge model. Token overlap cannot see that
+ * "eksitatorni postsinaptični potencial" and "ekscitacijski postsynaptični potencial" are one
+ * concept, and lowering its threshold would merge EPSP with IPSP; a judge finds exactly the
+ * cross-spelling, cross-angle pairs (measured 100% stable on a real lecture's items). Links are
+ * treated as undirected and unioned, and each surviving item keeps its group's peak importance.
+ * The safety valve returns the input untouched if the judge would collapse more than 60% of it —
+ * a judge that eager is wrong, not thorough.
+ */
+export function collapseDuplicateItems<TItem extends IndexedKnowledgeItem>(
+  items: TItem[],
+  links: Array<{ index: number; duplicateOf: number | null }>,
+): TItem[] {
+  const parent = items.map((_item, index) => index);
+
+  const find = (index: number): number => {
+    while (parent[index] !== index) {
+      parent[index] = parent[parent[index]];
+      index = parent[index];
+    }
+
+    return index;
+  };
+
+  for (const link of links) {
+    if (
+      link.duplicateOf == null ||
+      link.index === link.duplicateOf ||
+      link.index < 0 ||
+      link.index >= items.length ||
+      link.duplicateOf < 0 ||
+      link.duplicateOf >= items.length
+    ) {
+      continue;
+    }
+
+    parent[find(link.index)] = find(link.duplicateOf);
+  }
+
+  const byRoot = new Map<number, TItem[]>();
+
+  for (let index = 0; index < items.length; index += 1) {
+    const root = find(index);
+    byRoot.set(root, [...(byRoot.get(root) ?? []), items[index]]);
+  }
+
+  const collapsed = [...byRoot.values()].map((group) => {
+    const keeper = group.reduce((best, item) => (item.importance > best.importance ? item : best));
+
+    return {
+      ...keeper,
+      importance: Math.max(...group.map((item) => item.importance)),
+    };
+  });
+
+  if (collapsed.length < items.length * 0.4) {
+    return items;
+  }
+
+  return collapsed.sort((left, right) => left.id - right.id);
+}
+
 export function buildKnowledgeExtractionInstructions(params: {
   outputLanguage?: string | null;
   sourceType: "audio" | "document";
@@ -284,6 +358,8 @@ A chunk may span several unrelated topics — scanned pages and slide photos oft
 Be ruthless about non-substance. Return an empty items array for a chunk that is only administrative announcements, deadlines, chapter goals, "what you will learn" lists, figure and slide captions, chapter summaries, pointers to exercises, or transitions. Never turn those into items to avoid returning nothing.
 
 Rate importance honestly, because that rating is what the later step triages on: 5 = a learner fails without it, 3 = worth knowing, 1 = true but disposable.
+
+Every claim names its subject explicitly. A chunk that says "he later taught history" yields "Gogolj je pozneje predaval zgodovino" when the chunk identifies him — and no claim at all when it does not. A claim about an unnamed someone can never become a usable study question.
 
 Never invent a claim the chunk does not support.
 

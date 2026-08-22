@@ -134,3 +134,34 @@ test("short text passes through the splitter untouched", async () => {
   assert.deepEqual(splitTextForExtraction("Kratek zapis.", 2600), ["Kratek zapis."]);
   assert.deepEqual(splitTextForExtraction("   ", 2600), []);
 });
+
+test("duplicate links collapse via union-find, keeping peak importance per group", async () => {
+  const { collapseDuplicateItems } = await import("../src/lib/notes/note-prompts.ts");
+  const items = [
+    { id: 0, claim: "EPSP povzroči depolarizacijo", kind: "fact", importance: 3, terms: [], sectionTitle: "S" },
+    { id: 1, claim: "IPSP povzroči hiperpolarizacijo", kind: "fact", importance: 4, terms: [], sectionTitle: "S" },
+    { id: 2, claim: "Ekscitacijski postsynaptični potencial depolarizira membrano", kind: "fact", importance: 5, terms: [], sectionTitle: "S" },
+  ];
+  // Symmetric links, as the judge actually returns them.
+  const links = [
+    { index: 0, duplicateOf: 2 },
+    { index: 2, duplicateOf: 0 },
+    { index: 1, duplicateOf: null },
+  ];
+  const collapsed = collapseDuplicateItems(items, links);
+
+  assert.equal(collapsed.length, 2);
+  const epsp = collapsed.find((item) => item.claim.includes("depolar"));
+  assert.equal(epsp.importance, 5);
+});
+
+test("an over-eager judge is ignored rather than obeyed", async () => {
+  const { collapseDuplicateItems } = await import("../src/lib/notes/note-prompts.ts");
+  const items = Array.from({ length: 10 }, (_v, id) => ({
+    id, claim: `Distinct fact number ${id} about the topic`, kind: "fact", importance: 3, terms: [], sectionTitle: "S",
+  }));
+  // Judge claims everything duplicates item 0 — collapsing 90% is not credible.
+  const links = items.slice(1).map((item) => ({ index: item.id, duplicateOf: 0 }));
+
+  assert.equal(collapseDuplicateItems(items, links).length, 10);
+});

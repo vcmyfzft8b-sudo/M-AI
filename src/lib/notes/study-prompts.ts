@@ -76,7 +76,9 @@ Cover every item you are given. Return the item's id on the ${params.unitNoun} t
 
 Skip an item only when no honest standalone ${params.unitNoun} can be built from it — it is inseparable from a figure, or it is not a testable claim at all. Put those ids in skippedItemIds. Skipping an item of importance 4 or 5 needs a genuine reason; those are the ones a learner is most likely to be tested on.
 
-Never invent a fact the item does not contain, and never soften a precise value into a vague one.`;
+Never invent a fact the item does not contain, and never soften a precise value into a vague one.
+
+Each ${params.unitNoun} draws only on its own item. The other items in the batch are context for avoiding overlap — never a source of names, works, dates or values for this one. Pairing one item's subject with another item's facts is the worst failure this task has.`;
 }
 
 export function buildFlashcardInstructions(params: { outputLanguage?: string | null }) {

@@ -4,6 +4,10 @@
  * note coverage, deck coverage, distractor quality, and the repo's own mechanical validators.
  *
  *   node --experimental-strip-types scripts/live-eval.mjs <cookieFile> <lectureId> [...]
+ *
+ * Grades whichever instance LIVE_EVAL_BASE_URL points at, so the same run that grades a local
+ * dev server also grades a Vercel preview deployment (the only place the production build,
+ * serverless timeouts and deployed env vars are actually exercised).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -17,7 +21,7 @@ import {
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 loadEnv(ROOT);
 const cookie = fs.readFileSync(process.argv[2], "utf8").trim();
-const BASE = "http://localhost:3000";
+const BASE = (process.env.LIVE_EVAL_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const get = async (p) => (await fetch(`${BASE}${p}`, { headers: { Cookie: cookie } })).json();
 
 const keyFactsSchema = z.object({ facts: z.array(z.string().min(8)).min(5).max(60) });

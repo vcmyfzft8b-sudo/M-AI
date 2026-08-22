@@ -144,6 +144,16 @@ async function loadSubscriptions(stripe: Stripe) {
   return { subscriptions, truncated };
 }
 
+/**
+ * How much further back than the reported window the invoice scan reaches.
+ *
+ * Invoices can only be filtered by creation date, but revenue is dated by
+ * payment. An invoice raised just before the floor and paid just after it
+ * belongs to the window and would otherwise be missed, so the scan starts
+ * early enough to catch the longest retry Stripe will attempt.
+ */
+const LATE_PAYMENT_GRACE_DAYS = 30;
+
 async function loadPayments(stripe: Stripe, sinceUnix: number) {
   const payments: PaymentSnapshot[] = [];
   // Which promotion code a customer used, learned from any invoice carrying one
@@ -185,7 +195,14 @@ async function loadPayments(stripe: Stripe, sinceUnix: number) {
 
       payments.push({
         id: invoice.id ?? "",
-        created: invoice.created,
+        // Dated by when the money actually arrived, not when the invoice was
+        // drawn up. Stripe finalises a subscription invoice and only then
+        // charges it, and a card that fails is retried for days -- so an
+        // invoice raised on Wednesday is routinely paid on Friday. Dating
+        // revenue by `created` filed those euros under the day the invoice was
+        // written, which is how 21 Aug came to report €30 against the €90
+        // Stripe actually took that day.
+        paidAt: invoice.status_transitions?.paid_at ?? invoice.created,
         amount: invoice.amount_paid ?? 0,
         currency: invoice.currency ?? "eur",
         customerId,
@@ -257,13 +274,15 @@ const SALES_CACHE_SECONDS = DASHBOARD_REFRESH_SECONDS;
 
 async function fetchSalesData(historyDays: number): Promise<SalesData> {
   const stripe = getStripeClient();
-  const sinceUnix = Math.floor(
-    parseDay(addDays(todayInReportZone(), -historyDays)).getTime() / 1000,
+  const invoicesSinceUnix = Math.floor(
+    parseDay(
+      addDays(todayInReportZone(), -(historyDays + LATE_PAYMENT_GRACE_DAYS)),
+    ).getTime() / 1000,
   );
 
   const [subscriptionResult, paymentResult, promotionCodes] = await Promise.all([
     loadSubscriptions(stripe),
-    loadPayments(stripe, sinceUnix),
+    loadPayments(stripe, invoicesSinceUnix),
     loadPromotionCodes(stripe),
   ]);
 
@@ -322,7 +341,7 @@ export async function getRevenueBetween(
 
   return data.payments
     .filter((payment) => {
-      const day = todayInReportZone(new Date(payment.created * 1000));
+      const day = todayInReportZone(new Date(payment.paidAt * 1000));
       return day >= from && day <= to;
     })
     .reduce((sum, payment) => sum + payment.amount, 0);

@@ -321,6 +321,17 @@ mirrors what the webhook has seen.
 
 - **Revenue** counts paid invoices. Zero-amount invoices (trial starts and
   100%-off comps) are real conversions but not revenue, so they are excluded.
+- **A payment is dated by the day the money arrived** (`status_transitions.
+  paid_at`), never by the day the invoice was raised. Stripe finalises a
+  subscription invoice and only then charges it, and retries a declined card
+  for days, so the two routinely fall on different days. Dating by `created`
+  had 21 Aug 2026 reading €30 against the €90 Stripe actually took: two
+  invoices raised on the 19th and 20th were paid on the 21st and filed under
+  the days they were written. Every revenue figure — the tiles, the daily
+  series, the hourly chart, code attribution — now agrees day for day with
+  Stripe's own succeeded-charge totals. Because invoices can only be *fetched*
+  by creation date, the scan reaches 30 days further back than the reported
+  window so a late payment is never missed.
 - **MRR** normalises weekly and yearly plans to a monthly figure and counts only
   subscriptions that are actually paying — a `trialing` subscription is full
   access but not yet revenue.

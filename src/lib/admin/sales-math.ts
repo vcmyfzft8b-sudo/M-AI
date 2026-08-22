@@ -45,7 +45,14 @@ export type SubscriptionSnapshot = {
 
 export type PaymentSnapshot = {
   id: string;
-  created: number;
+  /**
+   * When the money actually arrived, in epoch seconds.
+   *
+   * Deliberately not the invoice's creation time: Stripe raises a subscription
+   * invoice before charging it, and retries a declined card for days, so the
+   * two can fall on different days. Every figure that dates revenue uses this.
+   */
+  paidAt: number;
   /** Minor units (cents). */
   amount: number;
   currency: string;
@@ -108,7 +115,7 @@ export function conversionRatesByPlan(
   // difference when a past date is asked about.
   const payingCustomerIds = new Set(
     data.payments
-      .filter((payment) => payment.customerId && payment.created <= nowUnix)
+      .filter((payment) => payment.customerId && payment.paidAt <= nowUnix)
       .map((payment) => payment.customerId as string),
   );
 
@@ -327,13 +334,13 @@ export function summarizeSales(
   };
 
   const revenue = data.payments
-    .filter((payment) => inRange(payment.created))
+    .filter((payment) => inRange(payment.paidAt))
     .reduce((sum, payment) => sum + payment.amount, 0);
 
   const previousRevenue = range.previous
     ? data.payments
         .filter((payment) => {
-          const day = unixDay(payment.created);
+          const day = unixDay(payment.paidAt);
           return day >= range.previous!.from && day <= range.previous!.to;
         })
         .reduce((sum, payment) => sum + payment.amount, 0)
@@ -454,7 +461,7 @@ export function revenueSeries(data: SalesData, range: DateRange): RevenueDay[] {
   }
 
   for (const payment of data.payments) {
-    const entry = byDay.get(unixDay(payment.created));
+    const entry = byDay.get(unixDay(payment.paidAt));
 
     if (entry) {
       entry.revenue += payment.amount;
@@ -621,7 +628,7 @@ export function promoCodeStats(
   // credited the creator with nothing for a sale they genuinely made. The first
   // paying invoice from a customer known to have used a code counts as that
   // code's sale; renewals afterwards do not.
-  const firstPaidByCustomer = new Map<string, { id: string; created: number }>();
+  const firstPaidByCustomer = new Map<string, { id: string; paidAt: number }>();
 
   for (const payment of data.payments) {
     if (!payment.customerId) {
@@ -630,10 +637,10 @@ export function promoCodeStats(
 
     const seen = firstPaidByCustomer.get(payment.customerId);
 
-    if (!seen || payment.created < seen.created) {
+    if (!seen || payment.paidAt < seen.paidAt) {
       firstPaidByCustomer.set(payment.customerId, {
         id: payment.id,
-        created: payment.created,
+        paidAt: payment.paidAt,
       });
     }
   }
@@ -652,7 +659,7 @@ export function promoCodeStats(
   };
 
   for (const payment of data.payments) {
-    const day = unixDay(payment.created);
+    const day = unixDay(payment.paidAt);
 
     if (day < range.from || day > range.to) {
       continue;

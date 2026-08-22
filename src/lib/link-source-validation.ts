@@ -4,10 +4,11 @@ import { parseYoutubeVideoId } from "./youtube-url.ts";
  * YouTube answers the innertube handshake with LOGIN_REQUIRED ("Sign in to confirm you're not a
  * bot") for every request from a datacenter IP — measured from Vercel iad1 on 2026-08-23 across
  * every client, with and without visitorData, while the identical calls from a residential IP
- * return OK with caption tracks. So captions are only offered where an egress YouTube will serve
- * is configured (YOUTUBE_FETCH_RELAY_URL, with NEXT_PUBLIC_YOUTUBE_IMPORT=on). Everywhere else the
- * link is refused here, up front, instead of being accepted and failed halfway through the
- * pipeline with a misleading "check whether the video is public".
+ * return OK with caption tracks. So captions are only offered where the deployment reaches YouTube
+ * from an egress it will serve — a residential proxy or a transcript service, switched on with
+ * NEXT_PUBLIC_YOUTUBE_IMPORT=on. Everywhere else the link is refused here, up front, instead of
+ * being accepted and failed halfway through the pipeline with a misleading "check whether the
+ * video is public".
  *
  * Read per call rather than cached at module load so the contract is testable in both states.
  */

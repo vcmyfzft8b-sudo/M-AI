@@ -1,0 +1,162 @@
+[
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 730,
+    "compression": 0.7995618838992333,
+    "recall": 0.9230769230769231,
+    "factsPer100Words": 4.931506849315069,
+    "leaked": [],
+    "missed": [
+      "Prevara pomeni namerno povzročitev zmote ali puščanje druge stranke v zmoti",
+      "Obveznost preneha tudi s pobotom, odpustom dolga, novacijo, združitvijo in zastaranjem",
+      "Če je k škodi prispeval oškodovanec, se odškodnina sorazmerno zmanjša"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 7,
+      "tables": 1,
+      "callouts": 1,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 98,
+      "afterDedupe": 63,
+      "retained": 48,
+      "dropped": 15,
+      "topics": 7
+    },
+    "costUsd": 0.04836655,
+    "calls": 10,
+    "gradingCostUsd": 0.0104589,
+    "elapsedMs": 60432,
+    "run": 0
+  },
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 770,
+    "compression": 0.8433734939759037,
+    "recall": 0.7692307692307693,
+    "factsPer100Words": 3.896103896103896,
+    "leaked": [],
+    "missed": [
+      "Razstavljeno blago z označeno ceno je ponudba, katalog ali oglas pa vabilo k ponudbi",
+      "Poslovna sposobnost se pridobi s polnoletnostjo (18 let); mladoletnik od 15. leta sklepa posle manjšega pomena",
+      "Velja načelo neformalnosti: pogodba je praviloma veljavna ne glede na obliko",
+      "Pogodba o prenosu nepremičnine mora biti pisna in podpis prodajalca notarsko overjen",
+      "Pogodba brez predpisane oblike je nična, razen če sta jo stranki v pretežnem delu izpolnili",
+      "Obveznost preneha tudi s pobotom, odpustom dolga, novacijo, združitvijo in zastaranjem",
+      "Če rok ni bistvena sestavina, mora upnik dati dodatni primerni rok pred odstopom",
+      "Če je k škodi prispeval oškodovanec, se odškodnina sorazmerno zmanjša",
+      "Splošni zastaralni rok je pet let; gospodarske in občasne terjatve zastarajo v treh letih"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 7,
+      "tables": 1,
+      "callouts": 1,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 99,
+      "afterDedupe": 67,
+      "retained": 48,
+      "dropped": 19,
+      "topics": 7
+    },
+    "costUsd": 0.04928224999999997,
+    "calls": 10,
+    "gradingCostUsd": 0.010730599999999993,
+    "elapsedMs": 53599,
+    "run": 1
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 755,
+    "compression": 0.9173754556500607,
+    "recall": 1,
+    "factsPer100Words": 3.576158940397351,
+    "leaked": [],
+    "missed": [],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 3,
+      "tables": 1,
+      "callouts": 1,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 62,
+      "afterDedupe": 49,
+      "retained": 28,
+      "dropped": 21,
+      "topics": 3
+    },
+    "costUsd": 0.02782535000000004,
+    "calls": 9,
+    "gradingCostUsd": 0.0075374,
+    "elapsedMs": 35306,
+    "run": 0
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 754,
+    "compression": 0.9161603888213852,
+    "recall": 0.9629629629629629,
+    "factsPer100Words": 3.4482758620689653,
+    "leaked": [],
+    "missed": [
+      "Postsynaptic potentials are graded, decay with distance and time, and sum"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 3,
+      "tables": 1,
+      "callouts": 2,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 63,
+      "afterDedupe": 44,
+      "retained": 34,
+      "dropped": 10,
+      "topics": 3
+    },
+    "costUsd": 0.03355570000000005,
+    "calls": 9,
+    "gradingCostUsd": 0.006559399999999993,
+    "elapsedMs": 45429,
+    "run": 1
+  }
+]

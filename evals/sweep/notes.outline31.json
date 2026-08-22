@@ -1,0 +1,151 @@
+[
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 962,
+    "compression": 1.0536692223439212,
+    "recall": 0.9743589743589743,
+    "factsPer100Words": 3.9501039501039505,
+    "leaked": [],
+    "missed": [
+      "Pogodba brez predpisane oblike je nična, razen če sta jo stranki v pretežnem delu izpolnili"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 7,
+      "tables": 1,
+      "callouts": 3,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 99,
+      "afterDedupe": 64,
+      "retained": 49,
+      "dropped": 15,
+      "topics": 7
+    },
+    "costUsd": 0.055763599999999997,
+    "calls": 10,
+    "gradingCostUsd": 0.010606599999999994,
+    "elapsedMs": 54158,
+    "run": 0
+  },
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 1055,
+    "compression": 1.1555312157721795,
+    "recall": 0.9487179487179487,
+    "factsPer100Words": 3.5071090047393363,
+    "leaked": [],
+    "missed": [
+      "Prevara pomeni namerno povzročitev zmote ali puščanje druge stranke v zmoti",
+      "Pogodba brez predpisane oblike je nična, razen če sta jo stranki v pretežnem delu izpolnili"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 6,
+      "tables": 1,
+      "callouts": 3,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 93,
+      "afterDedupe": 59,
+      "retained": 46,
+      "dropped": 13,
+      "topics": 6
+    },
+    "costUsd": 0.058463950000000015,
+    "calls": 10,
+    "gradingCostUsd": 0.01108519999999999,
+    "elapsedMs": 57947,
+    "run": 1
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 933,
+    "compression": 1.1336573511543135,
+    "recall": 1,
+    "factsPer100Words": 2.8938906752411575,
+    "leaked": [],
+    "missed": [],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 3,
+      "tables": 1,
+      "callouts": 2,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 60,
+      "afterDedupe": 44,
+      "retained": 26,
+      "dropped": 18,
+      "topics": 3
+    },
+    "costUsd": 0.031846100000000016,
+    "calls": 9,
+    "gradingCostUsd": 0.007553199999999982,
+    "elapsedMs": 34632,
+    "run": 0
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 1105,
+    "compression": 1.3426488456865127,
+    "recall": 1,
+    "factsPer100Words": 2.443438914027149,
+    "leaked": [],
+    "missed": [],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 6,
+      "tables": 1,
+      "callouts": 2,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 58,
+      "afterDedupe": 48,
+      "retained": 28,
+      "dropped": 20,
+      "topics": 6
+    },
+    "costUsd": 0.03653614999999999,
+    "calls": 9,
+    "gradingCostUsd": 0.007932300000000003,
+    "elapsedMs": 38232,
+    "run": 1
+  }
+]

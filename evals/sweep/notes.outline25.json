@@ -1,0 +1,152 @@
+[
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 988,
+    "compression": 1.082146768893757,
+    "recall": 0.9230769230769231,
+    "factsPer100Words": 3.643724696356275,
+    "leaked": [],
+    "missed": [
+      "Razstavljeno blago z označeno ceno je ponudba, katalog ali oglas pa vabilo k ponudbi",
+      "Molk naslovnika praviloma ne pomeni sprejema",
+      "Prevara pomeni namerno povzročitev zmote ali puščanje druge stranke v zmoti"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 7,
+      "tables": 1,
+      "callouts": 2,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 92,
+      "afterDedupe": 66,
+      "retained": 66,
+      "dropped": 1,
+      "topics": 7
+    },
+    "costUsd": 0.0552627,
+    "calls": 10,
+    "gradingCostUsd": 0.010737700000000003,
+    "elapsedMs": 53622,
+    "run": 0
+  },
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 1282,
+    "compression": 1.4041621029572837,
+    "recall": 0.9743589743589743,
+    "factsPer100Words": 2.9641185647425896,
+    "leaked": [],
+    "missed": [
+      "Razstavljeno blago z označeno ceno je ponudba, katalog ali oglas pa vabilo k ponudbi"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 15,
+      "tables": 1,
+      "callouts": 3,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 91,
+      "afterDedupe": 64,
+      "retained": 65,
+      "dropped": 0,
+      "topics": 15
+    },
+    "costUsd": 0.04615079999999998,
+    "calls": 9,
+    "gradingCostUsd": 0.0116044,
+    "elapsedMs": 46344,
+    "run": 1
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 1196,
+    "compression": 1.4532199270959902,
+    "recall": 1,
+    "factsPer100Words": 2.25752508361204,
+    "leaked": [],
+    "missed": [],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 6,
+      "tables": 2,
+      "callouts": 3,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 64,
+      "afterDedupe": 46,
+      "retained": 46,
+      "dropped": 1,
+      "topics": 6
+    },
+    "costUsd": 0.03907589999999998,
+    "calls": 9,
+    "gradingCostUsd": 0.006256099999999987,
+    "elapsedMs": 40421,
+    "run": 0
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 1038,
+    "compression": 1.2612393681652492,
+    "recall": 1,
+    "factsPer100Words": 2.6011560693641615,
+    "leaked": [],
+    "missed": [],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 5,
+      "tables": 1,
+      "callouts": 3,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 66,
+      "afterDedupe": 52,
+      "retained": 50,
+      "dropped": 1,
+      "topics": 5
+    },
+    "costUsd": 0.030146100000000037,
+    "calls": 9,
+    "gradingCostUsd": 0.008023800000000025,
+    "elapsedMs": 33048,
+    "run": 1
+  }
+]

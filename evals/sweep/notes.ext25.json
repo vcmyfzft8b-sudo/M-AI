@@ -1,0 +1,148 @@
+[
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 1205,
+    "compression": 1.3198247535596934,
+    "recall": 0.9743589743589743,
+    "factsPer100Words": 3.1535269709543567,
+    "leaked": [],
+    "missed": [
+      "Razstavljeno blago z označeno ceno je ponudba, katalog ali oglas pa vabilo k ponudbi"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 7,
+      "tables": 1,
+      "callouts": 2,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 121,
+      "afterDedupe": 79,
+      "retained": 66,
+      "dropped": 13,
+      "topics": 7
+    },
+    "costUsd": 0.0476825,
+    "calls": 11,
+    "gradingCostUsd": 0.013150499999999996,
+    "elapsedMs": 70213,
+    "run": 0
+  },
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 1178,
+    "compression": 1.290251916757941,
+    "recall": 1,
+    "factsPer100Words": 3.310696095076401,
+    "leaked": [],
+    "missed": [],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 0,
+      "tables": 1,
+      "callouts": 3,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 131,
+      "afterDedupe": 79,
+      "retained": 64,
+      "dropped": 15,
+      "topics": 5
+    },
+    "costUsd": 0.04000490000000001,
+    "calls": 11,
+    "gradingCostUsd": 0.0130614,
+    "elapsedMs": 61614,
+    "run": 1
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 1139,
+    "compression": 1.3839611178614823,
+    "recall": 1,
+    "factsPer100Words": 2.3705004389815625,
+    "leaked": [],
+    "missed": [],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 5,
+      "tables": 1,
+      "callouts": 3,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 101,
+      "afterDedupe": 74,
+      "retained": 48,
+      "dropped": 26,
+      "topics": 5
+    },
+    "costUsd": 0.0363067,
+    "calls": 10,
+    "gradingCostUsd": 0.0072610999999999926,
+    "elapsedMs": 52209,
+    "run": 0
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 967,
+    "compression": 1.174969623329283,
+    "recall": 1,
+    "factsPer100Words": 2.7921406411582215,
+    "leaked": [],
+    "missed": [],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 3,
+      "tables": 1,
+      "callouts": 3,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 104,
+      "afterDedupe": 75,
+      "retained": 49,
+      "dropped": 26,
+      "topics": 3
+    },
+    "costUsd": 0.030350400000000027,
+    "calls": 10,
+    "gradingCostUsd": 0.006866399999999995,
+    "elapsedMs": 46979,
+    "run": 1
+  }
+]

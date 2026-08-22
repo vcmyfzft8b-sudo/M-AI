@@ -1,0 +1,152 @@
+[
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 1360,
+    "compression": 1.4895947426067908,
+    "recall": 0.9743589743589743,
+    "factsPer100Words": 2.794117647058824,
+    "leaked": [],
+    "missed": [
+      "Pogodba o prenosu nepremičnine mora biti pisna in podpis prodajalca notarsko overjen"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 7,
+      "tables": 0,
+      "callouts": 1,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 92,
+      "afterDedupe": 63,
+      "retained": 58,
+      "dropped": 5,
+      "topics": 7
+    },
+    "costUsd": 0.033481000000000004,
+    "calls": 10,
+    "gradingCostUsd": 0.013834100000000002,
+    "elapsedMs": 37243,
+    "run": 0
+  },
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 1170,
+    "compression": 1.2814895947426068,
+    "recall": 0.9743589743589743,
+    "factsPer100Words": 3.247863247863248,
+    "leaked": [],
+    "missed": [
+      "Prevara pomeni namerno povzročitev zmote ali puščanje druge stranke v zmoti"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 6,
+      "tables": 0,
+      "callouts": 1,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 95,
+      "afterDedupe": 63,
+      "retained": 45,
+      "dropped": 18,
+      "topics": 6
+    },
+    "costUsd": 0.033091799999999984,
+    "calls": 10,
+    "gradingCostUsd": 0.01358319999999999,
+    "elapsedMs": 36672,
+    "run": 1
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 1921,
+    "compression": 2.3341433778857836,
+    "recall": 1,
+    "factsPer100Words": 1.4055179593961478,
+    "leaked": [],
+    "missed": [],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 0,
+      "tables": 1,
+      "callouts": 1,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 65,
+      "afterDedupe": 49,
+      "retained": 37,
+      "dropped": 12,
+      "topics": 5
+    },
+    "costUsd": 0.02447859999999999,
+    "calls": 9,
+    "gradingCostUsd": 0.007477500000000012,
+    "elapsedMs": 30348,
+    "run": 0
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 1371,
+    "compression": 1.6658566221142164,
+    "recall": 0.9629629629629629,
+    "factsPer100Words": 1.8964259664478482,
+    "leaked": [],
+    "missed": [
+      "The synaptic cleft is about 20 nanometres across"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 0,
+      "tables": 0,
+      "callouts": 1,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 54,
+      "afterDedupe": 41,
+      "retained": 31,
+      "dropped": 10,
+      "topics": 3
+    },
+    "costUsd": 0.021823999999999982,
+    "calls": 9,
+    "gradingCostUsd": 0.008213200000000004,
+    "elapsedMs": 26218,
+    "run": 1
+  }
+]

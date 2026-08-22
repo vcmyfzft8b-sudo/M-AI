@@ -1,0 +1,177 @@
+[
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 648,
+    "compression": 0.7097480832420592,
+    "recall": 0.717948717948718,
+    "factsPer100Words": 4.320987654320987,
+    "leaked": [],
+    "missed": [
+      "Ponudba mora vsebovati vse bistvene sestavine in voljo ponudnika, da bo ob sprejemu vezan",
+      "Sprejem mora biti brezpogojen; sprejem s spremembami je protiponudba in prvotna ponudba ugasne",
+      "Poslovna sposobnost se pridobi s polnoletnostjo (18 let); mladoletnik od 15. leta sklepa posle manjšega pomena",
+      "Prevara pomeni namerno povzročitev zmote ali puščanje druge stranke v zmoti",
+      "Pogodba brez predpisane oblike je nična, razen če sta jo stranki v pretežnem delu izpolnili",
+      "Izpolnitev mora biti pravilna po vsebini, kraju, času in osebi",
+      "Obveznost preneha tudi s pobotom, odpustom dolga, novacijo, združitvijo in zastaranjem",
+      "Dolžnik pride v zamudo, ko ne izpolni v roku; brez roka ob upnikovem pozivu",
+      "Če rok ni bistvena sestavina, mora upnik dati dodatni primerni rok pred odstopom",
+      "Imetnik nevarne stvari se razbremeni le z višjo silo, ravnanjem oškodovanca ali tretje osebe",
+      "Če je k škodi prispeval oškodovanec, se odškodnina sorazmerno zmanjša"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 6,
+      "tables": 1,
+      "callouts": 3,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 96,
+      "afterDedupe": 70,
+      "retained": 45,
+      "dropped": 25,
+      "topics": 6
+    },
+    "costUsd": 0.02877675,
+    "calls": 9,
+    "gradingCostUsd": 0.009719299999999997,
+    "elapsedMs": 48774,
+    "run": 0
+  },
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 783,
+    "compression": 0.8576122672508215,
+    "recall": 0.7948717948717948,
+    "factsPer100Words": 3.9591315453384412,
+    "leaked": [],
+    "missed": [
+      "Molk naslovnika praviloma ne pomeni sprejema",
+      "Poslovna sposobnost se pridobi s polnoletnostjo (18 let); mladoletnik od 15. leta sklepa posle manjšega pomena",
+      "Prevara pomeni namerno povzročitev zmote ali puščanje druge stranke v zmoti",
+      "Velja načelo neformalnosti: pogodba je praviloma veljavna ne glede na obliko",
+      "Pogodba brez predpisane oblike je nična, razen če sta jo stranki v pretežnem delu izpolnili",
+      "Obveznost preneha tudi s pobotom, odpustom dolga, novacijo, združitvijo in zastaranjem",
+      "Imetnik nevarne stvari se razbremeni le z višjo silo, ravnanjem oškodovanca ali tretje osebe",
+      "Če je k škodi prispeval oškodovanec, se odškodnina sorazmerno zmanjša"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 6,
+      "tables": 2,
+      "callouts": 1,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 89,
+      "afterDedupe": 70,
+      "retained": 49,
+      "dropped": 20,
+      "topics": 6
+    },
+    "costUsd": 0.026324000000000007,
+    "calls": 9,
+    "gradingCostUsd": 0.0103578,
+    "elapsedMs": 45077,
+    "run": 1
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 832,
+    "compression": 1.0109356014580801,
+    "recall": 0.9259259259259259,
+    "factsPer100Words": 3.004807692307692,
+    "leaked": [],
+    "missed": [
+      "The nicotinic acetylcholine receptor is ionotropic",
+      "The muscarinic acetylcholine receptor is metabotropic"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 5,
+      "tables": 2,
+      "callouts": 2,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 0.9629629629629629,
+    "extractionMissed": [
+      "The muscarinic acetylcholine receptor is metabotropic"
+    ],
+    "stages": {
+      "chunks": 3,
+      "extracted": 60,
+      "afterDedupe": 50,
+      "retained": 37,
+      "dropped": 13,
+      "topics": 5
+    },
+    "costUsd": 0.017290500000000014,
+    "calls": 9,
+    "gradingCostUsd": 0.006858299999999998,
+    "elapsedMs": 32756,
+    "run": 0
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 812,
+    "compression": 0.9866342648845686,
+    "recall": 0.9259259259259259,
+    "factsPer100Words": 3.078817733990148,
+    "leaked": [],
+    "missed": [
+      "The nicotinic acetylcholine receptor is ionotropic",
+      "The muscarinic acetylcholine receptor is metabotropic"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 5,
+      "tables": 2,
+      "callouts": 1,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 0.9629629629629629,
+    "extractionMissed": [
+      "The muscarinic acetylcholine receptor is metabotropic"
+    ],
+    "stages": {
+      "chunks": 3,
+      "extracted": 65,
+      "afterDedupe": 52,
+      "retained": 48,
+      "dropped": 3,
+      "topics": 5
+    },
+    "costUsd": 0.019100499999999992,
+    "calls": 9,
+    "gradingCostUsd": 0.006994,
+    "elapsedMs": 35241,
+    "run": 1
+  }
+]

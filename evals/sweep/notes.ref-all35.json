@@ -1,0 +1,148 @@
+[
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 1341,
+    "compression": 1.4687842278203724,
+    "recall": 1,
+    "factsPer100Words": 2.9082774049217,
+    "leaked": [],
+    "missed": [],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 5,
+      "tables": 1,
+      "callouts": 3,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 92,
+      "afterDedupe": 61,
+      "retained": 42,
+      "dropped": 19,
+      "topics": 5
+    },
+    "costUsd": 0.0634023,
+    "calls": 10,
+    "gradingCostUsd": 0.013797300000000012,
+    "elapsedMs": 59130,
+    "run": 0
+  },
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 1072,
+    "compression": 1.1741511500547646,
+    "recall": 1,
+    "factsPer100Words": 3.638059701492537,
+    "leaked": [],
+    "missed": [],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 5,
+      "tables": 1,
+      "callouts": 3,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 82,
+      "afterDedupe": 62,
+      "retained": 49,
+      "dropped": 13,
+      "topics": 5
+    },
+    "costUsd": 0.06229760000000001,
+    "calls": 10,
+    "gradingCostUsd": 0.014162499999999995,
+    "elapsedMs": 61987,
+    "run": 1
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 1301,
+    "compression": 1.5808019441069259,
+    "recall": 1,
+    "factsPer100Words": 2.07532667179093,
+    "leaked": [],
+    "missed": [],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 3,
+      "tables": 1,
+      "callouts": 3,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 65,
+      "afterDedupe": 51,
+      "retained": 28,
+      "dropped": 23,
+      "topics": 3
+    },
+    "costUsd": 0.0339284,
+    "calls": 9,
+    "gradingCostUsd": 0.0069542000000000215,
+    "elapsedMs": 34293,
+    "run": 0
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 1179,
+    "compression": 1.4325637910085054,
+    "recall": 1,
+    "factsPer100Words": 2.290076335877863,
+    "leaked": [],
+    "missed": [],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 3,
+      "tables": 1,
+      "callouts": 3,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 0.9629629629629629,
+    "extractionMissed": [
+      "The muscarinic acetylcholine receptor is metabotropic"
+    ],
+    "stages": {
+      "chunks": 3,
+      "extracted": 61,
+      "afterDedupe": 46,
+      "retained": 41,
+      "dropped": 5,
+      "topics": 3
+    },
+    "costUsd": 0.03164819999999996,
+    "calls": 9,
+    "gradingCostUsd": 0.007914900000000002,
+    "elapsedMs": 33514,
+    "run": 1
+  }
+]

@@ -9,6 +9,7 @@ import { z } from "zod";
 export const PRICES = {
   "gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
   "gemini-3.1-flash-lite": { input: 0.25, output: 1.5 },
+  "gemini-3-flash-preview": { input: 0.5, output: 3 },
   "gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },
   "gemini-3.6-flash": { input: 0.75, output: 3.75 },
   "gemini-3.7-flash": { input: 0.75, output: 3.75 },

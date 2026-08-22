@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
+import { lookup } from "node:dns/promises";
 import net from "node:net";
 import test from "node:test";
 
-import { describeLinkFetchFailure } from "../src/lib/link-fetch-errors.ts";
+import {
+  describeHostResolutionFailure,
+  describeLinkFetchFailure,
+} from "../src/lib/link-fetch-errors.ts";
 
 // The exact error production saw: Sentry recorded `TypeError: fetch failed` chained to
 // an "unable to verify the first certificate" cause, from a linked site serving an
@@ -79,6 +83,53 @@ test("survives a cause chain that points back at itself", () => {
   outer.cause = outer;
 
   assert.equal(describeLinkFetchFailure(outer), null);
+});
+
+// The exact error production saw: a user submitted a link whose hostname was "www.",
+// and the SSRF guard's own `lookup` call rejected with a code no list anticipated.
+test("classifies the resolver rejection that reached production", () => {
+  const error = new Error("getaddrinfo EBUSY www.");
+  error.code = "EBUSY";
+  error.errno = -16;
+  error.syscall = "getaddrinfo";
+  error.hostname = "www.";
+
+  assert.deepEqual(describeHostResolutionFailure(error), {
+    message: "The link's site could not be found.",
+    code: "link_host_not_found",
+  });
+});
+
+test("classifies a resolver rejection whatever code the platform picked", () => {
+  for (const code of ["EBUSY", "EAI_AGAIN", "ENOTFOUND", "EAI_FAIL", "ESERVFAIL"]) {
+    const error = new Error(`getaddrinfo ${code} host.invalid`);
+    error.code = code;
+    error.syscall = "getaddrinfo";
+
+    assert.equal(describeHostResolutionFailure(error).code, "link_host_not_found", code);
+  }
+});
+
+test("leaves a non-resolver failure unclassified so real defects still surface", () => {
+  // A bad argument to lookup() is our bug, not the user's link, and must keep paging.
+  const argumentError = new TypeError("The \"hostname\" argument must be of type string.");
+  argumentError.code = "ERR_INVALID_ARG_TYPE";
+
+  assert.equal(describeHostResolutionFailure(argumentError), null);
+  assert.equal(describeHostResolutionFailure(new Error("connect ECONNREFUSED")), null);
+  assert.equal(describeHostResolutionFailure(null), null);
+  assert.equal(describeHostResolutionFailure(undefined), null);
+});
+
+test("classifies the rejection Node really produces for the production hostname", async () => {
+  // Proves the match tracks the runtime rather than our memory of it. The resolver
+  // picks its own code here (EAI_AGAIN locally, EBUSY in production) -- the point is
+  // that whichever it picks is recognised.
+  await assert.rejects(lookup("www.", { all: true, verbatim: true }), (error) => {
+    assert.equal(error.syscall, "getaddrinfo");
+    assert.equal(describeHostResolutionFailure(error).code, "link_host_not_found");
+    return true;
+  });
 });
 
 test("classifies the failure Node really produces for a closed port", async () => {

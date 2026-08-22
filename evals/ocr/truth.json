@@ -1,0 +1,81 @@
+{
+ "slide-typed": {
+  "typed": [
+   "Kazalne števila in indeksi cen",
+   "Laspeyresov indeks uporablja količine iz baznega obdobja.",
+   "Paaschejev indeks uporablja količine iz tekočega obdobja.",
+   "Fisherjev idealni indeks je geometrijska sredina obeh.",
+   "Substitucijska pristranskost: Laspeyres precenjuje inflacijo.",
+   "Verižni indeks vsako obdobje osveži uteži košarice.",
+   "I(t/0)",
+   "Yt",
+   "Y0",
+   "100"
+  ],
+  "handwritten": []
+ },
+ "slide-annotated": {
+  "typed": [
+   "Kazalne števila in indeksi cen",
+   "Laspeyresov indeks uporablja količine iz baznega obdobja.",
+   "Paaschejev indeks uporablja količine iz tekočega obdobja.",
+   "Fisherjev idealni indeks je geometrijska sredina obeh.",
+   "Substitucijska pristranskost: Laspeyres precenjuje inflacijo.",
+   "Verižni indeks vsako obdobje osveži uteži košarice.",
+   "I(t/0)",
+   "Yt",
+   "Y0",
+   "100"
+  ],
+  "handwritten": [
+   "POZOR: na izpitu vedno napiši obdobje uteži!",
+   "CPI je Laspeyresov tip",
+   "BDP deflator = Paasche",
+   "geometrijska sredina => koren iz L krat P"
+  ]
+ },
+ "handwritten-page": {
+  "typed": [],
+  "handwritten": [
+   "Sinapsa = stik med nevronoma, špranja ~20 nm",
+   "Kalcij sproži eksocitozo veziklov!",
+   "Ionotropni receptor -> hiter, kanal se odpre",
+   "Metabotropni -> G-protein, počasnejši, ojačitev",
+   "EPSP depolarizacija, IPSP hiperpolarizacija",
+   "Aksonski grič odloči o akcijskem potencialu",
+   "SSRI blokira ponovni privzem serotonina"
+  ]
+ },
+ "handwritten-ugly": {
+  "typed": [],
+  "handwritten": [
+   "Sinapsa = stik med nevronoma, špranja ~20 nm",
+   "Kalcij sproži eksocitozo veziklov!",
+   "Ionotropni receptor -> hiter, kanal se odpre",
+   "Metabotropni -> G-protein, počasnejši, ojačitev",
+   "EPSP depolarizacija, IPSP hiperpolarizacija",
+   "Aksonski grič odloči o akcijskem potencialu",
+   "SSRI blokira ponovni privzem serotonina"
+  ]
+ },
+ "slide-annotated-ugly": {
+  "typed": [
+   "Kazalne števila in indeksi cen",
+   "Laspeyresov indeks uporablja količine iz baznega obdobja.",
+   "Paaschejev indeks uporablja količine iz tekočega obdobja.",
+   "Fisherjev idealni indeks je geometrijska sredina obeh.",
+   "Substitucijska pristranskost: Laspeyres precenjuje inflacijo.",
+   "Verižni indeks vsako obdobje osveži uteži košarice.",
+   "I(t/0)",
+   "Yt",
+   "Y0",
+   "100"
+  ],
+  "handwritten": [
+   "POZOR: na izpitu vedno napiši obdobje uteži!",
+   "CPI je Laspeyresov tip",
+   "BDP deflator = Paasche",
+   "geometrijska sredina => koren iz L krat P"
+  ]
+ }
+}

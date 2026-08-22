@@ -567,6 +567,7 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
             sourceType: lectureRow.source_type === "audio" ? "audio" : "document",
             outputLanguage: lectureRow.language_hint,
             usageContext: { lectureId: params.lectureId, userId: lectureRow.user_id },
+            artifactModelMetadata: artifactRow.model_metadata,
           })
         : null;
     const plannedCoverage = studyItems

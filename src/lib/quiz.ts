@@ -548,6 +548,7 @@ async function generateCoverageQuiz(params: {
       sourceType: params.lecture.source_type === "audio" ? "audio" : "document",
       outputLanguage: params.lecture.language_hint,
       usageContext: { lectureId: params.lecture.id, userId: params.lecture.user_id },
+      artifactModelMetadata: params.artifact.model_metadata,
     });
     const { drafts } = await generateItemQuizDrafts({
       items,

@@ -67,12 +67,87 @@ async function mapWithConcurrency<TInput, TOutput>(
 
 type StudyUsageContext = { userId?: string | null; lectureId?: string | null };
 
+const storedKnowledgeItemSchema = {
+  isValid(value: unknown): value is Omit<IndexedKnowledgeItem, "id"> {
+    if (typeof value !== "object" || value === null) {
+      return false;
+    }
+
+    const item = value as Record<string, unknown>;
+
+    return (
+      typeof item.claim === "string" &&
+      item.claim.length >= 12 &&
+      typeof item.kind === "string" &&
+      typeof item.importance === "number" &&
+      typeof item.sectionTitle === "string" &&
+      Array.isArray(item.terms)
+    );
+  },
+};
+
+/**
+ * Reads the knowledge items the note pipeline stored on the artifact, mapped onto source units by
+ * vocabulary overlap. Returns null when the artifact predates item storage (legacy notes) — the
+ * caller then falls back to a fresh extraction.
+ *
+ * Reuse is the point, not just a saving: when the deck extracts its own items it can cover a
+ * different set of facts than the notes teach, which is precisely the divergence the shared item
+ * list exists to prevent.
+ */
+export function resolveStoredStudyItems(params: {
+  artifactModelMetadata: unknown;
+  units: SourceUnit[];
+}): UnitKnowledgeItem[] | null {
+  const metadata = params.artifactModelMetadata;
+
+  if (typeof metadata !== "object" || metadata === null) {
+    return null;
+  }
+
+  const rawItems = (metadata as Record<string, unknown>).knowledgeItems;
+
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    return null;
+  }
+
+  const items = rawItems.filter(storedKnowledgeItemSchema.isValid);
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  const unitByIndex = new Map(params.units.map((unit) => [unit.unitIndex, unit]));
+  const allUnitIndexes = params.units.map((unit) => unit.unitIndex);
+
+  return items.map((item, id) => ({
+    ...item,
+    id,
+    importance: Math.max(1, Math.min(5, Math.round(item.importance))),
+    coveredUnitIndexes: allUnitIndexes,
+    primaryUnitIdx: resolvePrimaryUnitIdx(item.claim, allUnitIndexes, unitByIndex),
+  }));
+}
+
 export async function extractStudyItems(params: {
   units: SourceUnit[];
   sourceType: "audio" | "document";
   outputLanguage?: string | null;
   usageContext?: StudyUsageContext;
+  /** The note artifact's model_metadata; stored items there are reused instead of re-extracting. */
+  artifactModelMetadata?: unknown;
 }): Promise<UnitKnowledgeItem[]> {
+  if (params.artifactModelMetadata != null) {
+    const stored = resolveStoredStudyItems({
+      artifactModelMetadata: params.artifactModelMetadata,
+      units: params.units,
+    });
+
+    if (stored) {
+      return stored;
+    }
+  }
+
   const windows = buildUnitExtractionWindows(params.units, KNOWLEDGE_EXTRACTION_PASS_WINDOWS);
   const unitByIndex = new Map(params.units.map((unit) => [unit.unitIndex, unit]));
   const instructions = buildKnowledgeExtractionInstructions({

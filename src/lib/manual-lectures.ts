@@ -131,6 +131,18 @@ let pdfJsPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | nu
 
 let pdfWorkerPromise: Promise<void> | null = null;
 
+/**
+ * Imports a module with Node's own resolver, invisibly to webpack. Bundled by webpack, evaluating
+ * pdf.worker.mjs throws "Object.defineProperty called on non-object" (its module wrapper clashes
+ * with the interop shim), which killed every server-side PDF extraction in dev. The same modules
+ * load cleanly when Node resolves them natively, and outputFileTracingIncludes already ships them
+ * unbundled next to the standalone build. The Function constructor keeps the import() out of
+ * webpack's static analysis; the specifiers are the two fixed pdfjs paths below, never user input.
+ */
+const nativeImport = new Function("specifier", "return import(specifier)") as (
+  specifier: string,
+) => Promise<Record<string, unknown>>;
+
 async function ensurePdfJsNodeRuntime() {
   const pdfGlobal = globalThis as {
     DOMMatrix?: unknown;
@@ -154,10 +166,11 @@ async function ensurePdfJsNodeRuntime() {
   }
 
   if (!pdfGlobal.pdfjsWorker?.WorkerMessageHandler) {
-    pdfWorkerPromise ??= import("pdfjs-dist/legacy/build/pdf.worker.mjs")
+    pdfWorkerPromise ??= nativeImport("pdfjs-dist/legacy/build/pdf.worker.mjs")
       .then((worker) => {
         pdfGlobal.pdfjsWorker = {
-          WorkerMessageHandler: worker.WorkerMessageHandler,
+          WorkerMessageHandler: (worker as { WorkerMessageHandler: { setup: (...args: unknown[]) => void } })
+            .WorkerMessageHandler,
         };
       })
       .catch((error) => {
@@ -171,8 +184,11 @@ async function ensurePdfJsNodeRuntime() {
 
 export async function getPdfJs() {
   if (!pdfJsPromise) {
-    pdfJsPromise = ensurePdfJsNodeRuntime().then(() =>
-      import("pdfjs-dist/legacy/build/pdf.mjs"),
+    pdfJsPromise = ensurePdfJsNodeRuntime().then(
+      () =>
+        nativeImport("pdfjs-dist/legacy/build/pdf.mjs") as unknown as Promise<
+          typeof import("pdfjs-dist/legacy/build/pdf.mjs")
+        >,
     ).catch((error) => {
       pdfJsPromise = null;
       throw error;
@@ -1569,6 +1585,7 @@ export async function createLectureFromTextSource(params: {
       sourceType: "document",
       outputLanguage: params.languageHint,
       sourceTitleHint: params.titleHint,
+      usageContext: { lectureId: activeLectureId, userId: params.userId },
     });
 
     await requireActiveLecture(lectureId);

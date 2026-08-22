@@ -6,7 +6,7 @@ import type {
   SourceUnit,
 } from "../study-models.ts";
 
-import type { IndexedKnowledgeItem, KnowledgeItem } from "./note-prompts.ts";
+import { splitTextForExtraction, type IndexedKnowledgeItem, type KnowledgeItem } from "./note-prompts.ts";
 
 // Kept free of "server-only" so the item→unit mapping stays unit-testable
 // (tests/study-item-mapping.test.mjs) outside the Next.js runtime.
@@ -54,12 +54,18 @@ export function buildUnitExtractionWindows(
       windows.push(current);
     }
 
-    return windows.map((window, index) => ({
-      passIndex,
-      label: `Chunk ${index + 1} of ${windows.length}`,
-      text: window.text.join("\n\n"),
-      coveredUnitIndexes: window.coveredUnitIndexes,
-    }));
+    // A single unit can itself exceed the window (whole-recording transcript segments become
+    // one unit); split its text while keeping the unit attribution for citations.
+    const maxChars = Math.round(windowWords * 6.5);
+
+    return windows.flatMap((window, index) =>
+      splitTextForExtraction(window.text.join("\n\n"), maxChars).map((text) => ({
+        passIndex,
+        label: `Chunk ${index + 1} of ${windows.length}`,
+        text,
+        coveredUnitIndexes: window.coveredUnitIndexes,
+      })),
+    );
   });
 }
 

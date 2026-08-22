@@ -92,6 +92,50 @@ export const KNOWLEDGE_EXTRACTION_WINDOW_WORDS = 400;
  */
 export const KNOWLEDGE_EXTRACTION_PASS_WINDOWS = [400, 260];
 
+/**
+ * Splits text into pieces no longer than maxChars, breaking at sentence ends where possible and
+ * at whitespace otherwise. Transcription can hand back a single segment covering a whole
+ * recording (a 17-minute lecture arrived as one 12.8k-char segment), and a window that inherits
+ * such a segment whole makes "extract every claim" impossible to fit any output budget — the
+ * extraction call then burns its whole retry ladder on ever-larger truncations.
+ */
+export function splitTextForExtraction(text: string, maxChars: number): string[] {
+  const normalized = text.trim();
+
+  if (normalized.length <= maxChars) {
+    return normalized.length > 0 ? [normalized] : [];
+  }
+
+  const pieces: string[] = [];
+  let rest = normalized;
+
+  while (rest.length > maxChars) {
+    const slice = rest.slice(0, maxChars);
+    const sentenceEnd = Math.max(
+      slice.lastIndexOf(". "),
+      slice.lastIndexOf("! "),
+      slice.lastIndexOf("? "),
+      slice.lastIndexOf("\n"),
+    );
+    const whitespace = slice.lastIndexOf(" ");
+    const cut =
+      sentenceEnd >= Math.floor(maxChars * 0.5)
+        ? sentenceEnd + 1
+        : whitespace >= Math.floor(maxChars * 0.5)
+          ? whitespace
+          : maxChars;
+
+    pieces.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+
+  if (rest.length > 0) {
+    pieces.push(rest);
+  }
+
+  return pieces;
+}
+
 export const KNOWLEDGE_ITEM_KINDS = [
   "definition",
   "formula",
@@ -226,6 +270,8 @@ export function buildKnowledgeExtractionInstructions(params: {
 Extract every distinct testable claim in this chunk of ${sourceNoun}. One item per claim, written so it stands on its own without the chunk in front of you.
 
 Be exhaustive about substance. A later step decides what the finished note keeps, and it can only choose from what you return — a claim you leave out is lost for good. Split a sentence carrying two facts into two items. Two spellings of the same fact are fine; duplicates are merged later.
+
+A chunk may span several unrelated topics — scanned pages and slide photos often do. Extract every topic's claims, not just the first one's; sectionTitle then names the topics together. Never treat a topic change as the end of the chunk.
 
 Be ruthless about non-substance. Return an empty items array for a chunk that is only administrative announcements, deadlines, chapter goals, "what you will learn" lists, figure and slide captions, chapter summaries, pointers to exercises, or transitions. Never turn those into items to avoid returning nothing.
 

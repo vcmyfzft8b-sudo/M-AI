@@ -23,6 +23,7 @@ import {
   noteOutlineSchema,
   noteWriteSchema,
   normalizeGeneratedNoteMarkdown,
+  splitTextForExtraction,
   type IndexedKnowledgeItem,
 } from "@/lib/notes/note-prompts";
 import type { NoteGenerationResult, TranscriptSegmentInput } from "@/lib/types";
@@ -76,15 +77,18 @@ const APPROX_CHARS_PER_WORD = 6.5;
 
 function buildExtractionWindows(segments: TranscriptSegmentInput[]): ExtractionWindow[] {
   return KNOWLEDGE_EXTRACTION_PASS_WINDOWS.flatMap((windowWords, passIndex) => {
-    const windows = buildTranscriptWindows(
-      segments,
-      Math.round(windowWords * APPROX_CHARS_PER_WORD),
+    const maxChars = Math.round(windowWords * APPROX_CHARS_PER_WORD);
+    // buildTranscriptWindows never splits a single oversized segment, and transcription can hand
+    // back one segment covering the whole recording — split those here or the extraction budget
+    // cannot fit the window's claims.
+    const texts = buildTranscriptWindows(segments, maxChars).flatMap((window) =>
+      splitTextForExtraction(window.text, maxChars),
     );
 
-    return windows.map((window, index) => ({
+    return texts.map((text, index) => ({
       passIndex,
-      label: `Chunk ${index + 1} of ${windows.length}`,
-      text: window.text,
+      label: `Chunk ${index + 1} of ${texts.length}`,
+      text,
     }));
   });
 }
@@ -232,6 +236,16 @@ async function generateNotesContentDriven(
     modelMetadata: {
       pipeline: params.pipelineName,
       notesMode: "content",
+      // The extracted items travel with the artifact so study generation reuses this exact list
+      // instead of re-extracting: one extraction per lecture, and the deck can never cover a
+      // different set of facts than the notes were written from.
+      knowledgeItems: items.map(({ claim, kind, importance, terms, sectionTitle }) => ({
+        claim,
+        kind,
+        importance,
+        terms,
+        sectionTitle,
+      })),
       sourceType: params.sourceType,
       sourceWordCount,
       noteWordCount: normalizedNoteWordCount,

@@ -45,14 +45,22 @@ test("extraction windows cover every unit exactly once per pass", () => {
   }
 });
 
-test("a unit larger than the window becomes its own window instead of being split", () => {
-  const units = [makeUnit(0, "long ".repeat(900), 900), makeUnit(1, "short text here", 3)];
+test("a unit larger than the window is split for extraction but keeps its attribution", () => {
+  // Real case: transcription returned one segment covering a whole 17-minute recording, which
+  // became a single giant unit. Unsplit, "extract every claim" cannot fit any output budget.
+  const sentence = "Dolga poved o snovi predavanja, ki nosi eno samo dejstvo. ";
+  const units = [makeUnit(0, sentence.repeat(120), 1200), makeUnit(1, "short text here", 3)];
   const windows = buildUnitExtractionWindows(units, [400]);
 
-  // Citations land on whole units, so the oversized unit must stay intact.
-  assert.equal(windows.length, 2);
-  assert.deepEqual(windows[0].coveredUnitIndexes, [0]);
-  assert.deepEqual(windows[1].coveredUnitIndexes, [1]);
+  assert.ok(windows.length >= 3, `expected the big unit split, got ${windows.length} windows`);
+
+  for (const window of windows.slice(0, -1)) {
+    // Every piece of the split still cites the unit it came from.
+    assert.deepEqual(window.coveredUnitIndexes, [0]);
+    assert.ok(window.text.length <= 400 * 6.5);
+  }
+
+  assert.deepEqual(windows.at(-1).coveredUnitIndexes, [1]);
 });
 
 test("the primary unit is the one sharing vocabulary with the claim", () => {
@@ -102,4 +110,27 @@ test("a unit with no items still gets a plan so coverage validation sees it", ()
   assert.equal(plans.length, 2);
   // An empty concepts array is the existing "nothing to cover here" signal validateCoverage skips.
   assert.deepEqual(plans[1].concepts, []);
+});
+
+test("an oversized text splits at sentence boundaries and loses nothing", async () => {
+  const { splitTextForExtraction } = await import("../src/lib/notes/note-prompts.ts");
+  const sentence = "To je poved o snovi, ki nosi eno dejstvo. ";
+  const text = sentence.repeat(120); // ~5000 chars — one whole-recording transcript segment
+  const pieces = splitTextForExtraction(text, 2600);
+
+  assert.ok(pieces.length >= 2);
+  // Nothing dropped: joined pieces contain every sentence.
+  assert.equal(pieces.join(" ").split("poved").length, text.split("poved").length);
+  for (const piece of pieces) {
+    assert.ok(piece.length <= 2600, `piece too long: ${piece.length}`);
+    // Sentence-boundary cuts: every piece ends where a sentence ends.
+    assert.ok(piece.endsWith("."), piece.slice(-20));
+  }
+});
+
+test("short text passes through the splitter untouched", async () => {
+  const { splitTextForExtraction } = await import("../src/lib/notes/note-prompts.ts");
+
+  assert.deepEqual(splitTextForExtraction("Kratek zapis.", 2600), ["Kratek zapis."]);
+  assert.deepEqual(splitTextForExtraction("   ", 2600), []);
 });

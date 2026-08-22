@@ -181,12 +181,37 @@ test("the transcription step runs through runLectureStage and stops when it did 
   const step = FUNCTIONS_SOURCE.indexOf('step.run("transcribe-lecture"');
   const notes = FUNCTIONS_SOURCE.indexOf('step.run("generate-lecture-notes"');
   const stage = FUNCTIONS_SOURCE.indexOf("runLectureStage(", step);
-  const guard = FUNCTIONS_SOURCE.indexOf("if (!transcription.completed) {", step);
+  const guard = FUNCTIONS_SOURCE.indexOf("if (transcription?.completed === false) {", step);
 
   assert.ok(step > 0 && notes > step);
   assert.ok(stage > step && stage < notes, "the transcription no longer runs through runLectureStage");
   assert.ok(
     guard > stage && guard < notes,
     "notes must not be generated from a transcript the failed stage never wrote",
+  );
+});
+
+// A run already in flight when this ships replays the transcribe step from memoized state, and
+// before this change that step returned nothing. Inngest stores a step's undefined output as null
+// (`undefinedToNull`), so the guard is handed null on exactly those runs -- reading `.completed`
+// off it would throw a TypeError out of a lecture whose transcript is perfectly good, and the
+// catch below would mark it failed and report it to Sentry as a defect.
+test("an in-flight run replaying a step that returned nothing still generates its notes", () => {
+  const guard = (transcription) => transcription?.completed === false;
+
+  assert.equal(guard(null), false, "the memoized output of the old void step");
+  assert.equal(guard(undefined), false, "in case the executor sends no data at all");
+  assert.equal(guard({ completed: true }), false, "a transcript was written; carry on to notes");
+  assert.equal(guard({ completed: false }), true, "no speech; stop before the notes step");
+
+  const source = FUNCTIONS_SOURCE.slice(
+    FUNCTIONS_SOURCE.indexOf('step.run("transcribe-lecture"'),
+    FUNCTIONS_SOURCE.indexOf('step.run("generate-lecture-notes"'),
+  );
+
+  assert.equal(
+    source.includes("!transcription.completed"),
+    false,
+    "a bare truthiness check would throw on the memoized null of an in-flight run",
   );
 });

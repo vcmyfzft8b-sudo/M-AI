@@ -42,7 +42,7 @@ function subscription(overrides = {}) {
 function payment(overrides = {}) {
   return {
     id: "in_1",
-    created: at("2026-08-18T10:00:00Z"),
+    paidAt: at("2026-08-18T10:00:00Z"),
     amount: 2000,
     currency: "eur",
     customerId: "cus_1",
@@ -66,9 +66,9 @@ function salesData(overrides = {}) {
 test("revenue counts only invoices inside the window", () => {
   const data = salesData({
     payments: [
-      payment({ id: "in_in", created: at("2026-08-18T10:00:00Z"), amount: 2000 }),
+      payment({ id: "in_in", paidAt: at("2026-08-18T10:00:00Z"), amount: 2000 }),
       // Two months back: outside both the window and its comparison window.
-      payment({ id: "in_old", created: at("2026-06-01T10:00:00Z"), amount: 9900 }),
+      payment({ id: "in_old", paidAt: at("2026-06-01T10:00:00Z"), amount: 9900 }),
     ],
   });
 
@@ -77,11 +77,56 @@ test("revenue counts only invoices inside the window", () => {
   assert.equal(summary.revenue, 2000);
 });
 
+test("revenue lands on the day the money arrived, not the day the invoice was raised", () => {
+  // Stripe raises a subscription invoice and only then charges it, and retries
+  // a declined card for days. On 21 Aug 2026 the dashboard read EUR 30 while
+  // Stripe had taken EUR 90, because two invoices raised on the 19th and 20th
+  // and paid on the 21st were filed under the days they were written.
+  const yesterday = resolveRange("yesterday", {
+    now: new Date("2026-08-22T10:00:00Z"),
+  });
+
+  const data = salesData({
+    payments: [
+      payment({ id: "raised_19th", paidAt: at("2026-08-21T16:28:00Z"), amount: 2000 }),
+      payment({ id: "raised_20th", paidAt: at("2026-08-21T17:32:00Z"), amount: 2000 }),
+      payment({ id: "same_day", paidAt: at("2026-08-21T15:15:00Z"), amount: 1000 }),
+      // Raised on the 21st but only paid on the 22nd: tomorrow's money.
+      payment({ id: "paid_later", paidAt: at("2026-08-22T07:00:00Z"), amount: 5000 }),
+    ],
+  });
+
+  assert.equal(summarizeSales(data, yesterday, { now: NOW }).revenue, 5000);
+
+  const [day] = revenueSeries(data, yesterday);
+
+  assert.equal(day.day, "2026-08-21");
+  assert.equal(day.revenue, 5000);
+});
+
+test("a payment just before midnight in the reporting zone stays on its own day", () => {
+  // 21 Aug 23:30 in Ljubljana is already the 21st at 21:30 UTC. Bucketing in
+  // UTC would push it onto the 21st correctly here but a payment at 00:30
+  // local on the 22nd back onto the 21st, so both edges are pinned.
+  const yesterday = resolveRange("yesterday", {
+    now: new Date("2026-08-22T10:00:00Z"),
+  });
+
+  const data = salesData({
+    payments: [
+      payment({ id: "late", paidAt: at("2026-08-21T21:30:00Z"), amount: 3000 }),
+      payment({ id: "just_after", paidAt: at("2026-08-21T22:30:00Z"), amount: 7000 }),
+    ],
+  });
+
+  assert.equal(summarizeSales(data, yesterday, { now: NOW }).revenue, 3000);
+});
+
 test("the comparison window is the seven days before, not overlapping", () => {
   const data = salesData({
     payments: [
-      payment({ id: "now", created: at("2026-08-18T10:00:00Z"), amount: 2000 }),
-      payment({ id: "prev", created: at("2026-08-08T10:00:00Z"), amount: 5000 }),
+      payment({ id: "now", paidAt: at("2026-08-18T10:00:00Z"), amount: 2000 }),
+      payment({ id: "prev", paidAt: at("2026-08-08T10:00:00Z"), amount: 5000 }),
     ],
   });
 
@@ -320,12 +365,12 @@ test("the day-start projection is frozen: the day's own outcomes change nothing"
     ],
     payments: [
       // The conversion that set the morning's rate.
-      payment({ customerId: "cus_x", created: at("2026-08-18T10:00:00Z") }),
+      payment({ customerId: "cus_x", paidAt: at("2026-08-18T10:00:00Z") }),
       // Taken during the day itself: must not sharpen the frozen rate.
       payment({
         id: "in_today",
         customerId: "cus_t1",
-        created: at("2026-08-19T09:00:00Z"),
+        paidAt: at("2026-08-19T09:00:00Z"),
       }),
     ],
   });
@@ -357,11 +402,11 @@ test("asked about yesterday, the projection reproduces yesterday morning's answe
       }),
     ],
     payments: [
-      payment({ customerId: "cus_a", created: at("2026-08-12T10:00:00Z") }),
+      payment({ customerId: "cus_a", paidAt: at("2026-08-12T10:00:00Z") }),
       payment({
         id: "in_b",
         customerId: "cus_b",
-        created: at("2026-08-18T11:00:00Z"),
+        paidAt: at("2026-08-18T11:00:00Z"),
       }),
     ],
   });
@@ -375,7 +420,7 @@ test("asked about yesterday, the projection reproduces yesterday morning's answe
 
 test("the daily series covers every day in the window, zero-filled", () => {
   const data = salesData({
-    payments: [payment({ created: at("2026-08-18T10:00:00Z"), amount: 2000 })],
+    payments: [payment({ paidAt: at("2026-08-18T10:00:00Z"), amount: 2000 })],
     subscriptions: [
       subscription({
         created: at("2026-08-18T09:00:00Z"),
@@ -476,7 +521,7 @@ test("a payment outside the window is not attributed to the creator", () => {
   const data = salesData({
     promotionCodes: new Map([["promo_ema", "EMA50"]]),
     payments: [
-      payment({ created: at("2026-06-01T10:00:00Z"), amount: 9900, promotionCodeIds: ["promo_ema"] }),
+      payment({ paidAt: at("2026-06-01T10:00:00Z"), amount: 9900, promotionCodeIds: ["promo_ema"] }),
     ],
   });
 
@@ -769,7 +814,7 @@ test("a conversion after a trial is credited even when the coupon was used up", 
         id: "first-real-payment",
         customerId: "cus_converted",
         amount: 6500,
-        created: at("2026-08-18T10:00:00Z"),
+        paidAt: at("2026-08-18T10:00:00Z"),
         promotionCodeIds: [],
       }),
     ],
@@ -791,14 +836,14 @@ test("renewals after that first payment are not the creator's", () => {
         id: "first",
         customerId: "cus_converted",
         amount: 2000,
-        created: at("2026-08-14T10:00:00Z"),
+        paidAt: at("2026-08-14T10:00:00Z"),
         promotionCodeIds: [],
       }),
       payment({
         id: "renewal",
         customerId: "cus_converted",
         amount: 2000,
-        created: at("2026-08-18T10:00:00Z"),
+        paidAt: at("2026-08-18T10:00:00Z"),
         promotionCodeIds: [],
       }),
     ],
@@ -866,20 +911,20 @@ test("an as-of conversion rate ignores payments taken after that date", () => {
       payment({
         id: "early",
         customerId: "cus_1",
-        created: at("2026-08-11T10:00:00Z"),
+        paidAt: at("2026-08-11T10:00:00Z"),
         amount: 2000,
       }),
       // ...and two more only afterwards.
       payment({
         id: "late_a",
         customerId: "cus_2",
-        created: at("2026-08-19T10:00:00Z"),
+        paidAt: at("2026-08-19T10:00:00Z"),
         amount: 2000,
       }),
       payment({
         id: "late_b",
         customerId: "cus_3",
-        created: at("2026-08-19T11:00:00Z"),
+        paidAt: at("2026-08-19T11:00:00Z"),
         amount: 2000,
       }),
     ],

@@ -70,7 +70,7 @@ function hourlyRevenuePoints(
   const byHour = new Map<number, { amount: number; count: number }>();
 
   for (const payment of payments) {
-    const at = new Date(payment.created * 1000);
+    const at = new Date(payment.paidAt * 1000);
 
     if (todayInReportZone(at) !== day) {
       continue;

@@ -423,7 +423,12 @@ function normalizeMarkdownMathLine(line: string) {
       normalizeDelimitedMath(rawMath, (math) => `$$${math}$$`),
     )
     .replace(/(?<!\\)(?<!\$)\$([^\n$]+?)(?<!\\)\$(?!\$)/g, (match, rawMath: string) => {
-      if (!shouldRenderMathExpression(rawMath)) {
+      // Two bare dollars in prose are usually prices, not delimiters: "$30 ... ($12" pairs up
+      // and the whole sentence between them gets "repaired" into LaTeX. A span that contains an
+      // escaped currency dollar, or reads like a sentence, is left exactly as written.
+      const wordCount = rawMath.trim().split(/\s+/).length;
+
+      if (/\\\$/.test(rawMath) || wordCount > 8 || !shouldRenderMathExpression(rawMath)) {
         return match;
       }
 
@@ -507,6 +512,11 @@ function isStandaloneFormulaLine(line: string) {
   if (
     trimmed.length < 3 ||
     /(?:\$\$|\\\(|\\\[|(?<!\\)\$)/.test(trimmed) ||
+    // A table row is never a bare formula, whatever it contains: wrapping one in $$ turns the
+    // whole row into LaTeX and drags "\$30", "--" and "S/A razred" through the formula
+    // repairs — the exploded-table bug observed in a real note.
+    /^[|]/.test(trimmed) ||
+    /\s\|\s/.test(trimmed) ||
     /^[#>\-*\d.)\s]/.test(trimmed) ||
     /[.!?][\])}"']?$/.test(trimmed) ||
     /\s(?:je|is|are|was|were|and|or|in|on|for|with|kjer|kar|kot)\s/i.test(` ${trimmed} `)

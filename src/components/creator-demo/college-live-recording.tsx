@@ -13,6 +13,8 @@ import {
   type ReactNode,
 } from "react";
 import ReactMarkdown from "react-markdown";
+
+import { normalizeMathDelimiters } from "@/lib/markdown-math-delimiters";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -329,11 +331,13 @@ const NOTE_MARKDOWN_COMPONENTS = {
 const MarkdownBlock = memo(function MarkdownBlock({ text }: { text: string }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
+      // Same math contract as MarkdownRenderer: no single-dollar math (currency amounts pair up
+      // and explode tables), inline math arrives as \(...\) and is normalised to $$...$$.
+      remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }]]}
       rehypePlugins={[rehypeKatex, rehypeHighlightKeyPhrases]}
       components={NOTE_MARKDOWN_COMPONENTS}
     >
-      {text}
+      {normalizeMathDelimiters(text)}
     </ReactMarkdown>
   );
 });

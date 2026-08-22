@@ -3104,8 +3104,26 @@ select:disabled {
 }
 
 .app-shell-content {
+  position: relative;
   padding-top: 1rem;
   overflow-x: clip;
+}
+
+/*
+ * Hosted inside .app-shell-content, the overlay inherits the exact content width and centering
+ * of the page it stands in for; only the container's horizontal padding must be re-applied,
+ * because inset positioning bypasses it.
+ */
+.navigation-loading-overlay-in-content {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  width: auto;
+  /* The host's padding is responsive; inheriting it keeps the skeleton's content box identical
+     to the real page's at every breakpoint. */
+  padding: inherit;
+  overflow: hidden;
+  background: var(--canvas);
 }
 
 .ios-content.app-shell-content-start {
@@ -4625,7 +4643,8 @@ select:disabled {
   bottom: 0;
   left: 0;
   z-index: 70;
-  width: 100vw;
+  /* left is set inline to clear the desktop sidebar; a fixed 100vw width would overflow then. */
+  width: auto;
   overflow: auto;
   overscroll-behavior: contain;
   padding: 1.05rem max(0.95rem, env(safe-area-inset-left)) calc(env(safe-area-inset-bottom) + 6.5rem);

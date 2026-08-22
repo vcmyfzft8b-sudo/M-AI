@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
+import { NavigationFeedbackProvider } from "@/components/navigation-loading";
 import { getViewerAppState } from "@/lib/billing";
 import { requireUser } from "@/lib/auth";
 
@@ -28,11 +29,13 @@ export default async function AppLayout({
   }
 
   return (
-    <AppShell
-      hasPaidAccess={Boolean(appState?.hasPaidAccess)}
-      initialPathname={pathname}
-    >
-      {children}
-    </AppShell>
+    <NavigationFeedbackProvider>
+      <AppShell
+        hasPaidAccess={Boolean(appState?.hasPaidAccess)}
+        initialPathname={pathname}
+      >
+        {children}
+      </AppShell>
+    </NavigationFeedbackProvider>
   );
 }

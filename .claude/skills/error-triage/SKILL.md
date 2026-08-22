@@ -186,6 +186,15 @@ On the preview URL:
 3. Exercise the surrounding flow so the fix did not break its neighbours.
 4. For a client-side or UI error, drive a real browser (`npx playwright`), not curl.
 
+A preview does not exercise Inngest. `shouldUseHostedInngestJobs` gates the hosted
+functions on `VERCEL_ENV === "production"`, so a preview runs the internal HTTP
+routes and never crosses a step boundary. If the fix touches `src/inngest/` or the
+stage helpers in `src/lib/pipeline.ts`, a healthy preview proves the module graph
+builds and nothing more — say exactly that, list the real check under developer
+testing, and open the PR as a draft. Read
+[docs/lecture-pipeline-inngest.md](/docs/lecture-pipeline-inngest.md) before
+changing a step's return value or its id; both break runs already in flight.
+
 Preview access:
 
 - If preview URLs are protected, pass `VERCEL_AUTOMATION_BYPASS_SECRET` as the

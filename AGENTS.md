@@ -47,6 +47,13 @@
 - The automation opens pull requests and never merges them. It must not push to `main`, stack one fix branch on another, or write a database migration.
 - The operating procedure is [.claude/skills/error-triage/SKILL.md](/.claude/skills/error-triage/SKILL.md); setup and troubleshooting are in [docs/error-triage-automation.md](/docs/error-triage-automation.md).
 
+## Lecture Pipeline And Inngest Steps
+
+- Production runs the lecture pipeline as Inngest functions, one stage per step. Previews and local runs take the internal HTTP routes instead and never cross a step boundary, so **a Vercel preview does not verify an Inngest change** — the general "check it on the preview before merging" rule does not cover this area. Verify on production right after the merge, and do not claim preview coverage the deployment did not provide.
+- Inngest hashes a step's id from its name alone, so a deploy that lands mid-run replays completed steps from state written by the previous code. Giving an existing step a return value therefore breaks runs already in flight: a step that returned nothing replays as `null`, not `undefined`. Make the consumer tolerate the old shape. Renaming a step is the same trap in reverse — it re-runs, and for `transcribe-lecture` that means paying to transcribe twice.
+- Classify a failure that is the user's file rather than our bug on the throwing side of the step, via `runLectureStage`. Inngest flattens a failed step's error to `{ name: "Error", message, stack }`, so `isExpectedLectureInputFailure` cannot recognise anything once the function body's `catch` has it, and an expected failure ends up in Sentry and fails the run.
+- Details, the production check-list and the two incidents behind these rules are in [docs/lecture-pipeline-inngest.md](/docs/lecture-pipeline-inngest.md).
+
 ## Admin Dashboard
 
 - The admin dashboard is at `/admin`, gated by the `public.admin_users` email allowlist rather than a role on the user account. `PREVIEW_AUTH_BYPASS` deliberately does not open it.

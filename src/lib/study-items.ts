@@ -16,6 +16,7 @@ import {
   cardKindForItem,
   itemConceptKey,
   resolvePrimaryUnitIdx,
+  selectDeckWorthyItems,
   synthesizeItemPlans,
   type UnitKnowledgeItem,
 } from "@/lib/notes/study-item-mapping";
@@ -206,7 +207,7 @@ export async function extractStudyItems(params: {
     });
 
     if (stored) {
-      return stored;
+      return selectDeckWorthyItems(stored);
     }
   }
 
@@ -267,11 +268,16 @@ export async function extractStudyItems(params: {
     params.usageContext,
   );
 
-  return judged.map((item, id) => ({
-    ...item,
-    id,
-    primaryUnitIdx: resolvePrimaryUnitIdx(item.claim, item.coveredUnitIndexes, unitByIndex),
-  }));
+  // Filtered here rather than at each deck builder: flashcards, quiz and practice all come
+  // through this function, so one rule keeps the three decks on the same items — and the items
+  // that never make the cut are never sent to a generation call.
+  return selectDeckWorthyItems(
+    judged.map((item, id) => ({
+      ...item,
+      id,
+      primaryUnitIdx: resolvePrimaryUnitIdx(item.claim, item.coveredUnitIndexes, unitByIndex),
+    })),
+  );
 }
 
 function buildQuoteFromUnit(unit: SourceUnit | undefined, claim: string) {

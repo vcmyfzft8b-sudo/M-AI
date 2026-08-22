@@ -35,13 +35,47 @@ test("non-video YouTube shapes and other sites yield no id", () => {
   }
 });
 
-test("YouTube videos pass link validation while other video platforms stay blocked", () => {
-  // Videos are ingested via captions now, so the pre-flight check must let them through.
-  assert.equal(isUnsupportedVideoUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), false);
-  assert.equal(isUnsupportedVideoUrl("https://youtu.be/dQw4w9WgXcQ"), false);
-  // No single transcript exists for a playlist; it keeps the explanatory rejection.
-  assert.equal(isUnsupportedVideoUrl("https://www.youtube.com/playlist?list=PL123"), true);
-  assert.equal(isUnsupportedVideoUrl("https://vimeo.com/12345"), true);
-  assert.equal(isUnsupportedVideoUrl("https://www.tiktok.com/@u/video/1"), true);
-  assert.equal(isUnsupportedVideoUrl("https://example.com/lecture.mp4"), true);
+function withYoutubeImport(value, run) {
+  const previous = process.env.NEXT_PUBLIC_YOUTUBE_IMPORT;
+
+  if (value === undefined) {
+    delete process.env.NEXT_PUBLIC_YOUTUBE_IMPORT;
+  } else {
+    process.env.NEXT_PUBLIC_YOUTUBE_IMPORT = value;
+  }
+
+  try {
+    run();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.NEXT_PUBLIC_YOUTUBE_IMPORT;
+    } else {
+      process.env.NEXT_PUBLIC_YOUTUBE_IMPORT = previous;
+    }
+  }
+}
+
+test("YouTube videos pass link validation once caption import is switched on", () => {
+  withYoutubeImport("on", () => {
+    // Videos are ingested via captions there, so the pre-flight check must let them through.
+    assert.equal(isUnsupportedVideoUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), false);
+    assert.equal(isUnsupportedVideoUrl("https://youtu.be/dQw4w9WgXcQ"), false);
+    // No single transcript exists for a playlist; it keeps the explanatory rejection.
+    assert.equal(isUnsupportedVideoUrl("https://www.youtube.com/playlist?list=PL123"), true);
+    assert.equal(isUnsupportedVideoUrl("https://vimeo.com/12345"), true);
+    assert.equal(isUnsupportedVideoUrl("https://www.tiktok.com/@u/video/1"), true);
+    assert.equal(isUnsupportedVideoUrl("https://example.com/lecture.mp4"), true);
+  });
+});
+
+test("YouTube videos are refused up front where captions cannot be fetched", () => {
+  // Without an egress YouTube will serve, the handshake answers LOGIN_REQUIRED for every client.
+  // Accepting the link would create a lecture that can only fail, and fail with the wrong reason.
+  withYoutubeImport(undefined, () => {
+    assert.equal(isUnsupportedVideoUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), true);
+    assert.equal(isUnsupportedVideoUrl("https://youtu.be/dQw4w9WgXcQ"), true);
+  });
+  withYoutubeImport("off", () => {
+    assert.equal(isUnsupportedVideoUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), true);
+  });
 });

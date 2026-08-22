@@ -10,6 +10,10 @@ const NO_CAPTIONS_MESSAGE =
   "Ta YouTube video nima podnapisov, zato iz njega še ne znamo narediti zapiskov. Poskusi z videom, ki ima podnapise (tudi samodejni so v redu).";
 const VIDEO_NOT_LOADABLE_MESSAGE =
   "YouTube videa ni bilo mogoče naložiti. Preveri, ali je video javen, in poskusi znova.";
+// A datacenter IP is refused by YouTube's bot wall no matter which client asks, so telling the
+// learner to check whether their video is public sends them to fix something that is not broken.
+const VIDEO_BLOCKED_MESSAGE =
+  "YouTube trenutno zavrača naše zahteve za podnapise tega videa. To ni napaka tvojega videa — poskusi znova pozneje ali uporabi drug vir.";
 
 type CaptionTrack = {
   baseUrl: string;
@@ -72,12 +76,22 @@ const INNERTUBE_CLIENTS = [
 ] as const;
 
 type PlayerResponse = {
-  playabilityStatus?: { status?: string };
+  playabilityStatus?: { status?: string; reason?: string };
   videoDetails?: { title?: string };
   captions?: { playerCaptionsTracklistRenderer?: { captionTracks?: CaptionTrack[] } };
 };
 
-async function fetchPlayerResponse(videoId: string): Promise<PlayerResponse | null> {
+/**
+ * LOGIN_REQUIRED is YouTube's bot wall, not a permissions problem: measured from Vercel iad1 on
+ * 2026-08-23, every innertube client answers LOGIN_REQUIRED / "Sign in to confirm you're not a
+ * bot" while the identical calls from a residential IP return OK with caption tracks. The two
+ * causes need different words, so the handshake reports which one it hit.
+ */
+type PlayerHandshake = { response: PlayerResponse } | { blocked: true } | null;
+
+async function fetchPlayerResponse(videoId: string): Promise<PlayerHandshake> {
+  let blocked = false;
+
   for (const client of INNERTUBE_CLIENTS) {
     try {
       const response = await fetchWithTimeout(
@@ -100,14 +114,18 @@ async function fetchPlayerResponse(videoId: string): Promise<PlayerResponse | nu
       const playerResponse = (await response.json()) as PlayerResponse;
 
       if (playerResponse.playabilityStatus?.status === "OK") {
-        return playerResponse;
+        return { response: playerResponse };
+      }
+
+      if (playerResponse.playabilityStatus?.status === "LOGIN_REQUIRED") {
+        blocked = true;
       }
     } catch {
       // The next client is the retry.
     }
   }
 
-  return null;
+  return blocked ? { blocked: true } : null;
 }
 
 /**
@@ -261,14 +279,18 @@ export async function fetchYoutubeTranscriptSource(params: {
   videoId: string;
   languageHint?: string | null;
 }): Promise<YoutubeTranscriptSource> {
-  const playerResponse = await fetchPlayerResponse(params.videoId);
+  const handshake = await fetchPlayerResponse(params.videoId);
 
-  if (!playerResponse) {
+  if (!handshake) {
     throw new ExpectedLectureInputError(VIDEO_NOT_LOADABLE_MESSAGE, "link_not_loadable");
   }
 
+  if ("blocked" in handshake) {
+    throw new ExpectedLectureInputError(VIDEO_BLOCKED_MESSAGE, "youtube_request_blocked");
+  }
+
   const tracks =
-    playerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
+    handshake.response.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
   const track = pickCaptionTrack(tracks, params.languageHint ?? null);
 
   if (!track?.baseUrl) {
@@ -302,7 +324,7 @@ export async function fetchYoutubeTranscriptSource(params: {
 
   return {
     videoId: params.videoId,
-    title: playerResponse.videoDetails?.title?.trim() || null,
+    title: handshake.response.videoDetails?.title?.trim() || null,
     text,
     blocks,
     trackLanguage: track.languageCode ?? "unknown",

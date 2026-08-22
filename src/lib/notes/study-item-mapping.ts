@@ -199,3 +199,57 @@ export function synthesizeItemPlans(
     };
   });
 }
+
+/** A learner fails without a 5 and is likely tested on a 4; 3 and below are context, not a deck. */
+export const DECK_IMPORTANCE_FLOOR = 4;
+/** Below this a filtered deck stops being a study tool, so the next-best items are topped up. */
+export const MIN_DECK_ITEMS = 12;
+/** No lecture produces a deck a learner will not finish; a 43-slide source used to yield 134. */
+export const MAX_DECK_ITEMS = 60;
+
+/**
+ * Picks the items a deck is built from. The notes still teach every extracted item — that is what
+ * they are for — but a card, a quiz question and a practice question each cost a learner attention
+ * and cost us a generation call, so only the must-know items earn one.
+ *
+ * The rating is applied as a floor and then as a ranking, never as arithmetic: the extractor
+ * inflates (measured 2026-08-23: 49% of items land at 4 or 5), so a floor alone can still leave
+ * more items than a learner will work through. Over the ceiling the surplus is dropped by
+ * spreading the survivors evenly across the source rather than taking a prefix, so a trimmed deck
+ * still covers the end of the lecture.
+ */
+export function selectDeckWorthyItems<T extends { importance: number }>(
+  items: T[],
+  options?: { floor?: number; minItems?: number; maxItems?: number },
+): T[] {
+  const floor = options?.floor ?? DECK_IMPORTANCE_FLOOR;
+  const minItems = options?.minItems ?? MIN_DECK_ITEMS;
+  const maxItems = options?.maxItems ?? MAX_DECK_ITEMS;
+  const positionOf = new Map(items.map((item, position) => [item, position]));
+  const kept = items.filter((item) => item.importance >= floor);
+
+  // A short or evenly-rated source can leave too few must-knows to study from. Top up with the
+  // next best, highest rating first, keeping source order among equals.
+  if (kept.length < minItems) {
+    const toppedUp = items
+      .filter((item) => item.importance < floor)
+      .sort(
+        (left, right) =>
+          right.importance - left.importance ||
+          (positionOf.get(left) ?? 0) - (positionOf.get(right) ?? 0),
+      )
+      .slice(0, minItems - kept.length);
+
+    return [...kept, ...toppedUp].sort(
+      (left, right) => (positionOf.get(left) ?? 0) - (positionOf.get(right) ?? 0),
+    );
+  }
+
+  if (kept.length <= maxItems) {
+    return kept;
+  }
+
+  const step = kept.length / maxItems;
+
+  return Array.from({ length: maxItems }, (_unused, slot) => kept[Math.floor(slot * step)]);
+}

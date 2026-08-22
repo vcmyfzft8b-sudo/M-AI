@@ -1,5 +1,20 @@
 import { parseYoutubeVideoId } from "./youtube-url.ts";
 
+/**
+ * YouTube answers the innertube handshake with LOGIN_REQUIRED ("Sign in to confirm you're not a
+ * bot") for every request from a datacenter IP — measured from Vercel iad1 on 2026-08-23 across
+ * every client, with and without visitorData, while the identical calls from a residential IP
+ * return OK with caption tracks. So captions are only offered where an egress YouTube will serve
+ * is configured (YOUTUBE_FETCH_RELAY_URL, with NEXT_PUBLIC_YOUTUBE_IMPORT=on). Everywhere else the
+ * link is refused here, up front, instead of being accepted and failed halfway through the
+ * pipeline with a misleading "check whether the video is public".
+ *
+ * Read per call rather than cached at module load so the contract is testable in both states.
+ */
+export function isYoutubeCaptionImportEnabled() {
+  return process.env.NEXT_PUBLIC_YOUTUBE_IMPORT?.trim() === "on";
+}
+
 export const UNSUPPORTED_VIDEO_LINK_MESSAGE =
   "Ta povezava izgleda kot video. MemoAI podpira YouTube videe s podnapisi ter besedilne strani (članke, bloge, spletne strani). Za druge video platforme prilepi povezavo do besedilne strani ali YouTube videa.";
 
@@ -66,9 +81,11 @@ function isYoutubeVideoUrl(url: URL, hostname: string) {
 function isKnownVideoPlatformUrl(url: URL, hostname: string) {
   const pathname = url.pathname.toLowerCase().replace(/\/+$/, "");
 
-  // A YouTube video with a parseable id is now ingested via its captions; only the shapes with
-  // no single transcript (playlists, channels, clips) stay unsupported.
-  if (parseYoutubeVideoId(url.toString())) {
+  // A YouTube video with a parseable id is ingested via its captions wherever an egress YouTube
+  // will serve is configured; only the shapes with no single transcript (playlists, channels,
+  // clips) stay unsupported there. Without that egress the handshake cannot succeed at all, so
+  // the link is refused here rather than accepted and failed mid-pipeline.
+  if (isYoutubeCaptionImportEnabled() && parseYoutubeVideoId(url.toString())) {
     return false;
   }
 

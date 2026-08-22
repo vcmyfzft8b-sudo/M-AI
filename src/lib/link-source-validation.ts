@@ -15,8 +15,24 @@ export function isYoutubeCaptionImportEnabled() {
   return process.env.NEXT_PUBLIC_YOUTUBE_IMPORT?.trim() === "on";
 }
 
-export const UNSUPPORTED_VIDEO_LINK_MESSAGE =
+const UNSUPPORTED_VIDEO_WITH_YOUTUBE_MESSAGE =
   "Ta povezava izgleda kot video. MemoAI podpira YouTube videe s podnapisi ter besedilne strani (članke, bloge, spletne strani). Za druge video platforme prilepi povezavo do besedilne strani ali YouTube videa.";
+const UNSUPPORTED_VIDEO_MESSAGE =
+  "Ta povezava izgleda kot video. MemoAI trenutno ustvarja zapiske iz spletnih strani, člankov, blogov in drugih besedilnih strani, ne pa iz videov. Prilepi povezavo do besedilne strani.";
+
+/**
+ * Promising YouTube support in the rejection text is only honest where captions can actually be
+ * fetched; where they cannot, offering it sends the learner back to paste the same link again.
+ */
+export function getUnsupportedVideoLinkMessage() {
+  return isYoutubeCaptionImportEnabled()
+    ? UNSUPPORTED_VIDEO_WITH_YOUTUBE_MESSAGE
+    : UNSUPPORTED_VIDEO_MESSAGE;
+}
+
+export function isUnsupportedVideoLinkMessage(value: string) {
+  return value === UNSUPPORTED_VIDEO_WITH_YOUTUBE_MESSAGE || value === UNSUPPORTED_VIDEO_MESSAGE;
+}
 
 const DIRECT_VIDEO_FILE_EXTENSIONS = [
   ".3g2",
@@ -161,5 +177,5 @@ export function isUnsupportedVideoContentType(contentType: string) {
 }
 
 export function getUnsupportedVideoUrlMessage(value: string) {
-  return isUnsupportedVideoUrl(value) ? UNSUPPORTED_VIDEO_LINK_MESSAGE : null;
+  return isUnsupportedVideoUrl(value) ? getUnsupportedVideoLinkMessage() : null;
 }

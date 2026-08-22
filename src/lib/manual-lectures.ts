@@ -54,7 +54,7 @@ import {
 import { createEmbeddings as createAiEmbeddings } from "@/lib/ai/embeddings";
 import {
   isUnsupportedVideoContentType,
-  UNSUPPORTED_VIDEO_LINK_MESSAGE,
+  getUnsupportedVideoLinkMessage,
 } from "@/lib/link-source-validation";
 import {
   ExpectedLectureInputError,
@@ -1056,7 +1056,7 @@ export async function fetchReadableWebpage(params: { url: string }) {
 
   if (isUnsupportedVideoContentType(contentType)) {
     throw new ExpectedLectureInputError(
-      UNSUPPORTED_VIDEO_LINK_MESSAGE,
+      getUnsupportedVideoLinkMessage(),
       "unsupported_video_link",
     );
   }

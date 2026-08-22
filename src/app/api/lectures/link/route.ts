@@ -4,8 +4,9 @@ import { z } from "zod";
 import { createBillingRequiredResponse, getUserEntitlementState } from "@/lib/billing";
 import { enqueueLectureLinkProcessing } from "@/lib/jobs";
 import {
+  getUnsupportedVideoLinkMessage,
+  isUnsupportedVideoLinkMessage,
   isUnsupportedVideoUrl,
-  UNSUPPORTED_VIDEO_LINK_MESSAGE,
 } from "@/lib/link-source-validation";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
 
   if (isUnsupportedVideoUrl(parsed.data.url)) {
     return NextResponse.json(
-      { error: UNSUPPORTED_VIDEO_LINK_MESSAGE, code: "unsupported_video_link" },
+      { error: getUnsupportedVideoLinkMessage(), code: "unsupported_video_link" },
       { status: 400 },
     );
   }
@@ -136,9 +137,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ lectureId });
   } catch (error) {
-    if (error instanceof Error && error.message === UNSUPPORTED_VIDEO_LINK_MESSAGE) {
+    if (error instanceof Error && isUnsupportedVideoLinkMessage(error.message)) {
       return NextResponse.json(
-        { error: UNSUPPORTED_VIDEO_LINK_MESSAGE, code: "unsupported_video_link" },
+        { error: error.message, code: "unsupported_video_link" },
         { status: 400 },
       );
     }

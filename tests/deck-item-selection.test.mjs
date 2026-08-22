@@ -8,7 +8,7 @@ import {
   selectDeckWorthyItems,
 } from "../src/lib/notes/study-item-mapping.ts";
 
-const item = (importance, claim) => ({ importance, claim });
+const item = (importance, claim, kind = "fact") => ({ importance, claim, kind });
 
 test("only must-know items reach the deck", () => {
   const items = [
@@ -83,4 +83,41 @@ test("the measured shape of a real lecture lands inside the ceiling", () => {
   assert.equal(selected.length, 60);
   assert.ok(selected.length <= MAX_DECK_ITEMS);
   assert.ok(selected.length >= MIN_DECK_ITEMS);
+});
+
+test("a definition the extractor underrated still reaches the deck", () => {
+  // Measured on the 43-slide law deck: "a thing is an independent physical object a person can
+  // control" was rated 3 and vanished from every deck while detail rated 4 stayed.
+  const items = [
+    item(3, "a thing is an independent physical object", "definition"),
+    item(4, "a peripheral detail"),
+    item(3, "a peripheral aside"),
+    item(2, "the formula", "formula"),
+  ];
+  const selected = selectDeckWorthyItems(items, { minItems: 1 });
+
+  assert.deepEqual(
+    selected.map((entry) => entry.claim),
+    ["a thing is an independent physical object", "a peripheral detail", "the formula"],
+  );
+});
+
+test("a definition rated disposable stays out", () => {
+  const items = [item(1, "trivial definition", "definition"), item(5, "real")];
+
+  assert.deepEqual(
+    selectDeckWorthyItems(items, { minItems: 1 }).map((entry) => entry.claim),
+    ["real"],
+  );
+});
+
+test("over the ceiling the rated margin gives way before the backbone", () => {
+  const items = [
+    ...Array.from({ length: 30 }, (_u, i) => item(3, `def-${i}`, "definition")),
+    ...Array.from({ length: 90 }, (_u, i) => item(5, `rated-${i}`)),
+  ];
+  const selected = selectDeckWorthyItems(items, { maxItems: 40 });
+
+  assert.equal(selected.length, 40);
+  assert.equal(selected.filter((entry) => entry.kind === "definition").length, 30);
 });

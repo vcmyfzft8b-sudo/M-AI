@@ -206,19 +206,30 @@ export const DECK_IMPORTANCE_FLOOR = 4;
 export const MIN_DECK_ITEMS = 12;
 /** No lecture produces a deck a learner will not finish; a 43-slide source used to yield 134. */
 export const MAX_DECK_ITEMS = 60;
+/**
+ * What the rest of a lecture is built on, and what an exam asks first. Measured on the same
+ * 43-slide law deck (2026-08-23): filtering on the rating alone dropped "a thing is an independent
+ * physical object", "everything permanently joined to immovable property is a component part" and
+ * three more core definitions, because the extractor had rated them 3. The rating is not reliable
+ * enough to overrule a definition, so it does not get to.
+ */
+const DECK_BACKBONE_KINDS = new Set(["definition", "formula"]);
+/** Rated disposable by the extractor's own rubric — a 1 is not deck material whatever its kind. */
+const DECK_MINIMUM_IMPORTANCE = 2;
 
 /**
  * Picks the items a deck is built from. The notes still teach every extracted item — that is what
  * they are for — but a card, a quiz question and a practice question each cost a learner attention
- * and cost us a generation call, so only the must-know items earn one.
+ * and cost us a generation call, so only what a learner must know earns one.
  *
- * The rating is applied as a floor and then as a ranking, never as arithmetic: the extractor
- * inflates (measured 2026-08-23: 49% of items land at 4 or 5), so a floor alone can still leave
- * more items than a learner will work through. Over the ceiling the surplus is dropped by
- * spreading the survivors evenly across the source rather than taking a prefix, so a trimmed deck
- * still covers the end of the lecture.
+ * Two things qualify: the definitions and formulas the subject is built on, whatever they were
+ * rated, and anything the extractor rated must-know. The rating is used as a floor and a ranking,
+ * never as arithmetic — it inflates (measured: 53% of items at 4 or 5) and it misfires on basics,
+ * so it decides the margin, not the backbone. Over the ceiling the surplus is dropped by spreading
+ * the survivors across the source rather than taking a prefix, so a trimmed deck still reaches the
+ * end of the lecture.
  */
-export function selectDeckWorthyItems<T extends { importance: number }>(
+export function selectDeckWorthyItems<T extends { importance: number; kind?: string }>(
   items: T[],
   options?: { floor?: number; minItems?: number; maxItems?: number },
 ): T[] {
@@ -226,30 +237,43 @@ export function selectDeckWorthyItems<T extends { importance: number }>(
   const minItems = options?.minItems ?? MIN_DECK_ITEMS;
   const maxItems = options?.maxItems ?? MAX_DECK_ITEMS;
   const positionOf = new Map(items.map((item, position) => [item, position]));
-  const kept = items.filter((item) => item.importance >= floor);
+  const inSourceOrder = (left: T, right: T) =>
+    (positionOf.get(left) ?? 0) - (positionOf.get(right) ?? 0);
+  const isBackbone = (item: T) =>
+    item.kind !== undefined &&
+    DECK_BACKBONE_KINDS.has(item.kind) &&
+    item.importance >= DECK_MINIMUM_IMPORTANCE;
+
+  const backbone = items.filter(isBackbone);
+  const rated = items.filter((item) => !isBackbone(item) && item.importance >= floor);
+  const kept = [...backbone, ...rated].sort(inSourceOrder);
 
   // A short or evenly-rated source can leave too few must-knows to study from. Top up with the
   // next best, highest rating first, keeping source order among equals.
   if (kept.length < minItems) {
+    const chosen = new Set(kept);
     const toppedUp = items
-      .filter((item) => item.importance < floor)
-      .sort(
-        (left, right) =>
-          right.importance - left.importance ||
-          (positionOf.get(left) ?? 0) - (positionOf.get(right) ?? 0),
-      )
+      .filter((item) => !chosen.has(item) && item.importance >= DECK_MINIMUM_IMPORTANCE)
+      .sort((left, right) => right.importance - left.importance || inSourceOrder(left, right))
       .slice(0, minItems - kept.length);
 
-    return [...kept, ...toppedUp].sort(
-      (left, right) => (positionOf.get(left) ?? 0) - (positionOf.get(right) ?? 0),
-    );
+    return [...kept, ...toppedUp].sort(inSourceOrder);
   }
 
   if (kept.length <= maxItems) {
     return kept;
   }
 
-  const step = kept.length / maxItems;
+  // Over the ceiling the rated margin gives way first; the backbone is only thinned if the
+  // definitions alone would still overflow.
+  const spread = (group: T[], budget: number) =>
+    group.length <= budget
+      ? group
+      : Array.from(
+          { length: budget },
+          (_unused, slot) => group[Math.floor(slot * (group.length / budget))],
+        );
+  const keptBackbone = spread(backbone, maxItems);
 
-  return Array.from({ length: maxItems }, (_unused, slot) => kept[Math.floor(slot * step)]);
+  return [...keptBackbone, ...spread(rated, maxItems - keptBackbone.length)].sort(inSourceOrder);
 }

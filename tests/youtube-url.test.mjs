@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { parseYoutubeVideoId } from "../src/lib/youtube-url.ts";
 import {
+  getUnsupportedVideoLinkMessage,
   isUnsupportedVideoUrl,
 } from "../src/lib/link-source-validation.ts";
 
@@ -77,5 +78,16 @@ test("YouTube videos are refused up front where captions cannot be fetched", () 
   });
   withYoutubeImport("off", () => {
     assert.equal(isUnsupportedVideoUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), true);
+  });
+});
+
+test("the rejection only promises YouTube where YouTube can be fetched", () => {
+  withYoutubeImport("on", () => {
+    assert.match(getUnsupportedVideoLinkMessage(), /YouTube videe s podnapisi/);
+  });
+  // Offering captions we cannot fetch sends the learner back to paste the same link again.
+  withYoutubeImport(undefined, () => {
+    assert.doesNotMatch(getUnsupportedVideoLinkMessage(), /YouTube videe s podnapisi/);
+    assert.match(getUnsupportedVideoLinkMessage(), /ne pa iz videov/);
   });
 });

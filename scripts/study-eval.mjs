@@ -206,14 +206,15 @@ async function extractItems(fixture, fallbackModel) {
     env: process.env,
     fallbackModel,
   });
-  const passes = KNOWLEDGE_EXTRACTION_PASS_WINDOWS.flatMap((windowWords) =>
+  const passes = KNOWLEDGE_EXTRACTION_PASS_WINDOWS.flatMap((windowWords, passIndex) =>
     buildWindows(fixture.source, windowWords).map((window, index, all) => ({
       window,
+      passIndex,
       label: `Chunk ${index + 1} of ${all.length}`,
     })),
   );
 
-  const extractions = await mapWithConcurrency(passes, 4, ({ window, label }) =>
+  const extractions = await mapWithConcurrency(passes, 4, ({ window, label, passIndex }) =>
     generate({
       schema: knowledgeExtractionSchema,
       model: config.model,
@@ -224,14 +225,26 @@ async function extractItems(fixture, fallbackModel) {
         sourceType: fixture.sourceType,
       }),
       input: `${label}.\n\n${window}`,
-    }),
+    }).then((value) => ({ ...value, passIndex })),
   );
 
-  const raw = extractions.flatMap((extraction) =>
-    extraction.items.map((item) => ({ ...item, sectionTitle: extraction.sectionTitle })),
+  const byPass = new Map();
+
+  for (const extraction of extractions) {
+    byPass.set(extraction.passIndex, [
+      ...(byPass.get(extraction.passIndex) ?? []),
+      ...extraction.items.map((item) => ({ ...item, sectionTitle: extraction.sectionTitle })),
+    ]);
+  }
+
+  const perPass = [...byPass.values()].flatMap((items) =>
+    dedupeKnowledgeItems(
+      items.map((item, id) => ({ ...item, id })),
+      { boostRepeats: true },
+    ),
   );
 
-  return dedupeKnowledgeItems(raw.map((item, id) => ({ ...item, id }))).map((item, id) => ({
+  return dedupeKnowledgeItems(perPass.map((item, id) => ({ ...item, id }))).map((item, id) => ({
     ...item,
     id,
   }));
@@ -246,8 +259,18 @@ async function runItemDrivenVariant(fixture, fallbackModel) {
   });
   const batches = chunkStudyItems(items);
 
-  const runBatches = (schema, instructions, tokensPerItem) =>
-    mapWithConcurrency(batches, 3, (batch) =>
+  // Not every item deserves all three formats. Cards are the cheap, high-volume surface a learner
+  // drills; a quiz question costs four options to write and a practice question costs a marking
+  // scheme, so those are reserved for the material that actually carries the exam.
+  const floors = {
+    card: Number.parseInt(process.env.STUDY_CARD_FLOOR ?? "0", 10),
+    quiz: Number.parseInt(process.env.STUDY_QUIZ_FLOOR ?? "0", 10),
+    practice: Number.parseInt(process.env.STUDY_PRACTICE_FLOOR ?? "0", 10),
+  };
+  const batchesFor = (floor) =>
+    floor <= 0 ? batches : chunkStudyItems(items.filter((item) => item.importance >= floor));
+  const runFor = (floor, schema, instructions, tokensPerItem) =>
+    mapWithConcurrency(batchesFor(floor), 3, (batch) =>
       generate({
         schema,
         model: config.model,
@@ -261,9 +284,10 @@ async function runItemDrivenVariant(fixture, fallbackModel) {
     );
 
   const [cardBatches, quizBatches, practiceBatches] = await Promise.all([
-    runBatches(flashcardBatchSchema, buildFlashcardInstructions({ outputLanguage: fixture.language }), 260),
-    runBatches(quizBatchSchema, buildQuizInstructions({ outputLanguage: fixture.language }), 420),
-    runBatches(
+    runFor(floors.card, flashcardBatchSchema, buildFlashcardInstructions({ outputLanguage: fixture.language }), 260),
+    runFor(floors.quiz, quizBatchSchema, buildQuizInstructions({ outputLanguage: fixture.language }), 420),
+    runFor(
+      floors.practice,
       practiceBatchSchema,
       buildPracticeTestInstructions({ outputLanguage: fixture.language }),
       380,
@@ -393,6 +417,7 @@ const argValue = (name) => args.find((arg) => arg.startsWith(`--${name}=`))?.spl
 const wantedVariants = argValue("variant")?.split(",") ?? Object.keys(VARIANTS);
 const wantedFixtures = argValue("fixture")?.split(",");
 const shouldSave = args.includes("--save");
+const shouldGrade = !args.includes("--no-grade");
 
 const fixtures = fs
   .readdirSync(FIXTURE_DIR)
@@ -438,10 +463,9 @@ for (const fixture of fixtures) {
       ),
     ];
 
-    const [factCoverage, distractors] = await Promise.all([
-      gradeFactCoverage(fixture, prompts),
-      gradeDistractors(outcome.quiz),
-    ]);
+    const [factCoverage, distractors] = shouldGrade
+      ? await Promise.all([gradeFactCoverage(fixture, prompts), gradeDistractors(outcome.quiz)])
+      : [{ recall: 0, missed: [] }, { plausible: 0, singleAnswer: 0 }];
 
     const itemCoverage = outcome.items
       ? reportStudyCoverage({

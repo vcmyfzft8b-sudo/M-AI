@@ -56,7 +56,7 @@ test("an unrecognised thinking level falls back to the stage default instead of 
   assert.equal(config.thinkingLevel, "medium");
 });
 
-test("a claim repeated across chunks collapses to one item and gains importance", () => {
+test("a claim repeated within one extraction pass collapses and gains importance", () => {
   const items = [
     {
       id: 0,
@@ -84,12 +84,19 @@ test("a claim repeated across chunks collapses to one item and gains importance"
     },
   ];
 
-  const deduped = dedupeKnowledgeItems(items);
+  const deduped = dedupeKnowledgeItems(items, { boostRepeats: true });
 
   assert.equal(deduped.length, 2);
   // A lecturer restating something is evidence it matters, so the surviving copy ranks higher.
   assert.equal(deduped[0].importance, 4);
   assert.equal(deduped[1].claim, items[2].claim);
+
+  // Across passes the same claim is expected twice and means nothing, so the default must not
+  // boost — doing so flattened 70% of a source's items onto importance 5.
+  const merged = dedupeKnowledgeItems(items);
+
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].importance, 3);
 });
 
 test("dedupe keeps claims that merely share vocabulary but state different facts", () => {

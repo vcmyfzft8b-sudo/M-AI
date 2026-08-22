@@ -230,9 +230,10 @@ async function runContentDrivenVariant(fixture, fallbackModel) {
   const stage = (name) =>
     resolveStageModelConfig({ stage: name, env: process.env, fallbackModel });
   const extractConfig = stage("note_extract");
-  const passes = KNOWLEDGE_EXTRACTION_PASS_WINDOWS.flatMap((windowWords) =>
+  const passes = KNOWLEDGE_EXTRACTION_PASS_WINDOWS.flatMap((windowWords, passIndex) =>
     buildWindows(fixture.source, windowWords).map((window, index, all) => ({
       window,
+      passIndex,
       label: `Chunk ${index + 1} of ${all.length}`,
     })),
   );
@@ -436,6 +437,7 @@ const argValue = (name) => args.find((arg) => arg.startsWith(`--${name}=`))?.spl
 const wantedVariants = argValue("variant")?.split(",") ?? Object.keys(VARIANTS);
 const wantedFixtures = argValue("fixture")?.split(",");
 const shouldSave = args.includes("--save");
+const shouldGrade = !args.includes("--no-grade");
 // Recall on one sample swings by 10+ points between identical runs, so a single pass cannot
 // justify a prompt or model decision. Every reported figure is a mean over --repeat runs.
 const repeats = Number.parseInt(argValue("repeat") ?? "1", 10);
@@ -483,8 +485,11 @@ for (const fixture of fixtures) {
     // Grading is measurement, not product cost, so it is billed separately from the variant.
     const afterRun = { ...ledger };
     const noteWords = countWords(outcome.notesMd);
-    const scored = await grade(fixture, outcome.notesMd);
-    const extraction = outcome.claims ? await gradeExtraction(fixture, outcome.claims) : null;
+    const scored = shouldGrade
+      ? await grade(fixture, outcome.notesMd)
+      : { recall: 0, missed: [], leaked: [] };
+    const extraction =
+      shouldGrade && outcome.claims ? await gradeExtraction(fixture, outcome.claims) : null;
 
     console.log(`${noteWords} words, recall ${(scored.recall * 100).toFixed(0)}%`);
 

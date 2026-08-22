@@ -175,10 +175,19 @@ function tokenOverlap(left: Set<string>, right: Set<string>) {
 const DUPLICATE_CLAIM_OVERLAP = 0.8;
 
 /**
- * Collapses the same idea repeated across chunks, keeping the highest-importance wording.
- * A lecturer restating the crux three times should raise its importance, not produce three items.
+ * Collapses the same idea into one item, keeping the highest-importance wording.
+ *
+ * `boostRepeats` decides what a duplicate means. Within a single extraction pass a repeat is
+ * evidence the source keeps coming back to the claim, which is a reason to rank it higher. Across
+ * passes it means nothing — every item is expected to appear in both readings of the source — and
+ * boosting there flattens the scale: it pushed 70% of items to importance 5 and left nothing for
+ * a later stage to triage on.
  */
-export function dedupeKnowledgeItems(items: IndexedKnowledgeItem[]) {
+export function dedupeKnowledgeItems(
+  items: IndexedKnowledgeItem[],
+  options: { boostRepeats?: boolean } = {},
+) {
+  const boostRepeats = options.boostRepeats ?? false;
   const kept: Array<IndexedKnowledgeItem & { tokens: Set<string> }> = [];
 
   for (const item of items) {
@@ -189,8 +198,10 @@ export function dedupeKnowledgeItems(items: IndexedKnowledgeItem[]) {
     );
 
     if (duplicate) {
-      // A repeated claim is evidence the source treats it as important.
-      duplicate.importance = Math.min(5, Math.max(duplicate.importance, item.importance) + 1);
+      duplicate.importance = Math.min(
+        5,
+        Math.max(duplicate.importance, item.importance) + (boostRepeats ? 1 : 0),
+      );
       continue;
     }
 

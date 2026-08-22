@@ -8,7 +8,10 @@ import {
   normalizeNoteLanguage,
   resolveNoteLanguageLabel,
 } from "@/lib/languages";
-import { normalizeMarkdownMath } from "@/lib/math-markdown";
+import {
+  countWords,
+  normalizeGeneratedNoteMarkdown,
+} from "@/lib/notes/note-prompts";
 import type { NoteGenerationResult, TranscriptSegmentInput } from "@/lib/types";
 
 const NOTE_CHUNK_SUMMARY_CONCURRENCY = 2;
@@ -19,130 +22,6 @@ const MATH_FORMATTING_INSTRUCTIONS = `Formula formatting rules:
 - Use LaTeX subscripts, fractions, exponents, roots, functions, Greek letters, inequalities, arrows, sums, and integrals: \\(Y_t\\), \\(Y_{t-1}\\), \\(I_{t/0}\\), \\frac{a}{b}, x^2, \\sqrt{x}, \\sin(x), \\alpha, \\le, \\to, \\sum, and \\int.
 - For multi-line derivations, use one display math block with an aligned environment inside: $$\\begin{aligned} a &= b \\\\ c &= d \\end{aligned}$$.
 - Never write raw dollar-sign inline math, broken subscripts like $Yt$ or $I{t/0}$, or plain text formulas like Yt / Y0 100.`;
-
-export function countWords(value: string) {
-  return value.trim().split(/\s+/).filter(Boolean).length;
-}
-
-function decodeHtmlEntities(value: string) {
-  return value
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">");
-}
-
-function stripHtmlFromNotes(value: string) {
-  const normalized = value.trim();
-
-  if (!/<\/?(h[1-6]|p|ul|ol|li|strong|em|blockquote|br)\b/i.test(normalized)) {
-    return normalized;
-  }
-
-  return decodeHtmlEntities(
-    normalized
-      .replace(/\r\n/g, "\n")
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/p>/gi, "\n\n")
-      .replace(/<p[^>]*>/gi, "")
-      .replace(/<\/h1>/gi, "\n\n")
-      .replace(/<h1[^>]*>/gi, "# ")
-      .replace(/<\/h2>/gi, "\n\n")
-      .replace(/<h2[^>]*>/gi, "## ")
-      .replace(/<\/h3>/gi, "\n\n")
-      .replace(/<h3[^>]*>/gi, "### ")
-      .replace(/<\/h4>/gi, "\n\n")
-      .replace(/<h4[^>]*>/gi, "#### ")
-      .replace(/<\/h5>/gi, "\n\n")
-      .replace(/<h5[^>]*>/gi, "##### ")
-      .replace(/<\/h6>/gi, "\n\n")
-      .replace(/<h6[^>]*>/gi, "###### ")
-      .replace(/<\/li>/gi, "\n")
-      .replace(/<li[^>]*>/gi, "- ")
-      .replace(/<\/?(ul|ol)[^>]*>/gi, "\n")
-      .replace(/<\/strong>/gi, "**")
-      .replace(/<strong[^>]*>/gi, "**")
-      .replace(/<\/em>/gi, "*")
-      .replace(/<em[^>]*>/gi, "*")
-      .replace(/<\/blockquote>/gi, "\n")
-      .replace(/<blockquote[^>]*>/gi, "> ")
-      .replace(/<[^>]+>/g, "")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim(),
-  );
-}
-
-function normalizeStudyListSections(markdown: string) {
-  const listSectionHeadings = new Set([
-    "Preveri svoje znanje",
-    "Končni pregled",
-    "Check Yourself",
-    "Final Review",
-  ]);
-  const lines = markdown.split("\n");
-  const normalizedLines: string[] = [];
-  let inListSection = false;
-  let keptCalloutCount = 0;
-
-  for (const line of lines) {
-    const blockquote = /^>\s+(.+)$/.exec(line.trim());
-
-    if (blockquote) {
-      const content = blockquote[1];
-      const normalizedContent = content
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/\p{Diacritic}/gu, "");
-      const isExample = /^\*\*(primer|example):\*\*/.test(normalizedContent);
-      const shouldKeepCallout = keptCalloutCount < 3 && (!isExample || keptCalloutCount === 0);
-
-      if (shouldKeepCallout) {
-        keptCalloutCount += 1;
-        normalizedLines.push(line);
-      } else {
-        normalizedLines.push(content);
-      }
-
-      continue;
-    }
-
-    const unorderedListItem = /^(\s*)[*+]\s+(.+)$/.exec(line);
-
-    if (unorderedListItem) {
-      normalizedLines.push(`${unorderedListItem[1]}- ${unorderedListItem[2]}`);
-      continue;
-    }
-
-    const fixedLine = line
-      .replace(/^(#{2,3}\s+)Podrobni zapisk\s*$/i, "$1Podrobni zapiski")
-      .replace(/^(#{2,3}\s+)Detailed Note\s*$/i, "$1Detailed Notes");
-    const heading = /^#{2,3}\s+(.+)$/.exec(fixedLine.trim());
-
-    if (heading) {
-      const headingText = heading[1]
-        .replace(/[\u{1F300}-\u{1FAFF}]/gu, "")
-        .trim();
-      inListSection = listSectionHeadings.has(headingText);
-      normalizedLines.push(fixedLine);
-      continue;
-    }
-
-    if (
-      inListSection &&
-      line.trim().length > 0 &&
-      !/^(\s*[-*+]\s+|\s*\d+[.)]\s+|>\s+|\|)/.test(line)
-    ) {
-      normalizedLines.push(`- ${line.trim()}`);
-      continue;
-    }
-
-    normalizedLines.push(fixedLine);
-  }
-
-  return normalizedLines.join("\n");
-}
 
 function buildNoteTargets(sourceWordCount: number, chunkCount: number) {
   const targetNoteWordCount = Math.max(700, Math.min(3200, Math.round(sourceWordCount * 0.42)));
@@ -338,9 +217,7 @@ export async function generateNotesFromTranscript(
     ),
   });
 
-  const normalizedStructuredNotesMd = normalizeMarkdownMath(
-    normalizeStudyListSections(stripHtmlFromNotes(result.structuredNotesMd)),
-  );
+  const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(result.structuredNotesMd);
 
   const normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
 

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { normalizeMarkdownMath } from "../math-markdown.ts";
+
 import {
   buildGeneratedContentLanguageInstruction,
   normalizeNoteLanguage,
@@ -72,9 +74,23 @@ export function getStructuredPlusLabels(outputLanguage?: string | null) {
 /**
  * Extraction reads far more closely than synthesis does, so its windows are much smaller than the
  * 2200/3200-word windows the legacy pipeline summarised. A large window makes the model skim and
- * silently drop claims, which the outline step can never recover.
+ * silently drop claims, which no later step can recover.
+ *
+ * The size is measured, not guessed. On a dense source (39 testable facts in 913 words) extraction
+ * recall was 59% at 900-word windows and 100% at 400. Raising the thinking level instead makes it
+ * worse — a thinking model summarises the window where a fast one enumerates it.
  */
-export const KNOWLEDGE_EXTRACTION_WINDOW_WORDS = 900;
+export const KNOWLEDGE_EXTRACTION_WINDOW_WORDS = 400;
+
+/**
+ * Extraction is read twice at different granularities and the results are merged. One pass is not
+ * stable: the same dense source yielded 29 items on one run and 49 on another, and everything
+ * downstream is capped by whatever that single pass happened to catch. Two passes cut differently,
+ * so a claim that straddles a boundary in one pass sits inside a window in the other, and
+ * dedupeKnowledgeItems collapses the overlap. Extraction is the cheapest stage in the pipeline and
+ * the one every other stage depends on, which makes it the right place to spend twice.
+ */
+export const KNOWLEDGE_EXTRACTION_PASS_WINDOWS = [400, 260];
 
 export const KNOWLEDGE_ITEM_KINDS = [
   "definition",
@@ -239,9 +255,13 @@ export function buildNoteWritingInstructions(params: { outputLanguage?: string |
 
 Write study notes that teach the supplied outline. You also have the full source text: use it for wording, precision, formulas and worked examples, but let the outline decide what is covered.
 
-Teach every retained item once, in its assigned topic, in enough words to actually make it understood — a definition may take a line, a mechanism may take a paragraph. Add nothing that is not in the outline. Do not restate an item in a second place for emphasis.
+Teach every retained item once, in its assigned topic, in enough words to actually make it understood — a definition may take a line, a mechanism may take a paragraph. Add nothing that is not in the outline.
+
+Say each thing once. A learner should never meet the same sentence twice in different clothes. The overview, the bullets, the tables, the callouts and the review each do a different job: the overview orients, the bullets name, the topics explain, the table compares, the review consolidates in the learner's own testable words. If a callout would restate the overview, or a table would restate the bullets above it, drop it — a shorter note that never repeats itself beats a longer one that does.
 
 Length has no target. It is whatever teaching this outline honestly takes.
+
+Write for someone revising the night before an exam: name the thing, say what it is, say why it matters or what it is confused with. Prefer the concrete number, formula, or exact wording from the source over a paraphrase of it.
 
 Format (use these exact headings):
 - "${labels.overview}" — 2-3 sentences on the whole source, then one callout "> **${labels.keyTakeaway}:** ...".
@@ -249,8 +269,12 @@ Format (use these exact headings):
 - One GFM table when at least three items are genuinely comparable, with leading and trailing pipes. Never more than two tables, and never a table that repeats nearby bullets.
 - One "## N. Topic name" section per outline topic, in outline order.
 - Inside a topic use "${labels.coreIdea}" (exactly one sentence) and "${labels.detailedNotes}". Add "${labels.keyTerms}", "${labels.example}", "${labels.compare}" or "${labels.process}" only when that topic has such content.
-- "${labels.checkYourself}" once near the end — 3-5 questions answerable from these notes.
-- "${labels.finalReview}" — the takeaways and the mistakes worth warning about.
+- "${labels.checkYourself}" once near the end — 3-5 questions answerable from these notes, and worth asking: the things a learner most often gets wrong, not the easiest facts to look up.
+- "${labels.finalReview}" — the takeaways and the mistakes worth warning about, phrased so they are useful on their own without rereading the note.
+
+"${labels.overview}", "${labels.keyThings}", "${labels.checkYourself}" and "${labels.finalReview}" are always present. Everything else appears only when that topic has the content for it.
+
+"${labels.keyTerms}" is for terms whose definition is not already given in that topic's prose. Never repeat a definition there that the paragraph above just gave.
 
 Style: markdown only, no HTML. Bullets start with "- ". Prose for explanation, bullets for genuine lists. At most 3 blockquote callouts in total, of the form "> **${labels.definition}:** ...", "> **${labels.commonMistake}:** ..." or "> **${labels.keyTakeaway}:** ...". Between 2 and 5 emojis in major headings, never on bullets.
 
@@ -350,4 +374,141 @@ Use this stable Structured Plus markdown format with these exact heading labels:
 - End with "${labels.finalReview}" formatted as a hyphen bullet list containing 4-7 tight takeaways.
 
 Return markdown only. Do not use HTML tags. Use 2-5 logical emojis total in major section headings.`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Post-processing applied to every generated note                            */
+/* -------------------------------------------------------------------------- */
+
+export function countWords(value: string) {
+  return value.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+}
+
+function stripHtmlFromNotes(value: string) {
+  const normalized = value.trim();
+
+  if (!/<\/?(h[1-6]|p|ul|ol|li|strong|em|blockquote|br)\b/i.test(normalized)) {
+    return normalized;
+  }
+
+  return decodeHtmlEntities(
+    normalized
+      .replace(/\r\n/g, "\n")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<p[^>]*>/gi, "")
+      .replace(/<\/h1>/gi, "\n\n")
+      .replace(/<h1[^>]*>/gi, "# ")
+      .replace(/<\/h2>/gi, "\n\n")
+      .replace(/<h2[^>]*>/gi, "## ")
+      .replace(/<\/h3>/gi, "\n\n")
+      .replace(/<h3[^>]*>/gi, "### ")
+      .replace(/<\/h4>/gi, "\n\n")
+      .replace(/<h4[^>]*>/gi, "#### ")
+      .replace(/<\/h5>/gi, "\n\n")
+      .replace(/<h5[^>]*>/gi, "##### ")
+      .replace(/<\/h6>/gi, "\n\n")
+      .replace(/<h6[^>]*>/gi, "###### ")
+      .replace(/<\/li>/gi, "\n")
+      .replace(/<li[^>]*>/gi, "- ")
+      .replace(/<\/?(ul|ol)[^>]*>/gi, "\n")
+      .replace(/<\/strong>/gi, "**")
+      .replace(/<strong[^>]*>/gi, "**")
+      .replace(/<\/em>/gi, "*")
+      .replace(/<em[^>]*>/gi, "*")
+      .replace(/<\/blockquote>/gi, "\n")
+      .replace(/<blockquote[^>]*>/gi, "> ")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim(),
+  );
+}
+
+function normalizeStudyListSections(markdown: string) {
+  const listSectionHeadings = new Set([
+    "Preveri svoje znanje",
+    "Končni pregled",
+    "Check Yourself",
+    "Final Review",
+  ]);
+  const lines = markdown.split("\n");
+  const normalizedLines: string[] = [];
+  let inListSection = false;
+  let keptCalloutCount = 0;
+
+  for (const line of lines) {
+    const blockquote = /^>\s+(.+)$/.exec(line.trim());
+
+    if (blockquote) {
+      const content = blockquote[1];
+      const normalizedContent = content
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "");
+      const isExample = /^\*\*(primer|example):\*\*/.test(normalizedContent);
+      const shouldKeepCallout = keptCalloutCount < 3 && (!isExample || keptCalloutCount === 0);
+
+      if (shouldKeepCallout) {
+        keptCalloutCount += 1;
+        normalizedLines.push(line);
+      } else {
+        normalizedLines.push(content);
+      }
+
+      continue;
+    }
+
+    const unorderedListItem = /^(\s*)[*+]\s+(.+)$/.exec(line);
+
+    if (unorderedListItem) {
+      normalizedLines.push(`${unorderedListItem[1]}- ${unorderedListItem[2]}`);
+      continue;
+    }
+
+    const fixedLine = line
+      .replace(/^(#{2,3}\s+)Podrobni zapisk\s*$/i, "$1Podrobni zapiski")
+      .replace(/^(#{2,3}\s+)Detailed Note\s*$/i, "$1Detailed Notes");
+    const heading = /^#{2,3}\s+(.+)$/.exec(fixedLine.trim());
+
+    if (heading) {
+      const headingText = heading[1]
+        .replace(/[\u{1F300}-\u{1FAFF}]/gu, "")
+        .trim();
+      inListSection = listSectionHeadings.has(headingText);
+      normalizedLines.push(fixedLine);
+      continue;
+    }
+
+    if (
+      inListSection &&
+      line.trim().length > 0 &&
+      !/^(\s*[-*+]\s+|\s*\d+[.)]\s+|>\s+|\|)/.test(line)
+    ) {
+      normalizedLines.push(`- ${line.trim()}`);
+      continue;
+    }
+
+    normalizedLines.push(fixedLine);
+  }
+
+  return normalizedLines.join("\n");
+}
+
+/**
+ * The exact normalisation the pipeline applies before a note is stored, so anything that renders
+ * a note outside the pipeline (the eval harness, a preview page) shows what a learner would see
+ * rather than the raw model output.
+ */
+export function normalizeGeneratedNoteMarkdown(value: string) {
+  return normalizeMarkdownMath(normalizeStudyListSections(stripHtmlFromNotes(value)));
 }

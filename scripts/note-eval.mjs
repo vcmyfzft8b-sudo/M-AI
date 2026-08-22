@@ -26,10 +26,11 @@ import {
   buildNoteWritingInstructions,
   dedupeKnowledgeItems,
   formatOutlineForWriting,
-  KNOWLEDGE_EXTRACTION_WINDOW_WORDS,
+  KNOWLEDGE_EXTRACTION_PASS_WINDOWS,
   knowledgeExtractionSchema,
   legacyChunkSummarySchema,
   noteOutlineSchema,
+  normalizeGeneratedNoteMarkdown,
   noteWriteSchema,
 } from "../src/lib/notes/note-prompts.ts";
 import { resolveStageModelConfig } from "../src/lib/ai/model-config.ts";
@@ -219,18 +220,26 @@ async function runLegacyVariant(fixture, model) {
     ),
   });
 
-  return { notesMd: value.structuredNotesMd, stages: { chunks: windows.length } };
+  return {
+    notesMd: normalizeGeneratedNoteMarkdown(value.structuredNotesMd),
+    stages: { chunks: windows.length },
+  };
 }
 
 async function runContentDrivenVariant(fixture, fallbackModel) {
   const stage = (name) =>
     resolveStageModelConfig({ stage: name, env: process.env, fallbackModel });
-  const windows = buildWindows(fixture.source, KNOWLEDGE_EXTRACTION_WINDOW_WORDS);
-
   const extractConfig = stage("note_extract");
+  const passes = KNOWLEDGE_EXTRACTION_PASS_WINDOWS.flatMap((windowWords) =>
+    buildWindows(fixture.source, windowWords).map((window, index, all) => ({
+      window,
+      label: `Chunk ${index + 1} of ${all.length}`,
+    })),
+  );
+  const windows = buildWindows(fixture.source, KNOWLEDGE_EXTRACTION_PASS_WINDOWS[0]);
   const extractions = [];
 
-  for (const [index, window] of windows.entries()) {
+  for (const { window, label } of passes) {
     const { value } = await generate({
       schema: knowledgeExtractionSchema,
       model: extractConfig.model,
@@ -240,7 +249,7 @@ async function runContentDrivenVariant(fixture, fallbackModel) {
         outputLanguage: fixture.language,
         sourceType: fixture.sourceType,
       }),
-      input: `Chunk ${index + 1} of ${windows.length}.\n\n${window}`,
+      input: `${label}.\n\n${window}`,
     });
 
     extractions.push(value);
@@ -284,7 +293,7 @@ async function runContentDrivenVariant(fixture, fallbackModel) {
     thinkingLevel: writeConfig.thinkingLevel,
     // Sized from the retained items, not from a word target: ~110 output tokens per item plus
     // thinking headroom. Length follows the content, and so does the budget for it.
-    maxOutputTokens: Math.round(Math.max(2500, retainedItemCount * 110) * writeConfig.outputHeadroom),
+    maxOutputTokens: Math.round(Math.max(4000, retainedItemCount * 170) * writeConfig.outputHeadroom),
     instructions: buildNoteWritingInstructions({ outputLanguage: fixture.language }),
     input: `Outline to teach:\n${JSON.stringify(
       { title: outline.title, summary: outline.summary, topics: formatOutlineForWriting({ outline, items }) },
@@ -294,7 +303,7 @@ async function runContentDrivenVariant(fixture, fallbackModel) {
   });
 
   return {
-    notesMd: written.structuredNotesMd,
+    notesMd: normalizeGeneratedNoteMarkdown(written.structuredNotesMd),
     claims: items.map((item) => `[${item.importance}] ${item.claim}`),
     stages: {
       chunks: windows.length,
@@ -398,13 +407,19 @@ function scoreStructure(notesMd, language) {
   const tables = (notesMd.match(/^\|.+\|\s*$/gm) ?? []).length > 0
     ? (notesMd.match(/\n\|[-: |]+\|\n/g) ?? []).length
     : 0;
-  const overview = language === "sl" ? "## Hiter pregled" : "## Quick Overview";
-  const review = language === "sl" ? "## Končni pregled" : "## Final Review";
+  const overview = language === "sl" ? "Hiter pregled" : "Quick Overview";
+  const review = language === "sl" ? "Končni pregled" : "Final Review";
+  const check = language === "sl" ? "Preveri svoje znanje" : "Check Yourself";
+  // Headings are allowed an emoji, so match the label anywhere in the heading line rather than
+  // demanding it sit flush against the hashes.
+  const hasHeading = (label) =>
+    new RegExp(`^#{2,3}\\s+.*${label.replace(/[.*+?^$()|[\]\\]/g, "\\$&")}`, "m").test(notesMd);
 
   return {
-    hasOverview: notesMd.includes(overview),
-    hasFinalReview: notesMd.includes(review),
-    topics: (notesMd.match(/^##\s+\d+\./gm) ?? []).length,
+    hasOverview: hasHeading(overview),
+    hasFinalReview: hasHeading(review),
+    hasCheckYourself: hasHeading(check),
+    topics: (notesMd.match(/^##\s+(?:\p{Extended_Pictographic}\uFE0F?\s*)?\d+\./gmu) ?? []).length,
     tables,
     callouts,
     wrongBullets,

@@ -11,7 +11,7 @@ import type {
   TranscriptSegmentRow,
 } from "@/lib/database.types";
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
-import { countWords } from "@/lib/note-generation";
+import { countWords } from "@/lib/notes/note-prompts";
 import { createCoveragePlan, MAX_STUDY_ITEMS } from "@/lib/study-coverage";
 import { generateCoverageCards, repairCoverageCards } from "@/lib/study-cards";
 import type { CoverageCardDraft, CoverageUnitPlan, SourceUnit, StudySectionDraft } from "@/lib/study-models";

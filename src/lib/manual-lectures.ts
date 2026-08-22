@@ -1166,12 +1166,30 @@ export async function extractTextFromPdf(file: File) {
   const fallbackInstructions =
     "Extract as much readable text from this PDF as possible into plain text. Do not summarize. Preserve the source language, preserve examples and important details, and ignore repeated headers, footers, and page numbers when possible. Return only the extracted document text. Do not include JSON, markdown fences, commentary, or confidence notes.";
   const env = getServerEnv();
-  const fallbackText = await generateTextWithGeminiFile({
-    instructions: `${fallbackInstructions}\n\nExtract the document text as faithfully and completely as possible so it can be turned into detailed study notes and flashcards.`,
-    file,
-    model: env.GEMINI_TEXT_MODEL,
-    maxOutputTokens: PDF_FALLBACK_MAX_OUTPUT_TOKENS,
-  });
+  let fallbackText: string;
+
+  try {
+    fallbackText = await generateTextWithGeminiFile({
+      instructions: `${fallbackInstructions}\n\nExtract the document text as faithfully and completely as possible so it can be turned into detailed study notes and flashcards.`,
+      file,
+      model: env.GEMINI_TEXT_MODEL,
+      maxOutputTokens: PDF_FALLBACK_MAX_OUTPUT_TOKENS,
+    });
+  } catch (error) {
+    // Both readers have now given up on this file: PDF.js found no usable text layer, and the
+    // Gemini fallback answered with nothing four times over on an escalating token budget. That
+    // is a PDF with no readable text in it -- a scan of photographs, a diagram-only deck -- which
+    // is the learner's file to fix and not a defect, so say so in a way they can act on instead of
+    // failing the lecture with "Model returned empty text output." and paging us about it.
+    if (error instanceof GeminiEmptyTextOutputError) {
+      throw new ExpectedLectureInputError(
+        "V tem PDF-ju ni bilo mogoče najti berljivega besedila. Če gre za skeniran dokument, strani naloži kot fotografije, da jih lahko preberemo.",
+        "pdf_no_text",
+      );
+    }
+
+    throw error;
+  }
 
   return {
     title: file.name.replace(/\.pdf$/i, "") || "PDF document",

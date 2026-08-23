@@ -22,6 +22,7 @@ import {
   resolveExtractionMaxOutputTokens,
   knowledgeExtractionSchema,
   MATH_FORMATTING_INSTRUCTIONS,
+  enforceOutlineRetentionBounds,
   noteOutlineSchema,
   noteWriteSchema,
   normalizeGeneratedNoteMarkdown,
@@ -188,7 +189,7 @@ async function generateNotesContentDriven(
     throw new Error("Knowledge extraction found no study-worthy content in the source.");
   }
 
-  const outline = await generateStructuredObject({
+  const rawOutline = await generateStructuredObject({
     schema: noteOutlineSchema,
     maxOutputTokens: Math.max(2600, items.length * 60),
     stage: "note_outline",
@@ -212,6 +213,8 @@ async function generateNotesContentDriven(
     usageContext: params.usageContext,
   });
 
+  // The model chooses; the bounds on that choice are mechanical. See the function's own comment.
+  const outline = enforceOutlineRetentionBounds(rawOutline, items);
   const retainedItemCount = outline.topics.reduce(
     (total, topic) => total + topic.itemIds.length,
     0,

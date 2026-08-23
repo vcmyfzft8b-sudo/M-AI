@@ -151,3 +151,34 @@ test("a maths answer of one character is valid", () => {
     }),
   );
 });
+
+test("the outline's selection is bounded mechanically", async () => {
+  const { enforceOutlineRetentionBounds } = await import("../src/lib/notes/note-prompts.ts");
+  const mk = (id, importance, kind = "fact") => ({ id, importance, kind, sectionTitle: "T" });
+  const items = [
+    ...Array.from({ length: 10 }, (_u, i) => mk(i, 3, "definition")),
+    ...Array.from({ length: 90 }, (_u, i) => mk(10 + i, 3)),
+  ];
+
+  // Over-pruned: 5 kept of 100, every definition dropped. The backbone comes back.
+  const pruned = enforceOutlineRetentionBounds(
+    { topics: [{ title: "T", itemIds: [10, 11, 12, 13, 14] }], droppedItemIds: items.map((x) => x.id).filter((id) => ![10, 11, 12, 13, 14].includes(id)) },
+    items,
+  );
+  const keptIds = new Set(pruned.topics.flatMap((topic) => topic.itemIds));
+
+  for (let id = 0; id < 10; id += 1) {
+    assert.ok(keptIds.has(id), `definition ${id} must be restored`);
+  }
+
+  // Kept-everything: 100 of 100 becomes at most 60%.
+  const bloated = enforceOutlineRetentionBounds(
+    { topics: [{ title: "T", itemIds: items.map((x) => x.id) }], droppedItemIds: [] },
+    items,
+  );
+
+  assert.ok(
+    bloated.topics.flatMap((topic) => topic.itemIds).length <= 60,
+    "a note may never keep nearly everything again",
+  );
+});

@@ -403,7 +403,13 @@ You are given every knowledge item extracted from one source, each with an id. D
 
 Group the items that belong to the same concept into topics, ordered the way they should be learned rather than the order they appeared. Merge thin topics into their neighbours.
 
-Drop an item into droppedItemIds when it is redundant with a stronger item, too trivial to spend a learner's attention on, or cannot be understood outside the original source. Keep every item a learner would be tested on.
+Your job is to choose, and choosing means leaving things out. The extraction deliberately over-collects — it takes every claim it can find, including the incidental ones — and you are the step that decides which of them a learner actually needs. A note that keeps nearly everything is not a note, it is the source again.
+
+Keep an item only if a learner would be worse off not knowing it: the definitions the subject is built on, the distinctions that are examined, the mechanisms, the formulas, the numbers that matter. Drop the rest into droppedItemIds — the passing example, the aside, the restatement of something already kept, the detail that is true but that nobody is tested on, the item that only makes sense with the original slide in front of you.
+
+Expect to drop far more than you keep. Ask of every item: if this were missing, would the learner fail a question or misunderstand the subject? If not, it goes. When two items say nearly the same thing, keep the sharper one and drop the other.
+
+The importance rating is your starting point, not your answer — the extractor inflates it. Judge the item against the subject as a whole: in a source about property law, "ownership is the most complete power over a thing" is the subject, and "the seminar covered this in week three" is not.
 
 Let the material decide the shape. A source with few real ideas gets few topics. A dense source gets many. Do not aim for any particular number of topics.
 
@@ -460,15 +466,21 @@ export function buildNoteWritingInstructions(params: {
    * length, the model buys room by fusing and compressing rather than by dropping content — which
    * is the opposite of what it does when told only "teach everything".
    */
-  const coverageRule = `Your goal is coverage, not volume: every important thing in the source is in the note, and nothing that is not important is. Judge each sentence by what a learner would lose if it were deleted — if the answer is nothing, it does not belong.
+  const coverageRule = `You are writing a summary. The finished note is substantially shorter than the source and contains the part of it worth learning — that is the whole point of it existing. A learner who reads your note instead of the source should know everything they will be examined on and have spent a fraction of the time.
+
+The outline has already chosen what belongs. Teach those things well and add nothing else: no background the outline left out, no restating the source's structure, no sentence whose job is to introduce another sentence.
 
 Say it once, in the fewest words that still teach it. Fuse related points into one sentence rather than giving each its own. Cut every phrase that carries no information ("it is important to note that", "as we can see", "in this section we will"). Never pad a topic to make it look substantial, and never restate in the review what a topic already taught. A note that a learner can read in one sitting and still recall everything important beats a longer one that covers the same ground.`;
 
-  const pedagogyRule = `Build the note to be tested against, not just read. Re-reading a summary is one of the weakest ways to study; recalling it is one of the strongest, so every topic must give the learner something to recall against.
-
-In each topic, end with one "${labels.checkYourself}" style question a learner should be able to answer from that topic alone — put it inline, where the material is, not saved up for the end.
-
-Explain why, not only what. When the source gives a reason, a cause, or a consequence, state it: a learner remembers "X because Y" far better than "X". When two things are easily confused, say what separates them.
+  /**
+   * Retrieval practice is the strongest thing in the learning-science literature, but this product
+   * already delivers it three times over — flashcards, quiz and practice test, all built from the
+   * same items the note was written from. Putting questions in the note as well duplicated the
+   * decks and padded the one artefact that is supposed to be short. What stays here is the part
+   * that makes a fact learnable rather than merely recorded: the reason it holds, and the worked
+   * instance behind a formula.
+   */
+  const pedagogyRule = `Explain why, not only what. When the source gives a reason, a cause, or a consequence, state it: a learner remembers "X because Y" far better than "X". When two things are easily confused, say what separates them — that distinction is usually the thing being examined.
 
 When the source works through a procedure, a calculation or a formula, show one worked instance with its real numbers rather than describing the method in the abstract.`;
 
@@ -500,7 +512,7 @@ Format (use these exact headings):
 - One GFM table when at least three items are genuinely comparable, with leading and trailing pipes. Never more than two tables, and never a table that repeats nearby bullets.
 - One "## N. Topic name" section per outline topic, in outline order.
 - Inside a topic use "${labels.coreIdea}" (exactly one sentence) and "${labels.detailedNotes}". Add "${labels.keyTerms}", "${labels.example}", "${labels.compare}" or "${labels.process}" only when that topic has such content.
-- "${labels.checkYourself}" once near the end — 3-5 questions answerable from these notes, and worth asking: the things a learner most often gets wrong, not the easiest facts to look up.${params.pedagogy ? " These are in addition to the per-topic questions, and must not repeat them." : ""}
+- "${labels.checkYourself}" once near the end — 3-5 questions answerable from these notes, and worth asking: the things a learner most often gets wrong, not the easiest facts to look up.
 - "${labels.finalReview}" — the takeaways and the mistakes worth warning about, phrased so they are useful on their own without rereading the note.
 
 "${labels.overview}", "${labels.keyThings}", "${labels.checkYourself}" and "${labels.finalReview}" are always present. Everything else appears only when that topic has the content for it.
@@ -742,4 +754,79 @@ function normalizeStudyListSections(markdown: string) {
  */
 export function normalizeGeneratedNoteMarkdown(value: string) {
   return normalizeMarkdownMath(normalizeStudyListSections(stripHtmlFromNotes(value)));
+}
+
+/** The kinds a subject is built on; the outline never gets the last word on these. */
+const OUTLINE_BACKBONE_KINDS = new Set(["definition", "formula"]);
+
+/**
+ * Mechanical guardrails on the outline's selection, applied after the model has chosen.
+ *
+ * Measured 2026-08-23 on real uploads, the same instruction produced retention anywhere from 11
+ * of 48 items to 82 of 129 — one note missed exam material, the other was 86% as long as its
+ * source. The judgment of what to keep stays with the model; the bounds on that judgment are
+ * enforced here, the way the deck pipeline already does with selectDeckWorthyItems.
+ *
+ * Restores: any dropped definition or formula rated 3+, and any dropped item rated 5 — the things
+ * an examiner asks first — each into the topic whose section it came from, or the last topic.
+ * Trims: while more than 60% of the deduped items survive, the lowest-rated non-backbone item is
+ * dropped, so a note can never again be a rewrite of its source.
+ */
+export function enforceOutlineRetentionBounds<
+  TItem extends { id: number; kind: string; importance: number; sectionTitle: string },
+  TOutline extends { topics: Array<{ title: string; itemIds: number[] }>; droppedItemIds: number[] },
+>(outline: TOutline, items: TItem[]) {
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  const isBackbone = (item: TItem) =>
+    (OUTLINE_BACKBONE_KINDS.has(item.kind) && item.importance >= 3) || item.importance >= 5;
+  const topics = outline.topics.map((topic) => ({ ...topic, itemIds: [...topic.itemIds] }));
+  const retained = new Set(topics.flatMap((topic) => topic.itemIds));
+  const dropped = outline.droppedItemIds.filter((id) => !retained.has(id));
+
+  const restoredIds = new Set<number>();
+
+  for (const id of dropped) {
+    const item = itemById.get(id);
+
+    if (!item || !isBackbone(item)) {
+      continue;
+    }
+
+    const home =
+      topics.find((topic) => topic.title === item.sectionTitle) ?? topics[topics.length - 1];
+
+    if (home) {
+      home.itemIds.push(id);
+      retained.add(id);
+      restoredIds.add(id);
+    }
+  }
+
+  const ceiling = Math.max(20, Math.ceil(items.length * 0.6));
+
+  if (retained.size > ceiling) {
+    const removable = [...retained]
+      .map((id) => itemById.get(id))
+      .filter((item): item is TItem => Boolean(item) && !isBackbone(item as TItem))
+      .sort((left, right) => left.importance - right.importance);
+
+    for (const item of removable) {
+      if (retained.size <= ceiling) {
+        break;
+      }
+
+      retained.delete(item.id);
+
+      for (const topic of topics) {
+        topic.itemIds = topic.itemIds.filter((id) => id !== item.id);
+      }
+    }
+  }
+
+  return {
+    ...outline,
+    topics: topics.filter((topic) => topic.itemIds.length > 0),
+    droppedItemIds: items.map((item) => item.id).filter((id) => !retained.has(id)),
+    restoredItemCount: restoredIds.size,
+  };
 }

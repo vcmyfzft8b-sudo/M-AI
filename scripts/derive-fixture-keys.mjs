@@ -41,7 +41,7 @@ for (const file of fs.readdirSync(dir).filter((entry) => entry.endsWith(".json")
     thinkingLevel: "low",
     maxOutputTokens: 8000,
     instructions:
-      "List the distinct testable facts a learner must know from this source, as standalone claims in the source's own language. Cover the whole source evenly, including its later sections. Skip administrative chatter, learning objectives and repetition. At most 60.",
+      "You are setting the exam. List the facts from this source a student would actually be tested on, as standalone claims in the source's own language: the definitions the subject is built on, the distinctions, mechanisms, formulas and values that decide whether an answer is right. Leave out what an examiner would not ask — asides, examples that only illustrate, administrative chatter, repetition, background. Cover the whole source's important material, including its later sections. At most 40.",
     input: fixture.source.slice(0, 60000),
   });
 

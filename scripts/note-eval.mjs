@@ -25,6 +25,7 @@ import {
   buildNoteOutlineInstructions,
   buildNoteWritingInstructions,
   dedupeKnowledgeItems,
+  enforceOutlineRetentionBounds,
   formatOutlineForWriting,
   resolveNoteWordBudget,
   KNOWLEDGE_EXTRACTION_PASS_WINDOWS,
@@ -370,7 +371,7 @@ async function runContentDrivenVariant(fixture, fallbackModel, forceModel, optio
   );
 
   const outlineConfig = stage("note_outline");
-  const { value: outline } = await generate({
+  const { value: rawOutline } = await generate({
     schema: noteOutlineSchema,
     model: outlineConfig.model,
     thinkingLevel: outlineConfig.thinkingLevel,
@@ -391,6 +392,7 @@ async function runContentDrivenVariant(fixture, fallbackModel, forceModel, optio
       2,
     ),
   });
+  const outline = enforceOutlineRetentionBounds(rawOutline, items);
 
   const writeConfig = stage("note_write");
   const retainedItemCount = outline.topics.reduce((total, topic) => total + topic.itemIds.length, 0);

@@ -32,6 +32,10 @@ overturning any of it.
    layouts owns the overlay; it portals into `.app-shell-content` (geometry inherited), holds
    until the route skeleton (`data-route-skeleton`) unmounts, releases immediately on redirects.
 
+Every model in the stack was chosen by measurement, and those measurements — what was tested,
+what it cost, which dates change the answer, and the bugs the real material exposed — are written
+up in [ai-model-selection.md](./ai-model-selection.md). Read that before changing a model.
+
 ## How to verify changes (the actual gates)
 
 ```bash

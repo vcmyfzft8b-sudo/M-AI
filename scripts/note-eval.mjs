@@ -45,6 +45,12 @@ import { buildGeneratedContentLanguageInstruction } from "../src/lib/languages.t
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FIXTURE_DIR = path.join(ROOT, "evals", "fixtures");
+/**
+ * Out-of-sample fixtures built from real uploads. Kept out of git because they are other people's
+ * study material, and kept separate because the committed fixtures are the ones these prompts were
+ * developed against — scoring well on those proves much less than scoring well on these.
+ */
+const PRIVATE_FIXTURE_DIR = path.join(ROOT, "evals", "fixtures-private");
 const OUTPUT_DIR = path.join(ROOT, "evals", "output");
 
 const PRICES = {
@@ -598,6 +604,40 @@ function scoreStructure(notesMd, language) {
 
 const args = process.argv.slice(2);
 const argValue = (name) => args.find((arg) => arg.startsWith(`--${name}=`))?.split("=")[1];
+/**
+ * A fixture shipped without a hand-written answer key gets one derived from its source, once, and
+ * written back into the fixture file. Every variant is then graded against that identical key.
+ *
+ * This is what makes an out-of-sample test possible at all: the four original fixtures are the
+ * ones these prompts were developed against, so their scores are optimistic by construction. Real
+ * uploads have no key and nobody is going to hand-write one for a 5,000-word paper.
+ */
+async function ensureKeyFacts(fixture) {
+  if (fixture.keyFacts?.length) {
+    return fixture;
+  }
+
+  const { value } = await generate({
+    schema: z.object({ facts: z.array(z.string().min(8)).min(10).max(60) }),
+    model: GRADER_MODEL,
+    thinkingLevel: "low",
+    maxOutputTokens: 8000,
+    instructions:
+      "List the distinct testable facts a learner must know from this source, as standalone claims in the source's own language. Cover the whole source evenly, including its later sections. Skip administrative chatter, learning objectives and repetition. At most 60.",
+    input: fixture.source.slice(0, 60000),
+  });
+
+  const updated = { ...fixture, keyFacts: value.facts };
+
+  fs.writeFileSync(
+    path.join(fixture.directory ?? FIXTURE_DIR, `${fixture.id}.json`),
+    `${JSON.stringify(updated, null, 2)}\n`,
+  );
+  process.stdout.write(`derived ${value.facts.length} key facts for ${fixture.id}\n`);
+
+  return updated;
+}
+
 const wantedVariants = argValue("variant")?.split(",") ?? Object.keys(VARIANTS);
 const wantedFixtures = argValue("fixture")?.split(",");
 const shouldSave = args.includes("--save");
@@ -606,11 +646,23 @@ const shouldGrade = !args.includes("--no-grade");
 // justify a prompt or model decision. Every reported figure is a mean over --repeat runs.
 const repeats = Number.parseInt(argValue("repeat") ?? "1", 10);
 
-const fixtures = fs
-  .readdirSync(FIXTURE_DIR)
-  .filter((file) => file.endsWith(".json"))
-  .map((file) => JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, file), "utf8")))
-  .filter((fixture) => !wantedFixtures || wantedFixtures.includes(fixture.id));
+function loadFixturesFrom(directory) {
+  if (!fs.existsSync(directory)) {
+    return [];
+  }
+
+  return fs
+    .readdirSync(directory)
+    .filter((file) => file.endsWith(".json"))
+    .map((file) => ({
+      ...JSON.parse(fs.readFileSync(path.join(directory, file), "utf8")),
+      directory,
+    }));
+}
+
+const fixtures = [...loadFixturesFrom(FIXTURE_DIR), ...loadFixturesFrom(PRIVATE_FIXTURE_DIR)].filter(
+  (fixture) => !wantedFixtures || wantedFixtures.includes(fixture.id),
+);
 
 if (shouldSave) {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
@@ -618,7 +670,10 @@ if (shouldSave) {
 
 const results = [];
 
-for (const fixture of fixtures) {
+for (const rawFixture of fixtures) {
+  // A keyless fixture is graded against a key derived from its own source, once, before any
+  // variant runs — so every candidate answers to the identical standard.
+  const fixture = shouldGrade ? await ensureKeyFacts(rawFixture) : rawFixture;
   const sourceWords = countWords(fixture.source);
 
   for (const variantKey of wantedVariants) {

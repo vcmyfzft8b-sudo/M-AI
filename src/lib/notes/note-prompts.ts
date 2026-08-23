@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { normalizeMarkdownMath } from "../math-markdown.ts";
+import { normalizeMarkdownMath, stripBareTextMacrosFromProse } from "../math-markdown.ts";
 
 import {
   buildGeneratedContentLanguageInstruction,
@@ -753,7 +753,9 @@ function normalizeStudyListSections(markdown: string) {
  * rather than the raw model output.
  */
 export function normalizeGeneratedNoteMarkdown(value: string) {
-  return normalizeMarkdownMath(normalizeStudyListSections(stripHtmlFromNotes(value)));
+  return stripBareTextMacrosFromProse(
+    normalizeMarkdownMath(normalizeStudyListSections(stripHtmlFromNotes(value))),
+  );
 }
 
 /** The kinds a subject is built on; the outline never gets the last word on these. */

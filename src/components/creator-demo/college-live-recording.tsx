@@ -334,7 +334,7 @@ const MarkdownBlock = memo(function MarkdownBlock({ text }: { text: string }) {
       // Same math contract as MarkdownRenderer: no single-dollar math (currency amounts pair up
       // and explode tables), inline math arrives as \(...\) and is normalised to $$...$$.
       remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }]]}
-      rehypePlugins={[rehypeKatex, rehypeHighlightKeyPhrases]}
+      rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: "ignore", errorColor: "inherit" }], rehypeHighlightKeyPhrases]}
       components={NOTE_MARKDOWN_COMPONENTS}
     >
       {normalizeMathDelimiters(text)}

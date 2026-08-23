@@ -344,7 +344,7 @@ function rewriteOutsideTextSpans(value: string, rewrite: (segment: string) => st
 }
 
 export function normalizeFormulaSyntax(value: string) {
-  return replaceTopLevelFormulaFractions(
+  return rewriteOutsideTextSpans(
     rewriteOutsideTextSpans(
       normalizeMathFunctions(
         repairDroppedLatexCommandBackslashes(normalizeLatexEnvironment(value)),
@@ -376,6 +376,9 @@ export function normalizeFormulaSyntax(value: string) {
           .replace(/(?<![\p{L}\p{N}_])(\p{Lu})\{([^{}]+)\}/gu, "$1_{$2}")
           .replace(/(?<![\p{L}\p{N}_])(\p{Lu})(\d+)(?![\p{L}\p{N}_])/gu, "$1_{$2}"),
     ),
+    // Runs per segment between \text spans: a slash whose operand would reach into a \text
+    // stays a slash, which KaTeX renders fine. Splicing \frac braces into \text does not.
+    replaceTopLevelFormulaFractions,
   )
     .replace(/(\})\s+(100(?:\\%)?)/g, "$1 \\cdot $2")
     .replace(/\s+/g, " ")
@@ -627,4 +630,42 @@ export function normalizeMarkdownMath(markdown: string) {
   }
 
   return normalizedLines.join("\n");
+}
+
+/**
+ * Unwraps \text{...} that appears in plain prose, outside any math delimiter, code fence or
+ * table row. The writer occasionally carries its math habits into ordinary sentences —
+ * "50\text{ enot} z vrednostjo 39.000\text{ EUR}" in a bullet — and a learner should read
+ * "50 enot", not markup. Real math spans are left byte-for-byte alone.
+ */
+export function stripBareTextMacrosFromProse(value: string) {
+  return value
+    .split(/(```[\s\S]*?```)/)
+    .map((block, blockIndex) => {
+      if (blockIndex % 2 === 1) {
+        return block;
+      }
+
+      return block
+        .split("\n")
+        .map((line) => {
+          if (line.trimStart().startsWith("|")) {
+            return line;
+          }
+
+          return line
+            .split(/(\$\$[\s\S]*?\$\$|\\\([\s\S]*?\\\))/)
+            .map((segment, segmentIndex) =>
+              segmentIndex % 2 === 1
+                ? segment
+                : // The space in "\text{ enot}" is the space between number and unit; keep it.
+                  segment.replace(/\\text\{([^{}]*)\}/g, (_match, inner: string) =>
+                    inner.replace(/\s+/g, " "),
+                  ),
+            )
+            .join("");
+        })
+        .join("\n");
+    })
+    .join("");
 }

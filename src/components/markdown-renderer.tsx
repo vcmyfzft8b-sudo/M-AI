@@ -25,7 +25,9 @@ export function MarkdownRenderer({ content }: { content: string }) {
     <div className="markdown text-sm text-stone-700 sm:text-[15px]">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }]]}
-        rehypePlugins={[rehypeKatex]}
+        // A formula KaTeX cannot parse renders as its source in the surrounding colour — an
+        // imperfect formula reads as text, it does not scream in red at a learner mid-revision.
+        rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: "ignore", errorColor: "inherit" }]]}
       >
         {normalizeMathDelimiters(content)}
       </ReactMarkdown>

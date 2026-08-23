@@ -33,3 +33,29 @@ test("symbols outside \\text{} are still converted", () => {
   // ...and the same symbol inside prose is left alone.
   assert.equal(normalizeFormulaSyntax("\\text{do 5 ≤ 10}"), "\\text{do 5 ≤ 10}");
 });
+
+test("a fraction never splices into a \\text span", async () => {
+  // The production accounting note rendered "780\tex\frac{t{ EUR}}{\text{enoto}}" in red: the
+  // slash-to-\frac rewriter walked its operand boundary into the middle of \text{ EUR}.
+  const formula = "780\\text{ EUR}/\\text{enoto}";
+  const out = normalizeFormulaSyntax(formula);
+
+  assert.ok(!out.includes("\\tex\\frac"), out);
+  assert.ok(out.includes("\\text{ EUR}"), out);
+  assert.ok(out.includes("\\text{enoto}"), out);
+});
+
+test("stray \\text in prose is unwrapped at write time, math spans untouched", async () => {
+  const { stripBareTextMacrosFromProse } = await import("../src/lib/math-markdown.ts");
+  const note = [
+    "- Začetna zaloga: 50\\text{ enot} z vrednostjo 39.000\\text{ EUR}",
+    "| cena | 780\\text{ EUR} |",
+    "$$\\text{Povprečna cena} = 750$$",
+  ].join("\n");
+  const out = stripBareTextMacrosFromProse(note);
+
+  assert.ok(out.includes("50 enot z vrednostjo 39.000 EUR"), out);
+  // Table rows and math spans keep their bytes.
+  assert.ok(out.includes("| cena | 780\\text{ EUR} |"), out);
+  assert.ok(out.includes("$$\\text{Povprečna cena} = 750$$"), out);
+});

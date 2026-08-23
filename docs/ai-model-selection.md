@@ -64,6 +64,14 @@ Only the writer varied; extraction ran on `gemini-2.5-flash-lite` throughout.
 | `gemini-3.5-flash-lite` | 95.2% | 91.5% | $0.6202 |
 | `gemini-2.5-flash-lite` | 94.9% | 93.5% | $0.3802 |
 
+**Re-measured after the summary rework (exam-focused keys, selective outline): the gap widened.**
+Writing a selective summary is a harder per-item job than transcribing a kept-everything outline —
+the writer now decides how much compression each fact survives. Out of sample: 3.7-flash 93.8%
+mean / 79% worst, 3.5-flash-lite 86.4% / 58%, 2.5-flash-lite 80.9% with a 33%-recall catastrophic
+run whose extraction had been 100%. The cheap writers lose the facts in the writing step, and they
+lose them worst exactly when the note is at its most selective. The strong writer is not optional
+under this flow.
+
 The gap is concentrated in long documents. On the 5,000-word paper the cheaper writers lost 15 and
 23 points **during writing** — extraction had found everything, the writer could not hold it.
 3.7 Flash lost 8. Short documents do not separate the candidates at all.

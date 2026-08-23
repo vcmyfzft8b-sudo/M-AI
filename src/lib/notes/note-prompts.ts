@@ -152,7 +152,10 @@ export const knowledgeItemSchema = z.object({
   kind: z.enum(KNOWLEDGE_ITEM_KINDS),
   // 5 = a learner cannot pass without this. 1 = true but disposable.
   importance: z.number().int().min(1).max(5),
-  terms: z.array(z.string().min(2)).max(4),
+  // One character is a real term in a maths lecture: e, x, pi, the base a of a logarithm. A
+  // two-character floor rejected the extraction of a production logarithms source outright and
+  // burned the retry ladder on every attempt.
+  terms: z.array(z.string().min(1)).max(4),
 });
 
 export const knowledgeExtractionSchema = z.object({

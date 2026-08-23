@@ -42,8 +42,13 @@ export const generatedQuizQuestionSchema = z.object({
   question: z.string().min(10).max(300),
   options: z.array(z.string().min(1).max(200)).length(4),
   correctIndex: z.number().int().min(0).max(3),
-  // One sentence a learner reads after answering: why the correct option is correct.
-  explanation: z.string().min(6).max(400),
+  /**
+   * What the learner reads after answering, and where the learning actually lands: why the
+   * correct option is correct, and what makes the most tempting wrong one wrong. That is two
+   * explanations, and in Slovene it does not fit in 400 characters — the cap was rejecting whole
+   * batches of a production maths source and burning the retry ladder on every attempt.
+   */
+  explanation: z.string().min(6).max(900),
   difficulty: z.enum(["easy", "medium", "hard"]),
 });
 

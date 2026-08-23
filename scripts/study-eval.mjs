@@ -50,6 +50,12 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FIXTURE_DIR = path.join(ROOT, "evals", "fixtures");
+/**
+ * Out-of-sample fixtures built from real uploads, gitignored because they are other people's study
+ * material. The committed fixtures are the ones these prompts were developed against, so a deck
+ * that scores well on those has proved much less than one that scores well on these.
+ */
+const PRIVATE_FIXTURE_DIR = path.join(ROOT, "evals", "fixtures-private");
 const OUTPUT_DIR = path.join(ROOT, "evals", "output");
 
 loadEnv(ROOT);
@@ -431,11 +437,20 @@ const wantedFixtures = argValue("fixture")?.split(",");
 const shouldSave = args.includes("--save");
 const shouldGrade = !args.includes("--no-grade");
 
-const fixtures = fs
-  .readdirSync(FIXTURE_DIR)
-  .filter((file) => file.endsWith(".json"))
-  .map((file) => JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, file), "utf8")))
-  .filter((fixture) => !wantedFixtures || wantedFixtures.includes(fixture.id));
+function loadFixturesFrom(directory) {
+  if (!fs.existsSync(directory)) {
+    return [];
+  }
+
+  return fs
+    .readdirSync(directory)
+    .filter((file) => file.endsWith(".json"))
+    .map((file) => JSON.parse(fs.readFileSync(path.join(directory, file), "utf8")));
+}
+
+const fixtures = [...loadFixturesFrom(FIXTURE_DIR), ...loadFixturesFrom(PRIVATE_FIXTURE_DIR)].filter(
+  (fixture) => !wantedFixtures || wantedFixtures.includes(fixture.id),
+);
 
 if (shouldSave) {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });

@@ -27,7 +27,12 @@ const citedItemId = z.number().int().nonnegative();
 export const generatedFlashcardSchema = z.object({
   itemId: citedItemId,
   front: z.string().min(6).max(160),
-  back: z.string().min(2).max(260),
+  /**
+   * One character is a whole answer in mathematics — e, 0, 1, x. A two-character floor is a prose
+   * assumption, and it rejected entire flashcard batches from a production logarithms lecture.
+   * Same mistake as the two-character floor that was on knowledge-item terms.
+   */
+  back: z.string().min(1).max(260),
   difficulty: z.enum(["easy", "medium", "hard"]),
 });
 
@@ -60,7 +65,8 @@ export const quizBatchSchema = z.object({
 export const generatedPracticeQuestionSchema = z.object({
   itemId: citedItemId,
   question: z.string().min(10).max(400),
-  expectedPoints: z.array(z.string().min(3)).min(1).max(5),
+  // A marking point can be a single value for the same reason a flashcard answer can.
+  expectedPoints: z.array(z.string().min(1)).min(1).max(5),
 });
 
 export const practiceBatchSchema = z.object({

@@ -7,6 +7,10 @@ import {
   MIN_DECK_ITEMS,
   selectDeckWorthyItems,
 } from "../src/lib/notes/study-item-mapping.ts";
+import {
+  generatedFlashcardSchema,
+  generatedPracticeQuestionSchema,
+} from "../src/lib/notes/study-prompts.ts";
 
 const item = (importance, claim, kind = "fact") => ({ importance, claim, kind });
 
@@ -125,4 +129,25 @@ test("over the ceiling the rated margin gives way before the backbone", () => {
 
   assert.equal(selected.length, 40);
   assert.equal(selected.filter((entry) => entry.kind === "definition").length, 30);
+});
+
+test("a maths answer of one character is valid", () => {
+  // Three separate two-character floors rejected real production maths material: knowledge-item
+  // terms (e, x, the base a), the flashcard back (e, 0, 1) and practice marking points. They were
+  // prose assumptions, and this app is given a lot of mathematics.
+  assert.doesNotThrow(() =>
+    generatedFlashcardSchema.parse({
+      itemId: 0,
+      front: "Kateri je naravni logaritem osnove e?",
+      back: "1",
+      difficulty: "easy",
+    }),
+  );
+  assert.doesNotThrow(() =>
+    generatedPracticeQuestionSchema.parse({
+      itemId: 0,
+      question: "Izracunaj log osnove e od e.",
+      expectedPoints: ["1"],
+    }),
+  );
 });

@@ -180,3 +180,28 @@ export function isUnsupportedVideoContentType(contentType: string) {
 export function getUnsupportedVideoUrlMessage(value: string) {
   return isUnsupportedVideoUrl(value) ? getUnsupportedVideoLinkMessage() : null;
 }
+
+/**
+ * Whether a response is worth trying to read as a page.
+ *
+ * Anything textual qualifies, plus the XML-flavoured HTML that a surprising number of university
+ * and government sites still serve, plus JSON — an API or a docs page rendered from JSON still has
+ * words in it, and the extractor either finds prose or the pipeline rejects it downstream for
+ * having nothing to teach. A learner pasting a link should be told "there is nothing here to
+ * learn from" only when that is true, not when the server used an unusual content type. Binary —
+ * video, audio, images, archives — is still refused, since there is no text to find.
+ */
+export function isReadableLinkContentType(contentType: string) {
+  const normalized = contentType.toLowerCase();
+
+  return (
+    normalized.startsWith("text/") ||
+    normalized.includes("application/xhtml") ||
+    normalized.includes("application/xml") ||
+    normalized.includes("+xml") ||
+    normalized.includes("application/json") ||
+    normalized.includes("+json") ||
+    // A server that says nothing is usually a plain page; read it and judge by the content.
+    normalized.trim().length === 0
+  );
+}

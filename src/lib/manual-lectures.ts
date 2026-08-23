@@ -55,6 +55,7 @@ import { createEmbeddings as createAiEmbeddings } from "@/lib/ai/embeddings";
 import {
   isUnsupportedVideoContentType,
   getUnsupportedVideoLinkMessage,
+  isReadableLinkContentType,
 } from "@/lib/link-source-validation";
 import {
   ExpectedLectureInputError,
@@ -77,7 +78,15 @@ const pptxVisualExtractionSchema = z.object({
 });
 
 const MAX_LINK_FETCH_REDIRECTS = 3;
-const MAX_LINK_FETCH_BYTES = 1_000_000;
+/**
+ * A ceiling on how much markup we are willing to pull down, not a judgement about the page.
+ *
+ * The old limit was 1 MB of raw HTML, which rejected ordinary encyclopaedia and documentation
+ * pages: their markup runs to several megabytes while the readable article underneath is a few
+ * tens of kilobytes, and it gets capped at MAX_LINK_READABLE_TEXT_CHARS regardless. Measuring the
+ * markup was measuring the wrong thing.
+ */
+const MAX_LINK_FETCH_BYTES = 8_000_000;
 const MAX_LINK_READABLE_TEXT_CHARS = 45_000;
 const MAX_PREPARED_SOURCE_TEXT_CHARS = 240_000;
 const LINK_FETCH_TIMEOUT_MS = 10_000;
@@ -916,16 +925,15 @@ function resolveRedirectUrl(baseUrl: URL, location: string) {
   }
 }
 
+/**
+ * Reads at most maxBytes of the response and returns what it got.
+ *
+ * A page bigger than the ceiling is truncated rather than refused: the readable-text extractor
+ * copes with a partial document, article text sits near the top of the markup, and the extracted
+ * text is capped anyway. Refusing outright turned "this page is long" into "we cannot read this
+ * page", which is a worse answer and, for a learner pasting a Wikipedia link, a wrong one.
+ */
 async function readResponseBodyWithLimit(response: Response, maxBytes: number) {
-  const contentLength = Number(response.headers.get("content-length"));
-
-  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    throw new ExpectedLectureInputError(
-      "The linked page is too large to import.",
-      "link_too_large",
-    );
-  }
-
   if (!response.body) {
     return "";
   }
@@ -944,15 +952,12 @@ async function readResponseBodyWithLimit(response: Response, maxBytes: number) {
       }
 
       totalBytes += value.byteLength;
-
-      if (totalBytes > maxBytes) {
-        throw new ExpectedLectureInputError(
-          "The linked page is too large to import.",
-          "link_too_large",
-        );
-      }
-
       body += decoder.decode(value, { stream: true });
+
+      if (totalBytes >= maxBytes) {
+        await reader.cancel();
+        break;
+      }
     }
 
     body += decoder.decode();
@@ -1061,7 +1066,7 @@ export async function fetchReadableWebpage(params: { url: string }) {
     );
   }
 
-  if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
+  if (!isReadableLinkContentType(contentType)) {
     throw new ExpectedLectureInputError(
       "Only standard web pages are supported for link summaries.",
       "unsupported_link_content_type",

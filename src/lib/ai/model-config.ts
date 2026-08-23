@@ -45,7 +45,7 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
   note_write: {
     thinkingLevel: "high",
     outputHeadroom: 2.5,
-    defaultModel: "gemini-3.7-flash",
+    defaultModel: "or/google/gemini-3.7-flash",
   },
   coverage_plan: { thinkingLevel: "low", outputHeadroom: 1.6 },
   study_items: { thinkingLevel: "low", outputHeadroom: 1.6 },

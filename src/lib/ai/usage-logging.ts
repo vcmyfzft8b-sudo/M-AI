@@ -24,7 +24,17 @@ type GeminiModelPrice = {
   outputUsdPerMillion: number;
 };
 
+/**
+ * Routed models are priced at the gateway's rate, not the provider's — that is the entire point of
+ * routing them. Read live from OpenRouter's models API on 2026-08-23: gemini-3.7-flash is on a
+ * limited-time promotion at half Google's own price, so the meter has to know which door the call
+ * went through or every cost report is double.
+ */
 const GEMINI_MODEL_PRICES: Record<string, GeminiModelPrice> = {
+  "or/google/gemini-3.7-flash": { inputUsdPerMillion: 0.375, outputUsdPerMillion: 1.875 },
+  "or/google/gemini-3.6-flash": { inputUsdPerMillion: 0.75, outputUsdPerMillion: 3.75 },
+  "or/google/gemini-2.5-flash-lite": { inputUsdPerMillion: 0.1, outputUsdPerMillion: 0.4 },
+  "gemini-3.7-flash": { inputUsdPerMillion: 0.75, outputUsdPerMillion: 3.75 },
   "gemini-3.5-flash-lite": {
     inputUsdPerMillion: 0.3,
     outputUsdPerMillion: 2.5,

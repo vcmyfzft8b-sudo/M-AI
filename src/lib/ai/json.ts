@@ -5,6 +5,11 @@ import { z } from "zod";
 
 import { generateStructuredObjectWithGemini } from "@/lib/ai/gemini";
 import {
+  directModelId,
+  generateStructuredObjectWithOpenRouter,
+  isOpenRouterModel,
+} from "@/lib/ai/openrouter";
+import {
   applyOutputHeadroom,
   resolveStageModelConfig,
   type AiStage,
@@ -55,12 +60,52 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
     fallbackModel: env.GEMINI_TEXT_MODEL,
   });
 
+  const maxOutputTokens = applyOutputHeadroom(params.maxOutputTokens, config);
+  const usageContext = {
+    ...(params.usageContext ?? {}),
+    stage: params.usageContext?.stage ?? params.stage,
+  };
+
+  /**
+   * A stage may name a routed model ("or/google/gemini-3.7-flash") to buy the same weights at the
+   * gateway's price — on 2026-08-23 that is half what Google charges for 3.7-flash, on the most
+   * expensive call in the product.
+   *
+   * The gateway is one more thing that can be down, and a promotional rate is a thing that ends,
+   * so a routed call that fails for any reason is retried once against the provider directly. A
+   * learner's lecture is never worth failing to save a fraction of a cent, and the fallback also
+   * means the day the promotion ends is a pricing decision rather than an outage.
+   */
+  if (isOpenRouterModel(config.model)) {
+    const apiKey = env.OPENROUTER_API_KEY;
+
+    if (apiKey) {
+      try {
+        return await generateStructuredObjectWithOpenRouter({
+          schema: params.schema,
+          instructions: params.instructions,
+          input: params.input,
+          model: config.model,
+          apiKey,
+          maxOutputTokens,
+          thinkingLevel: config.thinkingLevel,
+          usageContext,
+        });
+      } catch (error) {
+        console.warn(
+          `OpenRouter call for ${config.model} failed, falling back to the direct provider.`,
+          error,
+        );
+      }
+    }
+  }
+
   return generateStructuredObjectWithGemini({
     schema: params.schema,
     instructions: params.instructions,
     input: params.input,
-    model: config.model,
-    maxOutputTokens: applyOutputHeadroom(params.maxOutputTokens, config),
+    model: isOpenRouterModel(config.model) ? directModelId(config.model) : config.model,
+    maxOutputTokens,
     ...(config.thinkingLevel
       ? {
           thinkingConfig: {
@@ -68,9 +113,6 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
           },
         }
       : {}),
-    usageContext: {
-      ...(params.usageContext ?? {}),
-      stage: params.usageContext?.stage ?? params.stage,
-    },
+    usageContext,
   });
 }

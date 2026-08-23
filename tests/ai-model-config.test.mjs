@@ -126,7 +126,13 @@ test("dedupe keeps claims that merely share vocabulary but state different facts
 test("note writing defaults to the premium model even when the shared fallback is cheap", () => {
   // The one stage worth paying for: measured 2026-08-23, it is where 3.5-flash-lite starts
   // dropping facts (92-94% recall) and 3.7-flash holds 100% on every fixture.
-  assert.equal(resolve("note_write", {}, "gemini-2.5-flash-lite").model, "gemini-3.7-flash");
+  // Routed through OpenRouter, where the same weights cost half what Google charges. json.ts
+  // falls back to the direct provider if the gateway fails, so this is a price choice, not a
+  // dependency.
+  assert.equal(
+    resolve("note_write", {}, "gemini-2.5-flash-lite").model,
+    "or/google/gemini-3.7-flash",
+  );
   assert.equal(resolve("note_extract", {}, "gemini-2.5-flash-lite").model, "gemini-2.5-flash-lite");
   // An explicit env override still wins over the stage default.
   assert.equal(
@@ -166,4 +172,12 @@ test("a GPT-5 model gets output headroom even at minimal effort", () => {
   });
 
   assert.equal(gemini.outputHeadroom, 1, "a model that does not think needs no headroom");
+});
+
+test("a routed model keeps its reasoning level and headroom", () => {
+  // The gateway changes the price, not the model, so the writer must still think.
+  const config = resolve("note_write", {}, "gemini-2.5-flash-lite");
+
+  assert.equal(config.thinkingLevel, "high");
+  assert.ok(applyOutputHeadroom(2500, config) > 2500);
 });

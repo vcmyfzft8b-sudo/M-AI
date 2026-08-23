@@ -317,6 +317,18 @@ const VARIANTS = {
     label: "item-driven, gemini-3.5-flash-lite",
     run: (fixture) => runItemDrivenVariant(fixture, "gemini-3.5-flash-lite"),
   },
+  "v2-2.5-lite": {
+    label: "item-driven, gemini-2.5-flash-lite (what production actually runs)",
+    run: (fixture) => runItemDrivenVariant(fixture, "gemini-2.5-flash-lite"),
+  },
+  "v2-gpt5-nano": {
+    label: "item-driven, gpt-5-nano",
+    run: (fixture) => runItemDrivenVariant(fixture, "gpt-5-nano"),
+  },
+  "v2-3.7-flash": {
+    label: "item-driven, gemini-3.7-flash on OpenRouter's promotional rate",
+    run: (fixture) => runItemDrivenVariant(fixture, "or/google/gemini-3.7-flash"),
+  },
 };
 
 /* -------------------------------------------------------------------------- */

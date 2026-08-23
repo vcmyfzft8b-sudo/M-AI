@@ -6,6 +6,13 @@ import path from "node:path";
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 
+import {
+  generateOpenAi,
+  generateOpenRouter,
+  isOpenAiModel,
+  isOpenRouterModel,
+} from "./openai-backend.mjs";
+
 export const PRICES = {
   "gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
   "gemini-3.1-flash-lite": { input: 0.25, output: 1.5 },
@@ -13,7 +20,17 @@ export const PRICES = {
   "gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },
   "gemini-3.6-flash": { input: 0.75, output: 3.75 },
   "gemini-3.7-flash": { input: 0.75, output: 3.75 },
+  "gpt-5-nano": { input: 0.05, output: 0.4 },
+  "gpt-5-mini": { input: 0.25, output: 2 },
+  // OpenRouter list rates read live from its models API on 2026-08-23; 3.7-flash is on a limited
+  // time promotion there, at half Google's own current price.
+  "or/google/gemini-3.7-flash": { input: 0.375, output: 1.875 },
+  "or/google/gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
+  "or/openai/gpt-5-nano": { input: 0.05, output: 0.4 },
 };
+
+/** A bake-off that hangs is worse than one that fails; every call gets a deadline. */
+const CALL_TIMEOUT_MS = 180_000;
 
 export const GRADER_MODEL = "gemini-3.5-flash-lite";
 
@@ -76,6 +93,22 @@ export async function generate({
   maxOutputTokens,
   thinkingLevel,
 }) {
+  if (isOpenRouterModel(model) || isOpenAiModel(model)) {
+    const run = isOpenRouterModel(model) ? generateOpenRouter : generateOpenAi;
+
+    return run({
+      schema,
+      instructions,
+      input,
+      model,
+      maxOutputTokens,
+      thinkingLevel,
+      ledger,
+      prices: PRICES,
+      timeoutMs: CALL_TIMEOUT_MS,
+    });
+  }
+
   const responseSchema = z.toJSONSchema(schema);
   let budget = maxOutputTokens;
 

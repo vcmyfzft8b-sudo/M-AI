@@ -25,9 +25,12 @@ type StageDefaults = {
   outputHeadroom: number;
   /**
    * A stage names its own model only when the measurement said the shared default is not good
-   * enough for it. The per-stage sweep (scripts/model-sweep.sh, 2026-08-22) found exactly one
-   * such stage: note writing, where the cheap model holds every fact but bloats to 130% of the
-   * source length while 3.5-flash-lite holds 73%.
+   * enough for it. Note writing is still the only such stage, and re-measured 2026-08-23 against
+   * the learning-science prompt it is the stage where models separate hardest: asked to teach,
+   * question and explain at once, 3.5-flash-lite drops facts to fit (92-94% recall) and
+   * 2.5-flash-lite collapses on a bad run (43%), while 3.7-flash holds 100% on every fixture with
+   * zero loss in the writing step. Everything else stays on the cheap model, where four candidates
+   * scored the same and only the price differed.
    */
   defaultModel?: string;
 };
@@ -42,7 +45,7 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
   note_write: {
     thinkingLevel: "high",
     outputHeadroom: 2.5,
-    defaultModel: "gemini-3.5-flash-lite",
+    defaultModel: "gemini-3.7-flash",
   },
   coverage_plan: { thinkingLevel: "low", outputHeadroom: 1.6 },
   study_items: { thinkingLevel: "low", outputHeadroom: 1.6 },
@@ -75,16 +78,39 @@ function parseThinkingLevel(value: string | undefined): ThinkingLevel | null {
   return normalized && THINKING_LEVELS.has(normalized) ? (normalized as ThinkingLevel) : null;
 }
 
+/** Strips a gateway prefix ("or/google/…") so a routed model is recognised as what it is. */
+function bareModelName(model: string) {
+  return model.replace(/^or\//i, "").replace(/^[a-z0-9-]+\//i, "");
+}
+
+/** Every GPT-5 model reasons, and its reasoning tokens are billed and budgeted as output. */
+function isOpenAiReasoningModel(model: string) {
+  return /^gpt-5/i.test(bareModelName(model));
+}
+
 /**
- * A model only honours a thinking level if it is a 3.x model. Sending thinkingConfig to a 2.5
- * model is accepted but meaningless, and 2.5-flash-lite does not think at all, so the headroom
+ * A model only honours a thinking level if it reasons at all. Sending thinkingConfig to a 2.5
+ * Gemini is accepted but meaningless, and 2.5-flash-lite does not think, so the headroom
  * multiplier has to collapse back to 1 or every budget is inflated for no reason.
  */
 export function supportsThinkingLevel(model: string) {
-  const majorVersion = Number.parseInt(model.match(/gemini-(\d+)/i)?.[1] ?? "", 10);
+  if (isOpenAiReasoningModel(model)) {
+    return true;
+  }
+
+  const majorVersion = Number.parseInt(bareModelName(model).match(/gemini-(\d+)/i)?.[1] ?? "", 10);
 
   return !Number.isNaN(majorVersion) && majorVersion >= 3;
 }
+
+/**
+ * Gemini at "minimal" genuinely does not think — the production meter records zero thinking tokens
+ * for every extraction call — so its budget needs no headroom. A GPT-5 model at minimal effort
+ * still reasons, and reasoning comes out of the same budget as the answer: measured 2026-08-23,
+ * gpt-5-nano spent 94,656 reasoning tokens across 27 extraction calls and every one of them
+ * truncated at a budget sized for a model that does not think.
+ */
+const OPENAI_MINIMAL_EFFORT_HEADROOM = 2;
 
 export type StageModelConfig = {
   stage: AiStage;
@@ -108,11 +134,16 @@ export function resolveStageModelConfig(params: {
     ? (parseThinkingLevel(params.env[STAGE_THINKING_ENV_KEYS[params.stage]]) ?? defaults.thinkingLevel)
     : null;
 
+  const minimalHeadroom = isOpenAiReasoningModel(model) ? OPENAI_MINIMAL_EFFORT_HEADROOM : 1;
+
   return {
     stage: params.stage,
     model,
     thinkingLevel,
-    outputHeadroom: thinkingLevel && thinkingLevel !== "minimal" ? defaults.outputHeadroom : 1,
+    outputHeadroom:
+      thinkingLevel && thinkingLevel !== "minimal"
+        ? Math.max(defaults.outputHeadroom, minimalHeadroom)
+        : minimalHeadroom,
   };
 }
 

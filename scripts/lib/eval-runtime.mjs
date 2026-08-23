@@ -96,7 +96,8 @@ export async function generate({
   if (isOpenRouterModel(model) || isOpenAiModel(model)) {
     const run = isOpenRouterModel(model) ? generateOpenRouter : generateOpenAi;
 
-    return run({
+    // This harness hands back the parsed value; the shared backend hands back { value, usage }.
+    const { value } = await run({
       schema,
       instructions,
       input,
@@ -107,6 +108,8 @@ export async function generate({
       prices: PRICES,
       timeoutMs: CALL_TIMEOUT_MS,
     });
+
+    return value;
   }
 
   const responseSchema = z.toJSONSchema(schema);

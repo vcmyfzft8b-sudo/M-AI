@@ -124,8 +124,9 @@ test("dedupe keeps claims that merely share vocabulary but state different facts
 });
 
 test("note writing defaults to the premium model even when the shared fallback is cheap", () => {
-  // The one stage the sweep found worth paying for: everything else inherits the fallback.
-  assert.equal(resolve("note_write", {}, "gemini-2.5-flash-lite").model, "gemini-3.5-flash-lite");
+  // The one stage worth paying for: measured 2026-08-23, it is where 3.5-flash-lite starts
+  // dropping facts (92-94% recall) and 3.7-flash holds 100% on every fixture.
+  assert.equal(resolve("note_write", {}, "gemini-2.5-flash-lite").model, "gemini-3.7-flash");
   assert.equal(resolve("note_extract", {}, "gemini-2.5-flash-lite").model, "gemini-2.5-flash-lite");
   // An explicit env override still wins over the stage default.
   assert.equal(
@@ -133,4 +134,36 @@ test("note writing defaults to the premium model even when the shared fallback i
       .model,
     "gemini-3.6-flash",
   );
+});
+
+test("a reasoning model is recognised through a gateway prefix", () => {
+  assert.equal(supportsThinkingLevel("or/google/gemini-3.7-flash"), true);
+  assert.equal(supportsThinkingLevel("or/openai/gpt-5-nano"), true);
+  assert.equal(supportsThinkingLevel("gpt-5-nano"), true);
+  assert.equal(supportsThinkingLevel("gpt-5-mini"), true);
+  // 2.5 still does not think, routed or not, so its budget must not be inflated.
+  assert.equal(supportsThinkingLevel("or/google/gemini-2.5-flash-lite"), false);
+  assert.equal(supportsThinkingLevel("gemini-2.5-flash-lite"), false);
+});
+
+test("a GPT-5 model gets output headroom even at minimal effort", () => {
+  // Measured: gpt-5-nano spent 94,656 reasoning tokens across 27 extraction calls and truncated
+  // every time, because extraction budgets assume a model that does not think.
+  const nano = resolveStageModelConfig({
+    stage: "note_extract",
+    env: {},
+    fallbackModel: "gpt-5-nano",
+  });
+
+  assert.equal(nano.thinkingLevel, "minimal");
+  assert.ok(nano.outputHeadroom > 1, "reasoning at minimal still eats the output budget");
+  assert.ok(applyOutputHeadroom(1800, nano) >= 3600);
+
+  const gemini = resolveStageModelConfig({
+    stage: "note_extract",
+    env: {},
+    fallbackModel: "gemini-2.5-flash-lite",
+  });
+
+  assert.equal(gemini.outputHeadroom, 1, "a model that does not think needs no headroom");
 });

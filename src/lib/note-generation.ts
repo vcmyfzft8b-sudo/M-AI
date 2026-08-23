@@ -216,7 +216,11 @@ async function generateNotesContentDriven(
     schema: noteWriteSchema,
     maxOutputTokens: Math.max(4000, retainedItemCount * 170),
     stage: "note_write",
-    instructions: buildNoteWritingInstructions({ outputLanguage: params.outputLanguage }),
+    instructions: buildNoteWritingInstructions({
+      outputLanguage: params.outputLanguage,
+      coverageObjective: true,
+      pedagogy: true,
+    }),
     input: `Outline to teach:\n${JSON.stringify(
       {
         title: outline.title,

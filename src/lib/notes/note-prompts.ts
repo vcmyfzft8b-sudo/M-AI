@@ -384,9 +384,73 @@ Every retained id must appear in exactly one topic, and every id must be either 
 Also return a title, a summary of 2-3 sentences covering the whole source, and the key topics.`;
 }
 
-export function buildNoteWritingInstructions(params: { outputLanguage?: string | null }) {
+/**
+ * Derives the writer's word budget from the source. A study note that runs longer than the lecture
+ * it condenses has stopped being a note: measured 2026-08-23, an unbudgeted writer produced 123%
+ * of source on gemini-3.5-flash-lite, 199% on gpt-5-nano and 213% on gemini-3.7-flash, so the
+ * absence of a budget — not the model — is what sets the length.
+ *
+ * The floor keeps a short, dense source teachable; the ceiling is the source itself, which no
+ * summary has any business exceeding.
+ */
+export function resolveNoteWordBudget(params: { sourceWordCount: number; retainedItemCount: number }) {
+  const fromSource = Math.round(params.sourceWordCount * 0.7);
+  const fromItems = params.retainedItemCount * 22;
+
+  return {
+    target: Math.max(250, Math.min(fromSource, Math.max(fromItems, Math.round(fromSource * 0.6)))),
+    ceiling: Math.max(320, params.sourceWordCount),
+  };
+}
+
+export function buildNoteWritingInstructions(params: {
+  outputLanguage?: string | null;
+  /** Omit to keep the unbudgeted behaviour the measured pipeline shipped with. */
+  wordBudget?: { target: number; ceiling: number };
+  /**
+   * States the goal as coverage of what matters rather than as a word count. Chain-of-Density
+   * gets its compression from a fixed length; this asks whether naming the objective gets the
+   * same density without ever mentioning length, which is the friendlier instruction if it works.
+   */
+  coverageObjective?: boolean;
+  /**
+   * Applies what the learning-science literature actually says about study material, which is not
+   * the same as what the summarisation literature says. Dunlosky et al. (2013) rate summarising as
+   * *low* utility and practice testing as *high*: a note that is only read is one of the weakest
+   * things a learner can do with their time. So the note is built to be tested against — retrieval
+   * cues sit inside every topic instead of in one block at the end — and explanations carry the
+   * "why" that elaborative interrogation and self-explanation (both moderate utility, both above
+   * summarising) depend on. Mayer's coherence principle supplies the other half: learning improves
+   * when extraneous material is excluded, not merely when good material is added.
+   */
+  pedagogy?: boolean;
+}) {
   const labels = getStructuredPlusLabels(params.outputLanguage);
   const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
+  /**
+   * Chain-of-Density's finding, applied to a single pass: when a summary has to fit a fixed
+   * length, the model buys room by fusing and compressing rather than by dropping content — which
+   * is the opposite of what it does when told only "teach everything".
+   */
+  const coverageRule = `Your goal is coverage, not volume: every important thing in the source is in the note, and nothing that is not important is. Judge each sentence by what a learner would lose if it were deleted — if the answer is nothing, it does not belong.
+
+Say it once, in the fewest words that still teach it. Fuse related points into one sentence rather than giving each its own. Cut every phrase that carries no information ("it is important to note that", "as we can see", "in this section we will"). Never pad a topic to make it look substantial, and never restate in the review what a topic already taught. A note that a learner can read in one sitting and still recall everything important beats a longer one that covers the same ground.`;
+
+  const pedagogyRule = `Build the note to be tested against, not just read. Re-reading a summary is one of the weakest ways to study; recalling it is one of the strongest, so every topic must give the learner something to recall against.
+
+In each topic, end with one "${labels.checkYourself}" style question a learner should be able to answer from that topic alone — put it inline, where the material is, not saved up for the end.
+
+Explain why, not only what. When the source gives a reason, a cause, or a consequence, state it: a learner remembers "X because Y" far better than "X". When two things are easily confused, say what separates them.
+
+When the source works through a procedure, a calculation or a formula, show one worked instance with its real numbers rather than describing the method in the abstract.`;
+
+  const lengthRule = params.coverageObjective
+    ? coverageRule
+    : params.wordBudget
+    ? `Length: aim for about ${params.wordBudget.target} words and never exceed ${params.wordBudget.ceiling}. The note must be shorter than the source — a note as long as the lecture has saved the learner nothing.
+
+If everything will not fit, you may not drop a retained item. Make room the other way: fuse two sentences into one, replace a clause with the term it defines, cut every phrase that carries no information ("it is important to note that", "as we can see"), and let a table or a bullet carry what a paragraph was carrying. Density is the goal — every sentence should teach something the previous one did not.`
+    : "Length has no target. It is whatever teaching this outline honestly takes.";
 
   return `${languageInstruction}
 
@@ -396,8 +460,10 @@ Teach every retained item once, in its assigned topic, in enough words to actual
 
 Say each thing once. A learner should never meet the same sentence twice in different clothes. The overview, the bullets, the tables, the callouts and the review each do a different job: the overview orients, the bullets name, the topics explain, the table compares, the review consolidates in the learner's own testable words. If a callout would restate the overview, or a table would restate the bullets above it, drop it — a shorter note that never repeats itself beats a longer one that does.
 
-Length has no target. It is whatever teaching this outline honestly takes.
-
+${lengthRule}
+${params.pedagogy ? `
+${pedagogyRule}
+` : ""}
 Write for someone revising the night before an exam: name the thing, say what it is, say why it matters or what it is confused with. Prefer the concrete number, formula, or exact wording from the source over a paraphrase of it.
 
 Format (use these exact headings):
@@ -406,7 +472,7 @@ Format (use these exact headings):
 - One GFM table when at least three items are genuinely comparable, with leading and trailing pipes. Never more than two tables, and never a table that repeats nearby bullets.
 - One "## N. Topic name" section per outline topic, in outline order.
 - Inside a topic use "${labels.coreIdea}" (exactly one sentence) and "${labels.detailedNotes}". Add "${labels.keyTerms}", "${labels.example}", "${labels.compare}" or "${labels.process}" only when that topic has such content.
-- "${labels.checkYourself}" once near the end — 3-5 questions answerable from these notes, and worth asking: the things a learner most often gets wrong, not the easiest facts to look up.
+- "${labels.checkYourself}" once near the end — 3-5 questions answerable from these notes, and worth asking: the things a learner most often gets wrong, not the easiest facts to look up.${params.pedagogy ? " These are in addition to the per-topic questions, and must not repeat them." : ""}
 - "${labels.finalReview}" — the takeaways and the mistakes worth warning about, phrased so they are useful on their own without rereading the note.
 
 "${labels.overview}", "${labels.keyThings}", "${labels.checkYourself}" and "${labels.finalReview}" are always present. Everything else appears only when that topic has the content for it.

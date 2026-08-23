@@ -12,6 +12,7 @@ import type {
 } from "@/lib/database.types";
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
 import { countWords } from "@/lib/notes/note-prompts";
+import { interleaveByTopic } from "@/lib/notes/study-item-mapping";
 import { createCoveragePlan, MAX_STUDY_ITEMS } from "@/lib/study-coverage";
 import {
   buildItemPlans,
@@ -264,13 +265,16 @@ function trimCardsToPlanBudget(params: {
     selectedCountByConcept.set(card.conceptKey, currentCount + 1);
   }
 
-  return selected.sort(
-    (left, right) =>
-      left.sourceUnitIdx - right.sourceUnitIdx ||
-      left.conceptKey.localeCompare(right.conceptKey) ||
-      right.coverageRank - left.coverageRank,
+  return interleaveByTopic(
+    selected.sort(
+      (left, right) =>
+        left.sourceUnitIdx - right.sourceUnitIdx ||
+        left.conceptKey.localeCompare(right.conceptKey) ||
+        right.coverageRank - left.coverageRank,
+    ),
   );
 }
+
 
 function selectAcceptedCards(params: {
   cards: CoverageCardDraft[];

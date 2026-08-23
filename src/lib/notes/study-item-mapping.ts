@@ -277,3 +277,36 @@ export function selectDeckWorthyItems<T extends { importance: number; kind?: str
 
   return [...keptBackbone, ...spread(rated, maxItems - keptBackbone.length)].sort(inSourceOrder);
 }
+
+/**
+ * Deals the deck round-robin across its topics instead of walking the source front to back.
+ *
+ * Practising one topic to exhaustion before starting the next (blocked practice) feels easier and
+ * teaches less: the learner never has to work out *which* idea a question is about, because the
+ * block already told them. Interleaving forces that discrimination on every card, and is one of
+ * the techniques the learning-science reviews rate as genuinely improving retention.
+ *
+ * Source order is kept inside each topic, so a sequence that has to be learned in order still is.
+ */
+export function interleaveByTopic<TCard extends { sourceUnitIdx: number }>(cards: TCard[]) {
+  const byTopic = new Map<number, TCard[]>();
+
+  for (const card of cards) {
+    byTopic.set(card.sourceUnitIdx, [...(byTopic.get(card.sourceUnitIdx) ?? []), card]);
+  }
+
+  const queues = [...byTopic.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, group]) => group);
+  const output: TCard[] = [];
+
+  for (let round = 0; output.length < cards.length; round += 1) {
+    for (const queue of queues) {
+      if (round < queue.length) {
+        output.push(queue[round]);
+      }
+    }
+  }
+
+  return output;
+}

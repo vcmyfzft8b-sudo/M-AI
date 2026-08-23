@@ -26,6 +26,7 @@ import {
   buildNoteWritingInstructions,
   dedupeKnowledgeItems,
   formatOutlineForWriting,
+  resolveNoteWordBudget,
   KNOWLEDGE_EXTRACTION_PASS_WINDOWS,
   knowledgeExtractionSchema,
   legacyChunkSummarySchema,
@@ -33,6 +34,12 @@ import {
   normalizeGeneratedNoteMarkdown,
   noteWriteSchema,
 } from "../src/lib/notes/note-prompts.ts";
+import {
+  generateOpenAi,
+  generateOpenRouter,
+  isOpenAiModel,
+  isOpenRouterModel,
+} from "./lib/openai-backend.mjs";
 import { resolveStageModelConfig } from "../src/lib/ai/model-config.ts";
 import { buildGeneratedContentLanguageInstruction } from "../src/lib/languages.ts";
 
@@ -50,112 +57,14 @@ const PRICES = {
   "gpt-5-nano": { input: 0.05, output: 0.4 },
   "gpt-5-mini": { input: 0.25, output: 2 },
   "gpt-5": { input: 1.25, output: 10 },
+  // OpenRouter list rates read live from its models API on 2026-08-23. 3.7-flash is on a limited
+  // time promotion there: half Google's own list price, and cheaper per output token than the
+  // 3.5-flash-lite this pipeline currently pays for the writing.
+  "or/google/gemini-3.7-flash": { input: 0.375, output: 1.875 },
+  "or/google/gemini-3.6-flash": { input: 0.75, output: 3.75 },
+  "or/google/gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
+  "or/openai/gpt-5-nano": { input: 0.05, output: 0.4 },
 };
-
-/**
- * Both providers answer the same prompts against the same schemas here, so a model from either
- * one can be graded by the same grader on the same fixtures. That is the only way to compare a
- * price card against quality rather than against a benchmark someone else ran on someone else's
- * task.
- */
-const isOpenAiModel = (model) => model.startsWith("gpt-");
-
-// OpenAI spends reasoning tokens out of max_output_tokens exactly as Gemini spends thinking
-// tokens, so the levels map straight across and the same headroom multipliers apply.
-const OPENAI_REASONING_EFFORT = {
-  minimal: "minimal",
-  low: "low",
-  medium: "medium",
-  high: "high",
-};
-
-// OpenAI's strict structured outputs accept a subset of JSON Schema: every object must forbid
-// extra properties and require every key, and the value constraints are simply rejected. Dropping
-// them here is what makes the schema loadable at all — the zod parse afterwards still enforces
-// them, so a model that ignores "at most four terms" is caught rather than excused.
-const OPENAI_UNSUPPORTED_SCHEMA_KEYS = [
-  "minItems",
-  "maxItems",
-  "minimum",
-  "maximum",
-  "exclusiveMinimum",
-  "exclusiveMaximum",
-  "minLength",
-  "maxLength",
-  "multipleOf",
-  "default",
-  "$schema",
-];
-
-/**
- * Gemini enforces "at most four terms" inside the platform; OpenAI's strict mode cannot express
- * it, so the model has to obey it from the prompt and gpt-5-nano does not. Clamping the answer
- * back into the schema keeps the comparison about whether a model finds the facts rather than
- * whether it can count, and the clamp count is reported so the difference is not hidden.
- */
-function clampToSchema(value, node, stats) {
-  if (!node || typeof node !== "object") {
-    return value;
-  }
-
-  if (node.type === "array" && Array.isArray(value)) {
-    const clamped =
-      typeof node.maxItems === "number" && value.length > node.maxItems
-        ? (stats.clamped += 1, value.slice(0, node.maxItems))
-        : value;
-
-    return clamped.map((entry) => clampToSchema(entry, node.items, stats));
-  }
-
-  if (node.type === "object" && value && typeof value === "object") {
-    const output = {};
-
-    for (const [key, entry] of Object.entries(value)) {
-      output[key] = clampToSchema(entry, node.properties?.[key], stats);
-    }
-
-    return output;
-  }
-
-  if (node.type === "integer" || node.type === "number") {
-    if (typeof value !== "number") {
-      return value;
-    }
-
-    const low = typeof node.minimum === "number" ? Math.max(node.minimum, value) : value;
-
-    return typeof node.maximum === "number" ? Math.min(node.maximum, low) : low;
-  }
-
-  return value;
-}
-
-function toOpenAiStrictSchema(node) {
-  if (Array.isArray(node)) {
-    return node.map(toOpenAiStrictSchema);
-  }
-
-  if (node === null || typeof node !== "object") {
-    return node;
-  }
-
-  const output = {};
-
-  for (const [key, value] of Object.entries(node)) {
-    if (OPENAI_UNSUPPORTED_SCHEMA_KEYS.includes(key)) {
-      continue;
-    }
-
-    output[key] = toOpenAiStrictSchema(value);
-  }
-
-  if (output.type === "object" && output.properties) {
-    output.additionalProperties = false;
-    output.required = Object.keys(output.properties);
-  }
-
-  return output;
-}
 
 const GRADER_MODEL = "gemini-3.5-flash-lite";
 
@@ -188,7 +97,23 @@ function loadEnv() {
 
 loadEnv();
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// A bake-off that hangs is worse than one that fails: a single stalled request with no deadline
+// held a five-variant run for forty minutes at three seconds of CPU. Every call gets a deadline.
+const CALL_TIMEOUT_MS = 180_000;
+
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: { timeout: CALL_TIMEOUT_MS },
+});
+
+function withDeadline(promise, label) {
+  return Promise.race([
+    promise,
+    new Promise((_resolve, reject) =>
+      setTimeout(() => reject(new Error(`${label} exceeded ${CALL_TIMEOUT_MS}ms`)), CALL_TIMEOUT_MS),
+    ),
+  ]);
+}
 const ledger = { calls: 0, inputTokens: 0, outputTokens: 0, thoughtTokens: 0, costUsd: 0, clamped: 0 };
 
 function countWords(value) {
@@ -212,100 +137,40 @@ function recordUsage(model, usage) {
   return { inputTokens, outputTokens, thoughtTokens, costUsd };
 }
 
-async function generateOpenAi({ schema, instructions, input, model, maxOutputTokens, thinkingLevel }) {
-  const responseSchema = z.toJSONSchema(schema);
-
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model,
-        instructions,
-        input: `${input}\n\nReturn exactly one JSON object matching this schema:\n${JSON.stringify(responseSchema)}`,
-        max_output_tokens: maxOutputTokens,
-        text: {
-          format: {
-            type: "json_schema",
-            name: "note_stage_output",
-            strict: true,
-            schema: toOpenAiStrictSchema(responseSchema),
-          },
-        },
-        ...(thinkingLevel
-          ? { reasoning: { effort: OPENAI_REASONING_EFFORT[thinkingLevel] ?? "low" } }
-          : {}),
-      }),
-    });
-    const payload = await response.json();
-
-    if (payload.error) {
-      throw new Error(`${model}: ${payload.error.message}`);
-    }
-
-    const price = PRICES[model] ?? { input: 0, output: 0 };
-    const inputTokens = payload.usage?.input_tokens ?? 0;
-    const outputTokens = payload.usage?.output_tokens ?? 0;
-    const thoughtTokens = payload.usage?.output_tokens_details?.reasoning_tokens ?? 0;
-
-    ledger.calls += 1;
-    ledger.inputTokens += inputTokens;
-    ledger.outputTokens += outputTokens;
-    ledger.thoughtTokens += thoughtTokens;
-    ledger.costUsd += (inputTokens * price.input + outputTokens * price.output) / 1_000_000;
-
-    const text = (payload.output ?? [])
-      .flatMap((entry) => entry.content ?? [])
-      .map((part) => part.text ?? "")
-      .join("")
-      .trim();
-
-    if (!text || payload.status === "incomplete") {
-      if (attempt === 2) {
-        throw new Error(
-          `${model} truncated at ${maxOutputTokens} tokens (${payload.incomplete_details?.reason ?? "empty"})`,
-        );
-      }
-
-      maxOutputTokens = Math.round(maxOutputTokens * 1.8);
-      continue;
-    }
-
-    const parsed = schema.safeParse(clampToSchema(JSON.parse(text), responseSchema, ledger));
-
-    if (!parsed.success) {
-      if (attempt === 2) {
-        throw new Error(`${model} broke the schema: ${parsed.error.issues[0]?.message}`);
-      }
-
-      input = `${input}\n\nYour previous answer was rejected: ${parsed.error.issues
-        .slice(0, 3)
-        .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-        .join("; ")}. Obey every constraint in the schema.`;
-      continue;
-    }
-
-    return {
-      value: parsed.data,
-      usage: { inputTokens, outputTokens, thoughtTokens },
-    };
-  }
-
-  throw new Error(`${model} never returned usable output`);
-}
-
 async function generate({ schema, instructions, input, model, maxOutputTokens, thinkingLevel }) {
+  if (isOpenRouterModel(model)) {
+    return generateOpenRouter({
+      schema,
+      instructions,
+      input,
+      model,
+      maxOutputTokens,
+      thinkingLevel,
+      ledger,
+      prices: PRICES,
+      timeoutMs: CALL_TIMEOUT_MS,
+    });
+  }
+
   if (isOpenAiModel(model)) {
-    return generateOpenAi({ schema, instructions, input, model, maxOutputTokens, thinkingLevel });
+    return generateOpenAi({
+      schema,
+      instructions,
+      input,
+      model,
+      maxOutputTokens,
+      thinkingLevel,
+      ledger,
+      prices: PRICES,
+      timeoutMs: CALL_TIMEOUT_MS,
+    });
   }
 
   const responseSchema = z.toJSONSchema(schema);
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const response = await ai.models.generateContent({
+    const response = await withDeadline(
+      ai.models.generateContent({
       model,
       contents: `${input}\n\nReturn exactly one JSON object matching this schema:\n${JSON.stringify(responseSchema)}`,
       config: {
@@ -314,8 +179,10 @@ async function generate({ schema, instructions, input, model, maxOutputTokens, t
         responseSchema,
         maxOutputTokens,
         ...(thinkingLevel ? { thinkingConfig: { thinkingLevel } } : {}),
-      },
-    });
+        },
+      }),
+      model,
+    );
 
     const usage = recordUsage(model, response.usageMetadata);
     const text = (response.text ?? "").trim();
@@ -424,11 +291,24 @@ async function runLegacyVariant(fixture, model) {
   };
 }
 
-async function runContentDrivenVariant(fixture, fallbackModel, forceModel) {
+async function runContentDrivenVariant(fixture, fallbackModel, forceModel, options = {}) {
   const stage = (name) => {
     const config = resolveStageModelConfig({ stage: name, env: process.env, fallbackModel });
 
     if (!forceModel) {
+      // supportsThinkingLevel only recognises Gemini, so an OpenAI model resolves to no level and
+      // the Responses API quietly applies its own default effort. Borrow the stage's intended
+      // level so effort is controlled on both sides of the comparison.
+      if ((isOpenAiModel(config.model) || isOpenRouterModel(config.model)) && !config.thinkingLevel) {
+        const intended = resolveStageModelConfig({
+          stage: name,
+          env: process.env,
+          fallbackModel: "gemini-3.5-flash-lite",
+        });
+
+        return { ...config, thinkingLevel: intended.thinkingLevel, outputHeadroom: intended.outputHeadroom };
+      }
+
       return config;
     }
 
@@ -514,7 +394,19 @@ async function runContentDrivenVariant(fixture, fallbackModel, forceModel) {
     // Sized from the retained items, not from a word target: ~110 output tokens per item plus
     // thinking headroom. Length follows the content, and so does the budget for it.
     maxOutputTokens: Math.round(Math.max(4000, retainedItemCount * 170) * writeConfig.outputHeadroom),
-    instructions: buildNoteWritingInstructions({ outputLanguage: fixture.language }),
+    instructions: buildNoteWritingInstructions({
+      outputLanguage: fixture.language,
+      ...(options.coverage ? { coverageObjective: true } : {}),
+      ...(options.pedagogy ? { pedagogy: true } : {}),
+      ...(options.dense
+        ? {
+            wordBudget: resolveNoteWordBudget({
+              sourceWordCount: countWords(fixture.source),
+              retainedItemCount,
+            }),
+          }
+        : {}),
+    }),
     input: `Outline to teach:\n${JSON.stringify(
       { title: outline.title, summary: outline.summary, topics: formatOutlineForWriting({ outline, items }) },
       null,
@@ -557,6 +449,46 @@ const VARIANTS = {
   "v2-gpt5-nano": {
     label: "content-driven pipeline, gpt-5-nano everywhere (the cheapest card on the market)",
     run: (fixture) => runContentDrivenVariant(fixture, "gpt-5-nano", "gpt-5-nano"),
+  },
+  "v2-pedagogy": {
+    label: "coverage objective plus the learning-science rules: inline retrieval, why, worked examples",
+    run: (fixture) =>
+      runContentDrivenVariant(fixture, "gemini-3.5-flash-lite", null, {
+        coverage: true,
+        pedagogy: true,
+      }),
+  },
+  "v2-coverage": {
+    label: "current models, writer told to cover what matters with no mention of length",
+    run: (fixture) =>
+      runContentDrivenVariant(fixture, "gemini-3.5-flash-lite", null, { coverage: true }),
+  },
+  "v2-coverage-3.7": {
+    label: "gemini-3.7-flash writing to a coverage objective, no length language",
+    run: (fixture) =>
+      runContentDrivenVariant(fixture, "gemini-2.5-flash-lite", null, { coverage: true }),
+  },
+  "v2-dense": {
+    label: "current models, writer given a Chain-of-Density word budget",
+    run: (fixture) => runContentDrivenVariant(fixture, "gemini-3.5-flash-lite", null, { dense: true }),
+  },
+  "v2-dense-3.7": {
+    label: "gemini-3.7-flash writing under a density budget",
+    run: (fixture) =>
+      runContentDrivenVariant(fixture, "gemini-2.5-flash-lite", null, { dense: true }),
+  },
+  "v2-dense-nano": {
+    label: "gpt-5-nano everywhere, writer under a density budget",
+    run: (fixture) => runContentDrivenVariant(fixture, "gpt-5-nano", "gpt-5-nano", { dense: true }),
+  },
+  "v2-3.7-flash": {
+    label: "content-driven pipeline, gemini-3.7-flash via OpenRouter's promotional rate",
+    run: (fixture) =>
+      runContentDrivenVariant(fixture, "or/google/gemini-3.7-flash", "or/google/gemini-3.7-flash"),
+  },
+  "v2-hybrid-nano": {
+    label: "nano for extraction and outlining, gemini-3.5-flash-lite still writing the note",
+    run: (fixture) => runContentDrivenVariant(fixture, "gpt-5-nano"),
   },
   "v2-gpt5-mini": {
     label: "content-driven pipeline, gpt-5-mini everywhere",

@@ -88,6 +88,10 @@ ${buildItemContract({ verb: "Write one flashcard for each.", unitNoun: "card" })
 
 A card tests one thing. If an item carries two facts, test the one its wording puts first and leave the other alone.
 
+A front must have exactly one defensible answer. "What is X used for?" or "What is important about X?" can be answered five ways, so a learner who knows the material still fails the card — ask the question whose answer is the back and nothing else. If you cannot narrow it, test a different aspect of the item.
+
+The learner must produce the answer from memory, not recognise it: never put the answer, or a phrase that gives it away, inside the front.
+
 Fronts ask for something specific: what a term means, which term matches a definition, what a value is, what a step does, what distinguishes two things, what follows from a cause. Match the question form to the item — a definition item becomes a "what is X" card, a comparison item becomes a "how does X differ from Y" card, a procedure item becomes a "what happens when" card. Do not force every item into the same shape.
 
 Backs are as short as the answer honestly is: a term, a value, a phrase, one sentence. A back that runs to several sentences means the front asked for too much.
@@ -109,11 +113,13 @@ Exactly four options, exactly one correct.
 
 The question must be answerable before the options are read — a learner who knows the material should be able to say the answer, then find it in the list.
 
-explanation is one sentence a learner reads after answering: why the correct option is correct, stated from the material rather than "as stated above".
+explanation is what the learner reads after answering, and it is where the learning happens: say why the correct option is correct, and then name the most tempting wrong option and say what makes it wrong. State both from the material, never "as stated above".
 
-The three wrong options are the heart of the question. Each must be a real thing from the same subject that a learner who half-knows the material might pick: the neighbouring term, the other side of the comparison, the plausible wrong value. Never filler, never obviously absurd, never a repeat of the correct answer in other words.
+The three wrong options are the heart of the question. Build each one from a mistake a learner actually makes, not from a random alternative: the term they confuse this one with, the two things they swap around, the value they get by applying the wrong rule, the condition they forget. A distractor should be tempting to someone who half-learned the material and invisible to someone who learned it. Never filler, never obviously absurd, never a repeat of the correct answer in other words.
 
-All four options must be the same kind of thing, the same grammatical shape and roughly the same length, so the correct one cannot be spotted by its form alone. Never use "all of the above", "none of the above", or an option that negates another.
+All four options must be the same kind of thing, the same grammatical shape and roughly the same length, so the correct one cannot be spotted by its form alone. Never use "all of the above", "none of the above", or an option that negates another. When the options are numbers or dates, order them.
+
+Ask what is true, never what is "not true" or "except" — a negative stem tests reading care instead of knowledge.
 
 Skip the item if you cannot build three plausible wrong options for it. A question with one real option and three obvious rejects teaches nothing.
 
@@ -130,7 +136,7 @@ ${buildItemContract({
 
 No options. These are questions a learner answers in their own words, the way a written exam asks: explain, describe, compare, list, justify, or work through.
 
-Ask for what the item actually supports. An item that is a single value does not deserve "discuss the significance of" — ask for the value and what it means. An item that is a mechanism deserves "explain how" or "explain why".
+Ask for what the item actually supports, and reach as high as it honestly allows. The flashcards already ask the learner to recall this material, so a written question earns its place by asking them to do something with it: apply it to a case, explain why it holds, work it through, or say what follows when a condition changes. An item that is a single value does not deserve "discuss the significance of" — ask for the value and what it means. An item that is a mechanism deserves "explain how" or "explain why".
 
 expectedPoints is the marking scheme: the specific things an answer must contain to be correct, one per point, each stated concretely enough to mark against. Not "understands the concept" but the actual claim, value or step.
 

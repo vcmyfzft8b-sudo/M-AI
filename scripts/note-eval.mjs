@@ -47,7 +47,115 @@ const PRICES = {
   "gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },
   "gemini-3.6-flash": { input: 0.75, output: 3.75 },
   "gemini-3.7-flash": { input: 0.75, output: 3.75 },
+  "gpt-5-nano": { input: 0.05, output: 0.4 },
+  "gpt-5-mini": { input: 0.25, output: 2 },
+  "gpt-5": { input: 1.25, output: 10 },
 };
+
+/**
+ * Both providers answer the same prompts against the same schemas here, so a model from either
+ * one can be graded by the same grader on the same fixtures. That is the only way to compare a
+ * price card against quality rather than against a benchmark someone else ran on someone else's
+ * task.
+ */
+const isOpenAiModel = (model) => model.startsWith("gpt-");
+
+// OpenAI spends reasoning tokens out of max_output_tokens exactly as Gemini spends thinking
+// tokens, so the levels map straight across and the same headroom multipliers apply.
+const OPENAI_REASONING_EFFORT = {
+  minimal: "minimal",
+  low: "low",
+  medium: "medium",
+  high: "high",
+};
+
+// OpenAI's strict structured outputs accept a subset of JSON Schema: every object must forbid
+// extra properties and require every key, and the value constraints are simply rejected. Dropping
+// them here is what makes the schema loadable at all — the zod parse afterwards still enforces
+// them, so a model that ignores "at most four terms" is caught rather than excused.
+const OPENAI_UNSUPPORTED_SCHEMA_KEYS = [
+  "minItems",
+  "maxItems",
+  "minimum",
+  "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "minLength",
+  "maxLength",
+  "multipleOf",
+  "default",
+  "$schema",
+];
+
+/**
+ * Gemini enforces "at most four terms" inside the platform; OpenAI's strict mode cannot express
+ * it, so the model has to obey it from the prompt and gpt-5-nano does not. Clamping the answer
+ * back into the schema keeps the comparison about whether a model finds the facts rather than
+ * whether it can count, and the clamp count is reported so the difference is not hidden.
+ */
+function clampToSchema(value, node, stats) {
+  if (!node || typeof node !== "object") {
+    return value;
+  }
+
+  if (node.type === "array" && Array.isArray(value)) {
+    const clamped =
+      typeof node.maxItems === "number" && value.length > node.maxItems
+        ? (stats.clamped += 1, value.slice(0, node.maxItems))
+        : value;
+
+    return clamped.map((entry) => clampToSchema(entry, node.items, stats));
+  }
+
+  if (node.type === "object" && value && typeof value === "object") {
+    const output = {};
+
+    for (const [key, entry] of Object.entries(value)) {
+      output[key] = clampToSchema(entry, node.properties?.[key], stats);
+    }
+
+    return output;
+  }
+
+  if (node.type === "integer" || node.type === "number") {
+    if (typeof value !== "number") {
+      return value;
+    }
+
+    const low = typeof node.minimum === "number" ? Math.max(node.minimum, value) : value;
+
+    return typeof node.maximum === "number" ? Math.min(node.maximum, low) : low;
+  }
+
+  return value;
+}
+
+function toOpenAiStrictSchema(node) {
+  if (Array.isArray(node)) {
+    return node.map(toOpenAiStrictSchema);
+  }
+
+  if (node === null || typeof node !== "object") {
+    return node;
+  }
+
+  const output = {};
+
+  for (const [key, value] of Object.entries(node)) {
+    if (OPENAI_UNSUPPORTED_SCHEMA_KEYS.includes(key)) {
+      continue;
+    }
+
+    output[key] = toOpenAiStrictSchema(value);
+  }
+
+  if (output.type === "object" && output.properties) {
+    output.additionalProperties = false;
+    output.required = Object.keys(output.properties);
+  }
+
+  return output;
+}
 
 const GRADER_MODEL = "gemini-3.5-flash-lite";
 
@@ -81,7 +189,7 @@ function loadEnv() {
 loadEnv();
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const ledger = { calls: 0, inputTokens: 0, outputTokens: 0, thoughtTokens: 0, costUsd: 0 };
+const ledger = { calls: 0, inputTokens: 0, outputTokens: 0, thoughtTokens: 0, costUsd: 0, clamped: 0 };
 
 function countWords(value) {
   return value.trim().split(/\s+/).filter(Boolean).length;
@@ -104,7 +212,96 @@ function recordUsage(model, usage) {
   return { inputTokens, outputTokens, thoughtTokens, costUsd };
 }
 
+async function generateOpenAi({ schema, instructions, input, model, maxOutputTokens, thinkingLevel }) {
+  const responseSchema = z.toJSONSchema(schema);
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        instructions,
+        input: `${input}\n\nReturn exactly one JSON object matching this schema:\n${JSON.stringify(responseSchema)}`,
+        max_output_tokens: maxOutputTokens,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "note_stage_output",
+            strict: true,
+            schema: toOpenAiStrictSchema(responseSchema),
+          },
+        },
+        ...(thinkingLevel
+          ? { reasoning: { effort: OPENAI_REASONING_EFFORT[thinkingLevel] ?? "low" } }
+          : {}),
+      }),
+    });
+    const payload = await response.json();
+
+    if (payload.error) {
+      throw new Error(`${model}: ${payload.error.message}`);
+    }
+
+    const price = PRICES[model] ?? { input: 0, output: 0 };
+    const inputTokens = payload.usage?.input_tokens ?? 0;
+    const outputTokens = payload.usage?.output_tokens ?? 0;
+    const thoughtTokens = payload.usage?.output_tokens_details?.reasoning_tokens ?? 0;
+
+    ledger.calls += 1;
+    ledger.inputTokens += inputTokens;
+    ledger.outputTokens += outputTokens;
+    ledger.thoughtTokens += thoughtTokens;
+    ledger.costUsd += (inputTokens * price.input + outputTokens * price.output) / 1_000_000;
+
+    const text = (payload.output ?? [])
+      .flatMap((entry) => entry.content ?? [])
+      .map((part) => part.text ?? "")
+      .join("")
+      .trim();
+
+    if (!text || payload.status === "incomplete") {
+      if (attempt === 2) {
+        throw new Error(
+          `${model} truncated at ${maxOutputTokens} tokens (${payload.incomplete_details?.reason ?? "empty"})`,
+        );
+      }
+
+      maxOutputTokens = Math.round(maxOutputTokens * 1.8);
+      continue;
+    }
+
+    const parsed = schema.safeParse(clampToSchema(JSON.parse(text), responseSchema, ledger));
+
+    if (!parsed.success) {
+      if (attempt === 2) {
+        throw new Error(`${model} broke the schema: ${parsed.error.issues[0]?.message}`);
+      }
+
+      input = `${input}\n\nYour previous answer was rejected: ${parsed.error.issues
+        .slice(0, 3)
+        .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+        .join("; ")}. Obey every constraint in the schema.`;
+      continue;
+    }
+
+    return {
+      value: parsed.data,
+      usage: { inputTokens, outputTokens, thoughtTokens },
+    };
+  }
+
+  throw new Error(`${model} never returned usable output`);
+}
+
 async function generate({ schema, instructions, input, model, maxOutputTokens, thinkingLevel }) {
+  if (isOpenAiModel(model)) {
+    return generateOpenAi({ schema, instructions, input, model, maxOutputTokens, thinkingLevel });
+  }
+
   const responseSchema = z.toJSONSchema(schema);
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -227,9 +424,30 @@ async function runLegacyVariant(fixture, model) {
   };
 }
 
-async function runContentDrivenVariant(fixture, fallbackModel) {
-  const stage = (name) =>
-    resolveStageModelConfig({ stage: name, env: process.env, fallbackModel });
+async function runContentDrivenVariant(fixture, fallbackModel, forceModel) {
+  const stage = (name) => {
+    const config = resolveStageModelConfig({ stage: name, env: process.env, fallbackModel });
+
+    if (!forceModel) {
+      return config;
+    }
+
+    // A whole-pipeline variant has to override note_write too, which names its own model. The
+    // stage's intended reasoning level and headroom come along, so the comparison is the model
+    // doing the same job with the same effort, not a different job.
+    const intended = resolveStageModelConfig({
+      stage: name,
+      env: process.env,
+      fallbackModel: "gemini-3.5-flash-lite",
+    });
+
+    return {
+      ...config,
+      model: forceModel,
+      thinkingLevel: intended.thinkingLevel,
+      outputHeadroom: intended.outputHeadroom,
+    };
+  };
   const extractConfig = stage("note_extract");
   const passes = KNOWLEDGE_EXTRACTION_PASS_WINDOWS.flatMap((windowWords, passIndex) =>
     buildWindows(fixture.source, windowWords).map((window, index, all) => ({
@@ -330,6 +548,19 @@ const VARIANTS = {
   v2: {
     label: "content-driven pipeline, gemini-3.5-flash-lite (isolates the prompts)",
     run: (fixture) => runContentDrivenVariant(fixture, "gemini-3.5-flash-lite"),
+  },
+  "v2-2.5-lite": {
+    label: "content-driven pipeline, gemini-2.5-flash-lite everywhere",
+    run: (fixture) =>
+      runContentDrivenVariant(fixture, "gemini-2.5-flash-lite", "gemini-2.5-flash-lite"),
+  },
+  "v2-gpt5-nano": {
+    label: "content-driven pipeline, gpt-5-nano everywhere (the cheapest card on the market)",
+    run: (fixture) => runContentDrivenVariant(fixture, "gpt-5-nano", "gpt-5-nano"),
+  },
+  "v2-gpt5-mini": {
+    label: "content-driven pipeline, gpt-5-mini everywhere",
+    run: (fixture) => runContentDrivenVariant(fixture, "gpt-5-mini", "gpt-5-mini"),
   },
 };
 

@@ -328,34 +328,54 @@ function cleanUnwrappedMathText(value: string) {
     .replace(/\s+-\s+(\*\*)/g, "\n- $1");
 }
 
+/**
+ * Runs a rewrite over the maths in a formula while leaving every \text{...} span exactly as it
+ * was.
+ *
+ * \text{} holds prose, and the symbol and subscript rules below are for symbols. Applied to prose
+ * they corrupt it: "\text{Zacetno stanje}" came back as "\text{Z_{a}cetno stanje}" and KaTeX
+ * refused the whole formula, printing the source in red to the learner.
+ */
+function rewriteOutsideTextSpans(value: string, rewrite: (segment: string) => string) {
+  return value
+    .split(/(\\text\{[^{}]*\})/g)
+    .map((segment, index) => (index % 2 === 1 ? segment : rewrite(segment)))
+    .join("");
+}
+
 export function normalizeFormulaSyntax(value: string) {
   return replaceTopLevelFormulaFractions(
-    normalizeMathFunctions(
-      repairDroppedLatexCommandBackslashes(normalizeLatexEnvironment(value)),
-    )
-      .trim()
-      .replace(/[−–—]/g, "-")
-      .replace(/≤/g, "\\le ")
-      .replace(/≥/g, "\\ge ")
-      .replace(/≠/g, "\\ne ")
-      .replace(/≈/g, "\\approx ")
-      .replace(/∞/g, "\\infty ")
-      .replace(/±/g, "\\pm ")
-      .replace(/∓/g, "\\mp ")
-      .replace(/∑/g, "\\sum ")
-      .replace(/∫/g, "\\int ")
-      .replace(/↔|⇔|<=>/g, "\\leftrightarrow ")
-      .replace(/→|⇒|=>|->/g, "\\to ")
-      .replace(/←|<-|⇐/g, "\\leftarrow ")
-      .replace(/(?<![<\\])<=/g, "\\le ")
-      .replace(/(?<![>\\])>=/g, "\\ge ")
-      .replace(/!=/g, "\\ne ")
-      .replace(/×|·/g, "\\cdot ")
-      .replace(/(?<!\\)\bper\b/g, "/")
-      .replace(/(?<!\\)%/g, "\\%")
-      .replace(/\b([A-Z])\{([^{}]+)\}/g, "$1_{$2}")
-      .replace(/\b([A-Z])([a-z])\b/g, "$1_{$2}")
-      .replace(/\b([A-Z])(\d+)\b/g, "$1_{$2}"),
+    rewriteOutsideTextSpans(
+      normalizeMathFunctions(
+        repairDroppedLatexCommandBackslashes(normalizeLatexEnvironment(value)),
+      ).trim(),
+      (segment) =>
+        segment
+          .replace(/[−–—]/g, "-")
+          .replace(/≤/g, "\\le ")
+          .replace(/≥/g, "\\ge ")
+          .replace(/≠/g, "\\ne ")
+          .replace(/≈/g, "\\approx ")
+          .replace(/∞/g, "\\infty ")
+          .replace(/±/g, "\\pm ")
+          .replace(/∓/g, "\\mp ")
+          .replace(/∑/g, "\\sum ")
+          .replace(/∫/g, "\\int ")
+          .replace(/↔|⇔|<=>/g, "\\leftrightarrow ")
+          .replace(/→|⇒|=>|->/g, "\\to ")
+          .replace(/←|<-|⇐/g, "\\leftarrow ")
+          .replace(/(?<![<\\])<=/g, "\\le ")
+          .replace(/(?<![>\\])>=/g, "\\ge ")
+          .replace(/!=/g, "\\ne ")
+          .replace(/×|·/g, "\\cdot ")
+          .replace(/(?<!\\)\bper\b/g, "/")
+          .replace(/(?<!\\)%/g, "\\%")
+          // Unicode-aware boundaries. JavaScript's \b is ASCII-only, so it saw a word boundary
+          // between the "a" and the "č" of "Začetno" and rewrote an ordinary Slovene word as a
+          // subscript, which made KaTeX reject the whole formula.
+          .replace(/(?<![\p{L}\p{N}_])(\p{Lu})\{([^{}]+)\}/gu, "$1_{$2}")
+          .replace(/(?<![\p{L}\p{N}_])(\p{Lu})(\d+)(?![\p{L}\p{N}_])/gu, "$1_{$2}"),
+    ),
   )
     .replace(/(\})\s+(100(?:\\%)?)/g, "$1 \\cdot $2")
     .replace(/\s+/g, " ")

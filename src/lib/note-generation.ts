@@ -18,6 +18,8 @@ import {
   dedupeKnowledgeItems,
   formatOutlineForWriting,
   KNOWLEDGE_EXTRACTION_PASS_WINDOWS,
+  MAX_ITEMS_PER_EXTRACTION_WINDOW,
+  resolveExtractionMaxOutputTokens,
   knowledgeExtractionSchema,
   MATH_FORMATTING_INSTRUCTIONS,
   noteOutlineSchema,
@@ -119,14 +121,20 @@ export async function extractKnowledgeItems(params: {
     async (window) => {
       const extraction = await generateStructuredObject({
         schema: knowledgeExtractionSchema,
-        maxOutputTokens: 1800,
+        maxOutputTokens: resolveExtractionMaxOutputTokens(countWords(window.text)),
         stage: "note_extract",
         instructions,
         input: `${window.label}.\n\n${window.text}`,
         usageContext: params.usageContext,
       });
 
-      return { ...extraction, passIndex: window.passIndex };
+      // Bounded here as well as in the instructions: a model that ignores the limit would
+      // otherwise hand the outline a shredded chunk to triage.
+      return {
+        ...extraction,
+        items: extraction.items.slice(0, MAX_ITEMS_PER_EXTRACTION_WINDOW),
+        passIndex: window.passIndex,
+      };
     },
   );
 

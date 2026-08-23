@@ -158,6 +158,29 @@ export const knowledgeItemSchema = z.object({
   terms: z.array(z.string().min(1)).max(4),
 });
 
+/**
+ * A 400-word window does not honestly contain more than this many distinct testable claims; an
+ * extractor returning more is shredding sentences, not extracting knowledge.
+ *
+ * Enforced in the instructions and again after parsing rather than in the schema: a maxItems on a
+ * nested array pushes Gemini's responseSchema over its complexity limit and the whole call is
+ * rejected with "too many states for serving".
+ */
+export const MAX_ITEMS_PER_EXTRACTION_WINDOW = 30;
+
+/**
+ * Sizes the extraction budget from the window instead of guessing a constant.
+ *
+ * Every other stage already budgets from its work — the outline from item count, the writer from
+ * retained items — and extraction was the one place still using a flat 1800, which is a number for
+ * an English window of average density. A dense Slovene window blows through it: Slovene costs
+ * about 2.2 tokens per word against English's 1.1, and one truncation in nine measured on real
+ * lecture recordings walked the whole retry ladder to 5832 tokens and still failed.
+ */
+export function resolveExtractionMaxOutputTokens(windowWordCount: number) {
+  return Math.max(2400, Math.round(windowWordCount * 9));
+}
+
 export const knowledgeExtractionSchema = z.object({
   sectionTitle: z.string().min(3),
   // Deliberately allows an empty array: a chunk that is administrative chatter, a learning-goal
@@ -365,6 +388,8 @@ Rate importance honestly, because that rating is what the later step triages on:
 Every claim names its subject explicitly. A chunk that says "he later taught history" yields "Gogolj je pozneje predaval zgodovino" when the chunk identifies him — and no claim at all when it does not. A claim about an unnamed someone can never become a usable study question.
 
 Never invent a claim the chunk does not support.
+
+Return at most ${MAX_ITEMS_PER_EXTRACTION_WINDOW} items. A chunk this size does not honestly hold more; if you are heading past that you are splitting sentences rather than finding claims, and the ones after the limit are discarded anyway.
 
 ${MATH_FORMATTING_INSTRUCTIONS}`;
 }

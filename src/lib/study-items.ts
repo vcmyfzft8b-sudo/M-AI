@@ -2,6 +2,11 @@ import "server-only";
 
 import { generateStructuredObject } from "@/lib/ai/json";
 import {
+  countWords,
+  MAX_ITEMS_PER_EXTRACTION_WINDOW,
+  resolveExtractionMaxOutputTokens,
+} from "@/lib/notes/note-prompts";
+import {
   buildKnowledgeExtractionInstructions,
   collapseDuplicateItems,
   dedupeKnowledgeItems,
@@ -224,7 +229,7 @@ export async function extractStudyItems(params: {
     async (window) => {
       const extraction = await generateStructuredObject({
         schema: knowledgeExtractionSchema,
-        maxOutputTokens: 1800,
+        maxOutputTokens: resolveExtractionMaxOutputTokens(countWords(window.text)),
         stage: "note_extract",
         instructions,
         input: `${window.label}.\n\n${window.text}`,
@@ -235,7 +240,7 @@ export async function extractStudyItems(params: {
         passIndex: window.passIndex,
         coveredUnitIndexes: window.coveredUnitIndexes,
         sectionTitle: extraction.sectionTitle,
-        items: extraction.items,
+        items: extraction.items.slice(0, MAX_ITEMS_PER_EXTRACTION_WINDOW),
       };
     },
   );

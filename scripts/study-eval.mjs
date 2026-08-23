@@ -28,6 +28,7 @@ import {
   dedupeKnowledgeItems,
   KNOWLEDGE_EXTRACTION_PASS_WINDOWS,
   knowledgeExtractionSchema,
+  resolveExtractionMaxOutputTokens,
 } from "../src/lib/notes/note-prompts.ts";
 import {
   buildFlashcardInstructions,
@@ -56,6 +57,10 @@ const FIXTURE_DIR = path.join(ROOT, "evals", "fixtures");
  * that scores well on those has proved much less than one that scores well on these.
  */
 const PRIVATE_FIXTURE_DIR = path.join(ROOT, "evals", "fixtures-private");
+
+function countWords(value) {
+  return value.trim().split(/\s+/).filter(Boolean).length;
+}
 const OUTPUT_DIR = path.join(ROOT, "evals", "output");
 
 loadEnv(ROOT);
@@ -225,7 +230,7 @@ async function extractItems(fixture, fallbackModel) {
       schema: knowledgeExtractionSchema,
       model: config.model,
       thinkingLevel: config.thinkingLevel,
-      maxOutputTokens: Math.round(1800 * config.outputHeadroom),
+      maxOutputTokens: Math.round(resolveExtractionMaxOutputTokens(countWords(window)) * config.outputHeadroom),
       instructions: buildKnowledgeExtractionInstructions({
         outputLanguage: fixture.language,
         sourceType: fixture.sourceType,

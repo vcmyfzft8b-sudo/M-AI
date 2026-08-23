@@ -29,6 +29,7 @@ import {
   resolveNoteWordBudget,
   KNOWLEDGE_EXTRACTION_PASS_WINDOWS,
   knowledgeExtractionSchema,
+  resolveExtractionMaxOutputTokens,
   legacyChunkSummarySchema,
   noteOutlineSchema,
   normalizeGeneratedNoteMarkdown,
@@ -350,7 +351,7 @@ async function runContentDrivenVariant(fixture, fallbackModel, forceModel, optio
       schema: knowledgeExtractionSchema,
       model: extractConfig.model,
       thinkingLevel: extractConfig.thinkingLevel,
-      maxOutputTokens: Math.round(1800 * extractConfig.outputHeadroom),
+      maxOutputTokens: Math.round(resolveExtractionMaxOutputTokens(countWords(window)) * extractConfig.outputHeadroom),
       instructions: buildKnowledgeExtractionInstructions({
         outputLanguage: fixture.language,
         sourceType: fixture.sourceType,

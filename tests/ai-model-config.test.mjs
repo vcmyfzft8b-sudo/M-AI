@@ -6,7 +6,14 @@ import {
   resolveStageModelConfig,
   supportsThinkingLevel,
 } from "../src/lib/ai/model-config.ts";
-import { dedupeKnowledgeItems } from "../src/lib/notes/note-prompts.ts";
+import { z } from "zod";
+
+import {
+  dedupeKnowledgeItems,
+  knowledgeExtractionSchema,
+  MAX_ITEMS_PER_EXTRACTION_WINDOW,
+  resolveExtractionMaxOutputTokens,
+} from "../src/lib/notes/note-prompts.ts";
 
 const resolve = (stage, env = {}, fallbackModel = "gemini-3.5-flash-lite") =>
   resolveStageModelConfig({ stage, env, fallbackModel });
@@ -180,4 +187,31 @@ test("a routed model keeps its reasoning level and headroom", () => {
 
   assert.equal(config.thinkingLevel, "high");
   assert.ok(applyOutputHeadroom(2500, config) > 2500);
+});
+
+test("the extraction budget is sized from the window, not guessed", () => {
+  // A flat 1800 was a number for an average English window. Slovene costs about twice the tokens
+  // per word, and one recording in nine walked the entire retry ladder to 5832 and still failed.
+  assert.ok(resolveExtractionMaxOutputTokens(400) > 1800);
+  assert.equal(resolveExtractionMaxOutputTokens(400), 3600);
+  assert.equal(resolveExtractionMaxOutputTokens(260), 2400, "short windows keep a sane floor");
+  assert.equal(resolveExtractionMaxOutputTokens(10), 2400);
+  // Monotonic: a bigger window never gets a smaller budget.
+  assert.ok(resolveExtractionMaxOutputTokens(800) > resolveExtractionMaxOutputTokens(400));
+});
+
+test("a window's item count is bounded", () => {
+  // Enforced in the prompt and after parsing, never in the schema: maxItems on a nested array
+  // pushes Gemini's responseSchema past its complexity limit and the call is rejected outright.
+  assert.equal(MAX_ITEMS_PER_EXTRACTION_WINDOW, 30);
+  // The small cap on `terms` is long-standing and fine. What Gemini rejected was a second bound
+  // on `items` — an array of objects — which pushed the schema past its complexity limit.
+  const schema = z.toJSONSchema(knowledgeExtractionSchema);
+
+  assert.equal(
+    schema.properties.items.maxItems,
+    undefined,
+    "bounding items in the schema is what makes Gemini reject the call",
+  );
+  assert.equal(schema.properties.items.items.properties.terms.maxItems, 4);
 });

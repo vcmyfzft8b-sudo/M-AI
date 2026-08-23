@@ -257,14 +257,21 @@ async function generateNotesContentDriven(
       notesMode: "content",
       // The extracted items travel with the artifact so study generation reuses this exact list
       // instead of re-extracting: one extraction per lecture, and the deck can never cover a
-      // different set of facts than the notes were written from.
-      knowledgeItems: items.map(({ claim, kind, importance, terms, sectionTitle }) => ({
-        claim,
-        kind,
-        importance,
-        terms,
-        sectionTitle,
-      })),
+      // different set of facts than the notes were written from. keptInNote carries the outline's
+      // exam-worthiness judgment (with its mechanical bounds already applied), so the decks test
+      // what the note teaches instead of re-deciding importance from the inflated rating alone.
+      knowledgeItems: (() => {
+        const keptIds = new Set(outline.topics.flatMap((topic) => topic.itemIds));
+
+        return items.map(({ id, claim, kind, importance, terms, sectionTitle }) => ({
+          claim,
+          kind,
+          importance,
+          terms,
+          sectionTitle,
+          keptInNote: keptIds.has(id),
+        }));
+      })(),
       sourceType: params.sourceType,
       sourceWordCount,
       noteWordCount: normalizedNoteWordCount,

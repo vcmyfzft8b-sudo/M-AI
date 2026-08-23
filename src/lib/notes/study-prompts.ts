@@ -107,6 +107,10 @@ Fronts ask for something specific: what a term means, which term matches a defin
 
 Backs are as short as the answer honestly is: a term, a value, a phrase, one sentence. A back that runs to several sentences means the front asked for too much.
 
+Never ask for a list. "Name the five principles of X" is a card a learner fails forever — if an item is a set, test the one member that matters, the count, or what distinguishes one member from another, and let the other members be other items' cards.
+
+When the source contains things that are easily mixed up — two similar terms, two rules that differ by one condition — the front must carry the context that tells them apart. A front that fits both of two confusable answers trains the confusion instead of resolving it.
+
 Difficulty reflects the item: easy for a single term or value, medium for a mechanism or comparison, hard for something with a condition or exception attached.
 
 ${STANDALONE_RULES}`;

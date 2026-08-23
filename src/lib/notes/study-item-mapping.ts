@@ -317,3 +317,15 @@ export function interleaveByTopic<TCard extends { sourceUnitIdx: number }>(cards
 
   return output;
 }
+
+/**
+ * Where the artifact carries the outline's exam-worthiness judgment, the decks obey it: a card
+ * tests what the note teaches, not whatever the extractor happened to collect. Below five kept
+ * items the flag is treated as absent — a deck needs something to practise, and a near-empty
+ * selection is likelier a malformed artifact than a two-fact source.
+ */
+export function filterToNoteKeptItems<TItem extends { keptInNote?: unknown }>(items: TItem[]) {
+  const kept = items.filter((item) => item.keptInNote === true);
+
+  return kept.length >= 5 ? kept : items;
+}

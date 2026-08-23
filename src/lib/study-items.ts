@@ -20,6 +20,7 @@ import {
   buildUnitExtractionWindows,
   cardKindForItem,
   itemConceptKey,
+  filterToNoteKeptItems,
   resolvePrimaryUnitIdx,
   selectDeckWorthyItems,
   synthesizeItemPlans,
@@ -165,7 +166,11 @@ export async function resolveStoredStudyItems(params: {
     return null;
   }
 
-  const items = rawItems.filter(storedKnowledgeItemSchema.isValid);
+  const validItems = rawItems.filter(storedKnowledgeItemSchema.isValid);
+
+  const items = filterToNoteKeptItems(
+    validItems as Array<(typeof validItems)[number] & { keptInNote?: unknown }>,
+  );
 
   if (items.length === 0) {
     return null;

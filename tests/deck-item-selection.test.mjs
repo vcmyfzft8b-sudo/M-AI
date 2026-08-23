@@ -182,3 +182,27 @@ test("the outline's selection is bounded mechanically", async () => {
     "a note may never keep nearly everything again",
   );
 });
+
+test("decks obey the note's exam judgment when the artifact carries it", async () => {
+  const { filterToNoteKeptItems } = await import("../src/lib/notes/study-item-mapping.ts");
+  const items = [
+    ...Array.from({ length: 6 }, (_u, i) => ({ claim: `kept ${i}`, keptInNote: true })),
+    ...Array.from({ length: 6 }, (_u, i) => ({ claim: `aside ${i}`, keptInNote: false })),
+  ];
+  const kept = filterToNoteKeptItems(items);
+
+  assert.equal(kept.length, 6, "only the note's kept items reach the deck");
+  assert.ok(kept.every((item) => item.claim.startsWith("kept")));
+});
+
+test("artifacts from before the flag fall back to the full list", async () => {
+  const { filterToNoteKeptItems } = await import("../src/lib/notes/study-item-mapping.ts");
+  const legacy = Array.from({ length: 8 }, (_u, i) => ({ claim: `c ${i}` }));
+
+  assert.equal(filterToNoteKeptItems(legacy).length, 8);
+
+  // A near-empty selection is treated as a malformed artifact, not a two-card deck.
+  const thin = [{ claim: "a", keptInNote: true }, ...Array.from({ length: 9 }, () => ({ claim: "b", keptInNote: false }))];
+
+  assert.equal(filterToNoteKeptItems(thin).length, 10);
+});

@@ -69,20 +69,25 @@ test("an oversized deck is trimmed across the whole source, not truncated to its
   assert.equal(new Set(selected.map((entry) => entry.claim)).size, 10);
 });
 
-test("the measured shape of a real lecture lands inside the ceiling", () => {
-  // The 43-slide PDF measured on 2026-08-23: 136 items rated 5:18, 4:49, 3:62, 2:7. It used to
-  // produce 134 flashcards.
+test("a real lecture is sized by its content, not by the ceiling", () => {
+  // The 43-slide law PDF measured on 2026-08-23: 127 items, of which 30 are definitions and 52
+  // more were rated must-know. The deck should be those 82 — the ceiling must not be what decides.
   const items = [
-    ...Array.from({ length: 18 }, () => item(5)),
-    ...Array.from({ length: 49 }, () => item(4)),
-    ...Array.from({ length: 62 }, () => item(3)),
-    ...Array.from({ length: 7 }, () => item(2)),
+    ...Array.from({ length: 30 }, () => item(3, undefined, "definition")),
+    ...Array.from({ length: 52 }, () => item(4)),
+    ...Array.from({ length: 45 }, () => item(3)),
   ];
   const selected = selectDeckWorthyItems(items);
 
-  assert.equal(selected.length, 60);
-  assert.ok(selected.length <= MAX_DECK_ITEMS);
+  assert.equal(selected.length, 82);
+  assert.ok(selected.length < MAX_DECK_ITEMS, "the ceiling must not be binding on a normal source");
   assert.ok(selected.length >= MIN_DECK_ITEMS);
+});
+
+test("the ceiling still catches a runaway source", () => {
+  const items = Array.from({ length: 400 }, () => item(5));
+
+  assert.equal(selectDeckWorthyItems(items).length, MAX_DECK_ITEMS);
 });
 
 test("a definition the extractor underrated still reaches the deck", () => {

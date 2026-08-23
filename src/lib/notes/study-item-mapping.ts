@@ -204,8 +204,15 @@ export function synthesizeItemPlans(
 export const DECK_IMPORTANCE_FLOOR = 4;
 /** Below this a filtered deck stops being a study tool, so the next-best items are topped up. */
 export const MIN_DECK_ITEMS = 12;
-/** No lecture produces a deck a learner will not finish; a 43-slide source used to yield 134. */
-export const MAX_DECK_ITEMS = 60;
+/**
+ * A runaway guard, not a target. What a deck contains is decided by the material — the subject's
+ * definitions and formulas, plus what the extractor rated must-know — and that selection already
+ * does the trimming: the 43-slide law source went from 127 extracted items to 82 deck-worthy ones
+ * on content alone. A round ceiling on top of that only deletes material a learner needs; at 60 it
+ * cut 22 items that had qualified. This number exists so a pathological source cannot produce a
+ * thousand-card deck, and should never be what decides a normal one.
+ */
+export const MAX_DECK_ITEMS = 150;
 /**
  * What the rest of a lecture is built on, and what an exam asks first. Measured on the same
  * 43-slide law deck (2026-08-23): filtering on the rating alone dropped "a thing is an independent

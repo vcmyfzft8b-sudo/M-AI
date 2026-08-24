@@ -17,7 +17,8 @@ overturning any of it.
    `STUDY_PIPELINE=legacy` restores the concept planner. The 70-card cap is plan-aware (legacy
    unchanged, item decks size themselves).
 3. **Models per stage** (`src/lib/ai/model-config.ts`): everything on `GEMINI_TEXT_MODEL`
-   (2.5-flash-lite) except `note_write` → gemini-3.5-flash-lite. OCR primary is 3.5-flash-lite;
+   (2.5-flash-lite) except `note_write` → `or/google/gemini-3.7-flash` (OpenRouter, Google
+   fallback — the summary rework raised the writer bar, see ai-model-selection.md). OCR primary is 3.5-flash-lite;
    rescue stays gemini-3-flash-preview. Thinking is off for OCR (version-aware —
    `resolveMinimalThinkingConfig`; 3.5+ rejects `thinkingBudget` with a bare 400). 3.1-flash-lite
    is **disqualified** everywhere (worst at every stage in the sweep).
@@ -70,7 +71,10 @@ All `/dev` pages are no-ops in production builds.
 
 1. **Real-user validation on the Vercel preview**, then merge. Previews do not exercise Inngest
    steps — verify note generation on production right after merge (AGENTS.md rule). Watch
-   `ai_usage_events` cost per lecture: expect ~5–15× the old spend (~$0.10–0.30/lecture).
+   `ai_usage_events` cost per lecture: measured on 12 staging lectures 2026-08-24, mean
+   **$0.074/lecture** (~4× the old spend; note_write is 42% of it, extraction 28%). Rises to
+   ~$0.105 when the OpenRouter 3.7-flash promo ends 27 Aug, ~$0.167 after Google's promo ends
+   31 Dec — the December cliff is when to re-run the writer sweep.
 2. **Importance calibration**: the extractor rates ~⅔ of items 4–5, so importance cannot gate
    deck size yet. Fixing the rating rubric (or ranking relatively per lecture) would enable
    "quiz/practice only for important items" cost cuts.

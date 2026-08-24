@@ -34,6 +34,11 @@ import {
   prepareInitialNoteTtsChunksSafely,
 } from "@/lib/note-tts";
 import { NoReadableScanTextError } from "@/lib/scan-ocr-errors";
+import {
+  condenseTranscriptForNotes,
+  PIPELINE_SOURCE_TEXT_TARGET_CHARS,
+} from "@/lib/source-condensation";
+import { createAiChunkSelector } from "@/lib/source-condensation-ai";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { normalizeMimeType } from "@/lib/storage";
 import { serializeVector } from "@/lib/utils";
@@ -420,7 +425,7 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
     }));
   }
 
-  const segments = storedSegments.map((segment) => ({
+  let segments = storedSegments.map((segment) => ({
     idx: segment.idx,
     startMs: segment.start_ms,
     endMs: segment.end_ms,
@@ -430,6 +435,28 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
 
   if (segments.length === 0) {
     throw new Error("Transcript is empty.");
+  }
+
+  // Text sources are compressed to the pipeline target before they are stored, but real audio
+  // transcripts arrive here uncapped — an unusually long or dense recording can exceed what note
+  // generation handles inside one step budget. Only the note input shrinks: the stored transcript,
+  // its embeddings, chat and study features keep the full text.
+  const transcriptChars = segments.reduce((sum, segment) => sum + segment.text.length, 0);
+  let transcriptCompression: Record<string, unknown> | null = null;
+
+  if (transcriptChars > PIPELINE_SOURCE_TEXT_TARGET_CHARS) {
+    const condensed = await condenseTranscriptForNotes({
+      segments,
+      targetChars: PIPELINE_SOURCE_TEXT_TARGET_CHARS,
+      selector: createAiChunkSelector({
+        stage: "source_condense",
+        userId: lecture.user_id,
+        lectureId: lecture.id,
+      }),
+    });
+
+    segments = condensed.segments;
+    transcriptCompression = { ...condensed.meta };
   }
 
   const sourceLabel =
@@ -464,6 +491,7 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
   const baseModelMetadata = {
     ...notes.modelMetadata,
     ...manualModelMetadata,
+    ...(transcriptCompression ? { transcriptCompression } : {}),
   };
 
   const { error: artifactError } = await supabase

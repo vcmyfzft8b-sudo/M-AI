@@ -53,6 +53,12 @@ import {
 } from "@/lib/text-source-processing";
 import { createEmbeddings as createAiEmbeddings } from "@/lib/ai/embeddings";
 import {
+  condenseSourceMaterial,
+  MAX_RAW_SOURCE_TEXT_CHARS,
+  PIPELINE_SOURCE_TEXT_TARGET_CHARS,
+} from "@/lib/source-condensation";
+import { createAiChunkSelector } from "@/lib/source-condensation-ai";
+import {
   isUnsupportedVideoContentType,
   getUnsupportedVideoLinkMessage,
   isReadableLinkContentType,
@@ -87,8 +93,10 @@ const MAX_LINK_FETCH_REDIRECTS = 3;
  * markup was measuring the wrong thing.
  */
 const MAX_LINK_FETCH_BYTES = 8_000_000;
-const MAX_LINK_READABLE_TEXT_CHARS = 45_000;
-const MAX_PREPARED_SOURCE_TEXT_CHARS = 240_000;
+// A long page is no longer sliced to a fixed excerpt: anything up to the raw compression ceiling
+// is kept and the source-condensation pass decides what the pipeline sees. The byte cap above is
+// the only remaining bound on the download itself.
+const MAX_LINK_READABLE_TEXT_CHARS = MAX_RAW_SOURCE_TEXT_CHARS;
 const LINK_FETCH_TIMEOUT_MS = 10_000;
 const TRANSCRIPT_SEGMENT_INSERT_BATCH_SIZE = 25;
 const OCR_PRIMARY_MAX_OUTPUT_TOKENS = 3500;
@@ -1437,6 +1445,63 @@ async function updateLectureEnrichmentProcessingStage(params: {
   }
 }
 
+type FittedSourceText = {
+  text: string;
+  blocks?: StructuredSourceBlock[];
+  sourceCompression: Record<string, unknown> | null;
+};
+
+/**
+ * Every text source passes through here on its way into the pipeline. Sources that fit are
+ * returned untouched; oversized ones are compressed down to what the note pipeline can process
+ * in one step, instead of being rejected with "split it into smaller parts" as before. Only
+ * material beyond the raw ceiling — several times a full textbook — is still refused.
+ */
+async function fitSourceTextToPipeline(params: {
+  cleanedText: string;
+  blocks?: StructuredSourceBlock[];
+  userId?: string;
+  lectureId?: string | null;
+}): Promise<FittedSourceText> {
+  if (params.cleanedText.length <= PIPELINE_SOURCE_TEXT_TARGET_CHARS) {
+    return { text: params.cleanedText, blocks: params.blocks, sourceCompression: null };
+  }
+
+  if (params.cleanedText.length > MAX_RAW_SOURCE_TEXT_CHARS) {
+    throw new ExpectedLectureInputError(
+      "This source is too large to process even with compression. Please split it into a few parts and try again.",
+      "source_too_large",
+    );
+  }
+
+  const condensed = await condenseSourceMaterial({
+    text: params.cleanedText,
+    blocks: params.blocks,
+    targetChars: PIPELINE_SOURCE_TEXT_TARGET_CHARS,
+    selector: createAiChunkSelector({
+      stage: "source_condense",
+      userId: params.userId ?? null,
+      lectureId: params.lectureId ?? null,
+    }),
+  });
+
+  const text = normalizeWhitespace(condensed.text);
+  // The selection budgets already keep the result under target; this guard exists because the
+  // note pipeline's step budget is sized to this number and must never see more.
+  const withinTarget = text.length <= PIPELINE_SOURCE_TEXT_TARGET_CHARS;
+  const boundedText = withinTarget ? text : text.slice(0, PIPELINE_SOURCE_TEXT_TARGET_CHARS);
+
+  return {
+    text: boundedText,
+    // A sliced text no longer lines up with the condensed blocks, so structure is dropped with it.
+    blocks: withinTarget ? (condensed.blocks ?? undefined) : undefined,
+    sourceCompression: {
+      ...condensed.meta,
+      compressedAt: new Date().toISOString(),
+    },
+  };
+}
+
 export async function createLectureFromTextSource(params: {
   userId: string;
   sourceType: string;
@@ -1459,14 +1524,16 @@ export async function createLectureFromTextSource(params: {
     );
   }
 
-  if (cleanedText.length > MAX_PREPARED_SOURCE_TEXT_CHARS) {
-    throw new ExpectedLectureInputError(
-      "This source is too large to process at once. Please split it into smaller parts and try again.",
-      "source_too_large",
-    );
-  }
+  const fitted = await fitSourceTextToPipeline({
+    cleanedText,
+    blocks: params.blocks,
+    userId: params.userId,
+    lectureId: params.lectureId ?? null,
+  });
+  const sourceText = fitted.text;
+  const sourceBlocks = fitted.blocks;
 
-  const durationSeconds = estimateTextSourceDurationSeconds(cleanedText);
+  const durationSeconds = estimateTextSourceDurationSeconds(sourceText);
   let lectureId: string | null = null;
 
   async function requireActiveLecture(targetLectureId: string) {
@@ -1506,8 +1573,9 @@ export async function createLectureFromTextSource(params: {
                 sourceType: params.sourceType,
                 titleHint: params.titleHint ?? null,
                 modelMetadata: params.modelMetadata ?? {},
-                text: cleanedText,
-                blocks: params.blocks ?? null,
+                text: sourceText,
+                blocks: sourceBlocks ?? null,
+                sourceCompression: fitted.sourceCompression,
               },
             },
           } as never,
@@ -1536,8 +1604,9 @@ export async function createLectureFromTextSource(params: {
                 sourceType: params.sourceType,
                 titleHint: params.titleHint ?? null,
                 modelMetadata: params.modelMetadata ?? {},
-                text: cleanedText,
-                blocks: params.blocks ?? null,
+                text: sourceText,
+                blocks: sourceBlocks ?? null,
+                sourceCompression: fitted.sourceCompression,
               },
             },
           } as never,
@@ -1552,8 +1621,8 @@ export async function createLectureFromTextSource(params: {
       lectureId = (lecture as { id: string }).id;
     }
     const transcript = buildSyntheticTranscriptFromTextSource({
-      text: cleanedText,
-      blocks: params.blocks,
+      text: sourceText,
+      blocks: sourceBlocks,
       sourceType: params.sourceType,
     });
 
@@ -1742,14 +1811,14 @@ export async function prepareLectureFromTextSource(params: {
     );
   }
 
-  if (cleanedText.length > MAX_PREPARED_SOURCE_TEXT_CHARS) {
-    throw new ExpectedLectureInputError(
-      "This source is too large to process at once. Please split it into smaller parts and try again.",
-      "source_too_large",
-    );
-  }
+  const fitted = await fitSourceTextToPipeline({
+    cleanedText,
+    blocks: params.blocks,
+    userId: params.userId,
+    lectureId: params.lectureId ?? null,
+  });
 
-  const durationSeconds = estimateTextSourceDurationSeconds(cleanedText);
+  const durationSeconds = estimateTextSourceDurationSeconds(fitted.text);
   const titleHint = params.titleHint == null ? null : stripUnstorableCharacters(params.titleHint);
   // Blocks, the title hint and model metadata reach us straight from the extractor, so clean
   // the whole payload here rather than trusting every producer to have done it.
@@ -1760,8 +1829,9 @@ export async function prepareLectureFromTextSource(params: {
       sourceType: params.sourceType,
       titleHint,
       modelMetadata: params.modelMetadata ?? {},
-      text: cleanedText,
-      blocks: params.blocks ?? null,
+      text: fitted.text,
+      blocks: fitted.blocks ?? null,
+      sourceCompression: fitted.sourceCompression,
     },
     processing: {
       stage: "queued",

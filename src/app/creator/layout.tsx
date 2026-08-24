@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 
 import { AppShell } from "@/components/app-shell";
+import { NavigationFeedbackProvider } from "@/components/navigation-loading";
 import { CreatorDemoProvider } from "@/components/creator-demo/creator-demo-provider";
 import { resolveCreatorDemoBasePath } from "@/lib/creator-demo/paths";
 import { getCreatorDemoSeed } from "@/lib/creator-demo/server-seed";
@@ -32,9 +33,11 @@ export default async function CreatorDemoLayout({
 
   return (
     <CreatorDemoProvider seed={getCreatorDemoSeed()} basePath={basePath}>
-      <AppShell hasPaidAccess initialPathname={pathname} className="creator-demo-shell">
-        {children}
-      </AppShell>
+      <NavigationFeedbackProvider>
+        <AppShell hasPaidAccess initialPathname={pathname} className="creator-demo-shell">
+          {children}
+        </AppShell>
+      </NavigationFeedbackProvider>
     </CreatorDemoProvider>
   );
 }

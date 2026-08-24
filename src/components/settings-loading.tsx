@@ -2,7 +2,7 @@ const SKELETON_LINK_CARDS = [0, 1, 2];
 
 export function SettingsLoading() {
   return (
-    <main className="home-dashboard pb-8" aria-busy="true" aria-label="Nalaganje nastavitev">
+    <main className="home-dashboard pb-8" data-route-skeleton="" aria-busy="true" aria-label="Nalaganje nastavitev">
       <section className="dashboard-section">
         <div className="dashboard-section-heading app-loading-header">
           <div className="app-loading-pill app-loading-pill-title" />

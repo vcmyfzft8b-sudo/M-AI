@@ -10,7 +10,7 @@ export function SupportIndexLoading() {
   ];
 
   return (
-    <main className="home-dashboard pb-8" aria-busy="true" aria-label="Nalaganje pomoči">
+    <main className="home-dashboard pb-8" data-route-skeleton="" aria-busy="true" aria-label="Nalaganje pomoči">
       <section className="dashboard-section">
         <div className="dashboard-section-heading app-loading-header">
           <div className="app-loading-pill app-loading-pill-title" />
@@ -39,7 +39,7 @@ export function SupportIndexLoading() {
 
 export function SupportArticleLoading() {
   return (
-    <main className="home-dashboard pb-8" aria-busy="true" aria-label="Nalaganje članka pomoči">
+    <main className="home-dashboard pb-8" data-route-skeleton="" aria-busy="true" aria-label="Nalaganje članka pomoči">
       <section className="dashboard-section">
         <div className="app-loading-header">
           <div className="app-loading-pill app-loading-pill-section" />

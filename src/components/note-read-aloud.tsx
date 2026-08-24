@@ -698,6 +698,15 @@ function WordToken({
   );
 }
 
+/**
+ * Markdown escapes survive the note tokenizer as literal text ("\$30" for a $30 price), because
+ * unescaping earlier would let the bare dollars pair up as fake math delimiters. Display is the
+ * one safe place to drop the backslash — word indices never change, only the glyphs shown.
+ */
+function displayText(value: string) {
+  return value.replace(/\\(\$)/g, "$1");
+}
+
 function MathToken({ value, display }: { value: string; display: boolean }) {
   let html = "";
 
@@ -780,7 +789,9 @@ function renderTokens(params: {
           >
             {runTokens.map((runToken, runIndex) => {
               if (runToken.type === "text") {
-                return <span key={`highlight-text-${index + runIndex}`}>{runToken.text}</span>;
+                return (
+                  <span key={`highlight-text-${index + runIndex}`}>{displayText(runToken.text)}</span>
+                );
               }
 
               if (runToken.type === "word") {
@@ -818,7 +829,7 @@ function renderTokens(params: {
     }
 
     if (token.type === "text") {
-      rendered.push(<span key={`text-${index}`}>{token.text}</span>);
+      rendered.push(<span key={`text-${index}`}>{displayText(token.text)}</span>);
       index += 1;
       continue;
     }

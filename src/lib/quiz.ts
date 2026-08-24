@@ -10,6 +10,12 @@ import type {
   TranscriptSegmentRow,
 } from "@/lib/database.types";
 import { generateStructuredObject } from "@/lib/ai/json";
+import {
+  buildItemPlans,
+  extractStudyItems,
+  generateItemQuizDrafts,
+  resolveStudyPipelineMode,
+} from "@/lib/study-items";
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
 import { areHighQualityQuizOptions, isHighQualityStudyPrompt } from "@/lib/study-quality";
@@ -535,6 +541,29 @@ async function generateCoverageQuiz(params: {
     lecture: params.lecture,
     transcript: params.transcript,
   });
+
+  if (resolveStudyPipelineMode() === "items") {
+    const items = await extractStudyItems({
+      units,
+      sourceType: params.lecture.source_type === "audio" ? "audio" : "document",
+      outputLanguage: params.lecture.language_hint,
+      usageContext: { lectureId: params.lecture.id, userId: params.lecture.user_id },
+      artifactModelMetadata: params.artifact.model_metadata,
+    });
+    const { drafts } = await generateItemQuizDrafts({
+      items,
+      units,
+      outputLanguage: params.lecture.language_hint,
+      usageContext: { lectureId: params.lecture.id, userId: params.lecture.user_id },
+    });
+
+    return {
+      units,
+      plannedCoverage: buildItemPlans(items, units),
+      questions: dedupeQuizQuestions(drafts),
+    };
+  }
+
   const plannedCoverage = await createCoveragePlan({
     title: params.lecture.title,
     summary: params.artifact.summary,

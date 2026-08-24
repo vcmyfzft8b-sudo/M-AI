@@ -32,3 +32,26 @@ test("callers that ask for no media resolution stay unchanged on every model", (
   assert.equal(resolvePartMediaResolution("gemini-3.1-flash-lite", undefined), undefined);
   assert.equal(resolvePartMediaResolution("gemini-2.5-flash-lite", undefined), undefined);
 });
+
+test("thinking suppression matches what each model generation accepts", async () => {
+  const { resolveMinimalThinkingConfig } = await import("../src/lib/ai/gemini-models.ts");
+
+  // 2.5 models reject thinking fields entirely.
+  assert.equal(resolveMinimalThinkingConfig("gemini-2.5-flash-lite"), undefined);
+  // 3.0/3.1 take the budget form; sending thinkingLevel is the untested path there.
+  assert.deepEqual(resolveMinimalThinkingConfig("gemini-3-flash-preview"), {
+    thinkingBudget: 0,
+    includeThoughts: false,
+  });
+  assert.deepEqual(resolveMinimalThinkingConfig("gemini-3.1-flash-lite"), {
+    thinkingBudget: 0,
+    includeThoughts: false,
+  });
+  // 3.5+ reject thinkingBudget with a bare 400; MINIMAL is the measured no-thinking level.
+  assert.deepEqual(resolveMinimalThinkingConfig("gemini-3.5-flash-lite"), {
+    thinkingLevel: "MINIMAL",
+  });
+  assert.deepEqual(resolveMinimalThinkingConfig("gemini-3.6-flash"), { thinkingLevel: "MINIMAL" });
+  // An unrecognised name sends nothing: a missing field degrades, an invalid one kills the call.
+  assert.equal(resolveMinimalThinkingConfig("some-future-model"), undefined);
+});

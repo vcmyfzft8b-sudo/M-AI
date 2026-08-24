@@ -9,6 +9,7 @@ export function LectureWorkspaceLoading() {
   return (
     <div
       className="lecture-workspace lecture-workspace-full"
+      data-route-skeleton=""
       role="status"
       aria-label="Nalaganje zapiska"
       aria-busy="true"

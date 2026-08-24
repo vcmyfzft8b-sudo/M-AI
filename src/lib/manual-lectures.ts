@@ -3,7 +3,9 @@ import "server-only";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
-import { PartMediaResolutionLevel, type ThinkingConfig } from "@google/genai";
+import { PartMediaResolutionLevel } from "@google/genai";
+
+import { resolveMinimalThinkingConfig } from "@/lib/ai/gemini-models";
 import JSZip from "jszip";
 import mammoth from "mammoth";
 import { z } from "zod";
@@ -52,7 +54,8 @@ import {
 import { createEmbeddings as createAiEmbeddings } from "@/lib/ai/embeddings";
 import {
   isUnsupportedVideoContentType,
-  UNSUPPORTED_VIDEO_LINK_MESSAGE,
+  getUnsupportedVideoLinkMessage,
+  isReadableLinkContentType,
 } from "@/lib/link-source-validation";
 import {
   ExpectedLectureInputError,
@@ -75,7 +78,15 @@ const pptxVisualExtractionSchema = z.object({
 });
 
 const MAX_LINK_FETCH_REDIRECTS = 3;
-const MAX_LINK_FETCH_BYTES = 1_000_000;
+/**
+ * A ceiling on how much markup we are willing to pull down, not a judgement about the page.
+ *
+ * The old limit was 1 MB of raw HTML, which rejected ordinary encyclopaedia and documentation
+ * pages: their markup runs to several megabytes while the readable article underneath is a few
+ * tens of kilobytes, and it gets capped at MAX_LINK_READABLE_TEXT_CHARS regardless. Measuring the
+ * markup was measuring the wrong thing.
+ */
+const MAX_LINK_FETCH_BYTES = 8_000_000;
 const MAX_LINK_READABLE_TEXT_CHARS = 45_000;
 const MAX_PREPARED_SOURCE_TEXT_CHARS = 240_000;
 const LINK_FETCH_TIMEOUT_MS = 10_000;
@@ -85,10 +96,8 @@ const OCR_RESCUE_MAX_OUTPUT_TOKENS = 6000;
 const PDF_FALLBACK_MAX_OUTPUT_TOKENS = 12000;
 const PPTX_VISUAL_EXTRACTION_MAX_OUTPUT_TOKENS = 9000;
 const OCR_MIN_ACCEPTED_TEXT_CHARS = 120;
-const OCR_THINKING_CONFIG: ThinkingConfig = {
-  includeThoughts: false,
-  thinkingBudget: 0,
-};
+// Thinking suppression is version-specific (3.5+ rejects thinkingBudget with a bare 400), so
+// the config is resolved from the model right before each call instead of being a constant.
 const OCR_FAILURE_PATTERNS = [
   /\b(can(?:not|'t)\s+(?:read|extract|see)|unable\s+to\s+(?:read|extract|see))\b/i,
   /\b(no|without)\s+(?:readable\s+)?text\b/i,
@@ -131,6 +140,18 @@ let pdfJsPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | nu
 
 let pdfWorkerPromise: Promise<void> | null = null;
 
+/**
+ * Imports a module with Node's own resolver, invisibly to webpack. Bundled by webpack, evaluating
+ * pdf.worker.mjs throws "Object.defineProperty called on non-object" (its module wrapper clashes
+ * with the interop shim), which killed every server-side PDF extraction in dev. The same modules
+ * load cleanly when Node resolves them natively, and outputFileTracingIncludes already ships them
+ * unbundled next to the standalone build. The Function constructor keeps the import() out of
+ * webpack's static analysis; the specifiers are the two fixed pdfjs paths below, never user input.
+ */
+const nativeImport = new Function("specifier", "return import(specifier)") as (
+  specifier: string,
+) => Promise<Record<string, unknown>>;
+
 async function ensurePdfJsNodeRuntime() {
   const pdfGlobal = globalThis as {
     DOMMatrix?: unknown;
@@ -154,10 +175,11 @@ async function ensurePdfJsNodeRuntime() {
   }
 
   if (!pdfGlobal.pdfjsWorker?.WorkerMessageHandler) {
-    pdfWorkerPromise ??= import("pdfjs-dist/legacy/build/pdf.worker.mjs")
+    pdfWorkerPromise ??= nativeImport("pdfjs-dist/legacy/build/pdf.worker.mjs")
       .then((worker) => {
         pdfGlobal.pdfjsWorker = {
-          WorkerMessageHandler: worker.WorkerMessageHandler,
+          WorkerMessageHandler: (worker as { WorkerMessageHandler: { setup: (...args: unknown[]) => void } })
+            .WorkerMessageHandler,
         };
       })
       .catch((error) => {
@@ -171,8 +193,11 @@ async function ensurePdfJsNodeRuntime() {
 
 export async function getPdfJs() {
   if (!pdfJsPromise) {
-    pdfJsPromise = ensurePdfJsNodeRuntime().then(() =>
-      import("pdfjs-dist/legacy/build/pdf.mjs"),
+    pdfJsPromise = ensurePdfJsNodeRuntime().then(
+      () =>
+        nativeImport("pdfjs-dist/legacy/build/pdf.mjs") as unknown as Promise<
+          typeof import("pdfjs-dist/legacy/build/pdf.mjs")
+        >,
     ).catch((error) => {
       pdfJsPromise = null;
       throw error;
@@ -900,16 +925,15 @@ function resolveRedirectUrl(baseUrl: URL, location: string) {
   }
 }
 
+/**
+ * Reads at most maxBytes of the response and returns what it got.
+ *
+ * A page bigger than the ceiling is truncated rather than refused: the readable-text extractor
+ * copes with a partial document, article text sits near the top of the markup, and the extracted
+ * text is capped anyway. Refusing outright turned "this page is long" into "we cannot read this
+ * page", which is a worse answer and, for a learner pasting a Wikipedia link, a wrong one.
+ */
 async function readResponseBodyWithLimit(response: Response, maxBytes: number) {
-  const contentLength = Number(response.headers.get("content-length"));
-
-  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    throw new ExpectedLectureInputError(
-      "The linked page is too large to import.",
-      "link_too_large",
-    );
-  }
-
   if (!response.body) {
     return "";
   }
@@ -928,15 +952,12 @@ async function readResponseBodyWithLimit(response: Response, maxBytes: number) {
       }
 
       totalBytes += value.byteLength;
-
-      if (totalBytes > maxBytes) {
-        throw new ExpectedLectureInputError(
-          "The linked page is too large to import.",
-          "link_too_large",
-        );
-      }
-
       body += decoder.decode(value, { stream: true });
+
+      if (totalBytes >= maxBytes) {
+        await reader.cancel();
+        break;
+      }
     }
 
     body += decoder.decode();
@@ -1040,12 +1061,12 @@ export async function fetchReadableWebpage(params: { url: string }) {
 
   if (isUnsupportedVideoContentType(contentType)) {
     throw new ExpectedLectureInputError(
-      UNSUPPORTED_VIDEO_LINK_MESSAGE,
+      getUnsupportedVideoLinkMessage(),
       "unsupported_video_link",
     );
   }
 
-  if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
+  if (!isReadableLinkContentType(contentType)) {
     throw new ExpectedLectureInputError(
       "Only standard web pages are supported for link summaries.",
       "unsupported_link_content_type",
@@ -1169,10 +1190,13 @@ export async function extractTextFromPdf(file: File) {
   let fallbackText: string;
 
   try {
+    // A PDF with no readable text layer is OCR work, not text work: the OCR benchmark
+    // (scripts/ocr-eval.mjs) disqualified the cheap text model on exactly this input.
     fallbackText = await generateTextWithGeminiFile({
       instructions: `${fallbackInstructions}\n\nExtract the document text as faithfully and completely as possible so it can be turned into detailed study notes and flashcards.`,
       file,
-      model: env.GEMINI_TEXT_MODEL,
+      model: env.GEMINI_OCR_MODEL,
+      thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_MODEL),
       maxOutputTokens: PDF_FALLBACK_MAX_OUTPUT_TOKENS,
     });
   } catch (error) {
@@ -1263,7 +1287,7 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
       model: env.GEMINI_OCR_MODEL,
       maxOutputTokens: OCR_PRIMARY_MAX_OUTPUT_TOKENS,
       maxAttempts: 1,
-      thinkingConfig: OCR_THINKING_CONFIG,
+      thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_MODEL),
       mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM,
       usageContext: buildImageOcrUsageContext({
         context,
@@ -1309,7 +1333,7 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
       model: env.GEMINI_OCR_RESCUE_MODEL,
       maxOutputTokens: OCR_RESCUE_MAX_OUTPUT_TOKENS,
       maxAttempts: 1,
-      thinkingConfig: OCR_THINKING_CONFIG,
+      thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_RESCUE_MODEL),
       mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH,
       usageContext: buildImageOcrUsageContext({
         context,
@@ -1566,6 +1590,7 @@ export async function createLectureFromTextSource(params: {
       sourceType: "document",
       outputLanguage: params.languageHint,
       sourceTitleHint: params.titleHint,
+      usageContext: { lectureId: activeLectureId, userId: params.userId },
     });
 
     await requireActiveLecture(lectureId);

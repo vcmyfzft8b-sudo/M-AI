@@ -1,0 +1,464 @@
+[
+ {
+  "config": "3.1-lite/off*",
+  "image": "handwritten-ugly",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.9428571428571428,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2381,
+    "costUsd": 0.0003195,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptr???\n\nKalcij sproži eksocitozo vezklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9714285714285714,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1095,
+    "costUsd": 0.0003195,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptr???\nKalcij sproži eksocitozo veziklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, ojačitev\nEPSP depolarizacija IPSP hiperpolarizacija\nAksonski grič odloča o akcijskem potencialu\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9714285714285714,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1080,
+    "costUsd": 0.0003195,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptr???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "3.1-lite/off*",
+  "image": "slide-annotated-ugly",
+  "samples": [
+   {
+    "typed": 1,
+    "handwritten": 0.9473684210526315,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1663,
+    "costUsd": 0.0004065,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na zpitu vedno napiši obdobje uteži!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 0.9473684210526315,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1170,
+    "costUsd": 0.0004065,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na zpitu vedno napiši obdobje utež!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\nGeometrijska sredina = koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 0.9473684210526315,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1057,
+    "costUsd": 0.0004065,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na zpitu vedno napiši obdobje uteži!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+   }
+  ]
+ },
+ {
+  "config": "3.1-lite/default",
+  "image": "handwritten-ugly",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.9428571428571428,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1038,
+    "costUsd": 0.0003195,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptr???\nKalcij sproži eksocitozo vezklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, ojačitev\nEPSP depolarizacija IPSP hiperpolarizacija\nAksonski grič odloča o akcijskem potencialu\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9428571428571428,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1046,
+    "costUsd": 0.0003195,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptr???\n\nKalcij sproži eksocitozo vezklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9142857142857143,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1251,
+    "costUsd": 0.0003195,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptr???\nKalcij sproži eksocitozo vezklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, ojačitev\nEPSP depolarizacija IPSP hiperpolarizacija\nAksonški grič odloča o akcijskem potencialu\nSSRI blokira ponovni privzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "3.1-lite/default",
+  "image": "slide-annotated-ugly",
+  "samples": [
+   {
+    "typed": 1,
+    "handwritten": 0.9473684210526315,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1087,
+    "costUsd": 0.0004065,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na zpitu vedno napiši obdobje uteži!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\nGeometrijska sredina = koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 0.9473684210526315,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1137,
+    "costUsd": 0.0004065,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na zpitu vedno napiši obdobje uteži!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\nGeometrijska sredina = koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 0.9473684210526315,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1077,
+    "costUsd": 0.0004065,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na zpitu vedno napiši obdobje uteži!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+   }
+  ]
+ },
+ {
+  "config": "3-flash-prev/off*",
+  "image": "handwritten-ugly",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.9714285714285714,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1384,
+    "costUsd": 0.000642,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nrecepti???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1396,
+    "costUsd": 0.000639,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptr???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1998,
+    "costUsd": 0.000645,
+    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nrecepti???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "3-flash-prev/off*",
+  "image": "slide-annotated-ugly",
+  "samples": [
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1668,
+    "costUsd": 0.000819,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\n\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1572,
+    "costUsd": 0.000819,
+    "text": "Kazalne števila in indeksi cen\n\n- Laspeyresov indeks uporablja količine iz baznega obdobja.\n- Paaschejev indeks uporablja količine iz tekočega obdobja.\n- Fisherjev idealni indeks je geometrijska sredina obeh.\n- Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n- Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2129,
+    "costUsd": 0.000819,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+   }
+  ]
+ },
+ {
+  "config": "2.5-lite",
+  "image": "handwritten-ugly",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.7428571428571429,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1628,
+    "costUsd": 0.0000792,
+    "text": "Sinapsa = stik med nevronoma, španja ~ 20 nm recepta???\nKalcij sproži ekscitozo vezklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, oljačitev\nEPSP depdanzacija IPSP hiperpdanzacija\nAksonski grič odoč o akajskem potencialu\nSSRI blokira ponovni priuzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.7142857142857143,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1379,
+    "costUsd": 0.00007880000000000002,
+    "text": "Sinapsa = stik med nevroni, špranja ~ 20 nm\nrecepte????\n\nKalcij sproži ekscitozo vezklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, očitev\n\nEPSO depolazacija, IPSP hiperpolazacija\n\nAksonski grič odoč o akajškem potencialu\n\nSSRI blokira ponovni prizem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.7428571428571429,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1370,
+    "costUsd": 0.00007880000000000002,
+    "text": "Sinapsa = stik med neuronomoma, španja ~20 nm recepcija???\nKalcij sproži ekscitozo veziklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, olajšitev\nEPSP depolizacija IPSP hiperpolizacija\nAksonski grič odoč o akajskem potencialu\nSSRI blokira ponovni prizem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "2.5-lite",
+  "image": "slide-annotated-ugly",
+  "samples": [
+   {
+    "typed": 1,
+    "handwritten": 0.7894736842105263,
+    "diacritics": 0.8,
+    "thoughtTokens": 0,
+    "elapsedMs": 1444,
+    "costUsd": 0.0001032,
+    "text": "Kazalne števila in indeksi cen\n\n* Laspeyresov indeks uporablja količine iz baznega obdobja.\n* Paaschejev indeks uporablja količine iz tekočega obdobja.\n* Fisherjev idealni indeks je geometrijska sredina obeh.\n* Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n* Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na rpiiu vedho najii ddhije ute!\ncpl je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometritska sredina = koren iz L krat p"
+   },
+   {
+    "typed": 1,
+    "handwritten": 0.8421052631578947,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1692,
+    "costUsd": 0.000102,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na ppitu vedno najiši dobje uteži\n\ncpl je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina koren iz L krat p"
+   },
+   {
+    "typed": 1,
+    "handwritten": 0.7894736842105263,
+    "diacritics": 0.9,
+    "thoughtTokens": 0,
+    "elapsedMs": 1355,
+    "costUsd": 0.00010279999999999999,
+    "text": "Kazalne števila in indeksi cen\n\n* Laspeyresov indeks uporablja količine iz baznega obdobja.\n* Paaschejev indeks uporablja količine iz tekočega obdobja.\n* Fisherjev idealni indeks je geometrijska sredina obeh.\n* Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n* Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na rpiith vedho najsi dobje utež!\nOPI je Laspeyresov tip\nBDP deflator = Paasche\ngeometrijska sredina = koren iz L krat P"
+   }
+  ]
+ },
+ {
+  "config": "3.5-lite/minimal",
+  "image": "handwritten-ugly",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.9428571428571428,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1346,
+    "costUsd": 0.0004576,
+    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nreceptor???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloča o akajskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9428571428571428,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1083,
+    "costUsd": 0.0004626,
+    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nrecepti???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksongki grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9714285714285714,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 953,
+    "costUsd": 0.0004626,
+    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nrecepti???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija | IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "3.5-lite/minimal",
+  "image": "slide-annotated-ugly",
+  "samples": [
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1137,
+    "costUsd": 0.0006076,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\ngeometrijska sredina = koren iz L krat P"
+   },
+   {
+    "typed": 0.975609756097561,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1089,
+    "costUsd": 0.0006076,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n• Verični indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+   },
+   {
+    "typed": 0.975609756097561,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1097,
+    "costUsd": 0.0006076,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n• Verični indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+   }
+  ]
+ },
+ {
+  "config": "3.5-lite/high",
+  "image": "handwritten-ugly",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.9714285714285714,
+    "diacritics": 1,
+    "thoughtTokens": 663,
+    "elapsedMs": 2826,
+    "costUsd": 0.0021176,
+    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nreceptr???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9714285714285714,
+    "diacritics": 1,
+    "thoughtTokens": 401,
+    "elapsedMs": 1994,
+    "costUsd": 0.0014601,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nrecepti???\nKalcij sproži eksocitozo veziklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, ojačitev\nEPSP depolarizacija IPSP hiperpolarizacija\nAksonski grič odloča o akcijskem potencialu\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9714285714285714,
+    "diacritics": 1,
+    "thoughtTokens": 801,
+    "elapsedMs": 3145,
+    "costUsd": 0.0024601,
+    "text": "receptr???\nSinapsa = stik med nevronoma, špranja ~20 nm\nKalcij sproži eksocitozo veziklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, ojačitev\nEPSP depolarizacija IPSP hiperpolarizacija\nAksonski grič odloča o akcijskem potencialu\nSSRI blokira ponovni privzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "3.5-lite/high",
+  "image": "slide-annotated-ugly",
+  "samples": [
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 991,
+    "elapsedMs": 3300,
+    "costUsd": 0.0031051,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\n                                          POZOR: na izpitu vedno napiši obdobje uteži!\n\n                                                             CPI je Laspeyresov tip\n\n                                             BDP deflator = Paasche\n\n                                         geometrijska sredina = koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 432,
+    "elapsedMs": 2074,
+    "costUsd": 0.0016851,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\ngeometrijska sredina = koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 1059,
+    "elapsedMs": 3703,
+    "costUsd": 0.0032751,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\n                                                POZOR: na izpitu vedno napiši obdobje uteži!\n                                                CPI je Laspeyresov tip\n                                                BDP deflator = Paasche\n                                                geometrijska sredina = koren iz L krat P"
+   }
+  ]
+ },
+ {
+  "config": "3.6-flash/minimal",
+  "image": "handwritten-ugly",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.9714285714285714,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1613,
+    "costUsd": 0.00087525,
+    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nreceptor???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9428571428571428,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1459,
+    "costUsd": 0.00088275,
+    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nreceptar???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni prevzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9428571428571428,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1628,
+    "costUsd": 0.000879,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptar???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni prevzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "3.6-flash/minimal",
+  "image": "slide-annotated-ugly",
+  "samples": [
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1744,
+    "costUsd": 0.001104,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\n\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2202,
+    "costUsd": 0.001104,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1667,
+    "costUsd": 0.00110775,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\n\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
+   }
+  ]
+ }
+]

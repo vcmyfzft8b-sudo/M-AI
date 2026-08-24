@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { LectureRow, TranscriptSegmentRow } from "@/lib/database.types";
-import { countWords } from "@/lib/note-generation";
+import { countWords } from "@/lib/notes/note-prompts";
 import type { SourceImportance, SourceUnit, StudySectionDraft } from "@/lib/study-models";
 
 const AUDIO_UNIT_TARGET_WORDS = 85;

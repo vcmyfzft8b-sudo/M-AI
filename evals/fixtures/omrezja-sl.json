@@ -1,0 +1,42 @@
+{
+  "id": "omrezja-sl",
+  "language": "sl",
+  "sourceType": "document",
+  "title": "Računalniška omrežja: model OSI in naslavljanje",
+  "notes": "Slovensko gradivo v obliki predstavitve. Vsebuje tipičen balast: cilje poglavja, ponovljene naslove, opise slik in povzetke, ki ne nosijo preverljivega dejstva.",
+  "source": "POGLAVJE 3 — RAČUNALNIŠKA OMREŽJA\n\nCilji poglavja\nPo koncu tega poglavja bo študent razumel osnove računalniških omrežij, znal opisati plasti modela OSI in poznal razliko med naslovi. Študent bo tudi znal uporabiti pridobljeno znanje pri reševanju nalog.\n\nSlika 3.1: Shematski prikaz omrežja. Na sliki vidimo več naprav, ki so povezane med seboj.\n\n3.1 Uvod\nRačunalniško omrežje je skupina naprav, ki so povezane tako, da si lahko izmenjujejo podatke in delijo vire. Omrežja delimo glede na obseg. LAN (Local Area Network) pokriva majhno geografsko območje, na primer eno stavbo ali pisarno. WAN (Wide Area Network) povezuje oddaljena območja, na primer mesta ali države. Med njima je MAN (Metropolitan Area Network), ki pokriva območje mesta.\n\n3.2 Referenčni model OSI\nModel OSI (Open Systems Interconnection) je referenčni model, ki komunikacijo v omrežju razdeli na sedem plasti. Vsaka plast opravlja svojo nalogo in nudi storitve plasti nad seboj.\n\nSedem plasti od spodaj navzgor je: fizična plast, povezavna plast, omrežna plast, transportna plast, sejna plast, predstavitvena plast in aplikacijska plast.\n\nFizična plast (1) prenaša surove bite po fizičnem mediju. Določa napetostne nivoje, hitrost prenosa in vrsto konektorja.\n\nPovezavna plast (2) skrbi za prenos okvirjev med sosednjima napravama v istem omrežnem segmentu in za zaznavanje napak. Na tej plasti se uporablja naslov MAC.\n\nOmrežna plast (3) skrbi za usmerjanje paketov med različnimi omrežji. Na tej plasti deluje protokol IP in se uporablja naslov IP.\n\nTransportna plast (4) zagotavlja prenos med končnima točkama. Tu delujeta protokola TCP in UDP.\n\nSejna plast (5) vzpostavlja, upravlja in zaključuje seje med aplikacijama.\n\nPredstavitvena plast (6) skrbi za obliko zapisa podatkov, kodiranje in šifriranje.\n\nAplikacijska plast (7) je najbližje uporabniku in nudi storitve aplikacijam, na primer HTTP, FTP in SMTP.\n\nSlika 3.2: Prikaz sedmih plasti modela OSI. Plasti so prikazane ena nad drugo.\n\n3.3 Naslavljanje\nNaslov MAC je fizični naslov omrežne kartice. Je 48-bitni naslov, zapisan šestnajstiško, in ga proizvajalec zapiše v napravo. Naslov MAC se ne spreminja glede na omrežje, v katerega je naprava priključena.\n\nNaslov IP je logični naslov. Naslov IPv4 je 32-biten, naslov IPv6 pa 128-biten. Naslov IP se spremeni, ko napravo priključimo v drugo omrežje.\n\nKljučna razlika: naslov MAC identificira napravo znotraj lokalnega segmenta, naslov IP pa identificira napravo v širšem omrežju in omogoča usmerjanje.\n\nProtokol ARP (Address Resolution Protocol) prevede naslov IP v naslov MAC znotraj lokalnega omrežja.\n\nProtokol DHCP (Dynamic Host Configuration Protocol) samodejno dodeli napravi naslov IP, masko podomrežja in privzeti prehod.\n\nSistem DNS (Domain Name System) prevede domensko ime v naslov IP.\n\n3.4 Omrežne naprave\nStikalo (switch) deluje na povezavni plasti in posreduje okvirje na podlagi naslova MAC. Zapomni si, na katerih vratih je katera naprava.\n\nUsmerjevalnik (router) deluje na omrežni plasti in posreduje pakete med različnimi omrežji na podlagi naslova IP.\n\nRazdelilnik (hub) je starejša naprava na fizični plasti, ki prejeti signal pošlje na vsa vrata brez presoje.\n\n3.5 Protokola TCP in UDP\nTCP (Transmission Control Protocol) je povezavno usmerjen protokol. Pred prenosom vzpostavi povezavo s postopkom trosmernega rokovanja, zagotavlja zanesljivost, pravilen vrstni red paketov in ponovno pošiljanje izgubljenih paketov. Uporablja se tam, kjer je pomembna zanesljivost, na primer pri spletnem brskanju in prenosu datotek.\n\nUDP (User Datagram Protocol) je nepovezaven protokol. Povezave ne vzpostavlja, ne zagotavlja vrstnega reda in ne pošilja izgubljenih paketov ponovno. Je hitrejši in ima manjšo režijo. Uporablja se pri pretakanju videa, spletni telefoniji in igrah v realnem času.\n\nGlavni kompromis: TCP zagotavlja zanesljivost na račun hitrosti, UDP pa hitrost na račun zanesljivosti.\n\nSlika 3.3: Primerjava TCP in UDP.\n\nPovzetek poglavja\nV tem poglavju smo spoznali osnove računalniških omrežij, model OSI in naslavljanje. Snov je pomembna za razumevanje nadaljnjih poglavij. Priporočamo, da rešite vaje na koncu poglavja.\n\nVprašanja za ponovitev so na voljo v spletni učilnici.",
+  "keyFacts": [
+    "LAN pokriva majhno geografsko območje (stavba, pisarna)",
+    "WAN povezuje oddaljena območja, na primer mesta ali države",
+    "MAN pokriva območje mesta",
+    "Model OSI razdeli komunikacijo na sedem plasti",
+    "Plasti OSI od spodaj navzgor: fizična, povezavna, omrežna, transportna, sejna, predstavitvena, aplikacijska",
+    "Fizična plast prenaša surove bite in določa napetost, hitrost in konektor",
+    "Povezavna plast prenaša okvirje med sosednjima napravama in zaznava napake; uporablja naslov MAC",
+    "Omrežna plast usmerja pakete med omrežji; tu deluje protokol IP",
+    "Transportna plast zagotavlja prenos med končnima točkama; TCP in UDP",
+    "Aplikacijska plast nudi storitve aplikacijam, na primer HTTP, FTP, SMTP",
+    "Naslov MAC je 48-biten fizični naslov omrežne kartice, zapisan šestnajstiško",
+    "Naslov IPv4 je 32-biten, IPv6 pa 128-biten",
+    "Naslov MAC se ne spreminja, naslov IP se spremeni ob priključitvi v drugo omrežje",
+    "ARP prevede naslov IP v naslov MAC znotraj lokalnega omrežja",
+    "DHCP samodejno dodeli naslov IP, masko podomrežja in privzeti prehod",
+    "DNS prevede domensko ime v naslov IP",
+    "Stikalo deluje na povezavni plasti in posreduje okvirje na podlagi naslova MAC",
+    "Usmerjevalnik deluje na omrežni plasti in posreduje pakete na podlagi naslova IP",
+    "Razdelilnik (hub) deluje na fizični plasti in pošlje signal na vsa vrata",
+    "TCP je povezavno usmerjen, uporablja trosmerno rokovanje, zagotavlja zanesljivost in vrstni red",
+    "UDP je nepovezaven, ne zagotavlja vrstnega reda ne ponovnega pošiljanja, je hitrejši z manjšo režijo",
+    "TCP se uporablja pri brskanju in prenosu datotek; UDP pri pretakanju videa, VoIP in igrah",
+    "Kompromis: TCP menja hitrost za zanesljivost, UDP zanesljivost za hitrost"
+  ],
+  "filler": [
+    "cilji poglavja: študent bo razumel osnove",
+    "opis slike 3.1: naprave, povezane med seboj",
+    "opis slike 3.2: plasti prikazane ena nad drugo",
+    "opis slike 3.3: primerjava TCP in UDP",
+    "povzetek poglavja: snov je pomembna za nadaljnja poglavja",
+    "priporočilo, da rešite vaje na koncu poglavja",
+    "vprašanja za ponovitev so v spletni učilnici"
+  ]
+}

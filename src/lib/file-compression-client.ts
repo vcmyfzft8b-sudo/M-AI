@@ -23,7 +23,25 @@ import type JSZip from "jszip";
 const COMPRESSED_IMAGE_MIME_TYPE = "image/jpeg";
 const MAX_COMPRESSIBLE_SCAN_IMAGE_BYTES = 120 * 1024 * 1024;
 const MAX_COMPRESSIBLE_DOCUMENT_BYTES = 250 * 1024 * 1024;
-const MAX_COMPRESSIBLE_AUDIO_BYTES = 650 * 1024 * 1024;
+// Mounting the source file into ffmpeg's worker FS reads it from disk instead of copying it into
+// the wasm heap, so the ceiling is set by output size, not input size. A 3-hour lossless WAV is
+// ~1.9 GB in and ~65 MB of mono 16 kHz mp3 out.
+const MAX_COMPRESSIBLE_AUDIO_BYTES = 2 * 1024 * 1024 * 1024;
+
+// Lossless and uncompressed formats are transcoded even when they fit the upload cap: a 200 MB
+// WAV is a slow, failure-prone upload that turns into ~15 MB of mp3 with nothing the
+// transcription model cares about lost.
+const BULKY_AUDIO_TRANSCODE_THRESHOLD_BYTES = 25 * 1024 * 1024;
+const BULKY_AUDIO_MIME_TYPES = new Set([
+  "audio/wav",
+  "audio/x-wav",
+  "audio/wave",
+  "audio/aiff",
+  "audio/x-aiff",
+  "audio/flac",
+  "audio/x-flac",
+  "audio/x-caf",
+]);
 const DOCUMENT_TEXT_TRUNCATION_MARKER =
   "\n\n[Dokument je bil skrajsan, ker je presegal tehnicno omejitev nalaganja.]\n";
 const PDF_RENDER_BACKGROUND = "#ffffff";
@@ -407,6 +425,31 @@ async function compressOfficeDocument(file: File): Promise<CompressionResult> {
     }
   }
 
+  // Last resort: drop the media outright. The pipeline reads only the text XML out of office
+  // files, so a deck whose photos cannot be re-encoded small enough (HEIC, EMF, huge TIFFs)
+  // still produces full notes — losing decorative images beats rejecting the whole file.
+  const textOnlyZip = await JSZip.loadAsync(originalBytes);
+
+  for (const removablePath of removablePaths) {
+    textOnlyZip.remove(removablePath);
+  }
+
+  for (const mediaPath of mediaPaths) {
+    textOnlyZip.remove(mediaPath);
+  }
+
+  const textOnlyBlob = await generateZipBlob(textOnlyZip);
+
+  if (textOnlyBlob.size <= MAX_DOCUMENT_BYTES) {
+    return {
+      file: new File([textOnlyBlob], file.name, {
+        type: file.type,
+        lastModified: Date.now(),
+      }),
+      compressed: true,
+    };
+  }
+
   throw new Error(fileTooLargeMessage("document", MAX_DOCUMENT_BYTES));
 }
 
@@ -688,8 +731,21 @@ export async function compressDocumentForUpload(file: File): Promise<Compression
   throw new Error(unsupportedCompressionMessage("document"));
 }
 
+function isBulkyAudioFile(file: File) {
+  const normalizedMimeType = normalizeUploadAudioMimeType({
+    mimeType: file.type || "application/octet-stream",
+    fileName: file.name,
+  });
+
+  return BULKY_AUDIO_MIME_TYPES.has(normalizedMimeType);
+}
+
 export async function compressAudioForUpload(file: File): Promise<CompressionResult> {
-  if (file.size <= MAX_AUDIO_BYTES) {
+  const needsTranscode =
+    file.size > MAX_AUDIO_BYTES ||
+    (isBulkyAudioFile(file) && file.size > BULKY_AUDIO_TRANSCODE_THRESHOLD_BYTES);
+
+  if (!needsTranscode) {
     return {
       file,
       compressed: false,
@@ -710,21 +766,25 @@ export async function compressAudioForUpload(file: File): Promise<CompressionRes
       wasmURL: `${coreBaseUrl}/ffmpeg-core.wasm`,
     });
 
-    const normalizedMimeType = normalizeUploadAudioMimeType({
-      mimeType: file.type || "application/octet-stream",
-      fileName: file.name,
-    });
-    const inputExtension = getExtensionForMimeType(normalizedMimeType);
     const outputMimeType = "audio/mpeg";
     const outputExtension = getExtensionForMimeType(outputMimeType);
-    const inputPath = `/input-${crypto.randomUUID()}.${inputExtension}`;
+    // WORKERFS mounts the browser File directly: ffmpeg streams it from disk instead of holding
+    // a full copy in the wasm heap, which is what limited the old path to mid-size files.
+    const inputDirectory = `/compress-input-${crypto.randomUUID()}`;
     const outputPath = `/output-${crypto.randomUUID()}.${outputExtension}`;
+    const workerFsType = "WORKERFS" as Parameters<typeof ffmpeg.mount>[0];
+
+    const mountedFile = file.name
+      ? file
+      : new File([file], `audio-${Date.now()}.bin`, { type: file.type });
 
     try {
-      await ffmpeg.writeFile(inputPath, new Uint8Array(await file.arrayBuffer()));
+      await ffmpeg.createDir(inputDirectory);
+      await ffmpeg.mount(workerFsType, { files: [mountedFile] }, inputDirectory);
+
       const exitCode = await ffmpeg.exec([
         "-i",
-        inputPath,
+        `${inputDirectory}/${mountedFile.name}`,
         "-map",
         "0:a:0",
         "-vn",
@@ -767,8 +827,9 @@ export async function compressAudioForUpload(file: File): Promise<CompressionRes
         compressed: true,
       };
     } finally {
-      await ffmpeg.deleteFile(inputPath).catch(() => null);
       await ffmpeg.deleteFile(outputPath).catch(() => null);
+      await ffmpeg.unmount(inputDirectory).catch(() => null);
+      await ffmpeg.deleteDir(inputDirectory).catch(() => null);
     }
   } catch (error) {
     if (error instanceof Error && error.message === fileTooLargeMessage("audio", MAX_AUDIO_BYTES)) {

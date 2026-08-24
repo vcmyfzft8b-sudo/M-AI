@@ -1,0 +1,4 @@
+running pogodbe-sl / v2 ... 80 cards, 80 quiz, fact recall 97%
+running synapse-en / v2 ... 79 cards, 80 quiz, fact recall 100%
+pogodbe-sl    v2           80    80    80    97%         100%     96%      96%      0%      $0.0222 
+synapse-en    v2           79    80    79    100%        100%     100%     100%     6%      $0.0170 

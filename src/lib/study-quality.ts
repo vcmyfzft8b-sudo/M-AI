@@ -1,4 +1,5 @@
-import "server-only";
+// Kept free of "server-only" so the study-quality gate can be measured against generated decks
+// (scripts/study-eval.mjs) outside the Next.js runtime. These are pure string predicates.
 
 export const MIN_CONCEPT_QUALITY_SCORE = 6;
 

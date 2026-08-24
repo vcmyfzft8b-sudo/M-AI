@@ -1,0 +1,163 @@
+[
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 933,
+    "compression": 1.0219058050383352,
+    "recall": 0.8461538461538461,
+    "factsPer100Words": 3.536977491961415,
+    "leaked": [],
+    "missed": [
+      "Razstavljeno blago z označeno ceno je ponudba, katalog ali oglas pa vabilo k ponudbi",
+      "Molk naslovnika praviloma ne pomeni sprejema",
+      "Pogodba zaradi napake volje je izpodbojna, ne nična",
+      "Velja načelo neformalnosti: pogodba je praviloma veljavna ne glede na obliko",
+      "Izpolnitev mora biti pravilna po vsebini, kraju, času in osebi",
+      "Imetnik nevarne stvari se razbremeni le z višjo silo, ravnanjem oškodovanca ali tretje osebe"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 6,
+      "tables": 1,
+      "callouts": 2,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 94,
+      "afterDedupe": 65,
+      "retained": 45,
+      "dropped": 20,
+      "topics": 6
+    },
+    "costUsd": 0.033576350000000005,
+    "calls": 9,
+    "gradingCostUsd": 0.010177499999999999,
+    "elapsedMs": 42402,
+    "run": 0
+  },
+  {
+    "fixture": "pogodbe-sl",
+    "variant": "v2",
+    "sourceWords": 913,
+    "noteWords": 848,
+    "compression": 0.9288061336254108,
+    "recall": 0.9487179487179487,
+    "factsPer100Words": 4.363207547169811,
+    "leaked": [],
+    "missed": [
+      "Molk naslovnika praviloma ne pomeni sprejema",
+      "Prevara pomeni namerno povzročitev zmote ali puščanje druge stranke v zmoti"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 5,
+      "tables": 1,
+      "callouts": 3,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 1,
+    "extractionMissed": [],
+    "stages": {
+      "chunks": 3,
+      "extracted": 98,
+      "afterDedupe": 74,
+      "retained": 47,
+      "dropped": 27,
+      "topics": 5
+    },
+    "costUsd": 0.04464645000000001,
+    "calls": 9,
+    "gradingCostUsd": 0.012061000000000002,
+    "elapsedMs": 52270,
+    "run": 1
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 1160,
+    "compression": 1.4094775212636694,
+    "recall": 0.9259259259259259,
+    "factsPer100Words": 2.1551724137931036,
+    "leaked": [],
+    "missed": [
+      "The nicotinic acetylcholine receptor is ionotropic",
+      "The muscarinic acetylcholine receptor is metabotropic"
+    ],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 4,
+      "tables": 1,
+      "callouts": 2,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 0.9629629629629629,
+    "extractionMissed": [
+      "The muscarinic acetylcholine receptor is metabotropic"
+    ],
+    "stages": {
+      "chunks": 3,
+      "extracted": 63,
+      "afterDedupe": 51,
+      "retained": 32,
+      "dropped": 19,
+      "topics": 4
+    },
+    "costUsd": 0.03527219999999999,
+    "calls": 9,
+    "gradingCostUsd": 0.0072157999999999944,
+    "elapsedMs": 41772,
+    "run": 0
+  },
+  {
+    "fixture": "synapse-en",
+    "variant": "v2",
+    "sourceWords": 823,
+    "noteWords": 1131,
+    "compression": 1.3742405832320779,
+    "recall": 1,
+    "factsPer100Words": 2.3872679045092835,
+    "leaked": [],
+    "missed": [],
+    "structure": {
+      "hasOverview": true,
+      "hasFinalReview": true,
+      "hasCheckYourself": true,
+      "topics": 4,
+      "tables": 1,
+      "callouts": 1,
+      "wrongBullets": 0,
+      "html": false
+    },
+    "extractionRecall": 0.9629629629629629,
+    "extractionMissed": [
+      "The muscarinic acetylcholine receptor is metabotropic"
+    ],
+    "stages": {
+      "chunks": 3,
+      "extracted": 62,
+      "afterDedupe": 48,
+      "retained": 33,
+      "dropped": 15,
+      "topics": 4
+    },
+    "costUsd": 0.032667699999999994,
+    "calls": 9,
+    "gradingCostUsd": 0.007361499999999993,
+    "elapsedMs": 38331,
+    "run": 1
+  }
+]

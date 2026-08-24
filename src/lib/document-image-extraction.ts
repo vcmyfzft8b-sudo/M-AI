@@ -9,6 +9,7 @@ import JSZip from "jszip";
 import sharp from "sharp";
 
 import { generateTextWithGeminiFile } from "@/lib/ai/gemini";
+import { resolveMinimalThinkingConfig } from "@/lib/ai/gemini-models";
 import { MAX_SCAN_IMAGE_BYTES, STORAGE_BUCKET } from "@/lib/constants";
 import { stripUnstorableCharacters } from "@/lib/database-text";
 import {
@@ -300,6 +301,11 @@ Return plain text only.${contextHint}`,
       maxOutputTokens: 180,
       maxAttempts: 1,
       mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM,
+      // The only vision call that reads GEMINI_TEXT_MODEL rather than an OCR model, so it is the
+      // one that silently starts thinking the day that default moves to a 3.x. Thinking is drawn
+      // from maxOutputTokens, and 180 leaves no room for it: the call would truncate, not just
+      // cost more. Every other vision call site already sends this.
+      thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_TEXT_MODEL),
     });
 
     const normalized = normalizeWhitespace(description);

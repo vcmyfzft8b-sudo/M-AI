@@ -328,34 +328,57 @@ function cleanUnwrappedMathText(value: string) {
     .replace(/\s+-\s+(\*\*)/g, "\n- $1");
 }
 
+/**
+ * Runs a rewrite over the maths in a formula while leaving every \text{...} span exactly as it
+ * was.
+ *
+ * \text{} holds prose, and the symbol and subscript rules below are for symbols. Applied to prose
+ * they corrupt it: "\text{Zacetno stanje}" came back as "\text{Z_{a}cetno stanje}" and KaTeX
+ * refused the whole formula, printing the source in red to the learner.
+ */
+function rewriteOutsideTextSpans(value: string, rewrite: (segment: string) => string) {
+  return value
+    .split(/(\\text\{[^{}]*\})/g)
+    .map((segment, index) => (index % 2 === 1 ? segment : rewrite(segment)))
+    .join("");
+}
+
 export function normalizeFormulaSyntax(value: string) {
-  return replaceTopLevelFormulaFractions(
-    normalizeMathFunctions(
-      repairDroppedLatexCommandBackslashes(normalizeLatexEnvironment(value)),
-    )
-      .trim()
-      .replace(/[−–—]/g, "-")
-      .replace(/≤/g, "\\le ")
-      .replace(/≥/g, "\\ge ")
-      .replace(/≠/g, "\\ne ")
-      .replace(/≈/g, "\\approx ")
-      .replace(/∞/g, "\\infty ")
-      .replace(/±/g, "\\pm ")
-      .replace(/∓/g, "\\mp ")
-      .replace(/∑/g, "\\sum ")
-      .replace(/∫/g, "\\int ")
-      .replace(/↔|⇔|<=>/g, "\\leftrightarrow ")
-      .replace(/→|⇒|=>|->/g, "\\to ")
-      .replace(/←|<-|⇐/g, "\\leftarrow ")
-      .replace(/(?<![<\\])<=/g, "\\le ")
-      .replace(/(?<![>\\])>=/g, "\\ge ")
-      .replace(/!=/g, "\\ne ")
-      .replace(/×|·/g, "\\cdot ")
-      .replace(/(?<!\\)\bper\b/g, "/")
-      .replace(/(?<!\\)%/g, "\\%")
-      .replace(/\b([A-Z])\{([^{}]+)\}/g, "$1_{$2}")
-      .replace(/\b([A-Z])([a-z])\b/g, "$1_{$2}")
-      .replace(/\b([A-Z])(\d+)\b/g, "$1_{$2}"),
+  return rewriteOutsideTextSpans(
+    rewriteOutsideTextSpans(
+      normalizeMathFunctions(
+        repairDroppedLatexCommandBackslashes(normalizeLatexEnvironment(value)),
+      ).trim(),
+      (segment) =>
+        segment
+          .replace(/[−–—]/g, "-")
+          .replace(/≤/g, "\\le ")
+          .replace(/≥/g, "\\ge ")
+          .replace(/≠/g, "\\ne ")
+          .replace(/≈/g, "\\approx ")
+          .replace(/∞/g, "\\infty ")
+          .replace(/±/g, "\\pm ")
+          .replace(/∓/g, "\\mp ")
+          .replace(/∑/g, "\\sum ")
+          .replace(/∫/g, "\\int ")
+          .replace(/↔|⇔|<=>/g, "\\leftrightarrow ")
+          .replace(/→|⇒|=>|->/g, "\\to ")
+          .replace(/←|<-|⇐/g, "\\leftarrow ")
+          .replace(/(?<![<\\])<=/g, "\\le ")
+          .replace(/(?<![>\\])>=/g, "\\ge ")
+          .replace(/!=/g, "\\ne ")
+          .replace(/×|·/g, "\\cdot ")
+          .replace(/(?<!\\)\bper\b/g, "/")
+          .replace(/(?<!\\)%/g, "\\%")
+          // Unicode-aware boundaries. JavaScript's \b is ASCII-only, so it saw a word boundary
+          // between the "a" and the "č" of "Začetno" and rewrote an ordinary Slovene word as a
+          // subscript, which made KaTeX reject the whole formula.
+          .replace(/(?<![\p{L}\p{N}_])(\p{Lu})\{([^{}]+)\}/gu, "$1_{$2}")
+          .replace(/(?<![\p{L}\p{N}_])(\p{Lu})(\d+)(?![\p{L}\p{N}_])/gu, "$1_{$2}"),
+    ),
+    // Runs per segment between \text spans: a slash whose operand would reach into a \text
+    // stays a slash, which KaTeX renders fine. Splicing \frac braces into \text does not.
+    replaceTopLevelFormulaFractions,
   )
     .replace(/(\})\s+(100(?:\\%)?)/g, "$1 \\cdot $2")
     .replace(/\s+/g, " ")
@@ -423,7 +446,12 @@ function normalizeMarkdownMathLine(line: string) {
       normalizeDelimitedMath(rawMath, (math) => `$$${math}$$`),
     )
     .replace(/(?<!\\)(?<!\$)\$([^\n$]+?)(?<!\\)\$(?!\$)/g, (match, rawMath: string) => {
-      if (!shouldRenderMathExpression(rawMath)) {
+      // Two bare dollars in prose are usually prices, not delimiters: "$30 ... ($12" pairs up
+      // and the whole sentence between them gets "repaired" into LaTeX. A span that contains an
+      // escaped currency dollar, or reads like a sentence, is left exactly as written.
+      const wordCount = rawMath.trim().split(/\s+/).length;
+
+      if (/\\\$/.test(rawMath) || wordCount > 8 || !shouldRenderMathExpression(rawMath)) {
         return match;
       }
 
@@ -507,6 +535,11 @@ function isStandaloneFormulaLine(line: string) {
   if (
     trimmed.length < 3 ||
     /(?:\$\$|\\\(|\\\[|(?<!\\)\$)/.test(trimmed) ||
+    // A table row is never a bare formula, whatever it contains: wrapping one in $$ turns the
+    // whole row into LaTeX and drags "\$30", "--" and "S/A razred" through the formula
+    // repairs — the exploded-table bug observed in a real note.
+    /^[|]/.test(trimmed) ||
+    /\s\|\s/.test(trimmed) ||
     /^[#>\-*\d.)\s]/.test(trimmed) ||
     /[.!?][\])}"']?$/.test(trimmed) ||
     /\s(?:je|is|are|was|were|and|or|in|on|for|with|kjer|kar|kot)\s/i.test(` ${trimmed} `)
@@ -597,4 +630,42 @@ export function normalizeMarkdownMath(markdown: string) {
   }
 
   return normalizedLines.join("\n");
+}
+
+/**
+ * Unwraps \text{...} that appears in plain prose, outside any math delimiter, code fence or
+ * table row. The writer occasionally carries its math habits into ordinary sentences —
+ * "50\text{ enot} z vrednostjo 39.000\text{ EUR}" in a bullet — and a learner should read
+ * "50 enot", not markup. Real math spans are left byte-for-byte alone.
+ */
+export function stripBareTextMacrosFromProse(value: string) {
+  return value
+    .split(/(```[\s\S]*?```)/)
+    .map((block, blockIndex) => {
+      if (blockIndex % 2 === 1) {
+        return block;
+      }
+
+      return block
+        .split("\n")
+        .map((line) => {
+          if (line.trimStart().startsWith("|")) {
+            return line;
+          }
+
+          return line
+            .split(/(\$\$[\s\S]*?\$\$|\\\([\s\S]*?\\\))/)
+            .map((segment, segmentIndex) =>
+              segmentIndex % 2 === 1
+                ? segment
+                : // The space in "\text{ enot}" is the space between number and unit; keep it.
+                  segment.replace(/\\text\{([^{}]*)\}/g, (_match, inner: string) =>
+                    inner.replace(/\s+/g, " "),
+                  ),
+            )
+            .join("");
+        })
+        .join("\n");
+    })
+    .join("");
 }

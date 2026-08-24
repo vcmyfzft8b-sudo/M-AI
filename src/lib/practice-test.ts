@@ -14,10 +14,17 @@ import type {
 } from "@/lib/database.types";
 import { generateStructuredObject } from "@/lib/ai/json";
 import { generateStructuredObjectWithGeminiFile } from "@/lib/ai/gemini";
+import { resolveMinimalThinkingConfig } from "@/lib/ai/gemini-models";
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { createCoveragePlan } from "@/lib/study-coverage";
+import {
+  buildItemPlans,
+  extractStudyItems,
+  generateItemPracticeDrafts,
+  resolveStudyPipelineMode,
+} from "@/lib/study-items";
 import { dependsOnMissingStudyContext, isHighQualityStudyPrompt } from "@/lib/study-quality";
 import type { CoverageConcept, CoverageUnitPlan, SourceUnit } from "@/lib/study-models";
 import { buildSourceUnits } from "@/lib/study-source-units";
@@ -422,6 +429,39 @@ async function generatePracticeQuestionBank(params: {
     lecture: params.lecture,
     transcript: params.transcript,
   });
+
+  if (resolveStudyPipelineMode() === "items") {
+    const items = await extractStudyItems({
+      units,
+      sourceType: params.lecture.source_type === "audio" ? "audio" : "document",
+      outputLanguage: params.lecture.language_hint,
+      usageContext: { lectureId: params.lecture.id, userId: params.lecture.user_id },
+      artifactModelMetadata: params.artifact.model_metadata,
+    });
+    const { drafts } = await generateItemPracticeDrafts({
+      items,
+      units,
+      outputLanguage: params.lecture.language_hint,
+      usageContext: { lectureId: params.lecture.id, userId: params.lecture.user_id },
+    });
+    // The whole bank is kept: attempts sample from it, and the item list is already the
+    // "what must be examinable" boundary, so a 40-question cap would reintroduce the hard
+    // limit the item pipeline removes.
+    const questions = dedupeQuestions(drafts).sort((left, right) => {
+      if (left.sourceUnitIdx !== right.sourceUnitIdx) {
+        return left.sourceUnitIdx - right.sourceUnitIdx;
+      }
+
+      return left.prompt.localeCompare(right.prompt);
+    });
+
+    return {
+      units,
+      plannedCoverage: buildItemPlans(items, units),
+      questions,
+    };
+  }
+
   const plannedCoverage = await createCoveragePlan({
     title: params.lecture.title,
     summary: params.artifact.summary,
@@ -1337,6 +1377,8 @@ export async function gradePracticeTestPhotoWithGemini(params: {
   answerGuide: string;
 }) {
   const env = getServerEnv();
+  // Reading a photographed handwritten answer is OCR work: the text model scored 73-81% on
+  // handwriting in the OCR benchmark, which is not a model to grade a student with.
   return generateStructuredObjectWithGeminiFile({
     schema: gradingSchema,
     instructions: `Grade the student's handwritten or photographed answer to the prompt.
@@ -1344,7 +1386,8 @@ Question: ${params.prompt}
 Answer guide: ${params.answerGuide}
 Use the same 0-5 integer rubric as a school practice test.`,
     file: params.file,
-    model: env.GEMINI_TEXT_MODEL,
+    model: env.GEMINI_OCR_MODEL,
+    thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_MODEL),
     maxOutputTokens: 1600,
   });
 }

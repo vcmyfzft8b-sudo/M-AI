@@ -1566,6 +1566,7 @@ export async function createLectureFromTextSource(params: {
       sourceType: "document",
       outputLanguage: params.languageHint,
       sourceTitleHint: params.titleHint,
+      context: { lectureId: activeLectureId, userId: params.userId },
     });
 
     await requireActiveLecture(lectureId);

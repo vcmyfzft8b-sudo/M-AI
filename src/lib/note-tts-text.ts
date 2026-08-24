@@ -180,22 +180,40 @@ function parseListItem(line: string): { ordered: boolean; text: string } | null 
 function getCalloutKind(text: string): NoteTtsTextBlock["calloutKind"] {
   const normalized = text.toLowerCase();
 
-  if (normalized.startsWith("definition:") || normalized.startsWith("definicija:")) {
+  if (
+    normalized.startsWith("definition:") ||
+    normalized.startsWith("definicija:") ||
+    normalized.startsWith("definizione:")
+  ) {
     return "definition";
   }
 
-  if (normalized.startsWith("example:") || normalized.startsWith("primer:")) {
+  if (
+    normalized.startsWith("example:") ||
+    normalized.startsWith("primer:") ||
+    normalized.startsWith("primjer:") ||
+    normalized.startsWith("beispiel:") ||
+    normalized.startsWith("esempio:")
+  ) {
     return "example";
   }
 
   if (
     normalized.startsWith("common mistake:") ||
-    normalized.startsWith("pogosta napaka:")
+    normalized.startsWith("pogosta napaka:") ||
+    normalized.startsWith("česta pogreška:") ||
+    normalized.startsWith("häufiger fehler:") ||
+    normalized.startsWith("errore comune:")
   ) {
     return "common_mistake";
   }
 
-  if (normalized.startsWith("key takeaway:") || normalized.startsWith("ključno:")) {
+  if (
+    normalized.startsWith("key takeaway:") ||
+    normalized.startsWith("ključno:") ||
+    normalized.startsWith("kernaussage:") ||
+    normalized.startsWith("punto chiave:")
+  ) {
     return "key_takeaway";
   }
 

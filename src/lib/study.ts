@@ -2,7 +2,6 @@ import "server-only";
 
 import type {
   Citation,
-  FlashcardDifficulty,
   FlashcardRow,
   LectureArtifactRow,
   LectureRow,
@@ -11,32 +10,18 @@ import type {
   TranscriptSegmentRow,
 } from "@/lib/database.types";
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
-import { countWords } from "@/lib/note-generation";
-import { createCoveragePlan, MAX_STUDY_ITEMS } from "@/lib/study-coverage";
-import { generateCoverageCards, repairCoverageCards } from "@/lib/study-cards";
-import type { CoverageCardDraft, CoverageUnitPlan, SourceUnit, StudySectionDraft } from "@/lib/study-models";
-import { buildSourceUnits } from "@/lib/study-source-units";
-import { validateCoverage } from "@/lib/study-validation";
+import { writeFlashcards, MAX_FLASHCARDS, STUDY_PIPELINE_VERSION } from "@/lib/generation/flashcards";
+import {
+  extractLearningPoints,
+  planStudySections,
+  type LearningPoint,
+} from "@/lib/generation/learning-points";
+import {
+  buildSegmentsByIdx,
+  buildSourceDocument,
+  buildUnitCitation,
+} from "@/lib/generation/source";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-
-const COVERAGE_TARGET = 0.9;
-const CRITICAL_COVERAGE_TARGET = 1;
-const MAX_REPAIR_PASSES = 2;
-
-type PostgrestLikeError = {
-  code?: string;
-  message?: string;
-  details?: string | null;
-  hint?: string | null;
-};
-
-type StudyStorageMode = "comprehensive" | "legacy";
-
-type StudyStorageCapabilities = {
-  mode: StudyStorageMode;
-  supportsSections: boolean;
-  supportsFlashcardCoverageFields: boolean;
-};
 
 function toErrorMessage(error: unknown) {
   if (error instanceof Error) {
@@ -44,9 +29,10 @@ function toErrorMessage(error: unknown) {
   }
 
   if (error && typeof error === "object") {
-    const candidate = error as PostgrestLikeError;
-    const parts = [candidate.message, candidate.details, candidate.hint]
-      .filter((value): value is string => typeof value === "string" && value.length > 0);
+    const candidate = error as { message?: string; details?: string | null; hint?: string | null };
+    const parts = [candidate.message, candidate.details, candidate.hint].filter(
+      (value): value is string => typeof value === "string" && value.length > 0,
+    );
 
     if (parts.length > 0) {
       return parts.join(" ");
@@ -60,99 +46,6 @@ function toErrorMessage(error: unknown) {
   return "Unknown flashcard generation error.";
 }
 
-function getSchemaErrorText(error: unknown) {
-  if (!error || typeof error !== "object") {
-    return "";
-  }
-
-  const candidate = error as PostgrestLikeError;
-  return [candidate.code, candidate.message, candidate.details, candidate.hint]
-    .filter((value): value is string => typeof value === "string" && value.length > 0)
-    .join(" ")
-    .toLowerCase();
-}
-
-function isMissingStudySectionsSchemaError(error: unknown) {
-  const text = getSchemaErrorText(error);
-
-  if (!text) {
-    return false;
-  }
-
-  return (
-    text.includes("lecture_study_sections") &&
-    (text.includes("does not exist") ||
-      text.includes("could not find") ||
-      text.includes("schema cache") ||
-      text.includes("42p01") ||
-      text.includes("pgrst"))
-  );
-}
-
-function isMissingFlashcardCoverageSchemaError(error: unknown) {
-  const text = getSchemaErrorText(error);
-
-  if (!text) {
-    return false;
-  }
-
-  const mentionsCoverageField =
-    text.includes("section_id") ||
-    text.includes("source_unit_idx") ||
-    text.includes("card_kind") ||
-    text.includes("concept_key") ||
-    text.includes("source_type") ||
-    text.includes("source_locator") ||
-    text.includes("coverage_rank");
-
-  return (
-    mentionsCoverageField &&
-    (text.includes("does not exist") ||
-      text.includes("could not find") ||
-      text.includes("schema cache") ||
-      text.includes("42703") ||
-      text.includes("pgrst"))
-  );
-}
-
-async function detectStudyStorageCapabilities(): Promise<StudyStorageCapabilities> {
-  const supabase = createSupabaseServiceRoleClient();
-
-  const [
-    { error: sectionsError },
-    { error: flashcardCoverageFieldsError },
-  ] = await Promise.all([
-    supabase.from("lecture_study_sections").select("id").limit(1),
-    supabase
-      .from("flashcards")
-      .select(
-        "id, section_id, source_unit_idx, card_kind, concept_key, source_type, source_locator, coverage_rank",
-      )
-      .limit(1),
-  ]);
-
-  if (sectionsError && !isMissingStudySectionsSchemaError(sectionsError)) {
-    throw sectionsError;
-  }
-
-  if (
-    flashcardCoverageFieldsError &&
-    !isMissingFlashcardCoverageSchemaError(flashcardCoverageFieldsError)
-  ) {
-    throw flashcardCoverageFieldsError;
-  }
-
-  const supportsSections = !sectionsError;
-  const supportsFlashcardCoverageFields = !flashcardCoverageFieldsError;
-
-  return {
-    mode:
-      supportsSections && supportsFlashcardCoverageFields ? "comprehensive" : "legacy",
-    supportsSections,
-    supportsFlashcardCoverageFields,
-  };
-}
-
 async function setStudyAssetStatus(params: {
   lectureId: string;
   status: LectureStudyAssetRow["status"];
@@ -161,348 +54,119 @@ async function setStudyAssetStatus(params: {
 }) {
   const supabase = createSupabaseServiceRoleClient();
 
-  const payload = {
-    lecture_id: params.lectureId,
-    status: params.status,
-    error_message: params.errorMessage ?? null,
-    model_metadata: params.modelMetadata ?? {},
-    generated_at: new Date().toISOString(),
-  };
-
-  const { error } = await supabase
-    .from("lecture_study_assets")
-    .upsert(payload as never, { onConflict: "lecture_id" });
+  const { error } = await supabase.from("lecture_study_assets").upsert(
+    {
+      lecture_id: params.lectureId,
+      status: params.status,
+      error_message: params.errorMessage ?? null,
+      model_metadata: params.modelMetadata ?? {},
+      generated_at: new Date().toISOString(),
+    } as never,
+    { onConflict: "lecture_id" },
+  );
 
   if (error) {
     throw error;
   }
 }
 
-function normalizeText(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/["'`]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+async function fetchExistingDeck(lectureId: string) {
+  const supabase = createSupabaseServiceRoleClient();
+  const [{ data: flashcards, error: flashcardsError }, { data: sections, error: sectionsError }] =
+    await Promise.all([
+      supabase
+        .from("flashcards")
+        .select("*")
+        .eq("lecture_id", lectureId)
+        .order("idx", { ascending: true }),
+      supabase
+        .from("lecture_study_sections")
+        .select("*")
+        .eq("lecture_id", lectureId)
+        .order("idx", { ascending: true }),
+    ]);
 
-function dedupeAcceptedCards(cards: CoverageCardDraft[]) {
-  const seen = new Set<string>();
-  const output: CoverageCardDraft[] = [];
-
-  for (const card of cards) {
-    const key = `${card.conceptKey}::${card.cardKind}::${normalizeText(card.front)}::${normalizeText(card.back)}`;
-    if (seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    output.push(card);
+  if (flashcardsError) {
+    throw flashcardsError;
   }
 
-  return output;
-}
-
-function trimCardsToPlanBudget(params: {
-  cards: CoverageCardDraft[];
-  plans: CoverageUnitPlan[];
-}) {
-  const targetCountByConcept = new Map<string, number>();
-
-  for (const plan of params.plans) {
-    for (const concept of plan.concepts) {
-      targetCountByConcept.set(
-        concept.conceptKey,
-        Math.min(Math.max(concept.recommendedCardCount, 1), 3),
-      );
-    }
+  if (sectionsError) {
+    throw sectionsError;
   }
 
-  const selectedCountByConcept = new Map<string, number>();
-  const rankedCards = [...params.cards].sort((left, right) => {
-    return (
-      right.coverageRank - left.coverageRank ||
-      left.sourceUnitIdx - right.sourceUnitIdx ||
-      left.front.length - right.front.length
-    );
-  });
-  const selected: CoverageCardDraft[] = [];
-
-  for (const card of rankedCards) {
-    if (selected.length >= MAX_STUDY_ITEMS) {
-      break;
-    }
-
-    const conceptTarget = targetCountByConcept.get(card.conceptKey) ?? 0;
-
-    if (conceptTarget <= 0) {
-      continue;
-    }
-
-    const currentCount = selectedCountByConcept.get(card.conceptKey) ?? 0;
-
-    if (currentCount >= conceptTarget) {
-      continue;
-    }
-
-    selected.push(card);
-    selectedCountByConcept.set(card.conceptKey, currentCount + 1);
-  }
-
-  return selected.sort(
-    (left, right) =>
-      left.sourceUnitIdx - right.sourceUnitIdx ||
-      left.conceptKey.localeCompare(right.conceptKey) ||
-      right.coverageRank - left.coverageRank,
-  );
-}
-
-function selectAcceptedCards(params: {
-  cards: CoverageCardDraft[];
-  plans: CoverageUnitPlan[];
-  units: SourceUnit[];
-}) {
-  const planByUnit = new Map(params.plans.map((plan) => [plan.unitIndex, plan]));
-  const unitByIndex = new Map(params.units.map((unit) => [unit.unitIndex, unit]));
-
-  return dedupeAcceptedCards(
-    params.cards.filter((card) => {
-      const plan = planByUnit.get(card.sourceUnitIdx);
-      const unit = unitByIndex.get(card.sourceUnitIdx);
-
-      if (!plan || !unit) {
-        return false;
-      }
-
-      if (card.sourceType !== unit.sourceType) {
-        return false;
-      }
-
-      if (
-        card.sourceType !== "audio" &&
-        card.sourceLocator !== unit.locatorLabel
-      ) {
-        return false;
-      }
-
-      if (!plan.concepts.some((concept) => concept.conceptKey === card.conceptKey)) {
-        return false;
-      }
-
-      return card.citations.some((citation) => Math.abs(citation.idx - unit.unitIndex) <= 1);
-    }),
-  );
-}
-
-function buildSectionRows(params: {
-  lectureId: string;
-  sections: StudySectionDraft[];
-  cards: CoverageCardDraft[];
-}) {
-  return params.sections.map((section) => ({
-    lecture_id: params.lectureId,
-    idx: section.idx,
-    title: section.title,
-    source_label: section.sourceLabel,
-    source_start_ms: section.sourceStartMs,
-    source_end_ms: section.sourceEndMs,
-    source_page_start: section.sourcePageStart,
-    source_page_end: section.sourcePageEnd,
-    unit_start_idx: section.unitStartIdx,
-    unit_end_idx: section.unitEndIdx,
-    card_count: params.cards.filter((card) => {
-      const unitSectionIndex = params.sections.find(
-        (candidate) =>
-          card.sourceUnitIdx >= candidate.unitStartIdx &&
-          card.sourceUnitIdx <= candidate.unitEndIdx,
-      )?.idx;
-      return unitSectionIndex === section.idx;
-    }).length,
-  }));
-}
-
-function buildFlashcardsToInsert(params: {
-  lectureId: string;
-  cards: CoverageCardDraft[];
-  units: SourceUnit[];
-  insertedSections: LectureStudySectionRow[];
-}) {
-  const unitByIndex = new Map(params.units.map((unit) => [unit.unitIndex, unit]));
-  const sectionIdByIndex = new Map(params.insertedSections.map((section) => [section.idx, section.id]));
-
-  return params.cards.map((card, index) => {
-    const unit = unitByIndex.get(card.sourceUnitIdx);
-    const sectionId = unit ? sectionIdByIndex.get(unit.sectionIndex) ?? null : null;
-
-    return {
-      lecture_id: params.lectureId,
-      idx: index,
-      front: card.front,
-      back: card.back,
-      hint: card.hint?.trim() ? card.hint.trim() : null,
-      citations_json: card.citations as unknown as Citation[],
-      difficulty: card.difficulty,
-      section_id: sectionId,
-      source_unit_idx: card.sourceUnitIdx,
-      card_kind: card.cardKind,
-      concept_key: card.conceptKey,
-      source_type: card.sourceType,
-      source_locator: card.sourceLocator,
-      coverage_rank: card.coverageRank,
-    };
-  });
-}
-
-function toLegacyFlashcardInsertRow(
-  flashcard:
-    | FlashcardRow
-    | {
-        lecture_id: string;
-        idx: number;
-        front: string;
-        back: string;
-        hint: string | null;
-        citations_json: Citation[];
-        difficulty: FlashcardDifficulty;
-      },
-) {
   return {
-    lecture_id: flashcard.lecture_id,
-    idx: flashcard.idx,
-    front: flashcard.front,
-    back: flashcard.back,
-    hint: flashcard.hint,
-    citations_json: flashcard.citations_json as unknown as Citation[],
-    difficulty: flashcard.difficulty,
+    flashcards: (flashcards ?? []) as FlashcardRow[],
+    sections: (sections ?? []) as LectureStudySectionRow[],
   };
-}
-
-function buildLegacyFlashcardsToInsert(params: {
-  lectureId: string;
-  cards: CoverageCardDraft[];
-}) {
-  return params.cards.map((card, index) =>
-    toLegacyFlashcardInsertRow({
-      lecture_id: params.lectureId,
-      idx: index,
-      front: card.front,
-      back: card.back,
-      hint: card.hint?.trim() ? card.hint.trim() : null,
-      citations_json: card.citations as unknown as Citation[],
-      difficulty: card.difficulty,
-    }),
-  );
 }
 
 async function restorePreviousDeck(params: {
   lectureId: string;
   previousSections: LectureStudySectionRow[];
   previousFlashcards: FlashcardRow[];
-  storage: StudyStorageCapabilities;
 }) {
   const supabase = createSupabaseServiceRoleClient();
 
   await supabase.from("flashcards").delete().eq("lecture_id", params.lectureId);
+  await supabase.from("lecture_study_sections").delete().eq("lecture_id", params.lectureId);
 
-  if (params.storage.supportsSections) {
-    await supabase.from("lecture_study_sections").delete().eq("lecture_id", params.lectureId);
-  }
-
-  if (params.storage.supportsSections && params.previousSections.length > 0) {
-    await supabase.from("lecture_study_sections").insert(
-      params.previousSections.map((section) => ({
-        ...section,
-      })) as never,
-    );
+  if (params.previousSections.length > 0) {
+    await supabase
+      .from("lecture_study_sections")
+      .insert(params.previousSections.map((section) => ({ ...section })) as never);
   }
 
   if (params.previousFlashcards.length > 0) {
-    const flashcardsToRestore =
-      params.storage.mode === "comprehensive"
-        ? params.previousFlashcards.map((flashcard) => ({
-            ...flashcard,
-          }))
-        : params.previousFlashcards.map(toLegacyFlashcardInsertRow);
-
-    await supabase.from("flashcards").insert(flashcardsToRestore as never);
+    await supabase
+      .from("flashcards")
+      .insert(params.previousFlashcards.map((flashcard) => ({ ...flashcard })) as never);
   }
 }
 
-async function fetchExistingDeck(
-  lectureId: string,
-  storage: StudyStorageCapabilities,
-) {
-  const supabase = createSupabaseServiceRoleClient();
-  const [{ data: flashcards, error: flashcardsError }, sectionsResult] = await Promise.all([
-    supabase
-      .from("flashcards")
-      .select("*")
-      .eq("lecture_id", lectureId)
-      .order("idx", { ascending: true }),
-    storage.supportsSections
-      ? supabase
-          .from("lecture_study_sections")
-          .select("*")
-          .eq("lecture_id", lectureId)
-          .order("idx", { ascending: true })
-      : Promise.resolve({ data: [], error: null }),
-  ]);
+function buildPointCitations(
+  point: LearningPoint,
+  segmentsByIdx: ReturnType<typeof buildSegmentsByIdx>,
+): Citation[] {
+  const citations: Citation[] = [];
 
-  if (sectionsResult.error) {
-    if (isMissingStudySectionsSchemaError(sectionsResult.error)) {
-      storage.supportsSections = false;
-      storage.mode = "legacy";
-    } else {
-      throw sectionsResult.error;
+  for (const unit of point.units.slice(0, 2)) {
+    const citation = buildUnitCitation(unit, segmentsByIdx);
+
+    if (citation) {
+      citations.push(citation);
     }
   }
 
-  if (flashcardsError) {
-    throw flashcardsError;
-  }
-
-  return {
-    sections: (sectionsResult.data ?? []) as LectureStudySectionRow[],
-    flashcards: (flashcards ?? []) as FlashcardRow[],
-  };
+  return citations;
 }
 
 export async function generateLectureFlashcards(params: { lectureId: string }) {
   const supabase = createSupabaseServiceRoleClient();
-  const startedAt = Date.now();
-  const storage = await detectStudyStorageCapabilities();
 
   await setStudyAssetStatus({
     lectureId: params.lectureId,
     status: "generating",
-    modelMetadata: {
-      stage: "building_sections",
-      pipeline: "flashcards-v4",
-      storageMode: storage.mode,
-    },
+    modelMetadata: { stage: "building_sections", pipeline: STUDY_PIPELINE_VERSION },
   });
 
   try {
-    const [{ data: lecture, error: lectureError }, { data: artifact, error: artifactError }, { data: transcript, error: transcriptError }, existingDeck] =
-      await Promise.all([
-        supabase
-          .from("lectures")
-          .select("*")
-          .eq("id", params.lectureId)
-          .single(),
-        supabase
-          .from("lecture_artifacts")
-          .select("*")
-          .eq("lecture_id", params.lectureId)
-          .single(),
-        supabase
-          .from("transcript_segments")
-          .select(TRANSCRIPT_SEGMENT_CONTENT_SELECT)
-          .eq("lecture_id", params.lectureId)
-          .order("idx", { ascending: true }),
-        fetchExistingDeck(params.lectureId, storage),
-      ]);
+    const [
+      { data: lecture, error: lectureError },
+      { data: artifact, error: artifactError },
+      { data: transcript, error: transcriptError },
+    ] = await Promise.all([
+      supabase.from("lectures").select("*").eq("id", params.lectureId).single(),
+      supabase
+        .from("lecture_artifacts")
+        .select("*")
+        .eq("lecture_id", params.lectureId)
+        .maybeSingle(),
+      supabase
+        .from("transcript_segments")
+        .select(TRANSCRIPT_SEGMENT_CONTENT_SELECT)
+        .eq("lecture_id", params.lectureId)
+        .order("idx", { ascending: true }),
+    ]);
 
     if (lectureError) {
       throw lectureError;
@@ -517,20 +181,30 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
     }
 
     const lectureRow = lecture as LectureRow;
-    const artifactRow = artifact as LectureArtifactRow;
-    const transcriptRows = (transcript ?? []) as TranscriptSegmentRow[];
+    const artifactRow = (artifact as LectureArtifactRow | null) ?? null;
+    const segments = ((transcript ?? []) as TranscriptSegmentRow[]).map((segment) => ({
+      idx: segment.idx,
+      startMs: segment.start_ms,
+      endMs: segment.end_ms,
+      speakerLabel: segment.speaker_label,
+      text: segment.text,
+    }));
 
-    if (lectureRow.status !== "ready") {
-      throw new Error("Flashcards are available after note processing finishes.");
-    }
-
-    if (transcriptRows.length === 0) {
+    if (segments.length === 0) {
       throw new Error("The lecture transcript is empty.");
     }
 
-    const { units, sections } = buildSourceUnits({
-      lecture: lectureRow,
-      transcript: transcriptRows,
+    const sourceType = lectureRow.source_type === "audio" ? "audio" : "document";
+    const source = buildSourceDocument(segments, sourceType);
+    const segmentsByIdx = buildSegmentsByIdx(segments);
+    const notesTitle = lectureRow.title ?? artifactRow?.summary?.slice(0, 80) ?? null;
+    const context = { lectureId: lectureRow.id, userId: lectureRow.user_id };
+
+    const points = await extractLearningPoints({
+      source,
+      notesTitle,
+      languageCode: lectureRow.language_hint,
+      context,
     });
 
     await setStudyAssetStatus({
@@ -538,147 +212,69 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
       status: "generating",
       modelMetadata: {
         stage: "planning_coverage",
-        pipeline: "flashcards-v4",
-        storageMode: storage.mode,
-        sourceUnitCount: units.length,
-        sectionCount: sections.length,
+        pipeline: STUDY_PIPELINE_VERSION,
+        learningPointCount: points.length,
       },
     });
-    const plannedCoverage = await createCoveragePlan({
-      title: lectureRow.title,
-      summary: artifactRow.summary,
-      keyTopics: artifactRow.key_topics,
-      units,
+
+    const sectionPlans = await planStudySections({
+      points,
+      notesTitle,
+      languageCode: lectureRow.language_hint,
+      context,
     });
-    const planByUnit = new Map(plannedCoverage.map((plan) => [plan.unitIndex, plan]));
-    const effectiveUnits = units.map((unit) => ({
-      ...unit,
-      importance: planByUnit.get(unit.unitIndex)?.importance ?? unit.importance,
-    }));
 
     await setStudyAssetStatus({
       lectureId: params.lectureId,
       status: "generating",
       modelMetadata: {
         stage: "generating_cards",
-        pipeline: "flashcards-v4",
-        storageMode: storage.mode,
-        sourceUnitCount: effectiveUnits.length,
-        sectionCount: sections.length,
-        plannedConceptCount: plannedCoverage.reduce((total, plan) => total + plan.concepts.length, 0),
+        pipeline: STUDY_PIPELINE_VERSION,
+        learningPointCount: points.length,
+        sectionCount: sectionPlans.length,
       },
     });
 
-    let generatedCards = await generateCoverageCards({
-      title: lectureRow.title,
-      summary: artifactRow.summary,
-      keyTopics: artifactRow.key_topics,
-      units: effectiveUnits,
-      plans: plannedCoverage,
-      outputLanguage: lectureRow.language_hint,
+    let deck = await writeFlashcards({
+      sections: sectionPlans,
+      notesTitle,
+      languageCode: lectureRow.language_hint,
+      context,
     });
 
-    let validation = validateCoverage({
-      units: effectiveUnits,
-      plans: plannedCoverage,
-      cards: generatedCards,
-    });
+    // Cap the deck by shedding the least important cards first, never core ones.
+    const totalCards = deck.reduce((total, entry) => total + entry.cards.length, 0);
 
-    for (let repairPass = 0; repairPass < MAX_REPAIR_PASSES; repairPass += 1) {
-      if (
-        validation.coverageRatio >= COVERAGE_TARGET &&
-        validation.criticalCoverageRatio >= CRITICAL_COVERAGE_TARGET &&
-        validation.failedConceptKeys.length === 0
-      ) {
-        break;
+    if (totalCards > MAX_FLASHCARDS) {
+      let excess = totalCards - MAX_FLASHCARDS;
+
+      for (const importance of ["detail", "supporting"] as const) {
+        if (excess <= 0) {
+          break;
+        }
+
+        for (const entry of [...deck].reverse()) {
+          if (excess <= 0) {
+            break;
+          }
+
+          const kept = [] as typeof entry.cards;
+          for (const card of entry.cards) {
+            if (excess > 0 && card.point.importance === importance) {
+              excess -= 1;
+            } else {
+              kept.push(card);
+            }
+          }
+          entry.cards = kept;
+        }
       }
 
-      await setStudyAssetStatus({
-        lectureId: params.lectureId,
-        status: "generating",
-        modelMetadata: {
-          stage: "repairing_coverage",
-          pipeline: "flashcards-v4",
-          storageMode: storage.mode,
-          repairPass: repairPass + 1,
-          uncoveredUnitIndexes: validation.uncoveredUnitIndexes,
-          failedConceptKeys: validation.failedConceptKeys,
-        },
-      });
-
-      const repairedCards = await repairCoverageCards({
-        title: lectureRow.title,
-        summary: artifactRow.summary,
-        keyTopics: artifactRow.key_topics,
-        units: effectiveUnits,
-        plans: plannedCoverage,
-        missingConceptsByUnit: validation.missingConceptsByUnit,
-        outputLanguage: lectureRow.language_hint,
-      });
-
-      generatedCards = dedupeAcceptedCards([...generatedCards, ...repairedCards]);
-      validation = validateCoverage({
-        units: effectiveUnits,
-        plans: plannedCoverage,
-        cards: generatedCards,
-      });
+      deck = deck.filter((entry) => entry.cards.length > 0);
     }
 
-    const acceptedCards = selectAcceptedCards({
-      cards: generatedCards,
-      plans: plannedCoverage,
-      units: effectiveUnits,
-    });
-    const trimmedAcceptedCards = trimCardsToPlanBudget({
-      cards: acceptedCards,
-      plans: plannedCoverage,
-    });
-    const acceptedValidation = validateCoverage({
-      units: effectiveUnits,
-      plans: plannedCoverage,
-      cards: trimmedAcceptedCards,
-    });
-
-    let finalCards = trimmedAcceptedCards;
-    let finalValidation = acceptedValidation;
-    let coverageWarning: string | null = null;
-
-    if (
-      finalValidation.coverageRatio < COVERAGE_TARGET ||
-      finalValidation.criticalCoverageRatio < CRITICAL_COVERAGE_TARGET ||
-      finalValidation.failedConceptKeys.length > 0
-    ) {
-      const generatedValidation = validateCoverage({
-        units: effectiveUnits,
-        plans: plannedCoverage,
-        cards: generatedCards,
-      });
-
-      if (
-        generatedCards.length > 0 &&
-        (
-          generatedValidation.coverageRatio > finalValidation.coverageRatio ||
-          generatedValidation.criticalCoverageRatio > finalValidation.criticalCoverageRatio ||
-          (finalCards.length === 0 && generatedCards.length > 0)
-        )
-      ) {
-        const trimmedGeneratedCards = trimCardsToPlanBudget({
-          cards: dedupeAcceptedCards(generatedCards),
-          plans: plannedCoverage,
-        });
-        finalCards = trimmedGeneratedCards;
-        finalValidation = validateCoverage({
-          units: effectiveUnits,
-          plans: plannedCoverage,
-          cards: trimmedGeneratedCards,
-        });
-      }
-
-      if (finalCards.length === 0) {
-        throw new Error("Flashcard generation produced no usable cards.");
-      }
-
-      coverageWarning = `Coverage validation fell below target (${finalValidation.coverageRatio} overall, ${finalValidation.criticalCoverageRatio} critical). Published the best available deck instead of failing.`;
+    if (deck.length === 0) {
+      throw new Error("Flashcard generation produced no cards.");
     }
 
     await setStudyAssetStatus({
@@ -686,148 +282,115 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
       status: "generating",
       modelMetadata: {
         stage: "publishing_deck",
-        pipeline: "flashcards-v4",
-        storageMode: storage.mode,
-        coverageRatio: finalValidation.coverageRatio,
-        criticalCoverageRatio: finalValidation.criticalCoverageRatio,
-        generatedCardCount: generatedCards.length,
-        acceptedCardCount: finalCards.length,
-        coverageWarning,
+        pipeline: STUDY_PIPELINE_VERSION,
       },
     });
 
-    const sectionRows = buildSectionRows({
-      lectureId: params.lectureId,
-      sections,
-      cards: finalCards,
-    });
+    const previous = await fetchExistingDeck(params.lectureId);
 
-    const { error: deleteFlashcardsError } = await supabase
-      .from("flashcards")
-      .delete()
-      .eq("lecture_id", params.lectureId);
+    await supabase.from("flashcards").delete().eq("lecture_id", params.lectureId);
+    await supabase.from("lecture_study_sections").delete().eq("lecture_id", params.lectureId);
 
-    if (deleteFlashcardsError) {
-      throw deleteFlashcardsError;
-    }
+    try {
+      const importanceRank = { core: 0, supporting: 1, detail: 2 } as const;
+      let cardIdx = 0;
 
-    let insertedSections: LectureStudySectionRow[] = [];
+      for (const [sectionIdx, entry] of deck.entries()) {
+        const sectionUnits = entry.section.points.flatMap((point) => point.units);
+        const unitStartIdx = Math.min(...sectionUnits.map((unit) => unit.segStartIdx));
+        const unitEndIdx = Math.max(...sectionUnits.map((unit) => unit.segEndIdx));
+        const startMs = Math.min(...sectionUnits.map((unit) => unit.startMs));
+        const endMs = Math.max(...sectionUnits.map((unit) => unit.endMs));
+        const firstUnit = sectionUnits.reduce((first, unit) =>
+          unit.unitId < first.unitId ? unit : first,
+        );
+        const lastUnit = sectionUnits.reduce((last, unit) =>
+          unit.unitId > last.unitId ? unit : last,
+        );
 
-    if (storage.supportsSections) {
-      const { error: deleteSectionsError } = await supabase
-        .from("lecture_study_sections")
-        .delete()
-        .eq("lecture_id", params.lectureId);
+        const { data: insertedSection, error: sectionError } = await supabase
+          .from("lecture_study_sections")
+          .insert({
+            lecture_id: params.lectureId,
+            idx: sectionIdx,
+            title: entry.section.title,
+            source_label:
+              sourceType === "audio"
+                ? `${firstUnit.locatorLabel.split("–")[0]}–${lastUnit.locatorLabel.split("–").at(-1)}`
+                : `${firstUnit.locatorLabel}–${lastUnit.locatorLabel}`,
+            source_start_ms: sourceType === "audio" ? startMs : null,
+            source_end_ms: sourceType === "audio" ? endMs : null,
+            source_page_start: null,
+            source_page_end: null,
+            unit_start_idx: unitStartIdx,
+            unit_end_idx: unitEndIdx,
+            card_count: entry.cards.length,
+          } as never)
+          .select("id")
+          .single();
 
-      if (deleteSectionsError) {
-        throw deleteSectionsError;
-      }
+        if (sectionError) {
+          throw sectionError;
+        }
 
-      const { data, error: sectionInsertError } = await supabase
-        .from("lecture_study_sections")
-        .insert(sectionRows as never)
-        .select("*");
+        const sectionId = (insertedSection as { id: string }).id;
+        const cardsToInsert = entry.cards.map((card) => {
+          const primaryUnit = card.point.units[0];
 
-      if (sectionInsertError || !data) {
-        await restorePreviousDeck({
-          lectureId: params.lectureId,
-          previousSections: existingDeck.sections,
-          previousFlashcards: existingDeck.flashcards,
-          storage,
+          return {
+            lecture_id: params.lectureId,
+            idx: cardIdx++,
+            front: card.front,
+            back: card.back,
+            hint: card.hint,
+            citations_json: buildPointCitations(card.point, segmentsByIdx),
+            difficulty: card.difficulty,
+            section_id: sectionId,
+            source_unit_idx: primaryUnit?.unitId ?? 0,
+            card_kind: card.kind,
+            concept_key: card.point.conceptKey,
+            source_type: lectureRow.source_type,
+            source_locator: primaryUnit?.locatorLabel ?? null,
+            coverage_rank: importanceRank[card.point.importance],
+          };
         });
-        throw new Error(sectionInsertError?.message ?? "Study sections could not be saved.");
+
+        const { error: cardsError } = await supabase
+          .from("flashcards")
+          .insert(cardsToInsert as never);
+
+        if (cardsError) {
+          throw cardsError;
+        }
       }
 
-      insertedSections = data as LectureStudySectionRow[];
-    }
+      await setStudyAssetStatus({
+        lectureId: params.lectureId,
+        status: "ready",
+        modelMetadata: {
+          stage: "ready",
+          pipeline: STUDY_PIPELINE_VERSION,
+          cardCount: cardIdx,
+          sectionCount: deck.length,
+          learningPointCount: points.length,
+        },
+      });
 
-    const flashcardsToInsert =
-      storage.mode === "comprehensive"
-        ? buildFlashcardsToInsert({
-            lectureId: params.lectureId,
-            cards: finalCards,
-            units: effectiveUnits,
-            insertedSections,
-          })
-        : buildLegacyFlashcardsToInsert({
-            lectureId: params.lectureId,
-            cards: finalCards,
-          });
-
-    const { error: flashcardInsertError } = await supabase
-      .from("flashcards")
-      .insert(flashcardsToInsert as never);
-
-    if (flashcardInsertError) {
+      return { cardCount: cardIdx, sectionCount: deck.length };
+    } catch (error) {
       await restorePreviousDeck({
         lectureId: params.lectureId,
-        previousSections: existingDeck.sections,
-        previousFlashcards: existingDeck.flashcards,
-        storage,
+        previousSections: previous.sections,
+        previousFlashcards: previous.flashcards,
       });
-      throw new Error(flashcardInsertError.message);
+      throw error;
     }
-
-    const difficultyCounts = finalCards.reduce<Record<FlashcardDifficulty, number>>(
-      (counts, flashcard) => {
-        counts[flashcard.difficulty] += 1;
-        return counts;
-      },
-      {
-        easy: 0,
-        medium: 0,
-        hard: 0,
-      },
-    );
-
-    const noteWordCount = countWords(artifactRow.structured_notes_md);
-    const sourceWordCount = transcriptRows.reduce(
-      (total, segment) => total + countWords(segment.text),
-      0,
-    );
-
-    await setStudyAssetStatus({
-      lectureId: params.lectureId,
-      status: "ready",
-      modelMetadata: {
-        stage: "ready",
-        pipeline: "flashcards-v4",
-        storageMode: storage.mode,
-        sourceUnitCount: effectiveUnits.length,
-        sectionCount: sections.length,
-        plannedConceptCount: plannedCoverage.reduce((total, plan) => total + plan.concepts.length, 0),
-        generatedCardCount: generatedCards.length,
-        acceptedCardCount: finalCards.length,
-        coverageRatio: finalValidation.coverageRatio,
-        criticalCoverageRatio: finalValidation.criticalCoverageRatio,
-        uncoveredUnitIndexes: finalValidation.uncoveredUnitIndexes,
-        failedConceptKeys: finalValidation.failedConceptKeys,
-        coverageWarning,
-        generationDurationMs: Date.now() - startedAt,
-        difficultyCounts,
-        sourceWordCount,
-        noteWordCount,
-        sectionSummaries: sectionRows.map((section) => ({
-          idx: section.idx,
-          title: section.title,
-          cardCount: section.card_count,
-        })),
-      },
-    });
   } catch (error) {
-    console.error("Flashcard generation failed", {
-      lectureId: params.lectureId,
-      error,
-    });
-
     await setStudyAssetStatus({
       lectureId: params.lectureId,
       status: "failed",
       errorMessage: toErrorMessage(error),
-      modelMetadata: {
-        pipeline: "flashcards-v4",
-        stage: "failed",
-      },
+      modelMetadata: { stage: "failed", pipeline: STUDY_PIPELINE_VERSION },
     });
 
     throw error;

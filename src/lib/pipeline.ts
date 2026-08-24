@@ -451,6 +451,7 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
     sourceType: lecture.source_type === "audio" ? "audio" : "document",
     outputLanguage: lecture.language_hint,
     sourceTitleHint,
+    context: { lectureId: lecture.id, userId: lecture.user_id },
   });
 
   const manualModelMetadata =

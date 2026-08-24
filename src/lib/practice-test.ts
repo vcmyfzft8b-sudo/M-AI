@@ -3,8 +3,6 @@ import "server-only";
 import { z } from "zod";
 
 import type {
-  FlashcardDifficulty,
-  LectureArtifactRow,
   LecturePracticeTestAssetRow,
   LectureRow,
   PracticeTestAttemptAnswerRow,
@@ -12,40 +10,26 @@ import type {
   PracticeTestQuestionRow,
   TranscriptSegmentRow,
 } from "@/lib/database.types";
-import { generateStructuredObject } from "@/lib/ai/json";
-import { generateStructuredObjectWithGeminiFile } from "@/lib/ai/gemini";
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
-import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
+import { gradePhotoAnswer, gradeTypedAnswer } from "@/lib/generation/grading";
+import { extractLearningPoints } from "@/lib/generation/learning-points";
+import {
+  writePracticeQuestions,
+  PRACTICE_TEST_PIPELINE_VERSION,
+} from "@/lib/generation/practice-questions";
+import { buildSourceDocument } from "@/lib/generation/source";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { createCoveragePlan } from "@/lib/study-coverage";
-import { dependsOnMissingStudyContext, isHighQualityStudyPrompt } from "@/lib/study-quality";
-import type { CoverageConcept, CoverageUnitPlan, SourceUnit } from "@/lib/study-models";
-import { buildSourceUnits } from "@/lib/study-source-units";
 import type {
   PracticeTestAttemptAnswer,
   PracticeTestAttemptWithAnswers,
   PracticeTestHistoryEntry,
   PracticeTestHistorySummary,
 } from "@/lib/types";
-import { getAiProvider, getServerEnv } from "@/lib/server-env";
+import { getAiProvider } from "@/lib/server-env";
 
 const PRACTICE_TEST_CONCURRENCY = 3;
 const RECENT_ATTEMPT_MEMORY = 3;
-const PRACTICE_TEST_GENERATION_VERSION = "practice-test-v2";
-const PRACTICE_TEST_GENERATION_ATTEMPTS = 3;
-const RAW_GENERATED_PROMPT_MAX_LENGTH = 1200;
-const RAW_GENERATED_ANSWER_GUIDE_MAX_LENGTH = 6000;
-const PRACTICE_PROMPT_MAX_LENGTH = 220;
-const PRACTICE_ANSWER_GUIDE_MAX_LENGTH = 1000;
-
-type PracticeTestQuestionDraft = {
-  prompt: string;
-  answerGuide: string;
-  difficulty: FlashcardDifficulty;
-  conceptKey: string;
-  sourceUnitIdx: number;
-  sourceLocator: string | null;
-};
+const PRACTICE_TEST_GENERATION_VERSION = PRACTICE_TEST_PIPELINE_VERSION;
 
 type AttemptQuestionMetadata = {
   questionIds: string[];
@@ -53,26 +37,6 @@ type AttemptQuestionMetadata = {
   bankVersion: string;
   generationVersion: string;
 };
-
-const practiceQuestionSchema = z.object({
-  prompt: z.string().min(12).max(RAW_GENERATED_PROMPT_MAX_LENGTH),
-  answerGuide: z.string().min(30).max(RAW_GENERATED_ANSWER_GUIDE_MAX_LENGTH),
-  difficulty: z.string().min(3).max(40),
-  conceptKey: z.string().min(1).max(120),
-});
-
-const practiceQuestionBatchSchema = z.object({
-  questions: z.array(practiceQuestionSchema).min(0).max(16),
-});
-
-const gradingSchema = z.object({
-  score: z.number().int().min(0).max(5),
-  expectedAnswer: z.string().min(1).max(1400),
-  rationale: z.string().min(1).max(1000),
-  strengths: z.string().min(1).max(1000),
-  missingPoints: z.string().min(1).max(1000),
-  confidence: z.string().min(2).max(40),
-});
 
 function toErrorMessage(error: unknown) {
   if (error instanceof z.ZodError) {
@@ -103,45 +67,6 @@ function toMetadataRecord(value: unknown) {
   }
 
   return { ...(value as Record<string, unknown>) };
-}
-
-function normalizeDifficulty(value: string): FlashcardDifficulty {
-  const normalized = value.trim().toLowerCase();
-
-  if (normalized === "easy" || normalized === "medium" || normalized === "hard") {
-    return normalized;
-  }
-
-  if (normalized === "simple" || normalized === "basic") {
-    return "easy";
-  }
-
-  if (normalized === "advanced" || normalized === "challenging") {
-    return "hard";
-  }
-
-  return "medium";
-}
-
-function normalizeText(value: string, maxLength: number) {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length <= maxLength ? normalized : normalized.slice(0, maxLength).trim();
-}
-
-function dedupeQuestions(questions: PracticeTestQuestionDraft[]) {
-  const seen = new Set<string>();
-  const output: PracticeTestQuestionDraft[] = [];
-
-  for (const question of questions) {
-    const key = `${question.conceptKey}::${question.prompt.toLowerCase()}`;
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    output.push(question);
-  }
-
-  return output;
 }
 
 async function mapWithConcurrency<TInput, TOutput>(
@@ -278,233 +203,6 @@ function shuffle<T>(values: T[]) {
   return output;
 }
 
-async function generateQuestionsForUnit(params: {
-  title: string | null;
-  summary: string;
-  keyTopics: string[];
-  unit: SourceUnit;
-  concepts: CoverageConcept[];
-  contextUnits: SourceUnit[];
-  outputLanguage?: string | null;
-  repairOnly?: boolean;
-}) {
-  const targetCount = Math.min(
-    Math.max(
-      params.concepts.reduce(
-        (total, concept) => total + Math.min(Math.max(concept.recommendedCardCount, 1), 2),
-        0,
-      ),
-      1,
-    ),
-    8,
-  );
-  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
-  const requestedConceptKeys = new Set(params.concepts.map((concept) => concept.conceptKey));
-  let generatedQuestions: PracticeTestQuestionDraft[] = [];
-
-  for (
-    let attemptIndex = 0;
-    attemptIndex < PRACTICE_TEST_GENERATION_ATTEMPTS &&
-    (attemptIndex === 0 || (targetCount > 0 && generatedQuestions.length === 0));
-    attemptIndex += 1
-  ) {
-    const retryInstruction =
-      attemptIndex === 0
-        ? ""
-        : "\nPrevious output included prompts that depended on missing context. Regenerate only standalone prompts with all needed context inside the question itself.";
-    const batch = await generateStructuredObject({
-      schema: practiceQuestionBatchSchema,
-      maxOutputTokens: Math.max(2200, targetCount * 600),
-      instructions: `${languageInstruction}
-${params.repairOnly ? "Repair missing practice-test coverage." : "Generate source-grounded open-ended practice-test questions."}
-Use only the supplied source material.
-Return at most ${targetCount} questions for this unit. The requested count is a maximum, not a quota.
-Each question must be free-response and must feel like a realistic written school test prompt.
-Do not use multiple-choice options.
-Spread questions across the requested concepts when high-quality prompts are supported, and avoid duplicates.
-Prefer prompts that require recall, explanation, listing, comparison, process description, or short synthesis grounded in the source.
-Keep prompts specific and answerable from the source material.
-Each question must test exactly one fact, definition, mechanism, comparison, sequence, formula, category, or cause-effect relationship.
-Every question must be fully self-contained so a student can solve it without seeing the original lecture, notes, table, diagram, or example.
-Do not refer to "the lecture", "the notes", "the table above", "the example shown", or any missing context outside the prompt itself.
-If a question depends on source-specific data, definitions, categories, scenarios, or examples, include that context directly in the prompt.
-Do not mention the source, material, lecture, notes, illustration, figure, table, graph, diagram, or example in the wording of the question.
-Write prompts as direct knowledge questions that can be answered from memory after studying the topic.${retryInstruction}
-Provide a concise but complete answerGuide that a grader can use for partial credit. Include the exact expected answer and 2-4 key points when the answer has multiple parts. Keep each answerGuide under 900 characters.
-Skip a requested concept if the only possible prompt would be vague, source-dependent, visual-only, caption-like, or created only to fill the count.
-Use the provided conceptKey exactly.
-Do not invent facts beyond the source.
-Return fewer than ${targetCount} questions, or zero questions, when fewer high-quality questions are supported.`,
-      input: JSON.stringify(
-        {
-          title: params.title,
-          summary: params.summary,
-          keyTopics: params.keyTopics,
-          repairOnly: Boolean(params.repairOnly),
-          unit: {
-            unitIndex: params.unit.unitIndex,
-            sectionTitle: params.unit.sectionTitle,
-            locatorLabel: params.unit.locatorLabel,
-            sourceType: params.unit.sourceType,
-            text: params.unit.text,
-          },
-          concepts: params.concepts.map((concept) => ({
-            ...concept,
-            recommendedQuestionCount: Math.min(Math.max(concept.recommendedCardCount, 1), 2),
-          })),
-          contextUnits: params.contextUnits.map((unit) => ({
-            unitIndex: unit.unitIndex,
-            locatorLabel: unit.locatorLabel,
-            text: unit.text,
-          })),
-        },
-        null,
-        2,
-      ),
-    });
-
-    generatedQuestions = dedupeQuestions([
-      ...generatedQuestions,
-      ...batch.questions
-        .filter((question) => requestedConceptKeys.has(question.conceptKey))
-        .map((question) => ({
-          prompt: normalizeText(question.prompt, PRACTICE_PROMPT_MAX_LENGTH),
-          answerGuide: normalizeText(
-            question.answerGuide,
-            PRACTICE_ANSWER_GUIDE_MAX_LENGTH,
-          ),
-          difficulty: normalizeDifficulty(question.difficulty),
-          conceptKey: question.conceptKey,
-          sourceUnitIdx: params.unit.unitIndex,
-          sourceLocator: params.unit.locatorLabel,
-        }))
-        .filter((question) => isHighQualityStudyPrompt(question.prompt)),
-    ]);
-  }
-
-  return generatedQuestions;
-}
-
-function findMissingConcepts(params: {
-  plans: CoverageUnitPlan[];
-  questions: PracticeTestQuestionDraft[];
-}) {
-  const questionCountsByConcept = new Map<string, number>();
-
-  for (const question of params.questions) {
-    questionCountsByConcept.set(
-      question.conceptKey,
-      (questionCountsByConcept.get(question.conceptKey) ?? 0) + 1,
-    );
-  }
-
-  const missingConceptsByUnit = new Map<number, CoverageConcept[]>();
-
-  for (const plan of params.plans) {
-    const missingConcepts = plan.concepts.filter(
-      (concept) => (questionCountsByConcept.get(concept.conceptKey) ?? 0) < 1,
-    );
-
-    if (missingConcepts.length > 0) {
-      missingConceptsByUnit.set(plan.unitIndex, missingConcepts);
-    }
-  }
-
-  return missingConceptsByUnit;
-}
-
-async function generatePracticeQuestionBank(params: {
-  lecture: LectureRow;
-  artifact: LectureArtifactRow;
-  transcript: TranscriptSegmentRow[];
-}) {
-  const { units } = buildSourceUnits({
-    lecture: params.lecture,
-    transcript: params.transcript,
-  });
-  const plannedCoverage = await createCoveragePlan({
-    title: params.lecture.title,
-    summary: params.artifact.summary,
-    keyTopics: params.artifact.key_topics,
-    units,
-  });
-  const planByUnit = new Map(plannedCoverage.map((plan) => [plan.unitIndex, plan]));
-
-  let generatedQuestions = (
-    await mapWithConcurrency(units, PRACTICE_TEST_CONCURRENCY, async (unit, index) => {
-      const plan = planByUnit.get(unit.unitIndex);
-      if (!plan || plan.concepts.length === 0) {
-        return [];
-      }
-
-      return generateQuestionsForUnit({
-        title: params.lecture.title,
-        summary: params.artifact.summary,
-        keyTopics: params.artifact.key_topics,
-        unit,
-        concepts: plan.concepts,
-        contextUnits: units.slice(Math.max(0, index - 1), Math.min(units.length, index + 2)),
-        outputLanguage: params.lecture.language_hint,
-      });
-    })
-  ).flat();
-
-  const missingConceptsByUnit = findMissingConcepts({
-    plans: plannedCoverage,
-    questions: generatedQuestions,
-  });
-
-  if (missingConceptsByUnit.size > 0) {
-    const repairedQuestions = (
-      await mapWithConcurrency(
-        [...missingConceptsByUnit.entries()],
-        PRACTICE_TEST_CONCURRENCY,
-        async ([unitIndex, concepts]) => {
-          const unit = units.find((candidate) => candidate.unitIndex === unitIndex);
-          if (!unit) {
-            return [];
-          }
-
-          return generateQuestionsForUnit({
-            title: params.lecture.title,
-            summary: params.artifact.summary,
-            keyTopics: params.artifact.key_topics,
-            unit,
-            concepts,
-            contextUnits: units.slice(Math.max(0, unitIndex - 1), Math.min(units.length, unitIndex + 2)),
-            outputLanguage: params.lecture.language_hint,
-            repairOnly: true,
-          });
-        },
-      )
-    ).flat();
-
-    generatedQuestions = dedupeQuestions([...generatedQuestions, ...repairedQuestions]);
-  }
-
-  const targetBankSize = Math.max(
-    18,
-    Math.min(
-      40,
-      plannedCoverage.reduce((total, plan) => total + plan.concepts.length, 0),
-    ),
-  );
-
-  const sortedQuestions = shuffle(generatedQuestions).sort((left, right) => {
-    if (left.sourceUnitIdx !== right.sourceUnitIdx) {
-      return left.sourceUnitIdx - right.sourceUnitIdx;
-    }
-
-    return left.prompt.localeCompare(right.prompt);
-  });
-
-  return {
-    units,
-    plannedCoverage,
-    questions: sortedQuestions.slice(0, Math.max(5, Math.min(targetBankSize, sortedQuestions.length))),
-  };
-}
-
 export async function generateLecturePracticeTest(params: {
   lectureId: string;
   regenerate?: boolean;
@@ -522,26 +220,18 @@ export async function generateLecturePracticeTest(params: {
   });
 
   try {
-    const [
-      { data: lecture, error: lectureError },
-      { data: artifact, error: artifactError },
-      { data: transcript, error: transcriptError },
-    ] = await Promise.all([
-      supabase.from("lectures").select("*").eq("id", params.lectureId).single(),
-      supabase.from("lecture_artifacts").select("*").eq("lecture_id", params.lectureId).single(),
-      supabase
-        .from("transcript_segments")
-        .select(TRANSCRIPT_SEGMENT_CONTENT_SELECT)
-        .eq("lecture_id", params.lectureId)
-        .order("idx", { ascending: true }),
-    ]);
+    const [{ data: lecture, error: lectureError }, { data: transcript, error: transcriptError }] =
+      await Promise.all([
+        supabase.from("lectures").select("*").eq("id", params.lectureId).single(),
+        supabase
+          .from("transcript_segments")
+          .select(TRANSCRIPT_SEGMENT_CONTENT_SELECT)
+          .eq("lecture_id", params.lectureId)
+          .order("idx", { ascending: true }),
+      ]);
 
     if (lectureError) {
       throw lectureError;
-    }
-
-    if (artifactError) {
-      throw artifactError;
     }
 
     if (transcriptError) {
@@ -549,7 +239,6 @@ export async function generateLecturePracticeTest(params: {
     }
 
     const lectureRow = lecture as LectureRow;
-    const artifactRow = artifact as LectureArtifactRow;
     const transcriptRows = (transcript ?? []) as TranscriptSegmentRow[];
 
     if (lectureRow.status !== "ready") {
@@ -560,11 +249,37 @@ export async function generateLecturePracticeTest(params: {
       throw new Error("The lecture transcript is empty.");
     }
 
-    const coverage = await generatePracticeQuestionBank({
-      lecture: lectureRow,
-      artifact: artifactRow,
-      transcript: transcriptRows,
+    const segments = transcriptRows.map((segment) => ({
+      idx: segment.idx,
+      startMs: segment.start_ms,
+      endMs: segment.end_ms,
+      speakerLabel: segment.speaker_label,
+      text: segment.text,
+    }));
+    const source = buildSourceDocument(
+      segments,
+      lectureRow.source_type === "audio" ? "audio" : "document",
+    );
+    const context = { lectureId: lectureRow.id, userId: lectureRow.user_id };
+
+    const points = await extractLearningPoints({
+      source,
+      notesTitle: lectureRow.title,
+      languageCode: lectureRow.language_hint,
+      context,
     });
+
+    const questions = await writePracticeQuestions({
+      points,
+      notesTitle: lectureRow.title,
+      languageCode: lectureRow.language_hint,
+      context,
+    });
+
+    if (questions.length === 0) {
+      throw new Error("Practice-test generation produced no questions.");
+    }
+
     const bankVersion = new Date().toISOString();
 
     const { error: deleteQuestionsError } = await supabase
@@ -576,7 +291,7 @@ export async function generateLecturePracticeTest(params: {
       throw deleteQuestionsError;
     }
 
-    const questionsToInsert = coverage.questions.map((question, index) => ({
+    const questionsToInsert = questions.map((question, index) => ({
       lecture_id: params.lectureId,
       idx: index,
       prompt: question.prompt,
@@ -588,14 +303,12 @@ export async function generateLecturePracticeTest(params: {
       created_at: new Date().toISOString(),
     }));
 
-    if (questionsToInsert.length > 0) {
-      const { error: insertError } = await supabase
-        .from("practice_test_questions")
-        .insert(questionsToInsert as never);
+    const { error: insertError } = await supabase
+      .from("practice_test_questions")
+      .insert(questionsToInsert as never);
 
-      if (insertError) {
-        throw insertError;
-      }
+    if (insertError) {
+      throw insertError;
     }
 
     await setPracticeTestAssetStatus({
@@ -605,11 +318,7 @@ export async function generateLecturePracticeTest(params: {
         stage: "ready",
         pipeline: PRACTICE_TEST_GENERATION_VERSION,
         questionCount: questionsToInsert.length,
-        sourceUnitCount: coverage.units.length,
-        plannedConceptCount: coverage.plannedCoverage.reduce(
-          (total, plan) => total + plan.concepts.length,
-          0,
-        ),
+        learningPointCount: points.length,
         bankVersion,
       },
     });
@@ -841,15 +550,11 @@ export async function createPracticeTestAttempt(params: {
   let { asset: assetRow, questions: questionRows, attempts: previousAttempts } =
     await loadAttemptInputs();
 
-  const hasInvalidStoredQuestions = questionRows.some((question) =>
-    dependsOnMissingStudyContext(question.prompt) || !isHighQualityStudyPrompt(question.prompt),
-  );
   const assetMetadata = toMetadataRecord(assetRow?.model_metadata);
   const needsInitialBank =
     !assetRow ||
     assetRow.status !== "ready" ||
     questionRows.length === 0 ||
-    hasInvalidStoredQuestions ||
     (typeof assetMetadata.pipeline === "string"
       ? assetMetadata.pipeline !== PRACTICE_TEST_GENERATION_VERSION
       : true);
@@ -960,38 +665,60 @@ export async function createPracticeTestAttempt(params: {
   };
 }
 
-async function gradeAnswer(params: {
-  prompt: string;
-  answerGuide: string;
-  typedAnswer: string;
-}) {
-  return generateStructuredObject({
-    schema: gradingSchema,
-    maxOutputTokens: 1600,
-    instructions: `Grade the student's free-response answer using the supplied answer guide.
-Return an integer score from 0 to 5.
-Scoring anchors:
-- 0: blank, unknown, or fundamentally incorrect
-- 1: very weak answer with only slight correctness
-- 2: limited partial understanding
-- 3: mostly correct but incomplete or mixed
-- 4: almost fully correct with minor omissions
-- 5: fully correct and complete
-Do not be generous with unsupported claims.
-ExpectedAnswer should describe what a strong answer needed to include.
-Rationale should explain the score clearly.
-Strengths should mention what the student got right.
-MissingPoints should mention what was absent or incorrect.`,
-    input: JSON.stringify(
-      {
-        prompt: params.prompt,
-        answerGuide: params.answerGuide,
-        studentAnswer: params.typedAnswer,
-      },
-      null,
-      2,
-    ),
-  });
+const DECLARED_UNKNOWN_FEEDBACK: Record<
+  string,
+  { rationale: string; strengths: string; missingPoints: string }
+> = {
+  en: {
+    rationale: "Marked as 'I don't know'.",
+    strengths: "No submitted answer.",
+    missingPoints: "A complete answer was not provided.",
+  },
+  sl: {
+    rationale: "Označeno kot »ne vem«.",
+    strengths: "Odgovor ni bil oddan.",
+    missingPoints: "Popoln odgovor ni bil podan — preglej pričakovani odgovor in snov ponovi.",
+  },
+  de: {
+    rationale: "Als „weiß ich nicht“ markiert.",
+    strengths: "Keine Antwort abgegeben.",
+    missingPoints: "Es wurde keine vollständige Antwort abgegeben.",
+  },
+  hr: {
+    rationale: "Označeno kao »ne znam«.",
+    strengths: "Odgovor nije predan.",
+    missingPoints: "Potpun odgovor nije dan — pregledaj očekivani odgovor i ponovi gradivo.",
+  },
+  it: {
+    rationale: "Contrassegnato come «non lo so».",
+    strengths: "Nessuna risposta inviata.",
+    missingPoints: "Non è stata fornita una risposta completa.",
+  },
+};
+
+function resolveDeclaredUnknownFeedback(languageCode: string | null) {
+  const normalized = languageCode?.trim().toLowerCase() ?? "";
+  return DECLARED_UNKNOWN_FEEDBACK[normalized] ?? DECLARED_UNKNOWN_FEEDBACK.en;
+}
+
+async function loadLectureGradingContext(lectureId: string) {
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .from("lectures")
+    .select("language_hint, user_id")
+    .eq("id", lectureId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  const row = data as { language_hint: string | null; user_id: string } | null;
+
+  return {
+    languageCode: row?.language_hint ?? null,
+    userId: row?.user_id ?? null,
+  };
 }
 
 function resolveAttemptQuestion(
@@ -1116,6 +843,7 @@ export async function submitPracticeTestAttempt(params: {
     .eq("id", params.attemptId);
 
   try {
+    const grading = await loadLectureGradingContext(params.lectureId);
     const gradedAnswers = await mapWithConcurrency(
       answerRows,
       PRACTICE_TEST_CONCURRENCY,
@@ -1128,6 +856,8 @@ export async function submitPracticeTestAttempt(params: {
         }
 
         if (input.declaredUnknown) {
+          const unknownFeedback = resolveDeclaredUnknownFeedback(grading.languageCode);
+
           return {
             id: answer.id,
             attempt_id: answer.attempt_id,
@@ -1139,17 +869,19 @@ export async function submitPracticeTestAttempt(params: {
             source_locator_snapshot: answer.source_locator_snapshot,
             score: 0,
             expected_answer: question.answer_guide,
-            grading_rationale: "Marked as 'I don't know'.",
-            strengths: "No submitted answer.",
-            missing_points: "A complete answer was not provided.",
+            grading_rationale: unknownFeedback.rationale,
+            strengths: unknownFeedback.strengths,
+            missing_points: unknownFeedback.missingPoints,
             grading_confidence: "high",
           };
         }
 
-        const graded = await gradeAnswer({
+        const graded = await gradeTypedAnswer({
           prompt: question.prompt,
           answerGuide: question.answer_guide,
           typedAnswer: input.typedAnswer.trim(),
+          languageCode: grading.languageCode,
+          context: { lectureId: params.lectureId, userId: params.userId },
         });
 
         return {
@@ -1335,17 +1067,18 @@ export async function gradePracticeTestPhotoWithGemini(params: {
   file: File;
   prompt: string;
   answerGuide: string;
+  lectureId?: string;
 }) {
-  const env = getServerEnv();
-  return generateStructuredObjectWithGeminiFile({
-    schema: gradingSchema,
-    instructions: `Grade the student's handwritten or photographed answer to the prompt.
-Question: ${params.prompt}
-Answer guide: ${params.answerGuide}
-Use the same 0-5 integer rubric as a school practice test.`,
+  const grading = params.lectureId
+    ? await loadLectureGradingContext(params.lectureId)
+    : { languageCode: null, userId: null };
+
+  return gradePhotoAnswer({
     file: params.file,
-    model: env.GEMINI_TEXT_MODEL,
-    maxOutputTokens: 1600,
+    prompt: params.prompt,
+    answerGuide: params.answerGuide,
+    languageCode: grading.languageCode,
+    context: { lectureId: params.lectureId ?? null, userId: grading.userId },
   });
 }
 

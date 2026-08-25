@@ -160,13 +160,7 @@ export function CaptureStudio({
     }
   }
 
-  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
+  async function acceptAudioFile(file: File) {
     try {
       setCaptureMode("upload");
       await setNewSource({
@@ -181,7 +175,42 @@ export function CaptureStudio({
           ? uploadError.message
           : "Datoteke ni bilo mogoče pripraviti.",
       );
+    }
+  }
+
+  function handleAudioDrop(event: React.DragEvent<HTMLElement>) {
+    // Without this the browser navigates to the dropped file, and macOS hands a .wav to Music.
+    event.preventDefault();
+
+    if (!consent || isUploading) {
+      return;
+    }
+
+    const file = event.dataTransfer.files?.[0];
+
+    if (file) {
+      void acceptAudioFile(file);
+    }
+  }
+
+  function handleAudioDragOver(event: React.DragEvent<HTMLElement>) {
+    if (Array.from(event.dataTransfer.types).includes("Files")) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+    }
+  }
+
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      await acceptAudioFile(file);
     } finally {
+      // Cleared so picking the same file twice in a row still fires a change event.
       event.target.value = "";
     }
   }
@@ -494,7 +523,11 @@ export function CaptureStudio({
                 </div>
               </button>
             ) : (
-              <label className="flex min-h-64 cursor-pointer flex-col justify-between rounded-[30px] border border-stone-200 bg-white p-7 transition hover:border-blue-300 hover:bg-[var(--brand-soft)]">
+              <label
+                onDragOver={handleAudioDragOver}
+                onDrop={handleAudioDrop}
+                className="flex min-h-64 cursor-pointer flex-col justify-between rounded-[30px] border border-stone-200 bg-white p-7 transition hover:border-blue-300 hover:bg-[var(--brand-soft)]"
+              >
                 <div className="flex items-center justify-between gap-4">
                   <span className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-stone-700">
                     Datoteka
@@ -507,7 +540,7 @@ export function CaptureStudio({
                     Izberi zvočno datoteko
                   </p>
                   <p className="mt-2 text-sm leading-7 text-stone-500">
-                    MP3, M4A, WAV, OGG, WEBM.
+                    MP3, M4A, WAV, OGG, WEBM. Datoteko lahko tudi povlečeš sem.
                   </p>
                 </div>
 

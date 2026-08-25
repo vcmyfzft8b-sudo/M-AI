@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { WindowFileDropGuard } from "@/components/window-file-drop-guard";
 import { AppShell } from "@/components/app-shell";
 import { NavigationFeedbackProvider } from "@/components/navigation-loading";
 import { getViewerAppState } from "@/lib/billing";
@@ -30,6 +31,7 @@ export default async function AppLayout({
 
   return (
     <NavigationFeedbackProvider>
+      <WindowFileDropGuard />
       <AppShell
         hasPaidAccess={Boolean(appState?.hasPaidAccess)}
         initialPathname={pathname}

@@ -32,6 +32,7 @@ import { createAudioLectureWithProcessingChunks } from "@/lib/audio-lecture-uplo
 import {
   AUDIO_FILE_INPUT_ACCEPT,
   DOCUMENT_FILE_INPUT_ACCEPT,
+  SUPPORTED_AUDIO_EXTENSIONS,
   MAX_DOCUMENT_BYTES,
   MAX_SCAN_IMAGE_COUNT,
   MAX_SCAN_IMAGE_BYTES,
@@ -141,6 +142,16 @@ function pickRecorderMimeType() {
       ];
 
   return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
+}
+
+function isAudioSourceFile(file: File) {
+  if (file.type.startsWith("audio/")) {
+    return true;
+  }
+
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+
+  return (SUPPORTED_AUDIO_EXTENSIONS as readonly string[]).includes(extension);
 }
 
 function sheetTitle(mode: NoteSourceMode) {
@@ -1683,15 +1694,13 @@ export function NoteSourceModal({
     }
   }
 
-  async function handlePdfPick(event: React.ChangeEvent<HTMLInputElement>) {
-    if (!canCreateNotes) {
-      event.target.value = "";
-      redirectToPaywall();
-      return;
-    }
-
-    const files = Array.from(event.target.files ?? []);
-
+  /**
+   * Shared by the file picker and by dropping onto the sheet. Dropping is worth supporting on its
+   * own, but it also has to be handled somewhere: a file dropped on a page that ignores it makes
+   * the browser navigate to it, and macOS opens a .wav in Music, so the app vanishes behind a
+   * music player with nothing uploaded.
+   */
+  async function acceptDocumentOrPhotoFiles(files: File[]) {
     if (files.length === 0) {
       return;
     }
@@ -1720,8 +1729,59 @@ export function NoteSourceModal({
           ? submitError.message
           : "Datoteke ni bilo mogoče pripraviti.",
       );
+    }
+  }
+
+  function handleFileDragOver(event: React.DragEvent<HTMLElement>) {
+    if (Array.from(event.dataTransfer.types).includes("Files")) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+    }
+  }
+
+  function handleSheetDrop(event: React.DragEvent<HTMLElement>) {
+    event.preventDefault();
+
+    const files = Array.from(event.dataTransfer.files ?? []);
+
+    if (files.length === 0) {
+      return;
+    }
+
+    if (!canCreateNotes) {
+      redirectToPaywall();
+      return;
+    }
+
+    // The sheet accepts whatever it can handle, whichever tab happens to be open: an audio file
+    // switches to the upload tab, anything else is treated as a document or photos.
+    if (files.length === 1 && isAudioSourceFile(files[0])) {
+      setSelectedMode("upload");
+      void replaceAudioSource({
+        file: files[0],
+        durationSeconds: 0,
+        previewUrl: URL.createObjectURL(files[0]),
+        origin: "upload",
+      });
+      return;
+    }
+
+    setSelectedMode("text");
+    void acceptDocumentOrPhotoFiles(files);
+  }
+
+  async function handlePdfPick(event: React.ChangeEvent<HTMLInputElement>) {
+    if (!canCreateNotes) {
+      event.target.value = "";
+      redirectToPaywall();
+      return;
+    }
+
+    try {
+      await acceptDocumentOrPhotoFiles(Array.from(event.target.files ?? []));
     } finally {
       setBusyLabel(null);
+      // Cleared so picking the same file twice in a row still fires a change event.
       event.target.value = "";
     }
   }
@@ -1910,6 +1970,8 @@ export function NoteSourceModal({
             className="ios-sheet note-source-sheet note-source-modal mobile-draggable-sheet"
             onPointerDown={handleSourceSheetPointerDown}
             onClickCapture={handleSourceSheetClickCapture}
+            onDragOver={handleFileDragOver}
+            onDrop={handleSheetDrop}
             style={
               sourceSheetDragOffset > 0
                 ? { transform: `translateY(${sourceSheetDragOffset}px)` }

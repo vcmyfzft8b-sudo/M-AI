@@ -1804,11 +1804,21 @@ export async function createLectureFromTextSource(params: {
     const documentImages = getStoredDocumentImagesFromMetadata(params.modelMetadata ?? {});
 
     if (documentImages.length > 0) {
-      await attachDocumentImagesToNotes({
-        lectureId,
-        structuredNotesMd: notes.structuredNotesMd,
-        documentImages,
-      });
+      // The note is already saved by this point; a picture that cannot find its paragraph must
+      // not take the finished text down with it.
+      try {
+        await attachDocumentImagesToNotes({
+          lectureId,
+          structuredNotesMd: notes.structuredNotesMd,
+          documentImages,
+        });
+      } catch (error) {
+        console.warn("Placing document images failed; the note keeps its text.", error);
+        captureBackgroundError(error, {
+          operation: "document_image_placement",
+          extra: { lectureId },
+        });
+      }
     }
 
     const { error: enrichmentCompleteError } = await supabase

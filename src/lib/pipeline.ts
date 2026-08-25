@@ -19,7 +19,7 @@ import {
   getInitialNoteAudioVoice,
   shouldCreateInitialNoteAudio,
 } from "@/lib/lecture-source-metadata";
-import { captureRouteError } from "@/lib/monitoring";
+import { captureBackgroundError, captureRouteError } from "@/lib/monitoring";
 import {
   buildSyntheticTranscriptFromTextSource,
   estimateTextSourceDurationSeconds,
@@ -524,11 +524,21 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
   const documentImages = getStoredDocumentImagesFromMetadata(manualModelMetadata);
 
   if (documentImages.length > 0) {
-    await attachDocumentImagesToNotes({
-      lectureId: lecture.id,
-      structuredNotesMd: notes.structuredNotesMd,
-      documentImages,
-    });
+    // Placement runs after the notes are already saved, so failing here would throw away a
+    // finished note over a picture that could not find its paragraph.
+    try {
+      await attachDocumentImagesToNotes({
+        lectureId: lecture.id,
+        structuredNotesMd: notes.structuredNotesMd,
+        documentImages,
+      });
+    } catch (error) {
+      console.warn("Placing document images failed; the note keeps its text.", error);
+      captureBackgroundError(error, {
+        operation: "document_image_placement",
+        extra: { lectureId: lecture.id },
+      });
+    }
   }
 
   const { error: enrichmentCompleteError } = await supabase

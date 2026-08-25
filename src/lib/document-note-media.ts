@@ -7,6 +7,7 @@ import {
   saveEditableNoteDoc,
   MAX_NOTE_MEDIA_BLOCKS,
 } from "@/lib/note-doc-server";
+import { normalizeText, scoreBlockForImage } from "@/lib/note-image-relevance";
 import {
   parseNoteTtsDocument,
   type NoteTtsBlock,
@@ -18,67 +19,12 @@ const MAX_FALLBACK_DOCUMENT_IMAGES = 6;
 const DEFAULT_DOCUMENT_IMAGE_WIDTH_PERCENT = 82;
 const DEFAULT_DOCUMENT_IMAGE_X_PERCENT = 50;
 const MAX_DOCUMENT_IMAGES_PER_NOTE_BLOCK = 2;
-const MIN_IMAGE_NOTE_RELEVANCE_SCORE = 1;
-const STOP_WORDS = new Set([
-  "the",
-  "and",
-  "for",
-  "with",
-  "from",
-  "this",
-  "that",
-  "into",
-  "they",
-  "their",
-  "image",
-  "document",
-  "visual",
-  "nearby",
-  "related",
-  "from",
-  "page",
-  "slide",
-  "source",
-  "material",
-  "notes",
-  "study",
-  "stran",
-  "slika",
-  "dokument",
-  "prosojnica",
-  "vizual",
-  "gradivo",
-  "zapiski",
-  "študij",
-  "studij",
-  "povezano",
-  "prikazuje",
-  "vsebuje",
-  "ima",
-  "lahko",
-  "smo",
-  "bomo",
-  "in",
-  "ali",
-  "kot",
-  "pri",
-  "ter",
-  "tudi",
-  "kaj",
-  "kako",
-  "zakaj",
-]);
-
-function normalizeText(value: string) {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
+/**
+ * Scores are now length-normalised (note-image-relevance.ts), so this is a ratio rather than a
+ * hit count: roughly "matched enough of the image's vocabulary to be worth claiming this
+ * paragraph". Below it an image takes the evenly-spread fallback instead of a bad guess.
+ */
+const MIN_IMAGE_NOTE_RELEVANCE_SCORE = 0.9;
 function tokenText(tokens: NoteTtsInlineToken[]) {
   return tokens.map((token) => token.text).join("");
 }
@@ -95,49 +41,6 @@ function blockText(block: NoteTtsBlock) {
   }
 
   return tokenText(block.tokens);
-}
-
-function keywords(value: string) {
-  return normalizeText(value)
-    .split(/\s+/)
-    .filter((word) => word.length >= 4 && !STOP_WORDS.has(word))
-    .slice(0, 80);
-}
-
-function keywordSet(value: string) {
-  return new Set(keywords(value));
-}
-
-function scoreBlockForImage(params: {
-  blockText: string;
-  image: StoredDocumentNoteImage;
-}) {
-  const imageKeywords = keywordSet(
-    [
-      params.image.description,
-      params.image.contextText,
-    ]
-      .filter(Boolean)
-      .join(" "),
-  );
-
-  if (imageKeywords.size === 0) {
-    return 0;
-  }
-
-  const text = normalizeText(params.blockText);
-  const blockKeywords = keywordSet(params.blockText);
-  let score = 0;
-
-  for (const keyword of imageKeywords) {
-    if (blockKeywords.has(keyword)) {
-      score += keyword.length >= 7 ? 3 : 2;
-    } else if (text.includes(keyword)) {
-      score += keyword.length >= 7 ? 2 : 1;
-    }
-  }
-
-  return score;
 }
 
 function findImagePlacement(params: {
@@ -302,7 +205,47 @@ function planDocumentImageMediaBlocks(params: {
     }
   }
 
-  return selected.sort((left, right) => left.index - right.index);
+  return enforceSourceOrder(
+    selected.sort((left, right) => left.index - right.index),
+    params.blocks,
+  );
+}
+
+
+/**
+ * Order only arranges the images that relevance could not place. A finished note is a synthesis,
+ * not a page-by-page rendering — it may well cover the last slide's idea first — so forcing every
+ * image into source order overrides the scorer where it was confident. Measured on a three-page
+ * handout, doing that dragged a correctly matched heart diagram up into the mitosis section.
+ *
+ * Fallback placements carry no topical claim at all, so among those an out-of-order image is
+ * simply wrong: they are kept from rising above a scored image that precedes them in the source.
+ */
+function enforceSourceOrder<T extends { afterBlockId: string; fallback: boolean }>(
+  placements: T[],
+  blocks: Array<{ id: string }>,
+) {
+  const blockOrder = new Map(blocks.map((block, index) => [block.id, index]));
+  let minimumIndex = -1;
+
+  return placements.map((placement) => {
+    const index = blockOrder.get(placement.afterBlockId) ?? -1;
+
+    if (!placement.fallback) {
+      // A scored placement is evidence; it sets the floor for later fallbacks and keeps its spot.
+      minimumIndex = Math.max(minimumIndex, index);
+      return placement;
+    }
+
+    if (index >= minimumIndex) {
+      minimumIndex = index;
+      return placement;
+    }
+
+    const corrected = blocks[minimumIndex];
+
+    return corrected ? { ...placement, afterBlockId: corrected.id } : placement;
+  });
 }
 
 function parseStoredDocumentImages(value: unknown): StoredDocumentNoteImage[] {

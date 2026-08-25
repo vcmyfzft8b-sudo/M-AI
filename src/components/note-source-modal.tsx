@@ -32,8 +32,6 @@ import { createAudioLectureWithProcessingChunks } from "@/lib/audio-lecture-uplo
 import {
   AUDIO_FILE_INPUT_ACCEPT,
   DOCUMENT_FILE_INPUT_ACCEPT,
-  MAX_AUDIO_BYTES,
-  MAX_AUDIO_SECONDS,
   MAX_DOCUMENT_BYTES,
   MAX_SCAN_IMAGE_COUNT,
   MAX_SCAN_IMAGE_BYTES,
@@ -45,15 +43,14 @@ import { mapAppHref } from "@/lib/creator-demo/paths";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import {
   createSafeTransportFileName,
-  getLowercaseExtension,
   isLegacyPowerPointDocument,
   isSupportedDocumentFile,
 } from "@/lib/document-files";
 import {
-  compressAudioForUpload,
   compressDocumentForUpload,
   compressScanImageForUpload,
 } from "@/lib/file-compression-client";
+import { prepareAudioSourceForUpload } from "@/lib/audio-source-preparation";
 import { NOTE_LANGUAGE_OPTIONS } from "@/lib/languages";
 import {
   getExtensionForMimeType,
@@ -61,7 +58,10 @@ import {
   normalizeMimeType,
   normalizeUploadScanImageMimeType,
 } from "@/lib/storage";
-import { getUnsupportedVideoUrlMessage } from "@/lib/link-source-validation";
+import {
+  getUnsupportedVideoUrlMessage,
+  isYoutubeCaptionImportEnabled,
+} from "@/lib/link-source-validation";
 import {
   DEFAULT_NOTE_TTS_VOICE,
   NOTE_TTS_VOICE_STORAGE_KEY,
@@ -141,42 +141,6 @@ function pickRecorderMimeType() {
       ];
 
   return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
-}
-
-function readAudioDuration(file: File) {
-  return new Promise<number>((resolve, reject) => {
-    const audio = document.createElement("audio");
-    const objectUrl = URL.createObjectURL(file);
-
-    const cleanup = () => {
-      URL.revokeObjectURL(objectUrl);
-      audio.remove();
-    };
-
-    audio.preload = "metadata";
-    audio.src = objectUrl;
-
-    audio.onloadedmetadata = () => {
-      const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
-      cleanup();
-      resolve(duration);
-    };
-
-    audio.onerror = () => {
-      cleanup();
-      reject(new Error("Dolžine zvočne datoteke ni bilo mogoče prebrati."));
-    };
-  });
-}
-
-function validateAudio(file: File, durationSeconds: number) {
-  if (file.size > MAX_AUDIO_BYTES) {
-    throw new Error("Zvočna datoteka je prevelika. Omejitev je 300 MB.");
-  }
-
-  if (durationSeconds > MAX_AUDIO_SECONDS) {
-    throw new Error("Zvočna datoteka je predolga. Omejitev je 3 ure.");
-  }
 }
 
 function sheetTitle(mode: NoteSourceMode) {
@@ -520,6 +484,9 @@ export function NoteSourceModal({
     () => getUnsupportedVideoUrlMessage(trimmedLinkValue),
     [trimmedLinkValue],
   );
+  // Only advertise YouTube where captions can actually be fetched: the deployment's egress
+  // decides that, and promising it elsewhere sends the learner back to paste the same link twice.
+  const youtubeImportEnabled = isYoutubeCaptionImportEnabled();
   const canGenerateText =
     Boolean(pdfSource) || photoSources.length > 0 || combinedTextSource.length >= 120;
   const canGenerateLink = trimmedLinkValue.length > 0 && !linkVideoError;
@@ -569,25 +536,27 @@ export function NoteSourceModal({
     let originalPreviewUrlToRevoke: string | null = null;
 
     try {
-      if (nextSource.durationSeconds > MAX_AUDIO_SECONDS) {
-        throw new Error("Zvočna datoteka je predolga. Omejitev je 3 ure.");
+      // Every limit is checked inside prepareAudioSourceForUpload, against the file we would
+      // actually upload rather than the one the user picked: a bulky WAV is transcoded first and
+      // judged on its mp3, which is the whole point of having a compressor.
+      const prepared = await prepareAudioSourceForUpload({
+        file: nextSource.file,
+        knownDurationSeconds: nextSource.durationSeconds,
+        onStageChange: setBusyLabel,
+      });
+
+      if (prepared.compressed) {
+        originalPreviewUrlToRevoke = nextSource.previewUrl;
       }
 
-      if (nextSource.file.size > MAX_AUDIO_BYTES) {
-        setBusyLabel("Stiskam zvok...");
-        const compressedAudio = await compressAudioForUpload(nextSource.file);
-
-        if (compressedAudio.compressed) {
-          originalPreviewUrlToRevoke = nextSource.previewUrl;
-          preparedSource = {
-            ...nextSource,
-            file: compressedAudio.file,
-            previewUrl: URL.createObjectURL(compressedAudio.file),
-          };
-        }
-      }
-
-      validateAudio(preparedSource.file, preparedSource.durationSeconds);
+      preparedSource = {
+        ...nextSource,
+        file: prepared.file,
+        durationSeconds: prepared.durationSeconds,
+        previewUrl: prepared.compressed
+          ? URL.createObjectURL(prepared.file)
+          : nextSource.previewUrl,
+      };
 
       if (audioSource?.previewUrl) {
         URL.revokeObjectURL(audioSource.previewUrl);
@@ -784,10 +753,12 @@ export function NoteSourceModal({
     }
 
     try {
-      const durationSeconds = await readAudioDuration(file);
+      // Duration is resolved during preparation, from the transcoded file when the original is
+      // one the browser refuses to decode. Reading it here first is what used to turn a large
+      // WAV away before compression had a chance to rescue it.
       await replaceAudioSource({
         file,
-        durationSeconds,
+        durationSeconds: 0,
         previewUrl: URL.createObjectURL(file),
         origin: "upload",
       });
@@ -2281,12 +2252,22 @@ export function NoteSourceModal({
                               setLinkValue(event.target.value);
                               setError(null);
                             }}
-                            placeholder="https://example.com"
+                            placeholder={
+                              youtubeImportEnabled
+                                ? "https://www.youtube.com/watch?v=..."
+                                : "https://example.com"
+                            }
                           />
                         </div>
                         {linkVideoError ? (
                           <p className="ios-info ios-danger mt-2">{linkVideoError}</p>
-                        ) : null}
+                        ) : (
+                          <p className="ios-info mt-2">
+                            {youtubeImportEnabled
+                              ? "Članki, blogi, spletne strani in YouTube videi s podnapisi."
+                              : "Članki, blogi in druge besedilne spletne strani."}
+                          </p>
+                        )}
                       </div>
 
                       {renderBusyOrGenerateButton({

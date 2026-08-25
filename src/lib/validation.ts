@@ -32,6 +32,13 @@ export function createSanitizedStringSchema(options?: {
   minLength?: number;
   maxLength?: number;
   multiline?: boolean;
+  /**
+   * Turns page-break control characters into paragraph breaks instead of refusing the input.
+   * Text copied out of a PDF or a word processor carries form feeds at every page boundary, and
+   * they mean exactly what a blank line means here — the source pipeline already splits blocks on
+   * them. Refusing the paste over one told the user only "unsupported control characters".
+   */
+  pageBreaksAsParagraphs?: boolean;
 }) {
   let outputSchema = z.string().refine((value) => !DISALLOWED_CONTROL_CHARACTERS.test(value), {
     message: "Input contains unsupported control characters.",
@@ -54,10 +61,13 @@ export function createSanitizedStringSchema(options?: {
   return z
     .string()
     .transform((value) =>
-      sanitizeUserInput(value, {
-        trim: options?.trim,
-        collapseWhitespace: options?.collapseWhitespace,
-      }),
+      sanitizeUserInput(
+        options?.pageBreaksAsParagraphs ? value.replace(/[\f\v]+/g, "\n\n") : value,
+        {
+          trim: options?.trim,
+          collapseWhitespace: options?.collapseWhitespace,
+        },
+      ),
     )
     .pipe(outputSchema);
 }
@@ -173,6 +183,7 @@ export const noteTextSchema = createSanitizedStringSchema({
   // oversized pastes are condensed server-side. The request body cap is what binds in practice.
   maxLength: 4_000_000,
   multiline: true,
+  pageBreaksAsParagraphs: true,
 });
 
 export const storagePathSchema = createSanitizedStringSchema({

@@ -1569,11 +1569,18 @@ async function fitSourceTextToPipeline(params: {
   userId?: string;
   lectureId?: string | null;
 }): Promise<FittedSourceText> {
-  if (params.cleanedText.length <= PIPELINE_SOURCE_TEXT_TARGET_CHARS) {
+  // Blocks are what the pipeline actually reads when they exist, and they are not always the same
+  // size as the plain text beside them: a document import appends each picture's description to
+  // the block it came from, so the blocks can carry more than `text` does. Measuring the smaller
+  // of the two would wave a source through that is over capacity once the blocks are used.
+  const blocksChars = params.blocks?.reduce((sum, block) => sum + block.text.length, 0) ?? 0;
+  const sourceChars = Math.max(params.cleanedText.length, blocksChars);
+
+  if (sourceChars <= PIPELINE_SOURCE_TEXT_TARGET_CHARS) {
     return { text: params.cleanedText, blocks: params.blocks, sourceCompression: null };
   }
 
-  if (params.cleanedText.length > MAX_RAW_SOURCE_TEXT_CHARS) {
+  if (sourceChars > MAX_RAW_SOURCE_TEXT_CHARS) {
     throw new ExpectedLectureInputError(
       "This source is too large to process even with compression. Please split it into a few parts and try again.",
       "source_too_large",

@@ -62,3 +62,55 @@ test("an image with no text to match on claims nothing", () => {
     0,
   );
 });
+
+test("each diagram of a multi-topic handout claims its own section", () => {
+  // The end-to-end case, with the strings a staging run actually produced. Placement looking
+  // right is not enough on its own: images that score nothing are spread evenly through the note,
+  // which on a document whose topics happen to run in the same order as the note looks identical
+  // to relevance working. These margins are what tell the two apart.
+  const images = {
+    mitoza: {
+      description:
+        "Ta slika prikazuje faze mitoze, ki se imenujejo profaza, metafaza, anafaza in telofaza.",
+      contextText:
+        "Mitoza je delitev, pri kateri iz ene celice nastaneta dve gensko enaki celici. Poteka v štirih fazah: profaza, metafaza, anafaza in telofaza.",
+    },
+    srce: {
+      description: "Diagram prikazuje pretok krvi skozi prekate srca.",
+      contextText:
+        "Srce ima štiri prekate: dva atrija in dva ventrikla. Zaklopke preprečujejo vračanje krvi nazaj.",
+    },
+    // Left in English on purpose: the model does not always honour the language instruction, and
+    // the Slovene contextText beside it has to carry the match on its own.
+    encimi: {
+      description: "diagram shows substrate binding to an enzyme, forming an enzyme-substrate complex.",
+      contextText:
+        "Encimi so beljakovinski katalizatorji. Delujejo tako, da znižajo aktivacijsko energijo reakcije. Substrat se veže na aktivno mesto encima.",
+    },
+  };
+
+  const noteBlocks = {
+    mitoza:
+      "Mitoza je celična delitev, pri kateri iz ene materinske celice nastaneta dve gensko enaki hčerinski celici z ohranjenim številom kromosomov.",
+    srce: "Zaklopke uravnavajo vračanje krvi nazaj v prejšnji prekat. Sinusni vozel se nahaja v desnem atriju in uravnava ritem srčnega utripa.",
+    encimi:
+      "Encimi so beljakovinski katalizatorji, ki pospešujejo biokemijske reakcije tako, da znižujejo njihovo aktivacijsko energijo.",
+    uvod: "Gradivo obravnava tri temeljne biološke stebre: delitev celic, mehaniko črpanja krvi skozi srce ter delovanje pospeševalcev biokemijskih reakcij.",
+  };
+
+  for (const [topic, image] of Object.entries(images)) {
+    const ranked = Object.entries(noteBlocks)
+      .map(([name, text]) => [name, scoreBlockForImage({ blockText: text, image })])
+      .sort((left, right) => right[1] - left[1]);
+
+    assert.equal(ranked[0][0], topic, `${topic} image landed on ${ranked[0][0]}`);
+    // Comfortably over the placement threshold, so it is placed on evidence rather than spread.
+    assert.ok(ranked[0][1] > 2, `${topic} scored only ${ranked[0][1].toFixed(2)}`);
+    // A note's overview paragraph names every topic, so it is expected to score moderately for
+    // all of them; what matters is that the section actually about the image wins clearly.
+    assert.ok(
+      ranked[0][1] > ranked[1][1] * 1.5,
+      `${topic}: ${ranked[0][1].toFixed(2)} is not a clear win over ${ranked[1][0]} ${ranked[1][1].toFixed(2)}`,
+    );
+  }
+});

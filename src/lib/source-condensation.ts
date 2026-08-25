@@ -61,8 +61,14 @@ const UNIT_JOINER_COST = 2;
 /**
  * Compression must never be the thing that kills a lecture. When the time budget runs out, the
  * remaining chunks fall back to mechanical selection instead of waiting on the model.
+ *
+ * Sized to leave room for its neighbours rather than to what selection might use: a document
+ * import spends the same 300 s invocation on text extraction and on describing images (60 s of
+ * its own), and a stage that is silently killed by the platform leaves the lecture stuck on a
+ * spinner forever. Measured, this is generous — 3.2 M characters across 67 chunks condensed in
+ * about 28 s, and the chunk count is capped at 32.
  */
-const DEFAULT_TIME_BUDGET_MS = 150_000;
+const DEFAULT_TIME_BUDGET_MS = 90_000;
 
 export type CondensationUnit = {
   label: string | null;

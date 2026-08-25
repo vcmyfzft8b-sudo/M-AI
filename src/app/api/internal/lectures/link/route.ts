@@ -1,6 +1,10 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
+import {
+  getInvocationBudgetMs,
+  runWithinInvocationBudget,
+} from "@/lib/invocation-budget";
 import { enqueueLectureNotesGeneration } from "@/lib/jobs";
 import { processStoredLinkLecture } from "@/lib/link-processing";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
@@ -14,6 +18,9 @@ const requestSchema = z.object({
 
 export const maxDuration = 300;
 const INTERNAL_JOB_MAX_BYTES = 8 * 1024;
+// Ends up verbatim in the lecture's error_message, so keep it about what the user can do. Which
+// link ran out of time is in the Sentry event markLecturePipelineFailed sends.
+const LINK_BUDGET_MESSAGE = "Obdelava je trajala predolgo in se je ustavila. Poskusi znova.";
 
 function getSecretFromRequest(request: Request) {
   const headerSecret = request.headers.get("x-internal-job-secret");
@@ -32,6 +39,7 @@ function getSecretFromRequest(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const invocationStartedAt = Date.now();
   const env = getServerEnv();
   const limited = await enforceRateLimit({
     request,
@@ -57,25 +65,38 @@ export async function POST(request: Request) {
     return parsed.response;
   }
 
-  try {
-    const result = await processStoredLinkLecture({
-      lectureId: parsed.data.lectureId,
-    });
+  // Answer before the work starts, the way /api/internal/lectures/document does. Awaiting the fetch
+  // and extraction here held the caller's own invocation open for the whole run: enqueueInternal
+  // LectureJob awaits this response, so a link that took the full five minutes killed the route
+  // that asked for it too. The caller only reads response.ok to learn the job started, never the
+  // body.
+  after(async () => {
+    try {
+      // The link processing cannot be cancelled, so it keeps running after the budget rejects. That
+      // is fine: the failure is recorded first, and a run that still lands in the remaining seconds
+      // overwrites the row with its own state.
+      const result = await runWithinInvocationBudget({
+        run: () =>
+          processStoredLinkLecture({
+            lectureId: parsed.data.lectureId,
+          }),
+        budgetMs: getInvocationBudgetMs({
+          maxDurationSeconds: maxDuration,
+          elapsedMs: Date.now() - invocationStartedAt,
+        }),
+        deadlineMessage: LINK_BUDGET_MESSAGE,
+      });
 
-    if (result.needsNotesGeneration) {
-      await enqueueLectureNotesGeneration(parsed.data.lectureId);
+      if (result.needsNotesGeneration) {
+        await enqueueLectureNotesGeneration(parsed.data.lectureId);
+      }
+    } catch (error) {
+      await markLecturePipelineFailed({
+        lectureId: parsed.data.lectureId,
+        error,
+      });
     }
-  } catch (error) {
-    await markLecturePipelineFailed({
-      lectureId: parsed.data.lectureId,
-      error,
-    });
-
-    return NextResponse.json({
-      ok: false,
-      error: error instanceof Error ? error.message : "Povezave ni bilo mogoče obdelati.",
-    });
-  }
+  });
 
   return NextResponse.json({ ok: true });
 }

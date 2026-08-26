@@ -9,6 +9,7 @@ import {
 } from "@google/genai";
 import { z } from "zod";
 
+import { WorkAbortedError, getCurrentAbortSignal, isWorkAbortedError } from "@/lib/abort-context";
 import { isRetryableAiError } from "@/lib/ai/errors";
 import { resolvePartMediaResolution } from "@/lib/ai/gemini-models";
 import {
@@ -104,6 +105,10 @@ function createGeminiTempFilePath(file: File, fallback: string) {
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
+  // A request that loses the race can still reject later (e.g. when the budget abort lands);
+  // without a handler that late rejection would surface as an unhandled one.
+  promise.catch(() => undefined);
+
   const timeoutPromise = new Promise<T>((_, reject) => {
     timeoutId = setTimeout(() => {
       reject(new Error(`${label} timed out after ${timeoutMs}ms.`));
@@ -171,6 +176,7 @@ export async function generateStructuredObjectWithGemini<TSchema extends z.ZodTy
   model: string;
   maxOutputTokens?: number;
   maxAttempts?: number;
+  timeoutMs?: number;
   thinkingConfig?: ThinkingConfig;
   usageContext?: GeminiUsageContext;
 }) {
@@ -179,8 +185,18 @@ export async function generateStructuredObjectWithGemini<TSchema extends z.ZodTy
   let useResponseSchema = true;
   const responseSchema = z.toJSONSchema(params.schema);
   const maxAttempts = resolveMaxAttempts(params.maxAttempts);
+  const timeoutMs = params.timeoutMs ?? GEMINI_GENERATION_TIMEOUT_MS;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    // The surrounding invocation budget aborts this signal when it runs out. Checking before the
+    // attempt — and handing the signal to the SDK so the in-flight request dies too — is what
+    // keeps a budget-killed pipeline from continuing to buy tokens as a zombie.
+    const abortSignal = getCurrentAbortSignal();
+
+    if (abortSignal?.aborted) {
+      throw new WorkAbortedError();
+    }
+
     const retryInstruction = buildStructuredRetryInstruction(lastError);
 
     try {
@@ -209,9 +225,10 @@ ${params.input}`,
               ...(useResponseSchema ? { responseSchema } : {}),
               maxOutputTokens,
               ...(params.thinkingConfig ? { thinkingConfig: params.thinkingConfig } : {}),
+              ...(abortSignal ? { abortSignal } : {}),
             },
           }),
-          GEMINI_GENERATION_TIMEOUT_MS,
+          timeoutMs,
           "Gemini structured generation",
         );
 
@@ -271,6 +288,12 @@ ${params.input}`,
         throw error;
       }
     } catch (error) {
+      // An abort is the budget ending, not the model failing — retrying would be the exact
+      // zombie-run behaviour the signal exists to stop.
+      if (isWorkAbortedError(error) || getCurrentAbortSignal()?.aborted) {
+        throw error;
+      }
+
       if (useResponseSchema && isGeminiSchemaTooComplexError(error)) {
         useResponseSchema = false;
       }
@@ -323,6 +346,12 @@ export async function generateStructuredObjectWithGeminiFile<TSchema extends z.Z
     uploadedFileName = uploaded.name ?? null;
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const abortSignal = getCurrentAbortSignal();
+
+      if (abortSignal?.aborted) {
+        throw new WorkAbortedError();
+      }
+
       const retryInstruction = buildStructuredRetryInstruction(lastError);
 
       try {
@@ -355,6 +384,7 @@ ${JSON.stringify(responseSchema)}`,
                 ...(useResponseSchema ? { responseSchema } : {}),
                 maxOutputTokens,
                 ...(params.thinkingConfig ? { thinkingConfig: params.thinkingConfig } : {}),
+                ...(abortSignal ? { abortSignal } : {}),
               },
             }),
             GEMINI_GENERATION_TIMEOUT_MS,
@@ -421,6 +451,10 @@ ${JSON.stringify(responseSchema)}`,
           throw error;
         }
       } catch (error) {
+        if (isWorkAbortedError(error) || getCurrentAbortSignal()?.aborted) {
+          throw error;
+        }
+
         if (useResponseSchema && isGeminiSchemaTooComplexError(error)) {
           useResponseSchema = false;
         }
@@ -477,6 +511,12 @@ export async function generateTextWithGeminiFile(params: {
     uploadedFileName = uploaded.name ?? null;
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const abortSignal = getCurrentAbortSignal();
+
+      if (abortSignal?.aborted) {
+        throw new WorkAbortedError();
+      }
+
       const retryInstruction =
         attempt === 0 || !lastError
           ? ""
@@ -508,6 +548,7 @@ export async function generateTextWithGeminiFile(params: {
                 responseMimeType: "text/plain",
                 maxOutputTokens,
                 ...(params.thinkingConfig ? { thinkingConfig: params.thinkingConfig } : {}),
+                ...(abortSignal ? { abortSignal } : {}),
               },
             }),
             GEMINI_GENERATION_TIMEOUT_MS,
@@ -556,6 +597,10 @@ export async function generateTextWithGeminiFile(params: {
           throw error;
         }
       } catch (error) {
+        if (isWorkAbortedError(error) || getCurrentAbortSignal()?.aborted) {
+          throw error;
+        }
+
         lastError = error;
 
         if (attempt < maxAttempts - 1 && isRetryableAiError(error)) {

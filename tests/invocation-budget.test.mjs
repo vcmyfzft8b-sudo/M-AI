@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { getCurrentAbortSignal } from "../src/lib/abort-context.ts";
 import {
   INVOCATION_BUDGET_SAFETY_MS,
   InvocationBudgetExceededError,
@@ -75,4 +76,75 @@ test("propagates the stage's own failure untouched", async () => {
     }),
     (error) => error === failure,
   );
+});
+
+test("aborts the losing run's signal when the deadline fires", async () => {
+  // The 2026-08-25 spike: the deadline rejected the race, but the losing pipeline kept running
+  // as a zombie — completing, saving notes, and buying tokens next to the retry that replaced
+  // it. The budget now installs an abort signal around the run; every AI call reads it through
+  // the abort context and dies with the budget.
+  let observedSignal;
+
+  await assert.rejects(
+    runWithinInvocationBudget({
+      run: () => {
+        observedSignal = getCurrentAbortSignal();
+        return new Promise(() => {});
+      },
+      budgetMs: 20,
+      deadlineMessage: "deadline",
+    }),
+    InvocationBudgetExceededError,
+  );
+
+  assert.ok(observedSignal instanceof AbortSignal, "the run sees the budget's signal");
+  assert.equal(observedSignal.aborted, true, "the deadline aborts the losing run");
+});
+
+test("a run that finishes in time sees a signal that was still live", async () => {
+  let abortedDuringRun;
+
+  const result = await runWithinInvocationBudget({
+    run: async () => {
+      abortedDuringRun = getCurrentAbortSignal()?.aborted;
+      return "done";
+    },
+    budgetMs: 60_000,
+    deadlineMessage: "unused",
+  });
+
+  assert.equal(result, "done");
+  assert.equal(abortedDuringRun, false);
+});
+
+test("a late rejection from the aborted run stays handled", async () => {
+  // The losing run now rejects once the abort lands. That rejection must never surface as an
+  // unhandled one — the deadline error already reported the failure.
+  let rejectLoser;
+
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on("unhandledRejection", onUnhandled);
+
+  try {
+    await assert.rejects(
+      runWithinInvocationBudget({
+        run: () =>
+          new Promise((_, reject) => {
+            rejectLoser = reject;
+          }),
+        budgetMs: 20,
+        deadlineMessage: "deadline",
+      }),
+      InvocationBudgetExceededError,
+    );
+
+    rejectLoser(new Error("aborted after the race was lost"));
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+  }
 });

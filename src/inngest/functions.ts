@@ -1,8 +1,12 @@
+import { NonRetriableError } from "inngest";
+
 import { inngest } from "@/inngest/client";
 import {
   getInvocationBudgetMs,
   runWithinInvocationBudget,
 } from "@/lib/invocation-budget";
+import { captureRouteError } from "@/lib/monitoring";
+import { isLectureGenerationBudgetExceededError } from "@/lib/notes/generation-guard";
 import {
   generateLectureNotesFromStoredTranscript,
   markLecturePipelineFailed,
@@ -43,6 +47,22 @@ function withStepBudget<T>(run: () => Promise<T>) {
   });
 }
 
+/**
+ * The generation guard tripping means the lecture has already burned a full day's attempt budget;
+ * letting Inngest retry the step four more times would be four more refusals at best and — if the
+ * guard's meter read fails open — four more expensive runs at worst. NonRetriableError makes the
+ * refusal terminal.
+ */
+function rethrowTerminalGenerationErrors(error: unknown): never {
+  if (isLectureGenerationBudgetExceededError(error)) {
+    throw new NonRetriableError(error instanceof Error ? error.message : String(error), {
+      cause: error,
+    });
+  }
+
+  throw error;
+}
+
 export const processLectureFunction = inngest.createFunction(
   { id: "process-lecture" },
   { event: "lecture/process.requested" },
@@ -79,7 +99,7 @@ export const processLectureFunction = inngest.createFunction(
           await generateLectureNotesFromStoredTranscript({
             lectureId: event.data.lectureId,
           });
-        }),
+        }).catch(rethrowTerminalGenerationErrors),
       );
     } catch (error) {
       const outcome = await step.run("mark-lecture-failed", () =>
@@ -110,7 +130,7 @@ export const processLectureNotesFunction = inngest.createFunction(
           await generateLectureNotesFromStoredTranscript({
             lectureId: event.data.lectureId,
           });
-        }),
+        }).catch(rethrowTerminalGenerationErrors),
       );
     } catch (error) {
       const outcome = await step.run("mark-lecture-failed", () =>
@@ -139,6 +159,14 @@ export const processLectureStudyFunction = inngest.createFunction(
           }),
         );
       } catch (error) {
+        // The step swallows the failure on purpose (the deck status carries it to the learner),
+        // but swallowed must not mean invisible: the team hears about it too.
+        captureRouteError(error, {
+          route: "inngest:process-lecture-study",
+          operation: "generateLectureFlashcards",
+          lectureId: event.data.lectureId,
+        });
+
         return {
           ok: false,
           error: error instanceof Error ? error.message : "Unknown flashcard generation error.",
@@ -162,6 +190,12 @@ export const processLectureQuizFunction = inngest.createFunction(
           }),
         );
       } catch (error) {
+        captureRouteError(error, {
+          route: "inngest:process-lecture-quiz",
+          operation: "generateLectureQuiz",
+          lectureId: event.data.lectureId,
+        });
+
         return {
           ok: false,
           error: error instanceof Error ? error.message : "Unknown quiz generation error.",
@@ -186,6 +220,12 @@ export const processLecturePracticeTestFunction = inngest.createFunction(
           }),
         );
       } catch (error) {
+        captureRouteError(error, {
+          route: "inngest:process-lecture-practice-test",
+          operation: "generateLecturePracticeTest",
+          lectureId: event.data.lectureId,
+        });
+
         return {
           ok: false,
           error:

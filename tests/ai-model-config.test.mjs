@@ -215,3 +215,16 @@ test("a window's item count is bounded", () => {
   );
   assert.equal(schema.properties.items.items.properties.terms.maxItems, 4);
 });
+
+test("the outline and write stages get a timeout sized for their output, others keep the default", async () => {
+  const { resolveStageTimeoutMs } = await import("../src/lib/ai/model-config.ts");
+
+  // The outline reads every extracted item and writes a 30-45k token outline; on 2026-08-25 the
+  // shared 90s timeout failed 136 of 236 production outline calls, each retry resending ~150k
+  // input tokens. The write call was hitting the gateway's timeout the same way and falling back
+  // to the direct provider at double the price.
+  assert.equal(resolveStageTimeoutMs("note_outline"), 240_000);
+  assert.equal(resolveStageTimeoutMs("note_write"), 240_000);
+  assert.equal(resolveStageTimeoutMs("note_extract"), undefined);
+  assert.equal(resolveStageTimeoutMs("chat"), undefined);
+});

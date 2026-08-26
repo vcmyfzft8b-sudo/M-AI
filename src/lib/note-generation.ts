@@ -29,11 +29,19 @@ import {
   splitTextForExtraction,
   type IndexedKnowledgeItem,
 } from "@/lib/notes/note-prompts";
+import {
+  generationCacheKey,
+  loadGenerationCache,
+  saveGenerationCacheEntry,
+} from "@/lib/notes/generation-cache";
 import { judgeCollapseDuplicateItems } from "@/lib/study-items";
 import type { NoteGenerationResult, TranscriptSegmentInput } from "@/lib/types";
 
 const NOTE_CHUNK_SUMMARY_CONCURRENCY = 2;
-const NOTE_EXTRACTION_CONCURRENCY = 3;
+// 8 workers, not 3: the extraction phase has to fit inside the Inngest step budget alongside the
+// outline and the write, and at 3 workers a large source spent the whole budget on extraction
+// alone. The windows are small and flash-lite's rate limits sit far above this.
+const NOTE_EXTRACTION_CONCURRENCY = 8;
 
 /**
  * "content" is the measured default: extract every testable claim, outline what the note keeps,
@@ -116,18 +124,46 @@ export async function extractKnowledgeItems(params: {
     sourceType: params.sourceType,
   });
 
+  // Checkpoints from a previous attempt at this same lecture: the step budget can end a run
+  // mid-extraction, and the Inngest retry that follows must pay only for the windows the earlier
+  // attempt did not finish, not for the whole source again.
+  const lectureId = params.usageContext?.lectureId ?? null;
+  const cachedWindows = lectureId
+    ? await loadGenerationCache({ lectureId, stage: "note_extract" })
+    : new Map<string, unknown>();
+
   const extractions = await mapWithConcurrency(
     windows,
     NOTE_EXTRACTION_CONCURRENCY,
     async (window) => {
-      const extraction = await generateStructuredObject({
-        schema: knowledgeExtractionSchema,
-        maxOutputTokens: resolveExtractionMaxOutputTokens(countWords(window.text)),
-        stage: "note_extract",
+      const maxOutputTokens = resolveExtractionMaxOutputTokens(countWords(window.text));
+      const cacheKey = generationCacheKey([
         instructions,
-        input: `${window.label}.\n\n${window.text}`,
-        usageContext: params.usageContext,
-      });
+        window.label,
+        window.text,
+        maxOutputTokens,
+      ]);
+      const cached = knowledgeExtractionSchema.safeParse(cachedWindows.get(cacheKey));
+
+      const extraction = cached.success
+        ? cached.data
+        : await generateStructuredObject({
+            schema: knowledgeExtractionSchema,
+            maxOutputTokens,
+            stage: "note_extract",
+            instructions,
+            input: `${window.label}.\n\n${window.text}`,
+            usageContext: params.usageContext,
+          });
+
+      if (!cached.success && lectureId) {
+        await saveGenerationCacheEntry({
+          lectureId,
+          stage: "note_extract",
+          cacheKey,
+          payload: extraction,
+        });
+      }
 
       // Bounded here as well as in the instructions: a model that ignores the limit would
       // otherwise hand the outline a shredded chunk to triage.
@@ -189,29 +225,53 @@ async function generateNotesContentDriven(
     throw new Error("Knowledge extraction found no study-worthy content in the source.");
   }
 
-  const rawOutline = await generateStructuredObject({
-    schema: noteOutlineSchema,
-    maxOutputTokens: Math.max(2600, items.length * 60),
-    stage: "note_outline",
-    instructions: buildNoteOutlineInstructions({ outputLanguage: params.outputLanguage }),
-    input: JSON.stringify(
-      {
-        sourceType: params.sourceType,
-        sourceLabel: params.sourceLabel,
-        sourceTitleHint: params.sourceTitleHint ?? null,
-        items: items.map(({ id, claim, kind, importance, sectionTitle }) => ({
-          id,
-          claim,
-          kind,
-          importance,
-          sectionTitle,
-        })),
-      },
-      null,
-      2,
-    ),
-    usageContext: params.usageContext,
+  const outlineInstructions = buildNoteOutlineInstructions({ outputLanguage: params.outputLanguage });
+  // Compact JSON on purpose: this is the largest prompt in the pipeline (every extracted item),
+  // and pretty-printing it was pure token overhead on a call that already fights its timeout.
+  const outlineInput = JSON.stringify({
+    sourceType: params.sourceType,
+    sourceLabel: params.sourceLabel,
+    sourceTitleHint: params.sourceTitleHint ?? null,
+    items: items.map(({ id, claim, kind, importance, sectionTitle }) => ({
+      id,
+      claim,
+      kind,
+      importance,
+      sectionTitle,
+    })),
   });
+  const outlineMaxOutputTokens = Math.max(2600, items.length * 60);
+  const lectureId = params.usageContext?.lectureId ?? null;
+  const outlineCacheKey = generationCacheKey([
+    outlineInstructions,
+    outlineInput,
+    outlineMaxOutputTokens,
+  ]);
+  const cachedOutline = lectureId
+    ? noteOutlineSchema.safeParse(
+        (await loadGenerationCache({ lectureId, stage: "note_outline" })).get(outlineCacheKey),
+      )
+    : null;
+
+  const rawOutline = cachedOutline?.success
+    ? cachedOutline.data
+    : await generateStructuredObject({
+        schema: noteOutlineSchema,
+        maxOutputTokens: outlineMaxOutputTokens,
+        stage: "note_outline",
+        instructions: outlineInstructions,
+        input: outlineInput,
+        usageContext: params.usageContext,
+      });
+
+  if (!cachedOutline?.success && lectureId) {
+    await saveGenerationCacheEntry({
+      lectureId,
+      stage: "note_outline",
+      cacheKey: outlineCacheKey,
+      payload: rawOutline,
+    });
+  }
 
   // The model chooses; the bounds on that choice are mechanical. See the function's own comment.
   const outline = enforceOutlineRetentionBounds(rawOutline, items);
@@ -232,15 +292,11 @@ async function generateNotesContentDriven(
       coverageObjective: true,
       pedagogy: true,
     }),
-    input: `Outline to teach:\n${JSON.stringify(
-      {
-        title: outline.title,
-        summary: outline.summary,
-        topics: formatOutlineForWriting({ outline, items }),
-      },
-      null,
-      2,
-    )}\n\nFull source text:\n${sourceText}`,
+    input: `Outline to teach:\n${JSON.stringify({
+      title: outline.title,
+      summary: outline.summary,
+      topics: formatOutlineForWriting({ outline, items }),
+    })}\n\nFull source text:\n${sourceText}`,
     usageContext: params.usageContext,
   });
 

@@ -162,8 +162,15 @@ Then reproduce it, in order of preference:
    verified** (title it with the Sentry issue or PR number so a missed cleanup is
    findable). **The capture is a real user's material: it never goes into the repo, a
    PR body, a commit, a test fixture, or a log line — quote the error, never the
-   content.** For audio sources the capture holds the transcript; the original
-   recording stays at the lecture's `storage_path` in production storage.
+   content.** When the failure is in extraction itself — a PDF/DOCX/PPTX or scan
+   that broke before any text existed — the **original uploaded file** is what you
+   need, and it is already persisted: uploads land in production Supabase storage
+   *before* processing starts, and the capture's `processing_metadata` snapshot
+   carries the stored document's `path`, `fileName` and `mimeType` (audio recordings
+   sit at the lecture's `storage_path`; the capture also holds their transcript).
+   Download the file with the service role, replay it through the matching intake
+   route on the preview, and never re-upload it anywhere but that preview. The
+   file's retention follows the lecture — reproduce while the capture is live.
 3. **A local request** that returns the same failure.
 4. **Reasoning from the stack trace**, when the trigger needs data even the capture
    does not have (a third-party outage, a race).

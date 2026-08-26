@@ -52,8 +52,12 @@ cascade-deleted with the lecture. The triage run reads the capture and replays i
 against the fix's own Preview (staging Supabase, synthetic account, deleted after
 verification — see the exception in [docs/preview-staging.md](/docs/preview-staging.md)),
 so "cannot reproduce, the trigger was a specific upload" stops being a reason to
-guess. The captured material is user content: it is never committed, quoted in a PR,
-turned into a fixture, or logged.
+guess. For file-based sources the original upload itself is also available: documents
+and scans are persisted to production storage before processing begins, and the
+capture's metadata snapshot carries the stored file's path, name and MIME type
+(audio recordings sit at the lecture's `storage_path`). The captured material is
+user content: it is never committed, quoted in a PR, turned into a fixture, or
+logged, and its retention follows the lecture.
 
 4xx responses, warnings, and preview-deployment noise are deliberately ignored.
 

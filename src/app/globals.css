@@ -15525,3 +15525,100 @@ select:disabled {
     animation-iteration-count: 1;
   }
 }
+
+/*
+ * Admin impersonation marker.
+ *
+ * A fixed overlay, never part of the document flow: an admin looking at a learner's account must
+ * see that account exactly as its owner does, and a banner that pushed the page down would change
+ * the very layout being inspected. It sits above the app's own chrome and clears the mobile tab
+ * bar's safe area.
+ */
+.impersonation-pill,
+.impersonation-dot {
+  position: fixed;
+  left: max(0.75rem, env(safe-area-inset-left));
+  bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 4.25rem);
+  z-index: 90;
+}
+
+.impersonation-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem 0.375rem 0.625rem;
+  border-radius: 999px;
+  border: 1px solid var(--red);
+  background: var(--surface-strong);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  font-size: 0.75rem;
+  color: var(--label);
+  max-width: min(22rem, calc(100vw - 1.5rem));
+}
+
+.impersonation-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.impersonation-dot-inline,
+.impersonation-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--red);
+  flex: none;
+}
+
+.impersonation-dot {
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid var(--surface-strong);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+  cursor: pointer;
+  padding: 0;
+}
+
+.impersonation-stop,
+.impersonation-collapse {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--red);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.1875rem 0.5rem;
+  cursor: pointer;
+}
+
+.impersonation-collapse {
+  background: transparent;
+  color: var(--secondary-label);
+  padding: 0.1875rem;
+}
+
+.impersonation-stop[data-pending] {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.impersonation-spin {
+  animation: impersonation-spin 0.9s linear infinite;
+}
+
+@keyframes impersonation-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media print {
+  .impersonation-pill,
+  .impersonation-dot {
+    display: none;
+  }
+}

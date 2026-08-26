@@ -23,6 +23,8 @@ export function NativeSubmitButton({
   children,
   pendingLabel,
   formClassName,
+  fields,
+  confirm,
   ...rest
 }: {
   action: string;
@@ -31,6 +33,10 @@ export function NativeSubmitButton({
   children: ReactNode;
   pendingLabel: string;
   formClassName?: string;
+  /** Hidden inputs to post alongside the press, for row-level actions that name a record. */
+  fields?: Record<string, string>;
+  /** Native confirm before submitting, for presses that should not happen by accident. */
+  confirm?: string;
   "data-variant"?: string;
   "data-size"?: string;
 }) {
@@ -41,8 +47,20 @@ export function NativeSubmitButton({
       action={action}
       method={method}
       className={formClassName}
-      onSubmit={() => setPending(true)}
+      onSubmit={(event) => {
+        if (confirm && !window.confirm(confirm)) {
+          event.preventDefault();
+          return;
+        }
+
+        setPending(true);
+      }}
     >
+      {fields
+        ? Object.entries(fields).map(([name, value]) => (
+            <input key={name} type="hidden" name={name} value={value} />
+          ))
+        : null}
       <button
         type="submit"
         className={className}

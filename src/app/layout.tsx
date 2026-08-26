@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
+import { ImpersonationBannerSlot } from "@/components/impersonation-banner-slot";
 import { ThemeController } from "@/components/theme-controller";
 import { VisitTracker } from "@/components/visit-tracker";
 import {
@@ -106,6 +107,7 @@ export default function RootLayout({
       <body>
         <ThemeController />
         {children}
+        <ImpersonationBannerSlot />
         <VisitTracker />
         <Analytics />
         <SpeedInsights />

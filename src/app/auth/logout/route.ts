@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { restoreAdminSession } from "@/lib/admin/impersonation-restore";
 import { PREVIEW_AUTH_BYPASS_DISABLED_COOKIE } from "@/lib/preview-mode";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
@@ -13,6 +14,15 @@ export async function POST(request: NextRequest) {
 
   if (limited) {
     return limited;
+  }
+
+  // An admin inside someone else's account holds that learner's session, and `signOut()` defaults
+  // to global scope — signing out here would revoke the learner's sessions on their own devices.
+  // Logging out of an impersonated account means leaving it, so it restores the admin instead.
+  const restored = await restoreAdminSession({ request, redirectPath: "/admin/users" });
+
+  if (restored) {
+    return restored;
   }
 
   const url = request.nextUrl.clone();

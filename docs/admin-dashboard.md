@@ -39,7 +39,7 @@ written server-side with the service role after the allowlist check.
 | `/admin/creators/[id]` | One creator: their accounts, every post, and the Memo AI decision per post |
 | `/admin/sales` | Revenue, MRR, trial pipeline and projections, revenue by discount code |
 | `/admin/visitors` | Visits, page views, who is online, top pages, referrers, countries, devices |
-| `/admin/users` | Every account, plan and subscription status, searchable |
+| `/admin/users` | Every account, plan and subscription status, searchable; open any account with **View as user** |
 | `/admin/settings` | Admin allowlist, Memo AI detection rules, collection status |
 
 Every page has a Today / 7 days / 30 days / This month / All time switch, and
@@ -62,6 +62,63 @@ A dashboard left open refreshes itself, on a cadence set per source in
 Refreshing pauses while the tab is hidden and catches up on return, so a
 dashboard left open in a background tab does not spend Stripe and Vercel calls
 all day for nobody to read.
+
+## Viewing the app as a user
+
+**View as user** on `/admin/users` opens that account's app — their notes, their decks, their
+plan, their onboarding state — so you can see what a learner is actually looking at and reproduce
+a problem in the place it happens.
+
+It is a **real session**, not a preview: you can click anything the learner can, including actions
+that write. Treat it as being signed in as them, because you are.
+
+### How it works
+
+The app resolves who you are from the Supabase session and then scopes every read to that user id
+— partly through RLS, mostly through service-role queries filtered by `user_id`. A fabricated
+identity (the shape `PREVIEW_AUTH_BYPASS` uses) would render pages while every request under
+`/api/lectures/**` answered 401, because those routes authenticate independently. So the button
+mints a genuine session for the target instead: `auth.admin.generateLink` produces a magic-link
+token that `verifyOtp` exchanges for real cookies. **This never emails the learner** —
+`generate_link` only generates; the sending endpoints are a different path, and the difference is
+visible in their rate limits (the sending path is throttled after one request, generating is not).
+
+Because the session is genuine, no page, component or API route needs to know the feature exists.
+
+### While you are in
+
+- A small red pill sits bottom-left: *Viewing as <email> · Stop*. It is a fixed overlay, never in
+  the document flow, so the layout you are inspecting is the layout the learner sees. Collapse it
+  to a dot for a clean screenshot; it is deliberately impossible to remove entirely.
+- **Stop** returns you to `/admin/users` as yourself.
+- The app's ordinary **Sign out** also returns you to your own account rather than signing out.
+  This matters: `signOut()` defaults to global scope, so signing out of an impersonated account
+  would revoke *the learner's* sessions on their own devices. Nothing in this feature ever calls
+  it while you are impersonating.
+- Your own session is held in an `httpOnly` `memoai-admin-restore` cookie for the trip back. If it
+  has expired by the time you leave, you are sent to `/admin/login` with the impersonation cleared
+  rather than left stranded inside someone's account.
+
+### Who can do it, and what is recorded
+
+Only emails in `admin_users`, checked on the request itself — the allowlist deliberately refuses
+`PREVIEW_AUTH_BYPASS` sessions, so no preview deployment is a door in. The target is named by id
+and resolved server-side; no email or token is ever accepted from the browser. The **Stop**
+endpoint is gated on the restore cookie instead of the allowlist, because while impersonating your
+session *is* the learner's — an admin check there would refuse the person trying to get out.
+
+Every start writes a row to `admin_impersonation_events` (admin email, target, user agent,
+timestamp) and a `[admin-impersonation]` line to the platform log. There is no end timestamp on
+purpose: an impersonation ends by cookie swap, browser close or token expiry, and a column that is
+usually wrong is worse than none. The audit table is service-role only and keeps rows after an
+account is deleted.
+
+### Using it to fix bugs
+
+For a failed lecture, pair it with the capture in `generation_failure_captures`
+(see [error-triage-automation.md](/docs/error-triage-automation.md)): the capture gives you the
+exact source material that broke, and **View as user** gives you the screen the learner was
+looking at when it did.
 
 ## Adding a creator
 

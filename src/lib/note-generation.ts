@@ -31,8 +31,10 @@ import {
 } from "@/lib/notes/note-prompts";
 import {
   generationCacheKey,
-  loadGenerationCache,
+  loadGenerationCacheEntries,
   saveGenerationCacheEntry,
+  stageModelCacheKeyPart,
+  withGenerationCheckpoint,
 } from "@/lib/notes/generation-cache";
 import { judgeCollapseDuplicateItems } from "@/lib/study-items";
 import type { NoteGenerationResult, TranscriptSegmentInput } from "@/lib/types";
@@ -126,23 +128,37 @@ export async function extractKnowledgeItems(params: {
 
   // Checkpoints from a previous attempt at this same lecture: the step budget can end a run
   // mid-extraction, and the Inngest retry that follows must pay only for the windows the earlier
-  // attempt did not finish, not for the whole source again.
+  // attempt did not finish, not for the whole source again. Keys are computed up front so the
+  // lookup fetches exactly the rows that can hit — never "everything for the stage".
   const lectureId = params.usageContext?.lectureId ?? null;
-  const cachedWindows = lectureId
-    ? await loadGenerationCache({ lectureId, stage: "note_extract" })
-    : new Map<string, unknown>();
+  const modelKeyPart = stageModelCacheKeyPart("note_extract");
+  const windowPlans = windows.map((window) => {
+    const maxOutputTokens = resolveExtractionMaxOutputTokens(countWords(window.text));
 
-  const extractions = await mapWithConcurrency(
-    windows,
-    NOTE_EXTRACTION_CONCURRENCY,
-    async (window) => {
-      const maxOutputTokens = resolveExtractionMaxOutputTokens(countWords(window.text));
-      const cacheKey = generationCacheKey([
+    return {
+      window,
+      maxOutputTokens,
+      cacheKey: generationCacheKey([
+        modelKeyPart,
         instructions,
         window.label,
         window.text,
         maxOutputTokens,
-      ]);
+      ]),
+    };
+  });
+  const cachedWindows = lectureId
+    ? await loadGenerationCacheEntries({
+        lectureId,
+        stage: "note_extract",
+        cacheKeys: windowPlans.map((plan) => plan.cacheKey),
+      })
+    : new Map<string, unknown>();
+
+  const extractions = await mapWithConcurrency(
+    windowPlans,
+    NOTE_EXTRACTION_CONCURRENCY,
+    async ({ window, maxOutputTokens, cacheKey }) => {
       const cached = knowledgeExtractionSchema.safeParse(cachedWindows.get(cacheKey));
 
       const extraction = cached.success
@@ -242,36 +258,27 @@ async function generateNotesContentDriven(
   });
   const outlineMaxOutputTokens = Math.max(2600, items.length * 60);
   const lectureId = params.usageContext?.lectureId ?? null;
-  const outlineCacheKey = generationCacheKey([
-    outlineInstructions,
-    outlineInput,
-    outlineMaxOutputTokens,
-  ]);
-  const cachedOutline = lectureId
-    ? noteOutlineSchema.safeParse(
-        (await loadGenerationCache({ lectureId, stage: "note_outline" })).get(outlineCacheKey),
-      )
-    : null;
 
-  const rawOutline = cachedOutline?.success
-    ? cachedOutline.data
-    : await generateStructuredObject({
+  const rawOutline = await withGenerationCheckpoint({
+    lectureId,
+    stage: "note_outline",
+    cacheKey: generationCacheKey([
+      stageModelCacheKeyPart("note_outline"),
+      outlineInstructions,
+      outlineInput,
+      outlineMaxOutputTokens,
+    ]),
+    schema: noteOutlineSchema,
+    generate: () =>
+      generateStructuredObject({
         schema: noteOutlineSchema,
         maxOutputTokens: outlineMaxOutputTokens,
         stage: "note_outline",
         instructions: outlineInstructions,
         input: outlineInput,
         usageContext: params.usageContext,
-      });
-
-  if (!cachedOutline?.success && lectureId) {
-    await saveGenerationCacheEntry({
-      lectureId,
-      stage: "note_outline",
-      cacheKey: outlineCacheKey,
-      payload: rawOutline,
-    });
-  }
+      }),
+  });
 
   // The model chooses; the bounds on that choice are mechanical. See the function's own comment.
   const outline = enforceOutlineRetentionBounds(rawOutline, items);
@@ -283,21 +290,39 @@ async function generateNotesContentDriven(
 
   // Budgeted from the retained items rather than from a word target: length follows the content,
   // and so does the budget for writing it.
-  const written = await generateStructuredObject({
-    schema: noteWriteSchema,
-    maxOutputTokens: Math.max(4000, retainedItemCount * 170),
+  const writeInstructions = buildNoteWritingInstructions({
+    outputLanguage: params.outputLanguage,
+    coverageObjective: true,
+    pedagogy: true,
+  });
+  const writeInput = `Outline to teach:\n${JSON.stringify({
+    title: outline.title,
+    summary: outline.summary,
+    topics: formatOutlineForWriting({ outline, items }),
+  })}\n\nFull source text:\n${sourceText}`;
+  const writeMaxOutputTokens = Math.max(4000, retainedItemCount * 170);
+
+  // Checkpointed like the outline: this is the single most expensive call in the product, and a
+  // budget that expires after the write but before the artifact is saved must not re-buy it.
+  const written = await withGenerationCheckpoint({
+    lectureId,
     stage: "note_write",
-    instructions: buildNoteWritingInstructions({
-      outputLanguage: params.outputLanguage,
-      coverageObjective: true,
-      pedagogy: true,
-    }),
-    input: `Outline to teach:\n${JSON.stringify({
-      title: outline.title,
-      summary: outline.summary,
-      topics: formatOutlineForWriting({ outline, items }),
-    })}\n\nFull source text:\n${sourceText}`,
-    usageContext: params.usageContext,
+    cacheKey: generationCacheKey([
+      stageModelCacheKeyPart("note_write"),
+      writeInstructions,
+      writeInput,
+      writeMaxOutputTokens,
+    ]),
+    schema: noteWriteSchema,
+    generate: () =>
+      generateStructuredObject({
+        schema: noteWriteSchema,
+        maxOutputTokens: writeMaxOutputTokens,
+        stage: "note_write",
+        instructions: writeInstructions,
+        input: writeInput,
+        usageContext: params.usageContext,
+      }),
   });
 
   const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(written.structuredNotesMd);

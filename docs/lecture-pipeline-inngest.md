@@ -117,6 +117,29 @@ invocation outright. A budget rejection is *not* an expected input failure — i
 `runLectureStage` from the outside, so it propagates to the step and fails it, which is what we
 want.
 
+Since the 2026-08-25 cost incident the budget also **cancels** the losing work: rejecting the
+race is not enough, because the losing pipeline keeps executing on the warm instance —
+completing, saving notes, and buying model calls next to the retry that replaced it. Five
+lectures did exactly that for hours and multiplied the day's Gemini bill by ten.
+`runWithinInvocationBudget` installs an `AbortSignal` through
+[src/lib/abort-context.ts](/src/lib/abort-context.ts) (AsyncLocalStorage, so it needs no
+parameter threading); every Gemini/OpenRouter call reads it, hands it to the SDK, and refuses to
+retry once it fires. If you add a new AI call site, read the signal the same way — a call that
+ignores it re-opens the zombie-spend hole.
+
+Two more consequences of that incident:
+
+- **Retries must resume, not re-buy.** The note pipeline checkpoints extraction windows, judge
+  verdicts, the outline and the write per lecture in `note_generation_cache`
+  ([src/lib/notes/generation-cache.ts](/src/lib/notes/generation-cache.ts)), keyed by a hash of
+  each call's exact input, so a budget-failed step's retry replays them in seconds. The cache is
+  fail-open in both directions and rows die with the lecture.
+- **A lecture's day has a spend ceiling.** `assertLectureGenerationWithinBudget`
+  ([src/lib/notes/generation-guard.ts](/src/lib/notes/generation-guard.ts)) refuses another run
+  once the lecture's last 24h of `ai_usage_events` shows a loop. The refusal is classified on
+  the throwing side of the step (marked failed there, `{ completed: false }` returned), exactly
+  like an expected input failure — it must not cross the step boundary as an error.
+
 ## Checking a pipeline change after it ships
 
 Because previews do not cover this, verify on production right after the merge:

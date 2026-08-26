@@ -14,18 +14,39 @@ import { AsyncLocalStorage } from "node:async_hooks";
  * The store survives `await` boundaries (AsyncLocalStorage follows the async context), so a signal
  * installed around the pipeline entry point is visible inside every extraction worker.
  */
-const abortSignalStore = new AsyncLocalStorage<AbortSignal>();
+type AbortContext = {
+  signal: AbortSignal;
+  /** Epoch ms when the surrounding budget will fire, when the caller knows it. */
+  deadlineAt?: number;
+};
 
-export function runWithAbortSignal<T>(signal: AbortSignal, run: () => Promise<T>): Promise<T> {
-  return abortSignalStore.run(signal, run);
+const abortContextStore = new AsyncLocalStorage<AbortContext>();
+
+export function runWithAbortSignal<T>(
+  signal: AbortSignal,
+  run: () => Promise<T>,
+  options?: { deadlineAt?: number },
+): Promise<T> {
+  return abortContextStore.run({ signal, deadlineAt: options?.deadlineAt }, run);
 }
 
 export function getCurrentAbortSignal(): AbortSignal | undefined {
-  return abortSignalStore.getStore();
+  return abortContextStore.getStore()?.signal;
+}
+
+/**
+ * Milliseconds until the surrounding budget fires, or undefined outside any budget. Lets a call
+ * clamp its own timeout to the time that actually exists: an attempt started with 35s left and a
+ * 240s timeout is a paid-for request whose answer nothing will ever read.
+ */
+export function getRemainingBudgetMs(): number | undefined {
+  const deadlineAt = abortContextStore.getStore()?.deadlineAt;
+
+  return deadlineAt == null ? undefined : Math.max(0, deadlineAt - Date.now());
 }
 
 export function isCurrentWorkAborted() {
-  return abortSignalStore.getStore()?.aborted ?? false;
+  return abortContextStore.getStore()?.signal.aborted ?? false;
 }
 
 export class WorkAbortedError extends Error {

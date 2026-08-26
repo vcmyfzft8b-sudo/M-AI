@@ -1,10 +1,9 @@
-import { NonRetriableError } from "inngest";
-
 import { inngest } from "@/inngest/client";
 import {
   getInvocationBudgetMs,
   runWithinInvocationBudget,
 } from "@/lib/invocation-budget";
+import { isExpectedLectureInputFailure } from "@/lib/lecture-processing-errors";
 import { captureRouteError } from "@/lib/monitoring";
 import { isLectureGenerationBudgetExceededError } from "@/lib/notes/generation-guard";
 import {
@@ -48,19 +47,27 @@ function withStepBudget<T>(run: () => Promise<T>) {
 }
 
 /**
- * The generation guard tripping means the lecture has already burned a full day's attempt budget;
- * letting Inngest retry the step four more times would be four more refusals at best and — if the
- * guard's meter read fails open — four more expensive runs at worst. NonRetriableError makes the
- * refusal terminal.
+ * Runs the notes stage and classifies the generation guard's refusal on the throwing side of the
+ * step, per docs/lecture-pipeline-inngest.md: across the step boundary the error class is
+ * flattened to a bare StepError, so the refusal must be recorded on the lecture *here* — where
+ * the object is still itself — and reported as a completed step, not a failed one. Letting it
+ * fail the step would buy four retried refusals and then an unclassifiable error in the
+ * function body's catch.
  */
-function rethrowTerminalGenerationErrors(error: unknown): never {
-  if (isLectureGenerationBudgetExceededError(error)) {
-    throw new NonRetriableError(error instanceof Error ? error.message : String(error), {
-      cause: error,
-    });
-  }
+async function runNotesStageWithGuard(lectureId: string) {
+  try {
+    await generateLectureNotesFromStoredTranscript({ lectureId });
 
-  throw error;
+    return { completed: true };
+  } catch (error) {
+    if (isLectureGenerationBudgetExceededError(error)) {
+      await markLecturePipelineFailed({ lectureId, error });
+
+      return { completed: false };
+    }
+
+    throw error;
+  }
 }
 
 export const processLectureFunction = inngest.createFunction(
@@ -94,13 +101,15 @@ export const processLectureFunction = inngest.createFunction(
         return;
       }
 
-      await step.run("generate-lecture-notes", () =>
-        withStepBudget(async () => {
-          await generateLectureNotesFromStoredTranscript({
-            lectureId: event.data.lectureId,
-          });
-        }).catch(rethrowTerminalGenerationErrors),
+      // This step returned nothing before the generation guard shipped, so an in-flight run
+      // replays its memoized output as `null` — read with optional chaining on purpose.
+      const generation = await step.run("generate-lecture-notes", () =>
+        withStepBudget(() => runNotesStageWithGuard(event.data.lectureId)),
       );
+
+      if (generation?.completed === false) {
+        return;
+      }
     } catch (error) {
       const outcome = await step.run("mark-lecture-failed", () =>
         markLecturePipelineFailed({
@@ -125,13 +134,14 @@ export const processLectureNotesFunction = inngest.createFunction(
   { event: "lecture/notes.requested" },
   async ({ event, step }) => {
     try {
-      await step.run("generate-lecture-notes", () =>
-        withStepBudget(async () => {
-          await generateLectureNotesFromStoredTranscript({
-            lectureId: event.data.lectureId,
-          });
-        }).catch(rethrowTerminalGenerationErrors),
+      // Same replay contract as above: older runs memoized `null` for this step.
+      const generation = await step.run("generate-lecture-notes", () =>
+        withStepBudget(() => runNotesStageWithGuard(event.data.lectureId)),
       );
+
+      if (generation?.completed === false) {
+        return;
+      }
     } catch (error) {
       const outcome = await step.run("mark-lecture-failed", () =>
         markLecturePipelineFailed({
@@ -160,12 +170,16 @@ export const processLectureStudyFunction = inngest.createFunction(
         );
       } catch (error) {
         // The step swallows the failure on purpose (the deck status carries it to the learner),
-        // but swallowed must not mean invisible: the team hears about it too.
-        captureRouteError(error, {
-          route: "inngest:process-lecture-study",
-          operation: "generateLectureFlashcards",
-          lectureId: event.data.lectureId,
-        });
+        // but swallowed must not mean invisible: the team hears about it too. Expected input
+        // failures stay out of Sentry — this catch is on the throwing side of the step, so the
+        // predicate still sees the real error class.
+        if (!isExpectedLectureInputFailure(error)) {
+          captureRouteError(error, {
+            route: "inngest:process-lecture-study",
+            operation: "generateLectureFlashcards",
+            lectureId: event.data.lectureId,
+          });
+        }
 
         return {
           ok: false,
@@ -190,11 +204,13 @@ export const processLectureQuizFunction = inngest.createFunction(
           }),
         );
       } catch (error) {
-        captureRouteError(error, {
-          route: "inngest:process-lecture-quiz",
-          operation: "generateLectureQuiz",
-          lectureId: event.data.lectureId,
-        });
+        if (!isExpectedLectureInputFailure(error)) {
+          captureRouteError(error, {
+            route: "inngest:process-lecture-quiz",
+            operation: "generateLectureQuiz",
+            lectureId: event.data.lectureId,
+          });
+        }
 
         return {
           ok: false,
@@ -220,11 +236,13 @@ export const processLecturePracticeTestFunction = inngest.createFunction(
           }),
         );
       } catch (error) {
-        captureRouteError(error, {
-          route: "inngest:process-lecture-practice-test",
-          operation: "generateLecturePracticeTest",
-          lectureId: event.data.lectureId,
-        });
+        if (!isExpectedLectureInputFailure(error)) {
+          captureRouteError(error, {
+            route: "inngest:process-lecture-practice-test",
+            operation: "generateLecturePracticeTest",
+            lectureId: event.data.lectureId,
+          });
+        }
 
         return {
           ok: false,

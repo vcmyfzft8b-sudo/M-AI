@@ -9,7 +9,12 @@ import {
 } from "@google/genai";
 import { z } from "zod";
 
-import { WorkAbortedError, getCurrentAbortSignal, isWorkAbortedError } from "@/lib/abort-context";
+import {
+  WorkAbortedError,
+  getCurrentAbortSignal,
+  getRemainingBudgetMs,
+  isWorkAbortedError,
+} from "@/lib/abort-context";
 import { isRetryableAiError } from "@/lib/ai/errors";
 import { resolvePartMediaResolution } from "@/lib/ai/gemini-models";
 import {
@@ -124,6 +129,45 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
   }
 }
 
+/** An attempt this close to the budget deadline cannot finish; starting it only buys a bill. */
+const MIN_ATTEMPT_BUDGET_MS = 15_000;
+/** Room for parsing, logging and the caller's failure handling after the model responds. */
+const ATTEMPT_BUDGET_MARGIN_MS = 5_000;
+
+/**
+ * The timeout one attempt actually gets: the requested stage timeout, clamped to the time the
+ * surrounding invocation budget has left. Without the clamp, an outline retry started with 35s
+ * of budget remaining launches a 240s request — a full-price call whose answer nothing will
+ * ever read, because the budget abort lands first.
+ */
+function resolveAttemptTimeoutMs(requestedTimeoutMs: number) {
+  const remainingMs = getRemainingBudgetMs();
+
+  if (remainingMs == null) {
+    return requestedTimeoutMs;
+  }
+
+  if (remainingMs < MIN_ATTEMPT_BUDGET_MS) {
+    throw new WorkAbortedError(
+      "The invocation budget is nearly spent; not starting another model call.",
+    );
+  }
+
+  return Math.min(requestedTimeoutMs, remainingMs - ATTEMPT_BUDGET_MARGIN_MS);
+}
+
+/**
+ * The signal handed to the SDK for one attempt: the invocation budget's signal joined with the
+ * attempt's own timeout. This is what actually cancels the HTTP request — the `withTimeout`
+ * race alone just abandoned it, and Google bills an abandoned request in full. 136 of 236
+ * production outline calls on 2026-08-25 were exactly that.
+ */
+function buildAttemptSignal(budgetSignal: AbortSignal | undefined, timeoutMs: number) {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+
+  return budgetSignal ? AbortSignal.any([budgetSignal, timeoutSignal]) : timeoutSignal;
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -205,6 +249,7 @@ export async function generateStructuredObjectWithGemini<TSchema extends z.ZodTy
         attempt,
         lastError,
       );
+      const attemptTimeoutMs = resolveAttemptTimeoutMs(timeoutMs);
       let response:
         | Awaited<ReturnType<typeof ai.models.generateContent>>
         | undefined;
@@ -225,10 +270,10 @@ ${params.input}`,
               ...(useResponseSchema ? { responseSchema } : {}),
               maxOutputTokens,
               ...(params.thinkingConfig ? { thinkingConfig: params.thinkingConfig } : {}),
-              ...(abortSignal ? { abortSignal } : {}),
+              abortSignal: buildAttemptSignal(abortSignal, attemptTimeoutMs),
             },
           }),
-          timeoutMs,
+          attemptTimeoutMs + ATTEMPT_BUDGET_MARGIN_MS,
           "Gemini structured generation",
         );
 
@@ -360,6 +405,7 @@ export async function generateStructuredObjectWithGeminiFile<TSchema extends z.Z
           attempt,
           lastError,
         );
+        const attemptTimeoutMs = resolveAttemptTimeoutMs(GEMINI_GENERATION_TIMEOUT_MS);
         let response:
           | Awaited<ReturnType<typeof ai.models.generateContent>>
           | undefined;
@@ -384,10 +430,10 @@ ${JSON.stringify(responseSchema)}`,
                 ...(useResponseSchema ? { responseSchema } : {}),
                 maxOutputTokens,
                 ...(params.thinkingConfig ? { thinkingConfig: params.thinkingConfig } : {}),
-                ...(abortSignal ? { abortSignal } : {}),
+                abortSignal: buildAttemptSignal(abortSignal, attemptTimeoutMs),
               },
             }),
-            GEMINI_GENERATION_TIMEOUT_MS,
+            attemptTimeoutMs + ATTEMPT_BUDGET_MARGIN_MS,
             "Gemini document extraction",
           );
 
@@ -528,6 +574,7 @@ export async function generateTextWithGeminiFile(params: {
         const maxOutputTokens = params.maxOutputTokens
           ? Math.round(params.maxOutputTokens * (attempt === 0 ? 1 : 1 + attempt * 0.4))
           : undefined;
+        const attemptTimeoutMs = resolveAttemptTimeoutMs(GEMINI_GENERATION_TIMEOUT_MS);
         let response:
           | Awaited<ReturnType<typeof ai.models.generateContent>>
           | undefined;
@@ -548,10 +595,10 @@ export async function generateTextWithGeminiFile(params: {
                 responseMimeType: "text/plain",
                 maxOutputTokens,
                 ...(params.thinkingConfig ? { thinkingConfig: params.thinkingConfig } : {}),
-                ...(abortSignal ? { abortSignal } : {}),
+                abortSignal: buildAttemptSignal(abortSignal, attemptTimeoutMs),
               },
             }),
-            GEMINI_GENERATION_TIMEOUT_MS,
+            attemptTimeoutMs + ATTEMPT_BUDGET_MARGIN_MS,
             "Gemini text extraction",
           );
 
@@ -633,6 +680,14 @@ export async function createGeminiEmbeddings(texts: string[]) {
   const embeddings: number[][] = [];
 
   for (let start = 0; start < texts.length; start += GEMINI_EMBEDDING_MAX_BATCH_SIZE) {
+    // Same contract as the generation calls: a budget-killed invocation must not keep walking
+    // the remaining batches as a zombie — large manual imports embed hundreds of segments here.
+    const abortSignal = getCurrentAbortSignal();
+
+    if (abortSignal?.aborted) {
+      throw new WorkAbortedError();
+    }
+
     const batch = texts.slice(start, start + GEMINI_EMBEDDING_MAX_BATCH_SIZE);
     let batchEmbeddings: number[][] | null = null;
     let lastError: unknown = null;
@@ -644,12 +699,17 @@ export async function createGeminiEmbeddings(texts: string[]) {
           contents: batch,
           config: {
             outputDimensionality: GEMINI_EMBEDDING_DIMENSION,
+            ...(abortSignal ? { abortSignal } : {}),
           },
         });
 
         batchEmbeddings = (response.embeddings ?? []).map((embedding) => embedding.values ?? []);
         break;
       } catch (error) {
+        if (isWorkAbortedError(error) || abortSignal?.aborted) {
+          throw error;
+        }
+
         lastError = error;
 
         if (attempt < GEMINI_GENERATION_MAX_ATTEMPTS - 1 && isRetryableAiError(error)) {

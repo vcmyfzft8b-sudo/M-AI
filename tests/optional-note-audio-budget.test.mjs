@@ -102,9 +102,26 @@ test("the failure path checks for finished notes before recording a failure", ()
 test("the Inngest functions only fail a step whose failure was recorded", () => {
   const catches = FUNCTIONS_SOURCE.split("markLecturePipelineFailed(").slice(1);
 
-  assert.equal(catches.length, 2, "expected both lecture-note functions to record failures");
+  assert.equal(
+    catches.length,
+    3,
+    "expected the guard's in-step path plus both lecture-note catch paths to record failures",
+  );
 
-  for (const body of catches) {
+  // The first occurrence is the generation guard's in-step classification: the refusal is
+  // recorded on the throwing side and the step completes with { completed: false } — it must
+  // not fail the step, or Inngest retries a refusal four more times and the function body
+  // reports an unclassifiable StepError.
+  const guardBody = catches[0];
+  const guardReturn = guardBody.indexOf("return { completed: false }");
+
+  assert.ok(guardReturn > 0, "the guard refusal no longer completes its step");
+  assert.ok(
+    guardReturn < guardBody.indexOf("throw error;"),
+    "only unclassified errors may fail the guard's step",
+  );
+
+  for (const body of catches.slice(1)) {
     const rethrow = body.indexOf("throw error;");
 
     assert.ok(rethrow > 0, "the failure is no longer rethrown at all");

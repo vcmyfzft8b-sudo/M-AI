@@ -46,7 +46,9 @@ export async function runWithinInvocationBudget<T>(params: {
   // through the abort context, so the losing run dies with the budget instead of outliving it.
   const abortController = new AbortController();
 
-  const runPromise = runWithAbortSignal(abortController.signal, params.run);
+  const runPromise = runWithAbortSignal(abortController.signal, params.run, {
+    deadlineAt: Date.now() + params.budgetMs,
+  });
 
   // When the deadline wins the race, the losing run now rejects (with the abort) instead of
   // running on — swallow that late rejection so it cannot surface as an unhandled one.

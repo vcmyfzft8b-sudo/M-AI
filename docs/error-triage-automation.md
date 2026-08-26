@@ -47,17 +47,20 @@ Only these, on production only:
 Every failure `markLecturePipelineFailed` records also snapshots the lecture's exact
 source input — manual-import text and blocks, or the joined transcript — into
 `generation_failure_captures`, keyed by `lecture_id` (which every such Sentry event
-carries as a tag). One row per lecture, latest failure wins, pruned after 30 days,
-cascade-deleted with the lecture. The triage run reads the capture and replays it
+carries as a tag). One row per lecture, latest failure wins, pruned after 30 days —
+and deliberately *not* deleted with the lecture. The triage run reads the capture and replays it
 against the fix's own Preview (staging Supabase, synthetic account, deleted after
 verification — see the exception in [docs/preview-staging.md](/docs/preview-staging.md)),
 so "cannot reproduce, the trigger was a specific upload" stops being a reason to
-guess. For file-based sources the original upload itself is also available: documents
-and scans are persisted to production storage before processing begins, and the
-capture's metadata snapshot carries the stored file's path, name and MIME type
-(audio recordings sit at the lecture's `storage_path`). The captured material is
-user content: it is never committed, quoted in a PR, turned into a fixture, or
-logged, and its retention follows the lecture.
+guess. For file-based sources the capture owns its own copies of the original
+uploads: at capture time the writer copies the pending document, scan photos and
+audio recording into the `failure-captures/<lectureId>/` storage prefix and lists
+them in the row's `captured_files`. **The capture — row and file copies — survives
+the learner deleting the lecture**, deliberately: the person whose lecture just
+failed is the person most likely to delete it, and deleting it used to destroy the
+evidence. Retention is the capture's own 30-day prune, which removes the row and its
+copies together. The captured material is user content: it is never committed,
+quoted in a PR, turned into a fixture, or logged.
 
 4xx responses, warnings, and preview-deployment noise are deliberately ignored.
 

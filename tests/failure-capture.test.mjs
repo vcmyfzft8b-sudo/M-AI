@@ -67,3 +67,49 @@ test("a lecture with no source at all still captures the context row", () => {
   assert.equal(record.lecture_id, "lec-1");
   assert.equal(record.language_hint, "sl");
 });
+
+test("every stored original the lecture was built from is referenced, deduped and capped", async () => {
+  const { resolveOriginalFileReferences, MAX_CAPTURED_FILES } = await import(
+    "../src/lib/notes/failure-capture-record.ts"
+  );
+
+  const references = resolveOriginalFileReferences({
+    storagePath: "user-1/lec-1/recording.mp3",
+    processingMetadata: {
+      pendingDocument: { path: "user-1/lec-1/skripta.pdf", fileName: "skripta.pdf", mimeType: "application/pdf" },
+      pendingScanImages: [{ path: "user-1/lec-1/scan-1.jpg" }, { path: "user-1/lec-1/scan-1.jpg" }],
+    },
+    scanImagePaths: ["user-1/lec-1/scan-1.jpg", "user-1/lec-1/scan-2.jpg"],
+  });
+
+  assert.deepEqual(
+    references.map((reference) => reference.path),
+    [
+      "user-1/lec-1/skripta.pdf",
+      "user-1/lec-1/scan-1.jpg",
+      "user-1/lec-1/scan-2.jpg",
+      "user-1/lec-1/recording.mp3",
+    ],
+  );
+  assert.equal(references[0].fileName, "skripta.pdf");
+  assert.equal(references[0].mimeType, "application/pdf");
+
+  // A scan with an absurd number of photos stays bounded.
+  const flood = resolveOriginalFileReferences({
+    storagePath: null,
+    processingMetadata: null,
+    scanImagePaths: Array.from({ length: 40 }, (_, index) => `p/${index}.jpg`),
+  });
+  assert.equal(flood.length, MAX_CAPTURED_FILES);
+});
+
+test("a text-only lecture references no files at all", async () => {
+  const { resolveOriginalFileReferences } = await import(
+    "../src/lib/notes/failure-capture-record.ts"
+  );
+
+  assert.deepEqual(
+    resolveOriginalFileReferences({ storagePath: null, processingMetadata: { manualImport: { text: "x" } }, scanImagePaths: [] }),
+    [],
+  );
+});

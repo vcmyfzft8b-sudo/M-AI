@@ -475,6 +475,7 @@ export type Database = {
           source_blocks: Json | null;
           processing_metadata: Json | null;
           source_char_count: number;
+          captured_files: Json | null;
           captured_at: string;
         };
         Insert: {
@@ -487,6 +488,7 @@ export type Database = {
           source_blocks?: Json | null;
           processing_metadata?: Json | null;
           source_char_count?: number;
+          captured_files?: Json | null;
           captured_at?: string;
         };
         Update: {
@@ -498,6 +500,7 @@ export type Database = {
           source_blocks?: Json | null;
           processing_metadata?: Json | null;
           source_char_count?: number;
+          captured_files?: Json | null;
           captured_at?: string;
         };
       };

@@ -201,8 +201,12 @@ export function recordTimestamp(record) {
 
 const TIMEOUT_PATTERN =
   /FUNCTION_INVOCATION_TIMEOUT|Task timed out after|EDGE_FUNCTION_INVOCATION_TIMEOUT|SANDBOX_.*TIMEOUT/i
+// "[lecture-pipeline]" is the structured line markLecturePipelineFailed writes for every lecture
+// that ends up failed (src/lib/pipeline.ts). It also reaches Sentry, but the two scans are meant
+// to be independently sufficient: a failed lecture must wake the triage run even on a day Sentry
+// drops the event.
 const UNCAUGHT_PATTERN =
-  /Unhandled(?: Promise)? [Rr]ejection|uncaughtException|FUNCTION_INVOCATION_FAILED|^\s*(?:[A-Z]\w*)?Error:|^\s*TypeError:|^\s*ReferenceError:/m
+  /Unhandled(?: Promise)? [Rr]ejection|uncaughtException|FUNCTION_INVOCATION_FAILED|\[lecture-pipeline\]|^\s*(?:[A-Z]\w*)?Error:|^\s*TypeError:|^\s*ReferenceError:/m
 
 // Returns null for anything that is not actionable, which is most of the stream.
 export function classify(record) {

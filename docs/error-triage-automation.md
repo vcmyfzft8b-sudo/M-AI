@@ -35,6 +35,10 @@ Only these, on production only:
 - HTTP 5xx responses
 - function timeouts (`FUNCTION_INVOCATION_TIMEOUT`, `Task timed out after ...`)
 - uncaught runtime exceptions at error or fatal level
+- `[lecture-pipeline]` failure lines — the structured line every failed lecture or
+  study generation writes (`markLecturePipelineFailed`), so a broken learner
+  experience wakes the run from the Vercel side even if the matching Sentry event
+  is lost
 - unresolved Sentry issues with events in the window, even when nothing in the
   Vercel logs matches them
 

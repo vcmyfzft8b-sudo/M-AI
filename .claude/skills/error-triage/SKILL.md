@@ -142,11 +142,33 @@ Then reproduce it, in order of preference:
 
 1. **A failing unit test** in `tests/` that fails before the fix and passes after.
    Strongest evidence, and it stays in the repo.
-2. **A local request** that returns the same failure.
-3. **Reasoning from the stack trace**, when the trigger needs data you do not have
-   (a specific upload, a third-party outage, a real user's row).
+2. **The captured source material**, when the error is a failed lecture or study
+   generation. Every failure recorded by `markLecturePipelineFailed` snapshots the
+   exact input it failed on into `generation_failure_captures` (one row per lecture,
+   latest failure, pruned after 30 days). The Sentry event's `lectureId` tag is the
+   key:
 
-If you land on 3, say so plainly in the PR — "not reproduced locally, reasoned from
+   ```sql
+   select source_type, language_hint, error_message, source_char_count,
+          source_text, source_blocks, processing_metadata
+   from generation_failure_captures where lecture_id = '<lectureId tag>';
+   ```
+
+   Replay `source_text` through the same intake — for text-shaped sources, POST it to
+   `/api/lectures/text` on **your fix's preview deployment** with the staging session
+   recipe (`docs/preview-staging.md`); previews use the staging Supabase, so the
+   replay cannot touch production data. Reproduce the failure there first, then prove
+   the fix on the same input, and **delete the staging lecture once the fix is
+   verified** (title it with the Sentry issue or PR number so a missed cleanup is
+   findable). **The capture is a real user's material: it never goes into the repo, a
+   PR body, a commit, a test fixture, or a log line — quote the error, never the
+   content.** For audio sources the capture holds the transcript; the original
+   recording stays at the lecture's `storage_path` in production storage.
+3. **A local request** that returns the same failure.
+4. **Reasoning from the stack trace**, when the trigger needs data even the capture
+   does not have (a third-party outage, a race).
+
+If you land on 4, say so plainly in the PR — "not reproduced locally, reasoned from
 stack trace" — and put manual reproduction steps in the developer test section. If you
 cannot do even that with confidence, record `needs-human` and move to the next error.
 

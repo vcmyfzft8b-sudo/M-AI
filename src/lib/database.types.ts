@@ -444,6 +444,26 @@ export type Database = {
           generated_at?: string;
         };
       };
+      note_generation_cache: {
+        Row: {
+          lecture_id: string;
+          stage: string;
+          cache_key: string;
+          payload: Json;
+          created_at: string;
+        };
+        Insert: {
+          lecture_id: string;
+          stage: string;
+          cache_key: string;
+          payload: Json;
+          created_at?: string;
+        };
+        Update: {
+          payload?: Json;
+          created_at?: string;
+        };
+      };
       lecture_note_media: {
         Row: {
           id: string;

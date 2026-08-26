@@ -12,8 +12,10 @@ import {
 import {
   applyOutputHeadroom,
   resolveStageModelConfig,
+  resolveStageTimeoutMs,
   type AiStage,
 } from "@/lib/ai/model-config";
+import { isWorkAbortedError } from "@/lib/abort-context";
 import type { GeminiUsageContext } from "@/lib/ai/usage-logging";
 import { getServerEnv } from "@/lib/server-env";
 
@@ -61,6 +63,7 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
   });
 
   const maxOutputTokens = applyOutputHeadroom(params.maxOutputTokens, config);
+  const timeoutMs = resolveStageTimeoutMs(params.stage);
   const usageContext = {
     ...(params.usageContext ?? {}),
     stage: params.usageContext?.stage ?? params.stage,
@@ -89,9 +92,16 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
           apiKey,
           maxOutputTokens,
           thinkingLevel: config.thinkingLevel,
+          ...(timeoutMs ? { timeoutMs } : {}),
           usageContext,
         });
       } catch (error) {
+        // A budget abort is not a gateway failure: falling back would start a fresh full-price
+        // call on an invocation that has already been told to stop.
+        if (isWorkAbortedError(error)) {
+          throw error;
+        }
+
         console.warn(
           `OpenRouter call for ${config.model} failed, falling back to the direct provider.`,
           error,
@@ -106,6 +116,7 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
     input: params.input,
     model: isOpenRouterModel(config.model) ? directModelId(config.model) : config.model,
     maxOutputTokens,
+    ...(timeoutMs ? { timeoutMs } : {}),
     ...(config.thinkingLevel
       ? {
           thinkingConfig: {

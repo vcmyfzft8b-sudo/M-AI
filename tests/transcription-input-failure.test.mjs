@@ -160,11 +160,17 @@ test("classifying inside the step keeps a silent recording out of Sentry and out
 });
 
 test("the failure path and the step ask the same question about an error", () => {
-  const guard = PIPELINE_SOURCE.indexOf("!isExpectedLectureInputFailure(params.error)");
+  const guard = PIPELINE_SOURCE.indexOf(
+    "const expectedInputFailure = isExpectedLectureInputFailure(params.error)",
+  );
   const capture = PIPELINE_SOURCE.indexOf("captureRouteError(params.error");
 
   assert.ok(guard > 0, "the Sentry capture no longer skips expected input failures");
   assert.ok(guard < capture, "the guard must come before the capture it skips");
+  assert.ok(
+    PIPELINE_SOURCE.includes("if (!expectedInputFailure) {"),
+    "the capture must be conditioned on the expected-input predicate",
+  );
 
   const stage = PIPELINE_SOURCE.indexOf("export async function runLectureStage");
   const stageBody = PIPELINE_SOURCE.slice(stage, PIPELINE_SOURCE.indexOf("\nexport ", stage + 1));

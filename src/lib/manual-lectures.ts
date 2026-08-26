@@ -5,6 +5,7 @@ import { isIP } from "node:net";
 
 import { PartMediaResolutionLevel } from "@google/genai";
 
+import { isWorkAbortedError } from "@/lib/abort-context";
 import { resolveMinimalThinkingConfig } from "@/lib/ai/gemini-models";
 import JSZip from "jszip";
 import mammoth from "mammoth";
@@ -1481,6 +1482,12 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
     };
   } catch (error) {
     if (error instanceof NoReadableScanTextError) {
+      throw error;
+    }
+
+    // A budget abort must keep its identity: rewrapping it would report a fabricated provider
+    // outage and let downstream abort handling treat the cancelled run as a retryable failure.
+    if (isWorkAbortedError(error) || isWorkAbortedError(primaryError)) {
       throw error;
     }
 

@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { getCurrentAbortSignal } from "@/lib/abort-context";
 import { GeminiTruncatedOutputError } from "@/lib/ai/structured-output";
 import { parseStructuredText } from "@/lib/ai/structured-output";
 import type { GeminiUsageContext, GeminiUsageMetadata } from "@/lib/ai/usage-logging";
@@ -124,10 +125,14 @@ export async function generateStructuredObjectWithOpenRouter<TSchema extends z.Z
   const responseSchema = z.toJSONSchema(params.schema);
   const maxOutputTokens = params.maxOutputTokens;
   let response: OpenRouterResponse | undefined;
+  // The invocation budget's signal rides along with the request timeout, so a budget-killed
+  // pipeline stops paying for this call instead of finishing it as a zombie.
+  const budgetSignal = getCurrentAbortSignal();
+  const timeoutSignal = AbortSignal.timeout(params.timeoutMs ?? 180_000);
 
   try {
     const raw = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      signal: AbortSignal.timeout(params.timeoutMs ?? 180_000),
+      signal: budgetSignal ? AbortSignal.any([timeoutSignal, budgetSignal]) : timeoutSignal,
       method: "POST",
       headers: {
         "Content-Type": "application/json",

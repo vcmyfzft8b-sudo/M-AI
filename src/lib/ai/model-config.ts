@@ -161,5 +161,22 @@ export function applyOutputHeadroom(maxOutputTokens: number | undefined, config:
   return Math.min(65_536, Math.round(maxOutputTokens * config.outputHeadroom));
 }
 
+/**
+ * Per-stage request timeouts where the shared 90s default is simply wrong for the work. The
+ * outline call reads every extracted item (~150k tokens on a large source) and writes a 30-45k
+ * token outline — on 2026-08-25 that meant 136 of 236 production outline calls hit the 90s
+ * timeout, each abort re-billed by the provider and each retry resending the full input. The
+ * write call carries the outline plus the whole source into a thinking model and was hitting the
+ * gateway's timeout the same way, falling back to the direct provider at double the price.
+ */
+const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
+  note_outline: 240_000,
+  note_write: 240_000,
+};
+
+export function resolveStageTimeoutMs(stage: AiStage) {
+  return STAGE_TIMEOUT_MS[stage];
+}
+
 export const AI_STAGE_MODEL_ENV_KEYS = STAGE_MODEL_ENV_KEYS;
 export const AI_STAGE_THINKING_ENV_KEYS = STAGE_THINKING_ENV_KEYS;

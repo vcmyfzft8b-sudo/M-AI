@@ -1,7 +1,11 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { processStoredDocumentLecture } from "@/lib/document-processing";
+import {
+  getInvocationBudgetMs,
+  runWithinInvocationBudget,
+} from "@/lib/invocation-budget";
 import { enqueueLectureNotesGeneration } from "@/lib/jobs";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -14,6 +18,9 @@ const requestSchema = z.object({
 
 export const maxDuration = 300;
 const INTERNAL_JOB_MAX_BYTES = 8 * 1024;
+// Ends up verbatim in the lecture's error_message, so keep it about what the user can do. Which
+// document ran out of time is in the Sentry event markLecturePipelineFailed sends.
+const DOCUMENT_BUDGET_MESSAGE = "Obdelava je trajala predolgo in se je ustavila. Poskusi znova.";
 
 function getSecretFromRequest(request: Request) {
   const headerSecret = request.headers.get("x-internal-job-secret");
@@ -32,6 +39,7 @@ function getSecretFromRequest(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const invocationStartedAt = Date.now();
   const env = getServerEnv();
   const limited = await enforceRateLimit({
     request,
@@ -57,25 +65,38 @@ export async function POST(request: Request) {
     return parsed.response;
   }
 
-  try {
-    const result = await processStoredDocumentLecture({
-      lectureId: parsed.data.lectureId,
-    });
+  // Answer before the work starts, the way /api/internal/lectures/process does. Awaiting the
+  // extraction here held the caller's own invocation open for the whole run: enqueueInternalLecture
+  // Job awaits this response, so a document that took the full five minutes killed the route that
+  // asked for it too -- POST /api/lectures/pdf and the recovery GET on /api/lectures/[id] both died
+  // alongside it. The caller only reads response.ok to learn the job started, never the body.
+  after(async () => {
+    try {
+      // The extraction cannot be cancelled, so it keeps running after the budget rejects. That is
+      // fine: the failure is recorded first, and a run that still lands in the remaining seconds
+      // overwrites the row with its own state.
+      const result = await runWithinInvocationBudget({
+        run: () =>
+          processStoredDocumentLecture({
+            lectureId: parsed.data.lectureId,
+          }),
+        budgetMs: getInvocationBudgetMs({
+          maxDurationSeconds: maxDuration,
+          elapsedMs: Date.now() - invocationStartedAt,
+        }),
+        deadlineMessage: DOCUMENT_BUDGET_MESSAGE,
+      });
 
-    if (result.needsNotesGeneration) {
-      await enqueueLectureNotesGeneration(parsed.data.lectureId);
+      if (result.needsNotesGeneration) {
+        await enqueueLectureNotesGeneration(parsed.data.lectureId);
+      }
+    } catch (error) {
+      await markLecturePipelineFailed({
+        lectureId: parsed.data.lectureId,
+        error,
+      });
     }
-  } catch (error) {
-    await markLecturePipelineFailed({
-      lectureId: parsed.data.lectureId,
-      error,
-    });
-
-    return NextResponse.json({
-      ok: false,
-      error: error instanceof Error ? error.message : "Dokumenta ni bilo mogoče obdelati.",
-    });
-  }
+  });
 
   return NextResponse.json({ ok: true });
 }

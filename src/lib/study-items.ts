@@ -1,5 +1,8 @@
 import "server-only";
 
+import type { z } from "zod";
+
+import { isWorkAbortedError } from "@/lib/abort-context";
 import { generateStructuredObject } from "@/lib/ai/json";
 import {
   countWords,
@@ -32,6 +35,13 @@ import {
   dedupeQuizDraftsByContent,
 } from "@/lib/notes/study-dedupe";
 import {
+  generationCacheKey,
+  loadGenerationCacheEntries,
+  saveGenerationCacheEntry,
+  stageModelCacheKeyPart,
+  withGenerationCheckpoint,
+} from "@/lib/notes/generation-cache";
+import {
   buildFlashcardInstructions,
   buildPracticeTestInstructions,
   buildQuizInstructions,
@@ -56,7 +66,7 @@ export function resolveStudyPipelineMode() {
   return process.env.STUDY_PIPELINE?.trim().toLowerCase() === "legacy" ? "legacy" : "items";
 }
 
-const STUDY_ITEM_EXTRACTION_CONCURRENCY = 3;
+const STUDY_ITEM_EXTRACTION_CONCURRENCY = 6;
 const STUDY_ITEM_GENERATION_CONCURRENCY = 3;
 
 async function mapWithConcurrency<TInput, TOutput>(
@@ -83,42 +93,109 @@ async function mapWithConcurrency<TInput, TOutput>(
 type StudyUsageContext = { userId?: string | null; lectureId?: string | null };
 
 const DUPLICATE_JUDGE_MAX_ITEMS = 300;
+/**
+ * Bounds judge spend and wall-clock on a pathological item flood: batches beyond this pass
+ * through mechanically deduped only. Six full batches (1,800 items) is far past any healthy
+ * lecture, and the cap is what keeps a user-facing path that reaches this (the practice-test
+ * attempt route) from stacking a dozen serialized model calls in front of the learner.
+ */
+const DUPLICATE_JUDGE_MAX_BATCHES = 6;
+
+async function judgeCollapseDuplicateItemBatch<TItem extends IndexedKnowledgeItem>(
+  items: TItem[],
+  usageContext: StudyUsageContext | undefined,
+): Promise<TItem[]> {
+  // A single item cannot duplicate itself; a call would be pure spend.
+  if (items.length < 2) {
+    return items;
+  }
+
+  const input = items.map((item, index) => `${index}. ${item.claim.slice(0, 130)}`).join("\n");
+  // Checkpointed so a retried generation reaches the same verdicts: the outline checkpoint is
+  // keyed by the item list this judge produces, and a fresh (nondeterministic) judgment on every
+  // attempt would quietly invalidate it.
+  const cacheKey = generationCacheKey([
+    stageModelCacheKeyPart("note_extract"),
+    DUPLICATE_JUDGE_INSTRUCTIONS,
+    input,
+  ]);
+  let result: { verdicts: z.infer<typeof duplicateVerdictSchema>["verdicts"] };
+
+  try {
+    result = await withGenerationCheckpoint({
+      lectureId: usageContext?.lectureId,
+      stage: "item_dedupe",
+      cacheKey,
+      schema: duplicateVerdictSchema,
+      generate: () =>
+        generateStructuredObject({
+          schema: duplicateVerdictSchema,
+          maxOutputTokens: Math.min(16_000, items.length * 16 + 600),
+          stage: "note_extract",
+          instructions: DUPLICATE_JUDGE_INSTRUCTIONS,
+          input,
+          usageContext: { ...(usageContext ?? {}), stage: "item_dedupe" },
+        }),
+    });
+  } catch (error) {
+    // A budget abort is not a judge failure to degrade around — the run is being cancelled.
+    if (isWorkAbortedError(error)) {
+      throw error;
+    }
+
+    // Degrade to "no duplicates found", and checkpoint that verdict too: a deck with some
+    // duplicates beats a failed generation, and the retry must reproduce this exact item list
+    // or the outline checkpoint keyed on it silently misses.
+    result = { verdicts: [] };
+
+    if (usageContext?.lectureId) {
+      await saveGenerationCacheEntry({
+        lectureId: usageContext.lectureId,
+        stage: "item_dedupe",
+        cacheKey,
+        payload: result,
+      });
+    }
+  }
+
+  // Judge indices refer to list positions; collapse works on positional ids.
+  const positional = items.map((item, index) => ({ ...item, id: index }));
+  const survivors = collapseDuplicateItems(positional, result.verdicts);
+  const importanceById = new Map(survivors.map((survivor) => [survivor.id, survivor.importance]));
+
+  return items.flatMap((item, index) =>
+    importanceById.has(index)
+      ? [{ ...item, importance: importanceById.get(index) ?? item.importance }]
+      : [],
+  );
+}
 
 /**
- * One cheap judge call collapses concept duplicates the mechanical merge cannot see —
- * cross-spelling and cross-angle restatements of one fact. Judge failure degrades to the
- * mechanically deduped list: a deck with some duplicates beats a failed generation.
+ * One cheap judge call per batch collapses concept duplicates the mechanical merge cannot see —
+ * cross-spelling and cross-angle restatements of one fact.
+ *
+ * Batched rather than capped at 300: the old early-out skipped the judge entirely above 300
+ * items, which is precisely the lecture that needs deduping most — on 2026-08-25 the skipped
+ * judge left thousands of near duplicates flowing into a ~150k-token outline prompt. A duplicate
+ * pair split across two batches survives, which is still strictly better than judging nothing.
  */
 export async function judgeCollapseDuplicateItems<TItem extends IndexedKnowledgeItem>(
   items: TItem[],
   usageContext?: StudyUsageContext,
 ): Promise<TItem[]> {
-  if (items.length < 2 || items.length > DUPLICATE_JUDGE_MAX_ITEMS) {
+  if (items.length < 2) {
     return items;
   }
 
-  try {
-    const result = await generateStructuredObject({
-      schema: duplicateVerdictSchema,
-      maxOutputTokens: Math.min(16_000, items.length * 16 + 600),
-      stage: "note_extract",
-      instructions: DUPLICATE_JUDGE_INSTRUCTIONS,
-      input: items.map((item, index) => `${index}. ${item.claim.slice(0, 130)}`).join("\n"),
-      usageContext: { ...(usageContext ?? {}), stage: "item_dedupe" },
-    });
+  const batches = chunkStudyItems(items, DUPLICATE_JUDGE_MAX_ITEMS);
+  const judged = batches.slice(0, DUPLICATE_JUDGE_MAX_BATCHES);
+  const passthrough = batches.slice(DUPLICATE_JUDGE_MAX_BATCHES);
 
-    // Judge indices refer to list positions; collapse works on positional ids.
-    const positional = items.map((item, index) => ({ ...item, id: index }));
-    const survivors = collapseDuplicateItems(positional, result.verdicts);
-    const surviving = new Set(survivors.map((item) => item.id));
+  const results = await mapWithConcurrency(judged, 2, (batch) =>
+    judgeCollapseDuplicateItemBatch(batch, usageContext),
+  );
 
-    return items
-      .map((item, index) => ({ item, index, importance: survivors.find((s) => s.id === index)?.importance }))
-      .filter(({ index }) => surviving.has(index))
-      .map(({ item, importance }) => ({ ...item, importance: importance ?? item.importance }));
-  } catch {
-    return items;
-  }
+  return [...results.flat(), ...passthrough.flat()];
 }
 
 const storedKnowledgeItemSchema = {
@@ -228,18 +305,61 @@ export async function extractStudyItems(params: {
     sourceType: params.sourceType,
   });
 
-  const extractions = await mapWithConcurrency(
-    windows,
-    STUDY_ITEM_EXTRACTION_CONCURRENCY,
-    async (window) => {
-      const extraction = await generateStructuredObject({
-        schema: knowledgeExtractionSchema,
-        maxOutputTokens: resolveExtractionMaxOutputTokens(countWords(window.text)),
-        stage: "note_extract",
+  // Same checkpointing as the note pipeline's extraction: a budget-killed run resumes on retry
+  // instead of re-buying every window. This path's windows come from a different builder than
+  // the note pipeline's, so it gets its own cache namespace and its own usage stage — the deck
+  // pipelines must neither pollute the note pipeline's generation guard counters nor force the
+  // note run to page through their rows.
+  const lectureId = params.usageContext?.lectureId ?? null;
+  const modelKeyPart = stageModelCacheKeyPart("note_extract");
+  const windowPlans = windows.map((window) => {
+    const maxOutputTokens = resolveExtractionMaxOutputTokens(countWords(window.text));
+
+    return {
+      window,
+      maxOutputTokens,
+      cacheKey: generationCacheKey([
+        modelKeyPart,
         instructions,
-        input: `${window.label}.\n\n${window.text}`,
-        usageContext: params.usageContext,
-      });
+        window.label,
+        window.text,
+        maxOutputTokens,
+      ]),
+    };
+  });
+  const cachedWindows = lectureId
+    ? await loadGenerationCacheEntries({
+        lectureId,
+        stage: "study_extract",
+        cacheKeys: windowPlans.map((plan) => plan.cacheKey),
+      })
+    : new Map<string, unknown>();
+
+  const extractions = await mapWithConcurrency(
+    windowPlans,
+    STUDY_ITEM_EXTRACTION_CONCURRENCY,
+    async ({ window, maxOutputTokens, cacheKey }) => {
+      const cached = knowledgeExtractionSchema.safeParse(cachedWindows.get(cacheKey));
+
+      const extraction = cached.success
+        ? cached.data
+        : await generateStructuredObject({
+            schema: knowledgeExtractionSchema,
+            maxOutputTokens,
+            stage: "note_extract",
+            instructions,
+            input: `${window.label}.\n\n${window.text}`,
+            usageContext: { ...(params.usageContext ?? {}), stage: "study_extract" },
+          });
+
+      if (!cached.success && lectureId) {
+        await saveGenerationCacheEntry({
+          lectureId,
+          stage: "study_extract",
+          cacheKey,
+          payload: extraction,
+        });
+      }
 
       return {
         passIndex: window.passIndex,

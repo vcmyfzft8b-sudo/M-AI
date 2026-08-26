@@ -2,7 +2,7 @@ import "server-only";
 
 import type { PostgrestError } from "@supabase/supabase-js";
 
-import { isRetryableAiError, toUserFacingAiErrorMessage } from "@/lib/ai/errors";
+import { toUserFacingAiErrorMessage } from "@/lib/ai/errors";
 import { chatAnswerSchema } from "@/lib/ai/schemas";
 import { generateStructuredObject } from "@/lib/ai/json";
 import { createEmbeddings } from "@/lib/ai/embeddings";
@@ -28,6 +28,8 @@ import {
 import type { ChatMessageWithCitations } from "@/lib/types";
 import { isPreparingInitialNoteAudio } from "@/lib/note-audio-stage";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
+import { clearGenerationCache } from "@/lib/notes/generation-cache";
+import { assertLectureGenerationWithinBudget } from "@/lib/notes/generation-guard";
 import { withNoteEnrichmentStage } from "@/lib/note-enrichment-status";
 import {
   markInitialNoteAudioPreparing,
@@ -324,6 +326,10 @@ export async function transcribeLectureContent(params: { lectureId: string }) {
 }
 
 export async function generateLectureNotesFromStoredTranscript(params: { lectureId: string }) {
+  // Before any state change or model call: a lecture that already burned through a day's worth of
+  // generation attempts gets a terminal failure instead of another expensive loop.
+  await assertLectureGenerationWithinBudget(params.lectureId);
+
   const { supabase, lecture } = await getLectureForPipeline(params);
   await updateLectureProcessingState({
     lectureId: lecture.id,
@@ -574,6 +580,10 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
     title: notes.title,
     durationSeconds: lecture.duration_seconds,
   });
+
+  // The checkpoints exist to make retries of an unfinished generation cheap; once the lecture is
+  // ready they are dead weight, and clearing here is what keeps the cache table bounded.
+  await clearGenerationCache(lecture.id);
 }
 
 /**
@@ -650,7 +660,30 @@ export async function markLecturePipelineFailed(params: {
     return { recorded: false };
   }
 
-  if (!isExpectedLectureInputFailure(params.error) && !isRetryableAiError(params.error)) {
+  // Every lecture that ends up failed leaves one structured, searchable line in the platform log
+  // — `vercel logs` filtered on "[lecture-pipeline]" is the operational view. Expected input
+  // failures (no speech in the recording, unreadable scan) are the learner's material, not a
+  // defect, so they log at warn and stay out of Sentry. Everything else logs at error and
+  // reaches Sentry — including AI errors that would have been retryable in the moment: by the
+  // time a lecture is being marked failed the retries are spent, and "the provider timed out
+  // until we gave up" is exactly the kind of failure the team wants an alert for. The old
+  // !isRetryableAiError guard silently dropped every one of the 2026-08-25 outline-timeout
+  // failures.
+  const expectedInputFailure = isExpectedLectureInputFailure(params.error);
+  const logPayload = {
+    lectureId: params.lectureId,
+    userId: lectureMetadata?.user_id ?? null,
+    sourceType: lectureMetadata?.source_type ?? null,
+    error: toErrorMessage(params.error),
+  };
+
+  if (expectedInputFailure) {
+    console.warn("[lecture-pipeline] Lecture failed on its own input", logPayload);
+  } else {
+    console.error("[lecture-pipeline] Lecture failed", logPayload);
+  }
+
+  if (!expectedInputFailure) {
     captureRouteError(params.error, {
       route: "lecture-pipeline",
       operation: "markLecturePipelineFailed",

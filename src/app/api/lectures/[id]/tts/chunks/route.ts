@@ -224,6 +224,7 @@ export async function POST(
   const detail = await getLectureDetailForUser({
     lectureId: id,
     userId: user.id,
+    verifiedLecture: lecture,
   });
 
   if (!detail) {

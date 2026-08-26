@@ -38,6 +38,7 @@ import type {
   StudySession,
 } from "@/lib/types";
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
+import { lectureRowMatchesOwner } from "@/lib/lecture-ownership";
 import {
   getInitialNoteAudioVoice,
   isRecord,
@@ -846,6 +847,12 @@ export async function listLecturesForUser(userId: string): Promise<AppLectureLis
 export async function getLectureDetailForUser(params: {
   lectureId: string;
   userId: string;
+  // The row a caller that has already run ensureUserOwnsLecture is holding. Handing it over
+  // skips the byte-identical ownership query below, which four handlers were otherwise running
+  // a second time per request. It is trusted only when it names this lecture and this owner
+  // (lectureRowMatchesOwner); anything else falls through to the query. Callers that do not
+  // pre-check omit it, and the lookup stays their ownership check.
+  verifiedLecture?: LectureRow | null;
 }): Promise<LectureDetail | null> {
   if (!uuidSchema.safeParse(params.lectureId).success) {
     return null;
@@ -853,27 +860,34 @@ export async function getLectureDetailForUser(params: {
 
   const supabase = await createSupabaseServerClient();
   const service = createSupabaseServiceRoleClient();
+  let lecture: LectureRow | null = lectureRowMatchesOwner(params.verifiedLecture, params)
+    ? (params.verifiedLecture ?? null)
+    : null;
 
-  const { data: lecture, error: lectureError } = await runPostgrestWithTimeout(
-    supabase
-      .from("lectures")
-      .select("*")
-      .eq("id", params.lectureId)
-      .eq("user_id", params.userId)
-      .maybeSingle(),
-    LECTURE_DETAIL_CORE_TIMEOUT_MS,
-    "lecture detail ownership lookup",
-  );
+  if (!lecture) {
+    const { data, error: lectureError } = await runPostgrestWithTimeout(
+      supabase
+        .from("lectures")
+        .select("*")
+        .eq("id", params.lectureId)
+        .eq("user_id", params.userId)
+        .maybeSingle(),
+      LECTURE_DETAIL_CORE_TIMEOUT_MS,
+      "lecture detail ownership lookup",
+    );
 
-  if (lectureError) {
-    throw lectureError;
+    if (lectureError) {
+      throw lectureError;
+    }
+
+    lecture = (data ?? null) as LectureRow | null;
   }
 
   if (!lecture) {
     return null;
   }
 
-  let lectureRow = lecture as LectureRow;
+  let lectureRow = lecture;
   const detailClient = service;
   const failedSections: string[] = [];
 

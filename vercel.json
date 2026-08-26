@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/ugc-sync?force=1",
       "schedule": "50 21 * * *"
+    },
+    {
+      "path": "/api/cron/ai-cost-report",
+      "schedule": "15 4 * * *"
     }
   ]
 }

@@ -9,12 +9,10 @@ import { isWorkAbortedError } from "@/lib/abort-context";
 import { resolveMinimalThinkingConfig } from "@/lib/ai/gemini-models";
 import JSZip from "jszip";
 import mammoth from "mammoth";
-import { z } from "zod";
 
 import { toUserFacingAiErrorMessage } from "@/lib/ai/errors";
 import {
   GeminiEmptyTextOutputError,
-  generateStructuredObjectWithGeminiFile,
   generateTextWithGeminiFile,
 } from "@/lib/ai/gemini";
 import {
@@ -54,6 +52,12 @@ import {
 } from "@/lib/text-source-processing";
 import { createEmbeddings as createAiEmbeddings } from "@/lib/ai/embeddings";
 import {
+  condenseSourceMaterial,
+  MAX_RAW_SOURCE_TEXT_CHARS,
+  PIPELINE_SOURCE_TEXT_TARGET_CHARS,
+} from "@/lib/source-condensation";
+import { createAiChunkSelector } from "@/lib/source-condensation-ai";
+import {
   isUnsupportedVideoContentType,
   getUnsupportedVideoLinkMessage,
   isReadableLinkContentType,
@@ -68,16 +72,6 @@ import {
 } from "@/lib/link-fetch-errors";
 import { serializeVector } from "@/lib/utils";
 
-const pptxVisualExtractionSchema = z.object({
-  title: z.string().min(1),
-  slides: z.array(
-    z.object({
-      slideNumber: z.number().int().positive(),
-      text: z.string().min(20),
-    }),
-  ),
-});
-
 const MAX_LINK_FETCH_REDIRECTS = 3;
 /**
  * A ceiling on how much markup we are willing to pull down, not a judgement about the page.
@@ -88,14 +82,15 @@ const MAX_LINK_FETCH_REDIRECTS = 3;
  * markup was measuring the wrong thing.
  */
 const MAX_LINK_FETCH_BYTES = 8_000_000;
-const MAX_LINK_READABLE_TEXT_CHARS = 45_000;
-const MAX_PREPARED_SOURCE_TEXT_CHARS = 240_000;
+// A long page is no longer sliced to a fixed excerpt: anything up to the raw compression ceiling
+// is kept and the source-condensation pass decides what the pipeline sees. The byte cap above is
+// the only remaining bound on the download itself.
+const MAX_LINK_READABLE_TEXT_CHARS = MAX_RAW_SOURCE_TEXT_CHARS;
 const LINK_FETCH_TIMEOUT_MS = 10_000;
 const TRANSCRIPT_SEGMENT_INSERT_BATCH_SIZE = 25;
 const OCR_PRIMARY_MAX_OUTPUT_TOKENS = 3500;
 const OCR_RESCUE_MAX_OUTPUT_TOKENS = 6000;
 const PDF_FALLBACK_MAX_OUTPUT_TOKENS = 12000;
-const PPTX_VISUAL_EXTRACTION_MAX_OUTPUT_TOKENS = 9000;
 const OCR_MIN_ACCEPTED_TEXT_CHARS = 120;
 // Thinking suppression is version-specific (3.5+ rejects thinkingBudget with a bare 400), so
 // the config is resolved from the model right before each call instead of being a constant.
@@ -460,26 +455,179 @@ function mergePptxVisualSlides(params: {
   });
 }
 
-async function extractVisualTextFromPptx(file: File, slideCount: number) {
+// Gemini's file API refuses the PPTX MIME type outright ("Unsupported MIME type",
+// INVALID_ARGUMENT), so uploading the deck itself never worked — every visual pass fell back to
+// editable text and an image-only deck died as "source too short". The slide images inside the
+// zip ARE accepted, so the visual pass reads those instead, one call per image, mapped back to
+// slides through each slide's relationship part.
+const PPTX_IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
+  bmp: "image/bmp",
+  gif: "image/gif",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
+/** Icons and bullets are smaller than this; slide screenshots and figures are bigger. */
+const MIN_PPTX_VISION_IMAGE_BYTES = 8 * 1024;
+/**
+ * Memory ceilings for the decompression pass. The 4 MB upload cap bounds the *zip*, not what it
+ * inflates to — flat bitmap data deflates 100-1000x, so a hostile or merely screenshot-heavy
+ * deck could otherwise expand to hundreds of megabytes of simultaneous Uint8Arrays inside an
+ * invocation that also holds the zip tree and the extracted text.
+ */
+const MAX_PPTX_VISION_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_PPTX_VISION_TOTAL_BYTES = 64 * 1024 * 1024;
+/** Cost ceiling: one cheap vision call per image, never more than this many per deck. */
+const MAX_PPTX_VISION_IMAGES = 24;
+const PPTX_VISION_IMAGE_MAX_OUTPUT_TOKENS = 2000;
+const PPTX_VISION_CONCURRENCY = 3;
+const PPTX_VISION_NO_CONTENT_MARKER = "NO_STUDY_CONTENT";
+
+async function extractVisualTextFromPptxSlideImages(
+  zip: JSZip,
+  slidePaths: string[],
+): Promise<Array<{ slideNumber: number; text: string }>> {
   const env = getServerEnv();
-  return generateStructuredObjectWithGeminiFile({
-    schema: pptxVisualExtractionSchema,
-    instructions: `Analyze this PowerPoint presentation slide by slide.
+  const candidates: Array<{ slideNumber: number; mediaPath: string; bytes: Uint8Array }> = [];
+  // Deduped across the whole deck, not per slide: a template background referenced by every
+  // slide would otherwise be inflated once per slide, held in N copies, and — being each slide's
+  // largest image — fill all vision slots with the same decorative picture.
+  const seenMediaPaths = new Set<string>();
+  let inflatedBytes = 0;
 
-For each slide, extract the full study-relevant meaning, not just editable text.
-Include:
-- visible text, labels, captions, tables, and speaker notes
-- text inside screenshots or images
-- diagram relationships, arrows, sequences, cause/effect, comparisons, and visual groupings
-- concise descriptions of important visual-only information
+  for (const slidePath of slidePaths) {
+    const slideNumber = getPptxPartNumber(slidePath);
+    const relsPath = slidePath.replace(/^ppt\/slides\//, "ppt/slides/_rels/") + ".rels";
+    const relsXml = await zip.file(relsPath)?.async("string");
 
-Preserve the source language. Do not summarize the whole deck into one answer. Return one item per slide, using slideNumber 1 through ${slideCount}. If a slide is decorative or empty, return a short factual note that it has no study-relevant content.`,
-    file,
-    model: env.GEMINI_TEXT_MODEL,
-    maxOutputTokens: PPTX_VISUAL_EXTRACTION_MAX_OUTPUT_TOKENS,
-    maxAttempts: 2,
-    mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH,
-  });
+    if (!relsXml) {
+      continue;
+    }
+
+    const mediaPaths = Array.from(relsXml.matchAll(/Target="\.\.\/(media\/[^"]+)"/g), (match) =>
+      `ppt/${match[1]}`,
+    );
+
+    for (const mediaPath of new Set(mediaPaths)) {
+      if (seenMediaPaths.has(mediaPath)) {
+        continue;
+      }
+
+      seenMediaPaths.add(mediaPath);
+
+      const extension = mediaPath.split(".").pop()?.toLowerCase() ?? "";
+
+      if (!PPTX_IMAGE_MIME_BY_EXTENSION[extension]) {
+        continue;
+      }
+
+      if (inflatedBytes >= MAX_PPTX_VISION_TOTAL_BYTES) {
+        continue;
+      }
+
+      const bytes = await zip.file(mediaPath)?.async("uint8array");
+
+      if (
+        bytes &&
+        bytes.byteLength >= MIN_PPTX_VISION_IMAGE_BYTES &&
+        bytes.byteLength <= MAX_PPTX_VISION_IMAGE_BYTES
+      ) {
+        inflatedBytes += bytes.byteLength;
+        candidates.push({ slideNumber, mediaPath, bytes });
+      }
+    }
+  }
+
+  // Round-robin by per-slide size rank: every slide gets its largest image looked at before any
+  // slide gets a second one, so the cap cannot starve the tail of a long deck.
+  const bySlide = new Map<number, typeof candidates>();
+
+  for (const candidate of candidates) {
+    const list = bySlide.get(candidate.slideNumber) ?? [];
+    list.push(candidate);
+    bySlide.set(candidate.slideNumber, list);
+  }
+
+  for (const list of bySlide.values()) {
+    list.sort((left, right) => right.bytes.byteLength - left.bytes.byteLength);
+  }
+
+  const selected: typeof candidates = [];
+
+  for (let rank = 0; selected.length < MAX_PPTX_VISION_IMAGES; rank += 1) {
+    const atRank = Array.from(bySlide.values(), (list) => list[rank]).filter(Boolean);
+
+    if (atRank.length === 0) {
+      break;
+    }
+
+    selected.push(...atRank.slice(0, MAX_PPTX_VISION_IMAGES - selected.length));
+  }
+
+  const instructions = `This image is embedded in a lecture slide. Extract its full study-relevant content: transcribe visible text, labels, captions and table contents exactly, and describe diagram relationships, arrows, sequences and comparisons concisely. Preserve the source language; do not translate or summarize away detail. Return only the extracted content as plain text. If the image is purely decorative with no study-relevant content, return exactly: ${PPTX_VISION_NO_CONTENT_MARKER}`;
+
+  const results = new Array<{ slideNumber: number; text: string } | null>(selected.length);
+  let cursor = 0;
+
+  const workers = Array.from(
+    { length: Math.min(PPTX_VISION_CONCURRENCY, selected.length) },
+    async () => {
+      while (cursor < selected.length) {
+        const index = cursor;
+        cursor += 1;
+        const candidate = selected[index];
+        const extension = candidate.mediaPath.split(".").pop()?.toLowerCase() ?? "png";
+
+        try {
+          const text = await generateTextWithGeminiFile({
+            instructions,
+            file: new File([Buffer.from(candidate.bytes)], candidate.mediaPath.split("/").pop() ?? "slide-image", {
+              type: PPTX_IMAGE_MIME_BY_EXTENSION[extension],
+            }),
+            model: env.GEMINI_OCR_MODEL,
+            maxOutputTokens: PPTX_VISION_IMAGE_MAX_OUTPUT_TOKENS,
+            maxAttempts: 1,
+            thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_MODEL),
+            mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM,
+            // Up to 24 vision calls per deck; without a stage they land as anonymous
+            // gemini_text_file rows and the meter cannot name one of the larger intake costs.
+            usageContext: { stage: "pptx_vision" },
+          });
+          const cleaned = normalizeWhitespace(text);
+
+          results[index] =
+            cleaned && !cleaned.includes(PPTX_VISION_NO_CONTENT_MARKER)
+              ? { slideNumber: candidate.slideNumber, text: cleaned }
+              : null;
+        } catch (error) {
+          // One unreadable image must not sink the deck; the merge simply sees less.
+          results[index] = null;
+          captureBackgroundError(error, {
+            operation: "pptx_slide_image_extraction",
+            extra: { mediaPath: candidate.mediaPath, byteLength: candidate.bytes.byteLength },
+          });
+        }
+      }
+    },
+  );
+
+  await Promise.all(workers);
+
+  const textsBySlide = new Map<number, string[]>();
+
+  for (const result of results) {
+    if (result) {
+      const list = textsBySlide.get(result.slideNumber) ?? [];
+      list.push(result.text);
+      textsBySlide.set(result.slideNumber, list);
+    }
+  }
+
+  return Array.from(textsBySlide.entries(), ([slideNumber, texts]) => ({
+    slideNumber,
+    text: texts.join("\n"),
+  }));
 }
 
 async function extractTextFromPptx(file: File) {
@@ -524,16 +672,14 @@ async function extractTextFromPptx(file: File) {
     mediaCount: mediaPaths.length,
     slides,
   });
-  let titleFromVisual: string | null = null;
   let mergedSlides = slides;
 
   if (shouldUseVisualExtraction) {
     try {
-      const visualExtraction = await extractVisualTextFromPptx(file, slideCount);
-      titleFromVisual = visualExtraction.title;
+      const visualSlides = await extractVisualTextFromPptxSlideImages(zip, slidePaths);
       mergedSlides = mergePptxVisualSlides({
         extractedSlides: slides,
-        visualSlides: visualExtraction.slides,
+        visualSlides,
       });
     } catch (error) {
       console.warn("PPTX visual extraction failed; using editable slide text only.", error);
@@ -550,7 +696,6 @@ async function extractTextFromPptx(file: File) {
       .join("\n\n"),
   );
   const title =
-    titleFromVisual ||
     mergedSlides[0]?.text
       .split(/[.!?\n]/)
       .map((line) => line.trim())
@@ -1444,6 +1589,70 @@ async function updateLectureEnrichmentProcessingStage(params: {
   }
 }
 
+type FittedSourceText = {
+  text: string;
+  blocks?: StructuredSourceBlock[];
+  sourceCompression: Record<string, unknown> | null;
+};
+
+/**
+ * Every text source passes through here on its way into the pipeline. Sources that fit are
+ * returned untouched; oversized ones are compressed down to what the note pipeline can process
+ * in one step, instead of being rejected with "split it into smaller parts" as before. Only
+ * material beyond the raw ceiling — several times a full textbook — is still refused.
+ */
+async function fitSourceTextToPipeline(params: {
+  cleanedText: string;
+  blocks?: StructuredSourceBlock[];
+  userId?: string;
+  lectureId?: string | null;
+}): Promise<FittedSourceText> {
+  // Blocks are what the pipeline actually reads when they exist, and they are not always the same
+  // size as the plain text beside them: a document import appends each picture's description to
+  // the block it came from, so the blocks can carry more than `text` does. Measuring the smaller
+  // of the two would wave a source through that is over capacity once the blocks are used.
+  const blocksChars = params.blocks?.reduce((sum, block) => sum + block.text.length, 0) ?? 0;
+  const sourceChars = Math.max(params.cleanedText.length, blocksChars);
+
+  if (sourceChars <= PIPELINE_SOURCE_TEXT_TARGET_CHARS) {
+    return { text: params.cleanedText, blocks: params.blocks, sourceCompression: null };
+  }
+
+  if (sourceChars > MAX_RAW_SOURCE_TEXT_CHARS) {
+    throw new ExpectedLectureInputError(
+      "This source is too large to process even with compression. Please split it into a few parts and try again.",
+      "source_too_large",
+    );
+  }
+
+  const condensed = await condenseSourceMaterial({
+    text: params.cleanedText,
+    blocks: params.blocks,
+    targetChars: PIPELINE_SOURCE_TEXT_TARGET_CHARS,
+    selector: createAiChunkSelector({
+      stage: "source_condense",
+      userId: params.userId ?? null,
+      lectureId: params.lectureId ?? null,
+    }),
+  });
+
+  const text = normalizeWhitespace(condensed.text);
+  // The selection budgets already keep the result under target; this guard exists because the
+  // note pipeline's step budget is sized to this number and must never see more.
+  const withinTarget = text.length <= PIPELINE_SOURCE_TEXT_TARGET_CHARS;
+  const boundedText = withinTarget ? text : text.slice(0, PIPELINE_SOURCE_TEXT_TARGET_CHARS);
+
+  return {
+    text: boundedText,
+    // A sliced text no longer lines up with the condensed blocks, so structure is dropped with it.
+    blocks: withinTarget ? (condensed.blocks ?? undefined) : undefined,
+    sourceCompression: {
+      ...condensed.meta,
+      compressedAt: new Date().toISOString(),
+    },
+  };
+}
+
 export async function createLectureFromTextSource(params: {
   userId: string;
   sourceType: string;
@@ -1466,14 +1675,16 @@ export async function createLectureFromTextSource(params: {
     );
   }
 
-  if (cleanedText.length > MAX_PREPARED_SOURCE_TEXT_CHARS) {
-    throw new ExpectedLectureInputError(
-      "This source is too large to process at once. Please split it into smaller parts and try again.",
-      "source_too_large",
-    );
-  }
+  const fitted = await fitSourceTextToPipeline({
+    cleanedText,
+    blocks: params.blocks,
+    userId: params.userId,
+    lectureId: params.lectureId ?? null,
+  });
+  const sourceText = fitted.text;
+  const sourceBlocks = fitted.blocks;
 
-  const durationSeconds = estimateTextSourceDurationSeconds(cleanedText);
+  const durationSeconds = estimateTextSourceDurationSeconds(sourceText);
   let lectureId: string | null = null;
 
   async function requireActiveLecture(targetLectureId: string) {
@@ -1513,8 +1724,9 @@ export async function createLectureFromTextSource(params: {
                 sourceType: params.sourceType,
                 titleHint: params.titleHint ?? null,
                 modelMetadata: params.modelMetadata ?? {},
-                text: cleanedText,
-                blocks: params.blocks ?? null,
+                text: sourceText,
+                blocks: sourceBlocks ?? null,
+                sourceCompression: fitted.sourceCompression,
               },
             },
           } as never,
@@ -1543,8 +1755,9 @@ export async function createLectureFromTextSource(params: {
                 sourceType: params.sourceType,
                 titleHint: params.titleHint ?? null,
                 modelMetadata: params.modelMetadata ?? {},
-                text: cleanedText,
-                blocks: params.blocks ?? null,
+                text: sourceText,
+                blocks: sourceBlocks ?? null,
+                sourceCompression: fitted.sourceCompression,
               },
             },
           } as never,
@@ -1559,8 +1772,8 @@ export async function createLectureFromTextSource(params: {
       lectureId = (lecture as { id: string }).id;
     }
     const transcript = buildSyntheticTranscriptFromTextSource({
-      text: cleanedText,
-      blocks: params.blocks,
+      text: sourceText,
+      blocks: sourceBlocks,
       sourceType: params.sourceType,
     });
 
@@ -1636,11 +1849,21 @@ export async function createLectureFromTextSource(params: {
     const documentImages = getStoredDocumentImagesFromMetadata(params.modelMetadata ?? {});
 
     if (documentImages.length > 0) {
-      await attachDocumentImagesToNotes({
-        lectureId,
-        structuredNotesMd: notes.structuredNotesMd,
-        documentImages,
-      });
+      // The note is already saved by this point; a picture that cannot find its paragraph must
+      // not take the finished text down with it.
+      try {
+        await attachDocumentImagesToNotes({
+          lectureId,
+          structuredNotesMd: notes.structuredNotesMd,
+          documentImages,
+        });
+      } catch (error) {
+        console.warn("Placing document images failed; the note keeps its text.", error);
+        captureBackgroundError(error, {
+          operation: "document_image_placement",
+          extra: { lectureId },
+        });
+      }
     }
 
     const { error: enrichmentCompleteError } = await supabase
@@ -1749,14 +1972,14 @@ export async function prepareLectureFromTextSource(params: {
     );
   }
 
-  if (cleanedText.length > MAX_PREPARED_SOURCE_TEXT_CHARS) {
-    throw new ExpectedLectureInputError(
-      "This source is too large to process at once. Please split it into smaller parts and try again.",
-      "source_too_large",
-    );
-  }
+  const fitted = await fitSourceTextToPipeline({
+    cleanedText,
+    blocks: params.blocks,
+    userId: params.userId,
+    lectureId: params.lectureId ?? null,
+  });
 
-  const durationSeconds = estimateTextSourceDurationSeconds(cleanedText);
+  const durationSeconds = estimateTextSourceDurationSeconds(fitted.text);
   const titleHint = params.titleHint == null ? null : stripUnstorableCharacters(params.titleHint);
   // Blocks, the title hint and model metadata reach us straight from the extractor, so clean
   // the whole payload here rather than trusting every producer to have done it.
@@ -1767,8 +1990,9 @@ export async function prepareLectureFromTextSource(params: {
       sourceType: params.sourceType,
       titleHint,
       modelMetadata: params.modelMetadata ?? {},
-      text: cleanedText,
-      blocks: params.blocks ?? null,
+      text: fitted.text,
+      blocks: fitted.blocks ?? null,
+      sourceCompression: fitted.sourceCompression,
     },
     processing: {
       stage: "queued",

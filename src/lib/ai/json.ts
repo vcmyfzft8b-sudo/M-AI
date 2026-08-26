@@ -41,6 +41,8 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
   input: string;
   maxOutputTokens?: number;
   stage?: AiStage;
+  /** For callers with their own fallback (e.g. condensation's mechanical selection): a retry ladder there is pure spend. */
+  maxAttempts?: number;
   usageContext?: GeminiUsageContext;
 }) {
   const env = getServerEnv();
@@ -52,6 +54,7 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
       input: params.input,
       model: env.GEMINI_TEXT_MODEL,
       maxOutputTokens: params.maxOutputTokens,
+      ...(params.maxAttempts ? { maxAttempts: params.maxAttempts } : {}),
       usageContext: params.usageContext,
     });
   }
@@ -117,6 +120,7 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
     model: isOpenRouterModel(config.model) ? directModelId(config.model) : config.model,
     maxOutputTokens,
     ...(timeoutMs ? { timeoutMs } : {}),
+    ...(params.maxAttempts ? { maxAttempts: params.maxAttempts } : {}),
     ...(config.thinkingLevel
       ? {
           thinkingConfig: {

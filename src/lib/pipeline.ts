@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { PostgrestError } from "@supabase/supabase-js";
+import { z } from "zod";
 
 import { toUserFacingAiErrorMessage } from "@/lib/ai/errors";
 import { chatAnswerSchema } from "@/lib/ai/schemas";
@@ -19,7 +20,7 @@ import {
   getInitialNoteAudioVoice,
   shouldCreateInitialNoteAudio,
 } from "@/lib/lecture-source-metadata";
-import { captureRouteError } from "@/lib/monitoring";
+import { captureBackgroundError, captureRouteError } from "@/lib/monitoring";
 import {
   buildSyntheticTranscriptFromTextSource,
   estimateTextSourceDurationSeconds,
@@ -28,7 +29,12 @@ import {
 import type { ChatMessageWithCitations } from "@/lib/types";
 import { isPreparingInitialNoteAudio } from "@/lib/note-audio-stage";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
-import { clearGenerationCache } from "@/lib/notes/generation-cache";
+import {
+  clearGenerationCache,
+  generationCacheKey,
+  stageModelCacheKeyPart,
+  withGenerationCheckpoint,
+} from "@/lib/notes/generation-cache";
 import { assertLectureGenerationWithinBudget } from "@/lib/notes/generation-guard";
 import { withNoteEnrichmentStage } from "@/lib/note-enrichment-status";
 import {
@@ -36,6 +42,11 @@ import {
   prepareInitialNoteTtsChunksSafely,
 } from "@/lib/note-tts";
 import { NoReadableScanTextError } from "@/lib/scan-ocr-errors";
+import {
+  condenseTranscriptForNotes,
+  PIPELINE_SOURCE_TEXT_TARGET_CHARS,
+} from "@/lib/source-condensation";
+import { createAiChunkSelector } from "@/lib/source-condensation-ai";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { normalizeMimeType } from "@/lib/storage";
 import { serializeVector } from "@/lib/utils";
@@ -45,6 +56,40 @@ import { NoClearSpeechDetectedError } from "@/lib/transcription/types";
 const transcriptionProvider = getTranscriptionProvider();
 const EMBEDDING_BATCH_SIZE = 100;
 const TRANSCRIPT_SEGMENT_INSERT_BATCH_SIZE = 25;
+
+/** Validates a replayed condensation checkpoint before it stands in for the model's selection. */
+const condensedTranscriptCheckpointSchema = z.object({
+  segments: z.array(
+    z.object({
+      idx: z.number(),
+      startMs: z.number(),
+      endMs: z.number(),
+      speakerLabel: z.string().nullable(),
+      text: z.string(),
+    }),
+  ),
+  meta: z.record(z.string(), z.unknown()),
+});
+
+/** Keeps whole segments while they fit; the first one is always kept so the result is never empty. */
+function clampSegmentsToChars<TSegment extends { text: string }>(
+  segments: TSegment[],
+  maxChars: number,
+) {
+  const kept: TSegment[] = [];
+  let total = 0;
+
+  for (const segment of segments) {
+    if (kept.length > 0 && total + segment.text.length > maxChars) {
+      break;
+    }
+
+    kept.push(segment);
+    total += segment.text.length;
+  }
+
+  return kept;
+}
 
 type LecturePipelineRow = {
   id: string;
@@ -426,7 +471,7 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
     }));
   }
 
-  const segments = storedSegments.map((segment) => ({
+  let segments = storedSegments.map((segment) => ({
     idx: segment.idx,
     startMs: segment.start_ms,
     endMs: segment.end_ms,
@@ -436,6 +481,61 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
 
   if (segments.length === 0) {
     throw new Error("Transcript is empty.");
+  }
+
+  // Text sources are compressed to the pipeline target before they are stored, but real audio
+  // transcripts arrive here uncapped — an unusually long or dense recording can exceed what note
+  // generation handles inside one step budget. Only the note input shrinks: the stored transcript,
+  // its embeddings, chat and study features keep the full text.
+  const transcriptChars = segments.reduce((sum, segment) => sum + segment.text.length, 0);
+  let transcriptCompression: Record<string, unknown> | null = null;
+
+  if (transcriptChars > PIPELINE_SOURCE_TEXT_TARGET_CHARS) {
+    // Checkpointed like every other stage in this step: selection is a model call, so replaying
+    // it on an Inngest retry would both re-pay for it and hand the retry *different* condensed
+    // text — which would silently invalidate every extraction checkpoint keyed on that text and
+    // re-buy the whole pipeline, the exact loop the checkpoints exist to stop.
+    const condensed = await withGenerationCheckpoint({
+      lectureId: lecture.id,
+      stage: "source_condense",
+      cacheKey: generationCacheKey([
+        stageModelCacheKeyPart("source_condense"),
+        PIPELINE_SOURCE_TEXT_TARGET_CHARS,
+        ...segments.map((segment) => segment.text),
+      ]),
+      schema: condensedTranscriptCheckpointSchema,
+      generate: () =>
+        condenseTranscriptForNotes({
+          segments,
+          targetChars: PIPELINE_SOURCE_TEXT_TARGET_CHARS,
+          selector: createAiChunkSelector({
+            stage: "source_condense",
+            userId: lecture.user_id,
+            lectureId: lecture.id,
+          }),
+        }),
+    });
+
+    // Condensation must never hand note generation nothing (a degenerate transcript whose every
+    // unit overflows its budget can select zero units) and never meaningfully more than the
+    // target the step budget is sized for.
+    const condensedSegments =
+      condensed.segments.length > 0
+        ? condensed.segments
+        : clampSegmentsToChars(segments, PIPELINE_SOURCE_TEXT_TARGET_CHARS);
+
+    if (condensed.segments.length === 0) {
+      console.warn(
+        "[lecture-pipeline] Condensation kept no segments; using a mechanical prefix instead",
+        { lectureId: lecture.id },
+      );
+    }
+
+    segments = clampSegmentsToChars(
+      condensedSegments,
+      Math.round(PIPELINE_SOURCE_TEXT_TARGET_CHARS * 1.05),
+    );
+    transcriptCompression = { ...condensed.meta };
   }
 
   const sourceLabel =
@@ -470,6 +570,7 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
   const baseModelMetadata = {
     ...notes.modelMetadata,
     ...manualModelMetadata,
+    ...(transcriptCompression ? { transcriptCompression } : {}),
   };
 
   const { error: artifactError } = await supabase
@@ -502,11 +603,21 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
   const documentImages = getStoredDocumentImagesFromMetadata(manualModelMetadata);
 
   if (documentImages.length > 0) {
-    await attachDocumentImagesToNotes({
-      lectureId: lecture.id,
-      structuredNotesMd: notes.structuredNotesMd,
-      documentImages,
-    });
+    // Placement runs after the notes are already saved, so failing here would throw away a
+    // finished note over a picture that could not find its paragraph.
+    try {
+      await attachDocumentImagesToNotes({
+        lectureId: lecture.id,
+        structuredNotesMd: notes.structuredNotesMd,
+        documentImages,
+      });
+    } catch (error) {
+      console.warn("Placing document images failed; the note keeps its text.", error);
+      captureBackgroundError(error, {
+        operation: "document_image_placement",
+        extra: { lectureId: lecture.id },
+      });
+    }
   }
 
   const { error: enrichmentCompleteError } = await supabase

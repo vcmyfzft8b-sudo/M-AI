@@ -36,7 +36,7 @@ const scanLectureFieldsSchema = z.object({
   text: z
     .union([z.string(), z.null()])
     .transform((value) => (typeof value === "string" ? value.trim() : ""))
-    .refine((value) => value.length <= 120000, {
+    .refine((value) => value.length <= 4_000_000, {
       message: "Text is too long.",
     }),
   createInitialAudio: z
@@ -67,7 +67,7 @@ const storedScanLectureSchema = z.object({
     .optional()
     .default("")
     .transform((value) => value.trim())
-    .refine((value) => value.length <= 120000, {
+    .refine((value) => value.length <= 4_000_000, {
       message: "Text is too long.",
     }),
   images: z.array(storedScanImageSchema).min(1).max(MAX_SCAN_IMAGE_COUNT),
@@ -105,8 +105,10 @@ export async function POST(request: Request) {
 
   try {
     if (request.headers.get("content-type")?.includes("application/json")) {
+      // The JSON body carries the pasted companion text alongside the stored-image descriptors,
+      // so its cap matches the text route rather than a descriptor-sized payload.
       const parsed = await parseJsonRequest(request, storedScanLectureSchema, {
-        maxBytes: 64 * 1024,
+        maxBytes: 4 * 1024 * 1024 + 256 * 1024,
       });
 
       if (!parsed.success) {

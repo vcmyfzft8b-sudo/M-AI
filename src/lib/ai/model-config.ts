@@ -4,6 +4,7 @@
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
 
 export const AI_STAGES = [
+  "source_condense",
   "note_extract",
   "note_outline",
   "note_write",
@@ -36,6 +37,9 @@ type StageDefaults = {
 };
 
 const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
+  // Selection over one chunk at a time: reads a lot, writes unit numbers. Same profile as
+  // extraction — high volume, local judgment, and thinking measurably hurts this kind of call.
+  source_condense: { thinkingLevel: "minimal", outputHeadroom: 1 },
   // High volume, one chunk at a time, no cross-chunk judgment to make.
   note_extract: { thinkingLevel: "minimal", outputHeadroom: 1 },
   // Decides what the finished note covers and drops. One call per source, so thinking is cheap
@@ -53,6 +57,7 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
 };
 
 const STAGE_MODEL_ENV_KEYS: Record<AiStage, string> = {
+  source_condense: "GEMINI_SOURCE_CONDENSE_MODEL",
   note_extract: "GEMINI_NOTE_EXTRACT_MODEL",
   note_outline: "GEMINI_NOTE_OUTLINE_MODEL",
   note_write: "GEMINI_NOTE_WRITE_MODEL",
@@ -62,6 +67,7 @@ const STAGE_MODEL_ENV_KEYS: Record<AiStage, string> = {
 };
 
 const STAGE_THINKING_ENV_KEYS: Record<AiStage, string> = {
+  source_condense: "GEMINI_SOURCE_CONDENSE_THINKING",
   note_extract: "GEMINI_NOTE_EXTRACT_THINKING",
   note_outline: "GEMINI_NOTE_OUTLINE_THINKING",
   note_write: "GEMINI_NOTE_WRITE_THINKING",
@@ -166,6 +172,10 @@ export function applyOutputHeadroom(maxOutputTokens: number | undefined, config:
 const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
   note_outline: 240_000,
   note_write: 240_000,
+  // The selector reads ~48k chars and writes only unit numbers; measured runs finish in seconds.
+  // A short leash matters because condensation runs inline in intake routes: one stalled call
+  // must not eat the invocation that six concurrent chunks share.
+  source_condense: 60_000,
 };
 
 export function resolveStageTimeoutMs(stage: AiStage) {

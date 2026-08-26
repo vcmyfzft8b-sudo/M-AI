@@ -24,6 +24,7 @@ import {
   isCanonicalLectureDocumentStoragePath,
   normalizeUploadDocumentMimeType,
 } from "@/lib/storage";
+import { captureBackgroundError } from "@/lib/monitoring";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 type StoredDocumentSource = {
@@ -229,12 +230,24 @@ export async function processStoredDocumentLecture(params: {
     throw new Error(imageStatusError.message);
   }
 
-  const extractedImages = await extractDocumentImages(file);
-  const documentImages = await storeDocumentImagesAsNoteMedia({
-    lectureId: lectureRow.id,
-    userId: lectureRow.user_id,
-    images: extractedImages,
-  });
+  // Pictures enrich the note; they never decide whether it exists. Storage talks to Supabase and
+  // can fail on its own, so it is contained here as well as inside the extractor.
+  let documentImages: StoredDocumentNoteImage[] = [];
+
+  try {
+    const extractedImages = await extractDocumentImages(file);
+    documentImages = await storeDocumentImagesAsNoteMedia({
+      lectureId: lectureRow.id,
+      userId: lectureRow.user_id,
+      images: extractedImages,
+    });
+  } catch (error) {
+    console.warn("Storing document images failed; continuing without pictures.", error);
+    captureBackgroundError(error, {
+      operation: "document_image_storage",
+      extra: { lectureId: lectureRow.id },
+    });
+  }
   const titleHint = extracted.title || pendingDocument.fileName.replace(/\.[^.]+$/i, "");
   const extractedPageBlocks = extracted.pages.map((page) => ({
     label: sourceType === "presentation" ? `Prosojnica ${page.pageNumber}` : `Stran ${page.pageNumber}`,

@@ -24,6 +24,13 @@ import { buildLectureNoteMediaStoragePath } from "@/lib/storage";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 const MAX_DOCUMENT_IMAGES = 12;
+/**
+ * The description stage shares a 300 s invocation with text extraction and note generation, so it
+ * gets a slice it cannot overrun. Eight images at concurrency 3 finish well inside this; a stalled
+ * provider costs the descriptions, not the lecture.
+ */
+const IMAGE_DESCRIPTION_BUDGET_MS = 60_000;
+const IMAGE_DESCRIPTION_CONCURRENCY = 3;
 const MAX_IMAGE_DESCRIPTION_COUNT = 8;
 const MAX_WEBPAGE_IMAGE_CANDIDATES = 24;
 const MIN_DOCUMENT_IMAGE_WIDTH = 96;
@@ -295,7 +302,8 @@ async function describeDocumentImage(image: ExtractedDocumentImage) {
 
 If useful, return exactly: USEFUL: one short sentence describing the concrete concept or relationship shown.
 If not useful, return exactly: NOT_USEFUL: short reason.
-Return plain text only.${contextHint}`,
+Write the description in the same language as the nearby document text below, using that material's own terms for what the image shows. The description is matched word by word against notes written in that language, so a description in the wrong language cannot place the image next to what it illustrates.
+Return plain text only. Keep the USEFUL and NOT_USEFUL markers in English exactly as written.${contextHint}`,
       file,
       model: env.GEMINI_TEXT_MODEL,
       maxOutputTokens: 180,
@@ -306,6 +314,9 @@ Return plain text only.${contextHint}`,
       // from maxOutputTokens, and 180 leaves no room for it: the call would truncate, not just
       // cost more. Every other vision call site already sends this.
       thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_TEXT_MODEL),
+      // No lecture exists yet on some intake paths, but the meter must still be able to name
+      // this spend: without a stage these calls land as anonymous gemini_text_file rows.
+      usageContext: { stage: "doc_image_relevance" },
     });
 
     const normalized = normalizeWhitespace(description);
@@ -758,6 +769,50 @@ function getPdfObject(store: unknown, name: string) {
   });
 }
 
+/**
+ * pdf.js hands back decoded pixels, and which shape they arrive in depends on how the image was
+ * stored: JPEG and Flate images come out as RGB or RGBA, while a bitonal scan — the photocopied
+ * handout case — arrives as one *bit* per pixel, packed and row-padded to byte boundaries. That
+ * last kind used to fall through the byte-length check and be dropped, so a scanned document's
+ * figures never reached the note.
+ */
+function toRawPixelBuffer(params: { data: Uint8Array; width: number; height: number }) {
+  const bytes = Buffer.from(params.data);
+  const pixelCount = params.width * params.height;
+
+  if (bytes.length === pixelCount * 4) {
+    return { bytes, channels: 4 as const };
+  }
+
+  if (bytes.length === pixelCount * 3) {
+    return { bytes, channels: 3 as const };
+  }
+
+  if (bytes.length === pixelCount) {
+    return { bytes, channels: 1 as const };
+  }
+
+  // Rows of packed 1-bit pixels are padded to a whole number of bytes, so the buffer is sized
+  // from the padded row width rather than from the pixel count.
+  const packedRowBytes = Math.ceil(params.width / 8);
+
+  if (bytes.length === packedRowBytes * params.height) {
+    const unpacked = Buffer.alloc(pixelCount);
+
+    for (let y = 0; y < params.height; y += 1) {
+      for (let x = 0; x < params.width; x += 1) {
+        const bit = (bytes[y * packedRowBytes + (x >> 3)] >> (7 - (x & 7))) & 1;
+        // A set bit is white in pdf.js's grayscale output.
+        unpacked[y * params.width + x] = bit ? 255 : 0;
+      }
+    }
+
+    return { bytes: unpacked, channels: 1 as const };
+  }
+
+  return null;
+}
+
 async function extractPdfImages(file: File) {
   const images: ExtractedDocumentImage[] = [];
   const pdfjs = await getPdfJs();
@@ -840,27 +895,22 @@ async function extractPdfImages(file: File) {
               continue;
             }
 
-            const bytes = Buffer.from(data as Uint8Array);
-            const pixelCount = width * height;
-            const channels =
-              bytes.length === pixelCount * 4
-                ? 4
-                : bytes.length === pixelCount * 3
-                  ? 3
-                  : bytes.length === pixelCount
-                    ? 1
-                    : null;
+            const decoded = toRawPixelBuffer({
+              data: data as Uint8Array,
+              width,
+              height,
+            });
 
-            if (!channels) {
+            if (!decoded) {
               continue;
             }
 
             const image = await normalizeImageForNotes({
-              bytes: await sharp(bytes, {
+              bytes: await sharp(decoded.bytes, {
                 raw: {
                   width,
                   height,
-                  channels,
+                  channels: decoded.channels,
                 },
               }).png().toBuffer(),
               sourceName: `pdf-page-${pageNumber}-image-${images.length + 1}.png`,
@@ -888,7 +938,36 @@ async function extractPdfImages(file: File) {
   return images;
 }
 
+/**
+ * Descriptions are what the placement scorer matches on, so they are worth having — but not at
+ * any price. Run one at a time each call could take the full 90 s Gemini timeout, and eight of
+ * them would spend twelve minutes against a route that is killed at five, taking the notes down
+ * with it. They run concurrently under a wall-clock budget instead, and whatever the budget does
+ * not cover keeps a generic description and still places on its surrounding source text.
+ */
 async function addImageDescriptions(images: ExtractedDocumentImage[]) {
+  const deadlineAt = Date.now() + IMAGE_DESCRIPTION_BUDGET_MS;
+  const describable = images.slice(0, MAX_IMAGE_DESCRIPTION_COUNT);
+  const results = new Array<string | null | undefined>(describable.length);
+  let cursor = 0;
+
+  const workers = Array.from(
+    { length: Math.min(IMAGE_DESCRIPTION_CONCURRENCY, describable.length) },
+    async () => {
+      while (cursor < describable.length) {
+        const index = cursor;
+        cursor += 1;
+
+        // Past the budget the remaining images are left undescribed rather than queued behind
+        // calls that would outlast the invocation.
+        results[index] =
+          Date.now() < deadlineAt ? await describeDocumentImage(describable[index]) : undefined;
+      }
+    },
+  );
+
+  await Promise.all(workers);
+
   const describedImages: ExtractedDocumentImage[] = [];
 
   for (const [index, image] of images.entries()) {
@@ -897,8 +976,10 @@ async function addImageDescriptions(images: ExtractedDocumentImage[]) {
       continue;
     }
 
-    const description = await describeDocumentImage(image);
+    const description = results[index];
 
+    // An explicit NOT_USEFUL verdict (null) drops the image, but only when it is small and has
+    // little around it — a large figure is kept even when the model is unimpressed by it.
     if (description === null) {
       const area = image.width * image.height;
       const hasNearbyContext = normalizeWhitespace(image.contextText ?? "").length >= 80;
@@ -923,6 +1004,12 @@ async function addImageDescriptions(images: ExtractedDocumentImage[]) {
   return describedImages;
 }
 
+/**
+ * Pictures are an enrichment, never a precondition. This used to rethrow, which meant a malformed
+ * JPEG inside an otherwise readable deck — or any pdf.js or sharp crash — failed the entire
+ * lecture and the learner got no notes at all from a document we had already read the text of.
+ * Every failure below now costs at most the images.
+ */
 export async function extractDocumentImages(file: File) {
   let images: ExtractedDocumentImage[] = [];
 
@@ -935,11 +1022,30 @@ export async function extractDocumentImages(file: File) {
       images = await extractPdfImages(file);
     }
   } catch (error) {
-    console.warn("Document image extraction failed.", error);
-    throw error;
+    console.warn("Document image extraction failed; continuing without pictures.", error);
+    captureBackgroundError(error, {
+      operation: "document_image_extraction",
+      extra: { fileName: file.name, fileSize: file.size, fileType: file.type },
+    });
+
+    return [];
   }
 
-  return addImageDescriptions(images.slice(0, MAX_DOCUMENT_IMAGES));
+  try {
+    return await addImageDescriptions(images.slice(0, MAX_DOCUMENT_IMAGES));
+  } catch (error) {
+    console.warn("Describing document images failed; keeping them undescribed.", error);
+    captureBackgroundError(error, {
+      operation: "document_image_description",
+      extra: { imageCount: images.length },
+    });
+
+    // Undescribed images still place, just on their surrounding source text alone.
+    return images.slice(0, MAX_DOCUMENT_IMAGES).map((image) => ({
+      ...image,
+      description: image.description ?? fallbackImageDescription(image),
+    }));
+  }
 }
 
 export async function storeDocumentImagesAsNoteMedia(params: {

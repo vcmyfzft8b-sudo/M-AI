@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { createAudioLectureWithProcessingChunks } from "@/lib/audio-lecture-upload";
-import { AUDIO_FILE_INPUT_ACCEPT, MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS } from "@/lib/constants";
+import { AUDIO_FILE_INPUT_ACCEPT } from "@/lib/constants";
+import { prepareAudioSourceForUpload } from "@/lib/audio-source-preparation";
 import { getExtensionForMimeType, normalizeMimeType } from "@/lib/storage";
 import { cn, formatTimestamp } from "@/lib/utils";
 import { LiveAudioWave } from "@/components/live-audio-wave";
@@ -46,42 +47,6 @@ function pickRecorderMimeType() {
   return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
 }
 
-function readAudioDuration(file: File) {
-  return new Promise<number>((resolve, reject) => {
-    const audio = document.createElement("audio");
-    const objectUrl = URL.createObjectURL(file);
-
-    const cleanup = () => {
-      URL.revokeObjectURL(objectUrl);
-      audio.remove();
-    };
-
-    audio.preload = "metadata";
-    audio.src = objectUrl;
-
-    audio.onloadedmetadata = () => {
-      const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
-      cleanup();
-      resolve(duration);
-    };
-
-    audio.onerror = () => {
-      cleanup();
-      reject(new Error("Dolžine posnetka ni bilo mogoče prebrati."));
-    };
-  });
-}
-
-function validateAudio(file: File, durationSeconds: number) {
-  if (file.size > MAX_AUDIO_BYTES) {
-    throw new Error("Posnetek je prevelik. Trenutna omejitev je 300 MB.");
-  }
-
-  if (durationSeconds > MAX_AUDIO_SECONDS) {
-    throw new Error("Posnetek je predolg. Trenutna omejitev je 3 ure.");
-  }
-}
-
 export function CaptureStudio({
   initialMode = "record",
 }: {
@@ -106,6 +71,8 @@ export function CaptureStudio({
   const [error, setError] = useState<string | null>(null);
   const [recordingSupported, setRecordingSupported] = useState<boolean | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  /** Set while a picked file is being transcoded, which for a long WAV takes a few seconds. */
+  const [preparingLabel, setPreparingLabel] = useState<string | null>(null);
   const [visualizerStream, setVisualizerStream] = useState<MediaStream | null>(null);
   const [stage, setStage] = useState<
     "idle" | "creating" | "uploading" | "finalizing"
@@ -145,13 +112,41 @@ export function CaptureStudio({
   }, [source]);
 
   async function setNewSource(nextSource: CaptureSource) {
+    let preparedPreviewUrl: string | null = null;
+
     try {
-      validateAudio(nextSource.file, nextSource.durationSeconds);
-      setSource(nextSource);
+      // The recorder timed its own take, so only an uploaded file needs its duration worked out —
+      // and a bulky upload is transcoded here rather than sent as is, which is what the modal
+      // does too. This page used to skip compression entirely.
+      const prepared = await prepareAudioSourceForUpload({
+        file: nextSource.file,
+        knownDurationSeconds:
+          nextSource.origin === "recording" ? nextSource.durationSeconds : null,
+        onStageChange: setPreparingLabel,
+      });
+
+      if (prepared.compressed) {
+        preparedPreviewUrl = URL.createObjectURL(prepared.file);
+
+        if (nextSource.previewUrl) {
+          URL.revokeObjectURL(nextSource.previewUrl);
+        }
+      }
+
+      setSource({
+        ...nextSource,
+        file: prepared.file,
+        durationSeconds: prepared.durationSeconds,
+        previewUrl: preparedPreviewUrl ?? nextSource.previewUrl,
+      });
       setError(null);
     } catch (validationError) {
       if (nextSource.previewUrl) {
         URL.revokeObjectURL(nextSource.previewUrl);
+      }
+
+      if (preparedPreviewUrl) {
+        URL.revokeObjectURL(preparedPreviewUrl);
       }
 
       setSource(null);
@@ -160,6 +155,48 @@ export function CaptureStudio({
           ? validationError.message
           : "Neveljaven posnetek.",
       );
+    } finally {
+      setPreparingLabel(null);
+    }
+  }
+
+  async function acceptAudioFile(file: File) {
+    try {
+      setCaptureMode("upload");
+      await setNewSource({
+        file,
+        durationSeconds: 0,
+        previewUrl: URL.createObjectURL(file),
+        origin: "upload",
+      });
+    } catch (uploadError) {
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Datoteke ni bilo mogoče pripraviti.",
+      );
+    }
+  }
+
+  function handleAudioDrop(event: React.DragEvent<HTMLElement>) {
+    // Without this the browser navigates to the dropped file, and macOS hands a .wav to Music.
+    event.preventDefault();
+
+    if (!consent || isUploading) {
+      return;
+    }
+
+    const file = event.dataTransfer.files?.[0];
+
+    if (file) {
+      void acceptAudioFile(file);
+    }
+  }
+
+  function handleAudioDragOver(event: React.DragEvent<HTMLElement>) {
+    if (Array.from(event.dataTransfer.types).includes("Files")) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
     }
   }
 
@@ -171,21 +208,9 @@ export function CaptureStudio({
     }
 
     try {
-      const durationSeconds = await readAudioDuration(file);
-      setCaptureMode("upload");
-      await setNewSource({
-        file,
-        durationSeconds,
-        previewUrl: URL.createObjectURL(file),
-        origin: "upload",
-      });
-    } catch (uploadError) {
-      setError(
-        uploadError instanceof Error
-          ? uploadError.message
-          : "Datoteke ni bilo mogoče pripraviti.",
-      );
+      await acceptAudioFile(file);
     } finally {
+      // Cleared so picking the same file twice in a row still fires a change event.
       event.target.value = "";
     }
   }
@@ -498,7 +523,11 @@ export function CaptureStudio({
                 </div>
               </button>
             ) : (
-              <label className="flex min-h-64 cursor-pointer flex-col justify-between rounded-[30px] border border-stone-200 bg-white p-7 transition hover:border-blue-300 hover:bg-[var(--brand-soft)]">
+              <label
+                onDragOver={handleAudioDragOver}
+                onDrop={handleAudioDrop}
+                className="flex min-h-64 cursor-pointer flex-col justify-between rounded-[30px] border border-stone-200 bg-white p-7 transition hover:border-blue-300 hover:bg-[var(--brand-soft)]"
+              >
                 <div className="flex items-center justify-between gap-4">
                   <span className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-stone-700">
                     Datoteka
@@ -511,7 +540,7 @@ export function CaptureStudio({
                     Izberi zvočno datoteko
                   </p>
                   <p className="mt-2 text-sm leading-7 text-stone-500">
-                    MP3, M4A, WAV, OGG, WEBM.
+                    MP3, M4A, WAV, OGG, WEBM. Datoteko lahko tudi povlečeš sem.
                   </p>
                 </div>
 
@@ -532,13 +561,20 @@ export function CaptureStudio({
             </p>
           )}
 
+          {preparingLabel ? (
+            <p className="mt-5 flex items-center gap-2 text-sm leading-7 text-stone-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {preparingLabel}
+            </p>
+          ) : null}
+
           {error ? <div className="danger-panel mt-5 px-4 py-3 text-sm">{error}</div> : null}
           <div className="mt-6 flex justify-end">
             <div className="flex w-full flex-col gap-3 sm:w-auto">
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!source || !consent || isUploading}
+                disabled={!source || !consent || isUploading || preparingLabel !== null}
                 className="primary-button w-full px-5 py-3.5 text-sm sm:w-auto sm:min-w-64"
               >
                 {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

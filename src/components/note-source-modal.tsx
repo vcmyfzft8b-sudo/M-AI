@@ -32,8 +32,7 @@ import { createAudioLectureWithProcessingChunks } from "@/lib/audio-lecture-uplo
 import {
   AUDIO_FILE_INPUT_ACCEPT,
   DOCUMENT_FILE_INPUT_ACCEPT,
-  MAX_AUDIO_BYTES,
-  MAX_AUDIO_SECONDS,
+  SUPPORTED_AUDIO_EXTENSIONS,
   MAX_DOCUMENT_BYTES,
   MAX_SCAN_IMAGE_COUNT,
   MAX_SCAN_IMAGE_BYTES,
@@ -45,15 +44,14 @@ import { mapAppHref } from "@/lib/creator-demo/paths";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import {
   createSafeTransportFileName,
-  getLowercaseExtension,
   isLegacyPowerPointDocument,
   isSupportedDocumentFile,
 } from "@/lib/document-files";
 import {
-  compressAudioForUpload,
   compressDocumentForUpload,
   compressScanImageForUpload,
 } from "@/lib/file-compression-client";
+import { prepareAudioSourceForUpload } from "@/lib/audio-source-preparation";
 import { NOTE_LANGUAGE_OPTIONS } from "@/lib/languages";
 import {
   getExtensionForMimeType,
@@ -61,7 +59,10 @@ import {
   normalizeMimeType,
   normalizeUploadScanImageMimeType,
 } from "@/lib/storage";
-import { getUnsupportedVideoUrlMessage } from "@/lib/link-source-validation";
+import {
+  getUnsupportedVideoUrlMessage,
+  isYoutubeCaptionImportEnabled,
+} from "@/lib/link-source-validation";
 import {
   DEFAULT_NOTE_TTS_VOICE,
   NOTE_TTS_VOICE_STORAGE_KEY,
@@ -143,40 +144,14 @@ function pickRecorderMimeType() {
   return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
 }
 
-function readAudioDuration(file: File) {
-  return new Promise<number>((resolve, reject) => {
-    const audio = document.createElement("audio");
-    const objectUrl = URL.createObjectURL(file);
-
-    const cleanup = () => {
-      URL.revokeObjectURL(objectUrl);
-      audio.remove();
-    };
-
-    audio.preload = "metadata";
-    audio.src = objectUrl;
-
-    audio.onloadedmetadata = () => {
-      const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
-      cleanup();
-      resolve(duration);
-    };
-
-    audio.onerror = () => {
-      cleanup();
-      reject(new Error("Dolžine zvočne datoteke ni bilo mogoče prebrati."));
-    };
-  });
-}
-
-function validateAudio(file: File, durationSeconds: number) {
-  if (file.size > MAX_AUDIO_BYTES) {
-    throw new Error("Zvočna datoteka je prevelika. Omejitev je 300 MB.");
+function isAudioSourceFile(file: File) {
+  if (file.type.startsWith("audio/")) {
+    return true;
   }
 
-  if (durationSeconds > MAX_AUDIO_SECONDS) {
-    throw new Error("Zvočna datoteka je predolga. Omejitev je 3 ure.");
-  }
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+
+  return (SUPPORTED_AUDIO_EXTENSIONS as readonly string[]).includes(extension);
 }
 
 function sheetTitle(mode: NoteSourceMode) {
@@ -520,6 +495,9 @@ export function NoteSourceModal({
     () => getUnsupportedVideoUrlMessage(trimmedLinkValue),
     [trimmedLinkValue],
   );
+  // Only advertise YouTube where captions can actually be fetched: the deployment's egress
+  // decides that, and promising it elsewhere sends the learner back to paste the same link twice.
+  const youtubeImportEnabled = isYoutubeCaptionImportEnabled();
   const canGenerateText =
     Boolean(pdfSource) || photoSources.length > 0 || combinedTextSource.length >= 120;
   const canGenerateLink = trimmedLinkValue.length > 0 && !linkVideoError;
@@ -569,25 +547,27 @@ export function NoteSourceModal({
     let originalPreviewUrlToRevoke: string | null = null;
 
     try {
-      if (nextSource.durationSeconds > MAX_AUDIO_SECONDS) {
-        throw new Error("Zvočna datoteka je predolga. Omejitev je 3 ure.");
+      // Every limit is checked inside prepareAudioSourceForUpload, against the file we would
+      // actually upload rather than the one the user picked: a bulky WAV is transcoded first and
+      // judged on its mp3, which is the whole point of having a compressor.
+      const prepared = await prepareAudioSourceForUpload({
+        file: nextSource.file,
+        knownDurationSeconds: nextSource.durationSeconds,
+        onStageChange: setBusyLabel,
+      });
+
+      if (prepared.compressed) {
+        originalPreviewUrlToRevoke = nextSource.previewUrl;
       }
 
-      if (nextSource.file.size > MAX_AUDIO_BYTES) {
-        setBusyLabel("Stiskam zvok...");
-        const compressedAudio = await compressAudioForUpload(nextSource.file);
-
-        if (compressedAudio.compressed) {
-          originalPreviewUrlToRevoke = nextSource.previewUrl;
-          preparedSource = {
-            ...nextSource,
-            file: compressedAudio.file,
-            previewUrl: URL.createObjectURL(compressedAudio.file),
-          };
-        }
-      }
-
-      validateAudio(preparedSource.file, preparedSource.durationSeconds);
+      preparedSource = {
+        ...nextSource,
+        file: prepared.file,
+        durationSeconds: prepared.durationSeconds,
+        previewUrl: prepared.compressed
+          ? URL.createObjectURL(prepared.file)
+          : nextSource.previewUrl,
+      };
 
       if (audioSource?.previewUrl) {
         URL.revokeObjectURL(audioSource.previewUrl);
@@ -784,10 +764,12 @@ export function NoteSourceModal({
     }
 
     try {
-      const durationSeconds = await readAudioDuration(file);
+      // Duration is resolved during preparation, from the transcoded file when the original is
+      // one the browser refuses to decode. Reading it here first is what used to turn a large
+      // WAV away before compression had a chance to rescue it.
       await replaceAudioSource({
         file,
-        durationSeconds,
+        durationSeconds: 0,
         previewUrl: URL.createObjectURL(file),
         origin: "upload",
       });
@@ -1712,15 +1694,13 @@ export function NoteSourceModal({
     }
   }
 
-  async function handlePdfPick(event: React.ChangeEvent<HTMLInputElement>) {
-    if (!canCreateNotes) {
-      event.target.value = "";
-      redirectToPaywall();
-      return;
-    }
-
-    const files = Array.from(event.target.files ?? []);
-
+  /**
+   * Shared by the file picker and by dropping onto the sheet. Dropping is worth supporting on its
+   * own, but it also has to be handled somewhere: a file dropped on a page that ignores it makes
+   * the browser navigate to it, and macOS opens a .wav in Music, so the app vanishes behind a
+   * music player with nothing uploaded.
+   */
+  async function acceptDocumentOrPhotoFiles(files: File[]) {
     if (files.length === 0) {
       return;
     }
@@ -1749,8 +1729,59 @@ export function NoteSourceModal({
           ? submitError.message
           : "Datoteke ni bilo mogoče pripraviti.",
       );
+    }
+  }
+
+  function handleFileDragOver(event: React.DragEvent<HTMLElement>) {
+    if (Array.from(event.dataTransfer.types).includes("Files")) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+    }
+  }
+
+  function handleSheetDrop(event: React.DragEvent<HTMLElement>) {
+    event.preventDefault();
+
+    const files = Array.from(event.dataTransfer.files ?? []);
+
+    if (files.length === 0) {
+      return;
+    }
+
+    if (!canCreateNotes) {
+      redirectToPaywall();
+      return;
+    }
+
+    // The sheet accepts whatever it can handle, whichever tab happens to be open: an audio file
+    // switches to the upload tab, anything else is treated as a document or photos.
+    if (files.length === 1 && isAudioSourceFile(files[0])) {
+      setSelectedMode("upload");
+      void replaceAudioSource({
+        file: files[0],
+        durationSeconds: 0,
+        previewUrl: URL.createObjectURL(files[0]),
+        origin: "upload",
+      });
+      return;
+    }
+
+    setSelectedMode("text");
+    void acceptDocumentOrPhotoFiles(files);
+  }
+
+  async function handlePdfPick(event: React.ChangeEvent<HTMLInputElement>) {
+    if (!canCreateNotes) {
+      event.target.value = "";
+      redirectToPaywall();
+      return;
+    }
+
+    try {
+      await acceptDocumentOrPhotoFiles(Array.from(event.target.files ?? []));
     } finally {
       setBusyLabel(null);
+      // Cleared so picking the same file twice in a row still fires a change event.
       event.target.value = "";
     }
   }
@@ -1939,6 +1970,8 @@ export function NoteSourceModal({
             className="ios-sheet note-source-sheet note-source-modal mobile-draggable-sheet"
             onPointerDown={handleSourceSheetPointerDown}
             onClickCapture={handleSourceSheetClickCapture}
+            onDragOver={handleFileDragOver}
+            onDrop={handleSheetDrop}
             style={
               sourceSheetDragOffset > 0
                 ? { transform: `translateY(${sourceSheetDragOffset}px)` }
@@ -2281,12 +2314,22 @@ export function NoteSourceModal({
                               setLinkValue(event.target.value);
                               setError(null);
                             }}
-                            placeholder="https://example.com"
+                            placeholder={
+                              youtubeImportEnabled
+                                ? "https://www.youtube.com/watch?v=..."
+                                : "https://example.com"
+                            }
                           />
                         </div>
                         {linkVideoError ? (
                           <p className="ios-info ios-danger mt-2">{linkVideoError}</p>
-                        ) : null}
+                        ) : (
+                          <p className="ios-info mt-2">
+                            {youtubeImportEnabled
+                              ? "Članki, blogi, spletne strani in YouTube videi s podnapisi."
+                              : "Članki, blogi in druge besedilne spletne strani."}
+                          </p>
+                        )}
                       </div>
 
                       {renderBusyOrGenerateButton({

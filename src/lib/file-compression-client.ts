@@ -740,8 +740,19 @@ function isBulkyAudioFile(file: File) {
   return BULKY_AUDIO_MIME_TYPES.has(normalizedMimeType);
 }
 
-export async function compressAudioForUpload(file: File): Promise<CompressionResult> {
+export async function compressAudioForUpload(
+  file: File,
+  options?: {
+    /**
+     * Transcode even a file that fits, for a caller that needs a container it can read: the mp3
+     * this produces is decodable everywhere, so it is how an otherwise unreadable upload gets a
+     * duration instead of a rejection.
+     */
+    force?: boolean;
+  },
+): Promise<CompressionResult> {
   const needsTranscode =
+    options?.force === true ||
     file.size > MAX_AUDIO_BYTES ||
     (isBulkyAudioFile(file) && file.size > BULKY_AUDIO_TRANSCODE_THRESHOLD_BYTES);
 
@@ -835,6 +846,10 @@ export async function compressAudioForUpload(file: File): Promise<CompressionRes
     if (error instanceof Error && error.message === fileTooLargeMessage("audio", MAX_AUDIO_BYTES)) {
       throw error;
     }
+
+    // The user-facing message says nothing about why, and this is the only place the real cause
+    // exists: without it a transcode failure is indistinguishable from an unsupported file.
+    console.error("Audio compression failed.", error);
 
     throw new Error(unsupportedCompressionMessage("audio"));
   }

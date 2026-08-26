@@ -11,7 +11,9 @@ import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { languageHintSchema, noteTextSchema, optionalLectureIdSchema } from "@/lib/validation";
 
-const CREATE_TEXT_LECTURE_MAX_BYTES = 256 * 1024;
+// Just under Vercel's ~4.5 MB serverless request-body limit, mirroring the document route: the
+// paste itself is allowed to be huge because oversized text is compressed before the pipeline.
+const CREATE_TEXT_LECTURE_MAX_BYTES = 4 * 1024 * 1024 + 256 * 1024;
 
 const createTextLectureSchema = z.object({
   lectureId: optionalLectureIdSchema,

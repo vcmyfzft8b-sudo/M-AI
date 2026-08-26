@@ -179,6 +179,7 @@ export async function GET(
   const detail = await getLectureDetailForUser({
     lectureId: id,
     userId: user.id,
+    verifiedLecture: lecture,
   });
 
   if (!detail) {

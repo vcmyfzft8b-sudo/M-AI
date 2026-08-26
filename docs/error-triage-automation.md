@@ -42,6 +42,19 @@ Only these, on production only:
 - unresolved Sentry issues with events in the window, even when nothing in the
   Vercel logs matches them
 
+### Reproducing with the user's actual material
+
+Every failure `markLecturePipelineFailed` records also snapshots the lecture's exact
+source input — manual-import text and blocks, or the joined transcript — into
+`generation_failure_captures`, keyed by `lecture_id` (which every such Sentry event
+carries as a tag). One row per lecture, latest failure wins, pruned after 30 days,
+cascade-deleted with the lecture. The triage run reads the capture and replays it
+against the fix's own Preview (staging Supabase, synthetic account, deleted after
+verification — see the exception in [docs/preview-staging.md](/docs/preview-staging.md)),
+so "cannot reproduce, the trigger was a specific upload" stops being a reason to
+guess. The captured material is user content: it is never committed, quoted in a PR,
+turned into a fixture, or logged.
+
 4xx responses, warnings, and preview-deployment noise are deliberately ignored.
 
 ### What It Will Never Do

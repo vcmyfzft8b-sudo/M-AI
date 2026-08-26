@@ -22,6 +22,12 @@ The staging branch is a separate Supabase environment. It has its own Auth, REST
    - `SUPABASE_SERVICE_ROLE_KEY`
 4. Do not create branch-specific overrides for those three variables.
 5. Keep production credentials, real payment methods, production webhooks, customer messages, and customer data out of Preview.
+   **One deliberate exception:** the source material in `generation_failure_captures`
+   may be replayed into a Preview to reproduce that captured failure and verify its
+   fix — that reproduction is the table's whole purpose. The replay must run under
+   the synthetic triage account, be titled with the Sentry issue or PR number, and
+   the staging lecture must be deleted once the fix is verified. The material still
+   never enters the repo, a PR, a test fixture, or a log line.
 6. Use a synthetic test account and identify test records with the PR or Sentry issue number when practical.
 7. Test the public page, `/api/health`, and the complete user flow affected by the PR.
 8. If safe test credentials for an affected integration are unavailable, keep the PR draft and state exactly which integration cannot be tested.

@@ -464,6 +464,43 @@ export type Database = {
           created_at?: string;
         };
       };
+      generation_failure_captures: {
+        Row: {
+          lecture_id: string;
+          user_id: string | null;
+          source_type: string | null;
+          language_hint: string | null;
+          error_message: string | null;
+          source_text: string | null;
+          source_blocks: Json | null;
+          processing_metadata: Json | null;
+          source_char_count: number;
+          captured_at: string;
+        };
+        Insert: {
+          lecture_id: string;
+          user_id?: string | null;
+          source_type?: string | null;
+          language_hint?: string | null;
+          error_message?: string | null;
+          source_text?: string | null;
+          source_blocks?: Json | null;
+          processing_metadata?: Json | null;
+          source_char_count?: number;
+          captured_at?: string;
+        };
+        Update: {
+          user_id?: string | null;
+          source_type?: string | null;
+          language_hint?: string | null;
+          error_message?: string | null;
+          source_text?: string | null;
+          source_blocks?: Json | null;
+          processing_metadata?: Json | null;
+          source_char_count?: number;
+          captured_at?: string;
+        };
+      };
       lecture_note_media: {
         Row: {
           id: string;

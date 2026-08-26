@@ -29,6 +29,7 @@ import {
 import type { ChatMessageWithCitations } from "@/lib/types";
 import { isPreparingInitialNoteAudio } from "@/lib/note-audio-stage";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
+import { captureGenerationFailureInput } from "@/lib/notes/failure-capture";
 import {
   clearGenerationCache,
   generationCacheKey,
@@ -670,7 +671,7 @@ export async function markLecturePipelineFailed(params: {
 }) {
   const { data: lecture } = await createSupabaseServiceRoleClient()
     .from("lectures")
-    .select("processing_metadata, source_type, user_id")
+    .select("processing_metadata, source_type, user_id, language_hint")
     .eq("id", params.lectureId)
     .maybeSingle();
 
@@ -678,6 +679,7 @@ export async function markLecturePipelineFailed(params: {
     processing_metadata?: unknown;
     source_type?: string | null;
     user_id?: string | null;
+    language_hint?: string | null;
   } | null;
   const metadata = parseProcessingMetadata(lectureMetadata?.processing_metadata);
   const transcriptionDiagnostics = getTranscriptionDiagnostics(params.error);
@@ -781,6 +783,19 @@ export async function markLecturePipelineFailed(params: {
     processingMetadata: nextMetadata,
     stage: "failed",
     errorMessage: toErrorMessage(params.error),
+  });
+
+  // Snapshot the exact input this lecture failed on, so the triage automation can reproduce the
+  // failure with the user's real material instead of reasoning from the stack trace. The raw
+  // error goes in the capture — the user-facing message above is written for the learner.
+  await captureGenerationFailureInput({
+    lectureId: params.lectureId,
+    userId: lectureMetadata?.user_id ?? null,
+    sourceType: lectureMetadata?.source_type ?? null,
+    languageHint: lectureMetadata?.language_hint ?? null,
+    errorMessage:
+      params.error instanceof Error ? params.error.message : String(params.error),
+    processingMetadata: lectureMetadata?.processing_metadata ?? null,
   });
 
   return { recorded: true };

@@ -671,7 +671,7 @@ export async function markLecturePipelineFailed(params: {
 }) {
   const { data: lecture } = await createSupabaseServiceRoleClient()
     .from("lectures")
-    .select("processing_metadata, source_type, user_id, language_hint")
+    .select("processing_metadata, source_type, user_id, language_hint, storage_path")
     .eq("id", params.lectureId)
     .maybeSingle();
 
@@ -680,6 +680,7 @@ export async function markLecturePipelineFailed(params: {
     source_type?: string | null;
     user_id?: string | null;
     language_hint?: string | null;
+    storage_path?: string | null;
   } | null;
   const metadata = parseProcessingMetadata(lectureMetadata?.processing_metadata);
   const transcriptionDiagnostics = getTranscriptionDiagnostics(params.error);
@@ -796,6 +797,7 @@ export async function markLecturePipelineFailed(params: {
     errorMessage:
       params.error instanceof Error ? params.error.message : String(params.error),
     processingMetadata: lectureMetadata?.processing_metadata ?? null,
+    storagePath: lectureMetadata?.storage_path ?? null,
   });
 
   return { recorded: true };

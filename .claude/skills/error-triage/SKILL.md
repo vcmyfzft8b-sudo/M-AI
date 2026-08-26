@@ -164,13 +164,15 @@ Then reproduce it, in order of preference:
    PR body, a commit, a test fixture, or a log line — quote the error, never the
    content.** When the failure is in extraction itself — a PDF/DOCX/PPTX or scan
    that broke before any text existed — the **original uploaded file** is what you
-   need, and it is already persisted: uploads land in production Supabase storage
-   *before* processing starts, and the capture's `processing_metadata` snapshot
-   carries the stored document's `path`, `fileName` and `mimeType` (audio recordings
-   sit at the lecture's `storage_path`; the capture also holds their transcript).
-   Download the file with the service role, replay it through the matching intake
-   route on the preview, and never re-upload it anywhere but that preview. The
-   file's retention follows the lecture — reproduce while the capture is live.
+   need, and the capture owns its own copy: at capture time the writer copies every
+   original (pending document, scan photos, audio recording) into the
+   `failure-captures/<lectureId>/` prefix of the storage bucket and lists them in
+   the row's `captured_files` (`path` is the original, `capturedPath` the copy).
+   **The capture and its copies survive the learner deleting the lecture** — prefer
+   `capturedPath`, since the originals vanish with the lecture — and both are
+   removed together by the 30-day prune. Download with the service role, replay
+   through the matching intake route on the preview, and never re-upload the
+   material anywhere but that preview.
 3. **A local request** that returns the same failure.
 4. **Reasoning from the stack trace**, when the trigger needs data even the capture
    does not have (a third-party outage, a race).

@@ -314,6 +314,9 @@ Return plain text only. Keep the USEFUL and NOT_USEFUL markers in English exactl
       // from maxOutputTokens, and 180 leaves no room for it: the call would truncate, not just
       // cost more. Every other vision call site already sends this.
       thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_TEXT_MODEL),
+      // No lecture exists yet on some intake paths, but the meter must still be able to name
+      // this spend: without a stage these calls land as anonymous gemini_text_file rows.
+      usageContext: { stage: "doc_image_relevance" },
     });
 
     const normalized = normalizeWhitespace(description);

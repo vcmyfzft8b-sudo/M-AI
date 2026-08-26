@@ -319,3 +319,31 @@ test("the ceilings that gate compression stay in their measured ratio", () => {
   assert.equal(PIPELINE_SOURCE_TEXT_TARGET_CHARS, 180_000);
   assert.equal(MAX_RAW_SOURCE_TEXT_CHARS, 4_000_000);
 });
+
+test("text with no whitespace at all is still split to the unit cap", () => {
+  // CJK prose, a PDF whose extractor lost inter-word spacing, or a pasted base64 blob: both
+  // split axes are whitespace-based, so before the hard-slice fallback this arrived as one
+  // giant unit that either overshot a chunk budget by 50x or was dropped whole.
+  const units = buildCondensationUnits({ text: "x".repeat(5_000) });
+
+  assert.ok(units.length >= 7, `expected the blob sliced into units, got ${units.length}`);
+
+  for (const unit of units) {
+    assert.ok(unit.text.length <= 700, `unit of ${unit.text.length} chars escaped the cap`);
+  }
+});
+
+test("a chunk whose every unit overflows the budget still keeps its first unit", () => {
+  // The always-keep-first escape hatch used to be cancelled by the budget conjunct, so a chunk
+  // of one oversized unit selected nothing — and downstream an all-empty selection reads as
+  // "the source has no content" for a source the user was promised would be compressed.
+  const kept = selectUnitsMechanically({
+    units: [{ label: null, pageNumber: null, text: "y".repeat(5_000) }],
+    charCount: 5_000,
+    chunkIndex: 0,
+    totalChunks: 1,
+    keepBudgetChars: 1_000,
+  });
+
+  assert.deepEqual(kept, [0]);
+});

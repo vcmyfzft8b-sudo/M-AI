@@ -53,6 +53,9 @@ export function createAiChunkSelector(usageContext?: GeminiUsageContext): ChunkS
       input: `Part ${chunk.chunkIndex + 1} of ${chunk.totalChunks}.\n\n${numberedUnits}`,
       maxOutputTokens: SELECTION_MAX_OUTPUT_TOKENS,
       stage: "source_condense",
+      // Selection has a free mechanical fallback, so walking the full retry ladder here would
+      // buy nothing but latency inside the intake route's own deadline.
+      maxAttempts: 2,
       usageContext,
     });
 

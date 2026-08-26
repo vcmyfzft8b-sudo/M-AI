@@ -2,6 +2,9 @@
 // unit-testable (tests/source-condensation.test.mjs). The model call is injected as a selector;
 // everything that decides how much text survives is deterministic code in this file.
 
+// Relative import on purpose: tests/source-condensation.test.mjs loads this file under plain
+// Node (--experimental-strip-types), which does not resolve the "@/" path alias.
+import { isWorkAbortedError } from "./abort-context.ts";
 import type { StructuredSourceBlock } from "@/lib/text-source-processing";
 import type { TranscriptSegmentInput } from "@/lib/types";
 
@@ -135,6 +138,30 @@ function splitLongUnitText(text: string, maxChars: number): string[] {
   let active = "";
 
   for (const part of parts) {
+    // Both split axes are whitespace-based, so text with no ASCII whitespace at all — CJK prose,
+    // a PDF page whose extractor lost inter-word spacing, a pasted base64 blob — arrives as one
+    // giant part. Hard-slice it: an arbitrary cut point still beats a unit the size limit was
+    // supposed to forbid, which downstream either overshoots a chunk budget by 50x or is dropped
+    // whole.
+    if (part.length > maxChars) {
+      if (active) {
+        chunks.push(active);
+        active = "";
+      }
+
+      for (let start = 0; start < part.length; start += maxChars) {
+        const slice = part.slice(start, start + maxChars);
+
+        if (slice.length === maxChars) {
+          chunks.push(slice);
+        } else {
+          active = slice;
+        }
+      }
+
+      continue;
+    }
+
     const next = active ? `${active}${joiner}${part}` : part;
 
     if (next.length > maxChars && active) {
@@ -278,6 +305,13 @@ export function selectUnitsMechanically(chunk: CondensationChunk): number[] {
       kept.push(index);
       keptChars += cost;
     }
+  }
+
+  // The escape hatch above only defeats the ratio test, so a chunk whose every unit overflows
+  // the budget (one giant unsplittable unit) would select nothing — and downstream that reads as
+  // "the source has no content". A truncated first unit always beats an empty chunk.
+  if (kept.length === 0 && chunk.units.length > 0) {
+    return [0];
   }
 
   return kept;
@@ -432,7 +466,14 @@ async function selectChunk(
       const enforced = enforceChunkSelection(chunk, selection);
 
       return { chunk, ...enforced, usedAi: true };
-    } catch {
+    } catch (error) {
+      // A budget abort is the invocation being cancelled, not a selector failure to degrade
+      // around — swallowing it would let the dying run finish condensation mechanically and
+      // wander on into note generation as a zombie.
+      if (isWorkAbortedError(error)) {
+        throw error;
+      }
+
       // The selector's own retries are exhausted by the time we see the failure; compression
       // degrades to mechanical selection rather than failing the lecture.
     }
@@ -483,10 +524,14 @@ export async function condenseSourceMaterial(params: {
 
   const units = capUnitsForAiSelection(dedupedUnits);
   const totalUnitChars = units.reduce((sum, unit) => sum + unit.text.length, 0);
+  // The "\n\n" joiners are charged in the fits-already test exactly as at every other budget
+  // site: without them a source a hair under target renders a hair over it, and the caller's
+  // slice then cuts mid-word and discards all block structure over a few hundred characters.
+  const renderedChars = totalUnitChars + units.length * UNIT_JOINER_COST;
   const chunks = chunkUnits(units, params.targetChars);
 
   const selected =
-    totalUnitChars <= params.targetChars
+    renderedChars <= params.targetChars
       ? chunks.map((chunk) => ({
           chunk,
           keptIndexes: chunk.units.map((_, index) => index),

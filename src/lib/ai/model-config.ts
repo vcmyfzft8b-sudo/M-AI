@@ -172,6 +172,10 @@ export function applyOutputHeadroom(maxOutputTokens: number | undefined, config:
 const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
   note_outline: 240_000,
   note_write: 240_000,
+  // The selector reads ~48k chars and writes only unit numbers; measured runs finish in seconds.
+  // A short leash matters because condensation runs inline in intake routes: one stalled call
+  // must not eat the invocation that six concurrent chunks share.
+  source_condense: 60_000,
 };
 
 export function resolveStageTimeoutMs(stage: AiStage) {

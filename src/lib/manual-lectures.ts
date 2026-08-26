@@ -470,6 +470,14 @@ const PPTX_IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
 };
 /** Icons and bullets are smaller than this; slide screenshots and figures are bigger. */
 const MIN_PPTX_VISION_IMAGE_BYTES = 8 * 1024;
+/**
+ * Memory ceilings for the decompression pass. The 4 MB upload cap bounds the *zip*, not what it
+ * inflates to — flat bitmap data deflates 100-1000x, so a hostile or merely screenshot-heavy
+ * deck could otherwise expand to hundreds of megabytes of simultaneous Uint8Arrays inside an
+ * invocation that also holds the zip tree and the extracted text.
+ */
+const MAX_PPTX_VISION_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_PPTX_VISION_TOTAL_BYTES = 64 * 1024 * 1024;
 /** Cost ceiling: one cheap vision call per image, never more than this many per deck. */
 const MAX_PPTX_VISION_IMAGES = 24;
 const PPTX_VISION_IMAGE_MAX_OUTPUT_TOKENS = 2000;
@@ -482,6 +490,11 @@ async function extractVisualTextFromPptxSlideImages(
 ): Promise<Array<{ slideNumber: number; text: string }>> {
   const env = getServerEnv();
   const candidates: Array<{ slideNumber: number; mediaPath: string; bytes: Uint8Array }> = [];
+  // Deduped across the whole deck, not per slide: a template background referenced by every
+  // slide would otherwise be inflated once per slide, held in N copies, and — being each slide's
+  // largest image — fill all vision slots with the same decorative picture.
+  const seenMediaPaths = new Set<string>();
+  let inflatedBytes = 0;
 
   for (const slidePath of slidePaths) {
     const slideNumber = getPptxPartNumber(slidePath);
@@ -497,15 +510,30 @@ async function extractVisualTextFromPptxSlideImages(
     );
 
     for (const mediaPath of new Set(mediaPaths)) {
+      if (seenMediaPaths.has(mediaPath)) {
+        continue;
+      }
+
+      seenMediaPaths.add(mediaPath);
+
       const extension = mediaPath.split(".").pop()?.toLowerCase() ?? "";
 
       if (!PPTX_IMAGE_MIME_BY_EXTENSION[extension]) {
         continue;
       }
 
+      if (inflatedBytes >= MAX_PPTX_VISION_TOTAL_BYTES) {
+        continue;
+      }
+
       const bytes = await zip.file(mediaPath)?.async("uint8array");
 
-      if (bytes && bytes.byteLength >= MIN_PPTX_VISION_IMAGE_BYTES) {
+      if (
+        bytes &&
+        bytes.byteLength >= MIN_PPTX_VISION_IMAGE_BYTES &&
+        bytes.byteLength <= MAX_PPTX_VISION_IMAGE_BYTES
+      ) {
+        inflatedBytes += bytes.byteLength;
         candidates.push({ slideNumber, mediaPath, bytes });
       }
     }
@@ -562,6 +590,9 @@ async function extractVisualTextFromPptxSlideImages(
             maxAttempts: 1,
             thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_MODEL),
             mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM,
+            // Up to 24 vision calls per deck; without a stage they land as anonymous
+            // gemini_text_file rows and the meter cannot name one of the larger intake costs.
+            usageContext: { stage: "pptx_vision" },
           });
           const cleaned = normalizeWhitespace(text);
 

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { PostgrestError } from "@supabase/supabase-js";
+import { z } from "zod";
 
 import { toUserFacingAiErrorMessage } from "@/lib/ai/errors";
 import { chatAnswerSchema } from "@/lib/ai/schemas";
@@ -28,7 +29,12 @@ import {
 import type { ChatMessageWithCitations } from "@/lib/types";
 import { isPreparingInitialNoteAudio } from "@/lib/note-audio-stage";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
-import { clearGenerationCache } from "@/lib/notes/generation-cache";
+import {
+  clearGenerationCache,
+  generationCacheKey,
+  stageModelCacheKeyPart,
+  withGenerationCheckpoint,
+} from "@/lib/notes/generation-cache";
 import { assertLectureGenerationWithinBudget } from "@/lib/notes/generation-guard";
 import { withNoteEnrichmentStage } from "@/lib/note-enrichment-status";
 import {
@@ -50,6 +56,40 @@ import { NoClearSpeechDetectedError } from "@/lib/transcription/types";
 const transcriptionProvider = getTranscriptionProvider();
 const EMBEDDING_BATCH_SIZE = 100;
 const TRANSCRIPT_SEGMENT_INSERT_BATCH_SIZE = 25;
+
+/** Validates a replayed condensation checkpoint before it stands in for the model's selection. */
+const condensedTranscriptCheckpointSchema = z.object({
+  segments: z.array(
+    z.object({
+      idx: z.number(),
+      startMs: z.number(),
+      endMs: z.number(),
+      speakerLabel: z.string().nullable(),
+      text: z.string(),
+    }),
+  ),
+  meta: z.record(z.string(), z.unknown()),
+});
+
+/** Keeps whole segments while they fit; the first one is always kept so the result is never empty. */
+function clampSegmentsToChars<TSegment extends { text: string }>(
+  segments: TSegment[],
+  maxChars: number,
+) {
+  const kept: TSegment[] = [];
+  let total = 0;
+
+  for (const segment of segments) {
+    if (kept.length > 0 && total + segment.text.length > maxChars) {
+      break;
+    }
+
+    kept.push(segment);
+    total += segment.text.length;
+  }
+
+  return kept;
+}
 
 type LecturePipelineRow = {
   id: string;
@@ -451,17 +491,50 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
   let transcriptCompression: Record<string, unknown> | null = null;
 
   if (transcriptChars > PIPELINE_SOURCE_TEXT_TARGET_CHARS) {
-    const condensed = await condenseTranscriptForNotes({
-      segments,
-      targetChars: PIPELINE_SOURCE_TEXT_TARGET_CHARS,
-      selector: createAiChunkSelector({
-        stage: "source_condense",
-        userId: lecture.user_id,
-        lectureId: lecture.id,
-      }),
+    // Checkpointed like every other stage in this step: selection is a model call, so replaying
+    // it on an Inngest retry would both re-pay for it and hand the retry *different* condensed
+    // text — which would silently invalidate every extraction checkpoint keyed on that text and
+    // re-buy the whole pipeline, the exact loop the checkpoints exist to stop.
+    const condensed = await withGenerationCheckpoint({
+      lectureId: lecture.id,
+      stage: "source_condense",
+      cacheKey: generationCacheKey([
+        stageModelCacheKeyPart("source_condense"),
+        PIPELINE_SOURCE_TEXT_TARGET_CHARS,
+        ...segments.map((segment) => segment.text),
+      ]),
+      schema: condensedTranscriptCheckpointSchema,
+      generate: () =>
+        condenseTranscriptForNotes({
+          segments,
+          targetChars: PIPELINE_SOURCE_TEXT_TARGET_CHARS,
+          selector: createAiChunkSelector({
+            stage: "source_condense",
+            userId: lecture.user_id,
+            lectureId: lecture.id,
+          }),
+        }),
     });
 
-    segments = condensed.segments;
+    // Condensation must never hand note generation nothing (a degenerate transcript whose every
+    // unit overflows its budget can select zero units) and never meaningfully more than the
+    // target the step budget is sized for.
+    const condensedSegments =
+      condensed.segments.length > 0
+        ? condensed.segments
+        : clampSegmentsToChars(segments, PIPELINE_SOURCE_TEXT_TARGET_CHARS);
+
+    if (condensed.segments.length === 0) {
+      console.warn(
+        "[lecture-pipeline] Condensation kept no segments; using a mechanical prefix instead",
+        { lectureId: lecture.id },
+      );
+    }
+
+    segments = clampSegmentsToChars(
+      condensedSegments,
+      Math.round(PIPELINE_SOURCE_TEXT_TARGET_CHARS * 1.05),
+    );
     transcriptCompression = { ...condensed.meta };
   }
 

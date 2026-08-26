@@ -7,6 +7,10 @@
 // Stopping a little short of the platform limit turns that silent kill into an ordinary rejection,
 // which the caller can still record on the row while the function is alive.
 
+// Relative import on purpose: tests/invocation-budget.test.mjs loads this file under plain Node
+// (--experimental-strip-types), which does not resolve the "@/" path alias.
+import { runWithAbortSignal } from "./abort-context.ts";
+
 /** Time left for the caller to write the failure once the budget is spent. */
 export const INVOCATION_BUDGET_SAFETY_MS = 20_000;
 
@@ -36,10 +40,23 @@ export async function runWithinInvocationBudget<T>(params: {
   deadlineMessage: string;
 }): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  // Racing alone is not enough: the losing `run()` keeps executing on the warm instance after the
+  // deadline rejection, and on 2026-08-25 those zombie pipelines re-bought hours of Gemini calls
+  // alongside the retries that replaced them. The signal installed here reaches every AI call
+  // through the abort context, so the losing run dies with the budget instead of outliving it.
+  const abortController = new AbortController();
+
+  const runPromise = runWithAbortSignal(abortController.signal, params.run, {
+    deadlineAt: Date.now() + params.budgetMs,
+  });
+
+  // When the deadline wins the race, the losing run now rejects (with the abort) instead of
+  // running on — swallow that late rejection so it cannot surface as an unhandled one.
+  runPromise.catch(() => undefined);
 
   try {
     return await Promise.race([
-      params.run(),
+      runPromise,
       new Promise<never>((_, reject) => {
         timeoutId = setTimeout(
           () =>
@@ -52,5 +69,7 @@ export async function runWithinInvocationBudget<T>(params: {
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
+
+    abortController.abort();
   }
 }

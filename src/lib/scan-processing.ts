@@ -5,6 +5,7 @@ import {
   getInitialNoteAudioVoice,
   shouldCreateInitialNoteAudio,
 } from "@/lib/lecture-source-metadata";
+import { LectureNoLongerExistsError } from "@/lib/lecture-processing-errors";
 import { extractTextFromImage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
 import {
   isCanonicalLectureScanImageStoragePath,
@@ -177,10 +178,17 @@ export async function processStoredScanLecture(
     .from("lectures")
     .select("id, user_id, source_type, title, language_hint, processing_metadata")
     .eq("id", params.lectureId)
-    .single();
+    .maybeSingle();
 
-  if (lectureError || !lecture) {
-    throw new Error(lectureError?.message ?? "Zapiska ni bilo mogoče najti.");
+  if (lectureError) {
+    throw lectureError;
+  }
+
+  // The learner deleted the lecture while this stage was still queued behind it. `.single()` used
+  // to report that as PostgREST's "Cannot coerce the result to a single JSON object", which said
+  // nothing about what had happened and reached Sentry as an unexplained defect.
+  if (!lecture) {
+    throw new LectureNoLongerExistsError(params.lectureId);
   }
 
   const lectureRow = lecture as {

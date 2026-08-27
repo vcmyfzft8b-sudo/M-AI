@@ -15,6 +15,28 @@ function readSource(relativePath) {
 
 const PIPELINE_SOURCE = readSource("src/lib/pipeline.ts");
 
+// Every stage opens by loading the lecture, and each one of these did it with `.single()`.
+const STAGE_LOADERS = [
+  ["src/lib/pipeline.ts", "async function getLectureForPipeline"],
+  ["src/lib/document-processing.ts", "export async function processStoredDocumentLecture"],
+  ["src/lib/link-processing.ts", "export async function processStoredLinkLecture"],
+  ["src/lib/scan-processing.ts", "export async function processStoredScanLecture"],
+];
+
+function readLectureLookup([relativePath, declaration]) {
+  const source = readSource(relativePath);
+  const start = source.indexOf(declaration);
+
+  assert.ok(start > 0, `${declaration} not found in ${relativePath}`);
+
+  // The lookup and its two guards, up to the row cast that follows them. Comments are stripped
+  // because the one above the guard quotes `.single()` to say what it replaced.
+  const rest = source.slice(start);
+  const end = rest.indexOf("\n  const lectureRow");
+
+  return rest.slice(0, end > 0 ? end : rest.indexOf("\n}\n")).replace(/^\s*\/\/.*$/gm, "");
+}
+
 // The production event (Sentry MEMOAI-WEB-32, 2026-08-27T11:34:03Z) that this file is about:
 // lecture de7f7667-9c2f-47f9-b6e8-e3e7f53c0492 was deleted while its Inngest run was still going.
 // The next stage to read the row got PostgREST's PGRST116 back from `.single()` and threw it, and
@@ -42,26 +64,23 @@ test("a lecture read out of the pipeline says it is gone, in words", () => {
   }
 });
 
-test("getLectureForPipeline names the deletion instead of leaking PGRST116", () => {
-  const start = PIPELINE_SOURCE.indexOf("async function getLectureForPipeline");
+test("every stage loader names the deletion instead of leaking PGRST116", () => {
+  for (const loader of STAGE_LOADERS) {
+    const [relativePath] = loader;
+    const body = readLectureLookup(loader);
 
-  assert.ok(start > 0);
-
-  // Just this function: everything up to the first line that closes a top-level declaration.
-  const rest = PIPELINE_SOURCE.slice(start);
-  // Comments stripped: the one above the guard quotes `.single()` to say what it replaced.
-  const body = rest
-    .slice(0, rest.indexOf("\n}\n") + 3)
-    .replace(/^\s*\/\/.*$/gm, "");
-
-  // `.single()` is what produced the unreadable message; `.maybeSingle()` hands back a null row
-  // so the deletion can be named.
-  assert.ok(!/\.single\(\)/.test(body), "getLectureForPipeline must not use .single()");
-  assert.ok(/\.maybeSingle\(\)/.test(body));
-  assert.ok(/throw new LectureNoLongerExistsError\(params\.lectureId\)/.test(body));
-  // A lookup that genuinely errored is still a real failure and must be rethrown, not mistaken
-  // for a deleted lecture.
-  assert.ok(/if \(lectureError\) \{\s*throw lectureError;/.test(body));
+    // `.single()` is what produced the unreadable message; `.maybeSingle()` hands back a null row
+    // so the deletion can be named.
+    assert.ok(!/\.single\(\)/.test(body), `${relativePath} must not load the lecture with .single()`);
+    assert.ok(/\.maybeSingle\(\)/.test(body), relativePath);
+    assert.ok(
+      /throw new LectureNoLongerExistsError\(params\.lectureId\)/.test(body),
+      relativePath,
+    );
+    // A lookup that genuinely errored is still a real failure and must be rethrown, not mistaken
+    // for a deleted lecture.
+    assert.ok(/if \(lectureError\) \{\s*throw lectureError;/.test(body), relativePath);
+  }
 });
 
 /**

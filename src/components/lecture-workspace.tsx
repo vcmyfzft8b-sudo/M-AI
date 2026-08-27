@@ -32,6 +32,7 @@ import {
   redirectToBillingIfNeeded,
 } from "@/lib/billing-client";
 import type { FlashcardConfidenceBucket, StudyAssetStatus } from "@/lib/database.types";
+import { canRetryLectureFailure } from "@/lib/lecture-failure-codes";
 import {
   getEffectiveLectureSourceType,
   isRecord,
@@ -5350,7 +5351,8 @@ export function LectureWorkspace({
             </div>
 
             <div className="lecture-actions">
-              {detail.lecture.status === "failed" ? (
+              {detail.lecture.status === "failed" &&
+              canRetryLectureFailure(detail.lecture.processing_metadata) ? (
                 <button
                   type="button"
                   onClick={handleRetry}

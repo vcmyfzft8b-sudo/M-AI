@@ -23,7 +23,7 @@ const TLS_ERROR_CODES = new Set([
 const DNS_ERROR_CODES = new Set(["EAI_AGAIN", "ENOTFOUND"]);
 
 const HOST_NOT_FOUND_FAILURE: LinkFetchFailure = {
-  message: "The link's site could not be found.",
+  message: "Spletne strani na tej povezavi ni bilo mogoče najti. Preveri, ali je naslov pravilen.",
   code: "link_host_not_found",
 };
 
@@ -97,7 +97,7 @@ export function describeLinkFetchFailure(error: unknown): LinkFetchFailure | nul
     )
   ) {
     return {
-      message: "The link's site has an invalid security certificate.",
+      message: "Spletna stran na tej povezavi ima neveljavno varnostno potrdilo, zato je nismo mogli odpreti.",
       code: "link_tls_failed",
     };
   }
@@ -108,7 +108,7 @@ export function describeLinkFetchFailure(error: unknown): LinkFetchFailure | nul
 
   if (codes.some((code) => CONNECTION_ERROR_CODES.has(code))) {
     return {
-      message: "The link's site could not be reached.",
+      message: "Do spletne strani na tej povezavi ni bilo mogoče priti. Poskusi znova čez nekaj minut.",
       code: "link_unreachable",
     };
   }

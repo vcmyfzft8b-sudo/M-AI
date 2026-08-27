@@ -18,7 +18,7 @@ test("classifies the incomplete certificate chain that reached production", () =
   cause.code = "UNABLE_TO_VERIFY_LEAF_SIGNATURE";
 
   assert.deepEqual(describeLinkFetchFailure(new TypeError("fetch failed", { cause })), {
-    message: "The link's site has an invalid security certificate.",
+    message: "Spletna stran na tej povezavi ima neveljavno varnostno potrdilo, zato je nismo mogli odpreti.",
     code: "link_tls_failed",
   });
 });
@@ -71,7 +71,7 @@ test("leaves anything unrecognised unclassified so real defects still surface", 
 test("does not reclassify an expected input error that already has a code", () => {
   // ExpectedLectureInputError carries its own `code` (e.g. "link_timeout"); the
   // classifier must not mistake one of those for a transport failure.
-  const expected = new Error("The link took too long to respond.");
+  const expected = new Error("Stran se ni odzvala dovolj hitro. Poskusi znova čez nekaj minut.");
   expected.name = "ExpectedLectureInputError";
   expected.code = "link_timeout";
 
@@ -95,7 +95,7 @@ test("classifies the resolver rejection that reached production", () => {
   error.hostname = "www.";
 
   assert.deepEqual(describeHostResolutionFailure(error), {
-    message: "The link's site could not be found.",
+    message: "Spletne strani na tej povezavi ni bilo mogoče najti. Preveri, ali je naslov pravilen.",
     code: "link_host_not_found",
   });
 });

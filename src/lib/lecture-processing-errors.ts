@@ -37,3 +37,31 @@ export function isExpectedLectureInputFailure(error: unknown) {
     isExpectedLectureInputError(error)
   );
 }
+
+/**
+ * The code to record on a failed lecture, so the UI can tell a failure retry might clear from one
+ * it cannot. Null for anything unrecognised, which keeps retry on offer by default.
+ *
+ * Carries the same caveat as `isExpectedLectureInputFailure`: ask while the error is still the
+ * object that was thrown. Past an Inngest step boundary the class and the `code` are gone, and
+ * this returns null.
+ */
+export function toLectureFailureCode(error: unknown) {
+  if (error instanceof ExpectedLectureInputError && error.code.length > 0) {
+    return error.code;
+  }
+
+  if (error instanceof NoReadableScanTextError) {
+    return "scan_not_enough_text";
+  }
+
+  if (error instanceof NoClearSpeechDetectedError) {
+    return "audio_no_clear_speech";
+  }
+
+  if (error instanceof InvalidAudioFileError) {
+    return "audio_not_decodable";
+  }
+
+  return null;
+}

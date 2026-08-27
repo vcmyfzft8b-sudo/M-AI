@@ -31,6 +31,7 @@ import {
 } from "@/components/navigation-loading";
 import { ViewportPortal } from "@/components/viewport-portal";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
+import { canRetryLectureFailure } from "@/lib/lecture-failure-codes";
 import { getEffectiveLectureSourceType } from "@/lib/lecture-source-metadata";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
@@ -1362,7 +1363,8 @@ export function HomeDashboard({
                       ) : null}
                       Izbriši
                     </button>
-                    {lecture.status === "failed" ? (
+                    {lecture.status === "failed" &&
+                    canRetryLectureFailure(lecture.processing_metadata) ? (
                       <button
                         type="button"
                         disabled={busyLectureId === lecture.id}

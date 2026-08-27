@@ -14,7 +14,11 @@ import {
   attachDocumentImagesToNotes,
   getStoredDocumentImagesFromMetadata,
 } from "@/lib/document-note-media";
-import { isExpectedLectureInputFailure } from "@/lib/lecture-processing-errors";
+import { LECTURE_FAILURE_METADATA_KEY } from "@/lib/lecture-failure-codes";
+import {
+  isExpectedLectureInputFailure,
+  toLectureFailureCode,
+} from "@/lib/lecture-processing-errors";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
 import {
   getInitialNoteAudioVoice,
@@ -779,9 +783,17 @@ export async function markLecturePipelineFailed(params: {
     });
   }
 
+  // Record what kind of failure this was, not just its wording. Both surfaces that render a
+  // failure use it to drop the retry button where retry cannot clear the cause — a link behind a
+  // sign-in, a recording with no speech — since offering it there only sends the learner round
+  // the same loop. Written on every failure, so a later one carrying no code clears an earlier
+  // code rather than leaving it to be read as current.
   await updateLectureProcessingState({
     lectureId: params.lectureId,
-    processingMetadata: nextMetadata,
+    processingMetadata: {
+      ...nextMetadata,
+      [LECTURE_FAILURE_METADATA_KEY]: { code: toLectureFailureCode(params.error) },
+    },
     stage: "failed",
     errorMessage: toErrorMessage(params.error),
   });

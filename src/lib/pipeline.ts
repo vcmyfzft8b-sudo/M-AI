@@ -17,6 +17,7 @@ import {
 import { LECTURE_FAILURE_METADATA_KEY } from "@/lib/lecture-failure-codes";
 import {
   isExpectedLectureInputFailure,
+  LectureNoLongerExistsError,
   toLectureFailureCode,
 } from "@/lib/lecture-processing-errors";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
@@ -238,10 +239,18 @@ async function getLectureForPipeline(params: { lectureId: string }) {
     .from("lectures")
     .select("*")
     .eq("id", params.lectureId)
-    .single();
+    .maybeSingle();
 
   if (lectureError) {
     throw lectureError;
+  }
+
+  // A learner deleting a lecture mid-run reaches the pipeline here first. `.single()` used to
+  // raise PostgREST's "Cannot coerce the result to a single JSON object" for it, which named
+  // neither the lecture nor the deletion and travelled all the way into the lecture's
+  // error_message and into Sentry as an unexplained defect.
+  if (!lecture) {
+    throw new LectureNoLongerExistsError(params.lectureId);
   }
 
   return {
@@ -665,19 +674,39 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
 }
 
 /**
- * Records a pipeline failure on the lecture row. Returns `{ recorded: false }` when the failure
- * arrived too late to matter — the notes were already finished — and the lecture was left ready
- * instead; a caller that would otherwise rethrow should treat that as a success.
+ * Records a pipeline failure on the lecture row. Returns `{ recorded: false }` when there was no
+ * failure left to record — the notes were already finished and the lecture was left ready, or the
+ * learner deleted the lecture out from under the run. A caller that would otherwise rethrow should
+ * treat either as a success: retrying buys nothing in both cases.
  */
 export async function markLecturePipelineFailed(params: {
   lectureId: string;
   error: unknown;
 }) {
-  const { data: lecture } = await createSupabaseServiceRoleClient()
+  const { data: lecture, error: lectureLookupError } = await createSupabaseServiceRoleClient()
     .from("lectures")
     .select("processing_metadata, source_type, user_id, language_hint, storage_path")
     .eq("id", params.lectureId)
     .maybeSingle();
+
+  // The learner deleted the lecture while it was still processing, so the run that just failed
+  // was working on something nobody is waiting for any more. There is no row to mark failed and
+  // no status anyone will read, and the failure capture has nothing to snapshot either — the
+  // source went with the lecture, so it wrote an orphan row of nulls that then sat there for
+  // thirty days. An abandoned run is an ordinary outcome, not a defect, so it stays out of Sentry
+  // and leaves only the structured platform-log line.
+  //
+  // Only a lookup that *succeeded* and came back empty proves the row is gone. A lookup that
+  // errored also leaves `lecture` null, and that is a real failure that must still be recorded —
+  // which is why the error is read here rather than discarded as it used to be.
+  if (!lectureLookupError && !lecture) {
+    console.warn("[lecture-pipeline] Lecture was deleted while it was still processing", {
+      lectureId: params.lectureId,
+      error: toErrorMessage(params.error),
+    });
+
+    return { recorded: false };
+  }
 
   const lectureMetadata = lecture as {
     processing_metadata?: unknown;

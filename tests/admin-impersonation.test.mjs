@@ -112,3 +112,20 @@ test("the impersonation cookie names are distinct and namespaced", () => {
     assert.ok(!name.startsWith("sb-"));
   }
 });
+
+test("the banner never reads cookies from the root layout", () => {
+  // Reading a cookie in the root layout opts every page out of static rendering — it took the
+  // three prerendered legal pages dynamic when the slot first landed there. The app layout is
+  // already dynamic, so the marker is free there and the marketing pages stay static.
+  const rootLayout = read("../src/app/layout.tsx");
+  const appLayout = read("../src/app/app/layout.tsx");
+
+  assert.ok(
+    !rootLayout.includes("ImpersonationBannerSlot"),
+    "the impersonation banner must not mount in the root layout",
+  );
+  assert.ok(
+    appLayout.includes("<ImpersonationBannerSlot />"),
+    "the impersonation banner must mount in the app layout",
+  );
+});

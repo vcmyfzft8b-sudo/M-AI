@@ -464,6 +464,29 @@ export type Database = {
           created_at?: string;
         };
       };
+      admin_impersonation_events: {
+        Row: {
+          id: string;
+          admin_email: string | null;
+          target_user_id: string;
+          target_email: string | null;
+          user_agent: string | null;
+          started_at: string;
+        };
+        Insert: {
+          id?: string;
+          admin_email?: string | null;
+          target_user_id: string;
+          target_email?: string | null;
+          user_agent?: string | null;
+          started_at?: string;
+        };
+        Update: {
+          admin_email?: string | null;
+          target_email?: string | null;
+          user_agent?: string | null;
+        };
+      };
       generation_failure_captures: {
         Row: {
           lecture_id: string;

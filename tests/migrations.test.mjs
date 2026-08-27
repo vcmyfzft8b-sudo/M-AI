@@ -156,6 +156,7 @@ test("every migration applies in order on an empty database", options, async () 
   ).map((row) => row.table_name);
 
   assert.deepEqual(tables, [
+    "admin_impersonation_events",
     "admin_users",
     "site_page_views",
     "site_sessions",

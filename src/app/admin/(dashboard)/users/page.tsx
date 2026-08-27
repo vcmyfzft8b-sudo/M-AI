@@ -1,7 +1,9 @@
 import { AreaChart } from "@/components/admin/chart";
+import { NativeSubmitButton } from "@/components/admin/native-submit";
 import { PendingLink } from "@/components/admin/pending-link";
 import { SearchForm } from "@/components/admin/search-form";
 import {
+  Alert,
   Badge,
   Section,
   EmptyState,
@@ -25,7 +27,18 @@ type SearchParams = Promise<{
   q?: string;
   filter?: string;
   page?: string;
+  impersonation?: string;
 }>;
+
+/** Why a "View as user" press bounced back here, in words the operator can act on. */
+const IMPERSONATION_ERRORS: Record<string, string> = {
+  "missing-user": "No account was selected.",
+  self: "That is your own account — you are already signed in as yourself.",
+  "admin-target": "That account is an admin. Admins cannot open each other's accounts.",
+  "unknown-user": "That account no longer exists, or has no email address to sign in with.",
+  "no-admin-session": "Your admin session could not be read. Sign in again and retry.",
+  failed: "The session could not be created. The details are in the server logs.",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +60,10 @@ export default async function UsersPage({
   const filter = normalizeUserFilter(params?.filter);
   const search = typeof params?.q === "string" ? params.q.slice(0, 120) : "";
   const page = Math.max(Number(params?.page ?? "1") || 1, 1);
+  const impersonationError =
+    typeof params?.impersonation === "string"
+      ? IMPERSONATION_ERRORS[params.impersonation] ?? null
+      : null;
 
   const [totals, growth, result] = await Promise.all([
     getUserTotals(range),
@@ -77,6 +94,7 @@ export default async function UsersPage({
 
   return (
     <>
+      {impersonationError && <Alert tone="error">{impersonationError}</Alert>}
       <header className="admin-header">
         <div>
           <h1 className="admin-title">Users</h1>
@@ -162,6 +180,7 @@ export default async function UsersPage({
                   <th>Status</th>
                   <th>Renews</th>
                   <th>Onboarded</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -208,6 +227,24 @@ export default async function UsersPage({
                     </td>
                     <td>{formatDate(user.currentPeriodEnd)}</td>
                     <td>{user.onboardingCompletedAt ? "yes" : "no"}</td>
+                    <td>
+                      {/*
+                        Posts to a route handler rather than a server action: starting an
+                        impersonation writes session cookies, which only the route-handler
+                        Supabase client can do.
+                      */}
+                      <NativeSubmitButton
+                        action="/api/admin/impersonate"
+                        className="admin-button"
+                        data-size="sm"
+                        formClassName="admin-inline-form"
+                        fields={{ user_id: user.id }}
+                        confirm={`Open the app as ${user.email ?? "this user"}? You will be signed in as them until you press Stop.`}
+                        pendingLabel="Opening…"
+                      >
+                        View as user
+                      </NativeSubmitButton>
+                    </td>
                   </tr>
                 ))}
               </tbody>

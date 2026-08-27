@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { WindowFileDropGuard } from "@/components/window-file-drop-guard";
 import { AppShell } from "@/components/app-shell";
+import { ImpersonationBannerSlot } from "@/components/impersonation-banner-slot";
 import { NavigationFeedbackProvider } from "@/components/navigation-loading";
 import { getViewerAppState } from "@/lib/billing";
 import { requireUser } from "@/lib/auth";
@@ -38,6 +39,7 @@ export default async function AppLayout({
       >
         {children}
       </AppShell>
+      <ImpersonationBannerSlot />
     </NavigationFeedbackProvider>
   );
 }

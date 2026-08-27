@@ -39,6 +39,61 @@ export function isExpectedLectureInputFailure(error: unknown) {
 }
 
 /**
+ * What PostgREST answers a `.single()` whose row is not there: code `PGRST116`, message "Cannot
+ * coerce the result to a single JSON object". Every pipeline stage opens by loading its lecture
+ * that way, so this is the shape a lecture deleted mid-run throws.
+ *
+ * Recognised by message as well as by code on purpose — unlike the class checks above this one
+ * has to survive an Inngest step boundary, where the error arrives rebuilt as a plain `Error`
+ * with nothing but its message left.
+ */
+export function isMissingLectureRowError(error: unknown) {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    if ((error as { code?: unknown }).code === "PGRST116") {
+      return true;
+    }
+  }
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error !== null && "message" in error
+        ? (error as { message?: unknown }).message
+        : null;
+
+  return (
+    typeof message === "string" &&
+    /cannot coerce the result to a single json object/i.test(message)
+  );
+}
+
+/**
+ * True when a pipeline failure is nothing but the learner deleting the lecture while its run was
+ * still going: the stage failed because its `lectures` row was gone, and the row is still gone.
+ *
+ * `DELETE /api/lectures/[id]` drops the row and leaves the Inngest run to finish on its own, so
+ * this is ordinary use, not a defect — there is no row left to record a failure on and nobody
+ * waiting for the answer.
+ *
+ * Both halves are required. A lookup that *errored* proves nothing about whether the row exists,
+ * so it is not treated as deletion; and a row that is missing while the stage failed for some
+ * other reason is a genuinely odd state that should still be reported.
+ */
+export function isDeletedLectureFailure(params: {
+  error: unknown;
+  /** The row the failure handler's own lookup returned, null when it found none. */
+  lectureRow: unknown;
+  /** Whether that lookup itself failed, in which case its empty result means nothing. */
+  lectureLookupFailed: boolean;
+}) {
+  return (
+    !params.lectureLookupFailed &&
+    (params.lectureRow === null || params.lectureRow === undefined) &&
+    isMissingLectureRowError(params.error)
+  );
+}
+
+/**
  * The code to record on a failed lecture, so the UI can tell a failure retry might clear from one
  * it cannot. Null for anything unrecognised, which keeps retry on offer by default.
  *

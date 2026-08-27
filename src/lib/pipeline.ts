@@ -16,6 +16,7 @@ import {
 } from "@/lib/document-note-media";
 import { LECTURE_FAILURE_METADATA_KEY } from "@/lib/lecture-failure-codes";
 import {
+  isDeletedLectureFailure,
   isExpectedLectureInputFailure,
   toLectureFailureCode,
 } from "@/lib/lecture-processing-errors";
@@ -665,15 +666,16 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
 }
 
 /**
- * Records a pipeline failure on the lecture row. Returns `{ recorded: false }` when the failure
- * arrived too late to matter — the notes were already finished — and the lecture was left ready
- * instead; a caller that would otherwise rethrow should treat that as a success.
+ * Records a pipeline failure on the lecture row. Returns `{ recorded: false }` when there was
+ * nothing to record — the notes were already finished and the lecture was left ready, or the
+ * lecture has been deleted and no row is left to write to. A caller that would otherwise rethrow
+ * should treat either as a success.
  */
 export async function markLecturePipelineFailed(params: {
   lectureId: string;
   error: unknown;
 }) {
-  const { data: lecture } = await createSupabaseServiceRoleClient()
+  const { data: lecture, error: lectureLookupError } = await createSupabaseServiceRoleClient()
     .from("lectures")
     .select("processing_metadata, source_type, user_id, language_hint, storage_path")
     .eq("id", params.lectureId)
@@ -686,6 +688,30 @@ export async function markLecturePipelineFailed(params: {
     language_hint?: string | null;
     storage_path?: string | null;
   } | null;
+
+  // A learner can delete a lecture while its run is still in flight — DELETE /api/lectures/[id]
+  // drops the row and leaves the Inngest run going — and the next stage to open with
+  // `getLectureForPipeline` then throws PGRST116 off a `.single()` that has no row to coerce.
+  // Nothing about that is a defect: there is no row left to write "failed" to, nobody is waiting
+  // for the notes, and reporting it pages the team for ordinary use. Rethrowing it is worse than
+  // useless — `recorded: true` sends the Inngest function on to four more retries of a run whose
+  // lecture no longer exists. One warn line keeps it visible in the platform log and that is all
+  // it is worth.
+  if (
+    isDeletedLectureFailure({
+      error: params.error,
+      lectureRow: lectureMetadata,
+      lectureLookupFailed: Boolean(lectureLookupError),
+    })
+  ) {
+    console.warn("[lecture-pipeline] Lecture was deleted while it was still processing", {
+      lectureId: params.lectureId,
+      error: toErrorMessage(params.error),
+    });
+
+    return { recorded: false };
+  }
+
   const metadata = parseProcessingMetadata(lectureMetadata?.processing_metadata);
   const transcriptionDiagnostics = getTranscriptionDiagnostics(params.error);
   const scanOcrDiagnostics = getScanOcrDiagnostics(params.error);

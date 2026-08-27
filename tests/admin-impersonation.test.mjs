@@ -7,10 +7,12 @@ import {
   ADMIN_RESTORE_COOKIE,
   IMPERSONATION_COOKIE,
   IMPERSONATION_COOKIE_OPTIONS,
-  encodeCookiePayload,
   parseAdminRestorePayload,
   parseImpersonationPayload,
+  signCookiePayload,
 } from "../src/lib/admin/impersonation-cookies.ts";
+
+const SECRET = "test-signing-secret";
 
 const read = (relative) =>
   readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");
@@ -30,7 +32,7 @@ test("both impersonation cookies are server-only and first-party", () => {
 
 test("payloads survive a round trip and malformed cookies decode to null", () => {
   const restore = { accessToken: "a", refreshToken: "r", adminEmail: "admin@memo.app" };
-  assert.deepEqual(parseAdminRestorePayload(encodeCookiePayload(restore)), restore);
+  assert.deepEqual(parseAdminRestorePayload(signCookiePayload(restore, SECRET), SECRET), restore);
 
   const state = {
     targetUserId: "user-1",
@@ -38,17 +40,50 @@ test("payloads survive a round trip and malformed cookies decode to null", () =>
     adminEmail: "admin@memo.app",
     startedAt: "2026-08-27T00:00:00.000Z",
   };
-  assert.deepEqual(parseImpersonationPayload(encodeCookiePayload(state)), state);
+  assert.deepEqual(parseImpersonationPayload(signCookiePayload(state, SECRET), SECRET), state);
 
   // A tampered or truncated cookie must read as "not impersonating" rather than throwing.
-  for (const bad of [undefined, "", "not-base64!", encodeCookiePayload({ nope: true })]) {
-    assert.equal(parseAdminRestorePayload(bad), null);
-    assert.equal(parseImpersonationPayload(bad), null);
+  for (const bad of [undefined, "", "not-base64!", signCookiePayload({ nope: true }, SECRET)]) {
+    assert.equal(parseAdminRestorePayload(bad, SECRET), null);
+    assert.equal(parseImpersonationPayload(bad, SECRET), null);
   }
 
   // A half-written restore cookie is useless: refusing it sends the admin to a clean re-login
   // instead of a broken setSession.
-  assert.equal(parseAdminRestorePayload(encodeCookiePayload({ accessToken: "a" })), null);
+  assert.equal(
+    parseAdminRestorePayload(signCookiePayload({ accessToken: "a" }, SECRET), SECRET),
+    null,
+  );
+});
+
+test("a forged or tampered cookie is refused, whatever it claims", () => {
+  // This is the property the whole feature rests on. Sign-out consults the restore cookie before
+  // it clears anything, so an unsigned payload would turn the sign-out button into a
+  // sign-in-as-attacker button for anyone able to write a cookie on the origin.
+  const attacker = { accessToken: "attacker", refreshToken: "attacker", adminEmail: "evil@x" };
+
+  // Unsigned, the shape the payload used to have.
+  const unsigned = Buffer.from(JSON.stringify(attacker), "utf8").toString("base64url");
+  assert.equal(parseAdminRestorePayload(unsigned, SECRET), null);
+
+  // Signed with the wrong key.
+  assert.equal(
+    parseAdminRestorePayload(signCookiePayload(attacker, "not-the-secret"), SECRET),
+    null,
+  );
+
+  // Body swapped underneath a valid signature.
+  const genuine = signCookiePayload({ accessToken: "a", refreshToken: "r" }, SECRET);
+  const swapped = `${unsigned}.${genuine.slice(genuine.lastIndexOf(".") + 1)}`;
+  assert.equal(parseAdminRestorePayload(swapped, SECRET), null);
+
+  // Signature stripped entirely.
+  assert.equal(parseAdminRestorePayload(genuine.split(".")[0], SECRET), null);
+
+  // And the same for the state cookie, so nobody can paint a fake "Viewing as" badge.
+  const fakeState = { targetUserId: "victim", targetEmail: "someone@else" };
+  const unsignedState = Buffer.from(JSON.stringify(fakeState), "utf8").toString("base64url");
+  assert.equal(parseImpersonationPayload(unsignedState, SECRET), null);
 });
 
 test("starting an impersonation is gated on the admin allowlist", () => {
@@ -66,10 +101,31 @@ test("starting an impersonation is gated on the admin allowlist", () => {
   );
 });
 
-test("stopping is gated on the restore cookie, so it is inert for everyone else", () => {
+test("stopping is inert unless a signed impersonation is in progress", () => {
   assert.match(STOP_ROUTE, /restoreAdminSession\(/);
-  assert.match(RESTORE, new RegExp(`cookies\\.get\\(${ADMIN_RESTORE_COOKIE ? "ADMIN_RESTORE_COOKIE" : ""}\\)`));
-  assert.match(RESTORE, /if \(!restore\) \{\s*return null;/);
+  // Null is returned only when NEITHER cookie is present — i.e. nothing to stop.
+  assert.match(RESTORE, /if \(!impersonating && !restore\) \{\s*return null;/);
+});
+
+test("an impersonation with no way back is force-ended, never left running", () => {
+  // The dangerous shape: impersonating, restore cookie gone. Stop used to do nothing, leaving the
+  // admin signed in as the learner — and the sign-out that would follow is a GLOBAL revoke of
+  // that learner's own devices. The only safe answer is to end the session here.
+  const forcedBranch = RESTORE.slice(RESTORE.indexOf("if (!restore)"));
+
+  assert.match(forcedBranch, /clearEverything\(params\.request, "\/admin\/login"\)/);
+  assert.match(
+    RESTORE,
+    /function clearEverything[\s\S]*startsWith\("sb-"\)[\s\S]*clearImpersonationCookies/,
+    "force-ending must clear the session cookies as well as the impersonation state",
+  );
+});
+
+test("leaving revokes the session it minted, scoped to that session alone", () => {
+  // 'local' scope ends exactly this session. Global would revoke the learner's own devices.
+  assert.match(RESTORE, /auth\.admin\.signOut\(accessToken, "local"\)/);
+  const revokeIndex = RESTORE.indexOf("await revokeImpersonatedSession");
+  assert.ok(revokeIndex > 0 && revokeIndex < RESTORE.indexOf("if (!restore)"));
 });
 
 test("logging out of an impersonated account never signs the learner out", () => {
@@ -84,11 +140,12 @@ test("logging out of an impersonated account never signs the learner out", () =>
     "the impersonation check must come before signOut, or the learner is signed out",
   );
 
-  // Nothing in the impersonation paths may actually call sign-out (prose about it is fine).
+  // Nothing in the impersonation paths may call the GLOBAL sign-out. The admin API's
+  // session-scoped signOut(jwt, "local") is the one permitted form.
   for (const source of [RESTORE, STOP_ROUTE, START_ROUTE]) {
     assert.ok(
       !/auth\.signOut\(/.test(source.replace(/`[^`]*`/g, "")),
-      "impersonation must never call signOut",
+      "impersonation must never call the client signOut",
     );
   }
 });
@@ -128,4 +185,21 @@ test("the banner never reads cookies from the root layout", () => {
     appLayout.includes("<ImpersonationBannerSlot />"),
     "the impersonation banner must mount in the app layout",
   );
+});
+
+test("an admin cannot open another admin's account", () => {
+  // Lateral movement between admin accounts is not debugging, and from that point every action
+  // would be recorded as the other admin's.
+  assert.match(START_ROUTE, /isAdminAccount\(target\.email\)/);
+  assert.match(START_ROUTE, /impersonation=admin-target/);
+
+  const guard = read("../src/lib/admin/impersonation.ts");
+  const body = guard.slice(guard.indexOf("export async function isAdminAccount"));
+  assert.match(
+    body,
+    /return Boolean\(error\) \|\| Boolean\(data\)/,
+    "an unreadable allowlist must be treated as 'might be an admin'",
+  );
+  // The email is escaped before it becomes a LIKE pattern.
+  assert.match(body, /replace\(/);
 });

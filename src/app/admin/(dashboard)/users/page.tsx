@@ -34,6 +34,7 @@ type SearchParams = Promise<{
 const IMPERSONATION_ERRORS: Record<string, string> = {
   "missing-user": "No account was selected.",
   self: "That is your own account — you are already signed in as yourself.",
+  "admin-target": "That account is an admin. Admins cannot open each other's accounts.",
   "unknown-user": "That account no longer exists, or has no email address to sign in with.",
   "no-admin-session": "Your admin session could not be read. Sign in again and retry.",
   failed: "The session could not be created. The details are in the server logs.",

@@ -1,7 +1,10 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import { cookies } from "next/headers";
 
+import { getServerEnv } from "@/lib/server-env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 import {
@@ -14,12 +17,28 @@ export {
   ADMIN_RESTORE_COOKIE,
   IMPERSONATION_COOKIE,
   IMPERSONATION_COOKIE_OPTIONS,
-  encodeCookiePayload,
+  signCookiePayload,
   parseAdminRestorePayload,
   parseImpersonationPayload,
   type AdminRestorePayload,
   type ImpersonationPayload,
 } from "./impersonation-cookies.ts";
+
+/**
+ * The key the impersonation cookies are signed with.
+ *
+ * Derived from the service-role key rather than a new env var: adding a required secret would
+ * break the next deploy that forgot it, and this key already exists everywhere the feature runs,
+ * never leaves the server, and is the same trust level as the thing it protects. It is hashed
+ * with a label so the signing key is not the credential itself, and rotating the service-role key
+ * simply invalidates outstanding impersonations — which is the correct outcome.
+ */
+export function impersonationCookieSecret() {
+  return createHash("sha256")
+    .update("memoai-impersonation-cookie-v1:")
+    .update(getServerEnv().SUPABASE_SERVICE_ROLE_KEY)
+    .digest();
+}
 
 /**
  * Admin impersonation: an admin holds a genuine session for another account so the app renders
@@ -40,6 +59,23 @@ export async function resolveImpersonationTarget(userId: string) {
   }
 
   return { id: data.user.id, email: data.user.email ?? null };
+}
+
+/**
+ * Another admin's account is never a legitimate impersonation target: debugging a learner needs
+ * a learner, while stepping into a colleague's admin account is lateral movement that the audit
+ * row would attribute to them from that point on. Refused outright.
+ */
+export async function isAdminAccount(email: string) {
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .from("admin_users")
+    .select("email")
+    .ilike("email", email.replace(/[\\%_]/g, "\\$&"))
+    .maybeSingle();
+
+  // Fail closed: if the allowlist cannot be read, assume the target might be an admin.
+  return Boolean(error) || Boolean(data);
 }
 
 /**
@@ -107,5 +143,8 @@ export async function recordImpersonationEvent(params: {
 export async function getImpersonationState(): Promise<ImpersonationPayload | null> {
   const cookieStore = await cookies();
 
-  return parseImpersonationPayload(cookieStore.get(IMPERSONATION_COOKIE)?.value);
+  return parseImpersonationPayload(
+    cookieStore.get(IMPERSONATION_COOKIE)?.value,
+    impersonationCookieSecret(),
+  );
 }

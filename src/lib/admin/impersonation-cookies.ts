@@ -1,17 +1,24 @@
 // Kept free of "server-only" so the cookie contract stays unit-testable
 // (tests/admin-impersonation.test.mjs) outside the Next.js runtime.
 
+import { createHmac, timingSafeEqual } from "node:crypto";
+
 /**
  * Holds the admin's own session while they are inside someone else's account, so coming back
- * needs no re-login. It carries the admin's *own* tokens — the same material their normal auth
- * cookie holds — so it is written `httpOnly`/`secure` and grants nothing their ordinary session
- * does not already grant.
+ * needs no re-login.
+ *
+ * Both cookies are `httpOnly`, but confidentiality is not the property that matters most here —
+ * **integrity is**. The restore cookie is fed to `setSession`, so a browser that can be made to
+ * present a forged one would be signed in as whoever forged it. Worse, sign-out consults this
+ * cookie before it clears anything, which would turn the sign-out button into a sign-in-as-
+ * attacker button. Every payload is therefore signed with a server-held key and rejected unless
+ * the signature verifies.
  */
 export const ADMIN_RESTORE_COOKIE = "memoai-admin-restore";
 
 /**
- * Names the account currently being impersonated. Readable by the server only; the banner is
- * rendered server-side from it, so the value never reaches client JavaScript.
+ * Names the account currently being impersonated. Signed like the restore cookie: an unsigned one
+ * would let anyone paint a convincing "Viewing as <someone>" badge over their own session.
  */
 export const IMPERSONATION_COOKIE = "memoai-impersonating";
 
@@ -28,21 +35,36 @@ export type ImpersonationPayload = {
   startedAt: string;
 };
 
-/**
- * Cookie values are base64url JSON: the payloads carry emails, and a raw JSON cookie would be
- * rejected or mangled by the `;`/`,` rules of the cookie grammar.
- */
-export function encodeCookiePayload(payload: unknown) {
-  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+/** `<base64url payload>.<base64url HMAC>` — JSON alone would not survive the cookie grammar. */
+export function signCookiePayload(payload: unknown, secret: Buffer | string) {
+  const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const signature = createHmac("sha256", secret).update(body).digest("base64url");
+
+  return `${body}.${signature}`;
 }
 
-function decodeCookiePayload(value: string | undefined): unknown {
+function verifyCookiePayload(value: string | undefined, secret: Buffer | string): unknown {
   if (!value) {
     return null;
   }
 
+  const separator = value.lastIndexOf(".");
+
+  if (separator <= 0) {
+    return null;
+  }
+
+  const body = value.slice(0, separator);
+  const provided = Buffer.from(value.slice(separator + 1), "base64url");
+  const expected = createHmac("sha256", secret).update(body).digest();
+
+  // Length check first: timingSafeEqual throws on a mismatch rather than returning false.
+  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+    return null;
+  }
+
   try {
-    return JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    return JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
   } catch {
     return null;
   }
@@ -54,9 +76,12 @@ function asRecord(value: unknown) {
     : null;
 }
 
-/** Returns the admin's stored session, or null when the cookie is absent or malformed. */
-export function parseAdminRestorePayload(value: string | undefined): AdminRestorePayload | null {
-  const record = asRecord(decodeCookiePayload(value));
+/** Returns the admin's stored session, or null when the cookie is absent, forged or malformed. */
+export function parseAdminRestorePayload(
+  value: string | undefined,
+  secret: Buffer | string,
+): AdminRestorePayload | null {
+  const record = asRecord(verifyCookiePayload(value, secret));
 
   if (!record) {
     return null;
@@ -76,8 +101,11 @@ export function parseAdminRestorePayload(value: string | undefined): AdminRestor
   };
 }
 
-export function parseImpersonationPayload(value: string | undefined): ImpersonationPayload | null {
-  const record = asRecord(decodeCookiePayload(value));
+export function parseImpersonationPayload(
+  value: string | undefined,
+  secret: Buffer | string,
+): ImpersonationPayload | null {
+  const record = asRecord(verifyCookiePayload(value, secret));
 
   if (!record) {
     return null;

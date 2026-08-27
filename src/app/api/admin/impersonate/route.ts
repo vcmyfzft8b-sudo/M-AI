@@ -1,11 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { requireAdminApi } from "@/lib/admin/auth";
+import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import {
   ADMIN_RESTORE_COOKIE,
   IMPERSONATION_COOKIE,
   IMPERSONATION_COOKIE_OPTIONS,
-  encodeCookiePayload,
+  impersonationCookieSecret,
+  isAdminAccount,
+  signCookiePayload,
   mintImpersonationTokenHash,
   recordImpersonationEvent,
   resolveImpersonationTarget,
@@ -42,6 +45,19 @@ export async function POST(request: NextRequest) {
     return admin.response;
   }
 
+  // Each press spends a Supabase auth API call to mint the session, so a stuck key or a leaning
+  // finger cannot walk the project into its auth rate limit.
+  const limited = await enforceRateLimit({
+    request,
+    route: "api:admin:impersonate:post",
+    rules: rateLimitPresets.mutate,
+    userId: admin.context.user.id,
+  });
+
+  if (limited) {
+    return limited;
+  }
+
   const formData = await request.formData().catch(() => null);
   const targetUserId =
     typeof formData?.get("user_id") === "string" ? String(formData.get("user_id")).trim() : "";
@@ -58,6 +74,12 @@ export async function POST(request: NextRequest) {
 
   if (!target?.email) {
     return redirectTo(request, "/admin/users", "?impersonation=unknown-user");
+  }
+
+  // Stepping into a colleague's admin account is lateral movement, not debugging: from that point
+  // every action they take is recorded as the other admin's.
+  if (await isAdminAccount(target.email)) {
+    return redirectTo(request, "/admin/users", "?impersonation=admin-target");
   }
 
   // The admin's own tokens, captured before their cookies are replaced, so Stop is a cookie swap
@@ -97,23 +119,25 @@ export async function POST(request: NextRequest) {
     return redirectTo(request, "/admin/users", "?impersonation=failed");
   }
 
+  const secret = impersonationCookieSecret();
+
   response.cookies.set(
     ADMIN_RESTORE_COOKIE,
-    encodeCookiePayload({
+    signCookiePayload({
       accessToken: adminSession.access_token,
       refreshToken: adminSession.refresh_token,
       adminEmail: admin.context.user.email ?? null,
-    }),
+    }, secret),
     IMPERSONATION_COOKIE_OPTIONS,
   );
   response.cookies.set(
     IMPERSONATION_COOKIE,
-    encodeCookiePayload({
+    signCookiePayload({
       targetUserId: target.id,
       targetEmail: target.email,
       adminEmail: admin.context.user.email ?? null,
       startedAt: new Date().toISOString(),
-    }),
+    }, secret),
     IMPERSONATION_COOKIE_OPTIONS,
   );
 

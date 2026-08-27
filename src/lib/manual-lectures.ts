@@ -70,6 +70,12 @@ import {
   describeHostResolutionFailure,
   describeLinkFetchFailure,
 } from "@/lib/link-fetch-errors";
+import {
+  LINK_LOGIN_WALL_CODE,
+  LINK_LOGIN_WALL_MESSAGE,
+  isLoginWallUrl,
+  looksLikeLoginPage,
+} from "@/lib/link-login-walls";
 import { serializeVector } from "@/lib/utils";
 
 const MAX_LINK_FETCH_REDIRECTS = 3;
@@ -1114,9 +1120,14 @@ async function readResponseBodyWithLimit(response: Response, maxBytes: number) {
   return body;
 }
 
-async function fetchReadableWebpageResponse(targetUrl: URL, redirectCount = 0): Promise<{
+async function fetchReadableWebpageResponse(
+  targetUrl: URL,
+  redirectCount = 0,
+  sawLoginWall = false,
+): Promise<{
   url: URL;
   response: Response;
+  sawLoginWall: boolean;
 }> {
   if (redirectCount > MAX_LINK_FETCH_REDIRECTS) {
     throw new ExpectedLectureInputError(
@@ -1161,12 +1172,20 @@ async function fetchReadableWebpageResponse(targetUrl: URL, redirectCount = 0): 
         );
       }
 
-      return fetchReadableWebpageResponse(nextUrl, redirectCount + 1);
+      // Note where the chain went, but keep following it. A sign-in wall only ever
+      // rewords a failure further down; deciding here would let a false positive turn a
+      // page we can actually read into an error.
+      return fetchReadableWebpageResponse(
+        nextUrl,
+        redirectCount + 1,
+        sawLoginWall || isLoginWallUrl(nextUrl),
+      );
     }
 
     return {
       url: targetUrl,
       response,
+      sawLoginWall,
     };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
@@ -1192,13 +1211,18 @@ async function fetchReadableWebpageResponse(targetUrl: URL, redirectCount = 0): 
 
 export async function fetchReadableWebpage(params: { url: string }) {
   const targetUrl = new URL(params.url);
-  const { url, response } = await fetchReadableWebpageResponse(targetUrl);
+  const { url, response, sawLoginWall } = await fetchReadableWebpageResponse(targetUrl);
+  // The URL the learner pasted can be the sign-in endpoint itself, with no redirect to
+  // give it away, so weigh that in alongside where the redirects led.
+  const behindLogin = sawLoginWall || isLoginWallUrl(url);
 
   if (!response.ok) {
+    if (behindLogin || response.status === 401 || response.status === 403) {
+      throw new ExpectedLectureInputError(LINK_LOGIN_WALL_MESSAGE, LINK_LOGIN_WALL_CODE);
+    }
+
     throw new ExpectedLectureInputError(
-      response.status === 401 || response.status === 403
-        ? "The link is private or requires permission to view."
-        : "The link could not be loaded.",
+      "The link could not be loaded.",
       "link_not_loadable",
     );
   }
@@ -1228,6 +1252,14 @@ export async function fetchReadableWebpage(params: { url: string }) {
   );
 
   if (composed.length < 200) {
+    // A sign-in form reliably lands here rather than in the `!response.ok` branch above:
+    // the site serves it as a perfectly healthy 200, and it reads as thin only because
+    // `stripNoisyHtml` drops the `<form>` that holds all of its text. Say what actually
+    // blocked us, so the learner is pointed at signing in rather than at retry.
+    if (behindLogin || looksLikeLoginPage(html)) {
+      throw new ExpectedLectureInputError(LINK_LOGIN_WALL_MESSAGE, LINK_LOGIN_WALL_CODE);
+    }
+
     throw new ExpectedLectureInputError(
       "This page does not contain enough readable text to summarize.",
       "link_not_enough_text",

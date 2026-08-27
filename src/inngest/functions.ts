@@ -121,7 +121,9 @@ export const processLectureFunction = inngest.createFunction(
       // The budget can also run out after the notes are finished, while the optional initial note
       // audio is still being prepared. markLecturePipelineFailed reports that by leaving the
       // lecture ready and returning `recorded: false`; failing the step then would make Inngest
-      // regenerate the finished notes from scratch four more times.
+      // regenerate the finished notes from scratch four more times. It returns the same when the
+      // learner deleted the lecture mid-run, where the four retries would each fail on the row
+      // that is no longer there.
       if (outcome.recorded) {
         throw error;
       }

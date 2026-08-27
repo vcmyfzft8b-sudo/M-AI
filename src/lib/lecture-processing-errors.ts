@@ -65,3 +65,34 @@ export function toLectureFailureCode(error: unknown) {
 
   return null;
 }
+
+/**
+ * The lecture row is gone. A learner can delete a lecture while its pipeline is still running,
+ * and every stage that reads the row throws the moment they do.
+ *
+ * The stages used to reach that through `.single()`, which raises PostgREST's "Cannot coerce the
+ * result to a single JSON object" — a message that names neither the lecture nor the deletion,
+ * and that was written verbatim into the lecture's `error_message` and reported to Sentry as a
+ * defect.
+ */
+export class LectureNoLongerExistsError extends Error {
+  readonly lectureId: string;
+
+  constructor(lectureId: string) {
+    super(`Lecture ${lectureId} no longer exists.`);
+    this.name = "LectureNoLongerExistsError";
+    this.lectureId = lectureId;
+  }
+}
+
+/**
+ * Only ask this while the error is still the object that was thrown — across an Inngest step
+ * boundary the class is flattened away, exactly as for `isExpectedLectureInputFailure`. On the far
+ * side, ask the database instead: no row means the lecture is gone, whatever the error says.
+ */
+export function isLectureNoLongerExistsError(error: unknown) {
+  return (
+    error instanceof LectureNoLongerExistsError ||
+    (error instanceof Error && error.name === "LectureNoLongerExistsError")
+  );
+}

@@ -1037,7 +1037,7 @@ async function assertPublicHostname(hostname: string) {
     normalizedHostname.endsWith(".local")
   ) {
     throw new ExpectedLectureInputError(
-      "Private network addresses are not allowed.",
+      "Ta povezava kaže na zasebno omrežje, zato je ne moremo odpreti. Prilepi javno dostopno povezavo.",
       "private_network_link",
     );
   }
@@ -1045,7 +1045,7 @@ async function assertPublicHostname(hostname: string) {
   if (isIP(normalizedHostname) !== 0) {
     if (isDisallowedIpAddress(normalizedHostname)) {
       throw new ExpectedLectureInputError(
-        "Private network addresses are not allowed.",
+        "Ta povezava kaže na zasebno omrežje, zato je ne moremo odpreti. Prilepi javno dostopno povezavo.",
         "private_network_link",
       );
     }
@@ -1060,7 +1060,7 @@ async function assertPublicHostname(hostname: string) {
     addresses.some((entry) => isDisallowedIpAddress(entry.address))
   ) {
     throw new ExpectedLectureInputError(
-      "Private network addresses are not allowed.",
+      "Ta povezava kaže na zasebno omrežje, zato je ne moremo odpreti. Prilepi javno dostopno povezavo.",
       "private_network_link",
     );
   }
@@ -1071,7 +1071,7 @@ function resolveRedirectUrl(baseUrl: URL, location: string) {
     return new URL(location, baseUrl);
   } catch {
     throw new ExpectedLectureInputError(
-      "The link returned an invalid redirect.",
+      "Ta povezava se preusmerja na naslov, ki ga ne znamo prebrati. Odpri jo v brskalniku in prilepi končni naslov strani.",
       "invalid_link_redirect",
     );
   }
@@ -1131,7 +1131,7 @@ async function fetchReadableWebpageResponse(
 }> {
   if (redirectCount > MAX_LINK_FETCH_REDIRECTS) {
     throw new ExpectedLectureInputError(
-      "Too many redirects. Use the final page URL directly.",
+      "Ta povezava se preusmerja prevečkrat. Odpri jo v brskalniku in prilepi končni naslov strani.",
       "too_many_link_redirects",
     );
   }
@@ -1158,7 +1158,7 @@ async function fetchReadableWebpageResponse(
 
       if (!location) {
         throw new ExpectedLectureInputError(
-          "The link returned an invalid redirect.",
+          "Ta povezava se preusmerja na naslov, ki ga ne znamo prebrati. Odpri jo v brskalniku in prilepi končni naslov strani.",
           "invalid_link_redirect",
         );
       }
@@ -1167,7 +1167,7 @@ async function fetchReadableWebpageResponse(
 
       if (nextUrl.protocol !== "http:" && nextUrl.protocol !== "https:") {
         throw new ExpectedLectureInputError(
-          "Only http and https links are supported.",
+          "Podprte so samo povezave, ki se začnejo s http:// ali https://.",
           "unsupported_link_protocol",
         );
       }
@@ -1190,7 +1190,7 @@ async function fetchReadableWebpageResponse(
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new ExpectedLectureInputError(
-        "The link took too long to respond.",
+        "Stran se ni odzvala dovolj hitro. Poskusi znova čez nekaj minut.",
         "link_timeout",
       );
     }
@@ -1222,7 +1222,7 @@ export async function fetchReadableWebpage(params: { url: string }) {
     }
 
     throw new ExpectedLectureInputError(
-      "The link could not be loaded.",
+      "Te povezave ni bilo mogoče naložiti. Preveri, ali se odpre v brskalniku, in poskusi znova.",
       "link_not_loadable",
     );
   }
@@ -1238,7 +1238,7 @@ export async function fetchReadableWebpage(params: { url: string }) {
 
   if (!isReadableLinkContentType(contentType)) {
     throw new ExpectedLectureInputError(
-      "Only standard web pages are supported for link summaries.",
+      "Ta povezava vodi do datoteke, ne do spletne strani. Če je to PDF, dokument ali predstavitev, jo prenesi in naloži v MemoAI — iz datoteke znamo narediti zapiske.",
       "unsupported_link_content_type",
     );
   }
@@ -1261,7 +1261,7 @@ export async function fetchReadableWebpage(params: { url: string }) {
     }
 
     throw new ExpectedLectureInputError(
-      "This page does not contain enough readable text to summarize.",
+      "Na tej strani ni dovolj berljivega besedila za zapiske. Prilepi povezavo do strani, ki ima več besedila.",
       "link_not_enough_text",
     );
   }
@@ -1652,7 +1652,7 @@ async function fitSourceTextToPipeline(params: {
 
   if (sourceChars > MAX_RAW_SOURCE_TEXT_CHARS) {
     throw new ExpectedLectureInputError(
-      "This source is too large to process even with compression. Please split it into a few parts and try again.",
+      "To gradivo je preveliko za obdelavo naenkrat. Razdeli ga na nekaj delov in poskusi znova.",
       "source_too_large",
     );
   }
@@ -1702,7 +1702,7 @@ export async function createLectureFromTextSource(params: {
 
   if (cleanedText.length < 120) {
     throw new ExpectedLectureInputError(
-      "Please provide a bit more source material before creating notes.",
+      "Za zapiske potrebujemo malo več gradiva. Dodaj še nekaj besedila in poskusi znova.",
       "source_too_short",
     );
   }
@@ -1999,7 +1999,7 @@ export async function prepareLectureFromTextSource(params: {
 
   if (cleanedText.length < 120) {
     throw new ExpectedLectureInputError(
-      "Please provide a bit more source material before creating notes.",
+      "Za zapiske potrebujemo malo več gradiva. Dodaj še nekaj besedila in poskusi znova.",
       "source_too_short",
     );
   }

@@ -38,7 +38,7 @@ const SUPABASE_BOOTSTRAP = `
   -- runner can fail on a local machine (or vice versa). Pin a deliberately
   -- non-UTC session so every migration and test runs under the hostile
   -- timezone that exposed the naive timezone('utc', now()) defaults fixed in
-  -- migration 0034 — host-independent, and biased toward catching that class.
+  -- migration 0035 — host-independent, and biased toward catching that class.
   set timezone = 'Etc/GMT-8';
   create schema if not exists auth;
   create table if not exists auth.users (

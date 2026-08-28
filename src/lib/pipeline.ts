@@ -873,64 +873,73 @@ export async function markLecturePipelineFailed(params: {
   const budgetFailureRuns = budgetOverrun ? readBudgetFailureCount(metadata) + 1 : 0;
 
   if (budgetOverrun && budgetFailureRuns < MAX_BUDGET_FAILURE_RUNS) {
-    await updateLectureProcessingState({
-      lectureId: params.lectureId,
-      processingMetadata: {
-        ...nextMetadata,
-        [BUDGET_FAILURE_COUNT_KEY]: budgetFailureRuns,
-        [LECTURE_FAILURE_METADATA_KEY]: { code: null },
-      },
-      stage: "failed",
-      errorMessage: toErrorMessage(params.error),
-    });
+    let retried = false;
 
-    // Marked failed first, retried second: if the enqueue dies, the lecture sits in exactly the
-    // state it sat in before this existed — failed, message on the row, retry button offered.
     try {
-      const retried = await enqueueBudgetOverrunRetry({
+      // The learner sees an uninterrupted spinner, not a failure that un-fails itself: the row
+      // goes back to "queued" — the same touch the stuck-lecture recovery in the lecture GET
+      // writes — with the failure counter bumped and processing.updatedAt refreshed. The fresh
+      // timestamp restarts that recovery's staleness clock, which is also the safety net here:
+      // if the retry run below dies without ever reaching this function again, the lecture is a
+      // stale "queued" row, and opening it re-enqueues the right job for every source shape.
+      //
+      // Touched before enqueueing, not after: on the HTTP-fallback tier the enqueue can run the
+      // whole job inline, and a touch written after it would stamp "queued" over the finished
+      // lecture with no recovery path left to fix it.
+      await createSupabaseServiceRoleClient()
+        .from("lectures")
+        .update(
+          sanitizeJsonForDatabase({
+            status: "queued",
+            error_message: null,
+            processing_metadata: {
+              ...nextMetadata,
+              [BUDGET_FAILURE_COUNT_KEY]: budgetFailureRuns,
+              [LECTURE_FAILURE_METADATA_KEY]: { code: null },
+              processing: {
+                ...(typeof (nextMetadata as Record<string, unknown>).processing === "object"
+                  ? ((nextMetadata as Record<string, unknown>).processing as Record<string, unknown>)
+                  : {}),
+                stage: "queued",
+                updatedAt: new Date().toISOString(),
+                errorMessage: null,
+              },
+            },
+          }) as never,
+        )
+        .eq("id", params.lectureId);
+
+      retried = await enqueueBudgetOverrunRetry({
         lectureId: params.lectureId,
         sourceType: lectureMetadata?.source_type ?? null,
         metadata,
       });
-
-      if (retried) {
-        // No "[lecture-pipeline]" prefix on purpose: the triage automation treats every line
-        // carrying that prefix as actionable, and a failure the pipeline is already retrying by
-        // itself is not. It stays a warn so the platform log still shows the struggle.
-        console.warn("Lecture run died on the invocation budget; retrying automatically", {
-          lectureId: params.lectureId,
-          budgetFailureRuns,
-          maxRuns: MAX_BUDGET_FAILURE_RUNS,
-          error: toErrorMessage(params.error),
-        });
-
-        return { recorded: true };
-      }
-    } catch (enqueueError) {
-      console.error("Automatic budget-overrun retry could not be enqueued", {
+    } catch (retryError) {
+      console.error("Automatic budget-overrun retry could not be started", {
         lectureId: params.lectureId,
-        error: enqueueError,
+        error: retryError,
       });
     }
 
-    // The automatic retry could not be started — this lecture is waiting on a human after all,
-    // so it gets the full visibility an unretried failure always had.
-    console.error("[lecture-pipeline] Lecture failed", {
-      lectureId: params.lectureId,
-      userId: lectureMetadata?.user_id ?? null,
-      sourceType: lectureMetadata?.source_type ?? null,
-      error: toErrorMessage(params.error),
-    });
-    captureRouteError(params.error, {
-      route: "lecture-pipeline",
-      operation: "markLecturePipelineFailed",
-      lectureId: params.lectureId,
-      userId: lectureMetadata?.user_id ?? undefined,
-      tags: { sourceType: lectureMetadata?.source_type ?? "unknown" },
-      extra: { budgetFailureRuns, autoRetryEnqueued: false },
-    });
+    if (retried) {
+      // No "[lecture-pipeline]" prefix on purpose: the triage automation treats every line
+      // carrying that prefix as actionable, and a failure the pipeline is already retrying by
+      // itself is not. It stays a warn so the platform log still shows the struggle.
+      console.warn("Lecture run died on the invocation budget; retrying automatically", {
+        lectureId: params.lectureId,
+        budgetFailureRuns,
+        maxRuns: MAX_BUDGET_FAILURE_RUNS,
+        error: toErrorMessage(params.error),
+      });
 
-    return { recorded: true };
+      return { recorded: true };
+    }
+
+    // The retry could not be started, so this lecture is waiting on a human after all. Falling
+    // through records the failure with everything an unretried one always had: the failed
+    // status and message (undoing the optimistic "queued" above), the log line, the Sentry
+    // event, and the retry button — the failure code below stays null for a non-terminal
+    // overrun, and null codes keep the button.
   }
 
   // The terminal budget case: this run was the lecture's last chance and it died on the budget

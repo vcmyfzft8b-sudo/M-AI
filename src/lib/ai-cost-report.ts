@@ -31,12 +31,18 @@ export type DailyCostSummary = {
   topLectures: Array<{ lectureId: string; usd: number; calls: number }>;
   /** Why the day's failed model calls failed, worst group first. */
   topCallFailures: CallFailureGroup[];
+  /** Every failed call of the day sorted into who has to act, not just the printed groups. */
+  callFailureCategories: Array<{ category: FailureCategory; count: number }>;
 };
 
 /** A group of failed model calls that share a stage and a root cause. */
 export type CallFailureGroup = {
   stage: string;
+  /** The raw provider/validator message, for whoever is going to debug it. */
   reason: string;
+  /** The same thing in one plain sentence, for whoever is only reading the summary. */
+  plain: string;
+  category: FailureCategory;
   count: number;
 };
 
@@ -87,12 +93,203 @@ function truncateReason(message: string | null | undefined): string {
 }
 
 /**
+ * Who has to act on a failure. The morning report leads with this, because "3 of yesterday's 4
+ * failures were bad uploads" and "3 of them were our schema" call for very different mornings.
+ */
+export type FailureCategory = "upload" | "our-code" | "provider" | "unknown";
+
+export type FailureExplanation = {
+  /** One sentence, no jargon, safe to paste into a summary as-is. */
+  plain: string;
+  category: FailureCategory;
+};
+
+/**
+ * Plain-English readings of the causes actually seen in production (30-day sweep, 2026-08-28:
+ * 42 distinct raw causes, of which the entries below cover ~99% of failed calls and every
+ * artifact failure). Ordered most specific first -- the first match wins.
+ *
+ * Anything unmatched falls through to "unknown" and keeps its raw message, so a new fault shows
+ * up in the report as itself rather than being silently mislabelled as a known one.
+ */
+const FAILURE_RULES: Array<{ match: RegExp; plain: string; category: FailureCategory }> = [
+  // --- The uploaded material is the problem; the user can fix it by uploading something else.
+  // The user-facing copy is Slovenian, so each of these matches both languages -- the report is
+  // read in English and "V zvoku ni bilo mogoce..." is not a summary.
+  {
+    match: /dovolj jasnega govora|no clear speech|not enough clear speech/i,
+    plain: "The recording had no clear speech to transcribe.",
+    category: "upload",
+  },
+  {
+    // Must precede the page rule: both mention "berljivega besedila", only this one is a photo.
+    match: /Na fotografiji ni bilo mogo|readable text.*photo|photo.*readable text/i,
+    plain: "The photo had too little readable text.",
+    category: "upload",
+  },
+  {
+    match: /Na tej strani ni dovolj berljivega besedila|does not contain enough readable text/i,
+    plain: "The linked page had almost no readable text to work from.",
+    category: "upload",
+  },
+  {
+    match: /private or requires permission/i,
+    plain: "The link was private, so it could not be opened.",
+    category: "upload",
+  },
+  {
+    match: /Do spletne strani na tej povezavi ni bilo mogo|could not be reached/i,
+    plain: "The linked page could not be reached.",
+    category: "upload",
+  },
+  {
+    match: /too large to process at once/i,
+    plain: "The upload was too big to process in one piece.",
+    category: "upload",
+  },
+  {
+    match: /datoteka je predolga|Omejitev je 3 ure/i,
+    plain: "The audio was longer than the 3-hour limit.",
+    category: "upload",
+  },
+  {
+    match: /datoteka je prevelika|Omejitev je 300 MB/i,
+    plain: "The audio was larger than the 300 MB limit.",
+    category: "upload",
+  },
+  {
+    match: /Dokumenta ni bilo mogo|nepodprte binarne podatke/i,
+    plain: "The document could not be read; it may need exporting as a PDF first.",
+    category: "upload",
+  },
+
+  // --- Our own request, schema, or caps; only a code change fixes these.
+  {
+    match: /too many states for serving/i,
+    plain:
+      "Our JSON schema was too complex for Gemini to serve, so the request was rejected before any work happened -- and still billed.",
+    category: "our-code",
+  },
+  {
+    match: /TruncatedOutputError|truncated.*output limit/i,
+    plain: "The model ran out of its output budget mid-JSON, so the reply could not be parsed.",
+    category: "our-code",
+  },
+  {
+    match: /Unsupported MIME type/i,
+    plain: "We sent a file type Gemini refuses instead of converting it first.",
+    category: "our-code",
+  },
+  // Two shapes for the same fault: the raw ZodError as logged against a model call, and the
+  // unwrapped single issue the study tables store ("questions.0.explanation: Too big: ...").
+  {
+    match: /"too_big"|Too big: expected/i,
+    plain: "The model wrote a field longer than our validator allows.",
+    category: "our-code",
+  },
+  {
+    match: /"too_small"|Too small: expected/i,
+    plain: "The model left a field shorter than our validator allows, usually empty.",
+    category: "our-code",
+  },
+  {
+    match: /ZodError|invalid_type/i,
+    plain: "The model's reply did not match the shape our validator expects.",
+    category: "our-code",
+  },
+  {
+    match: /SyntaxError|is not valid JSON|Unterminated string|Unexpected end of JSON/i,
+    plain: "The model returned malformed JSON.",
+    category: "our-code",
+  },
+  {
+    match: /Empty(Text|Structured)?OutputError|returned empty (text|structured) output/i,
+    plain: "The model returned nothing at all.",
+    category: "our-code",
+  },
+  {
+    match: /timed out after|operation was aborted|aborted due to timeout/i,
+    plain: "The call hit our own timeout and was cut off.",
+    category: "our-code",
+  },
+  {
+    // The pipeline's stage-budget message, stored in Slovenian on the lecture.
+    match: /trajala predolgo|traja predolgo/i,
+    plain: "Processing ran past our own time budget and was stopped part-way.",
+    category: "our-code",
+  },
+  {
+    match: /API key not valid|PERMISSION_DENIED|caller does not have permission/i,
+    plain: "The API key was rejected or is not allowed to call that model -- a config problem.",
+    category: "our-code",
+  },
+  {
+    match: /Request contains an invalid argument|INVALID_ARGUMENT/i,
+    plain: "Gemini rejected the request as malformed.",
+    category: "our-code",
+  },
+
+  // --- Gemini/OpenRouter's side. Transient, and the retry usually covers it.
+  {
+    match: /overloaded|high demand/i,
+    plain: "Gemini was overloaded and refused the call.",
+    category: "provider",
+  },
+  {
+    match: /service is currently unavailable|UNAVAILABLE|Deadline expired/i,
+    plain: "Gemini was temporarily unavailable.",
+    category: "provider",
+  },
+  {
+    match: /rate limit|RESOURCE_EXHAUSTED|quota/i,
+    plain: "We hit the provider's rate limit or quota.",
+    category: "provider",
+  },
+  {
+    match: /fetch failed|ECONNRESET|ETIMEDOUT|socket hang up|network error/i,
+    plain: "The connection to the provider failed outright.",
+    category: "provider",
+  },
+];
+
+/** Plain-English reading of one raw failure message. Never throws; unknown text stays unknown. */
+export function explainFailure(message: string | null | undefined): FailureExplanation {
+  const text = (message ?? "").trim();
+
+  if (!text) {
+    return { plain: "The failure was recorded without a message.", category: "unknown" };
+  }
+
+  const rule = FAILURE_RULES.find((candidate) => candidate.match.test(text));
+
+  return rule
+    ? { plain: rule.plain, category: rule.category }
+    : { plain: truncateReason(text), category: "unknown" };
+}
+
+/** Roll-up over every failure of a day, not just the top groups the report prints. */
+function countCategories(
+  failures: Array<{ message: string | null }>,
+): Array<{ category: FailureCategory; count: number }> {
+  const counts = new Map<FailureCategory, number>();
+
+  for (const failure of failures) {
+    const { category } = explainFailure(failure.message);
+    counts.set(category, (counts.get(category) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .map(([category, count]) => ({ category, count }))
+    .sort((left, right) => right.count - left.count);
+}
+
+/**
  * Groups failures by {@link failureReasonKey} but labels each group with the raw message seen
  * most often in it, so the caller gets a stable count next to text a human can act on.
  */
 function groupFailureReasons(
   failures: Array<{ message: string | null }>,
-): Array<{ reason: string; count: number }> {
+): Array<{ reason: string; plain: string; category: FailureCategory; count: number }> {
   const groups = new Map<string, { count: number; labels: Map<string, number> }>();
 
   for (const failure of failures) {
@@ -106,10 +303,11 @@ function groupFailureReasons(
   }
 
   return [...groups.values()]
-    .map((group) => ({
-      reason: [...group.labels.entries()].sort((left, right) => right[1] - left[1])[0][0],
-      count: group.count,
-    }))
+    .map((group) => {
+      const reason = [...group.labels.entries()].sort((left, right) => right[1] - left[1])[0][0];
+
+      return { reason, ...explainFailure(reason), count: group.count };
+    })
     .sort((left, right) => right.count - left.count);
 }
 
@@ -206,6 +404,7 @@ export function summarizeAiUsageByDay(rows: AiUsageRow[]): DailyCostSummary[] {
         )
         .sort((left, right) => right.count - left.count)
         .slice(0, TOP_CALL_FAILURES),
+      callFailureCategories: countCategories([...day.callFailures.values()].flat()),
     }));
 }
 
@@ -280,7 +479,15 @@ export type DailyGenerationSummary = {
   date: string;
   totals: GenerationOutcome;
   kinds: Record<GenerationKind, GenerationOutcome>;
-  failureReasons: Array<{ kind: GenerationKind; reason: string; count: number }>;
+  failureReasons: Array<{
+    kind: GenerationKind;
+    reason: string;
+    plain: string;
+    category: FailureCategory;
+    count: number;
+  }>;
+  /** Every failure of the day sorted into who has to act, not just the printed groups. */
+  failureCategories: Array<{ category: FailureCategory; count: number }>;
 };
 
 function emptyOutcome(): GenerationOutcome {
@@ -352,5 +559,6 @@ export function summarizeGenerationByDay(rows: GenerationRow[]): DailyGeneration
         )
         .sort((left, right) => right.count - left.count)
         .slice(0, TOP_GENERATION_FAILURES),
+      failureCategories: countCategories([...day.failures.values()].flat()),
     }));
 }

@@ -5,6 +5,7 @@ import {
   DEFAULT_DAILY_ALERT_USD,
   DEFAULT_LECTURE_ALERT_USD,
   GENERATION_KINDS,
+  explainFailure,
   failureReasonKey,
   findCostAnomalies,
   isOpenRouterBilledModel,
@@ -105,10 +106,13 @@ test("failed calls are grouped by stage and cause, with the provider's own error
   ]);
 
   assert.equal(day.failedCalls, 3);
-  assert.deepEqual(day.topCallFailures, [
-    { stage: "note_write", reason: "503: overloaded", count: 2 },
-    { stage: "note_extract", reason: "schema mismatch", count: 1 },
-  ]);
+  assert.deepEqual(
+    day.topCallFailures.map(({ stage, reason, count }) => ({ stage, reason, count })),
+    [
+      { stage: "note_write", reason: "503: overloaded", count: 2 },
+      { stage: "note_extract", reason: "schema mismatch", count: 1 },
+    ],
+  );
 });
 
 test("one fault reported with varying indices and ids collapses into a single group", () => {
@@ -125,9 +129,10 @@ test("one fault reported with varying indices and ids collapses into a single gr
     gen({ kind: "quizzes", status: "failed", error_message: "questions.4.explanation: Too big" }),
   ]);
 
-  assert.deepEqual(day.failureReasons, [
-    { kind: "quizzes", reason: "questions.0.explanation: Too big", count: 2 },
-  ]);
+  assert.deepEqual(
+    day.failureReasons.map(({ kind, reason, count }) => ({ kind, reason, count })),
+    [{ kind: "quizzes", reason: "questions.0.explanation: Too big", count: 2 }],
+  );
 });
 
 test("generation counts split succeeded, failed and still-running per artifact kind", () => {
@@ -144,9 +149,9 @@ test("generation counts split succeeded, failed and still-running per artifact k
   assert.deepEqual(day.totals, { total: 6, succeeded: 3, failed: 1, pending: 2 });
   assert.deepEqual(day.kinds.notes, { total: 3, succeeded: 1, failed: 1, pending: 1 });
   assert.deepEqual(day.kinds.quizzes, { total: 1, succeeded: 0, failed: 0, pending: 1 });
-  assert.deepEqual(day.failureReasons, [
-    { kind: "notes", reason: "Obdelava je trajala predolgo.", count: 1 },
-  ]);
+  assert.equal(day.failureReasons.length, 1);
+  assert.equal(day.failureReasons[0].kind, "notes");
+  assert.equal(day.failureReasons[0].reason, "Obdelava je trajala predolgo.");
 
   // Every kind is always present, so the report never has to guard on a missing key.
   assert.deepEqual(Object.keys(day.kinds).sort(), [...GENERATION_KINDS].sort());
@@ -161,7 +166,81 @@ test("generation days are separated and ordered, like the spend days", () => {
   assert.deepEqual(summary.map((day) => day.date), ["2026-08-25", "2026-08-26"]);
   assert.equal(summary[0].totals.failed, 1);
   // A failure with no message still has to be counted and shown as something.
-  assert.deepEqual(summary[0].failureReasons, [
-    { kind: "notes", reason: "(no message)", count: 1 },
+  assert.equal(summary[0].failureReasons[0].reason, "(no message)");
+  assert.equal(summary[0].failureReasons[0].category, "unknown");
+});
+
+test("every failure carries a plain-English reading and who has to act on it", () => {
+  // The exact strings production emits, one per category, verbatim from a 30-day sweep.
+  const overloaded = explainFailure(
+    '429: {"error":{"code":429,"message":"This model is currently experiencing high demand."}}',
+  );
+  assert.equal(overloaded.category, "provider");
+  assert.match(overloaded.plain, /overloaded/i);
+
+  const badAudio = explainFailure(
+    "V zvoku ni bilo mogoče zaznati dovolj jasnega govora. Preveri posnetek in poskusi znova.",
+  );
+  assert.equal(badAudio.category, "upload");
+  // The Slovenian message has to come back out in English, or the summary cannot use it.
+  assert.match(badAudio.plain, /no clear speech/i);
+
+  const schema = explainFailure(
+    '400: {"error":{"code":400,"message":"The specified schema produces a constraint that has too many states for serving."}}',
+  );
+  assert.equal(schema.category, "our-code");
+  // This one is billed despite producing nothing, which is the whole reason it is called out.
+  assert.match(schema.plain, /billed/i);
+
+  assert.equal(
+    explainFailure(
+      "GeminiTruncatedOutputError: Model output was truncated: generation hit the 2400-token output limit",
+    ).category,
+    "our-code",
+  );
+  assert.equal(
+    explainFailure('ZodError: [ { "origin": "string", "code": "too_big", "maximum": 140 } ]').category,
+    "our-code",
+  );
+
+  // A cause nobody has classified yet must survive as itself, not be forced into a known bucket.
+  const novel = explainFailure("Kessler syndrome in the GPU cluster");
+  assert.equal(novel.category, "unknown");
+  assert.equal(novel.plain, "Kessler syndrome in the GPU cluster");
+
+  assert.equal(explainFailure(null).category, "unknown");
+  assert.equal(explainFailure("").category, "unknown");
+});
+
+test("categories roll up over every failure, not just the groups the report prints", () => {
+  // TOP_CALL_FAILURES caps the printed list at 5; a roll-up computed from that list would
+  // under-count, which is exactly the number a reader would trust most.
+  const failures = [];
+
+  for (let index = 0; index < 8; index += 1) {
+    failures.push(
+      row({ success: false, stage: `stage_${index}`, error_message: "Model returned empty text output." }),
+    );
+  }
+
+  failures.push(row({ success: false, stage: "extra", error_message: "The service is currently unavailable." }));
+
+  const [day] = summarizeAiUsageByDay(failures);
+
+  assert.equal(day.topCallFailures.length, 5, "the printed list stays capped");
+  assert.deepEqual(day.callFailureCategories, [
+    { category: "our-code", count: 8 },
+    { category: "provider", count: 1 },
+  ]);
+
+  const [gen1] = summarizeGenerationByDay([
+    gen({ kind: "notes", status: "failed", error_message: "The link is private or requires permission to view." }),
+    gen({ kind: "notes", status: "failed", error_message: "This page does not contain enough readable text to summarize." }),
+    gen({ kind: "quizzes", status: "failed", error_message: "questions.0.explanation: Too big: expected string to have <=760 characters" }),
+  ]);
+
+  assert.deepEqual(gen1.failureCategories, [
+    { category: "upload", count: 2 },
+    { category: "our-code", count: 1 },
   ]);
 });

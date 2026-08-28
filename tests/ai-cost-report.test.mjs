@@ -4,9 +4,12 @@ import test from "node:test";
 import {
   DEFAULT_DAILY_ALERT_USD,
   DEFAULT_LECTURE_ALERT_USD,
+  GENERATION_KINDS,
+  failureReasonKey,
   findCostAnomalies,
   isOpenRouterBilledModel,
   summarizeAiUsageByDay,
+  summarizeGenerationByDay,
 } from "../src/lib/ai-cost-report.ts";
 
 const row = (overrides) => ({
@@ -16,6 +19,16 @@ const row = (overrides) => ({
   success: true,
   estimated_cost_usd: 0.001,
   lecture_id: "lec-1",
+  error_code: null,
+  error_message: null,
+  ...overrides,
+});
+
+const gen = (overrides) => ({
+  kind: "notes",
+  settled_at: "2026-08-25T10:00:00Z",
+  status: "ready",
+  error_message: null,
   ...overrides,
 });
 
@@ -81,4 +94,74 @@ test("the alarm trips on a runaway day or a runaway lecture, and stays quiet on 
   assert.equal(findCostAnomalies(healthy, { dailyAlertUsd: 1, lectureAlertUsd: 0.3 }).length, 2);
   assert.ok(DEFAULT_DAILY_ALERT_USD > 2, "the default must sit above the healthy baseline");
   assert.ok(DEFAULT_LECTURE_ALERT_USD > 0.5, "the default must sit above the worst healthy lecture");
+});
+
+test("failed calls are grouped by stage and cause, with the provider's own error code kept", () => {
+  const [day] = summarizeAiUsageByDay([
+    row({ success: false, stage: "note_write", error_code: "503", error_message: "overloaded" }),
+    row({ success: false, stage: "note_write", error_code: "503", error_message: "overloaded" }),
+    row({ success: false, stage: "note_extract", error_message: "schema mismatch" }),
+    row(),
+  ]);
+
+  assert.equal(day.failedCalls, 3);
+  assert.deepEqual(day.topCallFailures, [
+    { stage: "note_write", reason: "503: overloaded", count: 2 },
+    { stage: "note_extract", reason: "schema mismatch", count: 1 },
+  ]);
+});
+
+test("one fault reported with varying indices and ids collapses into a single group", () => {
+  // The real shape: quiz generation rejects questions.0 on one lecture and questions.1 on the
+  // next. Two rows, one bug -- the report has to say "2", not list it twice.
+  assert.equal(
+    failureReasonKey("questions.0.explanation: Too big: expected <=760 characters"),
+    failureReasonKey("questions.11.explanation: Too big: expected <=760 characters"),
+  );
+  assert.notEqual(failureReasonKey("timed out"), failureReasonKey("no speech detected"));
+
+  const [day] = summarizeGenerationByDay([
+    gen({ kind: "quizzes", status: "failed", error_message: "questions.0.explanation: Too big" }),
+    gen({ kind: "quizzes", status: "failed", error_message: "questions.4.explanation: Too big" }),
+  ]);
+
+  assert.deepEqual(day.failureReasons, [
+    { kind: "quizzes", reason: "questions.0.explanation: Too big", count: 2 },
+  ]);
+});
+
+test("generation counts split succeeded, failed and still-running per artifact kind", () => {
+  const [day] = summarizeGenerationByDay([
+    gen({ kind: "notes", status: "ready" }),
+    gen({ kind: "notes", status: "failed", error_message: "Obdelava je trajala predolgo." }),
+    // An upload abandoned mid-flight is not a generation defect, so it must land in pending.
+    gen({ kind: "notes", status: "uploading" }),
+    gen({ kind: "flashcards", status: "ready" }),
+    gen({ kind: "quizzes", status: "generating" }),
+    gen({ kind: "practiceTests", status: "ready" }),
+  ]);
+
+  assert.deepEqual(day.totals, { total: 6, succeeded: 3, failed: 1, pending: 2 });
+  assert.deepEqual(day.kinds.notes, { total: 3, succeeded: 1, failed: 1, pending: 1 });
+  assert.deepEqual(day.kinds.quizzes, { total: 1, succeeded: 0, failed: 0, pending: 1 });
+  assert.deepEqual(day.failureReasons, [
+    { kind: "notes", reason: "Obdelava je trajala predolgo.", count: 1 },
+  ]);
+
+  // Every kind is always present, so the report never has to guard on a missing key.
+  assert.deepEqual(Object.keys(day.kinds).sort(), [...GENERATION_KINDS].sort());
+});
+
+test("generation days are separated and ordered, like the spend days", () => {
+  const summary = summarizeGenerationByDay([
+    gen({ settled_at: "2026-08-26T00:01:00Z" }),
+    gen({ settled_at: "2026-08-25T23:59:00Z", status: "failed", error_message: null }),
+  ]);
+
+  assert.deepEqual(summary.map((day) => day.date), ["2026-08-25", "2026-08-26"]);
+  assert.equal(summary[0].totals.failed, 1);
+  // A failure with no message still has to be counted and shown as something.
+  assert.deepEqual(summary[0].failureReasons, [
+    { kind: "notes", reason: "(no message)", count: 1 },
+  ]);
 });

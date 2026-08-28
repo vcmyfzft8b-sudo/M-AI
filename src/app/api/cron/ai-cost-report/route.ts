@@ -3,9 +3,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   findCostAnomalies,
   summarizeAiUsageByDay,
+  summarizeGenerationByDay,
   DEFAULT_DAILY_ALERT_USD,
   DEFAULT_LECTURE_ALERT_USD,
   type AiUsageRow,
+  type GenerationKind,
+  type GenerationRow,
 } from "@/lib/ai-cost-report";
 import { captureRouteError } from "@/lib/monitoring";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -29,6 +32,30 @@ const MAX_REPORT_DAYS = 30;
 const USAGE_PAGE_SIZE = 1000;
 /** Far above any healthy week; stops a pathological table from turning the report into the outage. */
 const MAX_USAGE_ROWS = 60_000;
+/** Artifact rows run ~50/day per kind, so this is a runaway guard, not a real ceiling. */
+const MAX_GENERATION_ROWS = 20_000;
+
+/**
+ * Where each artifact records its outcome. The three study tables are re-stamped on every status
+ * write (see setStudyAssetStatus and friends), so `generated_at` is when the attempt settled.
+ * Lectures have no such column -- `updated_at` there also moves on a rename or a folder change --
+ * so notes bucket by `created_at`, which reads as "lectures uploaded that day and how they turned
+ * out". In production only ~1% of a day's lectures are still in flight when the report runs.
+ */
+const GENERATION_SOURCES: Array<{
+  kind: GenerationKind;
+  table: string;
+  timestampColumn: string;
+}> = [
+  { kind: "notes", table: "lectures", timestampColumn: "created_at" },
+  { kind: "flashcards", table: "lecture_study_assets", timestampColumn: "generated_at" },
+  { kind: "quizzes", table: "lecture_quiz_assets", timestampColumn: "generated_at" },
+  {
+    kind: "practiceTests",
+    table: "lecture_practice_test_assets",
+    timestampColumn: "generated_at",
+  },
+];
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -91,7 +118,9 @@ async function loadUsageRows(sinceIso: string): Promise<AiUsageRow[]> {
   for (let from = 0; rows.length < MAX_USAGE_ROWS; from += USAGE_PAGE_SIZE) {
     const { data, error } = await supabase
       .from("ai_usage_events")
-      .select("created_at, model, stage, success, estimated_cost_usd, lecture_id")
+      .select(
+        "created_at, model, stage, success, estimated_cost_usd, lecture_id, error_code, error_message",
+      )
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: true })
       .range(from, from + USAGE_PAGE_SIZE - 1);
@@ -108,6 +137,53 @@ async function loadUsageRows(sinceIso: string): Promise<AiUsageRow[]> {
   }
 
   return rows;
+}
+
+/**
+ * Outcome rows for every artifact kind. Each table is small (tens of rows a day), so the four
+ * loads run together and the counting happens in JS -- one paged read per table beats a count
+ * query per kind per status per day.
+ */
+async function loadGenerationRows(sinceIso: string): Promise<GenerationRow[]> {
+  const supabase = createSupabaseServiceRoleClient();
+
+  const perSource = await Promise.all(
+    GENERATION_SOURCES.map(async ({ kind, table, timestampColumn }) => {
+      const rows: GenerationRow[] = [];
+
+      for (let from = 0; rows.length < MAX_GENERATION_ROWS; from += USAGE_PAGE_SIZE) {
+        const { data, error } = await supabase
+          .from(table)
+          .select(`${timestampColumn}, status, error_message`)
+          .gte(timestampColumn, sinceIso)
+          .order(timestampColumn, { ascending: true })
+          .range(from, from + USAGE_PAGE_SIZE - 1);
+
+        if (error) {
+          throw error;
+        }
+
+        const page = (data ?? []) as unknown as Array<Record<string, unknown>>;
+
+        rows.push(
+          ...page.map((row) => ({
+            kind,
+            settled_at: String(row[timestampColumn]),
+            status: String(row.status ?? ""),
+            error_message: (row.error_message as string | null) ?? null,
+          })),
+        );
+
+        if (page.length < USAGE_PAGE_SIZE) {
+          break;
+        }
+      }
+
+      return rows;
+    }),
+  );
+
+  return perSource.flat();
 }
 
 /**
@@ -163,17 +239,21 @@ export async function GET(request: NextRequest) {
   since.setUTCDate(since.getUTCDate() - days);
 
   try {
-    const [rows, openRouterAccount] = await Promise.all([
+    const [rows, generationRows, openRouterAccount] = await Promise.all([
       loadUsageRows(since.toISOString()),
+      loadGenerationRows(since.toISOString()),
       fetchOpenRouterCredits(),
     ]);
     const summary = summarizeAiUsageByDay(rows);
+    const generationSummary = summarizeGenerationByDay(generationRows);
 
     const yesterdayDate = new Date();
     yesterdayDate.setUTCHours(0, 0, 0, 0);
     yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
     const yesterdayKey = yesterdayDate.toISOString().slice(0, 10);
     const yesterday = summary.find((day) => day.date === yesterdayKey) ?? null;
+    const generationYesterday =
+      generationSummary.find((day) => day.date === yesterdayKey) ?? null;
 
     const limits = {
       dailyAlertUsd: parseThreshold(
@@ -202,6 +282,7 @@ export async function GET(request: NextRequest) {
     } else {
       console.log("[ai-cost-report] Daily spend OK", {
         yesterday: yesterday ?? "no usage",
+        generation: generationYesterday?.totals ?? "no generations",
       });
     }
 
@@ -213,6 +294,10 @@ export async function GET(request: NextRequest) {
       anomalies,
       openRouterAccount,
       daily: summary,
+      generation: {
+        yesterday: generationYesterday,
+        daily: generationSummary,
+      },
     });
   } catch (error) {
     captureRouteError(error, {

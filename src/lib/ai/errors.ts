@@ -8,7 +8,10 @@ function getErrorText(error: unknown) {
   }
 
   try {
-    return JSON.stringify(error);
+    // `JSON.stringify(undefined)` is `undefined`, not a string, and every caller here goes
+    // straight on to `.toLowerCase()` or `.trim()`. This function feeds the message that records
+    // a pipeline failure, so it must never be the thing that throws.
+    return JSON.stringify(error) ?? String(error);
   } catch {
     return String(error);
   }
@@ -24,6 +27,46 @@ export const AI_SAVE_TIMEOUT_MESSAGE =
   "Shranjevanje zapiskov je trajalo predolgo. Poskusi znova čez minuto.";
 export const AI_PROVIDER_OVERLOADED_MESSAGE =
   "Naš ponudnik UI je trenutno preobremenjen. Poskusi znova čez minuto.";
+// The sentence `runWithinInvocationBudget` already rejects with when a stage outlives its budget.
+// Repeated here rather than imported from the five call sites that declare it, because those live
+// in route modules this dependency-free file must not pull in; tests/aborted-run-message.test.mjs
+// fails if any of them drifts from this one.
+export const AI_PROCESSING_TOO_LONG_MESSAGE =
+  "Obdelava je trajala predolgo in se je ustavila. Poskusi znova.";
+
+/**
+ * An abort inside the pipeline means exactly one thing: the invocation budget ran out and
+ * cancelled the work still in flight (see src/lib/abort-context.ts). The budget's own rejection
+ * normally wins the race and carries `AI_PROCESSING_TOO_LONG_MESSAGE`, but on 2026-08-27 a
+ * cancelled call's rejection reached `markLecturePipelineFailed` first, and its raw text — Node's
+ * `DOMException: This operation was aborted` — was written to the lecture as the learner's error
+ * message and opened a Sentry issue of its own (MEMOAI-WEB-34).
+ *
+ * Recognised by `name` first. The message test is not a convenience: `markLecturePipelineFailed`
+ * is called on the far side of an Inngest step boundary, which rebuilds the error as a plain
+ * `Error` and leaves nothing but the message to go on. Both strings matched here are fixed — one
+ * is Node's own default abort reason, the other is `WorkAbortedError`'s own wording — not a
+ * provider's prose that could be reworded upstream.
+ */
+export function isAbortedWorkError(error: unknown) {
+  const name =
+    error instanceof Error
+      ? error.name
+      : typeof error === "object" && error !== null && "name" in error
+        ? (error as { name?: unknown }).name
+        : null;
+
+  if (name === "AbortError" || name === "WorkAbortedError") {
+    return true;
+  }
+
+  const text = getErrorText(error).trim();
+
+  return (
+    /^this operation was aborted\.?$/i.test(text) ||
+    text.toLowerCase().includes("the invocation budget ran out")
+  );
+}
 
 // Only the overloaded sentence, deliberately. The English wording of the save-timeout message
 // contained no provider keyword, so it classified as NOT retryable, and mapping it to retryable
@@ -67,6 +110,13 @@ export function toUserFacingAiErrorMessage(error: unknown) {
   // save-timeout sentence against the overloaded rule and swap one message for the other.
   if (text.trim() === AI_SAVE_TIMEOUT_MESSAGE || text.trim() === AI_PROVIDER_OVERLOADED_MESSAGE) {
     return text.trim();
+  }
+
+  // Before the keyword rules below: a cancelled run is the budget ending, and the learner is owed
+  // the budget's own sentence rather than Node's English abort text. It is the same outcome the
+  // budget reports when its rejection wins the race, so the two paths now read identically.
+  if (isAbortedWorkError(error)) {
+    return AI_PROCESSING_TOO_LONG_MESSAGE;
   }
 
   if (

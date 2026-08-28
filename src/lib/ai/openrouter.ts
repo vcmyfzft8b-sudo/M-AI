@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import { getCurrentAbortSignal } from "@/lib/abort-context";
+import { isMandatoryReasoningModel, resolveWireReasoningEffort } from "@/lib/ai/model-config";
 import { GeminiTruncatedOutputError } from "@/lib/ai/structured-output";
 import { parseStructuredText } from "@/lib/ai/structured-output";
 import type { GeminiUsageContext, GeminiUsageMetadata } from "@/lib/ai/usage-logging";
@@ -39,6 +40,48 @@ export function directModelId(model: string) {
 }
 
 const REASONING_EFFORT = new Set(["minimal", "low", "medium", "high"]);
+
+/**
+ * How this request asks the gateway to reason, which differs by what the model can do.
+ *
+ * A Gemini or GPT model takes our level names directly and may skip reasoning entirely. GLM
+ * cannot: reasoning is mandatory on its endpoint ("reasoning: { enabled: false }" is rejected
+ * with a 400), it only understands max/high/low, and an unrecognised effort silently buys its
+ * default — which is "max", the most expensive setting on the card. So GLM levels are mapped to
+ * the nearest supported effort and the reasoning text is excluded from the response body (it is
+ * billed either way; there is no reason to ship it back).
+ */
+function buildReasoningBlock(routedModel: string, thinkingLevel: string | null | undefined) {
+  if (isMandatoryReasoningModel(routedModel)) {
+    const effort =
+      resolveWireReasoningEffort(
+        routedModel,
+        thinkingLevel && REASONING_EFFORT.has(thinkingLevel)
+          ? (thinkingLevel as "minimal" | "low" | "medium" | "high")
+          : "low",
+      ) ?? "low";
+
+    return { reasoning: { effort, exclude: true } };
+  }
+
+  return thinkingLevel && REASONING_EFFORT.has(thinkingLevel)
+    ? { reasoning: { effort: thinkingLevel } }
+    : {};
+}
+
+/**
+ * Provider routing preferences. GLM is served by fifteen third-party hosts at wildly different
+ * speeds and quantizations; without a preference OpenRouter picks by price and the same request
+ * can land anywhere. sort:"throughput" pins routing to the fastest live host (measured
+ * 2026-08-28: it roughly doubled tokens/s over default routing) and require_parameters keeps the
+ * request off any host that would silently drop response_format's strict JSON schema. Gemini
+ * routed through the gateway is served by Google alone, so it needs neither.
+ */
+function buildProviderBlock(routedModel: string) {
+  return isMandatoryReasoningModel(routedModel)
+    ? { provider: { sort: "throughput", require_parameters: true } }
+    : {};
+}
 
 // Strict structured outputs accept a subset of JSON Schema: objects must forbid extra properties
 // and require every key, and the value constraints are rejected outright. Dropping them is what
@@ -158,9 +201,8 @@ export async function generateStructuredObjectWithOpenRouter<TSchema extends z.Z
             schema: toStrictJsonSchema(responseSchema),
           },
         },
-        ...(params.thinkingLevel && REASONING_EFFORT.has(params.thinkingLevel)
-          ? { reasoning: { effort: params.thinkingLevel } }
-          : {}),
+        ...buildReasoningBlock(routedModel, params.thinkingLevel),
+        ...buildProviderBlock(routedModel),
       }),
     });
 

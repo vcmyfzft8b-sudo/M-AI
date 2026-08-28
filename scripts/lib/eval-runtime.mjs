@@ -27,10 +27,14 @@ export const PRICES = {
   "or/google/gemini-3.7-flash": { input: 0.375, output: 1.875 },
   "or/google/gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
   "or/openai/gpt-5-nano": { input: 0.05, output: 0.4 },
+  // Z.ai GLM 5.3 Flash, read live from OpenRouter's models API on 2026-08-28. Reasoning is
+  // mandatory on this endpoint and its reasoning tokens are billed as completion tokens, so the
+  // output rate is what the thinking costs.
+  "or/z-ai/glm-5.3-flash": { input: 0.075, output: 0.25 },
 };
 
 /** A bake-off that hangs is worse than one that fails; every call gets a deadline. */
-const CALL_TIMEOUT_MS = 180_000;
+const CALL_TIMEOUT_MS = Number.parseInt(process.env.EVAL_CALL_TIMEOUT_MS ?? "", 10) || 180_000;
 
 export const GRADER_MODEL = "gemini-3.5-flash-lite";
 

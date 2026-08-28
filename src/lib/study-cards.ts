@@ -291,6 +291,7 @@ async function generateCardsForConceptBatch(params: {
 
   const batch = await generateStructuredObject({
     schema: generatedCardBatchSchema,
+    stage: "study_items",
     maxOutputTokens: Math.max(2600, targetCount * 560),
     instructions:
       `${languageInstruction}

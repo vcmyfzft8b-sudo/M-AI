@@ -421,6 +421,7 @@ async function generateQuestionsForUnit(params: {
 
   const batch = await generateStructuredObject({
     schema: quizQuestionBatchSchema,
+    stage: "study_items",
     maxOutputTokens: Math.max(2200, targetCount * 520),
     instructions: `${languageInstruction}
 ${params.repairOnly ? "Repair missing quiz coverage." : "Generate source-grounded multiple-choice quiz questions."}

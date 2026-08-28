@@ -321,6 +321,7 @@ async function generateQuestionsForUnit(params: {
         : "\nPrevious output included prompts that depended on missing context. Regenerate only standalone prompts with all needed context inside the question itself.";
     const batch = await generateStructuredObject({
       schema: practiceQuestionBatchSchema,
+      stage: "study_items",
       maxOutputTokens: Math.max(2200, targetCount * 600),
       instructions: `${languageInstruction}
 ${params.repairOnly ? "Repair missing practice-test coverage." : "Generate source-grounded open-ended practice-test questions."}
@@ -1007,6 +1008,7 @@ async function gradeAnswer(params: {
 }) {
   return generateStructuredObject({
     schema: gradingSchema,
+    stage: "study_items",
     maxOutputTokens: 1600,
     instructions: `Grade the student's free-response answer using the supplied answer guide.
 Return an integer score from 0 to 5.

@@ -10,9 +10,13 @@ import {
   isOpenRouterModel,
 } from "@/lib/ai/openrouter";
 import {
+  AI_STAGE_MODEL_ENV_KEYS,
   applyOutputHeadroom,
+  isGeminiModel,
+  resolveStageDirectFallbackModel,
   resolveStageModelConfig,
   resolveStageTimeoutMs,
+  supportsThinkingLevel,
   type AiStage,
 } from "@/lib/ai/model-config";
 import { isWorkAbortedError } from "@/lib/abort-context";
@@ -43,6 +47,14 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
   stage?: AiStage;
   /** For callers with their own fallback (e.g. condensation's mechanical selection): a retry ladder there is pure spend. */
   maxAttempts?: number;
+  /**
+   * Pins this one call to a model without touching the stage's configuration — the resolver
+   * still supplies the stage's thinking level, headroom and timeout for whatever model this is.
+   * Used by the outline's size gate (note-generation.ts): a very large outline cannot finish on
+   * the slow default model inside one Vercel invocation, so it runs on the fast proven one. An
+   * explicit env override for the stage still wins over this, so the operator keeps the last word.
+   */
+  modelOverride?: string;
   usageContext?: GeminiUsageContext;
 }) {
   const env = getServerEnv();
@@ -59,14 +71,17 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
     });
   }
 
+  const stageModelEnvKey = AI_STAGE_MODEL_ENV_KEYS[params.stage];
   const config = resolveStageModelConfig({
     stage: params.stage,
-    env: process.env,
+    env: params.modelOverride
+      ? { ...process.env, [stageModelEnvKey]: process.env[stageModelEnvKey] || params.modelOverride }
+      : process.env,
     fallbackModel: env.GEMINI_TEXT_MODEL,
   });
 
   const maxOutputTokens = applyOutputHeadroom(params.maxOutputTokens, config);
-  const timeoutMs = resolveStageTimeoutMs(params.stage);
+  const timeoutMs = resolveStageTimeoutMs(params.stage, config.model);
   const usageContext = {
     ...(params.usageContext ?? {}),
     stage: params.usageContext?.stage ?? params.stage,
@@ -113,18 +128,32 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
     }
   }
 
+  /**
+   * The direct-provider fallback model. For a routed Gemini ("or/google/…") the direct id is the
+   * same weights bought from Google. For a routed non-Gemini model (GLM) there is no Google id to
+   * strip down to — sending "glm-5.3-flash" to the Gemini API is a guaranteed second failure — so
+   * the stage falls back to the Gemini model that ran it before the switch.
+   */
+  const fallbackModel = !isOpenRouterModel(config.model)
+    ? config.model
+    : isGeminiModel(config.model)
+      ? directModelId(config.model)
+      : (resolveStageDirectFallbackModel(params.stage) ?? env.GEMINI_TEXT_MODEL);
+  const fallbackThinkingLevel = supportsThinkingLevel(fallbackModel) ? config.thinkingLevel : null;
+  const fallbackTimeoutMs = resolveStageTimeoutMs(params.stage, fallbackModel);
+
   return generateStructuredObjectWithGemini({
     schema: params.schema,
     instructions: params.instructions,
     input: params.input,
-    model: isOpenRouterModel(config.model) ? directModelId(config.model) : config.model,
+    model: fallbackModel,
     maxOutputTokens,
-    ...(timeoutMs ? { timeoutMs } : {}),
+    ...(fallbackTimeoutMs ? { timeoutMs: fallbackTimeoutMs } : {}),
     ...(params.maxAttempts ? { maxAttempts: params.maxAttempts } : {}),
-    ...(config.thinkingLevel
+    ...(fallbackThinkingLevel
       ? {
           thinkingConfig: {
-            thinkingLevel: SDK_THINKING_LEVELS[config.thinkingLevel],
+            thinkingLevel: SDK_THINKING_LEVELS[fallbackThinkingLevel],
           },
         }
       : {}),

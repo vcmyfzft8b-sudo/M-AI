@@ -340,6 +340,13 @@ const VARIANTS = {
     label: "item-driven, gemini-3.7-flash on OpenRouter's promotional rate",
     run: (fixture) => runItemDrivenVariant(fixture, "or/google/gemini-3.7-flash"),
   },
+  // GLM 5.3 Flash bake-off, 2026-08-28. Study generation runs entirely on the shared cheap model,
+  // so one row is the whole comparison: the candidate does both the extraction the deck is built
+  // from and the card, quiz and practice writing.
+  "glm-5.3-flash": {
+    label: "item-driven, GLM 5.3 Flash via OpenRouter",
+    run: (fixture) => runItemDrivenVariant(fixture, "or/z-ai/glm-5.3-flash"),
+  },
 };
 
 /* -------------------------------------------------------------------------- */

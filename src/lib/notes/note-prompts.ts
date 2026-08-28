@@ -458,6 +458,13 @@ export function buildNoteWritingInstructions(params: {
    * when extraneous material is excluded, not merely when good material is added.
    */
   pedagogy?: boolean;
+  /**
+   * When the note is written in windows (see planNoteWriteWindows), each call writes one
+   * consecutive slice of the outline's topics. The shared sections are assigned by position —
+   * the first window opens the note, the last closes it — and every window sees the full topic
+   * list so it knows what it must NOT write.
+   */
+  window?: { index: number; count: number };
 }) {
   const labels = getStructuredPlusLabels(params.outputLanguage);
   const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
@@ -506,22 +513,127 @@ ${pedagogyRule}
 ` : ""}
 Write for someone revising the night before an exam: name the thing, say what it is, say why it matters or what it is confused with. Prefer the concrete number, formula, or exact wording from the source over a paraphrase of it.
 
-Format (use these exact headings):
-- "${labels.overview}" — 2-3 sentences on the whole source, then one callout "> **${labels.keyTakeaway}:** ...".
-- "${labels.keyThings}" — the highest-importance items as bullets.
-- One GFM table when at least three items are genuinely comparable, with leading and trailing pipes. Never more than two tables, and never a table that repeats nearby bullets.
-- One "## N. Topic name" section per outline topic, in outline order.
-- Inside a topic use "${labels.coreIdea}" (exactly one sentence) and "${labels.detailedNotes}". Add "${labels.keyTerms}", "${labels.example}", "${labels.compare}" or "${labels.process}" only when that topic has such content.
-- "${labels.checkYourself}" once near the end — 3-5 questions answerable from these notes, and worth asking: the things a learner most often gets wrong, not the easiest facts to look up.
-- "${labels.finalReview}" — the takeaways and the mistakes worth warning about, phrased so they are useful on their own without rereading the note.
-
-"${labels.overview}", "${labels.keyThings}", "${labels.checkYourself}" and "${labels.finalReview}" are always present. Everything else appears only when that topic has the content for it.
+${buildWriteFormatRules(labels, params.window)}
 
 "${labels.keyTerms}" is for terms whose definition is not already given in that topic's prose. Never repeat a definition there that the paragraph above just gave.
 
-Style: markdown only, no HTML. Bullets start with "- ". Prose for explanation, bullets for genuine lists. At most 3 blockquote callouts in total, of the form "> **${labels.definition}:** ...", "> **${labels.commonMistake}:** ..." or "> **${labels.keyTakeaway}:** ...". Between 2 and 5 emojis in major headings, never on bullets.
+Style: markdown only, no HTML. Bullets start with "- ". Prose for explanation, bullets for genuine lists. At most ${params.window && params.window.count > 1 ? "2" : "3"} blockquote callouts in total, of the form "> **${labels.definition}:** ...", "> **${labels.commonMistake}:** ..." or "> **${labels.keyTakeaway}:** ...". ${params.window && params.window.count > 1 ? "At most 2 emojis in major headings" : "Between 2 and 5 emojis in major headings"}, never on bullets.
 
 ${MATH_FORMATTING_INSTRUCTIONS}`;
+}
+
+/**
+ * The format contract for one write call. A single-window note carries the whole structure; a
+ * windowed call writes only its own slice of it, and the shared sections are assigned by
+ * position so that the concatenated windows read as one note with each section appearing exactly
+ * once: the first window opens (overview, key things), the last closes (check yourself, final
+ * review), and every window writes only the topics marked as its own in the outline it receives.
+ */
+function buildWriteFormatRules(
+  labels: ReturnType<typeof getStructuredPlusLabels>,
+  window?: { index: number; count: number },
+) {
+  const overviewRule = `- "${labels.overview}" — 2-3 sentences on the whole source, then one callout "> **${labels.keyTakeaway}:** ...".
+- "${labels.keyThings}" — the highest-importance items as bullets.`;
+  const topicRules = `- One GFM table when at least three items are genuinely comparable, with leading and trailing pipes. Never more than two tables, and never a table that repeats nearby bullets.
+- One "## N. Topic name" section per outline topic, in outline order, numbered with the topic's given position.
+- Inside a topic use "${labels.coreIdea}" (exactly one sentence) and "${labels.detailedNotes}". Add "${labels.keyTerms}", "${labels.example}", "${labels.compare}" or "${labels.process}" only when that topic has such content.`;
+  const closingRule = `- "${labels.checkYourself}" once near the end — 3-5 questions answerable from these notes, and worth asking: the things a learner most often gets wrong, not the easiest facts to look up.
+- "${labels.finalReview}" — the takeaways and the mistakes worth warning about, phrased so they are useful on their own without rereading the note.`;
+
+  if (!window || window.count <= 1) {
+    return `Format (use these exact headings):
+${overviewRule}
+${topicRules}
+${closingRule}
+
+"${labels.overview}", "${labels.keyThings}", "${labels.checkYourself}" and "${labels.finalReview}" are always present. Everything else appears only when that topic has the content for it.`;
+  }
+
+  const isFirst = window.index === 0;
+  const isLast = window.index === window.count - 1;
+  const role = isFirst
+    ? `${overviewRule}
+${topicRules}
+Do NOT write "${labels.checkYourself}" or "${labels.finalReview}" — the closing part of the note writes those.`
+    : isLast
+      ? `${topicRules}
+${closingRule}
+Do NOT write "${labels.overview}" or "${labels.keyThings}" — the opening part of the note already wrote those. "${labels.checkYourself}" and "${labels.finalReview}" cover the WHOLE outline, including the topics marked coveredElsewhere, not only this part's topics.`
+      : `${topicRules}
+Do NOT write "${labels.overview}", "${labels.keyThings}", "${labels.checkYourself}" or "${labels.finalReview}" — other parts of the note write those.`;
+
+  return `This note is written in ${window.count} parts that will be joined in order, and you are writing part ${window.index + 1}. Write ONLY the topics whose items are given in full in the outline; topics marked coveredElsewhere are being written in another part — never write a section for them and never re-teach their material. Start your output directly with this part's first heading and end it after this part's last section: no preamble, no title line, no transition sentences into other parts.
+
+Format for part ${window.index + 1} of ${window.count} (use these exact headings):
+${role}`;
+}
+
+/**
+ * Partitions the outline's topics into consecutive write windows of at most this many retained
+ * items each.
+ *
+ * The windows exist because of a wall-clock ceiling, not a quality preference: the default writer
+ * (GLM 5.3 Flash, ~50-80 tokens/s through the pinned OpenRouter host) writes a 74-item note in
+ * 200-400s, every route runs under Vercel's 300s maxDuration, and the write call's leash must
+ * also leave room for its Gemini fallback in the same invocation. 36 items is ~6k output tokens —
+ * roughly 100-150s of GLM — so each window finishes comfortably inside one invocation, and each
+ * window checkpoints separately (note_generation_cache), so an Inngest retry resumes after the
+ * windows already written instead of re-buying them.
+ */
+export const NOTE_WRITE_WINDOW_MAX_ITEMS = 36;
+
+export type NoteWriteWindow = {
+  /** Indexes into outline.topics, consecutive and in outline order. */
+  topicIndexes: number[];
+  itemCount: number;
+};
+
+export function planNoteWriteWindows(
+  outline: z.infer<typeof noteOutlineSchema>,
+  maxItemsPerWindow = NOTE_WRITE_WINDOW_MAX_ITEMS,
+): NoteWriteWindow[] {
+  const windows: NoteWriteWindow[] = [];
+  let current: NoteWriteWindow = { topicIndexes: [], itemCount: 0 };
+
+  outline.topics.forEach((topic, index) => {
+    const topicItems = topic.itemIds.length;
+
+    // A single topic larger than the whole budget still gets one window: topics are the unit of
+    // coherence and are never split. Such a topic runs longer, but the outline's own topic sizing
+    // makes this rare, and one oversized window still beats one oversized note.
+    if (current.topicIndexes.length > 0 && current.itemCount + topicItems > maxItemsPerWindow) {
+      windows.push(current);
+      current = { topicIndexes: [], itemCount: 0 };
+    }
+
+    current.topicIndexes.push(index);
+    current.itemCount += topicItems;
+  });
+
+  if (current.topicIndexes.length > 0) {
+    windows.push(current);
+  }
+
+  return windows;
+}
+
+/**
+ * The outline as one write window sees it: full item detail for the topics this window writes,
+ * titles only for every other topic — enough to know what is taught elsewhere (so nothing is
+ * duplicated "for completeness") without paying to resend material another window owns.
+ */
+export function formatOutlineForWindowWriting(params: {
+  outline: z.infer<typeof noteOutlineSchema>;
+  items: IndexedKnowledgeItem[];
+  topicIndexes: number[];
+}) {
+  const included = new Set(params.topicIndexes);
+  const full = formatOutlineForWriting(params);
+
+  return full.map((topic, index) =>
+    included.has(index) ? topic : { position: topic.position, title: topic.title, coveredElsewhere: true },
+  );
 }
 
 export function formatOutlineForWriting(params: {

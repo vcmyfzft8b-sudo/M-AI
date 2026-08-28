@@ -2,6 +2,7 @@ import "server-only";
 
 import { chunkSummarySchema, noteArtifactSchema } from "@/lib/ai/schemas";
 import { generateStructuredObject } from "@/lib/ai/json";
+import { getServerEnv } from "@/lib/server-env";
 import { buildTranscriptWindows } from "@/lib/chunking";
 import {
   buildGeneratedContentLanguageInstruction,
@@ -16,7 +17,9 @@ import {
   buildNoteWritingInstructions,
   countWords,
   dedupeKnowledgeItems,
+  formatOutlineForWindowWriting,
   formatOutlineForWriting,
+  planNoteWriteWindows,
   KNOWLEDGE_EXTRACTION_PASS_WINDOWS,
   MAX_ITEMS_PER_EXTRACTION_WINDOW,
   resolveExtractionMaxOutputTokens,
@@ -218,6 +221,17 @@ export async function extractKnowledgeItems(params: {
   return judged.map((item, id) => ({ ...item, id }));
 }
 
+/**
+ * Above this many extracted items the outline runs on GEMINI_TEXT_MODEL instead of the stage's
+ * default. The outline is the one call that cannot be windowed — it is the single place global
+ * importance is judged, over every item at once — and its output grows with the item count
+ * (~60 tokens each). The default writer since 2026-08-28 reasons at ~50-80 tokens/s, so past
+ * ~120 items the call stops fitting the 300s invocation it runs in, and a call that cannot fit
+ * is a call that can never converge, no matter how many times Inngest retries it. The fast
+ * proven Gemini outline (the pre-switch production model) takes over exactly there.
+ */
+const OUTLINE_SIZE_GATE_MAX_ITEMS = 120;
+
 async function generateNotesContentDriven(
   segments: TranscriptSegmentInput[],
   params: {
@@ -259,11 +273,14 @@ async function generateNotesContentDriven(
   const outlineMaxOutputTokens = Math.max(2600, items.length * 60);
   const lectureId = params.usageContext?.lectureId ?? null;
 
+  const outlineModelOverride =
+    items.length > OUTLINE_SIZE_GATE_MAX_ITEMS ? getServerEnv().GEMINI_TEXT_MODEL : undefined;
+
   const rawOutline = await withGenerationCheckpoint({
     lectureId,
     stage: "note_outline",
     cacheKey: generationCacheKey([
-      stageModelCacheKeyPart("note_outline"),
+      stageModelCacheKeyPart("note_outline", outlineModelOverride),
       outlineInstructions,
       outlineInput,
       outlineMaxOutputTokens,
@@ -276,6 +293,7 @@ async function generateNotesContentDriven(
         stage: "note_outline",
         instructions: outlineInstructions,
         input: outlineInput,
+        ...(outlineModelOverride ? { modelOverride: outlineModelOverride } : {}),
         usageContext: params.usageContext,
       }),
   });
@@ -288,44 +306,60 @@ async function generateNotesContentDriven(
   );
   const sourceText = segments.map((segment) => segment.text).join("\n\n");
 
-  // Budgeted from the retained items rather than from a word target: length follows the content,
-  // and so does the budget for writing it.
-  const writeInstructions = buildNoteWritingInstructions({
-    outputLanguage: params.outputLanguage,
-    coverageObjective: true,
-    pedagogy: true,
-  });
-  const writeInput = `Outline to teach:\n${JSON.stringify({
-    title: outline.title,
-    summary: outline.summary,
-    topics: formatOutlineForWriting({ outline, items }),
-  })}\n\nFull source text:\n${sourceText}`;
-  const writeMaxOutputTokens = Math.max(4000, retainedItemCount * 170);
+  // The note is written in one call when it fits, and in consecutive topic windows when it does
+  // not (planNoteWriteWindows says why: the default writer's speed against the 300s invocation).
+  // Each window is checkpointed separately, so a step that dies mid-note resumes after the
+  // windows already written — the same convergence contract the extraction windows have.
+  const writeWindows = planNoteWriteWindows(outline);
+  const windowMarkdowns: string[] = [];
 
-  // Checkpointed like the outline: this is the single most expensive call in the product, and a
-  // budget that expires after the write but before the artifact is saved must not re-buy it.
-  const written = await withGenerationCheckpoint({
-    lectureId,
-    stage: "note_write",
-    cacheKey: generationCacheKey([
-      stageModelCacheKeyPart("note_write"),
-      writeInstructions,
-      writeInput,
-      writeMaxOutputTokens,
-    ]),
-    schema: noteWriteSchema,
-    generate: () =>
-      generateStructuredObject({
-        schema: noteWriteSchema,
-        maxOutputTokens: writeMaxOutputTokens,
-        stage: "note_write",
-        instructions: writeInstructions,
-        input: writeInput,
-        usageContext: params.usageContext,
-      }),
-  });
+  for (const [windowIndex, writeWindow] of writeWindows.entries()) {
+    const windowOption =
+      writeWindows.length > 1 ? { window: { index: windowIndex, count: writeWindows.length } } : {};
+    const writeInstructions = buildNoteWritingInstructions({
+      outputLanguage: params.outputLanguage,
+      coverageObjective: true,
+      pedagogy: true,
+      ...windowOption,
+    });
+    const windowTopics =
+      writeWindows.length > 1
+        ? formatOutlineForWindowWriting({ outline, items, topicIndexes: writeWindow.topicIndexes })
+        : formatOutlineForWriting({ outline, items });
+    const writeInput = `Outline to teach:\n${JSON.stringify({
+      title: outline.title,
+      summary: outline.summary,
+      topics: windowTopics,
+    })}\n\nFull source text:\n${sourceText}`;
+    const writeMaxOutputTokens = Math.max(4000, writeWindow.itemCount * 170);
 
-  const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(written.structuredNotesMd);
+    // Checkpointed like the outline: this is the single most expensive call in the product, and a
+    // budget that expires after the write but before the artifact is saved must not re-buy it.
+    const written = await withGenerationCheckpoint({
+      lectureId,
+      stage: "note_write",
+      cacheKey: generationCacheKey([
+        stageModelCacheKeyPart("note_write"),
+        writeInstructions,
+        writeInput,
+        writeMaxOutputTokens,
+      ]),
+      schema: noteWriteSchema,
+      generate: () =>
+        generateStructuredObject({
+          schema: noteWriteSchema,
+          maxOutputTokens: writeMaxOutputTokens,
+          stage: "note_write",
+          instructions: writeInstructions,
+          input: writeInput,
+          usageContext: params.usageContext,
+        }),
+    });
+
+    windowMarkdowns.push(written.structuredNotesMd.trim());
+  }
+
+  const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(windowMarkdowns.join("\n\n"));
   const normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
 
   return {

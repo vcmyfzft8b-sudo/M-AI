@@ -2,7 +2,7 @@ import "server-only";
 
 import type { z } from "zod";
 
-import { resolveStageModelConfig, type AiStage } from "@/lib/ai/model-config";
+import { AI_STAGE_MODEL_ENV_KEYS, resolveStageModelConfig, type AiStage } from "@/lib/ai/model-config";
 import { getServerEnv } from "@/lib/server-env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
@@ -38,10 +38,15 @@ const CACHE_LOOKUP_CHUNK_SIZE = 80;
  * stage to a different model via env would keep serving the old model's checkpointed outputs —
  * exactly the change the "stale keys stop matching" contract must cover.
  */
-export function stageModelCacheKeyPart(stage: AiStage) {
+export function stageModelCacheKeyPart(stage: AiStage, modelOverride?: string) {
+  const envKey = AI_STAGE_MODEL_ENV_KEYS[stage];
   const config = resolveStageModelConfig({
     stage,
-    env: process.env,
+    // Mirrors json.ts exactly: a caller-supplied override loses to an explicit env override, so
+    // the key always names the model the call will actually run on.
+    env: modelOverride
+      ? { ...process.env, [envKey]: process.env[envKey] || modelOverride }
+      : process.env,
     fallbackModel: getServerEnv().GEMINI_TEXT_MODEL,
   });
 

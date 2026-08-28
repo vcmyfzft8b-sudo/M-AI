@@ -36,7 +36,8 @@ import type {
 } from "@/lib/types";
 import { getAiProvider, getServerEnv } from "@/lib/server-env";
 
-const PRACTICE_TEST_CONCURRENCY = 3;
+// Raised 3 -> 6 with the 2026-08-28 GLM switch (~3x slower per call; batches independent).
+const PRACTICE_TEST_CONCURRENCY = 6;
 const RECENT_ATTEMPT_MEMORY = 3;
 const PRACTICE_TEST_GENERATION_VERSION = "practice-test-v2";
 const PRACTICE_TEST_GENERATION_ATTEMPTS = 3;

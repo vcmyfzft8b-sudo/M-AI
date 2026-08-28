@@ -67,7 +67,10 @@ export function resolveStudyPipelineMode() {
 }
 
 const STUDY_ITEM_EXTRACTION_CONCURRENCY = 6;
-const STUDY_ITEM_GENERATION_CONCURRENCY = 3;
+// Raised 3 -> 6 with the 2026-08-28 GLM switch: the model is ~3x slower per call, batches are
+// independent, and each study step still has to fit its 300s invocation. Six concurrent small
+// calls is what the extraction stage has always run without trouble.
+const STUDY_ITEM_GENERATION_CONCURRENCY = 6;
 
 async function mapWithConcurrency<TInput, TOutput>(
   values: TInput[],

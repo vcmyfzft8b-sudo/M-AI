@@ -477,7 +477,7 @@ export function buildNoteWritingInstructions(params: {
 
 The outline has already chosen what belongs. Teach those things well and add nothing else: no background the outline left out, no restating the source's structure, no sentence whose job is to introduce another sentence.
 
-Say it once, in the fewest words that still teach it. Fuse related points into one sentence rather than giving each its own. Cut every phrase that carries no information ("it is important to note that", "as we can see", "in this section we will"). Never pad a topic to make it look substantial, and never restate in the review what a topic already taught. A note that a learner can read in one sitting and still recall everything important beats a longer one that covers the same ground.`;
+Say it once, in the fewest words that still teach it. Fuse related points into one bullet rather than giving each its own. Cut every phrase that carries no information ("it is important to note that", "as we can see", "in this section we will"). Never pad a topic to make it look substantial, and never restate in the review what a topic already taught. A note that a learner can read in one sitting and still recall everything important beats a longer one that covers the same ground.`;
 
   /**
    * Retrieval practice is the strongest thing in the learning-science literature, but this product
@@ -487,9 +487,9 @@ Say it once, in the fewest words that still teach it. Fuse related points into o
    * that makes a fact learnable rather than merely recorded: the reason it holds, and the worked
    * instance behind a formula.
    */
-  const pedagogyRule = `Explain why, not only what. When the source gives a reason, a cause, or a consequence, state it: a learner remembers "X because Y" far better than "X". When two things are easily confused, say what separates them — that distinction is usually the thing being examined.
+  const pedagogyRule = `Explain why, not only what — in the note's own compact register. When the source gives a reason, a cause or a consequence, it rides on the same bullet ("X, ker Y" / "X because Y") or on one short arrow line beneath it, never in its own paragraph. A learner remembers "X because Y" far better than "X".
 
-When the source works through a procedure, a calculation or a formula, show one worked instance with its real numbers rather than describing the method in the abstract.`;
+When the source works through a procedure, a calculation or a formula, show one worked instance with its real numbers rather than describing the method in the abstract — that instance is the topic's example.`;
 
   const lengthRule = params.coverageObjective
     ? coverageRule
@@ -503,9 +503,17 @@ If everything will not fit, you may not drop a retained item. Make room the othe
 
 Write study notes that teach the supplied outline. You also have the full source text: use it for wording, precision, formulas and worked examples, but let the outline decide what is covered.
 
-Teach every retained item once, in its assigned topic, in enough words to actually make it understood — a definition may take a line, a mechanism may take a paragraph. Add nothing that is not in the outline.
+Cover every retained item once, in its assigned topic. An item is covered when a learner could answer a question about it from your words — for most items that is one bullet, not a paragraph. Add nothing that is not in the outline.
 
-Say each thing once. A learner should never meet the same sentence twice in different clothes. The overview, the bullets, the tables, the callouts and the review each do a different job: the overview orients, the bullets name, the topics explain, the table compares, the review consolidates in the learner's own testable words. If a callout would restate the overview, or a table would restate the bullets above it, drop it — a shorter note that never repeats itself beats a longer one that does.
+Write the way a strong student writes a revision sheet, not the way a textbook writes a chapter. Bullet points and fragments are the default; full sentences are not required and connective prose is not wanted. No transitions, no introductions, no sentence whose only job is grammar. A short paragraph (2-3 sentences) is allowed only when a mechanism genuinely unfolds in steps and bullets would break the chain of cause and effect.
+
+Explain every important term or idea with the same compact pattern:
+- Name it: "**term** — what it is, in plain words, on one line." Bold the term, keep the source's exact word for it.
+- If it has a why or a how worth knowing, that is one short line, not a paragraph.
+- Give ONE concrete example only where an example genuinely clarifies — real numbers, a real case from the source. Most items need none; a topic almost never needs more than one.
+- When two things are easily confused, separate them in one line of the form "X — does A; Y — does B" or one small table — that distinction is usually the thing being examined. Write the line entirely in the output language.
+
+Say each thing once. A learner should never meet the same fact twice in different clothes. The overview, the bullets, the tables, the callouts and the review each do a different job: the overview orients, the topics explain, the table compares, the review consolidates in testable words. If a callout would restate the overview, or a table would restate the bullets above it, drop it — a shorter note that never repeats itself beats a longer one that does.
 
 ${lengthRule}
 ${params.pedagogy ? `

@@ -24,7 +24,8 @@ import { createCoveragePlan, MAX_STUDY_ITEMS } from "@/lib/study-coverage";
 import type { CoverageConcept, CoverageUnitPlan, SourceUnit } from "@/lib/study-models";
 import { buildSourceUnits } from "@/lib/study-source-units";
 
-const QUIZ_CONCURRENCY = 4;
+// Raised 4 -> 6 with the 2026-08-28 GLM switch (~3x slower per call; batches independent).
+const QUIZ_CONCURRENCY = 6;
 
 type PostgrestLikeError = {
   code?: string;

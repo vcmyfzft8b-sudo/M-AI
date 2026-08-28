@@ -330,3 +330,23 @@ test("the source-note contract assigns the H1 to part one alone", () => {
   assert.match(later, /Do NOT write an H1 title/);
   assert.doesNotMatch(single, /split into/);
 });
+
+test("callout labels match exactly what the renderer colours", () => {
+  // note-tts-text.ts getCalloutKind matches these bold label prefixes; a label that drifts even
+  // slightly falls back to the plain blue box, so the contract and the renderer are pinned to
+  // each other here.
+  const sl = buildSourceNoteInstructions({ outputLanguage: "sl" });
+  const en = buildSourceNoteInstructions({ outputLanguage: "en" });
+
+  for (const label of ["Definicija", "Pogosta napaka", "Ključno"]) {
+    assert.match(sl, new RegExp(`> \\*\\*${label}:\\*\\*`));
+  }
+
+  for (const label of ["Definition", "Common mistake", "Key takeaway"]) {
+    assert.match(en, new RegExp(`> \\*\\*${label}:\\*\\*`));
+  }
+
+  // Windowed parts get a per-part budget so joined parts cannot stack up a wall of boxes.
+  assert.match(buildSourceNoteInstructions({ window: { index: 1, count: 3 } }), /at most 2 callouts in this part/);
+  assert.match(en, /at most 4 callouts in the whole note/);
+});

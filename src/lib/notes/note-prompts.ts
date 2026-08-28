@@ -572,8 +572,12 @@ export function buildSourceNoteInstructions(params: {
   window?: { index: number; count: number };
 }) {
   const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
+  const labels = getStructuredPlusLabels(params.outputLanguage);
   const window = params.window;
   const windowed = window && window.count > 1;
+  // The renderer recognises these exact bold labels (note-tts-text.ts getCalloutKind) and turns
+  // the blockquote into a coloured box; any other label falls back to the plain blue one.
+  const calloutBudget = windowed ? "at most 2 callouts in this part" : "at most 4 callouts in the whole note";
 
   const outputContract = windowed
     ? window.index === 0
@@ -638,6 +642,13 @@ FORMATTING RULES
 - Mnemonic word-equations go on their own bolded line: **podatki + obdelava = informacije**
 - No emojis. No em dashes; use a comma, a colon or the word "to" instead.
 - Paragraphs stay under 4 lines. Break anything longer.
+
+CALLOUTS
+
+The app renders blockquotes of the form "> **Label:** text" as coloured highlight boxes. Use them to lift the few things a student must not miss, and you are the judge of what earns one: a make-or-break definition, the distinction everyone gets wrong on the exam, the one takeaway a section exists for. Use ${calloutBudget}, each 1-2 lines, never two in a row, and never for material that is merely interesting. A callout must not restate a sentence that already appears in the surrounding text; it replaces it. Use exactly these labels:
+- "> **${labels.definition}:** ..." for a foundational definition the subject is built on
+- "> **${labels.commonMistake}:** ..." for the confusion or error students are tested on
+- "> **${labels.keyTakeaway}:** ..." for the single most important consequence or rule of a section
 
 WHAT NOT TO DO
 

@@ -23,11 +23,11 @@ export const openRouterModelId = (model) => model.slice("or/".length);
 const REASONING_EFFORT = { minimal: "minimal", low: "low", medium: "medium", high: "high" };
 
 /**
- * GLM publishes only max/high/low. OpenRouter accepts "minimal" and "medium" without complaint and
- * the provider silently falls back to its own default effort, which is "max" — so an unmapped
- * level buys the most expensive setting on the card for a stage that asked for the cheapest.
+ * GLM publishes only max/high/low, and an unmapped name silently buys its default ("max").
+ * Everything maps to "low", mirroring production (model-config.ts): measured 2026-08-29,
+ * low-effort GLM matched or beat high-effort on recall while writing shorter, denser notes.
  */
-const GLM_REASONING_EFFORT = { minimal: "low", low: "low", medium: "high", high: "high" };
+const GLM_REASONING_EFFORT = { minimal: "low", low: "low", medium: "low", high: "low" };
 
 const isMandatoryReasoningModel = (model) => /glm-5/i.test(model);
 

@@ -123,15 +123,18 @@ function isMandatoryReasoningModel(model: string) {
 }
 
 /**
- * GLM publishes only max/high/low. OpenRouter accepts the other names without complaint and the
- * provider then falls back to its own default effort — which is "max", the most expensive setting
- * there is. Naming a supported effort is what keeps a cheap stage cheap.
+ * GLM publishes only max/high/low, and an unmapped name silently buys its default — "max", the
+ * most expensive setting there is. Every level maps to "low": measured 2026-08-29 on the note
+ * fixtures, low-effort GLM matched or beat high-effort on recall (98-100% vs 92-100%) while
+ * writing up to 28% shorter and measurably denser notes — for this pipeline's structured work,
+ * extra reasoning bought verbosity, not quality. Raising a stage back is a one-line change here,
+ * but bring a measurement.
  */
 const GLM_REASONING_EFFORT: Record<ThinkingLevel, string> = {
   minimal: "low",
   low: "low",
-  medium: "high",
-  high: "high",
+  medium: "low",
+  high: "low",
 };
 
 /** The effort name to send on the wire for a model that does not use our four level names. */

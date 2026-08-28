@@ -202,12 +202,13 @@ test("a mandatory-reasoning model gets output headroom even at minimal effort", 
   assert.equal(gemini.outputHeadroom, 1, "a model that does not think needs no headroom");
 });
 
-test("GLM levels map onto the efforts its endpoint actually supports", () => {
-  // GLM publishes only max/high/low; an unmapped name silently buys its default, which is "max".
-  assert.equal(resolveWireReasoningEffort(GLM_TEXT_MODEL, "minimal"), "low");
-  assert.equal(resolveWireReasoningEffort(GLM_TEXT_MODEL, "low"), "low");
-  assert.equal(resolveWireReasoningEffort(GLM_TEXT_MODEL, "medium"), "high");
-  assert.equal(resolveWireReasoningEffort(GLM_TEXT_MODEL, "high"), "high");
+test("every GLM level maps to its cheapest effort, by measurement", () => {
+  // GLM publishes only max/high/low and an unmapped name silently buys "max". Measured
+  // 2026-08-29: low-effort GLM matched or beat high-effort on note recall while writing up to
+  // 28% shorter — for this pipeline, extra reasoning bought verbosity, not quality.
+  for (const level of ["minimal", "low", "medium", "high"]) {
+    assert.equal(resolveWireReasoningEffort(GLM_TEXT_MODEL, level), "low");
+  }
   // Other models keep our level names untouched.
   assert.equal(resolveWireReasoningEffort("or/google/gemini-3.7-flash", "medium"), "medium");
 });

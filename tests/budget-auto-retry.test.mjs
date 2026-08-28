@@ -82,34 +82,46 @@ test("the terminal message tells the learner the material is the cause, and stay
   assert.equal(canRetryLectureFailureCode("source_too_large"), false);
 });
 
-/** The counter ladder as markLecturePipelineFailed walks it: run 1 retries, run 2 retries, run 3 stops. */
+/**
+ * The counter ladder as markLecturePipelineFailed walks it: run 1 retries quietly, run 2 retries
+ * quietly, run 3 stops. "Quietly" is load-bearing: between retries the learner sees "queued" — a
+ * spinner — never a failed banner or a retry button that un-fails itself seconds later.
+ */
 function decide({ storedCount, budgetOverrun, maxRuns = 3 }) {
   const budgetFailureRuns = budgetOverrun ? storedCount + 1 : 0;
 
   if (budgetOverrun && budgetFailureRuns < maxRuns) {
-    return { action: "auto-retry", write: budgetFailureRuns };
+    return { action: "auto-retry", write: budgetFailureRuns, learnerSees: "queued" };
   }
 
   if (budgetOverrun) {
-    return { action: "terminal", write: budgetFailureRuns, code: "source_too_large" };
+    return {
+      action: "terminal",
+      write: budgetFailureRuns,
+      code: "source_too_large",
+      learnerSees: "failed",
+    };
   }
 
-  return { action: "ordinary-failure", write: null };
+  return { action: "ordinary-failure", write: null, learnerSees: "failed" };
 }
 
 test("two automatic retries, then the material is called too extensive", () => {
   assert.deepEqual(decide({ storedCount: 0, budgetOverrun: true }), {
     action: "auto-retry",
     write: 1,
+    learnerSees: "queued",
   });
   assert.deepEqual(decide({ storedCount: 1, budgetOverrun: true }), {
     action: "auto-retry",
     write: 2,
+    learnerSees: "queued",
   });
   assert.deepEqual(decide({ storedCount: 2, budgetOverrun: true }), {
     action: "terminal",
     write: 3,
     code: "source_too_large",
+    learnerSees: "failed",
   });
 
   // A manual retry after the terminal verdict that overruns again goes straight back to
@@ -175,4 +187,26 @@ test("the retry job mirrors the manual retry route's choices", () => {
     assert.ok(body.includes(call), call);
   }
   assert.ok(body.includes("return false"));
+});
+
+test("between retries the learner sees queued, written before the enqueue", () => {
+  const start = PIPELINE_SOURCE.indexOf("if (budgetOverrun && budgetFailureRuns < MAX_BUDGET_FAILURE_RUNS)");
+
+  assert.ok(start > 0);
+
+  const branch = PIPELINE_SOURCE.slice(start, PIPELINE_SOURCE.indexOf("// The terminal budget case:", start));
+
+  // The quiet state is "queued" — the one status the lecture GET's stuck-recovery re-enqueues
+  // for every source shape, so a retry run that dies silently still has a safety net.
+  assert.ok(branch.includes('status: "queued"'), "the intermediate write must be queued, not failed");
+  assert.ok(!branch.includes('stage: "failed"'), "the intermediate branch must never write failed");
+  // And its staleness clock must restart, or opening the lecture mid-retry double-enqueues.
+  assert.ok(branch.includes("updatedAt: new Date().toISOString()"));
+
+  // Touch before enqueue: on the HTTP-fallback tier the enqueue can run the whole job inline,
+  // and a touch after it would stamp "queued" over the finished lecture.
+  const touch = branch.indexOf('status: "queued"');
+  const enqueue = branch.indexOf("enqueueBudgetOverrunRetry");
+
+  assert.ok(touch < enqueue, "the queued touch must be written before the retry is enqueued");
 });

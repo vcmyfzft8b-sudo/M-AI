@@ -1648,10 +1648,6 @@ export function NoteReadAloud({
         clone.style.zIndex = "30";
         clone.style.transformOrigin = "top left";
         clone.style.willChange = "transform";
-        clone.style.backgroundImage = sourceImageUrl ? `url("${sourceImageUrl}")` : "";
-        clone.style.backgroundPosition = "center";
-        clone.style.backgroundRepeat = "no-repeat";
-        clone.style.backgroundSize = "contain";
 
         if (sourceImageUrl) {
           cloneImage.src = sourceImageUrl;
@@ -1662,10 +1658,16 @@ export function NoteReadAloud({
           cloneImage.style.width = "100%";
           cloneImage.style.height = "100%";
           cloneImage.style.objectFit = "contain";
-          cloneImage.style.background = "#111827";
+          // Transparent like the real photo: the flying copy must look exactly like what it
+          // replaces, not like the framed box the design retired.
+          cloneImage.style.background = "transparent";
           clone.appendChild(cloneImage);
         }
 
+        // Native scroll anchoring reacts to the reflow the move causes and shifts the page under
+        // the flying clone, which both drifts the landing spot and jolts the screen. Held off for
+        // the duration of the move; the layout effect's cleanup restores it.
+        cloneHost.style.overflowAnchor = "none";
         cloneHost.appendChild(clone);
         pendingArrowMoveCloneRef.current = clone;
       } else {
@@ -1686,10 +1688,21 @@ export function NoteReadAloud({
       return;
     }
 
+    // The click handler turned scroll anchoring off on the clone's host; every path out of this
+    // effect that does not end in clearAnimatedElementStyles has to turn it back on itself.
+    const restoreOverflowAnchor = () => {
+      const host =
+        contentRef.current?.closest<HTMLElement>(".app-shell-pull-content") ??
+        window.document.body;
+
+      host.style.overflowAnchor = "";
+    };
+
     if (!renderedMediaBlocks.some((block) => block.id === pendingBlockId)) {
       pendingArrowMovedMediaBlockIdRef.current = null;
       pendingArrowMoveCloneRef.current?.remove();
       pendingArrowMoveCloneRef.current = null;
+      restoreOverflowAnchor();
       return;
     }
 
@@ -1705,6 +1718,14 @@ export function NoteReadAloud({
         animatedElement.style.visibility = "";
         animatedElement.style.willChange = "";
         animatedElement.style.zIndex = "";
+
+        const host = animatedElement.closest<HTMLElement>(".app-shell-pull-content");
+
+        if (host) {
+          host.style.overflowAnchor = "";
+        } else {
+          window.document.body.style.overflowAnchor = "";
+        }
       }
 
       animatedClone?.remove();
@@ -1720,6 +1741,7 @@ export function NoteReadAloud({
     if (!mediaElement) {
       pendingArrowMoveCloneRef.current?.remove();
       pendingArrowMoveCloneRef.current = null;
+      restoreOverflowAnchor();
       return;
     }
 
@@ -1775,6 +1797,10 @@ export function NoteReadAloud({
             duration: moveDurationMs,
             easing: "cubic-bezier(0.2, 0, 0, 1)",
             composite: "replace",
+            // Without fill, a finished Web Animation reverts to its start for the frame between
+            // "finish" and the clone's removal — a visible flash of the photo back at its old
+            // position, which read as the move "glitching".
+            fill: "forwards",
           },
         );
         moveAnimation.addEventListener("finish", clearAnimatedElementStyles, { once: true });
@@ -1787,6 +1813,7 @@ export function NoteReadAloud({
         if (pendingArrowMoveCloneRef.current === clone) {
           pendingArrowMoveCloneRef.current = null;
         }
+        restoreOverflowAnchor();
       }
     }
 

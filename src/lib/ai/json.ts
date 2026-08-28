@@ -16,6 +16,7 @@ import {
   resolveStageDirectFallbackModel,
   resolveStageModelConfig,
   resolveStageTimeoutMs,
+  shouldFallBackToDirectProvider,
   supportsThinkingLevel,
   type AiStage,
 } from "@/lib/ai/model-config";
@@ -115,8 +116,9 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
         });
       } catch (error) {
         // A budget abort is not a gateway failure: falling back would start a fresh full-price
-        // call on an invocation that has already been told to stop.
-        if (isWorkAbortedError(error)) {
+        // call on an invocation that has already been told to stop. Everything else — including
+        // GLM's characteristic truncation — falls through to the direct provider below.
+        if (!shouldFallBackToDirectProvider(error, isWorkAbortedError)) {
           throw error;
         }
 

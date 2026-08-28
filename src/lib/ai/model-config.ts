@@ -165,6 +165,23 @@ export function resolveStageDirectFallbackModel(stage: AiStage): string | null {
 }
 
 /**
+ * Whether a failed gateway call should be retried against the direct provider.
+ *
+ * Everything a gateway can do wrong is a reason to fall back — a 5xx, a refused schema, a
+ * timeout, and above all a truncation, which is GLM's characteristic failure (measured 2.1% of
+ * calls over the first day, mostly on the small high-volume study batches: it occasionally runs
+ * past a budget three times its expected output without closing the JSON). A learner's lecture is
+ * never worth failing to save a fraction of a cent.
+ *
+ * The single exception is an abort. The invocation budget aborts work that has already run out of
+ * wall clock, so falling back there would start a fresh full-price call on a request that is
+ * being killed anyway — spending money to produce nothing.
+ */
+export function shouldFallBackToDirectProvider(error: unknown, isAborted: (error: unknown) => boolean) {
+  return !isAborted(error);
+}
+
+/**
  * A model only honours a thinking level if it reasons at all. Sending thinkingConfig to a 2.5
  * Gemini is accepted but meaningless, and 2.5-flash-lite does not think, so the headroom
  * multiplier has to collapse back to 1 or every budget is inflated for no reason.

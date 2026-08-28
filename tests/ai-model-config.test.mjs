@@ -8,6 +8,7 @@ import {
   resolveStageModelConfig,
   resolveStageTimeoutMs,
   resolveWireReasoningEffort,
+  shouldFallBackToDirectProvider,
   supportsThinkingLevel,
 } from "../src/lib/ai/model-config.ts";
 import { z } from "zod";
@@ -349,4 +350,23 @@ test("windowed instructions assign each shared section to exactly one window", (
   assert.match(single, /## Quick Overview/);
   assert.match(single, /### Check Yourself/);
   assert.doesNotMatch(single, /part 1 of/);
+});
+
+test("every gateway failure falls back to Gemini except a budget abort", () => {
+  // The safety net the whole GLM switch rests on. Truncation is GLM's characteristic failure
+  // (2.1% of calls on day one), and it must reach the direct provider rather than fail a
+  // learner's lecture. An abort is the one thing worth propagating: the invocation is already
+  // being killed, so a fallback call would spend money to produce nothing.
+  class Aborted extends Error {}
+  const isAborted = (error) => error instanceof Aborted;
+
+  const truncated = new Error("Model output was truncated: generation hit the 3200-token limit.");
+  const gatewayDown = new Error("OpenRouter z-ai/glm-5.3-flash: 503 upstream unavailable");
+  const schemaRefused = new Error("z-ai/glm-5.3-flash broke the schema");
+
+  for (const error of [truncated, gatewayDown, schemaRefused]) {
+    assert.equal(shouldFallBackToDirectProvider(error, isAborted), true);
+  }
+
+  assert.equal(shouldFallBackToDirectProvider(new Aborted("budget spent"), isAborted), false);
 });

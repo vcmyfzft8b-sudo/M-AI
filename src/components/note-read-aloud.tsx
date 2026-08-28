@@ -1741,6 +1741,8 @@ export function NoteReadAloud({
         animatedElement.style.visibility = "";
         animatedElement.style.willChange = "";
         animatedElement.style.zIndex = "";
+        animatedElement.style.width = "";
+        animatedElement.style.height = "";
 
         const host = animatedElement.closest<HTMLElement>(".app-shell-pull-content");
 
@@ -1771,6 +1773,17 @@ export function NoteReadAloud({
     const fromRect = pendingArrowMoveFromRectRef.current;
     const clone = pendingArrowMoveCloneRef.current;
     const siblingRects = pendingArrowMoveSiblingRectsRef.current;
+
+    // The move re-parents the media in React, so the <img> remounts and sizes itself from its
+    // attribute ratio until the bitmap re-decodes — a late height correction that nudged the
+    // text below after everything had visibly settled. The element's true size is already known
+    // (it was on screen a frame ago), so pin the box to it for the flight; by release time the
+    // cached image has decoded at exactly this size and the unpin changes nothing.
+    if (fromRect) {
+      mediaElement.style.width = `${fromRect.width}px`;
+      mediaElement.style.height = `${fromRect.height}px`;
+    }
+
     const toRect = mediaElement.getBoundingClientRect();
     pendingArrowMovedMediaBlockIdRef.current = null;
     pendingArrowMoveFromRectRef.current = null;
@@ -1882,6 +1895,8 @@ export function NoteReadAloud({
         if (pendingArrowMoveCloneRef.current === clone) {
           pendingArrowMoveCloneRef.current = null;
         }
+        mediaElement.style.width = "";
+        mediaElement.style.height = "";
         restoreOverflowAnchor();
       }
     }

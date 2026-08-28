@@ -39,6 +39,7 @@ import {
 import type { ChatMessageWithCitations } from "@/lib/types";
 import { isPreparingInitialNoteAudio } from "@/lib/note-audio-stage";
 import { generateNotesFromTranscript, type NotesGenerationPhase } from "@/lib/note-generation";
+import { applyAiHighlightsToNote } from "@/lib/notes/ai-highlights";
 import { captureGenerationFailureInput } from "@/lib/notes/failure-capture";
 import {
   clearGenerationCache,
@@ -728,6 +729,15 @@ export async function generateLectureNotesFromStoredTranscript(params: {
       });
     }
   }
+
+  // The model's highlighter pass: best-effort like image placement, and it swallows its own
+  // failures, so the finished note is never at risk over a decoration.
+  await applyAiHighlightsToNote({
+    lectureId: lecture.id,
+    structuredNotesMd: notes.structuredNotesMd,
+    lectureTitle: notes.title ?? lecture.title,
+    usageContext: { lectureId: lecture.id, userId: lecture.user_id },
+  });
 
   const { error: enrichmentCompleteError } = await supabase
     .from("lecture_artifacts")

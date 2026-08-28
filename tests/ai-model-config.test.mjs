@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   applyOutputHeadroom,
   GLM_TEXT_MODEL,
-  resolveStageDirectFallbackModel,
+  resolveStageFallbackModel,
   resolveStageModelConfig,
   resolveStageTimeoutMs,
   resolveWireReasoningEffort,
@@ -212,13 +212,13 @@ test("every GLM level maps to its cheapest effort, by measurement", () => {
   assert.equal(resolveWireReasoningEffort("or/google/gemini-3.7-flash", "medium"), "medium");
 });
 
-test("a failed GLM call falls back to the Gemini that ran the stage before the switch", () => {
-  // Sending "glm-5.3-flash" to Google's API is a guaranteed second failure, so the fallback for
-  // a routed non-Gemini model is a real Gemini: the premium writer for note_write, the shared
-  // text model (signalled as null) everywhere else.
-  assert.equal(resolveStageDirectFallbackModel("note_write"), "gemini-3.7-flash");
-  assert.equal(resolveStageDirectFallbackModel("note_extract"), null);
-  assert.equal(resolveStageDirectFallbackModel("note_outline"), null);
+test("a failed GLM call falls back to the pre-switch Gemini, routed through the same gateway", () => {
+  // One gateway, one bill (2026-08-29): the fallback Gemini rides OpenRouter like the primary.
+  // json.ts strips these ids to their bare form for the last tier, bought direct from Google,
+  // which exists because a fallback that shares the primary's gateway shares its outages.
+  assert.equal(resolveStageFallbackModel("note_write"), "or/google/gemini-3.7-flash");
+  assert.equal(resolveStageFallbackModel("note_extract"), null);
+  assert.equal(resolveStageFallbackModel("note_outline"), null);
 });
 
 test("GLM gets a shorter leash than Gemini so its fallback fits the same invocation", () => {

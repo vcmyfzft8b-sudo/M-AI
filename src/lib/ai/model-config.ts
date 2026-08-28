@@ -154,17 +154,19 @@ export function isGeminiModel(model: string) {
 }
 
 /**
- * Where a stage lands when its routed call fails and the direct id is not a Gemini model.
+ * The Gemini a stage falls back to when its GLM call fails — ROUTED through OpenRouter, so that
+ * in normal operation every model call in the product rides one gateway and one bill
+ * (2026-08-29, at the user's request). The fallback model is still the Gemini that ran the stage
+ * before the 2026-08-28 switch: 3.7-flash for the write (the stage where the 2026-08-23
+ * measurement showed models separate hardest) and GEMINI_TEXT_MODEL for the rest (signalled
+ * here as null, because this module cannot read server env; json.ts routes it).
  *
- * The gateway fallback in json.ts exists so a learner's lecture survives an OpenRouter outage.
- * For "or/google/…" models the direct id IS the fallback — same weights, bought from Google. For
- * GLM there is no direct Google id to fall back to, so each stage falls back to the Gemini model
- * that ran it before the 2026-08-28 switch: 3.7-flash for the write (the stage where the
- * 2026-08-23 measurement showed models separate hardest) and GEMINI_TEXT_MODEL for the rest
- * (signalled here as null, because this module cannot read server env).
+ * Buying direct from Google remains as the LAST tier only — json.ts strips this id to its bare
+ * form when the gateway itself is the thing that is down, because a fallback that shares the
+ * primary's gateway shares its outages.
  */
-export function resolveStageDirectFallbackModel(stage: AiStage): string | null {
-  return stage === "note_write" ? "gemini-3.7-flash" : null;
+export function resolveStageFallbackModel(stage: AiStage): string | null {
+  return stage === "note_write" ? "or/google/gemini-3.7-flash" : null;
 }
 
 /**

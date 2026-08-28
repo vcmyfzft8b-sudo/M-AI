@@ -286,8 +286,15 @@ async function generateNotesContentDriven(
   const outlineMaxOutputTokens = Math.max(2600, items.length * 60);
   const lectureId = params.usageContext?.lectureId ?? null;
 
+  // The gate model rides OpenRouter like everything else (2026-08-29); the fallback chain in
+  // json.ts still lands it on direct Google if the gateway is the problem.
+  const gateModel = getServerEnv().GEMINI_TEXT_MODEL;
   const outlineModelOverride =
-    items.length > OUTLINE_SIZE_GATE_MAX_ITEMS ? getServerEnv().GEMINI_TEXT_MODEL : undefined;
+    items.length > OUTLINE_SIZE_GATE_MAX_ITEMS
+      ? /^gemini-/i.test(gateModel)
+        ? `or/google/${gateModel}`
+        : gateModel
+      : undefined;
 
   const rawOutline = await withGenerationCheckpoint({
     lectureId,

@@ -13,7 +13,7 @@ import {
   AI_STAGE_MODEL_ENV_KEYS,
   applyOutputHeadroom,
   isGeminiModel,
-  resolveStageDirectFallbackModel,
+  resolveStageFallbackModel,
   resolveStageModelConfig,
   resolveStageTimeoutMs,
   shouldFallBackToDirectProvider,
@@ -89,58 +89,82 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
   };
 
   /**
-   * A stage may name a routed model ("or/google/gemini-3.7-flash") to buy the same weights at the
-   * gateway's price — on 2026-08-23 that is half what Google charges for 3.7-flash, on the most
-   * expensive call in the product.
+   * The fallback chain, one gateway wide and one provider deep (2026-08-29):
    *
-   * The gateway is one more thing that can be down, and a promotional rate is a thing that ends,
-   * so a routed call that fails for any reason is retried once against the provider directly. A
-   * learner's lecture is never worth failing to save a fraction of a cent, and the fallback also
-   * means the day the promotion ends is a pricing decision rather than an outage.
+   *   1. the stage's model, routed        (GLM through OpenRouter)
+   *   2. the stage's Gemini fallback, routed  (same prompts, same gateway, same bill)
+   *   3. the same Gemini, bought direct from Google
+   *
+   * Tier 2 exists because most failures are the MODEL's — a truncation, a refused schema, a bad
+   * host — and the recovery should stay on the one gateway everything is billed and observed
+   * through. Tier 3 exists because the gateway itself can be down, and a fallback that shares
+   * the primary's gateway shares its outages. Every tier gets the identical instructions and
+   * input; only the model id and wire settings change, so a learner cannot tell which tier
+   * answered.
    */
+  const routedFallbackModel = !isOpenRouterModel(config.model)
+    ? null
+    : isGeminiModel(config.model)
+      ? null
+      : (resolveStageFallbackModel(params.stage) ??
+        (isGeminiModel(env.GEMINI_TEXT_MODEL) ? `or/google/${env.GEMINI_TEXT_MODEL}` : null));
+
   if (isOpenRouterModel(config.model)) {
     const apiKey = env.OPENROUTER_API_KEY;
 
     if (apiKey) {
-      try {
-        return await generateStructuredObjectWithOpenRouter({
-          schema: params.schema,
-          instructions: params.instructions,
-          input: params.input,
-          model: config.model,
-          apiKey,
-          maxOutputTokens,
-          thinkingLevel: config.thinkingLevel,
-          ...(timeoutMs ? { timeoutMs } : {}),
-          usageContext,
-        });
-      } catch (error) {
-        // A budget abort is not a gateway failure: falling back would start a fresh full-price
-        // call on an invocation that has already been told to stop. Everything else — including
-        // GLM's characteristic truncation — falls through to the direct provider below.
-        if (!shouldFallBackToDirectProvider(error, isWorkAbortedError)) {
-          throw error;
-        }
+      const routedAttempts =
+        routedFallbackModel && routedFallbackModel !== config.model
+          ? [config.model, routedFallbackModel]
+          : [config.model];
 
-        console.warn(
-          `OpenRouter call for ${config.model} failed, falling back to the direct provider.`,
-          error,
-        );
+      for (const routedModel of routedAttempts) {
+        const attemptThinkingLevel = supportsThinkingLevel(routedModel)
+          ? config.thinkingLevel
+          : null;
+        const attemptTimeoutMs = resolveStageTimeoutMs(params.stage, routedModel);
+
+        try {
+          return await generateStructuredObjectWithOpenRouter({
+            schema: params.schema,
+            instructions: params.instructions,
+            input: params.input,
+            model: routedModel,
+            apiKey,
+            maxOutputTokens,
+            thinkingLevel: attemptThinkingLevel,
+            ...(attemptTimeoutMs ? { timeoutMs: attemptTimeoutMs } : {}),
+            usageContext,
+          });
+        } catch (error) {
+          // A budget abort is not a gateway failure: falling back would start a fresh full-price
+          // call on an invocation that has already been told to stop. Everything else — including
+          // GLM's characteristic truncation — falls through to the next tier.
+          if (!shouldFallBackToDirectProvider(error, isWorkAbortedError)) {
+            throw error;
+          }
+
+          console.warn(
+            `OpenRouter call for ${routedModel} failed, falling back to the next tier.`,
+            error,
+          );
+        }
       }
     }
   }
 
   /**
-   * The direct-provider fallback model. For a routed Gemini ("or/google/…") the direct id is the
-   * same weights bought from Google. For a routed non-Gemini model (GLM) there is no Google id to
-   * strip down to — sending "glm-5.3-flash" to the Gemini API is a guaranteed second failure — so
-   * the stage falls back to the Gemini model that ran it before the switch.
+   * The last tier: the fallback Gemini bought directly from Google. Stripping a routed Gemini id
+   * gives the same weights; a routed non-Gemini primary strips through its stage's Gemini
+   * fallback instead — sending "glm-5.3-flash" to the Gemini API is a guaranteed failure.
    */
   const fallbackModel = !isOpenRouterModel(config.model)
     ? config.model
     : isGeminiModel(config.model)
       ? directModelId(config.model)
-      : (resolveStageDirectFallbackModel(params.stage) ?? env.GEMINI_TEXT_MODEL);
+      : routedFallbackModel
+        ? directModelId(routedFallbackModel)
+        : env.GEMINI_TEXT_MODEL;
   const fallbackThinkingLevel = supportsThinkingLevel(fallbackModel) ? config.thinkingLevel : null;
   const fallbackTimeoutMs = resolveStageTimeoutMs(params.stage, fallbackModel);
 

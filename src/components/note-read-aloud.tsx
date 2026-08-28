@@ -1734,23 +1734,73 @@ export function NoteReadAloud({
     let moveAnimation: Animation | null = null;
     const siblingAnimations: Animation[] = [];
 
+    let pinReleased = false;
+
+    /**
+     * Releases the size pin without letting the page move: the scroll position is captured,
+     * the pin cleared with a forced layout, and the scroll written back before paint — so even
+     * if the unpin does change the box (an image that has not re-decoded yet), the viewport
+     * holds. Scroll anchoring stays off until a frame after the release for the same reason:
+     * re-enabling it in the same tick as a reflow was exactly the end-of-move page shift.
+     */
+    const releaseSizePin = (element: HTMLElement) => {
+      if (pinReleased) {
+        return;
+      }
+
+      pinReleased = true;
+
+      const host = element.closest<HTMLElement>(".app-shell-pull-content");
+      const scroller = host && host.scrollHeight > host.clientHeight + 1 ? host : null;
+      const savedTop = scroller ? scroller.scrollTop : window.scrollY;
+
+      // One frozen operation: reveal the real element, drop the pin, remove the covering clone,
+      // flush layout, and write the captured scroll back before paint. Whatever any of those
+      // mutations did to scroll height or anchoring, the viewport cannot move.
+      element.style.visibility = "";
+      element.style.width = "";
+      element.style.height = "";
+      animatedClone?.remove();
+      if (pendingArrowMoveCloneRef.current === animatedClone) {
+        pendingArrowMoveCloneRef.current = null;
+      }
+      void element.offsetHeight;
+
+      if (scroller) {
+        scroller.scrollTop = savedTop;
+      } else if (Math.abs(window.scrollY - savedTop) > 0.5) {
+        window.scrollTo({ top: savedTop });
+      }
+
+      window.requestAnimationFrame(() => {
+        (host ?? window.document.body).style.overflowAnchor = "";
+      });
+    };
+
     const clearAnimatedElementStyles = () => {
       if (animatedElement) {
         animatedElement.style.backfaceVisibility = "";
         animatedElement.style.transformOrigin = "";
-        animatedElement.style.visibility = "";
         animatedElement.style.willChange = "";
         animatedElement.style.zIndex = "";
-        animatedElement.style.width = "";
-        animatedElement.style.height = "";
 
-        const host = animatedElement.closest<HTMLElement>(".app-shell-pull-content");
+        // The pin — and the clone still covering the landing spot — wait for the remounted
+        // image to finish decoding: released earlier, the box falls back to its attribute ratio
+        // and the note below shifts after visibly settling.
+        const element = animatedElement;
+        const image = element.querySelector("img");
 
-        if (host) {
-          host.style.overflowAnchor = "";
+        if (image && !image.complete) {
+          const release = () => releaseSizePin(element);
+
+          image.addEventListener("load", release, { once: true });
+          image.addEventListener("error", release, { once: true });
+          window.setTimeout(release, 1_200);
         } else {
-          window.document.body.style.overflowAnchor = "";
+          releaseSizePin(element);
         }
+
+        return;
       }
 
       animatedClone?.remove();
@@ -1895,9 +1945,7 @@ export function NoteReadAloud({
         if (pendingArrowMoveCloneRef.current === clone) {
           pendingArrowMoveCloneRef.current = null;
         }
-        mediaElement.style.width = "";
-        mediaElement.style.height = "";
-        restoreOverflowAnchor();
+        releaseSizePin(mediaElement);
       }
     }
 

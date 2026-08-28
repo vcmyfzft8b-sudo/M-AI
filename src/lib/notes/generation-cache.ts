@@ -125,12 +125,24 @@ export async function saveGenerationCacheEntry(params: {
 }
 
 /** Called once the notes are saved and the lecture is ready — the checkpoints have done their job. */
-export async function clearGenerationCache(lectureId: string) {
+/**
+ * Without a stage this clears everything for the lecture (the note pipeline's completion call).
+ * With a stage it clears only that stage's checkpoints — the study generators use this so a
+ * finished deck's batches stop replaying (a learner who regenerates expects fresh drafts, not a
+ * cache hit) while a quiz still generating keeps its own checkpoints untouched.
+ */
+export async function clearGenerationCache(lectureId: string, stage?: string) {
   try {
-    const { error } = await createSupabaseServiceRoleClient()
+    let query = createSupabaseServiceRoleClient()
       .from("note_generation_cache")
       .delete()
       .eq("lecture_id", lectureId);
+
+    if (stage) {
+      query = query.eq("stage", stage);
+    }
+
+    const { error } = await query;
 
     if (error) {
       console.warn("Note generation cache cleanup failed; rows stay until lecture delete.", error.message);

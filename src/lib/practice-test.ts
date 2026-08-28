@@ -24,7 +24,9 @@ import {
   extractStudyItems,
   generateItemPracticeDrafts,
   resolveStudyPipelineMode,
+  STUDY_BATCH_CACHE_STAGES,
 } from "@/lib/study-items";
+import { clearGenerationCache } from "@/lib/notes/generation-cache";
 import { dependsOnMissingStudyContext, isHighQualityStudyPrompt } from "@/lib/study-quality";
 import type { CoverageConcept, CoverageUnitPlan, SourceUnit } from "@/lib/study-models";
 import { buildSourceUnits } from "@/lib/study-source-units";
@@ -639,6 +641,10 @@ export async function generateLecturePracticeTest(params: {
         throw insertError;
       }
     }
+
+    // The bank is published; clearing the batch checkpoints keeps the cache table holding only
+    // in-flight work and keeps a learner's "regenerate" fresh.
+    await clearGenerationCache(params.lectureId, STUDY_BATCH_CACHE_STAGES.practice);
 
     await setPracticeTestAssetStatus({
       lectureId: params.lectureId,

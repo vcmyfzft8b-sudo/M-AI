@@ -15,7 +15,9 @@ import {
   extractStudyItems,
   generateItemQuizDrafts,
   resolveStudyPipelineMode,
+  STUDY_BATCH_CACHE_STAGES,
 } from "@/lib/study-items";
+import { clearGenerationCache } from "@/lib/notes/generation-cache";
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
 import { areHighQualityQuizOptions, isHighQualityStudyPrompt } from "@/lib/study-quality";
@@ -779,6 +781,10 @@ export async function generateLectureQuiz(params: { lectureId: string }) {
         created_at: createdAt,
       };
     });
+
+    // Published either way below; the batch checkpoints have done their job, and a learner's
+    // "regenerate" should produce fresh questions rather than replaying them.
+    await clearGenerationCache(params.lectureId, STUDY_BATCH_CACHE_STAGES.quiz);
 
     if (storage.mode === "tables") {
       await publishQuizQuestions({

@@ -19,7 +19,9 @@ import {
   extractStudyItems,
   generateItemCardDrafts,
   resolveStudyPipelineMode,
+  STUDY_BATCH_CACHE_STAGES,
 } from "@/lib/study-items";
+import { clearGenerationCache } from "@/lib/notes/generation-cache";
 import { generateCoverageCards, repairCoverageCards } from "@/lib/study-cards";
 import type { CoverageCardDraft, CoverageUnitPlan, SourceUnit, StudySectionDraft } from "@/lib/study-models";
 import { buildSourceUnits } from "@/lib/study-source-units";
@@ -828,6 +830,11 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
       (total, segment) => total + countWords(segment.text),
       0,
     );
+
+    // The deck is published; its batch checkpoints have done their job. Clearing them keeps the
+    // cache table holding only in-flight work, and makes a learner's "regenerate" produce fresh
+    // drafts instead of replaying these.
+    await clearGenerationCache(params.lectureId, STUDY_BATCH_CACHE_STAGES.cards);
 
     await setStudyAssetStatus({
       lectureId: params.lectureId,

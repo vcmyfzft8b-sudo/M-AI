@@ -3,7 +3,11 @@ import "server-only";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { z } from "zod";
 
-import { toUserFacingAiErrorMessage } from "@/lib/ai/errors";
+import {
+  AI_SOURCE_TOO_EXTENSIVE_MESSAGE,
+  isBudgetOverrunFailure,
+  toUserFacingAiErrorMessage,
+} from "@/lib/ai/errors";
 import { chatAnswerSchema } from "@/lib/ai/schemas";
 import { generateStructuredObject } from "@/lib/ai/json";
 import { createEmbeddings } from "@/lib/ai/embeddings";
@@ -22,6 +26,7 @@ import {
 } from "@/lib/lecture-processing-errors";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
 import {
+  getEffectiveLectureSourceType,
   getInitialNoteAudioVoice,
   shouldCreateInitialNoteAudio,
 } from "@/lib/lecture-source-metadata";
@@ -126,6 +131,72 @@ function parseProcessingMetadata(value: unknown) {
   return value as Record<string, unknown>;
 }
 
+// How many runs of one lecture may die on the invocation budget before the pipeline stops
+// retrying for the learner and calls the material too extensive. Two automatic retries means
+// three full runs — and on the Inngest path each run already spends several step attempts, every
+// one against a fresh budget with all finished work checkpointed. Measured on the 2026-08-27
+// overrun: the run after the failed one completed in 80 seconds, because only the unfinished
+// stages were left to buy.
+const MAX_BUDGET_FAILURE_RUNS = 3;
+// Lives in processing_metadata next to `failure`; cleared by updateLectureProcessingState the
+// moment a run reaches "ready".
+const BUDGET_FAILURE_COUNT_KEY = "budgetFailureCount";
+
+function readBudgetFailureCount(metadata: Record<string, unknown>) {
+  const value = metadata[BUDGET_FAILURE_COUNT_KEY];
+
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+/**
+ * Presses the retry button the learner would otherwise have to find themselves. The job chosen
+ * mirrors the manual retry route (src/app/api/lectures/[id]/retry) exactly, and anything that
+ * route would refuse to retry is not retried here either. Imported lazily because jobs.ts
+ * imports this module; by the time a failure is being recorded, both modules are long evaluated.
+ */
+async function enqueueBudgetOverrunRetry(params: {
+  lectureId: string;
+  sourceType: string | null;
+  metadata: Record<string, unknown>;
+}) {
+  const jobs = await import("@/lib/jobs");
+  const pendingDocument =
+    params.metadata.pendingDocument && typeof params.metadata.pendingDocument === "object";
+  const pendingLinkUrl =
+    typeof params.metadata.pendingLinkUrl === "string" &&
+    params.metadata.pendingLinkUrl.trim().length > 0;
+  const effectiveSourceType = getEffectiveLectureSourceType({
+    source_type: params.sourceType,
+    processing_metadata: params.metadata,
+  } as never);
+
+  if (pendingDocument) {
+    await jobs.enqueueLectureDocumentProcessing(params.lectureId);
+    return true;
+  }
+
+  if (pendingLinkUrl) {
+    await jobs.enqueueLectureLinkProcessing(params.lectureId);
+    return true;
+  }
+
+  if (effectiveSourceType === "audio") {
+    await jobs.enqueueLectureProcessing(params.lectureId);
+    return true;
+  }
+
+  if (
+    params.metadata.manualImport &&
+    typeof params.metadata.manualImport === "object" &&
+    !Array.isArray(params.metadata.manualImport)
+  ) {
+    await jobs.enqueueLectureNotesGeneration(params.lectureId);
+    return true;
+  }
+
+  return false;
+}
+
 async function updateLectureProcessingState(params: {
   lectureId: string;
   processingMetadata: unknown;
@@ -140,7 +211,16 @@ async function updateLectureProcessingState(params: {
   title?: string | null;
 }) {
   const supabase = createSupabaseServiceRoleClient();
-  const metadata = parseProcessingMetadata(params.processingMetadata);
+  const stored = parseProcessingMetadata(params.processingMetadata);
+  // A finished lecture wipes its budget-failure count: the count exists to stop the automatic
+  // retry of one struggling run from looping, not to hold a grudge — a later regeneration of the
+  // same lecture starts with fresh retries. Copied rather than deleted in place, because
+  // parseProcessingMetadata returns the caller's own object.
+  const { [BUDGET_FAILURE_COUNT_KEY]: staleBudgetFailures, ...withoutBudgetFailures } = stored;
+  const metadata = params.stage === "ready" ? withoutBudgetFailures : stored;
+
+  void staleBudgetFailures;
+
   const status = params.stage === "checking_document_images" ? "generating_notes" : params.stage;
 
   // An error message can quote the source text, and the metadata we merge back carries
@@ -779,6 +859,91 @@ export async function markLecturePipelineFailed(params: {
   // !isRetryableAiError guard silently dropped every one of the 2026-08-25 outline-timeout
   // failures.
   const expectedInputFailure = isExpectedLectureInputFailure(params.error);
+  // A run that died on the invocation budget was healthy and simply ran out of time, and every
+  // stage it finished is checkpointed — the next run pays only for what is left (measured on the
+  // 2026-08-27 overrun: 80 seconds). The learner's retry button would fix it; they should not
+  // have to find it. That lecture sat failed for 3.6 hours until its owner came back and pressed
+  // the button themselves, so the pipeline now presses it: the failure is still recorded
+  // honestly, then the same job the manual retry route would start is started automatically.
+  //
+  // Bounded by MAX_BUDGET_FAILURE_RUNS. A source that dies on the budget run after run, with
+  // checkpoints accumulating the whole time, has demonstrated — not merely suggested — that it
+  // cannot be processed in one piece; that terminal case is handled below.
+  const budgetOverrun = isBudgetOverrunFailure(params.error);
+  const budgetFailureRuns = budgetOverrun ? readBudgetFailureCount(metadata) + 1 : 0;
+
+  if (budgetOverrun && budgetFailureRuns < MAX_BUDGET_FAILURE_RUNS) {
+    await updateLectureProcessingState({
+      lectureId: params.lectureId,
+      processingMetadata: {
+        ...nextMetadata,
+        [BUDGET_FAILURE_COUNT_KEY]: budgetFailureRuns,
+        [LECTURE_FAILURE_METADATA_KEY]: { code: null },
+      },
+      stage: "failed",
+      errorMessage: toErrorMessage(params.error),
+    });
+
+    // Marked failed first, retried second: if the enqueue dies, the lecture sits in exactly the
+    // state it sat in before this existed — failed, message on the row, retry button offered.
+    try {
+      const retried = await enqueueBudgetOverrunRetry({
+        lectureId: params.lectureId,
+        sourceType: lectureMetadata?.source_type ?? null,
+        metadata,
+      });
+
+      if (retried) {
+        // No "[lecture-pipeline]" prefix on purpose: the triage automation treats every line
+        // carrying that prefix as actionable, and a failure the pipeline is already retrying by
+        // itself is not. It stays a warn so the platform log still shows the struggle.
+        console.warn("Lecture run died on the invocation budget; retrying automatically", {
+          lectureId: params.lectureId,
+          budgetFailureRuns,
+          maxRuns: MAX_BUDGET_FAILURE_RUNS,
+          error: toErrorMessage(params.error),
+        });
+
+        return { recorded: true };
+      }
+    } catch (enqueueError) {
+      console.error("Automatic budget-overrun retry could not be enqueued", {
+        lectureId: params.lectureId,
+        error: enqueueError,
+      });
+    }
+
+    // The automatic retry could not be started — this lecture is waiting on a human after all,
+    // so it gets the full visibility an unretried failure always had.
+    console.error("[lecture-pipeline] Lecture failed", {
+      lectureId: params.lectureId,
+      userId: lectureMetadata?.user_id ?? null,
+      sourceType: lectureMetadata?.source_type ?? null,
+      error: toErrorMessage(params.error),
+    });
+    captureRouteError(params.error, {
+      route: "lecture-pipeline",
+      operation: "markLecturePipelineFailed",
+      lectureId: params.lectureId,
+      userId: lectureMetadata?.user_id ?? undefined,
+      tags: { sourceType: lectureMetadata?.source_type ?? "unknown" },
+      extra: { budgetFailureRuns, autoRetryEnqueued: false },
+    });
+
+    return { recorded: true };
+  }
+
+  // The terminal budget case: this run was the lecture's last chance and it died on the budget
+  // again. The learner's message stops promising that trying again will help — it will not, and
+  // the "source_too_large" code (already in the unretryable set) takes the retry button with it.
+  const budgetRetriesExhausted = budgetOverrun && budgetFailureRuns >= MAX_BUDGET_FAILURE_RUNS;
+  const learnerMessage = budgetRetriesExhausted
+    ? AI_SOURCE_TOO_EXTENSIVE_MESSAGE
+    : toErrorMessage(params.error);
+  const failureCode = budgetRetriesExhausted
+    ? "source_too_large"
+    : toLectureFailureCode(params.error);
+
   const logPayload = {
     lectureId: params.lectureId,
     userId: lectureMetadata?.user_id ?? null,
@@ -821,10 +986,14 @@ export async function markLecturePipelineFailed(params: {
     lectureId: params.lectureId,
     processingMetadata: {
       ...nextMetadata,
-      [LECTURE_FAILURE_METADATA_KEY]: { code: toLectureFailureCode(params.error) },
+      // The exhausted count is kept on the row on purpose: if a learner retries a lecture the
+      // pipeline has already called too extensive and it overruns again, it goes straight back
+      // to terminal instead of winning three more automatic runs.
+      ...(budgetOverrun ? { [BUDGET_FAILURE_COUNT_KEY]: budgetFailureRuns } : {}),
+      [LECTURE_FAILURE_METADATA_KEY]: { code: failureCode },
     },
     stage: "failed",
-    errorMessage: toErrorMessage(params.error),
+    errorMessage: learnerMessage,
   });
 
   // Snapshot the exact input this lecture failed on, so the triage automation can reproduce the

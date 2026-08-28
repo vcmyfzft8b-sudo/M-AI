@@ -68,6 +68,35 @@ export function isAbortedWorkError(error: unknown) {
   );
 }
 
+// What the learner reads when the pipeline has proven — not guessed — that their material cannot
+// be processed in one piece: the run overran its budget, was retried automatically, and overran
+// again. Deliberately free of every keyword `isRetryableAiError` matches, so a rethrow of this
+// exact sentence keeps classifying as not retryable.
+export const AI_SOURCE_TOO_EXTENSIVE_MESSAGE =
+  "Gradivo je preobsežno, da bi ga obdelali v enem kosu. Razdeli ga na manjše dele in vsak del dodaj kot svoj zapisek.";
+
+/**
+ * The whole budget-overrun family, whichever side of the race surfaced it: the budget's own
+ * rejection (`InvocationBudgetExceededError`, or just its Slovene sentence once an Inngest step
+ * boundary has flattened the class away) and the cancelled work's rejection (`isAbortedWorkError`).
+ *
+ * These are the failures where the run was healthy and simply ran out of time — measured on
+ * 2026-08-28: a run that died this way finished in 80 seconds when retried, because every
+ * completed stage is checkpointed. That is what makes this family, and only this family, safe to
+ * retry automatically.
+ */
+export function isBudgetOverrunFailure(error: unknown) {
+  if (error instanceof Error && error.name === "InvocationBudgetExceededError") {
+    return true;
+  }
+
+  if (isAbortedWorkError(error)) {
+    return true;
+  }
+
+  return getErrorText(error).trim() === AI_PROCESSING_TOO_LONG_MESSAGE;
+}
+
 // Only the overloaded sentence, deliberately. The English wording of the save-timeout message
 // contained no provider keyword, so it classified as NOT retryable, and mapping it to retryable
 // now would be a behaviour change rather than a translation.

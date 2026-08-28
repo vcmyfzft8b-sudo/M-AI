@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import type { FinishReason } from "@google/genai";
 
+import { sanitizeJsonForDatabase } from "../database-text.ts";
+
 // Kept free of "server-only" so the structured-output contract stays unit-testable
 // (tests/gemini-structured-output.test.mjs) outside the Next.js runtime.
 
@@ -50,7 +52,12 @@ export function extractJsonPayload(value: string) {
 }
 
 export function parseStructuredText<TSchema extends z.ZodTypeAny>(schema: TSchema, text: string) {
-  return schema.parse(JSON.parse(extractJsonPayload(text)));
+  // Sanitized before validation, so the schema judges the value that will actually be used.
+  // Model output can carry U+0000 and lone surrogates — GLM produced a lone surrogate in a
+  // flashcard on its first day (2026-08-28), and one such character fails the entire Supabase
+  // insert with "invalid input syntax for type json" (see database-text.ts). Neither character
+  // can mean anything: a lone surrogate cannot even be UTF-8 encoded to send anywhere.
+  return schema.parse(sanitizeJsonForDatabase(JSON.parse(extractJsonPayload(text))));
 }
 
 export function toErrorMessage(error: unknown) {

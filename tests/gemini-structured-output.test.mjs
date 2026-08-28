@@ -83,3 +83,18 @@ test("non-truncation errors keep the invalid-JSON retry instruction", () => {
 test("first attempt gets no retry instruction", () => {
   assert.equal(buildStructuredRetryInstruction(null), "");
 });
+
+test("model output carrying unstorable characters is cleaned before validation", () => {
+  // GLM produced a lone surrogate in a flashcard on 2026-08-28; one such character fails the
+  // whole Supabase insert with "invalid input syntax for type json". The parse boundary is the
+  // one place every structured output passes through, from either provider.
+  const schema = z.object({ front: z.string(), back: z.string() });
+  const dirty = JSON.stringify({ front: "pojem \u0000 ARP", back: "razlaga \ud83d konec" });
+
+  const parsed = parseStructuredText(schema, dirty);
+
+  assert.equal(parsed.front, "pojem  ARP");
+  assert.equal(parsed.back, "razlaga  konec");
+  // The cleaned value round-trips as UTF-8, which is exactly what Postgres requires.
+  assert.doesNotThrow(() => new TextEncoder().encode(JSON.stringify(parsed)));
+});

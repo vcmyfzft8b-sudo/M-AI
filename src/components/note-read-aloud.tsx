@@ -1572,6 +1572,8 @@ export function NoteReadAloud({
   const pendingArrowMovedMediaBlockIdRef = useRef<string | null>(null);
   const pendingArrowMoveFromRectRef = useRef<DOMRect | null>(null);
   const pendingArrowMoveCloneRef = useRef<HTMLElement | null>(null);
+  /** Pre-move positions of every other block, so the displaced text slides instead of snapping. */
+  const pendingArrowMoveSiblingRectsRef = useRef<Map<string, DOMRect> | null>(null);
   const prefetchedChunksRef = useRef(new Map<string, TtsChunkResponse>());
   const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse>>());
   const prefetchQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1624,6 +1626,26 @@ export function NoteReadAloud({
 
       pendingArrowMoveCloneRef.current?.remove();
       pendingArrowMoveFromRectRef.current = mediaElement?.getBoundingClientRect() ?? null;
+
+      // FLIP snapshot of everything else in the note: the reorder reflows the blocks between the
+      // photo's old and new position, and without a before-rect they snap. Keyed with a prefix so
+      // a text block id can never collide with a media block id.
+      const siblingRects = new Map<string, DOMRect>();
+
+      for (const element of contentRef.current?.querySelectorAll<HTMLElement>(
+        "[data-note-block-id], [data-note-media-block-id]",
+      ) ?? []) {
+        const textId = element.getAttribute("data-note-block-id");
+        const mediaId = element.getAttribute("data-note-media-block-id");
+
+        if (mediaId === blockId) {
+          continue;
+        }
+
+        siblingRects.set(textId ? `b:${textId}` : `m:${mediaId}`, element.getBoundingClientRect());
+      }
+
+      pendingArrowMoveSiblingRectsRef.current = siblingRects;
 
       if (mediaElement && pendingArrowMoveFromRectRef.current) {
         const sourceImage = mediaElement.querySelector("img");
@@ -1710,6 +1732,7 @@ export function NoteReadAloud({
     let animatedElement: HTMLElement | null = null;
     let animatedClone: HTMLElement | null = null;
     let moveAnimation: Animation | null = null;
+    const siblingAnimations: Animation[] = [];
 
     const clearAnimatedElementStyles = () => {
       if (animatedElement) {
@@ -1747,9 +1770,11 @@ export function NoteReadAloud({
 
     const fromRect = pendingArrowMoveFromRectRef.current;
     const clone = pendingArrowMoveCloneRef.current;
+    const siblingRects = pendingArrowMoveSiblingRectsRef.current;
     const toRect = mediaElement.getBoundingClientRect();
     pendingArrowMovedMediaBlockIdRef.current = null;
     pendingArrowMoveFromRectRef.current = null;
+    pendingArrowMoveSiblingRectsRef.current = null;
     ignoreScrollUntilRef.current = Date.now() + 900;
 
     if (fromRect) {
@@ -1805,6 +1830,50 @@ export function NoteReadAloud({
         );
         moveAnimation.addEventListener("finish", clearAnimatedElementStyles, { once: true });
 
+        // The same slide, applied to every block the reorder displaced: each starts at its
+        // pre-move position and settles into its new one on the same clock as the photo, so the
+        // whole note moves as one motion instead of the text snapping under a flying image.
+        if (siblingRects) {
+          for (const element of contentRef.current?.querySelectorAll<HTMLElement>(
+            "[data-note-block-id], [data-note-media-block-id]",
+          ) ?? []) {
+            const textId = element.getAttribute("data-note-block-id");
+            const mediaId = element.getAttribute("data-note-media-block-id");
+
+            if (mediaId === pendingBlockId) {
+              continue;
+            }
+
+            const before = siblingRects.get(textId ? `b:${textId}` : `m:${mediaId}`);
+
+            if (!before) {
+              continue;
+            }
+
+            const after = element.getBoundingClientRect();
+            const siblingDeltaX = before.left - after.left;
+            const siblingDeltaY = before.top - after.top;
+
+            if (Math.abs(siblingDeltaX) < 0.5 && Math.abs(siblingDeltaY) < 0.5) {
+              continue;
+            }
+
+            siblingAnimations.push(
+              element.animate(
+                [
+                  { transform: `translate3d(${siblingDeltaX}px, ${siblingDeltaY}px, 0)` },
+                  { transform: "translate3d(0, 0, 0)" },
+                ],
+                {
+                  duration: moveDurationMs,
+                  easing: "cubic-bezier(0.2, 0, 0, 1)",
+                  composite: "replace",
+                },
+              ),
+            );
+          }
+        }
+
         cleanupTimeout = window.setTimeout(() => {
           clearAnimatedElementStyles();
         }, moveDurationMs + 80);
@@ -1820,6 +1889,10 @@ export function NoteReadAloud({
     return () => {
       window.clearTimeout(cleanupTimeout);
       moveAnimation?.cancel();
+
+      for (const animation of siblingAnimations) {
+        animation.cancel();
+      }
 
       clearAnimatedElementStyles();
     };

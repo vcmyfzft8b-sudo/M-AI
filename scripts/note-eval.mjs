@@ -23,11 +23,11 @@ import {
   buildLegacyNoteTargets,
   buildLegacyStructuredPlusInstructions,
   buildNoteOutlineInstructions,
-  buildNoteWritingInstructions,
+  assembleSourceNoteParts,
+  buildSourceNoteInstructions,
   dedupeKnowledgeItems,
   enforceOutlineRetentionBounds,
-  formatOutlineForWriting,
-  resolveNoteWordBudget,
+  planSourceWriteWindows,
   KNOWLEDGE_EXTRACTION_PASS_WINDOWS,
   knowledgeExtractionSchema,
   resolveExtractionMaxOutputTokens,
@@ -410,32 +410,35 @@ async function runContentDrivenVariant(fixture, fallbackModel, forceModel, optio
 
   const writeConfig = stage("note_write");
   const retainedItemCount = outline.topics.reduce((total, topic) => total + topic.itemIds.length, 0);
-  const { value: written } = await generate({
-    schema: noteWriteSchema,
-    model: writeConfig.model,
-    thinkingLevel: writeConfig.thinkingLevel,
-    // Sized from the retained items, not from a word target: ~110 output tokens per item plus
-    // thinking headroom. Length follows the content, and so does the budget for it.
-    maxOutputTokens: Math.round(Math.max(4000, retainedItemCount * 170) * writeConfig.outputHeadroom),
-    instructions: buildNoteWritingInstructions({
-      outputLanguage: fixture.language,
-      ...(options.coverage ? { coverageObjective: true } : {}),
-      ...(options.pedagogy ? { pedagogy: true } : {}),
-      ...(options.dense
-        ? {
-            wordBudget: resolveNoteWordBudget({
-              sourceWordCount: countWords(fixture.source),
-              retainedItemCount,
-            }),
-          }
-        : {}),
-    }),
-    input: `Outline to teach:\n${JSON.stringify(
-      { title: outline.title, summary: outline.summary, topics: formatOutlineForWriting({ outline, items }) },
-      null,
-      2,
-    )}\n\nFull source text:\n${fixture.source}`,
-  });
+  // Mirrors production since 2026-08-29: the note is written straight from the raw source with
+  // the user-supplied contract (buildSourceNoteInstructions); the outline above still feeds the
+  // extraction metrics and the study decks. The coverage/pedagogy/dense options are retired —
+  // the contract carries its own length and style rules.
+  const sourceWindows = planSourceWriteWindows(fixture.source);
+  const parts = [];
+
+  for (const [index, sourceWindow] of sourceWindows.entries()) {
+    const { value: part } = await generate({
+      schema: noteWriteSchema,
+      model: writeConfig.model,
+      thinkingLevel: writeConfig.thinkingLevel,
+      maxOutputTokens: Math.round(
+        Math.max(4000, countWords(sourceWindow) * 1.6) * writeConfig.outputHeadroom,
+      ),
+      instructions: buildSourceNoteInstructions({
+        outputLanguage: fixture.language,
+        ...(sourceWindows.length > 1 ? { window: { index, count: sourceWindows.length } } : {}),
+      }),
+      input:
+        sourceWindows.length > 1 && index > 0
+          ? `Topic of the whole document: ${outline.title}\n\nSource material (part ${index + 1} of ${sourceWindows.length}):\n${sourceWindow}`
+          : sourceWindow,
+    });
+
+    parts.push(part.structuredNotesMd.trim());
+  }
+
+  const written = { structuredNotesMd: assembleSourceNoteParts(parts) };
 
   return {
     notesMd: normalizeGeneratedNoteMarkdown(written.structuredNotesMd),

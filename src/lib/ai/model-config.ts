@@ -60,8 +60,8 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
   // Decides what the finished note covers and drops. One call per source, so thinking is cheap
   // here and this is the only place global importance is judged.
   note_outline: { thinkingLevel: "medium", outputHeadroom: 2.5, defaultModel: GLM_TEXT_MODEL },
-  // The single hardest call in the product, and one per source (or one per window on a large
-  // outline — see planNoteWriteWindows). The bake-off's write-only GLM row scored +7.1 recall
+  // The single hardest call in the product, and one per source (or one per part on a large
+  // source — see planSourceWriteWindows). The bake-off's write-only GLM row scored +7.1 recall
   // points over routed 3.7-flash at -62% cost.
   note_write: {
     thinkingLevel: "high",

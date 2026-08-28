@@ -13,13 +13,12 @@ import {
   buildLegacyAudioNoteTargets,
   buildLegacyNoteTargets,
   buildLegacyStructuredPlusInstructions,
+  assembleSourceNoteParts,
   buildNoteOutlineInstructions,
-  buildNoteWritingInstructions,
+  buildSourceNoteInstructions,
   countWords,
   dedupeKnowledgeItems,
-  formatOutlineForWindowWriting,
-  formatOutlineForWriting,
-  planNoteWriteWindows,
+  planSourceWriteWindows,
   KNOWLEDGE_EXTRACTION_PASS_WINDOWS,
   MAX_ITEMS_PER_EXTRACTION_WINDOW,
   resolveExtractionMaxOutputTokens,
@@ -324,32 +323,29 @@ async function generateNotesContentDriven(
   );
   const sourceText = segments.map((segment) => segment.text).join("\n\n");
 
-  // The note is written in one call when it fits, and in consecutive topic windows when it does
-  // not (planNoteWriteWindows says why: the default writer's speed against the 300s invocation).
-  // Each window is checkpointed separately, so a step that dies mid-note resumes after the
-  // windows already written — the same convergence contract the extraction windows have.
-  const writeWindows = planNoteWriteWindows(outline);
+  // The note is written straight from the raw source (buildSourceNoteInstructions carries the
+  // whole contract — the outline above still feeds the study decks and the note's title, but the
+  // note text no longer passes through it). One call when the source fits, consecutive source
+  // parts when it does not; each part is checkpointed separately, so a step that dies mid-note
+  // resumes after the parts already written — the same convergence contract extraction has.
+  const sourceWindows = planSourceWriteWindows(sourceText);
   const windowMarkdowns: string[] = [];
 
-  for (const [windowIndex, writeWindow] of writeWindows.entries()) {
-    const windowOption =
-      writeWindows.length > 1 ? { window: { index: windowIndex, count: writeWindows.length } } : {};
-    const writeInstructions = buildNoteWritingInstructions({
+  for (const [windowIndex, sourceWindow] of sourceWindows.entries()) {
+    const writeInstructions = buildSourceNoteInstructions({
       outputLanguage: params.outputLanguage,
-      coverageObjective: true,
-      pedagogy: true,
-      ...windowOption,
+      ...(sourceWindows.length > 1
+        ? { window: { index: windowIndex, count: sourceWindows.length } }
+        : {}),
     });
-    const windowTopics =
-      writeWindows.length > 1
-        ? formatOutlineForWindowWriting({ outline, items, topicIndexes: writeWindow.topicIndexes })
-        : formatOutlineForWriting({ outline, items });
-    const writeInput = `Outline to teach:\n${JSON.stringify({
-      title: outline.title,
-      summary: outline.summary,
-      topics: windowTopics,
-    })}\n\nFull source text:\n${sourceText}`;
-    const writeMaxOutputTokens = Math.max(4000, writeWindow.itemCount * 170);
+    const writeInput =
+      sourceWindows.length > 1 && windowIndex > 0
+        ? `Topic of the whole document: ${outline.title}\n\nSource material (part ${windowIndex + 1} of ${sourceWindows.length}):\n${sourceWindow}`
+        : sourceWindow;
+    // Sized from the part's own length: the contract caps the note at ~60% of the source, and
+    // Slovene runs ~2.3 tokens per word, so 1.6x words is that ceiling plus slack — small enough
+    // that a runaway part still cannot outlive the write leash.
+    const writeMaxOutputTokens = Math.max(4000, Math.round(countWords(sourceWindow) * 1.6));
 
     // Checkpointed like the outline: this is the single most expensive call in the product, and a
     // budget that expires after the write but before the artifact is saved must not re-buy it.
@@ -377,7 +373,9 @@ async function generateNotesContentDriven(
     windowMarkdowns.push(written.structuredNotesMd.trim());
   }
 
-  const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(windowMarkdowns.join("\n\n"));
+  const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(
+    assembleSourceNoteParts(windowMarkdowns),
+  );
   const normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
 
   return {

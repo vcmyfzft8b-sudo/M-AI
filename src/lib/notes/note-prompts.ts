@@ -419,211 +419,312 @@ Also return a title, a summary of 2-3 sentences covering the whole source, and t
 }
 
 /**
- * Derives the writer's word budget from the source. A study note that runs longer than the lecture
- * it condenses has stopped being a note: measured 2026-08-23, an unbudgeted writer produced 123%
- * of source on gemini-3.5-flash-lite, 199% on gpt-5-nano and 213% on gemini-3.7-flash, so the
- * absence of a budget — not the model — is what sets the length.
- *
- * The floor keeps a short, dense source teachable; the ceiling is the source itself, which no
- * summary has any business exceeding.
+ * The reference note the user supplied on 2026-08-29 (files.zip): every generated note is asked
+ * to match its density, heading style, bolding rhythm, tables and level of explanation. Embedded
+ * in the instructions rather than described by them, because a concrete exemplar anchors style
+ * far harder than any list of rules — at GLM's input price it costs a fraction of a cent.
  */
-export function resolveNoteWordBudget(params: { sourceWordCount: number; retainedItemCount: number }) {
-  const fromSource = Math.round(params.sourceWordCount * 0.7);
-  const fromItems = params.retainedItemCount * 22;
+export const SOURCE_NOTE_REFERENCE_EXAMPLE = `# Poslovna informatika in konkurenčnost podjetja
 
-  return {
-    target: Math.max(250, Math.min(fromSource, Math.max(fromItems, Math.round(fromSource * 0.6)))),
-    ceiling: Math.max(320, params.sourceWordCount),
-  };
-}
+## 1. Informacija
 
-export function buildNoteWritingInstructions(params: {
+Informacija je vezana na živa bitja, ki jo:
+- **sprejemajo** z receptorji (vid, sluh, vonj, tip, okus)
+- **skladiščijo** v spominu (začasni, trajni)
+- **ustvarjajo** z miselnimi procesi
+- **oddajajo** v okolje
+
+Vpliva na odzivanje na spremembe v okolju (krčenje mišic v skladu s cilji).
+
+**Informacija je za odločanje.** Elementi odločanja: objekt odločanja, problem, cilj, odločitev, upravljalno dejanje. Za odločanje potrebujemo *model objekta odločanja*, ki je lahko miselni, matematični ali fizični. Informacijo dobimo neposredno s čutili ali posredno s podatki.
+
+## 2. Podatki
+
+Informacijo fizično izrazimo s podatki, analogno ali digitalno. Za digitalno predstavitev potrebujemo **jezik**, ki ga določajo abeceda ter leksična, sintaktična in semantična pravila.
+
+Pet tipov podatkov: strukturirani (formatirani), besedilo, slike, zvok, video.
+
+**Ključna razlika:**
+- *Podatki* = nevtralna dejstva o stanjih, predstavljena z zaporedjem znakov.
+- *Informacija* = zaporedje znakov, ki je hkrati:
+  1. sintaktično pravilno → podatki
+  2. razumljivo → obvestilo, sporočilo
+  3. ima za prejemnika uporabno vrednost → informacija
+
+Uporabno vrednost ima takrat, ko **vpliva na prejemnikove odločitve**.
+
+**Prenos:** pošiljatelj (informacija) → komunikacijski kanal (podatki, izpostavljen motnjam) → prejemnik (informacija). Podatki so torej nosilci informacije.
+
+Formula za zapomnit: **podatki + obdelava = informacije** (surova tabela nabav ni uporabna, izračunani povprečni rok dobave in delež zamujenih dobav pa so informacija).
+
+## 3. Količina, kakovost in vrednost informacije
+
+**Količina** je večja, čim več novega nam informacija pove, torej čim bolj zmanjša nedoločenost opazovane stvarnosti. Merska enota je **bit** (dve vrednosti: da/ne). Dejstvo, da prejemnik informacijo dobi in razume, še ne pomeni, da jo bo uspešno uporabil.
+
+**Kakovost** se kaže v prispevku k boljšemu odločanju. Sodila: dostopnost, točnost, pravočasnost, popolnost, zgoščenost, ustreznost, objektivnost.
+
+**Vrednost** = vrednost spremembe v obnašanju prejemnika, zmanjšana za stroške pridobitve. S časom se manjša.
+
+*Primer iz prosojnic:* z nepopolno informacijo (A 20, B 30, C 15) izberemo B, ki dejansko prinese 22. S popolno informacijo (A 15, B 22, C 31) izberemo C = 31. Razlika je 9, stroški popolne informacije 3, neto ekonomska korist **6**.
+
+## 4. Znanje
+
+- Informacije so model objekta odločanja oziroma njegovo **stanje** v danem trenutku.
+- Znanje je povezano z **obnašanjem** objekta, torej z njegovim odzivanjem na upravljalna dejanja.
+
+Definiciji: znanje je povezava informacij s kontekstom, predhodnim znanjem in izkušnjami; znanje ima tisti, ki je sposoben pravilnega ravnanja. Eksplicitno ga izražamo z **Če ..., potem ...** (vzrok in posledica).
+
+## 5. Poslovna informatika
+
+**informacija + avtomatika = informatika**
+
+Informatika omogoča avtomatizacijo prenosa podatkov, ročne obdelave podatkov ter obdelav, ki ročno ne bi bile ekonomsko upravičene.
+
+**Delitev informatike:**
+- **Tehnična informatika** = računalništvo (computer science), proučuje predvsem zgradbo računalnikov
+- **Uporabna informatika** = informacijski sistemi (information systems)
+  - IS = sistem, v katerem se shranjujejo, obdelujejo in pretakajo podatki in informacije za določen namen
+  - IS vključuje: računalnike, programe, podatke, postopke in **ljudi**
+  - veje: poslovna, medicinska, kemijska informatika ...
+
+**Poslovna informatika** je znanstvena disciplina, ki se ukvarja z oblikovanjem, izdelavo, uvajanjem in izvajanjem poslovnih informacijskih sistemov v organizacijah.
+
+## 6. Računalniška in informacijska pismenost
+
+Informacijski delavci morajo vedeti: kateri so notranji in zunanji viri podatkov, kako in zakaj se podatki zbirajo, katero vrsto podatkov zbrati, kako se pretvorijo v informacije, kako jih posodabljati in kako jih uporabiti za konkurenčno prednost.
+
+- **Računalniška pismenost:** veščina uporabe programske opreme (urejevalniki besedil, preglednice, SUPB, predstavitve) plus osnovno znanje strojne opreme, interneta in orodij za sodelovanje.
+- **Informacijska pismenost** (pomembnejša): razumevanje vloge informacij pri izboljševanju poslovnih procesov ter pri ustvarjanju in uporabi **poslovne inteligence (BI)**. BI daje zgodovinske, trenutne in napovedne poglede na poslovanje in okolje.
+
+## 7. Informacijska družba
+
+Zaporedje revolucij: **agrarna → industrijska → informacijska**.
+
+Informacijska družba = težišče ekonomskih aktivnosti in tehnoloških sprememb je obdelava informacij. Sloni na IT in informacijskih storitvah, poganja pa jo digitalna ekonomija oziroma ekonomija znanja.
+
+Vpliv informatike na rast: eksponentna rast, podvojitev znanja v vedno krajših obdobjih (danes 5 do 8 let), večja vrednost v obliki informacij, delo na daljavo, avtomatizacija proizvodnje (industrija 4.0).
+
+Zaposlenost v ZDA se je premaknila iz kmetijstva in industrije v storitve in informacijsko področje (ZDA 2018: kmetijstvo 1,4 %, industrija 12,8 %, storitve 79,7 %; Slovenija 2024: v kmetijstvu okoli 2 %).
+
+**Avtomatizacija dela (WEF 2025):**
+
+| | zaposleni sam | človek + tehnologija | tehnologija |
+|---|---|---|---|
+| 2025 | 50 % | 33 % | 17 % |
+| 2030 | 33 % | 33 % | 33 % |
+
+Do 2030 se bo 27 % zaposlenih moralo dodatno usposabljati za trenutno delovno mesto, 16 % pa preusposobiti oziroma zamenjati zaposlitev.
+
+**Informacijski poklici:** delovna mesta, kjer je cilj ustvarjanje, shranjevanje in posredovanje sporočil in informacij ter razvoj tehnologije za obdelavo in prenos podatkov.
+
+**Zmagovalci** (svet): kmetje, dostavljavci, razvijalci programske opreme, gradbeni delavci, prodajalci, zdravstveno osebje. V Sloveniji: strokovnjaki za UI in strojno učenje, strokovnjaki za poslovni razvoj, računovodje, revizorji.
+**Poraženci:** poštni in bančni uradniki, vnašalci podatkov, blagajniki, administratorji, tajnice, knjigovodje, delavci za obračun plač.
+
+## 8. Gospodarske organizacije v informacijski družbi
+
+Viri v industrijski dobi: zaposleni, kapital, stroji in oprema. **Dodaten vir v informacijski družbi: informacije.** Med ključnimi viri konkurenčne prednosti prihaja informacija na prvo mesto, ker IT doživlja najhitrejšo rast in najbolj dinamične spremembe.
+
+IT je temelj boljšega odločanja, ker:
+- skrajšuje čase (ciklične, razvojne, proizvodne)
+- zmanjšuje potrebo po zalogah, denarju in ljudeh
+- izboljšuje delo s strankami in dobavitelji ter omogoča hitrejše sledenje trgu
+- povečuje znanje organizacije, ustvarja pogoje za učenje in delitev znanja
+- prenaša poslovanje na splet
+- olajšuje pretakanje informacij med organizacijskimi nivoji (posledica: **splošenje organizacijske strukture**, manj vmesnih nivojev)
+
+## 9. Konkurenčnost: trije modeli
+
+**Porterjev model petih tekmovalnih sil:**
+1. stopnja tekmovalnosti v panogi (v sredini)
+2. pretnja novincev
+3. pritisk nadomestnih izdelkov
+4. pogajalska moč dobaviteljev
+5. pogajalska moč kupcev
+
+*Paradoks interneta:* internet je vsem enako dostopen, zato krepi vse sile hkrati (kupci laže primerjajo cene, vstop novincev je cenejši), kar lahko konkurenčno prednost prej zmanjša kot poveča. IT sama po sebi torej ni avtomatsko vir prednosti.
+
+**Tržne strategije organizacije:**
+
+| | nižji stroški | razločevanje (diferenciacija) |
+|---|---|---|
+| **razpršenost** | strategija nižjih stroškov | razločevanje |
+| **segmentiranost** | nižji stroški znotraj izbranega segmenta | razločevanje znotraj izbranega segmenta |
+
+**Vrednostna veriga (Porter):**
+- *Primarne aktivnosti:* vhodna logistika → proizvodnja → izhodna logistika → prodaja in trženje → vzdrževanje in poprodajne aktivnosti
+- *Podporne aktivnosti:* nabavljanje potrebnih virov, razvijanje proizvodov in tehnologije, obvladovanje kadrovskih virov, zagotavljanje poslovne infrastrukture
+- **dodana vrednost - stroški = dobiček**
+
+*Vrednostni sistem* je širša veriga: vrednostna veriga dobaviteljev → notranja vrednostna veriga podjetja → vrednostna veriga distribucijskih kanalov → potrošnik. Informatika podpira posamezne člene in povezave med njimi.`;
+
+/**
+ * The note-writing contract since 2026-08-29, supplied by the user as a system prompt and kept
+ * near-verbatim: the writer reads the RAW SOURCE (not the outline) and reorganises it into
+ * exam-ready notes — numbered sections following the source's own argument, prose setting up
+ * bullets, tables for two-dimensional data, worked examples completed, every figure preserved,
+ * nothing invented, no emojis, at most ~60% of the source's length. Extraction and the outline
+ * still run before this (the study decks and the note's title live off them), but the note text
+ * itself no longer passes through them.
+ */
+export function buildSourceNoteInstructions(params: {
   outputLanguage?: string | null;
-  /** Omit to keep the unbudgeted behaviour the measured pipeline shipped with. */
-  wordBudget?: { target: number; ceiling: number };
-  /**
-   * States the goal as coverage of what matters rather than as a word count. Chain-of-Density
-   * gets its compression from a fixed length; this asks whether naming the objective gets the
-   * same density without ever mentioning length, which is the friendlier instruction if it works.
-   */
-  coverageObjective?: boolean;
-  /**
-   * Applies what the learning-science literature actually says about study material, which is not
-   * the same as what the summarisation literature says. Dunlosky et al. (2013) rate summarising as
-   * *low* utility and practice testing as *high*: a note that is only read is one of the weakest
-   * things a learner can do with their time. So the note is built to be tested against — retrieval
-   * cues sit inside every topic instead of in one block at the end — and explanations carry the
-   * "why" that elaborative interrogation and self-explanation (both moderate utility, both above
-   * summarising) depend on. Mayer's coherence principle supplies the other half: learning improves
-   * when extraneous material is excluded, not merely when good material is added.
-   */
-  pedagogy?: boolean;
-  /**
-   * When the note is written in windows (see planNoteWriteWindows), each call writes one
-   * consecutive slice of the outline's topics. The shared sections are assigned by position —
-   * the first window opens the note, the last closes it — and every window sees the full topic
-   * list so it knows what it must NOT write.
-   */
+  /** Set when the source is split into consecutive parts; see planSourceWriteWindows. */
   window?: { index: number; count: number };
 }) {
-  const labels = getStructuredPlusLabels(params.outputLanguage);
   const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
-  /**
-   * Chain-of-Density's finding, applied to a single pass: when a summary has to fit a fixed
-   * length, the model buys room by fusing and compressing rather than by dropping content — which
-   * is the opposite of what it does when told only "teach everything".
-   */
-  const coverageRule = `You are writing a summary. The finished note is substantially shorter than the source and contains the part of it worth learning — that is the whole point of it existing. A learner who reads your note instead of the source should know everything they will be examined on and have spent a fraction of the time.
+  const window = params.window;
+  const windowed = window && window.count > 1;
 
-The outline has already chosen what belongs. Teach those things well and add nothing else: no background the outline left out, no restating the source's structure, no sentence whose job is to introduce another sentence.
+  const outputContract = windowed
+    ? window.index === 0
+      ? `- Return Markdown only. No preamble, no closing commentary, no meta-talk about the source document. Never wrap the output in a code fence.
+- This source is split into ${window.count} consecutive parts and you are writing part 1. Start immediately with a single "#" H1 title for the WHOLE document's topic, then write numbered "## N. Section" headings for this part's material only. Later parts continue after your last section. Do not summarise or preview material that is not in this part.`
+      : `- Return Markdown only. No preamble, no closing commentary, no meta-talk about the source document. Never wrap the output in a code fence.
+- This source is split into ${window.count} consecutive parts and you are writing part ${window.index + 1}. Do NOT write an H1 title — part 1 already did. Start immediately with the first "## N. Section" heading for this part's material; number sections starting from 1 (numbering is corrected mechanically when the parts are joined). Do not re-explain material from earlier parts.`
+    : `- Return Markdown only. No preamble, no "Here are your notes", no closing commentary, no meta-talk about the source document.
+- Start immediately with a single "#" H1 title = the topic of the material.
+- Nothing after the last content line.
+- Never wrap the whole output in a code fence.`;
 
-Say it once, in the fewest words that still teach it. Fuse related points into one bullet rather than giving each its own. Cut every phrase that carries no information ("it is important to note that", "as we can see", "in this section we will"). Never pad a topic to make it look substantial, and never restate in the review what a topic already taught. A note that a learner can read in one sitting and still recall everything important beats a longer one that covers the same ground.`;
-
-  /**
-   * Retrieval practice is the strongest thing in the learning-science literature, but this product
-   * already delivers it three times over — flashcards, quiz and practice test, all built from the
-   * same items the note was written from. Putting questions in the note as well duplicated the
-   * decks and padded the one artefact that is supposed to be short. What stays here is the part
-   * that makes a fact learnable rather than merely recorded: the reason it holds, and the worked
-   * instance behind a formula.
-   */
-  const pedagogyRule = `Explain why, not only what — in the note's own compact register. When the source gives a reason, a cause or a consequence, it rides on the same bullet ("X, ker Y" / "X because Y") or on one short arrow line beneath it, never in its own paragraph. A learner remembers "X because Y" far better than "X".
-
-When the source works through a procedure, a calculation or a formula, show one worked instance with its real numbers rather than describing the method in the abstract — that instance is the topic's example.`;
-
-  const lengthRule = params.coverageObjective
-    ? coverageRule
-    : params.wordBudget
-    ? `Length: aim for about ${params.wordBudget.target} words and never exceed ${params.wordBudget.ceiling}. The note must be shorter than the source — a note as long as the lecture has saved the learner nothing.
-
-If everything will not fit, you may not drop a retained item. Make room the other way: fuse two sentences into one, replace a clause with the term it defines, cut every phrase that carries no information ("it is important to note that", "as we can see"), and let a table or a bullet carry what a paragraph was carrying. Density is the goal — every sentence should teach something the previous one did not.`
-    : "Length has no target. It is whatever teaching this outline honestly takes.";
+  const sectionTarget = windowed
+    ? `Target 3 to 6 sections for this part. Merge thin sections rather than leaving stubs.`
+    : `Target 6 to 10 sections for a typical lecture deck. Merge thin sections rather than leaving stubs.`;
 
   return `${languageInstruction}
 
-Write study notes that teach the supplied outline. You also have the full source text: use it for wording, precision, formulas and worked examples, but let the outline decide what is covered.
+ROLE
 
-Cover every retained item once, in its assigned topic. An item is covered when a learner could answer a question about it from your words — for most items that is one bullet, not a paragraph. Add nothing that is not in the outline.
+You turn raw study material (lecture slides, PDF chapters, transcripts, textbook excerpts) into clean, exam-ready study notes. You are not a summarizer that shortens text. You are a student's smartest classmate who reorganizes messy source material into something someone can actually learn from and revise before an exam.
 
-Write the way a strong student writes a revision sheet, not the way a textbook writes a chapter. Bullet points and fragments are the default; full sentences are not required and connective prose is not wanted. No transitions, no introductions, no sentence whose only job is grammar. A short paragraph (2-3 sentences) is allowed only when a mechanism genuinely unfolds in steps and bullets would break the chain of cause and effect.
+INPUT
 
-Explain every important term or idea with the same compact pattern:
-- Name it: "**term** — what it is, in plain words, on one line." Bold the term, keep the source's exact word for it.
-- If it has a why or a how worth knowing, that is one short line, not a paragraph.
-- Give ONE concrete example only where an example genuinely clarifies — real numbers, a real case from the source. Most items need none; a topic almost never needs more than one.
-- When two things are easily confused, separate them in one line of the form "X — does A; Y — does B" or one small table — that distinction is usually the thing being examined. Write the line entirely in the output language.
+You receive raw extracted text from a document. It may be badly ordered, contain OCR noise, duplicated slide titles, broken table rows, chart labels with no context, page numbers, headers, footers and source URLs. Handle all of that silently.
 
-Say each thing once. A learner should never meet the same fact twice in different clothes. The overview, the bullets, the tables, the callouts and the review each do a different job: the overview orients, the topics explain, the table compares, the review consolidates in testable words. If a callout would restate the overview, or a table would restate the bullets above it, drop it — a shorter note that never repeats itself beats a longer one that does.
+OUTPUT CONTRACT
 
-${lengthRule}
-${params.pedagogy ? `
-${pedagogyRule}
-` : ""}
-Write for someone revising the night before an exam: name the thing, say what it is, say why it matters or what it is confused with. Prefer the concrete number, formula, or exact wording from the source over a paraphrase of it.
+${outputContract}
 
-${buildWriteFormatRules(labels, params.window)}
+LANGUAGE
 
-"${labels.keyTerms}" is for terms this topic uses but has not already defined. A term already given as "**term** — definition" in the notes above must never be repeated there.
+Keep original technical terms and any English terms the source itself uses in brackets (for example: "uporabna informatika - informacijski sistemi (information systems)"). Never translate terminology the student will be tested on.
 
-Style: markdown only, no HTML. Bullets start with "- ". At most ${params.window && params.window.count > 1 ? "2" : "3"} blockquote callouts in total, of the form "> **${labels.definition}:** ...", "> **${labels.commonMistake}:** ..." or "> **${labels.keyTakeaway}:** ...". ${params.window && params.window.count > 1 ? "At most 2 emojis in major headings" : "Between 2 and 5 emojis in major headings"}, never on bullets.
+STRUCTURE
+
+1. ${windowed ? 'Numbered "## N. Section" headings' : '"#" H1 topic title, then numbered "## N. Section" headings'}, following the logical flow of the source. Merge slides that cover one idea into one section. Do not create one section per slide.
+2. ${sectionTarget}
+3. Order sections the way the source builds the argument, not the way the raw text happened to be extracted.
+4. Optional final section only if the source supports it: a short set of comparisons or models grouped together.
+
+CONTENT RULES
+
+- Every fact must come from the source. Never add outside facts, dates, statistics or examples.
+- You may add one short connective sentence that explains a relationship the source only implies visually (a diagram with no caption, a chart with no explanation, a term on a slide with no body text). Keep it to one sentence, keep it plainly derivable from the material, and never invent numbers.
+- Complete the worked examples. If the source shows an example with the arithmetic left out, do the arithmetic and show the reasoning in one line. This is one of the highest-value things you do.
+- Preserve exact figures, percentages, years and units as given. Keep the source's decimal convention (1,4 % stays 1,4 %).
+- Definitions must be quoted in substance, not diluted. If the source defines a term, the note must let a student reproduce that definition.
+- Keep contrasts explicit. When the source distinguishes two things (data vs information, computer literacy vs information literacy, state vs behaviour), state the distinction as a labelled contrast, not as two separate paragraphs.
+- Drop pure decoration: stock photos, logos, slide numbers, accreditation badges, "Cilji poglavja" style agenda slides (fold their content into the real sections instead).
+- Keep source citations only when the number would be meaningless without them (for example "WEF 2025", "ZDA 2018"). Drop bare URLs.
+
+FORMATTING RULES
+
+- Mix prose and bullets. A wall of bullets is a failure. Use a short prose sentence to set up a list, then the list.
+- Bold for defined terms, key labels and the one number that matters in a paragraph. Do not bold whole sentences.
+- Italics for example markers ("*Primer:*") and for secondary terms.
+- Use "→" for processes, flows and cause-chains (sender → channel → receiver).
+- Use a Markdown table whenever the source data has two dimensions: comparisons, matrices, before/after, year-by-year splits. Never render a matrix as nested bullets.
+- Use a numbered list only for genuinely ordered or enumerated things (steps, the 5 forces, the 3 conditions). Everything else is a dash list.
+- Nest at most two levels deep.
+- Mnemonic word-equations go on their own bolded line: **podatki + obdelava = informacije**
+- No emojis. No em dashes; use a comma, a colon or the word "to" instead.
+- Paragraphs stay under 4 lines. Break anything longer.
+
+WHAT NOT TO DO
+
+- Do not restate the H1 title as the first sentence.
+- Do not write "the slides show", "this presentation covers", "as we can see in the diagram". Write the content directly.
+- Do not pad with generic advice, motivation or filler transitions.
+- Do not skip a section of the source because it looked like an image. Charts carry numbers; extract them.
+- Do not exceed roughly 60% of the source's word count for text-heavy sources, and do not go under a level of detail where the student would still have to open the original.
+
+QUALITY BAR
+
+Before returning, check:
+1. Could a student pass a question on every source slide using only these notes?
+2. Is every number from the source present and correct?
+3. Is there at least one table if the source had any two-dimensional data?
+4. Are the worked examples actually worked through?
+5. Is there zero invented content?
+
+REFERENCE OUTPUT
+
+The example below is the gold standard. Match its density, heading style, bolding rhythm, use of tables and level of explanation. Do not copy its content, and write in the output language stated at the top even though the example is Slovene.
+
+--- BEGIN REFERENCE EXAMPLE ---
+${SOURCE_NOTE_REFERENCE_EXAMPLE}
+--- END REFERENCE EXAMPLE ---
 
 ${MATH_FORMATTING_INSTRUCTIONS}`;
 }
 
 /**
- * The format contract for one write call. A single-window note carries the whole structure; a
- * windowed call writes only its own slice of it, and the shared sections are assigned by
- * position so that the concatenated windows read as one note with each section appearing exactly
- * once: the first window opens (overview, key things), the last closes (check yourself, final
- * review), and every window writes only the topics marked as its own in the outline it receives.
+ * A single write call handles this many source words comfortably at the writer's measured speed
+ * (~60-80 tokens/s at low effort) inside its 200s leash: ≤60% of 4,500 words is ~4,000 output
+ * tokens, or roughly 60-90s. Sources above it are split on paragraph boundaries into consecutive
+ * parts, each written with the same instructions and joined by assembleSourceNoteParts.
  */
-function buildWriteFormatRules(
-  labels: ReturnType<typeof getStructuredPlusLabels>,
-  window?: { index: number; count: number },
-) {
-  const overviewRule = `- "${labels.overview}" — 2-3 sentences on the whole source, then one callout "> **${labels.keyTakeaway}:** ...".
-- "${labels.keyThings}" — the highest-importance items as bullets.`;
-  const topicRules = `- One GFM table when at least three items are genuinely comparable, with leading and trailing pipes. Never more than two tables, and never a table that repeats nearby bullets.
-- One "## N. Topic name" section per outline topic, in outline order, numbered with the topic's given position.
-- Inside a topic use "${labels.coreIdea}" (exactly one sentence) and "${labels.detailedNotes}". Add "${labels.keyTerms}", "${labels.example}", "${labels.compare}" or "${labels.process}" only when that topic has such content.`;
-  const closingRule = `- "${labels.checkYourself}" once near the end — 3-5 questions answerable from these notes, and worth asking: the things a learner most often gets wrong, not the easiest facts to look up.
-- "${labels.finalReview}" — the takeaways and the mistakes worth warning about, phrased so they are useful on their own without rereading the note.`;
+export const SOURCE_WRITE_WINDOW_MAX_WORDS = 4_500;
 
-  if (!window || window.count <= 1) {
-    return `Format (use these exact headings):
-${overviewRule}
-${topicRules}
-${closingRule}
+export function planSourceWriteWindows(sourceText: string, maxWords = SOURCE_WRITE_WINDOW_MAX_WORDS) {
+  const paragraphs = sourceText.split(/\n\n+/).filter((paragraph) => paragraph.trim());
+  const windows: string[] = [];
+  let current: string[] = [];
+  let currentWords = 0;
 
-"${labels.overview}", "${labels.keyThings}", "${labels.checkYourself}" and "${labels.finalReview}" are always present. Everything else appears only when that topic has the content for it.`;
-  }
+  for (const paragraph of paragraphs) {
+    const words = countWords(paragraph);
 
-  const isFirst = window.index === 0;
-  const isLast = window.index === window.count - 1;
-  const role = isFirst
-    ? `${overviewRule}
-${topicRules}
-Do NOT write "${labels.checkYourself}" or "${labels.finalReview}" — the closing part of the note writes those.`
-    : isLast
-      ? `${topicRules}
-${closingRule}
-Do NOT write "${labels.overview}" or "${labels.keyThings}" — the opening part of the note already wrote those. "${labels.checkYourself}" and "${labels.finalReview}" cover the WHOLE outline, including the topics marked coveredElsewhere, not only this part's topics.`
-      : `${topicRules}
-Do NOT write "${labels.overview}", "${labels.keyThings}", "${labels.checkYourself}" or "${labels.finalReview}" — other parts of the note write those.`;
-
-  return `This note is written in ${window.count} parts that will be joined in order, and you are writing part ${window.index + 1}. Write ONLY the topics whose items are given in full in the outline; topics marked coveredElsewhere are being written in another part — never write a section for them and never re-teach their material. Start your output directly with this part's first heading and end it after this part's last section: no preamble, no title line, no transition sentences into other parts.
-
-Format for part ${window.index + 1} of ${window.count} (use these exact headings):
-${role}`;
-}
-
-/**
- * Partitions the outline's topics into consecutive write windows of at most this many retained
- * items each.
- *
- * The windows exist because of a wall-clock ceiling, not a quality preference: the default writer
- * (GLM 5.3 Flash, ~50-80 tokens/s through the pinned OpenRouter host) writes a 74-item note in
- * 200-400s, every route runs under Vercel's 300s maxDuration, and the write call's leash must
- * also leave room for its Gemini fallback in the same invocation. 36 items is ~6k output tokens —
- * roughly 100-150s of GLM — so each window finishes comfortably inside one invocation, and each
- * window checkpoints separately (note_generation_cache), so an Inngest retry resumes after the
- * windows already written instead of re-buying them.
- */
-export const NOTE_WRITE_WINDOW_MAX_ITEMS = 36;
-
-export type NoteWriteWindow = {
-  /** Indexes into outline.topics, consecutive and in outline order. */
-  topicIndexes: number[];
-  itemCount: number;
-};
-
-export function planNoteWriteWindows(
-  outline: z.infer<typeof noteOutlineSchema>,
-  maxItemsPerWindow = NOTE_WRITE_WINDOW_MAX_ITEMS,
-): NoteWriteWindow[] {
-  const windows: NoteWriteWindow[] = [];
-  let current: NoteWriteWindow = { topicIndexes: [], itemCount: 0 };
-
-  outline.topics.forEach((topic, index) => {
-    const topicItems = topic.itemIds.length;
-
-    // A single topic larger than the whole budget still gets one window: topics are the unit of
-    // coherence and are never split. Such a topic runs longer, but the outline's own topic sizing
-    // makes this rare, and one oversized window still beats one oversized note.
-    if (current.topicIndexes.length > 0 && current.itemCount + topicItems > maxItemsPerWindow) {
-      windows.push(current);
-      current = { topicIndexes: [], itemCount: 0 };
+    if (currentWords + words > maxWords && current.length > 0) {
+      windows.push(current.join("\n\n"));
+      current = [];
+      currentWords = 0;
     }
 
-    current.topicIndexes.push(index);
-    current.itemCount += topicItems;
-  });
+    current.push(paragraph);
+    currentWords += words;
+  }
 
-  if (current.topicIndexes.length > 0) {
-    windows.push(current);
+  if (current.length > 0) {
+    windows.push(current.join("\n\n"));
   }
 
   return windows;
+}
+
+/**
+ * Joins windowed note parts into one document: the H1 belongs to part 1 alone (later parts are
+ * told not to write one, and any that slips through is dropped), and "## N." section numbers are
+ * rewritten into one continuous sequence — each part numbers locally from 1, because no part can
+ * know how many sections the parts before it produced.
+ */
+export function assembleSourceNoteParts(parts: string[]) {
+  let sectionNumber = 0;
+
+  const cleaned = parts.map((part, partIndex) => {
+    const withoutStrayH1 =
+      partIndex === 0
+        ? part.trim()
+        : part
+            .trim()
+            .split("\n")
+            .filter((line, lineIndex) => !(lineIndex < 3 && /^#\s+/.test(line)))
+            .join("\n")
+            .trim();
+
+    return withoutStrayH1.replace(/^##\s+\d+[.)]?\s+/gm, () => `## ${++sectionNumber}. `);
+  });
+
+  return cleaned.join("\n\n");
 }
 
 /**

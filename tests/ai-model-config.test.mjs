@@ -14,13 +14,12 @@ import {
 import { z } from "zod";
 
 import {
-  buildNoteWritingInstructions,
+  assembleSourceNoteParts,
+  buildSourceNoteInstructions,
   dedupeKnowledgeItems,
-  formatOutlineForWindowWriting,
   knowledgeExtractionSchema,
   MAX_ITEMS_PER_EXTRACTION_WINDOW,
-  NOTE_WRITE_WINDOW_MAX_ITEMS,
-  planNoteWriteWindows,
+  planSourceWriteWindows,
   resolveExtractionMaxOutputTokens,
 } from "../src/lib/notes/note-prompts.ts";
 
@@ -280,94 +279,54 @@ test("the outline and write stages get a timeout sized for their output, others 
   assert.equal(resolveStageTimeoutMs("chat"), undefined);
 });
 
-const outlineWith = (topicSizes) => ({
-  title: "T",
-  summary: "S",
-  keyTopics: ["a"],
-  droppedItemIds: [],
-  topics: topicSizes.map((size, index) => ({
-    title: `Topic ${index + 1}`,
-    itemIds: Array.from({ length: size }, (_, i) => index * 1000 + i),
-  })),
-});
+const paragraphsOf = (wordsEach, count) =>
+  Array.from({ length: count }, (_, i) => Array(wordsEach).fill(`w${i}`).join(" ")).join("\n\n");
 
-test("a note that fits the window budget is written in one call, exactly as before", () => {
-  const windows = planNoteWriteWindows(outlineWith([10, 12, 14]));
+test("a source that fits the window budget is written in one call", () => {
+  const windows = planSourceWriteWindows(paragraphsOf(500, 4), 4_500);
 
   assert.equal(windows.length, 1);
-  assert.deepEqual(windows[0].topicIndexes, [0, 1, 2]);
-  assert.equal(windows[0].itemCount, 36);
 });
 
-test("a large outline splits into consecutive windows that never break a topic", () => {
-  // 20+20 fits one window; 20 more does not; a topic bigger than the whole budget still gets
-  // its own window rather than being split — topics are the unit of coherence.
-  const windows = planNoteWriteWindows(outlineWith([20, 16, 20, 50, 8]));
+test("a large source splits on paragraph boundaries into consecutive parts", () => {
+  const source = paragraphsOf(1_000, 7);
+  const windows = planSourceWriteWindows(source, 3_000);
 
+  assert.equal(windows.length, 3);
+  // Nothing lost, nothing duplicated: the parts joined are the source again.
+  assert.equal(windows.join("\n\n"), source);
+});
+
+test("assembled parts carry one H1 and one continuous section numbering", () => {
+  const assembled = assembleSourceNoteParts([
+    "# Naslov\n\n## 1. Prva\n\nvsebina\n\n## 2. Druga\n\nvsebina",
+    "# Odvečen naslov\n\n## 1. Tretja\n\nvsebina",
+    "## 1. Četrta\n\nvsebina\n\n## 2. Peta\n\nvsebina",
+  ]);
+
+  assert.equal((assembled.match(/^#\s+/gm) ?? []).length, 1, "exactly one H1 survives");
   assert.deepEqual(
-    windows.map((w) => w.topicIndexes),
-    [[0, 1], [2], [3], [4]],
+    (assembled.match(/^##\s+\d+\./gm) ?? []).map((h) => h.trim()),
+    ["## 1.", "## 2.", "## 3.", "## 4.", "## 5."],
+    "section numbers run continuously across parts",
   );
-  assert.ok(windows.every((w) => w.topicIndexes.length > 0));
-  // Every topic appears exactly once, in outline order.
-  assert.deepEqual(windows.flatMap((w) => w.topicIndexes), [0, 1, 2, 3, 4]);
-  assert.equal(NOTE_WRITE_WINDOW_MAX_ITEMS, 36);
+  assert.match(assembled, /## 3\. Tretja/);
+  assert.match(assembled, /## 5\. Peta/);
 });
 
-test("a window sees full detail for its own topics and titles only for the rest", () => {
-  const outline = outlineWith([2, 2]);
-  const items = outline.topics.flatMap((topic, t) =>
-    topic.itemIds.map((id) => ({
-      id,
-      claim: `claim ${id}`,
-      kind: "fact",
-      importance: 3,
-      terms: [],
-      sectionTitle: `s${t}`,
-    })),
-  );
-  const view = formatOutlineForWindowWriting({ outline, items, topicIndexes: [1] });
+test("the source-note contract assigns the H1 to part one alone", () => {
+  const single = buildSourceNoteInstructions({ outputLanguage: "sl" });
+  const first = buildSourceNoteInstructions({ outputLanguage: "sl", window: { index: 0, count: 3 } });
+  const later = buildSourceNoteInstructions({ outputLanguage: "sl", window: { index: 1, count: 3 } });
 
-  assert.equal(view[0].coveredElsewhere, true);
-  assert.equal(view[0].items, undefined);
-  assert.equal(view[1].coveredElsewhere, undefined);
-  assert.equal(view[1].items.length, 2);
-  // Positions stay global so heading numbers survive the split.
-  assert.deepEqual(view.map((topic) => topic.position), [1, 2]);
-});
-
-test("windowed instructions assign each shared section to exactly one window", () => {
-  const opening = buildNoteWritingInstructions({ window: { index: 0, count: 3 } });
-  const middle = buildNoteWritingInstructions({ window: { index: 1, count: 3 } });
-  const closing = buildNoteWritingInstructions({ window: { index: 2, count: 3 } });
-  const single = buildNoteWritingInstructions({});
-
-  assert.match(opening, /## Quick Overview/);
-  assert.match(opening, /Do NOT write "### Check Yourself"/);
-  assert.match(middle, /Do NOT write "## Quick Overview"/);
-  assert.match(closing, /### Check Yourself/);
-  assert.match(closing, /Do NOT write "## Quick Overview"/);
-  // The single-call contract is untouched: all sections, no windowing language.
-  assert.match(single, /## Quick Overview/);
-  assert.match(single, /### Check Yourself/);
-  assert.doesNotMatch(single, /part 1 of/);
-});
-
-test("every gateway failure falls back to Gemini except a budget abort", () => {
-  // The safety net the whole GLM switch rests on. Truncation is GLM's characteristic failure
-  // (2.1% of calls on day one), and it must reach the direct provider rather than fail a
-  // learner's lecture. An abort is the one thing worth propagating: the invocation is already
-  // being killed, so a fallback call would spend money to produce nothing.
-  class Aborted extends Error {}
-  const isAborted = (error) => error instanceof Aborted;
-
-  const truncated = new Error("Model output was truncated: generation hit the 3200-token limit.");
-  const gatewayDown = new Error("OpenRouter z-ai/glm-5.3-flash: 503 upstream unavailable");
-  const schemaRefused = new Error("z-ai/glm-5.3-flash broke the schema");
-
-  for (const error of [truncated, gatewayDown, schemaRefused]) {
-    assert.equal(shouldFallBackToDirectProvider(error, isAborted), true);
+  for (const prompt of [single, first, later]) {
+    assert.match(prompt, /No emojis/);
+    assert.match(prompt, /roughly 60% of the source's word count/);
+    assert.match(prompt, /BEGIN REFERENCE EXAMPLE/);
   }
 
-  assert.equal(shouldFallBackToDirectProvider(new Aborted("budget spent"), isAborted), false);
+  assert.match(single, /Start immediately with a single "#" H1 title/);
+  assert.match(first, /writing part 1/);
+  assert.match(later, /Do NOT write an H1 title/);
+  assert.doesNotMatch(single, /split into/);
 });

@@ -189,8 +189,10 @@ test("every failure carries a plain-English reading and who has to act on it", (
     '400: {"error":{"code":400,"message":"The specified schema produces a constraint that has too many states for serving."}}',
   );
   assert.equal(schema.category, "our-code");
-  // This one is billed despite producing nothing, which is the whole reason it is called out.
-  assert.match(schema.plain, /billed/i);
+  // Measured over 30d: all 12,626 of these carry null cost and zero tokens -- Gemini rejects the
+  // request at validation, so it is wasted work but not wasted money. Do not call it billed.
+  assert.doesNotMatch(schema.plain, /still billed/i);
+  assert.match(schema.plain, /costs nothing/i);
 
   assert.equal(
     explainFailure(

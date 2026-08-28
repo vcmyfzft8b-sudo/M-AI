@@ -167,7 +167,7 @@ const FAILURE_RULES: Array<{ match: RegExp; plain: string; category: FailureCate
   {
     match: /too many states for serving/i,
     plain:
-      "Our JSON schema was too complex for Gemini to serve, so the request was rejected before any work happened -- and still billed.",
+      "Our JSON schema was too complex for Gemini to serve, so the request was rejected before the model ran. It costs nothing, but nothing is produced either.",
     category: "our-code",
   },
   {

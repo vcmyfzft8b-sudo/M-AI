@@ -523,9 +523,9 @@ Write for someone revising the night before an exam: name the thing, say what it
 
 ${buildWriteFormatRules(labels, params.window)}
 
-"${labels.keyTerms}" is for terms whose definition is not already given in that topic's prose. Never repeat a definition there that the paragraph above just gave.
+"${labels.keyTerms}" is for terms this topic uses but has not already defined. A term already given as "**term** — definition" in the notes above must never be repeated there.
 
-Style: markdown only, no HTML. Bullets start with "- ". Prose for explanation, bullets for genuine lists. At most ${params.window && params.window.count > 1 ? "2" : "3"} blockquote callouts in total, of the form "> **${labels.definition}:** ...", "> **${labels.commonMistake}:** ..." or "> **${labels.keyTakeaway}:** ...". ${params.window && params.window.count > 1 ? "At most 2 emojis in major headings" : "Between 2 and 5 emojis in major headings"}, never on bullets.
+Style: markdown only, no HTML. Bullets start with "- ". At most ${params.window && params.window.count > 1 ? "2" : "3"} blockquote callouts in total, of the form "> **${labels.definition}:** ...", "> **${labels.commonMistake}:** ..." or "> **${labels.keyTakeaway}:** ...". ${params.window && params.window.count > 1 ? "At most 2 emojis in major headings" : "Between 2 and 5 emojis in major headings"}, never on bullets.
 
 ${MATH_FORMATTING_INSTRUCTIONS}`;
 }

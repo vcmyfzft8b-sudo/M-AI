@@ -6428,10 +6428,12 @@ select:disabled {
   position: relative;
   width: min(100%, var(--note-inline-media-width, 100%));
   margin: 1rem auto;
-  border: 1px solid var(--separator);
+  /* Borderless by request (2026-08-29): the photo sits directly on the page. Selection and
+     resizing keep their affordance through the .selected outline below. */
+  border: none;
   border-radius: 8px;
   overflow: hidden;
-  background: var(--surface-muted);
+  background: transparent;
   cursor: pointer;
   transition:
     opacity 160ms ease,
@@ -6449,7 +6451,8 @@ select:disabled {
   width: 100%;
   max-height: 460px;
   object-fit: contain;
-  background: #111827;
+  /* Transparent, or contain-fit letterbox bars read as a dark frame around the photo. */
+  background: transparent;
 }
 
 .note-inline-media figcaption {

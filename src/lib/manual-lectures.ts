@@ -1894,6 +1894,7 @@ export async function createLectureFromTextSource(params: {
           lectureId,
           structuredNotesMd: notes.structuredNotesMd,
           documentImages,
+          usageContext: { lectureId, userId: params.userId },
         });
       } catch (error) {
         console.warn("Placing document images failed; the note keeps its text.", error);

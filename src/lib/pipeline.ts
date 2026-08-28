@@ -720,6 +720,7 @@ export async function generateLectureNotesFromStoredTranscript(params: {
         lectureId: lecture.id,
         structuredNotesMd: notes.structuredNotesMd,
         documentImages,
+        usageContext: { lectureId: lecture.id, userId: lecture.user_id },
       });
     } catch (error) {
       console.warn("Placing document images failed; the note keeps its text.", error);

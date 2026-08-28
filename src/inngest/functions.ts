@@ -6,6 +6,7 @@ import {
 import { isExpectedLectureInputFailure } from "@/lib/lecture-processing-errors";
 import { captureRouteError } from "@/lib/monitoring";
 import { isLectureGenerationBudgetExceededError } from "@/lib/notes/generation-guard";
+import type { NotesGenerationPhase } from "@/lib/note-generation";
 import {
   generateLectureNotesFromStoredTranscript,
   markLecturePipelineFailed,
@@ -54,6 +55,33 @@ function withStepBudget<T>(run: () => Promise<T>) {
  * fail the step would buy four retried refusals and then an unclassifiable error in the
  * function body's catch.
  */
+/**
+ * Warms the note pipeline's checkpoints up to one phase, inside its own step budget, and never
+ * fails its step. These steps exist because the default writer is ~3-5x slower than the Gemini it
+ * replaced: extract, outline and write no longer reliably share one 300s invocation on a large
+ * source. Splitting them gives each phase a fresh budget, and the checkpoint cache makes the
+ * hand-off free — the next step replays everything already done in seconds.
+ *
+ * Swallowing errors here is deliberate, not optimistic: a warm-up is pure cache warming, so any
+ * real failure — bad source, guard refusal, provider outage — will surface again in the
+ * authoritative generate-lecture-notes step, which owns failure classification. Letting a warm-up
+ * fail its step would buy four Inngest retries of a step whose work the next step redoes anyway.
+ */
+async function warmNotesPhase(lectureId: string, stopAfter: NotesGenerationPhase) {
+  try {
+    await withStepBudget(() =>
+      generateLectureNotesFromStoredTranscript({ lectureId, stopAfter }),
+    );
+  } catch (error) {
+    console.warn(`Notes ${stopAfter} warm-up did not finish; the next step continues from its checkpoints.`, {
+      lectureId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return { warmed: stopAfter };
+}
+
 async function runNotesStageWithGuard(lectureId: string) {
   try {
     await generateLectureNotesFromStoredTranscript({ lectureId });
@@ -101,6 +129,13 @@ export const processLectureFunction = inngest.createFunction(
         return;
       }
 
+      await step.run("warm-notes-extraction", () =>
+        warmNotesPhase(event.data.lectureId, "note_extract"),
+      );
+      await step.run("warm-notes-outline", () =>
+        warmNotesPhase(event.data.lectureId, "note_outline"),
+      );
+
       // This step returned nothing before the generation guard shipped, so an in-flight run
       // replays its memoized output as `null` — read with optional chaining on purpose.
       const generation = await step.run("generate-lecture-notes", () =>
@@ -136,6 +171,13 @@ export const processLectureNotesFunction = inngest.createFunction(
   { event: "lecture/notes.requested" },
   async ({ event, step }) => {
     try {
+      await step.run("warm-notes-extraction", () =>
+        warmNotesPhase(event.data.lectureId, "note_extract"),
+      );
+      await step.run("warm-notes-outline", () =>
+        warmNotesPhase(event.data.lectureId, "note_outline"),
+      );
+
       // Same replay contract as above: older runs memoized `null` for this step.
       const generation = await step.run("generate-lecture-notes", () =>
         withStepBudget(() => runNotesStageWithGuard(event.data.lectureId)),

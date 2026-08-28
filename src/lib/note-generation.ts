@@ -232,6 +232,14 @@ export async function extractKnowledgeItems(params: {
  */
 const OUTLINE_SIZE_GATE_MAX_ITEMS = 120;
 
+/**
+ * The phases an Inngest warm-up step can stop after. Each phase is checkpointed, so a later step
+ * that re-enters the pipeline replays everything up to here in seconds and spends its own fresh
+ * invocation budget on the phases that remain — which is what gives a slow model more wall clock
+ * than any single 300s invocation can.
+ */
+export type NotesGenerationPhase = "note_extract" | "note_outline";
+
 async function generateNotesContentDriven(
   segments: TranscriptSegmentInput[],
   params: {
@@ -240,9 +248,11 @@ async function generateNotesContentDriven(
     sourceType: "audio" | "document";
     outputLanguage?: string | null;
     sourceTitleHint?: string | null;
+    /** Warm the checkpoints up to this phase and return null instead of a finished note. */
+    stopAfter?: NotesGenerationPhase;
     usageContext?: { userId?: string | null; lectureId?: string | null };
   },
-): Promise<NoteGenerationResult> {
+): Promise<NoteGenerationResult | null> {
   const sourceWordCount = segments.reduce((total, segment) => total + countWords(segment.text), 0);
   const items = await extractKnowledgeItems({
     segments,
@@ -253,6 +263,10 @@ async function generateNotesContentDriven(
 
   if (items.length === 0) {
     throw new Error("Knowledge extraction found no study-worthy content in the source.");
+  }
+
+  if (params.stopAfter === "note_extract") {
+    return null;
   }
 
   const outlineInstructions = buildNoteOutlineInstructions({ outputLanguage: params.outputLanguage });
@@ -297,6 +311,10 @@ async function generateNotesContentDriven(
         usageContext: params.usageContext,
       }),
   });
+
+  if (params.stopAfter === "note_outline") {
+    return null;
+  }
 
   // The model chooses; the bounds on that choice are mechanical. See the function's own comment.
   const outline = enforceOutlineRetentionBounds(rawOutline, items);
@@ -499,12 +517,19 @@ export async function generateNotesFromTranscript(
     sourceType?: "audio" | "document";
     outputLanguage?: string | null;
     sourceTitleHint?: string | null;
+    stopAfter?: NotesGenerationPhase;
     usageContext?: { userId?: string | null; lectureId?: string | null };
   },
-): Promise<NoteGenerationResult> {
+): Promise<NoteGenerationResult | null> {
   const sourceType = params.sourceType ?? "audio";
 
   if (resolveNotesPipelineMode() === "legacy") {
+    // The legacy pipeline has no phases to warm: a warm-up call is a no-op rather than a full
+    // (and prematurely saved) generation.
+    if (params.stopAfter) {
+      return null;
+    }
+
     return generateNotesLegacy(segments, { ...params, sourceType });
   }
 

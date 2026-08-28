@@ -1845,6 +1845,11 @@ export async function createLectureFromTextSource(params: {
       usageContext: { lectureId: activeLectureId, userId: params.userId },
     });
 
+    // Null only ever means a stopAfter warm-up, which this full run does not pass.
+    if (!notes) {
+      throw new Error("Note generation returned no result for a full run.");
+    }
+
     await requireActiveLecture(lectureId);
 
     const baseModelMetadata = {

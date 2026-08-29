@@ -2,6 +2,7 @@ import "server-only";
 
 import { chunkSummarySchema, noteArtifactSchema } from "@/lib/ai/schemas";
 import { generateStructuredObject } from "@/lib/ai/json";
+import { getServerEnv } from "@/lib/server-env";
 import { buildTranscriptWindows } from "@/lib/chunking";
 import {
   buildGeneratedContentLanguageInstruction,
@@ -12,11 +13,12 @@ import {
   buildLegacyAudioNoteTargets,
   buildLegacyNoteTargets,
   buildLegacyStructuredPlusInstructions,
+  assembleSourceNoteParts,
   buildNoteOutlineInstructions,
-  buildNoteWritingInstructions,
+  buildSourceNoteInstructions,
   countWords,
   dedupeKnowledgeItems,
-  formatOutlineForWriting,
+  planSourceWriteWindows,
   KNOWLEDGE_EXTRACTION_PASS_WINDOWS,
   MAX_ITEMS_PER_EXTRACTION_WINDOW,
   resolveExtractionMaxOutputTokens,
@@ -218,6 +220,25 @@ export async function extractKnowledgeItems(params: {
   return judged.map((item, id) => ({ ...item, id }));
 }
 
+/**
+ * Above this many extracted items the outline runs on GEMINI_TEXT_MODEL instead of the stage's
+ * default. The outline is the one call that cannot be windowed — it is the single place global
+ * importance is judged, over every item at once — and its output grows with the item count
+ * (~60 tokens each). The default writer since 2026-08-28 reasons at ~50-80 tokens/s, so past
+ * ~120 items the call stops fitting the 300s invocation it runs in, and a call that cannot fit
+ * is a call that can never converge, no matter how many times Inngest retries it. The fast
+ * proven Gemini outline (the pre-switch production model) takes over exactly there.
+ */
+const OUTLINE_SIZE_GATE_MAX_ITEMS = 120;
+
+/**
+ * The phases an Inngest warm-up step can stop after. Each phase is checkpointed, so a later step
+ * that re-enters the pipeline replays everything up to here in seconds and spends its own fresh
+ * invocation budget on the phases that remain — which is what gives a slow model more wall clock
+ * than any single 300s invocation can.
+ */
+export type NotesGenerationPhase = "note_extract" | "note_outline";
+
 async function generateNotesContentDriven(
   segments: TranscriptSegmentInput[],
   params: {
@@ -226,9 +247,11 @@ async function generateNotesContentDriven(
     sourceType: "audio" | "document";
     outputLanguage?: string | null;
     sourceTitleHint?: string | null;
+    /** Warm the checkpoints up to this phase and return null instead of a finished note. */
+    stopAfter?: NotesGenerationPhase;
     usageContext?: { userId?: string | null; lectureId?: string | null };
   },
-): Promise<NoteGenerationResult> {
+): Promise<NoteGenerationResult | null> {
   const sourceWordCount = segments.reduce((total, segment) => total + countWords(segment.text), 0);
   const items = await extractKnowledgeItems({
     segments,
@@ -239,6 +262,10 @@ async function generateNotesContentDriven(
 
   if (items.length === 0) {
     throw new Error("Knowledge extraction found no study-worthy content in the source.");
+  }
+
+  if (params.stopAfter === "note_extract") {
+    return null;
   }
 
   const outlineInstructions = buildNoteOutlineInstructions({ outputLanguage: params.outputLanguage });
@@ -259,11 +286,21 @@ async function generateNotesContentDriven(
   const outlineMaxOutputTokens = Math.max(2600, items.length * 60);
   const lectureId = params.usageContext?.lectureId ?? null;
 
+  // The gate model rides OpenRouter like everything else (2026-08-29); the fallback chain in
+  // json.ts still lands it on direct Google if the gateway is the problem.
+  const gateModel = getServerEnv().GEMINI_TEXT_MODEL;
+  const outlineModelOverride =
+    items.length > OUTLINE_SIZE_GATE_MAX_ITEMS
+      ? /^gemini-/i.test(gateModel)
+        ? `or/google/${gateModel}`
+        : gateModel
+      : undefined;
+
   const rawOutline = await withGenerationCheckpoint({
     lectureId,
     stage: "note_outline",
     cacheKey: generationCacheKey([
-      stageModelCacheKeyPart("note_outline"),
+      stageModelCacheKeyPart("note_outline", outlineModelOverride),
       outlineInstructions,
       outlineInput,
       outlineMaxOutputTokens,
@@ -276,9 +313,14 @@ async function generateNotesContentDriven(
         stage: "note_outline",
         instructions: outlineInstructions,
         input: outlineInput,
+        ...(outlineModelOverride ? { modelOverride: outlineModelOverride } : {}),
         usageContext: params.usageContext,
       }),
   });
+
+  if (params.stopAfter === "note_outline") {
+    return null;
+  }
 
   // The model chooses; the bounds on that choice are mechanical. See the function's own comment.
   const outline = enforceOutlineRetentionBounds(rawOutline, items);
@@ -288,44 +330,59 @@ async function generateNotesContentDriven(
   );
   const sourceText = segments.map((segment) => segment.text).join("\n\n");
 
-  // Budgeted from the retained items rather than from a word target: length follows the content,
-  // and so does the budget for writing it.
-  const writeInstructions = buildNoteWritingInstructions({
-    outputLanguage: params.outputLanguage,
-    coverageObjective: true,
-    pedagogy: true,
-  });
-  const writeInput = `Outline to teach:\n${JSON.stringify({
-    title: outline.title,
-    summary: outline.summary,
-    topics: formatOutlineForWriting({ outline, items }),
-  })}\n\nFull source text:\n${sourceText}`;
-  const writeMaxOutputTokens = Math.max(4000, retainedItemCount * 170);
+  // The note is written straight from the raw source (buildSourceNoteInstructions carries the
+  // whole contract — the outline above still feeds the study decks and the note's title, but the
+  // note text no longer passes through it). One call when the source fits, consecutive source
+  // parts when it does not; each part is checkpointed separately, so a step that dies mid-note
+  // resumes after the parts already written — the same convergence contract extraction has.
+  const sourceWindows = planSourceWriteWindows(sourceText);
+  const windowMarkdowns: string[] = [];
 
-  // Checkpointed like the outline: this is the single most expensive call in the product, and a
-  // budget that expires after the write but before the artifact is saved must not re-buy it.
-  const written = await withGenerationCheckpoint({
-    lectureId,
-    stage: "note_write",
-    cacheKey: generationCacheKey([
-      stageModelCacheKeyPart("note_write"),
-      writeInstructions,
-      writeInput,
-      writeMaxOutputTokens,
-    ]),
-    schema: noteWriteSchema,
-    generate: () =>
-      generateStructuredObject({
-        schema: noteWriteSchema,
-        maxOutputTokens: writeMaxOutputTokens,
-        stage: "note_write",
-        instructions: writeInstructions,
-        input: writeInput,
-        usageContext: params.usageContext,
-      }),
-  });
+  for (const [windowIndex, sourceWindow] of sourceWindows.entries()) {
+    const writeInstructions = buildSourceNoteInstructions({
+      outputLanguage: params.outputLanguage,
+      ...(sourceWindows.length > 1
+        ? { window: { index: windowIndex, count: sourceWindows.length } }
+        : {}),
+    });
+    const writeInput =
+      sourceWindows.length > 1 && windowIndex > 0
+        ? `Topic of the whole document: ${outline.title}\n\nSource material (part ${windowIndex + 1} of ${sourceWindows.length}):\n${sourceWindow}`
+        : sourceWindow;
+    // Sized from the part's own length: the contract caps the note at ~60% of the source, and
+    // Slovene runs ~2.3 tokens per word, so 1.6x words is that ceiling plus slack — small enough
+    // that a runaway part still cannot outlive the write leash.
+    const writeMaxOutputTokens = Math.max(4000, Math.round(countWords(sourceWindow) * 1.6));
 
-  const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(written.structuredNotesMd);
+    // Checkpointed like the outline: this is the single most expensive call in the product, and a
+    // budget that expires after the write but before the artifact is saved must not re-buy it.
+    const written = await withGenerationCheckpoint({
+      lectureId,
+      stage: "note_write",
+      cacheKey: generationCacheKey([
+        stageModelCacheKeyPart("note_write"),
+        writeInstructions,
+        writeInput,
+        writeMaxOutputTokens,
+      ]),
+      schema: noteWriteSchema,
+      generate: () =>
+        generateStructuredObject({
+          schema: noteWriteSchema,
+          maxOutputTokens: writeMaxOutputTokens,
+          stage: "note_write",
+          instructions: writeInstructions,
+          input: writeInput,
+          usageContext: params.usageContext,
+        }),
+    });
+
+    windowMarkdowns.push(written.structuredNotesMd.trim());
+  }
+
+  const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(
+    assembleSourceNoteParts(windowMarkdowns),
+  );
   const normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
 
   return {
@@ -465,12 +522,19 @@ export async function generateNotesFromTranscript(
     sourceType?: "audio" | "document";
     outputLanguage?: string | null;
     sourceTitleHint?: string | null;
+    stopAfter?: NotesGenerationPhase;
     usageContext?: { userId?: string | null; lectureId?: string | null };
   },
-): Promise<NoteGenerationResult> {
+): Promise<NoteGenerationResult | null> {
   const sourceType = params.sourceType ?? "audio";
 
   if (resolveNotesPipelineMode() === "legacy") {
+    // The legacy pipeline has no phases to warm: a warm-up call is a no-op rather than a full
+    // (and prematurely saved) generation.
+    if (params.stopAfter) {
+      return null;
+    }
+
     return generateNotesLegacy(segments, { ...params, sourceType });
   }
 

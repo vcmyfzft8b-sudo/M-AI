@@ -266,16 +266,27 @@ test("unit building splits an unbroken wall of text instead of returning one gia
   assert.ok(units.every((unit) => unit.text.length <= 700));
 });
 
-test("the compression stage resolves like extraction: minimal thinking, no headroom", () => {
+test("the compression stage resolves like extraction: minimal thinking, cheapest effort", () => {
   const config = resolveStageModelConfig({
     stage: "source_condense",
     env: {},
     fallbackModel: "gemini-2.5-flash-lite",
   });
 
-  assert.equal(config.model, "gemini-2.5-flash-lite");
-  assert.equal(config.thinkingLevel, null, "2.5 cannot think, so no level is sent");
-  assert.equal(applyOutputHeadroom(2_000, config), 2_000);
+  // GLM everywhere since 2026-08-28; it cannot abstain from reasoning, so minimal maps to its
+  // cheapest effort and the budget carries the mandatory-reasoning headroom.
+  assert.equal(config.model, "or/z-ai/glm-5.3-flash");
+  assert.equal(config.thinkingLevel, "minimal");
+  assert.equal(applyOutputHeadroom(2_000, config), 4_000);
+
+  const gated = resolveStageModelConfig({
+    stage: "source_condense",
+    env: { GEMINI_SOURCE_CONDENSE_MODEL: "gemini-2.5-flash-lite" },
+    fallbackModel: "gemini-2.5-flash-lite",
+  });
+
+  assert.equal(gated.thinkingLevel, null, "2.5 cannot think, so no level is sent");
+  assert.equal(applyOutputHeadroom(2_000, gated), 2_000);
 
   const overridden = resolveStageModelConfig({
     stage: "source_condense",

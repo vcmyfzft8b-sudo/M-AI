@@ -2,7 +2,7 @@ import "server-only";
 
 import type { z } from "zod";
 
-import { resolveStageModelConfig, type AiStage } from "@/lib/ai/model-config";
+import { AI_STAGE_MODEL_ENV_KEYS, resolveStageModelConfig, type AiStage } from "@/lib/ai/model-config";
 import { getServerEnv } from "@/lib/server-env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
@@ -38,10 +38,15 @@ const CACHE_LOOKUP_CHUNK_SIZE = 80;
  * stage to a different model via env would keep serving the old model's checkpointed outputs —
  * exactly the change the "stale keys stop matching" contract must cover.
  */
-export function stageModelCacheKeyPart(stage: AiStage) {
+export function stageModelCacheKeyPart(stage: AiStage, modelOverride?: string) {
+  const envKey = AI_STAGE_MODEL_ENV_KEYS[stage];
   const config = resolveStageModelConfig({
     stage,
-    env: process.env,
+    // Mirrors json.ts exactly: a caller-supplied override loses to an explicit env override, so
+    // the key always names the model the call will actually run on.
+    env: modelOverride
+      ? { ...process.env, [envKey]: process.env[envKey] || modelOverride }
+      : process.env,
     fallbackModel: getServerEnv().GEMINI_TEXT_MODEL,
   });
 
@@ -120,12 +125,24 @@ export async function saveGenerationCacheEntry(params: {
 }
 
 /** Called once the notes are saved and the lecture is ready — the checkpoints have done their job. */
-export async function clearGenerationCache(lectureId: string) {
+/**
+ * Without a stage this clears everything for the lecture (the note pipeline's completion call).
+ * With a stage it clears only that stage's checkpoints — the study generators use this so a
+ * finished deck's batches stop replaying (a learner who regenerates expects fresh drafts, not a
+ * cache hit) while a quiz still generating keeps its own checkpoints untouched.
+ */
+export async function clearGenerationCache(lectureId: string, stage?: string) {
   try {
-    const { error } = await createSupabaseServiceRoleClient()
+    let query = createSupabaseServiceRoleClient()
       .from("note_generation_cache")
       .delete()
       .eq("lecture_id", lectureId);
+
+    if (stage) {
+      query = query.eq("stage", stage);
+    }
+
+    const { error } = await query;
 
     if (error) {
       console.warn("Note generation cache cleanup failed; rows stay until lecture delete.", error.message);

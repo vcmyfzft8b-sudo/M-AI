@@ -4,6 +4,7 @@ import test from "node:test";
 import { z } from "zod";
 
 import {
+  classifyGatewayFailure,
   GeminiTruncatedOutputError,
   buildStructuredRetryInstruction,
   extractJsonPayload,
@@ -82,4 +83,29 @@ test("non-truncation errors keep the invalid-JSON retry instruction", () => {
 
 test("first attempt gets no retry instruction", () => {
   assert.equal(buildStructuredRetryInstruction(null), "");
+});
+
+test("model output carrying unstorable characters is cleaned before validation", () => {
+  // GLM produced a lone surrogate in a flashcard on 2026-08-28; one such character fails the
+  // whole Supabase insert with "invalid input syntax for type json". The parse boundary is the
+  // one place every structured output passes through, from either provider.
+  const schema = z.object({ front: z.string(), back: z.string() });
+  const dirty = JSON.stringify({ front: "pojem \u0000 ARP", back: "razlaga \ud83d konec" });
+
+  const parsed = parseStructuredText(schema, dirty);
+
+  assert.equal(parsed.front, "pojem  ARP");
+  assert.equal(parsed.back, "razlaga  konec");
+  // The cleaned value round-trips as UTF-8, which is exactly what Postgres requires.
+  assert.doesNotThrow(() => new TextEncoder().encode(JSON.stringify(parsed)));
+});
+
+test("gateway failures classify by what a retry could still buy", () => {
+  // Truncation is stochastic and fails fast: retry the same model with a grown budget. A timeout
+  // burned the whole leash, so a same-model retry cannot fit the invocation. Everything else is
+  // a fast failure the chain may retry or pass over freely.
+  assert.equal(classifyGatewayFailure(new GeminiTruncatedOutputError(3200)), "truncated");
+  assert.equal(classifyGatewayFailure(new DOMException("timed out", "TimeoutError")), "timeout");
+  assert.equal(classifyGatewayFailure(new DOMException("aborted", "AbortError")), "other");
+  assert.equal(classifyGatewayFailure(new Error("503 upstream unavailable")), "other");
 });

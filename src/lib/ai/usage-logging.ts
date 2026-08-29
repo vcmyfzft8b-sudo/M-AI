@@ -32,6 +32,10 @@ type GeminiModelPrice = {
  */
 const GEMINI_MODEL_PRICES: Record<string, GeminiModelPrice> = {
   "or/google/gemini-3.7-flash": { inputUsdPerMillion: 0.375, outputUsdPerMillion: 1.875 },
+  // Z.ai GLM 5.3 Flash, read live from OpenRouter's models API on 2026-08-28. Reasoning is
+  // mandatory on its endpoint and billed inside completion tokens, so the output rate is also
+  // what the thinking costs.
+  "or/z-ai/glm-5.3-flash": { inputUsdPerMillion: 0.075, outputUsdPerMillion: 0.25 },
   "or/google/gemini-3.6-flash": { inputUsdPerMillion: 0.75, outputUsdPerMillion: 3.75 },
   "or/google/gemini-2.5-flash-lite": { inputUsdPerMillion: 0.1, outputUsdPerMillion: 0.4 },
   "gemini-3.7-flash": { inputUsdPerMillion: 0.75, outputUsdPerMillion: 3.75 },

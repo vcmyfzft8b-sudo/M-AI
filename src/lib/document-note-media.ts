@@ -1,5 +1,9 @@
 import "server-only";
 
+import { z } from "zod";
+
+import { generateStructuredObject } from "@/lib/ai/json";
+import type { GeminiUsageContext } from "@/lib/ai/usage-logging";
 import type { StoredDocumentNoteImage } from "@/lib/document-image-extraction";
 import {
   parseStoredNoteDoc,
@@ -119,6 +123,95 @@ function isLikelyUsefulStudyImage(image: StoredDocumentNoteImage) {
   }
 
   return description.length > 0 || context.length > 0;
+}
+
+const imagePlacementSchema = z.object({
+  placements: z
+    .array(
+      z.object({
+        /** The [n] label of the image being judged. */
+        imageNumber: z.number().int().min(1),
+        /** False drops the image from the note entirely. */
+        include: z.boolean(),
+        /** The [n] label of the note block the image belongs directly under; 0 when include is false. */
+        afterBlockNumber: z.number().int().min(0),
+      }),
+    )
+    .max(40),
+});
+
+const IMAGE_PLACEMENT_INSTRUCTIONS = `You place figures from a source document into the finished study note built from it, and you throw away the ones that do not belong. You are given the note as a numbered list of blocks, and the candidate images as a numbered list of descriptions with the source text that surrounded them.
+
+For every image decide two things:
+- include: only when the image genuinely helps a student learn the material next to it — a diagram, a chart with real data, a labelled figure, a worked example, a table rendered as a picture. Exclude decoration, logos, slide backgrounds, stock photos, portraits without study value, and images whose content the note already fully states in text or a table.
+- afterBlockNumber: the block the image belongs DIRECTLY under — the paragraph, list or table that discusses what the image shows. Judge by topic, not by position in the source: the note reorders material. If no block truly discusses it, exclude it rather than parking it somewhere plausible.
+
+Never place more than two images under the same block. Return a judgment for every image.`;
+
+/**
+ * The model as the picture editor: it sees the finished note and every candidate image, keeps
+ * only the ones that add study value and seats each under the block that actually discusses it.
+ * Introduced 2026-08-29 to replace two mechanical behaviours the reader saw as misplacement: a
+ * vocabulary-overlap scorer that cannot judge topic, and an evenly-spread fallback that inserted
+ * unmatched images regardless of fit. Any failure falls back to exactly that mechanical path —
+ * a note must never lose its pictures to a judgment call that errored.
+ */
+async function judgeImagePlacements(params: {
+  images: StoredDocumentNoteImage[];
+  blocks: Array<{ id: string; text: string }>;
+  usageContext?: GeminiUsageContext;
+}) {
+  const blockList = params.blocks
+    .map((block, index) => `[${index + 1}] ${block.text.slice(0, 220)}`)
+    .join("\n");
+  const imageList = params.images
+    .map((image, index) => {
+      const description = (image.description ?? "").slice(0, 300);
+      const context = (image.contextText ?? "").slice(0, 300);
+
+      return `[${index + 1}] description: ${description || "(none)"}\n    surrounding source text: ${context || "(none)"}`;
+    })
+    .join("\n");
+
+  const selection = await generateStructuredObject({
+    schema: imagePlacementSchema,
+    stage: "chat",
+    maxOutputTokens: Math.max(1200, params.images.length * 90),
+    instructions: IMAGE_PLACEMENT_INSTRUCTIONS,
+    input: `NOTE BLOCKS:\n${blockList}\n\nCANDIDATE IMAGES:\n${imageList}`,
+    usageContext: { ...(params.usageContext ?? {}), stage: "image_placement" },
+  });
+
+  const placements: Array<{ image: StoredDocumentNoteImage; afterBlockId: string }> = [];
+  const blockUsageCount = new Map<string, number>();
+
+  for (const judgment of selection.placements) {
+    const image = params.images[judgment.imageNumber - 1];
+    const block = params.blocks[judgment.afterBlockNumber - 1];
+
+    if (!image || !judgment.include || !block) {
+      continue;
+    }
+
+    if (placements.some((placed) => placed.image.mediaId === image.mediaId)) {
+      continue;
+    }
+
+    const blockUsage = blockUsageCount.get(block.id) ?? 0;
+
+    if (blockUsage >= MAX_DOCUMENT_IMAGES_PER_NOTE_BLOCK) {
+      continue;
+    }
+
+    blockUsageCount.set(block.id, blockUsage + 1);
+    placements.push({ image, afterBlockId: block.id });
+
+    if (placements.length >= MAX_AUTO_INSERTED_DOCUMENT_IMAGES) {
+      break;
+    }
+  }
+
+  return placements;
 }
 
 function planDocumentImageMediaBlocks(params: {
@@ -300,6 +393,7 @@ export async function attachDocumentImagesToNotes(params: {
   lectureId: string;
   structuredNotesMd: string;
   documentImages: StoredDocumentNoteImage[];
+  usageContext?: GeminiUsageContext;
 }) {
   const documentImages = params.documentImages;
 
@@ -326,12 +420,32 @@ export async function attachDocumentImagesToNotes(params: {
   const storedDoc = parseStoredNoteDoc(artifact);
   const existingMediaIds = new Set(storedDoc.mediaBlocks.map((block) => block.mediaId));
   const openSlots = Math.max(0, MAX_NOTE_MEDIA_BLOCKS - storedDoc.mediaBlocks.length);
-  const plannedMediaBlocks = planDocumentImageMediaBlocks({
-    documentImages,
-    blocks,
-    existingMediaIds,
-    openSlots,
-  });
+  const candidates = documentImages.filter((image) => !existingMediaIds.has(image.mediaId));
+
+  let plannedMediaBlocks: Array<{ image: StoredDocumentNoteImage; afterBlockId: string }> = [];
+
+  if (candidates.length > 0 && openSlots > 0) {
+    try {
+      plannedMediaBlocks = (
+        await judgeImagePlacements({
+          images: candidates,
+          blocks,
+          usageContext: params.usageContext,
+        })
+      ).slice(0, openSlots);
+    } catch (error) {
+      console.warn(
+        "Image placement judgment failed; falling back to mechanical placement.",
+        error instanceof Error ? error.message : error,
+      );
+      plannedMediaBlocks = planDocumentImageMediaBlocks({
+        documentImages,
+        blocks,
+        existingMediaIds,
+        openSlots,
+      });
+    }
+  }
 
   if (plannedMediaBlocks.length === 0) {
     return;

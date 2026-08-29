@@ -23,11 +23,11 @@ import {
   buildLegacyNoteTargets,
   buildLegacyStructuredPlusInstructions,
   buildNoteOutlineInstructions,
-  buildNoteWritingInstructions,
+  assembleSourceNoteParts,
+  buildSourceNoteInstructions,
   dedupeKnowledgeItems,
   enforceOutlineRetentionBounds,
-  formatOutlineForWriting,
-  resolveNoteWordBudget,
+  planSourceWriteWindows,
   KNOWLEDGE_EXTRACTION_PASS_WINDOWS,
   knowledgeExtractionSchema,
   resolveExtractionMaxOutputTokens,
@@ -72,9 +72,16 @@ const PRICES = {
   "or/google/gemini-3.6-flash": { input: 0.75, output: 3.75 },
   "or/google/gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
   "or/openai/gpt-5-nano": { input: 0.05, output: 0.4 },
+  // Z.ai GLM 5.3 Flash, read live from OpenRouter's models API on 2026-08-28. Reasoning is
+  // mandatory on this endpoint and its reasoning tokens are billed as completion tokens, so the
+  // output rate is what the thinking costs.
+  "or/z-ai/glm-5.3-flash": { input: 0.075, output: 0.25 },
 };
 
 const GRADER_MODEL = "gemini-3.5-flash-lite";
+
+/** The candidate under test, named once so a variant row cannot drift from a price row. */
+const GLM = "or/z-ai/glm-5.3-flash";
 
 function loadEnv() {
   for (const file of [".env.local", ".env"]) {
@@ -107,7 +114,7 @@ loadEnv();
 
 // A bake-off that hangs is worse than one that fails: a single stalled request with no deadline
 // held a five-variant run for forty minutes at three seconds of CPU. Every call gets a deadline.
-const CALL_TIMEOUT_MS = 180_000;
+const CALL_TIMEOUT_MS = Number.parseInt(process.env.EVAL_CALL_TIMEOUT_MS ?? "", 10) || 180_000;
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -300,8 +307,15 @@ async function runLegacyVariant(fixture, model) {
 }
 
 async function runContentDrivenVariant(fixture, fallbackModel, forceModel, options = {}) {
+  /**
+   * A variant may name a model for one stage without disturbing the rest. It does so through the
+   * same GEMINI_*_MODEL keys production reads, so the override travels through the real resolver
+   * and picks up that stage's real thinking level and output headroom — which is the whole point
+   * when the candidate is a model that reasons on every call.
+   */
+  const env = { ...process.env, ...(options.stageEnv ?? {}) };
   const stage = (name) => {
-    const config = resolveStageModelConfig({ stage: name, env: process.env, fallbackModel });
+    const config = resolveStageModelConfig({ stage: name, env, fallbackModel });
 
     if (!forceModel) {
       // supportsThinkingLevel only recognises Gemini, so an OpenAI model resolves to no level and
@@ -396,32 +410,35 @@ async function runContentDrivenVariant(fixture, fallbackModel, forceModel, optio
 
   const writeConfig = stage("note_write");
   const retainedItemCount = outline.topics.reduce((total, topic) => total + topic.itemIds.length, 0);
-  const { value: written } = await generate({
-    schema: noteWriteSchema,
-    model: writeConfig.model,
-    thinkingLevel: writeConfig.thinkingLevel,
-    // Sized from the retained items, not from a word target: ~110 output tokens per item plus
-    // thinking headroom. Length follows the content, and so does the budget for it.
-    maxOutputTokens: Math.round(Math.max(4000, retainedItemCount * 170) * writeConfig.outputHeadroom),
-    instructions: buildNoteWritingInstructions({
-      outputLanguage: fixture.language,
-      ...(options.coverage ? { coverageObjective: true } : {}),
-      ...(options.pedagogy ? { pedagogy: true } : {}),
-      ...(options.dense
-        ? {
-            wordBudget: resolveNoteWordBudget({
-              sourceWordCount: countWords(fixture.source),
-              retainedItemCount,
-            }),
-          }
-        : {}),
-    }),
-    input: `Outline to teach:\n${JSON.stringify(
-      { title: outline.title, summary: outline.summary, topics: formatOutlineForWriting({ outline, items }) },
-      null,
-      2,
-    )}\n\nFull source text:\n${fixture.source}`,
-  });
+  // Mirrors production since 2026-08-29: the note is written straight from the raw source with
+  // the user-supplied contract (buildSourceNoteInstructions); the outline above still feeds the
+  // extraction metrics and the study decks. The coverage/pedagogy/dense options are retired —
+  // the contract carries its own length and style rules.
+  const sourceWindows = planSourceWriteWindows(fixture.source);
+  const parts = [];
+
+  for (const [index, sourceWindow] of sourceWindows.entries()) {
+    const { value: part } = await generate({
+      schema: noteWriteSchema,
+      model: writeConfig.model,
+      thinkingLevel: writeConfig.thinkingLevel,
+      maxOutputTokens: Math.round(
+        Math.max(4000, countWords(sourceWindow) * 1.6) * writeConfig.outputHeadroom,
+      ),
+      instructions: buildSourceNoteInstructions({
+        outputLanguage: fixture.language,
+        ...(sourceWindows.length > 1 ? { window: { index, count: sourceWindows.length } } : {}),
+      }),
+      input:
+        sourceWindows.length > 1 && index > 0
+          ? `Topic of the whole document: ${outline.title}\n\nSource material (part ${index + 1} of ${sourceWindows.length}):\n${sourceWindow}`
+          : sourceWindow,
+    });
+
+    parts.push(part.structuredNotesMd.trim());
+  }
+
+  const written = { structuredNotesMd: assembleSourceNoteParts(parts) };
 
   return {
     notesMd: normalizeGeneratedNoteMarkdown(written.structuredNotesMd),
@@ -502,6 +519,52 @@ const VARIANTS = {
   "v2-gpt5-mini": {
     label: "content-driven pipeline, gpt-5-mini everywhere",
     run: (fixture) => runContentDrivenVariant(fixture, "gpt-5-mini", "gpt-5-mini"),
+  },
+  /* ---------------------------------------------------------------------- */
+  /* GLM 5.3 Flash bake-off, 2026-08-28                                      */
+  /*                                                                         */
+  /* "prod" is the control: the exact stage models, thinking levels and      */
+  /* writing prompt note-generation.ts ships, so the two GLM rows are read   */
+  /* against what a learner gets today rather than against an older variant. */
+  /* ---------------------------------------------------------------------- */
+  prod: {
+    label: "production as shipped: 2.5-lite everywhere, 3.7-flash writing, coverage + pedagogy",
+    run: (fixture) =>
+      runContentDrivenVariant(fixture, "gemini-2.5-flash-lite", null, {
+        coverage: true,
+        pedagogy: true,
+      }),
+  },
+  "glm-all": {
+    label: "GLM 5.3 Flash on every stage, production prompts",
+    run: (fixture) =>
+      runContentDrivenVariant(fixture, "or/z-ai/glm-5.3-flash", null, {
+        coverage: true,
+        pedagogy: true,
+        stageEnv: {
+          GEMINI_NOTE_EXTRACT_MODEL: GLM,
+          GEMINI_NOTE_OUTLINE_MODEL: GLM,
+          GEMINI_NOTE_WRITE_MODEL: GLM,
+        },
+      }),
+  },
+  "glm-write": {
+    label: "GLM 5.3 Flash writing the note, 2.5-lite still extracting and outlining",
+    run: (fixture) =>
+      runContentDrivenVariant(fixture, "gemini-2.5-flash-lite", null, {
+        coverage: true,
+        pedagogy: true,
+        stageEnv: { GEMINI_NOTE_WRITE_MODEL: GLM },
+      }),
+  },
+  "glm-cheap": {
+    label: "GLM 5.3 Flash extracting and outlining, 3.7-flash still writing",
+    run: (fixture) =>
+      runContentDrivenVariant(fixture, "gemini-2.5-flash-lite", null, {
+        coverage: true,
+        pedagogy: true,
+        stageEnv: { GEMINI_NOTE_EXTRACT_MODEL: GLM, GEMINI_NOTE_OUTLINE_MODEL: GLM },
+      }),
   },
 };
 

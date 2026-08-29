@@ -10,12 +10,18 @@ import {
   isOpenRouterModel,
 } from "@/lib/ai/openrouter";
 import {
+  AI_STAGE_MODEL_ENV_KEYS,
   applyOutputHeadroom,
+  isGeminiModel,
+  resolveStageFallbackModel,
   resolveStageModelConfig,
   resolveStageTimeoutMs,
+  shouldFallBackToDirectProvider,
+  supportsThinkingLevel,
   type AiStage,
 } from "@/lib/ai/model-config";
 import { isWorkAbortedError } from "@/lib/abort-context";
+import { classifyGatewayFailure } from "@/lib/ai/structured-output";
 import type { GeminiUsageContext } from "@/lib/ai/usage-logging";
 import { getServerEnv } from "@/lib/server-env";
 
@@ -43,6 +49,14 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
   stage?: AiStage;
   /** For callers with their own fallback (e.g. condensation's mechanical selection): a retry ladder there is pure spend. */
   maxAttempts?: number;
+  /**
+   * Pins this one call to a model without touching the stage's configuration — the resolver
+   * still supplies the stage's thinking level, headroom and timeout for whatever model this is.
+   * Used by the outline's size gate (note-generation.ts): a very large outline cannot finish on
+   * the slow default model inside one Vercel invocation, so it runs on the fast proven one. An
+   * explicit env override for the stage still wins over this, so the operator keeps the last word.
+   */
+  modelOverride?: string;
   usageContext?: GeminiUsageContext;
 }) {
   const env = getServerEnv();
@@ -59,72 +73,140 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
     });
   }
 
+  const stageModelEnvKey = AI_STAGE_MODEL_ENV_KEYS[params.stage];
   const config = resolveStageModelConfig({
     stage: params.stage,
-    env: process.env,
+    env: params.modelOverride
+      ? { ...process.env, [stageModelEnvKey]: process.env[stageModelEnvKey] || params.modelOverride }
+      : process.env,
     fallbackModel: env.GEMINI_TEXT_MODEL,
   });
 
   const maxOutputTokens = applyOutputHeadroom(params.maxOutputTokens, config);
-  const timeoutMs = resolveStageTimeoutMs(params.stage);
+  const timeoutMs = resolveStageTimeoutMs(params.stage, config.model);
   const usageContext = {
     ...(params.usageContext ?? {}),
     stage: params.usageContext?.stage ?? params.stage,
   };
 
   /**
-   * A stage may name a routed model ("or/google/gemini-3.7-flash") to buy the same weights at the
-   * gateway's price — on 2026-08-23 that is half what Google charges for 3.7-flash, on the most
-   * expensive call in the product.
+   * The fallback chain, one gateway wide and one provider deep (2026-08-29):
    *
-   * The gateway is one more thing that can be down, and a promotional rate is a thing that ends,
-   * so a routed call that fails for any reason is retried once against the provider directly. A
-   * learner's lecture is never worth failing to save a fraction of a cent, and the fallback also
-   * means the day the promotion ends is a pricing decision rather than an outage.
+   *   1. the stage's model, routed        (GLM through OpenRouter)
+   *   2. the stage's Gemini fallback, routed  (same prompts, same gateway, same bill)
+   *   3. the same Gemini, bought direct from Google
+   *
+   * Tier 2 exists because most failures are the MODEL's — a truncation, a refused schema, a bad
+   * host — and the recovery should stay on the one gateway everything is billed and observed
+   * through. Tier 3 exists because the gateway itself can be down, and a fallback that shares
+   * the primary's gateway shares its outages. Every tier gets the identical instructions and
+   * input; only the model id and wire settings change, so a learner cannot tell which tier
+   * answered.
    */
+  const routedFallbackModel = !isOpenRouterModel(config.model)
+    ? null
+    : isGeminiModel(config.model)
+      ? null
+      : (resolveStageFallbackModel(params.stage) ??
+        (isGeminiModel(env.GEMINI_TEXT_MODEL) ? `or/google/${env.GEMINI_TEXT_MODEL}` : null));
+
   if (isOpenRouterModel(config.model)) {
     const apiKey = env.OPENROUTER_API_KEY;
 
     if (apiKey) {
-      try {
-        return await generateStructuredObjectWithOpenRouter({
-          schema: params.schema,
-          instructions: params.instructions,
-          input: params.input,
-          model: config.model,
-          apiKey,
-          maxOutputTokens,
-          thinkingLevel: config.thinkingLevel,
-          ...(timeoutMs ? { timeoutMs } : {}),
-          usageContext,
-        });
-      } catch (error) {
-        // A budget abort is not a gateway failure: falling back would start a fresh full-price
-        // call on an invocation that has already been told to stop.
-        if (isWorkAbortedError(error)) {
-          throw error;
-        }
+      const routedAttempts =
+        routedFallbackModel && routedFallbackModel !== config.model
+          ? [config.model, routedFallbackModel]
+          : [config.model];
 
-        console.warn(
-          `OpenRouter call for ${config.model} failed, falling back to the direct provider.`,
-          error,
-        );
+      for (const [tierIndex, routedModel] of routedAttempts.entries()) {
+        const attemptThinkingLevel = supportsThinkingLevel(routedModel)
+          ? config.thinkingLevel
+          : null;
+        const attemptTimeoutMs = resolveStageTimeoutMs(params.stage, routedModel);
+        // The primary model gets a second try before the chain moves on: its characteristic
+        // failure (truncation) is a stochastic tail event that a retry usually clears, it fails
+        // fast enough to leave room in the invocation, and the fallback tier costs 1.3-7x more
+        // per token. A timeout gets no retry — it already burned the whole leash — and the
+        // fallback tier gets no retry either: its job is to answer, not to be persisted with.
+        const maxAttempts = tierIndex === 0 ? 2 : 1;
+        let attemptMaxOutputTokens = maxOutputTokens;
+
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+          try {
+            return await generateStructuredObjectWithOpenRouter({
+              schema: params.schema,
+              instructions: params.instructions,
+              input: params.input,
+              model: routedModel,
+              apiKey,
+              maxOutputTokens: attemptMaxOutputTokens,
+              thinkingLevel: attemptThinkingLevel,
+              ...(attemptTimeoutMs ? { timeoutMs: attemptTimeoutMs } : {}),
+              usageContext,
+            });
+          } catch (error) {
+            // A budget abort is not a gateway failure: falling back would start a fresh
+            // full-price call on an invocation that has already been told to stop.
+            if (!shouldFallBackToDirectProvider(error, isWorkAbortedError)) {
+              throw error;
+            }
+
+            const failure = classifyGatewayFailure(error);
+
+            if (failure === "truncated" && attemptMaxOutputTokens) {
+              // A truncation retry without a bigger budget re-buys the same truncation.
+              attemptMaxOutputTokens = Math.min(
+                65_536,
+                Math.round(attemptMaxOutputTokens * 1.8),
+              );
+            }
+
+            console.warn(
+              `OpenRouter call for ${routedModel} failed (${failure}), ${
+                failure !== "timeout" && attempt + 1 < maxAttempts
+                  ? "retrying on the same model"
+                  : "falling back to the next tier"
+              }.`,
+              error,
+            );
+
+            if (failure === "timeout") {
+              break;
+            }
+          }
+        }
       }
     }
   }
+
+  /**
+   * The last tier: the fallback Gemini bought directly from Google. Stripping a routed Gemini id
+   * gives the same weights; a routed non-Gemini primary strips through its stage's Gemini
+   * fallback instead — sending "glm-5.3-flash" to the Gemini API is a guaranteed failure.
+   */
+  const fallbackModel = !isOpenRouterModel(config.model)
+    ? config.model
+    : isGeminiModel(config.model)
+      ? directModelId(config.model)
+      : routedFallbackModel
+        ? directModelId(routedFallbackModel)
+        : env.GEMINI_TEXT_MODEL;
+  const fallbackThinkingLevel = supportsThinkingLevel(fallbackModel) ? config.thinkingLevel : null;
+  const fallbackTimeoutMs = resolveStageTimeoutMs(params.stage, fallbackModel);
 
   return generateStructuredObjectWithGemini({
     schema: params.schema,
     instructions: params.instructions,
     input: params.input,
-    model: isOpenRouterModel(config.model) ? directModelId(config.model) : config.model,
+    model: fallbackModel,
     maxOutputTokens,
-    ...(timeoutMs ? { timeoutMs } : {}),
+    ...(fallbackTimeoutMs ? { timeoutMs: fallbackTimeoutMs } : {}),
     ...(params.maxAttempts ? { maxAttempts: params.maxAttempts } : {}),
-    ...(config.thinkingLevel
+    ...(fallbackThinkingLevel
       ? {
           thinkingConfig: {
-            thinkingLevel: SDK_THINKING_LEVELS[config.thinkingLevel],
+            thinkingLevel: SDK_THINKING_LEVELS[fallbackThinkingLevel],
           },
         }
       : {}),

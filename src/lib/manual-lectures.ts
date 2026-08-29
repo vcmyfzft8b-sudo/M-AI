@@ -7,6 +7,7 @@ import { PartMediaResolutionLevel } from "@google/genai";
 
 import { isWorkAbortedError } from "@/lib/abort-context";
 import { resolveMinimalThinkingConfig } from "@/lib/ai/gemini-models";
+import { applyAiHighlightsToNote } from "@/lib/notes/ai-highlights";
 import JSZip from "jszip";
 import mammoth from "mammoth";
 
@@ -1845,6 +1846,11 @@ export async function createLectureFromTextSource(params: {
       usageContext: { lectureId: activeLectureId, userId: params.userId },
     });
 
+    // Null only ever means a stopAfter warm-up, which this full run does not pass.
+    if (!notes) {
+      throw new Error("Note generation returned no result for a full run.");
+    }
+
     await requireActiveLecture(lectureId);
 
     const baseModelMetadata = {
@@ -1888,6 +1894,7 @@ export async function createLectureFromTextSource(params: {
           lectureId,
           structuredNotesMd: notes.structuredNotesMd,
           documentImages,
+          usageContext: { lectureId, userId: params.userId },
         });
       } catch (error) {
         console.warn("Placing document images failed; the note keeps its text.", error);
@@ -1897,6 +1904,14 @@ export async function createLectureFromTextSource(params: {
         });
       }
     }
+
+    // Same contract as image placement: the highlighter never endangers the saved note.
+    await applyAiHighlightsToNote({
+      lectureId,
+      structuredNotesMd: notes.structuredNotesMd,
+      lectureTitle: notes.title ?? params.titleHint,
+      usageContext: { lectureId, userId: params.userId },
+    });
 
     const { error: enrichmentCompleteError } = await supabase
       .from("lecture_artifacts")

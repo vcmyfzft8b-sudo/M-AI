@@ -22,6 +22,30 @@ export const openRouterModelId = (model) => model.slice("or/".length);
 // tokens, so the levels map straight across and the same headroom multipliers apply.
 const REASONING_EFFORT = { minimal: "minimal", low: "low", medium: "medium", high: "high" };
 
+/**
+ * GLM publishes only max/high/low, and an unmapped name silently buys its default ("max").
+ * Everything maps to "low", mirroring production (model-config.ts): measured 2026-08-29,
+ * low-effort GLM matched or beat high-effort on recall while writing shorter, denser notes.
+ */
+const GLM_REASONING_EFFORT = { minimal: "low", low: "low", medium: "low", high: "low" };
+
+const isMandatoryReasoningModel = (model) => /glm-5/i.test(model);
+
+/**
+ * The reasoning block to put on the wire. A model that must reason is told to reason as little as
+ * the stage allows; one that can abstain is told to abstain, which is what "minimal" has always
+ * meant here.
+ */
+function reasoningBlock(model, thinkingLevel) {
+  if (isMandatoryReasoningModel(model)) {
+    return { reasoning: { effort: GLM_REASONING_EFFORT[thinkingLevel] ?? "low", exclude: true } };
+  }
+
+  return thinkingLevel && thinkingLevel !== "minimal"
+    ? { reasoning: { effort: REASONING_EFFORT[thinkingLevel] } }
+    : { reasoning: { exclude: true } };
+}
+
 // Strict structured outputs accept a subset of JSON Schema: every object must forbid extra
 // properties and require every key, and the value constraints are simply rejected. Dropping them
 // is what makes the schema loadable at all.
@@ -151,9 +175,7 @@ export async function generateOpenRouter({
             schema: toStrictSchema(responseSchema),
           },
         },
-        ...(thinkingLevel && thinkingLevel !== "minimal"
-          ? { reasoning: { effort: REASONING_EFFORT[thinkingLevel] } }
-          : { reasoning: { exclude: true } }),
+        ...reasoningBlock(routedModel, thinkingLevel),
       }),
     });
     const payload = await response.json();

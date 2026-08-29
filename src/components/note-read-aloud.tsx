@@ -1572,6 +1572,8 @@ export function NoteReadAloud({
   const pendingArrowMovedMediaBlockIdRef = useRef<string | null>(null);
   const pendingArrowMoveFromRectRef = useRef<DOMRect | null>(null);
   const pendingArrowMoveCloneRef = useRef<HTMLElement | null>(null);
+  /** Pre-move positions of every other block, so the displaced text slides instead of snapping. */
+  const pendingArrowMoveSiblingRectsRef = useRef<Map<string, DOMRect> | null>(null);
   const prefetchedChunksRef = useRef(new Map<string, TtsChunkResponse>());
   const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse>>());
   const prefetchQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1625,6 +1627,26 @@ export function NoteReadAloud({
       pendingArrowMoveCloneRef.current?.remove();
       pendingArrowMoveFromRectRef.current = mediaElement?.getBoundingClientRect() ?? null;
 
+      // FLIP snapshot of everything else in the note: the reorder reflows the blocks between the
+      // photo's old and new position, and without a before-rect they snap. Keyed with a prefix so
+      // a text block id can never collide with a media block id.
+      const siblingRects = new Map<string, DOMRect>();
+
+      for (const element of contentRef.current?.querySelectorAll<HTMLElement>(
+        "[data-note-block-id], [data-note-media-block-id]",
+      ) ?? []) {
+        const textId = element.getAttribute("data-note-block-id");
+        const mediaId = element.getAttribute("data-note-media-block-id");
+
+        if (mediaId === blockId) {
+          continue;
+        }
+
+        siblingRects.set(textId ? `b:${textId}` : `m:${mediaId}`, element.getBoundingClientRect());
+      }
+
+      pendingArrowMoveSiblingRectsRef.current = siblingRects;
+
       if (mediaElement && pendingArrowMoveFromRectRef.current) {
         const sourceImage = mediaElement.querySelector("img");
         const cloneHost =
@@ -1648,10 +1670,6 @@ export function NoteReadAloud({
         clone.style.zIndex = "30";
         clone.style.transformOrigin = "top left";
         clone.style.willChange = "transform";
-        clone.style.backgroundImage = sourceImageUrl ? `url("${sourceImageUrl}")` : "";
-        clone.style.backgroundPosition = "center";
-        clone.style.backgroundRepeat = "no-repeat";
-        clone.style.backgroundSize = "contain";
 
         if (sourceImageUrl) {
           cloneImage.src = sourceImageUrl;
@@ -1662,10 +1680,16 @@ export function NoteReadAloud({
           cloneImage.style.width = "100%";
           cloneImage.style.height = "100%";
           cloneImage.style.objectFit = "contain";
-          cloneImage.style.background = "#111827";
+          // Transparent like the real photo: the flying copy must look exactly like what it
+          // replaces, not like the framed box the design retired.
+          cloneImage.style.background = "transparent";
           clone.appendChild(cloneImage);
         }
 
+        // Native scroll anchoring reacts to the reflow the move causes and shifts the page under
+        // the flying clone, which both drifts the landing spot and jolts the screen. Held off for
+        // the duration of the move; the layout effect's cleanup restores it.
+        cloneHost.style.overflowAnchor = "none";
         cloneHost.appendChild(clone);
         pendingArrowMoveCloneRef.current = clone;
       } else {
@@ -1686,10 +1710,21 @@ export function NoteReadAloud({
       return;
     }
 
+    // The click handler turned scroll anchoring off on the clone's host; every path out of this
+    // effect that does not end in clearAnimatedElementStyles has to turn it back on itself.
+    const restoreOverflowAnchor = () => {
+      const host =
+        contentRef.current?.closest<HTMLElement>(".app-shell-pull-content") ??
+        window.document.body;
+
+      host.style.overflowAnchor = "";
+    };
+
     if (!renderedMediaBlocks.some((block) => block.id === pendingBlockId)) {
       pendingArrowMovedMediaBlockIdRef.current = null;
       pendingArrowMoveCloneRef.current?.remove();
       pendingArrowMoveCloneRef.current = null;
+      restoreOverflowAnchor();
       return;
     }
 
@@ -1697,14 +1732,75 @@ export function NoteReadAloud({
     let animatedElement: HTMLElement | null = null;
     let animatedClone: HTMLElement | null = null;
     let moveAnimation: Animation | null = null;
+    const siblingAnimations: Animation[] = [];
+
+    let pinReleased = false;
+
+    /**
+     * Releases the size pin without letting the page move: the scroll position is captured,
+     * the pin cleared with a forced layout, and the scroll written back before paint — so even
+     * if the unpin does change the box (an image that has not re-decoded yet), the viewport
+     * holds. Scroll anchoring stays off until a frame after the release for the same reason:
+     * re-enabling it in the same tick as a reflow was exactly the end-of-move page shift.
+     */
+    const releaseSizePin = (element: HTMLElement) => {
+      if (pinReleased) {
+        return;
+      }
+
+      pinReleased = true;
+
+      const host = element.closest<HTMLElement>(".app-shell-pull-content");
+      const scroller = host && host.scrollHeight > host.clientHeight + 1 ? host : null;
+      const savedTop = scroller ? scroller.scrollTop : window.scrollY;
+
+      // One frozen operation: reveal the real element, drop the pin, remove the covering clone,
+      // flush layout, and write the captured scroll back before paint. Whatever any of those
+      // mutations did to scroll height or anchoring, the viewport cannot move.
+      element.style.visibility = "";
+      element.style.width = "";
+      element.style.height = "";
+      animatedClone?.remove();
+      if (pendingArrowMoveCloneRef.current === animatedClone) {
+        pendingArrowMoveCloneRef.current = null;
+      }
+      void element.offsetHeight;
+
+      if (scroller) {
+        scroller.scrollTop = savedTop;
+      } else if (Math.abs(window.scrollY - savedTop) > 0.5) {
+        window.scrollTo({ top: savedTop });
+      }
+
+      window.requestAnimationFrame(() => {
+        (host ?? window.document.body).style.overflowAnchor = "";
+      });
+    };
 
     const clearAnimatedElementStyles = () => {
       if (animatedElement) {
         animatedElement.style.backfaceVisibility = "";
         animatedElement.style.transformOrigin = "";
-        animatedElement.style.visibility = "";
         animatedElement.style.willChange = "";
         animatedElement.style.zIndex = "";
+
+        // The pin — and the clone still covering the landing spot — wait for the remounted
+        // image to finish decoding: released earlier, the box falls back to its attribute ratio
+        // and the note below shifts after visibly settling.
+        const element = animatedElement;
+        const image = element.querySelector("img");
+
+        if (image && !image.complete) {
+          const release = () => releaseSizePin(element);
+
+          image.addEventListener("load", release, { once: true });
+          image.addEventListener("error", release, { once: true });
+          window.setTimeout(release, 1_200);
+        } else {
+          releaseSizePin(element);
+        }
+
+        return;
       }
 
       animatedClone?.remove();
@@ -1720,14 +1816,28 @@ export function NoteReadAloud({
     if (!mediaElement) {
       pendingArrowMoveCloneRef.current?.remove();
       pendingArrowMoveCloneRef.current = null;
+      restoreOverflowAnchor();
       return;
     }
 
     const fromRect = pendingArrowMoveFromRectRef.current;
     const clone = pendingArrowMoveCloneRef.current;
+    const siblingRects = pendingArrowMoveSiblingRectsRef.current;
+
+    // The move re-parents the media in React, so the <img> remounts and sizes itself from its
+    // attribute ratio until the bitmap re-decodes — a late height correction that nudged the
+    // text below after everything had visibly settled. The element's true size is already known
+    // (it was on screen a frame ago), so pin the box to it for the flight; by release time the
+    // cached image has decoded at exactly this size and the unpin changes nothing.
+    if (fromRect) {
+      mediaElement.style.width = `${fromRect.width}px`;
+      mediaElement.style.height = `${fromRect.height}px`;
+    }
+
     const toRect = mediaElement.getBoundingClientRect();
     pendingArrowMovedMediaBlockIdRef.current = null;
     pendingArrowMoveFromRectRef.current = null;
+    pendingArrowMoveSiblingRectsRef.current = null;
     ignoreScrollUntilRef.current = Date.now() + 900;
 
     if (fromRect) {
@@ -1775,9 +1885,57 @@ export function NoteReadAloud({
             duration: moveDurationMs,
             easing: "cubic-bezier(0.2, 0, 0, 1)",
             composite: "replace",
+            // Without fill, a finished Web Animation reverts to its start for the frame between
+            // "finish" and the clone's removal — a visible flash of the photo back at its old
+            // position, which read as the move "glitching".
+            fill: "forwards",
           },
         );
         moveAnimation.addEventListener("finish", clearAnimatedElementStyles, { once: true });
+
+        // The same slide, applied to every block the reorder displaced: each starts at its
+        // pre-move position and settles into its new one on the same clock as the photo, so the
+        // whole note moves as one motion instead of the text snapping under a flying image.
+        if (siblingRects) {
+          for (const element of contentRef.current?.querySelectorAll<HTMLElement>(
+            "[data-note-block-id], [data-note-media-block-id]",
+          ) ?? []) {
+            const textId = element.getAttribute("data-note-block-id");
+            const mediaId = element.getAttribute("data-note-media-block-id");
+
+            if (mediaId === pendingBlockId) {
+              continue;
+            }
+
+            const before = siblingRects.get(textId ? `b:${textId}` : `m:${mediaId}`);
+
+            if (!before) {
+              continue;
+            }
+
+            const after = element.getBoundingClientRect();
+            const siblingDeltaX = before.left - after.left;
+            const siblingDeltaY = before.top - after.top;
+
+            if (Math.abs(siblingDeltaX) < 0.5 && Math.abs(siblingDeltaY) < 0.5) {
+              continue;
+            }
+
+            siblingAnimations.push(
+              element.animate(
+                [
+                  { transform: `translate3d(${siblingDeltaX}px, ${siblingDeltaY}px, 0)` },
+                  { transform: "translate3d(0, 0, 0)" },
+                ],
+                {
+                  duration: moveDurationMs,
+                  easing: "cubic-bezier(0.2, 0, 0, 1)",
+                  composite: "replace",
+                },
+              ),
+            );
+          }
+        }
 
         cleanupTimeout = window.setTimeout(() => {
           clearAnimatedElementStyles();
@@ -1787,12 +1945,17 @@ export function NoteReadAloud({
         if (pendingArrowMoveCloneRef.current === clone) {
           pendingArrowMoveCloneRef.current = null;
         }
+        releaseSizePin(mediaElement);
       }
     }
 
     return () => {
       window.clearTimeout(cleanupTimeout);
       moveAnimation?.cancel();
+
+      for (const animation of siblingAnimations) {
+        animation.cancel();
+      }
 
       clearAnimatedElementStyles();
     };

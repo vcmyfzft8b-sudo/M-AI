@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { z } from "zod";
+import { z } from "zod";
 
 import { isWorkAbortedError } from "@/lib/abort-context";
 import { generateStructuredObject } from "@/lib/ai/json";
@@ -66,8 +66,22 @@ export function resolveStudyPipelineMode() {
   return process.env.STUDY_PIPELINE?.trim().toLowerCase() === "legacy" ? "legacy" : "items";
 }
 
+/**
+ * Cache stages for the per-batch study checkpoints, one per asset type so the three generators —
+ * which can run concurrently for the same lecture — never clear each other's in-flight work.
+ * The publish point of each asset type clears its own stage on success.
+ */
+export const STUDY_BATCH_CACHE_STAGES = {
+  cards: "study_batch_cards",
+  quiz: "study_batch_quiz",
+  practice: "study_batch_practice",
+} as const;
+
 const STUDY_ITEM_EXTRACTION_CONCURRENCY = 6;
-const STUDY_ITEM_GENERATION_CONCURRENCY = 3;
+// Raised 3 -> 6 with the 2026-08-28 GLM switch: the model is ~3x slower per call, batches are
+// independent, and each study step still has to fit its 300s invocation. Six concurrent small
+// calls is what the extraction stage has always run without trouble.
+const STUDY_ITEM_GENERATION_CONCURRENCY = 6;
 
 async function mapWithConcurrency<TInput, TOutput>(
   values: TInput[],
@@ -433,20 +447,53 @@ export type ItemStudyGenerationResult = {
   plans: CoverageUnitPlan[];
 };
 
+const studyBatchCheckpointSchema = z.object({
+  drafts: z.array(z.unknown()),
+  coveredItemIds: z.array(z.number().int()),
+});
+
 /**
  * Runs one generator over the item batches, retries the union of skipped and missing items once,
  * and reports what stayed uncovered. One retry, not a loop: an item the generator refuses twice
  * is an item the prompts consider untestable, and looping on it just re-buys the same refusal.
+ *
+ * Each batch is checkpointed (note_generation_cache) when the caller names a checkpoint stage.
+ * The note pipeline earned this the hard way (the 2026-08-25 cost spike) and the study
+ * generators inherited the same exposure with the 2026-08-28 GLM switch: a large lecture's deck
+ * is ~50 batches per asset type at ~20-30s each, which can outlive the 300s invocation — and a
+ * retry with no checkpoints re-buys every batch and may never converge. Keys carry the resolved
+ * model, the instructions and the batch's items, so a prompt or model change invalidates itself;
+ * the caller clears its stage after a successful publish so a learner's regenerate stays fresh.
  */
 async function generateWithSkipRetry<TDraft>(params: {
   items: UnitKnowledgeItem[];
   generateBatch: (batch: UnitKnowledgeItem[]) => Promise<{ drafts: TDraft[]; coveredItemIds: number[] }>;
+  checkpoint?: { lectureId: string | null | undefined; stage: string; instructions: string };
 }) {
+  const runBatch = (batch: UnitKnowledgeItem[]) => {
+    const checkpoint = params.checkpoint;
+
+    if (!checkpoint?.lectureId) {
+      return params.generateBatch(batch);
+    }
+
+    return withGenerationCheckpoint({
+      lectureId: checkpoint.lectureId,
+      stage: checkpoint.stage,
+      cacheKey: generationCacheKey([
+        stageModelCacheKeyPart("study_items"),
+        checkpoint.instructions,
+        JSON.stringify(batch.map((item) => [item.id, item.claim])),
+      ]),
+      schema: studyBatchCheckpointSchema,
+      generate: () => params.generateBatch(batch),
+    }) as Promise<{ drafts: TDraft[]; coveredItemIds: number[] }>;
+  };
   const batches = chunkStudyItems(params.items);
   const firstRound = await mapWithConcurrency(
     batches,
     STUDY_ITEM_GENERATION_CONCURRENCY,
-    params.generateBatch,
+    runBatch,
   );
   const drafts = firstRound.flatMap((round) => round.drafts);
   const covered = new Set(firstRound.flatMap((round) => round.coveredItemIds));
@@ -457,7 +504,7 @@ async function generateWithSkipRetry<TDraft>(params: {
     const retryRound = await mapWithConcurrency(
       retryBatches,
       STUDY_ITEM_GENERATION_CONCURRENCY,
-      params.generateBatch,
+      runBatch,
     );
 
     drafts.push(...retryRound.flatMap((round) => round.drafts));
@@ -489,6 +536,11 @@ export async function generateItemCardDrafts(params: {
 
   const { drafts, uncoveredItemIds } = await generateWithSkipRetry({
     items: params.items,
+    checkpoint: {
+      lectureId: params.usageContext?.lectureId,
+      stage: STUDY_BATCH_CACHE_STAGES.cards,
+      instructions,
+    },
     generateBatch: async (batch) => {
       const result = await generateStructuredObject({
         schema: flashcardBatchSchema,
@@ -558,6 +610,11 @@ export async function generateItemQuizDrafts(params: {
 
   const { drafts, uncoveredItemIds } = await generateWithSkipRetry({
     items: params.items,
+    checkpoint: {
+      lectureId: params.usageContext?.lectureId,
+      stage: STUDY_BATCH_CACHE_STAGES.quiz,
+      instructions,
+    },
     generateBatch: async (batch) => {
       const result = await generateStructuredObject({
         schema: quizBatchSchema,
@@ -628,6 +685,11 @@ export async function generateItemPracticeDrafts(params: {
 
   const { drafts, uncoveredItemIds } = await generateWithSkipRetry({
     items: params.items,
+    checkpoint: {
+      lectureId: params.usageContext?.lectureId,
+      stage: STUDY_BATCH_CACHE_STAGES.practice,
+      instructions,
+    },
     generateBatch: async (batch) => {
       const result = await generateStructuredObject({
         schema: practiceBatchSchema,

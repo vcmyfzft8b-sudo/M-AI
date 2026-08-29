@@ -6426,12 +6426,18 @@ select:disabled {
 
 .note-inline-media {
   position: relative;
-  width: min(100%, var(--note-inline-media-width, 100%));
+  /* fit-content so the container hugs the visible picture: every overlay child — the action
+     buttons, the menu, the resize handle — anchors to the photo's own corners. With the frame
+     gone (2026-08-29) a full-width container put those controls in the invisible letterbox
+     beside the image. The resize width still caps through max-width, and an image narrower
+     than its cap simply renders at its natural size instead of upscaling. */
+  width: fit-content;
+  max-width: min(100%, var(--note-inline-media-width, 100%));
   margin: 1rem auto;
-  border: 1px solid var(--separator);
+  border: none;
   border-radius: 8px;
   overflow: hidden;
-  background: var(--surface-muted);
+  background: transparent;
   cursor: pointer;
   transition:
     opacity 160ms ease,
@@ -6446,10 +6452,13 @@ select:disabled {
 
 .note-inline-media img {
   display: block;
-  width: 100%;
+  /* auto + max constraints instead of width:100%: the img box IS the picture, no letterbox,
+     so the fit-content container above wraps exactly the visible photo. */
+  width: auto;
+  height: auto;
+  max-width: 100%;
   max-height: 460px;
-  object-fit: contain;
-  background: #111827;
+  background: transparent;
 }
 
 .note-inline-media figcaption {
@@ -6464,6 +6473,27 @@ select:disabled {
   font-size: 0.84rem;
   color: var(--secondary-label);
   pointer-events: none;
+}
+
+/* On pointer devices the controls live ON the photo, so they appear only when the reader is
+   engaging with it — hover, keyboard focus, or selection. Touch devices keep them always
+   visible: a tap opens the fullscreen preview, so there is no pre-tap hover moment.
+   visibility (not display) so the fade can run, and hidden visibility also keeps the buttons
+   unclickable while faded out. */
+@media (hover: hover) and (pointer: fine) {
+  .note-inline-media figcaption {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 140ms ease, visibility 0s linear 140ms;
+  }
+
+  .note-inline-media:hover figcaption,
+  .note-inline-media:focus-within figcaption,
+  .note-inline-media.selected figcaption {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 140ms ease;
+  }
 }
 
 .note-inline-media-actions {

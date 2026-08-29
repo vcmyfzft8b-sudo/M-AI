@@ -24,8 +24,12 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 const GENERATION_GUARD_WINDOW_HOURS = 24;
 const MAX_EXTRACTION_CALLS_PER_DAY = 1_200;
 const MAX_OUTLINE_ATTEMPTS_PER_DAY = 60;
-const MAX_COMPLETED_WRITES_PER_DAY = 10;
-const MAX_WRITE_ATTEMPTS_PER_DAY = 20;
+// Since the 2026-08-28 windowed write, one note logs one write row per WINDOW (up to ~8 on the
+// largest sources), so these two ceilings are sized in windows, not notes: they still allow the
+// same handful of full regenerations a legitimate day can contain, and still catch the
+// fifteen-rewrites loop they exist for.
+const MAX_COMPLETED_WRITES_PER_DAY = 40;
+const MAX_WRITE_ATTEMPTS_PER_DAY = 80;
 
 export const LECTURE_GENERATION_BUDGET_MESSAGE =
   "Ustvarjanje zapiskov za to gradivo je večkrat zapored spodletelo, zato smo nadaljnje poskuse ustavili. Poskusi jutri ali nam piši, da preverimo, kaj je narobe.";

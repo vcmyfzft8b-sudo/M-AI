@@ -38,7 +38,8 @@ import {
 } from "@/lib/text-source-processing";
 import type { ChatMessageWithCitations } from "@/lib/types";
 import { isPreparingInitialNoteAudio } from "@/lib/note-audio-stage";
-import { generateNotesFromTranscript } from "@/lib/note-generation";
+import { generateNotesFromTranscript, type NotesGenerationPhase } from "@/lib/note-generation";
+import { applyAiHighlightsToNote } from "@/lib/notes/ai-highlights";
 import { captureGenerationFailureInput } from "@/lib/notes/failure-capture";
 import {
   clearGenerationCache,
@@ -459,7 +460,15 @@ export async function transcribeLectureContent(params: { lectureId: string }) {
   });
 }
 
-export async function generateLectureNotesFromStoredTranscript(params: { lectureId: string }) {
+export async function generateLectureNotesFromStoredTranscript(params: {
+  lectureId: string;
+  /**
+   * Warm the note pipeline's checkpoints up to this phase, then stop before saving anything.
+   * The Inngest function runs one warm-up step per phase so each phase spends a fresh
+   * invocation budget; the final full run replays them from cache in seconds.
+   */
+  stopAfter?: NotesGenerationPhase;
+}) {
   // Before any state change or model call: a lecture that already burned through a day's worth of
   // generation attempts gets a terminal failure instead of another expensive loop.
   await assertLectureGenerationWithinBudget(params.lectureId);
@@ -652,7 +661,14 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
     outputLanguage: lecture.language_hint,
     sourceTitleHint,
     usageContext: { lectureId: params.lectureId, userId: lecture.user_id },
+    ...(params.stopAfter ? { stopAfter: params.stopAfter } : {}),
   });
+
+  // A warm-up run stops here on purpose: the phase checkpoints are written and the finishing
+  // steps — artifact save, images, audio, statuses — belong to the one authoritative full run.
+  if (!notes) {
+    return;
+  }
 
   const manualModelMetadata =
     manualImportRecord?.modelMetadata &&
@@ -704,6 +720,7 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
         lectureId: lecture.id,
         structuredNotesMd: notes.structuredNotesMd,
         documentImages,
+        usageContext: { lectureId: lecture.id, userId: lecture.user_id },
       });
     } catch (error) {
       console.warn("Placing document images failed; the note keeps its text.", error);
@@ -713,6 +730,15 @@ export async function generateLectureNotesFromStoredTranscript(params: { lecture
       });
     }
   }
+
+  // The model's highlighter pass: best-effort like image placement, and it swallows its own
+  // failures, so the finished note is never at risk over a decoration.
+  await applyAiHighlightsToNote({
+    lectureId: lecture.id,
+    structuredNotesMd: notes.structuredNotesMd,
+    lectureTitle: notes.title ?? lecture.title,
+    usageContext: { lectureId: lecture.id, userId: lecture.user_id },
+  });
 
   const { error: enrichmentCompleteError } = await supabase
     .from("lecture_artifacts")

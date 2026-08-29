@@ -24,7 +24,9 @@ import {
   extractStudyItems,
   generateItemPracticeDrafts,
   resolveStudyPipelineMode,
+  STUDY_BATCH_CACHE_STAGES,
 } from "@/lib/study-items";
+import { clearGenerationCache } from "@/lib/notes/generation-cache";
 import { dependsOnMissingStudyContext, isHighQualityStudyPrompt } from "@/lib/study-quality";
 import type { CoverageConcept, CoverageUnitPlan, SourceUnit } from "@/lib/study-models";
 import { buildSourceUnits } from "@/lib/study-source-units";
@@ -36,7 +38,8 @@ import type {
 } from "@/lib/types";
 import { getAiProvider, getServerEnv } from "@/lib/server-env";
 
-const PRACTICE_TEST_CONCURRENCY = 3;
+// Raised 3 -> 6 with the 2026-08-28 GLM switch (~3x slower per call; batches independent).
+const PRACTICE_TEST_CONCURRENCY = 6;
 const RECENT_ATTEMPT_MEMORY = 3;
 const PRACTICE_TEST_GENERATION_VERSION = "practice-test-v2";
 const PRACTICE_TEST_GENERATION_ATTEMPTS = 3;
@@ -321,6 +324,7 @@ async function generateQuestionsForUnit(params: {
         : "\nPrevious output included prompts that depended on missing context. Regenerate only standalone prompts with all needed context inside the question itself.";
     const batch = await generateStructuredObject({
       schema: practiceQuestionBatchSchema,
+      stage: "study_items",
       maxOutputTokens: Math.max(2200, targetCount * 600),
       instructions: `${languageInstruction}
 ${params.repairOnly ? "Repair missing practice-test coverage." : "Generate source-grounded open-ended practice-test questions."}
@@ -637,6 +641,10 @@ export async function generateLecturePracticeTest(params: {
         throw insertError;
       }
     }
+
+    // The bank is published; clearing the batch checkpoints keeps the cache table holding only
+    // in-flight work and keeps a learner's "regenerate" fresh.
+    await clearGenerationCache(params.lectureId, STUDY_BATCH_CACHE_STAGES.practice);
 
     await setPracticeTestAssetStatus({
       lectureId: params.lectureId,
@@ -1007,6 +1015,7 @@ async function gradeAnswer(params: {
 }) {
   return generateStructuredObject({
     schema: gradingSchema,
+    stage: "study_items",
     maxOutputTokens: 1600,
     instructions: `Grade the student's free-response answer using the supplied answer guide.
 Return an integer score from 0 to 5.

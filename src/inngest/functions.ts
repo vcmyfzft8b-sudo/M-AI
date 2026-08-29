@@ -158,7 +158,9 @@ export const processLectureFunction = inngest.createFunction(
       // lecture ready and returning `recorded: false`; failing the step then would make Inngest
       // regenerate the finished notes from scratch four more times. It returns the same when the
       // learner deleted the lecture mid-run, where the four retries would each fail on the row
-      // that is no longer there.
+      // that is no longer there — and when it handed the overrun to an automatic retry, where the
+      // lecture is back to "queued" with a fresh run already enqueued and nothing was recorded to
+      // rethrow about.
       if (outcome.recorded) {
         throw error;
       }

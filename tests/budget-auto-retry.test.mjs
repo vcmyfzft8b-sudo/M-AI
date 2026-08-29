@@ -18,6 +18,7 @@ function readSource(relativePath) {
 }
 
 const PIPELINE_SOURCE = readSource("src/lib/pipeline.ts");
+const FUNCTIONS_SOURCE = readSource("src/inngest/functions.ts");
 
 /**
  * The production case this exists for (Sentry MEMOAI-WEB-2N/2Y family, and the 2026-08-27
@@ -154,6 +155,76 @@ test("the auto-retry log line does not wear the triage automation's prefix", () 
 
   assert.ok(line, "the auto-retry warn line must exist");
   assert.ok(!line[0].includes("[lecture-pipeline]"), line[0]);
+});
+
+/**
+ * The production pair this exists for, 2026-08-29T07:32 on lecture b11aa158:
+ *
+ *   07:32:07.389 warn  Lecture run died on the invocation budget; retrying automatically
+ *                      { budgetFailureRuns: 1, maxRuns: 3 }
+ *   07:32:09.864 error Error: Obdelava je trajala predolgo in se je ustavila. Poskusi znova.
+ *                      { stepId: 'generate-lecture-notes' }   POST /api/inngest 400
+ *
+ * The retry went on to succeed — no further failure for that lecture, and the learner's polling
+ * kept returning 200 — so the second line is a run that healed itself being reported to the
+ * platform as a failed one. It reached the log because the auto-retry branch answered
+ * `recorded: true`, which is the one answer that makes the Inngest bodies rethrow.
+ *
+ * The branch said `true` honestly when it still marked the lecture failed before re-enqueueing.
+ * Moving the intermediate state to "queued" removed the recording and left the answer behind.
+ */
+test("a started auto-retry reports nothing recorded, so the Inngest run is not failed", () => {
+  const start = PIPELINE_SOURCE.indexOf("if (budgetOverrun && budgetFailureRuns < MAX_BUDGET_FAILURE_RUNS)");
+
+  assert.ok(start > 0);
+
+  const branch = PIPELINE_SOURCE.slice(start, PIPELINE_SOURCE.indexOf("// The terminal budget case:", start));
+  const retried = branch.indexOf("if (retried) {");
+
+  assert.ok(retried > 0, "the started-retry branch must exist");
+
+  const started = branch.slice(retried);
+
+  assert.ok(
+    /return \{ recorded: false \}/.test(started),
+    "a started auto-retry recorded no failure: queued row, no Sentry event, no capture",
+  );
+  assert.ok(
+    !/return \{ recorded: true \}/.test(started),
+    "recorded: true here rethrows in the Inngest bodies and logs an uncaught budget error",
+  );
+});
+
+test("an auto-retry that could not be started still fails the run", () => {
+  // The fall-through case is the one that keeps every bit of visibility: the lecture really is
+  // waiting on a human, so the ordinary tail records it and the rethrow that follows is correct.
+  const tail = PIPELINE_SOURCE.slice(PIPELINE_SOURCE.indexOf("// The terminal budget case:"));
+
+  assert.ok(
+    /return \{ recorded: true \};/.test(tail),
+    "the recorded-failure tail must still answer true",
+  );
+});
+
+test("both Inngest bodies rethrow only on a recorded failure", () => {
+  // The two pipeline functions, process-lecture and process-lecture-notes. Their catch blocks are
+  // the only place a budget overrun can reach POST /api/inngest as an uncaught error.
+  const guards = FUNCTIONS_SOURCE.split("if (outcome.recorded) {").slice(1);
+
+  assert.equal(guards.length, 2, "both pipeline function bodies must be covered");
+
+  for (const afterGuard of guards) {
+    // The rethrow has to be inside the guard, not merely after it somewhere.
+    assert.match(afterGuard.slice(0, 40), /^\s*throw error;/);
+  }
+
+  // And nothing may rethrow the caught error before the guard has been consulted.
+  for (const body of FUNCTIONS_SOURCE.split("const outcome = await step.run(").slice(1)) {
+    const guard = body.indexOf("if (outcome.recorded) {");
+    const rethrow = body.indexOf("throw error;");
+
+    assert.ok(guard > 0 && guard < rethrow, "the guard must come before the rethrow");
+  }
 });
 
 test("the terminal branch writes the too-extensive message and its code", () => {

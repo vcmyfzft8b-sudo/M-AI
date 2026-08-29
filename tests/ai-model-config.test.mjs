@@ -297,14 +297,15 @@ test("a large source splits on paragraph boundaries into consecutive parts", () 
   assert.equal(windows.join("\n\n"), source);
 });
 
-test("assembled parts carry one H1 and one continuous section numbering", () => {
+test("no assembled part keeps an H1, and section numbering runs continuously", () => {
+  // The app displays the note's title above the note, so an H1 in the body doubled it.
   const assembled = assembleSourceNoteParts([
-    "# Naslov\n\n## 1. Prva\n\nvsebina\n\n## 2. Druga\n\nvsebina",
-    "# Odvečen naslov\n\n## 1. Tretja\n\nvsebina",
+    "# Odvečen naslov\n\n## 1. Prva\n\nvsebina\n\n## 2. Druga\n\nvsebina",
+    "# Še en naslov\n\n## 1. Tretja\n\nvsebina",
     "## 1. Četrta\n\nvsebina\n\n## 2. Peta\n\nvsebina",
   ]);
 
-  assert.equal((assembled.match(/^#\s+/gm) ?? []).length, 1, "exactly one H1 survives");
+  assert.equal((assembled.match(/^#\s[^#]/gm) ?? []).length, 0, "no H1 survives assembly");
   assert.deepEqual(
     (assembled.match(/^##\s+\d+\./gm) ?? []).map((h) => h.trim()),
     ["## 1.", "## 2.", "## 3.", "## 4.", "## 5."],
@@ -314,7 +315,7 @@ test("assembled parts carry one H1 and one continuous section numbering", () => 
   assert.match(assembled, /## 5\. Peta/);
 });
 
-test("the source-note contract assigns the H1 to part one alone", () => {
+test("the source-note contract forbids the H1 everywhere", () => {
   const single = buildSourceNoteInstructions({ outputLanguage: "sl" });
   const first = buildSourceNoteInstructions({ outputLanguage: "sl", window: { index: 0, count: 3 } });
   const later = buildSourceNoteInstructions({ outputLanguage: "sl", window: { index: 1, count: 3 } });
@@ -323,11 +324,10 @@ test("the source-note contract assigns the H1 to part one alone", () => {
     assert.match(prompt, /No emojis/);
     assert.match(prompt, /roughly 60% of the source's word count/);
     assert.match(prompt, /BEGIN REFERENCE EXAMPLE/);
+    assert.match(prompt, /Do NOT write an H1 title/);
   }
 
-  assert.match(single, /Start immediately with a single "#" H1 title/);
   assert.match(first, /writing part 1/);
-  assert.match(later, /Do NOT write an H1 title/);
   assert.doesNotMatch(single, /split into/);
 });
 

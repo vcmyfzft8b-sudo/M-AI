@@ -2,7 +2,7 @@ import {
   isLikelyMathExpression,
   normalizeFormulaSyntax,
   normalizeMarkdownMath,
-} from "@/lib/math-markdown";
+} from "./math-markdown.ts";
 
 export type NoteTtsWord = {
   index: number;
@@ -511,20 +511,14 @@ export function parseNoteTtsDocument(markdown: string): NoteTtsDocument {
       const rows = tableLines
         .map((line, rowIndex) => {
           const cells = splitTableCells(line)
-            .map((cell, cellIndex) => {
-              const tokens = tokenizeText(cell);
-
-              if (!tokens) {
-                return null;
-              }
-
-              return {
-                id: `note-tts-block-${blocks.length}-row-${rowIndex}-cell-${cellIndex}`,
-                header: rowIndex === 0,
-                tokens,
-              };
-            })
-            .filter((cell): cell is NonNullable<typeof cell> => Boolean(cell));
+            // An empty cell stays a cell: a comparison table's header often starts with one
+            // ("| | 2025 | 2030 |"), and dropping it shifted every header label one column
+            // left. Empty tokens add no words, so annotation word indexes are untouched.
+            .map((cell, cellIndex) => ({
+              id: `note-tts-block-${blocks.length}-row-${rowIndex}-cell-${cellIndex}`,
+              header: rowIndex === 0,
+              tokens: tokenizeText(cell) ?? [],
+            }));
 
           if (cells.length === 0) {
             return null;

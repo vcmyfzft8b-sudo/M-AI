@@ -2937,11 +2937,13 @@ export function LectureWorkspace({
           noteSelection.endWordIndex,
         ),
     );
-    const sameColorMatchingAnnotations = matchingAnnotations.filter(
-      (annotation) => (annotation.colorId ?? "orange") === colorId,
-    );
+    // Coverage decides removal regardless of color. Filtering to the picker's current color made
+    // toggling someone-else's-color highlights (the model's yellow, most of all) REPLACE them
+    // with the picker color instead of removing them — the reader selected marked text, tapped
+    // highlight, and watched it change color. Selecting fully-highlighted text and tapping the
+    // tool now always removes exactly the selected words, whatever color marked them.
     const shouldRemoveSelection = isSelectionFullyCoveredByAnnotations(
-      sameColorMatchingAnnotations,
+      matchingAnnotations,
       noteSelection,
     );
     const annotationsWithoutSelectionForKind = activeNoteDoc.annotations.flatMap((annotation) => {

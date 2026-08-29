@@ -37,6 +37,11 @@ const highlightSelectionSchema = z.object({
         quote: z.string().min(12).max(280),
       }),
     )
+    // The floor turns an under-called judgment into a retryable schema failure: on 2026-08-29 a
+    // production note got a 31-token "nothing worth highlighting" answer from a note full of
+    // exam material, and the reader saw a note with no highlights at all. Any note past the
+    // 60-word gate has at least a handful of highlight-worthy spans.
+    .min(4)
     .max(20),
 });
 
@@ -48,7 +53,7 @@ Rules:
 - Choose 4 to 12 across the whole note and spread them across sections; at most 2 per section.
 - Never quote a heading, and never quote text inside a "> **...**" callout box — those are already emphasized.
 - Quotes must not overlap each other.
-- If little is highlight-worthy, return fewer. Never highlight filler to reach a count.`;
+- Every study note contains at least a handful of spans a student would mark — return AT LEAST 4. Pick the strongest candidates rather than skipping the job; just never pad beyond what is genuinely worth marking.`;
 
 /** The word stream the reader's own selections index against, minus headings and callouts. */
 function collectHighlightableWords(blocks: NoteTtsBlock[]) {

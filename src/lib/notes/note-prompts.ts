@@ -582,11 +582,11 @@ export function buildSourceNoteInstructions(params: {
   const outputContract = windowed
     ? window.index === 0
       ? `- Return Markdown only. No preamble, no closing commentary, no meta-talk about the source document. Never wrap the output in a code fence.
-- This source is split into ${window.count} consecutive parts and you are writing part 1. Start immediately with a single "#" H1 title for the WHOLE document's topic, then write numbered "## N. Section" headings for this part's material only. Later parts continue after your last section. Do not summarise or preview material that is not in this part.`
+- This source is split into ${window.count} consecutive parts and you are writing part 1. Do NOT write an H1 title — the app already displays the note's title above the note. Start immediately with the first numbered "## N. Section" heading for this part's material. Later parts continue after your last section. Do not summarise or preview material that is not in this part.`
       : `- Return Markdown only. No preamble, no closing commentary, no meta-talk about the source document. Never wrap the output in a code fence.
-- This source is split into ${window.count} consecutive parts and you are writing part ${window.index + 1}. Do NOT write an H1 title — part 1 already did. Start immediately with the first "## N. Section" heading for this part's material; number sections starting from 1 (numbering is corrected mechanically when the parts are joined). Do not re-explain material from earlier parts.`
+- This source is split into ${window.count} consecutive parts and you are writing part ${window.index + 1}. Do NOT write an H1 title. Start immediately with the first "## N. Section" heading for this part's material; number sections starting from 1 (numbering is corrected mechanically when the parts are joined). Do not re-explain material from earlier parts.`
     : `- Return Markdown only. No preamble, no "Here are your notes", no closing commentary, no meta-talk about the source document.
-- Start immediately with a single "#" H1 title = the topic of the material.
+- Do NOT write an H1 title — the app already displays the note's title above the note. Start immediately with the first numbered "## N. Section" heading.
 - Nothing after the last content line.
 - Never wrap the whole output in a code fence.`;
 
@@ -614,7 +614,7 @@ Keep original technical terms and any English terms the source itself uses in br
 
 STRUCTURE
 
-1. ${windowed ? 'Numbered "## N. Section" headings' : '"#" H1 topic title, then numbered "## N. Section" headings'}, following the logical flow of the source. Merge slides that cover one idea into one section. Do not create one section per slide.
+1. Numbered "## N. Section" headings, following the logical flow of the source. Merge slides that cover one idea into one section. Do not create one section per slide.
 2. ${sectionTarget}
 3. Order sections the way the source builds the argument, not the way the raw text happened to be extracted.
 4. Optional final section only if the source supports it: a short set of comparisons or models grouped together.
@@ -652,7 +652,7 @@ The app renders blockquotes of the form "> **Label:** text" as coloured highligh
 
 WHAT NOT TO DO
 
-- Do not restate the H1 title as the first sentence.
+- Do not open with a restatement of the note's title.
 - Do not write "the slides show", "this presentation covers", "as we can see in the diagram". Write the content directly.
 - Do not pad with generic advice, motivation or filler transitions.
 - Do not skip a section of the source because it looked like an image. Charts carry numbers; extract them.
@@ -713,24 +713,21 @@ export function planSourceWriteWindows(sourceText: string, maxWords = SOURCE_WRI
 }
 
 /**
- * Joins windowed note parts into one document: the H1 belongs to part 1 alone (later parts are
- * told not to write one, and any that slips through is dropped), and "## N." section numbers are
- * rewritten into one continuous sequence — each part numbers locally from 1, because no part can
- * know how many sections the parts before it produced.
+ * Joins windowed note parts into one document: no part may carry an H1 (the app displays the
+ * note's title above the note, so an H1 in the body doubled it — 2026-08-29), and "## N."
+ * section numbers are rewritten into one continuous sequence — each part numbers locally from 1,
+ * because no part can know how many sections the parts before it produced.
  */
 export function assembleSourceNoteParts(parts: string[]) {
   let sectionNumber = 0;
 
-  const cleaned = parts.map((part, partIndex) => {
-    const withoutStrayH1 =
-      partIndex === 0
-        ? part.trim()
-        : part
-            .trim()
-            .split("\n")
-            .filter((line, lineIndex) => !(lineIndex < 3 && /^#\s+/.test(line)))
-            .join("\n")
-            .trim();
+  const cleaned = parts.map((part) => {
+    const withoutStrayH1 = part
+      .trim()
+      .split("\n")
+      .filter((line, lineIndex) => !(lineIndex < 3 && /^#\s[^#]/.test(line + " ")))
+      .join("\n")
+      .trim();
 
     return withoutStrayH1.replace(/^##\s+\d+[.)]?\s+/gm, () => `## ${++sectionNumber}. `);
   });

@@ -4,6 +4,7 @@ import test from "node:test";
 import { z } from "zod";
 
 import {
+  classifyGatewayFailure,
   GeminiTruncatedOutputError,
   buildStructuredRetryInstruction,
   extractJsonPayload,
@@ -97,4 +98,14 @@ test("model output carrying unstorable characters is cleaned before validation",
   assert.equal(parsed.back, "razlaga  konec");
   // The cleaned value round-trips as UTF-8, which is exactly what Postgres requires.
   assert.doesNotThrow(() => new TextEncoder().encode(JSON.stringify(parsed)));
+});
+
+test("gateway failures classify by what a retry could still buy", () => {
+  // Truncation is stochastic and fails fast: retry the same model with a grown budget. A timeout
+  // burned the whole leash, so a same-model retry cannot fit the invocation. Everything else is
+  // a fast failure the chain may retry or pass over freely.
+  assert.equal(classifyGatewayFailure(new GeminiTruncatedOutputError(3200)), "truncated");
+  assert.equal(classifyGatewayFailure(new DOMException("timed out", "TimeoutError")), "timeout");
+  assert.equal(classifyGatewayFailure(new DOMException("aborted", "AbortError")), "other");
+  assert.equal(classifyGatewayFailure(new Error("503 upstream unavailable")), "other");
 });

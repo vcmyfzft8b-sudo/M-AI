@@ -60,6 +60,27 @@ export function parseStructuredText<TSchema extends z.ZodTypeAny>(schema: TSchem
   return schema.parse(sanitizeJsonForDatabase(JSON.parse(extractJsonPayload(text))));
 }
 
+/**
+ * How a failed gateway call should be handled, from the shape of its error:
+ *
+ * - "truncated": the model ran past its token budget — stochastic, retryable on the same model
+ *   with a grown budget (fails fast, so a retry fits the invocation).
+ * - "timeout": the call burned its whole leash. A same-model retry cannot fit the invocation;
+ *   go straight to the fallback tier.
+ * - "other": 5xx, refused schema, bad host — fail fast, retry or fall back freely.
+ */
+export function classifyGatewayFailure(error: unknown): "truncated" | "timeout" | "other" {
+  if (error instanceof GeminiTruncatedOutputError) {
+    return "truncated";
+  }
+
+  if (error instanceof DOMException && error.name === "TimeoutError") {
+    return "timeout";
+  }
+
+  return "other";
+}
+
 export function toErrorMessage(error: unknown) {
   if (error instanceof z.ZodError) {
     return error.issues

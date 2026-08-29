@@ -21,6 +21,7 @@ import {
   type AiStage,
 } from "@/lib/ai/model-config";
 import { isWorkAbortedError } from "@/lib/abort-context";
+import { classifyGatewayFailure } from "@/lib/ai/structured-output";
 import type { GeminiUsageContext } from "@/lib/ai/usage-logging";
 import { getServerEnv } from "@/lib/server-env";
 
@@ -118,36 +119,62 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
           ? [config.model, routedFallbackModel]
           : [config.model];
 
-      for (const routedModel of routedAttempts) {
+      for (const [tierIndex, routedModel] of routedAttempts.entries()) {
         const attemptThinkingLevel = supportsThinkingLevel(routedModel)
           ? config.thinkingLevel
           : null;
         const attemptTimeoutMs = resolveStageTimeoutMs(params.stage, routedModel);
+        // The primary model gets a second try before the chain moves on: its characteristic
+        // failure (truncation) is a stochastic tail event that a retry usually clears, it fails
+        // fast enough to leave room in the invocation, and the fallback tier costs 1.3-7x more
+        // per token. A timeout gets no retry — it already burned the whole leash — and the
+        // fallback tier gets no retry either: its job is to answer, not to be persisted with.
+        const maxAttempts = tierIndex === 0 ? 2 : 1;
+        let attemptMaxOutputTokens = maxOutputTokens;
 
-        try {
-          return await generateStructuredObjectWithOpenRouter({
-            schema: params.schema,
-            instructions: params.instructions,
-            input: params.input,
-            model: routedModel,
-            apiKey,
-            maxOutputTokens,
-            thinkingLevel: attemptThinkingLevel,
-            ...(attemptTimeoutMs ? { timeoutMs: attemptTimeoutMs } : {}),
-            usageContext,
-          });
-        } catch (error) {
-          // A budget abort is not a gateway failure: falling back would start a fresh full-price
-          // call on an invocation that has already been told to stop. Everything else — including
-          // GLM's characteristic truncation — falls through to the next tier.
-          if (!shouldFallBackToDirectProvider(error, isWorkAbortedError)) {
-            throw error;
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+          try {
+            return await generateStructuredObjectWithOpenRouter({
+              schema: params.schema,
+              instructions: params.instructions,
+              input: params.input,
+              model: routedModel,
+              apiKey,
+              maxOutputTokens: attemptMaxOutputTokens,
+              thinkingLevel: attemptThinkingLevel,
+              ...(attemptTimeoutMs ? { timeoutMs: attemptTimeoutMs } : {}),
+              usageContext,
+            });
+          } catch (error) {
+            // A budget abort is not a gateway failure: falling back would start a fresh
+            // full-price call on an invocation that has already been told to stop.
+            if (!shouldFallBackToDirectProvider(error, isWorkAbortedError)) {
+              throw error;
+            }
+
+            const failure = classifyGatewayFailure(error);
+
+            if (failure === "truncated" && attemptMaxOutputTokens) {
+              // A truncation retry without a bigger budget re-buys the same truncation.
+              attemptMaxOutputTokens = Math.min(
+                65_536,
+                Math.round(attemptMaxOutputTokens * 1.8),
+              );
+            }
+
+            console.warn(
+              `OpenRouter call for ${routedModel} failed (${failure}), ${
+                failure !== "timeout" && attempt + 1 < maxAttempts
+                  ? "retrying on the same model"
+                  : "falling back to the next tier"
+              }.`,
+              error,
+            );
+
+            if (failure === "timeout") {
+              break;
+            }
           }
-
-          console.warn(
-            `OpenRouter call for ${routedModel} failed, falling back to the next tier.`,
-            error,
-          );
         }
       }
     }

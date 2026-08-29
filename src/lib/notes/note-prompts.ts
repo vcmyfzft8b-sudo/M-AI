@@ -645,7 +645,7 @@ FORMATTING RULES
 
 CALLOUTS
 
-The app renders blockquotes of the form "> **Label:** text" as coloured highlight boxes. Use them to lift the few things a student must not miss, and you are the judge of what earns one: a make-or-break definition, the distinction everyone gets wrong on the exam, the one takeaway a section exists for. Every note has at least one thing worth calling out — include AT LEAST 1 and ${calloutBudget}, each 1-2 lines, never two in a row, and never for material that is merely interesting. A callout must not restate a sentence that already appears in the surrounding text; it replaces it. Use exactly these labels:
+The app renders blockquotes of the form "> **Label:** text" as coloured highlight boxes. Use them to lift the few things a student must not miss, and you are the judge of what earns one: a make-or-break definition, the distinction everyone gets wrong on the exam, the one takeaway a section exists for. You are also the judge of whether a note needs any at all — a note can have zero callouts. Use ${calloutBudget}, each 1-2 lines, never two in a row, and never for material that is merely interesting. A callout must not restate a sentence that already appears in the surrounding text; it replaces it. Use exactly these labels:
 - "> **${labels.definition}:** ..." for a foundational definition the subject is built on
 - "> **${labels.commonMistake}:** ..." for the confusion or error students are tested on
 - "> **${labels.keyTakeaway}:** ..." for the single most important consequence or rule of a section

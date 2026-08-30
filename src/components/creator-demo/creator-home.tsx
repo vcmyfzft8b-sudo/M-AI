@@ -1,5 +1,7 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+
 import {
   useCreatorDemoFolders,
   useCreatorDemoLectures,
@@ -17,14 +19,23 @@ export function CreatorHome({
 }) {
   const lectures = useCreatorDemoLectures(initialLectures);
   const folders = useCreatorDemoFolders(initialFolders);
+  const searchParams = useSearchParams();
+
+  /*
+   * `?plan=free` shows the demo as somebody who has not paid: the prize wheel,
+   * the offer sheet and the upgrade prompts all hang off `hasPaidAccess`, and
+   * they are otherwise unreachable here — the demo exists to show the shipping
+   * UI, and half of it only exists for people who have not bought yet.
+   */
+  const isFreePlan = searchParams.get("plan") === "free";
 
   return (
     <HomeDashboard
       lectures={lectures}
       folders={folders}
       userId={DEMO_USER_ID}
-      canCreateNotes
-      hasPaidAccess
+      canCreateNotes={!isFreePlan}
+      hasPaidAccess={!isFreePlan}
       trialLectureId={null}
       showDevDashboard={false}
     />

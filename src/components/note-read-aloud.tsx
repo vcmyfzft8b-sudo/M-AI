@@ -334,8 +334,11 @@ function QuotaUsageMenu({
 
   const menuContent = (
     <>
+      {/* `data-drag-handle` is what lets a drag start here: useSheet ignores
+          pointers that land on a button unless the button is the grabber. */}
       <button
         type="button"
+        data-drag-handle="true"
         className="mobile-sheet-drag-handle note-read-usage-drag-handle"
         aria-label="Povleci navzdol za zapiranje"
       />

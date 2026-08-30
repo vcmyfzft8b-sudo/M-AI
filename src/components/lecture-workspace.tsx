@@ -50,6 +50,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 
+import { useDictation } from "@/components/use-dictation";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { useRouter } from "next/navigation";
 import type {
@@ -1277,6 +1278,16 @@ export function LectureWorkspace({
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
   const quizAdvanceTimerRef = useRef<number | null>(null);
   const closeMobileChat = useCallback(() => setIsMobileChatOpen(false), []);
+  /*
+   * Dictation for the chat composer. What it hears is appended to whatever is
+   * already in the field rather than replacing it, so speaking after typing
+   * continues the sentence instead of throwing it away.
+   */
+  const dictation = useDictation({
+    onText: useCallback((text: string) => {
+      setQuestion((current) => (current.trim() ? `${current.trim()} ${text}` : text));
+    }, []),
+  });
   const chatSheet = useSheet(closeMobileChat, { scrollable: true });
 
   /*
@@ -3886,6 +3897,8 @@ export function LectureWorkspace({
   function renderChatBody() {
     const composerDisabled =
       detail.lecture.status !== "ready" || isSending || chatLimitReached;
+    // Nothing to send yet, and a microphone to offer instead.
+    const showChatMic = dictation.supported && !question.trim() && !isSending;
 
     return (
       <>
@@ -3945,21 +3958,42 @@ export function LectureWorkspace({
               placeholder="Napiši svoje vprašanje"
               aria-label="Napiši svoje vprašanje"
             />
-            <button
-              type="submit"
-              disabled={composerDisabled}
-              className={`memo-chat-send ${question.trim() ? "ready" : ""}`.trim()}
-              aria-label="Pošlji sporočilo"
-            >
-              {isSending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Msym name="arrow_upward" size="1.35rem" />
-              )}
-            </button>
+            {/*
+              * One control, two jobs: an empty field offers the microphone, and
+              * the moment there is something to send it becomes Send. Two
+              * buttons side by side would mean the common one — Send — is never
+              * where the thumb already is.
+              */}
+            {showChatMic ? (
+              <button
+                type="button"
+                disabled={composerDisabled}
+                className={`memo-chat-send mic ${dictation.listening ? "listening" : ""}`.trim()}
+                onClick={dictation.toggle}
+                aria-pressed={dictation.listening}
+                aria-label={dictation.listening ? "Ustavi narekovanje" : "Narekuj vprašanje"}
+              >
+                <Msym name={dictation.listening ? "stop" : "mic"} size="1.35rem" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={composerDisabled}
+                className={`memo-chat-send ${question.trim() ? "ready" : ""}`.trim()}
+                aria-label="Pošlji sporočilo"
+              >
+                {isSending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Msym name="arrow_upward" size="1.35rem" />
+                )}
+              </button>
+            )}
           </form>
 
-          {chatError ? (
+          {dictation.error ? (
+            <p className="memo-chat-status danger">{dictation.error}</p>
+          ) : chatError ? (
             <p className="memo-chat-status danger">{chatError}</p>
           ) : detail.lecture.status !== "ready" ? (
             <p className="memo-chat-status">Na voljo bo po koncu obdelave.</p>
@@ -6035,6 +6069,26 @@ export function LectureWorkspace({
                 <Msym name="chat_bubble" size="1.35rem" className="bubble" />
               </span>
               </button>
+
+            {/*
+              * The circle at the end of the bar is a microphone, so it dictates
+              * rather than just decorating: it opens the chat and starts
+              * listening, and what it hears lands in the composer. It sits
+              * beside the bar rather than inside it because a button cannot
+              * contain another button — the stylesheet lays it over the icon
+              * slot the bar already draws.
+              */}
+            {dictation.supported ? (
+              <button
+                type="button"
+                className={`memo-m-chatbar-mic ${dictation.listening ? "listening" : ""}`.trim()}
+                onClick={() => {
+                  setIsMobileChatOpen(true);
+                  dictation.start();
+                }}
+                aria-label="Narekuj vprašanje"
+              />
+            ) : null}
           </div>
         </div>
       </div>

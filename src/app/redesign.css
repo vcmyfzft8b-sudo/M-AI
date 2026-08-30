@@ -2505,6 +2505,24 @@
   color: var(--bg);
 }
 
+/* The same control as Send, in its dictation role: white while it waits,
+   coral while it listens, because the only way to know a microphone is open is
+   to be told. */
+.memo-chat-send.mic {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.memo-chat-send.mic.listening {
+  background: var(--coral);
+  color: #fff;
+}
+
+/* The bar it overlays is the phone's; there is nothing to sit on above that. */
+.memo-m-chatbar-mic {
+  display: none;
+}
+
 .memo-chat-send .msym {
   font-size: 1.35rem;
 }
@@ -8577,6 +8595,43 @@
     position: absolute;
     font-size: 1.35rem;
     transition: opacity 0.2s ease;
+  }
+
+  /*
+   * The dictation control, laid over the circle the bar already draws so the
+   * microphone in it is the thing you press. Transparent: the circle
+   * underneath is the visible button, this only carries the hit area, because
+   * a button cannot be nested inside the bar's own button.
+   *
+   * It is only there while that circle is a microphone. Once the pill is
+   * reading or annotating the circle becomes a speech bubble, and a bubble
+   * that starts dictation would be lying.
+   */
+  .memo-m-chatbar-mic {
+    display: block;
+    position: absolute;
+    top: 50%;
+    right: 0.4rem;
+    z-index: 1;
+    width: 2.6rem;
+    height: 2.6rem;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    transform: translateY(-50%);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .memo-m-chatbar-mic.listening {
+    background: rgba(244, 95, 90, 0.5);
+  }
+
+  .memo-dock:has(.memo-dock-pill.reading) .memo-m-chatbar-mic,
+  .memo-dock:has(.memo-dock-pill.annotating) .memo-m-chatbar-mic,
+  .memo-dock:not(:has(.memo-m-chatbar)) .memo-m-chatbar-mic {
+    display: none;
   }
 
   .memo-m-chatbar-icon .mic {

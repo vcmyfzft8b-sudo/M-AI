@@ -484,10 +484,20 @@
   min-width: 0;
 }
 
-/* ...and it needs this column's ground. `--canvas` belongs to the old shell
-   and is not defined in the memo layer, so the overlay would be transparent
-   and the page would show through the skeleton. */
+/*
+ * ...and it needs this column's ground. `--canvas` belongs to the old shell and
+ * is not defined in the memo layer, so the overlay would be transparent and the
+ * page would show through the skeleton.
+ *
+ * It also has to outrank the page it is covering. The outgoing screen raises
+ * its own chrome well above the overlay's default 40 — the folder chip at 50,
+ * the search and the dock at 60, the phone's home bar at 80 — which is why the
+ * library's chip and search were still painted over the help screen's skeleton.
+ * 90 clears all of them and still sits under everything portalled out of the
+ * column (105 and up), so a sheet left open during a navigation stays visible.
+ */
 .memo-main > .navigation-loading-overlay-in-content {
+  z-index: 90;
   background: var(--bg);
 }
 

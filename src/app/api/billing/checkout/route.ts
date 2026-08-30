@@ -64,8 +64,25 @@ export async function POST(request: Request) {
       customerId,
       email: appState.user.email ?? appState.profile?.email ?? null,
     });
+    // A prize from the home-screen wheel is applied here. Stripe rejects
+    // `discounts` alongside `allow_promotion_codes`, so a won coupon replaces
+    // the promo-code field rather than sitting next to it — the learner already
+    // has their discount and does not need to type one.
+    const wheel = await getDiscountWheelState(appState.user.id);
+    const wheelCoupon = wheel.hasUnredeemedPrize ? wheel.coupon : null;
+
+    /*
+     * A discounted purchase is not also a trial.
+     *
+     * The coupon is `duration: once`, so it halves the first invoice — and a
+     * trial pushes that invoice three days out, past the ten minutes the offer
+     * was sold on and past the moment the buyer agreed to it. Stripe then shows
+     * "3 days free, then €130,00 per year", which is the undiscounted price and
+     * the opposite of what the sheet promised. Charging the discounted period
+     * straight away is what the offer actually says.
+     */
     const subscriptionTrialEligible =
-      appState.subscriptionTrialEligible && !hasPriorStripeSubscription;
+      appState.subscriptionTrialEligible && !hasPriorStripeSubscription && !wheelCoupon;
     const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
       metadata: {
         userId: appState.user.id,
@@ -73,13 +90,6 @@ export async function POST(request: Request) {
       },
       ...(subscriptionTrialEligible ? { trial_period_days: 3 } : {}),
     };
-
-    // A prize from the home-screen wheel is applied here. Stripe rejects
-    // `discounts` alongside `allow_promotion_codes`, so a won coupon replaces
-    // the promo-code field rather than sitting next to it — the learner already
-    // has their discount and does not need to type one.
-    const wheel = await getDiscountWheelState(appState.user.id);
-    const wheelCoupon = wheel.hasUnredeemedPrize ? wheel.coupon : null;
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",

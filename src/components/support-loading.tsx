@@ -3,7 +3,7 @@ const SKELETON_SECTIONS = [
   [0, 1, 2],
 ];
 
-/** The help screen's shapes: greeting card, then one grouped card per section. */
+/** The help screen's shapes: one grouped card per section. */
 export function SupportIndexLoading() {
   return (
     <div className="memo-support-screen" aria-hidden="true" data-route-skeleton="">
@@ -12,11 +12,6 @@ export function SupportIndexLoading() {
           className="app-loading-pill"
           style={{ height: "1.75rem", width: "7rem", marginBottom: "1.2rem" }}
         />
-
-        <div className="memo-help-intro">
-          <span className="app-loading-pill" style={{ height: "1.1rem", width: "16rem" }} />
-          <span className="app-loading-pill" style={{ height: "1.1rem", width: "21rem" }} />
-        </div>
 
         {SKELETON_SECTIONS.map((section, index) => (
           <div key={index} className="memo-help-section">

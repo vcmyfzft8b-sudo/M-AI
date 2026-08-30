@@ -180,26 +180,24 @@ export function SettingsScreen({
    * shows them. The phone gives the account its own card under a "Račun"
    * heading, so there they are rendered separately rather than as rows.
    */
-  const accountRows: typeof rows = isDemo
-    ? []
-    : [
-        {
-          id: "logout",
-          emoji: "👤",
-          title: "Odjava",
-          detail: email,
-          // The phone has this on the Račun card above instead.
-          className: "memo-only-desktop",
-          onSelect: () => setConfirm("logout"),
-        },
-        {
-          id: "delete",
-          emoji: "🗑️",
-          title: "Izbriši račun",
-          danger: true,
-          onSelect: () => setConfirm("delete"),
-        },
-      ];
+  const accountRows: typeof rows = [
+    {
+      id: "logout",
+      emoji: "👤",
+      title: "Odjava",
+      detail: email,
+      // The phone has this on the Račun card above instead.
+      className: "memo-only-desktop",
+      onSelect: () => setConfirm("logout"),
+    },
+    {
+      id: "delete",
+      emoji: "🗑️",
+      title: "Izbriši račun",
+      danger: true,
+      onSelect: () => setConfirm("delete"),
+    },
+  ];
 
   const confirmCopy: Record<ConfirmKind, { emoji: string; title: string; body: string; cta: string }> = {
     logout: {
@@ -226,6 +224,24 @@ export function SettingsScreen({
   function runConfirm() {
     const kind = confirm;
     confirmSheet.dismiss();
+
+    /*
+     * The demo draws the whole screen — the artboard has Odjava and Izbriši
+     * račun on it, and a settings page missing its account section is not the
+     * settings page. There is no account behind it, so both confirmations stop
+     * at the toast rather than posting a logout or opening a mail client.
+     */
+    if (isDemo) {
+      if (kind === "logout") {
+        showToast("V predstavitvi ni računa za odjavo");
+        return;
+      }
+
+      if (kind === "delete") {
+        showToast("V predstavitvi ni računa za izbris");
+        return;
+      }
+    }
 
     if (kind === "logout") {
       setIsLoggingOut(true);

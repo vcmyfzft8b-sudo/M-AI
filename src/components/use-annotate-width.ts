@@ -26,8 +26,10 @@ const HYSTERESIS_PX = 3;
  * the tree and collapses to `max-width: 0`, so measuring the row's full extent
  * would size the pill for swatches nobody can see.
  *
- * The palette-open state is excluded because the design gives it a width of its
- * own (`calc(100% - 0.7rem)`); measuring then would fight that.
+ * The palette-open state is measured too, though the artboard skips it: at
+ * 390px the swatch row genuinely needs the whole row and the stylesheet still
+ * gives it `calc(100% - 0.7rem)` there, but on a tablet that same rule stretches
+ * the pill across a screen with room to spare.
  *
  * The value is written as a custom property rather than held in state: the pill
  * is remeasured every commit and through a 480ms follow loop, and re-rendering
@@ -43,7 +45,7 @@ export function useAnnotateWidth(annotating: boolean, paletteOpen: boolean) {
     const pill = pillRef.current;
     const layer = layerRef.current;
 
-    if (!pill || !layer || !annotating || paletteOpen) {
+    if (!pill || !layer || !annotating) {
       return;
     }
 
@@ -74,7 +76,7 @@ export function useAnnotateWidth(annotating: boolean, paletteOpen: boolean) {
 
     lastRef.current = width;
     pill.style.setProperty("--annot-w", `${width}px`);
-  }, [annotating, paletteOpen]);
+  }, [annotating]);
 
   // Every commit, mirroring the design's own componentDidUpdate: the label and
   // the swatch row both animate their width, and the marker colour can change

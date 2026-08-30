@@ -4018,6 +4018,33 @@
   background: var(--surface);
 }
 
+/*
+ * And the white controls that are not pills of text: the header circles, the
+ * folder chip, the nav buttons, the closes. The chat button already carried
+ * this outline and everything beside it did not, which is what made it look
+ * like the odd one out rather than the standard.
+ *
+ * The dock pill and the chat bar are deliberately absent: they already draw
+ * the same hairline as an inset shadow, and a real border on the pill would
+ * pull its buttons 2px inwards — the annotate row is measured to the pixel.
+ */
+.memo-m-round.memo-m-round,
+.memo-m-folder-chip.memo-m-folder-chip,
+.memo-folder-chip.memo-folder-chip,
+.memo-m-navbtn.memo-m-navbtn,
+.memo-icon-button.memo-icon-button,
+.memo-note-action.memo-note-action,
+.mobile-study-manage-pill.mobile-study-manage-pill,
+.memo-close-button.memo-close-button,
+.memo-sheet-close.memo-sheet-close,
+.memo-chat-close.memo-chat-close,
+.memo-portal .app-close-button.app-close-button,
+.memo .app-close-button.app-close-button,
+.memo-portal .ios-sheet-header-close.ios-sheet-header-close,
+.memo .ios-sheet-header-close.ios-sheet-header-close {
+  border: 2px solid var(--line);
+}
+
 /* ---------------------------------------------------------------------------
    Close buttons
    ---------------------------------------------------------------------------
@@ -8272,6 +8299,19 @@
     max-width: calc(100% - 0.7rem);
   }
 
+  /*
+   * A phone is only just wide enough for the open palette, which is why the
+   * artboard gives it the whole row and folds the chat button away. A tablet
+   * is not a phone: the pill hugs its swatches there and the chat button stays,
+   * because there is nothing to gain by hiding it.
+   */
+  @media (min-width: 480px) {
+    .memo-dock-pill.annotating.palette {
+      width: var(--annot-w, calc(100% - 0.7rem));
+    }
+
+  }
+
   /* The design cross-fades the dock's three layers and nothing more. A scale
      on top of that would also be measured by useAnnotateWidth while it runs,
      so the annotate pill would settle a pixel short of its content. */
@@ -8356,11 +8396,14 @@
     background: #17171a;
   }
 
-  /* The palette needs the whole row. */
-  .memo-dock:has(.memo-dock-pill.annotating.palette) .memo-m-chatbar {
-    width: 0;
-    opacity: 0;
-    pointer-events: none;
+  /* The palette needs the whole row — on a phone. A tablet has room for both,
+     so the chat button stays there (see the pill's own min-width rule). */
+  @media (max-width: 479px) {
+    .memo-dock:has(.memo-dock-pill.annotating.palette) .memo-m-chatbar {
+      width: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
   }
 
   .memo-m-chatbar-label {

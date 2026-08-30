@@ -7,8 +7,7 @@ import { Msym } from "@/components/msym";
 import { HELP_SECTIONS } from "@/lib/help-center";
 
 /**
- * Pomoč, as the redesign draws it: a greeting card, then one grouped card per
- * section.
+ * Pomoč, as the redesign draws it: one grouped card per section.
  *
  * The redesign expands each row in place, because its mock answers are two
  * sentences. The real help centre holds long-form articles (terms, privacy,
@@ -34,11 +33,6 @@ export function SupportScreen({ basePath = "/app/support" }: { basePath?: string
           >
             <Msym name="arrow_back" size="1.5rem" fill={false} weight={500} />
           </button>
-        </div>
-
-        <div className="memo-help-intro">
-          <p>Živjo! Tukaj je ekipa Memo AI.</p>
-          <p>Za najhitrejši odgovor preveri spodnje vire.</p>
         </div>
 
         {HELP_SECTIONS.map((section) => (

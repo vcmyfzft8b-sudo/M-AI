@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { BillingPortalButton } from "@/components/billing-portal-button";
 import { InstantLink } from "@/components/instant-link";
 import { Emoji, Msym } from "@/components/msym";
+import { useAppHref } from "@/components/creator-demo/creator-demo-context";
 import { MemoPortal } from "@/components/memo-portal";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { BRAND_NAME, BRAND_SUPPORT_EMAIL } from "@/lib/brand";
@@ -63,6 +64,7 @@ export function SettingsScreen({
   isDemo?: boolean;
 }) {
   const router = useRouter();
+  const startHref = useAppHref("/app/start");
   const [confirm, setConfirm] = useState<ConfirmKind | null>(null);
   // A bottom sheet on the phone, a centred dialog on desktop — and on the
   // phone it leaves and drags like every other sheet.
@@ -310,7 +312,7 @@ export function SettingsScreen({
             {hasSubscription ? (
               <BillingPortalButton />
             ) : (
-              <InstantLink href="/app/start" className="memo-primary-pill">
+              <InstantLink href={startHref} className="memo-primary-pill">
                 <Emoji symbol="✨" size="1rem" />
                 <span>Izberi paket</span>
               </InstantLink>

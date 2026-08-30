@@ -1273,6 +1273,7 @@ export function LectureWorkspace({
   // reopened; on the phone the same conversation is a sheet.
   const { setChatOpen, chatSlot } = useAppLayout();
   const homeHref = useAppHref("/app");
+  const startHref = useAppHref("/app/start");
   const [isChatDismissed, setIsChatDismissed] = useState(false);
   const [isChatExpanded, setIsChatExpanded] = useState(false);
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
@@ -4005,7 +4006,7 @@ export function LectureWorkspace({
               <button
                 type="button"
                 className="memo-button-outline small"
-                onClick={() => router.push("/app/start")}
+                onClick={() => router.push(startHref)}
               >
                 Nadgradi
               </button>

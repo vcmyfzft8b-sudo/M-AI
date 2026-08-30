@@ -472,6 +472,8 @@ export function HomeDashboard({
   const router = useRouter();
   const searchParams = useSearchParams();
   const homeHref = useAppHref("/app");
+  // The upgrade screen exists on the demo too; `/app/start` would walk out of it.
+  const startHref = useAppHref("/app/start");
   const isCreatorDemo = useIsCreatorDemo();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
@@ -773,7 +775,7 @@ export function HomeDashboard({
 
   function openQuickAction(mode: NoteSourceMode) {
     if (!canCreateNotes) {
-      router.push("/app/start");
+      router.push(startHref);
       return;
     }
 
@@ -1022,7 +1024,7 @@ export function HomeDashboard({
             <button
               type="button"
               className="memo-utility-link upsell"
-              onClick={() => router.push("/app/start")}
+              onClick={() => router.push(startHref)}
             >
               <span>Nadgradi za nov zapisek</span>
               <Msym name="chevron_right" size="1.1rem" fill={false} weight={400} />
@@ -1194,7 +1196,7 @@ export function HomeDashboard({
                     href={
                       hasPaidAccess || trialLectureId === lecture.id
                         ? `/app/lectures/${lecture.id}`
-                        : "/app/start"
+                        : startHref
                     }
                     isMenuOpen={openMenuLectureId === lecture.id}
                     isBusy={busyLectureId === lecture.id}
@@ -1237,7 +1239,7 @@ export function HomeDashboard({
             className="memo-m-create"
             onClick={() => {
               if (!canCreateNotes) {
-                router.push("/app/start");
+                router.push(startHref);
                 return;
               }
 

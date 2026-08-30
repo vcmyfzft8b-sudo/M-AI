@@ -2,67 +2,66 @@ const SKELETON_ACTION_TILES = [0, 1, 2, 3];
 const SKELETON_NOTE_ROWS = [0, 1, 2, 3];
 
 /**
- * Mirrors the real dashboard, sized from measurements of the live page (desktop, 2026-08-22):
- * action card 108px with a 48px icon, note row 101px with a 24px title and 18px subtitle line,
- * section heading 29px, toolbar row 48px. The containers reuse the real layout classes so the
- * swap to content changes pixels inside the shapes, never the shapes themselves.
+ * The home screen's shapes, so the swap to real content changes pixels inside
+ * the shapes rather than the shapes themselves. Sized from the redesign: quick
+ * action 5.1rem, note row 5.4rem, both 20px radius.
  */
 export function DashboardLoading() {
   return (
-    <div className="home-dashboard pb-8" aria-hidden="true" data-route-skeleton="">
-      <section className="dashboard-section dashboard-create-section">
-        <div className="dashboard-section-heading" style={{ minHeight: "1.8rem" }}>
-          <div className="app-loading-pill" style={{ height: "1.35rem", width: "7.5rem" }} />
-        </div>
-
-        <div className="note-action-grid">
-          {SKELETON_ACTION_TILES.map((tile) => (
-            <div key={tile} className="note-action-card">
-              <span className="note-action-card-icon app-loading-pill" style={{ borderRadius: "50%" }} />
-              <span className="note-action-card-copy" style={{ gap: "0.4rem" }}>
-                <span className="app-loading-pill" style={{ height: "1rem", width: "55%" }} />
-                <span className="app-loading-pill" style={{ height: "0.7rem", width: "80%" }} />
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="dashboard-section dashboard-library-section mt-4">
-        <div className="dashboard-section-heading mb-4" style={{ minHeight: "1.8rem" }}>
-          <div className="app-loading-pill" style={{ height: "1.35rem", width: "7rem" }} />
-        </div>
-
-        <div className="dashboard-toolbar library-toolbar" style={{ alignItems: "center" }}>
+    <div className="memo-home-screen" aria-hidden="true" data-route-skeleton="">
+      <div className="memo-home-scroll">
+        <div className="memo-only-desktop">
+          <div className="app-loading-pill" style={{ height: "1.4rem", width: "9rem" }} />
           <div
             className="app-loading-pill"
-            style={{ height: "3rem", width: "8.5rem", borderRadius: "0.8rem", alignSelf: "flex-start" }}
+            style={{ height: "0.95rem", width: "21rem", marginTop: "0.5rem" }}
           />
-          <div className="ios-search notes-search" style={{ minHeight: "2.7rem" }} />
+
+          <div className="memo-quick-grid">
+            {SKELETON_ACTION_TILES.map((tile) => (
+              <div key={tile} className="memo-quick-card">
+                <span
+                  className="memo-quick-tile app-loading-pill"
+                  style={{ borderRadius: "999px" }}
+                />
+                <span className="app-loading-pill" style={{ height: "1.1rem", width: "9rem" }} />
+              </div>
+            ))}
+          </div>
+
+          <div
+            className="app-loading-pill"
+            style={{ height: "1.4rem", width: "8rem", marginTop: "2.6rem" }}
+          />
         </div>
 
-        {SKELETON_NOTE_ROWS.map((row) => (
+        <div className="memo-library-bar memo-only-desktop">
           <div
-            key={row}
-            className="ios-row-note-card"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "1rem",
-              minHeight: "6.3rem",
-            }}
-          >
-            <div
-              className="app-loading-pill"
-              style={{ width: "3.2rem", height: "3.2rem", borderRadius: "50%", flexShrink: 0 }}
-            />
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem", flex: 1 }}>
-              <div className="app-loading-pill" style={{ height: "1rem", width: "55%" }} />
-              <div className="app-loading-pill" style={{ height: "0.7rem", width: "32%" }} />
-            </div>
+            className="app-loading-pill"
+            style={{ height: "3.4rem", width: "11rem", borderRadius: "18px" }}
+          />
+        </div>
+
+        <div className="memo-home-body">
+          <div className="memo-note-list">
+            {SKELETON_NOTE_ROWS.map((row) => (
+              <div key={row} className="memo-note-row" style={{ cursor: "default" }}>
+                <span
+                  className="memo-note-emoji app-loading-pill"
+                  style={{ borderRadius: "999px" }}
+                />
+                <span className="memo-note-copy">
+                  <span className="app-loading-pill" style={{ height: "1.1rem", width: "62%" }} />
+                  <span
+                    className="app-loading-pill"
+                    style={{ height: "0.85rem", width: "38%", marginTop: "0.35rem" }}
+                  />
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
-      </section>
+        </div>
+      </div>
     </div>
   );
 }

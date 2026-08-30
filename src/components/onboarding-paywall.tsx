@@ -16,6 +16,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { EmojiIcon } from "@/components/emoji-icon";
+import { Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import {
   BRAND_LOCKUP_HEIGHT,
@@ -299,6 +300,7 @@ export function OnboardingPaywall({
   hasPaidAccess,
   subscriptionTrialEligible = true,
   plans,
+  discountCouponPending = false,
 }: {
   profile: ProfileRow | null;
   subscription: BillingSubscriptionRow | null;
@@ -306,6 +308,8 @@ export function OnboardingPaywall({
   hasPaidAccess: boolean;
   subscriptionTrialEligible?: boolean;
   plans: BillingPlanCard[];
+  /** True when the home-screen wheel has awarded a coupon this checkout will use. */
+  discountCouponPending?: boolean;
 }) {
   const router = useRouter();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
@@ -1152,6 +1156,13 @@ export function OnboardingPaywall({
           </div>
         ))}
       </div>
+
+      {discountCouponPending ? (
+        <p className="memo-discount-note">
+          <Msym name="check_circle" size="1.15rem" />
+          Popust 50 % je pripravljen za tvoj nakup
+        </p>
+      ) : null}
 
       <div className="memo-paywall-plan-grid" role="radiogroup" aria-label="Izberi paket">
         {paywallPlans.map((plan) => {

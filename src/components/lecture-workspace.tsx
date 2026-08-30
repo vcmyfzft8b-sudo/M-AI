@@ -3,15 +3,9 @@
 import {
   ArrowLeft,
   ArrowRight,
-  ArrowUp,
   Check,
-  Highlighter,
   ImagePlus,
   Loader2,
-  Palette,
-  Pencil,
-  Plus,
-  Underline,
   X,
 } from "lucide-react";
 import type {
@@ -21,11 +15,13 @@ import type {
 } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
+import { useAppLayout } from "@/components/app-layout-context";
+import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
+import { Emoji, Msym } from "@/components/msym";
 import { NoteReadAloud } from "@/components/note-read-aloud";
 import { StudyCompletionCard } from "@/components/study-completion-card";
-import { ViewportPortal } from "@/components/viewport-portal";
+import { MemoPortal } from "@/components/memo-portal";
 import {
   getApiErrorMessage,
   parseApiResponse,
@@ -40,6 +36,7 @@ import {
   shouldCreateInitialNoteAudio,
 } from "@/lib/lecture-source-metadata";
 import { isNoteEnrichmentPending } from "@/lib/note-enrichment-status";
+import { noteEmoji } from "@/lib/note-emoji";
 import type { EditableNoteDoc, NoteAnnotation, NoteAnnotationKind } from "@/lib/note-doc";
 import { NOTE_TTS_HIGHLIGHT_COLORS } from "@/lib/note-tts-settings";
 import { parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
@@ -48,6 +45,10 @@ import {
   STORAGE_BUCKET,
 } from "@/lib/constants";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import Image from "next/image";
+import { createPortal } from "react-dom";
+
+import { useSheetDrag } from "@/components/use-sheet-drag";
 import { useRouter } from "next/navigation";
 import type {
   ChatMessageWithCitations,
@@ -188,8 +189,10 @@ type QuizQuestionMutationResponse = {
   error?: unknown;
 };
 
+/** The five swatches the redesign shows in the dock's colour palette. */
 const NOTE_HIGHLIGHT_COLORS = [
   "orange",
+  "yellow",
   "green",
   "blue",
   "pink",
@@ -200,6 +203,8 @@ const NOTE_HIGHLIGHT_COLORS = [
     id: colorId,
     label: color?.label ?? colorId,
     value: color?.currentBackground ?? "#fb923c",
+    /** Text colour that reads on top of `value`, for the brush button. */
+    contrast: color?.currentColor ?? "#431407",
   };
 });
 
@@ -240,32 +245,140 @@ function getRequestErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-function getTabItems({
-  hasAudio,
-  showsTranscript,
-}: {
-  hasAudio: boolean;
-  showsTranscript: boolean;
-}) {
-  const items: Array<{
-    id: WorkspaceTab;
-    label: string;
-    icon: string;
-  }> = [
-    { id: "notes", label: "Zapiski", icon: "📝" },
-    { id: "study", label: "Učenje", icon: "🧠" },
-    { id: "chat", label: "Klepet", icon: "💬" },
-  ];
+/**
+ * The redesign's pill row. Study is three peers rather than one tab with an
+ * inner switch, and chat has left the row entirely — it is the side panel on
+ * desktop and the bar at the foot of the note on the phone.
+ *
+ * Each pill carries its own tint, which the active state mixes into its
+ * background and border.
+ */
+const NOTE_TABS = [
+  { id: "notes", view: null, label: "Zapiski", icon: "description", tint: "#f45f5a" },
+  {
+    id: "flashcards",
+    view: "flashcards",
+    label: "Flashcards",
+    icon: "style",
+    tint: "oklch(0.66 0.15 295)",
+  },
+  { id: "quiz", view: "quiz", label: "Kviz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
+  {
+    id: "test",
+    view: "practice_test",
+    label: "Test",
+    icon: "assignment",
+    tint: "oklch(0.66 0.15 150)",
+  },
+  { id: "transcript", view: null, label: "Prepis", icon: "text_snippet", tint: "oklch(0.66 0.15 250)" },
+] as const;
 
-  if (showsTranscript) {
-    items.push({ id: "transcript", label: "Prepis", icon: "📜" });
+type NoteTabId = (typeof NOTE_TABS)[number]["id"];
+
+/**
+ * Reads the chat SSE stream, handing each token to `onDelta` as it lands and
+ * returning the persisted message from the closing `done` frame.
+ *
+ * The frames are: `delta` for a piece of prose, `done` for the saved message,
+ * `error` for a failure the server already logged. An `error` frame is thrown
+ * so it lands in the caller's existing catch alongside a dropped connection.
+ */
+async function readChatStream(
+  response: Response,
+  onDelta: (updater: (current: string) => string) => void,
+): Promise<ChatResponse | null> {
+  if (!response.body) {
+    return null;
   }
 
-  if (hasAudio) {
-    items.push({ id: "audio", label: "Zvok", icon: "🎧" });
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: ChatResponse | null = null;
+
+  const handleFrame = (frame: string) => {
+    let event = "message";
+    const data: string[] = [];
+
+    for (const line of frame.split("\n")) {
+      if (line.startsWith("event:")) {
+        event = line.slice(6).trim();
+      } else if (line.startsWith("data:")) {
+        data.push(line.slice(5).trim());
+      }
+    }
+
+    if (data.length === 0) {
+      return;
+    }
+
+    let parsed: unknown;
+
+    try {
+      parsed = JSON.parse(data.join("\n"));
+    } catch {
+      return;
+    }
+
+    if (event === "delta") {
+      const text = (parsed as { text?: string }).text ?? "";
+      if (text) {
+        onDelta((current) => current + text);
+      }
+      return;
+    }
+
+    if (event === "done") {
+      result = parsed as ChatResponse;
+      return;
+    }
+
+    if (event === "error") {
+      throw new Error(
+        (parsed as { error?: string }).error ?? "Odgovora ni bilo mogoče ustvariti.",
+      );
+    }
+  };
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Frames are separated by a blank line; a partial one waits for more.
+      let split = buffer.indexOf("\n\n");
+
+      while (split !== -1) {
+        handleFrame(buffer.slice(0, split));
+        buffer = buffer.slice(split + 2);
+        split = buffer.indexOf("\n\n");
+      }
+    }
+  } finally {
+    reader.releaseLock();
   }
 
-  return items;
+  return result;
+}
+
+/** How close to the foot of the chat log still counts as "reading the tail". */
+const STICK_TO_BOTTOM_PX = 120;
+
+/** Opening prompts in the chat panel, as the redesign lists them. */
+const CHAT_SUGGESTIONS = [
+  "Povzemi predavanje",
+  "Razloži ključni pojem",
+  "Naredi 5 vprašanj",
+  "Podaljšaj zapiske",
+];
+
+function getNoteTabs({ showsTranscript }: { showsTranscript: boolean }) {
+  return NOTE_TABS.filter((tab) => tab.id !== "transcript" || showsTranscript);
 }
 
 function shouldPollLecture(status: LectureDetail["lecture"]["status"]) {
@@ -762,26 +875,6 @@ function lectureProcessingStageLabel(
   return "Pripravljam zapiske";
 }
 
-function studyAssetStatusLabel(status: StudyAssetStatus | null | undefined) {
-  if (status === "queued") {
-    return "Priprava";
-  }
-
-  if (status === "generating") {
-    return "Ustvarjanje";
-  }
-
-  if (status === "failed") {
-    return "Napaka";
-  }
-
-  if (status === "ready") {
-    return "Pripravljeno";
-  }
-
-  return null;
-}
-
 function StudyGenerationNotice({
   stageCopy,
   bodyCopy = "Ustvarjanje teče v ozadju. Lahko zapreš ta pogled in se vrneš čez nekaj minut.",
@@ -1122,22 +1215,17 @@ function ChatBubble({ message }: { message: ChatMessageWithCitations }) {
   const assistant = message.role === "assistant";
 
   return (
-    <div className={`lecture-chat-message ${assistant ? "assistant" : "user"}`}>
-      <div className="lecture-chat-bubble">
-        <p className="lecture-chat-copy">{message.content}</p>
-        {message.citations.length > 0 ? (
-          <div className="lecture-chat-citations">
-            {message.citations.map((citation) => (
-              <span
-                key={`${message.id}-${citation.idx}-${citation.startMs}`}
-                className="lecture-chat-citation"
-              >
-                {formatTimestamp(citation.startMs)}
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </div>
+    <div className={assistant ? "memo-bubble-bot" : "memo-bubble-user"}>
+      <p className="memo-bubble-copy">{message.content}</p>
+      {message.citations.length > 0 ? (
+        <div className="memo-bubble-citations">
+          {message.citations.map((citation) => (
+            <span key={`${message.id}-${citation.idx}-${citation.startMs}`}>
+              {formatTimestamp(citation.startMs)}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1159,6 +1247,27 @@ export function LectureWorkspace({
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("notes");
   const [question, setQuestion] = useState("");
   const [chatError, setChatError] = useState<string | null>(null);
+  // Redesign chrome. Chat is a side panel that can be dismissed to a pill and
+  // reopened; on the phone the same conversation is a sheet.
+  const { setChatOpen, chatSlot } = useAppLayout();
+  const homeHref = useAppHref("/app");
+  const [isChatDismissed, setIsChatDismissed] = useState(false);
+  const [isChatExpanded, setIsChatExpanded] = useState(false);
+  const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
+  const quizAdvanceTimerRef = useRef<number | null>(null);
+  const closeMobileChat = useCallback(() => setIsMobileChatOpen(false), []);
+  const chatSheetDrag = useSheetDrag(closeMobileChat, { scrollable: true });
+  const [practiceQuestionIndex, setPracticeQuestionIndex] = useState(0);
+
+  // A pending auto-advance must not fire after the quiz is left behind.
+  useEffect(
+    () => () => {
+      window.clearTimeout(quizAdvanceTimerRef.current ?? undefined);
+    },
+    [],
+  );
+  const [dockSlot, setDockSlot] = useState<HTMLElement | null>(null);
+
   const [isSending, setIsSending] = useState(false);
   const [trialChatMessagesRemaining, setTrialChatMessagesRemaining] = useState(
     initialTrialChatMessagesRemaining,
@@ -1177,6 +1286,9 @@ export function LectureWorkspace({
   const [noteSelection, setNoteSelection] = useState<NoteSelectionRange | null>(null);
   const [isHighlightPaletteOpen, setIsHighlightPaletteOpen] = useState(false);
   const [selectedHighlightColorId, setSelectedHighlightColorId] = useState("orange");
+  const activeHighlightColor =
+    NOTE_HIGHLIGHT_COLORS.find((color) => color.id === selectedHighlightColorId) ??
+    NOTE_HIGHLIGHT_COLORS[0];
   const [selectedNoteBlockId, setSelectedNoteBlockId] = useState<string | null>(null);
   const [selectedMediaBlockId, setSelectedMediaBlockId] = useState<string | null>(null);
   const [deletingNoteMediaIds, setDeletingNoteMediaIds] = useState<ReadonlySet<string>>(
@@ -1294,7 +1406,9 @@ export function LectureWorkspace({
   const [practiceSubmittedAt, setPracticeSubmittedAt] = useState<string | null>(
     initialPracticeTestSession.submittedAt,
   );
-  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const [chatLogNode, setChatLogNode] = useState<HTMLDivElement | null>(null);
+  /** The answer as it is being written, replaced by the saved message at the end. */
+  const [streamingAnswer, setStreamingAnswer] = useState("");
   const flashcardFeedbackTimerRef = useRef<number | null>(null);
   const flashcardFeedbackTokenRef = useRef(0);
   const flashcardDragSessionRef = useRef<FlashcardDragSession | null>(null);
@@ -1614,23 +1728,50 @@ export function LectureWorkspace({
     };
   }, []);
 
+  /*
+   * The chat log follows its own content. A MutationObserver rather than a
+   * dependency list, because an answer arrives a token at a time — the message
+   * count never changes while it is being written, so nothing else would fire.
+   *
+   * It only sticks when the reader is already at the bottom: having scrolled up
+   * to re-read something, being yanked back down by every arriving token is
+   * worse than losing the tail.
+   */
   useEffect(() => {
-    if (activeTab !== "chat") {
+    const log = chatLogNode;
+
+    if (!log) {
       return;
     }
 
-    const chatScroll = chatScrollRef.current;
-    if (!chatScroll) {
-      return;
-    }
+    const isNearBottom = () =>
+      log.scrollHeight - log.scrollTop - log.clientHeight < STICK_TO_BOTTOM_PX;
 
-    window.requestAnimationFrame(() => {
-      chatScroll.scrollTo({
-        top: chatScroll.scrollHeight,
-        behavior: "auto",
-      });
+    const stick = () => {
+      log.scrollTop = log.scrollHeight;
+    };
+
+    stick();
+
+    let pinned = true;
+    const handleScroll = () => {
+      pinned = isNearBottom();
+    };
+
+    const observer = new MutationObserver(() => {
+      if (pinned) {
+        stick();
+      }
     });
-  }, [activeTab, detail.chatMessages.length, isSending]);
+
+    observer.observe(log, { childList: true, subtree: true, characterData: true });
+    log.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      observer.disconnect();
+      log.removeEventListener("scroll", handleScroll);
+    };
+  }, [chatLogNode]);
 
   useEffect(() => {
     const nextSavedAt = new Date().toISOString();
@@ -1909,6 +2050,21 @@ export function LectureWorkspace({
       ? (quizOptionOrders.get(currentQuizQuestionId) ??
         Array.from({ length: activeQuizQuestion.options.length }, (_, index) => index))
       : [];
+  /*
+   * The design only interrupts on a wrong answer: a right one advances on its
+   * own, and the miss opens a row that names the answer and offers a way into
+   * chat. The letter shown is the option's position in the shuffled order, not
+   * its index in the stored question.
+   */
+  const quizAnswerWasWrong =
+    activeQuizQuestion !== null &&
+    activeQuizSelection !== null &&
+    activeQuizSelection !== activeQuizQuestion.correct_option_idx;
+  const correctQuizOptionLetter = activeQuizQuestion
+    ? String.fromCharCode(
+        65 + Math.max(0, activeQuizOptionOrder.indexOf(activeQuizQuestion.correct_option_idx)),
+      )
+    : "";
   const totalQuizQuestions = detail.quizQuestions.length;
   const quizRoundPercent =
     quizRoundSummary && quizRoundSummary.total > 0
@@ -1920,6 +2076,12 @@ export function LectureWorkspace({
     (persistedPracticeAttempt?.status === "in_progress" ? persistedPracticeAttempt : null) ??
     detail.practiceTestAttempts.find((attempt) => attempt.status === "in_progress") ??
     null;
+  const currentPracticeAttemptKey = currentPracticeAttempt?.id ?? null;
+
+  // A fresh attempt starts at its first question.
+  useEffect(() => {
+    setPracticeQuestionIndex(0);
+  }, [currentPracticeAttemptKey]);
   const latestGradedPracticeAttempt =
     [...detail.practiceTestAttempts].reverse().find((attempt) => attempt.status === "graded") ?? null;
   const visiblePracticeAttempt =
@@ -1936,15 +2098,6 @@ export function LectureWorkspace({
       Boolean(practiceTextAnswers[questionId]?.trim())
     );
   }).length;
-  const activeMaterialStatus =
-    activeStudyView === "flashcards"
-      ? totalFlashcards > 0
-        ? "ready"
-        : detail.studyAsset?.status
-      : activeStudyView === "quiz"
-        ? detail.quizAsset?.status
-        : detail.practiceTestAsset?.status;
-  const activeMaterialStatusLabel = studyAssetStatusLabel(activeMaterialStatus);
   const isStudyGenerating =
     totalFlashcards === 0 && (shouldPollAsset(detail.studyAsset?.status) || isAwaitingStudyGeneration);
   const isQuizGenerating = shouldPollAsset(detail.quizAsset?.status) || isAwaitingQuizGeneration;
@@ -2572,16 +2725,22 @@ export function LectureWorkspace({
       return;
     }
 
-    setQuizSelections((current) => {
-      if (typeof current[currentQuizQuestionId] === "number") {
-        return current;
-      }
+    // Already answered — the reveal stands until the question is left.
+    if (activeQuizSelection !== null) {
+      return;
+    }
 
-      return {
-        ...current,
-        [currentQuizQuestionId]: optionIndex,
-      };
-    });
+    setQuizSelections((current) => ({
+      ...current,
+      [currentQuizQuestionId]: optionIndex,
+    }));
+
+    // A right answer needs no interruption — the design lets it read for a
+    // beat, then moves on by itself. A miss waits for the feedback row.
+    if (optionIndex === activeQuizQuestion.correct_option_idx) {
+      window.clearTimeout(quizAdvanceTimerRef.current ?? undefined);
+      quizAdvanceTimerRef.current = window.setTimeout(() => moveQuizQuestion(1), 780);
+    }
   }
 
   function finishQuizRound() {
@@ -2612,6 +2771,25 @@ export function LectureWorkspace({
     );
 
     setQuizRoundSummary(summary);
+  }
+
+  /*
+   * "Preglej zakaj" hands the miss to chat, exactly as the design does: it
+   * moves on to the next question, opens the panel (or the phone sheet) and
+   * sends the question already written.
+   */
+  function reviewQuizAnswerInChat() {
+    if (!activeQuizQuestion) {
+      return;
+    }
+
+    const answer = activeQuizQuestion.options[activeQuizQuestion.correct_option_idx] ?? "";
+    const prompt = `Pomagaj mi razumeti, zakaj je »${answer}« pravilen odgovor na »${activeQuizQuestion.prompt}«`;
+
+    moveQuizQuestion(1);
+    setIsChatDismissed(false);
+    setIsMobileChatOpen(true);
+    void submitChatQuestion(prompt);
   }
 
   function moveQuizQuestion(direction: -1 | 1) {
@@ -2654,8 +2832,15 @@ export function LectureWorkspace({
     setStudyError(null);
   }
 
-  async function submitChatQuestion() {
-    if (!question.trim() || chatLimitReached) {
+  /**
+   * `override` lets a suggestion chip send its own text: React state has not
+   * settled by the time the click handler runs, so reading `question` back
+   * would send the previous value.
+   */
+  async function submitChatQuestion(override?: string) {
+    const draft = (override ?? question).trim();
+
+    if (!draft || chatLimitReached) {
       return;
     }
 
@@ -2664,7 +2849,7 @@ export function LectureWorkspace({
       lecture_id: detail.lecture.id,
       user_id: "me",
       role: "user",
-      content: question.trim(),
+      content: draft,
       citations: [],
       created_at: new Date().toISOString(),
     };
@@ -2675,13 +2860,13 @@ export function LectureWorkspace({
     }));
     setIsSending(true);
     setChatError(null);
-    const currentQuestion = question.trim();
+    const currentQuestion = draft;
     setQuestion("");
 
     let response: Response;
     let payload: ChatResponse | null = null;
     try {
-      response = await fetch(`/api/lectures/${detail.lecture.id}/chat`, {
+      response = await fetch(`/api/lectures/${detail.lecture.id}/chat/stream`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -2690,7 +2875,15 @@ export function LectureWorkspace({
           question: currentQuestion,
         }),
       });
-      payload = (await response.json().catch(() => null)) as ChatResponse | null;
+
+      /*
+       * A refusal — the trial limit, a lecture still processing — comes back as
+       * ordinary JSON before the stream begins, so both shapes are handled: an
+       * event stream is read frame by frame, anything else is parsed as before.
+       */
+      payload = response.headers.get("Content-Type")?.includes("text/event-stream")
+        ? await readChatStream(response, setStreamingAnswer)
+        : ((await response.json().catch(() => null)) as ChatResponse | null);
     } catch (error) {
       setChatError(getRequestErrorMessage(error, "Odgovora ni bilo mogoče ustvariti."));
       setDetail((current) => ({
@@ -2702,6 +2895,7 @@ export function LectureWorkspace({
       return;
     } finally {
       setIsSending(false);
+      setStreamingAnswer("");
     }
 
     if (!response.ok) {
@@ -2752,7 +2946,7 @@ export function LectureWorkspace({
     await submitChatQuestion();
   }
 
-  function handleChatKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+  function handleChatKeyDown(event: React.KeyboardEvent<HTMLElement>) {
     if (event.key !== "Enter" || event.shiftKey) {
       return;
     }
@@ -3416,7 +3610,7 @@ export function LectureWorkspace({
     }
 
     function handleWindowPointerEnd() {
-      if (studyManagerDragOffsetRef.current > 80) {
+      if (studyManagerDragOffsetRef.current > 110) {
         animateCloseStudyManager();
         return;
       }
@@ -3483,7 +3677,7 @@ export function LectureWorkspace({
 
       studyManagerTouchDragActiveRef.current = false;
 
-      if (studyManagerDragOffsetRef.current > 80) {
+      if (studyManagerDragOffsetRef.current > 110) {
         animateCloseStudyManager();
         return;
       }
@@ -3869,76 +4063,198 @@ export function LectureWorkspace({
     }
   }
 
+  /**
+   * The conversation itself. The redesign shows it in a side panel on desktop
+   * and a sheet on the phone, so the body is shared and only the frame differs.
+   */
+  /**
+   * The conversation itself. The redesign shows it in a side panel on desktop
+   * and a sheet on the phone, so the body is shared and only the frame differs.
+   */
+  function renderChatBody() {
+    const composerDisabled =
+      detail.lecture.status !== "ready" || isSending || chatLimitReached;
+
+    return (
+      <>
+        <div ref={setChatLogNode} className="memo-chat-log memo-scroll">
+          <div className="memo-chat-intro">
+            <span className="memo-avatar">
+              <Image src="/memo-mascot.png" alt="" width={320} height={288} />
+            </span>
+            <p>
+              Živjo, jaz sem Memo. Vprašaj me karkoli o tem predavanju — povzetek, razlago
+              pojma ali primer za izpit.
+              {showsTranscript ? " Kot kontekst uporabim zapiske in prepis." : ""}
+            </p>
+          </div>
+
+          {detail.chatMessages.map((message) => (
+            <ChatBubble key={message.id} message={message} />
+          ))}
+
+          {/* While the answer streams it renders in a real bubble, so the text
+              lands where the saved message will sit rather than jumping. The
+              placeholder only shows before the first token arrives. */}
+          {streamingAnswer ? (
+            <div className="memo-bubble-bot streaming">
+              <p className="memo-bubble-copy">
+                {streamingAnswer}
+                <span className="memo-caret" aria-hidden="true" />
+              </p>
+            </div>
+          ) : isSending ? (
+            <div className="memo-typing">Memo piše…</div>
+          ) : null}
+        </div>
+
+        <div className="memo-chat-foot">
+          {detail.chatMessages.length === 0 && !composerDisabled ? (
+            <div className="memo-chip-row memo-chiprow">
+              {CHAT_SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  className="memo-chip"
+                  onClick={() => void submitChatQuestion(suggestion)}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <form onSubmit={handleChatSubmit} className="memo-chat-input">
+            <input
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              onKeyDown={handleChatKeyDown}
+              disabled={composerDisabled}
+              placeholder="Napiši svoje vprašanje"
+              aria-label="Napiši svoje vprašanje"
+            />
+            <button
+              type="submit"
+              disabled={composerDisabled}
+              className={`memo-chat-send ${question.trim() ? "ready" : ""}`.trim()}
+              aria-label="Pošlji sporočilo"
+            >
+              {isSending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Msym name="arrow_upward" size="1.35rem" />
+              )}
+            </button>
+          </form>
+
+          {chatError ? (
+            <p className="memo-chat-status danger">{chatError}</p>
+          ) : detail.lecture.status !== "ready" ? (
+            <p className="memo-chat-status">Na voljo bo po koncu obdelave.</p>
+          ) : chatLimitReached ? (
+            <div className="memo-chat-limit">
+              <p className="memo-chat-status">
+                Porabil si brezplačna sporočila za ta zapisek.
+              </p>
+              <button
+                type="button"
+                className="memo-button-outline small"
+                onClick={() => router.push("/app/start")}
+              >
+                Nadgradi
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </>
+    );
+  }
+
   function renderPanel() {
     if (activeTab === "notes") {
+      // The dock's annotate layer: brush, underline, colour, photo, and the
+      // swatch row the colour button slides open.
       const annotationToolbar = noteSelection ? (
-        <div className={`note-annotation-toolbar ${isHighlightPaletteOpen ? "palette-open" : ""}`}>
-          {isHighlightPaletteOpen ? (
-            <span className="note-annotation-colors" aria-label="Barva označevanja">
-              {NOTE_HIGHLIGHT_COLORS.map((color) => (
-                <button
-                  key={color.id}
-                  type="button"
-                  className={selectedHighlightColorId === color.id ? "active" : ""}
-                  style={{ "--note-annotation-color": color.value } as CSSProperties}
-                  onPointerDown={(event) => event.preventDefault()}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => {
-                    setSelectedHighlightColorId(color.id);
-                  }}
-                  aria-label={color.label}
-                  title={color.label}
-                />
-              ))}
-            </span>
-          ) : null}
+        <>
           <button
             type="button"
-            className="primary"
+            className="memo-annotate-primary"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => void handleApplyAnnotation("highlight")}
             disabled={isSavingNoteDoc}
             aria-label="Označi"
             title="Označi"
+            style={
+              {
+                "--marker-cur": activeHighlightColor.value,
+                "--marker-cur-text": activeHighlightColor.contrast,
+              } as CSSProperties
+            }
           >
-            <Highlighter aria-hidden="true" />
-            <span>Označi</span>
+            <Msym name="ink_highlighter" size="1.25rem" fill={false} weight={500} />
+            <span className="memo-annotate-label">Označi</span>
           </button>
           <button
             type="button"
+            className="memo-annotate-icon"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => void handleApplyAnnotation("underline")}
             disabled={isSavingNoteDoc}
             aria-label="Podčrtaj"
             title="Podčrtaj"
           >
-            <Underline aria-hidden="true" />
+            <span
+              className="memo-annotate-underline"
+              style={{ "--marker-cur": activeHighlightColor.value } as CSSProperties}
+            >
+              U
+            </span>
           </button>
           <button
             type="button"
-            className="color-trigger"
+            className={`memo-palette-trigger ${isHighlightPaletteOpen ? "open" : ""}`.trim()}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => setIsHighlightPaletteOpen((current) => !current)}
             disabled={isSavingNoteDoc}
             aria-label="Barva"
             title="Barva"
           >
-            <Palette aria-hidden="true" />
+            <Msym name="palette" size="1.25rem" fill={false} weight={500} />
           </button>
           {isCreatorDemo ? null : (
             <button
               type="button"
-              className="note-annotation-photo"
+              className="memo-annotate-icon"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => notePhotoInputRef.current?.click()}
               disabled={isSavingNoteDoc || !selectedNoteBlockId}
               aria-label="Dodaj fotografijo"
               title="Dodaj fotografijo"
             >
-              <ImagePlus aria-hidden="true" />
+              <Msym name="add_photo_alternate" size="1.25rem" fill={false} weight={500} />
             </button>
           )}
-        </div>
+          <div
+            className={`memo-swatches ${isHighlightPaletteOpen ? "open" : ""}`.trim()}
+            aria-label="Barva označevanja"
+          >
+            {NOTE_HIGHLIGHT_COLORS.map((color) => (
+              <button
+                key={color.id}
+                type="button"
+                className={`memo-swatch ${
+                  selectedHighlightColorId === color.id ? "selected" : ""
+                }`.trim()}
+                style={{ background: color.value }}
+                onPointerDown={(event) => event.preventDefault()}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setSelectedHighlightColorId(color.id)}
+                aria-label={color.label}
+                title={color.label}
+              />
+            ))}
+          </div>
+        </>
       ) : null;
       const photoToolbar = selectedNoteBlockId && !noteSelection && !isCreatorDemo ? (
         <button
@@ -3960,9 +4276,9 @@ export function LectureWorkspace({
       ) : null;
 
       return (
-        <div className="workspace-panel-stack lecture-panel-stack">
+        <div className="memo-notes-panel">
           {cleanedStructuredNotes && detail.lecture.status === "ready" && !noteEnrichmentPending ? (
-            <div className="ios-card lecture-notes-card">
+            <div className="memo-note-body">
               <div
                 ref={noteAnnotationShellRef}
                 className="markdown lecture-markdown note-annotation-shell"
@@ -3992,6 +4308,8 @@ export function LectureWorkspace({
                     </>
                   }
                   annotationActive={Boolean(noteSelection)}
+                  annotationPaletteOpen={isHighlightPaletteOpen}
+                  dockContainer={dockSlot}
                   annotations={activeNoteDoc.annotations}
                   mediaBlocks={activeNoteDoc.mediaBlocks}
                   noteMedia={renderedNoteMedia}
@@ -4164,15 +4482,9 @@ export function LectureWorkspace({
               className={`ios-card lecture-study-shell ${shouldAutoSizeStudyShell ? "auto-height" : ""}`}
             >
               <div className="lecture-study-header">
-                <div className="lecture-study-title">
-                  {activeMaterialStatus && activeMaterialStatusLabel ? (
-                    <div className="lecture-study-meta">
-                      <span className={`lecture-study-status ${activeMaterialStatus}`}>
-                        {activeMaterialStatusLabel}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
+                {/* The design carries no readiness chip here — the material
+                    being on screen is the signal. */}
+                <div className="lecture-study-title" />
                 <div className="lecture-study-header-actions">
                   {canManageActiveStudyView ? (
                     <button
@@ -4180,7 +4492,7 @@ export function LectureWorkspace({
                       className="lecture-study-manage-button"
                       onClick={openStudyManager}
                     >
-                      <Pencil aria-hidden="true" />
+                      <Msym name="edit_square" size="1.2rem" fill={false} weight={500} />
                       <span>Uredi</span>
                     </button>
                   ) : null}
@@ -4214,17 +4526,20 @@ export function LectureWorkspace({
 
             {activeStudyView === "flashcards" ? (
               totalFlashcards === 0 ? (
-                <div className="empty-state lecture-empty-card lecture-study-empty">
+                <div className="memo-study-empty">
                   {!isStudyGenerating ? (
                     <>
-                      <p className="ios-row-title">
+                      <div className="memo-study-empty-orb">
+                        <Emoji symbol="🗂️" size="4.4rem" />
+                      </div>
+                      <p className="memo-study-empty-title">
                         {detail.lecture.status !== "ready"
                           ? "Učna orodja se odklenejo, ko je obdelava zapiska končana."
                           : detail.studyAsset?.status === "failed"
                             ? "Ustvarjanje kartic ni uspelo."
                             : "Ustvari kartice, ko si pripravljen."}
                       </p>
-                      <p className="ios-row-subtitle">
+                      <p className="memo-study-empty-copy">
                         {detail.lecture.status !== "ready"
                           ? "Najprej nastanejo zapiski. Nato lahko kartice ustvariš ročno."
                           : "Ustvari učni komplet v istem jeziku in iz iste vsebine kot tvoji zapiski."}
@@ -4236,11 +4551,13 @@ export function LectureWorkspace({
                       type="button"
                       onClick={() => void handleStudyCreate()}
                       disabled={isRegeneratingStudy}
-                      className="lecture-study-refresh lecture-study-create-button"
+                      className="memo-study-empty-cta"
                     >
                       {isRegeneratingStudy ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : null}
+                        <Msym name="progress_activity" className="memo-spin" size="1.2rem" />
+                      ) : (
+                        <Msym name="style" size="1.2rem" fill={false} weight={500} />
+                      )}
                       Ustvari kartice
                     </button>
                   ) : null}
@@ -4275,7 +4592,7 @@ export function LectureWorkspace({
                         aria-label="Začni znova"
                         title="Začni znova"
                       >
-                        <EmojiIcon symbol="🔄" size="1rem" />
+                        <Msym name="replay" size="1.2rem" fill={false} weight={500} />
                         Začni komplet znova
                       </button>
                     ) : (
@@ -4284,7 +4601,7 @@ export function LectureWorkspace({
                         onClick={() => continueFlashcardReview(visibleFlashcardRepeatQueue)}
                         className="lecture-study-refresh lecture-study-restart"
                       >
-                        <EmojiIcon symbol="🔄" size="1rem" />
+                        <Msym name="replay" size="1.2rem" fill={false} weight={500} />
                         Ponovi {visibleFlashcardRoundSummary.missed}{" "}
                         {visibleFlashcardRoundSummary.missed === 1 ? "zgrešeno kartico" : "zgrešene kartice"}
                       </button>
@@ -4293,6 +4610,28 @@ export function LectureWorkspace({
                 />
             ) : currentFlashcard ? (
                 <>
+                  {/* The redesign heads the deck with its position and a thick
+                      progress bar. */}
+                  <div className="memo-study-head">
+                    <span className="memo-study-head-title">
+                      Kartica {activeFlashcardIndex + 1}
+                    </span>
+                    <span className="memo-study-head-count">
+                      {Math.max(0, reviewQueue.length - activeFlashcardIndex - 1)} ostalo
+                    </span>
+                  </div>
+                  <div className="memo-progress cards">
+                    <div
+                      style={{
+                        width: `${
+                          reviewQueue.length > 0
+                            ? Math.round((activeFlashcardIndex / reviewQueue.length) * 100)
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+
                   <div className="lecture-flashcard-stage">
                     <div className="lecture-flashcard-stage-card">
                       <button
@@ -4318,7 +4657,7 @@ export function LectureWorkspace({
                               ) : null}
                             </div>
                             <p className="lecture-flashcard-content">{currentFlashcard.front}</p>
-                            <span className="lecture-flashcard-side-label">Pokaži odgovor</span>
+                            <span className="lecture-flashcard-side-label">Klikni za obrat</span>
                           </div>
                           <div className="lecture-flashcard-face lecture-flashcard-face-answer">
                             <div className="lecture-flashcard-face-header">
@@ -4330,7 +4669,7 @@ export function LectureWorkspace({
                               ) : null}
                             </div>
                             <p className="lecture-flashcard-content">{currentFlashcard.back}</p>
-                            <span className="lecture-flashcard-side-label">Nazaj na vprašanje</span>
+                            <span className="lecture-flashcard-side-label">Klikni za obrat</span>
                           </div>
                         </div>
                         <div className="lecture-flashcard-drag-overlay" aria-hidden="true">
@@ -4442,7 +4781,7 @@ export function LectureWorkspace({
                       aria-label="Začni znova"
                       title="Začni znova"
                     >
-                      <EmojiIcon symbol="🔄" size="1rem" />
+                      <Msym name="replay" size="1.2rem" fill={false} weight={500} />
                       Začni komplet znova
                     </button>
                   }
@@ -4450,17 +4789,20 @@ export function LectureWorkspace({
               )
             ) : activeStudyView === "quiz" ? (
               totalQuizQuestions === 0 ? (
-                <div className="empty-state lecture-empty-card lecture-study-empty">
+                <div className="memo-study-empty">
                   {!isQuizGenerating ? (
                     <>
-                      <p className="ios-row-title">
+                      <div className="memo-study-empty-orb">
+                        <Emoji symbol="❓" size="4.4rem" />
+                      </div>
+                      <p className="memo-study-empty-title">
                         {detail.lecture.status !== "ready"
                           ? "Učna orodja se odklenejo, ko je obdelava zapiska končana."
                           : detail.quizAsset?.status === "failed"
                             ? "Ustvarjanje kviza ni uspelo."
                             : "Ustvari kviz, ko si pripravljen."}
                       </p>
-                      <p className="ios-row-subtitle">
+                      <p className="memo-study-empty-copy">
                         {detail.lecture.status !== "ready"
                           ? "Najprej nastanejo zapiski. Nato lahko kvize ustvariš ročno."
                           : "Ustvari vprašanja z več izbirami v istem jeziku kot tvoji zapiski."}
@@ -4472,11 +4814,13 @@ export function LectureWorkspace({
                       type="button"
                       onClick={() => void handleQuizCreate()}
                       disabled={isRegeneratingQuiz}
-                      className="lecture-study-refresh lecture-study-create-button"
+                      className="memo-study-empty-cta"
                     >
                       {isRegeneratingQuiz ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : null}
+                        <Msym name="progress_activity" className="memo-spin" size="1.2rem" />
+                      ) : (
+                        <Msym name="quiz" size="1.2rem" fill={false} weight={500} />
+                      )}
                       Ustvari kviz
                     </button>
                   ) : null}
@@ -4512,7 +4856,7 @@ export function LectureWorkspace({
                         onClick={restartQuiz}
                         className="lecture-study-refresh lecture-study-restart"
                       >
-                        <EmojiIcon symbol="🔄" size="1rem" />
+                        <Msym name="replay" size="1.2rem" fill={false} weight={500} />
                         Začni kviz znova
                       </button>
                     ) : (
@@ -4521,7 +4865,7 @@ export function LectureWorkspace({
                         onClick={continueQuizReview}
                         className="lecture-study-refresh lecture-study-restart"
                       >
-                        <EmojiIcon symbol="🔄" size="1rem" />
+                        <Msym name="replay" size="1.2rem" fill={false} weight={500} />
                         Ponovi {quizRoundSummary.missed}{" "}
                         {quizRoundSummary.missed === 1 ? "zgrešeno vprašanje" : "zgrešena vprašanja"}
                       </button>
@@ -4530,12 +4874,26 @@ export function LectureWorkspace({
                 />
               ) : activeQuizQuestion ? (
                 <div className="lecture-quiz-stage">
-                  <div className="lecture-quiz-meta">
-                    <span>{activeQuizQuestionIndex + 1} / {quizRoundCount}</span>
-                    {quizRound > 1 ? <span>Krog {quizRound}</span> : null}
+                  {/* The redesign heads the quiz with its position and a
+                      progress bar rather than a bare counter. */}
+                  <span className="memo-quiz-count">
+                    Vprašanje {activeQuizQuestionIndex + 1} od {quizRoundCount}
+                    {quizRound > 1 ? ` · Krog ${quizRound}` : ""}
+                  </span>
+                  <div className="memo-progress quiz">
+                    <div
+                      style={{
+                        width: `${
+                          quizRoundCount > 0
+                            ? Math.round(((activeQuizQuestionIndex + 1) / quizRoundCount) * 100)
+                            : 0
+                        }%`,
+                      }}
+                    />
                   </div>
 
                   <div className="lecture-quiz-card">
+                    <span className="memo-quiz-eyebrow">Izberi en odgovor</span>
                     <p className="lecture-quiz-prompt">{activeQuizQuestion.prompt}</p>
 
                     <div className="lecture-quiz-options">
@@ -4562,46 +4920,43 @@ export function LectureWorkspace({
                               {String.fromCharCode(65 + displayIndex)}
                             </span>
                             <span className="lecture-quiz-option-copy">{option}</span>
+                            {isCorrect || isIncorrect ? (
+                              <span className="lecture-quiz-option-mark">
+                                <Msym name={isCorrect ? "check" : "close"} size="1.2rem" />
+                              </span>
+                            ) : null}
                           </button>
                         );
                       })}
                     </div>
 
-                    {activeQuizSelection !== null ? (
-                      <div className="lecture-quiz-feedback">
-                        <p
-                          className={`lecture-quiz-feedback-title ${
-                            activeQuizSelection === activeQuizQuestion.correct_option_idx
-                              ? "correct"
-                              : "incorrect"
-                          }`}
-                        >
-                          {activeQuizSelection === activeQuizQuestion.correct_option_idx
-                            ? "Pravilno"
-                            : "Napačno"}
-                        </p>
-                        <p className="lecture-quiz-feedback-copy">{activeQuizQuestion.explanation}</p>
+                    {quizAnswerWasWrong ? (
+                      <div className="memo-quiz-result">
+                        <span className="memo-quiz-result-badge">
+                          <Msym name="cancel" size="1.25rem" />
+                        </span>
+                        <span className="memo-quiz-result-copy">
+                          <span className="memo-quiz-result-title">Ups, ni pravilno.</span>
+                          <span>Pravilen odgovor je {correctQuizOptionLetter}</span>
+                        </span>
+                        <div className="memo-quiz-result-actions">
+                          <button
+                            type="button"
+                            onClick={reviewQuizAnswerInChat}
+                            className="memo-quiz-result-ghost"
+                          >
+                            Preglej zakaj
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveQuizQuestion(1)}
+                            className="memo-quiz-result-primary"
+                          >
+                            Razumem
+                          </button>
+                        </div>
                       </div>
                     ) : null}
-                  </div>
-
-                  <div className="lecture-quiz-actions">
-                    <button
-                      type="button"
-                      onClick={() => moveQuizQuestion(-1)}
-                      disabled={activeQuizQuestionIndex === 0}
-                      className="lecture-study-action"
-                    >
-                      Nazaj
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveQuizQuestion(1)}
-                      disabled={activeQuizSelection === null}
-                      className="lecture-study-refresh"
-                    >
-                      {activeQuizQuestionIndex === quizQueue.length - 1 ? "Zaključi" : "Naprej"}
-                    </button>
                   </div>
                 </div>
               ) : (
@@ -4620,17 +4975,20 @@ export function LectureWorkspace({
                       onClick={restartQuiz}
                       className="lecture-study-refresh lecture-study-restart"
                     >
-                      <EmojiIcon symbol="🔄" size="1rem" />
+                      <Msym name="replay" size="1.2rem" fill={false} weight={500} />
                       Začni kviz znova
                     </button>
                   }
                 />
               )
             ) : detail.practiceTestQuestions.length === 0 ? (
-              <div className="empty-state lecture-empty-card lecture-study-empty">
+              <div className="memo-study-empty">
                 {!isPracticeTestGenerating ? (
                   <>
-                    <p className="ios-row-title">
+                    <div className="memo-study-empty-orb">
+                      <Emoji symbol="📝" size="4.4rem" />
+                    </div>
+                    <p className="memo-study-empty-title">
                       {detail.lecture.status !== "ready"
                         ? "Učna orodja se odklenejo, ko je obdelava zapiska končana."
                         : detail.practiceTestAsset?.status === "failed"
@@ -4639,7 +4997,7 @@ export function LectureWorkspace({
                             ? "Začni nov preizkus, ko si pripravljen."
                             : "Ustvari svoj prvi preizkus."}
                     </p>
-                    <p className="ios-row-subtitle">
+                    <p className="memo-study-empty-copy">
                       {detail.lecture.status !== "ready"
                         ? "Najprej nastanejo zapiski. Nato lahko začneš preizkus."
                         : hasCompletedPracticeTest
@@ -4653,7 +5011,7 @@ export function LectureWorkspace({
                     type="button"
                     onClick={() => void handlePracticeTestStart()}
                     disabled={isStartingPracticeTest}
-                    className="lecture-study-refresh lecture-study-create-button"
+                    className="memo-study-empty-cta"
                   >
                     {isStartingPracticeTest ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -4666,58 +5024,101 @@ export function LectureWorkspace({
                 ) : null}
               </div>
             ) : currentPracticeAttempt ? (
-              <div className="lecture-practice-shell">
-                <div className="lecture-practice-list">
-                  {practiceAttemptAnswers.map((answer, index) => {
-                    const question = answer.question;
-                    const questionId = answer.practice_test_question_id ?? `snapshot-${answer.id}`;
-                    const isUnknown = practiceUnknownQuestionIds.includes(questionId);
+              (() => {
+                /*
+                 * The design takes the test one question at a time, the way the
+                 * quiz does — a counter, a progress bar, the prompt, and a row
+                 * that walks back and forward until the last question submits.
+                 */
+                const total = practiceAttemptAnswers.length;
+                const index = Math.min(practiceQuestionIndex, Math.max(total - 1, 0));
+                const answer = practiceAttemptAnswers[index];
 
-                    return (
-                      <div key={answer.id} className="lecture-practice-card">
-                        <div className="lecture-practice-card-header">
-                          <span>Vprašanje {index + 1}</span>
-                        </div>
-                        <p className="lecture-practice-prompt">{question?.prompt ?? "Vprašanje ni na voljo."}</p>
-                        <textarea
-                          value={practiceTextAnswers[questionId] ?? ""}
-                          onChange={(event) => handlePracticeAnswerChange(questionId, event.target.value)}
-                          disabled={isUnknown}
-                          className="ios-textarea lecture-practice-textarea"
-                          placeholder="Sem napiši svoj odgovor..."
-                        />
-                        <div className="lecture-practice-controls">
-                          <label className="lecture-practice-unknown">
-                            <input
-                              type="checkbox"
-                              checked={isUnknown}
-                              onChange={(event) =>
-                                handlePracticeUnknownToggle(questionId, event.target.checked)
-                              }
-                            />
-                            Ne vem
-                          </label>
-                        </div>
+                if (!answer) {
+                  return null;
+                }
+
+                const questionId = answer.practice_test_question_id ?? `snapshot-${answer.id}`;
+                const isUnknown = practiceUnknownQuestionIds.includes(questionId);
+                const isLast = index === total - 1;
+
+                return (
+                  <div className="lecture-practice-shell">
+                    <div className="lecture-practice-stage">
+                      <div className="memo-test-meta">
+                        <span className="memo-test-no">Vprašanje {index + 1}</span>
+                        <span className="memo-test-count">
+                          {index + 1} / {total}
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="memo-progress test">
+                        <div
+                          style={{
+                            width: `${total > 0 ? Math.round(((index + 1) / total) * 100) : 0}%`,
+                          }}
+                        />
+                      </div>
 
-                <div className="lecture-practice-submit">
-                  <button
-                    type="button"
-                    onClick={() => void handlePracticeTestSubmit()}
-                    disabled={
-                      isSubmittingPracticeTest ||
-                      practiceQuestionsAnsweredCount < practiceAttemptAnswers.length
-                    }
-                    className="lecture-study-refresh"
-                  >
-                    {isSubmittingPracticeTest ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Oddaj preizkus
-                  </button>
-                </div>
-              </div>
+                      <p className="lecture-practice-prompt">
+                        {answer.question?.prompt ?? "Vprašanje ni na voljo."}
+                      </p>
+                      <textarea
+                        value={practiceTextAnswers[questionId] ?? ""}
+                        onChange={(event) => handlePracticeAnswerChange(questionId, event.target.value)}
+                        disabled={isUnknown}
+                        className="ios-textarea lecture-practice-textarea"
+                        placeholder="Napiši svoj odgovor…"
+                      />
+
+                      <div className="lecture-practice-controls">
+                        <label className="lecture-practice-unknown">
+                          <input
+                            type="checkbox"
+                            checked={isUnknown}
+                            onChange={(event) =>
+                              handlePracticeUnknownToggle(questionId, event.target.checked)
+                            }
+                          />
+                          Ne vem
+                        </label>
+                      </div>
+
+                      <div className="memo-test-actions">
+                        <button
+                          type="button"
+                          className="memo-test-prev"
+                          disabled={index === 0}
+                          onClick={() => setPracticeQuestionIndex((current) => Math.max(0, current - 1))}
+                        >
+                          Nazaj
+                        </button>
+                        <button
+                          type="button"
+                          className="memo-test-next"
+                          disabled={
+                            isLast &&
+                            (isSubmittingPracticeTest ||
+                              practiceQuestionsAnsweredCount < practiceAttemptAnswers.length)
+                          }
+                          onClick={() => {
+                            if (!isLast) {
+                              setPracticeQuestionIndex((current) => Math.min(total - 1, current + 1));
+                              return;
+                            }
+
+                            void handlePracticeTestSubmit();
+                          }}
+                        >
+                          {isLast && isSubmittingPracticeTest ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : null}
+                          {isLast ? "Oddaj preizkus" : "Naprej"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
             ) : (
               <div className="lecture-practice-shell">
                 {visiblePracticeAttempt && visiblePracticeAttempt.status === "graded" ? (
@@ -4820,20 +5221,30 @@ export function LectureWorkspace({
                     </details>
                   </div>
                 ) : (
-                  <div className="lecture-practice-summary lecture-practice-summary-centered">
-                    <div className="lecture-practice-summary-actions">
-                      {!isPracticeTestGenerating ? (
-                        <button
-                          type="button"
-                          onClick={() => void handlePracticeTestStart()}
-                          disabled={isStartingPracticeTest}
-                          className="lecture-study-refresh lecture-practice-start-button"
-                        >
-                          {isStartingPracticeTest ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-                          Začni nov preizkus
-                        </button>
-                      ) : null}
+                  <div className="memo-study-empty">
+                    <div className="memo-study-empty-orb">
+                      <Emoji symbol="📝" size="4.4rem" />
                     </div>
+                    <span className="memo-study-empty-title">Vadbeni test</span>
+                    <span className="memo-study-empty-copy">
+                      Odprta vprašanja iz tega predavanja. Odgovore napišeš s svojimi
+                      besedami, Memo pa jih oceni in pojasni.
+                    </span>
+                    {!isPracticeTestGenerating ? (
+                      <button
+                        type="button"
+                        onClick={() => void handlePracticeTestStart()}
+                        disabled={isStartingPracticeTest}
+                        className="memo-study-empty-cta"
+                      >
+                        {isStartingPracticeTest ? (
+                          <Msym name="progress_activity" className="memo-spin" size="1.2rem" />
+                        ) : (
+                          <Msym name="assignment" size="1.2rem" fill={false} weight={500} />
+                        )}
+                        Začni nov preizkus
+                      </button>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -4841,7 +5252,7 @@ export function LectureWorkspace({
           </div>
           </div>
 
-          <ViewportPortal>
+          <MemoPortal>
             {isStudyManagerOpen && (activeStudyView === "flashcards" || activeStudyView === "quiz") ? (
               <div className="study-manager-backdrop" role="presentation" onClick={animateCloseStudyManager}>
                 <div
@@ -4857,7 +5268,7 @@ export function LectureWorkspace({
                   onClick={(event) => event.stopPropagation()}
                   style={
                     studyManagerDragOffset > 0
-                      ? { transform: `translateY(${studyManagerDragOffset}px)` }
+                      ? { transform: `translateY(${studyManagerDragOffset}px)`, transition: "none" }
                       : undefined
                   }
                 >
@@ -4881,17 +5292,8 @@ export function LectureWorkspace({
                       aria-label="Zapri"
                       title="Zapri"
                     >
-                      <EmojiIcon symbol="✖️" size="1rem" />
+                      <Msym name="close" size="1.45rem" fill={false} weight={500} />
                     </button>
-                  </div>
-
-                  <div className="ios-search notes-search study-manager-search">
-                    <EmojiIcon symbol="🔎" size="0.95rem" />
-                    <input
-                      value={studyManagerSearch}
-                      onChange={(event) => setStudyManagerSearch(event.target.value)}
-                      placeholder="Poišči..."
-                    />
                   </div>
 
                   {activeStudyView === "flashcards" ? (
@@ -4909,7 +5311,7 @@ export function LectureWorkspace({
                         {editingFlashcardId ? (
                           <div className="study-manager-form-header">
                             <button type="button" onClick={startFlashcardCreate}>
-                              <Plus aria-hidden="true" />
+                              <Msym name="add" size="1.1rem" />
                               Nova
                             </button>
                           </div>
@@ -4940,11 +5342,20 @@ export function LectureWorkspace({
                           {isSavingStudyItem ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
-                            <EmojiIcon symbol="✅" size="1rem" />
+                            <Msym name="check" size="1.15rem" />
                           )}
                           {editingFlashcardId ? "Shrani kartico" : "Dodaj kartico"}
                         </button>
                       </form>
+
+                      <div className="ios-search notes-search study-manager-search">
+                        <Msym name="search" size="1.1rem" fill={false} weight={500} />
+                        <input
+                          value={studyManagerSearch}
+                          onChange={(event) => setStudyManagerSearch(event.target.value)}
+                          placeholder="Poišči..."
+                        />
+                      </div>
 
                       <div className="study-manager-list">
                         {managedFlashcards.map((flashcard) => {
@@ -5034,7 +5445,7 @@ export function LectureWorkspace({
                         {editingQuizQuestionId ? (
                           <div className="study-manager-form-header">
                             <button type="button" onClick={startQuizQuestionCreate}>
-                              <Plus aria-hidden="true" />
+                              <Msym name="add" size="1.1rem" />
                               Novo
                             </button>
                           </div>
@@ -5081,29 +5492,24 @@ export function LectureWorkspace({
                             </label>
                           ))}
                         </div>
-                        <label>
-                          <span>Razlaga</span>
-                          <textarea
-                            value={quizQuestionForm.explanation}
-                            onChange={(event) =>
-                              setQuizQuestionForm((current) => ({
-                                ...current,
-                                explanation: event.target.value,
-                              }))
-                            }
-                            rows={3}
-                            required
-                          />
-                        </label>
                         <button type="submit" className="study-manager-save" disabled={isSavingStudyItem}>
                           {isSavingStudyItem ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
-                            <EmojiIcon symbol="✅" size="1rem" />
+                            <Msym name="check" size="1.15rem" />
                           )}
                           {editingQuizQuestionId ? "Shrani vprašanje" : "Dodaj vprašanje"}
                         </button>
                       </form>
+
+                      <div className="ios-search notes-search study-manager-search">
+                        <Msym name="search" size="1.1rem" fill={false} weight={500} />
+                        <input
+                          value={studyManagerSearch}
+                          onChange={(event) => setStudyManagerSearch(event.target.value)}
+                          placeholder="Poišči..."
+                        />
+                      </div>
 
                       <div className="study-manager-list">
                         {managedQuizQuestions.map((question) => {
@@ -5182,232 +5588,369 @@ export function LectureWorkspace({
                 </div>
               </div>
             ) : null}
-          </ViewportPortal>
+          </MemoPortal>
 
-          <ViewportPortal>
-            {canManageActiveStudyView && !isStudyManagerOpen ? (
-              <button
-                type="button"
-                className="mobile-study-manage-pill"
-                onClick={openStudyManager}
-                aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
-              >
-                <EmojiIcon symbol="✏️" size="1.12rem" className="mobile-study-manage-pill-icon" />
-                <span className="mobile-study-manage-pill-label">Uredi</span>
-              </button>
-            ) : null}
-          </ViewportPortal>
+          {/* On the phone this rides in the dock row beside the chat bar —
+              the slot the listen pill uses on the notes tab, which no study
+              tab fills. */}
+          {canManageActiveStudyView && !isStudyManagerOpen && dockSlot
+            ? createPortal(
+                <button
+                  type="button"
+                  className="mobile-study-manage-pill memo-only-mobile flex"
+                  onClick={openStudyManager}
+                  aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
+                >
+                  <Msym name="edit_square" size="1.3rem" fill={false} weight={500} />
+                  <span className="mobile-study-manage-pill-label">Uredi</span>
+                </button>,
+                dockSlot,
+              )
+            : null}
         </>
       );
     }
 
-    if (activeTab === "chat") {
-      return (
-        <div className="ios-card lecture-chat-shell">
-          <div ref={chatScrollRef} className="lecture-chat-scroll">
-            <div className="chat-thread lecture-chat-thread">
-              {detail.chatMessages.length > 0 ? (
-                <>
-                  {detail.chatMessages.map((message) => (
-                    <ChatBubble key={message.id} message={message} />
-                  ))}
-                  {isSending ? (
-                    <div className="lecture-chat-message assistant">
-                      <div className="lecture-chat-bubble lecture-chat-bubble-loading">
-                        <span className="lecture-chat-dots" aria-hidden="true">
-                          <span />
-                          <span />
-                          <span />
-                        </span>
-                      </div>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <div className="lecture-chat-empty">
-                  <p className="lecture-chat-empty-title">Vprašaj o tem predavanju.</p>
-                  <p className="lecture-chat-empty-copy">
-                    {showsTranscript
-                      ? "Kot kontekst uporabi zapiske in prepis."
-                      : "Kot kontekst uporabi zapiske."}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <form onSubmit={handleChatSubmit} className="lecture-chat-composer">
-            <div className="lecture-chat-composer-row">
-              <textarea
-                value={question}
-                onChange={(event) => setQuestion(event.target.value)}
-                onKeyDown={handleChatKeyDown}
-                disabled={detail.lecture.status !== "ready" || isSending || chatLimitReached}
-                className="lecture-chat-input"
-                placeholder="Vprašaj o tem predavanju"
-                rows={1}
-              />
-              <button
-                type="submit"
-                disabled={detail.lecture.status !== "ready" || isSending || chatLimitReached}
-                className="lecture-chat-send"
-                aria-label="Pošlji sporočilo"
-              >
-                {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-              </button>
-            </div>
-            <div className="lecture-chat-composer-footer">
-              {chatError ? (
-                <p className="lecture-chat-status ios-danger">{chatError}</p>
-              ) : detail.lecture.status !== "ready" ? (
-                <p className="lecture-chat-status">Na voljo bo po koncu obdelave.</p>
-              ) : chatLimitReached ? (
-                <div className="flex items-center justify-between gap-3">
-                  <p className="lecture-chat-status">
-                    Porabil si brezplačna sporočila za ta zapisek. Za nadaljevanje klepeta nadgradi paket.
-                  </p>
-                  <button
-                    type="button"
-                    className="ios-secondary-button"
-                    onClick={() => router.push("/app/start")}
-                  >
-                    Nadgradi
-                  </button>
-                </div>
-              ) : (
-                <p className="lecture-chat-status">Odgovori ostajajo vezani na to predavanje.</p>
-              )}
-            </div>
-          </form>
-        </div>
-      );
-    }
-
-    if (activeTab === "transcript") {
+    if (activeTab === "transcript" || activeTab === "audio") {
       const transcriptSegments =
         detail.transcript.length > 0 ? detail.transcript : getScanTranscriptFallback(detail);
       const isScanTranscript = isScanImport(detail);
 
-      return transcriptSegments.length > 0 ? (
-        <div
-          className={`ios-card lecture-transcript-card ${
-            isScanTranscript ? "lecture-transcript-card-scan" : ""
-          }`}
-        >
-          {transcriptSegments.map((segment) => (
-            <div key={segment.id} className="timeline-row">
-              <p className="timeline-time">
-                {isScanTranscript ? (
-                  formatScanTranscriptLabel(segment.speaker_label)
-                ) : (
-                  <>
-                    {formatTimestamp(segment.start_ms)}
-                    {segment.end_ms > segment.start_ms
-                      ? ` - ${formatTimestamp(segment.end_ms)}`
-                      : ""}
-                    {segment.speaker_label ? ` · ${segment.speaker_label}` : ""}
-                  </>
-                )}
-              </p>
-              <p className="lecture-transcript-text m-0 whitespace-pre-wrap text-[0.98rem] leading-8 text-[var(--label)]">
-                {segment.text}
-              </p>
+      return (
+        <div className="memo-transcript">
+          {/* The redesign puts the recording's player above the transcript
+              rather than on a tab of its own. */}
+          {detail.audioUrl ? (
+            <div className="memo-player">
+              <audio controls src={detail.audioUrl} className="memo-player-audio" />
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="empty-state lecture-empty-card lecture-empty-message">
-          <p className="ios-row-title">Prepis se še pripravlja.</p>
-          <p className="ios-row-subtitle">Ko bo pripravljen, se bo prikazal tukaj.</p>
+          ) : null}
+
+          {transcriptSegments.length > 0 ? (
+            <div className="memo-transcript-rows">
+              {transcriptSegments.map((segment) => (
+                <div key={segment.id} className="memo-transcript-row">
+                  <span className="memo-transcript-time">
+                    {isScanTranscript
+                      ? formatScanTranscriptLabel(segment.speaker_label)
+                      : formatTimestamp(segment.start_ms)}
+                  </span>
+                  <span className="memo-transcript-text">{segment.text}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="memo-empty">
+              <Emoji symbol="📜" size="2rem" />
+              <p>Prepis se še pripravlja.</p>
+              <p>Ko bo pripravljen, se bo prikazal tukaj.</p>
+            </div>
+          )}
         </div>
       );
     }
 
-    return (
-      <div className="ios-card audio-panel">
-        <p className="lecture-card-label">Zvok</p>
-        {detail.audioUrl ? (
-          <audio controls src={detail.audioUrl} className="mt-4 w-full" />
-        ) : (
-          <div className="empty-state lecture-empty-card">
-            <p className="ios-row-title">Zvok še ni na voljo.</p>
-            <p className="ios-row-subtitle">Prikazal se bo po koncu nalaganja.</p>
-          </div>
-        )}
-      </div>
-    );
+    return null;
   }
 
-  return (
-    <div className="lecture-workspace lecture-workspace-full">
-      <div className="workspace-panel-stack lecture-main-column">
-        <div className="lecture-header">
-          <div className="lecture-header-row">
-            <div className="ios-title-block lecture-title-block">
-              <h1 className="ios-large-title">
-                {detail.lecture.title ?? "Predavanje v obdelavi"}
-              </h1>
-              <div className="lecture-meta-row">
-                <span className="lecture-meta-copy">{formatCalendarDate(detail.lecture.created_at)}</span>
+  const noteEmojiSymbol = detail.lecture.emoji?.trim() || noteEmoji(detail.lecture);
+
+  function navigateHome() {
+    router.push(homeHref);
+  }
+
+  const activeTabId: NoteTabId =
+    activeTab === "notes"
+      ? "notes"
+      : activeTab === "transcript" || activeTab === "audio"
+        ? "transcript"
+        : activeStudyView === "flashcards"
+          ? "flashcards"
+          : activeStudyView === "quiz"
+            ? "quiz"
+            : "test";
+
+  /**
+   * Desktop shows the conversation as the grid's third column, so it is
+   * portalled into the slot the shell renders (see AppLayoutProvider). The
+   * phone shows the same body as a full-height sheet.
+   *
+   * The quiz owns the bottom of the screen with its own result sheet, so chat
+   * steps aside there — matching the redesign, where "Preglej zakaj" is the way
+   * into chat from a quiz.
+   */
+  // The design keeps the chat panel open on every tab; only the button that
+  // brings it back is withheld on the quiz, which wants the full width while a
+  // question is on screen.
+  const showChatPanel = !isChatDismissed;
+
+  useEffect(() => {
+    setChatOpen(showChatPanel);
+    return () => setChatOpen(false);
+  }, [setChatOpen, showChatPanel]);
+
+  const desktopChatPanel =
+    showChatPanel && chatSlot
+      ? createPortal(
+          <>
+            {isChatExpanded ? (
+              <button
+                type="button"
+                aria-label="Pomanjšaj klepet"
+                className="memo-chat-scrim"
+                onClick={() => setIsChatExpanded(false)}
+              />
+            ) : null}
+            <aside className={`memo-chat-aside ${isChatExpanded ? "expanded" : ""}`.trim()}>
+              <div className="memo-chat-head">
+                <div className="memo-chat-head-row">
+                  <span className="memo-avatar">
+                    <Image src="/memo-mascot.png" alt="" width={320} height={288} />
+                  </span>
+                  <span style={{ flex: 1 }} />
+                  <button
+                    type="button"
+                    aria-label={isChatExpanded ? "Pomanjšaj" : "Razširi"}
+                    className="memo-icon-button"
+                    onClick={() => setIsChatExpanded((current) => !current)}
+                  >
+                    <Msym
+                      name={isChatExpanded ? "close_fullscreen" : "open_in_full"}
+                      size="1.2rem"
+                      fill={false}
+                      weight={500}
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Zapri klepet"
+                    className="memo-icon-button"
+                    onClick={() => {
+                      setIsChatDismissed(true);
+                      setIsChatExpanded(false);
+                    }}
+                  >
+                    <Msym name="close" size="1.45rem" fill={false} weight={500} />
+                  </button>
+                </div>
+
+                <h2>Klepet s tem zapiskom</h2>
+                <div className="memo-chat-rule" />
               </div>
+
+              {renderChatBody()}
+            </aside>
+          </>,
+          chatSlot,
+        )
+      : null;
+
+  const mobileChatSheet = isMobileChatOpen ? (
+    <MemoPortal>
+      <button
+        type="button"
+        aria-label="Zapri klepet"
+        className="memo-scrim memo-only-mobile"
+        onClick={() => setIsMobileChatOpen(false)}
+      />
+      <div
+        className="memo-sheet-full surface memo-only-mobile memo-note-chat-sheet"
+        role="dialog"
+        aria-modal="true"
+        {...chatSheetDrag.dragProps}
+      >
+        {/* The grabber is the only place a drag may start here: the log below
+            it scrolls, and a finger on that should pan rather than dismiss. */}
+        <div className="memo-grab-wide" data-drag-handle="true">
+          <span />
+        </div>
+        <div className="memo-m-chat-head">
+          <span className="memo-m-chat-heading">
+            <span className="memo-m-chat-title">Klepet s tem zapiskom</span>
+          </span>
+          <button
+            type="button"
+            aria-label="Zapri"
+            className="memo-m-chat-head-btn right"
+            onClick={() => setIsMobileChatOpen(false)}
+          >
+            <Msym name="close" size="1.45rem" fill={false} weight={500} />
+          </button>
+        </div>
+
+        {renderChatBody()}
+      </div>
+    </MemoPortal>
+  ) : null;
+
+  const chatPanel = (
+    <>
+      {desktopChatPanel}
+      {mobileChatSheet}
+    </>
+  );
+
+  const lectureTitle = detail.lecture.title?.trim() || "Predavanje v obdelavi";
+  const lectureIsProcessing =
+    shouldPollLecture(detail.lecture.status) ||
+    (detail.flashcards.length === 0 && shouldPollAsset(detail.studyAsset?.status)) ||
+    shouldPollAsset(detail.quizAsset?.status) ||
+    shouldPollAsset(detail.practiceTestAsset?.status);
+
+  function selectNoteTab(tab: (typeof NOTE_TABS)[number]) {
+    if (tab.id === "notes") {
+      setActiveTab("notes");
+      return;
+    }
+
+    if (tab.id === "transcript") {
+      setActiveTab("transcript");
+      return;
+    }
+
+    setActiveTab("study");
+
+    if (tab.view) {
+      setActiveStudyView(tab.view);
+    }
+  }
+
+  const tabPills = (
+    <div className="memo-tabs memo-chiprow">
+      {getNoteTabs({ showsTranscript }).map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => selectNoteTab(tab)}
+          className={`memo-tab ${activeTabId === tab.id ? "active" : ""}`.trim()}
+          style={{ "--tab-tint": tab.tint } as CSSProperties}
+          aria-current={activeTabId === tab.id ? "page" : undefined}
+        >
+          <Msym name={tab.icon} size="1.2rem" fill={false} weight={500} />
+          <span>{tab.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+
+  /*
+   * The design carries no overflow menu on the note screen. Its only item that
+   * was not already reachable — retrying a failed import — is shown in the open
+   * instead, and only when there is something to retry.
+   */
+  const noteMenu =
+    detail.lecture.status === "failed" &&
+    canRetryLectureFailure(detail.lecture.processing_metadata) ? (
+      <div className="memo-note-actions">
+        <button type="button" className="memo-note-action" onClick={handleRetry}>
+          {isRetrying ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Msym name="refresh" size="1.15rem" fill={false} weight={500} />
+          )}
+          <span>Poskusi znova</span>
+        </button>
+      </div>
+    ) : null;
+
+  return (
+    <>
+      <div className="memo-note-screen">
+        {/* Phone chrome: back, the note's emoji, and the actions menu. */}
+        <div className="memo-m-navbar memo-only-mobile flex">
+          <button
+            type="button"
+            aria-label="Nazaj"
+            className="memo-m-navbtn"
+            onClick={navigateHome}
+          >
+            <Msym name="arrow_back" size="1.5rem" fill={false} weight={500} />
+          </button>
+          <Emoji symbol={noteEmojiSymbol} className="memo-m-noteemoji" size="1.5rem" />
+        </div>
+
+        <div className="memo-note-card">
+          <div className="memo-breadcrumb memo-only-desktop">
+            <button type="button" onClick={navigateHome}>
+              Moji zapiski
+            </button>
+            <Msym name="chevron_right" size="1.1rem" fill={false} weight={400} />
+            <span className="memo-breadcrumb-current">Podrobnosti zapiska</span>
+          </div>
+
+          <div className="memo-note-scroll">
+            {tabPills}
+
+            <div className="memo-note-head memo-only-desktop">
+              <span className="memo-note-head-emoji">
+                <Emoji symbol={noteEmojiSymbol} size="1.45rem" />
+              </span>
+              <h1>{lectureTitle}</h1>
             </div>
 
-            <div className="lecture-actions">
-              {detail.lecture.status === "failed" &&
-              canRetryLectureFailure(detail.lecture.processing_metadata) ? (
-                <button
-                  type="button"
-                  onClick={handleRetry}
-                  className="lecture-action-button lecture-action-button-danger"
-                >
-                  {isRetrying ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <EmojiIcon symbol="🔄" size="1rem" />
-                  )}
-                  Poskusi znova
-                </button>
-              ) : null}
+            <h1 className="memo-m-note-title memo-only-mobile">{lectureTitle}</h1>
+
+            {noteMenu}
+
+            <div className="memo-note-date memo-only-desktop">
+              <span>{formatCalendarDate(detail.lecture.created_at)}</span>
+            </div>
+
+            <div className="memo-m-note-meta memo-only-mobile flex">
+              <span>{formatCalendarDate(detail.lecture.created_at)}</span>
+            </div>
+
+            {detail.lecture.error_message ? (
+              <p className="memo-inline-error">{detail.lecture.error_message}</p>
+            ) : null}
+
+            {lectureIsProcessing ? (
+              <p className="memo-note-processing">
+                Obdelava še poteka. Ta pogled se samodejno osvežuje.
+              </p>
+            ) : null}
+
+            {activeTabId === "notes" ? <div className="memo-study-divider-off" /> : null}
+
+            <div className={`memo-panel ${activeTabId === "notes" ? "" : "study"}`.trim()}>
+              {renderPanel()}
             </div>
           </div>
 
-          {detail.lecture.error_message ? (
-            <p className="danger-panel lecture-inline-note">{detail.lecture.error_message}</p>
-          ) : null}
+          {/* The bottom row: the listen / annotate pill (rendered into the slot
+              by NoteReadAloud) and the way into chat. */}
+          <div className="memo-dock">
+            <div className="memo-dock-slot" ref={setDockSlot} />
 
-          {shouldPollLecture(detail.lecture.status) ||
-          (detail.flashcards.length === 0 && shouldPollAsset(detail.studyAsset?.status)) ||
-          shouldPollAsset(detail.quizAsset?.status) ||
-          shouldPollAsset(detail.practiceTestAsset?.status) ? (
-            <p className="ios-info lecture-inline-note">
-              Obdelava še poteka. Ta pogled se samodejno osvežuje.
-            </p>
-          ) : null}
-        </div>
+            {isChatDismissed && activeTabId !== "quiz" ? (
+              <button
+                type="button"
+                aria-label="Odpri klepet"
+                className="memo-chat-fab memo-only-desktop"
+                onClick={() => setIsChatDismissed(false)}
+              >
+                <Msym name="forum" size="1.35rem" />
+                <span>Klepet</span>
+              </button>
+            ) : null}
 
-        <div className="ios-segmented lecture-segmented">
-          {getTabItems({
-            hasAudio: Boolean(detail.audioUrl),
-            showsTranscript,
-          }).map((tab) => (
             <button
-              key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`ios-segment lecture-tab-button ${activeTab === tab.id ? "active" : ""}`}
-              aria-label={tab.label}
-              title={tab.label}
+              className="memo-m-chatbar memo-only-mobile"
+              onClick={() => setIsMobileChatOpen(true)}
+              aria-label="Klepetaj s tem zapiskom"
             >
-              <span className="lecture-tab-button-content">
-                <EmojiIcon symbol={tab.icon} size="1rem" />
-                <span className="lecture-tab-button-label">{tab.label}</span>
+              <span className="memo-m-chatbar-label">Klepetaj s tem zapiskom</span>
+              <span className="memo-m-chatbar-icon">
+                <Msym name="mic" size="1.35rem" className="mic" />
+                <Msym name="chat_bubble" size="1.35rem" className="bubble" />
               </span>
-            </button>
-          ))}
+              </button>
+          </div>
         </div>
-
-        {renderPanel()}
       </div>
-    </div>
+
+      {chatPanel}
+    </>
   );
 }

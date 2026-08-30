@@ -27,7 +27,8 @@ import {
 import { EmojiIcon } from "@/components/emoji-icon";
 import { LiveAudioWave } from "@/components/live-audio-wave";
 import { useInstantNavigation } from "@/components/navigation-loading";
-import { ViewportPortal } from "@/components/viewport-portal";
+import { MemoPortal } from "@/components/memo-portal";
+import { Emoji, Msym } from "@/components/msym";
 import { createAudioLectureWithProcessingChunks } from "@/lib/audio-lecture-upload";
 import {
   AUDIO_FILE_INPUT_ACCEPT,
@@ -154,6 +155,11 @@ function isAudioSourceFile(file: File) {
   return (SUPPORTED_AUDIO_EXTENSIONS as readonly string[]).includes(extension);
 }
 
+/** The tile emoji beside the modal's title, per capture mode. */
+function modeEmoji(mode: NoteSourceMode) {
+  return MODES.find((item) => item.id === mode)?.icon ?? "📝";
+}
+
 function sheetTitle(mode: NoteSourceMode) {
   if (mode === "record") {
     return "Posnemi predavanje";
@@ -167,7 +173,7 @@ function sheetTitle(mode: NoteSourceMode) {
     return "Dodaj povezavo";
   }
 
-  return "Prilepi besedilo ali dokument";
+  return "Naloži PDF ali besedilo";
 }
 
 function sheetDescription() {
@@ -1013,7 +1019,7 @@ export function NoteSourceModal({
     }
 
     function handleWindowPointerEnd() {
-      if (sourceSheetDragOffsetRef.current > 80) {
+      if (sourceSheetDragOffsetRef.current > 110) {
         sourceSheetDragStartYRef.current = null;
         sourceSheetDragOffsetRef.current = window.innerHeight;
         setSourceSheetDragOffset(window.innerHeight);
@@ -1862,26 +1868,45 @@ export function NoteSourceModal({
     }
   }
 
+  /**
+   * The redesign's action row: Prekliči beside the primary call to action.
+   * While a request is in flight the row collapses to a single Prekliči, which
+   * cancels that request rather than closing the sheet — the existing
+   * behaviour, and the more useful one at that moment.
+   */
+  function renderModalActions(primary: React.ReactNode) {
+    if (busyLabel) {
+      return (
+        <div className="memo-modal-actions">
+          <button
+            type="button"
+            className="ios-secondary-button wide"
+            disabled={isCancelling}
+            onClick={() => void handleCancelBusyAction()}
+          >
+            {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Prekliči
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="memo-modal-actions">
+        <button type="button" className="ios-secondary-button" onClick={requestClose}>
+          Prekliči
+        </button>
+        {primary}
+      </div>
+    );
+  }
+
   function renderBusyOrGenerateButton(params: {
     canGenerate: boolean;
     onGenerate: () => void;
     generateIcon: string;
   }) {
-    if (busyLabel) {
-      return (
-        <button
-          type="button"
-          className="ios-secondary-button"
-          disabled={isCancelling}
-          onClick={() => void handleCancelBusyAction()}
-        >
-          {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          Prekliči
-        </button>
-      );
-    }
-
-    return (
+    return renderModalActions(
       <button
         type="button"
         className="ios-primary-button"
@@ -1895,22 +1920,37 @@ export function NoteSourceModal({
           params.onGenerate();
         }}
       >
-        <EmojiIcon symbol={params.generateIcon} size="1rem" />
-        Ustvari
-      </button>
+        Ustvari zapisek
+      </button>,
     );
   }
 
+  /**
+   * Opting into the read-aloud audio up front. Kept from production — the note
+   * screen's listen dock has nothing to play without it — and dressed as the
+   * redesign's switch row.
+   */
   function renderInitialAudioOption() {
     return (
-      <label className="note-source-audio-option">
-        <input
-          type="checkbox"
-          checked={createInitialAudio}
-          onChange={(event) => setCreateInitialAudio(event.target.checked)}
-        />
-        <span>Ustvari zvok</span>
-      </label>
+      <div className="memo-capture-row static">
+        <span className="memo-capture-row-tile">
+          <Emoji symbol="🎧" size="1.15rem" />
+        </span>
+        <span className="memo-capture-row-copy">
+          <span>Ustvari zvok</span>
+          <span>Da lahko zapiske tudi poslušaš.</span>
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={createInitialAudio}
+          aria-label="Ustvari zvok"
+          className={`memo-switch ${createInitialAudio ? "on" : ""}`.trim()}
+          onClick={() => setCreateInitialAudio(!createInitialAudio)}
+        >
+          <span />
+        </button>
+      </div>
     );
   }
 
@@ -1974,7 +2014,7 @@ export function NoteSourceModal({
             onDrop={handleSheetDrop}
             style={
               sourceSheetDragOffset > 0
-                ? { transform: `translateY(${sourceSheetDragOffset}px)` }
+                ? { transform: `translateY(${sourceSheetDragOffset}px)`, transition: "none" }
                 : undefined
             }
           >
@@ -1984,14 +2024,18 @@ export function NoteSourceModal({
               aria-label="Povleci navzdol za zapiranje"
             />
             <div className="ios-sheet-header note-source-header">
-              <div className="note-source-header-main">
-                {/* No back button: the close button and the drag-down gesture
-                    both route through requestClose, which steps back out of the
-                    guide to the audio options rather than closing the sheet. */}
-                <h2 className="ios-sheet-title">
-                  {showAudioImportGuide ? "Uvozi zvok iz telefona" : sheetTitle(selectedMode)}
-                </h2>
-              </div>
+              <span className="memo-modal-tile">
+                <Emoji
+                  symbol={showAudioImportGuide ? "📱" : modeEmoji(selectedMode)}
+                  size="1.3rem"
+                />
+              </span>
+              {/* No back button: the close button and the drag-down gesture
+                  both route through requestClose, which steps back out of the
+                  guide to the audio options rather than closing the sheet. */}
+              <h2 className="ios-sheet-title">
+                {showAudioImportGuide ? "Uvozi zvok iz telefona" : sheetTitle(selectedMode)}
+              </h2>
               <button
                 type="button"
                 onClick={requestClose}
@@ -1999,7 +2043,7 @@ export function NoteSourceModal({
                 className="app-close-button ios-sheet-header-close"
                 aria-label="Zapri"
               >
-                <EmojiIcon symbol="✖️" size="1rem" />
+                <Msym name="close" size="1.45rem" fill={false} weight={500} />
               </button>
             </div>
 
@@ -2062,25 +2106,19 @@ export function NoteSourceModal({
                     Za predavanje uporabi sistemski snemalnik. Zvok shrani v Datoteke. Nato ga tukaj v zavihku za nalaganje pretvori v zapiske.
                   </p>
                 </section>
+
+                <div className="memo-modal-actions">
+                  <button
+                    type="button"
+                    className="ios-secondary-button wide"
+                    onClick={() => setShowAudioImportGuide(false)}
+                  >
+                    Nazaj
+                  </button>
+                </div>
               </div>
             ) : (
               <>
-                {!isRecording ? (
-                  <div className="mt-6 ios-segmented note-source-segmented">
-                    {MODES.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setSelectedMode(item.id)}
-                        className={`ios-segment ${selectedMode === item.id ? "active" : ""}`}
-                        aria-label={item.label}
-                        title={item.label}
-                      >
-                        <EmojiIcon symbol={item.icon} size="1.05rem" />
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
                 <div
                   className={cn(
                     "mt-6 space-y-4 note-source-modal-body",
@@ -2093,20 +2131,17 @@ export function NoteSourceModal({
                   {selectedMode === "record" && !isRecording ? (
                     <button
                       type="button"
-                      className="ios-card note-source-guide-entry"
+                      className="memo-capture-row"
                       onClick={() => setShowAudioImportGuide(true)}
                     >
-                      <div className="note-source-guide-entry-copy">
-                        <p className="note-source-guide-entry-title">
-                          Kako lahko snemaš tudi z ugasnjenim telefonom?
-                        </p>
-                        <p className="note-source-guide-entry-text">
-                          Shrani posnetek in ga tukaj naloži kasneje.
-                        </p>
-                      </div>
-                      <span className="note-source-guide-entry-arrow" aria-hidden="true">
-                        ›
+                      <span className="memo-capture-row-tile">
+                        <Emoji symbol="📱" size="1.15rem" />
                       </span>
+                      <span className="memo-capture-row-copy">
+                        <span>Kako snemaš z ugasnjenim telefonom?</span>
+                        <span>Shrani posnetek in ga tukaj naloži kasneje.</span>
+                      </span>
+                      <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
                     </button>
                   ) : null}
 
@@ -2147,30 +2182,29 @@ export function NoteSourceModal({
                       ) : null}
 
                       {isRecording ? (
-                        <div className="ios-card">
-                          <p className="note-source-card-label">Snemanje</p>
-                          <p className="ios-row-title mt-3">
-                            {isPaused ? "Snemanje je začasno ustavljeno" : "Snemanje poteka"}
-                          </p>
-                          <p className="ios-row-subtitle">
-                            {formatTimestamp(elapsedSeconds * 1000)}
-                          </p>
-                          <div className="mt-4 px-4 py-4 text-[var(--label)]">
-                            <LiveAudioWave
-                              stream={visualizerStream}
-                              active={isRecording && !isPaused}
-                              className="mx-auto max-w-[14rem]"
-                            />
+                        <div className="memo-record">
+                          <div className={`memo-record-orb ${isPaused ? "paused" : ""}`.trim()}>
+                            <span className="ring" />
+                            <span className="halo" />
+                            <span className="core" />
                           </div>
-                        </div>
-                      ) : null}
-
-                      {isRecording ? (
-                        <div className="note-source-recording-actions">
+                          <span className="memo-record-clock">
+                            {formatTimestamp(elapsedSeconds * 1000)}
+                          </span>
+                          {/* The real input level, rather than the artboard's
+                              decorative bars. */}
+                          <LiveAudioWave
+                            stream={visualizerStream}
+                            active={isRecording && !isPaused}
+                            className="memo-record-wave"
+                          />
+                          <span className="memo-record-hint">
+                            {isPaused ? "Snemanje je začasno ustavljeno" : "Snemanje predavanja poteka"}
+                          </span>
                           <button
                             type="button"
                             disabled={Boolean(busyLabel)}
-                            className="ios-secondary-button"
+                            className="memo-record-pause"
                             onClick={() => {
                               if (busyLabel) {
                                 return;
@@ -2184,10 +2218,24 @@ export function NoteSourceModal({
                               pauseRecording();
                             }}
                           >
-                            <EmojiIcon symbol={isPaused ? "▶️" : "⏸️"} size="1rem" />
-                            {isPaused ? "Nadaljuj snemanje" : "Začasno ustavi snemanje"}
+                            <Msym name={isPaused ? "play_arrow" : "pause"} size="1.15rem" />
+                            {isPaused ? "Nadaljuj snemanje" : "Začasno ustavi"}
                           </button>
+                        </div>
+                      ) : null}
 
+                      {isRecording ? (
+                        <div className="memo-modal-actions">
+                          {/* The design pairs Prekliči with the call to action.
+                              Pausing has no counterpart there, so it keeps its
+                              own round control beside the orb. */}
+                          <button
+                            type="button"
+                            className="ios-secondary-button"
+                            onClick={requestClose}
+                          >
+                            Prekliči
+                          </button>
                           <button
                             type="button"
                             disabled={Boolean(busyLabel)}
@@ -2200,12 +2248,8 @@ export function NoteSourceModal({
                               void stopRecording();
                             }}
                           >
-                            {busyLabel ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <EmojiIcon symbol="🎙️" size="1rem" />
-                            )}
-                            {busyLabel ?? "Ustavi snemanje"}
+                            {busyLabel ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                            {busyLabel ?? "Ustavi in ustvari zapisek"}
                           </button>
                         </div>
                       ) : null}
@@ -2235,19 +2279,24 @@ export function NoteSourceModal({
                       ) : null}
 
                       {!isRecording && !preparedRecording ? (
-                        <button
-                          type="button"
-                          disabled={Boolean(busyLabel)}
-                          className="ios-primary-button"
-                          onClick={() => void startRecording()}
-                        >
-                          {busyLabel ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <EmojiIcon symbol="🎙️" size="1rem" />
-                          )}
-                          {busyLabel ?? "Začni snemanje"}
-                        </button>
+                        <div className="memo-modal-actions">
+                          <button
+                            type="button"
+                            className="ios-secondary-button"
+                            onClick={requestClose}
+                          >
+                            Prekliči
+                          </button>
+                          <button
+                            type="button"
+                            disabled={Boolean(busyLabel)}
+                            className="ios-primary-button"
+                            onClick={() => void startRecording()}
+                          >
+                            {busyLabel ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                            {busyLabel ?? "Začni snemanje"}
+                          </button>
+                        </div>
                       ) : null}
                     </>
                   ) : null}
@@ -2276,7 +2325,7 @@ export function NoteSourceModal({
                         <button
                           type="button"
                           disabled={Boolean(busyLabel)}
-                          className="ios-secondary-button"
+                          className="memo-dropzone"
                           onClick={() => {
                             if (!canCreateNotes) {
                               redirectToPaywall();
@@ -2286,8 +2335,14 @@ export function NoteSourceModal({
                             uploadInputRef.current?.click();
                           }}
                         >
-                          <EmojiIcon symbol="📤" size="1rem" />
-                          {preparedUpload ? "Izberi drugo zvočno datoteko" : "Izberi zvočno datoteko"}
+                          <Msym name="cloud_upload" className="memo-dropzone-icon" />
+                          <span className="memo-dropzone-lead">
+                            {preparedUpload ? "Izberi drugo datoteko" : "Izberi datoteko"}
+                          </span>
+                          <span className="memo-dropzone-title">MP3, M4A, WAV ali WEBM</span>
+                          <span className="memo-dropzone-hint">
+                            povleci sem ali klikni Izberi datoteko
+                          </span>
                         </button>
                       )}
 
@@ -2305,8 +2360,7 @@ export function NoteSourceModal({
                         <label className="note-source-field-label">
                           Povezava
                         </label>
-                        <div className="ios-search">
-                          <EmojiIcon symbol="🔎" size="0.95rem" />
+                        <div className="ios-search note-source-link-field">
                           <input
                             value={linkValue}
                             readOnly={isCreatorDemo}
@@ -2446,7 +2500,7 @@ export function NoteSourceModal({
                         <div className="note-source-docs-actions note-source-docs-actions-bottom">
                           <button
                             type="button"
-                            className="ios-secondary-button note-source-docs-action-button"
+                            className="memo-dropzone"
                             disabled={Boolean(busyLabel)}
                             onClick={() => {
                               if (!canCreateNotes) {
@@ -2457,8 +2511,12 @@ export function NoteSourceModal({
                               pdfInputRef.current?.click();
                             }}
                           >
-                            <EmojiIcon symbol="📤" size="1rem" />
-                            Datoteka
+                            <Msym name="cloud_upload" className="memo-dropzone-icon" />
+                            <span className="memo-dropzone-lead">Izberi datoteko</span>
+                            <span className="memo-dropzone-title">PDF, DOCX, PPTX ali slika</span>
+                            <span className="memo-dropzone-hint">
+                              povleci sem ali klikni Izberi datoteko
+                            </span>
                           </button>
 
                           <button
@@ -2474,7 +2532,7 @@ export function NoteSourceModal({
                               scanInputRef.current?.click();
                             }}
                           >
-                            <EmojiIcon symbol="📷" size="1rem" />
+                            <Msym name="photo_camera" />
                             Skeniraj
                           </button>
                         </div>
@@ -2674,7 +2732,7 @@ export function NoteSourceModal({
   return (
     <>
       {navigationOverlay}
-      <ViewportPortal>{modalContent}</ViewportPortal>
+      <MemoPortal>{modalContent}</MemoPortal>
     </>
   );
 }

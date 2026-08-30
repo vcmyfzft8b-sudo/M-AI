@@ -1,0 +1,327 @@
+"use client";
+
+import { useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
+
+import { BillingPortalButton } from "@/components/billing-portal-button";
+import { InstantLink } from "@/components/instant-link";
+import { Emoji, Msym } from "@/components/msym";
+import { MemoPortal } from "@/components/memo-portal";
+import { BRAND_NAME, BRAND_SUPPORT_EMAIL } from "@/lib/brand";
+import type { ThemePreference } from "@/lib/theme";
+import {
+  readStoredThemePreference,
+  setThemePreference,
+  subscribeToThemePreference,
+} from "@/lib/theme";
+
+/**
+ * Nastavitve, as the redesign draws it: a theme segment, the plan card, and a
+ * list of rows. On the phone the same content is grouped under headings the way
+ * the settings sheet shows it, and the close control returns to the library.
+ */
+
+const THEME_OPTIONS: Array<{ value: ThemePreference; label: string }> = [
+  { value: "light", label: "Svetla" },
+  { value: "dark", label: "Temna" },
+  { value: "system", label: "Sistem" },
+];
+
+type ConfirmKind = "logout" | "delete" | "share";
+
+export function SettingsScreen({
+  email,
+  planLabel,
+  planDetail,
+  hasSubscription,
+  isDemo = false,
+}: {
+  email: string;
+  planLabel: string;
+  planDetail: string;
+  hasSubscription: boolean;
+  /** The creator demo has no account: sign-out and deletion are hidden. */
+  isDemo?: boolean;
+}) {
+  const router = useRouter();
+  const [confirm, setConfirm] = useState<ConfirmKind | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const preference = useSyncExternalStore(
+    subscribeToThemePreference,
+    readStoredThemePreference,
+    () => "system" as ThemePreference,
+  );
+
+  const shareHref = `mailto:?subject=${encodeURIComponent(
+    `Preizkusi ${BRAND_NAME}`,
+  )}&body=${encodeURIComponent(
+    `Uporabljam ${BRAND_NAME} za zapiske predavanj in mislim, da bi ti lahko prišel prav.`,
+  )}`;
+
+  // There is no self-serve deletion endpoint; the request goes to support, which
+  // is what the confirmation copy promises.
+  const deleteRequestHref = `mailto:${BRAND_SUPPORT_EMAIL}?subject=${encodeURIComponent(
+    "Zahteva za izbris računa",
+  )}&body=${encodeURIComponent(
+    `Prosim za izbris računa ${email} in vseh povezanih podatkov.`,
+  )}`;
+
+  function showToast(message: string) {
+    setToast(message);
+    window.setTimeout(() => setToast(null), 2200);
+  }
+
+  const themeSegment = (
+    <div className="memo-segment">
+      {THEME_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          className={preference === option.value ? "active" : ""}
+          aria-pressed={preference === option.value}
+          onClick={() => setThemePreference(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  const rows: Array<{
+    id: string;
+    emoji: string;
+    title: string;
+    href?: string;
+    detail?: string;
+    danger?: boolean;
+    onSelect?: () => void;
+  }> = [
+    {
+      id: "redeem",
+      emoji: "🎟️",
+      title: "Unovči kodo",
+      href: "/app/support/redeem-code",
+    },
+    {
+      id: "privacy",
+      emoji: "🔒",
+      title: "Zasebnost",
+      href: "/legal/privacy-policy",
+    },
+    { id: "share", emoji: "📤", title: "Deli", onSelect: () => setConfirm("share") },
+    {
+      id: "feature",
+      emoji: "💡",
+      title: "Predlagaj funkcijo",
+      href: "/app/support/feature-request",
+    },
+    {
+      id: "help",
+      emoji: "❓",
+      title: "Center za pomoč",
+      href: "/app/support",
+    },
+    ...(isDemo
+      ? []
+      : [
+          {
+            id: "logout",
+            emoji: "👤",
+            title: "Odjava",
+            detail: email,
+            onSelect: () => setConfirm("logout"),
+          },
+          {
+            id: "delete",
+            emoji: "🗑️",
+            title: "Izbriši račun",
+            danger: true,
+            onSelect: () => setConfirm("delete"),
+          },
+        ]),
+  ];
+
+  const confirmCopy: Record<ConfirmKind, { emoji: string; title: string; body: string; cta: string }> = {
+    logout: {
+      emoji: "👤",
+      title: "Se želiš odjaviti?",
+      body: `Odjavljen boš iz računa ${email} na tej napravi.`,
+      cta: "Odjava",
+    },
+    delete: {
+      emoji: "🗑️",
+      title: "Izbriši račun?",
+      body:
+        "Vsi zapiski, kartice in kvizi bodo trajno izbrisani. Zahtevo obdelamo ročno — poslali ti bomo potrditev po e-pošti.",
+      cta: "Pošlji zahtevo",
+    },
+    share: {
+      emoji: "📤",
+      title: `Deli ${BRAND_NAME}`,
+      body: `Pošlji povabilo sošolcu — uporabljam ${BRAND_NAME} za zapiske predavanj in mislim, da bi ti lahko prišel prav.`,
+      cta: "Odpri e-pošto",
+    },
+  };
+
+  function runConfirm() {
+    const kind = confirm;
+    setConfirm(null);
+
+    if (kind === "logout") {
+      setIsLoggingOut(true);
+      const form = document.createElement("form");
+      form.method = "post";
+      form.action = "/auth/logout";
+      document.body.appendChild(form);
+      form.submit();
+      return;
+    }
+
+    if (kind === "delete") {
+      window.location.href = deleteRequestHref;
+      showToast("Zahteva za izbris pripravljena");
+      return;
+    }
+
+    if (kind === "share") {
+      window.location.href = shareHref;
+      showToast("Povabilo pripravljeno");
+    }
+  }
+
+  return (
+    <>
+      <div className="memo-settings-screen">
+        {/* Phone: the sheet's close control, which returns to the library. */}
+        <div className="memo-settings-topbar memo-only-mobile flex">
+          <button
+            type="button"
+            aria-label="Zapri"
+            className="memo-m-round"
+            onClick={() => router.push("/app")}
+          >
+            <Msym name="close" size="1.45rem" fill={false} weight={500} />
+          </button>
+        </div>
+
+        <div className="memo-page">
+          <h1>Nastavitve</h1>
+
+          <div className="memo-card-row">
+            <span className="memo-card-row-copy">
+              <span className="memo-card-row-title">Tema</span>
+              <span className="memo-card-row-detail">Svetla ali temna postavitev</span>
+            </span>
+            {themeSegment}
+          </div>
+
+          <div className="memo-card-row">
+            <span className="memo-card-row-copy">
+              <span className="memo-eyebrow">Paket</span>
+              <span className="memo-card-row-title">{planLabel}</span>
+              <span className="memo-card-row-detail">{planDetail}</span>
+            </span>
+            {hasSubscription ? (
+              <BillingPortalButton />
+            ) : (
+              <InstantLink href="/app/start" className="memo-primary-pill">
+                <Emoji symbol="✨" size="1rem" />
+                <span>Izberi paket</span>
+              </InstantLink>
+            )}
+          </div>
+
+          <p className="memo-fine-print">
+            Preklic in vračila ureja{" "}
+            <InstantLink href="/legal/refund-policy" className="memo-underline-link">
+              politika vračil
+            </InstantLink>
+            .
+          </p>
+
+          <div className="memo-settings-list">
+            {rows.map((row) => {
+              const body = (
+                <>
+                  <span className={`memo-settings-tile ${row.danger ? "danger" : ""}`.trim()}>
+                    <Emoji symbol={row.emoji} size="1.15rem" />
+                  </span>
+                  <span className="memo-settings-copy">
+                    <span className={`memo-settings-title ${row.danger ? "danger" : ""}`.trim()}>
+                      {row.title}
+                    </span>
+                    {row.detail ? (
+                      <span className="memo-settings-detail">{row.detail}</span>
+                    ) : null}
+                  </span>
+                  <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
+                </>
+              );
+
+              return row.href ? (
+                <InstantLink key={row.id} href={row.href} className="memo-settings-row">
+                  {body}
+                </InstantLink>
+              ) : (
+                <button
+                  key={row.id}
+                  type="button"
+                  className="memo-settings-row"
+                  onClick={row.onSelect}
+                  disabled={row.id === "logout" && isLoggingOut}
+                >
+                  {body}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {confirm ? (
+        <MemoPortal>
+          <button
+            type="button"
+            aria-label="Prekliči"
+            className="memo-scrim"
+            onClick={() => setConfirm(null)}
+          />
+          <div className="memo-confirm memo-confirm-fixed" role="dialog" aria-modal="true">
+            <span className={`memo-confirm-tile ${confirm === "delete" ? "danger" : ""}`.trim()}>
+              <Emoji symbol={confirmCopy[confirm].emoji} size="1.4rem" />
+            </span>
+            <h2>{confirmCopy[confirm].title}</h2>
+            <p>{confirmCopy[confirm].body}</p>
+            <div className="memo-confirm-actions">
+              <button
+                type="button"
+                className="memo-confirm-cancel"
+                onClick={() => setConfirm(null)}
+              >
+                Prekliči
+              </button>
+              <button
+                type="button"
+                className={`memo-confirm-go ${confirm === "delete" ? "danger" : ""}`.trim()}
+                onClick={runConfirm}
+              >
+                {confirmCopy[confirm].cta}
+              </button>
+            </div>
+          </div>
+        </MemoPortal>
+      ) : null}
+
+      {toast ? (
+        <MemoPortal>
+          <div className="memo-toast" role="status">
+            <Msym name="check_circle" size="1.25rem" />
+            <span>{toast}</span>
+          </div>
+        </MemoPortal>
+      ) : null}
+    </>
+  );
+}

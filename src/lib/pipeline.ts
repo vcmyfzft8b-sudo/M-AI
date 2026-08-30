@@ -9,7 +9,7 @@ import {
   toUserFacingAiErrorMessage,
 } from "@/lib/ai/errors";
 import { chatAnswerSchema } from "@/lib/ai/schemas";
-import { generateStructuredObject } from "@/lib/ai/json";
+import { generateStructuredObject, streamStructuredObject } from "@/lib/ai/json";
 import { createEmbeddings } from "@/lib/ai/embeddings";
 import { parseAudioChunkManifest } from "@/lib/audio-processing";
 import { CHAT_MATCH_COUNT } from "@/lib/constants";
@@ -210,6 +210,8 @@ async function updateLectureProcessingState(params: {
   errorMessage?: string | null;
   durationSeconds?: number | null;
   title?: string | null;
+  /** Undefined leaves whatever the lecture already has; null clears it. */
+  emoji?: string | null;
 }) {
   const supabase = createSupabaseServiceRoleClient();
   const stored = parseProcessingMetadata(params.processingMetadata);
@@ -235,6 +237,7 @@ async function updateLectureProcessingState(params: {
         error_message: params.errorMessage ?? null,
         duration_seconds: params.durationSeconds,
         title: params.title,
+        ...(params.emoji === undefined ? {} : { emoji: params.emoji }),
         processing_metadata: {
           ...metadata,
           processing: {
@@ -708,6 +711,7 @@ export async function generateLectureNotesFromStoredTranscript(params: {
     stage: "checking_document_images",
     durationSeconds: lecture.duration_seconds,
     title: notes.title,
+    emoji: notes.emoji ?? null,
   });
 
   const documentImages = getStoredDocumentImagesFromMetadata(manualModelMetadata);
@@ -1122,10 +1126,49 @@ type RpcMatchResult = {
   similarity: number;
 };
 
+/**
+ * Streams the answer when there is somewhere to send it and the stage is routed
+ * through the gateway, and returns null whenever it cannot — no handler, not
+ * routed, or the stream broke. Null means "use the ordinary call", so a
+ * streaming failure costs a retry rather than the answer.
+ *
+ * The partial text already shown is discarded on failure: the fallback re-runs
+ * the whole call, and half of one answer followed by all of another would read
+ * as gibberish. Callers replace what they have rendered with the final text.
+ */
+async function streamChatAnswer(
+  call: {
+    schema: typeof chatAnswerSchema;
+    stage: "chat";
+    instructions: string;
+    input: string;
+  },
+  onDelta: ((text: string) => void) | undefined,
+) {
+  if (!onDelta) {
+    return null;
+  }
+
+  try {
+    return await streamStructuredObject({ ...call, streamField: "answer", onDelta });
+  } catch (error) {
+    console.error("[chat] streaming failed, falling back to a plain call", error);
+    return null;
+  }
+}
+
 export async function answerLectureChat(params: {
   lectureId: string;
   userId: string;
   question: string;
+  /**
+   * Chat is the one stage a learner watches happen, so when a delta handler is
+   * supplied the answer is streamed as it is written. The model, prompt and
+   * schema are identical either way; only the delivery differs, and a stream
+   * that fails falls back to the ordinary call rather than the learner losing
+   * the answer.
+   */
+  onDelta?: (text: string) => void;
 }) {
   const supabase = createSupabaseServiceRoleClient();
 
@@ -1165,9 +1208,9 @@ export async function answerLectureChat(params: {
 
   const context = (matches ?? []) as RpcMatchResult[];
 
-  const answer = await generateStructuredObject({
+  const call = {
     schema: chatAnswerSchema,
-    stage: "chat",
+    stage: "chat" as const,
     instructions: `${buildGeneratedContentLanguageInstruction(lectureRow?.language_hint)} Answer the student using only the supplied lecture context. If the answer is not fully supported, say that the lecture does not clearly state it. Cite only transcript chunks that are genuinely relevant.`,
     input: JSON.stringify(
       {
@@ -1179,7 +1222,9 @@ export async function answerLectureChat(params: {
       null,
       2,
     ),
-  });
+  };
+
+  const answer = (await streamChatAnswer(call, params.onDelta)) ?? (await generateStructuredObject(call));
 
   const citations = answer.citations.map((citation) => ({
     idx: citation.idx,

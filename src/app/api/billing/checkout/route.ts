@@ -12,6 +12,7 @@ import {
   hasStripeSubscriptionHistory,
   PURCHASABLE_BILLING_PLAN_IDS,
 } from "@/lib/billing";
+import { getDiscountWheelState, markDiscountWheelRedeemed } from "@/lib/discount-wheel";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
 
@@ -73,6 +74,13 @@ export async function POST(request: Request) {
       ...(subscriptionTrialEligible ? { trial_period_days: 3 } : {}),
     };
 
+    // A prize from the home-screen wheel is applied here. Stripe rejects
+    // `discounts` alongside `allow_promotion_codes`, so a won coupon replaces
+    // the promo-code field rather than sitting next to it — the learner already
+    // has their discount and does not need to type one.
+    const wheel = await getDiscountWheelState(appState.user.id);
+    const wheelCoupon = wheel.hasUnredeemedPrize ? wheel.coupon : null;
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customerId,
@@ -84,7 +92,9 @@ export async function POST(request: Request) {
       ],
       success_url: getBillingSuccessUrl(request),
       cancel_url: getBillingCancelUrl(request),
-      allow_promotion_codes: true,
+      ...(wheelCoupon
+        ? { discounts: [{ coupon: wheelCoupon }] }
+        : { allow_promotion_codes: true }),
       billing_address_collection: "auto",
       // The refund policy leans on the buyer expressly asking for the service to
       // start before the 14-day withdrawal period runs out; that request has to
@@ -105,6 +115,13 @@ export async function POST(request: Request) {
       },
       subscription_data: subscriptionData,
     });
+
+    if (wheelCoupon) {
+      // Spend the prize on this session. If the learner abandons checkout they
+      // keep the price they were shown via Stripe's own session, but the coupon
+      // is not silently re-applied to a later, different purchase.
+      await markDiscountWheelRedeemed(appState.user.id);
+    }
 
     return NextResponse.json({ url: session.url });
   } catch (error) {

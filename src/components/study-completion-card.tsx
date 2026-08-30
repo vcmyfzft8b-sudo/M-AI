@@ -1,7 +1,8 @@
 "use client";
 
-import { CheckCircle2 } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
+
+import { Emoji } from "@/components/msym";
 
 interface StudyCompletionMetric {
   label: string;
@@ -19,17 +20,15 @@ interface StudyCompletionCardProps {
   actions: ReactNode;
 }
 
-function completionTone(percentage: number) {
-  if (percentage >= 85) {
-    return "excellent";
-  }
-
-  if (percentage >= 60) {
-    return "solid";
-  }
-
-  return "progress";
-}
+/**
+ * The redesign's results screen: a tinted orb with the outcome emoji, the score
+ * pinned to it on a tilted badge, then the headline and the way onward. The
+ * design draws exactly this after a quiz, a deck or a submitted test.
+ *
+ * A pass keeps the design's green; anything below carries its coral, and the
+ * emoji follows — 🎉 when it went well, 💪 when it did not.
+ */
+const PASS_THRESHOLD = 70;
 
 export function StudyCompletionCard({
   eyebrow,
@@ -42,46 +41,35 @@ export function StudyCompletionCard({
   actions,
 }: StudyCompletionCardProps) {
   const clampedPercentage = Math.max(0, Math.min(100, Math.round(percentage)));
-  const tone = completionTone(clampedPercentage);
-  const ringStyle: CSSProperties = {
-    background: `conic-gradient(var(--completion-accent) ${clampedPercentage}%, color-mix(in srgb, var(--surface-muted) 86%, transparent) ${clampedPercentage}% 100%)`,
-  };
+  const isGood = clampedPercentage >= PASS_THRESHOLD;
+  const tint = isGood ? "#2aa34a" : "#f45f5a";
+  const tintStyle = { "--memo-result-tint": tint } as CSSProperties;
 
   return (
-    <div className={`lecture-study-completion lecture-study-completion-${tone}`}>
-      <div className="lecture-study-completion-header">
-        {eyebrow ? <span className="lecture-study-completion-badge">{eyebrow}</span> : null}
-        <div className="lecture-study-completion-copy">
-          <h3 className="lecture-study-completion-title">{title}</h3>
-          {subtitle ? (
-            <p className="lecture-study-completion-subtitle">{subtitle}</p>
-          ) : null}
+    <div className="memo-result" style={tintStyle}>
+      <div className="memo-result-orb-wrap">
+        <div className="memo-result-orb">
+          <Emoji symbol={isGood ? "🎉" : "💪"} size="4.4rem" />
         </div>
+        <span className="memo-result-badge">{clampedPercentage} %</span>
       </div>
 
-      <div className="lecture-study-completion-body">
-        <div
-          className="lecture-study-completion-ring"
-          style={ringStyle}
-          aria-label={`${clampedPercentage}% ${percentageLabel.toLowerCase()}`}
-        >
-          <div className="lecture-study-completion-ring-inner">
-            <CheckCircle2 className="h-5 w-5" />
-            <strong>{clampedPercentage}%</strong>
-            <span>{percentageLabel}</span>
-          </div>
-        </div>
+      {eyebrow ? <span className="memo-result-eyebrow">{eyebrow}</span> : null}
+      <span className="memo-result-title">{title}</span>
 
-        <div className="lecture-study-completion-primary-metric">
-          <span>{primaryMetric.label}</span>
-          <strong>{primaryMetric.value}</strong>
-        </div>
-      </div>
+      <span className="memo-result-line">
+        <span className="memo-result-score">{clampedPercentage} %</span> {percentageLabel.toLowerCase()}
+      </span>
+      <span className="memo-result-line">
+        {primaryMetric.label.toLowerCase()}{" "}
+        <span className="memo-result-score">{primaryMetric.value}</span>
+      </span>
+      {subtitle ? <span className="memo-result-line">{subtitle}</span> : null}
 
       {secondaryMetrics.length > 0 ? (
-        <div className="lecture-study-completion-metrics">
+        <div className="memo-result-metrics">
           {secondaryMetrics.map((metric) => (
-            <div key={metric.label} className="lecture-study-completion-metric">
+            <div key={metric.label} className="memo-result-metric">
               <span>{metric.label}</span>
               <strong>{metric.value}</strong>
             </div>
@@ -89,7 +77,7 @@ export function StudyCompletionCard({
         </div>
       ) : null}
 
-      <div className="lecture-study-complete-actions">{actions}</div>
+      <div className="memo-result-actions">{actions}</div>
     </div>
   );
 }

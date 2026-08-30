@@ -4074,14 +4074,13 @@ export function LectureWorkspace({
           </div>
         </>
       ) : null;
-      // A block selected on its own still gets the photo control — in the dock,
-      // beside where it sits when text is selected.
-      const showPhotoOnlyDock = Boolean(selectedNoteBlockId) && !noteSelection;
-      const dockToolbar = noteSelection
-        ? annotationToolbar
-        : showPhotoOnlyDock
-          ? photoDockButton
-          : null;
+      /*
+       * The dock is the listen control until words are selected, and the
+       * annotation row for exactly as long as they are. A block selected on its
+       * own used to put the photo button there alone, which read as a third
+       * kind of dock; the photo control lives on the annotation row instead.
+       */
+      const dockToolbar = noteSelection ? annotationToolbar : null;
       const noteStatus = noteError ? (
         <span className="note-toolbar-status error">{noteError}</span>
       ) : isSavingNoteDoc ? (
@@ -4115,7 +4114,7 @@ export function LectureWorkspace({
                   )}
                   annotationToolbar={dockToolbar}
                   toolbarAccessory={noteStatus}
-                  annotationActive={Boolean(noteSelection) || showPhotoOnlyDock}
+                  annotationActive={Boolean(noteSelection)}
                   annotationPaletteOpen={isHighlightPaletteOpen}
                   dockContainer={dockSlot}
                   annotations={activeNoteDoc.annotations}

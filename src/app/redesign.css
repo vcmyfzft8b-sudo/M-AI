@@ -40,6 +40,19 @@
   --focus-ring: rgba(0, 0, 0, 0.22);
   /* Cards mark hover with an edge rather than a lift. */
   --hover-ring: rgba(0, 0, 0, 0.1);
+
+  /*
+   * Buttons. One outline, at one width, in two colours: the artboard's own
+   * `2px solid rgba(0,0,0,0.2)` reads as a rim on a colour fill and as a hard
+   * line on a pale one, so pale buttons take the same 2px at `--line`.
+   * Every button that declares a border reads it from here.
+   */
+  --btn-border-width: 2px;
+  --btn-border: var(--line);
+  --btn-border-filled: rgba(0, 0, 0, 0.2);
+  /* Round icon buttons — a header close, a back arrow — are all one size. */
+  --btn-round: 2.9rem;
+  --btn-round-glyph: 1.45rem;
 }
 
 :root[data-theme="dark"] .memo,
@@ -2436,7 +2449,7 @@
   flex: 0 0 auto;
   height: 2.7rem;
   padding: 0 1.05rem;
-  border: 1px solid var(--line);
+  border: var(--btn-border-width) solid var(--btn-border);
   border-radius: 12px;
   background: var(--surface);
   color: var(--text);
@@ -3076,7 +3089,7 @@
 .memo-button-outline {
   height: 3.2rem;
   padding: 0 1.3rem;
-  border: 1px solid var(--line);
+  border: var(--btn-border-width) solid var(--btn-border);
   border-radius: 999px;
   background: var(--surface);
   color: var(--text);
@@ -3910,7 +3923,7 @@
 }
 
 .memo-panel .memo-quiz-result-ghost {
-  border: 1px solid var(--line);
+  border: var(--btn-border-width) solid var(--btn-border);
   background: var(--surface);
   color: var(--text);
 }
@@ -3974,84 +3987,121 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Coral call-to-actions
+   The button system
    ---------------------------------------------------------------------------
-   One treatment everywhere. The artboard borders exactly one of its fifteen
-   coral buttons — the dock's "Nov zapisek" — and leaves the rest bare, so they
-   read as different components. They are all given that button's outline and
-   glow here instead.
+   One outline, at one width, in two colours, applied by what a button is made
+   of rather than by where it happens to live:
+
+   - a button with a colour fill  -> `--btn-border-filled`, the artboard's own
+     20% black, which reads as a rim on coral or red;
+   - a button with a pale fill sitting on the page -> the same 2px at
+     `--btn-border`, because 20% black on near-white is a hard line;
+   - a button nested inside another outlined surface -> nothing. The segment
+     track, the dock pill and the swatch row already carry the edge; a second
+     one inside them would draw a box around a box.
+   - a button with a near-black fill -> nothing visible either way, so they
+     keep their shadow and stay out of both lists.
+
+   The artboard borders exactly one of its buttons — the dock's "Nov zapisek" —
+   and leaves the rest bare, which is why they read as different components
+   there. Here they are all one component.
+
+   Selectors are doubled throughout: many of these declare `border: 0` further
+   down the file, and this block is the definition, not a correction.
    ------------------------------------------------------------------------ */
+
+/* Colour fills. The glow is the coral call to action's alone. */
 .memo-sheet-coral.memo-sheet-coral,
 .memo-button-coral.memo-button-coral,
 .memo-wheel-cta.memo-wheel-cta,
 .memo-offer-cta.memo-offer-cta,
 .memo-paywall-cta.memo-paywall-cta,
+.memo-subscribe-cta.memo-subscribe-cta,
+.memo-new-folder-cta.memo-new-folder-cta,
 .note-source-modal .ios-primary-button.ios-primary-button {
-  border: 2px solid rgba(0, 0, 0, 0.2);
+  border: var(--btn-border-width) solid var(--btn-border-filled);
   box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
 }
 
-/* The red confirm is a filled colour button like the coral ones, so it takes
-   the same rim — the glow stays coral-only. */
-.memo-sheet-danger.memo-sheet-danger {
-  border: 2px solid rgba(0, 0, 0, 0.2);
+.memo-sheet-danger.memo-sheet-danger,
+.memo-confirm-go.memo-confirm-go,
+.library-folder-danger-button.library-folder-danger-button,
+.memo-note-action.danger.danger {
+  border: var(--btn-border-width) solid var(--btn-border-filled);
 }
 
-/*
- * The buttons those stand next to — the cancels and the ghosts — take the same
- * 2px outline, so a pair of actions reads as a pair rather than as one
- * bordered button beside one bare one. Not the same *colour* of outline: 20%
- * black is a rim on a coral fill and a hard line on a pale one, so these use
- * the `--line` the artboard gives every other outlined thing. They sit on
- * `--surface` rather than `--tile` for the same reason — a white pill with a
- * hairline is what the rest of the phone is made of.
- *
- * Doubled for the same reason as the coral block: several of these declare
- * `border: 0` further down the file.
- */
+/* Pale fills on the page: the cancels, the ghosts, the chips, the tabs, the
+   round icon buttons — everything a thumb lands on that is not a card. */
 .memo-sheet-ghost.memo-sheet-ghost,
 .memo-button-ghost.memo-button-ghost,
+.memo-button-outline.memo-button-outline,
 .memo-capture-cancel.memo-capture-cancel,
-.memo-portal .ios-secondary-button.ios-secondary-button,
-.memo .ios-secondary-button.ios-secondary-button {
-  border: 2px solid var(--line);
-  background: var(--surface);
-}
-
-/*
- * And the white controls that are not pills of text: the header circles, the
- * folder chip, the nav buttons, the closes. The chat button already carried
- * this outline and everything beside it did not, which is what made it look
- * like the odd one out rather than the standard.
- *
- * The dock pill and the chat bar are deliberately absent: they already draw
- * the same hairline as an inset shadow, and a real border on the pill would
- * pull its buttons 2px inwards — the annotate row is measured to the pixel.
- */
+.memo-ghost-pill.memo-ghost-pill,
+.memo-primary-pill.memo-primary-pill,
+.memo-confirm-cancel.memo-confirm-cancel,
+.memo-settings-signout.memo-settings-signout,
+.memo-chip.memo-chip,
+.memo-tab.memo-tab,
+.memo-note-action.memo-note-action,
+.memo-scope-button.memo-scope-button,
+.memo-icon-button.memo-icon-button,
+.memo-homechat-head-btn.memo-homechat-head-btn,
 .memo-m-round.memo-m-round,
+.memo-m-navbtn.memo-m-navbtn,
 .memo-m-folder-chip.memo-m-folder-chip,
 .memo-folder-chip.memo-folder-chip,
-.memo-m-navbtn.memo-m-navbtn,
-.memo-icon-button.memo-icon-button,
-.memo-note-action.memo-note-action,
+.memo-m-chat-head-btn.memo-m-chat-head-btn,
+.memo-esc button,
+.memo-sub-chatbar button,
+.memo-swipe-action-circle.memo-swipe-action-circle,
+.study-manager-icon-button.study-manager-icon-button,
+.study-manage-pill.study-manage-pill,
 .mobile-study-manage-pill.mobile-study-manage-pill,
+.memo-action-sheet-item.memo-action-sheet-item,
+.memo-action-sheet-cancel.memo-action-sheet-cancel,
+.memo-quiz-sheet-actions .ghost,
+.memo-result-actions > :not(:first-child),
+.library-folder-modal-close.library-folder-modal-close,
+.library-folder-mobile-sheet-close.library-folder-mobile-sheet-close,
+.library-folder-secondary-button.library-folder-secondary-button,
+.memo-panel .lecture-study-manage-button.lecture-study-manage-button,
+.memo-panel .lecture-flashcard-nav-button.lecture-flashcard-nav-button,
+.memo-panel .lecture-flashcard-review-button.lecture-flashcard-review-button,
 .memo-close-button.memo-close-button,
 .memo-sheet-close.memo-sheet-close,
 .memo-chat-close.memo-chat-close,
 .memo-portal .app-close-button.app-close-button,
 .memo .app-close-button.app-close-button,
+.memo-portal .ios-secondary-button.ios-secondary-button,
+.memo .ios-secondary-button.ios-secondary-button,
 .memo-portal .ios-sheet-header-close.ios-sheet-header-close,
 .memo .ios-sheet-header-close.ios-sheet-header-close {
-  border: 2px solid var(--line);
+  border: var(--btn-border-width) solid var(--btn-border);
+}
+
+/* The two that also had the wrong ground under them: a white pill with a
+   hairline is what the rest of the phone is made of. */
+.memo-sheet-ghost.memo-sheet-ghost,
+.memo-button-ghost.memo-button-ghost,
+.memo-capture-cancel.memo-capture-cancel,
+.memo-portal .ios-secondary-button.ios-secondary-button,
+.memo .ios-secondary-button.ios-secondary-button {
+  background: var(--surface);
 }
 
 /* ---------------------------------------------------------------------------
    Close buttons
    ---------------------------------------------------------------------------
-   One shape everywhere. The app grew several of these — a sheet header close, a
-   modal close, a panel close — at four different sizes; the design draws a
-   single 2.9rem tile circle with a 1.45rem glyph, so they are all named here
-   rather than left to drift apart again.
+   One shape everywhere, from `--btn-round`. The app grew several of these — a
+   sheet header close, a modal close, a panel close — at four different sizes,
+   and `.memo-close-button` was even redeclared later in this file at 2.6rem,
+   quietly defeating the rule that claims to unify them. The size lives in a
+   token now, so there is one place to disagree with.
+
+   The artboard draws it as a white circle lifted off the page, not as a grey
+   tile: `--surface` under a `--shadow`. Only the capture sheet had been given
+   that locally, which is why its close looked like a different control from
+   every other close in the app.
    ------------------------------------------------------------------------ */
 .memo-close-button,
 .memo-sheet-close,
@@ -4063,14 +4113,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.9rem;
-  height: 2.9rem;
+  width: var(--btn-round);
+  height: var(--btn-round);
   flex: 0 0 auto;
   padding: 0;
-  border: 0;
   border-radius: 999px;
-  background: var(--tile);
+  background: var(--surface);
   color: var(--text);
+  box-shadow: var(--shadow);
   cursor: pointer;
 }
 
@@ -4081,7 +4131,7 @@
 .memo .app-close-button .msym,
 .memo-portal .ios-sheet-header-close .msym,
 .memo .ios-sheet-header-close .msym {
-  font-size: 1.45rem;
+  font-size: var(--btn-round-glyph);
 }
 
 .memo-close-button:disabled,
@@ -4992,24 +5042,6 @@
   letter-spacing: -0.03em;
 }
 
-.memo-close-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.6rem;
-  height: 2.6rem;
-  flex: 0 0 auto;
-  border: 0;
-  border-radius: 999px;
-  background: var(--tile);
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.memo-close-button .msym {
-  font-size: 1.3rem;
-}
-
 .memo-modal-actions {
   display: flex;
   gap: 0.7rem;
@@ -5651,20 +5683,6 @@
   font-size: 1.3rem;
   font-weight: 800;
   letter-spacing: -0.03em;
-}
-
-.note-source-modal .app-close-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.6rem;
-  height: 2.6rem;
-  flex: 0 0 auto;
-  border: 0;
-  border-radius: 999px;
-  background: var(--tile);
-  color: var(--muted);
-  cursor: pointer;
 }
 
 .note-source-modal .ios-textarea {
@@ -7873,7 +7891,7 @@
     height: 3.55rem;
     flex: 0 0 auto;
     padding: 0;
-    border: 2px solid var(--line);
+    border: var(--btn-border-width) solid var(--btn-border);
     border-radius: 999px;
     background: var(--surface);
     color: var(--text);
@@ -7895,7 +7913,7 @@
     min-height: 3.55rem;
     min-width: 12.4rem;
     padding: 0 1.3rem;
-    border: 2px solid rgba(0, 0, 0, 0.2);
+    border: var(--btn-border-width) solid var(--btn-border-filled);
     border-radius: 999px;
     background: var(--coral);
     color: #fff;
@@ -9366,7 +9384,7 @@
   .memo-card-row .billing-portal-button,
   .memo-card-row .memo-primary-pill,
   .note-source-modal.mobile-draggable-sheet .memo-modal-actions .ios-primary-button {
-    border: 2px solid rgba(0, 0, 0, 0.2);
+    border: var(--btn-border-width) solid var(--btn-border-filled);
     box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
   }
 
@@ -10466,11 +10484,13 @@
     line-height: normal;
   }
 
+  /* Production sizes this one at 2.75rem from a selector the shared close rule
+     cannot outrank; the token is restated here rather than left to drift. */
   .note-source-modal.mobile-draggable-sheet .ios-sheet-header-close {
     position: static;
     flex: 0 0 auto;
-    width: 2.9rem;
-    height: 2.9rem;
+    width: var(--btn-round);
+    height: var(--btn-round);
   }
 
   /*
@@ -10522,12 +10542,6 @@
     gap: 1.1rem;
     padding-top: 1rem;
     padding-bottom: 2rem;
-  }
-
-  .note-source-modal.mobile-draggable-sheet .ios-sheet-header-close {
-    background: var(--surface);
-    color: var(--text);
-    box-shadow: var(--shadow);
   }
 
   /* The artboard's capture screen is only the source and the actions. The two

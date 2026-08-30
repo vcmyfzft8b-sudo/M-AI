@@ -781,9 +781,10 @@ export async function generateLectureNotesFromStoredTranscript(params: {
 
 /**
  * Records a pipeline failure on the lecture row. Returns `{ recorded: false }` when there was no
- * failure left to record — the notes were already finished and the lecture was left ready, or the
- * learner deleted the lecture out from under the run. A caller that would otherwise rethrow should
- * treat either as a success: retrying buys nothing in both cases.
+ * failure left to record — the notes were already finished and the lecture was left ready, the
+ * learner deleted the lecture out from under the run, or the overrun was handed to an automatic
+ * retry and the row went back to "queued". A caller that would otherwise rethrow should treat all
+ * three as a success: retrying buys nothing in any of them.
  */
 export async function markLecturePipelineFailed(params: {
   lectureId: string;
@@ -958,7 +959,18 @@ export async function markLecturePipelineFailed(params: {
         error: toErrorMessage(params.error),
       });
 
-      return { recorded: true };
+      // Nothing was recorded: the row is "queued" with its error_message cleared, no Sentry event
+      // was sent and no failure capture was written. Saying otherwise makes the Inngest bodies
+      // rethrow — the run that just healed itself is reported to the platform as a failed one, and
+      // the uncaught budget error on POST /api/inngest wakes the triage automation for a lecture
+      // that is already being retried. That is the 2026-08-29T07:32 pair in the platform log:
+      // "retrying automatically" for lecture b11aa158, then the same sentence again as an uncaught
+      // error 2.5 seconds later, from a run whose retry went on to succeed.
+      //
+      // This branch returned `recorded: true` honestly until the intermediate state became
+      // "queued": before that it really did mark the lecture failed first. The write changed; this
+      // did not.
+      return { recorded: false };
     }
 
     // The retry could not be started, so this lecture is waiting on a human after all. Falling

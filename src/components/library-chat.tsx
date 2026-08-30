@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { Emoji, Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
+import { useDictation } from "@/components/use-dictation";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 
@@ -339,6 +340,17 @@ export function LibraryChat({
   }
 
   const sendReady = draft.trim().length > 0;
+  /*
+   * The same control as the note chat's: a microphone until there is something
+   * to send, then Send. Desktop has no reason to differ — the arrow appearing
+   * only when it does something is the point, not the input method.
+   */
+  const dictation = useDictation({
+    onText: useCallback((text: string) => {
+      setDraft((current) => (current.trim() ? `${current.trim()} ${text}` : text));
+    }, []),
+  });
+  const showMic = dictation.supported && !sendReady;
 
   return (
     <>
@@ -378,11 +390,22 @@ export function LibraryChat({
             </div>
             <button
               type="button"
-              aria-label="Pošlji"
-              className={`memo-send ${sendReady ? "ready" : ""}`.trim()}
-              onClick={() => void send()}
+              aria-label={
+                showMic
+                  ? dictation.listening
+                    ? "Ustavi narekovanje"
+                    : "Narekuj vprašanje"
+                  : "Pošlji"
+              }
+              className={`memo-send ${showMic ? "mic" : ""} ${
+                dictation.listening ? "listening" : ""
+              } ${sendReady ? "ready" : ""}`.trim()}
+              onClick={() => (showMic ? dictation.toggle() : void send())}
             >
-              <Msym name="arrow_upward" size="1.4rem" />
+              <Msym
+                name={showMic ? (dictation.listening ? "stop" : "mic") : "arrow_upward"}
+                size="1.4rem"
+              />
             </button>
           </div>
         </div>
@@ -474,11 +497,16 @@ export function LibraryChat({
                     </div>
                     <button
                       type="button"
-                      aria-label="Pošlji"
-                      className={`memo-send ${sendReady ? "ready" : ""}`.trim()}
-                      onClick={() => void send()}
+                      aria-label={showMic ? "Narekuj vprašanje" : "Pošlji"}
+                      className={`memo-send ${showMic ? "mic" : ""} ${
+                        dictation.listening ? "listening" : ""
+                      } ${sendReady ? "ready" : ""}`.trim()}
+                      onClick={() => (showMic ? dictation.toggle() : void send())}
                     >
-                      <Msym name="arrow_upward" size="1.4rem" />
+                      <Msym
+                        name={showMic ? (dictation.listening ? "stop" : "mic") : "arrow_upward"}
+                        size="1.4rem"
+                      />
                     </button>
                   </div>
                 </div>
@@ -627,11 +655,16 @@ export function LibraryChat({
                     />
                     <button
                       type="button"
-                      aria-label="Pošlji"
-                      className={`memo-chat-send ${sendReady ? "ready" : ""}`.trim()}
-                      onClick={() => void send()}
+                      aria-label={showMic ? "Narekuj vprašanje" : "Pošlji"}
+                      className={`memo-chat-send ${showMic ? "mic" : ""} ${
+                        dictation.listening ? "listening" : ""
+                      } ${sendReady ? "ready" : ""}`.trim()}
+                      onClick={() => (showMic ? dictation.toggle() : void send())}
                     >
-                      <Msym name="arrow_upward" size="1.5rem" />
+                      <Msym
+                        name={showMic ? (dictation.listening ? "stop" : "mic") : "arrow_upward"}
+                        size="1.5rem"
+                      />
                     </button>
                   </div>
                 </div>

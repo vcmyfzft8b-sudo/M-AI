@@ -8,10 +8,11 @@ export function SupportIndexLoading() {
   return (
     <div className="memo-support-screen" aria-hidden="true" data-route-skeleton="">
       <div className="memo-page">
-        <div
-          className="app-loading-pill"
-          style={{ height: "1.75rem", width: "7rem", marginBottom: "1.2rem" }}
-        />
+        {/* Title and the way back share a row here, as on the real screen. */}
+        <div className="memo-support-head">
+          <div className="app-loading-pill" style={{ height: "1.75rem", width: "7rem" }} />
+          <span className="memo-m-round app-loading-pill memo-only-mobile" />
+        </div>
 
         {SKELETON_SECTIONS.map((section, index) => (
           <div key={index} className="memo-help-section">

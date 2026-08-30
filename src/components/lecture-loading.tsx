@@ -5,7 +5,17 @@ const SKELETON_PARAGRAPHS = [
   ["full", "short"],
 ] as const;
 
-/** The note screen's shapes: pill row, emoji + title, then the body. */
+/**
+ * The note screen while it loads.
+ *
+ * Same idea as the home skeleton: the screen's own class names carry the sizes,
+ * so `.memo-tab` is whatever a tab is at this width rather than a pill someone
+ * measured once on desktop and left behind when the phone got shorter ones.
+ *
+ * The phone's nav row and the dock are drawn too. Both belong to the note
+ * screen rather than to the app shell, and a skeleton without them takes the
+ * way back off the screen for as long as the note takes to arrive.
+ */
 export function LectureWorkspaceLoading() {
   return (
     <div
@@ -15,15 +25,21 @@ export function LectureWorkspaceLoading() {
       aria-label="Nalaganje zapiska"
       aria-busy="true"
     >
+      {/* Phone: back, the note's emoji, actions. */}
+      <div className="memo-m-navbar memo-only-mobile flex">
+        <span className="memo-m-navbtn app-loading-pill" />
+        <span
+          className="app-loading-pill"
+          style={{ display: "block", height: "1.5rem", width: "1.5rem", borderRadius: "999px" }}
+        />
+        <span className="memo-m-navbtn app-loading-pill" />
+      </div>
+
       <div className="memo-note-card">
         <div className="memo-note-scroll">
           <div className="memo-tabs">
             {SKELETON_TABS.map((tab) => (
-              <span
-                key={tab}
-                className="app-loading-pill"
-                style={{ height: "3.1rem", width: "7.5rem", borderRadius: "999px", flex: "0 0 auto" }}
-              />
+              <span key={tab} className="memo-tab app-loading-pill" style={{ width: "7.5rem" }} />
             ))}
           </div>
 
@@ -60,6 +76,12 @@ export function LectureWorkspaceLoading() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Phone: the listen pill and the way into chat, where they always are. */}
+        <div className="memo-dock">
+          <span className="memo-dock-pill app-loading-pill" />
+          <span className="memo-m-chatbar app-loading-pill memo-only-mobile" />
         </div>
       </div>
     </div>

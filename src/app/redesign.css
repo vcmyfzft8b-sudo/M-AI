@@ -478,7 +478,17 @@
 }
 
 .memo-main {
+  /* The route skeleton is portalled in here as an `inset: 0` overlay, which
+     needs a positioned ancestor to fill this column rather than the page. */
+  position: relative;
   min-width: 0;
+}
+
+/* ...and it needs this column's ground. `--canvas` belongs to the old shell
+   and is not defined in the memo layer, so the overlay would be transparent
+   and the page would show through the skeleton. */
+.memo-main > .navigation-loading-overlay-in-content {
+  background: var(--bg);
 }
 
 /*
@@ -2507,13 +2517,15 @@
 
 /* The same control as Send, in its dictation role: white while it waits,
    coral while it listens, because the only way to know a microphone is open is
-   to be told. */
-.memo-chat-send.mic {
+   to be told. The library chat's bar uses `.memo-send` for the same button. */
+.memo-chat-send.mic,
+.memo-send.mic {
   background: var(--surface);
   color: var(--text);
 }
 
-.memo-chat-send.mic.listening {
+.memo-chat-send.mic.listening,
+.memo-send.mic.listening {
   background: var(--coral);
   color: #fff;
 }
@@ -4630,7 +4642,13 @@
   box-shadow: var(--shadow);
 }
 
-.memo-card-row + .memo-card-row {
+/*
+ * A general sibling, not an adjacent one: the phone's section headings sit
+ * between these cards and are `display: none` on desktop, which is enough to
+ * break `+` — the element is still in the DOM. That is why two settings cards
+ * were touching at desktop width and nowhere else.
+ */
+.memo-card-row ~ .memo-card-row {
   margin-top: 0.85rem;
 }
 

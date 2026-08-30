@@ -162,7 +162,14 @@ export function AppShell({
               </nav>
             </aside>
 
-            <main className="memo-main">{children}</main>
+            {/*
+              * `app-shell-content` is what the navigation overlay looks for: it
+              * portals the route skeleton in here, so the skeleton gets this
+              * column's width and padding and the rail beside it stays put.
+              * Without the hook the overlay falls back to a fixed layer over
+              * the whole window, which covers the rail while a page loads.
+              */}
+            <main className="memo-main app-shell-content">{children}</main>
 
             {/* Third grid column; the note screen portals its chat panel here. */}
             {chatOpen ? <div className="memo-chat-slot" ref={registerChatSlot} /> : null}

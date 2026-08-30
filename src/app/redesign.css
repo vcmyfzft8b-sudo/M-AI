@@ -8191,7 +8191,14 @@
     -webkit-touch-callout: default;
   }
 
-  .memo-note-card {
+  /*
+   * The card is only a desktop surface. `.memo-grid.with-chat` restates its
+   * padding at three-class specificity, which beat the reset here and left the
+   * note inset by the card's 1.4rem *and* the scroller's 1.15rem — more than
+   * twice the artboard's margin.
+   */
+  .memo-note-card,
+  .memo-grid.with-chat .memo-note-card {
     margin-left: 0;
     padding: 0;
     background: transparent;

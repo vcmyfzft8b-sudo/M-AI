@@ -295,7 +295,7 @@ export function DiscountOffer({
               }}
               disabled={isSpinning && !hasWon}
             >
-              {hasWon ? "Uporabi kodo" : isSpinning ? "Vrtim…" : "Zavrti kolo"}
+              {hasWon ? "Prevzemi popust" : isSpinning ? "Vrtim…" : "Zavrti kolo"}
             </button>
           </div>
         </div>

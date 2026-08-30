@@ -2401,7 +2401,15 @@ a:visited {
   }
 
   .memo-paywall-shell {
+    /*
+     * `min-height`, not `height`: the shell fills the screen when it fits and
+     * grows past it when it does not. With the cancelled-payment banner on top
+     * the content is taller than the viewport, and a fixed height left the
+     * call to action below the fold with nothing able to scroll to it.
+     */
     min-height: 100dvh;
+    max-height: none;
+    overflow-y: auto;
     padding: max(4.65rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
   }
 

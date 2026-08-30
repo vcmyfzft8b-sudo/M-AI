@@ -32,6 +32,19 @@
   }
 }
 
+/*
+ * The shell is a fixed-height, clipped box — right for the app's own screens,
+ * which scroll inside their own panes. The paywall is not one of those: it is
+ * a page that grows, and with the cancelled-payment banner on top it grows
+ * past the viewport, leaving the call to action below a fold nothing could
+ * scroll to. Where the shell contains it, the shell scrolls.
+ */
+.memo-shell:has(.app-start-shell) {
+  height: auto;
+  min-height: 100dvh;
+  overflow-y: auto;
+}
+
 /* --- tokens --------------------------------------------------------------- */
 
 .memo,

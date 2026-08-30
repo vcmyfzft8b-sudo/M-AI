@@ -20,7 +20,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { flushSync } from "react-dom";
 
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
-import { INSTALL_GUIDE_SEEN_KEY, shouldOfferInstallGuide } from "@/lib/install-guide";
+import {
+  detectInstallPlatform,
+  INSTALL_GUIDE_SEEN_KEY,
+  shouldOfferInstallGuide,
+} from "@/lib/install-guide";
 import { DiscountOffer } from "@/components/discount-offer";
 import { LibraryChat } from "@/components/library-chat";
 import { NoteSourceModal, type NoteSourceMode } from "@/components/note-source-modal";
@@ -521,7 +525,9 @@ export function HomeDashboard({
   const [showInstallHint, setShowInstallHint] = useState(false);
 
   useEffect(() => {
-    const sync = () => setShowInstallHint(shouldOfferInstallGuide());
+    // Only where the guide behind it exists: it is iPhone screenshots.
+    const sync = () =>
+      setShowInstallHint(detectInstallPlatform() === "ios" && shouldOfferInstallGuide());
 
     sync();
     window.addEventListener(INSTALL_GUIDE_SEEN_KEY, sync);

@@ -165,23 +165,33 @@
 
 /* The drawing sits on the page's ground so the drawn phone reads as a phone
    against it rather than as a panel inside the card. */
-.memo-install-art,
+/* A real capture of a phone screen, so it keeps the phone's proportions and
+   gets an edge to sit against rather than bleeding into the card behind it. */
 .memo-install-shot {
-  display: block;
+  position: relative;
   width: 100%;
-  max-width: 15rem;
-  height: auto;
+  max-width: 13rem;
   margin: 0 auto;
+  border: 1px solid var(--line);
   border-radius: 16px;
+  overflow: hidden;
   background: var(--bg);
 }
 
-/* A real screenshot is a photograph of a phone, so it keeps the phone's
-   proportions and gets an edge to sit against rather than bleeding into the
-   card behind it. */
-.memo-install-shot {
-  border: 1px solid var(--line);
-  object-fit: contain;
+.memo-install-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* The box over the row the step is about. Drawn rather than described: on a
+   screenshot of a whole phone, "the one near the bottom" is not directions. */
+.memo-install-highlight {
+  position: absolute;
+  border: 2.5px solid #f45f5a;
+  border-radius: 8px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
 }
 
 /* --- tokens --------------------------------------------------------------- */

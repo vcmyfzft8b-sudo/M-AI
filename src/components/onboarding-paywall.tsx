@@ -15,6 +15,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { EmojiIcon } from "@/components/emoji-icon";
+import { HOME_SCREEN_STEPS } from "@/lib/install-guide";
 import { Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import {
@@ -71,34 +72,6 @@ type OnboardingForm = {
   dailyGoal: string;
 };
 
-const HOME_SCREEN_STEPS = [
-  {
-    title: "Klikni Share",
-    description: "V Safariju odpri meni in pritisni Share.",
-    src: "/onboarding/add-home-screen-menu.png",
-    alt: "Safari meni z možnostjo Share",
-    highlight: { left: "27.4%", top: "58.75%", width: "64.2%", height: "4.15%" },
-  },
-  {
-    title: "Izberi Add to Home Screen",
-    description: "V share meniju pritisni Add to Home Screen.",
-    src: "/onboarding/add-home-screen-share.png",
-    alt: "iPhone delilni meni z možnostjo Add to Home Screen",
-    highlight: { left: "5.2%", top: "78.65%", width: "89.6%", height: "5.15%" },
-  },
-  {
-    title: "Pritisni Add",
-    description: "Ime lahko pustiš Memo AI in potrdiš z Add.",
-    src: "/onboarding/add-home-screen-add.png",
-    alt: "Potrditev Add to Home Screen za Memo AI",
-  },
-  {
-    title: "Memo AI je zdaj na Home Screenu",
-    description: "Naslednjič ga odpreš kot aplikacijo.",
-    src: "/onboarding/add-home-screen-result.png",
-    alt: "Memo AI ikona na začetnem zaslonu iPhona",
-  },
-] as const;
 
 const HOME_SCREEN_DRAG_LOCK_THRESHOLD_PX = 6;
 const HOME_SCREEN_SWIPE_THRESHOLD_PX = 18;

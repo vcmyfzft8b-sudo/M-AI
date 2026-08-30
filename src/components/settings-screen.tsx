@@ -12,7 +12,11 @@ import { MemoPortal } from "@/components/memo-portal";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { BRAND_NAME, BRAND_SUPPORT_EMAIL } from "@/lib/brand";
 import type { ThemePreference } from "@/lib/theme";
-import { INSTALL_GUIDE_SEEN_KEY, shouldOfferInstallGuide } from "@/lib/install-guide";
+import {
+  detectInstallPlatform,
+  INSTALL_GUIDE_SEEN_KEY,
+  shouldOfferInstallGuide,
+} from "@/lib/install-guide";
 import {
   readStoredThemePreference,
   setThemePreference,
@@ -34,6 +38,11 @@ const THEME_OPTIONS: Array<{ value: ThemePreference; label: string }> = [
   { value: "dark", label: "Temna" },
   { value: "system", label: "Sistem" },
 ];
+
+/** Platform never changes for the life of a page, so there is nothing to watch. */
+function subscribeToNothing() {
+  return () => {};
+}
 
 type ConfirmKind = "logout" | "delete" | "share";
 
@@ -75,6 +84,17 @@ export function SettingsScreen({
   const [isInstallGuideOpen, setIsInstallGuideOpen] = useState(false);
   /* Same badge as the gear carries, on the row that answers it. */
   const [showInstallHint, setShowInstallHint] = useState(false);
+
+  /*
+   * The guide is iPhone screenshots, so it is offered on iPhones. Showing an
+   * Android user how to use Safari's share sheet would be worse than saying
+   * nothing.
+   */
+  const isIos = useSyncExternalStore(
+    subscribeToNothing,
+    () => detectInstallPlatform() === "ios",
+    () => false,
+  );
 
   useEffect(() => {
     const sync = () => setShowInstallHint(shouldOfferInstallGuide());
@@ -170,14 +190,18 @@ export function SettingsScreen({
   );
 
   const rows: SettingsRow[] = [
-    {
-      id: "install",
-      emoji: "📲",
-      title: "Dodaj na začetni zaslon",
-      detail: "Odpri Memo kot aplikacijo",
-      className: showInstallHint ? "has-dot" : "",
-      onSelect: () => setIsInstallGuideOpen(true),
-    },
+    ...(isIos
+      ? [
+          {
+            id: "install",
+            emoji: "📲",
+            title: "Dodaj na začetni zaslon",
+            detail: "Odpri Memo kot aplikacijo",
+            className: showInstallHint ? "has-dot" : "",
+            onSelect: () => setIsInstallGuideOpen(true),
+          },
+        ]
+      : []),
     {
       id: "redeem",
       emoji: "🎟️",

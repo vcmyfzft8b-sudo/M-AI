@@ -1,5 +1,46 @@
 export const INSTALL_GUIDE_SEEN_KEY = "memo-install-guide-seen";
 
+/*
+ * Adding Memo to the home screen, in real screenshots taken on a real iPhone.
+ *
+ * Shared with the onboarding paywall, which is where they came from — one set
+ * of images and one set of words, so the two places that explain this cannot
+ * drift into explaining it differently.
+ *
+ * `highlight` is a box drawn over the shot to point at the row being described,
+ * in percentages so it survives the image being served at any size.
+ */
+export const HOME_SCREEN_STEPS = [
+  {
+    title: "Klikni Share",
+    description: "V Safariju odpri meni in pritisni Share.",
+    src: "/onboarding/add-home-screen-menu.png",
+    alt: "Safari meni z možnostjo Share",
+    highlight: { left: "27.4%", top: "58.75%", width: "64.2%", height: "4.15%" },
+  },
+  {
+    title: "Izberi Add to Home Screen",
+    description: "V share meniju pritisni Add to Home Screen.",
+    src: "/onboarding/add-home-screen-share.png",
+    alt: "iPhone delilni meni z možnostjo Add to Home Screen",
+    highlight: { left: "5.2%", top: "78.65%", width: "89.6%", height: "5.15%" },
+  },
+  {
+    title: "Pritisni Add",
+    description: "Ime lahko pustiš Memo AI in potrdiš z Add.",
+    src: "/onboarding/add-home-screen-add.png",
+    alt: "Potrditev Add to Home Screen za Memo AI",
+    highlight: { left: "78.5%", top: "8.4%", width: "18.2%", height: "5.4%" },
+  },
+  {
+    title: "Memo AI je zdaj na Home Screenu",
+    description: "Naslednjič ga odpreš kot aplikacijo.",
+    src: "/onboarding/add-home-screen-result.png",
+    alt: "Memo AI ikona na začetnem zaslonu iPhona",
+    highlight: { left: "3.6%", top: "7.6%", width: "20.4%", height: "9.6%" },
+  },
+] as const;
+
 export type InstallPlatform = "ios" | "android" | "other";
 
 /**

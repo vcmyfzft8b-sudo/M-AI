@@ -28,6 +28,7 @@ import { EmojiIcon } from "@/components/emoji-icon";
 import { LiveAudioWave } from "@/components/live-audio-wave";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { MemoPortal } from "@/components/memo-portal";
+import { sheetClass, useSheet } from "@/components/use-sheet";
 import { Emoji, Msym } from "@/components/msym";
 import { createAudioLectureWithProcessingChunks } from "@/lib/audio-lecture-upload";
 import {
@@ -384,6 +385,14 @@ export function NoteSourceModal({
   const [visualizerStream, setVisualizerStream] = useState<MediaStream | null>(null);
   const [showAudioImportGuide, setShowAudioImportGuide] = useState(false);
   const [sourceSheetDragOffset, setSourceSheetDragOffset] = useState(0);
+
+  /*
+   * The sheet keeps its own drag — its close is layered, stepping back out of
+   * the photo preview or the text editor before it leaves — but the exit is the
+   * design's shared one rather than a jump off the bottom of the screen.
+   */
+  const sourceSheet = useSheet(onClose);
+  const dismissSourceSheet = sourceSheet.dismiss;
 
   useEffect(() => {
     if (mode) {
@@ -917,6 +926,7 @@ export function NoteSourceModal({
   const requestClose = useCallback(() => {
     sourceSheetDragStartYRef.current = null;
     sourceSheetDragOffsetRef.current = 0;
+
     setSourceSheetDragOffset(0);
 
     if (activePhotoPreviewId) {
@@ -944,14 +954,14 @@ export function NoteSourceModal({
       return;
     }
 
-    onClose();
+    dismissSourceSheet();
   }, [
     busyLabel,
+    dismissSourceSheet,
     handleCancelBusyAction,
     activePhotoPreviewId,
     isRecording,
     isTextEditorOpen,
-    onClose,
     showAudioImportGuide,
     stopRecording,
   ]);
@@ -1020,12 +1030,7 @@ export function NoteSourceModal({
 
     function handleWindowPointerEnd() {
       if (sourceSheetDragOffsetRef.current > 110) {
-        sourceSheetDragStartYRef.current = null;
-        sourceSheetDragOffsetRef.current = window.innerHeight;
-        setSourceSheetDragOffset(window.innerHeight);
-        window.setTimeout(() => {
-          requestCloseRef.current();
-        }, 180);
+        requestCloseRef.current();
         return;
       }
 
@@ -1995,7 +2000,7 @@ export function NoteSourceModal({
   const modalContent = (
     <>
       <div
-        className="ios-sheet-backdrop note-source-modal-backdrop"
+        className={sheetClass("ios-sheet-backdrop note-source-modal-backdrop", sourceSheet.closing)}
         onClick={requestClose}
         aria-hidden="true"
       />
@@ -2007,13 +2012,19 @@ export function NoteSourceModal({
       >
         <div className="ios-sheet-stack note-source-modal-stack">
           <section
-            className="ios-sheet note-source-sheet note-source-modal mobile-draggable-sheet"
+            className={sheetClass(
+              "ios-sheet note-source-sheet note-source-modal mobile-draggable-sheet",
+              sourceSheet.closing,
+            )}
             onPointerDown={handleSourceSheetPointerDown}
             onClickCapture={handleSourceSheetClickCapture}
             onDragOver={handleFileDragOver}
             onDrop={handleSheetDrop}
+            data-dragging={
+              sourceSheetDragOffset > 0 && !sourceSheet.closing ? "true" : undefined
+            }
             style={
-              sourceSheetDragOffset > 0
+              sourceSheetDragOffset > 0 && !sourceSheet.closing
                 ? { transform: `translateY(${sourceSheetDragOffset}px)`, transition: "none" }
                 : undefined
             }
@@ -2022,6 +2033,7 @@ export function NoteSourceModal({
               type="button"
               className="mobile-sheet-drag-handle note-source-modal-drag-handle"
               aria-label="Povleci navzdol za zapiranje"
+              data-drag-handle
             />
             <div className="ios-sheet-header note-source-header">
               <span className="memo-modal-tile">

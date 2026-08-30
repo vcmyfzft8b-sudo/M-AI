@@ -5,7 +5,6 @@ import Image from "next/image";
 import katex from "katex";
 import type {
   CSSProperties,
-  MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from "react";
@@ -15,6 +14,7 @@ import { createPortal } from "react-dom";
 
 import { Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
+import { sheetClass, useSheet } from "@/components/use-sheet";
 import {
   DEFAULT_NOTE_TTS_HIGHLIGHT_COLOR_ID,
   DEFAULT_NOTE_TTS_PLAYBACK_RATE,
@@ -136,7 +136,6 @@ const TTS_FREE_DAILY_LIMIT_MESSAGE =
   "Porabil si današnje brezplačno ustvarjanje zvoka. Za več zvoka nadgradi paket ali počakaj do ponastavitve ob 00:00. Že pripravljene dele lahko še vedno poslušaš od začetka do mesta, kjer je zvok pripravljen.";
 const TTS_PAID_DAILY_LIMIT_MESSAGE =
   "Porabil si današnje ustvarjanje zvoka. Nov zvok bo na voljo po ponastavitvi ob 00:00. Že pripravljene dele lahko še vedno poslušaš od začetka do mesta, kjer je zvok pripravljen.";
-const READ_SETTINGS_SHEET_CLOSE_MS = 180;
 const TTS_GENERATION_PROGRESS_LABEL = "Ustvarjam zvok";
 
 function getTtsGenerationProgressPercent(startedAt: number, workloadChunks = 1) {
@@ -305,131 +304,23 @@ function QuotaUsageMenu({
   onHighlightColorChange: (colorId: NoteTtsHighlightColorId) => void;
 }) {
   const menuRef = useRef<HTMLDetailsElement | null>(null);
-  const dragStartYRef = useRef<number | null>(null);
-  const dragOffsetRef = useRef(0);
-  const suppressClickRef = useRef(false);
-  const closeTimerRef = useRef<number | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isMenuClosing, setIsMenuClosing] = useState(false);
-  const [dragOffset, setDragOffset] = useState(0);
 
   const closeMenu = useCallback(() => {
-    if (closeTimerRef.current !== null) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-    dragStartYRef.current = null;
-    dragOffsetRef.current = 0;
-    setDragOffset(0);
     setIsMenuOpen(false);
-    setIsMenuClosing(false);
     if (menuRef.current) {
       menuRef.current.open = false;
     }
   }, []);
 
+  // The listening settings are an ordinary phone sheet: they drag from anywhere
+  // that is not a control, and they leave through the shared exit.
+  const settingsSheet = useSheet(closeMenu);
+  const dismissSettingsSheet = settingsSheet.dismiss;
+
   const animateCloseMenu = useCallback(() => {
-    if (isMenuClosing) {
-      return;
-    }
-
-    dragStartYRef.current = null;
-    dragOffsetRef.current = window.innerHeight;
-    setIsMenuClosing(true);
-    setDragOffset(window.innerHeight);
-    closeTimerRef.current = window.setTimeout(() => {
-      closeTimerRef.current = null;
-      closeMenu();
-    }, READ_SETTINGS_SHEET_CLOSE_MS);
-  }, [closeMenu, isMenuClosing]);
-
-  useEffect(() => {
-    return () => {
-      if (closeTimerRef.current !== null) {
-        window.clearTimeout(closeTimerRef.current);
-      }
-    };
-  }, []);
-
-  function handleSheetPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.pointerType === "mouse" && event.button !== 0) {
-      return;
-    }
-
-    const target = event.target;
-    const interactiveTarget =
-      target instanceof Element
-        ? target.closest("button, input, textarea, select, a, .app-close-button")
-        : null;
-    const dragHandleTarget =
-      target instanceof Element ? target.closest(".note-read-usage-drag-handle") : null;
-
-    if (
-      interactiveTarget &&
-      !dragHandleTarget
-    ) {
-      return;
-    }
-
-    suppressClickRef.current = false;
-    dragStartYRef.current = event.clientY;
-    if (!interactiveTarget || dragHandleTarget) {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
-  }
-
-  function updateDragOffset(clientY: number) {
-    if (dragStartYRef.current === null) {
-      return;
-    }
-
-    const nextOffset = Math.max(0, clientY - dragStartYRef.current);
-    dragOffsetRef.current = nextOffset;
-    if (nextOffset > 8) {
-      suppressClickRef.current = true;
-    }
-    setDragOffset(nextOffset);
-  }
-
-  function handleSheetClickCapture(event: ReactMouseEvent<HTMLDivElement>) {
-    if (!suppressClickRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    suppressClickRef.current = false;
-  }
-
-  useEffect(() => {
-    if (!isMenuOpen) {
-      return;
-    }
-
-    function handleWindowPointerMove(event: PointerEvent) {
-      updateDragOffset(event.clientY);
-    }
-
-    function handleWindowPointerEnd() {
-      if (dragOffsetRef.current > 80) {
-        animateCloseMenu();
-        return;
-      }
-
-      dragStartYRef.current = null;
-      dragOffsetRef.current = 0;
-      setDragOffset(0);
-    }
-
-    window.addEventListener("pointermove", handleWindowPointerMove);
-    window.addEventListener("pointerup", handleWindowPointerEnd);
-    window.addEventListener("pointercancel", handleWindowPointerEnd);
-    return () => {
-      window.removeEventListener("pointermove", handleWindowPointerMove);
-      window.removeEventListener("pointerup", handleWindowPointerEnd);
-      window.removeEventListener("pointercancel", handleWindowPointerEnd);
-    };
-  }, [animateCloseMenu, isMenuOpen]);
+    dismissSettingsSheet();
+  }, [dismissSettingsSheet]);
 
   if (!status) {
     return null;
@@ -536,16 +427,7 @@ function QuotaUsageMenu({
       <details
         ref={menuRef}
         className={`note-read-usage-menu ${isLimitReached ? "limit" : ""}`}
-        onToggle={(event) => {
-          const isOpen = event.currentTarget.open;
-          setIsMenuOpen(isOpen);
-          if (isOpen) {
-            setIsMenuClosing(false);
-            dragStartYRef.current = null;
-            dragOffsetRef.current = 0;
-            setDragOffset(0);
-          }
-        }}
+        onToggle={(event) => setIsMenuOpen(event.currentTarget.open)}
       >
         <summary
           className="note-read-usage-trigger"
@@ -568,22 +450,19 @@ function QuotaUsageMenu({
         <MemoPortal>
           <button
             type="button"
-            className="note-read-usage-mobile-backdrop"
+            className={sheetClass("note-read-usage-mobile-backdrop", settingsSheet.closing)}
             onClick={animateCloseMenu}
             aria-label="Zapri nastavitve poslušanja"
           />
           <div
-            className="note-read-usage-popover note-read-usage-mobile-sheet"
+            className={sheetClass(
+              "note-read-usage-popover note-read-usage-mobile-sheet",
+              settingsSheet.closing,
+            )}
             role="dialog"
             aria-modal="true"
             aria-label="Nastavitve poslušanja"
-            onPointerDown={handleSheetPointerDown}
-            onClickCapture={handleSheetClickCapture}
-            style={
-              dragOffset > 0
-                ? { transform: `translateY(${dragOffset}px)`, transition: "none" }
-                : undefined
-            }
+            {...settingsSheet.dragProps}
           >
             {menuContent}
           </div>

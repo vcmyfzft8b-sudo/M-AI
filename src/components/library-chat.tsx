@@ -1,11 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Emoji, Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
+import { sheetClass, useSheet } from "@/components/use-sheet";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 
 /**
@@ -92,6 +93,18 @@ export function LibraryChat({
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, [isScopeMenuOpen]);
 
+  const close = useCallback(() => {
+    onOpenChange(false);
+    setIsScopeMenuOpen(false);
+  }, [onOpenChange]);
+
+  /*
+   * The phone sheet is a scrolling conversation, so — as in the design — only
+   * the grabber starts a drag; a finger on the log pans it.
+   */
+  const chatSheet = useSheet(close, { scrollable: true });
+  const dismissChatSheet = chatSheet.dismiss;
+
   useEffect(() => {
     if (!open) {
       return;
@@ -99,14 +112,13 @@ export function LibraryChat({
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onOpenChange(false);
-        setIsScopeMenuOpen(false);
+        dismissChatSheet();
       }
     }
 
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [onOpenChange, open]);
+  }, [dismissChatSheet, open]);
 
   async function send(preset?: string) {
     const question = (preset ?? draft).trim();
@@ -480,11 +492,16 @@ export function LibraryChat({
             <button
               type="button"
               aria-label="Zapri klepet"
-              className="memo-scrim"
-              onClick={() => onOpenChange(false)}
+              className={sheetClass("memo-scrim", chatSheet.closing)}
+              onClick={() => chatSheet.dismiss()}
             />
-            <div className="memo-sheet-full surface" role="dialog" aria-modal="true">
-              <div className="memo-grab-wide">
+            <div
+              className={sheetClass("memo-sheet-full surface", chatSheet.closing)}
+              role="dialog"
+              aria-modal="true"
+              {...chatSheet.dragProps}
+            >
+              <div className="memo-grab-wide" data-drag-handle>
                 <span />
               </div>
               <div className="memo-m-chat-head">
@@ -512,7 +529,7 @@ export function LibraryChat({
                   type="button"
                   aria-label="Zapri"
                   className="memo-m-chat-head-btn right"
-                  onClick={() => onOpenChange(false)}
+                  onClick={() => chatSheet.dismiss()}
                 >
                   <Msym name="close" size="1.45rem" fill={false} weight={500} />
                 </button>

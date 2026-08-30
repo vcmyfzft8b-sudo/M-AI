@@ -66,6 +66,8 @@ export type DemoNotePack = {
   title: string;
   sourceType: "audio" | "pdf" | "text" | "link" | "presentation";
   durationSeconds: number | null;
+  /** Documents print a page count on the note row, the way the design does. */
+  pageCount?: number;
   summary: string;
   keyTopics: string[];
   notesMd: string;
@@ -538,6 +540,7 @@ const ANATOMIJA: DemoNotePack = {
   title: "Anatomija – zgradba živčevja",
   sourceType: "pdf",
   durationSeconds: null,
+  pageCount: 24,
   summary:
     "Skripta razdeli živčevje na osrednji in obkrajni del, opiše nevron kot osnovno enoto ter razloži, kako akcijski potencial in sinapsa prenašata informacijo po telesu.",
   keyTopics: [

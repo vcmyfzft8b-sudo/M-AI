@@ -36,6 +36,7 @@ function buildProcessingMetadata(pack: DemoNotePack): Json {
   return {
     manualImport: {
       sourceType: pack.sourceType,
+      modelMetadata: pack.pageCount ? { sourcePageCount: pack.pageCount } : {},
     },
   };
 }

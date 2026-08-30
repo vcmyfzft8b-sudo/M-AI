@@ -1,10 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
+import { sheetClass, useSheet } from "@/components/use-sheet";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -148,9 +149,22 @@ export function DiscountOffer({
     }
   }
 
-  function closeWheel() {
-    onWheelOpenChange(false);
-  }
+  /*
+   * Both are full-height sheets the design marks scrollable, so the grabber is
+   * the only place a drag starts, and both leave through the shared exit.
+   */
+  const wheelSheet = useSheet(
+    useCallback(() => onWheelOpenChange(false), [onWheelOpenChange]),
+    { scrollable: true },
+  );
+  const offerSheet = useSheet(
+    useCallback(() => onOfferOpenChange(false), [onOfferOpenChange]),
+    { scrollable: true },
+  );
+
+  const closeWheel = wheelSheet.dismiss;
+  const closeOffer = offerSheet.dismiss;
+  const isClosing = offerOpen ? offerSheet.closing : wheelSheet.closing;
 
   if (!wheelOpen && !offerOpen) {
     return null;
@@ -161,10 +175,10 @@ export function DiscountOffer({
       <button
         type="button"
         aria-label="Zapri"
-        className="memo-scrim"
+        className={sheetClass("memo-scrim", isClosing)}
         onClick={() => {
           if (offerOpen) {
-            onOfferOpenChange(false);
+            closeOffer();
             return;
           }
 
@@ -173,8 +187,13 @@ export function DiscountOffer({
       />
 
       {wheelOpen && !offerOpen ? (
-        <div className="memo-sheet-full memo-wheel-sheet" role="dialog" aria-modal="true">
-          <div className="memo-grab-wide">
+        <div
+          className={sheetClass("memo-sheet-full memo-wheel-sheet", wheelSheet.closing)}
+          role="dialog"
+          aria-modal="true"
+          {...wheelSheet.dragProps}
+        >
+          <div className="memo-grab-wide" data-drag-handle>
             <span />
           </div>
           <div className="memo-wheel-close-row">
@@ -182,7 +201,7 @@ export function DiscountOffer({
               type="button"
               aria-label="Zapri"
               className="memo-m-round"
-              onClick={closeWheel}
+              onClick={() => closeWheel()}
             >
               <Msym name="close" size="1.45rem" fill={false} weight={500} />
             </button>
@@ -283,8 +302,13 @@ export function DiscountOffer({
       ) : null}
 
       {offerOpen ? (
-        <div className="memo-sheet-full memo-offer-sheet" role="dialog" aria-modal="true">
-          <div className="memo-grab-wide">
+        <div
+          className={sheetClass("memo-sheet-full memo-offer-sheet", offerSheet.closing)}
+          role="dialog"
+          aria-modal="true"
+          {...offerSheet.dragProps}
+        >
+          <div className="memo-grab-wide" data-drag-handle>
             <span className="light" />
           </div>
           <div className="memo-offer-head">
@@ -293,7 +317,7 @@ export function DiscountOffer({
               type="button"
               aria-label="Zapri ponudbo"
               className="memo-offer-close"
-              onClick={() => onOfferOpenChange(false)}
+              onClick={() => closeOffer()}
             >
               <Msym name="close" size="1.45rem" fill={false} weight={500} />
             </button>

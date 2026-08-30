@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 
 import { BillingPortalButton } from "@/components/billing-portal-button";
 import { InstantLink } from "@/components/instant-link";
 import { Emoji, Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
+import { sheetClass, useSheet } from "@/components/use-sheet";
 import { BRAND_NAME, BRAND_SUPPORT_EMAIL } from "@/lib/brand";
 import type { ThemePreference } from "@/lib/theme";
 import {
@@ -45,6 +46,9 @@ export function SettingsScreen({
 }) {
   const router = useRouter();
   const [confirm, setConfirm] = useState<ConfirmKind | null>(null);
+  // A bottom sheet on the phone, a centred dialog on desktop — and on the
+  // phone it leaves and drags like every other sheet.
+  const confirmSheet = useSheet(useCallback(() => setConfirm(null), []));
   const [toast, setToast] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -167,7 +171,7 @@ export function SettingsScreen({
 
   function runConfirm() {
     const kind = confirm;
-    setConfirm(null);
+    confirmSheet.dismiss();
 
     if (kind === "logout") {
       setIsLoggingOut(true);
@@ -285,10 +289,15 @@ export function SettingsScreen({
           <button
             type="button"
             aria-label="Prekliči"
-            className="memo-scrim"
-            onClick={() => setConfirm(null)}
+            className={sheetClass("memo-scrim", confirmSheet.closing)}
+            onClick={() => confirmSheet.dismiss()}
           />
-          <div className="memo-confirm memo-confirm-fixed" role="dialog" aria-modal="true">
+          <div
+            className={sheetClass("memo-confirm memo-confirm-fixed", confirmSheet.closing)}
+            role="dialog"
+            aria-modal="true"
+            {...confirmSheet.dragProps}
+          >
             <span className={`memo-confirm-tile ${confirm === "delete" ? "danger" : ""}`.trim()}>
               <Emoji symbol={confirmCopy[confirm].emoji} size="1.4rem" />
             </span>
@@ -298,7 +307,7 @@ export function SettingsScreen({
               <button
                 type="button"
                 className="memo-confirm-cancel"
-                onClick={() => setConfirm(null)}
+                onClick={() => confirmSheet.dismiss()}
               >
                 Prekliči
               </button>

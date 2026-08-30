@@ -32,6 +32,7 @@ import {
   useInstantNavigation,
 } from "@/components/navigation-loading";
 import { MemoPortal } from "@/components/memo-portal";
+import { sheetClass, useSheet } from "@/components/use-sheet";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -40,7 +41,10 @@ import {
 } from "@/lib/brand";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
 import { canRetryLectureFailure } from "@/lib/lecture-failure-codes";
-import { getEffectiveLectureSourceType } from "@/lib/lecture-source-metadata";
+import {
+  getEffectiveLectureSourceType,
+  getLectureSourceDetail,
+} from "@/lib/lecture-source-metadata";
 import { noteEmoji } from "@/lib/note-emoji";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
@@ -148,6 +152,13 @@ function sourceLabel(sourceType: string) {
   return "Zvok";
 }
 
+/** "Zvok, 1 h 12 min" where the design has a detail to print, "Zvok" where not. */
+function sourceMeta(lecture: AppLectureListItem, sourceType: string) {
+  const detail = getLectureSourceDetail(lecture);
+
+  return detail ? `${sourceLabel(sourceType)}, ${detail}` : sourceLabel(sourceType);
+}
+
 function shouldPollLectureStatus(status: AppLectureListItem["status"]) {
   return (
     status === "uploading" ||
@@ -200,7 +211,7 @@ const NoteRow = memo(function NoteRow({
     ? "Ustvarjanje zapiskov…"
     : isFailed
       ? "Obdelava ni uspela"
-      : `${formatCalendarDate(lecture.created_at)} • ${sourceLabel(sourceType)}`;
+      : `${formatCalendarDate(lecture.created_at)} • ${sourceMeta(lecture, sourceType)}`;
 
   useEffect(
     () => () => {
@@ -481,14 +492,6 @@ export function HomeDashboard({
   const homeHref = useAppHref("/app");
   const isCreatorDemo = useIsCreatorDemo();
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const mobileCreateMenuDragStartYRef = useRef<number | null>(null);
-  const mobileCreateMenuDragOffsetRef = useRef(0);
-  const mobileCreateMenuSuppressClickRef = useRef(false);
-  const mobileCreateMenuCloseTimerRef = useRef<number | null>(null);
-  const dashboardDialogDragStartYRef = useRef<number | null>(null);
-  const dashboardDialogDragOffsetRef = useRef(0);
-  const dashboardDialogSuppressClickRef = useRef(false);
-  const dashboardDialogCloseTimerRef = useRef<number | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const renameViewportMetricsKeyRef = useRef("");
   const [query, setQuery] = useState("");
@@ -500,8 +503,6 @@ export function HomeDashboard({
   const [hasClaimedDiscount, setHasClaimedDiscount] = useState(false);
   const [manualModal, setManualModal] = useState<NoteSourceMode | null>(null);
   const [isMobileCreateMenuOpen, setIsMobileCreateMenuOpen] = useState(false);
-  const [mobileCreateMenuDragOffset, setMobileCreateMenuDragOffset] = useState(0);
-  const [dashboardDialogDragOffset, setDashboardDialogDragOffset] = useState(0);
   const [renameDialogStyle, setRenameDialogStyle] = useState<CSSProperties | undefined>();
   const [libraryLectures, setLibraryLectures] = useState(lectures);
   const [useDashboardSwipeActions, setUseDashboardSwipeActions] = useState(false);
@@ -635,40 +636,10 @@ export function HomeDashboard({
   }
 
   const closeMobileCreateMenu = useCallback(() => {
-    if (mobileCreateMenuCloseTimerRef.current !== null) {
-      window.clearTimeout(mobileCreateMenuCloseTimerRef.current);
-      mobileCreateMenuCloseTimerRef.current = null;
-    }
-    mobileCreateMenuDragStartYRef.current = null;
-    mobileCreateMenuDragOffsetRef.current = 0;
-    setMobileCreateMenuDragOffset(0);
     setIsMobileCreateMenuOpen(false);
   }, []);
 
-  const animateCloseMobileCreateMenu = useCallback(() => {
-    if (mobileCreateMenuCloseTimerRef.current !== null) {
-      return;
-    }
-
-    mobileCreateMenuDragStartYRef.current = null;
-    mobileCreateMenuDragOffsetRef.current = window.innerHeight;
-    setMobileCreateMenuDragOffset(window.innerHeight);
-    mobileCreateMenuCloseTimerRef.current = window.setTimeout(() => {
-      mobileCreateMenuCloseTimerRef.current = null;
-      closeMobileCreateMenu();
-    }, 180);
-  }, [closeMobileCreateMenu]);
-
   const closeDashboardDialog = useCallback(() => {
-    if (dashboardDialogCloseTimerRef.current !== null) {
-      window.clearTimeout(dashboardDialogCloseTimerRef.current);
-      dashboardDialogCloseTimerRef.current = null;
-    }
-
-    dashboardDialogDragStartYRef.current = null;
-    dashboardDialogDragOffsetRef.current = 0;
-    dashboardDialogSuppressClickRef.current = false;
-    setDashboardDialogDragOffset(0);
     setDashboardActionError(null);
     setRenameTarget(null);
     setRenameValue("");
@@ -677,19 +648,27 @@ export function HomeDashboard({
     setDeleteTarget(null);
   }, []);
 
-  const animateCloseDashboardDialog = useCallback(() => {
-    if (busyLectureId || dashboardDialogCloseTimerRef.current !== null) {
-      return;
-    }
+  /*
+   * The design gives every phone sheet the same exit — it drops out of frame
+   * under `.closing` rather than vanishing. On desktop these are centred
+   * dialogs that the design closes on the spot, so the animated path is taken
+   * only where the sheet skin is.
+   */
+  const createSheet = useSheet(closeMobileCreateMenu);
+  const dialogSheet = useSheet(closeDashboardDialog, { locked: Boolean(busyLectureId) });
 
-    dashboardDialogDragStartYRef.current = null;
-    dashboardDialogDragOffsetRef.current = window.innerHeight;
-    setDashboardDialogDragOffset(window.innerHeight);
-    dashboardDialogCloseTimerRef.current = window.setTimeout(() => {
-      dashboardDialogCloseTimerRef.current = null;
-      closeDashboardDialog();
-    }, 180);
-  }, [busyLectureId, closeDashboardDialog]);
+  const dismissCreateSheet = createSheet.dismiss;
+  const dismissDialogSheet = dialogSheet.dismiss;
+
+  // Wrapped rather than passed straight to `onClick`, which would hand the
+  // click event to `dismiss` as its "run after closing" callback.
+  const animateCloseMobileCreateMenu = useCallback(() => {
+    dismissCreateSheet();
+  }, [dismissCreateSheet]);
+
+  const animateCloseDashboardDialog = useCallback(() => {
+    dismissDialogSheet();
+  }, [dismissDialogSheet]);
 
   useEffect(() => {
     if (!renameTarget && !deleteTarget) {
@@ -845,16 +824,6 @@ export function HomeDashboard({
     };
   }, [renameTarget, useDashboardSwipeActions]);
 
-  useEffect(
-    () => () => {
-      if (dashboardDialogCloseTimerRef.current !== null) {
-        window.clearTimeout(dashboardDialogCloseTimerRef.current);
-        dashboardDialogCloseTimerRef.current = null;
-      }
-    },
-    [],
-  );
-
   useEffect(() => {
     if (!isMobileCreateMenuOpen) {
       return;
@@ -868,89 +837,6 @@ export function HomeDashboard({
 
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [animateCloseMobileCreateMenu, isMobileCreateMenuOpen]);
-
-  function handleMobileCreateMenuPointerDown(
-    event: ReactPointerEvent<HTMLElement>,
-  ) {
-    if (event.pointerType === "mouse" && event.button !== 0) {
-      return;
-    }
-
-    const target = event.target;
-    const interactiveTarget =
-      target instanceof Element
-        ? target.closest("button, a, input, textarea, select, .app-close-button")
-        : null;
-    const dragHandleTarget =
-      target instanceof Element ? target.closest(".mobile-create-menu-drag-handle") : null;
-
-    mobileCreateMenuSuppressClickRef.current = false;
-    mobileCreateMenuDragStartYRef.current = null;
-
-    if (interactiveTarget && !dragHandleTarget) {
-      return;
-    }
-
-    mobileCreateMenuDragStartYRef.current = event.clientY;
-    if (!interactiveTarget || dragHandleTarget) {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
-  }
-
-  function updateMobileCreateMenuDragOffset(clientY: number) {
-    if (mobileCreateMenuDragStartYRef.current === null) {
-      return;
-    }
-
-    const nextOffset = Math.max(0, clientY - mobileCreateMenuDragStartYRef.current);
-    mobileCreateMenuDragOffsetRef.current = nextOffset;
-    if (nextOffset > 8) {
-      mobileCreateMenuSuppressClickRef.current = true;
-    }
-    setMobileCreateMenuDragOffset(nextOffset);
-  }
-
-  function handleMobileCreateMenuClickCapture(
-    event: ReactMouseEvent<HTMLElement>,
-  ) {
-    if (!mobileCreateMenuSuppressClickRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    mobileCreateMenuSuppressClickRef.current = false;
-  }
-
-  useEffect(() => {
-    if (!isMobileCreateMenuOpen) {
-      return;
-    }
-
-    function handleWindowPointerMove(event: PointerEvent) {
-      updateMobileCreateMenuDragOffset(event.clientY);
-    }
-
-    function handleWindowPointerEnd() {
-      if (mobileCreateMenuDragOffsetRef.current > 110) {
-        animateCloseMobileCreateMenu();
-        return;
-      }
-
-      mobileCreateMenuDragStartYRef.current = null;
-      mobileCreateMenuDragOffsetRef.current = 0;
-      setMobileCreateMenuDragOffset(0);
-    }
-
-    window.addEventListener("pointermove", handleWindowPointerMove);
-    window.addEventListener("pointerup", handleWindowPointerEnd);
-    window.addEventListener("pointercancel", handleWindowPointerEnd);
-    return () => {
-      window.removeEventListener("pointermove", handleWindowPointerMove);
-      window.removeEventListener("pointerup", handleWindowPointerEnd);
-      window.removeEventListener("pointercancel", handleWindowPointerEnd);
-    };
   }, [animateCloseMobileCreateMenu, isMobileCreateMenuOpen]);
 
   function openQuickAction(mode: NoteSourceMode) {
@@ -1002,57 +888,6 @@ export function HomeDashboard({
     }
   }
 
-  function handleDashboardDialogDragHandlePointerDown(
-    event: ReactPointerEvent<HTMLElement>,
-  ) {
-    if (busyLectureId || (event.pointerType === "mouse" && event.button !== 0)) {
-      return;
-    }
-
-    const target = event.target;
-    const interactiveTarget =
-      target instanceof Element
-        ? target.closest("button, a, input, textarea, select, .app-close-button")
-        : null;
-    const dragHandleTarget =
-      target instanceof Element ? target.closest(".mobile-create-menu-drag-handle") : null;
-
-    dashboardDialogSuppressClickRef.current = false;
-    dashboardDialogDragStartYRef.current = null;
-
-    if (interactiveTarget && !dragHandleTarget) {
-      return;
-    }
-
-    dashboardDialogDragStartYRef.current = event.clientY;
-    if (!interactiveTarget || dragHandleTarget) {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
-  }
-
-  function updateDashboardDialogDragOffset(clientY: number) {
-    if (dashboardDialogDragStartYRef.current === null) {
-      return;
-    }
-
-    const nextOffset = Math.max(0, clientY - dashboardDialogDragStartYRef.current);
-    dashboardDialogDragOffsetRef.current = nextOffset;
-    if (nextOffset > 8) {
-      dashboardDialogSuppressClickRef.current = true;
-    }
-    setDashboardDialogDragOffset(nextOffset);
-  }
-
-  function handleDashboardDialogClickCapture(event: ReactMouseEvent<HTMLElement>) {
-    if (!dashboardDialogSuppressClickRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    dashboardDialogSuppressClickRef.current = false;
-  }
-
   function handleRenameDialogPointerDownCapture(event: ReactPointerEvent<HTMLElement>) {
     const target = event.target;
 
@@ -1072,36 +907,6 @@ export function HomeDashboard({
 
     renameInputRef.current?.blur();
   }
-
-  useEffect(() => {
-    if (!renameTarget && !deleteTarget) {
-      return;
-    }
-
-    function handleWindowPointerMove(event: PointerEvent) {
-      updateDashboardDialogDragOffset(event.clientY);
-    }
-
-    function handleWindowPointerEnd() {
-      if (dashboardDialogDragOffsetRef.current > 110 && !busyLectureId) {
-        animateCloseDashboardDialog();
-        return;
-      }
-
-      dashboardDialogDragStartYRef.current = null;
-      dashboardDialogDragOffsetRef.current = 0;
-      setDashboardDialogDragOffset(0);
-    }
-
-    window.addEventListener("pointermove", handleWindowPointerMove);
-    window.addEventListener("pointerup", handleWindowPointerEnd);
-    window.addEventListener("pointercancel", handleWindowPointerEnd);
-    return () => {
-      window.removeEventListener("pointermove", handleWindowPointerMove);
-      window.removeEventListener("pointerup", handleWindowPointerEnd);
-      window.removeEventListener("pointercancel", handleWindowPointerEnd);
-    };
-  }, [animateCloseDashboardDialog, busyLectureId, deleteTarget, renameTarget]);
 
   async function handleDeleteLecture() {
     if (!deleteTarget) {
@@ -1535,26 +1340,25 @@ export function HomeDashboard({
           <button
             type="button"
             aria-label="Zapri"
-            className="memo-scrim"
+            className={sheetClass("memo-scrim", dialogSheet.closing)}
             onClick={closeRenameModal}
           />
           <div
-            className={`memo-sheet memo-dialog ${
-              renameKeyboardVisible ? "keyboard-visible" : "keyboard-hidden"
-            }`}
+            className={sheetClass(
+              `memo-sheet memo-dialog ${
+                renameKeyboardVisible ? "keyboard-visible" : "keyboard-hidden"
+              }`,
+              dialogSheet.closing,
+            )}
             role="dialog"
             aria-modal="true"
             aria-labelledby="rename-note-title"
-            onPointerDown={handleDashboardDialogDragHandlePointerDown}
-            onClickCapture={handleDashboardDialogClickCapture}
+            onPointerDown={dialogSheet.dragProps.onPointerDown}
             onPointerDownCapture={handleRenameDialogPointerDownCapture}
-            style={
-              dashboardDialogDragOffset
-                ? { transform: `translateY(${dashboardDialogDragOffset}px)`, transition: "none" }
-                : renameDialogStyle
-            }
+            data-dragging={dialogSheet.dragProps["data-dragging"]}
+            style={{ ...renameDialogStyle, ...dialogSheet.dragProps.style }}
           >
-            <div className="memo-grab" />
+            <div className="memo-grab" data-drag-handle />
             <span id="rename-note-title" className="memo-sheet-heading">
               Preimenuj zapisek
             </span>
@@ -1608,23 +1412,17 @@ export function HomeDashboard({
           <button
             type="button"
             aria-label="Zapri"
-            className="memo-scrim"
+            className={sheetClass("memo-scrim", dialogSheet.closing)}
             onClick={closeDeleteModal}
           />
           <div
-            className="memo-sheet memo-dialog"
+            className={sheetClass("memo-sheet memo-dialog", dialogSheet.closing)}
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-note-title"
-            onPointerDown={handleDashboardDialogDragHandlePointerDown}
-            onClickCapture={handleDashboardDialogClickCapture}
-            style={
-              dashboardDialogDragOffset
-                ? { transform: `translateY(${dashboardDialogDragOffset}px)`, transition: "none" }
-                : undefined
-            }
+            {...dialogSheet.dragProps}
           >
-            <div className="memo-grab" />
+            <div className="memo-grab" data-drag-handle />
             <span id="delete-note-title" className="memo-sheet-heading">
               Izbriši zapisek
             </span>
@@ -1666,23 +1464,17 @@ export function HomeDashboard({
           <button
             type="button"
             aria-label="Zapri"
-            className="memo-scrim"
+            className={sheetClass("memo-scrim", createSheet.closing)}
             onClick={animateCloseMobileCreateMenu}
           />
           <div
-            className="memo-sheet"
+            className={sheetClass("memo-sheet", createSheet.closing)}
             role="dialog"
             aria-modal="true"
             aria-labelledby="mobile-create-menu-title"
-            onPointerDown={handleMobileCreateMenuPointerDown}
-            onClickCapture={handleMobileCreateMenuClickCapture}
-            style={
-              mobileCreateMenuDragOffset
-                ? { transform: `translateY(${mobileCreateMenuDragOffset}px)`, transition: "none" }
-                : undefined
-            }
+            {...createSheet.dragProps}
           >
-            <div className="memo-grab memo-create-drag-handle" />
+            <div className="memo-grab memo-create-drag-handle" data-drag-handle />
             <div className="memo-sheet-title">
               <span id="mobile-create-menu-title">Nov zapisek</span>
               <button

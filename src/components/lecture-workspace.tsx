@@ -48,7 +48,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 
-import { useSheetDrag } from "@/components/use-sheet-drag";
+import { sheetClass, useSheet } from "@/components/use-sheet";
 import { useRouter } from "next/navigation";
 import type {
   ChatMessageWithCitations,
@@ -1256,7 +1256,7 @@ export function LectureWorkspace({
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
   const quizAdvanceTimerRef = useRef<number | null>(null);
   const closeMobileChat = useCallback(() => setIsMobileChatOpen(false), []);
-  const chatSheetDrag = useSheetDrag(closeMobileChat, { scrollable: true });
+  const chatSheet = useSheet(closeMobileChat, { scrollable: true });
   const [practiceQuestionIndex, setPracticeQuestionIndex] = useState(0);
 
   // A pending auto-advance must not fire after the quiz is left behind.
@@ -1304,7 +1304,6 @@ export function LectureWorkspace({
   const studyManagerDragStartYRef = useRef<number | null>(null);
   const studyManagerDragOffsetRef = useRef(0);
   const studyManagerSuppressClickRef = useRef(false);
-  const studyManagerCloseTimerRef = useRef<number | null>(null);
   const studyManagerSheetRef = useRef<HTMLDivElement | null>(null);
   const studyManagerTouchDragActiveRef = useRef(false);
   const studyManagerItemSuppressClickRef = useRef(false);
@@ -3409,10 +3408,6 @@ export function LectureWorkspace({
   }
 
   const closeStudyManager = useCallback(() => {
-    if (studyManagerCloseTimerRef.current !== null) {
-      window.clearTimeout(studyManagerCloseTimerRef.current);
-      studyManagerCloseTimerRef.current = null;
-    }
     studyManagerDragStartYRef.current = null;
     studyManagerDragOffsetRef.current = 0;
     studyManagerSuppressClickRef.current = false;
@@ -3424,29 +3419,17 @@ export function LectureWorkspace({
     setIsStudyManagerOpen(false);
   }, []);
 
+  /*
+   * This sheet keeps its own drag — it is scroll-aware and has to coexist with
+   * the per-row swipe — but the exit is the design's shared one: `.closing`
+   * carries it out of frame rather than the sheet jumping there in a frame.
+   */
+  const studyManagerSheet = useSheet(closeStudyManager);
+  const dismissStudyManager = studyManagerSheet.dismiss;
+
   const animateCloseStudyManager = useCallback(() => {
-    if (studyManagerCloseTimerRef.current !== null) {
-      return;
-    }
-
-    studyManagerDragStartYRef.current = null;
-    studyManagerDragOffsetRef.current = window.innerHeight;
-    setStudyManagerDragOffset(window.innerHeight);
-    studyManagerCloseTimerRef.current = window.setTimeout(() => {
-      studyManagerCloseTimerRef.current = null;
-      closeStudyManager();
-    }, 180);
-  }, [closeStudyManager]);
-
-  useEffect(
-    () => () => {
-      if (studyManagerCloseTimerRef.current !== null) {
-        window.clearTimeout(studyManagerCloseTimerRef.current);
-        studyManagerCloseTimerRef.current = null;
-      }
-    },
-    [],
-  );
+    dismissStudyManager();
+  }, [dismissStudyManager]);
 
   useEffect(() => {
     if (!isStudyManagerOpen) {
@@ -5254,20 +5237,30 @@ export function LectureWorkspace({
 
           <MemoPortal>
             {isStudyManagerOpen && (activeStudyView === "flashcards" || activeStudyView === "quiz") ? (
-              <div className="study-manager-backdrop" role="presentation" onClick={animateCloseStudyManager}>
+              <div
+                className={sheetClass("study-manager-backdrop", studyManagerSheet.closing)}
+                role="presentation"
+                onClick={animateCloseStudyManager}
+              >
                 <div
                   ref={studyManagerSheetRef}
-                  className={`study-manager-sheet mobile-draggable-sheet ${
-                    studyManagerInputFocused ? "keyboard-open" : ""
-                  }`}
+                  className={sheetClass(
+                    `study-manager-sheet mobile-draggable-sheet ${
+                      studyManagerInputFocused ? "keyboard-open" : ""
+                    }`,
+                    studyManagerSheet.closing,
+                  )}
                   role="dialog"
                   aria-modal="true"
                   aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
                   onPointerDown={handleStudyManagerPointerDown}
                   onClickCapture={handleStudyManagerClickCapture}
                   onClick={(event) => event.stopPropagation()}
+                  data-dragging={
+                    studyManagerDragOffset > 0 && !studyManagerSheet.closing ? "true" : undefined
+                  }
                   style={
-                    studyManagerDragOffset > 0
+                    studyManagerDragOffset > 0 && !studyManagerSheet.closing
                       ? { transform: `translateY(${studyManagerDragOffset}px)`, transition: "none" }
                       : undefined
                   }
@@ -5750,14 +5743,17 @@ export function LectureWorkspace({
       <button
         type="button"
         aria-label="Zapri klepet"
-        className="memo-scrim memo-only-mobile"
-        onClick={() => setIsMobileChatOpen(false)}
+        className={sheetClass("memo-scrim memo-only-mobile", chatSheet.closing)}
+        onClick={() => chatSheet.dismiss()}
       />
       <div
-        className="memo-sheet-full surface memo-only-mobile memo-note-chat-sheet"
+        className={sheetClass(
+          "memo-sheet-full surface memo-only-mobile memo-note-chat-sheet",
+          chatSheet.closing,
+        )}
         role="dialog"
         aria-modal="true"
-        {...chatSheetDrag.dragProps}
+        {...chatSheet.dragProps}
       >
         {/* The grabber is the only place a drag may start here: the log below
             it scrolls, and a finger on that should pan rather than dismiss. */}
@@ -5772,7 +5768,7 @@ export function LectureWorkspace({
             type="button"
             aria-label="Zapri"
             className="memo-m-chat-head-btn right"
-            onClick={() => setIsMobileChatOpen(false)}
+            onClick={() => chatSheet.dismiss()}
           >
             <Msym name="close" size="1.45rem" fill={false} weight={500} />
           </button>

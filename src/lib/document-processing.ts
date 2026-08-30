@@ -295,6 +295,8 @@ export async function processStoredDocumentLecture(params: {
             : "document",
       sourceFileName: pendingDocument.fileName,
       sourceDocumentUpload: pendingDocument,
+      // The note row prints "PDF, 24 strani"; this is where that 24 comes from.
+      sourcePageCount: extracted.pages.length || null,
       documentImages,
     },
   });

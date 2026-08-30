@@ -20,6 +20,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { flushSync } from "react-dom";
 
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
+import { INSTALL_GUIDE_SEEN_KEY, shouldOfferInstallGuide } from "@/lib/install-guide";
 import { DiscountOffer } from "@/components/discount-offer";
 import { LibraryChat } from "@/components/library-chat";
 import { NoteSourceModal, type NoteSourceMode } from "@/components/note-source-modal";
@@ -511,6 +512,22 @@ export function HomeDashboard({
    * already used theirs.
    */
   const [canSpinWheel, setCanSpinWheel] = useState<boolean | null>(null);
+  /*
+   * Whether to badge the settings gear. Read after mount rather than during
+   * render: it comes from `localStorage` and from `display-mode`, neither of
+   * which the server can know, and a badge that renders on the server would
+   * flash on for everyone who has already dismissed it.
+   */
+  const [showInstallHint, setShowInstallHint] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setShowInstallHint(shouldOfferInstallGuide());
+
+    sync();
+    window.addEventListener(INSTALL_GUIDE_SEEN_KEY, sync);
+
+    return () => window.removeEventListener(INSTALL_GUIDE_SEEN_KEY, sync);
+  }, []);
   const [manualModal, setManualModal] = useState<NoteSourceMode | null>(null);
   const [isMobileCreateMenuOpen, setIsMobileCreateMenuOpen] = useState(false);
   const [libraryLectures, setLibraryLectures] = useState(lectures);
@@ -1093,7 +1110,13 @@ export function HomeDashboard({
             height={BRAND_LOCKUP_HEIGHT}
             priority
           />
-          <InstantLink href="/app/settings" className="memo-m-round" aria-label="Nastavitve">
+          {/* The dot is the only hint that there is something new in there;
+              it clears the first time the guide is opened. */}
+          <InstantLink
+            href="/app/settings"
+            className={`memo-m-round ${showInstallHint ? "has-dot" : ""}`.trim()}
+            aria-label={showInstallHint ? "Nastavitve (1 novost)" : "Nastavitve"}
+          >
             <Msym name="settings" size="1.6rem" fill={false} weight={500} />
           </InstantLink>
         </div>

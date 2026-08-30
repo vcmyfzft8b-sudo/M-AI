@@ -1,16 +1,18 @@
 "use client";
 
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 
 import { BillingPortalButton } from "@/components/billing-portal-button";
 import { InstantLink } from "@/components/instant-link";
 import { Emoji, Msym } from "@/components/msym";
 import { useAppHref } from "@/components/creator-demo/creator-demo-context";
+import { InstallGuide } from "@/components/install-guide";
 import { MemoPortal } from "@/components/memo-portal";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { BRAND_NAME, BRAND_SUPPORT_EMAIL } from "@/lib/brand";
 import type { ThemePreference } from "@/lib/theme";
+import { INSTALL_GUIDE_SEEN_KEY, shouldOfferInstallGuide } from "@/lib/install-guide";
 import {
   readStoredThemePreference,
   setThemePreference,
@@ -70,6 +72,18 @@ export function SettingsScreen({
   // phone it leaves and drags like every other sheet.
   const confirmSheet = useSheet(useCallback(() => setConfirm(null), []));
   const [toast, setToast] = useState<string | null>(null);
+  const [isInstallGuideOpen, setIsInstallGuideOpen] = useState(false);
+  /* Same badge as the gear carries, on the row that answers it. */
+  const [showInstallHint, setShowInstallHint] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setShowInstallHint(shouldOfferInstallGuide());
+
+    sync();
+    window.addEventListener(INSTALL_GUIDE_SEEN_KEY, sync);
+
+    return () => window.removeEventListener(INSTALL_GUIDE_SEEN_KEY, sync);
+  }, []);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const preference = useSyncExternalStore(
@@ -156,6 +170,14 @@ export function SettingsScreen({
   );
 
   const rows: SettingsRow[] = [
+    {
+      id: "install",
+      emoji: "📲",
+      title: "Dodaj na začetni zaslon",
+      detail: "Odpri Memo kot aplikacijo",
+      className: showInstallHint ? "has-dot" : "",
+      onSelect: () => setIsInstallGuideOpen(true),
+    },
     {
       id: "redeem",
       emoji: "🎟️",
@@ -409,6 +431,11 @@ export function SettingsScreen({
           </div>
         </MemoPortal>
       ) : null}
+
+      <InstallGuide
+        open={isInstallGuideOpen}
+        onClose={() => setIsInstallGuideOpen(false)}
+      />
 
       {toast ? (
         <MemoPortal>

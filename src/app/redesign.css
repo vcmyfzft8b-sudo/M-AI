@@ -45,6 +45,135 @@
   overflow-y: auto;
 }
 
+/* ---------------------------------------------------------------------------
+   Add to home screen
+   ---------------------------------------------------------------------------
+   A dot on the settings gear, and the sheet it leads to. The dot is the whole
+   of the notification: a badge with a number would promise a count nobody is
+   keeping.
+   ------------------------------------------------------------------------ */
+.memo-m-round.has-dot,
+.memo-settings-row.has-dot {
+  position: relative;
+}
+
+.memo-m-round.has-dot::after,
+.memo-settings-row.has-dot::after {
+  content: "";
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 999px;
+  background: var(--coral);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+/* On a row the dot belongs beside the chevron, not in the corner. */
+.memo-settings-row.has-dot::after {
+  top: 50%;
+  right: 3rem;
+  transform: translateY(-50%);
+}
+
+.memo-install-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 1.15rem 0.9rem;
+}
+
+.memo-install-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.memo-install-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  overflow-y: auto;
+  padding: 0 1.15rem calc(2rem + var(--memo-safe-bottom));
+}
+
+.memo-install-lead {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.02rem;
+  line-height: 1.5;
+}
+
+.memo-install-steps {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-install-step {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem 1.1rem 1.2rem;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 22px;
+  background: var(--surface);
+}
+
+.memo-install-step-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+
+.memo-install-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--coral);
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.memo-install-step-copy {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.memo-install-step-copy > span:first-child {
+  font-size: 1.05rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.memo-install-step-copy > span:last-child {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+/* The drawing sits on the page's ground so the drawn phone reads as a phone
+   against it rather than as a panel inside the card. */
+.memo-install-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 11rem;
+  border-radius: 16px;
+  background: var(--bg);
+}
+
 /* --- tokens --------------------------------------------------------------- */
 
 .memo,

@@ -32,10 +32,14 @@ export function createChatEventStream<TResult>(params: {
 
         send("done", result);
       } catch (error) {
+        /*
+         * The learner is told the same thing whatever broke. What actually
+         * failed here is a Postgres error, a gateway timeout or a schema
+         * mismatch — none of it is theirs to read, and an error frame is not
+         * the place to hand a raw database message to a browser.
+         */
         console.error(`${params.label} stream failed`, error);
-        send("error", {
-          error: error instanceof Error ? error.message : "Odgovora ni bilo mogoče ustvariti.",
-        });
+        send("error", { error: "Odgovora ni bilo mogoče ustvariti. Poskusi znova." });
       } finally {
         controller.close();
       }

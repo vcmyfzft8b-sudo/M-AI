@@ -798,7 +798,13 @@ export async function generateLectureNotesFromStoredTranscript(params: {
       lectureId: lecture.id,
       content: notes.structuredNotesMd,
       title: notes.title,
-      languageHint: lecture.language_hint,
+      /*
+       * The language just detected, not the one this row was loaded with: the
+       * row in hand predates the update a few lines above, and it is null on
+       * every note made since the language picker went. Reading it here would
+       * have read a Slovenian note aloud in an English voice.
+       */
+      languageHint: detectedLanguage ?? lecture.language_hint,
       voice: getInitialNoteAudioVoice(lecture.processing_metadata),
     });
   }

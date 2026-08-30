@@ -2207,7 +2207,7 @@ export function NoteSourceModal({
                   ) : null}
 
                   {!isRecording ? (
-                    <div className="memo-only-desktop">
+                    <div className="memo-only-desktop note-source-extra">
                       <label className="note-source-field-label">
                         Jezik
                       </label>

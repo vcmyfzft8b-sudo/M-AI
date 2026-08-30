@@ -5644,7 +5644,14 @@
 }
 
 .note-source-modal-stack {
-  width: min(36rem, 100%);
+  /*
+   * A definite width, not `min(36rem, 100%)`: the wrap is a `place-items:
+   * center` grid, so that percentage resolves against a column sized by its
+   * own content — a cycle the browser breaks by shrink-wrapping, which left
+   * the artboard's 36rem modal rendering at about 27.
+   */
+  width: 36rem;
+  max-width: 100%;
   pointer-events: auto;
 }
 
@@ -6003,6 +6010,114 @@
 /* Without a leading glyph the link field is the design's plain pill. */
 .note-source-modal .note-source-link-field {
   padding-left: 1.2rem;
+}
+
+/*
+ * The artboard's capture screen — either artboard — is the source and the
+ * actions, nothing else. The rows we keep on top of that, the read-aloud switch
+ * and the language picker and the "how do I record with the screen off?" link,
+ * belong under the source rather than above it, so the screen opens on the
+ * thing it is asking for. Ordering rather than markup, because the source is
+ * four different elements across the four modes.
+ */
+.note-source-modal-body > .memo-capture-row,
+.note-source-modal-body > .note-source-extra {
+  order: 1;
+}
+
+.note-source-modal-body > .memo-modal-actions {
+  order: 2;
+}
+
+/* ---------------------------------------------------------------------------
+   The capture modal on desktop
+   ---------------------------------------------------------------------------
+   The desktop artboard draws this as a 36rem card, and its fields are the
+   sunken kind on `--bg` rather than the phone's raised cards — a raised card
+   inside a white modal has nothing to lift off. Its close is a `--tile` circle
+   for the same reason the phone's is a white one: it has to contrast with what
+   is behind it, and behind it here is the white card.
+   ------------------------------------------------------------------------ */
+@media (min-width: 1100px) {
+  .note-source-modal .app-close-button.app-close-button,
+  .note-source-modal .ios-sheet-header-close.ios-sheet-header-close {
+    width: 2.6rem;
+    height: 2.6rem;
+    background: var(--tile);
+    color: var(--muted);
+    box-shadow: none;
+  }
+
+  /* `Msym` writes its size inline, so this is the one way to say that the
+     desktop artboard's glyph is smaller than the phone's. */
+  .note-source-modal .app-close-button .msym,
+  .note-source-modal .ios-sheet-header-close .msym {
+    font-size: 1.3rem !important;
+  }
+
+  .note-source-modal .memo-dropzone {
+    display: grid;
+    place-items: center;
+    gap: 0.7rem;
+    height: 12rem;
+    padding: 0;
+    border: 1.5px dashed var(--line);
+    border-radius: 22px;
+    background: var(--bg);
+  }
+
+  .note-source-modal .memo-dropzone-icon {
+    font-size: 2.2rem;
+    color: var(--muted);
+  }
+
+  .note-source-modal .memo-dropzone-lead,
+  .note-source-modal .memo-dropzone-title {
+    font-size: 1rem;
+    font-weight: 400;
+    letter-spacing: normal;
+    color: var(--muted);
+  }
+
+  /* The artboard's third line is a monospaced hint about dragging. */
+  .note-source-modal .memo-dropzone-hint {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.82rem;
+    color: var(--muted-2);
+  }
+
+  .note-source-modal .ios-textarea,
+  .note-source-modal .note-source-inline-textarea {
+    height: 11rem;
+    min-height: 0;
+    max-height: none;
+    padding: 1rem 1.15rem;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: var(--bg);
+    box-shadow: none;
+    font-size: 1.02rem;
+    line-height: 1.6;
+    resize: none;
+  }
+
+  .note-source-modal .ios-search.note-source-link-field {
+    height: 3.5rem;
+    padding: 0 1.2rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--bg);
+    box-shadow: none;
+  }
+
+  .note-source-modal .ios-search.note-source-link-field input {
+    font-size: 1.02rem;
+  }
+
+  /* The desktop orb is a plain red disc; the mic is the phone artboard's. */
+  .memo-record-orb-mic {
+    display: none;
+  }
 }
 
 .note-source-modal .memo-modal-actions {
@@ -10544,14 +10659,6 @@
     gap: 1.1rem;
     padding-top: 1rem;
     padding-bottom: 2rem;
-  }
-
-  /* The artboard's capture screen is only the source and the actions. The two
-     rows we keep on top of that — the read-aloud switch and the "how do I
-     record with the screen off?" link — belong under the source rather than
-     above it, so the screen still opens on the thing it is asking for. */
-  .note-source-modal.mobile-draggable-sheet .note-source-modal-body > .memo-capture-row {
-    order: 1;
   }
 
   .note-source-modal.mobile-draggable-sheet .memo-modal-actions {

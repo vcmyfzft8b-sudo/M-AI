@@ -8442,10 +8442,128 @@
     box-shadow: 0 10px 22px rgba(244, 95, 90, 0.24);
   }
 
-  .memo-settings-row {
-    min-height: 4.4rem;
-    padding: 0 1.2rem;
+  /*
+   * The phone settings sheet, as the design groups it: a heading above each
+   * group, the theme segment on its own rather than inside a card, the account
+   * on its own card, and the rows collected into one surface with hairlines
+   * between them instead of a stack of separate cards.
+   */
+  .memo-settings-heading {
+    margin: 1.5rem 0 0.7rem;
+    font-size: 1.25rem;
+    font-weight: 750;
+    letter-spacing: -0.03em;
+  }
+
+  .memo-settings-screen .memo-page > .memo-settings-heading:first-of-type {
+    margin-top: 0;
+  }
+
+  .memo-card-row.memo-settings-theme {
+    padding: 0;
+    border-radius: 999px;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* The phone artboard leads with Sistem; desktop keeps the DOM order. */
+  .memo-settings-theme .memo-segment {
+    padding: 0.35rem;
+  }
+
+  .memo-settings-theme .memo-segment button {
+    flex: 1;
+    min-width: 0;
+    height: 2.8rem;
+    padding: 0;
+    font-size: 1rem;
+  }
+
+  .memo-settings-theme .memo-segment button[data-theme-option="system"] {
+    order: -1;
+  }
+
+  .memo-card-row.memo-settings-account {
+    gap: 0;
+    padding: 1.1rem 1.2rem;
+  }
+
+  .memo-settings-account .memo-card-row-title {
+    margin: 0.3rem 0 0.9rem;
+    overflow: hidden;
+    font-size: 1.05rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    text-overflow: ellipsis;
+  }
+
+  .memo-settings-signout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 3rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--tile);
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 1.02rem;
+    font-weight: 650;
+  }
+
+  .memo-settings-signout:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .memo-settings-list {
+    gap: 0;
+    margin-top: 0.8rem;
     border-radius: 20px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .memo-settings-list .memo-settings-row {
+    min-height: 0;
+    height: 4.2rem;
+    padding: 0 1.2rem;
+    border-radius: 0;
+    gap: 0.9rem;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* Hairlines between rows, never above the first one in a card. */
+  .memo-settings-list .memo-settings-row + .memo-settings-row {
+    border-top: 1px solid var(--line);
+  }
+
+  .memo-settings-list .memo-settings-row:active {
+    background: var(--tile);
+  }
+
+  .memo-settings-list .memo-settings-tile .memo-emoji {
+    font-size: 1.25rem;
+  }
+
+  .memo-settings-list .memo-settings-title {
+    font-size: 1.1rem;
+    font-weight: 650;
+    letter-spacing: -0.025em;
+  }
+
+  .memo-settings-list .memo-settings-row > .msym {
+    font-size: 1.45rem;
+    color: var(--muted);
+  }
+
+  /* The design's help row carries an icon-font glyph, not an emoji. */
+  .memo-settings-help .memo-settings-tile .msym {
+    color: var(--text);
   }
 
   .memo-confirm-fixed {

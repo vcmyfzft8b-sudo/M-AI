@@ -22,6 +22,10 @@ import {
  * the settings sheet shows it, and the close control returns to the library.
  */
 
+/*
+ * Desktop order. The phone artboard leads with Sistem instead, which the
+ * stylesheet reorders rather than this list — one DOM, two orders.
+ */
 const THEME_OPTIONS: Array<{ value: ThemePreference; label: string }> = [
   { value: "light", label: "Svetla" },
   { value: "dark", label: "Temna" },
@@ -29,6 +33,20 @@ const THEME_OPTIONS: Array<{ value: ThemePreference; label: string }> = [
 ];
 
 type ConfirmKind = "logout" | "delete" | "share";
+
+type SettingsRow = {
+  id: string;
+  emoji: string;
+  /** An icon-font glyph where the design draws one instead of an emoji. */
+  icon?: string;
+  title: string;
+  href?: string;
+  detail?: string;
+  danger?: boolean;
+  /** Extra classes on the row, for rows only one breakpoint draws. */
+  className?: string;
+  onSelect?: () => void;
+};
 
 export function SettingsScreen({
   email,
@@ -77,12 +95,54 @@ export function SettingsScreen({
     window.setTimeout(() => setToast(null), 2200);
   }
 
+  function renderRow(row: SettingsRow) {
+    const body = (
+      <>
+        <span className={`memo-settings-tile ${row.danger ? "danger" : ""}`.trim()}>
+          {row.icon ? (
+            <Msym name={row.icon} size="1.35rem" fill weight={500} />
+          ) : (
+            <Emoji symbol={row.emoji} size="1.15rem" />
+          )}
+        </span>
+        <span className="memo-settings-copy">
+          <span className={`memo-settings-title ${row.danger ? "danger" : ""}`.trim()}>
+            {row.title}
+          </span>
+          {row.detail ? <span className="memo-settings-detail">{row.detail}</span> : null}
+        </span>
+        <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
+      </>
+    );
+
+    return row.href ? (
+      <InstantLink
+        key={row.id}
+        href={row.href}
+        className={`memo-settings-row ${row.className ?? ""}`.trim()}
+      >
+        {body}
+      </InstantLink>
+    ) : (
+      <button
+        key={row.id}
+        type="button"
+        className={`memo-settings-row ${row.className ?? ""}`.trim()}
+        onClick={row.onSelect}
+        disabled={row.id === "logout" && isLoggingOut}
+      >
+        {body}
+      </button>
+    );
+  }
+
   const themeSegment = (
     <div className="memo-segment">
       {THEME_OPTIONS.map((option) => (
         <button
           key={option.value}
           type="button"
+          data-theme-option={option.value}
           className={preference === option.value ? "active" : ""}
           aria-pressed={preference === option.value}
           onClick={() => setThemePreference(option.value)}
@@ -93,15 +153,7 @@ export function SettingsScreen({
     </div>
   );
 
-  const rows: Array<{
-    id: string;
-    emoji: string;
-    title: string;
-    href?: string;
-    detail?: string;
-    danger?: boolean;
-    onSelect?: () => void;
-  }> = [
+  const rows: SettingsRow[] = [
     {
       id: "redeem",
       emoji: "🎟️",
@@ -121,31 +173,33 @@ export function SettingsScreen({
       title: "Predlagaj funkcijo",
       href: "/app/support/feature-request",
     },
-    {
-      id: "help",
-      emoji: "❓",
-      title: "Center za pomoč",
-      href: "/app/support",
-    },
-    ...(isDemo
-      ? []
-      : [
-          {
-            id: "logout",
-            emoji: "👤",
-            title: "Odjava",
-            detail: email,
-            onSelect: () => setConfirm("logout"),
-          },
-          {
-            id: "delete",
-            emoji: "🗑️",
-            title: "Izbriši račun",
-            danger: true,
-            onSelect: () => setConfirm("delete"),
-          },
-        ]),
   ];
+
+  /*
+   * Desktop keeps Odjava and Izbriši račun in the same list, as its artboard
+   * shows them. The phone gives the account its own card under a "Račun"
+   * heading, so there they are rendered separately rather than as rows.
+   */
+  const accountRows: typeof rows = isDemo
+    ? []
+    : [
+        {
+          id: "logout",
+          emoji: "👤",
+          title: "Odjava",
+          detail: email,
+          // The phone has this on the Račun card above instead.
+          className: "memo-only-desktop",
+          onSelect: () => setConfirm("logout"),
+        },
+        {
+          id: "delete",
+          emoji: "🗑️",
+          title: "Izbriši račun",
+          danger: true,
+          onSelect: () => setConfirm("delete"),
+        },
+      ];
 
   const confirmCopy: Record<ConfirmKind, { emoji: string; title: string; body: string; cta: string }> = {
     logout: {
@@ -213,13 +267,21 @@ export function SettingsScreen({
         <div className="memo-page">
           <h1>Nastavitve</h1>
 
-          <div className="memo-card-row">
-            <span className="memo-card-row-copy">
+          {/*
+            * The phone puts each group under its own heading and drops the
+            * explanatory line the desktop artboard keeps beside "Tema".
+            */}
+          <h2 className="memo-settings-heading memo-only-mobile">Tema</h2>
+
+          <div className="memo-card-row memo-settings-theme">
+            <span className="memo-card-row-copy memo-only-desktop">
               <span className="memo-card-row-title">Tema</span>
               <span className="memo-card-row-detail">Svetla ali temna postavitev</span>
             </span>
             {themeSegment}
           </div>
+
+          <h2 className="memo-settings-heading memo-only-mobile">Naročnina</h2>
 
           <div className="memo-card-row">
             <span className="memo-card-row-copy">
@@ -245,40 +307,45 @@ export function SettingsScreen({
             .
           </p>
 
-          <div className="memo-settings-list">
-            {rows.map((row) => {
-              const body = (
-                <>
-                  <span className={`memo-settings-tile ${row.danger ? "danger" : ""}`.trim()}>
-                    <Emoji symbol={row.emoji} size="1.15rem" />
-                  </span>
-                  <span className="memo-settings-copy">
-                    <span className={`memo-settings-title ${row.danger ? "danger" : ""}`.trim()}>
-                      {row.title}
-                    </span>
-                    {row.detail ? (
-                      <span className="memo-settings-detail">{row.detail}</span>
-                    ) : null}
-                  </span>
-                  <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
-                </>
-              );
+          {accountRows.length > 0 ? (
+            <>
+              <h2 className="memo-settings-heading memo-only-mobile">Račun</h2>
 
-              return row.href ? (
-                <InstantLink key={row.id} href={row.href} className="memo-settings-row">
-                  {body}
-                </InstantLink>
-              ) : (
+              {/* The phone names the account on its own card, as the design does. */}
+              <div className="memo-card-row memo-settings-account memo-only-mobile">
+                <span className="memo-card-row-copy">
+                  <span className="memo-eyebrow">Prijavljen</span>
+                  <span className="memo-card-row-title">{email}</span>
+                </span>
                 <button
-                  key={row.id}
                   type="button"
-                  className="memo-settings-row"
-                  onClick={row.onSelect}
-                  disabled={row.id === "logout" && isLoggingOut}
+                  className="memo-settings-signout"
+                  onClick={() => setConfirm("logout")}
+                  disabled={isLoggingOut}
                 >
-                  {body}
+                  Odjava
                 </button>
-              );
+              </div>
+            </>
+          ) : null}
+
+          {/* The phone groups the rows into one card; desktop keeps them apart. */}
+          <div className="memo-settings-list">
+            {rows.map(renderRow)}
+            {accountRows.map(renderRow)}
+          </div>
+
+          <h2 className="memo-settings-heading memo-only-mobile">Pomoč</h2>
+
+          {/* Desktop reaches the help centre from the rail, so this card is
+              the phone's only. */}
+          <div className="memo-settings-list memo-settings-help memo-only-mobile grid">
+            {renderRow({
+              id: "help",
+              emoji: "❓",
+              icon: "help",
+              title: "Center za pomoč",
+              href: "/app/support",
             })}
           </div>
         </div>

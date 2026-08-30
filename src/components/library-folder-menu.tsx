@@ -13,8 +13,9 @@ import {
 
 import { useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
-import { Folder } from "@/components/folder";
-import { ViewportPortal } from "@/components/viewport-portal";
+import { Emoji, Msym } from "@/components/msym";
+import { MemoPortal } from "@/components/memo-portal";
+import { useSheetDrag } from "@/components/use-sheet-drag";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 import { formatRelativeDate } from "@/lib/utils";
 
@@ -131,6 +132,9 @@ function lectureSummary(count: number) {
   return `${count} predavanj`;
 }
 
+/** How long the design's sheet exit runs before the sheet may unmount. */
+const SHEET_CLOSE_MS = 260;
+
 export function LibraryFolderMenu({
   lectures,
   userId,
@@ -162,6 +166,12 @@ export function LibraryFolderMenu({
   const [folderName, setFolderName] = useState("");
   const [draftLectureIds, setDraftLectureIds] = useState<string[]>([]);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  /** The folder whose ••• action sheet is open, as the phone design draws it. */
+  const [folderActionTarget, setFolderActionTarget] = useState<LibraryFolder | null>(null);
+  /** True while a sheet plays the design's exit, just before it unmounts. */
+  const [isSheetClosing, setIsSheetClosing] = useState(false);
+  const closeFolderActions = useCallback(() => setFolderActionTarget(null), []);
+  const folderActionDrag = useSheetDrag(closeFolderActions);
   const [editingName, setEditingName] = useState("");
   const [editingLectureIds, setEditingLectureIds] = useState<string[]>([]);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -395,11 +405,13 @@ export function LibraryFolderMenu({
 
   const animateCloseFolderSheet = useCallback(() => {
     folderSheetDragStartYRef.current = null;
-    folderSheetDragOffsetRef.current = window.innerHeight;
-    setFolderSheetDragOffset(window.innerHeight);
+    folderSheetDragOffsetRef.current = 0;
+    setFolderSheetDragOffset(0);
+    setIsSheetClosing(true);
     window.setTimeout(() => {
+      setIsSheetClosing(false);
       closeFolderSheet();
-    }, 180);
+    }, SHEET_CLOSE_MS);
   }, [closeFolderSheet]);
 
   function handleFolderSheetPointerDown(
@@ -465,7 +477,7 @@ export function LibraryFolderMenu({
     }
 
     function handleWindowPointerEnd() {
-      if (folderSheetDragOffsetRef.current > 80) {
+      if (folderSheetDragOffsetRef.current > 110) {
         animateCloseFolderSheet();
         return;
       }
@@ -547,20 +559,20 @@ export function LibraryFolderMenu({
     }
 
     function handleWindowPointerEnd() {
-      if (folderModalDragOffsetRef.current > 80) {
+      if (folderModalDragOffsetRef.current > 110) {
         folderModalDragStartYRef.current = null;
         folderModalDragOffsetRef.current = window.innerHeight;
         setFolderModalDragOffset(window.innerHeight);
         if (isCreateModalOpen) {
           window.setTimeout(() => {
             closeCreateModal();
-          }, 180);
+          }, SHEET_CLOSE_MS);
           return;
         }
 
         window.setTimeout(() => {
           handleCancelEdit();
-        }, 180);
+        }, SHEET_CLOSE_MS);
         return;
       }
 
@@ -636,6 +648,10 @@ export function LibraryFolderMenu({
     if (isFolderEditBusy) {
       return;
     }
+
+    // The picker gives way to the editor rather than sitting behind it — two
+    // stacked sheets read as one broken one.
+    setIsOpen(false);
 
     setEditingFolderId(folder.id);
     setEditingName(folder.name);
@@ -735,121 +751,103 @@ export function LibraryFolderMenu({
     startEditingFolder(selectedFolder ?? liveFolders[0]);
   }
 
+  /**
+   * The folder list, as the redesign draws it: flat rows on the menu's own
+   * surface, a filled check on the selected one, then a rule and the two
+   * management actions. The counts production showed under each name are gone —
+   * the design puts the name on a single line.
+   */
   function renderFolderMenuOptions() {
-    return (
-      <div className="library-folder-menu-primary">
-      <div className="library-folder-actions">
-        <button
-          type="button"
-          className={`library-folder-option library-folder-option-folder ${selectedFolderId === null ? "active" : ""}`}
-          onClick={handleSelectAllNotes}
-        >
-          <span className="library-folder-option-copy">
-            <span className="library-folder-option-icon">
-              <Folder open={false} size={0.34} />
-            </span>
-            <span className="library-folder-option-text">
-              <span>Vsi zapiski</span>
-              <span className="library-folder-option-meta">
-                {lectureSummary(lectures.length)}
-              </span>
-            </span>
-          </span>
-        </button>
+    const options = [
+      { id: null as string | null, name: "Vsi zapiski", onSelect: handleSelectAllNotes },
+      ...liveFolders.map((folder) => ({
+        id: folder.id,
+        name: folder.name,
+        onSelect: () => handleSelectFolder(folder),
+      })),
+    ];
 
-        {liveFolders.map((folder) => (
+    return (
+      <>
+        {options.map((option) => (
           <button
+            key={option.id ?? "all"}
             type="button"
-            key={folder.id}
-            className={`library-folder-option library-folder-option-folder ${selectedFolderId === folder.id ? "active" : ""}`}
-            onClick={() => handleSelectFolder(folder)}
+            className="memo-menu-item"
+            onClick={option.onSelect}
           >
-            <span className="library-folder-option-copy">
-              <span className="library-folder-option-icon">
-                <Folder open={false} size={0.34} />
+            <Emoji symbol="📁" size="1.05rem" />
+            <span className="memo-menu-item-label">{option.name}</span>
+            {selectedFolderId === option.id ? (
+              <span className="memo-menu-check">
+                <Msym name="check" size="0.9rem" />
               </span>
-              <span className="library-folder-option-text">
-                <span>{folder.name}</span>
-                <span className="library-folder-option-meta">
-                  {lectureSummary(folder.lectureIds.length)}
-                </span>
-              </span>
-            </span>
+            ) : null}
           </button>
         ))}
 
-        <div className="library-folder-menu-divider" />
+        <div className="memo-menu-sep" />
 
         <button
           type="button"
-          className="library-folder-option library-folder-option-action"
+          className="memo-menu-item"
           onClick={() => {
             setFolderName("");
             setDraftLectureIds([]);
             setIsCreateModalOpen(true);
           }}
         >
-          <span className="library-folder-option-copy">
-            <span className="library-folder-option-icon">
-              <EmojiIcon symbol="➕" size="0.95rem" />
-            </span>
-            <span>Nova mapa</span>
-          </span>
-          <span className="library-folder-option-icon">
-            <EmojiIcon symbol="›" size="1.1rem" />
-          </span>
+          <Msym name="add" size="1.2rem" fill={false} weight={500} />
+          <span className="memo-menu-item-label">Nova mapa</span>
         </button>
 
-        <button
-          type="button"
-          className="library-folder-option library-folder-option-action"
-          onClick={handleOpenEditModal}
-        >
-          <span className="library-folder-option-copy">
-            <span className="library-folder-option-icon">
-              <EmojiIcon symbol="✏️" size="0.95rem" />
-            </span>
-            <span>Uredi mape</span>
-          </span>
-          <span className="library-folder-option-icon">
-            <EmojiIcon symbol="›" size="1.1rem" />
-          </span>
+        <button type="button" className="memo-menu-item" onClick={handleOpenEditModal}>
+          <Msym name="edit" size="1.15rem" weight={500} />
+          <span className="memo-menu-item-label">Uredi mape</span>
         </button>
-      </div>
-      </div>
+      </>
     );
   }
 
   return (
     <div className="library-folder-shell" ref={shellRef}>
+      {/* Desktop chip: 📁 · name · caret, as the redesign draws it. */}
       <button
         type="button"
-        className={`library-folder-trigger ${isOpen ? "open" : ""}`}
+        className="memo-folder-chip memo-only-desktop"
         onClick={handleToggleMenu}
         aria-expanded={isOpen}
       >
-        <span className="library-folder-trigger-icon">
-          <Folder open={isOpen} size={0.5} />
-        </span>
-        <span className="library-folder-trigger-label">
+        <Emoji symbol="📁" size="1.2rem" />
+        <span className="memo-folder-chip-label">
           {selectedFolder?.name ?? "Vsi zapiski"}
         </span>
-        <EmojiIcon className={`library-folder-chevron ${isOpen ? "open" : ""}`} symbol="▾" size="0.95rem" />
+        <Msym name="arrow_drop_down" size="1.2rem" />
+      </button>
+
+      {/* Phone chip: shorter, with the expand caret the sheet opens from. */}
+      <button
+        type="button"
+        className="memo-m-folder-chip memo-only-mobile"
+        onClick={handleToggleMenu}
+        aria-expanded={isOpen}
+      >
+        <Emoji symbol="📁" size="1.1rem" />
+        <span>{selectedFolder?.name ?? "Vsi zapiski"}</span>
+        <Msym name="expand_more" size="1.2rem" fill={false} weight={500} />
       </button>
 
       {isOpen ? (
         <>
-          <div className="library-folder-menu library-folder-menu-desktop">
-            {renderFolderMenuOptions()}
-          </div>
-          <ViewportPortal>
+          <div className="memo-menu memo-only-desktop">{renderFolderMenuOptions()}</div>
+          <MemoPortal>
             <div
               className="library-folder-mobile-sheet-backdrop"
               role="presentation"
               onClick={animateCloseFolderSheet}
             />
             <section
-              className="library-folder-mobile-sheet"
+              className={`library-folder-mobile-sheet ${isSheetClosing ? "closing" : ""}`.trim()}
               role="dialog"
               aria-modal="true"
               aria-labelledby="folders-sheet-title"
@@ -857,7 +855,7 @@ export function LibraryFolderMenu({
               onClickCapture={handleFolderSheetClickCapture}
               style={
                 folderSheetDragOffset > 0
-                  ? { transform: `translateY(${folderSheetDragOffset}px)` }
+                  ? { transform: `translateY(${folderSheetDragOffset}px)`, transition: "none" }
                   : undefined
               }
             >
@@ -872,23 +870,82 @@ export function LibraryFolderMenu({
                 </h2>
                 <button
                   type="button"
-              className="app-close-button library-folder-mobile-sheet-close"
+                  className="app-close-button library-folder-mobile-sheet-close"
                   onClick={animateCloseFolderSheet}
                   aria-label="Zapri mape"
                 >
-                  <EmojiIcon symbol="✖️" size="1rem" />
+                  <Msym name="close" size="1.45rem" fill={false} weight={500} />
                 </button>
               </div>
+              {/* The phone design groups the folders into one card with hairline
+                  dividers and puts the per-folder menu at the end of each row,
+                  rather than the desktop dropdown's flat list. */}
               <div className="library-folder-mobile-sheet-body">
-                {renderFolderMenuOptions()}
+                <div className="memo-folder-card">
+                  <div className="memo-folder-row">
+                    <button
+                      type="button"
+                      className="memo-folder-row-main"
+                      onClick={handleSelectAllNotes}
+                    >
+                      <Emoji symbol="📁" size="1.2rem" />
+                      <span className="memo-folder-row-label">Vsi zapiski</span>
+                      {selectedFolderId === null ? (
+                        <Msym name="check" size="1.35rem" fill={false} weight={500} />
+                      ) : null}
+                    </button>
+                  </div>
+
+                  {liveFolders.map((folder) => (
+                    <div key={folder.id} className="memo-folder-row">
+                      <button
+                        type="button"
+                        className="memo-folder-row-main"
+                        onClick={() => handleSelectFolder(folder)}
+                      >
+                        <Emoji symbol="📁" size="1.2rem" />
+                        <span className="memo-folder-row-label">{folder.name}</span>
+                        {selectedFolderId === folder.id ? (
+                          <Msym name="check" size="1.35rem" fill={false} weight={500} />
+                        ) : null}
+                      </button>
+                      <button
+                        type="button"
+                        className="memo-folder-row-menu"
+                        onClick={() => {
+                          setIsOpen(false);
+                          setFolderActionTarget(folder);
+                        }}
+                        aria-label={`Možnosti mape ${folder.name}`}
+                      >
+                        <Msym name="more_horiz" size="1.5rem" fill={false} weight={500} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="memo-folder-sheet-cta">
+                  <button
+                    type="button"
+                    className="memo-new-folder-cta"
+                    onClick={() => {
+                      setIsOpen(false);
+                      setFolderName("");
+                      setDraftLectureIds([]);
+                      setIsCreateModalOpen(true);
+                    }}
+                  >
+                    Nova mapa
+                  </button>
+                </div>
               </div>
             </section>
-          </ViewportPortal>
+          </MemoPortal>
         </>
       ) : null}
 
       {isCreateModalOpen ? (
-        <ViewportPortal>
+        <MemoPortal>
           <div
             className="library-folder-modal-overlay"
             role="presentation"
@@ -904,7 +961,7 @@ export function LibraryFolderMenu({
               onClickCapture={handleFolderModalClickCapture}
               style={
                 folderModalDragOffset > 0
-                  ? { transform: `translateY(${folderModalDragOffset}px)` }
+                  ? { transform: `translateY(${folderModalDragOffset}px)`, transition: "none" }
                   : undefined
               }
             >
@@ -926,8 +983,11 @@ export function LibraryFolderMenu({
                 <h3 id="new-folder-title" className="library-folder-modal-title">
                   Nova mapa
                 </h3>
+              </div>
+
+              <div className="library-folder-modal-icon-row">
                 <div className="library-folder-modal-icon">
-                  <Folder open size={1.35} />
+                  <Emoji symbol="📁" size="2.6rem" />
                 </div>
               </div>
 
@@ -992,11 +1052,71 @@ export function LibraryFolderMenu({
               </button>
             </div>
           </div>
-        </ViewportPortal>
+        </MemoPortal>
+      ) : null}
+
+      {folderActionTarget ? (
+        <MemoPortal>
+          <div
+            className="library-folder-mobile-sheet-backdrop"
+            role="presentation"
+            onClick={() => setFolderActionTarget(null)}
+          />
+          <section
+            className="memo-action-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Možnosti mape ${folderActionTarget.name}`}
+            {...folderActionDrag.dragProps}
+          >
+            <span className="mobile-sheet-drag-handle" data-drag-handle="true" />
+            <p className="memo-action-sheet-target">{folderActionTarget.name}</p>
+
+            <div className="memo-action-sheet-list">
+              <button
+                type="button"
+                className="memo-action-sheet-item"
+                onClick={() => {
+                  const folder = folderActionTarget;
+                  setFolderActionTarget(null);
+                  startEditingFolder(folder);
+                }}
+              >
+                <Msym name="drive_file_rename_outline" size="1.4rem" fill={false} weight={500} />
+                Preimenuj mapo
+              </button>
+
+              <button
+                type="button"
+                className="memo-action-sheet-item danger"
+                disabled={deletingFolderId === folderActionTarget.id}
+                onClick={() => {
+                  const folderId = folderActionTarget.id;
+                  setFolderActionTarget(null);
+                  void handleDeleteFolder(folderId);
+                }}
+              >
+                <Msym name="folder_delete" size="1.4rem" fill={false} weight={500} />
+                Izbriši mapo
+              </button>
+
+              <button
+                type="button"
+                className="memo-action-sheet-cancel"
+                onClick={() => {
+                  setFolderActionTarget(null);
+                  setIsOpen(true);
+                }}
+              >
+                Prekliči
+              </button>
+            </div>
+          </section>
+        </MemoPortal>
       ) : null}
 
       {isEditModalOpen ? (
-        <ViewportPortal>
+        <MemoPortal>
           <div
             className="library-folder-modal-overlay"
             role="presentation"
@@ -1012,7 +1132,7 @@ export function LibraryFolderMenu({
               onClickCapture={handleFolderModalClickCapture}
               style={
                 folderModalDragOffset > 0
-                  ? { transform: `translateY(${folderModalDragOffset}px)` }
+                  ? { transform: `translateY(${folderModalDragOffset}px)`, transition: "none" }
                   : undefined
               }
             >
@@ -1034,8 +1154,11 @@ export function LibraryFolderMenu({
               <h3 id="edit-folder-title" className="library-folder-modal-title">
                 Uredi mapo
               </h3>
+            </div>
+
+            <div className="library-folder-modal-icon-row">
               <div className="library-folder-modal-icon">
-                <Folder open size={1.35} />
+                <Emoji symbol="📁" size="2.6rem" />
               </div>
             </div>
 
@@ -1144,14 +1267,14 @@ export function LibraryFolderMenu({
                 {deletingFolderId === editingFolderId ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  <EmojiIcon symbol="🗑️" size="0.95rem" />
+                  <Msym name="delete" size="1.15rem" fill={false} weight={500} />
                 )}
                 {deletingFolderId === editingFolderId ? "Brišem..." : "Izbriši mapo"}
               </button>
             </div>
             </div>
           </div>
-        </ViewportPortal>
+        </MemoPortal>
       ) : null}
     </div>
   );

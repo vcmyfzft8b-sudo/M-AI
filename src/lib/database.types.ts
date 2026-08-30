@@ -156,6 +156,9 @@ export type Database = {
           trial_lecture_id: string | null;
           trial_started_at: string | null;
           trial_consumed_at: string | null;
+          discount_wheel_spun_at: string | null;
+          discount_wheel_coupon: string | null;
+          discount_wheel_redeemed_at: string | null;
         };
         Insert: {
           id: string;
@@ -187,6 +190,9 @@ export type Database = {
           trial_lecture_id?: string | null;
           trial_started_at?: string | null;
           trial_consumed_at?: string | null;
+          discount_wheel_spun_at?: string | null;
+          discount_wheel_coupon?: string | null;
+          discount_wheel_redeemed_at?: string | null;
         };
         Update: {
           email?: string | null;
@@ -217,6 +223,9 @@ export type Database = {
           trial_lecture_id?: string | null;
           trial_started_at?: string | null;
           trial_consumed_at?: string | null;
+          discount_wheel_spun_at?: string | null;
+          discount_wheel_coupon?: string | null;
+          discount_wheel_redeemed_at?: string | null;
         };
       };
       billing_subscriptions: {
@@ -293,6 +302,7 @@ export type Database = {
           id: string;
           user_id: string;
           title: string | null;
+          emoji: string | null;
           source_type: string;
           access_tier: "paid" | "trial";
           storage_path: string | null;
@@ -308,6 +318,7 @@ export type Database = {
           id?: string;
           user_id: string;
           title?: string | null;
+          emoji?: string | null;
           source_type: string;
           access_tier?: "paid" | "trial";
           storage_path?: string | null;
@@ -321,6 +332,7 @@ export type Database = {
         };
         Update: {
           title?: string | null;
+          emoji?: string | null;
           source_type?: string;
           access_tier?: "paid" | "trial";
           storage_path?: string | null;

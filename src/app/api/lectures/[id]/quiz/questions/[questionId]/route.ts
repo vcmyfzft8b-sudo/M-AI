@@ -21,7 +21,7 @@ const quizQuestionPayloadSchema = z.object({
   prompt: z.string().trim().min(1).max(3_000),
   options: z.array(z.string().trim().min(1).max(1_000)).length(4),
   correctOptionIndex: z.number().int().min(0).max(3),
-  explanation: z.string().trim().min(1).max(4_000),
+  explanation: z.string().trim().max(4_000),
   difficulty: z.enum(["easy", "medium", "hard"]),
 });
 

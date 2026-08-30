@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Pause, Play, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, X } from "lucide-react";
 import Image from "next/image";
 import katex from "katex";
 import type {
@@ -11,8 +11,10 @@ import type {
 } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { EmojiIcon } from "@/components/emoji-icon";
-import { ViewportPortal } from "@/components/viewport-portal";
+import { createPortal } from "react-dom";
+
+import { Msym } from "@/components/msym";
+import { MemoPortal } from "@/components/memo-portal";
 import {
   DEFAULT_NOTE_TTS_HIGHLIGHT_COLOR_ID,
   DEFAULT_NOTE_TTS_PLAYBACK_RATE,
@@ -554,20 +556,16 @@ function QuotaUsageMenu({
                 ? "Brez dnevne omejitve ustvarjanja zvoka"
               : `Preostalo ${remainingPercent} % dnevnega ustvarjanja zvoka`
           }
-          title="Poraba ustvarjanja zvoka"
+          title="Nastavitve poslušanja"
         >
-          <EmojiIcon
-            className="library-folder-chevron note-read-usage-chevron"
-            symbol="▾"
-            size="0.95rem"
-          />
+          <Msym name="tune" size="1.25rem" fill={false} weight={500} />
         </summary>
         <div className="note-read-usage-popover note-read-usage-inline-popover">
           {menuContent}
         </div>
       </details>
       {isMenuOpen ? (
-        <ViewportPortal>
+        <MemoPortal>
           <button
             type="button"
             className="note-read-usage-mobile-backdrop"
@@ -583,13 +581,13 @@ function QuotaUsageMenu({
             onClickCapture={handleSheetClickCapture}
             style={
               dragOffset > 0
-                ? { transform: `translateY(${dragOffset}px)` }
+                ? { transform: `translateY(${dragOffset}px)`, transition: "none" }
                 : undefined
             }
           >
             {menuContent}
           </div>
-        </ViewportPortal>
+        </MemoPortal>
       ) : null}
     </>
   );
@@ -1382,7 +1380,7 @@ function InlineNoteMedia({
         title="Spremeni velikost fotografije"
       />
       {isPreviewOpen ? (
-        <ViewportPortal>
+        <MemoPortal>
           <div
             className="note-media-preview"
             role="dialog"
@@ -1414,7 +1412,7 @@ function InlineNoteMedia({
               onClick={(event) => event.stopPropagation()}
             />
           </div>
-        </ViewportPortal>
+        </MemoPortal>
       ) : null}
     </figure>
   );
@@ -1523,6 +1521,8 @@ export function NoteReadAloud({
   annotationToolbar,
   toolbarAccessory,
   annotationActive = false,
+  dockContainer = null,
+  annotationPaletteOpen = false,
   annotations = [],
   mediaBlocks = [],
   noteMedia = [],
@@ -1541,6 +1541,15 @@ export function NoteReadAloud({
   annotationToolbar?: ReactNode;
   toolbarAccessory?: ReactNode;
   annotationActive?: boolean;
+  /**
+   * Where the dock renders. The redesign pins it to the bottom of the note
+   * screen beside the chat affordance, which lives outside this component, so
+   * the note screen hands down the element to portal into. Null renders it in
+   * place, which is what the creator demo and any other host gets.
+   */
+  dockContainer?: HTMLElement | null;
+  /** True while the colour swatches are showing, so the pill widens for them. */
+  annotationPaletteOpen?: boolean;
   annotations?: NoteAnnotation[];
   mediaBlocks?: NoteMediaBlock[];
   noteMedia?: NoteMediaAsset[];
@@ -1582,6 +1591,13 @@ export function NoteReadAloud({
   // back with allowance left.
   const creationLimitReachedVoiceRef = useRef<NoteTtsVoice | null>(null);
   const playbackRequestIdRef = useRef(0);
+  /**
+   * Seconds of audio finished before the chunk that is playing now. The note is
+   * read as a sequence of chunks, so the audio element's own currentTime resets
+   * at every boundary; adding it to this gives a clock for the whole reading,
+   * which is what the dock shows.
+   */
+  const playedBeforeChunkRef = useRef(0);
   const preparedInitialChunkKeyRef = useRef<string | null>(null);
   const generationProgressIntervalRef = useRef<number | null>(null);
   const generationProgressDismissRef = useRef<number | null>(null);
@@ -1597,6 +1613,7 @@ export function NoteReadAloud({
   const sessionIdRef = useRef<string>(createReadSessionId());
   const statusRef = useRef<TtsStatusResponse | null>(null);
   const [status, setStatus] = useState<TtsStatusResponse | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [activeChunk, setActiveChunk] = useState<ActiveChunk | null>(null);
   const [activeChunkIndex, setActiveChunkIndex] = useState(0);
   const [completedWordIndex, setCompletedWordIndex] = useState(-1);
@@ -2644,6 +2661,8 @@ export function NoteReadAloud({
       return;
     }
 
+    setElapsedSeconds(playedBeforeChunkRef.current + audio.currentTime);
+
     const wordState = getPlaybackWordState(
       activeChunk,
       Math.max(0, audio.currentTime * 1000),
@@ -2902,6 +2921,12 @@ export function NoteReadAloud({
     const nextChunkIndex = activeChunk.chunkIndex + 1;
 
     if (nextChunkIndex < activeChunk.chunkCount) {
+      // Bank this chunk's length before the element rewinds for the next one.
+      const finished = audioRef.current?.duration;
+      if (Number.isFinite(finished)) {
+        playedBeforeChunkRef.current += finished as number;
+      }
+
       void playChunk(nextChunkIndex);
       return;
     }
@@ -2917,6 +2942,26 @@ export function NoteReadAloud({
     resetPlaybackWordState,
   ]);
 
+  /** Closes the reading player and puts the dock back to its headphones state. */
+  const stopReading = useCallback(() => {
+    const audio = audioRef.current;
+
+    if (audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    }
+
+    playbackRequestIdRef.current += 1;
+    playedBeforeChunkRef.current = 0;
+    setElapsedSeconds(0);
+    setIsPlaying(false);
+    setIsStartingPlayback(false);
+    setActiveChunk(null);
+    setActiveChunkIndex(0);
+    resetPlaybackWordState(-1);
+  }, [resetPlaybackWordState]);
+
   const disabled =
     isFetchingChunk ||
     isStartingPlayback ||
@@ -2931,55 +2976,77 @@ export function NoteReadAloud({
         : activeChunk
           ? "Nadaljuj"
           : "Poslušaj";
-  const renderPlaybackIcon = (className: string) =>
-    isPreparingPlayback ? (
-      <Loader2 className={`${className} animate-spin`} />
-    ) : isPlaying ? (
-      <Pause className={className} />
-    ) : (
-      <Play className={className} />
-    );
 
-  const renderNoteDock = () =>
-    annotationActive && annotationToolbar ? (
-      <div className="mobile-note-annotation-pill">{annotationToolbar}</div>
-    ) : (
-      <button
-        type="button"
-        className="mobile-note-read-pill"
-        onClick={() => {
-          window.dispatchEvent(new Event("memoai:mobile-dock-close"));
-          void handlePlayPause();
-        }}
-        disabled={disabled}
-        aria-label={playButtonLabel}
-      >
-        <EmojiIcon
-          symbol={isPreparingPlayback ? "⏳" : isPlaying ? "⏸️" : "🎧"}
-          size="1.12rem"
-          className="mobile-note-read-pill-icon"
-        />
-        <span className="mobile-note-read-pill-label">{playButtonLabel}</span>
-      </button>
-    );
+  /**
+   * The dock, exactly as the redesign draws it: one pill that morphs between
+   * three states rather than swapping elements, so its width animates.
+   *
+   *   idle       — a headphones button; tapping it starts the reading
+   *   reading    — play/pause, progress, elapsed, speed, close
+   *   annotating — the highlight tools, whenever note text is selected
+   *
+   * Only the active layer is rendered on desktop so the pill sizes to its
+   * content; on the phone all three stack and cross-fade (see redesign.css).
+   */
+  const formatClock = (seconds: number) => {
+    const total = Math.max(0, Math.round(seconds));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+  };
 
-  return (
-    <>
-      <div className="note-read-toolbar">
-        {annotationToolbar ?? (
-          <button
-            type="button"
-            className="note-read-button"
-            onClick={() => {
-              void handlePlayPause();
-            }}
-            disabled={disabled}
-            aria-label={playButtonLabel}
-          >
-            {renderPlaybackIcon("h-4 w-4")}
-            <span>{playButtonLabel}</span>
-          </button>
-        )}
+  const isAnnotating = annotationActive && Boolean(annotationToolbar);
+  const isReading = !isAnnotating && (isPlaying || Boolean(activeChunk));
+  const isIdle = !isAnnotating && !isReading;
+  const totalWords = document.words.length;
+  const readProgressPercent =
+    totalWords > 0
+      ? Math.min(100, Math.round(((completedWordIndex + 2) / totalWords) * 100))
+      : 0;
+
+  const renderNoteDock = () => (
+    <div
+      className={[
+        "memo-dock-pill",
+        isReading ? "reading" : "",
+        isAnnotating ? "annotating" : "",
+        isAnnotating && annotationPaletteOpen ? "palette" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <div className={`memo-dock-layer memo-dock-idle-layer ${isIdle ? "on" : ""}`.trim()}>
+        <button
+          type="button"
+          className="memo-dock-idle"
+          onClick={() => void handlePlayPause()}
+          disabled={disabled}
+          aria-label={playButtonLabel}
+        >
+          {isPreparingPlayback ? (
+            <Msym name="progress_activity" size="1.55rem" className="memo-spin" />
+          ) : (
+            <Msym name="headphones" size="1.55rem" fill={false} weight={500} />
+          )}
+        </button>
+      </div>
+
+      <div className={`memo-dock-layer memo-dock-player ${isReading ? "on" : ""}`.trim()}>
+        <button
+          type="button"
+          className="memo-dock-play"
+          onClick={() => void handlePlayPause()}
+          disabled={disabled}
+          aria-label={playButtonLabel}
+        >
+          {isPreparingPlayback ? (
+            <Msym name="progress_activity" size="1.35rem" className="memo-spin" />
+          ) : (
+            <Msym name={isPlaying ? "pause" : "play_arrow"} size="1.35rem" />
+          )}
+        </button>
+        <span className="memo-dock-track">
+          <span style={{ width: `${readProgressPercent}%` }} />
+        </span>
+        <span className="memo-dock-time">{formatClock(elapsedSeconds)}</span>
         <QuotaUsageMenu
           status={status}
           playbackRate={playbackRate}
@@ -2989,9 +3056,30 @@ export function NoteReadAloud({
           onVoiceChange={setSelectedVoice}
           onHighlightColorChange={setHighlightColorId}
         />
-        {toolbarAccessory}
-        {error ? <span className="note-read-error">{error}</span> : null}
+        <button
+          type="button"
+          className="memo-dock-close"
+          onClick={stopReading}
+          aria-label="Zapri branje"
+        >
+          <Msym name="close" size="1.45rem" fill={false} weight={500} />
+        </button>
       </div>
+
+      <div className={`memo-dock-layer memo-dock-annotate ${isAnnotating ? "on" : ""}`.trim()}>
+        {annotationToolbar}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {toolbarAccessory || error ? (
+        <div className="memo-note-toolbar">
+          {toolbarAccessory}
+          {error ? <span className="memo-note-toolbar-error">{error}</span> : null}
+        </div>
+      ) : null}
       {ttsGenerationProgress ? (
         <div
           className="note-read-generation-progress"
@@ -3026,17 +3114,8 @@ export function NoteReadAloud({
         }}
         className="note-read-audio"
       />
-      {/*
-        The dock is rendered twice on purpose. Mobile portals it to <body> so it
-        can sit fixed above the tab bar. Desktop keeps it in the note card and
-        positions it absolutely, so it hugs the card's corner instead of the
-        window's — the note column is capped and centred, so a viewport-anchored
-        pill drifts far to its right on wide screens. Exactly one is visible at
-        any width; see the `note-dock-*` rules in globals.css.
-      */}
-      <ViewportPortal>
-        <div className="note-dock note-dock-mobile">{renderNoteDock()}</div>
-      </ViewportPortal>
+      {/* The note screen owns where the dock sits, on both breakpoints. */}
+      {dockContainer ? createPortal(renderNoteDock(), dockContainer) : null}
       <div
         ref={contentRef}
         className="note-read-content"
@@ -3059,7 +3138,7 @@ export function NoteReadAloud({
           onDeleteMedia={onDeleteMedia}
         />
       </div>
-      <div className="note-dock note-dock-desktop">{renderNoteDock()}</div>
+      {dockContainer ? null : <div className="memo-dock">{renderNoteDock()}</div>}
     </>
   );
 }

@@ -1,50 +1,65 @@
-const SKELETON_TABS = [0, 1, 2];
+const SKELETON_TABS = [0, 1, 2, 3, 4];
 const SKELETON_PARAGRAPHS = [
   ["full", "full", "short"],
   ["full", "full", "full", "short"],
   ["full", "short"],
 ] as const;
 
+/** The note screen's shapes: pill row, emoji + title, then the body. */
 export function LectureWorkspaceLoading() {
   return (
     <div
-      className="lecture-workspace lecture-workspace-full"
+      className="memo-note-screen"
       data-route-skeleton=""
       role="status"
       aria-label="Nalaganje zapiska"
       aria-busy="true"
     >
-      <div className="workspace-panel-stack lecture-main-column">
-        <div className="lecture-header">
-          <div className="lecture-header-row">
-            <div className="lecture-loading-title-block">
-              <div className="app-loading-pill lecture-loading-title" />
-              <div className="app-loading-pill lecture-loading-meta" />
-            </div>
+      <div className="memo-note-card">
+        <div className="memo-note-scroll">
+          <div className="memo-tabs">
+            {SKELETON_TABS.map((tab) => (
+              <span
+                key={tab}
+                className="app-loading-pill"
+                style={{ height: "3.1rem", width: "7.5rem", borderRadius: "999px", flex: "0 0 auto" }}
+              />
+            ))}
           </div>
-        </div>
 
-        <div className="ios-segmented lecture-segmented">
-          {SKELETON_TABS.map((tab) => (
-            <div key={tab} className="ios-segment lecture-loading-segment">
-              <div className="app-loading-pill lecture-loading-segment-pill" />
-            </div>
-          ))}
-        </div>
+          <div className="memo-note-head">
+            <span
+              className="memo-note-head-emoji app-loading-pill"
+              style={{ borderRadius: "999px" }}
+            />
+            <span
+              className="app-loading-pill"
+              style={{ height: "1.85rem", width: "min(28rem, 70%)", marginTop: "0.1rem" }}
+            />
+          </div>
 
-        <div className="ios-card lecture-notes-card lecture-loading-card">
-          <div className="app-loading-pill app-loading-pill-section" />
-
-          {SKELETON_PARAGRAPHS.map((paragraph, paragraphIndex) => (
-            <div key={paragraphIndex} className="lecture-loading-paragraph">
-              {paragraph.map((row, rowIndex) => (
-                <div
-                  key={rowIndex}
-                  className={`app-loading-row${row === "short" ? " short" : ""}`}
+          <div className="memo-note-body">
+            {SKELETON_PARAGRAPHS.map((paragraph, index) => (
+              <div key={index} style={{ marginBottom: "1.9rem" }}>
+                <span
+                  className="app-loading-pill"
+                  style={{ height: "1.32rem", width: "11rem", display: "block" }}
                 />
-              ))}
-            </div>
-          ))}
+                {paragraph.map((line, lineIndex) => (
+                  <span
+                    key={lineIndex}
+                    className="app-loading-pill"
+                    style={{
+                      display: "block",
+                      height: "1.05rem",
+                      width: line === "short" ? "58%" : "100%",
+                      marginTop: "0.8rem",
+                    }}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

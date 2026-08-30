@@ -387,6 +387,7 @@ async function generateNotesContentDriven(
 
   return {
     title: outline.title,
+    emoji: outline.emoji ?? null,
     summary: outline.summary,
     keyTopics: outline.keyTopics,
     structuredNotesMd: normalizedStructuredNotesMd,

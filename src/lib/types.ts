@@ -167,6 +167,8 @@ export interface CreateLectureResponse {
 
 export interface NoteGenerationResult {
   title: string;
+  /** Topical emoji for the note; null when the model did not pick one. */
+  emoji?: string | null;
   summary: string;
   keyTopics: string[];
   structuredNotesMd: string;

@@ -1,63 +1,70 @@
-function SkeletonRow({ short = false }: { short?: boolean }) {
-  return <div className={`app-loading-row${short ? " short" : ""}`} />;
-}
+const SKELETON_SECTIONS = [
+  [0, 1, 2, 3],
+  [0, 1, 2],
+];
 
+/** The help screen's shapes: greeting card, then one grouped card per section. */
 export function SupportIndexLoading() {
-  const sections = [
-    { titleWidth: "7rem", items: 4 },
-    { titleWidth: "10rem", items: 3 },
-    { titleWidth: "9rem", items: 3 },
-  ];
-
   return (
-    <main className="home-dashboard pb-8" data-route-skeleton="" aria-busy="true" aria-label="Nalaganje pomoči">
-      <section className="dashboard-section">
-        <div className="dashboard-section-heading app-loading-header">
-          <div className="app-loading-pill app-loading-pill-title" />
+    <div className="memo-support-screen" aria-hidden="true" data-route-skeleton="">
+      <div className="memo-page">
+        <div
+          className="app-loading-pill"
+          style={{ height: "1.75rem", width: "7rem", marginBottom: "1.2rem" }}
+        />
+
+        <div className="memo-help-intro">
+          <span className="app-loading-pill" style={{ height: "1.1rem", width: "16rem" }} />
+          <span className="app-loading-pill" style={{ height: "1.1rem", width: "21rem" }} />
         </div>
-      </section>
 
-      {sections.map((section, sectionIndex) => (
-        <section key={sectionIndex} className="dashboard-section">
-          <div className="dashboard-section-heading">
-            <div className="app-loading-pill app-loading-pill-section" style={{ width: section.titleWidth }} />
+        {SKELETON_SECTIONS.map((section, index) => (
+          <div key={index} className="memo-help-section">
+            <div
+              className="app-loading-pill"
+              style={{ height: "1.3rem", width: "10rem", marginBottom: "0.85rem" }}
+            />
+            <div className="memo-help-group">
+              {section.map((row) => (
+                <div key={row} className="memo-help-toggle memo-help-item">
+                  <span className="app-loading-pill" style={{ height: "1.08rem", width: "45%" }} />
+                </div>
+              ))}
+            </div>
           </div>
-
-          <div className="dashboard-note-list">
-            {Array.from({ length: section.items }, (_, itemIndex) => (
-              <div key={itemIndex} className="dashboard-link-card support-link-card-skeleton">
-                <div className="app-loading-row" />
-                <div className="app-loading-pill support-chevron-skeleton" />
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
-    </main>
+        ))}
+      </div>
+    </div>
   );
 }
 
+const ARTICLE_LINES = ["full", "full", "short", "full", "full", "short"] as const;
+
+/** A single help article: heading, then body lines on the redesign's card. */
 export function SupportArticleLoading() {
   return (
-    <main className="home-dashboard pb-8" data-route-skeleton="" aria-busy="true" aria-label="Nalaganje članka pomoči">
-      <section className="dashboard-section">
-        <div className="app-loading-header">
-          <div className="app-loading-pill app-loading-pill-section" />
-          <div className="app-loading-pill app-loading-pill-title" />
-        </div>
-      </section>
+    <div
+      className="memo-support-screen"
+      data-route-skeleton=""
+      aria-busy="true"
+      aria-label="Nalaganje članka pomoči"
+    >
+      <div className="memo-page">
+        <div
+          className="app-loading-pill"
+          style={{ height: "1.75rem", width: "min(24rem, 70%)", marginBottom: "1.2rem" }}
+        />
 
-      <section className="dashboard-section">
-        <div className="dashboard-surface-card help-article-card support-article-skeleton">
-          <SkeletonRow />
-          <SkeletonRow />
-          <SkeletonRow short />
-          <div className="app-loading-pill app-loading-pill-section" />
-          <SkeletonRow />
-          <SkeletonRow />
-          <SkeletonRow short />
+        <div className="memo-help-intro">
+          {ARTICLE_LINES.map((line, index) => (
+            <span
+              key={index}
+              className="app-loading-pill"
+              style={{ height: "1.02rem", width: line === "short" ? "58%" : "100%" }}
+            />
+          ))}
         </div>
-      </section>
-    </main>
+      </div>
+    </div>
   );
 }

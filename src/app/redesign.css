@@ -2071,6 +2071,21 @@
   letter-spacing: -0.02em;
   max-width: 6rem;
   margin-left: 0.4rem;
+  transition:
+    max-width 0.38s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.24s cubic-bezier(0.32, 0.72, 0, 1),
+    margin-left 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/*
+ * The palette needs the row. The design rolls the label away as the swatches
+ * roll out — without it the toolbar is wider than the dock and the last colour
+ * (and, where it is shown, the photo button) are clipped off the edge.
+ */
+.memo-dock-pill.palette .memo-annotate-label {
+  max-width: 0;
+  opacity: 0;
+  margin-left: 0;
 }
 
 .memo-annotate-icon {
@@ -2150,25 +2165,23 @@
 }
 
 .memo-swatches.open {
-  /* Room for five 1.3rem swatches, their gaps, and the selected one's ring —
-     `overflow: hidden` (needed for the unroll) clips at the padding edge, so
-     without this the ring and the last swatch are cut off. */
-  max-width: 13rem;
+  /* Room for five swatches, their gaps and the selected one's ring —
+     `overflow: hidden` (needed for the unroll) clips at the padding edge. */
+  max-width: 12rem;
   opacity: 1;
-  margin: 0 0.35rem 0 0.55rem;
-  padding: 0.35rem;
+  margin: 0 0 0 0.3rem;
+  padding: 0.3rem;
 }
 
 .memo-swatch {
-  width: 1.3rem;
-  height: 1.3rem;
+  width: 1.5rem;
+  height: 1.5rem;
   flex: 0 0 auto;
-  margin: 0.15rem;
   transition: box-shadow 0.18s ease, transform 0.18s ease;
   padding: 0;
   border-radius: 999px;
   cursor: pointer;
-  border: 2px solid var(--surface);
+  border: 2.5px solid var(--surface);
 }
 
 .memo-swatch.selected {
@@ -8025,13 +8038,21 @@
   /* Back, the note's emoji and the actions button, pushed to the two edges
      with the emoji between them, as the design lays the bar out. */
   .memo-m-navbar {
-    position: relative;
-    z-index: 3;
+    position: absolute;
+    top: 0.5rem;
+    left: 1.15rem;
+    right: 1.15rem;
+    z-index: 5;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 0.5rem 1.15rem 0.7rem;
+    /* The bar is only its controls; the content behind it stays reachable. */
+    pointer-events: none;
+  }
+
+  .memo-m-navbar > * {
+    pointer-events: auto;
   }
 
   /*
@@ -8101,12 +8122,25 @@
     font-size: 0.95rem;
   }
 
+  /*
+   * The note screen scrolls under its floating controls the way the home
+   * screen does: the content fades out as it passes behind them rather than
+   * being cut off against the scroller's edge. The stops match the home
+   * screen's, offset by the taller bar here.
+   */
   .memo-note-scroll {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 0.2rem 1.15rem 7rem;
+    padding: 4.1rem 1.15rem 7rem;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 2.2rem,
+      #000 4rem
+    );
+    mask-image: linear-gradient(to bottom, transparent 0, transparent 2.2rem, #000 4rem);
   }
 
   .memo-m-note-title {

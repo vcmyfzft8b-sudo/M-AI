@@ -1352,6 +1352,7 @@ export function LectureWorkspace({
   const deletingNoteMediaIdsRef = useRef(new Set<string>());
   const optimisticNoteMediaUrlsRef = useRef(new Map<string, string>());
   const studyManagerSheetRef = useRef<HTMLDivElement | null>(null);
+  const noteScrollRef = useRef<HTMLDivElement | null>(null);
   const studyManagerItemSuppressClickRef = useRef(false);
   const studyManagerItemDragRef = useRef<StudyManagerItemDragState | null>(null);
   const deletingStudyItemIdsRef = useRef(new Set<string>());
@@ -5526,6 +5527,15 @@ export function LectureWorkspace({
     }
   }
 
+  /*
+   * Each tab starts at its own top. The scroller is shared, so without this a
+   * tab opens at the last one's offset — which on the study tabs leaves the
+   * pills sitting half-faded under the navbar.
+   */
+  useEffect(() => {
+    noteScrollRef.current?.scrollTo({ top: 0 });
+  }, [activeTab, activeStudyView]);
+
   const activeTabId: NoteTabId =
     activeTab === "notes"
       ? "notes"
@@ -5953,7 +5963,7 @@ export function LectureWorkspace({
             <span className="memo-breadcrumb-current">Podrobnosti zapiska</span>
           </div>
 
-          <div className="memo-note-scroll">
+          <div className="memo-note-scroll" ref={noteScrollRef}>
             {tabPills}
 
             <div className="memo-note-head memo-only-desktop">

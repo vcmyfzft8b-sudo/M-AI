@@ -9,11 +9,9 @@ import { PURCHASABLE_BILLING_PLANS } from "@/lib/billing";
  * through. This mounts the same component against demo props so it can be
  * looked at and worked on like every other screen here.
  *
- * `discountCouponPending` is on because that is the interesting state: it is
- * what a buyer sees after the prize wheel, and it is the copy most likely to be
- * wrong. Checkout still posts to the real endpoint and will fail without an
- * account, which is the honest behaviour for a demo of a payment screen —
- * better a visible error than a fake success.
+ * Checkout still posts to the real endpoint and will fail without an account,
+ * which is the honest behaviour for a demo of a payment screen — better a
+ * visible error than a fake success.
  */
 export default function CreatorDemoStartPage() {
   return (
@@ -24,7 +22,6 @@ export default function CreatorDemoStartPage() {
         onboardingComplete
         hasPaidAccess={false}
         plans={PURCHASABLE_BILLING_PLANS}
-        discountCouponPending
       />
     </main>
   );

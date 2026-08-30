@@ -9,7 +9,6 @@ import {
   Loader2,
   Minus,
   Plus,
-  X,
 } from "lucide-react";
 import { startTransition, useRef, useState } from "react";
 import Image from "next/image";
@@ -300,7 +299,6 @@ export function OnboardingPaywall({
   hasPaidAccess,
   subscriptionTrialEligible = true,
   plans,
-  discountCouponPending = false,
 }: {
   profile: ProfileRow | null;
   subscription: BillingSubscriptionRow | null;
@@ -308,8 +306,6 @@ export function OnboardingPaywall({
   hasPaidAccess: boolean;
   subscriptionTrialEligible?: boolean;
   plans: BillingPlanCard[];
-  /** True when the home-screen wheel has awarded a coupon this checkout will use. */
-  discountCouponPending?: boolean;
 }) {
   const router = useRouter();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
@@ -1103,11 +1099,11 @@ export function OnboardingPaywall({
         <div className="app-start-dismiss-row">
           <button
             type="button"
-            className="app-start-close-button"
+            className="memo-close-button app-start-close-button"
             onClick={() => navigateWithFeedback("/app")}
             aria-label="Zapri ponudbo naročnine"
           >
-            <X className="h-5 w-5" />
+            <Msym name="close" size="1.45rem" fill={false} weight={500} />
           </button>
         </div>
       ) : null}
@@ -1156,13 +1152,6 @@ export function OnboardingPaywall({
           </div>
         ))}
       </div>
-
-      {discountCouponPending ? (
-        <p className="memo-discount-note">
-          <Msym name="check_circle" size="1.15rem" />
-          Popust 50 % je pripravljen za tvoj nakup
-        </p>
-      ) : null}
 
       <div className="memo-paywall-plan-grid" role="radiogroup" aria-label="Izberi paket">
         {paywallPlans.map((plan) => {

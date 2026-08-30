@@ -439,13 +439,11 @@ a:visited {
   padding-inline: 1.1rem;
 }
 
+/* The paywall used to strip this back to a bare glyph. It is the app's close
+   button now — same size, ground, outline and shadow as every other one — so
+   only the glyph colour is left to the paywall's own palette. */
 .memo-paywall-shell .app-start-close-button {
-  width: 2.65rem;
-  height: 2.65rem;
-  border-color: transparent;
-  background: transparent;
   color: var(--memo-paywall-close-color);
-  box-shadow: none;
 }
 
 .memo-paywall-brand {

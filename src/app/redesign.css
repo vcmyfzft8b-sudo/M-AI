@@ -508,6 +508,23 @@
  * 90 clears all of them and still sits under everything portalled out of the
  * column (105 and up), so a sheet left open during a navigation stays visible.
  */
+/*
+ * The fallback overlay, used where there is no shell to portal into — the
+ * paywall at /app/start renders outside it entirely. It inherits the old
+ * shell's padding from globals, which boxes a full-screen skeleton inside a
+ * frame the page it replaces does not have. The skeletons carry their own
+ * padding, so it is removed here.
+ */
+.navigation-loading-overlay.memo-portal {
+  /* `.memo-portal` is `display: contents`, which is right for a wrapper that
+     only carries tokens and wrong for one that has to paint a ground: with no
+     box the page underneath shows through the skeleton. The box comes back;
+     the tokens stay. */
+  display: block;
+  padding: 0;
+  background: var(--bg);
+}
+
 .memo-main > .navigation-loading-overlay-in-content {
   z-index: 90;
   background: var(--bg);

@@ -9108,6 +9108,10 @@
     position: fixed;
     inset: auto 0 var(--memo-kb) 0;
     z-index: 126;
+    /* Production lays this out as a gapped grid; the design stacks it with
+       its own margins, and the gap was adding 16px above the header. */
+    display: block;
+    gap: 0;
     max-height: calc(100dvh - var(--memo-kb) - 54px);
     overflow-y: auto;
     padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
@@ -9136,17 +9140,49 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 1.1rem;
+    /* Production reserves a row tall enough for a button here; the design's
+       header is exactly as tall as its title. */
+    min-height: 0;
+    margin-bottom: 1rem;
   }
 
   .library-folder-mobile-sheet-title {
     font-size: 1.25rem;
     font-weight: 750;
     letter-spacing: -0.03em;
+    /* The design's title is a bare span; a heading's taller line box would
+       make the header 6px deeper and drop the close with it. */
+    line-height: normal;
   }
 
-  .library-folder-mobile-sheet-close {
+  /* ---------------------------------------------------------------------
+     Sheet header closes
+     ---------------------------------------------------------------------
+     One place everywhere. Every sheet header in the design is a centred
+     title with the close pinned to the right edge and no vertical offset of
+     its own — the header's own `align-items: center` places it, so it lands
+     on the title's centre whatever the header's height. Production sets a
+     hard `top` on several of them, which is what pushed the folder sheet's
+     close below its title.
+     ------------------------------------------------------------------ */
+  .library-folder-mobile-sheet-close,
+  .memo-sheet-close,
+  .memo-m-chat-head-btn,
+  .memo-offer-close,
+  .library-folder-modal-close,
+  .memo-portal .ios-sheet-header-close,
+  .memo .ios-sheet-header-close {
     position: absolute;
+    top: auto;
+    bottom: auto;
+    margin: 0;
+  }
+
+  .library-folder-mobile-sheet-close,
+  .memo-sheet-close,
+  .library-folder-modal-close,
+  .memo-portal .ios-sheet-header-close,
+  .memo .ios-sheet-header-close {
     right: 0;
   }
 

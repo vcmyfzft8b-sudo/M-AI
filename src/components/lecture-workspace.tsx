@@ -5634,7 +5634,7 @@ export function LectureWorkspace({
         <div className="memo-grab-wide" data-drag-handle="true">
           <span />
         </div>
-        <div className="memo-m-chat-head">
+        <div className="memo-m-chat-head" data-drag-zone>
           <span className="memo-m-chat-heading">
             <span className="memo-m-chat-title">Klepet s tem zapiskom</span>
           </span>

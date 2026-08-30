@@ -504,7 +504,7 @@ export function LibraryChat({
               <div className="memo-grab-wide" data-drag-handle>
                 <span />
               </div>
-              <div className="memo-m-chat-head">
+              <div className="memo-m-chat-head" data-drag-zone>
                 <button
                   type="button"
                   aria-label="Nov klepet"

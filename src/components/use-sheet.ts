@@ -142,12 +142,18 @@ export function useSheet(onClosed: () => void, options?: SheetOptions) {
       }
 
       const isHandle = Boolean(target.closest("[data-drag-handle]"));
+      /*
+       * A drag zone is somewhere a drag may start even on a scrolling sheet —
+       * a header, say — but which still lets its own buttons be buttons. The
+       * grabber alone is a 1.6rem target, which is a lot to ask of a thumb.
+       */
+      const inDragZone = isHandle || Boolean(target.closest("[data-drag-zone]"));
 
-      if (scrollable && !isHandle) {
+      if (scrollable && !inDragZone) {
         return;
       }
 
-      if (target.closest("button") && !isHandle) {
+      if (target.closest("button, a, input, textarea, select") && !isHandle) {
         return;
       }
 

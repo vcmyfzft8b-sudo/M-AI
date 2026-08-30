@@ -157,6 +157,7 @@ export function LibraryFolderMenu({
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   /** The folder whose ••• action sheet is open, as the phone design draws it. */
   const [folderActionTarget, setFolderActionTarget] = useState<LibraryFolder | null>(null);
+  const [folderDeleteTarget, setFolderDeleteTarget] = useState<LibraryFolder | null>(null);
   /** True while a sheet plays the design's exit, just before it unmounts. */
   const closeFolderActions = useCallback(() => setFolderActionTarget(null), []);
   const folderActionSheet = useSheet(closeFolderActions);
@@ -165,6 +166,10 @@ export function LibraryFolderMenu({
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [isSavingFolder, setIsSavingFolder] = useState(false);
   const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
+  const folderDeleteSheet = useSheet(
+    useCallback(() => setFolderDeleteTarget(null), []),
+    { locked: Boolean(deletingFolderId) },
+  );
   const lectureIdSet = useMemo(
     () => new Set(lectures.map((lecture) => lecture.id)),
     [lectures],
@@ -547,6 +552,8 @@ export function LibraryFolderMenu({
 
       const nextFolders = folders.filter((folder) => folder.id !== folderId);
       setFolders(nextFolders);
+      // The confirm sheet is what asked; it leaves once the folder is gone.
+      setFolderDeleteTarget(null);
 
       if (selectedFolderId === folderId) {
         onSelectFolder(null, null);
@@ -926,9 +933,9 @@ export function LibraryFolderMenu({
                 className="memo-action-sheet-item danger"
                 disabled={deletingFolderId === folderActionTarget.id}
                 onClick={() => {
-                  const folderId = folderActionTarget.id;
+                  const folder = folderActionTarget;
                   setFolderActionTarget(null);
-                  void handleDeleteFolder(folderId);
+                  setFolderDeleteTarget(folder);
                 }}
               >
                 <Msym name="folder_delete" size="1.4rem" fill={false} weight={500} />
@@ -950,10 +957,122 @@ export function LibraryFolderMenu({
         </MemoPortal>
       ) : null}
 
+      {folderDeleteTarget ? (
+        <MemoPortal>
+          <button
+            type="button"
+            aria-label="Zapri"
+            className={sheetClass("memo-scrim", folderDeleteSheet.closing)}
+            onClick={() => folderDeleteSheet.dismiss()}
+          />
+          <div
+            className={sheetClass("memo-sheet memo-folder-delete-sheet", folderDeleteSheet.closing)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="folder-delete-title"
+            {...folderDeleteSheet.dragProps}
+          >
+            <div className="memo-grab" data-drag-handle />
+            <span id="folder-delete-title" className="memo-folder-delete-title">
+              Izbriši mapo
+            </span>
+            <p className="memo-folder-delete-copy">
+              Mapa »{folderDeleteTarget.name}« bo izbrisana. Zapiski v njej ostanejo med
+              vsemi zapiski.
+            </p>
+            <div className="memo-folder-delete-actions">
+              <button
+                type="button"
+                className="memo-folder-delete-go"
+                disabled={Boolean(deletingFolderId)}
+                onClick={() => {
+                  const folderId = folderDeleteTarget.id;
+                  void handleDeleteFolder(folderId);
+                }}
+              >
+                {deletingFolderId ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : null}
+                Izbriši mapo
+              </button>
+              <button
+                type="button"
+                className="memo-folder-delete-cancel"
+                disabled={Boolean(deletingFolderId)}
+                onClick={() => folderDeleteSheet.dismiss(() => setIsOpen(true))}
+              >
+                Prekliči
+              </button>
+            </div>
+          </div>
+        </MemoPortal>
+      ) : null}
+
       {isEditModalOpen ? (
         <MemoPortal>
+          {/*
+            * The phone renames on its own sheet — title, Končano, one field —
+            * as the artboard draws it. The editor below, with its folder
+            * picker and its three stacked buttons, is desktop's.
+            */}
+          <button
+            type="button"
+            aria-label="Zapri"
+            className={sheetClass("memo-scrim memo-only-mobile", editModalSheet.closing)}
+            onClick={animateCancelEdit}
+          />
           <div
-            className={sheetClass("library-folder-modal-overlay", editModalSheet.closing)}
+            className={sheetClass(
+              "memo-sheet memo-folder-name-sheet memo-only-mobile",
+              editModalSheet.closing,
+            )}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Preimenuj mapo"
+            {...editModalSheet.dragProps}
+          >
+            <div className="memo-grab" data-drag-handle />
+            <div className="memo-folder-name-head">
+              <span className="memo-folder-name-title">Preimenuj</span>
+              <button
+                type="button"
+                className="memo-folder-done"
+                onClick={() => void handleSaveFolder()}
+                disabled={isFolderEditBusy || editingName.trim().length === 0}
+                aria-busy={isSavingFolder}
+              >
+                Končano
+              </button>
+            </div>
+            <input
+              className="memo-folder-name-field"
+              value={editingName}
+              onChange={(event) => setEditingName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") {
+                  return;
+                }
+
+                event.preventDefault();
+                event.currentTarget.blur();
+                void handleSaveFolder();
+              }}
+              placeholder="Ime mape"
+              enterKeyHint="done"
+              autoCapitalize="sentences"
+              autoCorrect="off"
+              autoComplete="off"
+              maxLength={32}
+              aria-label="Ime mape"
+              disabled={isFolderEditBusy}
+            />
+          </div>
+
+          <div
+            className={sheetClass(
+              "library-folder-modal-overlay memo-only-desktop",
+              editModalSheet.closing,
+            )}
             role="presentation"
             onClick={animateCancelEdit}
           >

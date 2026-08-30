@@ -3974,6 +3974,24 @@
 }
 
 /* ---------------------------------------------------------------------------
+   Coral call-to-actions
+   ---------------------------------------------------------------------------
+   One treatment everywhere. The artboard borders exactly one of its fifteen
+   coral buttons — the dock's "Nov zapisek" — and leaves the rest bare, so they
+   read as different components. They are all given that button's outline and
+   glow here instead.
+   ------------------------------------------------------------------------ */
+.memo-sheet-coral.memo-sheet-coral,
+.memo-button-coral.memo-button-coral,
+.memo-wheel-cta.memo-wheel-cta,
+.memo-offer-cta.memo-offer-cta,
+.memo-paywall-cta.memo-paywall-cta,
+.note-source-modal .ios-primary-button.ios-primary-button {
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
+}
+
+/* ---------------------------------------------------------------------------
    Close buttons
    ---------------------------------------------------------------------------
    One shape everywhere. The app grew several of these — a sheet header close, a
@@ -9260,15 +9278,115 @@
     overflow-y: auto;
   }
 
-  /* Title on the left, the confirm beside it — the artboard's header row. */
-  .library-folder-modal-header {
+  /*
+   * Coral only at this width; desktop draws these dark, and a coral outline
+   * there would be wrong. The class is doubled so this lands whatever the
+   * order — several of these declare `border: 0` further down the file.
+   */
+  .memo-capture-submit.memo-capture-submit,
+  .memo-new-folder-cta.memo-new-folder-cta,
+  .memo-folder-done.memo-folder-done,
+  .memo-card-row .settings-inline-action,
+  .memo-card-row .billing-portal-button,
+  .memo-card-row .memo-primary-pill,
+  .note-source-modal.mobile-draggable-sheet .memo-modal-actions .ios-primary-button {
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
+  }
+
+  /* Centred title with the confirm pinned right — the artboard's header row. */
+  .library-folder-modal-header,
+  .memo-folder-name-head {
+    position: relative;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 1.3rem;
+  }
+
+  .memo-folder-name-title {
+    font-size: 1.25rem;
+    font-weight: 750;
+    letter-spacing: -0.03em;
+    line-height: normal;
+  }
+
+  .memo-folder-name-field {
+    width: 100%;
+    height: 3.6rem;
+    padding: 0 1.2rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--field);
+    color: var(--text);
+    outline: none;
+    font-family: inherit;
+    font-size: 1.08rem;
+    font-weight: 600;
+  }
+
+  /* --- deleting a folder ------------------------------------------------ */
+
+  .memo-folder-delete-title {
+    display: block;
+    margin-bottom: 0.5rem;
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: 750;
+    letter-spacing: -0.03em;
+  }
+
+  .memo-folder-delete-copy {
+    margin: 0 0 1.1rem;
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.4;
+    text-align: center;
+  }
+
+  .memo-folder-delete-actions {
+    display: grid;
+    gap: 0.7rem;
+  }
+
+  .memo-folder-delete-go,
+  .memo-folder-delete-cancel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .memo-folder-delete-go {
+    height: 3.4rem;
+    background: #ff3b30;
+    color: #fff;
+    font-size: 1.08rem;
+    font-weight: 700;
+  }
+
+  .memo-folder-delete-cancel {
+    height: 3.1rem;
+    background: var(--tile);
+    color: var(--text);
+    font-size: 1.02rem;
+    font-weight: 650;
+  }
+
+  .memo-folder-delete-go:disabled,
+  .memo-folder-delete-cancel:disabled {
+    cursor: default;
+    opacity: 0.6;
   }
 
   .memo-folder-done {
+    position: absolute;
+    right: 0;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     height: 2.5rem;

@@ -10184,7 +10184,9 @@
     /* Header, then the body that takes what is left. */
     grid-template-rows: auto minmax(0, 1fr);
     gap: 0;
-    padding: max(1.25rem, env(safe-area-inset-top)) 1.15rem
+    /* The artboard starts its header 0.5rem below the status bar; edge to
+       edge that is the safe area, whichever is larger. */
+    padding: max(0.5rem, env(safe-area-inset-top)) 1.15rem
       calc(env(safe-area-inset-bottom) + 1.25rem);
     border: 0;
     border-radius: 0;
@@ -10203,8 +10205,9 @@
   .note-source-modal.mobile-draggable-sheet .note-source-header {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
-    margin-bottom: 1.6rem;
+    gap: 0.75rem;
+    margin-bottom: 0;
+    padding-bottom: 0.7rem;
     min-height: 2.9rem;
   }
 
@@ -10212,9 +10215,10 @@
     flex: 1;
     min-width: 0;
     text-align: left;
-    font-size: 1.3rem;
-    font-weight: 800;
+    font-size: 1.08rem;
+    font-weight: 750;
     letter-spacing: -0.03em;
+    line-height: normal;
   }
 
   .note-source-modal.mobile-draggable-sheet .ios-sheet-header-close {
@@ -10243,8 +10247,36 @@
     align-self: stretch;
   }
 
+  /*
+   * The artboard stacks the two actions at the foot, the call to action first
+   * and taller than the Prekliči beneath it — not two buttons of one size.
+   */
   .note-source-modal.mobile-draggable-sheet .memo-modal-actions {
+    display: grid;
+    gap: 0.7rem;
     margin-top: auto;
+  }
+
+  .note-source-modal.mobile-draggable-sheet .memo-modal-actions .ios-primary-button {
+    order: 1;
+    min-height: 0;
+    height: 3.55rem;
+    font-size: 1.12rem;
+    font-weight: 700;
+  }
+
+  .note-source-modal.mobile-draggable-sheet .memo-modal-actions .ios-secondary-button {
+    order: 2;
+    min-height: 0;
+    height: 3rem;
+    font-size: 1.02rem;
+    font-weight: 650;
+  }
+
+  .note-source-modal.mobile-draggable-sheet .note-source-modal-body {
+    gap: 1.1rem;
+    padding-top: 1rem;
+    padding-bottom: 2rem;
   }
 
   .note-source-modal.mobile-draggable-sheet .ios-sheet-header-close {
@@ -10254,8 +10286,7 @@
   }
 
   .note-source-modal.mobile-draggable-sheet .memo-modal-actions {
-    flex-direction: column-reverse;
-    gap: 0.6rem;
+    /* The grid above already orders these; `gap` is the artboard's 0.7rem. */
     padding-top: 0.6rem;
     background: var(--bg);
   }

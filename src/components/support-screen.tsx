@@ -20,19 +20,21 @@ export function SupportScreen({ basePath = "/app/support" }: { basePath?: string
 
   return (
     <div className="memo-support-screen">
-      <div className="memo-settings-topbar memo-only-mobile flex">
-        <button
-          type="button"
-          aria-label="Nazaj"
-          className="memo-m-round"
-          onClick={() => router.push("/app")}
-        >
-          <Msym name="arrow_back" size="1.5rem" fill={false} weight={500} />
-        </button>
-      </div>
-
       <div className="memo-page">
-        <h1>Pomoč</h1>
+        {/* The phone puts the title and the way back on one row, the title on
+            the left; desktop reaches this screen from the rail and needs no
+            back control at all. */}
+        <div className="memo-support-head">
+          <h1>Pomoč</h1>
+          <button
+            type="button"
+            aria-label="Nazaj"
+            className="memo-m-round memo-only-mobile flex"
+            onClick={() => router.push(basePath === "/app/support" ? "/app" : basePath.replace(/\/support$/, ""))}
+          >
+            <Msym name="arrow_back" size="1.5rem" fill={false} weight={500} />
+          </button>
+        </div>
 
         <div className="memo-help-intro">
           <p>Živjo! Tukaj je ekipa Memo AI.</p>

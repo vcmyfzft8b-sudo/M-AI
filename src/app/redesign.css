@@ -8593,8 +8593,22 @@
     padding: 0.35rem 1.15rem calc(2.5rem + var(--memo-safe-bottom));
   }
 
-  .memo-support-screen .memo-settings-topbar {
-    justify-content: flex-start;
+  /* Title left, the way back right, on one row — the design's help header. */
+  .memo-support-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-top: 0.5rem;
+  }
+
+  .memo-support-head h1 {
+    margin: 0;
+    font-size: 1.6rem;
+  }
+
+  .memo-support-screen .memo-page > .memo-help-intro {
+    margin-top: 1rem;
   }
 
   .memo-help-intro {

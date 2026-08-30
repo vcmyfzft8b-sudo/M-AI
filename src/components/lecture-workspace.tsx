@@ -1232,6 +1232,17 @@ function ChatBubble({ message }: { message: ChatMessageWithCitations }) {
   );
 }
 
+/**
+ * The phone artboard says "Tapni", the desktop one "Klikni". Both are rendered
+ * and the stylesheet picks, so this needs no viewport state on the client.
+ */
+const flipHint = (
+  <>
+    <span className="memo-only-desktop">Klikni za obrat</span>
+    <span className="memo-only-mobile">Tapni za obrat</span>
+  </>
+);
+
 export function LectureWorkspace({
   initialDetail,
   hasPaidAccess,
@@ -1331,17 +1342,12 @@ export function LectureWorkspace({
   const noteAnnotationShellRef = useRef<HTMLDivElement | null>(null);
   const deletingNoteMediaIdsRef = useRef(new Set<string>());
   const optimisticNoteMediaUrlsRef = useRef(new Map<string, string>());
-  const studyManagerDragStartYRef = useRef<number | null>(null);
-  const studyManagerDragOffsetRef = useRef(0);
-  const studyManagerSuppressClickRef = useRef(false);
   const studyManagerSheetRef = useRef<HTMLDivElement | null>(null);
-  const studyManagerTouchDragActiveRef = useRef(false);
   const studyManagerItemSuppressClickRef = useRef(false);
   const studyManagerItemDragRef = useRef<StudyManagerItemDragState | null>(null);
   const deletingStudyItemIdsRef = useRef(new Set<string>());
   const [isStudyManagerOpen, setIsStudyManagerOpen] = useState(false);
   const [studyManagerSearch, setStudyManagerSearch] = useState("");
-  const [studyManagerDragOffset, setStudyManagerDragOffset] = useState(0);
   const [studyManagerInputFocused, setStudyManagerInputFocused] = useState(false);
   const [studyManagerItemDrag, setStudyManagerItemDrag] =
     useState<StudyManagerItemDragState | null>(null);
@@ -3438,12 +3444,8 @@ export function LectureWorkspace({
   }
 
   const closeStudyManager = useCallback(() => {
-    studyManagerDragStartYRef.current = null;
-    studyManagerDragOffsetRef.current = 0;
-    studyManagerSuppressClickRef.current = false;
     studyManagerItemDragRef.current = null;
     setStudyManagerInputFocused(false);
-    setStudyManagerDragOffset(0);
     setStudyManagerItemDrag(null);
     setOpenStudyManagerActionItemId(null);
     setIsStudyManagerOpen(false);
@@ -3454,7 +3456,7 @@ export function LectureWorkspace({
    * the per-row swipe — but the exit is the design's shared one: `.closing`
    * carries it out of frame rather than the sheet jumping there in a frame.
    */
-  const studyManagerSheet = useSheet(closeStudyManager);
+  const studyManagerSheet = useSheet(closeStudyManager, { scrollable: true });
   const dismissStudyManager = studyManagerSheet.dismiss;
 
   const animateCloseStudyManager = useCallback(() => {
@@ -3498,226 +3500,6 @@ export function LectureWorkspace({
     };
   }, [animateCloseStudyManager, isStudyManagerOpen]);
 
-  function handleStudyManagerPointerDown(event: ReactPointerEvent<HTMLElement>) {
-    if (event.pointerType === "mouse" && event.button !== 0) {
-      return;
-    }
-
-    const target = event.target;
-    const sheet = event.currentTarget;
-    const swipeItemTarget =
-      target instanceof Element ? target.closest(".study-manager-item-surface") : null;
-    const interactiveTarget =
-      target instanceof Element
-        ? target.closest("button, a, input, textarea, select, .app-close-button")
-        : null;
-    const dragHandleTarget =
-      target instanceof Element ? target.closest(".study-manager-drag-handle") : null;
-    const topDragZoneTarget =
-      target instanceof Element ? target.closest(".study-manager-top-drag-zone") : null;
-    const dragHeaderTarget =
-      target instanceof Element ? target.closest(".study-manager-header") : null;
-    const draggableRegionTarget =
-      target instanceof Element
-        ? target.closest(
-            ".study-manager-sheet, .study-manager-header, .study-manager-form, .study-manager-list",
-          )
-        : null;
-
-    studyManagerSuppressClickRef.current = false;
-    studyManagerDragStartYRef.current = null;
-
-    if (swipeItemTarget) {
-      return;
-    }
-
-    if (interactiveTarget && !dragHandleTarget && !topDragZoneTarget) {
-      return;
-    }
-
-    if (!dragHandleTarget && !topDragZoneTarget && !draggableRegionTarget) {
-      return;
-    }
-
-    if (!dragHandleTarget && !topDragZoneTarget && !dragHeaderTarget && sheet.scrollTop > 0) {
-      return;
-    }
-
-    if (topDragZoneTarget && sheet.scrollTop > 0) {
-      sheet.scrollTo({ top: 0 });
-    }
-
-    studyManagerDragStartYRef.current = event.clientY;
-    if (!interactiveTarget || dragHandleTarget || topDragZoneTarget) {
-      sheet.setPointerCapture(event.pointerId);
-    }
-  }
-
-  function shouldStartStudyManagerTopDrag(target: EventTarget | null) {
-    const sheet = studyManagerSheetRef.current;
-
-    if (!sheet || sheet.scrollTop > 0) {
-      return false;
-    }
-
-    if (!(target instanceof Element) || !sheet.contains(target)) {
-      return false;
-    }
-
-    if (target.closest(".study-manager-item-surface")) {
-      return false;
-    }
-
-    const dragHandleTarget = target.closest(".study-manager-drag-handle");
-    const topDragZoneTarget = target.closest(".study-manager-top-drag-zone");
-
-    if (
-      target.closest("button, a, input, textarea, select, .app-close-button") &&
-      !dragHandleTarget &&
-      !topDragZoneTarget
-    ) {
-      return false;
-    }
-
-    return Boolean(
-      dragHandleTarget ||
-        topDragZoneTarget ||
-        target.closest(".study-manager-header, .study-manager-form, .study-manager-list"),
-    );
-  }
-
-  function updateStudyManagerDragOffset(clientY: number) {
-    if (studyManagerDragStartYRef.current === null) {
-      return false;
-    }
-
-    const nextOffset = Math.max(0, clientY - studyManagerDragStartYRef.current);
-    studyManagerDragOffsetRef.current = nextOffset;
-    if (nextOffset > 8) {
-      studyManagerSuppressClickRef.current = true;
-    }
-    setStudyManagerDragOffset(nextOffset);
-    return nextOffset > 0;
-  }
-
-  function handleStudyManagerClickCapture(event: ReactMouseEvent<HTMLElement>) {
-    if (!studyManagerSuppressClickRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    studyManagerSuppressClickRef.current = false;
-  }
-
-  useEffect(() => {
-    if (!isStudyManagerOpen) {
-      return;
-    }
-
-    function handleWindowPointerMove(event: PointerEvent) {
-      const isDraggingDown = updateStudyManagerDragOffset(event.clientY);
-      if (isDraggingDown) {
-        event.preventDefault();
-      }
-    }
-
-    function handleWindowPointerEnd() {
-      if (studyManagerDragOffsetRef.current > 110) {
-        animateCloseStudyManager();
-        return;
-      }
-
-      studyManagerDragStartYRef.current = null;
-      studyManagerDragOffsetRef.current = 0;
-      setStudyManagerDragOffset(0);
-    }
-
-    window.addEventListener("pointermove", handleWindowPointerMove, { passive: false });
-    window.addEventListener("pointerup", handleWindowPointerEnd);
-    window.addEventListener("pointercancel", handleWindowPointerEnd);
-    return () => {
-      window.removeEventListener("pointermove", handleWindowPointerMove);
-      window.removeEventListener("pointerup", handleWindowPointerEnd);
-      window.removeEventListener("pointercancel", handleWindowPointerEnd);
-    };
-  }, [animateCloseStudyManager, isStudyManagerOpen]);
-
-  useEffect(() => {
-    if (!isStudyManagerOpen) {
-      return;
-    }
-
-    function handleTouchStart(event: TouchEvent) {
-      studyManagerTouchDragActiveRef.current = false;
-      studyManagerDragStartYRef.current = null;
-
-      if (
-        window.innerWidth >= 1100 ||
-        event.touches.length !== 1 ||
-        !shouldStartStudyManagerTopDrag(event.target)
-      ) {
-        return;
-      }
-
-      studyManagerDragStartYRef.current = event.touches[0]?.clientY ?? null;
-    }
-
-    function handleTouchMove(event: TouchEvent) {
-      const touch = event.touches[0];
-      const startY = studyManagerDragStartYRef.current;
-
-      if (!touch || startY === null) {
-        return;
-      }
-
-      const deltaY = touch.clientY - startY;
-
-      if (deltaY <= 0) {
-        return;
-      }
-
-      event.preventDefault();
-      studyManagerTouchDragActiveRef.current = true;
-      updateStudyManagerDragOffset(touch.clientY);
-    }
-
-    function handleTouchEnd() {
-      if (!studyManagerTouchDragActiveRef.current) {
-        studyManagerDragStartYRef.current = null;
-        return;
-      }
-
-      studyManagerTouchDragActiveRef.current = false;
-
-      if (studyManagerDragOffsetRef.current > 110) {
-        animateCloseStudyManager();
-        return;
-      }
-
-      studyManagerDragStartYRef.current = null;
-      studyManagerDragOffsetRef.current = 0;
-      setStudyManagerDragOffset(0);
-    }
-
-    document.addEventListener("touchstart", handleTouchStart, {
-      capture: true,
-      passive: true,
-    });
-    document.addEventListener("touchmove", handleTouchMove, {
-      capture: true,
-      passive: false,
-    });
-    document.addEventListener("touchend", handleTouchEnd, true);
-    document.addEventListener("touchcancel", handleTouchEnd, true);
-
-    return () => {
-      document.removeEventListener("touchstart", handleTouchStart, true);
-      document.removeEventListener("touchmove", handleTouchMove, true);
-      document.removeEventListener("touchend", handleTouchEnd, true);
-      document.removeEventListener("touchcancel", handleTouchEnd, true);
-    };
-  }, [animateCloseStudyManager, isStudyManagerOpen]);
 
   function getStudyManagerItemOffset(itemId: string) {
     if (studyManagerItemDrag?.id === itemId) {
@@ -4365,8 +4147,6 @@ export function LectureWorkspace({
 
     if (activeTab === "study") {
       const currentFlashcard = studyDeck.find((flashcard) => flashcard.id === currentReviewFlashcardId) ?? null;
-      const currentFlashcardDisplayIndex = currentFlashcard ? activeFlashcardIndex + 1 : 0;
-      const currentFlashcardDisplayTotal = reviewQueue.length || totalFlashcards;
       const currentFlashcardAnswer =
         currentFlashcard ? flashcardSessionResults[currentFlashcard.id]?.latestConfidence ?? null : null;
       const currentFlashcardAnswerLabel =
@@ -4471,12 +4251,8 @@ export function LectureWorkspace({
         (activeStudyView === "quiz" && detail.quizQuestions.length > 0);
       const openStudyManager = () => {
         window.dispatchEvent(new Event("memoai:mobile-dock-close"));
-        studyManagerDragStartYRef.current = null;
-        studyManagerDragOffsetRef.current = 0;
-        studyManagerSuppressClickRef.current = false;
         studyManagerItemDragRef.current = null;
-        setStudyManagerDragOffset(0);
-        setStudyManagerInputFocused(false);
+            setStudyManagerInputFocused(false);
         setStudyManagerItemDrag(null);
         setOpenStudyManagerActionItemId(null);
         setIsStudyManagerOpen(true);
@@ -4662,7 +4438,6 @@ export function LectureWorkspace({
                         <div className="lecture-flashcard-rotator">
                           <div className="lecture-flashcard-face lecture-flashcard-face-front">
                             <div className="lecture-flashcard-face-header">
-                              <span>{currentFlashcardDisplayIndex} / {currentFlashcardDisplayTotal}</span>
                               {currentFlashcardAnswerLabel ? (
                                 <span className={`lecture-flashcard-answer-label ${currentFlashcardAnswerClass}`}>
                                   {currentFlashcardAnswerLabel}
@@ -4670,11 +4445,10 @@ export function LectureWorkspace({
                               ) : null}
                             </div>
                             <p className="lecture-flashcard-content">{currentFlashcard.front}</p>
-                            <span className="lecture-flashcard-side-label">Klikni za obrat</span>
+                            <span className="lecture-flashcard-side-label">{flipHint}</span>
                           </div>
                           <div className="lecture-flashcard-face lecture-flashcard-face-answer">
                             <div className="lecture-flashcard-face-header">
-                              <span>{currentFlashcardDisplayIndex} / {currentFlashcardDisplayTotal}</span>
                               {currentFlashcardAnswerLabel ? (
                                 <span className={`lecture-flashcard-answer-label ${currentFlashcardAnswerClass}`}>
                                   {currentFlashcardAnswerLabel}
@@ -4682,7 +4456,7 @@ export function LectureWorkspace({
                               ) : null}
                             </div>
                             <p className="lecture-flashcard-content">{currentFlashcard.back}</p>
-                            <span className="lecture-flashcard-side-label">Klikni za obrat</span>
+                            <span className="lecture-flashcard-side-label">{flipHint}</span>
                           </div>
                         </div>
                         <div className="lecture-flashcard-drag-overlay" aria-hidden="true">
@@ -5283,23 +5057,19 @@ export function LectureWorkspace({
                   role="dialog"
                   aria-modal="true"
                   aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
-                  onPointerDown={handleStudyManagerPointerDown}
-                  onClickCapture={handleStudyManagerClickCapture}
                   onClick={(event) => event.stopPropagation()}
-                  data-dragging={
-                    studyManagerDragOffset > 0 && !studyManagerSheet.closing ? "true" : undefined
-                  }
-                  style={
-                    studyManagerDragOffset > 0 && !studyManagerSheet.closing
-                      ? { transform: `translateY(${studyManagerDragOffset}px)`, transition: "none" }
-                      : undefined
-                  }
+                  {...studyManagerSheet.dragProps}
                 >
-                  <div className="study-manager-top-drag-zone" aria-hidden="true" />
+                  <div
+                    className="study-manager-top-drag-zone"
+                    aria-hidden="true"
+                    data-drag-handle
+                  />
                   <button
                     type="button"
                     className="mobile-sheet-drag-handle study-manager-drag-handle"
-                    aria-label="Zapri urejanje"
+                    aria-label="Povleci navzdol za zapiranje"
+                    data-drag-handle
                   />
                   <div className="study-manager-header">
                     <div>
@@ -6124,7 +5894,7 @@ export function LectureWorkspace({
 
   return (
     <>
-      <div className="memo-note-screen">
+      <div className="memo-note-screen" data-note-tab={activeTabId}>
         {/* Phone chrome: back, the note's emoji, and the actions menu. */}
         <div className="memo-m-navbar memo-only-mobile flex">
           <button
@@ -6169,7 +5939,9 @@ export function LectureWorkspace({
               <h1>{lectureTitle}</h1>
             </div>
 
-            <h1 className="memo-m-note-title memo-only-mobile">{lectureTitle}</h1>
+            <h1 className="memo-m-note-title memo-only-mobile memo-notes-tab-only">
+              {lectureTitle}
+            </h1>
 
             {noteMenu}
 
@@ -6177,7 +5949,7 @@ export function LectureWorkspace({
               <span>{formatCalendarDate(detail.lecture.created_at)}</span>
             </div>
 
-            <div className="memo-m-note-meta memo-only-mobile flex">
+            <div className="memo-m-note-meta memo-only-mobile flex memo-notes-tab-only">
               <span>{noteMetaLine}</span>
             </div>
 

@@ -7858,6 +7858,31 @@
 
   /* --- mobile note -------------------------------------------------------- */
 
+  /*
+   * The study tabs are their own screen in the phone design — no note heading
+   * above them — which is what lets the card and its answer row fit without
+   * scrolling. The notes tab keeps the title and the meta line.
+   */
+  .memo-note-screen:not([data-note-tab="notes"]) .memo-notes-tab-only {
+    display: none;
+  }
+
+  /*
+   * The artboard has no dock on this screen, so its card runs to 26rem. Here
+   * the dock stays — the edit control lives in it — so the card gives back the
+   * height the dock occupies. Anything more and the answer row ends up behind
+   * it, which is worse than a slightly shorter card.
+   */
+  .memo-note-screen:not([data-note-tab="notes"]) .memo-panel .lecture-flashcard-stage {
+    margin-top: 2.2rem;
+  }
+
+  .memo-note-screen:not([data-note-tab="notes"]) .memo-panel .lecture-flashcard,
+  .memo-note-screen:not([data-note-tab="notes"]) .memo-panel .lecture-flashcard-rotator,
+  .memo-note-screen:not([data-note-tab="notes"]) .memo-panel .lecture-flashcard-face {
+    min-height: 20rem;
+  }
+
   /* Back, the note's emoji and the actions button, pushed to the two edges
      with the emoji between them, as the design lays the bar out. */
   .memo-m-navbar {
@@ -8747,6 +8772,19 @@
 
   [data-dragging="true"] {
     transition: none !important;
+  }
+
+  /*
+   * …and they all arrive the same way. `memo-pop-in` is the desktop entrance
+   * and is stated globally, so on the phone every draggable sheet has to name
+   * the rise again or it lands on the spot instead of coming up from the edge.
+   */
+  .note-source-modal.mobile-draggable-sheet,
+  .library-folder-modal.mobile-draggable-sheet,
+  .study-manager-sheet.mobile-draggable-sheet,
+  .memo-portal .ios-sheet,
+  .memo-portal .mobile-draggable-sheet {
+    animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   /* The grabber, at the design's size. */

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { cache } from "react";
 import Stripe from "stripe";
 
-import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
+import { PREVIEW_AUTH_BYPASS_USER_ID, getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 import { getServerEnv } from "@/lib/server-env";
 import { resolveSiteOrigin } from "@/lib/site-url";
@@ -482,6 +482,24 @@ export const getViewerAppState = cache(async function getViewerAppState() {
   }
 
   const entitlement = await getUserEntitlementState(user.id);
+
+  /*
+   * The preview bypass signs in as an account with no profile row, so
+   * `onboardingComplete` is false and the app layout bounces it to /app/start
+   * before it can reach a single screen. Onboarding is not what anyone opens
+   * the bypass to look at, so it counts as done for this one account.
+   *
+   * Nothing else is faked: it still has no subscription, so it sees exactly
+   * what an unpaid account sees. And the bypass itself only exists when
+   * PREVIEW_AUTH_BYPASS is set, which production is not.
+   */
+  if (user.id === PREVIEW_AUTH_BYPASS_USER_ID) {
+    return {
+      user,
+      ...entitlement,
+      onboardingComplete: true,
+    };
+  }
 
   return {
     user,

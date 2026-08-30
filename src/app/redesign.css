@@ -7970,16 +7970,38 @@
   }
 
   /*
-   * The same card once the prize is gone for the day. Coral is the discount's
-   * colour and it should leave with the discount, so this reads in the app's
-   * own ink — it is an ordinary way to buy, not a deal.
+   * The same card once the prize is gone for the day — filled coral rather
+   * than white, because a quiet white card in a stack of white note cards is
+   * a card nobody sees. It takes the call-to-action treatment the rest of the
+   * app uses: the artboard's rim and the coral glow, so it reads as the one
+   * thing on the screen worth pressing.
    */
-  .memo-promo.upgrade .memo-promo-copy > span:first-child {
-    color: var(--text);
+  .memo-promo.upgrade {
+    border: var(--btn-border-width) solid var(--btn-border-filled);
+    background: var(--coral);
+    box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
+  }
+
+  .memo-promo.upgrade .memo-promo-copy > span:first-child,
+  .memo-promo.upgrade .memo-promo-copy > span:last-child,
+  .memo-promo.upgrade .msym {
+    color: #ffffff;
   }
 
   .memo-promo.upgrade .memo-promo-copy > span:last-child {
-    color: var(--muted);
+    opacity: 0.86;
+  }
+
+  /* The glyph sits on a translucent tile, as the note rows' emoji do. */
+  .memo-promo-tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.7rem;
+    height: 2.7rem;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.22);
   }
 
   .memo-note-list {

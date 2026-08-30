@@ -1065,16 +1065,8 @@ export function HomeDashboard({
             </button>
           ) : null}
 
-          {!hasPaidAccess && !canCreateNotes ? (
-            <button
-              type="button"
-              className="memo-utility-link upsell"
-              onClick={() => router.push(startHref)}
-            >
-              <span>Nadgradi za nov zapisek</span>
-              <Msym name="chevron_right" size="1.1rem" fill={false} weight={400} />
-            </button>
-          ) : null}
+          {/* The upgrade card below the search says this, and says it better:
+              two prompts to buy stacked above the library read as nagging. */}
 
           <div className="memo-only-desktop">
             <h1 className="memo-home-h1">Nov zapisek</h1>
@@ -1187,11 +1179,14 @@ export function HomeDashboard({
                 className="memo-promo upgrade memo-only-mobile flex"
                 onClick={() => router.push(startHref)}
               >
+                <span className="memo-promo-tile">
+                  <Emoji symbol="⚡" size="1.35rem" />
+                </span>
                 <span className="memo-promo-copy">
-                  <span>Nadgradi na Premium</span>
+                  <span>Odkleni Premium</span>
                   <span>Neomejeni zapiski, kartice in kvizi</span>
                 </span>
-                <Emoji symbol="⚡" size="2rem" />
+                <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
               </button>
             ) : null}
 

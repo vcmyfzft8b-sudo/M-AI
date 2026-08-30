@@ -4,10 +4,7 @@ import { chunkSummarySchema, noteArtifactSchema } from "@/lib/ai/schemas";
 import { generateStructuredObject } from "@/lib/ai/json";
 import { getServerEnv } from "@/lib/server-env";
 import { buildTranscriptWindows } from "@/lib/chunking";
-import {
-  buildGeneratedContentLanguageInstruction,
-  resolveNoteLanguageLabel,
-} from "@/lib/languages";
+import { buildGeneratedContentLanguageInstruction, detectSourceLanguage } from "@/lib/languages";
 import {
   buildKnowledgeExtractionInstructions,
   buildLegacyAudioNoteTargets,
@@ -239,6 +236,24 @@ const OUTLINE_SIZE_GATE_MAX_ITEMS = 120;
  */
 export type NotesGenerationPhase = "note_extract" | "note_outline";
 
+/*
+ * Which language the note's own furniture is written in — its section headings
+ * ("Hiter pregled" / "Quick Overview") and its callout labels.
+ *
+ * These are literal strings handed to the model, so unlike the body they
+ * cannot follow the source on their own. They used to follow a language the
+ * learner picked; nobody picks one any more, and the stored hint is null on
+ * every note made since, which would have quietly given a Slovenian lecture
+ * English headings.
+ *
+ * So it is read off the source, the same way the note's language is. When the
+ * source is too short or too mixed to call, the app's own language is the
+ * better guess than English — it is what the default used to be.
+ */
+function resolveNoteLabelLanguage(sourceText: string, outputLanguage?: string | null) {
+  return detectSourceLanguage(sourceText) ?? outputLanguage ?? "sl";
+}
+
 async function generateNotesContentDriven(
   segments: TranscriptSegmentInput[],
   params: {
@@ -338,9 +353,11 @@ async function generateNotesContentDriven(
   const sourceWindows = planSourceWriteWindows(sourceText);
   const windowMarkdowns: string[] = [];
 
+  const labelLanguage = resolveNoteLabelLanguage(sourceText, params.outputLanguage);
+
   for (const [windowIndex, sourceWindow] of sourceWindows.entries()) {
     const writeInstructions = buildSourceNoteInstructions({
-      outputLanguage: params.outputLanguage,
+      outputLanguage: labelLanguage,
       ...(sourceWindows.length > 1
         ? { window: { index: windowIndex, count: sourceWindows.length } }
         : {}),
@@ -387,6 +404,7 @@ async function generateNotesContentDriven(
 
   return {
     title: outline.title,
+    emoji: outline.emoji ?? null,
     summary: outline.summary,
     keyTopics: outline.keyTopics,
     structuredNotesMd: normalizedStructuredNotesMd,
@@ -446,17 +464,20 @@ async function generateNotesLegacy(
     sourceType === "audio"
       ? buildLegacyAudioNoteTargets(sourceWordCount, windows.length)
       : buildLegacyNoteTargets(sourceWordCount, windows.length);
-  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
-  const languageLabel = resolveNoteLanguageLabel(params.outputLanguage);
+  const languageInstruction = buildGeneratedContentLanguageInstruction();
+  const labelLanguage = resolveNoteLabelLanguage(
+    segments.map((segment) => segment.text).join("\n\n"),
+    params.outputLanguage,
+  );
   const chunkInstructions =
     sourceType === "audio"
       ? `${languageInstruction} You create source cards from spoken lecture transcript chunks. Identify the study-worthy material in this chunk: definitions, mechanisms, sequences, comparisons, formulas, examples, clarifications, caveats, and exam-relevant details. Preserve technical terms and explain abbreviated or implied ideas when the transcript supports them. Skip filler, repeated phrases, low-value asides, and examples that add no new understanding. Never invent facts. Bullet points must be complete study points, not fragments. ${MATH_FORMATTING_INSTRUCTIONS}`
       : `${languageInstruction} You create source cards from lecture-style source material. Identify the study-worthy material in this chunk: definitions, mechanisms, sequences, comparisons, formulas, caveats, examples already present in the source, and exam-relevant details. Skip filler, repeated wording, low-value details, and examples that add no new understanding. Never invent facts. Bullet points must be complete study points, not fragments. ${MATH_FORMATTING_INSTRUCTIONS}`;
   const structuredPlusInstructions = buildLegacyStructuredPlusInstructions({
-    outputLanguage: params.outputLanguage,
+    outputLanguage: labelLanguage,
     recommendedTopicCount: targets.recommendedTopicCount,
   });
-  const finalInstructions = `${languageInstruction} You are preparing final study notes in ${languageLabel} from ${params.sourceLabel}. Produce a title, summary, key topics, and student-ready notes that cover the important material in the source without unnecessary text. Work section by section through the material: decide what the learner needs to know, explain it clearly, and skip filler or repetition. Every chunk summary should contribute only its non-duplicate substantive content to the final notes. Build about ${targets.recommendedTopicCount} substantial sections when the material supports it. ${structuredPlusInstructions}`;
+  const finalInstructions = `${languageInstruction} You are preparing final study notes from ${params.sourceLabel}. Produce a title, summary, key topics, and student-ready notes that cover the important material in the source without unnecessary text. Work section by section through the material: decide what the learner needs to know, explain it clearly, and skip filler or repetition. Every chunk summary should contribute only its non-duplicate substantive content to the final notes. Build about ${targets.recommendedTopicCount} substantial sections when the material supports it. ${structuredPlusInstructions}`;
 
   const chunkOutputs = await mapWithConcurrency(
     windows,

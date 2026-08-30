@@ -16,9 +16,16 @@ export const getOptionalUser = cache(async function getOptionalUser() {
   return user;
 });
 
+/**
+ * The stand-in account the preview bypass signs in as. Exported so entitlement
+ * can recognise it: it has no profile row, and without one every page would
+ * bounce it into onboarding.
+ */
+export const PREVIEW_AUTH_BYPASS_USER_ID = "00000000-0000-4000-8000-000000000001";
+
 function getPreviewAuthBypassUser() {
   return {
-    id: "00000000-0000-4000-8000-000000000001",
+    id: PREVIEW_AUTH_BYPASS_USER_ID,
     aud: "authenticated",
     role: "authenticated",
     email: "preview@memo.app",

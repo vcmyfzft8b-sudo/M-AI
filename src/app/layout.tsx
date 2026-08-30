@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
+import { KeyboardInset } from "@/components/keyboard-inset";
 import { ThemeController } from "@/components/theme-controller";
 import { VisitTracker } from "@/components/visit-tracker";
 import {
@@ -13,8 +14,86 @@ import {
 
 import "katex/dist/katex.min.css";
 import "./globals.css";
+import "./redesign.css";
 
 const siteTitle = `${SEO_BRAND_NAME} | ${BRAND_SHORTLINE}`;
+
+/**
+ * The redesign draws every glyph from Material Symbols Rounded. `next/font`
+ * has no icon fonts in its catalogue, so the family is requested straight from
+ * Google — subset to the icons we actually render (`icon_names`), because the
+ * unsubset variable font is several megabytes. `display=block` stops ligature
+ * names ("chevron_right") flashing as literal words before the font arrives.
+ *
+ * Add any new icon to this list, or `.msym` will render its name as text.
+ */
+const MATERIAL_SYMBOL_NAMES = [
+  "add",
+  "add_photo_alternate",
+  "arrow_back",
+  "arrow_drop_down",
+  "arrow_forward",
+  "arrow_upward",
+  "assignment",
+  "bolt",
+  "cancel",
+  "chat_bubble",
+  "check",
+  "check_circle",
+  "chevron_right",
+  "close",
+  "close_fullscreen",
+  "cloud_upload",
+  "delete",
+  "description",
+  "download",
+  "drag_handle",
+  "drive_file_rename_outline",
+  "edit",
+  "edit_square",
+  "expand_less",
+  "expand_more",
+  "folder",
+  "folder_delete",
+  "forum",
+  "forward_10",
+  "headphones",
+  "help",
+  "home",
+  "ink_highlighter",
+  "ios_share",
+  "link",
+  "mic",
+  "more_horiz",
+  "open_in_full",
+  "palette",
+  "pause",
+  "person",
+  "photo_camera",
+  "photo_library",
+  "play_arrow",
+  "progress_activity",
+  "quiz",
+  "radio_button_checked",
+  "refresh",
+  "replay",
+  "replay_10",
+  "search",
+  "settings",
+  "skip_next",
+  "skip_previous",
+  "speed",
+  "stop",
+  "style",
+  "text_fields",
+  "text_snippet",
+  "tune",
+  "warning",
+].join(",");
+
+const MATERIAL_SYMBOLS_HREF =
+  "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,-50..200" +
+  `&icon_names=${MATERIAL_SYMBOL_NAMES}&display=block`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SEO_SITE_URL),
@@ -84,6 +163,9 @@ export default function RootLayout({
   return (
     <html lang="sl" suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link rel="stylesheet" href={MATERIAL_SYMBOLS_HREF} />
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -105,6 +187,7 @@ export default function RootLayout({
       </head>
       <body>
         <ThemeController />
+        <KeyboardInset />
         {children}
         <VisitTracker />
         <Analytics />

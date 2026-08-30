@@ -80,10 +80,11 @@ export async function POST(request: Request) {
     .object({
       lectureId: optionalDocumentLectureIdSchema,
       originalFileName: optionalOriginalFileNameSchema,
+      // A missing field means "we do not know", not "Slovenian".
       languageHint: z
         .union([z.string(), z.null()])
-        .transform((value) => (typeof value === "string" ? value : "sl"))
-        .pipe(languageHintSchema),
+        .transform((value) => (typeof value === "string" && value.trim() ? value : null))
+        .pipe(languageHintSchema.nullable()),
       createInitialAudio: formBooleanSchema,
       initialAudioVoice: formInitialAudioVoiceSchema,
     })
@@ -195,7 +196,7 @@ export async function POST(request: Request) {
           status: "queued",
           error_message: null,
           title: sourceFileName.replace(/\.[^.]+$/i, ""),
-          language_hint: languageHint,
+          language_hint: languageHint ?? null,
           processing_metadata: {
             createInitialAudio,
             initialAudioVoice: initialAudioVoice ?? null,

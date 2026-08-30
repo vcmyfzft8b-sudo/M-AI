@@ -2,7 +2,7 @@ import "server-only";
 
 import { SonioxNodeClient } from "@soniox/node";
 
-import { normalizeNoteLanguage } from "@/lib/languages";
+import { NOTE_LANGUAGE_OPTIONS } from "@/lib/languages";
 import { requireSonioxEnv } from "@/lib/server-env";
 import type { TranscriptResult } from "@/lib/types";
 import {
@@ -28,9 +28,26 @@ function getSonioxClient() {
   return sonioxClient;
 }
 
+/**
+ * The hints for a lecture whose language somebody already knows — a retry of a
+ * lecture we have transcribed before, say.
+ *
+ * `null` when nobody knows, which is now the normal case: nothing asks the user
+ * to pick a language any more, so the honest thing is to let Soniox identify it
+ * rather than assert a default and transcribe Slovenian audio as English.
+ * `normalizeNoteLanguage` cannot say that — it answers "en" for anything it
+ * does not recognise — so the check is against the codes themselves.
+ */
 function resolveLanguageHints(languageHint: string | null) {
-  const normalized = normalizeNoteLanguage(languageHint);
-  return normalized ? [normalized] : ["sl"];
+  const normalized = languageHint?.trim().toLowerCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  const known = NOTE_LANGUAGE_OPTIONS.some((option) => option.value === normalized);
+
+  return known ? [normalized] : null;
 }
 
 function fallbackSegments(text: string, durationSeconds: number): TranscriptResult["segments"] {
@@ -97,10 +114,10 @@ export class SonioxTranscriptionProvider implements TranscriptionProvider {
         model: env.SONIOX_MODEL,
         file: input.bytes,
         filename: input.file.name || "lecture-audio",
-        language_hints: languageHints,
-        language_hints_strict: input.options.languageHintsStrict,
+        ...(languageHints ? { language_hints: languageHints } : {}),
+        language_hints_strict: Boolean(languageHints) && input.options.languageHintsStrict,
         enable_speaker_diarization: true,
-        enable_language_identification: !input.options.languageHintsStrict,
+        enable_language_identification: !languageHints || !input.options.languageHintsStrict,
         wait: true,
         wait_options: {
           interval_ms: SONIOX_WAIT_INTERVAL_MS,
@@ -130,7 +147,7 @@ export class SonioxTranscriptionProvider implements TranscriptionProvider {
     const transcriptText = transcript?.text.trim() ?? "";
     const diagnostics: TranscriptionAttemptDiagnostics = {
       audioDurationMs: transcription.audio_duration_ms ?? null,
-      languageHints,
+      languageHints: languageHints ?? [],
       languageHintsStrict: input.options.languageHintsStrict,
       status: transcription.status,
       transcriptLength: transcriptText.length,

@@ -1,6 +1,7 @@
 "use client";
 
-import { Loader2, X } from "lucide-react";
+import Image from "next/image";
+import { Loader2 } from "lucide-react";
 import {
   memo,
   startTransition,
@@ -11,7 +12,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -20,57 +20,84 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { flushSync } from "react-dom";
 
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
+import {
+  detectInstallPlatform,
+  INSTALL_GUIDE_SEEN_KEY,
+  shouldOfferInstallGuide,
+} from "@/lib/install-guide";
+import { DiscountOffer } from "@/components/discount-offer";
+import { LibraryChat } from "@/components/library-chat";
 import { NoteSourceModal, type NoteSourceMode } from "@/components/note-source-modal";
-import { StatusBadge } from "@/components/status-badge";
-import { EmojiIcon } from "@/components/emoji-icon";
+import { Emoji, Msym } from "@/components/msym";
 import { InstantLink } from "@/components/instant-link";
 import { LibraryFolderMenu } from "@/components/library-folder-menu";
 import {
   shouldHandleLinkNavigation,
   useInstantNavigation,
 } from "@/components/navigation-loading";
-import { ViewportPortal } from "@/components/viewport-portal";
+import { MemoPortal } from "@/components/memo-portal";
+import { useCollapsingHeader } from "@/components/use-collapsing-header";
+import { sheetClass, useSheet } from "@/components/use-sheet";
+import {
+  BRAND_LOCKUP_HEIGHT,
+  BRAND_LOCKUP_SRC,
+  BRAND_LOCKUP_WIDTH,
+  SEO_BRAND_NAME,
+} from "@/lib/brand";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
 import { canRetryLectureFailure } from "@/lib/lecture-failure-codes";
-import { getEffectiveLectureSourceType } from "@/lib/lecture-source-metadata";
+import {
+  getEffectiveLectureSourceType,
+  getLectureSourceDetail,
+  getLectureSourceLabel,
+} from "@/lib/lecture-source-metadata";
+import { noteEmoji } from "@/lib/note-emoji";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 import { formatCalendarDate } from "@/lib/utils";
 
+/** Desktop home: four capture entry points, in the redesign's order. */
 const QUICK_ACTIONS = [
   {
     id: "record" as const,
     label: "Posnemi predavanje",
-    detail: "Začni z enim dotikom",
-    icon: "🎙️",
+    icon: "radio_button_checked",
     accent: "record",
-  },
-  {
-    id: "upload" as const,
-    label: "Naloži zvok",
-    detail: "MP3, M4A, WAV ali WEBM",
-    icon: "📤",
-    accent: "default",
-  },
-  {
-    id: "text" as const,
-    label: "Prilepi besedilo ali PDF",
-    detail: "Pretvori gradivo v strukturirane zapiske",
-    icon: "📄",
-    accent: "default",
+    filled: true,
   },
   {
     id: "link" as const,
     label: "Dodaj povezavo",
-    detail: "Spletni članek ali vir",
-    icon: "🔗",
-    accent: "default",
+    icon: "link",
+    accent: "",
+    filled: true,
   },
+  {
+    id: "text" as const,
+    label: "Naloži PDF ali besedilo",
+    icon: "text_fields",
+    accent: "",
+    filled: true,
+  },
+  {
+    id: "upload" as const,
+    label: "Naloži zvok",
+    icon: "cloud_upload",
+    accent: "",
+    filled: true,
+  },
+] as const;
+
+/** Phone home: the same entry points, as the "Nov zapisek" sheet lists them. */
+const CREATE_OPTIONS = [
+  { id: "record" as const, emoji: "🎙️", label: "Posnemi zvok" },
+  { id: "upload" as const, emoji: "🔊", label: "Naloži zvok" },
+  { id: "text" as const, emoji: "📚", label: "PDF, datoteka ali besedilo" },
+  { id: "link" as const, emoji: "🔗", label: "Spletna povezava" },
 ] as const;
 
 const DASHBOARD_MUTATION_TIMEOUT_MS = 18_000;
 const DASHBOARD_NOTE_ACTION_REVEAL_PX = 144;
-const RENAME_KEYBOARD_VISIBLE_INSET_PX = 80;
 
 type DashboardNoteDragState = {
   pointerId: number;
@@ -110,36 +137,13 @@ async function fetchDashboardMutation(
   }
 }
 
-function sourceLabel(sourceType: string) {
-  if (sourceType === "link") {
-    return "Povezava";
-  }
+/** "Zvok, 1 h 12 min" where the design has a detail to print, "Zvok" where not. */
+function sourceMeta(lecture: AppLectureListItem, sourceType: string) {
+  const detail = getLectureSourceDetail(lecture);
 
-  if (sourceType === "text") {
-    return "Besedilo";
-  }
-
-  if (sourceType === "pdf") {
-    return "PDF";
-  }
-
-  if (sourceType === "presentation") {
-    return "Predstavitev";
-  }
-
-  return "Zvok";
-}
-
-function SourceIcon({ sourceType }: { sourceType: string }) {
-  if (sourceType === "link") {
-    return <EmojiIcon symbol="🔗" size="1rem" />;
-  }
-
-  if (sourceType === "text" || sourceType === "pdf" || sourceType === "presentation") {
-    return <EmojiIcon symbol="📄" size="1rem" />;
-  }
-
-  return <EmojiIcon symbol="🎙️" size="1rem" />;
+  return detail
+    ? `${getLectureSourceLabel(sourceType)}, ${detail}`
+    : getLectureSourceLabel(sourceType);
 }
 
 function shouldPollLectureStatus(status: AppLectureListItem["status"]) {
@@ -186,7 +190,15 @@ const NoteRow = memo(function NoteRow({
   const suppressClickRef = useRef(false);
   const [dragState, setDragState] = useState<DashboardNoteDragState | null>(null);
   const noteOffset = dragState?.offset ?? (isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0);
-  const isSwipeActive = Boolean(dragState || isMenuOpen || noteOffset < 0);
+  const title = lecture.title?.trim() || "Neimenovan zapisek";
+  const emoji = noteEmoji(lecture);
+  const isProcessing = shouldPollLectureStatus(lecture.status);
+  const isFailed = lecture.status === "failed";
+  const meta = isProcessing
+    ? "Ustvarjanje zapiskov…"
+    : isFailed
+      ? "Obdelava ni uspela"
+      : `${formatCalendarDate(lecture.created_at)} • ${sourceMeta(lecture, sourceType)}`;
 
   useEffect(
     () => () => {
@@ -203,13 +215,14 @@ const NoteRow = memo(function NoteRow({
     navigateWithFeedback(href);
   }
 
+  // Desktop: a plain row that opens the note. Actions live on the note screen.
   if (!useSwipeActions) {
     return (
-      <div className={`ios-row-note-card ${isMenuOpen ? "menu-open" : ""}`}>
+      <>
         {navigationOverlay}
         <InstantLink
           href={href}
-          className="ios-row-note-card-link"
+          className="memo-note-row"
           aria-busy={isOpening}
           onClick={(event) => {
             if (!shouldHandleLinkNavigation(event)) {
@@ -220,70 +233,21 @@ const NoteRow = memo(function NoteRow({
             openLecture();
           }}
         >
-          <div className="ios-row-icon" style={{ backgroundColor: "var(--surface-muted)" }}>
-            <SourceIcon sourceType={sourceType} />
-          </div>
+          <span className="memo-note-emoji">
+            <Emoji symbol={emoji} size="1.3rem" />
+          </span>
 
-          <div className="min-w-0 flex-1">
-            <p className="ios-row-title truncate font-medium">
-              {lecture.title ?? "Neimenovan zapisek"}
-            </p>
-            <p className="ios-row-subtitle mt-1">
-              {sourceLabel(sourceType)} • {formatCalendarDate(lecture.created_at)}
-            </p>
-          </div>
+          <span className="memo-note-copy">
+            <span className="memo-note-title">{title}</span>
+            <span className="memo-note-meta">{meta}</span>
+          </span>
 
-          <div className="flex items-center gap-3">
-            {lecture.status !== "ready" && <StatusBadge status={lecture.status} />}
-          </div>
+          {isProcessing ? <span className="memo-note-badge">Ustvarjanje</span> : null}
+          {isFailed ? <span className="memo-note-badge failed">Napaka</span> : null}
+
+          <Msym name="chevron_right" size="1.55rem" fill={false} weight={400} />
         </InstantLink>
-
-        <div
-          ref={isMenuOpen ? attachMenuRef : undefined}
-          className="dashboard-note-actions"
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <button
-            type="button"
-            aria-label={`Odpri dejanja za ${lecture.title ?? "zapisek"}`}
-            aria-expanded={isMenuOpen}
-            disabled={isBusy}
-            onClick={() => onToggleMenu(lecture.id)}
-            className={`dashboard-note-menu-button ${isMenuOpen ? "open" : ""}`}
-          >
-            {isBusy ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <EmojiIcon symbol="⋯" size="1rem" />
-            )}
-          </button>
-
-          {isMenuOpen ? (
-            <div className="dashboard-note-menu">
-              <button
-                type="button"
-                onClick={() => onOpenRename(lecture)}
-                className="dashboard-note-menu-item"
-                aria-label="Preimenuj zapisek"
-                title="Preimenuj zapisek"
-              >
-                <EmojiIcon symbol="✏️" size="0.95rem" />
-                <span>Preimenuj</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onOpenDelete(lecture)}
-                className="dashboard-note-menu-item danger"
-                aria-label="Izbriši zapisek"
-                title="Izbriši zapisek"
-              >
-                <EmojiIcon symbol="🗑️" size="0.95rem" />
-                <span>Izbriši</span>
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </div>
+      </>
     );
   }
 
@@ -326,9 +290,7 @@ const NoteRow = memo(function NoteRow({
     }
 
     const shouldOpen = current.offset < -DASHBOARD_NOTE_ACTION_REVEAL_PX / 2;
-    if (shouldOpen && !isMenuOpen) {
-      onToggleMenu(lecture.id);
-    } else if (!shouldOpen && isMenuOpen) {
+    if (shouldOpen !== isMenuOpen) {
       onToggleMenu(lecture.id);
     }
 
@@ -392,6 +354,12 @@ const NoteRow = memo(function NoteRow({
       return;
     }
 
+    // A tap while the actions are revealed closes them instead of opening.
+    if (isMenuOpen) {
+      onToggleMenu(lecture.id);
+      return;
+    }
+
     openLecture();
   }
 
@@ -404,74 +372,78 @@ const NoteRow = memo(function NoteRow({
     openLecture();
   }
 
+  // Phone: the row slides left to reveal Uredi / Izbriši.
   return (
-    <div
-      className={`ios-row-note-card dashboard-note-swipe-row ${
-        isMenuOpen ? "menu-open" : ""
-      } ${isSwipeActive ? "is-swiping" : ""} ${dragState ? "is-dragging" : ""} ${isOpening ? "is-opening" : ""}`}
-    >
+    <div className={`memo-swipe-row ${isMenuOpen ? "open" : ""}`.trim()}>
       {navigationOverlay}
       <div
+        role="link"
+        tabIndex={0}
+        className={`memo-swipe-surface ${dragState ? "dragging" : ""}`.trim()}
+        onPointerDown={handlePointerDown}
+        onDragStart={(event) => event.preventDefault()}
+        onClick={handleSurfaceClick}
+        onKeyDown={handleSurfaceKeyDown}
+        style={{ transform: `translateX(${noteOffset}px)` }}
+      >
+        <span className="memo-note-emoji">
+          <Emoji symbol={emoji} size="1.35rem" />
+        </span>
+
+        <span className="memo-note-copy">
+          <span className="memo-note-title">{title}</span>
+          <span className="memo-note-meta">{meta}</span>
+        </span>
+
+        <button
+          type="button"
+          aria-label={`Dejanja za ${title}`}
+          aria-expanded={isMenuOpen}
+          className={`memo-note-chevron ${isMenuOpen ? "open" : ""}`.trim()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            suppressClickRef.current = false;
+            onToggleMenu(lecture.id);
+          }}
+        >
+          <Msym name="chevron_right" size="1.25rem" fill={false} weight={500} />
+        </button>
+      </div>
+
+      <div
         ref={isMenuOpen ? attachMenuRef : undefined}
-        className="dashboard-note-actions"
+        className={`memo-swipe-actions ${isMenuOpen || noteOffset < 0 ? "on" : ""}`.trim()}
         onPointerDown={(event) => event.stopPropagation()}
       >
         <button
           type="button"
-          aria-label={`Preimenuj ${lecture.title ?? "zapisek"}`}
+          aria-label={`Preimenuj ${title}`}
           disabled={isBusy}
           onClick={() => onOpenRename(lecture)}
-          className="dashboard-note-menu-button edit"
+          className="memo-swipe-action"
         >
-          <span className="dashboard-note-action-circle">
-            <EmojiIcon symbol="✏️" size="1.1rem" />
+          <span className="memo-swipe-action-circle">
+            <Emoji symbol="✏️" size="1.1rem" />
           </span>
-          <span className="dashboard-note-action-label">Uredi</span>
+          <span>Uredi</span>
         </button>
         <button
           type="button"
-          aria-label={`Izbriši ${lecture.title ?? "zapisek"}`}
+          aria-label={`Izbriši ${title}`}
           disabled={isBusy}
           onClick={() => onOpenDelete(lecture)}
-          className="dashboard-note-menu-button danger"
+          className="memo-swipe-action danger"
         >
-          <span className="dashboard-note-action-circle">
+          <span className="memo-swipe-action-circle">
             {isBusy ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <EmojiIcon symbol="🗑️" size="1.1rem" />
+              <Emoji symbol="🗑️" size="1.1rem" />
             )}
           </span>
-          <span className="dashboard-note-action-label">Izbriši</span>
+          <span>Izbriši</span>
         </button>
-      </div>
-      <div
-        role="link"
-        tabIndex={0}
-        className="ios-row-note-card-link dashboard-note-card-surface"
-        onPointerDown={handlePointerDown}
-        onClick={handleSurfaceClick}
-        onKeyDown={handleSurfaceKeyDown}
-        style={
-          {
-            "--dashboard-note-swipe-offset": `${noteOffset}px`,
-          } as CSSProperties
-        }
-      >
-        <div className="ios-row-icon" style={{ backgroundColor: "var(--surface-muted)" }}>
-          <SourceIcon sourceType={sourceType} />
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <p className="ios-row-title truncate font-medium">{lecture.title ?? "Neimenovan zapisek"}</p>
-          <p className="ios-row-subtitle mt-1">
-            {sourceLabel(sourceType)} • {formatCalendarDate(lecture.created_at)}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {lecture.status !== "ready" && <StatusBadge status={lecture.status} />}
-        </div>
       </div>
     </div>
   );
@@ -492,6 +464,7 @@ export function HomeDashboard({
   canCreateNotes,
   hasPaidAccess,
   trialLectureId,
+  canSpinWheel: initialCanSpinWheel = null,
   showDevDashboard,
 }: {
   lectures: AppLectureListItem[];
@@ -500,29 +473,72 @@ export function HomeDashboard({
   canCreateNotes: boolean;
   hasPaidAccess: boolean;
   trialLectureId: string | null;
+  /** Whether the wheel has a spin left, as the server saw it while rendering. */
+  canSpinWheel?: boolean | null;
   showDevDashboard: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const homeHref = useAppHref("/app");
+  // The upgrade screen exists on the demo too; `/app/start` would walk out of it.
+  const startHref = useAppHref("/app/start");
   const isCreatorDemo = useIsCreatorDemo();
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const mobileCreateMenuDragStartYRef = useRef<number | null>(null);
-  const mobileCreateMenuDragOffsetRef = useRef(0);
-  const mobileCreateMenuSuppressClickRef = useRef(false);
-  const mobileCreateMenuCloseTimerRef = useRef<number | null>(null);
-  const dashboardDialogDragStartYRef = useRef<number | null>(null);
-  const dashboardDialogDragOffsetRef = useRef(0);
-  const dashboardDialogSuppressClickRef = useRef(false);
-  const dashboardDialogCloseTimerRef = useRef<number | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
-  const renameViewportMetricsKeyRef = useRef("");
   const [query, setQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isLibraryChatOpen, setIsLibraryChatOpen] = useState(false);
+  const [isWheelOpen, setIsWheelOpen] = useState(false);
+  /*
+   * Seeded from the URL rather than opened in an effect: an effect runs after
+   * the first paint, so returning from Stripe showed the home screen for a
+   * frame before the offer appeared. It was never dismissed — it should be
+   * there the moment the page draws.
+   */
+  const [isOfferOpen, setIsOfferOpen] = useState(
+    () => searchParams.get("offer") === "1",
+  );
+  /*
+   * True when the offer is being restored after a trip to Stripe rather than
+   * opened by the wheel. It was never really dismissed, so it should already
+   * be there when the page draws — sliding it up again would say it had gone
+   * away and come back.
+   */
+  const [isOfferRestored, setIsOfferRestored] = useState(
+    () => searchParams.get("offer") === "1",
+  );
+  const [hasClaimedDiscount, setHasClaimedDiscount] = useState(false);
+  /*
+   * Whether the wheel has a spin left, as the server sees it. Null until the
+   * answer arrives, which is why neither card is drawn before then — guessing
+   * and correcting would flash one card into the other on every load.
+   *
+   * Asking the server matters: the spin is once a day and survives reloads and
+   * devices, so a purely local flag showed the gift again to somebody who had
+   * already used theirs.
+   */
+  const [canSpinWheel, setCanSpinWheel] = useState<boolean | null>(initialCanSpinWheel);
+  /*
+   * Whether to badge the settings gear. Read after mount rather than during
+   * render: it comes from `localStorage` and from `display-mode`, neither of
+   * which the server can know, and a badge that renders on the server would
+   * flash on for everyone who has already dismissed it.
+   */
+  const [showInstallHint, setShowInstallHint] = useState(false);
+
+  useEffect(() => {
+    // Phones only — matching the settings row the badge is pointing at.
+    const sync = () =>
+      setShowInstallHint(detectInstallPlatform() !== "other" && shouldOfferInstallGuide());
+
+    sync();
+    window.addEventListener(INSTALL_GUIDE_SEEN_KEY, sync);
+
+    return () => window.removeEventListener(INSTALL_GUIDE_SEEN_KEY, sync);
+  }, []);
   const [manualModal, setManualModal] = useState<NoteSourceMode | null>(null);
   const [isMobileCreateMenuOpen, setIsMobileCreateMenuOpen] = useState(false);
-  const [mobileCreateMenuDragOffset, setMobileCreateMenuDragOffset] = useState(0);
-  const [dashboardDialogDragOffset, setDashboardDialogDragOffset] = useState(0);
-  const [renameDialogStyle, setRenameDialogStyle] = useState<CSSProperties | undefined>();
   const [libraryLectures, setLibraryLectures] = useState(lectures);
   const [useDashboardSwipeActions, setUseDashboardSwipeActions] = useState(false);
   const [busyLectureId, setBusyLectureId] = useState<string | null>(null);
@@ -531,7 +547,6 @@ export function HomeDashboard({
   const [openMenuLectureId, setOpenMenuLectureId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<AppLectureListItem | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [renameKeyboardVisible, setRenameKeyboardVisible] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AppLectureListItem | null>(null);
   const [dashboardActionError, setDashboardActionError] = useState<string | null>(null);
   const [showLocalDevDashboard, setShowLocalDevDashboard] = useState(showDevDashboard);
@@ -564,7 +579,9 @@ export function HomeDashboard({
   }, [isCreatorDemo]);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    // The redesign switches to the phone layout at 1100px, and the swipe rows
+    // are part of that layout.
+    const mediaQuery = window.matchMedia("(max-width: 1099px)");
     const syncSwipeMode = () => setUseDashboardSwipeActions(mediaQuery.matches);
 
     syncSwipeMode();
@@ -603,6 +620,7 @@ export function HomeDashboard({
     };
   }, [libraryLectures, router]);
 
+
   useEffect(() => {
     if (!openMenuLectureId) {
       return;
@@ -612,7 +630,7 @@ export function HomeDashboard({
       const target = event.target;
       const isInsideOpenSwipeRow =
         target instanceof Element &&
-        Boolean(target.closest(".dashboard-note-swipe-row.menu-open"));
+        Boolean(target.closest(".memo-swipe-row.open"));
 
       if (isInsideOpenSwipeRow) {
         return;
@@ -635,61 +653,37 @@ export function HomeDashboard({
   }
 
   const closeMobileCreateMenu = useCallback(() => {
-    if (mobileCreateMenuCloseTimerRef.current !== null) {
-      window.clearTimeout(mobileCreateMenuCloseTimerRef.current);
-      mobileCreateMenuCloseTimerRef.current = null;
-    }
-    mobileCreateMenuDragStartYRef.current = null;
-    mobileCreateMenuDragOffsetRef.current = 0;
-    setMobileCreateMenuDragOffset(0);
     setIsMobileCreateMenuOpen(false);
   }, []);
 
-  const animateCloseMobileCreateMenu = useCallback(() => {
-    if (mobileCreateMenuCloseTimerRef.current !== null) {
-      return;
-    }
-
-    mobileCreateMenuDragStartYRef.current = null;
-    mobileCreateMenuDragOffsetRef.current = window.innerHeight;
-    setMobileCreateMenuDragOffset(window.innerHeight);
-    mobileCreateMenuCloseTimerRef.current = window.setTimeout(() => {
-      mobileCreateMenuCloseTimerRef.current = null;
-      closeMobileCreateMenu();
-    }, 180);
-  }, [closeMobileCreateMenu]);
-
   const closeDashboardDialog = useCallback(() => {
-    if (dashboardDialogCloseTimerRef.current !== null) {
-      window.clearTimeout(dashboardDialogCloseTimerRef.current);
-      dashboardDialogCloseTimerRef.current = null;
-    }
-
-    dashboardDialogDragStartYRef.current = null;
-    dashboardDialogDragOffsetRef.current = 0;
-    dashboardDialogSuppressClickRef.current = false;
-    setDashboardDialogDragOffset(0);
     setDashboardActionError(null);
     setRenameTarget(null);
     setRenameValue("");
-    setRenameKeyboardVisible(false);
-    setRenameDialogStyle(undefined);
     setDeleteTarget(null);
   }, []);
 
-  const animateCloseDashboardDialog = useCallback(() => {
-    if (busyLectureId || dashboardDialogCloseTimerRef.current !== null) {
-      return;
-    }
+  /*
+   * The design gives every phone sheet the same exit — it drops out of frame
+   * under `.closing` rather than vanishing. On desktop these are centred
+   * dialogs that the design closes on the spot, so the animated path is taken
+   * only where the sheet skin is.
+   */
+  const createSheet = useSheet(closeMobileCreateMenu);
+  const dialogSheet = useSheet(closeDashboardDialog, { locked: Boolean(busyLectureId) });
 
-    dashboardDialogDragStartYRef.current = null;
-    dashboardDialogDragOffsetRef.current = window.innerHeight;
-    setDashboardDialogDragOffset(window.innerHeight);
-    dashboardDialogCloseTimerRef.current = window.setTimeout(() => {
-      dashboardDialogCloseTimerRef.current = null;
-      closeDashboardDialog();
-    }, 180);
-  }, [busyLectureId, closeDashboardDialog]);
+  const dismissCreateSheet = createSheet.dismiss;
+  const dismissDialogSheet = dialogSheet.dismiss;
+
+  // Wrapped rather than passed straight to `onClick`, which would hand the
+  // click event to `dismiss` as its "run after closing" callback.
+  const animateCloseMobileCreateMenu = useCallback(() => {
+    dismissCreateSheet();
+  }, [dismissCreateSheet]);
+
+  const animateCloseDashboardDialog = useCallback(() => {
+    dismissDialogSheet();
+  }, [dismissDialogSheet]);
 
   useEffect(() => {
     if (!renameTarget && !deleteTarget) {
@@ -747,33 +741,9 @@ export function HomeDashboard({
       window.setTimeout(restoreScrollPosition, 0);
     };
 
+    // The dialog itself rides `--memo-kb`, which `KeyboardInset` publishes.
+    // All this has left to do is hold the page behind it still.
     const updateViewportMetrics = () => {
-      const viewport = window.visualViewport;
-      const viewportHeight = viewport?.height ?? window.innerHeight;
-      const viewportOffsetTop = viewport?.offsetTop ?? 0;
-      const keyboardInset = Math.max(
-        0,
-        window.innerHeight - viewportHeight - viewportOffsetTop,
-      );
-      setRenameKeyboardVisible(keyboardInset > RENAME_KEYBOARD_VISIBLE_INSET_PX);
-
-      const roundedKeyboardInset = Math.round(keyboardInset);
-      const roundedViewportHeight = Math.round(viewportHeight);
-      const roundedViewportOffsetTop = Math.round(viewportOffsetTop);
-      const viewportMetricsKey = [
-        roundedKeyboardInset,
-        roundedViewportHeight,
-        roundedViewportOffsetTop,
-      ].join(":");
-
-      if (renameViewportMetricsKeyRef.current !== viewportMetricsKey) {
-        renameViewportMetricsKeyRef.current = viewportMetricsKey;
-        setRenameDialogStyle({
-          "--dashboard-note-dialog-keyboard-inset": `${roundedKeyboardInset}px`,
-          "--dashboard-note-dialog-visual-height": `${roundedViewportHeight}px`,
-          "--dashboard-note-dialog-visual-offset-top": `${roundedViewportOffsetTop}px`,
-        } as CSSProperties);
-      }
       scheduleScrollRestore();
     };
 
@@ -812,7 +782,6 @@ export function HomeDashboard({
     window.visualViewport?.addEventListener("scroll", updateViewportMetrics, { passive: true });
     window.visualViewport?.addEventListener("resize", updateViewportMetrics, { passive: true });
     renameInput?.addEventListener("focus", handleFocusIn);
-    const viewportPollId = window.setInterval(updateViewportMetrics, 120);
     updateViewportMetrics();
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(focusRenameInput);
@@ -827,9 +796,6 @@ export function HomeDashboard({
       window.visualViewport?.removeEventListener("scroll", updateViewportMetrics);
       window.visualViewport?.removeEventListener("resize", updateViewportMetrics);
       renameInput?.removeEventListener("focus", handleFocusIn);
-      window.clearInterval(viewportPollId);
-      renameViewportMetricsKeyRef.current = "";
-      setRenameDialogStyle(undefined);
       root.style.overflow = previousRootOverflow;
       root.style.overscrollBehavior = previousRootOverscrollBehavior;
       root.style.scrollBehavior = previousRootScrollBehavior;
@@ -844,16 +810,6 @@ export function HomeDashboard({
       window.scrollTo(0, scrollY);
     };
   }, [renameTarget, useDashboardSwipeActions]);
-
-  useEffect(
-    () => () => {
-      if (dashboardDialogCloseTimerRef.current !== null) {
-        window.clearTimeout(dashboardDialogCloseTimerRef.current);
-        dashboardDialogCloseTimerRef.current = null;
-      }
-    },
-    [],
-  );
 
   useEffect(() => {
     if (!isMobileCreateMenuOpen) {
@@ -870,92 +826,9 @@ export function HomeDashboard({
     return () => window.removeEventListener("keydown", handleEscape);
   }, [animateCloseMobileCreateMenu, isMobileCreateMenuOpen]);
 
-  function handleMobileCreateMenuPointerDown(
-    event: ReactPointerEvent<HTMLElement>,
-  ) {
-    if (event.pointerType === "mouse" && event.button !== 0) {
-      return;
-    }
-
-    const target = event.target;
-    const interactiveTarget =
-      target instanceof Element
-        ? target.closest("button, a, input, textarea, select, .app-close-button")
-        : null;
-    const dragHandleTarget =
-      target instanceof Element ? target.closest(".mobile-create-menu-drag-handle") : null;
-
-    mobileCreateMenuSuppressClickRef.current = false;
-    mobileCreateMenuDragStartYRef.current = null;
-
-    if (interactiveTarget && !dragHandleTarget) {
-      return;
-    }
-
-    mobileCreateMenuDragStartYRef.current = event.clientY;
-    if (!interactiveTarget || dragHandleTarget) {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
-  }
-
-  function updateMobileCreateMenuDragOffset(clientY: number) {
-    if (mobileCreateMenuDragStartYRef.current === null) {
-      return;
-    }
-
-    const nextOffset = Math.max(0, clientY - mobileCreateMenuDragStartYRef.current);
-    mobileCreateMenuDragOffsetRef.current = nextOffset;
-    if (nextOffset > 8) {
-      mobileCreateMenuSuppressClickRef.current = true;
-    }
-    setMobileCreateMenuDragOffset(nextOffset);
-  }
-
-  function handleMobileCreateMenuClickCapture(
-    event: ReactMouseEvent<HTMLElement>,
-  ) {
-    if (!mobileCreateMenuSuppressClickRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    mobileCreateMenuSuppressClickRef.current = false;
-  }
-
-  useEffect(() => {
-    if (!isMobileCreateMenuOpen) {
-      return;
-    }
-
-    function handleWindowPointerMove(event: PointerEvent) {
-      updateMobileCreateMenuDragOffset(event.clientY);
-    }
-
-    function handleWindowPointerEnd() {
-      if (mobileCreateMenuDragOffsetRef.current > 80) {
-        animateCloseMobileCreateMenu();
-        return;
-      }
-
-      mobileCreateMenuDragStartYRef.current = null;
-      mobileCreateMenuDragOffsetRef.current = 0;
-      setMobileCreateMenuDragOffset(0);
-    }
-
-    window.addEventListener("pointermove", handleWindowPointerMove);
-    window.addEventListener("pointerup", handleWindowPointerEnd);
-    window.addEventListener("pointercancel", handleWindowPointerEnd);
-    return () => {
-      window.removeEventListener("pointermove", handleWindowPointerMove);
-      window.removeEventListener("pointerup", handleWindowPointerEnd);
-      window.removeEventListener("pointercancel", handleWindowPointerEnd);
-    };
-  }, [animateCloseMobileCreateMenu, isMobileCreateMenuOpen]);
-
   function openQuickAction(mode: NoteSourceMode) {
     if (!canCreateNotes) {
-      router.push("/app/start");
+      router.push(startHref);
       return;
     }
 
@@ -1002,57 +875,6 @@ export function HomeDashboard({
     }
   }
 
-  function handleDashboardDialogDragHandlePointerDown(
-    event: ReactPointerEvent<HTMLElement>,
-  ) {
-    if (busyLectureId || (event.pointerType === "mouse" && event.button !== 0)) {
-      return;
-    }
-
-    const target = event.target;
-    const interactiveTarget =
-      target instanceof Element
-        ? target.closest("button, a, input, textarea, select, .app-close-button")
-        : null;
-    const dragHandleTarget =
-      target instanceof Element ? target.closest(".mobile-create-menu-drag-handle") : null;
-
-    dashboardDialogSuppressClickRef.current = false;
-    dashboardDialogDragStartYRef.current = null;
-
-    if (interactiveTarget && !dragHandleTarget) {
-      return;
-    }
-
-    dashboardDialogDragStartYRef.current = event.clientY;
-    if (!interactiveTarget || dragHandleTarget) {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
-  }
-
-  function updateDashboardDialogDragOffset(clientY: number) {
-    if (dashboardDialogDragStartYRef.current === null) {
-      return;
-    }
-
-    const nextOffset = Math.max(0, clientY - dashboardDialogDragStartYRef.current);
-    dashboardDialogDragOffsetRef.current = nextOffset;
-    if (nextOffset > 8) {
-      dashboardDialogSuppressClickRef.current = true;
-    }
-    setDashboardDialogDragOffset(nextOffset);
-  }
-
-  function handleDashboardDialogClickCapture(event: ReactMouseEvent<HTMLElement>) {
-    if (!dashboardDialogSuppressClickRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    dashboardDialogSuppressClickRef.current = false;
-  }
-
   function handleRenameDialogPointerDownCapture(event: ReactPointerEvent<HTMLElement>) {
     const target = event.target;
 
@@ -1072,36 +894,6 @@ export function HomeDashboard({
 
     renameInputRef.current?.blur();
   }
-
-  useEffect(() => {
-    if (!renameTarget && !deleteTarget) {
-      return;
-    }
-
-    function handleWindowPointerMove(event: PointerEvent) {
-      updateDashboardDialogDragOffset(event.clientY);
-    }
-
-    function handleWindowPointerEnd() {
-      if (dashboardDialogDragOffsetRef.current > 80 && !busyLectureId) {
-        animateCloseDashboardDialog();
-        return;
-      }
-
-      dashboardDialogDragStartYRef.current = null;
-      dashboardDialogDragOffsetRef.current = 0;
-      setDashboardDialogDragOffset(0);
-    }
-
-    window.addEventListener("pointermove", handleWindowPointerMove);
-    window.addEventListener("pointerup", handleWindowPointerEnd);
-    window.addEventListener("pointercancel", handleWindowPointerEnd);
-    return () => {
-      window.removeEventListener("pointermove", handleWindowPointerMove);
-      window.removeEventListener("pointerup", handleWindowPointerEnd);
-      window.removeEventListener("pointercancel", handleWindowPointerEnd);
-    };
-  }, [animateCloseDashboardDialog, busyLectureId, deleteTarget, renameTarget]);
 
   async function handleDeleteLecture() {
     if (!deleteTarget) {
@@ -1225,7 +1017,9 @@ export function HomeDashboard({
     return (
       lecture.title?.toLowerCase().includes(search) ||
       lecture.error_message?.toLowerCase().includes(search) ||
-      sourceLabel(getEffectiveLectureSourceType(lecture)).toLowerCase().includes(search)
+      getLectureSourceLabel(getEffectiveLectureSourceType(lecture))
+        .toLowerCase()
+        .includes(search)
     );
   });
 
@@ -1237,78 +1031,204 @@ export function HomeDashboard({
   const toggleLectureMenu = (lectureId: string) => {
     setOpenMenuLectureId((current) => (current === lectureId ? null : lectureId));
   };
+  // The wheel is a one-shot offer for people who have not subscribed. Whether
+  // it was already spun lives on the server; `hasClaimedDiscount` only hides
+  // the card for the rest of this session once it has been. As in the design it
+  // sits above the full library only: a search or a folder is a narrowed view,
+  // and the offer would be pushing itself in front of the answer.
+  // Publishes `--memo-head-p` as the list scrolls; the collapse itself is CSS.
+  const { attachScroll, attachScreen } = useCollapsingHeader();
+
+  /*
+   * Stripe sends a cancelled discount checkout back with `offer=1`. Reopening
+   * the sheet puts the buyer where they left off — the prize is still theirs
+   * until it is spent or its ten minutes run out, and the server is the one
+   * that decides which.
+   */
+  useEffect(() => {
+    if (searchParams.get("offer") !== "1") {
+      return;
+    }
+
+    setIsOfferOpen(true);
+    setIsOfferRestored(true);
+    router.replace(homeHref, { scroll: false });
+  }, [homeHref, router, searchParams]);
+
+  useEffect(() => {
+    if (hasPaidAccess) {
+      return;
+    }
+
+    // A refresh, not the first answer: the server already supplied that. This
+    // catches a spin taken on another device, or the day turning over.
+    let cancelled = false;
+
+    void fetch("/api/discount-wheel")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((state: { canSpin?: boolean; spunToday?: boolean } | null) => {
+        if (!cancelled) {
+          // `spunToday` rather than `canSpin`: the latter is relaxed in
+          // development so the wheel can be replayed, and the card should be
+          // the one production would show either way.
+          setCanSpinWheel(Boolean(state?.canSpin) && !state?.spunToday);
+        }
+      })
+      .catch(() => {
+        // No wheel rather than a broken home screen.
+        if (!cancelled) {
+          setCanSpinWheel(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasPaidAccess]);
+
+  const inLibraryView = !selectedFolderId && !deferredQuery.trim();
+  /*
+   * The wheel is on offer while the server says there is a spin left and this
+   * session has not already used it. `hasClaimedDiscount` is what covers the
+   * gap between spinning and the server catching up.
+   */
+  const wheelAvailable = canSpinWheel === true && !hasClaimedDiscount;
+  const showDiscountPromo = !hasPaidAccess && wheelAvailable && inLibraryView;
+  /*
+   * ...and whenever it is not on offer, the slot keeps an ordinary way to buy.
+   *
+   * Stated as "the wheel is not available" rather than "the server says the
+   * spin is spent", because those are not the same thing and the difference
+   * left a hole: spinning hides the gift card immediately, while the server
+   * only reports the spin gone on the next load — and in development it never
+   * reports it at all. The slot showed nothing in between.
+   *
+   * Still waits for the first answer (`canSpinWheel !== null`), so the two
+   * cards do not flash into each other on load.
+   */
+  const showUpgradePromo =
+    !hasPaidAccess && canSpinWheel !== null && !wheelAvailable && inLibraryView;
 
   return (
     <>
-      <div className="home-dashboard pb-8">
-        {showLocalDevDashboard ? (
-          <section className="dashboard-section">
-            <div style={{ padding: "0.1rem 0" }}>
-              <button
-                type="button"
-                aria-label="Dev dashboard"
-                data-testid="dev-dashboard-button"
-                className="app-dev-dashboard-link"
-                onClick={() => router.push("/dev/account-state")}
-              >
-                <span>Dev dashboard</span>
-                <EmojiIcon symbol="›" size="1.1rem" />
-              </button>
-            </div>
-          </section>
-        ) : null}
+      <div className="memo-home-screen" ref={attachScreen}>
+        {/* Phone chrome: the lockup and the gear that opens Nastavitve. */}
+        <div className="memo-m-topbar memo-only-mobile flex">
+          <Image
+            src={BRAND_LOCKUP_SRC}
+            alt={SEO_BRAND_NAME}
+            width={BRAND_LOCKUP_WIDTH}
+            height={BRAND_LOCKUP_HEIGHT}
+            priority
+          />
+          {/* The dot is the only hint that there is something new in there;
+              it clears the first time the guide is opened. */}
+          <InstantLink
+            href="/app/settings"
+            className={`memo-m-round ${showInstallHint ? "has-dot" : ""}`.trim()}
+            aria-label={showInstallHint ? "Nastavitve (1 novost)" : "Nastavitve"}
+          >
+            <Msym name="settings" size="1.6rem" fill={false} weight={500} />
+          </InstantLink>
+        </div>
 
-        {!hasPaidAccess && !canCreateNotes ? (
-          <section className="dashboard-section">
-            <div style={{ padding: "0.1rem 0" }}>
-              <button
-                type="button"
-                className="app-home-highlight-link"
-                onClick={() => router.push("/app/start")}
-              >
-                <span>Nadgradi za nov zapisek</span>
-                <EmojiIcon symbol="›" size="1.1rem" />
-              </button>
-            </div>
-          </section>
-        ) : null}
+        <div className="memo-home-scroll" ref={attachScroll}>
+          {showLocalDevDashboard ? (
+            <button
+              type="button"
+              aria-label="Dev dashboard"
+              data-testid="dev-dashboard-button"
+              className="memo-utility-link memo-only-desktop"
+              onClick={() => router.push("/dev/account-state")}
+            >
+              <span>Dev dashboard</span>
+              <Msym name="chevron_right" size="1.1rem" fill={false} weight={400} />
+            </button>
+          ) : null}
 
-        <section className="dashboard-section dashboard-create-section">
-          <div className="dashboard-section-heading">
-            <h2 className="dashboard-section-title">Nov zapisek</h2>
-          </div>
+          {/* The upgrade card below the search says this, and says it better:
+              two prompts to buy stacked above the library read as nagging. */}
 
-          <div className="note-action-grid">
-            {QUICK_ACTIONS.map((action) => (
-              <button
-                key={action.id}
-                type="button"
-                onClick={() => openQuickAction(action.id)}
-                className="note-action-card"
-              >
-                <span
-                  className={`note-action-card-icon ${
-                    action.accent === "record" ? "record" : ""
-                  }`}
+          <div className="memo-only-desktop">
+            <h1 className="memo-home-h1">Nov zapisek</h1>
+            <p className="memo-home-sub">
+              Posnemi ali naloži zvok, prilepi besedilo ali povezavo
+            </p>
+
+            <div className="memo-quick-grid">
+              {QUICK_ACTIONS.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  className="memo-quick-card"
+                  onClick={() => openQuickAction(action.id)}
                 >
-                  <EmojiIcon symbol={action.icon} size="1.2rem" />
-                </span>
-                <span className="note-action-card-copy">
-                  <span className="note-action-card-label">{action.label}</span>
-                  <span className="note-action-card-detail">{action.detail}</span>
-                </span>
-                <EmojiIcon className="note-action-card-chevron" symbol="›" size="1.1rem" />
-              </button>
-            ))}
-          </div>
-        </section>
+                  <span className={`memo-quick-tile ${action.accent}`.trim()}>
+                    <Msym name={action.icon} size="1.45rem" fill={action.filled} />
+                  </span>
+                  <span className="memo-quick-label">{action.label}</span>
+                </button>
+              ))}
+            </div>
 
-        <section className="dashboard-section dashboard-library-section mt-4">
-          <div className="dashboard-section-heading mb-4">
-            <h2 className="dashboard-section-title">Moji zapiski</h2>
+            <h2 className="memo-home-h2">Moji zapiski</h2>
           </div>
 
-          <div className="dashboard-toolbar library-toolbar">
+          {/* The title and the search scroll away with the list; while they
+              go, the title fades and the field folds. The folder pill below is
+              opaque and sits above them, so they pass under it. */}
+          <h1 className="memo-m-title memo-only-mobile">Moji zapiski</h1>
+
+          <div className="memo-m-search memo-only-mobile flex">
+            <Msym name="search" size="1.3rem" fill={false} weight={600} />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Išči po zapiskih in prepisih"
+              type="search"
+              inputMode="search"
+              enterKeyHint="search"
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="Išči po zapiskih"
+            />
+          </div>
+
+          {/* Desktop library bar: the folder chip slides out as search opens. */}
+          <div className="memo-library-bar memo-only-desktop">
+            <div className={`memo-folder-wrap ${isSearchOpen ? "hidden" : ""}`.trim()}>
+              <LibraryFolderMenu
+                lectures={libraryLectures}
+                userId={userId}
+                initialFolders={folders}
+                selectedFolderId={selectedFolderId}
+                onSelectFolder={(folderId, lectureIds) => {
+                  setSelectedFolderId(folderId);
+                  setSelectedFolderLectureIds(lectureIds);
+                }}
+              />
+            </div>
+
+            <div
+              className={`memo-search ${isSearchOpen ? "open" : ""}`.trim()}
+              onClick={() => searchInputRef.current?.focus()}
+            >
+              <Msym name="search" size="1.3rem" fill={false} weight={600} />
+              <input
+                ref={searchInputRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onFocus={() => setIsSearchOpen(true)}
+                onBlur={() => setIsSearchOpen(false)}
+                placeholder="Išči po zapiskih"
+                aria-label="Išči po zapiskih"
+              />
+            </div>
+          </div>
+
+          <div className="memo-m-folderbar memo-only-mobile">
             <LibraryFolderMenu
               lectures={libraryLectures}
               userId={userId}
@@ -1319,82 +1239,95 @@ export function HomeDashboard({
                 setSelectedFolderLectureIds(lectureIds);
               }}
             />
-
-            <div className="ios-search notes-search">
-              <EmojiIcon symbol="🔎" size="0.95rem" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Išči po naslovu"
-              />
-            </div>
           </div>
 
-          {failedLectures.length > 0 ? (
-            <div className="dashboard-subsection">
-              <div className="dashboard-subsection-heading">
-                <h3 className="dashboard-subsection-title">Potrebno pozornosti</h3>
-              </div>
+          <div className="memo-home-body">
+            {showDiscountPromo ? (
+              <button
+                type="button"
+                className="memo-promo memo-only-mobile flex"
+                onClick={() => setIsWheelOpen(true)}
+              >
+                <span className="memo-promo-copy">
+                  <span>Dobil si popust!</span>
+                  <span>Odkleni najboljše funkcije ceneje</span>
+                </span>
+                <Emoji symbol="🎁" size="2rem" />
+              </button>
+            ) : showUpgradePromo ? (
+              <button
+                type="button"
+                className="memo-promo upgrade memo-only-mobile flex"
+                onClick={() => router.push(startHref)}
+              >
+                <span className="memo-promo-copy">
+                  <span>Odkleni Premium</span>
+                  <span>Neomejeni zapiski in učna orodja</span>
+                </span>
+                <Emoji symbol="⚡" size="2rem" />
+              </button>
+            ) : null}
 
-              {failedLectures.map((lecture) => (
-                <div key={lecture.id} className="dashboard-alert-card">
-                  <div className="ios-row-icon" style={{ backgroundColor: "var(--red-soft)", color: "var(--red)", width: "2rem", height: "2rem" }}>
-                    <EmojiIcon symbol="⚠️" size="1rem" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="ios-row-title text-[var(--red)] font-medium">
-                      {lecture.error_message ? "Napaka pri obdelavi zapiska" : "Napaka pri ustvarjanju zapiska"}
-                    </p>
-                    <p className="ios-row-subtitle mt-1" style={{ fontSize: "0.8rem", color: "var(--label)" }}>
-                      {lecture.error_message ?? "Poskusi znova ali odstrani zapisek iz knjižnice."}
-                    </p>
-                  </div>
+            {dashboardActionError && !renameTarget && !deleteTarget ? (
+              <p className="memo-inline-error">{dashboardActionError}</p>
+            ) : null}
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={busyLectureId === lecture.id}
-                      onClick={() => openDeleteModal(lecture)}
-                      className="ios-text-button"
-                      style={{ color: "var(--red)", backgroundColor: "var(--red-soft)", padding: "0.3rem 1rem", borderRadius: "10px", fontSize: "0.85rem", fontWeight: 600 }}
-                    >
-                      {busyLectureId === lecture.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+            {failedLectures.length > 0 ? (
+              <div className="memo-note-list memo-failed-list">
+                {failedLectures.map((lecture) => (
+                  <div key={lecture.id} className="memo-failed-row">
+                    <span className="memo-note-emoji failed">
+                      <Msym name="warning" size="1.25rem" />
+                    </span>
+                    <span className="memo-note-copy">
+                      <span className="memo-note-title">
+                        {lecture.title ?? "Neimenovan zapisek"}
+                      </span>
+                      <span className="memo-note-meta">
+                        {lecture.error_message ?? "Obdelava ni uspela."}
+                      </span>
+                    </span>
+                    <span className="memo-failed-actions">
+                      {canRetryLectureFailure(lecture) ? (
+                        <button
+                          type="button"
+                          className="memo-button-outline small"
+                          onClick={() => void handleRetryLecture(lecture.id)}
+                          disabled={busyLectureId === lecture.id}
+                        >
+                          {busyLectureId === lecture.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : null}
+                          Poskusi znova
+                        </button>
                       ) : null}
-                      Izbriši
-                    </button>
-                    {lecture.status === "failed" &&
-                    canRetryLectureFailure(lecture.processing_metadata) ? (
                       <button
                         type="button"
+                        className="memo-button-outline small danger"
+                        onClick={() => openDeleteModal(lecture)}
                         disabled={busyLectureId === lecture.id}
-                        onClick={() => void handleRetryLecture(lecture.id)}
-                        className="ios-text-button"
-                        style={{ color: "var(--label)", backgroundColor: "var(--surface-muted)", padding: "0.3rem 1rem", borderRadius: "10px", fontSize: "0.85rem", fontWeight: 600 }}
                       >
-                        {busyLectureId === lecture.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : null}
-                        Poskusi znova
+                        Izbriši
                       </button>
-                    ) : null}
+                    </span>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
+                ))}
+              </div>
+            ) : null}
 
-          {regularLectures.length > 0 ? (
-            <div className="dashboard-note-list">
-              {regularLectures.map((lecture) => {
-                const canOpenLecture = hasPaidAccess || trialLectureId === lecture.id;
-                const href = canOpenLecture ? `/app/lectures/${lecture.id}` : "/app/start";
-
-                return (
+            {regularLectures.length > 0 ? (
+              <div className="memo-note-list">
+                {regularLectures.map((lecture) => (
                   <NoteRow
                     key={lecture.id}
                     lecture={lecture}
-                    href={href}
+                    // Without a subscription only the trial note opens; the rest
+                    // route to checkout.
+                    href={
+                      hasPaidAccess || trialLectureId === lecture.id
+                        ? `/app/lectures/${lecture.id}`
+                        : startHref
+                    }
                     isMenuOpen={openMenuLectureId === lecture.id}
                     isBusy={busyLectureId === lecture.id}
                     useSwipeActions={useDashboardSwipeActions}
@@ -1403,135 +1336,60 @@ export function HomeDashboard({
                     onOpenDelete={openDeleteModal}
                     attachMenuRef={attachMenuRef}
                   />
-                );
-              })}
-            </div>
-          ) : (
-            <div className="empty-state app-empty-state">
-              <div className="app-empty-state-icon">
-                <EmojiIcon symbol="📝" size="1.25rem" />
-              </div>
-              <p className="ios-row-title">
-                {search
-                  ? "Ni ujemajočih zapiskov"
-                  : selectedFolderId
-                    ? "Ta mapa je prazna"
-                    : "Tvoja knjižnica je prazna"}
-              </p>
-              <p className="ios-row-subtitle mt-2">
-                {search
-                  ? "Poskusi krajši iskalni izraz ali počisti iskanje."
-                  : selectedFolderId
-                    ? "Dodaj predavanja v to mapo ali se vrni na vse zapiske."
-                    : "Začni s posnetkom, zvočno datoteko, PDF-jem, PPTX-om, besedilom ali povezavo."}
-              </p>
-              {!search && !selectedFolderId ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!canCreateNotes) {
-                      router.push("/app/start");
-                      return;
-                    }
-
-                    setManualModal("record");
-                  }}
-                  className="app-home-highlight-link"
-                >
-                  <span>Ustvari svoj prvi zapisek</span>
-                  <EmojiIcon symbol="›" size="1.1rem" />
-                </button>
-              ) : null}
-            </div>
-          )}
-        </section>
-
-      </div>
-
-      <ViewportPortal>
-        <button
-          type="button"
-          className="mobile-new-note-pill"
-          onClick={() => {
-            window.dispatchEvent(new Event("memoai:mobile-dock-close"));
-            setIsMobileCreateMenuOpen(true);
-          }}
-          aria-haspopup="dialog"
-          aria-expanded={isMobileCreateMenuOpen}
-        >
-          <EmojiIcon symbol="➕" size="1rem" className="mobile-new-note-pill-icon" />
-          <span className="mobile-new-note-pill-label">Nov zapisek</span>
-        </button>
-      </ViewportPortal>
-
-      {isMobileCreateMenuOpen ? (
-        <ViewportPortal>
-          <>
-            <button
-              type="button"
-              className="mobile-create-menu-backdrop"
-              onClick={animateCloseMobileCreateMenu}
-              aria-label="Zapri meni za nov zapisek"
-            />
-            <section
-              className="mobile-create-menu"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="mobile-create-menu-title"
-              onPointerDown={handleMobileCreateMenuPointerDown}
-              onClickCapture={handleMobileCreateMenuClickCapture}
-              style={
-                mobileCreateMenuDragOffset > 0
-                  ? { transform: `translateY(${mobileCreateMenuDragOffset}px)` }
-                  : undefined
-              }
-            >
-              <button
-                type="button"
-                className="mobile-sheet-drag-handle mobile-create-menu-drag-handle"
-                aria-label="Povleci navzdol za zapiranje"
-              />
-              <div className="mobile-create-menu-header">
-                <h2 id="mobile-create-menu-title" className="dashboard-section-title">
-                  Nov zapisek
-                </h2>
-                <button
-                  type="button"
-                  className="app-close-button"
-                  onClick={animateCloseMobileCreateMenu}
-                  aria-label="Zapri meni za nov zapisek"
-                >
-                  <EmojiIcon symbol="✖️" size="1rem" />
-                </button>
-              </div>
-
-              <div className="note-action-grid mobile-create-action-grid">
-                {QUICK_ACTIONS.map((action) => (
-                  <button
-                    key={action.id}
-                    type="button"
-                    onClick={() => openQuickAction(action.id)}
-                    className="note-action-card"
-                  >
-                    <span
-                      className={`note-action-card-icon ${
-                        action.accent === "record" ? "record" : ""
-                      }`}
-                    >
-                      <EmojiIcon symbol={action.icon} size="1.2rem" />
-                    </span>
-                    <span className="note-action-card-copy">
-                      <span className="note-action-card-label">{action.label}</span>
-                      <span className="note-action-card-detail">{action.detail}</span>
-                    </span>
-                    <EmojiIcon className="note-action-card-chevron" symbol="›" size="1.1rem" />
-                  </button>
                 ))}
               </div>
-            </section>
-          </>
-        </ViewportPortal>
-      ) : null}
+            ) : null}
+
+            {filteredLectures.length === 0 ? (
+              <div className="memo-empty">
+                <Emoji symbol="📝" size="2rem" />
+                <p>{search ? "Ni ujemajočih zapiskov" : "Še ni zapiskov"}</p>
+                <p>
+                  {search
+                    ? "Poskusi krajši iskalni izraz."
+                    : "Posnemi predavanje ali naloži gradivo in Memo pripravi zapiske."}
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Phone: chat and the create sheet. */}
+        <div className="memo-m-homebar memo-only-mobile flex">
+          <button
+            type="button"
+            aria-label="Klepet z zapiski"
+            className="memo-m-chat-fab"
+            onClick={() => setIsLibraryChatOpen(true)}
+          >
+            <Msym name="chat_bubble" size="1.6rem" fill={false} weight={500} />
+          </button>
+          <button
+            type="button"
+            className="memo-m-create"
+            onClick={() => {
+              if (!canCreateNotes) {
+                router.push(startHref);
+                return;
+              }
+
+              setIsMobileCreateMenuOpen(true);
+            }}
+          >
+            <Msym name="edit_square" size="1.4rem" fill={false} weight={500} />
+            <span>Nov zapisek</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Desktop: the always-present ask bar, and the full panel it opens. */}
+      <LibraryChat
+        folders={folders}
+        lectures={libraryLectures}
+        open={isLibraryChatOpen}
+        onOpenChange={setIsLibraryChatOpen}
+        hasPaidAccess={hasPaidAccess}
+      />
 
       <NoteSourceModal
         mode={activeModal}
@@ -1540,391 +1398,191 @@ export function HomeDashboard({
         canCreateNotes={canCreateNotes}
       />
 
-      {renameTarget ? (
-        <ViewportPortal>
-          <>
-            {useDashboardSwipeActions ? (
-              <>
-            <button
-              type="button"
-              className="mobile-create-menu-backdrop dashboard-note-dialog-backdrop"
-              onClick={closeRenameModal}
-              aria-label="Zapri okno za preimenovanje zapiska"
-            />
-            <section
-              className={`mobile-create-menu dashboard-note-dialog dashboard-note-dialog-rename mobile-draggable-sheet keyboard-open ${
-                renameKeyboardVisible ? "keyboard-visible" : "keyboard-hidden"
-              }`}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="rename-note-title"
-              onPointerDownCapture={handleRenameDialogPointerDownCapture}
-              onPointerDown={handleDashboardDialogDragHandlePointerDown}
-              onClickCapture={handleDashboardDialogClickCapture}
-              style={{
-                ...renameDialogStyle,
-                ...(dashboardDialogDragOffset > 0
-                  ? { transform: `translateY(${dashboardDialogDragOffset}px)` }
-                  : null),
-              }}
-            >
-              <button
-                type="button"
-                className="mobile-sheet-drag-handle mobile-create-menu-drag-handle dashboard-note-dialog-drag-handle"
-                aria-label="Povleci navzdol za zapiranje"
-                disabled={busyLectureId === renameTarget.id}
-              />
-              <div className="mobile-create-menu-header dashboard-note-dialog-header">
-                <h2 id="rename-note-title" className="dashboard-section-title">
-                  Preimenuj zapisek
-                </h2>
-                <button
-                  type="button"
-                  className="app-close-button"
-                  onClick={closeRenameModal}
-                  aria-label="Zapri okno za preimenovanje zapiska"
-                  disabled={busyLectureId === renameTarget.id}
-                >
-                  <EmojiIcon symbol="✖️" size="1rem" />
-                </button>
-              </div>
+      {showDiscountPromo || isWheelOpen || isOfferOpen ? (
+        <DiscountOffer
+          wheelOpen={isWheelOpen}
+          offerOpen={isOfferOpen}
+          onWheelOpenChange={setIsWheelOpen}
+          onOfferOpenChange={(open) => {
+            setIsOfferOpen(open);
 
-              <form
-                className="dashboard-note-dialog-body"
-                onSubmit={(event) => {
+            if (!open) {
+              setIsOfferRestored(false);
+            }
+          }}
+          offerRestored={isOfferRestored}
+          onClaimed={() => setHasClaimedDiscount(true)}
+        />
+      ) : null}
+
+      {/* Rename and delete are bottom sheets on the phone and centred dialogs
+          on desktop; one markup, two skins. */}
+      {renameTarget ? (
+        <MemoPortal>
+          <button
+            type="button"
+            aria-label="Zapri"
+            className={sheetClass("memo-scrim", dialogSheet.closing)}
+            onClick={closeRenameModal}
+          />
+          <div
+            className={sheetClass("memo-sheet memo-dialog", dialogSheet.closing)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rename-note-title"
+            onPointerDown={dialogSheet.dragProps.onPointerDown}
+            onPointerDownCapture={handleRenameDialogPointerDownCapture}
+            data-dragging={dialogSheet.dragProps["data-dragging"]}
+            style={dialogSheet.dragProps.style}
+          >
+            <div className="memo-grab" data-drag-handle />
+            <span id="rename-note-title" className="memo-sheet-heading">
+              Preimenuj zapisek
+            </span>
+            <input
+              ref={renameInputRef}
+              className="memo-sheet-field"
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
                   event.preventDefault();
                   void handleRenameLecture();
-                }}
+                }
+              }}
+              placeholder="Naslov zapiska"
+              enterKeyHint="done"
+              autoCapitalize="sentences"
+              autoCorrect="off"
+              autoComplete="off"
+            />
+            {dashboardActionError ? (
+              <p className="memo-inline-error">{dashboardActionError}</p>
+            ) : null}
+            <div className="memo-sheet-actions">
+              <button
+                type="button"
+                className="memo-sheet-coral"
+                onClick={() => void handleRenameLecture()}
+                disabled={busyLectureId === renameTarget.id}
               >
-                <p className="ios-subtitle dashboard-note-dialog-copy">
-                  Daj temu zapisku bolj jasen naslov, ne da zapustiš stran.
-                </p>
-                {dashboardActionError ? (
-                  <p className="ios-info ios-danger dashboard-note-dialog-copy">
-                    {dashboardActionError}
-                  </p>
+                {busyLectureId === renameTarget.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : null}
-
-                <label className="dashboard-note-dialog-field">
-                  <span>Naslov</span>
-                  <input
-                    ref={renameInputRef}
-                    value={renameValue}
-                    onChange={(event) => setRenameValue(event.target.value)}
-                    onPointerDown={(event) => {
-                      if (document.activeElement === event.currentTarget && !renameKeyboardVisible) {
-                        event.currentTarget.blur();
-                      }
-
-                      event.currentTarget.focus({ preventScroll: true });
-                    }}
-                    onClick={(event) => {
-                      event.currentTarget.focus({ preventScroll: true });
-                    }}
-                    className="ios-input"
-                    placeholder="Neimenovan zapisek"
-                  />
-                </label>
-
-                <div className="dashboard-note-dialog-actions">
-                  <button
-                    type="submit"
-                    className="ios-primary-button"
-                    disabled={
-                      busyLectureId === renameTarget.id ||
-                      !renameValue.trim() ||
-                      renameValue.trim() === (renameTarget.title?.trim() || "Neimenovan zapisek")
-                    }
-                  >
-                    {busyLectureId === renameTarget.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : null}
-                    Shrani naslov
-                  </button>
-                  <button
-                    type="button"
-                    className="ios-secondary-button"
-                    onClick={closeRenameModal}
-                    disabled={busyLectureId === renameTarget.id}
-                  >
-                    Prekliči
-                  </button>
-                </div>
-              </form>
-            </section>
-              </>
-            ) : (
-              <>
-                <div
-                  className="ios-sheet-backdrop dashboard-note-dialog-backdrop"
-                  onClick={closeRenameModal}
-                  aria-hidden="true"
-                />
-                <div className="ios-sheet-wrap dashboard-note-dialog-wrap" role="presentation">
-                  <div className="ios-sheet-stack">
-                    <section
-                      className="ios-sheet dashboard-note-dialog mobile-draggable-sheet"
-                      role="dialog"
-                      aria-modal="true"
-                      aria-labelledby="rename-note-title"
-                      style={
-                        dashboardDialogDragOffset > 0
-                          ? { transform: `translateY(${dashboardDialogDragOffset}px)` }
-                          : undefined
-                      }
-                    >
-                      <button
-                        type="button"
-                        className="mobile-sheet-drag-handle dashboard-note-dialog-drag-handle"
-                        onPointerDown={handleDashboardDialogDragHandlePointerDown}
-                        aria-label="Povleci navzdol za zapiranje"
-                        disabled={busyLectureId === renameTarget.id}
-                      />
-                      <div className="ios-sheet-header">
-                        <h2 id="rename-note-title" className="ios-sheet-title">
-                          Preimenuj zapisek
-                        </h2>
-                        <button
-                          type="button"
-                          className="app-close-button ios-sheet-header-close"
-                          onClick={closeRenameModal}
-                          aria-label="Zapri okno za preimenovanje zapiska"
-                          disabled={busyLectureId === renameTarget.id}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-
-                      <form
-                        className="dashboard-note-dialog-body"
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          void handleRenameLecture();
-                        }}
-                      >
-                        <p className="ios-subtitle dashboard-note-dialog-copy">
-                          Daj temu zapisku bolj jasen naslov, ne da zapustiš stran.
-                        </p>
-                        {dashboardActionError ? (
-                          <p className="ios-info ios-danger dashboard-note-dialog-copy">
-                            {dashboardActionError}
-                          </p>
-                        ) : null}
-
-                        <label className="dashboard-note-dialog-field">
-                          <span>Naslov</span>
-                          <input
-                            autoFocus
-                            value={renameValue}
-                            onChange={(event) => setRenameValue(event.target.value)}
-                            className="ios-input"
-                            placeholder="Neimenovan zapisek"
-                          />
-                        </label>
-
-                        <div className="dashboard-note-dialog-actions">
-                          <button
-                            type="submit"
-                            className="ios-primary-button"
-                            disabled={
-                              busyLectureId === renameTarget.id ||
-                              !renameValue.trim() ||
-                              renameValue.trim() ===
-                                (renameTarget.title?.trim() || "Neimenovan zapisek")
-                            }
-                          >
-                            {busyLectureId === renameTarget.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : null}
-                            Shrani naslov
-                          </button>
-                          <button
-                            type="button"
-                            className="ios-secondary-button"
-                            onClick={closeRenameModal}
-                            disabled={busyLectureId === renameTarget.id}
-                          >
-                            Prekliči
-                          </button>
-                        </div>
-                      </form>
-                    </section>
-                  </div>
-                </div>
-              </>
-            )}
-          </>
-        </ViewportPortal>
+                Shrani naslov
+              </button>
+              <button
+                type="button"
+                className="memo-sheet-ghost"
+                onClick={closeRenameModal}
+                disabled={busyLectureId === renameTarget.id}
+              >
+                Prekliči
+              </button>
+            </div>
+          </div>
+        </MemoPortal>
       ) : null}
 
       {deleteTarget ? (
-        <ViewportPortal>
-          <>
-            {useDashboardSwipeActions ? (
-              <>
-            <button
-              type="button"
-              className="mobile-create-menu-backdrop dashboard-note-dialog-backdrop"
-              onClick={closeDeleteModal}
-              aria-label="Zapri okno za brisanje zapiska"
-            />
-            <section
-              className="mobile-create-menu dashboard-note-dialog mobile-draggable-sheet"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="delete-note-title"
-              onPointerDown={handleDashboardDialogDragHandlePointerDown}
-              onClickCapture={handleDashboardDialogClickCapture}
-              style={
-                dashboardDialogDragOffset > 0
-                  ? { transform: `translateY(${dashboardDialogDragOffset}px)` }
-                  : undefined
-              }
-            >
+        <MemoPortal>
+          <button
+            type="button"
+            aria-label="Zapri"
+            className={sheetClass("memo-scrim", dialogSheet.closing)}
+            onClick={closeDeleteModal}
+          />
+          <div
+            className={sheetClass("memo-sheet memo-dialog", dialogSheet.closing)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-note-title"
+            {...dialogSheet.dragProps}
+          >
+            <div className="memo-grab" data-drag-handle />
+            <span id="delete-note-title" className="memo-sheet-heading">
+              Izbriši zapisek
+            </span>
+            <p className="memo-sheet-copy">
+              Zapisek »{deleteTarget.title?.trim() || "Neimenovan zapisek"}« bo trajno
+              izbrisan skupaj s prepisom, karticami in kvizi.
+            </p>
+            {dashboardActionError ? (
+              <p className="memo-inline-error">{dashboardActionError}</p>
+            ) : null}
+            <div className="memo-sheet-actions">
               <button
                 type="button"
-                className="mobile-sheet-drag-handle mobile-create-menu-drag-handle dashboard-note-dialog-drag-handle"
-                aria-label="Povleci navzdol za zapiranje"
+                className="memo-sheet-danger"
+                onClick={() => void handleDeleteLecture()}
                 disabled={busyLectureId === deleteTarget.id}
-              />
-              <div className="mobile-create-menu-header dashboard-note-dialog-header">
-                <h2 id="delete-note-title" className="dashboard-section-title">
-                  Izbriši zapisek
-                </h2>
-                <button
-                  type="button"
-                  className="app-close-button"
-                  onClick={closeDeleteModal}
-                  aria-label="Zapri okno za brisanje zapiska"
-                  disabled={busyLectureId === deleteTarget.id}
-                >
-                  <EmojiIcon symbol="✖️" size="1rem" />
-                </button>
-              </div>
-
-              <div className="dashboard-note-dialog-body">
-                <p className="ios-subtitle dashboard-note-dialog-copy">
-                  Izbriši{" "}
-                  <span className="dashboard-note-dialog-highlight">
-                    {deleteTarget.title?.trim() || "Neimenovan zapisek"}
-                  </span>
-                  ? Tega ni mogoče razveljaviti.
-                </p>
-                {dashboardActionError ? (
-                  <p className="ios-info ios-danger dashboard-note-dialog-copy">
-                    {dashboardActionError}
-                  </p>
+              >
+                {busyLectureId === deleteTarget.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : null}
+                Izbriši zapisek
+              </button>
+              <button
+                type="button"
+                className="memo-sheet-ghost"
+                onClick={closeDeleteModal}
+                disabled={busyLectureId === deleteTarget.id}
+              >
+                Prekliči
+              </button>
+            </div>
+          </div>
+        </MemoPortal>
+      ) : null}
 
-                <div className="dashboard-note-dialog-actions">
-                  <button
-                    type="button"
-                    className="dashboard-note-dialog-danger"
-                    onClick={() => void handleDeleteLecture()}
-                    disabled={busyLectureId === deleteTarget.id}
-                  >
-                    {busyLectureId === deleteTarget.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : null}
-                    Izbriši zapisek
-                  </button>
-                  <button
-                    type="button"
-                    className="ios-secondary-button"
-                    onClick={closeDeleteModal}
-                    disabled={busyLectureId === deleteTarget.id}
-                  >
-                    Prekliči
-                  </button>
-                </div>
-              </div>
-            </section>
-              </>
-            ) : (
-              <>
-                <div
-                  className="ios-sheet-backdrop dashboard-note-dialog-backdrop"
-                  onClick={closeDeleteModal}
-                  aria-hidden="true"
-                />
-                <div className="ios-sheet-wrap dashboard-note-dialog-wrap" role="presentation">
-                  <div className="ios-sheet-stack">
-                    <section
-                      className="ios-sheet dashboard-note-dialog mobile-draggable-sheet"
-                      role="dialog"
-                      aria-modal="true"
-                      aria-labelledby="delete-note-title"
-                      style={
-                        dashboardDialogDragOffset > 0
-                          ? { transform: `translateY(${dashboardDialogDragOffset}px)` }
-                          : undefined
-                      }
-                    >
-                      <button
-                        type="button"
-                        className="mobile-sheet-drag-handle dashboard-note-dialog-drag-handle"
-                        onPointerDown={handleDashboardDialogDragHandlePointerDown}
-                        aria-label="Povleci navzdol za zapiranje"
-                        disabled={busyLectureId === deleteTarget.id}
-                      />
-                      <div className="ios-sheet-header">
-                        <h2 id="delete-note-title" className="ios-sheet-title">
-                          Izbriši zapisek
-                        </h2>
-                        <button
-                          type="button"
-                          className="app-close-button ios-sheet-header-close"
-                          onClick={closeDeleteModal}
-                          aria-label="Zapri okno za brisanje zapiska"
-                          disabled={busyLectureId === deleteTarget.id}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-
-                      <div className="dashboard-note-dialog-body">
-                        <p className="ios-subtitle dashboard-note-dialog-copy">
-                          Izbriši{" "}
-                          <span className="dashboard-note-dialog-highlight">
-                            {deleteTarget.title?.trim() || "Neimenovan zapisek"}
-                          </span>
-                          ? Tega ni mogoče razveljaviti.
-                        </p>
-                        {dashboardActionError ? (
-                          <p className="ios-info ios-danger dashboard-note-dialog-copy">
-                            {dashboardActionError}
-                          </p>
-                        ) : null}
-
-                        <div className="dashboard-note-dialog-actions">
-                          <button
-                            type="button"
-                            className="dashboard-note-dialog-danger"
-                            onClick={() => void handleDeleteLecture()}
-                            disabled={busyLectureId === deleteTarget.id}
-                          >
-                            {busyLectureId === deleteTarget.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : null}
-                            Izbriši zapisek
-                          </button>
-                          <button
-                            type="button"
-                            className="ios-secondary-button"
-                            onClick={closeDeleteModal}
-                            disabled={busyLectureId === deleteTarget.id}
-                          >
-                            Prekliči
-                          </button>
-                        </div>
-                      </div>
-                    </section>
-                  </div>
-                </div>
-              </>
-            )}
-          </>
-        </ViewportPortal>
+      {/* Phone: "Nov zapisek" opens the capture picker as a bottom sheet. */}
+      {isMobileCreateMenuOpen ? (
+        <MemoPortal>
+          <button
+            type="button"
+            aria-label="Zapri"
+            className={sheetClass("memo-scrim", createSheet.closing)}
+            onClick={animateCloseMobileCreateMenu}
+          />
+          <div
+            className={sheetClass("memo-sheet", createSheet.closing)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mobile-create-menu-title"
+            {...createSheet.dragProps}
+          >
+            <div className="memo-grab memo-create-drag-handle" data-drag-handle />
+            <div className="memo-sheet-title">
+              <span id="mobile-create-menu-title">Nov zapisek</span>
+              <button
+                type="button"
+                className="memo-sheet-close"
+                aria-label="Zapri"
+                onClick={animateCloseMobileCreateMenu}
+              >
+                <Msym name="close" size="1.45rem" fill={false} weight={500} />
+              </button>
+            </div>
+            <div className="memo-sheet-list">
+              {CREATE_OPTIONS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className="memo-sheet-option"
+                  onClick={() => {
+                    closeMobileCreateMenu();
+                    openQuickAction(option.id);
+                  }}
+                >
+                  <span className="memo-sheet-option-tile">
+                    <Emoji symbol={option.emoji} size="1.35rem" />
+                  </span>
+                  <span className="memo-sheet-option-label">{option.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </MemoPortal>
       ) : null}
     </>
   );

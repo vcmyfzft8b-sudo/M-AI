@@ -3182,45 +3182,6 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                 ))}
               </div>
 
-              <div style={{ display: "grid", gap: "6px" }}>
-                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--m-second)" }}>Jezik</span>
-                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                  <select
-                    value={s.language}
-                    onChange={(e) => this.setState({ language: e.target.value })}
-                    style={{
-                      width: "100%",
-                      minHeight: "44px",
-                      padding: "8px 34px 8px 14px",
-                      border: 0,
-                      borderRadius: "10px",
-                      background: "var(--m-muted)",
-                      color: "var(--m-label)",
-                      fontSize: "16px",
-                      fontFamily: "inherit",
-                      appearance: "none",
-                      WebkitAppearance: "none",
-                      outline: "none",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {[
-                      { value: "sl", label: "Slovenščina" },
-                      { value: "en", label: "Angleščina" },
-                      { value: "de", label: "Nemščina" },
-                      { value: "hr", label: "Hrvaščina" },
-                    ].map((language) => (
-                      <option key={language.value} value={language.value}>
-                        {language.label}
-                      </option>
-                    ))}
-                  </select>
-                  <span aria-hidden="true" style={{ position: "absolute", right: "14px", color: "var(--m-second)", fontSize: "12px", pointerEvents: "none" }}>
-                    ▾
-                  </span>
-                </div>
-              </div>
-
               <button
                 type="button"
                 onClick={() => this.setState((c) => ({ createAudio: !c.createAudio }))}

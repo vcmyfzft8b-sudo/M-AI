@@ -326,7 +326,6 @@ export function CaptureStudio({
       const result = await createAudioLectureWithProcessingChunks({
         file: source.file,
         durationSeconds: Math.max(source.durationSeconds, 1),
-        languageHint: "sl",
         normalizeBeforeUpload: source.origin === "recording",
         signal: createController.signal,
         onLectureCreated: (lectureId) => {

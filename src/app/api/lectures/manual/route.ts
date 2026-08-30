@@ -15,7 +15,11 @@ const CREATE_MANUAL_LECTURE_MAX_BYTES = 8 * 1024;
 
 const createManualLectureSchema = z.object({
   sourceType: z.enum(["text", "pdf", "link"]),
-  languageHint: languageHintSchema.default("sl"),
+  // Kept optional for clients that still send it — a retry replays the
+  // language a lecture was already transcribed in. Nothing asks a user for
+  // one any more, and a default here would assert Slovenian over every
+  // source the pipeline is now meant to detect for itself.
+  languageHint: languageHintSchema.optional(),
 });
 
 export async function POST(request: Request) {
@@ -70,7 +74,7 @@ export async function POST(request: Request) {
         source_type: parsed.data.sourceType,
         access_tier: entitlement.hasPaidAccess ? "paid" : "trial",
         status: "uploading",
-        language_hint: parsed.data.languageHint,
+        language_hint: parsed.data.languageHint ?? null,
       } as never,
     )
     .select("id")

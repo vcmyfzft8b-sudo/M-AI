@@ -1,18 +1,21 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Pause, Play, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, X } from "lucide-react";
 import Image from "next/image";
 import katex from "katex";
 import type {
   CSSProperties,
-  MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { EmojiIcon } from "@/components/emoji-icon";
-import { ViewportPortal } from "@/components/viewport-portal";
+import { createPortal } from "react-dom";
+
+import { Msym } from "@/components/msym";
+import { MemoPortal } from "@/components/memo-portal";
+import { useAnnotateWidth } from "@/components/use-annotate-width";
+import { sheetClass, useSheet } from "@/components/use-sheet";
 import {
   DEFAULT_NOTE_TTS_HIGHLIGHT_COLOR_ID,
   DEFAULT_NOTE_TTS_PLAYBACK_RATE,
@@ -134,7 +137,6 @@ const TTS_FREE_DAILY_LIMIT_MESSAGE =
   "Porabil si današnje brezplačno ustvarjanje zvoka. Za več zvoka nadgradi paket ali počakaj do ponastavitve ob 00:00. Že pripravljene dele lahko še vedno poslušaš od začetka do mesta, kjer je zvok pripravljen.";
 const TTS_PAID_DAILY_LIMIT_MESSAGE =
   "Porabil si današnje ustvarjanje zvoka. Nov zvok bo na voljo po ponastavitvi ob 00:00. Že pripravljene dele lahko še vedno poslušaš od začetka do mesta, kjer je zvok pripravljen.";
-const READ_SETTINGS_SHEET_CLOSE_MS = 180;
 const TTS_GENERATION_PROGRESS_LABEL = "Ustvarjam zvok";
 
 function getTtsGenerationProgressPercent(startedAt: number, workloadChunks = 1) {
@@ -303,131 +305,23 @@ function QuotaUsageMenu({
   onHighlightColorChange: (colorId: NoteTtsHighlightColorId) => void;
 }) {
   const menuRef = useRef<HTMLDetailsElement | null>(null);
-  const dragStartYRef = useRef<number | null>(null);
-  const dragOffsetRef = useRef(0);
-  const suppressClickRef = useRef(false);
-  const closeTimerRef = useRef<number | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isMenuClosing, setIsMenuClosing] = useState(false);
-  const [dragOffset, setDragOffset] = useState(0);
 
   const closeMenu = useCallback(() => {
-    if (closeTimerRef.current !== null) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-    dragStartYRef.current = null;
-    dragOffsetRef.current = 0;
-    setDragOffset(0);
     setIsMenuOpen(false);
-    setIsMenuClosing(false);
     if (menuRef.current) {
       menuRef.current.open = false;
     }
   }, []);
 
+  // The listening settings are an ordinary phone sheet: they drag from anywhere
+  // that is not a control, and they leave through the shared exit.
+  const settingsSheet = useSheet(closeMenu);
+  const dismissSettingsSheet = settingsSheet.dismiss;
+
   const animateCloseMenu = useCallback(() => {
-    if (isMenuClosing) {
-      return;
-    }
-
-    dragStartYRef.current = null;
-    dragOffsetRef.current = window.innerHeight;
-    setIsMenuClosing(true);
-    setDragOffset(window.innerHeight);
-    closeTimerRef.current = window.setTimeout(() => {
-      closeTimerRef.current = null;
-      closeMenu();
-    }, READ_SETTINGS_SHEET_CLOSE_MS);
-  }, [closeMenu, isMenuClosing]);
-
-  useEffect(() => {
-    return () => {
-      if (closeTimerRef.current !== null) {
-        window.clearTimeout(closeTimerRef.current);
-      }
-    };
-  }, []);
-
-  function handleSheetPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.pointerType === "mouse" && event.button !== 0) {
-      return;
-    }
-
-    const target = event.target;
-    const interactiveTarget =
-      target instanceof Element
-        ? target.closest("button, input, textarea, select, a, .app-close-button")
-        : null;
-    const dragHandleTarget =
-      target instanceof Element ? target.closest(".note-read-usage-drag-handle") : null;
-
-    if (
-      interactiveTarget &&
-      !dragHandleTarget
-    ) {
-      return;
-    }
-
-    suppressClickRef.current = false;
-    dragStartYRef.current = event.clientY;
-    if (!interactiveTarget || dragHandleTarget) {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
-  }
-
-  function updateDragOffset(clientY: number) {
-    if (dragStartYRef.current === null) {
-      return;
-    }
-
-    const nextOffset = Math.max(0, clientY - dragStartYRef.current);
-    dragOffsetRef.current = nextOffset;
-    if (nextOffset > 8) {
-      suppressClickRef.current = true;
-    }
-    setDragOffset(nextOffset);
-  }
-
-  function handleSheetClickCapture(event: ReactMouseEvent<HTMLDivElement>) {
-    if (!suppressClickRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    suppressClickRef.current = false;
-  }
-
-  useEffect(() => {
-    if (!isMenuOpen) {
-      return;
-    }
-
-    function handleWindowPointerMove(event: PointerEvent) {
-      updateDragOffset(event.clientY);
-    }
-
-    function handleWindowPointerEnd() {
-      if (dragOffsetRef.current > 80) {
-        animateCloseMenu();
-        return;
-      }
-
-      dragStartYRef.current = null;
-      dragOffsetRef.current = 0;
-      setDragOffset(0);
-    }
-
-    window.addEventListener("pointermove", handleWindowPointerMove);
-    window.addEventListener("pointerup", handleWindowPointerEnd);
-    window.addEventListener("pointercancel", handleWindowPointerEnd);
-    return () => {
-      window.removeEventListener("pointermove", handleWindowPointerMove);
-      window.removeEventListener("pointerup", handleWindowPointerEnd);
-      window.removeEventListener("pointercancel", handleWindowPointerEnd);
-    };
-  }, [animateCloseMenu, isMenuOpen]);
+    dismissSettingsSheet();
+  }, [dismissSettingsSheet]);
 
   if (!status) {
     return null;
@@ -440,8 +334,11 @@ function QuotaUsageMenu({
 
   const menuContent = (
     <>
+      {/* `data-drag-handle` is what lets a drag start here: useSheet ignores
+          pointers that land on a button unless the button is the grabber. */}
       <button
         type="button"
+        data-drag-handle="true"
         className="mobile-sheet-drag-handle note-read-usage-drag-handle"
         aria-label="Povleci navzdol za zapiranje"
       />
@@ -534,16 +431,7 @@ function QuotaUsageMenu({
       <details
         ref={menuRef}
         className={`note-read-usage-menu ${isLimitReached ? "limit" : ""}`}
-        onToggle={(event) => {
-          const isOpen = event.currentTarget.open;
-          setIsMenuOpen(isOpen);
-          if (isOpen) {
-            setIsMenuClosing(false);
-            dragStartYRef.current = null;
-            dragOffsetRef.current = 0;
-            setDragOffset(0);
-          }
-        }}
+        onToggle={(event) => setIsMenuOpen(event.currentTarget.open)}
       >
         <summary
           className="note-read-usage-trigger"
@@ -554,42 +442,35 @@ function QuotaUsageMenu({
                 ? "Brez dnevne omejitve ustvarjanja zvoka"
               : `Preostalo ${remainingPercent} % dnevnega ustvarjanja zvoka`
           }
-          title="Poraba ustvarjanja zvoka"
+          title="Nastavitve poslušanja"
         >
-          <EmojiIcon
-            className="library-folder-chevron note-read-usage-chevron"
-            symbol="▾"
-            size="0.95rem"
-          />
+          <Msym name="tune" size="1.25rem" fill={false} weight={500} />
         </summary>
         <div className="note-read-usage-popover note-read-usage-inline-popover">
           {menuContent}
         </div>
       </details>
       {isMenuOpen ? (
-        <ViewportPortal>
+        <MemoPortal>
           <button
             type="button"
-            className="note-read-usage-mobile-backdrop"
+            className={sheetClass("note-read-usage-mobile-backdrop", settingsSheet.closing)}
             onClick={animateCloseMenu}
             aria-label="Zapri nastavitve poslušanja"
           />
           <div
-            className="note-read-usage-popover note-read-usage-mobile-sheet"
+            className={sheetClass(
+              "note-read-usage-popover note-read-usage-mobile-sheet",
+              settingsSheet.closing,
+            )}
             role="dialog"
             aria-modal="true"
             aria-label="Nastavitve poslušanja"
-            onPointerDown={handleSheetPointerDown}
-            onClickCapture={handleSheetClickCapture}
-            style={
-              dragOffset > 0
-                ? { transform: `translateY(${dragOffset}px)` }
-                : undefined
-            }
+            {...settingsSheet.dragProps}
           >
             {menuContent}
           </div>
-        </ViewportPortal>
+        </MemoPortal>
       ) : null}
     </>
   );
@@ -1382,7 +1263,7 @@ function InlineNoteMedia({
         title="Spremeni velikost fotografije"
       />
       {isPreviewOpen ? (
-        <ViewportPortal>
+        <MemoPortal>
           <div
             className="note-media-preview"
             role="dialog"
@@ -1414,7 +1295,7 @@ function InlineNoteMedia({
               onClick={(event) => event.stopPropagation()}
             />
           </div>
-        </ViewportPortal>
+        </MemoPortal>
       ) : null}
     </figure>
   );
@@ -1523,6 +1404,8 @@ export function NoteReadAloud({
   annotationToolbar,
   toolbarAccessory,
   annotationActive = false,
+  dockContainer = null,
+  annotationPaletteOpen = false,
   annotations = [],
   mediaBlocks = [],
   noteMedia = [],
@@ -1541,6 +1424,15 @@ export function NoteReadAloud({
   annotationToolbar?: ReactNode;
   toolbarAccessory?: ReactNode;
   annotationActive?: boolean;
+  /**
+   * Where the dock renders. The redesign pins it to the bottom of the note
+   * screen beside the chat affordance, which lives outside this component, so
+   * the note screen hands down the element to portal into. Null renders it in
+   * place, which is what the creator demo and any other host gets.
+   */
+  dockContainer?: HTMLElement | null;
+  /** True while the colour swatches are showing, so the pill widens for them. */
+  annotationPaletteOpen?: boolean;
   annotations?: NoteAnnotation[];
   mediaBlocks?: NoteMediaBlock[];
   noteMedia?: NoteMediaAsset[];
@@ -1582,6 +1474,13 @@ export function NoteReadAloud({
   // back with allowance left.
   const creationLimitReachedVoiceRef = useRef<NoteTtsVoice | null>(null);
   const playbackRequestIdRef = useRef(0);
+  /**
+   * Seconds of audio finished before the chunk that is playing now. The note is
+   * read as a sequence of chunks, so the audio element's own currentTime resets
+   * at every boundary; adding it to this gives a clock for the whole reading,
+   * which is what the dock shows.
+   */
+  const playedBeforeChunkRef = useRef(0);
   const preparedInitialChunkKeyRef = useRef<string | null>(null);
   const generationProgressIntervalRef = useRef<number | null>(null);
   const generationProgressDismissRef = useRef<number | null>(null);
@@ -1597,6 +1496,7 @@ export function NoteReadAloud({
   const sessionIdRef = useRef<string>(createReadSessionId());
   const statusRef = useRef<TtsStatusResponse | null>(null);
   const [status, setStatus] = useState<TtsStatusResponse | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [activeChunk, setActiveChunk] = useState<ActiveChunk | null>(null);
   const [activeChunkIndex, setActiveChunkIndex] = useState(0);
   const [completedWordIndex, setCompletedWordIndex] = useState(-1);
@@ -2644,6 +2544,8 @@ export function NoteReadAloud({
       return;
     }
 
+    setElapsedSeconds(playedBeforeChunkRef.current + audio.currentTime);
+
     const wordState = getPlaybackWordState(
       activeChunk,
       Math.max(0, audio.currentTime * 1000),
@@ -2902,6 +2804,12 @@ export function NoteReadAloud({
     const nextChunkIndex = activeChunk.chunkIndex + 1;
 
     if (nextChunkIndex < activeChunk.chunkCount) {
+      // Bank this chunk's length before the element rewinds for the next one.
+      const finished = audioRef.current?.duration;
+      if (Number.isFinite(finished)) {
+        playedBeforeChunkRef.current += finished as number;
+      }
+
       void playChunk(nextChunkIndex);
       return;
     }
@@ -2917,6 +2825,26 @@ export function NoteReadAloud({
     resetPlaybackWordState,
   ]);
 
+  /** Closes the reading player and puts the dock back to its headphones state. */
+  const stopReading = useCallback(() => {
+    const audio = audioRef.current;
+
+    if (audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    }
+
+    playbackRequestIdRef.current += 1;
+    playedBeforeChunkRef.current = 0;
+    setElapsedSeconds(0);
+    setIsPlaying(false);
+    setIsStartingPlayback(false);
+    setActiveChunk(null);
+    setActiveChunkIndex(0);
+    resetPlaybackWordState(-1);
+  }, [resetPlaybackWordState]);
+
   const disabled =
     isFetchingChunk ||
     isStartingPlayback ||
@@ -2931,55 +2859,79 @@ export function NoteReadAloud({
         : activeChunk
           ? "Nadaljuj"
           : "Poslušaj";
-  const renderPlaybackIcon = (className: string) =>
-    isPreparingPlayback ? (
-      <Loader2 className={`${className} animate-spin`} />
-    ) : isPlaying ? (
-      <Pause className={className} />
-    ) : (
-      <Play className={className} />
-    );
 
-  const renderNoteDock = () =>
-    annotationActive && annotationToolbar ? (
-      <div className="mobile-note-annotation-pill">{annotationToolbar}</div>
-    ) : (
-      <button
-        type="button"
-        className="mobile-note-read-pill"
-        onClick={() => {
-          window.dispatchEvent(new Event("memoai:mobile-dock-close"));
-          void handlePlayPause();
-        }}
-        disabled={disabled}
-        aria-label={playButtonLabel}
-      >
-        <EmojiIcon
-          symbol={isPreparingPlayback ? "⏳" : isPlaying ? "⏸️" : "🎧"}
-          size="1.12rem"
-          className="mobile-note-read-pill-icon"
-        />
-        <span className="mobile-note-read-pill-label">{playButtonLabel}</span>
-      </button>
-    );
+  /**
+   * The dock, exactly as the redesign draws it: one pill that morphs between
+   * three states rather than swapping elements, so its width animates.
+   *
+   *   idle       — a headphones button; tapping it starts the reading
+   *   reading    — play/pause, progress, elapsed, speed, close
+   *   annotating — the highlight tools, whenever note text is selected
+   *
+   * Only the active layer is rendered on desktop so the pill sizes to its
+   * content; on the phone all three stack and cross-fade (see redesign.css).
+   */
+  const formatClock = (seconds: number) => {
+    const total = Math.max(0, Math.round(seconds));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+  };
 
-  return (
-    <>
-      <div className="note-read-toolbar">
-        {annotationToolbar ?? (
-          <button
-            type="button"
-            className="note-read-button"
-            onClick={() => {
-              void handlePlayPause();
-            }}
-            disabled={disabled}
-            aria-label={playButtonLabel}
-          >
-            {renderPlaybackIcon("h-4 w-4")}
-            <span>{playButtonLabel}</span>
-          </button>
-        )}
+  const isAnnotating = annotationActive && Boolean(annotationToolbar);
+  const isReading = !isAnnotating && (isPlaying || Boolean(activeChunk));
+  const isIdle = !isAnnotating && !isReading;
+  const { pillRef, layerRef } = useAnnotateWidth(isAnnotating, annotationPaletteOpen);
+  const totalWords = document.words.length;
+  const readProgressPercent =
+    totalWords > 0
+      ? Math.min(100, Math.round(((completedWordIndex + 2) / totalWords) * 100))
+      : 0;
+
+  const renderNoteDock = () => (
+    <div
+      ref={pillRef}
+      className={[
+        "memo-dock-pill",
+        isReading ? "reading" : "",
+        isAnnotating ? "annotating" : "",
+        isAnnotating && annotationPaletteOpen ? "palette" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <div className={`memo-dock-layer memo-dock-idle-layer ${isIdle ? "on" : ""}`.trim()}>
+        <button
+          type="button"
+          className="memo-dock-idle"
+          onClick={() => void handlePlayPause()}
+          disabled={disabled}
+          aria-label={playButtonLabel}
+        >
+          {isPreparingPlayback ? (
+            <Msym name="progress_activity" size="1.55rem" className="memo-spin" />
+          ) : (
+            <Msym name="headphones" size="1.55rem" fill={false} weight={500} />
+          )}
+        </button>
+      </div>
+
+      <div className={`memo-dock-layer memo-dock-player ${isReading ? "on" : ""}`.trim()}>
+        <button
+          type="button"
+          className="memo-dock-play"
+          onClick={() => void handlePlayPause()}
+          disabled={disabled}
+          aria-label={playButtonLabel}
+        >
+          {isPreparingPlayback ? (
+            <Msym name="progress_activity" size="1.35rem" className="memo-spin" />
+          ) : (
+            <Msym name={isPlaying ? "pause" : "play_arrow"} size="1.35rem" />
+          )}
+        </button>
+        <span className="memo-dock-track">
+          <span style={{ width: `${readProgressPercent}%` }} />
+        </span>
+        <span className="memo-dock-time">{formatClock(elapsedSeconds)}</span>
         <QuotaUsageMenu
           status={status}
           playbackRate={playbackRate}
@@ -2989,9 +2941,33 @@ export function NoteReadAloud({
           onVoiceChange={setSelectedVoice}
           onHighlightColorChange={setHighlightColorId}
         />
-        {toolbarAccessory}
-        {error ? <span className="note-read-error">{error}</span> : null}
+        <button
+          type="button"
+          className="memo-dock-close"
+          onClick={stopReading}
+          aria-label="Zapri branje"
+        >
+          <Msym name="close" size="1.45rem" fill={false} weight={500} />
+        </button>
       </div>
+
+      <div
+        ref={layerRef}
+        className={`memo-dock-layer memo-dock-annotate ${isAnnotating ? "on" : ""}`.trim()}
+      >
+        {annotationToolbar}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {toolbarAccessory || error ? (
+        <div className="memo-note-toolbar">
+          {toolbarAccessory}
+          {error ? <span className="memo-note-toolbar-error">{error}</span> : null}
+        </div>
+      ) : null}
       {ttsGenerationProgress ? (
         <div
           className="note-read-generation-progress"
@@ -3026,17 +3002,8 @@ export function NoteReadAloud({
         }}
         className="note-read-audio"
       />
-      {/*
-        The dock is rendered twice on purpose. Mobile portals it to <body> so it
-        can sit fixed above the tab bar. Desktop keeps it in the note card and
-        positions it absolutely, so it hugs the card's corner instead of the
-        window's — the note column is capped and centred, so a viewport-anchored
-        pill drifts far to its right on wide screens. Exactly one is visible at
-        any width; see the `note-dock-*` rules in globals.css.
-      */}
-      <ViewportPortal>
-        <div className="note-dock note-dock-mobile">{renderNoteDock()}</div>
-      </ViewportPortal>
+      {/* The note screen owns where the dock sits, on both breakpoints. */}
+      {dockContainer ? createPortal(renderNoteDock(), dockContainer) : null}
       <div
         ref={contentRef}
         className="note-read-content"
@@ -3059,7 +3026,7 @@ export function NoteReadAloud({
           onDeleteMedia={onDeleteMedia}
         />
       </div>
-      <div className="note-dock note-dock-desktop">{renderNoteDock()}</div>
+      {dockContainer ? null : <div className="memo-dock">{renderNoteDock()}</div>}
     </>
   );
 }

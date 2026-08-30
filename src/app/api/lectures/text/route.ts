@@ -18,7 +18,11 @@ const CREATE_TEXT_LECTURE_MAX_BYTES = 4 * 1024 * 1024 + 256 * 1024;
 const createTextLectureSchema = z.object({
   lectureId: optionalLectureIdSchema,
   text: noteTextSchema,
-  languageHint: languageHintSchema.default("sl"),
+  // Kept optional for clients that still send it — a retry replays the
+  // language a lecture was already transcribed in. Nothing asks a user for
+  // one any more, and a default here would assert Slovenian over every
+  // source the pipeline is now meant to detect for itself.
+  languageHint: languageHintSchema.optional(),
   createInitialAudio: z.boolean().optional().default(false),
   initialAudioVoice: z.enum(NOTE_TTS_VOICES).optional(),
 });

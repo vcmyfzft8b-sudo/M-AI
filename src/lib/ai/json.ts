@@ -8,6 +8,7 @@ import {
   directModelId,
   generateStructuredObjectWithOpenRouter,
   isOpenRouterModel,
+  streamStructuredObjectWithOpenRouter,
 } from "@/lib/ai/openrouter";
 import {
   AI_STAGE_MODEL_ENV_KEYS,
@@ -211,5 +212,56 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
         }
       : {}),
     usageContext,
+  });
+}
+
+/**
+ * A streamed structured call for the one stage a learner watches happen.
+ *
+ * It runs only the routed tier: streaming is a nicety, and a stage that has to
+ * reach for its fallback has bigger problems than how the text arrives. The
+ * caller is expected to catch and re-run the ordinary
+ * `generateStructuredObject`, which still has the full three-tier chain.
+ * Returns null when the stage is not routed through the gateway at all, so the
+ * caller can go straight to that path without an exception.
+ */
+export async function streamStructuredObject<TSchema extends z.ZodTypeAny>(params: {
+  schema: TSchema;
+  instructions: string;
+  input: string;
+  stage: AiStage;
+  streamField: string;
+  onDelta: (text: string) => void;
+  maxOutputTokens?: number;
+  usageContext?: GeminiUsageContext;
+}): Promise<z.infer<TSchema> | null> {
+  const env = getServerEnv();
+  const config = resolveStageModelConfig({
+    stage: params.stage,
+    env: process.env,
+    fallbackModel: env.GEMINI_TEXT_MODEL,
+  });
+
+  const apiKey = env.OPENROUTER_API_KEY;
+
+  if (!isOpenRouterModel(config.model) || !apiKey) {
+    return null;
+  }
+
+  return streamStructuredObjectWithOpenRouter({
+    schema: params.schema,
+    instructions: params.instructions,
+    input: params.input,
+    model: config.model,
+    apiKey,
+    streamField: params.streamField,
+    onDelta: params.onDelta,
+    maxOutputTokens: applyOutputHeadroom(params.maxOutputTokens, config),
+    thinkingLevel: config.thinkingLevel,
+    timeoutMs: resolveStageTimeoutMs(params.stage, config.model),
+    usageContext: {
+      ...(params.usageContext ?? {}),
+      stage: params.usageContext?.stage ?? params.stage,
+    },
   });
 }

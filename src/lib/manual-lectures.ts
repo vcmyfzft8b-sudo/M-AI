@@ -1746,7 +1746,7 @@ export async function createLectureFromTextSource(params: {
           {
             source_type: params.sourceType,
             status: "generating_notes",
-            language_hint: params.languageHint ?? "sl",
+            language_hint: params.languageHint ?? null,
             duration_seconds: durationSeconds,
             error_message: null,
             title: params.titleHint ?? null,
@@ -1778,7 +1778,7 @@ export async function createLectureFromTextSource(params: {
             user_id: params.userId,
             source_type: params.sourceType,
             status: "generating_notes",
-            language_hint: params.languageHint ?? "sl",
+            language_hint: params.languageHint ?? null,
             duration_seconds: durationSeconds,
             title: params.titleHint ?? null,
             processing_metadata: {
@@ -1944,7 +1944,7 @@ export async function createLectureFromTextSource(params: {
         lectureId,
         content: notes.structuredNotesMd,
         title: notes.title,
-        languageHint: params.languageHint ?? "sl",
+        languageHint: params.languageHint ?? null,
         voice: params.initialAudioVoice,
       });
     }
@@ -2055,7 +2055,7 @@ export async function prepareLectureFromTextSource(params: {
         {
           source_type: params.sourceType,
           status: "queued",
-          language_hint: params.languageHint ?? "sl",
+          language_hint: params.languageHint ?? null,
           duration_seconds: durationSeconds,
           error_message: null,
           title: titleHint,
@@ -2098,7 +2098,7 @@ export async function prepareLectureFromTextSource(params: {
         user_id: params.userId,
         source_type: params.sourceType,
         status: "queued",
-        language_hint: params.languageHint ?? "sl",
+        language_hint: params.languageHint ?? null,
         duration_seconds: durationSeconds,
         title: titleHint,
         processing_metadata: processingMetadata,

@@ -20,7 +20,7 @@ Za zdaj ima vsak račun svojo knjižnico zapiskov in zgodovino obdelav.
 
 - prijavi se z računom, ki naj bo lastnik zapiskov
 - zapiske po potrebi kopiraj iz prikaza zapiska
-- za bolj dosledne rezultate uporabljaj enake jezikovne nastavitve`,
+- za bolj dosledne rezultate nalagaj gradivo istega predmeta v isti račun`,
   },
   {
     slug: "gift-coconote",
@@ -38,11 +38,11 @@ Za uporabo Memo naj si prejemnik ustvari svoj račun, nato pa pri plačilu v Str
     category: "Pogosto",
     content: `# Podprti jeziki
 
-Aplikacija lahko obdela večjezično gradivo, vendar so rezultati najboljši, če pred ustvarjanjem zapiska izbereš pravi izvorni jezik.
+Jezika ni treba nastavljati. Memo AI prebere gradivo in zapiske, kartice in kvize napiše v jeziku, v katerem je gradivo samo.
 
 ## Priporočila
 
-- pred oddajo izberi dejanski jezik posnetka ali besedila
+- gradivo naloži takšno, kot je — prevajanje vnaprej ni potrebno
 - pri mešanju jezikov pomagajo krajši posnetki
 - tehnični angleški izrazi lahko ostanejo v končnem rezultatu, kadar so del izvorne vsebine`,
   },
@@ -96,11 +96,11 @@ Podprti formati so MP3, M4A, WAV, OGG in WEBM.
     category: "Snemanje in zapiski",
     content: `# Kakovost prepisa
 
-Kakovost prepisa je odvisna od čistosti zvoka, prekrivanja govorcev in izbranega izvornega jezika.
+Kakovost prepisa je odvisna od čistosti zvoka in prekrivanja govorcev. Jezik prepozna Memo AI sam.
 
 ## Kako izboljšati rezultate
 
-- pred obdelavo izberi pravilen jezik
+- posnemi čim bližje govorcu
 - pri pogovorih omogoči zajem več govorcev
 - zmanjša ozadni hrup
 - zelo dolge posnetke razdeli na manjše dele`,
@@ -147,7 +147,6 @@ Kontakt za vprašanja o zasebnosti in za uveljavljanje pravic: info@memoai.eu
 **Podatki iz uvodne nastavitve**
 
 - odgovori v uvodnem vprašalniku, na primer študijsko področje, način uporabe in razlog za uporabo
-- jezikovne nastavitve
 
 **Vsebina, ki jo pošlješ**
 

@@ -30,6 +30,7 @@ const UNRETRYABLE_LECTURE_FAILURE_CODES = new Set([
   "link_requires_login",
   "private_network_link",
   "scan_not_enough_text",
+  "source_no_study_content",
   "source_too_large",
   "source_too_short",
   "too_many_link_redirects",

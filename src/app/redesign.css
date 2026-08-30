@@ -165,13 +165,23 @@
 
 /* The drawing sits on the page's ground so the drawn phone reads as a phone
    against it rather than as a panel inside the card. */
-.memo-install-art {
+.memo-install-art,
+.memo-install-shot {
   display: block;
   width: 100%;
+  max-width: 15rem;
   height: auto;
-  max-height: 11rem;
+  margin: 0 auto;
   border-radius: 16px;
   background: var(--bg);
+}
+
+/* A real screenshot is a photograph of a phone, so it keeps the phone's
+   proportions and gets an edge to sit against rather than bleeding into the
+   card behind it. */
+.memo-install-shot {
+  border: 1px solid var(--line);
+  object-fit: contain;
 }
 
 /* --- tokens --------------------------------------------------------------- */

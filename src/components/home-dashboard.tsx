@@ -484,6 +484,16 @@ export function HomeDashboard({
   const [isWheelOpen, setIsWheelOpen] = useState(false);
   const [isOfferOpen, setIsOfferOpen] = useState(false);
   const [hasClaimedDiscount, setHasClaimedDiscount] = useState(false);
+  /*
+   * Whether the wheel has a spin left, as the server sees it. Null until the
+   * answer arrives, which is why neither card is drawn before then — guessing
+   * and correcting would flash one card into the other on every load.
+   *
+   * Asking the server matters: the spin is once a day and survives reloads and
+   * devices, so a purely local flag showed the gift again to somebody who had
+   * already used theirs.
+   */
+  const [canSpinWheel, setCanSpinWheel] = useState<boolean | null>(null);
   const [manualModal, setManualModal] = useState<NoteSourceMode | null>(null);
   const [isMobileCreateMenuOpen, setIsMobileCreateMenuOpen] = useState(false);
   const [libraryLectures, setLibraryLectures] = useState(lectures);
@@ -986,8 +996,43 @@ export function HomeDashboard({
   // Publishes `--memo-head-p` as the list scrolls; the collapse itself is CSS.
   const { attachScroll, attachScreen } = useCollapsingHeader();
 
+  useEffect(() => {
+    if (hasPaidAccess) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void fetch("/api/discount-wheel")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((state: { canSpin?: boolean } | null) => {
+        if (!cancelled) {
+          setCanSpinWheel(state?.canSpin ?? false);
+        }
+      })
+      .catch(() => {
+        // No wheel rather than a broken home screen.
+        if (!cancelled) {
+          setCanSpinWheel(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasPaidAccess]);
+
+  const inLibraryView = !selectedFolderId && !deferredQuery.trim();
   const showDiscountPromo =
-    !hasPaidAccess && !hasClaimedDiscount && !selectedFolderId && !deferredQuery.trim();
+    !hasPaidAccess && !hasClaimedDiscount && canSpinWheel === true && inLibraryView;
+  /*
+   * Today's spin is gone — used, or the offer was closed — and there is still
+   * no subscription. The slot keeps a way to buy, just without the prize: an
+   * offer that is over should not keep advertising itself, and an empty slot
+   * would lose the only upgrade prompt on the phone's library screen.
+   */
+  const showUpgradePromo =
+    !hasPaidAccess && canSpinWheel === false && inLibraryView;
 
   return (
     <>
@@ -1135,6 +1180,18 @@ export function HomeDashboard({
                   <span>Odkleni najboljše funkcije ceneje</span>
                 </span>
                 <Emoji symbol="🎁" size="2rem" />
+              </button>
+            ) : showUpgradePromo ? (
+              <button
+                type="button"
+                className="memo-promo upgrade memo-only-mobile flex"
+                onClick={() => router.push(startHref)}
+              >
+                <span className="memo-promo-copy">
+                  <span>Nadgradi na Premium</span>
+                  <span>Neomejeni zapiski, kartice in kvizi</span>
+                </span>
+                <Emoji symbol="⚡" size="2rem" />
               </button>
             ) : null}
 

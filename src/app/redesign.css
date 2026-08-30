@@ -7969,6 +7969,19 @@
     font-size: 2rem;
   }
 
+  /*
+   * The same card once the prize is gone for the day. Coral is the discount's
+   * colour and it should leave with the discount, so this reads in the app's
+   * own ink — it is an ordinary way to buy, not a deal.
+   */
+  .memo-promo.upgrade .memo-promo-copy > span:first-child {
+    color: var(--text);
+  }
+
+  .memo-promo.upgrade .memo-promo-copy > span:last-child {
+    color: var(--muted);
+  }
+
   .memo-note-list {
     display: grid;
     gap: 0.7rem;
@@ -8969,13 +8982,26 @@
   }
 
 
+  /*
+   * These two carry a desktop `memo-pop-in` on a two-class selector, which
+   * outranks the phone's own `memo-sheet-up` on `.memo-sheet-full` however
+   * late that comes — so they were the only sheets in the app that popped
+   * into place instead of sliding up, while still sliding out like the rest.
+   * Restated here so the entrance matches the exit, and both match everything
+   * else.
+   *
+   * `transform: translateY(0)` rather than `none` for the same reason the
+   * generic rule uses it: the drag and the closing exit both animate the
+   * transform, and there has to be a value to animate from.
+   */
   .memo-sheet-full.memo-wheel-sheet,
   .memo-sheet-full.memo-offer-sheet {
     top: calc(3.5rem + var(--memo-safe-top));
     bottom: var(--memo-kb);
     left: 0;
-    transform: none;
+    transform: translateY(0);
     width: auto;
+    animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
 

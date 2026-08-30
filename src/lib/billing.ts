@@ -78,7 +78,10 @@ export const BILLING_PLANS: Record<
     label: "Letno",
     cadence: "na mesec",
     amount: 130,
-    displayAmount: "11",
+    // €130 a year is €10.83 a month, not €11. Rounding the headline up prices
+    // the plan above what is actually charged, which is the one direction a
+    // price must never be wrong in.
+    displayAmount: "10,83",
     billingNote: "Obračunano letno",
     annualizedAmount: 130,
     blurb: "Najnižja dejanska cena, če uporabljaš aplikacijo celo leto.",

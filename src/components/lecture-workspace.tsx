@@ -22,6 +22,7 @@ import { Emoji, Msym } from "@/components/msym";
 import { NoteReadAloud } from "@/components/note-read-aloud";
 import { StudyCompletionCard } from "@/components/study-completion-card";
 import { MemoPortal } from "@/components/memo-portal";
+import { RecordingPlayer } from "@/components/recording-player";
 import {
   getApiErrorMessage,
   parseApiResponse,
@@ -5432,9 +5433,7 @@ export function LectureWorkspace({
           {/* The redesign puts the recording's player above the transcript
               rather than on a tab of its own. */}
           {detail.audioUrl ? (
-            <div className="memo-player">
-              <audio controls src={detail.audioUrl} className="memo-player-audio" />
-            </div>
+            <RecordingPlayer key={detail.audioUrl} src={detail.audioUrl} />
           ) : null}
 
           {transcriptSegments.length > 0 ? (

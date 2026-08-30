@@ -3271,9 +3271,10 @@
 }
 
 .memo-player {
-  padding: 1.3rem 1.5rem;
-  border-radius: 22px;
-  background: var(--sunken);
+  padding: 1.35rem 1.4rem 1.5rem;
+  border-radius: 26px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .memo-player-track {
@@ -3304,7 +3305,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 0.7rem;
+  margin-top: 0.8rem;
   color: var(--muted);
   font-size: 0.9rem;
   font-weight: 650;
@@ -3316,7 +3317,7 @@
   align-items: center;
   justify-content: center;
   gap: 1.35rem;
-  margin-top: 1.1rem;
+  margin-top: 1.25rem;
 }
 
 .memo-player-skip {
@@ -3352,6 +3353,48 @@
 
 .memo-player-play .msym {
   font-size: 1.9rem;
+}
+
+/* The scrub sits invisibly over the drawn track and carries its behaviour. */
+.memo-player-range {
+  position: absolute;
+  inset: -0.7rem 0;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+.memo-player-range:disabled {
+  cursor: default;
+}
+
+.memo-player-rate-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1.1rem;
+}
+
+.memo-player-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.4rem;
+  padding: 0 0.95rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.98rem;
+  font-weight: 700;
 }
 
 .memo-transcript-rows {

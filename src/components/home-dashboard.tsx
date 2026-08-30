@@ -12,7 +12,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -32,6 +31,7 @@ import {
   useInstantNavigation,
 } from "@/components/navigation-loading";
 import { MemoPortal } from "@/components/memo-portal";
+import { useCollapsingHeader } from "@/components/use-collapsing-header";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import {
   BRAND_LOCKUP_HEIGHT,
@@ -93,7 +93,6 @@ const CREATE_OPTIONS = [
 
 const DASHBOARD_MUTATION_TIMEOUT_MS = 18_000;
 const DASHBOARD_NOTE_ACTION_REVEAL_PX = 144;
-const RENAME_KEYBOARD_VISIBLE_INSET_PX = 80;
 
 type DashboardNoteDragState = {
   pointerId: number;
@@ -476,7 +475,6 @@ export function HomeDashboard({
   const isCreatorDemo = useIsCreatorDemo();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
-  const renameViewportMetricsKeyRef = useRef("");
   const [query, setQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -486,17 +484,14 @@ export function HomeDashboard({
   const [hasClaimedDiscount, setHasClaimedDiscount] = useState(false);
   const [manualModal, setManualModal] = useState<NoteSourceMode | null>(null);
   const [isMobileCreateMenuOpen, setIsMobileCreateMenuOpen] = useState(false);
-  const [renameDialogStyle, setRenameDialogStyle] = useState<CSSProperties | undefined>();
   const [libraryLectures, setLibraryLectures] = useState(lectures);
   const [useDashboardSwipeActions, setUseDashboardSwipeActions] = useState(false);
-  const [isHomeScrolled, setIsHomeScrolled] = useState(false);
   const [busyLectureId, setBusyLectureId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedFolderLectureIds, setSelectedFolderLectureIds] = useState<string[] | null>(null);
   const [openMenuLectureId, setOpenMenuLectureId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<AppLectureListItem | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [renameKeyboardVisible, setRenameKeyboardVisible] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AppLectureListItem | null>(null);
   const [dashboardActionError, setDashboardActionError] = useState<string | null>(null);
   const [showLocalDevDashboard, setShowLocalDevDashboard] = useState(showDevDashboard);
@@ -570,22 +565,6 @@ export function HomeDashboard({
     };
   }, [libraryLectures, router]);
 
-  /*
-   * The phone header gives its room back to the list as you scroll: the title
-   * and the search collapse away on the same curve the search uses when it
-   * sweeps over the folder chip, and come back at the top. Hysteresis either
-   * side of the threshold stops it flickering when a scroll settles right on it.
-   */
-  useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY;
-      setIsHomeScrolled((current) => (current ? y > 24 : y > 72));
-    };
-
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   useEffect(() => {
     if (!openMenuLectureId) {
@@ -626,8 +605,6 @@ export function HomeDashboard({
     setDashboardActionError(null);
     setRenameTarget(null);
     setRenameValue("");
-    setRenameKeyboardVisible(false);
-    setRenameDialogStyle(undefined);
     setDeleteTarget(null);
   }, []);
 
@@ -709,33 +686,9 @@ export function HomeDashboard({
       window.setTimeout(restoreScrollPosition, 0);
     };
 
+    // The dialog itself rides `--memo-kb`, which `KeyboardInset` publishes.
+    // All this has left to do is hold the page behind it still.
     const updateViewportMetrics = () => {
-      const viewport = window.visualViewport;
-      const viewportHeight = viewport?.height ?? window.innerHeight;
-      const viewportOffsetTop = viewport?.offsetTop ?? 0;
-      const keyboardInset = Math.max(
-        0,
-        window.innerHeight - viewportHeight - viewportOffsetTop,
-      );
-      setRenameKeyboardVisible(keyboardInset > RENAME_KEYBOARD_VISIBLE_INSET_PX);
-
-      const roundedKeyboardInset = Math.round(keyboardInset);
-      const roundedViewportHeight = Math.round(viewportHeight);
-      const roundedViewportOffsetTop = Math.round(viewportOffsetTop);
-      const viewportMetricsKey = [
-        roundedKeyboardInset,
-        roundedViewportHeight,
-        roundedViewportOffsetTop,
-      ].join(":");
-
-      if (renameViewportMetricsKeyRef.current !== viewportMetricsKey) {
-        renameViewportMetricsKeyRef.current = viewportMetricsKey;
-        setRenameDialogStyle({
-          "--dashboard-note-dialog-keyboard-inset": `${roundedKeyboardInset}px`,
-          "--dashboard-note-dialog-visual-height": `${roundedViewportHeight}px`,
-          "--dashboard-note-dialog-visual-offset-top": `${roundedViewportOffsetTop}px`,
-        } as CSSProperties);
-      }
       scheduleScrollRestore();
     };
 
@@ -774,7 +727,6 @@ export function HomeDashboard({
     window.visualViewport?.addEventListener("scroll", updateViewportMetrics, { passive: true });
     window.visualViewport?.addEventListener("resize", updateViewportMetrics, { passive: true });
     renameInput?.addEventListener("focus", handleFocusIn);
-    const viewportPollId = window.setInterval(updateViewportMetrics, 120);
     updateViewportMetrics();
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(focusRenameInput);
@@ -789,9 +741,6 @@ export function HomeDashboard({
       window.visualViewport?.removeEventListener("scroll", updateViewportMetrics);
       window.visualViewport?.removeEventListener("resize", updateViewportMetrics);
       renameInput?.removeEventListener("focus", handleFocusIn);
-      window.clearInterval(viewportPollId);
-      renameViewportMetricsKeyRef.current = "";
-      setRenameDialogStyle(undefined);
       root.style.overflow = previousRootOverflow;
       root.style.overscrollBehavior = previousRootOverscrollBehavior;
       root.style.scrollBehavior = previousRootScrollBehavior;
@@ -1032,12 +981,15 @@ export function HomeDashboard({
   // the card for the rest of this session once it has been. As in the design it
   // sits above the full library only: a search or a folder is a narrowed view,
   // and the offer would be pushing itself in front of the answer.
+  // Publishes `--memo-head-p` as the list scrolls; the collapse itself is CSS.
+  const { attachScroll, attachScreen } = useCollapsingHeader();
+
   const showDiscountPromo =
     !hasPaidAccess && !hasClaimedDiscount && !selectedFolderId && !deferredQuery.trim();
 
   return (
     <>
-      <div className={`memo-home-screen ${isHomeScrolled ? "scrolled" : ""}`.trim()}>
+      <div className="memo-home-screen" ref={attachScreen}>
         {/* Phone chrome: the lockup and the gear that opens Nastavitve. */}
         <div className="memo-m-topbar memo-only-mobile flex">
           <Image
@@ -1052,7 +1004,7 @@ export function HomeDashboard({
           </InstantLink>
         </div>
 
-        <div className="memo-home-scroll">
+        <div className="memo-home-scroll" ref={attachScroll}>
           {showLocalDevDashboard ? (
             <button
               type="button"
@@ -1102,6 +1054,9 @@ export function HomeDashboard({
             <h2 className="memo-home-h2">Moji zapiski</h2>
           </div>
 
+          {/* The title and the search scroll away with the list; while they
+              go, the title fades and the field folds. The folder pill below is
+              opaque and sits above them, so they pass under it. */}
           <h1 className="memo-m-title memo-only-mobile">Moji zapiski</h1>
 
           <div className="memo-m-search memo-only-mobile flex">
@@ -1332,19 +1287,14 @@ export function HomeDashboard({
             onClick={closeRenameModal}
           />
           <div
-            className={sheetClass(
-              `memo-sheet memo-dialog ${
-                renameKeyboardVisible ? "keyboard-visible" : "keyboard-hidden"
-              }`,
-              dialogSheet.closing,
-            )}
+            className={sheetClass("memo-sheet memo-dialog", dialogSheet.closing)}
             role="dialog"
             aria-modal="true"
             aria-labelledby="rename-note-title"
             onPointerDown={dialogSheet.dragProps.onPointerDown}
             onPointerDownCapture={handleRenameDialogPointerDownCapture}
             data-dragging={dialogSheet.dragProps["data-dragging"]}
-            style={{ ...renameDialogStyle, ...dialogSheet.dragProps.style }}
+            style={dialogSheet.dragProps.style}
           >
             <div className="memo-grab" data-drag-handle />
             <span id="rename-note-title" className="memo-sheet-heading">

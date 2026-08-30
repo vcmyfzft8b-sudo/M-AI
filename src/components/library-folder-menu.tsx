@@ -785,7 +785,7 @@ export function LibraryFolderMenu({
               />
               <button
                 type="button"
-                className="app-close-button library-folder-modal-close"
+                className="app-close-button library-folder-modal-close memo-only-desktop"
                 onClick={animateCloseCreateModal}
                 aria-label="Zapri okno za novo mapo"
               >
@@ -796,6 +796,17 @@ export function LibraryFolderMenu({
                 <h3 id="new-folder-title" className="library-folder-modal-title">
                   Nova mapa
                 </h3>
+                {/* The phone confirms from the header; desktop keeps its
+                    footer button. */}
+                <button
+                  type="button"
+                  className="memo-folder-done memo-only-mobile flex"
+                  onClick={handleCreateFolder}
+                  disabled={isCreatingFolder || folderName.trim().length === 0}
+                  aria-busy={isCreatingFolder}
+                >
+                  Končano
+                </button>
               </div>
 
               <div className="library-folder-modal-icon-row">
@@ -806,17 +817,21 @@ export function LibraryFolderMenu({
 
               <div className="library-folder-modal-body">
                 <label className="library-folder-modal-field">
-                  <span>Ime</span>
+                  <span className="memo-only-desktop">Ime</span>
                   <input
                     value={folderName}
                     onChange={(event) => setFolderName(event.target.value)}
                     placeholder="Biologija, Matematika, Zgodovina..."
                     className="ios-input"
+                    aria-label="Ime mape"
+                    maxLength={32}
                     disabled={isCreatingFolder}
                   />
                 </label>
 
-                <div className="library-folder-modal-field">
+                {/* The phone creates the folder empty and says so; notes are
+                    moved in from the folder's own editor afterwards. */}
+                <div className="library-folder-modal-field memo-only-desktop">
                   <span>Dodaj predavanja</span>
                   <div className="library-folder-lecture-picker modal">
                     {lectures.length > 0 ? (
@@ -851,9 +866,13 @@ export function LibraryFolderMenu({
                 </div>
               </div>
 
+              <p className="memo-folder-hint memo-only-mobile">
+                Zapiske lahko kadar koli premakneš v to mapo.
+              </p>
+
               <button
                 type="button"
-                className="library-folder-primary-button modal"
+                className="library-folder-primary-button modal memo-only-desktop"
                 onClick={handleCreateFolder}
                 disabled={isCreatingFolder || folderName.trim().length === 0}
                 aria-busy={isCreatingFolder}

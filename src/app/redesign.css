@@ -7334,9 +7334,24 @@
 @media (max-width: 1099px) {
   .memo,
   .memo-portal {
-    --memo-kb: 0px;
+    /* `KeyboardInset` publishes the measured height on the document element;
+       the fallback keeps every calc() honest before it has run and on any
+       browser without `visualViewport`. */
+    --memo-kb: var(--memo-keyboard, 0px);
     --memo-safe-top: env(safe-area-inset-top, 0px);
     --memo-safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /*
+   * Sheets that live inside a full-screen wrapper are pinned to the bottom of
+   * *that*, so subtracting the keyboard from their own height is not enough —
+   * the wrapper has to end above the keys or the sheet stays behind them.
+   */
+  .note-source-modal-wrap,
+  .library-folder-modal-overlay,
+  .study-manager-backdrop,
+  .memo-portal .ios-sheet-wrap {
+    bottom: var(--memo-kb);
   }
 
 
@@ -7454,11 +7469,6 @@
     z-index: 3;
     background: var(--bg);
     margin: 0.45rem 1.15rem 0;
-    overflow: hidden;
-    transition:
-      height 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-      margin 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 0.22s ease;
     font-weight: 800;
     letter-spacing: -0.04em;
     font-size: 1.35rem;
@@ -7481,37 +7491,44 @@
     flex: 0 0 auto;
     position: relative;
     z-index: 3;
-    transition:
-      height 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-      margin 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 0.22s ease;
   }
 
   /*
-   * Scrolled: the title and the search fold away to give the list the room,
-   * on the same curve the search uses when it sweeps over the folder chip.
-   * They keep their place in the flow at zero height, so nothing below jumps.
+   * The collapse, on the design's curve. `--memo-head-p` runs 0 → 1 over the
+   * first 80px of scroll (published by `useCollapsingHeader`) and everything
+   * below is derived from it.
+   *
+   * Both elements scroll away with the list — nothing is pinned and nothing
+   * resizes, so the scroll metrics never change and the header cannot fight
+   * the scroller. The folder pill beneath is opaque and sits above them, so
+   * they pass under it rather than showing through.
    */
-  .memo-home-screen.scrolled .memo-m-title,
-  .memo-home-screen.scrolled .memo-m-search {
-    height: 0;
-    margin-top: 0;
-    margin-bottom: 0;
-    opacity: 0;
-    pointer-events: none;
+  .memo-m-title {
+    opacity: clamp(0, calc(1 - var(--memo-head-p, 0) * 1.9), 1);
+    transition: opacity 0.1s linear;
   }
 
-  .memo-home-screen.scrolled .memo-m-search {
-    padding-block: 0;
+  /* Scaled from its top edge, so it folds up into the bar rather than
+     shrinking towards its own middle. 0.06 rather than 0 keeps it paintable. */
+  .memo-m-search {
+    transform-origin: top center;
+    will-change: transform;
+    transform: scaleY(max(0.06, calc(1 - var(--memo-head-p, 0))));
+    opacity: clamp(0, calc(1 - (var(--memo-head-p, 0) - 0.6) * 2.5), 1);
+    transition: opacity 0.1s linear;
   }
 
-  /* A focused field stays put — collapsing it out from under a typing thumb
-     would close the keyboard. */
-  .memo-home-screen.scrolled .memo-m-search:focus-within {
-    height: 2.75rem;
-    margin-top: 0.8rem;
-    opacity: 1;
-    pointer-events: auto;
+  /* The contents counter-scale, so the placeholder and the glyph are never
+     squashed on the way down — they cut out early instead. */
+  .memo-m-search input {
+    transform: scaleY(calc(1 / max(0.06, calc(1 - var(--memo-head-p, 0)))));
+    opacity: clamp(0, calc((0.02 - var(--memo-head-p, 0)) * 1000), 1);
+    transition: opacity 0.1s linear;
+  }
+
+  .memo-m-search .msym {
+    opacity: clamp(0, calc((0.02 - var(--memo-head-p, 0)) * 1000), 1);
+    transition: opacity 0.08s linear;
   }
 
   .memo-m-search .msym {
@@ -9138,14 +9155,78 @@
     padding: 0;
   }
 
-  .library-folder-modal {
+  /*
+   * A column, not the desktop grid: the grid gave each part a fixed track, and
+   * on a phone the folder mark's track was shorter than the mark, so it
+   * printed over the field beneath it. Here the parts take the height they
+   * need and the body is the one thing that scrolls.
+   */
+  .library-folder-modal,
+  .library-folder-modal.mobile-draggable-sheet {
+    display: flex;
+    flex-direction: column;
+    grid-template-rows: none;
     width: auto;
+    /* Anchored to the bottom edge and no taller than its content. Production
+       pins top *and* bottom, which stretched the sheet down the whole screen
+       and left the field floating in the middle of it. */
+    position: fixed;
+    inset: auto 0 var(--memo-kb) 0;
     max-height: calc(100dvh - var(--memo-kb) - 54px);
     padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .library-folder-modal > * {
+    flex: 0 0 auto;
+  }
+
+  .library-folder-modal-body {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  /* Title on the left, the confirm beside it — the artboard's header row. */
+  .library-folder-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .memo-folder-done {
+    align-items: center;
+    justify-content: center;
+    height: 2.5rem;
+    padding: 0 1.05rem;
+    border: 0;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ff6d68, #f45f5a);
+    color: #fff;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.98rem;
+    font-weight: 700;
+    transition: opacity 0.16s ease;
+  }
+
+  /* Nothing to confirm yet: the design greys it out rather than hiding it. */
+  .memo-folder-done:disabled {
+    background: var(--tile);
+    color: var(--muted);
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .memo-folder-hint {
+    margin: 0.9rem 0 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+    text-align: center;
   }
 
   .library-folder-modal-drag-handle {
@@ -10061,7 +10142,9 @@
    * specificity to land.
    */
   .note-source-modal.mobile-draggable-sheet {
-    inset: 0;
+    /* Full screen, but stopping above the keyboard — the design gives its
+       capture screen the same inset it gives every other shell. */
+    inset: 0 0 var(--memo-kb) 0;
     /* Header, then the body that takes what is left. */
     grid-template-rows: auto minmax(0, 1fr);
     gap: 0;

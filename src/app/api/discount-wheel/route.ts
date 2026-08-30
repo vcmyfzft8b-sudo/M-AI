@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
 
+import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import { getDiscountWheelState, spinDiscountWheel } from "@/lib/discount-wheel";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /** Whether this account still has a spin, and what it already won. */
 export async function GET() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Through the same helper as every other route, so the preview bypass can
+  // reach the wheel instead of being told it is not signed in.
+  const user = await getOptionalUserOrPreviewBypass();
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
@@ -20,10 +19,9 @@ export async function GET() {
 
 /** Spins the wheel. Idempotent: a second call returns the first prize. */
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Through the same helper as every other route, so the preview bypass can
+  // reach the wheel instead of being told it is not signed in.
+  const user = await getOptionalUserOrPreviewBypass();
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

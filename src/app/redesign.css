@@ -6259,9 +6259,20 @@
   background: var(--bg);
 }
 
-.memo-offer-sheet {
-  background: radial-gradient(120% 80% at 50% 0%, #2b2338 0%, #14161a 55%, #0b0c0e 100%);
-  color: #ffffff;
+/*
+ * The offer follows the theme like everything else. It used to be a fixed dark
+ * gradient with white text baked in, which read as white-on-white the moment a
+ * later `.memo-sheet-full { background: var(--bg) }` in the phone layer won on
+ * source order — hence the doubled class here as well.
+ *
+ * The tint is the brand coral at low opacity over the page ground, so it still
+ * reads as a promotion rather than as another sheet, in either theme.
+ */
+.memo-offer-sheet.memo-offer-sheet {
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(244, 95, 90, 0.16) 0%, transparent 60%),
+    var(--bg);
+  color: var(--text);
 }
 
 .memo-wheel-close-row {
@@ -6462,7 +6473,7 @@
 /* --- offer sheet ---------------------------------------------------------- */
 
 .memo-offer-sheet .memo-grab-wide span {
-  background: rgba(255, 255, 255, 0.35);
+  background: var(--muted-2);
   opacity: 1;
 }
 
@@ -6527,7 +6538,7 @@
 
 .memo-offer-sub {
   margin: 0.5rem 0 0;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
   font-size: 1.05rem;
   text-align: center;
 }
@@ -6549,9 +6560,9 @@
   padding: 1rem 1.1rem;
   border-radius: 18px;
   cursor: pointer;
-  color: #ffffff;
-  border: 2px solid rgba(255, 255, 255, 0.28);
-  background: transparent;
+  color: var(--text);
+  border: var(--btn-border-width) solid var(--btn-border);
+  background: var(--surface);
   transform: translateY(0);
   transition:
     border-color 0.2s ease,
@@ -6560,8 +6571,8 @@
 }
 
 .memo-offer-plan.selected {
-  border-color: #ffffff;
-  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--text);
+  background: var(--surface);
   transform: translateY(-1px);
 }
 
@@ -6575,8 +6586,8 @@
   height: 1.4rem;
   padding: 0 0.7rem;
   border-radius: 999px;
-  background: #ffffff;
-  color: #14161a;
+  background: var(--text);
+  color: var(--bg);
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -6589,7 +6600,7 @@
   height: 1.4rem;
   flex: 0 0 auto;
   border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.45);
+  border: 2px solid var(--line);
   background: transparent;
   transition: border-width 0.2s ease;
 }
@@ -6600,7 +6611,7 @@
 
 .memo-offer-plan-copy {
   display: grid;
-  gap: 0.15rem;
+  gap: 0.2rem;
   flex: 1;
   min-width: 0;
   text-align: left;
@@ -6610,18 +6621,21 @@
   font-size: 1.08rem;
   font-weight: 750;
   letter-spacing: -0.025em;
+  line-height: 1.2;
 }
 
 .memo-offer-plan-copy > span:last-child {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--muted);
   font-size: 0.92rem;
 }
 
 .memo-offer-price {
   flex: 0 0 auto;
+  align-self: center;
   font-size: 1.05rem;
-  font-weight: 700;
+  font-weight: 750;
   letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .memo-offer-cta {
@@ -6646,16 +6660,77 @@
   cursor: default;
 }
 
+/*
+ * The countdown, on the sheet's own ground rather than on a plate: a
+ * monospaced face so the digits sit in fixed columns and nothing shifts as
+ * they change, and a red glow so it still reads as a fuse burning down. The
+ * whole thing blinks as one — the colon is not special.
+ */
+.memo-offer-timer {
+  align-self: center;
+  margin: 0.35rem 0 0;
+  color: #ff3b30;
+  font-family: ui-monospace, SFMono-Regular, Menlo, "Courier New", monospace;
+  font-size: 2.9rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  text-shadow:
+    0 0 10px rgba(255, 59, 48, 0.55),
+    0 0 28px rgba(255, 59, 48, 0.28);
+  animation: memo-offer-blip 1s steps(1, end) infinite;
+}
+
+/* The last minute blinks twice as fast. */
+.memo-offer-timer.urgent {
+  animation-duration: 0.5s;
+}
+
+@keyframes memo-offer-blip {
+  0%,
+  54% {
+    opacity: 1;
+  }
+
+  55%,
+  100% {
+    opacity: 0.24;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-offer-timer {
+    animation: none;
+  }
+}
+
+/* The small print under the price, as on the main paywall's plan cards. */
+.memo-offer-price {
+  display: grid;
+  justify-items: end;
+  gap: 0.15rem;
+  text-align: right;
+}
+
+.memo-offer-billing {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+
 .memo-offer-fine {
   margin: 0.2rem 0 0;
   text-align: center;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--muted);
   font-size: 0.95rem;
 }
 
 .memo-offer-sheet .memo-inline-error {
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffd9d7;
+  background: rgba(255, 59, 48, 0.12);
+  color: #ff3b30;
 }
 
 

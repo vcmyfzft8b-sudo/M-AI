@@ -30,6 +30,9 @@ import {
 /** Matches the design: 6 slices, and the pointer lands on the 50 % one. */
 const WHEEL_SLICES = ["10 %", "5 %", "20 %", "50 %", "15 %", "30 %"];
 const SPIN_DEGREES = 3390;
+/** How long the offer stands, matching WHEEL_PRIZE_TTL_MS on the server. */
+const OFFER_SECONDS = 10 * 60;
+
 const SPIN_MS = 6250;
 
 const CONFETTI_COLORS = ["#ff6d68", "#ffb347", "#34c759", "#0066cc", "#b18bff", "#ff9a94"];
@@ -37,8 +40,9 @@ const CONFETTI_COLORS = ["#ff6d68", "#ffb347", "#34c759", "#0066cc", "#b18bff", 
 type OfferPlan = {
   id: "yearly" | "monthly";
   label: string;
-  detail: string;
   price: string;
+  /** The small print under the price: what is actually charged, and when. */
+  billing: string;
   badge: string;
 };
 
@@ -50,15 +54,24 @@ const OFFER_PLANS: OfferPlan[] = [
   {
     id: "yearly",
     label: "Enkratna ponudba",
-    detail: "Prvo leto €65, nato €130 na leto",
     price: "€1,25/teden",
+    /*
+     * One line of small print, not two. The card used to say the same thing
+     * twice — a "first year / then" line beside a "billed yearly" line — and
+     * Stripe restates the full terms at checkout anyway.
+     *
+     * What stays is the renewal price. That the discount covers one period and
+     * the price goes up afterwards is the one thing a buyer cannot find out
+     * later, so it is not the sort of text to trim.
+     */
+    billing: "Obračunano letno: €65, nato €130",
     badge: "PRIHRANI 50 %",
   },
   {
     id: "monthly",
     label: "Mesečno",
-    detail: "Prvi mesec €10, nato €20 na mesec",
     price: "€10/mesec",
+    billing: "Obračunano mesečno: €10, nato €20",
     badge: "",
   },
 ];
@@ -83,6 +96,13 @@ export function DiscountOffer({
   const [plan, setPlan] = useState<OfferPlan["id"]>("yearly");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * The offer's ten minutes, counted from the moment it opens. The server is
+   * what actually enforces the window — it measures from the recorded spin and
+   * refuses the coupon after it — so this is the honest display of a deadline
+   * rather than the deadline itself.
+   */
+  const [secondsLeft, setSecondsLeft] = useState(OFFER_SECONDS);
 
   useEffect(
     () => () => {
@@ -153,6 +173,21 @@ export function DiscountOffer({
    * Both are full-height sheets the design marks scrollable, so the grabber is
    * the only place a drag starts, and both leave through the shared exit.
    */
+  useEffect(() => {
+    if (!offerOpen) {
+      setSecondsLeft(OFFER_SECONDS);
+      return;
+    }
+
+    const started = Date.now();
+    const id = window.setInterval(() => {
+      const elapsed = Math.floor((Date.now() - started) / 1000);
+      setSecondsLeft(Math.max(0, OFFER_SECONDS - elapsed));
+    }, 1000);
+
+    return () => window.clearInterval(id);
+  }, [offerOpen]);
+
   const wheelSheet = useSheet(
     useCallback(() => onWheelOpenChange(false), [onWheelOpenChange]),
     { scrollable: true },
@@ -311,8 +346,8 @@ export function DiscountOffer({
           <div className="memo-grab-wide" data-drag-handle>
             <span className="light" />
           </div>
+          {/* The logo below already says whose offer this is. */}
           <div className="memo-offer-head">
-            <span>{SEO_BRAND_NAME}</span>
             <button
               type="button"
               aria-label="Zapri ponudbo"
@@ -335,6 +370,16 @@ export function DiscountOffer({
             <p className="memo-offer-headline">50 % ceneje</p>
             <p className="memo-offer-sub">Ko zapreš ponudbo, je ni več.</p>
 
+            {/* Big numbers and nothing else. The urgency is the number. */}
+            <p
+              className={`memo-offer-timer ${secondsLeft <= 60 ? "urgent" : ""}`.trim()}
+              role="timer"
+              aria-live="off"
+            >
+              {String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:
+              {String(secondsLeft % 60).padStart(2, "0")}
+            </p>
+
             <div className="memo-offer-plans">
               {OFFER_PLANS.map((offerPlan) => (
                 <button
@@ -347,9 +392,12 @@ export function DiscountOffer({
                     <span className="memo-offer-badge">{offerPlan.badge}</span>
                   ) : null}
                   <span className="memo-offer-radio" />
+                  {/* Name over its small print on the left, the headline price
+                      on the right — the long billing line needs the full width
+                      of the card, not the sliver beside the price. */}
                   <span className="memo-offer-plan-copy">
                     <span>{offerPlan.label}</span>
-                    {offerPlan.detail ? <span>{offerPlan.detail}</span> : null}
+                    <span className="memo-offer-billing">{offerPlan.billing}</span>
                   </span>
                   <span className="memo-offer-price">{offerPlan.price}</span>
                 </button>

@@ -56,9 +56,22 @@ function isSameUtcDay(a: Date, b: Date) {
   );
 }
 
+/**
+ * Local development spins as often as you like.
+ *
+ * The whole flow — wheel, prize, countdown, offer, checkout — is one spin per
+ * day in production, which makes it a flow nobody can look at twice in an
+ * afternoon. This is the only place the rule is decided, so relaxing it here
+ * relaxes it everywhere at once, and `NODE_ENV` is `production` on every
+ * deployment including previews.
+ */
+function spinLimitEnforced() {
+  return process.env.NODE_ENV !== "development";
+}
+
 /** True when a spin recorded at this instant still counts against today. */
 function spentToday(spunAt: string | null, now: Date) {
-  if (!spunAt) {
+  if (!spunAt || !spinLimitEnforced()) {
     return false;
   }
 
@@ -77,6 +90,12 @@ export async function getDiscountWheelState(userId: string): Promise<DiscountWhe
     .maybeSingle();
 
   if (error) {
+    // Same reasoning as the spin: a database without migration 0036 should not
+    // stop the flow being looked at locally.
+    if (!spinLimitEnforced()) {
+      return { canSpin: true, coupon: null, hasUnredeemedPrize: false, prizeExpiresAt: null };
+    }
+
     throw error;
   }
 
@@ -120,22 +139,50 @@ export async function spinDiscountWheel(userId: string): Promise<{
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   ).toISOString();
 
-  const { data, error } = await supabase
+  const spin = supabase
     .from("profiles")
     .update({
       discount_wheel_spun_at: now.toISOString(),
       discount_wheel_coupon: WHEEL_COUPON_ID,
+      // A new spin is a new prize, so it has not been used yet. Without this a
+      // second day's win would arrive already spent.
+      discount_wheel_redeemed_at: null,
     } as never)
-    .eq("id", userId)
-    .or(`discount_wheel_spun_at.is.null,discount_wheel_spun_at.lt.${startOfDay}`)
+    .eq("id", userId);
+
+  const { data, error } = await (
+    spinLimitEnforced()
+      ? spin.or(`discount_wheel_spun_at.is.null,discount_wheel_spun_at.lt.${startOfDay}`)
+      : spin
+  )
     .select("discount_wheel_coupon")
     .maybeSingle();
 
   if (error) {
+    /*
+     * Development answers with the prize whatever the database says.
+     *
+     * The columns this writes to come from migration 0036, and an environment
+     * that has not run it fails here with "column does not exist" — which puts
+     * "the prize could not be saved" in front of anyone trying to look at the
+     * flow. The bookkeeping is what breaks; the flow itself is worth seeing.
+     */
+    if (!spinLimitEnforced()) {
+      return { coupon: WHEEL_COUPON_ID, label: WHEEL_PRIZE_LABEL, alreadySpun: false };
+    }
+
     throw error;
   }
 
   if (data) {
+    return { coupon: WHEEL_COUPON_ID, label: WHEEL_PRIZE_LABEL, alreadySpun: false };
+  }
+
+  // Locally the signed-in account may be the preview bypass, which has no
+  // profile row for the update to match. Reporting a failure there would put
+  // "the prize could not be saved" in front of anyone trying to look at the
+  // flow, so development answers with the prize and skips the bookkeeping.
+  if (!spinLimitEnforced()) {
     return { coupon: WHEEL_COUPON_ID, label: WHEEL_PRIZE_LABEL, alreadySpun: false };
   }
 

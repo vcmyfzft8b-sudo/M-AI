@@ -1190,14 +1190,11 @@ export function HomeDashboard({
                 className="memo-promo upgrade memo-only-mobile flex"
                 onClick={() => router.push(startHref)}
               >
-                <span className="memo-promo-tile">
-                  <Emoji symbol="⚡" size="1.35rem" />
-                </span>
                 <span className="memo-promo-copy">
                   <span>Odkleni Premium</span>
                   <span>Neomejeni zapiski in učna orodja</span>
                 </span>
-                <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
+                <Emoji symbol="⚡" size="2rem" />
               </button>
             ) : null}
 

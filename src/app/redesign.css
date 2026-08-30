@@ -7989,36 +7989,18 @@
    * thing on the screen worth pressing.
    */
   /*
-   * A tinted card rather than a filled one: it still stands out of a stack of
-   * white note rows, without shouting over "Nov zapisek" — the screen's actual
-   * primary action, which is coral. Periwinkle is the palette's other accent,
-   * already used for the emoji tiles, so this reads as part of the app.
+   * The same card as the gift one — same white surface, same two lines, same
+   * emoji on the right — because it stands in the same slot and swapping one
+   * for the other should not move anything. Only the accent differs: coral
+   * belongs to the discount, so the plain offer takes the palette's other
+   * accent and reads as an ordinary way to buy rather than a deal.
    */
-  .memo-promo.upgrade {
-    border: var(--btn-border-width) solid var(--upgrade-line);
-    background: var(--upgrade-tint);
-    box-shadow: none;
-  }
-
-  .memo-promo.upgrade .memo-promo-copy > span:first-child,
-  .memo-promo.upgrade .msym {
+  .memo-promo.upgrade .memo-promo-copy > span:first-child {
     color: var(--upgrade-ink);
   }
 
   .memo-promo.upgrade .memo-promo-copy > span:last-child {
     color: var(--muted);
-  }
-
-  /* The glyph on the card's own ground, the way note rows carry their emoji. */
-  .memo-promo-tile {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.7rem;
-    height: 2.7rem;
-    flex: 0 0 auto;
-    border-radius: 999px;
-    background: var(--surface);
   }
 
   .memo-note-list {

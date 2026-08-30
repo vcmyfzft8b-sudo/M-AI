@@ -13,6 +13,12 @@ import { generateStructuredObject, streamStructuredObject } from "@/lib/ai/json"
 import { createEmbeddings } from "@/lib/ai/embeddings";
 import { parseAudioChunkManifest } from "@/lib/audio-processing";
 import { CHAT_MATCH_COUNT } from "@/lib/constants";
+import {
+  buildTutorHistory,
+  buildTutorInstructions,
+  TUTOR_HISTORY_TURN_LIMIT,
+  type TutorHistoryTurn,
+} from "@/lib/ai/tutor-prompt";
 import { sanitizeJsonForDatabase } from "@/lib/database-text";
 import {
   attachDocumentImagesToNotes,
@@ -24,7 +30,7 @@ import {
   LectureNoLongerExistsError,
   toLectureFailureCode,
 } from "@/lib/lecture-processing-errors";
-import { buildGeneratedContentLanguageInstruction, detectSourceLanguage } from "@/lib/languages";
+import { detectSourceLanguage } from "@/lib/languages";
 import {
   getEffectiveLectureSourceType,
   getInitialNoteAudioVoice,
@@ -1199,26 +1205,39 @@ export async function answerLectureChat(params: {
 }) {
   const supabase = createSupabaseServiceRoleClient();
 
-  const [{ data: artifact }, { data: lecture }, embeddingResponse] = await Promise.all([
-    supabase
-      .from("lecture_artifacts")
-      .select("*")
-      .eq("lecture_id", params.lectureId)
-      .maybeSingle(),
-    supabase
-      .from("lectures")
-      .select("language_hint")
-      .eq("id", params.lectureId)
-      .maybeSingle(),
-    createEmbeddings([params.question]),
-  ]);
+  const [{ data: artifact }, { data: lecture }, { data: priorMessages }, embeddingResponse] =
+    await Promise.all([
+      supabase
+        .from("lecture_artifacts")
+        .select("*")
+        .eq("lecture_id", params.lectureId)
+        .maybeSingle(),
+      supabase
+        .from("lectures")
+        .select("title")
+        .eq("id", params.lectureId)
+        .maybeSingle(),
+      /*
+       * The conversation so far. Newest first here because that is what a
+       * limit can be applied to; it is flipped back before it is sent, since
+       * the model should read it in the order it happened.
+       */
+      supabase
+        .from("chat_messages")
+        .select("role, content")
+        .eq("lecture_id", params.lectureId)
+        .eq("user_id", params.userId)
+        .order("created_at", { ascending: false })
+        .limit(TUTOR_HISTORY_TURN_LIMIT),
+      createEmbeddings([params.question]),
+    ]);
 
   const queryEmbedding = serializeVector(embeddingResponse[0]);
   const artifactRow = (artifact ?? null) as {
     summary: string;
     key_topics: string[];
   } | null;
-  const lectureRow = (lecture ?? null) as { language_hint: string | null } | null;
+  const lectureRow = (lecture ?? null) as { title: string | null } | null;
 
   const { data: matches, error: matchError } = await supabase.rpc(
     "match_transcript_segments" as never,
@@ -1235,13 +1254,19 @@ export async function answerLectureChat(params: {
 
   const context = (matches ?? []) as RpcMatchResult[];
 
+  const conversation = buildTutorHistory(
+    ((priorMessages ?? []) as TutorHistoryTurn[]).slice().reverse(),
+  );
+
   const call = {
     schema: chatAnswerSchema,
     stage: "chat" as const,
-    instructions: `${buildGeneratedContentLanguageInstruction()} Answer the student using only the supplied lecture context. If the answer is not fully supported, say that the lecture does not clearly state it. Cite only transcript chunks that are genuinely relevant.`,
+    instructions: buildTutorInstructions("lecture"),
     input: JSON.stringify(
       {
         question: params.question,
+        conversation,
+        noteTitle: lectureRow?.title ?? null,
         summary: artifactRow?.summary ?? null,
         keyTopics: artifactRow?.key_topics ?? [],
         context,

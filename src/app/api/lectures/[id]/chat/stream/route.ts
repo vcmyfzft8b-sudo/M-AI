@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { canSendTrialChatMessage, createBillingRequiredResponse } from "@/lib/billing";
+import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
+import { createChatEventStream } from "@/lib/chat-stream";
 import { answerLectureChat } from "@/lib/pipeline";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chatQuestionSchema, routeIdParamSchema } from "@/lib/validation";
 
 const chatSchema = z.object({
@@ -20,10 +21,12 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  /*
+   * The preview bypass counts as signed in here, so a preview deployment can
+   * actually open the chat. Without it every preview answered 401 at the first
+   * question, which is not something a reviewer should have to discover.
+   */
+  const user = await getOptionalUserOrPreviewBypass();
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
@@ -82,52 +85,14 @@ export async function POST(
     );
   }
 
-  /*
-   * The answer is streamed so the learner watches it being written rather than
-   * waiting at a blank panel. Each token arrives as an SSE `delta` frame; the
-   * `done` frame carries the persisted message, which the client swaps in for
-   * the text it has been painting — that message is the one with an id and
-   * citations, and it is what a reload will show.
-   *
-   * A stream that cannot start falls back inside answerLectureChat, so the
-   * learner still gets an answer; it simply arrives all at once.
-   */
-  const encoder = new TextEncoder();
-
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const send = (event: string, data: unknown) => {
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-      };
-
-      try {
-        const result = await answerLectureChat({
-          lectureId: id,
-          userId: user.id,
-          question: parsed.data.question,
-          onDelta: (text) => send("delta", { text }),
-        });
-
-        send("done", result);
-      } catch (error) {
-        console.error("[chat] stream failed", error);
-        send("error", {
-          error: error instanceof Error ? error.message : "Odgovora ni bilo mogoče ustvariti.",
-        });
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      // Vercel buffers a proxied response without this, which would defeat the
-      // entire point of streaming it.
-      "X-Accel-Buffering": "no",
-    },
+  return createChatEventStream({
+    label: "[chat]",
+    run: (send) =>
+      answerLectureChat({
+        lectureId: id,
+        userId: user.id,
+        question: parsed.data.question,
+        onDelta: send.delta,
+      }),
   });
 }

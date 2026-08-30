@@ -50,7 +50,9 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 
+import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
+import { readChatStream } from "@/lib/chat-stream-client";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { useRouter } from "next/navigation";
 import type {
@@ -277,97 +279,6 @@ const NOTE_TABS = [
 ] as const;
 
 type NoteTabId = (typeof NOTE_TABS)[number]["id"];
-
-/**
- * Reads the chat SSE stream, handing each token to `onDelta` as it lands and
- * returning the persisted message from the closing `done` frame.
- *
- * The frames are: `delta` for a piece of prose, `done` for the saved message,
- * `error` for a failure the server already logged. An `error` frame is thrown
- * so it lands in the caller's existing catch alongside a dropped connection.
- */
-async function readChatStream(
-  response: Response,
-  onDelta: (updater: (current: string) => string) => void,
-): Promise<ChatResponse | null> {
-  if (!response.body) {
-    return null;
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let result: ChatResponse | null = null;
-
-  const handleFrame = (frame: string) => {
-    let event = "message";
-    const data: string[] = [];
-
-    for (const line of frame.split("\n")) {
-      if (line.startsWith("event:")) {
-        event = line.slice(6).trim();
-      } else if (line.startsWith("data:")) {
-        data.push(line.slice(5).trim());
-      }
-    }
-
-    if (data.length === 0) {
-      return;
-    }
-
-    let parsed: unknown;
-
-    try {
-      parsed = JSON.parse(data.join("\n"));
-    } catch {
-      return;
-    }
-
-    if (event === "delta") {
-      const text = (parsed as { text?: string }).text ?? "";
-      if (text) {
-        onDelta((current) => current + text);
-      }
-      return;
-    }
-
-    if (event === "done") {
-      result = parsed as ChatResponse;
-      return;
-    }
-
-    if (event === "error") {
-      throw new Error(
-        (parsed as { error?: string }).error ?? "Odgovora ni bilo mogoče ustvariti.",
-      );
-    }
-  };
-
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-
-      // Frames are separated by a blank line; a partial one waits for more.
-      let split = buffer.indexOf("\n\n");
-
-      while (split !== -1) {
-        handleFrame(buffer.slice(0, split));
-        buffer = buffer.slice(split + 2);
-        split = buffer.indexOf("\n\n");
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  return result;
-}
 
 /** How close to the foot of the chat log still counts as "reading the tail". */
 const STICK_TO_BOTTOM_PX = 120;
@@ -2938,7 +2849,7 @@ export function LectureWorkspace({
        * event stream is read frame by frame, anything else is parsed as before.
        */
       payload = response.headers.get("Content-Type")?.includes("text/event-stream")
-        ? await readChatStream(response, setStreamingAnswer)
+        ? await readChatStream<ChatResponse>(response, setStreamingAnswer)
         : ((await response.json().catch(() => null)) as ChatResponse | null);
     } catch (error) {
       setChatError(getRequestErrorMessage(error, "Odgovora ni bilo mogoče ustvariti."));
@@ -3930,7 +3841,7 @@ export function LectureWorkspace({
               </p>
             </div>
           ) : isSending ? (
-            <div className="memo-typing">Memo piše…</div>
+            <TypingDots />
           ) : null}
         </div>
 

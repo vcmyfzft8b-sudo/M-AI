@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import { canSendTrialChatMessage, createBillingRequiredResponse } from "@/lib/billing";
 import { answerLectureChat } from "@/lib/pipeline";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chatQuestionSchema, routeIdParamSchema } from "@/lib/validation";
 
 const chatSchema = z.object({
@@ -20,10 +20,12 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  /*
+   * The preview bypass counts as signed in here, so a preview deployment can
+   * actually open the chat. Without it every preview answered 401 at the first
+   * question, which is not something a reviewer should have to discover.
+   */
+  const user = await getOptionalUserOrPreviewBypass();
 
   if (!user) {
     return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });

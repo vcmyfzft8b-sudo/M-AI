@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 
 import { Emoji, Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
+import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { sheetClass, useSheet } from "@/components/use-sheet";
+import { readChatStream } from "@/lib/chat-stream-client";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 
 /**
@@ -49,6 +51,8 @@ export function LibraryChat({
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  /* The answer as it is being written, before it becomes a finished message. */
+  const [streamingAnswer, setStreamingAnswer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [scope, setScope] = useState<Scope>("recent");
   const [scopeFolderId, setScopeFolderId] = useState<string | null>(null);
@@ -65,6 +69,12 @@ export function LibraryChat({
         : "Nedavni zapiski";
   const detailLabel = useTranscripts ? "s prepisi" : "brez prepisov";
   const readyCount = lectures.filter((lecture) => lecture.status === "ready").length;
+  /*
+   * With nothing in the library there is nothing to scope to, so the picker
+   * goes: every option it offers — recent notes, all notes, a folder — reads
+   * the same empty shelf. The chat itself stays, because Memo can still answer.
+   */
+  const hasNotes = readyCount > 0;
 
   useEffect(() => {
     const node = logRef.current;
@@ -72,7 +82,7 @@ export function LibraryChat({
     if (node) {
       node.scrollTop = node.scrollHeight;
     }
-  }, [messages, isTyping, open]);
+  }, [messages, isTyping, streamingAnswer, open]);
 
   useEffect(() => {
     if (!isScopeMenuOpen) {
@@ -133,6 +143,16 @@ export function LibraryChat({
       return;
     }
 
+    /*
+     * Nothing about this conversation is stored, so the transcript that goes
+     * back with the question is the only memory the tutor has of it. Sent
+     * before the new question is added, since that travels separately.
+     */
+    const history = messages.map((message) => ({
+      role: message.role,
+      content: message.text,
+    }));
+
     setDraft("");
     setError(null);
     setIsScopeMenuOpen(false);
@@ -142,6 +162,7 @@ export function LibraryChat({
       { id: `u${Date.now()}`, role: "user", text: question },
     ]);
     setIsTyping(true);
+    setStreamingAnswer("");
 
     try {
       const response = await fetch("/api/library-chat", {
@@ -152,15 +173,24 @@ export function LibraryChat({
           scope,
           folderId: scope === "folder" ? scopeFolderId : null,
           useTranscripts,
+          history,
         }),
       });
 
-      const payload = (await response.json().catch(() => null)) as
-        | { answer?: string; error?: string }
-        | null;
+      /*
+       * A refusal — no subscription, a rate limit — arrives as ordinary JSON
+       * before the stream begins, so both shapes are handled: an event stream
+       * is read frame by frame, anything else is parsed as it always was.
+       */
+      const payload = response.headers.get("Content-Type")?.includes("text/event-stream")
+        ? await readChatStream<{ answer?: string }>(response, setStreamingAnswer)
+        : ((await response.json().catch(() => null)) as { answer?: string; error?: string } | null);
 
       if (!response.ok || !payload?.answer) {
-        throw new Error(payload?.error ?? "Odgovora ni bilo mogoče pripraviti.");
+        throw new Error(
+          (payload as { error?: string } | null)?.error ??
+            "Odgovora ni bilo mogoče pripraviti.",
+        );
       }
 
       setMessages((current) => [
@@ -171,6 +201,7 @@ export function LibraryChat({
       setError(caught instanceof Error ? caught.message : "Odgovora ni bilo mogoče pripraviti.");
     } finally {
       setIsTyping(false);
+      setStreamingAnswer("");
     }
   }
 
@@ -307,14 +338,16 @@ export function LibraryChat({
               <Image src="/memo-mascot.png" alt="" width={320} height={288} />
             </span>
             <p>
-              Živjo, jaz sem Memo. Vprašaj me karkoli o svojih zapiskih. Ta pogovor se ne
-              shrani v tvoj račun.
+              {hasNotes
+                ? "Živjo, jaz sem Memo. Vprašaj me karkoli o svojih zapiskih. Ta pogovor se ne shrani v tvoj račun."
+                : "Živjo, jaz sem Memo. Zapiskov še nimaš, a lahko vseeno vprašaš karkoli — razložim ti tudi brez njih. Ta pogovor se ne shrani v tvoj račun."}
             </p>
           </div>
         ) : (
           <p className="memo-m-chat-intro">
-            Živjo, jaz sem Memo. Kaj te zanima o tvojih zapiskih? Ta klepet se ne shrani v
-            tvoj račun.
+            {hasNotes
+              ? "Živjo, jaz sem Memo. Kaj te zanima o tvojih zapiskih? Ta klepet se ne shrani v tvoj račun."
+              : "Živjo, jaz sem Memo. Zapiskov še nimaš, a lahko vseeno vprašaš karkoli — razložim ti tudi brez njih. Ta klepet se ne shrani v tvoj račun."}
           </p>
         )}
 
@@ -333,7 +366,22 @@ export function LibraryChat({
           ),
         )}
 
-        {isTyping ? <div className="memo-typing">Memo piše…</div> : null}
+        {/* While it streams it renders where the finished message will sit, so
+            the text does not jump when the two swap. The dots show only until
+            the first token lands. */}
+        {streamingAnswer ? (
+          <div className="memo-homechat-answer">
+            <span className="memo-avatar">
+              <Image src="/memo-mascot.png" alt="" width={320} height={288} />
+            </span>
+            <div>
+              {streamingAnswer}
+              <span className="memo-caret" aria-hidden="true" />
+            </div>
+          </div>
+        ) : isTyping ? (
+          <TypingDots withAvatar />
+        ) : null}
         {error ? <div className="memo-inline-error">{error}</div> : null}
       </>
     );
@@ -370,24 +418,26 @@ export function LibraryChat({
                   void send();
                 }
               }}
-              placeholder="Vprašaj karkoli o svojih zapiskih"
-              aria-label="Vprašaj karkoli o svojih zapiskih"
+              placeholder={hasNotes ? "Vprašaj karkoli o svojih zapiskih" : "Vprašaj karkoli"}
+              aria-label={hasNotes ? "Vprašaj karkoli o svojih zapiskih" : "Vprašaj karkoli"}
             />
-            <div ref={scopeRef} style={{ position: "relative", flex: "0 0 auto" }}>
-              {isScopeMenuOpen ? renderScopeMenu("right") : null}
-              <button
-                type="button"
-                className={`memo-scope-button ${isScopeMenuOpen ? "open" : ""}`.trim()}
-                onClick={() => {
-                  setIsScopeMenuOpen((current) => !current);
-                  setIsFolderSubOpen(false);
-                }}
-              >
-                <span>{scopeLabel}</span>
-                <span className="memo-scope-detail">{detailLabel}</span>
-                <Msym name="arrow_drop_down" size="1.2rem" />
-              </button>
-            </div>
+            {hasNotes ? (
+              <div ref={scopeRef} style={{ position: "relative", flex: "0 0 auto" }}>
+                {isScopeMenuOpen ? renderScopeMenu("right") : null}
+                <button
+                  type="button"
+                  className={`memo-scope-button ${isScopeMenuOpen ? "open" : ""}`.trim()}
+                  onClick={() => {
+                    setIsScopeMenuOpen((current) => !current);
+                    setIsFolderSubOpen(false);
+                  }}
+                >
+                  <span>{scopeLabel}</span>
+                  <span className="memo-scope-detail">{detailLabel}</span>
+                  <Msym name="arrow_drop_down" size="1.2rem" />
+                </button>
+              </div>
+            ) : null}
             <button
               type="button"
               aria-label={
@@ -480,21 +530,25 @@ export function LibraryChat({
                     aria-label="Vprašaj dodatno vprašanje"
                   />
                   <div className="memo-homechat-composer-row">
-                    <div ref={scopeRef} style={{ position: "relative", flex: "0 0 auto" }}>
-                      {isScopeMenuOpen ? renderScopeMenu("left") : null}
-                      <button
-                        type="button"
-                        className="memo-homechat-scope"
-                        onClick={() => {
-                          setIsScopeMenuOpen((current) => !current);
-                          setIsFolderSubOpen(false);
-                        }}
-                      >
-                        <span>{scopeLabel}</span>
-                        <span className="memo-scope-detail">{detailLabel}</span>
-                        <Msym name="expand_more" size="1.2rem" />
-                      </button>
-                    </div>
+                    {hasNotes ? (
+                      <div ref={scopeRef} style={{ position: "relative", flex: "0 0 auto" }}>
+                        {isScopeMenuOpen ? renderScopeMenu("left") : null}
+                        <button
+                          type="button"
+                          className="memo-homechat-scope"
+                          onClick={() => {
+                            setIsScopeMenuOpen((current) => !current);
+                            setIsFolderSubOpen(false);
+                          }}
+                        >
+                          <span>{scopeLabel}</span>
+                          <span className="memo-scope-detail">{detailLabel}</span>
+                          <Msym name="expand_more" size="1.2rem" />
+                        </button>
+                      </div>
+                    ) : (
+                      <span />
+                    )}
                     <button
                       type="button"
                       aria-label={showMic ? "Narekuj vprašanje" : "Pošlji"}
@@ -545,13 +599,19 @@ export function LibraryChat({
                   <Msym name="edit_square" size="1.45rem" fill={false} weight={500} />
                 </button>
                 <span className="memo-m-chat-heading">
-                  <button type="button" onClick={() => setIsScopeMenuOpen((c) => !c)}>
-                    Klepet z:
-                  </button>
-                  <span className="memo-m-chat-scope">
-                    <Emoji symbol="📌" size="0.85rem" />
-                    <span>{scopeLabel}</span>
-                  </span>
+                  {hasNotes ? (
+                    <>
+                      <button type="button" onClick={() => setIsScopeMenuOpen((c) => !c)}>
+                        Klepet z:
+                      </button>
+                      <span className="memo-m-chat-scope">
+                        <Emoji symbol="📌" size="0.85rem" />
+                        <span>{scopeLabel}</span>
+                      </span>
+                    </>
+                  ) : (
+                    <span className="memo-m-chat-title">Klepet z Memom</span>
+                  )}
                 </span>
                 <button
                   type="button"
@@ -568,7 +628,7 @@ export function LibraryChat({
               </div>
 
               <div className="memo-m-chat-foot">
-                {isScopeMenuOpen ? (
+                {isScopeMenuOpen && hasNotes ? (
                   <div ref={scopeRef} className="memo-m-source-menu">
                     <div className="memo-m-source-row">
                       <span>Uporabi prepise (max 25)</span>
@@ -626,17 +686,19 @@ export function LibraryChat({
                 ) : null}
 
                 <div className="memo-m-chat-composer">
-                  <button
-                    type="button"
-                    className="memo-m-chat-scope-chip"
-                    onClick={() => setIsScopeMenuOpen((current) => !current)}
-                  >
-                    <span style={{ fontWeight: 700, letterSpacing: "-0.025em" }}>
-                      Klepet z:
-                    </span>
-                    <span style={{ color: "var(--muted)" }}>{scopeLabel}</span>
-                    <Msym name="expand_more" size="1.15rem" fill={false} weight={500} />
-                  </button>
+                  {hasNotes ? (
+                    <button
+                      type="button"
+                      className="memo-m-chat-scope-chip"
+                      onClick={() => setIsScopeMenuOpen((current) => !current)}
+                    >
+                      <span style={{ fontWeight: 700, letterSpacing: "-0.025em" }}>
+                        Klepet z:
+                      </span>
+                      <span style={{ color: "var(--muted)" }}>{scopeLabel}</span>
+                      <Msym name="expand_more" size="1.15rem" fill={false} weight={500} />
+                    </button>
+                  ) : null}
                   <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
                     <input
                       value={draft}
@@ -647,11 +709,11 @@ export function LibraryChat({
                           void send();
                         }
                       }}
-                      placeholder="Vprašaj karkoli o svojih zapiskih"
+                      placeholder={hasNotes ? "Vprašaj karkoli o svojih zapiskih" : "Vprašaj karkoli"}
                       enterKeyHint="send"
                       autoCapitalize="sentences"
                       autoComplete="off"
-                      aria-label="Vprašaj karkoli o svojih zapiskih"
+                      aria-label={hasNotes ? "Vprašaj karkoli o svojih zapiskih" : "Vprašaj karkoli"}
                     />
                     <button
                       type="button"

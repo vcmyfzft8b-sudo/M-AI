@@ -2663,10 +2663,76 @@
   line-height: 1.55;
 }
 
+/*
+ * Three dots while Memo reads before it writes.
+ *
+ * The bubble is the bot bubble's shape and colour so that when the answer
+ * replaces it nothing moves except the contents. The dots rise rather than
+ * fade — at this size a fade is nearly invisible against the sunken
+ * background — and each is a third of a beat behind the one before it.
+ */
 .memo-typing {
   align-self: flex-start;
-  color: var(--muted);
-  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.memo-typing .memo-avatar {
+  width: 2.1rem;
+  height: 2.1rem;
+  flex: 0 0 auto;
+}
+
+.memo-typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.85rem 1rem;
+  border-radius: 18px 18px 18px 6px;
+  background: var(--sunken);
+}
+
+.memo-typing-dots > span {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: memo-typing-bounce 1.25s ease-in-out infinite;
+}
+
+.memo-typing-dots > span:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.memo-typing-dots > span:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes memo-typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateY(-0.28rem);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-typing-dots > span {
+    animation: memo-typing-fade 1.4s ease-in-out infinite;
+  }
+
+  @keyframes memo-typing-fade {
+    0%,
+    60%,
+    100% { opacity: 0.4; }
+    30% { opacity: 1; }
+  }
 }
 
 .memo-chat-foot {

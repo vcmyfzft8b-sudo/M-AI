@@ -3,8 +3,12 @@ import "server-only";
 import { z } from "zod";
 
 import { createEmbeddings } from "@/lib/ai/embeddings";
-import { generateStructuredObject } from "@/lib/ai/json";
-import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
+import { generateStructuredObject, streamStructuredObject } from "@/lib/ai/json";
+import {
+  buildTutorHistory,
+  buildTutorInstructions,
+  type TutorHistoryTurn,
+} from "@/lib/ai/tutor-prompt";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { serializeVector } from "@/lib/utils";
 
@@ -39,7 +43,15 @@ const SUMMARY_CHAR_CAP = 1200;
 const ALL_SCOPE_NOTE_CAP = 120;
 
 const libraryAnswerSchema = z.object({
-  answer: z.string().min(4),
+  /* The description travels to the model with the schema — see chatAnswerSchema. */
+  answer: z
+    .string()
+    .min(4)
+    .describe(
+      "The reply, in the language of the learner's last message. Simple, short enough to read " +
+        "on a phone, and ending with exactly one short question unless they were only saying " +
+        "thanks or goodbye.",
+    ),
   /** Titles of the notes the answer leaned on, so the UI can show its sources. */
   usedNotes: z.array(z.string()).max(6),
 });
@@ -178,44 +190,81 @@ async function fetchTranscriptContext(params: {
   return new Map(results);
 }
 
+/**
+ * Streams when there is somewhere to send the tokens and the stage is routed
+ * through the gateway, and returns null when it cannot — no handler, not
+ * routed, or the stream broke. Null means "make the ordinary call", so a
+ * failure to stream costs a second request rather than the answer.
+ */
+async function streamLibraryAnswer(
+  call: {
+    schema: typeof libraryAnswerSchema;
+    stage: "chat";
+    instructions: string;
+    input: string;
+  },
+  onDelta: ((text: string) => void) | undefined,
+) {
+  if (!onDelta) {
+    return null;
+  }
+
+  try {
+    return await streamStructuredObject({ ...call, streamField: "answer", onDelta });
+  } catch (error) {
+    console.error("[library-chat] streaming failed, falling back to a plain call", error);
+    return null;
+  }
+}
+
 export async function answerLibraryChat(params: {
   userId: string;
   question: string;
   scope: LibraryChatScope;
   folderId: string | null;
   useTranscripts: boolean;
+  /**
+   * The transcript so far. This chat is never written to the database — the
+   * design promises the learner it is not saved — so the conversation comes
+   * back from the client on every turn or it does not exist at all.
+   */
+  history?: TutorHistoryTurn[];
+  /** Supplied when the answer is being streamed to a watching learner. */
+  onDelta?: (text: string) => void;
 }): Promise<LibraryChatResult> {
   const supabase = createSupabaseServiceRoleClient();
   const lectures = await resolveLectureIds(params);
-
-  if (lectures.length === 0) {
-    return {
-      answer:
-        params.scope === "folder"
-          ? "V tej mapi še ni dokončanih zapiskov, zato nimam česa prebrati. Izberi drugo mapo ali dodaj zapisek."
-          : "Nimaš še nobenega dokončanega zapiska, zato nimam česa prebrati. Posnemi predavanje ali naloži gradivo in poskusi znova.",
-      usedNotes: [],
-      noteCount: 0,
-      usedTranscripts: false,
-    };
-  }
-
   const lectureIds = lectures.map((lecture) => lecture.id);
 
-  const { data: artifactRows, error: artifactError } = await supabase
-    .from("lecture_artifacts")
-    .select("lecture_id, summary, key_topics")
-    .in("lecture_id", lectureIds);
+  /*
+   * An empty library is not a dead end.
+   *
+   * This used to return a fixed "you have no notes yet" line without asking the
+   * model anything, which meant a brand new account got that same sentence back
+   * for "hello", "who are you?" and "how does this work?" — every one of them a
+   * question that has nothing to do with having notes. The model is asked
+   * either way now; it is simply told the library is empty, and says so itself
+   * when the question actually needed something to read.
+   */
+  const artifacts = new Map<string, ArtifactRow>();
 
-  if (artifactError) {
-    throw artifactError;
+  if (lectureIds.length > 0) {
+    const { data: artifactRows, error: artifactError } = await supabase
+      .from("lecture_artifacts")
+      .select("lecture_id, summary, key_topics")
+      .in("lecture_id", lectureIds);
+
+    if (artifactError) {
+      throw artifactError;
+    }
+
+    for (const row of (artifactRows ?? []) as ArtifactRow[]) {
+      artifacts.set(row.lecture_id, row);
+    }
   }
 
-  const artifacts = new Map(
-    ((artifactRows ?? []) as ArtifactRow[]).map((row) => [row.lecture_id, row]),
-  );
-
-  const useTranscripts = params.useTranscripts && lectures.length <= TRANSCRIPT_NOTE_CAP;
+  const useTranscripts =
+    params.useTranscripts && lectureIds.length > 0 && lectures.length <= TRANSCRIPT_NOTE_CAP;
   const transcripts = useTranscripts
     ? await fetchTranscriptContext({ lectureIds, question: params.question })
     : new Map<string, TranscriptMatch[]>();
@@ -235,29 +284,38 @@ export async function answerLibraryChat(params: {
     };
   });
 
-  const result = await generateStructuredObject({
+  const call = {
     schema: libraryAnswerSchema,
-    stage: "chat",
+    stage: "chat" as const,
     instructions: [
-      buildGeneratedContentLanguageInstruction(),
-      "You are Memo, helping a student across their whole note library.",
-      "Answer using only the supplied notes. If the notes do not cover it, say so plainly instead of guessing.",
-      "Prefer concrete pointers — which note, which topic — over general study advice.",
-      "Keep the answer short enough to read on a phone: a few sentences, or a short list when the question asks for one.",
+      buildTutorInstructions("library"),
       "List in usedNotes the exact titles of the notes you actually drew on.",
-    ].join(" "),
+    ].join("\n\n"),
     input: JSON.stringify(
       {
         question: params.question,
+        conversation: buildTutorHistory(params.history ?? []),
         scope: params.scope,
         noteCount: notes.length,
+        ...(notes.length === 0
+          ? {
+              libraryIsEmpty: true,
+              libraryEmptyMeaning:
+                params.scope === "folder"
+                  ? "This folder has no finished notes yet. Other folders may."
+                  : "This learner has no finished notes yet.",
+            }
+          : {}),
         includesTranscripts: useTranscripts,
         notes,
       },
       null,
       2,
     ),
-  });
+  };
+
+  const result = (await streamLibraryAnswer(call, params.onDelta)) ??
+    (await generateStructuredObject(call));
 
   return {
     answer: result.answer,

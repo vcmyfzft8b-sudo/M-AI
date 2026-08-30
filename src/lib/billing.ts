@@ -5,6 +5,7 @@ import { cache } from "react";
 import Stripe from "stripe";
 
 import { PREVIEW_AUTH_BYPASS_USER_ID, getOptionalUserOrPreviewBypass } from "@/lib/auth";
+import { isPreviewPremiumEnabled } from "@/lib/preview-mode";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 import { getServerEnv } from "@/lib/server-env";
 import { resolveSiteOrigin } from "@/lib/site-url";
@@ -497,10 +498,27 @@ export const getViewerAppState = cache(async function getViewerAppState() {
    * PREVIEW_AUTH_BYPASS is set, which production is not.
    */
   if (user.id === PREVIEW_AUTH_BYPASS_USER_ID) {
+    /*
+     * ...and a subscription when the premium cookie is set, so the same
+     * account can be flipped between the paywalled view and the paid one. It
+     * is the entitlement that is faked, not a billing row: nothing is written,
+     * and nothing about Stripe changes.
+     */
+    const previewPremium = await isPreviewPremiumEnabled();
+
     return {
       user,
       ...entitlement,
       onboardingComplete: true,
+      ...(previewPremium
+        ? {
+            hasPaidAccess: true,
+            canCreateNotes: true,
+            canAccessPaywalledCreation: false,
+            shouldShowTrialEntry: false,
+            hasTrialLectureAvailable: false,
+          }
+        : {}),
     };
   }
 

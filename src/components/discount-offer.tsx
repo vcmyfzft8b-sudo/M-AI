@@ -192,8 +192,17 @@ export function DiscountOffer({
     useCallback(() => onWheelOpenChange(false), [onWheelOpenChange]),
     { scrollable: true },
   );
+  /*
+   * Closing the offer closes the wheel with it. The wheel is what opened the
+   * offer and stays mounted behind it, so dismissing only the top sheet put
+   * the learner back on a spun wheel showing a prize they had just declined.
+   * One gesture, one exit.
+   */
   const offerSheet = useSheet(
-    useCallback(() => onOfferOpenChange(false), [onOfferOpenChange]),
+    useCallback(() => {
+      onOfferOpenChange(false);
+      onWheelOpenChange(false);
+    }, [onOfferOpenChange, onWheelOpenChange]),
     { scrollable: true },
   );
 

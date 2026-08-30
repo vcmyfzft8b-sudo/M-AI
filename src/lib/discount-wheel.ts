@@ -36,6 +36,14 @@ export const WHEEL_PRIZE_LABEL = "50 % popusta";
  */
 export const WHEEL_PRIZE_TTL_MS = 10 * 60 * 1000;
 
+/** Thrown when the wheel is asked to award a prize it has nowhere to store. */
+export class MissingDiscountWheelSchemaError extends Error {
+  constructor() {
+    super("Discount wheel columns are missing; run migration 0036.");
+    this.name = "MissingDiscountWheelSchemaError";
+  }
+}
+
 export type DiscountWheelState = {
   /** False once the wheel has been spun, whatever the outcome. */
   canSpin: boolean;
@@ -46,6 +54,27 @@ export type DiscountWheelState = {
   /** When the current prize lapses, for the countdown. Null when there is none. */
   prizeExpiresAt: string | null;
 };
+
+/**
+ * True when a failure is the database not having migration 0036's columns.
+ *
+ * Postgres answers 42703 for an unknown column; PostgREST answers PGRST204
+ * when its own schema cache has never seen one. Either way the feature has no
+ * storage behind it, which is a deployment state rather than a fault in the
+ * request — so the wheel reports "nothing to offer" instead of throwing a 500
+ * at somebody who only opened the home screen.
+ */
+function isMissingWheelSchema(error: { code?: string; message?: string } | null) {
+  if (!error) {
+    return false;
+  }
+
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    Boolean(error.message?.includes("discount_wheel"))
+  );
+}
 
 /** True when the two instants fall on the same UTC day. */
 function isSameUtcDay(a: Date, b: Date) {
@@ -90,10 +119,13 @@ export async function getDiscountWheelState(userId: string): Promise<DiscountWhe
     .maybeSingle();
 
   if (error) {
-    // Same reasoning as the spin: a database without migration 0036 should not
-    // stop the flow being looked at locally.
+    // Locally the flow is worth looking at even with no storage behind it.
     if (!spinLimitEnforced()) {
       return { canSpin: true, coupon: null, hasUnredeemedPrize: false, prizeExpiresAt: null };
+    }
+
+    if (isMissingWheelSchema(error)) {
+      return { canSpin: false, coupon: null, hasUnredeemedPrize: false, prizeExpiresAt: null };
     }
 
     throw error;
@@ -171,6 +203,10 @@ export async function spinDiscountWheel(userId: string): Promise<{
       return { coupon: WHEEL_COUPON_ID, label: WHEEL_PRIZE_LABEL, alreadySpun: false };
     }
 
+    if (isMissingWheelSchema(error)) {
+      throw new MissingDiscountWheelSchemaError();
+    }
+
     throw error;
   }
 
@@ -210,7 +246,9 @@ export async function markDiscountWheelRedeemed(userId: string) {
     .eq("id", userId)
     .is("discount_wheel_redeemed_at", null);
 
-  if (error) {
+  // Never the reason a checkout fails: the session is already created by the
+  // time this runs, and a purchase that succeeded must not report an error.
+  if (error && !isMissingWheelSchema(error)) {
     throw error;
   }
 }

@@ -200,7 +200,7 @@ export function DiscountOffer({
             <button
               type="button"
               aria-label="Zapri"
-              className="memo-m-round"
+              className="memo-close-button"
               onClick={() => closeWheel()}
             >
               <Msym name="close" size="1.45rem" fill={false} weight={500} />

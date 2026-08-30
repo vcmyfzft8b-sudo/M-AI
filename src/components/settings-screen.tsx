@@ -273,7 +273,9 @@ export function SettingsScreen({
           <button
             type="button"
             aria-label="Zapri"
-            className="memo-m-round"
+            // An X closes a screen, so it is the app's close button rather
+            // than the library header's slightly larger round control.
+            className="memo-close-button"
             onClick={() => router.push("/app")}
           >
             <Msym name="close" size="1.45rem" fill={false} weight={500} />

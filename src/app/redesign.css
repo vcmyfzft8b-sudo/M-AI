@@ -4030,18 +4030,19 @@
   border: var(--btn-border-width) solid var(--btn-border-filled);
 }
 
-/* Pale fills on the page: the cancels, the ghosts, the chips, the tabs, the
-   round icon buttons — everything a thumb lands on that is not a card. */
+/* The white button. One ground, one outline, one lift — the round header
+   controls, the cancels, the ghosts, the chips, the closes: everything a thumb
+   lands on that is not a card and is not filled with a colour. Several of these
+   were `--tile` greys, which is why two buttons side by side could read as two
+   different components. */
 .memo-sheet-ghost.memo-sheet-ghost,
 .memo-button-ghost.memo-button-ghost,
 .memo-button-outline.memo-button-outline,
 .memo-capture-cancel.memo-capture-cancel,
 .memo-ghost-pill.memo-ghost-pill,
-.memo-primary-pill.memo-primary-pill,
 .memo-confirm-cancel.memo-confirm-cancel,
 .memo-settings-signout.memo-settings-signout,
 .memo-chip.memo-chip,
-.memo-tab.memo-tab,
 .memo-note-action.memo-note-action,
 .memo-scope-button.memo-scope-button,
 .memo-icon-button.memo-icon-button,
@@ -4050,7 +4051,6 @@
 .memo-m-navbtn.memo-m-navbtn,
 .memo-m-folder-chip.memo-m-folder-chip,
 .memo-folder-chip.memo-folder-chip,
-.memo-m-chat-head-btn.memo-m-chat-head-btn,
 .memo-esc button,
 .memo-sub-chatbar button,
 .memo-swipe-action-circle.memo-swipe-action-circle,
@@ -4066,10 +4066,11 @@
 .library-folder-secondary-button.library-folder-secondary-button,
 .memo-panel .lecture-study-manage-button.lecture-study-manage-button,
 .memo-panel .lecture-flashcard-nav-button.lecture-flashcard-nav-button,
-.memo-panel .lecture-flashcard-review-button.lecture-flashcard-review-button,
 .memo-close-button.memo-close-button,
 .memo-sheet-close.memo-sheet-close,
 .memo-chat-close.memo-chat-close,
+.memo-offer-close.memo-offer-close,
+.memo-m-chat-head-btn.memo-m-chat-head-btn,
 .memo-portal .app-close-button.app-close-button,
 .memo .app-close-button.app-close-button,
 .memo-portal .ios-secondary-button.ios-secondary-button,
@@ -4077,16 +4078,16 @@
 .memo-portal .ios-sheet-header-close.ios-sheet-header-close,
 .memo .ios-sheet-header-close.ios-sheet-header-close {
   border: var(--btn-border-width) solid var(--btn-border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
-/* The two that also had the wrong ground under them: a white pill with a
-   hairline is what the rest of the phone is made of. */
-.memo-sheet-ghost.memo-sheet-ghost,
-.memo-button-ghost.memo-button-ghost,
-.memo-capture-cancel.memo-capture-cancel,
-.memo-portal .ios-secondary-button.ios-secondary-button,
-.memo .ios-secondary-button.ios-secondary-button {
-  background: var(--surface);
+/* Outline only: these keep a ground of their own — a near-black fill, or the
+   tint that says which tab or which answer you are on. */
+.memo-primary-pill.memo-primary-pill,
+.memo-tab.memo-tab,
+.memo-panel .lecture-flashcard-review-button.lecture-flashcard-review-button {
+  border: var(--btn-border-width) solid var(--btn-border);
 }
 
 /* ---------------------------------------------------------------------------
@@ -4106,6 +4107,7 @@
 .memo-close-button,
 .memo-sheet-close,
 .memo-chat-close,
+.memo-offer-close,
 .memo-portal .app-close-button,
 .memo .app-close-button,
 .memo-portal .ios-sheet-header-close,
@@ -4127,6 +4129,7 @@
 .memo-close-button .msym,
 .memo-sheet-close .msym,
 .memo-chat-close .msym,
+.memo-offer-close .msym,
 .memo-portal .app-close-button .msym,
 .memo .app-close-button .msym,
 .memo-portal .ios-sheet-header-close .msym,
@@ -6325,10 +6328,7 @@
   width: 2.9rem;
   height: 2.9rem;
   padding: 0;
-  border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
   cursor: pointer;
 }
 
@@ -10024,18 +10024,20 @@
     padding: 0.55rem 1.15rem 0.6rem;
   }
 
+  /* A sheet header circle, so it is the close button: the shared rule owns the
+     size, the white ground and the shadow — only the placement is local. */
   .memo-m-chat-head-btn {
     position: absolute;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2.9rem;
-    height: 2.9rem;
+    width: var(--btn-round);
+    height: var(--btn-round);
     padding: 0;
-    border: 0;
     border-radius: 999px;
-    background: var(--tile);
+    background: var(--surface);
     color: var(--text);
+    box-shadow: var(--shadow);
     cursor: pointer;
   }
 
@@ -10048,7 +10050,7 @@
   }
 
   .memo-m-chat-head-btn .msym {
-    font-size: 1.45rem;
+    font-size: var(--btn-round-glyph);
     font-variation-settings: "FILL" 0, "wght" 500;
   }
 

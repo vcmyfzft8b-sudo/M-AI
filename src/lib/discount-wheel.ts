@@ -95,7 +95,18 @@ type DevWheelRow = {
   spentAt: string | null;
 };
 
-const devWheelRows = new Map<string, DevWheelRow>();
+/*
+ * Hung off `globalThis` because a module-level map does not survive hot
+ * reload: every edit gives the route a fresh module, the prize awarded a
+ * moment ago disappears, and checkout is told there is no coupon — which looks
+ * exactly like the discount being broken. The same reason Next's own guidance
+ * puts dev singletons here.
+ */
+const devWheelStore = globalThis as typeof globalThis & {
+  __memoDevWheelRows?: Map<string, DevWheelRow>;
+};
+
+const devWheelRows = (devWheelStore.__memoDevWheelRows ??= new Map<string, DevWheelRow>());
 
 /** True when the two instants fall on the same UTC day. */
 function isSameUtcDay(a: Date, b: Date) {

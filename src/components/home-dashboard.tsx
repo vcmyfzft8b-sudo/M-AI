@@ -44,6 +44,7 @@ import { canRetryLectureFailure } from "@/lib/lecture-failure-codes";
 import {
   getEffectiveLectureSourceType,
   getLectureSourceDetail,
+  getLectureSourceLabel,
 } from "@/lib/lecture-source-metadata";
 import { noteEmoji } from "@/lib/note-emoji";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
@@ -132,31 +133,13 @@ async function fetchDashboardMutation(
   }
 }
 
-function sourceLabel(sourceType: string) {
-  if (sourceType === "link") {
-    return "Povezava";
-  }
-
-  if (sourceType === "text") {
-    return "Besedilo";
-  }
-
-  if (sourceType === "pdf") {
-    return "PDF";
-  }
-
-  if (sourceType === "presentation") {
-    return "Predstavitev";
-  }
-
-  return "Zvok";
-}
-
 /** "Zvok, 1 h 12 min" where the design has a detail to print, "Zvok" where not. */
 function sourceMeta(lecture: AppLectureListItem, sourceType: string) {
   const detail = getLectureSourceDetail(lecture);
 
-  return detail ? `${sourceLabel(sourceType)}, ${detail}` : sourceLabel(sourceType);
+  return detail
+    ? `${getLectureSourceLabel(sourceType)}, ${detail}`
+    : getLectureSourceLabel(sourceType);
 }
 
 function shouldPollLectureStatus(status: AppLectureListItem["status"]) {
@@ -437,7 +420,7 @@ const NoteRow = memo(function NoteRow({
           className="memo-swipe-action"
         >
           <span className="memo-swipe-action-circle">
-            <Msym name="edit_square" size="1.2rem" fill={false} weight={500} />
+            <Emoji symbol="✏️" size="1.1rem" />
           </span>
           <span>Uredi</span>
         </button>
@@ -452,7 +435,7 @@ const NoteRow = memo(function NoteRow({
             {isBusy ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Msym name="delete" size="1.2rem" fill={false} weight={500} />
+              <Emoji symbol="🗑️" size="1.1rem" />
             )}
           </span>
           <span>Izbriši</span>
@@ -1030,7 +1013,9 @@ export function HomeDashboard({
     return (
       lecture.title?.toLowerCase().includes(search) ||
       lecture.error_message?.toLowerCase().includes(search) ||
-      sourceLabel(getEffectiveLectureSourceType(lecture)).toLowerCase().includes(search)
+      getLectureSourceLabel(getEffectiveLectureSourceType(lecture))
+        .toLowerCase()
+        .includes(search)
     );
   });
 
@@ -1044,8 +1029,11 @@ export function HomeDashboard({
   };
   // The wheel is a one-shot offer for people who have not subscribed. Whether
   // it was already spun lives on the server; `hasClaimedDiscount` only hides
-  // the card for the rest of this session once it has been.
-  const showDiscountPromo = !hasPaidAccess && !hasClaimedDiscount;
+  // the card for the rest of this session once it has been. As in the design it
+  // sits above the full library only: a search or a folder is a narrowed view,
+  // and the offer would be pushing itself in front of the answer.
+  const showDiscountPromo =
+    !hasPaidAccess && !hasClaimedDiscount && !selectedFolderId && !deferredQuery.trim();
 
   return (
     <>

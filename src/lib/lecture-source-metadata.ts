@@ -87,6 +87,27 @@ export function lectureShowsTranscript(params: {
   );
 }
 
+/** How the redesign names each source: "Zvok", "PDF", "Povezava"… */
+export function getLectureSourceLabel(sourceType: string) {
+  if (sourceType === "link") {
+    return "Povezava";
+  }
+
+  if (sourceType === "text") {
+    return "Besedilo";
+  }
+
+  if (sourceType === "pdf") {
+    return "PDF";
+  }
+
+  if (sourceType === "presentation") {
+    return "Predstavitev";
+  }
+
+  return "Zvok";
+}
+
 /**
  * The detail the redesign prints after the source on a note row — "Zvok,
  * 1 h 12 min", "PDF, 24 strani". A link or pasted text carries none, and

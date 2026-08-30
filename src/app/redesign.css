@@ -7858,22 +7858,16 @@
 
   /* --- mobile note -------------------------------------------------------- */
 
+  /* Back, the note's emoji and the actions button, pushed to the two edges
+     with the emoji between them, as the design lays the bar out. */
   .memo-m-navbar {
     position: relative;
     z-index: 3;
     display: flex;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: space-between;
     gap: 0.75rem;
     padding: 0.5rem 1.15rem 0.7rem;
-  }
-
-  /* Centred on the bar itself, so the back button on one side alone does not
-     pull it off centre. */
-  .memo-m-noteemoji {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
   }
 
   /*
@@ -8586,8 +8580,10 @@
     display: none;
   }
 
+  /* Same ink as the listen button it sits beside — the two round dock
+     controls read as one pair, so one of them greyed out looks disabled. */
   .mobile-study-manage-pill .msym {
-    color: var(--muted);
+    color: var(--text);
   }
 
 

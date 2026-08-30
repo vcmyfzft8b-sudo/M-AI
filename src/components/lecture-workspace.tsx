@@ -13,7 +13,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAppLayout } from "@/components/app-layout-context";
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
@@ -31,6 +31,8 @@ import type { FlashcardConfidenceBucket, StudyAssetStatus } from "@/lib/database
 import { canRetryLectureFailure } from "@/lib/lecture-failure-codes";
 import {
   getEffectiveLectureSourceType,
+  getLectureSourceDetail,
+  getLectureSourceLabel,
   isRecord,
   lectureShowsTranscript,
   shouldCreateInitialNoteAudio,
@@ -1257,6 +1259,34 @@ export function LectureWorkspace({
   const quizAdvanceTimerRef = useRef<number | null>(null);
   const closeMobileChat = useCallback(() => setIsMobileChatOpen(false), []);
   const chatSheet = useSheet(closeMobileChat, { scrollable: true });
+
+  /*
+   * The phone note screen carries the design's actions menu: the more button
+   * in the navbar opens a sheet naming the note, with Preimenuj and Izbriši on
+   * it, each of which swaps to its own sheet the way the library rows do.
+   */
+  const [noteActionsOpen, setNoteActionsOpen] = useState(false);
+  const [noteRenameOpen, setNoteRenameOpen] = useState(false);
+  const [noteDeleteOpen, setNoteDeleteOpen] = useState(false);
+  const [noteRenameValue, setNoteRenameValue] = useState("");
+  const [noteActionError, setNoteActionError] = useState<string | null>(null);
+  const [isNoteActionBusy, setIsNoteActionBusy] = useState(false);
+
+  const noteActionsSheet = useSheet(useCallback(() => setNoteActionsOpen(false), []));
+  const renameSheet = useSheet(
+    useCallback(() => {
+      setNoteRenameOpen(false);
+      setNoteActionError(null);
+    }, []),
+    { locked: isNoteActionBusy },
+  );
+  const deleteSheet = useSheet(
+    useCallback(() => {
+      setNoteDeleteOpen(false);
+      setNoteActionError(null);
+    }, []),
+    { locked: isNoteActionBusy },
+  );
   const [practiceQuestionIndex, setPracticeQuestionIndex] = useState(0);
 
   // A pending auto-advance must not fire after the quiz is left behind.
@@ -5652,6 +5682,63 @@ export function LectureWorkspace({
     router.push(homeHref);
   }
 
+  async function renameNote() {
+    const nextTitle = noteRenameValue.trim();
+
+    if (!nextTitle || nextTitle === lectureTitle) {
+      renameSheet.dismiss();
+      return;
+    }
+
+    try {
+      setNoteActionError(null);
+      setIsNoteActionBusy(true);
+      const response = await fetch(`/api/lectures/${detail.lecture.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: nextTitle }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "Naslova ni bilo mogoče shraniti.");
+      }
+
+      setIsNoteActionBusy(false);
+      renameSheet.dismiss(() => startTransition(() => router.refresh()));
+    } catch (error) {
+      setNoteActionError(
+        error instanceof Error ? error.message : "Naslova ni bilo mogoče shraniti.",
+      );
+      setIsNoteActionBusy(false);
+    }
+  }
+
+  async function deleteNote() {
+    try {
+      setNoteActionError(null);
+      setIsNoteActionBusy(true);
+      const response = await fetch(`/api/lectures/${detail.lecture.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "Zapiska ni bilo mogoče izbrisati.");
+      }
+
+      // The note is gone, so there is nothing to come back to: leave for the
+      // library rather than closing the sheet onto a dead screen.
+      setIsNoteActionBusy(false);
+      router.push(homeHref);
+    } catch (error) {
+      setNoteActionError(
+        error instanceof Error ? error.message : "Zapiska ni bilo mogoče izbrisati.",
+      );
+      setIsNoteActionBusy(false);
+    }
+  }
+
   const activeTabId: NoteTabId =
     activeTab === "notes"
       ? "notes"
@@ -5787,6 +5874,192 @@ export function LectureWorkspace({
   );
 
   const lectureTitle = detail.lecture.title?.trim() || "Predavanje v obdelavi";
+  // The phone prints the source beside the date — "28. 8. 2026, Zvok,
+  // 1 h 12 min" — where desktop shows the date alone.
+  const noteSourceDetail = getLectureSourceDetail(detail.lecture);
+  const noteMetaLine = [
+    formatCalendarDate(detail.lecture.created_at),
+    getLectureSourceLabel(getEffectiveLectureSourceType(detail.lecture)),
+    noteSourceDetail,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  /*
+   * The note's own actions, as the design's `actions` sheet draws them: the
+   * title named quietly at the top, Preimenuj and Izbriši on their own cards,
+   * and Prekliči closing it out. Each action swaps sheets on the spot, which is
+   * what the design does between sheets in one flow.
+   */
+  const noteActionSheets = (
+    <>
+      {noteActionsOpen ? (
+        <MemoPortal>
+          <button
+            type="button"
+            aria-label="Zapri"
+            className={sheetClass("memo-scrim memo-only-mobile", noteActionsSheet.closing)}
+            onClick={() => noteActionsSheet.dismiss()}
+          />
+          <section
+            className={sheetClass("memo-action-sheet memo-only-mobile", noteActionsSheet.closing)}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Dejanja zapiska ${lectureTitle}`}
+            {...noteActionsSheet.dragProps}
+          >
+            <span className="mobile-sheet-drag-handle" data-drag-handle="true" />
+            <p className="memo-action-sheet-target">{lectureTitle}</p>
+
+            <div className="memo-action-sheet-list">
+              <button
+                type="button"
+                className="memo-action-sheet-item"
+                onClick={() => {
+                  setNoteActionsOpen(false);
+                  setNoteRenameValue(lectureTitle);
+                  setNoteRenameOpen(true);
+                }}
+              >
+                <Msym name="edit" size="1.4rem" fill weight={500} />
+                Preimenuj
+              </button>
+
+              <button
+                type="button"
+                className="memo-action-sheet-item danger"
+                onClick={() => {
+                  setNoteActionsOpen(false);
+                  setNoteDeleteOpen(true);
+                }}
+              >
+                <Msym name="delete" size="1.4rem" fill weight={500} />
+                Izbriši
+              </button>
+
+              <button
+                type="button"
+                className="memo-action-sheet-cancel"
+                onClick={() => noteActionsSheet.dismiss()}
+              >
+                Prekliči
+              </button>
+            </div>
+          </section>
+        </MemoPortal>
+      ) : null}
+
+      {noteRenameOpen ? (
+        <MemoPortal>
+          <button
+            type="button"
+            aria-label="Zapri"
+            className={sheetClass("memo-scrim memo-only-mobile", renameSheet.closing)}
+            onClick={() => renameSheet.dismiss()}
+          />
+          <div
+            className={sheetClass("memo-sheet memo-dialog memo-only-mobile", renameSheet.closing)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="note-rename-title"
+            {...renameSheet.dragProps}
+          >
+            <div className="memo-grab" data-drag-handle />
+            <span id="note-rename-title" className="memo-sheet-heading">
+              Preimenuj zapisek
+            </span>
+            <input
+              className="memo-sheet-field"
+              value={noteRenameValue}
+              onChange={(event) => setNoteRenameValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") {
+                  return;
+                }
+
+                event.preventDefault();
+                event.currentTarget.blur();
+                void renameNote();
+              }}
+              placeholder="Naslov zapiska"
+              enterKeyHint="done"
+              autoCapitalize="sentences"
+              autoCorrect="off"
+              autoComplete="off"
+            />
+            {noteActionError ? <p className="memo-inline-error">{noteActionError}</p> : null}
+            <div className="memo-sheet-actions">
+              <button
+                type="button"
+                className="memo-sheet-coral"
+                onClick={() => void renameNote()}
+                disabled={isNoteActionBusy}
+              >
+                {isNoteActionBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Shrani
+              </button>
+              <button
+                type="button"
+                className="memo-sheet-ghost"
+                onClick={() => renameSheet.dismiss()}
+                disabled={isNoteActionBusy}
+              >
+                Prekliči
+              </button>
+            </div>
+          </div>
+        </MemoPortal>
+      ) : null}
+
+      {noteDeleteOpen ? (
+        <MemoPortal>
+          <button
+            type="button"
+            aria-label="Zapri"
+            className={sheetClass("memo-scrim memo-only-mobile", deleteSheet.closing)}
+            onClick={() => deleteSheet.dismiss()}
+          />
+          <div
+            className={sheetClass("memo-sheet memo-dialog memo-only-mobile", deleteSheet.closing)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="note-delete-title"
+            {...deleteSheet.dragProps}
+          >
+            <div className="memo-grab" data-drag-handle />
+            <span id="note-delete-title" className="memo-sheet-heading">
+              Izbriši zapisek
+            </span>
+            <p className="memo-sheet-copy">
+              Zapisek »{lectureTitle}« bo trajno izbrisan skupaj s prepisom, karticami in
+              kvizi.
+            </p>
+            {noteActionError ? <p className="memo-inline-error">{noteActionError}</p> : null}
+            <div className="memo-sheet-actions">
+              <button
+                type="button"
+                className="memo-sheet-danger"
+                onClick={() => void deleteNote()}
+                disabled={isNoteActionBusy}
+              >
+                {isNoteActionBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Izbriši zapisek
+              </button>
+              <button
+                type="button"
+                className="memo-sheet-ghost"
+                onClick={() => deleteSheet.dismiss()}
+                disabled={isNoteActionBusy}
+              >
+                Prekliči
+              </button>
+            </div>
+          </div>
+        </MemoPortal>
+      ) : null}
+    </>
+  );
+
   const lectureIsProcessing =
     shouldPollLecture(detail.lecture.status) ||
     (detail.flashcards.length === 0 && shouldPollAsset(detail.studyAsset?.status)) ||
@@ -5863,6 +6136,18 @@ export function LectureWorkspace({
             <Msym name="arrow_back" size="1.5rem" fill={false} weight={500} />
           </button>
           <Emoji symbol={noteEmojiSymbol} className="memo-m-noteemoji" size="1.5rem" />
+          <button
+            type="button"
+            aria-label="Dejanja"
+            className="memo-m-navbtn filled"
+            onClick={() => {
+              setNoteRenameValue(lectureTitle);
+              setNoteActionError(null);
+              setNoteActionsOpen(true);
+            }}
+          >
+            <Msym name="more_horiz" size="1.35rem" fill weight={500} />
+          </button>
         </div>
 
         <div className="memo-note-card">
@@ -5893,7 +6178,7 @@ export function LectureWorkspace({
             </div>
 
             <div className="memo-m-note-meta memo-only-mobile flex">
-              <span>{formatCalendarDate(detail.lecture.created_at)}</span>
+              <span>{noteMetaLine}</span>
             </div>
 
             {detail.lecture.error_message ? (
@@ -5947,6 +6232,7 @@ export function LectureWorkspace({
       </div>
 
       {chatPanel}
+      {noteActionSheets}
     </>
   );
 }

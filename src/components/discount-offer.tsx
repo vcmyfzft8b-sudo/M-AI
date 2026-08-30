@@ -240,7 +240,9 @@ export function DiscountOffer({
           <div className="memo-grab-wide" data-drag-handle>
             <span />
           </div>
-          <div className="memo-wheel-close-row">
+          {/* The whole header drags, not just the 3.4rem grabber — the same
+              zone the app's other sheets give a thumb. */}
+          <div className="memo-wheel-close-row" data-drag-zone>
             <button
               type="button"
               aria-label="Zapri"
@@ -356,7 +358,7 @@ export function DiscountOffer({
             <span className="light" />
           </div>
           {/* The logo below already says whose offer this is. */}
-          <div className="memo-offer-head">
+          <div className="memo-offer-head" data-drag-zone>
             <button
               type="button"
               aria-label="Zapri ponudbo"

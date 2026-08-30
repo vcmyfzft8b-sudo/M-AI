@@ -378,6 +378,13 @@ export function NoteSourceModal({
   const [isCancelling, setIsCancelling] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isTextEditorOpen, setIsTextEditorOpen] = useState(false);
+  /*
+   * The text editor is a sheet, so it leaves like one however it is dismissed —
+   * the scrim included. Tapping outside used to unmount it on the spot while
+   * the drag and the close button both animated, which read as two different
+   * controls doing two different things.
+   */
+  const textEditorSheet = useSheet(useCallback(() => setIsTextEditorOpen(false), []));
   const [textEditorKeyboardOffset, setTextEditorKeyboardOffset] = useState(0);
   const [visualizerStream, setVisualizerStream] = useState<MediaStream | null>(null);
   const [showAudioImportGuide, setShowAudioImportGuide] = useState(false);
@@ -2636,14 +2643,20 @@ export function NoteSourceModal({
       {selectedMode === "text" && isTextEditorOpen ? (
         <>
           <div
-            className="ios-sheet-backdrop note-source-subsheet-backdrop"
-            onClick={() => setIsTextEditorOpen(false)}
+            className={sheetClass(
+              "ios-sheet-backdrop note-source-subsheet-backdrop",
+              textEditorSheet.closing,
+            )}
+            onClick={() => textEditorSheet.dismiss()}
             aria-hidden="true"
           />
           <div
-            className={`ios-sheet-wrap note-source-subsheet-wrap ${
-              textEditorKeyboardOffset > 0 ? "keyboard-open" : ""
-            }`}
+            className={sheetClass(
+              `ios-sheet-wrap note-source-subsheet-wrap ${
+                textEditorKeyboardOffset > 0 ? "keyboard-open" : ""
+              }`.trim(),
+              textEditorSheet.closing,
+            )}
             style={
               {
                 "--text-editor-keyboard-offset": `${textEditorKeyboardOffset}px`,

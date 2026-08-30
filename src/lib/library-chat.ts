@@ -235,15 +235,11 @@ export async function answerLibraryChat(params: {
     };
   });
 
-  // The library spans notes that may be in different languages; the newest
-  // note's hint is the best single guess at what the learner studies in.
-  const languageHint = lectures.find((lecture) => lecture.language_hint)?.language_hint ?? null;
-
   const result = await generateStructuredObject({
     schema: libraryAnswerSchema,
     stage: "chat",
     instructions: [
-      buildGeneratedContentLanguageInstruction(languageHint),
+      buildGeneratedContentLanguageInstruction(),
       "You are Memo, helping a student across their whole note library.",
       "Answer using only the supplied notes. If the notes do not cover it, say so plainly instead of guessing.",
       "Prefer concrete pointers — which note, which topic — over general study advice.",

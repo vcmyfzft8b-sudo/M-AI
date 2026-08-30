@@ -2,7 +2,6 @@
 
 import * as Sentry from "@sentry/nextjs";
 import {
-  ChevronDown,
   Loader2,
   Trash2,
   X,
@@ -54,7 +53,6 @@ import {
   compressScanImageForUpload,
 } from "@/lib/file-compression-client";
 import { prepareAudioSourceForUpload } from "@/lib/audio-source-preparation";
-import { NOTE_LANGUAGE_OPTIONS } from "@/lib/languages";
 import {
   getExtensionForMimeType,
   isSupportedScanImageMimeType,
@@ -371,7 +369,6 @@ export function NoteSourceModal({
   const [activePhotoPreviewId, setActivePhotoPreviewId] = useState<string | null>(null);
   const [textValue, setTextValue] = useState("");
   const [linkValue, setLinkValue] = useState("");
-  const [languageHint, setLanguageHint] = useState("sl");
   const [createInitialAudio, setCreateInitialAudio] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -646,7 +643,6 @@ export function NoteSourceModal({
     setActivePhotoPreviewId(null);
     setTextValue("");
     setLinkValue("");
-    setLanguageHint("sl");
     setCreateInitialAudio(false);
     setIsRecording(false);
     setIsPaused(false);
@@ -689,7 +685,6 @@ export function NoteSourceModal({
         timeoutMessage: "Priprava zapiska traja predolgo. Osveži stran in poskusi znova.",
         body: JSON.stringify({
           sourceType,
-          languageHint,
         }),
       });
 
@@ -698,7 +693,7 @@ export function NoteSourceModal({
       createdLectureIdRef.current = payload.lectureId;
       return payload.lectureId as string;
     },
-    [languageHint],
+    [],
   );
 
   const handleCancelBusyAction = useCallback(async () => {
@@ -1157,7 +1152,6 @@ export function NoteSourceModal({
       const result = await createAudioLectureWithProcessingChunks({
         file: audioSource.file,
         durationSeconds: Math.max(audioSource.durationSeconds, 1),
-        languageHint,
         createInitialAudio,
         initialAudioVoice: getInitialAudioVoice(),
         normalizeBeforeUpload: audioSource.origin === "recording",
@@ -1234,7 +1228,6 @@ export function NoteSourceModal({
         body: JSON.stringify({
           lectureId,
           text: combinedTextSource,
-          languageHint,
           createInitialAudio,
           initialAudioVoice: getInitialAudioVoice(),
         }),
@@ -1367,7 +1360,6 @@ export function NoteSourceModal({
           "Dodajanje fotografij v obdelavo traja predolgo. Osveži stran in poskusi znova.",
         body: JSON.stringify({
           lectureId,
-          languageHint,
           createInitialAudio,
           initialAudioVoice: getInitialAudioVoice(),
           text: combinedTextSource,
@@ -1456,7 +1448,6 @@ export function NoteSourceModal({
         body: JSON.stringify({
           lectureId,
           url: trimmedLinkValue,
-          languageHint,
           createInitialAudio,
           initialAudioVoice: getInitialAudioVoice(),
         }),
@@ -1832,8 +1823,7 @@ export function NoteSourceModal({
       formData.append("lectureId", lectureId);
       formData.append("file", uploadFile);
       formData.append("originalFileName", pdfSource.name);
-      formData.append("languageHint", languageHint);
-      formData.append("createInitialAudio", String(createInitialAudio));
+        formData.append("createInitialAudio", String(createInitialAudio));
       formData.append("initialAudioVoice", getInitialAudioVoice());
 
       const controller = new AbortController();
@@ -2204,28 +2194,6 @@ export function NoteSourceModal({
                       </span>
                       <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
                     </button>
-                  ) : null}
-
-                  {!isRecording ? (
-                    <div className="memo-only-desktop note-source-extra">
-                      <label className="note-source-field-label">
-                        Jezik
-                      </label>
-                      <div className="relative note-source-select-wrap">
-                        <select
-                          value={languageHint}
-                          onChange={(event) => setLanguageHint(event.target.value)}
-                          className="ios-select appearance-none pr-10"
-                        >
-                          {NOTE_LANGUAGE_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--secondary-label)]" />
-                      </div>
-                    </div>
                   ) : null}
 
                   {!isRecording ? renderInitialAudioOption() : null}

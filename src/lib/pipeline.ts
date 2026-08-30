@@ -24,7 +24,7 @@ import {
   LectureNoLongerExistsError,
   toLectureFailureCode,
 } from "@/lib/lecture-processing-errors";
-import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
+import { buildGeneratedContentLanguageInstruction, detectSourceLanguage } from "@/lib/languages";
 import {
   getEffectiveLectureSourceType,
   getInitialNoteAudioVoice,
@@ -705,6 +705,33 @@ export async function generateLectureNotesFromStoredTranscript(params: {
     throw artifactError;
   }
 
+  /*
+   * Record what language the notes came out in.
+   *
+   * Nobody picks one any more — the model writes in whatever the source was —
+   * but read-aloud still needs a concrete code to align its audio against, and
+   * the assistant reads it too. Detecting it from the finished notes rather
+   * than from the transcript is the closer question: the notes are the thing
+   * that gets spoken.
+   *
+   * A failure to detect is left alone rather than written as a guess; the
+   * consumers already treat a missing language as "work it out yourself".
+   */
+  const detectedLanguage = detectSourceLanguage(notes.structuredNotesMd);
+
+  if (detectedLanguage && detectedLanguage !== lecture.language_hint) {
+    const { error: languageError } = await supabase
+      .from("lectures")
+      .update({ language_hint: detectedLanguage } as never)
+      .eq("id", lecture.id);
+
+    if (languageError) {
+      // Not worth failing a finished note over: everything downstream has a
+      // sane behaviour for an unknown language.
+      console.warn("Failed to record detected note language", languageError);
+    }
+  }
+
   await updateLectureProcessingState({
     lectureId: lecture.id,
     processingMetadata: lecture.processing_metadata,
@@ -1211,7 +1238,7 @@ export async function answerLectureChat(params: {
   const call = {
     schema: chatAnswerSchema,
     stage: "chat" as const,
-    instructions: `${buildGeneratedContentLanguageInstruction(lectureRow?.language_hint)} Answer the student using only the supplied lecture context. If the answer is not fully supported, say that the lecture does not clearly state it. Cite only transcript chunks that are genuinely relevant.`,
+    instructions: `${buildGeneratedContentLanguageInstruction()} Answer the student using only the supplied lecture context. If the answer is not fully supported, say that the lecture does not clearly state it. Cite only transcript chunks that are genuinely relevant.`,
     input: JSON.stringify(
       {
         question: params.question,

@@ -380,7 +380,7 @@ export function buildKnowledgeExtractionInstructions(params: {
   outputLanguage?: string | null;
   sourceType: "audio" | "document";
 }) {
-  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
+  const languageInstruction = buildGeneratedContentLanguageInstruction();
   const sourceNoun = params.sourceType === "audio" ? "spoken lecture transcript" : "course material";
 
   return `${languageInstruction}
@@ -405,7 +405,7 @@ ${MATH_FORMATTING_INSTRUCTIONS}`;
 }
 
 export function buildNoteOutlineInstructions(params: { outputLanguage?: string | null }) {
-  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
+  const languageInstruction = buildGeneratedContentLanguageInstruction();
 
   return `${languageInstruction}
 
@@ -583,7 +583,7 @@ export function buildSourceNoteInstructions(params: {
   /** Set when the source is split into consecutive parts; see planSourceWriteWindows. */
   window?: { index: number; count: number };
 }) {
-  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
+  const languageInstruction = buildGeneratedContentLanguageInstruction();
   const labels = getStructuredPlusLabels(params.outputLanguage);
   const window = params.window;
   const windowed = window && window.count > 1;

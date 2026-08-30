@@ -29,10 +29,11 @@ export const maxDuration = 300;
 
 const scanLectureFieldsSchema = z.object({
   lectureId: optionalDocumentLectureIdSchema,
+  // A missing field means "we do not know", not "Slovenian".
   languageHint: z
     .union([z.string(), z.null()])
-    .transform((value) => (typeof value === "string" ? value : "sl"))
-    .pipe(languageHintSchema),
+    .transform((value) => (typeof value === "string" && value.trim() ? value : null))
+    .pipe(languageHintSchema.nullable()),
   text: z
     .union([z.string(), z.null()])
     .transform((value) => (typeof value === "string" ? value.trim() : ""))
@@ -59,7 +60,11 @@ const storedScanImageSchema = z.object({
 
 const storedScanLectureSchema = z.object({
   lectureId: optionalDocumentLectureIdSchema.pipe(z.string().uuid()),
-  languageHint: languageHintSchema.default("sl"),
+  // Kept optional for clients that still send it — a retry replays the
+  // language a lecture was already transcribed in. Nothing asks a user for
+  // one any more, and a default here would assert Slovenian over every
+  // source the pipeline is now meant to detect for itself.
+  languageHint: languageHintSchema.optional(),
   createInitialAudio: z.boolean().optional().default(false),
   initialAudioVoice: z.enum(NOTE_TTS_VOICES).optional(),
   text: z
@@ -170,7 +175,7 @@ export async function POST(request: Request) {
             status: "queued",
             error_message: null,
             title: titleHint,
-            language_hint: languageHint,
+            language_hint: languageHint ?? null,
             processing_metadata: {
               createInitialAudio,
               initialAudioVoice: initialAudioVoice ?? null,
@@ -340,7 +345,7 @@ export async function POST(request: Request) {
             text: blocks.map((block) => block.text).join("\n\n"),
             blocks,
             titleHint,
-            languageHint,
+            ...(languageHint ? { languageHint } : {}),
             createInitialAudio,
             initialAudioVoice,
             modelMetadata: {

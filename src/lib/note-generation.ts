@@ -447,7 +447,7 @@ async function generateNotesLegacy(
     sourceType === "audio"
       ? buildLegacyAudioNoteTargets(sourceWordCount, windows.length)
       : buildLegacyNoteTargets(sourceWordCount, windows.length);
-  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
+  const languageInstruction = buildGeneratedContentLanguageInstruction();
   const languageLabel = resolveNoteLanguageLabel(params.outputLanguage);
   const chunkInstructions =
     sourceType === "audio"

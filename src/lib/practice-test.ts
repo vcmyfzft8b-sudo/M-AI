@@ -308,7 +308,7 @@ async function generateQuestionsForUnit(params: {
     ),
     8,
   );
-  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
+  const languageInstruction = buildGeneratedContentLanguageInstruction();
   const requestedConceptKeys = new Set(params.concepts.map((concept) => concept.conceptKey));
   let generatedQuestions: PracticeTestQuestionDraft[] = [];
 

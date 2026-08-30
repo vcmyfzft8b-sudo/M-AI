@@ -12,7 +12,7 @@ import {
   hasStripeSubscriptionHistory,
   PURCHASABLE_BILLING_PLAN_IDS,
 } from "@/lib/billing";
-import { getDiscountWheelState, markDiscountWheelSpent } from "@/lib/discount-wheel";
+import { getDiscountWheelState } from "@/lib/discount-wheel";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
 
@@ -126,12 +126,16 @@ export async function POST(request: Request) {
       subscription_data: subscriptionData,
     });
 
-    if (wheelCoupon) {
-      // Spend the prize on this session. If the learner abandons checkout they
-      // keep the price they were shown via Stripe's own session, but the coupon
-      // is not silently re-applied to a later, different purchase.
-      await markDiscountWheelSpent(appState.user.id);
-    }
+    /*
+     * The prize is deliberately not spent here.
+     *
+     * Opening Stripe and coming back is an ordinary thing to do — the buyer
+     * wants another look at the plans, or their card is in the other room —
+     * and spending the coupon at session creation meant the offer they
+     * returned to was already dead, with its countdown still running. It ends
+     * where the offer says it ends: when the ten minutes run out, or when the
+     * sheet is closed without buying.
+     */
 
     return NextResponse.json({ url: session.url });
   } catch (error) {

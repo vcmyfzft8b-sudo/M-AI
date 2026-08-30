@@ -96,6 +96,8 @@ export function DiscountOffer({
   const boughtRef = useRef(false);
   /** Read through a ref: the countdown effect runs before the sheet exists. */
   const closeOfferRef = useRef<(() => void) | null>(null);
+  /** The prize's deadline, as the server knows it. Null until it answers. */
+  const expiresAtRef = useRef<number | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [hasWon, setHasWon] = useState(false);
   const [plan, setPlan] = useState<OfferPlan["id"]>("yearly");
@@ -184,13 +186,40 @@ export function DiscountOffer({
   useEffect(() => {
     if (!offerOpen) {
       setSecondsLeft(OFFER_SECONDS);
+      expiresAtRef.current = null;
       return;
     }
 
+    /*
+     * Count down to the server's deadline, not to ten minutes from now.
+     *
+     * The clock starts at the spin and belongs to the prize, so opening Stripe
+     * and coming back has to resume it rather than restart it — a countdown
+     * that resets every time the sheet reopens is not a deadline, it is a
+     * decoration. `expiresAtRef` is filled by the fetch below; until it
+     * answers, the full ten minutes is the honest guess.
+     */
     const started = Date.now();
+    let cancelled = false;
+
+    void fetch("/api/discount-wheel")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((state: { prizeExpiresAt?: string | null } | null) => {
+        const expiresAt = state?.prizeExpiresAt ? Date.parse(state.prizeExpiresAt) : Number.NaN;
+
+        if (!cancelled && Number.isFinite(expiresAt)) {
+          expiresAtRef.current = expiresAt;
+          setSecondsLeft(Math.max(0, Math.round((expiresAt - Date.now()) / 1000)));
+        }
+      })
+      .catch(() => {});
+
     const id = window.setInterval(() => {
-      const elapsed = Math.floor((Date.now() - started) / 1000);
-      const left = Math.max(0, OFFER_SECONDS - elapsed);
+      const deadline = expiresAtRef.current;
+      const left =
+        deadline === null
+          ? Math.max(0, OFFER_SECONDS - Math.floor((Date.now() - started) / 1000))
+          : Math.max(0, Math.round((deadline - Date.now()) / 1000));
       setSecondsLeft(left);
 
       // Out of time closes the offer, which withdraws the prize the same way
@@ -202,7 +231,10 @@ export function DiscountOffer({
       }
     }, 1000);
 
-    return () => window.clearInterval(id);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
   }, [offerOpen]);
 
   const wheelSheet = useSheet(

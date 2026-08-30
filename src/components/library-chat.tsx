@@ -339,15 +339,15 @@ export function LibraryChat({
             </span>
             <p>
               {hasNotes
-                ? "Živjo, jaz sem Memo. Vprašaj me karkoli o svojih zapiskih. Ta pogovor se ne shrani v tvoj račun."
-                : "Živjo, jaz sem Memo. Zapiskov še nimaš, a lahko vseeno vprašaš karkoli — razložim ti tudi brez njih. Ta pogovor se ne shrani v tvoj račun."}
+                ? "Živjo, jaz sem Memo AI. Vprašaj me karkoli o svojih zapiskih. Ta pogovor se ne shrani v tvoj račun."
+                : "Živjo, jaz sem Memo AI. Zapiskov še nimaš, a lahko vseeno vprašaš karkoli — razložim ti tudi brez njih. Ta pogovor se ne shrani v tvoj račun."}
             </p>
           </div>
         ) : (
           <p className="memo-m-chat-intro">
             {hasNotes
-              ? "Živjo, jaz sem Memo. Kaj te zanima o tvojih zapiskih? Ta klepet se ne shrani v tvoj račun."
-              : "Živjo, jaz sem Memo. Zapiskov še nimaš, a lahko vseeno vprašaš karkoli — razložim ti tudi brez njih. Ta klepet se ne shrani v tvoj račun."}
+              ? "Živjo, jaz sem Memo AI. Kaj te zanima o tvojih zapiskih? Ta klepet se ne shrani v tvoj račun."
+              : "Živjo, jaz sem Memo AI. Zapiskov še nimaš, a lahko vseeno vprašaš karkoli — razložim ti tudi brez njih. Ta klepet se ne shrani v tvoj račun."}
           </p>
         )}
 
@@ -610,7 +610,7 @@ export function LibraryChat({
                       </span>
                     </>
                   ) : (
-                    <span className="memo-m-chat-title">Klepet z Memom</span>
+                    <span className="memo-m-chat-title">Klepet z Memo AI</span>
                   )}
                 </span>
                 <button

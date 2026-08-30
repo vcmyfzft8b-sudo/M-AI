@@ -3820,7 +3820,7 @@ export function LectureWorkspace({
               <Image src="/memo-mascot.png" alt="" width={320} height={288} />
             </span>
             <p>
-              Živjo, jaz sem Memo. Vprašaj me karkoli o tem predavanju — povzetek, razlago
+              Živjo, jaz sem Memo AI. Vprašaj me karkoli o tem predavanju — povzetek, razlago
               pojma ali primer za izpit.
               {showsTranscript ? " Kot kontekst uporabim zapiske in prepis." : ""}
             </p>

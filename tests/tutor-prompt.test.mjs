@@ -52,10 +52,12 @@ test("simple and clear is stated as the goal, not thoroughness", () => {
   assert.match(instructions, /Never pad an answer to look thorough/);
 });
 
-test("the tutor is Memo and will not name what runs it", () => {
+test("the tutor is Memo AI and will not name what runs it", () => {
   const instructions = buildTutorInstructions("lecture");
 
-  assert.match(instructions, /You are Memo/);
+  assert.match(instructions, /You are Memo AI/);
+  // In full, every time: "Memo" alone is not the product's name.
+  assert.match(instructions, /never just "Memo"/);
   assert.match(instructions, /Never name or hint at the company, model, provider or version/);
   assert.match(instructions, /do not confirm, deny or narrow down a guess/);
 });

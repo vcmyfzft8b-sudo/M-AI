@@ -91,6 +91,11 @@ export function DiscountOffer({
   onClaimed: () => void;
 }) {
   const spinTimerRef = useRef<number | null>(null);
+  /** Set once checkout has been started, so leaving does not withdraw a prize
+   *  the purchase is already carrying. */
+  const boughtRef = useRef(false);
+  /** Read through a ref: the countdown effect runs before the sheet exists. */
+  const closeOfferRef = useRef<(() => void) | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [hasWon, setHasWon] = useState(false);
   const [plan, setPlan] = useState<OfferPlan["id"]>("yearly");
@@ -144,6 +149,9 @@ export function DiscountOffer({
   }
 
   async function startCheckout() {
+    // The purchase carries the coupon from here on, so leaving this screen
+    // must not withdraw it.
+    boughtRef.current = true;
     setIsCheckingOut(true);
     setError(null);
 
@@ -182,7 +190,16 @@ export function DiscountOffer({
     const started = Date.now();
     const id = window.setInterval(() => {
       const elapsed = Math.floor((Date.now() - started) / 1000);
-      setSecondsLeft(Math.max(0, OFFER_SECONDS - elapsed));
+      const left = Math.max(0, OFFER_SECONDS - elapsed);
+      setSecondsLeft(left);
+
+      // Out of time closes the offer, which withdraws the prize the same way
+      // walking away does. The server would refuse the coupon by now anyway;
+      // this is so the screen says so rather than sitting on a dead offer.
+      if (left === 0) {
+        window.clearInterval(id);
+        closeOfferRef.current?.();
+      }
     }, 1000);
 
     return () => window.clearInterval(id);
@@ -193,13 +210,24 @@ export function DiscountOffer({
     { scrollable: true },
   );
   /*
-   * Closing the offer closes the wheel with it. The wheel is what opened the
-   * offer and stays mounted behind it, so dismissing only the top sheet put
-   * the learner back on a spun wheel showing a prize they had just declined.
-   * One gesture, one exit.
+   * Closing the offer gives the prize up, and closes the wheel with it.
+   *
+   * The wheel is what opened the offer and stays mounted behind it, so
+   * dismissing only the top sheet put the learner back on a spun wheel showing
+   * a prize they had just declined. And the offer is "now or not at all": if
+   * walking away left the coupon attached, the countdown would be a bluff and
+   * checkout would still be half price an hour later.
+   *
+   * Fire-and-forget. The prize is the server's to withdraw and it has already
+   * happened as far as this screen is concerned; a failed request should not
+   * hold the sheet open or put an error in front of somebody leaving.
    */
   const offerSheet = useSheet(
     useCallback(() => {
+      if (!boughtRef.current) {
+        void fetch("/api/discount-wheel", { method: "DELETE" }).catch(() => {});
+      }
+
       onOfferOpenChange(false);
       onWheelOpenChange(false);
     }, [onOfferOpenChange, onWheelOpenChange]),
@@ -209,6 +237,10 @@ export function DiscountOffer({
   const closeWheel = wheelSheet.dismiss;
   const closeOffer = offerSheet.dismiss;
   const isClosing = offerOpen ? offerSheet.closing : wheelSheet.closing;
+
+  useEffect(() => {
+    closeOfferRef.current = closeOffer;
+  });
 
   if (!wheelOpen && !offerOpen) {
     return null;

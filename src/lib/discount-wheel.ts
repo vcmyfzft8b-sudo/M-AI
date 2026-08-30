@@ -233,11 +233,18 @@ export async function spinDiscountWheel(userId: string): Promise<{
 }
 
 /**
- * Marks the prize used. Called when a checkout session that carries the coupon
- * is created, so the discount is attached to one purchase and not to every
- * later one.
+ * Marks the prize spent.
+ *
+ * Two things end a prize and they end it the same way: a checkout that carried
+ * the coupon, and the learner closing the offer without buying. The offer is
+ * "now or not at all", so walking away from it has to cost the discount —
+ * otherwise the ten-minute countdown is a bluff, and reopening the sheet or
+ * going straight to /app/start would still be half price.
+ *
+ * The spin timestamp is left alone, so the wheel stays spent for the rest of
+ * the day either way and comes back tomorrow.
  */
-export async function markDiscountWheelRedeemed(userId: string) {
+export async function markDiscountWheelSpent(userId: string) {
   const supabase = createSupabaseServiceRoleClient();
 
   const { error } = await supabase

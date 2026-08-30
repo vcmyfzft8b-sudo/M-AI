@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
-import { getDiscountWheelState, spinDiscountWheel } from "@/lib/discount-wheel";
+import {
+  getDiscountWheelState,
+  markDiscountWheelSpent,
+  spinDiscountWheel,
+} from "@/lib/discount-wheel";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 
 /** Whether this account still has a spin, and what it already won. */
@@ -47,4 +51,24 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+}
+
+/**
+ * Gives the prize up. Sent when the offer is closed without a purchase.
+ *
+ * The offer is "now or not at all", so walking away from it spends the
+ * discount — without this the countdown means nothing, because the sheet could
+ * simply be reopened, or checkout reached from anywhere else, and the coupon
+ * would still be attached.
+ */
+export async function DELETE() {
+  const user = await getOptionalUserOrPreviewBypass();
+
+  if (!user) {
+    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+  }
+
+  await markDiscountWheelSpent(user.id);
+
+  return NextResponse.json({ ok: true });
 }

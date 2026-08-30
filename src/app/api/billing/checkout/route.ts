@@ -12,7 +12,7 @@ import {
   hasStripeSubscriptionHistory,
   PURCHASABLE_BILLING_PLAN_IDS,
 } from "@/lib/billing";
-import { getDiscountWheelState, markDiscountWheelRedeemed } from "@/lib/discount-wheel";
+import { getDiscountWheelState, markDiscountWheelSpent } from "@/lib/discount-wheel";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
 
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
       // Spend the prize on this session. If the learner abandons checkout they
       // keep the price they were shown via Stripe's own session, but the coupon
       // is not silently re-applied to a later, different purchase.
-      await markDiscountWheelRedeemed(appState.user.id);
+      await markDiscountWheelSpent(appState.user.id);
     }
 
     return NextResponse.json({ url: session.url });

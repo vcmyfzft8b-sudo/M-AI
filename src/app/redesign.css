@@ -9406,6 +9406,23 @@
     cursor: grab;
   }
 
+  /*
+   * A drag zone has to take the gesture away from the browser the same way the
+   * grabber does. A scrolling sheet is `touch-action: pan-y`, so without this
+   * a real finger dragging the header is claimed for scrolling and the pointer
+   * stream is cancelled before the sheet moves — the grabber worked only
+   * because it already set this.
+   */
+  [data-drag-zone] {
+    touch-action: none;
+    cursor: grab;
+  }
+
+  /* Its buttons are still buttons, and should not read as draggable. */
+  [data-drag-zone] button {
+    cursor: pointer;
+  }
+
   .memo-grab-wide span {
     display: block;
     width: 2.6rem;

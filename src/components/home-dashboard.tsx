@@ -1184,7 +1184,7 @@ export function HomeDashboard({
                 </span>
                 <span className="memo-promo-copy">
                   <span>Odkleni Premium</span>
-                  <span>Neomejeni zapiski, kartice in kvizi</span>
+                  <span>Neomejeni zapiski in učna orodja</span>
                 </span>
                 <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
               </button>

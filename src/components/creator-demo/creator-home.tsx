@@ -26,6 +26,10 @@ export function CreatorHome({
    * the offer sheet and the upgrade prompts all hang off `hasPaidAccess`, and
    * they are otherwise unreachable here — the demo exists to show the shipping
    * UI, and half of it only exists for people who have not bought yet.
+   *
+   * Opt-in, and it stays that way. Plain `/creator` is what gets recorded, and
+   * a creator's screen should never show a paywall, a discount or an upgrade
+   * prompt — it is meant to look like an account that already has everything.
    */
   const isFreePlan = searchParams.get("plan") === "free";
 

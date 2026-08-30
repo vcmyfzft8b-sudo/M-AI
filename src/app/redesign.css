@@ -30,6 +30,12 @@
   --track: #e6e6ea;
   --ink: #17171a;
   --emoji-tile: rgba(130, 148, 218, 0.13);
+  /* The upgrade card's accent. Periwinkle rather than coral: coral belongs to
+     the discount and to the primary action, and an upgrade prompt that shouts
+     as loudly as "Nov zapisek" competes with it. */
+  --upgrade-tint: rgba(130, 148, 218, 0.16);
+  --upgrade-line: rgba(130, 148, 218, 0.34);
+  --upgrade-ink: #4a4f8f;
   --promo: #f45f5a;
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   --shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.18);
@@ -75,6 +81,9 @@
   --track: #3a3a3e;
   --ink: #ffffff;
   --emoji-tile: rgba(130, 148, 218, 0.2);
+  --upgrade-tint: rgba(130, 148, 218, 0.22);
+  --upgrade-line: rgba(130, 148, 218, 0.4);
+  --upgrade-ink: #b9c2f0;
   --promo: #ff6d68;
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.75);
@@ -101,6 +110,9 @@
     --track: #3a3a3e;
     --ink: #ffffff;
     --emoji-tile: rgba(130, 148, 218, 0.2);
+  --upgrade-tint: rgba(130, 148, 218, 0.22);
+  --upgrade-line: rgba(130, 148, 218, 0.4);
+  --upgrade-ink: #b9c2f0;
     --promo: #ff6d68;
     --shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
     --shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.75);
@@ -7976,23 +7988,28 @@
    * app uses: the artboard's rim and the coral glow, so it reads as the one
    * thing on the screen worth pressing.
    */
+  /*
+   * A tinted card rather than a filled one: it still stands out of a stack of
+   * white note rows, without shouting over "Nov zapisek" — the screen's actual
+   * primary action, which is coral. Periwinkle is the palette's other accent,
+   * already used for the emoji tiles, so this reads as part of the app.
+   */
   .memo-promo.upgrade {
-    border: var(--btn-border-width) solid var(--btn-border-filled);
-    background: var(--coral);
-    box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
+    border: var(--btn-border-width) solid var(--upgrade-line);
+    background: var(--upgrade-tint);
+    box-shadow: none;
   }
 
   .memo-promo.upgrade .memo-promo-copy > span:first-child,
-  .memo-promo.upgrade .memo-promo-copy > span:last-child,
   .memo-promo.upgrade .msym {
-    color: #ffffff;
+    color: var(--upgrade-ink);
   }
 
   .memo-promo.upgrade .memo-promo-copy > span:last-child {
-    opacity: 0.86;
+    color: var(--muted);
   }
 
-  /* The glyph sits on a translucent tile, as the note rows' emoji do. */
+  /* The glyph on the card's own ground, the way note rows carry their emoji. */
   .memo-promo-tile {
     display: inline-flex;
     align-items: center;
@@ -8001,7 +8018,7 @@
     height: 2.7rem;
     flex: 0 0 auto;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.22);
+    background: var(--surface);
   }
 
   .memo-note-list {

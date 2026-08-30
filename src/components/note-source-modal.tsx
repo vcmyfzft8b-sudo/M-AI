@@ -1931,6 +1931,53 @@ export function NoteSourceModal({
   }
 
   /**
+   * Whatever source is already staged for this mode, drawn as one card.
+   *
+   * It heads the screen rather than sitting among the options, because it is
+   * the answer to what the screen is asking: everything below it — the audio
+   * switch, the picker, the actions — is about that file.
+   */
+  function renderPreparedSourceCard() {
+    if (selectedMode === "record" && preparedRecording) {
+      return (
+        <div className="ios-card note-source-prepared-card">
+          <p className="note-source-card-label">Pripravljen posnetek</p>
+          <p className="ios-row-title mt-3">{preparedRecording.file.name}</p>
+          <p className="ios-row-subtitle">
+            {formatTimestamp(preparedRecording.durationSeconds * 1000)}
+          </p>
+        </div>
+      );
+    }
+
+    if (selectedMode === "upload" && preparedUpload) {
+      return (
+        <div className="ios-card note-source-prepared-card">
+          <p className="note-source-card-label">Izbrana datoteka</p>
+          <p className="ios-row-title mt-3">{preparedUpload.file.name}</p>
+          <p className="ios-row-subtitle">
+            {formatTimestamp(preparedUpload.durationSeconds * 1000)}
+          </p>
+        </div>
+      );
+    }
+
+    if (selectedMode === "text" && pdfSource) {
+      return (
+        <div className="ios-card note-source-docs-file-card note-source-prepared-card">
+          <p className="note-source-card-label">Izbran dokument</p>
+          <p className="ios-row-title note-source-docs-file-name">{pdfSource.name}</p>
+          <p className="ios-row-subtitle note-source-docs-file-copy">
+            Uporabljen bo, dokler ponovno ne začneš tipkati.
+          </p>
+        </div>
+      );
+    }
+
+    return null;
+  }
+
+  /**
    * Opting into the read-aloud audio up front. Kept from production — the note
    * screen's listen dock has nothing to play without it — and dressed as the
    * redesign's switch row.
@@ -2140,6 +2187,8 @@ export function NoteSourceModal({
                       "note-source-modal-body-photos",
                   )}
                 >
+                  {renderPreparedSourceCard()}
+
                   {selectedMode === "record" && !isRecording ? (
                     <button
                       type="button"
@@ -2183,16 +2232,6 @@ export function NoteSourceModal({
 
                   {selectedMode === "record" ? (
                     <>
-                      {preparedRecording ? (
-                        <div className="ios-card">
-                          <p className="note-source-card-label">Pripravljen posnetek</p>
-                          <p className="ios-row-title mt-3">{preparedRecording.file.name}</p>
-                          <p className="ios-row-subtitle">
-                            {formatTimestamp(preparedRecording.durationSeconds * 1000)}
-                          </p>
-                        </div>
-                      ) : null}
-
                       {/* The design draws the orb, the clock and the hint for
                           the whole of the record screen — it has no separate
                           "before you start" state, because its timer runs from
@@ -2331,16 +2370,6 @@ export function NoteSourceModal({
 
                   {selectedMode === "upload" ? (
                     <>
-                      {preparedUpload ? (
-                        <div className="ios-card">
-                          <p className="note-source-card-label">Izbrana datoteka</p>
-                          <p className="ios-row-title mt-3">{preparedUpload.file.name}</p>
-                          <p className="ios-row-subtitle">
-                            {formatTimestamp(preparedUpload.durationSeconds * 1000)}
-                          </p>
-                        </div>
-                      ) : null}
-
                       <input
                         ref={uploadInputRef}
                         type="file"
@@ -2424,16 +2453,6 @@ export function NoteSourceModal({
 
                   {selectedMode === "text" ? (
                     <>
-                      {pdfSource ? (
-                        <div className="ios-card note-source-docs-file-card">
-                          <p className="note-source-card-label">Izbran dokument</p>
-                          <p className="ios-row-title note-source-docs-file-name">{pdfSource.name}</p>
-                          <p className="ios-row-subtitle note-source-docs-file-copy">
-                            Uporabljen bo, dokler ponovno ne začneš tipkati.
-                          </p>
-                        </div>
-                      ) : null}
-
                       {!pdfSource && photoSources.length === 0 ? (
                         <div className="note-source-docs-textarea-wrap">
                           <textarea

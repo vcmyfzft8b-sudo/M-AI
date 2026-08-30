@@ -3991,6 +3991,33 @@
   box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
 }
 
+/* The red confirm is a filled colour button like the coral ones, so it takes
+   the same rim — the glow stays coral-only. */
+.memo-sheet-danger.memo-sheet-danger {
+  border: 2px solid rgba(0, 0, 0, 0.2);
+}
+
+/*
+ * The buttons those stand next to — the cancels and the ghosts — take the same
+ * 2px outline, so a pair of actions reads as a pair rather than as one
+ * bordered button beside one bare one. Not the same *colour* of outline: 20%
+ * black is a rim on a coral fill and a hard line on a pale one, so these use
+ * the `--line` the artboard gives every other outlined thing. They sit on
+ * `--surface` rather than `--tile` for the same reason — a white pill with a
+ * hairline is what the rest of the phone is made of.
+ *
+ * Doubled for the same reason as the coral block: several of these declare
+ * `border: 0` further down the file.
+ */
+.memo-sheet-ghost.memo-sheet-ghost,
+.memo-button-ghost.memo-button-ghost,
+.memo-capture-cancel.memo-capture-cancel,
+.memo-portal .ios-secondary-button.ios-secondary-button,
+.memo .ios-secondary-button.ios-secondary-button {
+  border: 2px solid var(--line);
+  background: var(--surface);
+}
+
 /* ---------------------------------------------------------------------------
    Close buttons
    ---------------------------------------------------------------------------
@@ -10460,8 +10487,23 @@
     box-shadow: var(--shadow);
   }
 
+  /* The artboard's capture screen is only the source and the actions. The two
+     rows we keep on top of that — the read-aloud switch and the "how do I
+     record with the screen off?" link — belong under the source rather than
+     above it, so the screen still opens on the thing it is asking for. */
+  .note-source-modal.mobile-draggable-sheet .note-source-modal-body > .memo-capture-row {
+    order: 1;
+  }
+
   .note-source-modal.mobile-draggable-sheet .memo-modal-actions {
-    /* The grid above already orders these; `gap` is the artboard's 0.7rem. */
+    order: 2;
+    /* The grid above already orders these; `gap` is the artboard's 0.7rem.
+       `margin-top: auto` is what pins them to the foot of the screen the way
+       the artboard does, instead of letting them ride up under short
+       content. The `!important` answers production's own `margin-top: 0
+       !important` on every sibling of the text body, which there kept the
+       actions tight under a field that filled the screen. */
+    margin-top: auto !important;
     padding-top: 0.6rem;
     background: var(--bg);
   }

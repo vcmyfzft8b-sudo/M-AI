@@ -996,6 +996,21 @@ export function HomeDashboard({
   // Publishes `--memo-head-p` as the list scrolls; the collapse itself is CSS.
   const { attachScroll, attachScreen } = useCollapsingHeader();
 
+  /*
+   * Stripe sends a cancelled discount checkout back with `offer=1`. Reopening
+   * the sheet puts the buyer where they left off — the prize is still theirs
+   * until it is spent or its ten minutes run out, and the server is the one
+   * that decides which.
+   */
+  useEffect(() => {
+    if (searchParams.get("offer") !== "1") {
+      return;
+    }
+
+    setIsOfferOpen(true);
+    router.replace(homeHref, { scroll: false });
+  }, [homeHref, router, searchParams]);
+
   useEffect(() => {
     if (hasPaidAccess) {
       return;

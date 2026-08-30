@@ -665,8 +665,20 @@ export function getBillingSuccessUrl(request?: BillingRequestLike) {
   return `${resolveSiteOrigin(request)}/app/start?checkout=success`;
 }
 
-export function getBillingCancelUrl(request?: BillingRequestLike) {
-  return `${resolveSiteOrigin(request)}/app/start?checkout=cancelled`;
+/**
+ * Where Stripe sends a buyer who backed out.
+ *
+ * A checkout started from the prize wheel returns to the offer rather than to
+ * the standard paywall: that buyer was shown a discounted price on a countdown,
+ * and dropping them onto a full-price screen loses the thing they came for.
+ * `offer=1` is what the home screen reads to reopen it.
+ */
+export function getBillingCancelUrl(request?: BillingRequestLike, fromOffer = false) {
+  const origin = resolveSiteOrigin(request);
+
+  return fromOffer
+    ? `${origin}/app?checkout=cancelled&offer=1`
+    : `${origin}/app/start?checkout=cancelled`;
 }
 
 export function getBillingPortalReturnUrl(request?: BillingRequestLike) {

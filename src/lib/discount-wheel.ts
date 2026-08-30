@@ -76,6 +76,27 @@ function isMissingWheelSchema(error: { code?: string; message?: string } | null)
   );
 }
 
+/*
+ * A local stand-in for the profile row.
+ *
+ * The preview-bypass account has no row in `profiles`, so every write here
+ * matches nothing and every read comes back empty: the wheel awards a prize
+ * that vanishes, and checkout is told there is no coupon. That makes the one
+ * flow nobody can test end to end the one that takes the money.
+ *
+ * In development the state falls back to this map when the database has no row
+ * for the user. It lives for the life of the server process, which is exactly
+ * as long as anyone testing needs it to, and it is unreachable in production —
+ * `spinLimitEnforced()` is the same switch that lifts the daily limit.
+ */
+type DevWheelRow = {
+  spunAt: string;
+  coupon: string;
+  spentAt: string | null;
+};
+
+const devWheelRows = new Map<string, DevWheelRow>();
+
 /** True when the two instants fall on the same UTC day. */
 function isSameUtcDay(a: Date, b: Date) {
   return (
@@ -137,16 +158,21 @@ export async function getDiscountWheelState(userId: string): Promise<DiscountWhe
     discount_wheel_redeemed_at: string | null;
   } | null;
 
+  const dev = !spinLimitEnforced();
+  const devRow = dev && !row ? devWheelRows.get(userId) : undefined;
+
   const now = new Date();
-  const spunAt = row?.discount_wheel_spun_at ?? null;
+  const spunAt = devRow?.spunAt ?? row?.discount_wheel_spun_at ?? null;
   const spunMs = spunAt ? Date.parse(spunAt) : Number.NaN;
   const expiresMs = Number.isFinite(spunMs) ? spunMs + WHEEL_PRIZE_TTL_MS : Number.NaN;
-  const unused = Boolean(row?.discount_wheel_coupon) && !row?.discount_wheel_redeemed_at;
+  const coupon = devRow?.coupon ?? row?.discount_wheel_coupon ?? null;
+  const spentAt = devRow ? devRow.spentAt : (row?.discount_wheel_redeemed_at ?? null);
+  const unused = Boolean(coupon) && !spentAt;
   const live = Number.isFinite(expiresMs) && expiresMs > now.getTime();
 
   return {
     canSpin: !spentToday(spunAt, now),
-    coupon: row?.discount_wheel_coupon ?? null,
+    coupon,
     hasUnredeemedPrize: unused && live,
     prizeExpiresAt: unused && live ? new Date(expiresMs).toISOString() : null,
   };
@@ -215,10 +241,16 @@ export async function spinDiscountWheel(userId: string): Promise<{
   }
 
   // Locally the signed-in account may be the preview bypass, which has no
-  // profile row for the update to match. Reporting a failure there would put
-  // "the prize could not be saved" in front of anyone trying to look at the
-  // flow, so development answers with the prize and skips the bookkeeping.
+  // profile row for the update to match. Record the prize in the process
+  // instead, so the rest of the flow — the countdown, the offer, the coupon
+  // checkout reads — behaves exactly as it will for a real account.
   if (!spinLimitEnforced()) {
+    devWheelRows.set(userId, {
+      spunAt: now.toISOString(),
+      coupon: WHEEL_COUPON_ID,
+      spentAt: null,
+    });
+
     return { coupon: WHEEL_COUPON_ID, label: WHEEL_PRIZE_LABEL, alreadySpun: false };
   }
 
@@ -252,6 +284,14 @@ export async function markDiscountWheelSpent(userId: string) {
     .update({ discount_wheel_redeemed_at: new Date().toISOString() } as never)
     .eq("id", userId)
     .is("discount_wheel_redeemed_at", null);
+
+  if (!spinLimitEnforced()) {
+    const devRow = devWheelRows.get(userId);
+
+    if (devRow && !devRow.spentAt) {
+      devWheelRows.set(userId, { ...devRow, spentAt: new Date().toISOString() });
+    }
+  }
 
   // Never the reason a checkout fails: the session is already created by the
   // time this runs, and a purchase that succeeded must not report an error.

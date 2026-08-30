@@ -101,7 +101,7 @@ export async function POST(request: Request) {
         },
       ],
       success_url: getBillingSuccessUrl(request),
-      cancel_url: getBillingCancelUrl(request),
+      cancel_url: getBillingCancelUrl(request, Boolean(wheelCoupon)),
       ...(wheelCoupon
         ? { discounts: [{ coupon: wheelCoupon }] }
         : { allow_promotion_codes: true }),

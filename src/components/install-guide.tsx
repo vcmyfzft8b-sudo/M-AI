@@ -1,12 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback } from "react";
 
 import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
 import { sheetClass, useSheet } from "@/components/use-sheet";
-import { HOME_SCREEN_STEPS, markInstallGuideSeen } from "@/lib/install-guide";
+import { HOME_SCREEN_STEPS } from "@/lib/install-guide";
 
 /**
  * How to keep Memo on the home screen.
@@ -24,13 +23,7 @@ import { HOME_SCREEN_STEPS, markInstallGuideSeen } from "@/lib/install-guide";
  * where the control lives is the only honest thing an app can do here.
  */
 export function InstallGuide({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const sheet = useSheet(
-    useCallback(() => {
-      markInstallGuideSeen();
-      onClose();
-    }, [onClose]),
-    { scrollable: true },
-  );
+  const sheet = useSheet(onClose, { scrollable: true });
 
   if (!open) {
     return null;

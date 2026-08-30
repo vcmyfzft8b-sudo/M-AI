@@ -15,6 +15,7 @@ import type { ThemePreference } from "@/lib/theme";
 import {
   detectInstallPlatform,
   INSTALL_GUIDE_SEEN_KEY,
+  markInstallGuideSeen,
   shouldOfferInstallGuide,
 } from "@/lib/install-guide";
 import {
@@ -197,7 +198,13 @@ export function SettingsScreen({
             title: "Dodaj na začetni zaslon",
             detail: "Odpri Memo kot aplikacijo",
             className: showInstallHint ? "has-dot" : "",
-            onSelect: () => setIsInstallGuideOpen(true),
+            // Opening it is the whole of "seen": the badge is there to get
+            // somebody to look once, so it goes the moment they do, not when
+            // they close the sheet or read to the end of it.
+            onSelect: () => {
+              markInstallGuideSeen();
+              setIsInstallGuideOpen(true);
+            },
           },
         ]
       : []),

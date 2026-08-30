@@ -482,14 +482,24 @@ export function HomeDashboard({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isLibraryChatOpen, setIsLibraryChatOpen] = useState(false);
   const [isWheelOpen, setIsWheelOpen] = useState(false);
-  const [isOfferOpen, setIsOfferOpen] = useState(false);
+  /*
+   * Seeded from the URL rather than opened in an effect: an effect runs after
+   * the first paint, so returning from Stripe showed the home screen for a
+   * frame before the offer appeared. It was never dismissed — it should be
+   * there the moment the page draws.
+   */
+  const [isOfferOpen, setIsOfferOpen] = useState(
+    () => searchParams.get("offer") === "1",
+  );
   /*
    * True when the offer is being restored after a trip to Stripe rather than
    * opened by the wheel. It was never really dismissed, so it should already
    * be there when the page draws — sliding it up again would say it had gone
    * away and come back.
    */
-  const [isOfferRestored, setIsOfferRestored] = useState(false);
+  const [isOfferRestored, setIsOfferRestored] = useState(
+    () => searchParams.get("offer") === "1",
+  );
   const [hasClaimedDiscount, setHasClaimedDiscount] = useState(false);
   /*
    * Whether the wheel has a spin left, as the server sees it. Null until the

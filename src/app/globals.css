@@ -345,41 +345,16 @@ a:visited {
 }
 
 .memo-paywall-shell {
+  /*
+   * Light is the base; dark is the override. These were the other way round,
+   * so the dark gradient was what painted in every moment before a media query
+   * or a `data-theme` attribute resolved — the dark paywall flashing on the way
+   * to Stripe and back. A colour whose only light definition lives in a media
+   * query has no light definition at first paint.
+   */
   --memo-paywall-purple: var(--tint);
   --memo-paywall-purple-soft: var(--tint-soft);
   --memo-paywall-panel: rgba(30, 28, 38, 0.86);
-  --memo-paywall-border: rgba(255, 255, 255, 0.12);
-  --memo-paywall-bg:
-    radial-gradient(circle at 50% -10%, rgba(10, 132, 255, 0.38), transparent 34%),
-    radial-gradient(circle at 50% 8%, rgba(10, 132, 255, 0.22), transparent 42%),
-    linear-gradient(180deg, #0b3158 0%, #061828 36%, #050505 100%);
-  --memo-paywall-text: #ffffff;
-  --memo-paywall-title-text: #ffffff;
-  --memo-paywall-close-color: rgba(255, 255, 255, 0.92);
-  --memo-paywall-benefit-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.035));
-  --memo-paywall-benefit-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
-  --memo-paywall-benefit-title: #ffffff;
-  --memo-paywall-benefit-copy: rgba(255, 255, 255, 0.56);
-  --memo-paywall-plan-border: rgba(255, 255, 255, 0.11);
-  --memo-paywall-plan-bg: rgba(15, 15, 17, 0.84);
-  --memo-paywall-plan-text: rgba(255, 255, 255, 0.45);
-  --memo-paywall-plan-selected-bg: linear-gradient(180deg, rgba(10, 132, 255, 0.18), rgba(7, 28, 48, 0.88));
-  --memo-paywall-plan-selected-text: #ffffff;
-  --memo-paywall-badge-bg: #17131f;
-  --memo-paywall-badge-text: #ffffff;
-  --memo-paywall-price-muted: rgba(255, 255, 255, 0.48);
-  --memo-paywall-muted: rgba(255, 255, 255, 0.6);
-  --memo-paywall-muted-soft: rgba(255, 255, 255, 0.43);
-  --memo-paywall-cta-shadow: 0 1rem 3rem rgba(10, 132, 255, 0.3);
-  gap: 1.05rem;
-  align-content: start;
-  overflow: hidden auto;
-  padding: max(4.75rem, env(safe-area-inset-top)) 1.5rem max(1.2rem, env(safe-area-inset-bottom));
-  background: var(--memo-paywall-bg);
-  color: var(--memo-paywall-text);
-}
-
-:root[data-theme="light"] .memo-paywall-shell {
   --memo-paywall-border: rgba(0, 0, 0, 0.09);
   --memo-paywall-bg:
     radial-gradient(circle at 50% -10%, rgba(0, 102, 204, 0.16), transparent 35%),
@@ -403,34 +378,66 @@ a:visited {
   --memo-paywall-muted: rgba(0, 0, 0, 0.58);
   --memo-paywall-muted-soft: rgba(0, 0, 0, 0.46);
   --memo-paywall-cta-shadow: 0 1rem 2.5rem rgba(0, 102, 204, 0.2);
+  gap: 1.05rem;
+  align-content: start;
+  overflow: hidden auto;
+  padding: max(4.75rem, env(safe-area-inset-top)) 1.5rem max(1.2rem, env(safe-area-inset-bottom));
+  background: var(--memo-paywall-bg);
+  color: var(--memo-paywall-text);
 }
 
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]) .memo-paywall-shell,
-  :root[data-theme="system"] .memo-paywall-shell {
-    --memo-paywall-border: rgba(0, 0, 0, 0.09);
+/* Dark, where dark is chosen or preferred. */
+:root[data-theme="dark"] .memo-paywall-shell {
+  --memo-paywall-border: rgba(255, 255, 255, 0.12);
+  --memo-paywall-bg:
+    radial-gradient(circle at 50% -10%, rgba(10, 132, 255, 0.38), transparent 34%),
+    radial-gradient(circle at 50% 8%, rgba(10, 132, 255, 0.22), transparent 42%),
+    linear-gradient(180deg, #0b3158 0%, #061828 36%, #050505 100%);
+  --memo-paywall-text: #ffffff;
+  --memo-paywall-title-text: #ffffff;
+  --memo-paywall-close-color: rgba(255, 255, 255, 0.92);
+  --memo-paywall-benefit-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.035));
+  --memo-paywall-benefit-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --memo-paywall-benefit-title: #ffffff;
+  --memo-paywall-benefit-copy: rgba(255, 255, 255, 0.56);
+  --memo-paywall-plan-border: rgba(255, 255, 255, 0.11);
+  --memo-paywall-plan-bg: rgba(15, 15, 17, 0.84);
+  --memo-paywall-plan-text: rgba(255, 255, 255, 0.45);
+  --memo-paywall-plan-selected-bg: linear-gradient(180deg, rgba(10, 132, 255, 0.18), rgba(7, 28, 48, 0.88));
+  --memo-paywall-plan-selected-text: #ffffff;
+  --memo-paywall-badge-bg: #17131f;
+  --memo-paywall-badge-text: #ffffff;
+  --memo-paywall-price-muted: rgba(255, 255, 255, 0.48);
+  --memo-paywall-muted: rgba(255, 255, 255, 0.6);
+  --memo-paywall-muted-soft: rgba(255, 255, 255, 0.43);
+  --memo-paywall-cta-shadow: 0 1rem 3rem rgba(10, 132, 255, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .memo-paywall-shell {
+    --memo-paywall-border: rgba(255, 255, 255, 0.12);
     --memo-paywall-bg:
-      radial-gradient(circle at 50% -10%, rgba(0, 102, 204, 0.16), transparent 35%),
-      radial-gradient(circle at 50% 8%, rgba(0, 102, 204, 0.1), transparent 42%),
-      linear-gradient(180deg, #f4f8ff 0%, #ffffff 42%, #f6f7fb 100%);
-    --memo-paywall-text: var(--label);
-    --memo-paywall-title-text: var(--label);
-    --memo-paywall-close-color: rgba(0, 0, 0, 0.58);
-    --memo-paywall-benefit-bg: rgba(255, 255, 255, 0.78);
-    --memo-paywall-benefit-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), 0 0.7rem 2rem rgba(0, 0, 0, 0.05);
-    --memo-paywall-benefit-title: var(--label);
-    --memo-paywall-benefit-copy: rgba(0, 0, 0, 0.52);
-    --memo-paywall-plan-border: rgba(0, 0, 0, 0.11);
-    --memo-paywall-plan-bg: rgba(255, 255, 255, 0.84);
-    --memo-paywall-plan-text: rgba(0, 0, 0, 0.5);
-    --memo-paywall-plan-selected-bg: linear-gradient(180deg, rgba(0, 102, 204, 0.12), rgba(255, 255, 255, 0.94));
-    --memo-paywall-plan-selected-text: var(--label);
-    --memo-paywall-badge-bg: #ffffff;
-    --memo-paywall-badge-text: var(--label);
-    --memo-paywall-price-muted: rgba(0, 0, 0, 0.52);
-    --memo-paywall-muted: rgba(0, 0, 0, 0.58);
-    --memo-paywall-muted-soft: rgba(0, 0, 0, 0.46);
-    --memo-paywall-cta-shadow: 0 1rem 2.5rem rgba(0, 102, 204, 0.2);
+      radial-gradient(circle at 50% -10%, rgba(10, 132, 255, 0.38), transparent 34%),
+      radial-gradient(circle at 50% 8%, rgba(10, 132, 255, 0.22), transparent 42%),
+      linear-gradient(180deg, #0b3158 0%, #061828 36%, #050505 100%);
+    --memo-paywall-text: #ffffff;
+    --memo-paywall-title-text: #ffffff;
+    --memo-paywall-close-color: rgba(255, 255, 255, 0.92);
+    --memo-paywall-benefit-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.035));
+    --memo-paywall-benefit-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+    --memo-paywall-benefit-title: #ffffff;
+    --memo-paywall-benefit-copy: rgba(255, 255, 255, 0.56);
+    --memo-paywall-plan-border: rgba(255, 255, 255, 0.11);
+    --memo-paywall-plan-bg: rgba(15, 15, 17, 0.84);
+    --memo-paywall-plan-text: rgba(255, 255, 255, 0.45);
+    --memo-paywall-plan-selected-bg: linear-gradient(180deg, rgba(10, 132, 255, 0.18), rgba(7, 28, 48, 0.88));
+    --memo-paywall-plan-selected-text: #ffffff;
+    --memo-paywall-badge-bg: #17131f;
+    --memo-paywall-badge-text: #ffffff;
+    --memo-paywall-price-muted: rgba(255, 255, 255, 0.48);
+    --memo-paywall-muted: rgba(255, 255, 255, 0.6);
+    --memo-paywall-muted-soft: rgba(255, 255, 255, 0.43);
+    --memo-paywall-cta-shadow: 0 1rem 3rem rgba(10, 132, 255, 0.3);
   }
 }
 

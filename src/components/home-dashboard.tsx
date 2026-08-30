@@ -1023,16 +1023,27 @@ export function HomeDashboard({
   }, [hasPaidAccess]);
 
   const inLibraryView = !selectedFolderId && !deferredQuery.trim();
-  const showDiscountPromo =
-    !hasPaidAccess && !hasClaimedDiscount && canSpinWheel === true && inLibraryView;
   /*
-   * Today's spin is gone — used, or the offer was closed — and there is still
-   * no subscription. The slot keeps a way to buy, just without the prize: an
-   * offer that is over should not keep advertising itself, and an empty slot
-   * would lose the only upgrade prompt on the phone's library screen.
+   * The wheel is on offer while the server says there is a spin left and this
+   * session has not already used it. `hasClaimedDiscount` is what covers the
+   * gap between spinning and the server catching up.
+   */
+  const wheelAvailable = canSpinWheel === true && !hasClaimedDiscount;
+  const showDiscountPromo = !hasPaidAccess && wheelAvailable && inLibraryView;
+  /*
+   * ...and whenever it is not on offer, the slot keeps an ordinary way to buy.
+   *
+   * Stated as "the wheel is not available" rather than "the server says the
+   * spin is spent", because those are not the same thing and the difference
+   * left a hole: spinning hides the gift card immediately, while the server
+   * only reports the spin gone on the next load — and in development it never
+   * reports it at all. The slot showed nothing in between.
+   *
+   * Still waits for the first answer (`canSpinWheel !== null`), so the two
+   * cards do not flash into each other on load.
    */
   const showUpgradePromo =
-    !hasPaidAccess && canSpinWheel === false && inLibraryView;
+    !hasPaidAccess && canSpinWheel !== null && !wheelAvailable && inLibraryView;
 
   return (
     <>

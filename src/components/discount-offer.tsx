@@ -79,12 +79,15 @@ const OFFER_PLANS: OfferPlan[] = [
 export function DiscountOffer({
   wheelOpen,
   offerOpen,
+  offerRestored = false,
   onWheelOpenChange,
   onOfferOpenChange,
   onClaimed,
 }: {
   wheelOpen: boolean;
   offerOpen: boolean;
+  /** Restored after checkout rather than opened by the wheel: no entrance. */
+  offerRestored?: boolean;
   onWheelOpenChange: (open: boolean) => void;
   onOfferOpenChange: (open: boolean) => void;
   /** Fired once the prize is banked, so the home card can stop offering it. */
@@ -413,7 +416,7 @@ export function DiscountOffer({
 
       {offerOpen ? (
         <div
-          className={sheetClass("memo-sheet-full memo-offer-sheet", offerSheet.closing)}
+          className={sheetClass(`memo-sheet-full memo-offer-sheet ${offerRestored ? "restored" : ""}`.trim(), offerSheet.closing)}
           role="dialog"
           aria-modal="true"
           {...offerSheet.dragProps}

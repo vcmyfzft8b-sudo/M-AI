@@ -53,6 +53,13 @@ export type DiscountWheelState = {
   hasUnredeemedPrize: boolean;
   /** When the current prize lapses, for the countdown. Null when there is none. */
   prizeExpiresAt: string | null;
+  /*
+   * Whether today's spin has been used, as a plain fact — unlike `canSpin`,
+   * which development deliberately relaxes so the flow can be replayed. The
+   * home screen decides which card to show from this, so the card is the one
+   * production would show even while the wheel is being re-spun locally.
+   */
+  spunToday: boolean;
 };
 
 /**
@@ -153,11 +160,23 @@ export async function getDiscountWheelState(userId: string): Promise<DiscountWhe
   if (error) {
     // Locally the flow is worth looking at even with no storage behind it.
     if (!spinLimitEnforced()) {
-      return { canSpin: true, coupon: null, hasUnredeemedPrize: false, prizeExpiresAt: null };
+      return {
+        canSpin: true,
+        coupon: null,
+        hasUnredeemedPrize: false,
+        prizeExpiresAt: null,
+        spunToday: false,
+      };
     }
 
     if (isMissingWheelSchema(error)) {
-      return { canSpin: false, coupon: null, hasUnredeemedPrize: false, prizeExpiresAt: null };
+      return {
+        canSpin: false,
+        coupon: null,
+        hasUnredeemedPrize: false,
+        prizeExpiresAt: null,
+        spunToday: false,
+      };
     }
 
     throw error;
@@ -181,11 +200,15 @@ export async function getDiscountWheelState(userId: string): Promise<DiscountWhe
   const unused = Boolean(coupon) && !spentAt;
   const live = Number.isFinite(expiresMs) && expiresMs > now.getTime();
 
+  // The honest daily fact, before development's relaxation is applied to it.
+  const usedTodaysSpin = Boolean(spunAt) && isSameUtcDay(new Date(spunAt as string), now);
+
   return {
     canSpin: !spentToday(spunAt, now),
     coupon,
     hasUnredeemedPrize: unused && live,
     prizeExpiresAt: unused && live ? new Date(expiresMs).toISOString() : null,
+    spunToday: usedTodaysSpin,
   };
 }
 

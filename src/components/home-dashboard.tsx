@@ -483,6 +483,13 @@ export function HomeDashboard({
   const [isLibraryChatOpen, setIsLibraryChatOpen] = useState(false);
   const [isWheelOpen, setIsWheelOpen] = useState(false);
   const [isOfferOpen, setIsOfferOpen] = useState(false);
+  /*
+   * True when the offer is being restored after a trip to Stripe rather than
+   * opened by the wheel. It was never really dismissed, so it should already
+   * be there when the page draws — sliding it up again would say it had gone
+   * away and come back.
+   */
+  const [isOfferRestored, setIsOfferRestored] = useState(false);
   const [hasClaimedDiscount, setHasClaimedDiscount] = useState(false);
   /*
    * Whether the wheel has a spin left, as the server sees it. Null until the
@@ -1008,6 +1015,7 @@ export function HomeDashboard({
     }
 
     setIsOfferOpen(true);
+    setIsOfferRestored(true);
     router.replace(homeHref, { scroll: false });
   }, [homeHref, router, searchParams]);
 
@@ -1020,9 +1028,12 @@ export function HomeDashboard({
 
     void fetch("/api/discount-wheel")
       .then((response) => (response.ok ? response.json() : null))
-      .then((state: { canSpin?: boolean } | null) => {
+      .then((state: { canSpin?: boolean; spunToday?: boolean } | null) => {
         if (!cancelled) {
-          setCanSpinWheel(state?.canSpin ?? false);
+          // `spunToday` rather than `canSpin`: the latter is relaxed in
+          // development so the wheel can be replayed, and the card should be
+          // the one production would show either way.
+          setCanSpinWheel(Boolean(state?.canSpin) && !state?.spunToday);
         }
       })
       .catch(() => {
@@ -1348,7 +1359,14 @@ export function HomeDashboard({
           wheelOpen={isWheelOpen}
           offerOpen={isOfferOpen}
           onWheelOpenChange={setIsWheelOpen}
-          onOfferOpenChange={setIsOfferOpen}
+          onOfferOpenChange={(open) => {
+            setIsOfferOpen(open);
+
+            if (!open) {
+              setIsOfferRestored(false);
+            }
+          }}
+          offerRestored={isOfferRestored}
           onClaimed={() => setHasClaimedDiscount(true)}
         />
       ) : null}

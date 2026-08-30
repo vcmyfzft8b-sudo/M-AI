@@ -7,6 +7,31 @@
    editing the token block over hand-tuning a component.
    ========================================================================= */
 
+/*
+ * The canvas: the ground the browser paints where no element does, including
+ * the frames between leaving this page and the next one drawing. The root
+ * element had no background, so that fell through to the user agent's — which
+ * is dark on a dark system, and is the dark flash seen on the way to Stripe
+ * checkout.
+ *
+ * The values are literals rather than tokens because the tokens live on
+ * `.memo`, and this is the one element that sits above them. They are the same
+ * two values `--bg` holds.
+ */
+:root {
+  background-color: #f1f1f5;
+}
+
+:root[data-theme="dark"] {
+  background-color: #000000;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    background-color: #000000;
+  }
+}
+
 /* --- tokens --------------------------------------------------------------- */
 
 .memo,
@@ -9032,6 +9057,11 @@
    * generic rule uses it: the drag and the closing exit both animate the
    * transform, and there has to be a value to animate from.
    */
+  /* Restored after Stripe: it was never dismissed, so it is simply there. */
+  .memo-sheet-full.memo-offer-sheet.restored {
+    animation: none;
+  }
+
   .memo-sheet-full.memo-wheel-sheet,
   .memo-sheet-full.memo-offer-sheet {
     top: calc(3.5rem + var(--memo-safe-top));

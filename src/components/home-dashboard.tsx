@@ -464,6 +464,7 @@ export function HomeDashboard({
   canCreateNotes,
   hasPaidAccess,
   trialLectureId,
+  canSpinWheel: initialCanSpinWheel = null,
   showDevDashboard,
 }: {
   lectures: AppLectureListItem[];
@@ -472,6 +473,8 @@ export function HomeDashboard({
   canCreateNotes: boolean;
   hasPaidAccess: boolean;
   trialLectureId: string | null;
+  /** Whether the wheel has a spin left, as the server saw it while rendering. */
+  canSpinWheel?: boolean | null;
   showDevDashboard: boolean;
 }) {
   const router = useRouter();
@@ -515,7 +518,7 @@ export function HomeDashboard({
    * devices, so a purely local flag showed the gift again to somebody who had
    * already used theirs.
    */
-  const [canSpinWheel, setCanSpinWheel] = useState<boolean | null>(null);
+  const [canSpinWheel, setCanSpinWheel] = useState<boolean | null>(initialCanSpinWheel);
   /*
    * Whether to badge the settings gear. Read after mount rather than during
    * render: it comes from `localStorage` and from `display-mode`, neither of
@@ -525,9 +528,9 @@ export function HomeDashboard({
   const [showInstallHint, setShowInstallHint] = useState(false);
 
   useEffect(() => {
-    // Only where the guide behind it exists: it is iPhone screenshots.
+    // Phones only — matching the settings row the badge is pointing at.
     const sync = () =>
-      setShowInstallHint(detectInstallPlatform() === "ios" && shouldOfferInstallGuide());
+      setShowInstallHint(detectInstallPlatform() !== "other" && shouldOfferInstallGuide());
 
     sync();
     window.addEventListener(INSTALL_GUIDE_SEEN_KEY, sync);
@@ -1057,6 +1060,8 @@ export function HomeDashboard({
       return;
     }
 
+    // A refresh, not the first answer: the server already supplied that. This
+    // catches a spin taken on another device, or the day turning over.
     let cancelled = false;
 
     void fetch("/api/discount-wheel")

@@ -86,13 +86,12 @@ export function SettingsScreen({
   const [showInstallHint, setShowInstallHint] = useState(false);
 
   /*
-   * The guide is iPhone screenshots, so it is offered on iPhones. Showing an
-   * Android user how to use Safari's share sheet would be worse than saying
-   * nothing.
+   * Phones only: a desktop has no home screen to add to, so the row would be
+   * answering a question nobody asked.
    */
-  const isIos = useSyncExternalStore(
+  const isPhone = useSyncExternalStore(
     subscribeToNothing,
-    () => detectInstallPlatform() === "ios",
+    () => detectInstallPlatform() !== "other",
     () => false,
   );
 
@@ -190,7 +189,7 @@ export function SettingsScreen({
   );
 
   const rows: SettingsRow[] = [
-    ...(isIos
+    ...(isPhone
       ? [
           {
             id: "install",

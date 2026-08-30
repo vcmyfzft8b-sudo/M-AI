@@ -16,9 +16,9 @@ import { HOME_SCREEN_STEPS, markInstallGuideSeen } from "@/lib/install-guide";
  * differently. They are real captures from a real iPhone, which is why they
  * carry a highlight box: pointing at the row beats describing where it is.
  *
- * iOS only, deliberately. These shots are of Safari, and Android's route is
- * different enough that showing an iPhone to an Android user would mislead
- * rather than help — the row that opens this is hidden there.
+ * Android sees the same shots. The control sits behind a different menu there,
+ * but it is named the same and the destination is identical, so the pictures
+ * still show what the person is looking for.
  *
  * There is no install button because iOS has no prompt to trigger. Showing
  * where the control lives is the only honest thing an app can do here.
@@ -92,7 +92,7 @@ export function InstallGuide({ open, onClose }: { open: boolean; onClose: () => 
                     height={844}
                     sizes="(max-width: 1099px) 60vw, 15rem"
                   />
-                  {"highlight" in step && step.highlight ? (
+                  {step.highlight ? (
                     <span className="memo-install-highlight" style={step.highlight} />
                   ) : null}
                 </div>

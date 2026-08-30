@@ -1236,6 +1236,14 @@ function ChatBubble({ message }: { message: ChatMessageWithCitations }) {
  * The phone artboard says "Tapni", the desktop one "Klikni". Both are rendered
  * and the stylesheet picks, so this needs no viewport state on the client.
  */
+/** What the phone navbar calls each study screen. Flashcards names nothing. */
+const SUB_SCREEN_TITLES: Record<string, string> = {
+  flashcards: "",
+  quiz: "Kviz",
+  test: "Vadbeni test",
+  transcript: "Prepis",
+};
+
 const flipHint = (
   <>
     <span className="memo-only-desktop">Klikni za obrat</span>
@@ -4663,10 +4671,20 @@ export function LectureWorkspace({
                 <div className="lecture-quiz-stage">
                   {/* The redesign heads the quiz with its position and a
                       progress bar rather than a bare counter. */}
-                  <span className="memo-quiz-count">
-                    Vprašanje {activeQuizQuestionIndex + 1} od {quizRoundCount}
-                    {quizRound > 1 ? ` · Krog ${quizRound}` : ""}
-                  </span>
+                  {/* Desktop writes the position as one line, "Vprašanje 1 od
+                      8". The phone splits it the way it splits the flashcard
+                      header: the label bold on the left, the count muted on
+                      the right. */}
+                  <div className="memo-quiz-head">
+                    <span className="memo-quiz-count">
+                      Vprašanje {activeQuizQuestionIndex + 1}
+                      <span className="memo-only-desktop"> od {quizRoundCount}</span>
+                      {quizRound > 1 ? ` · Krog ${quizRound}` : ""}
+                    </span>
+                    <span className="memo-quiz-total memo-only-mobile">
+                      {activeQuizQuestionIndex + 1} / {quizRoundCount}
+                    </span>
+                  </div>
                   <div className="memo-progress quiz">
                     <div
                       style={{
@@ -5905,7 +5923,14 @@ export function LectureWorkspace({
           >
             <Msym name="arrow_back" size="1.5rem" fill={false} weight={500} />
           </button>
-          <Emoji symbol={noteEmojiSymbol} className="memo-m-noteemoji" size="1.5rem" />
+          {/* The notes screen shows the note's emoji; each study screen names
+              itself instead, and flashcards names nothing — the design's own
+              mapping. */}
+          {activeTabId === "notes" ? (
+            <Emoji symbol={noteEmojiSymbol} className="memo-m-noteemoji" size="1.5rem" />
+          ) : (
+            <span className="memo-m-navtitle">{SUB_SCREEN_TITLES[activeTabId]}</span>
+          )}
           <button
             type="button"
             aria-label="Dejanja"

@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  ImagePlus,
   Loader2,
   X,
 } from "lucide-react";
@@ -3979,6 +3978,24 @@ export function LectureWorkspace({
     if (activeTab === "notes") {
       // The dock's annotate layer: brush, underline, colour, photo, and the
       // swatch row the colour button slides open.
+      // One photo control, shown in the dock both while text is selected and
+      // while a block is — the dock is where the design keeps note actions, and
+      // it used to be reachable only through a text selection or a button
+      // stranded in a row below the note.
+      const photoDockButton = (
+        <button
+          type="button"
+          className="memo-annotate-icon"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => notePhotoInputRef.current?.click()}
+          disabled={isSavingNoteDoc || !selectedNoteBlockId}
+          aria-label="Dodaj fotografijo"
+          title="Dodaj fotografijo"
+        >
+          <Msym name="add_photo_alternate" size="1.25rem" fill={false} weight={500} />
+        </button>
+      );
+
       const annotationToolbar = noteSelection ? (
         <>
           <button
@@ -4026,19 +4043,7 @@ export function LectureWorkspace({
           >
             <Msym name="palette" size="1.25rem" fill={false} weight={500} />
           </button>
-          {isCreatorDemo ? null : (
-            <button
-              type="button"
-              className="memo-annotate-icon"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => notePhotoInputRef.current?.click()}
-              disabled={isSavingNoteDoc || !selectedNoteBlockId}
-              aria-label="Dodaj fotografijo"
-              title="Dodaj fotografijo"
-            >
-              <Msym name="add_photo_alternate" size="1.25rem" fill={false} weight={500} />
-            </button>
-          )}
+          {isCreatorDemo ? null : photoDockButton}
           <div
             className={`memo-swatches ${isHighlightPaletteOpen ? "open" : ""}`.trim()}
             aria-label="Barva označevanja"
@@ -4061,19 +4066,14 @@ export function LectureWorkspace({
           </div>
         </>
       ) : null;
-      const photoToolbar = selectedNoteBlockId && !noteSelection && !isCreatorDemo ? (
-        <button
-          type="button"
-          className="note-photo-toolbar-button"
-          onClick={() => notePhotoInputRef.current?.click()}
-          disabled={isSavingNoteDoc}
-          aria-label="Dodaj fotografijo"
-          title="Dodaj fotografijo"
-        >
-          <ImagePlus aria-hidden="true" />
-          <span>Fotografija</span>
-        </button>
-      ) : null;
+      // A block selected on its own still gets the photo control — in the dock,
+      // beside where it sits when text is selected.
+      const showPhotoOnlyDock = Boolean(selectedNoteBlockId) && !noteSelection && !isCreatorDemo;
+      const dockToolbar = noteSelection
+        ? annotationToolbar
+        : showPhotoOnlyDock
+          ? photoDockButton
+          : null;
       const noteStatus = noteError ? (
         <span className="note-toolbar-status error">{noteError}</span>
       ) : isSavingNoteDoc ? (
@@ -4105,14 +4105,9 @@ export function LectureWorkspace({
                   autoPrepareFirstChunk={shouldCreateInitialNoteAudio(
                     detail.lecture.processing_metadata,
                   )}
-                  annotationToolbar={annotationToolbar}
-                  toolbarAccessory={
-                    <>
-                      {photoToolbar}
-                      {noteStatus}
-                    </>
-                  }
-                  annotationActive={Boolean(noteSelection)}
+                  annotationToolbar={dockToolbar}
+                  toolbarAccessory={noteStatus}
+                  annotationActive={Boolean(noteSelection) || showPhotoOnlyDock}
                   annotationPaletteOpen={isHighlightPaletteOpen}
                   dockContainer={dockSlot}
                   annotations={activeNoteDoc.annotations}

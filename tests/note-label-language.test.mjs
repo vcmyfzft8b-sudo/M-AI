@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { detectSourceLanguage } from "../src/lib/languages.ts";
-import { getStructuredPlusLabels } from "../src/lib/notes/note-prompts.ts";
+import {
+  buildLegacyStructuredPlusInstructions,
+  buildSourceNoteInstructions,
+  getStructuredPlusLabels,
+} from "../src/lib/notes/note-prompts.ts";
 
 /*
  * A note's headings and callout labels are literal strings handed to the model,
@@ -60,4 +64,41 @@ test("the source outranks a stale stored hint", () => {
   // A lecture created back when everything defaulted to "sl", whose material is
   // in fact English: the note should not be given Slovenian furniture.
   assert.equal(resolveNoteLabelLanguage(ENGLISH_SOURCE, "sl"), "en");
+});
+
+/*
+ * ...and the same rule where it actually lands: the composed prompt.
+ *
+ * The two note paths carry different furniture. The live content-driven path
+ * lets the model write its own section headings and only fixes the callout
+ * labels — which `note-tts-text.ts` then matches to colour the boxes, and which
+ * a reader sees in bold inside their own sentences. The legacy path fixes the
+ * headings too. Both are literal strings, and both would have been English.
+ */
+test("the live path's callout labels follow the source", () => {
+  const slovenian = buildSourceNoteInstructions({
+    outputLanguage: resolveNoteLabelLanguage(SLOVENIAN_SOURCE, null),
+  });
+
+  assert.match(slovenian, /\*\*Definicija:\*\*/);
+  assert.match(slovenian, /\*\*Pogosta napaka:\*\*/);
+  assert.match(slovenian, /\*\*Ključno:\*\*/);
+  assert.doesNotMatch(slovenian, /\*\*Key takeaway:\*\*/);
+
+  const english = buildSourceNoteInstructions({
+    outputLanguage: resolveNoteLabelLanguage(ENGLISH_SOURCE, null),
+  });
+
+  assert.match(english, /\*\*Key takeaway:\*\*/);
+  assert.doesNotMatch(english, /\*\*Ključno:\*\*/);
+});
+
+test("the legacy path's headings follow the source", () => {
+  const legacy = buildLegacyStructuredPlusInstructions({
+    outputLanguage: resolveNoteLabelLanguage(SLOVENIAN_SOURCE, null),
+    recommendedTopicCount: 8,
+  });
+
+  assert.match(legacy, /Hiter pregled/);
+  assert.doesNotMatch(legacy, /Quick Overview/);
 });

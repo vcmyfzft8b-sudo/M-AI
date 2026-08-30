@@ -3263,6 +3263,14 @@ export function LectureWorkspace({
     optimisticNoteMediaUrlsRef.current.set(optimisticMediaId, localPreviewUrl);
     setOptimisticNoteMedia((current) => [...current, optimisticMedia]);
     applyOptimisticNoteDoc(optimisticDoc);
+
+    // The demo note has no row behind it to upload against, and the design's
+    // own artboard simply splices the photo into the body — so stop at the
+    // local preview rather than round-tripping to an endpoint that will 404.
+    if (isCreatorDemo) {
+      return;
+    }
+
     setIsSavingNoteDoc(true);
     setNoteError(null);
 
@@ -4043,7 +4051,7 @@ export function LectureWorkspace({
           >
             <Msym name="palette" size="1.25rem" fill={false} weight={500} />
           </button>
-          {isCreatorDemo ? null : photoDockButton}
+          {photoDockButton}
           <div
             className={`memo-swatches ${isHighlightPaletteOpen ? "open" : ""}`.trim()}
             aria-label="Barva označevanja"
@@ -4068,7 +4076,7 @@ export function LectureWorkspace({
       ) : null;
       // A block selected on its own still gets the photo control — in the dock,
       // beside where it sits when text is selected.
-      const showPhotoOnlyDock = Boolean(selectedNoteBlockId) && !noteSelection && !isCreatorDemo;
+      const showPhotoOnlyDock = Boolean(selectedNoteBlockId) && !noteSelection;
       const dockToolbar = noteSelection
         ? annotationToolbar
         : showPhotoOnlyDock

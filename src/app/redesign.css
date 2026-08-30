@@ -2159,9 +2159,9 @@
   margin: 0;
   padding: 0;
   transition:
-    max-width 0.38s cubic-bezier(0.32, 0.72, 0, 1),
-    opacity 0.24s ease,
-    margin 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+    max-width 0.34s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.2s ease,
+    margin 0.34s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .memo-swatches.open {
@@ -8245,26 +8245,25 @@
     max-width: calc(100% - 0.7rem);
   }
 
+  /* The design cross-fades the dock's three layers and nothing more. A scale
+     on top of that would also be measured by useAnnotateWidth while it runs,
+     so the annotate pill would settle a pixel short of its content. */
   .memo-dock-layer {
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     opacity: 0;
-    transform: scale(0.98);
     pointer-events: none;
     animation: none;
-    transition:
-      opacity 0.22s ease,
-      transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+    transition: opacity 0.2s ease 0s;
   }
 
   .memo-dock-layer.on {
     display: flex;
     opacity: 1;
-    transform: none;
     pointer-events: auto;
-    transition-delay: 0.08s;
+    transition-delay: 0.1s;
   }
 
   .memo-dock-idle {
@@ -8286,8 +8285,8 @@
   }
 
   .memo-swatches.open {
-    margin: 0 0.35rem 0 0.3rem;
-    padding: 0.35rem;
+    margin: 0 0 0 0.3rem;
+    padding: 0.3rem;
   }
 
   /* The chat bar and the dock pill share one row and trade width. Which state
@@ -10480,22 +10479,97 @@
 
   /* On the phone the drop target names the action before the formats. */
   .memo-dropzone {
-    height: 13rem;
-    gap: 0.55rem;
-    border-color: var(--line);
+    height: auto;
+    gap: 0.6rem;
+    padding: 3rem 1.5rem;
+    border: 2px dashed var(--line);
+    border-radius: 24px;
     background: var(--surface);
+  }
+
+  .memo-dropzone-icon {
+    font-size: 2.6rem;
   }
 
   .memo-dropzone-lead {
     display: block;
     font-size: 1.08rem;
-    font-weight: 750;
-    letter-spacing: -0.02em;
+    font-weight: 700;
+    letter-spacing: -0.025em;
     color: var(--text);
   }
 
   .memo-dropzone-title {
-    font-size: 0.98rem;
+    font-size: 0.95rem;
+    text-align: center;
+  }
+
+  /* The paste-text field on the same screens. Production draws it as a sunken
+     field with a hairline; the artboard draws it as a raised card, like every
+     other surface on the phone. */
+  .memo-portal .note-source-inline-textarea,
+  .memo-portal .note-source-subsheet-textarea {
+    width: 100%;
+    /* Production caps this at ~7rem so the old sheet still fitted a keyboard.
+       The artboard's capture screen is a full screen, and the sheet scrolls. */
+    height: 14rem;
+    min-height: 0;
+    max-height: none;
+    padding: 1.1rem 1.2rem;
+    border: 0;
+    border-radius: 22px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow);
+    outline: none;
+    font-size: 1.05rem;
+    line-height: 1.5;
+    resize: none;
+  }
+
+  /*
+   * The recording orb, at the artboard's proportions: one coral ring around a
+   * coral core with a mic in it. Production draws a red core, no mic, and a
+   * second halo between them. The wave and the pause control stay — the
+   * artboard has neither, but they are what makes a recording screen usable.
+   */
+  .memo-record {
+    gap: 1.4rem;
+    padding: 3.5rem 0 0;
+  }
+
+  /* The artboard's orb is two still circles. The pulse and the halo are the
+     old modal's; the running clock and the live waveform already say that
+     something is being recorded. */
+  .memo-record-orb .ring {
+    background: rgba(244, 95, 90, 0.14);
+    animation: none;
+  }
+
+  .memo-record-orb .halo {
+    display: none;
+  }
+
+  .memo-record-orb .core {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 6.4rem;
+    height: 6.4rem;
+    background: var(--coral);
+    color: #fff;
+    box-shadow: none;
+    animation: none;
+  }
+
+  .memo-record-orb-mic {
+    font-size: 2.6rem;
+  }
+
+  .memo-record-clock {
+    font-size: 2rem;
+    font-weight: 750;
+    letter-spacing: -0.03em;
   }
 
   .memo-dropzone-hint {

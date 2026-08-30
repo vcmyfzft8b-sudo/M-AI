@@ -2158,7 +2158,7 @@ export function NoteSourceModal({
                   ) : null}
 
                   {!isRecording ? (
-                    <div>
+                    <div className="memo-only-desktop">
                       <label className="note-source-field-label">
                         Jezik
                       </label>
@@ -2193,26 +2193,41 @@ export function NoteSourceModal({
                         </div>
                       ) : null}
 
-                      {isRecording ? (
+                      {/* The design draws the orb, the clock and the hint for
+                          the whole of the record screen — it has no separate
+                          "before you start" state, because its timer runs from
+                          the moment the screen opens. Here the microphone has
+                          to be asked for first, so the same screen sits at
+                          0:00 until it is. */}
+                      {preparedRecording ? null : (
                         <div className="memo-record">
                           <div className={`memo-record-orb ${isPaused ? "paused" : ""}`.trim()}>
                             <span className="ring" />
                             <span className="halo" />
-                            <span className="core" />
+                            <span className="core">
+                              <Msym name="mic" className="memo-record-orb-mic" fill />
+                            </span>
                           </div>
                           <span className="memo-record-clock">
                             {formatTimestamp(elapsedSeconds * 1000)}
                           </span>
                           {/* The real input level, rather than the artboard's
                               decorative bars. */}
-                          <LiveAudioWave
-                            stream={visualizerStream}
-                            active={isRecording && !isPaused}
-                            className="memo-record-wave"
-                          />
+                          {isRecording ? (
+                            <LiveAudioWave
+                              stream={visualizerStream}
+                              active={!isPaused}
+                              className="memo-record-wave"
+                            />
+                          ) : null}
                           <span className="memo-record-hint">
-                            {isPaused ? "Snemanje je začasno ustavljeno" : "Snemanje predavanja poteka"}
+                            {!isRecording
+                              ? "Pritisni Začni snemanje, ko se predavanje začne."
+                              : isPaused
+                                ? "Snemanje je začasno ustavljeno"
+                                : "Snemanje poteka – zapisek nastane, ko ustaviš."}
                           </span>
+                          {isRecording ? (
                           <button
                             type="button"
                             disabled={Boolean(busyLabel)}
@@ -2233,8 +2248,9 @@ export function NoteSourceModal({
                             <Msym name={isPaused ? "play_arrow" : "pause"} size="1.15rem" />
                             {isPaused ? "Nadaljuj snemanje" : "Začasno ustavi"}
                           </button>
+                          ) : null}
                         </div>
-                      ) : null}
+                      )}
 
                       {isRecording ? (
                         <div className="memo-modal-actions">

@@ -971,7 +971,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
 
     const dropIcon = stage >= 1 ? (s.flowSource ? s.flowSource.icon : "🎙️") : "⬇️";
     const dropTitle = stage >= 1 ? (s.flowSource ? s.flowSource.noteTitle : "Nov zapisek") : "Spusti vir sem";
-    const dropSubtitle = stage >= 1 ? (s.flowSource ? s.flowSource.noteSub : "danes") : "Zvok, PDF, dokument ali besedilo";
+    const dropSubtitle = stage >= 1 ? (s.flowSource ? s.flowSource.noteSub : "danes") : "Zvok, PDF, dokument ali fotografija";
 
     return (
       <article

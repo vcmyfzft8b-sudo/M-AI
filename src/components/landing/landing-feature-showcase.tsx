@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { Fragment, useState } from "react";
 
 const FEATURES = [
-  { title: "Posnemi ali naloži", desc: "Predavanja, PDF-je, dokumente, povezave in prilepljeno besedilo." },
+  { title: "Posnemi ali naloži", desc: "Predavanja, PDF-je, dokumente, fotografije zapiskov in povezave." },
   { title: "Dobi clean zapiske", desc: "Urejeni zapiski in prepisi brez ročnega prepisovanja." },
   { title: "Flashcardi", desc: "Ključni pojmi se spremenijo v kartice za hitro ponavljanje." },
   { title: "Kvizi", desc: "Preveri razumevanje z vprašanji iz svojega gradiva." },

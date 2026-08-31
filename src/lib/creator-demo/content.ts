@@ -1167,7 +1167,8 @@ Najpogosteje spremljajo čas zaključevanja meseca, obrat zalog, delež zamujeni
 const ZGODOVINA: DemoNotePack = {
   key: "zgodovina",
   title: "Zgodovina – francoska revolucija",
-  sourceType: "text",
+  sourceType: "presentation",
+  pageCount: 18,
   durationSeconds: null,
   summary:
     "Zapiski povzamejo vzroke francoske revolucije, potek od sklica generalnih stanov do Napoleonovega prevzema oblasti ter dolgoročne posledice za Evropo.",
@@ -1503,12 +1504,11 @@ export const DEMO_SEED_FOLDERS: Array<{
  * and body disagree.
  */
 export const DEMO_CREATE_PACKS: Record<
-  "record" | "upload" | "text" | "pdf" | "photo" | "link",
+  "record" | "upload" | "pdf" | "photo" | "link",
   string[]
 > = {
   record: ["mikroekonomija"],
   upload: ["mikroekonomija"],
-  text: ["zgodovina"],
   pdf: ["anatomija"],
   photo: ["anatomija"],
   link: ["erp"],

@@ -789,22 +789,115 @@ function lectureProcessingStageLabel(
   return "Pripravljam zapiske";
 }
 
+type GenerationPreview = "notes" | "cards" | "quiz" | "test";
+
+/** The note body a generating note is on its way to becoming. */
+const GENERATION_NOTE_PARAGRAPHS = [
+  ["full", "full", "short"],
+  ["full", "full", "full", "short"],
+  ["full", "short"],
+] as const;
+
+const GENERATION_QUIZ_OPTIONS = [0, 1, 2, 3];
+
+/**
+ * The ghost of the thing being generated, in the shape that will replace it.
+ *
+ * Built the way the two route skeletons are — out of the real screen's own
+ * measurements rather than out of a spinner that says nothing about what is
+ * coming. A wait that ends in a stack of flashcards should look like a stack of
+ * flashcards filling in.
+ */
+function GenerationSkeleton({ kind }: { kind: GenerationPreview }) {
+  if (kind === "notes") {
+    return (
+      <div className="memo-gen-preview" aria-hidden="true">
+        {GENERATION_NOTE_PARAGRAPHS.map((paragraph, index) => (
+          <div key={index} className="memo-gen-para">
+            <span className="app-loading-pill memo-gen-heading" />
+            {paragraph.map((line, lineIndex) => (
+              <span
+                key={lineIndex}
+                className={`app-loading-pill memo-gen-line ${line === "short" ? "short" : ""}`.trim()}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (kind === "cards") {
+    return (
+      <div className="memo-gen-preview" aria-hidden="true">
+        <div className="memo-gen-deckhead">
+          <div className="memo-gen-cardhead">
+            <span className="app-loading-pill" />
+            <span className="app-loading-pill" />
+          </div>
+          <span className="app-loading-pill memo-gen-bar cards" />
+        </div>
+        <div className="memo-gen-face">
+          <span className="app-loading-pill" />
+          <span className="app-loading-pill" />
+        </div>
+      </div>
+    );
+  }
+
+  if (kind === "quiz") {
+    return (
+      <div className="memo-gen-preview" aria-hidden="true">
+        <span className="app-loading-pill memo-gen-bar quiz" />
+        <div className="memo-gen-quizcard">
+          <span className="app-loading-pill memo-gen-prompt" />
+          {GENERATION_QUIZ_OPTIONS.map((option) => (
+            <span key={option} className="app-loading-pill memo-gen-option" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="memo-gen-preview" aria-hidden="true">
+      <span className="app-loading-pill memo-gen-bar test" />
+      <div className="memo-gen-testblock">
+        <span className="app-loading-pill memo-gen-prompt" />
+        <span className="app-loading-pill memo-gen-testinput" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A stage caption over the ghost of what is being made.
+ *
+ * The caption carries the one thing a skeleton cannot: these waits run for
+ * minutes and move through named stages, and "Ustvarjam kartice" is the
+ * difference between a screen that is working and a screen that is stuck. It
+ * sits on the panel itself — the panel is already the surface, and the card
+ * this used to draw around itself landed as a second card inside the first.
+ */
 function StudyGenerationNotice({
   stageCopy,
   bodyCopy = "Ustvarjanje teče v ozadju. Lahko zapreš ta pogled in se vrneš čez nekaj minut.",
+  preview,
 }: {
   stageCopy: string;
   bodyCopy?: string;
+  preview: GenerationPreview;
 }) {
   return (
-    <div className="lecture-study-generation-notice" role="status" aria-live="polite">
-      <div className="lecture-study-generation-progress" aria-hidden="true">
-        <span />
+    <div className="memo-gen" role="status" aria-live="polite" aria-busy="true">
+      <div className="memo-gen-head">
+        <p className="memo-gen-stage">{stageCopy}</p>
+        <p className="memo-gen-copy">{bodyCopy}</p>
+        <span className="memo-gen-track" aria-hidden="true">
+          <span />
+        </span>
       </div>
-      <div className="lecture-study-generation-copy">
-        <p className="lecture-study-generation-stage">{stageCopy}</p>
-        <p>{bodyCopy}</p>
-      </div>
+      <GenerationSkeleton kind={preview} />
     </div>
   );
 }
@@ -4100,8 +4193,11 @@ export function LectureWorkspace({
           ) : shouldPollLecture(detail.lecture.status) ||
             noteEnrichmentPending ||
             notesArtifactLoadFailed ? (
-            <div className="lecture-notes-processing">
+            /* The wrapper the finished note uses, so the caption and the ghost
+               paragraphs sit exactly where the note's own text will. */
+            <div className="memo-note-body">
               <StudyGenerationNotice
+                preview="notes"
                 stageCopy={notesArtifactLoadFailed ? "Nalaganje zapiskov" : lectureProcessingStageCopy}
                 bodyCopy={
                   notesArtifactLoadFailed
@@ -4287,45 +4383,42 @@ export function LectureWorkspace({
 
             {activeStudyView === "flashcards" ? (
               totalFlashcards === 0 ? (
-                <div className="memo-study-empty">
-                  {!isStudyGenerating ? (
-                    <>
-                      <div className="memo-study-empty-orb">
-                        <Emoji symbol="🗂️" size="4.4rem" />
-                      </div>
-                      <p className="memo-study-empty-title">
-                        {detail.lecture.status !== "ready"
-                          ? "Učna orodja se odklenejo, ko je obdelava zapiska končana."
-                          : detail.studyAsset?.status === "failed"
-                            ? "Ustvarjanje kartic ni uspelo."
-                            : "Ustvari kartice, ko si pripravljen."}
-                      </p>
-                      <p className="memo-study-empty-copy">
-                        {detail.lecture.status !== "ready"
-                          ? "Najprej nastanejo zapiski. Nato lahko kartice ustvariš ročno."
-                          : "Ustvari učni komplet v istem jeziku in iz iste vsebine kot tvoji zapiski."}
-                      </p>
-                    </>
-                  ) : null}
-                  {detail.lecture.status === "ready" && !isStudyGenerating ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleStudyCreate()}
-                      disabled={isRegeneratingStudy}
-                      className="memo-study-empty-cta"
-                    >
-                      {isRegeneratingStudy ? (
-                        <Msym name="progress_activity" className="memo-spin" size="1.2rem" />
-                      ) : (
-                        <Msym name="style" size="1.2rem" fill={false} weight={500} />
-                      )}
-                      Ustvari kartice
-                    </button>
-                  ) : null}
-                  {isStudyGenerating ? (
-                    <StudyGenerationNotice stageCopy={studyStageCopy} />
-                  ) : null}
-                </div>
+                isStudyGenerating ? (
+                  <StudyGenerationNotice preview="cards" stageCopy={studyStageCopy} />
+                ) : (
+                  <div className="memo-study-empty">
+                    <div className="memo-study-empty-orb">
+                      <Emoji symbol="🗂️" size="4.4rem" />
+                    </div>
+                    <p className="memo-study-empty-title">
+                      {detail.lecture.status !== "ready"
+                        ? "Učna orodja se odklenejo, ko je obdelava zapiska končana."
+                        : detail.studyAsset?.status === "failed"
+                          ? "Ustvarjanje kartic ni uspelo."
+                          : "Ustvari kartice, ko si pripravljen."}
+                    </p>
+                    <p className="memo-study-empty-copy">
+                      {detail.lecture.status !== "ready"
+                        ? "Najprej nastanejo zapiski. Nato lahko kartice ustvariš ročno."
+                        : "Ustvari učni komplet v istem jeziku in iz iste vsebine kot tvoji zapiski."}
+                    </p>
+                    {detail.lecture.status === "ready" ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleStudyCreate()}
+                        disabled={isRegeneratingStudy}
+                        className="memo-study-empty-cta"
+                      >
+                        {isRegeneratingStudy ? (
+                          <Msym name="progress_activity" className="memo-spin" size="1.2rem" />
+                        ) : (
+                          <Msym name="style" size="1.2rem" fill={false} weight={500} />
+                        )}
+                        Ustvari kartice
+                      </button>
+                    ) : null}
+                  </div>
+                )
             ) : visibleFlashcardRoundSummary ? (
                 <StudyCompletionCard
                   eyebrow={
@@ -4548,45 +4641,42 @@ export function LectureWorkspace({
               )
             ) : activeStudyView === "quiz" ? (
               totalQuizQuestions === 0 ? (
-                <div className="memo-study-empty">
-                  {!isQuizGenerating ? (
-                    <>
-                      <div className="memo-study-empty-orb">
-                        <Emoji symbol="❓" size="4.4rem" />
-                      </div>
-                      <p className="memo-study-empty-title">
-                        {detail.lecture.status !== "ready"
-                          ? "Učna orodja se odklenejo, ko je obdelava zapiska končana."
-                          : detail.quizAsset?.status === "failed"
-                            ? "Ustvarjanje kviza ni uspelo."
-                            : "Ustvari kviz, ko si pripravljen."}
-                      </p>
-                      <p className="memo-study-empty-copy">
-                        {detail.lecture.status !== "ready"
-                          ? "Najprej nastanejo zapiski. Nato lahko kvize ustvariš ročno."
-                          : "Ustvari vprašanja z več izbirami v istem jeziku kot tvoji zapiski."}
-                      </p>
-                    </>
-                  ) : null}
-                  {detail.lecture.status === "ready" && !isQuizGenerating ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleQuizCreate()}
-                      disabled={isRegeneratingQuiz}
-                      className="memo-study-empty-cta"
-                    >
-                      {isRegeneratingQuiz ? (
-                        <Msym name="progress_activity" className="memo-spin" size="1.2rem" />
-                      ) : (
-                        <Msym name="quiz" size="1.2rem" fill={false} weight={500} />
-                      )}
-                      Ustvari kviz
-                    </button>
-                  ) : null}
-                  {isQuizGenerating ? (
-                    <StudyGenerationNotice stageCopy={quizStageCopy} />
-                  ) : null}
-                </div>
+                isQuizGenerating ? (
+                  <StudyGenerationNotice preview="quiz" stageCopy={quizStageCopy} />
+                ) : (
+                  <div className="memo-study-empty">
+                    <div className="memo-study-empty-orb">
+                      <Emoji symbol="❓" size="4.4rem" />
+                    </div>
+                    <p className="memo-study-empty-title">
+                      {detail.lecture.status !== "ready"
+                        ? "Učna orodja se odklenejo, ko je obdelava zapiska končana."
+                        : detail.quizAsset?.status === "failed"
+                          ? "Ustvarjanje kviza ni uspelo."
+                          : "Ustvari kviz, ko si pripravljen."}
+                    </p>
+                    <p className="memo-study-empty-copy">
+                      {detail.lecture.status !== "ready"
+                        ? "Najprej nastanejo zapiski. Nato lahko kvize ustvariš ročno."
+                        : "Ustvari vprašanja z več izbirami v istem jeziku kot tvoji zapiski."}
+                    </p>
+                    {detail.lecture.status === "ready" ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleQuizCreate()}
+                        disabled={isRegeneratingQuiz}
+                        className="memo-study-empty-cta"
+                      >
+                        {isRegeneratingQuiz ? (
+                          <Msym name="progress_activity" className="memo-spin" size="1.2rem" />
+                        ) : (
+                          <Msym name="quiz" size="1.2rem" fill={false} weight={500} />
+                        )}
+                        Ustvari kviz
+                      </button>
+                    ) : null}
+                  </div>
+                )
               ) : quizRoundSummary ? (
                 <StudyCompletionCard
                   eyebrow={
@@ -4751,47 +4841,44 @@ export function LectureWorkspace({
                 />
               )
             ) : detail.practiceTestQuestions.length === 0 ? (
-              <div className="memo-study-empty">
-                {!isPracticeTestGenerating ? (
-                  <>
-                    <div className="memo-study-empty-orb">
-                      <Emoji symbol="📝" size="4.4rem" />
-                    </div>
-                    <p className="memo-study-empty-title">
-                      {detail.lecture.status !== "ready"
-                        ? "Učna orodja se odklenejo, ko je obdelava zapiska končana."
-                        : detail.practiceTestAsset?.status === "failed"
-                          ? "Ustvarjanje preizkusa ni uspelo."
-                          : hasCompletedPracticeTest
-                            ? "Začni nov preizkus, ko si pripravljen."
-                            : "Ustvari svoj prvi preizkus."}
-                    </p>
-                    <p className="memo-study-empty-copy">
-                      {detail.lecture.status !== "ready"
-                        ? "Najprej nastanejo zapiski. Nato lahko začneš preizkus."
+              isPracticeTestGenerating ? (
+                <StudyGenerationNotice preview="test" stageCopy={practiceTestStageCopy} />
+              ) : (
+                <div className="memo-study-empty">
+                  <div className="memo-study-empty-orb">
+                    <Emoji symbol="📝" size="4.4rem" />
+                  </div>
+                  <p className="memo-study-empty-title">
+                    {detail.lecture.status !== "ready"
+                      ? "Učna orodja se odklenejo, ko je obdelava zapiska končana."
+                      : detail.practiceTestAsset?.status === "failed"
+                        ? "Ustvarjanje preizkusa ni uspelo."
                         : hasCompletedPracticeTest
-                          ? "Vsak nov preizkus prinese nov naključen nabor odprtih vprašanj."
-                          : "Najprej ustvari prvi nabor samostojnih odprtih vprašanj, nato preglej rezultate in po koncu začni nove preizkuse."}
-                    </p>
-                  </>
-                ) : null}
-                {detail.lecture.status === "ready" && !isPracticeTestGenerating ? (
-                  <button
-                    type="button"
-                    onClick={() => void handlePracticeTestStart()}
-                    disabled={isStartingPracticeTest}
-                    className="memo-study-empty-cta"
-                  >
-                    {isStartingPracticeTest ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : null}
-                    {hasCompletedPracticeTest ? "Začni nov preizkus" : "Ustvari preizkus"}
-                  </button>
-                ) : null}
-                {isPracticeTestGenerating ? (
-                  <StudyGenerationNotice stageCopy={practiceTestStageCopy} />
-                ) : null}
-              </div>
+                          ? "Začni nov preizkus, ko si pripravljen."
+                          : "Ustvari svoj prvi preizkus."}
+                  </p>
+                  <p className="memo-study-empty-copy">
+                    {detail.lecture.status !== "ready"
+                      ? "Najprej nastanejo zapiski. Nato lahko začneš preizkus."
+                      : hasCompletedPracticeTest
+                        ? "Vsak nov preizkus prinese nov naključen nabor odprtih vprašanj."
+                        : "Najprej ustvari prvi nabor samostojnih odprtih vprašanj, nato preglej rezultate in po koncu začni nove preizkuse."}
+                  </p>
+                  {detail.lecture.status === "ready" ? (
+                    <button
+                      type="button"
+                      onClick={() => void handlePracticeTestStart()}
+                      disabled={isStartingPracticeTest}
+                      className="memo-study-empty-cta"
+                    >
+                      {isStartingPracticeTest ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : null}
+                      {hasCompletedPracticeTest ? "Začni nov preizkus" : "Ustvari preizkus"}
+                    </button>
+                  ) : null}
+                </div>
+              )
             ) : currentPracticeAttempt ? (
               (() => {
                 /*

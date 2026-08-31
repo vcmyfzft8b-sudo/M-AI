@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 import { BillingPortalButton } from "@/components/billing-portal-button";
@@ -79,9 +80,14 @@ export function SettingsScreen({
   const homeHref = useAppHref("/app");
   const startHref = useAppHref("/app/start");
   const [confirm, setConfirm] = useState<ConfirmKind | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   // A bottom sheet on the phone, a centred dialog on desktop — and on the
-  // phone it leaves and drags like every other sheet.
-  const confirmSheet = useSheet(useCallback(() => setConfirm(null), []));
+  // phone it leaves and drags like every other sheet. Once the logout POST is
+  // away the sheet is locked: the page is on its way out, and dismissing it
+  // would leave the settings screen looking idle while it goes.
+  const confirmSheet = useSheet(useCallback(() => setConfirm(null), []), {
+    locked: isLoggingOut,
+  });
   const [toast, setToast] = useState<string | null>(null);
   const [isInstallGuideOpen, setIsInstallGuideOpen] = useState(false);
   /* Same badge as the gear carries, on the row that answers it. */
@@ -105,7 +111,6 @@ export function SettingsScreen({
 
     return () => window.removeEventListener(INSTALL_GUIDE_SEEN_KEY, sync);
   }, []);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const preference = useSyncExternalStore(
     subscribeToThemePreference,
@@ -278,7 +283,10 @@ export function SettingsScreen({
 
   function runConfirm() {
     const kind = confirm;
-    confirmSheet.dismiss();
+
+    if (isLoggingOut) {
+      return;
+    }
 
     /*
      * The demo draws the whole screen — the artboard has Odjava and Izbriši
@@ -286,18 +294,22 @@ export function SettingsScreen({
      * settings page. There is no account behind it, so both confirmations stop
      * at the toast rather than posting a logout or opening a mail client.
      */
-    if (isDemo) {
-      if (kind === "logout") {
-        showToast("V predstavitvi ni računa za odjavo");
-        return;
-      }
-
-      if (kind === "delete") {
-        showToast("V predstavitvi ni računa za izbris");
-        return;
-      }
+    if (isDemo && (kind === "logout" || kind === "delete")) {
+      confirmSheet.dismiss();
+      showToast(
+        kind === "logout"
+          ? "V predstavitvi ni računa za odjavo"
+          : "V predstavitvi ni računa za izbris",
+      );
+      return;
     }
 
+    /*
+     * The logout is a POST that comes back as a full page load, and there is
+     * nothing for the app to render in between. So the sheet stays where it
+     * is with the spinner on the button that was pressed, rather than closing
+     * onto a settings screen that looks like nothing happened.
+     */
     if (kind === "logout") {
       setIsLoggingOut(true);
       const form = document.createElement("form");
@@ -307,6 +319,8 @@ export function SettingsScreen({
       form.submit();
       return;
     }
+
+    confirmSheet.dismiss();
 
     if (kind === "delete") {
       window.location.href = deleteRequestHref;
@@ -397,8 +411,12 @@ export function SettingsScreen({
                   className="memo-settings-signout"
                   onClick={() => setConfirm("logout")}
                   disabled={isLoggingOut}
+                  aria-busy={isLoggingOut}
                 >
-                  Odjava
+                  {isLoggingOut ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  ) : null}
+                  {isLoggingOut ? "Odjavljam..." : "Odjava"}
                 </button>
               </div>
             </>
@@ -433,6 +451,7 @@ export function SettingsScreen({
             aria-label="Prekliči"
             className={sheetClass("memo-scrim", confirmSheet.closing)}
             onClick={() => confirmSheet.dismiss()}
+            disabled={isLoggingOut}
           />
           <div
             className={sheetClass("memo-confirm memo-confirm-fixed", confirmSheet.closing)}
@@ -450,6 +469,7 @@ export function SettingsScreen({
                 type="button"
                 className="memo-confirm-cancel"
                 onClick={() => confirmSheet.dismiss()}
+                disabled={isLoggingOut}
               >
                 Prekliči
               </button>
@@ -457,8 +477,13 @@ export function SettingsScreen({
                 type="button"
                 className={`memo-confirm-go ${confirm === "delete" ? "danger" : ""}`.trim()}
                 onClick={runConfirm}
+                disabled={isLoggingOut}
+                aria-busy={isLoggingOut}
               >
-                {confirmCopy[confirm].cta}
+                {isLoggingOut ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : null}
+                {isLoggingOut ? "Odjavljam..." : confirmCopy[confirm].cta}
               </button>
             </div>
           </div>

@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { getAuthProviderAvailability } from "@/lib/auth-providers";
+import { AuthBackLink } from "@/components/auth-back-link";
 import { BrandLogo } from "@/components/brand-logo";
 import { EmailAuthForm } from "@/components/email-auth-form";
 import { BRAND_NAME } from "@/lib/brand";
@@ -84,11 +84,7 @@ export async function AuthPageShell(props: {
           </a>
 
           <div className="landing-nav-actions">
-            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-            <a href="/" className="app-back-button">
-              <ChevronLeft className="h-5 w-5" />
-              Nazaj
-            </a>
+            <AuthBackLink />
           </div>
         </div>
       </header>

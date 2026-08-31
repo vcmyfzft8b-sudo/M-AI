@@ -579,10 +579,22 @@ const NoteRow = memo(function NoteRow({
           aria-label={`Dejanja za ${title}`}
           aria-expanded={isMenuOpen}
           className={`memo-note-chevron ${isMenuOpen ? "open" : ""}`.trim()}
-          onPointerDown={(event) => event.stopPropagation()}
+          /*
+           * No `stopPropagation` here on purpose: the chevron is the part of
+           * the row that says the actions are there, so it is the part a finger
+           * reaches for to pull them out. Letting the pointerdown reach the
+           * surface makes the chevron a drag handle as well as a toggle.
+           */
           onClick={(event) => {
             event.stopPropagation();
-            suppressClickRef.current = false;
+
+            // The drag already decided where the row sits. Toggling on the
+            // click that ends it would immediately undo it.
+            if (suppressClickRef.current) {
+              suppressClickRef.current = false;
+              return;
+            }
+
             onToggleMenu(lecture.id);
           }}
         >
@@ -657,6 +669,10 @@ export function HomeDashboard({
   showDevDashboard: boolean;
 }) {
   const router = useRouter();
+  const {
+    navigateWithFeedback: navigateDashboardWithFeedback,
+    overlay: dashboardNavigationOverlay,
+  } = useInstantNavigation();
   const searchParams = useSearchParams();
   const homeHref = useAppHref("/app");
   // The upgrade screen exists on the demo too; `/app/start` would walk out of it.
@@ -1007,7 +1023,7 @@ export function HomeDashboard({
 
   function openQuickAction(mode: NoteSourceMode) {
     if (!canCreateNotes) {
-      router.push(startHref);
+      navigateDashboardWithFeedback(startHref);
       return;
     }
 
@@ -1290,6 +1306,7 @@ export function HomeDashboard({
 
   return (
     <>
+      {dashboardNavigationOverlay}
       <div className="memo-home-screen" ref={attachScreen}>
         {/* Phone chrome: the lockup and the gear that opens Nastavitve. */}
         <div className="memo-m-topbar memo-only-mobile flex">
@@ -1318,7 +1335,7 @@ export function HomeDashboard({
               aria-label="Dev dashboard"
               data-testid="dev-dashboard-button"
               className="memo-utility-link memo-only-desktop"
-              onClick={() => router.push("/dev/account-state")}
+              onClick={() => navigateDashboardWithFeedback("/dev/account-state")}
             >
               <span>Dev dashboard</span>
               <Msym name="chevron_right" size="1.1rem" fill={false} weight={400} />
@@ -1437,7 +1454,7 @@ export function HomeDashboard({
               <button
                 type="button"
                 className="memo-promo upgrade memo-only-mobile flex"
-                onClick={() => router.push(startHref)}
+                onClick={() => navigateDashboardWithFeedback(startHref)}
               >
                 <span className="memo-promo-copy">
                   <span>Odkleni Premium</span>
@@ -1548,7 +1565,7 @@ export function HomeDashboard({
             className="memo-m-create"
             onClick={() => {
               if (!canCreateNotes) {
-                router.push(startHref);
+                navigateDashboardWithFeedback(startHref);
                 return;
               }
 

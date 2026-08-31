@@ -18,6 +18,7 @@ import { useAppLayout } from "@/components/app-layout-context";
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { Emoji, Msym } from "@/components/msym";
+import { useInstantNavigation } from "@/components/navigation-loading";
 import { NoteReadAloud } from "@/components/note-read-aloud";
 import { StudyCompletionCard } from "@/components/study-completion-card";
 import { MemoPortal } from "@/components/memo-portal";
@@ -54,7 +55,7 @@ import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { readChatStream } from "@/lib/chat-stream-client";
 import { sheetClass, useSheet } from "@/components/use-sheet";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type {
   ChatMessageWithCitations,
   LectureDetail,
@@ -1268,6 +1269,8 @@ export function LectureWorkspace({
   initialTrialChatMessagesRemaining: number;
 }) {
   const router = useRouter();
+  const { navigateWithFeedback, overlay: navigationOverlay, navigatingTo } = useInstantNavigation();
+  const notePathname = usePathname();
   const isCreatorDemo = useIsCreatorDemo();
   const [detail, setDetail] = useState(initialDetail);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("notes");
@@ -4024,7 +4027,7 @@ export function LectureWorkspace({
               <button
                 type="button"
                 className="memo-button-outline small"
-                onClick={() => router.push(startHref)}
+                onClick={() => navigateWithFeedback(startHref)}
               >
                 Nadgradi
               </button>
@@ -5516,7 +5519,10 @@ export function LectureWorkspace({
   const noteEmojiSymbol = detail.lecture.emoji?.trim() || noteEmoji(detail.lecture);
 
   function navigateHome() {
-    router.push(homeHref);
+    // Leaving the note is a whole-screen swap, so it goes through the shared
+    // feedback path: the library's skeleton paints in the tap frame instead of
+    // the note sitting there unchanged while the router fetches.
+    navigateWithFeedback(homeHref);
   }
 
   async function renameNote() {
@@ -5567,7 +5573,7 @@ export function LectureWorkspace({
       // The note is gone, so there is nothing to come back to: leave for the
       // library rather than closing the sheet onto a dead screen.
       setIsNoteActionBusy(false);
-      router.push(homeHref);
+      navigateWithFeedback(homeHref);
     } catch (error) {
       setNoteActionError(
         error instanceof Error ? error.message : "Zapiska ni bilo mogoče izbrisati.",
@@ -5608,7 +5614,13 @@ export function LectureWorkspace({
   // The design keeps the chat panel open on every tab; only the button that
   // brings it back is withheld on the quiz, which wants the full width while a
   // question is on screen.
-  const showChatPanel = !isChatDismissed;
+  //
+  // It also closes the moment a navigation away starts. The panel is portalled
+  // into the shell's third grid column, outside the content area the loading
+  // overlay covers, so leaving the note with it open left the note's chat
+  // standing beside the library's skeleton until the route committed.
+  const isLeavingNote = navigatingTo != null && navigatingTo !== notePathname;
+  const showChatPanel = !isChatDismissed && !isLeavingNote;
 
   useEffect(() => {
     setChatOpen(showChatPanel);
@@ -5967,6 +5979,7 @@ export function LectureWorkspace({
 
   return (
     <>
+      {navigationOverlay}
       <div className="memo-note-screen" data-note-tab={activeTabId}>
         {/* Phone chrome: back, the note's emoji, and the actions menu. */}
         <div className="memo-m-navbar memo-only-mobile flex">

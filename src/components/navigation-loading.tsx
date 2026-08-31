@@ -26,6 +26,13 @@ import { mapAppHref, unmapDemoPathname } from "@/lib/creator-demo/paths";
  */
 const NAVIGATION_FAILSAFE_MS = 12000;
 
+/**
+ * How long the router waits for the overlay to paint before starting anyway.
+ * Two frames at 60Hz plus room for a slow one — and, on a hidden document
+ * where no frame ever comes, the whole of the wait.
+ */
+const NAVIGATION_PAINT_FLOOR_MS = 64;
+
 function getPathnameFromHref(href: string) {
   const cutIndex = href.search(/[?#]/);
   return cutIndex === -1 ? href : href.slice(0, cutIndex);
@@ -90,6 +97,14 @@ function routeSkeletonStillMounted() {
 type NavigationFeedback = {
   navigateWithFeedback: (href: string) => void;
   isNavigating: boolean;
+  /**
+   * Pathname the pending navigation is headed for, or null when none is in
+   * flight. A page that has to take itself apart before it is replaced (the
+   * note screen's chat column, which lives outside the overlay) compares this
+   * with its own path: while the destination is still this page, the
+   * navigation is the one that arrived here, not one leaving.
+   */
+  navigatingTo: string | null;
 };
 
 const NavigationFeedbackContext = createContext<NavigationFeedback | null>(null);
@@ -102,14 +117,26 @@ const NavigationFeedbackContext = createContext<NavigationFeedback | null>(null)
  * has mounted.
  */
 export function NavigationFeedbackProvider({ children }: { children: ReactNode }) {
-  const { navigateWithFeedback, overlay, isNavigating } = useInstantNavigationState();
+  const { navigateWithFeedback, overlay, isNavigating, navigatingTo } = useInstantNavigationState();
 
   return (
-    <NavigationFeedbackContext.Provider value={{ navigateWithFeedback, isNavigating }}>
+    <NavigationFeedbackContext.Provider
+      value={{ navigateWithFeedback, isNavigating, navigatingTo }}
+    >
       {children}
       {overlay}
     </NavigationFeedbackContext.Provider>
   );
+}
+
+/**
+ * The layout-hosted feedback, or null outside a provider. `InstantLink` uses this rather than
+ * `useInstantNavigation` because it renders no overlay of its own: without a provider there is
+ * nothing to show the fallback overlay in, so the link must stay an ordinary link instead of
+ * delaying the push for a skeleton nobody will see.
+ */
+export function useNavigationFeedback() {
+  return useContext(NavigationFeedbackContext);
 }
 
 /**
@@ -134,7 +161,7 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
   const router = useRouter();
   const currentPathname = usePathname();
   const demoBasePath = useCreatorDemoBasePath();
-  const frameRef = useRef<number | null>(null);
+  const cancelPaintWaitRef = useRef<(() => void) | null>(null);
   const [pending, setPending] = useState<{
     href: string;
     top: number;
@@ -198,20 +225,63 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
 
   useEffect(
     () => () => {
-      if (frameRef.current != null) {
-        window.cancelAnimationFrame(frameRef.current);
-      }
+      cancelPaintWaitRef.current?.();
     },
     [],
   );
+
+  /**
+   * Runs `start` once the overlay has had a frame to paint.
+   *
+   * A hidden document never fires `requestAnimationFrame`, so waiting on it
+   * alone strands the navigation until the tab comes back — the tap does
+   * nothing, which is worse than the missing skeleton this file exists to fix.
+   * The timer is the floor: whichever comes first wins, and the other is
+   * dropped.
+   */
+  function afterPaint(start: () => void) {
+    cancelPaintWaitRef.current?.();
+
+    let frameId: number | null = null;
+    let innerFrameId: number | null = null;
+
+    const run = () => {
+      cancelPaintWaitRef.current?.();
+      start();
+    };
+
+    cancelPaintWaitRef.current = () => {
+      cancelPaintWaitRef.current = null;
+
+      if (frameId != null) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      if (innerFrameId != null) {
+        window.cancelAnimationFrame(innerFrameId);
+      }
+
+      window.clearTimeout(timeoutId);
+    };
+
+    const timeoutId = window.setTimeout(run, NAVIGATION_PAINT_FLOOR_MS);
+
+    frameId = window.requestAnimationFrame(() => {
+      frameId = null;
+      innerFrameId = window.requestAnimationFrame(() => {
+        innerFrameId = null;
+        run();
+      });
+    });
+  }
 
   function navigateWithFeedback(rawHref: string) {
     const href = mapAppHref(rawHref, demoBasePath);
     const targetPathname = getPathnameFromHref(href);
 
-    // Same page (e.g. only the query changes) or a route without a skeleton:
-    // navigate normally, an overlay would flash or lie about the destination.
-    if (disabled || targetPathname === currentPathname || !getNavigationSkeleton(href, demoBasePath)) {
+    // Same page (e.g. only the query changes): nothing is going to be replaced,
+    // so an overlay would only flash over content that stays put.
+    if (disabled || targetPathname === currentPathname) {
       router.push(href);
       return;
     }
@@ -223,13 +293,9 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
       fromPathname: currentPathname,
     });
 
-    // Double rAF guarantees the skeleton is painted before the router starts.
-    frameRef.current = window.requestAnimationFrame(() => {
-      frameRef.current = window.requestAnimationFrame(() => {
-        frameRef.current = null;
-        router.push(href);
-      });
-    });
+    // Two frames: enough for the overlay to be on screen before the router
+    // starts competing for the main thread.
+    afterPaint(() => router.push(href));
   }
 
   const skeleton = pending ? getNavigationSkeleton(pending.href, demoBasePath) : null;
@@ -242,7 +308,22 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
       ? document.querySelector<HTMLElement>(".app-shell-content")
       : null;
   const overlay =
-    pending && skeleton
+    pending && !skeleton
+      ? /*
+         * The destination has no skeleton of its own (the onboarding/paywall
+         * takeover, a dev route). Standing a wrong skeleton in for it would
+         * lie about where the click is going, and doing nothing is the bug
+         * this whole file exists to fix — so the feedback is a progress bar
+         * pinned to the top of the viewport. It paints in the click frame,
+         * covers nothing, and needs to know nothing about the target.
+         */
+        createPortal(
+          <div className="navigation-progress memo-portal" data-navigation-overlay="" role="status">
+            <span className="navigation-progress-bar" />
+          </div>,
+          document.body,
+        )
+      : pending && skeleton
       ? contentHost
         ? createPortal(
             <div
@@ -275,5 +356,10 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
           )
       : null;
 
-  return { navigateWithFeedback, overlay, isNavigating: pending != null };
+  return {
+    navigateWithFeedback,
+    overlay,
+    isNavigating: pending != null,
+    navigatingTo: pending ? getPathnameFromHref(pending.href) : null,
+  };
 }

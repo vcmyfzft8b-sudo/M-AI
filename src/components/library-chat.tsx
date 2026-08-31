@@ -2,10 +2,10 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 
 import { Emoji, Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
+import { useInstantNavigation } from "@/components/navigation-loading";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { sheetClass, useSheet } from "@/components/use-sheet";
@@ -45,7 +45,7 @@ export function LibraryChat({
   onOpenChange: (open: boolean) => void;
   hasPaidAccess: boolean;
 }) {
-  const router = useRouter();
+  const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const logRef = useRef<HTMLDivElement | null>(null);
   const scopeRef = useRef<HTMLDivElement | null>(null);
   const [draft, setDraft] = useState("");
@@ -139,7 +139,7 @@ export function LibraryChat({
     }
 
     if (!hasPaidAccess) {
-      router.push("/app/start");
+      navigateWithFeedback("/app/start");
       return;
     }
 
@@ -412,6 +412,7 @@ export function LibraryChat({
 
   return (
     <>
+      {navigationOverlay}
       {/* Desktop: the always-visible ask bar over the notes column. */}
       {open ? null : (
         <div className="memo-homebar-wrap memo-only-desktop">

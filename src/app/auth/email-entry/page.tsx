@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
 
+import { AuthBackLink } from "@/components/auth-back-link";
 import { BrandLogo } from "@/components/brand-logo";
 import { EmailEntryForm } from "@/components/email-entry-form";
 import { getOptionalUser } from "@/lib/auth";
@@ -31,11 +31,7 @@ export default async function EmailEntryPage({
   return (
     <main className="landing-shell landing-auth-page email-entry-page">
       <div className="email-entry-topbar">
-        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-        <a href="/" className="app-back-button">
-          <ChevronLeft className="h-5 w-5" />
-          Nazaj
-        </a>
+        <AuthBackLink />
       </div>
 
       <section className="landing-auth-wrap email-entry-wrap">

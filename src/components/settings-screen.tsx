@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
 
 import { BillingPortalButton } from "@/components/billing-portal-button";
 import { InstantLink } from "@/components/instant-link";
@@ -9,6 +8,7 @@ import { Emoji, Msym } from "@/components/msym";
 import { useAppHref } from "@/components/creator-demo/creator-demo-context";
 import { InstallGuide } from "@/components/install-guide";
 import { MemoPortal } from "@/components/memo-portal";
+import { useInstantNavigation } from "@/components/navigation-loading";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { BRAND_NAME, BRAND_SUPPORT_EMAIL } from "@/lib/brand";
 import type { ThemePreference } from "@/lib/theme";
@@ -75,7 +75,8 @@ export function SettingsScreen({
   /** The creator demo has no account: sign-out and deletion are hidden. */
   isDemo?: boolean;
 }) {
-  const router = useRouter();
+  const { navigateWithFeedback, overlay: navigationOverlay, isNavigating } = useInstantNavigation();
+  const homeHref = useAppHref("/app");
   const startHref = useAppHref("/app/start");
   const [confirm, setConfirm] = useState<ConfirmKind | null>(null);
   // A bottom sheet on the phone, a centred dialog on desktop — and on the
@@ -321,6 +322,7 @@ export function SettingsScreen({
 
   return (
     <>
+      {navigationOverlay}
       <div className="memo-settings-screen">
         {/* Phone: the sheet's close control, which returns to the library. */}
         <div className="memo-settings-topbar memo-only-mobile flex">
@@ -330,7 +332,8 @@ export function SettingsScreen({
             // An X closes a screen, so it is the app's close button rather
             // than the library header's slightly larger round control.
             className="memo-close-button"
-            onClick={() => router.push("/app")}
+            aria-busy={isNavigating}
+            onClick={() => navigateWithFeedback(homeHref)}
           >
             <Msym name="close" size="1.45rem" fill={false} weight={500} />
           </button>

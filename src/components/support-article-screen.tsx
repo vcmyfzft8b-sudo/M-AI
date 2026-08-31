@@ -1,9 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { Msym } from "@/components/msym";
+import { useInstantNavigation } from "@/components/navigation-loading";
 
 /** A single help article, on the redesign's page chrome. */
 export function SupportArticleScreen({
@@ -17,16 +16,18 @@ export function SupportArticleScreen({
   content: string;
   backHref?: string;
 }) {
-  const router = useRouter();
+  const { navigateWithFeedback, overlay: navigationOverlay, isNavigating } = useInstantNavigation();
 
   return (
     <div className="memo-support-screen">
+      {navigationOverlay}
       <div className="memo-settings-topbar memo-only-mobile flex">
         <button
           type="button"
           aria-label="Nazaj"
           className="memo-m-round"
-          onClick={() => router.push(backHref)}
+          aria-busy={isNavigating}
+          onClick={() => navigateWithFeedback(backHref)}
         >
           <Msym name="arrow_back" size="1.5rem" fill={false} weight={500} />
         </button>
@@ -34,7 +35,7 @@ export function SupportArticleScreen({
 
       <div className="memo-page">
         <div className="memo-breadcrumb memo-only-desktop">
-          <button type="button" onClick={() => router.push(backHref)}>
+          <button type="button" aria-busy={isNavigating} onClick={() => navigateWithFeedback(backHref)}>
             Pomoč
           </button>
           <Msym name="chevron_right" size="1.1rem" fill={false} weight={400} />

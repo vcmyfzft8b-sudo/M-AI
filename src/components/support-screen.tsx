@@ -1,9 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-
 import { InstantLink } from "@/components/instant-link";
 import { Msym } from "@/components/msym";
+import { useInstantNavigation } from "@/components/navigation-loading";
 import { HELP_SECTIONS } from "@/lib/help-center";
 
 /**
@@ -15,10 +14,12 @@ import { HELP_SECTIONS } from "@/lib/help-center";
  * the phone artboard does too.
  */
 export function SupportScreen({ basePath = "/app/support" }: { basePath?: string }) {
-  const router = useRouter();
+  const { navigateWithFeedback, overlay: navigationOverlay, isNavigating } = useInstantNavigation();
+  const backHref = basePath === "/app/support" ? "/app" : basePath.replace(/\/support$/, "");
 
   return (
     <div className="memo-support-screen">
+      {navigationOverlay}
       <div className="memo-page">
         {/* The phone puts the title and the way back on one row, the title on
             the left; desktop reaches this screen from the rail and needs no
@@ -29,7 +30,8 @@ export function SupportScreen({ basePath = "/app/support" }: { basePath?: string
             type="button"
             aria-label="Nazaj"
             className="memo-m-round memo-only-mobile flex"
-            onClick={() => router.push(basePath === "/app/support" ? "/app" : basePath.replace(/\/support$/, ""))}
+            aria-busy={isNavigating}
+            onClick={() => navigateWithFeedback(backHref)}
           >
             <Msym name="arrow_back" size="1.5rem" fill={false} weight={500} />
           </button>

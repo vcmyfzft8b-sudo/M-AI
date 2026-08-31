@@ -5,6 +5,7 @@ export type NoteStatus = "uploading" | "queued" | "transcribing" | "generating_n
 
 export type PreviewNote = {
   id: string;
+  emoji: string;
   title: string;
   source: SourceKind;
   date: string;
@@ -18,121 +19,83 @@ export type PreviewFolder = {
   noteIds: string[];
 };
 
-export type SheetMode = "record" | "upload" | "text" | "link";
+export type CaptureMode = "record" | "upload" | "file" | "link";
 
-export const QUICK_ACTIONS: Array<{ id: SheetMode; label: string; detail: string; icon: string; accent: string }> = [
-  { id: "record", label: "Posnemi predavanje", detail: "Začni z enim dotikom", icon: "🎙️", accent: "record" },
-  { id: "upload", label: "Naloži zvok", detail: "MP3, M4A, WAV ali WEBM", icon: "📤", accent: "default" },
-  { id: "text", label: "Naloži PDF ali dokument", detail: "Pretvori gradivo v strukturirane zapiske", icon: "📄", accent: "default" },
-  { id: "link", label: "Dodaj povezavo", detail: "Spletni članek ali vir", icon: "🔗", accent: "default" },
+/* The create sheet's four rows, as `createOptions` lists them. */
+export const CREATE_OPTIONS: Array<{ id: CaptureMode; emoji: string; label: string }> = [
+  { id: "record", emoji: "🎙️", label: "Posnemi zvok" },
+  { id: "upload", emoji: "🔊", label: "Naloži zvok" },
+  { id: "file", emoji: "📚", label: "PDF, datoteka ali besedilo" },
+  { id: "link", emoji: "🔗", label: "Spletna povezava" },
 ];
 
-export const SOURCE_MODES: Array<{ id: SheetMode; label: string; icon: string }> = [
-  { id: "record", label: "Snemaj", icon: "🎙️" },
-  { id: "upload", label: "Naloži", icon: "📤" },
-  { id: "text", label: "Dokumenti", icon: "📄" },
-  { id: "link", label: "Povezava", icon: "🔗" },
-];
-
-export const SHEET_CONTENT: Record<
-  SheetMode,
+/*
+ * The capture screen each option opens, from the design's own `CAPTURE` table.
+ * `noteTitle` is the title the finished note takes, as `addNote` sets it.
+ */
+export const CAPTURE: Record<
+  CaptureMode,
   {
     title: string;
-    cardLabel: string;
-    cardTitle: string;
-    cardMeta: string;
-    createIcon: string;
-    secondary: string;
-    noteTitle: string;
+    cta: string;
+    emoji: string;
     source: SourceKind;
+    placeholder?: string;
+    noteTitle: string;
+    /* The demo already has something to work with, so the capture screen opens
+       on a chosen file rather than an empty picker: this is what it shows. */
+    pickedName?: string;
+    pickedMeta?: string;
+    pickedText?: string;
   }
 > = {
-  record: {
-    title: "Posnemi predavanje",
-    cardLabel: "Pripravljen posnetek",
-    cardTitle: "posnetek-predavanje-4.m4a",
-    cardMeta: "48:12 • posneto v aplikaciji",
-    createIcon: "📄",
-    secondary: "Posnemi znova",
-    noteTitle: "Posneto predavanje – 4. teden",
-    source: "audio",
-  },
+  record: { title: "Posnemi zvok", cta: "Ustavi in ustvari zapisek", emoji: "🎙️", source: "audio", noteTitle: "Nov posnetek predavanja" },
   upload: {
     title: "Naloži zvok",
-    cardLabel: "Izbrana datoteka",
-    cardTitle: "Predavanje-IS-4.m4a",
-    cardMeta: "51,2 MB • 47:38",
-    createIcon: "📄",
-    secondary: "Izberi drugo datoteko",
-    noteTitle: "Predavanje IS – 4. teden",
+    cta: "Ustvari zapisek",
+    emoji: "🔊",
+    placeholder: "MP3, M4A, WAV ali WEBM",
     source: "audio",
+    noteTitle: "Naložen posnetek",
+    pickedName: "Predavanje-IS-4.m4a",
+    pickedMeta: "51,2 MB • 47:38",
   },
-  text: {
-    title: "Naloži dokument ali fotografije",
-    cardLabel: "Izbran dokument",
-    cardTitle: "Poslovni-IS-skripta.pdf",
-    cardMeta: "24 strani • 3,1 MB",
-    createIcon: "📄",
-    secondary: "Izberi drug dokument",
-    noteTitle: "Poslovni IS – skripta",
+  file: {
+    title: "PDF, datoteka ali besedilo",
+    cta: "Ustvari zapisek",
+    emoji: "📚",
+    placeholder: "PDF, DOCX, PPTX ali slika",
     source: "pdf",
+    noteTitle: "Naloženo gradivo",
+    pickedName: "Poslovni-IS-skripta.pdf",
+    pickedMeta: "24 strani • 3,1 MB",
   },
   link: {
-    title: "Dodaj povezavo",
-    cardLabel: "Povezava",
-    cardTitle: "https://www.finance.si/erp-sistemi-v-praksi",
-    cardMeta: "Spletni članek • slovenščina",
-    createIcon: "📄",
-    secondary: "Prilepi drugo povezavo",
-    noteTitle: "Članek: ERP sistemi v praksi",
+    title: "Spletna povezava",
+    cta: "Ustvari zapisek",
+    emoji: "🔗",
+    placeholder: "https://…",
     source: "link",
+    noteTitle: "Uvožena povezava",
+    pickedText: "https://www.finance.si/erp-sistemi-v-praksi",
   },
 };
 
-export const SOURCE_VARIANTS: Record<SheetMode, Array<{ cardTitle: string; cardMeta: string; noteTitle: string }>> = {
-  record: [
-    { cardTitle: "posnetek-predavanje-4.m4a", cardMeta: "48:12 • posneto v aplikaciji", noteTitle: "Posneto predavanje – 4. teden" },
-    { cardTitle: "posnetek-vaje-2.m4a", cardMeta: "31:47 • posneto v aplikaciji", noteTitle: "Posnete vaje – 2. teden" },
-  ],
-  upload: [
-    { cardTitle: "Predavanje-IS-4.m4a", cardMeta: "51,2 MB • 47:38", noteTitle: "Predavanje IS – 4. teden" },
-    { cardTitle: "Mikroekonomija-5.mp3", cardMeta: "38,6 MB • 36:02", noteTitle: "Mikroekonomija – 5. predavanje" },
-  ],
-  text: [
-    { cardTitle: "Poslovni-IS-skripta.pdf", cardMeta: "24 strani • 3,1 MB", noteTitle: "Poslovni IS – skripta" },
-    { cardTitle: "Anatomija-zivcevje.pptx", cardMeta: "42 prosojnic • 8,4 MB", noteTitle: "Anatomija – živčevje" },
-  ],
-  link: [
-    { cardTitle: "https://www.finance.si/erp-sistemi-v-praksi", cardMeta: "Spletni članek • slovenščina", noteTitle: "Članek: ERP sistemi v praksi" },
-    { cardTitle: "https://sl.wikipedia.org/wiki/Informacijski_sistem", cardMeta: "Wikipedia • slovenščina", noteTitle: "Wikipedia: Informacijski sistem" },
-  ],
-};
-
+/* The help centre's three groups, exactly as the design's `helpSections` list
+   them. The rows lead somewhere in the real app; here they are the design's
+   own inert rows. */
 export const HELP_SECTIONS = [
   {
     title: "Pogosto",
-    items: [
-      { title: "Družinski paket?", body: "Enega paketa ne moreš deliti med več računov. Vsak študent ima svojo knjižnico zapiskov." },
-      { title: "Ali lahko podarim Memo AI?", body: "Da. Kupiš kodo, jo pošlješ prijatelju, on pa jo unovči v nastavitvah." },
-      { title: "Ali podpirate moj jezik?", body: "Podpiramo slovenščino, angleščino, nemščino, hrvaščino in še 20 drugih jezikov." },
-      { title: "Predlog funkcije", body: "Napiši nam na info@memoai.eu. Predloge študentov uvrstimo v načrt razvoja." },
-    ],
+    items: ["Družinski paket?", "Ali lahko podarim Memo?", "Ali podpirate moj jezik?", "Predlog funkcije"],
   },
   {
     title: "Snemanje in zapiski",
-    items: [
-      { title: "Video povezava ne deluje", body: "Povezave do videov (YouTube, Drive) niso podprte. Naloži zvok ali dokument." },
-      { title: "Ne morem naložiti zvoka", body: "Datoteka mora biti krajša od 3 ur in manjša od 300 MB. Uporabi MP3, M4A, WAV ali WEBM." },
-      { title: "Prepis je prekratek ali netočen", body: "Telefon približaj predavatelju in se izogibaj hrupu. Krajše datoteke dajo natančnejši prepis." },
-    ],
+    items: ["Video povezava ne deluje", "Ne morem naložiti zvoka", "Prepis je prekratek ali netočen"],
   },
   {
     title: "Račun in dostop",
-    items: [
-      { title: "Unovči kodo", body: "Odpri Nastavitve, izberi Unovči kodo in vpiši 8-mestno kodo." },
-      { title: "Pogoji uporabe", body: "Memo AI je namenjen osebni študijski uporabi. Gradiva ne deli naprej brez dovoljenja avtorja." },
-      { title: "Politika zasebnosti", body: "Posnetki in zapiski so tvoji. Hranimo jih šifrirano, brisanje je takojšnje in trajno." },
-    ],
+    items: ["Unovči kodo", "Politika zasebnosti", "Politika vračil", "Pogoji uporabe"],
   },
 ];
 
@@ -144,84 +107,95 @@ export const THEME_OPTIONS = [
 
 export type PreviewTheme = (typeof THEME_OPTIONS)[number]["value"];
 
+/*
+ * The mockup's palette: the `.phone` token block from the redesign's phone
+ * artboard, verbatim. The names keep an `--m-` prefix because the mockup
+ * renders inside the landing page, where `--surface` and friends already belong
+ * to something else. `landing.css` states the same pair for the system theme;
+ * these are what the in-mockup theme switch writes inline.
+ */
 export const LIGHT_TOKENS: Record<string, string> = {
-  "--m-canvas": "#e9e9ed",
+  "--m-bg": "#f1f1f5",
   "--m-surface": "#ffffff",
-  "--m-muted": "#f5f5f7",
-  "--m-sheet": "#ffffff",
   "--m-label": "#000000",
-  "--m-second": "#66666d",
-  "--m-third": "#d2d2d7",
-  "--m-sep": "rgba(0,0,0,0.08)",
-  "--m-sep-strong": "rgba(0,0,0,0.16)",
-  "--m-tint": "#0066cc",
-  "--m-tint-soft": "rgba(0,102,204,0.1)",
-  "--m-green": "#34c759",
-  "--m-green-soft": "rgba(52,199,89,0.12)",
-  "--m-red": "#ff3b30",
-  "--m-red-soft": "rgba(255,59,48,0.12)",
-  "--m-shadow": "0 4px 20px rgba(0,0,0,0.04)",
-  "--m-nav": "rgba(255,255,255,0.72)",
-  "--m-card-grad": "linear-gradient(180deg, #ffffff, #fafafb)",
-  "--m-hl-blue": "rgba(88,140,255,0.32)",
-  "--m-hl-orange": "rgba(232,132,52,0.4)",
-  "--m-hl-deep": "rgba(226,86,32,0.4)",
-  "--m-dock-toggle": "rgba(255,255,255,0.98)",
-  "--m-dock-toggle-color": "#000000",
-  "--m-tab-active": "linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.52))",
-  "--m-tab-active-shadow": "inset 0 1px 0 rgba(255,255,255,0.58), 0 12px 24px rgba(0,0,0,0.1)",
-  "--m-action-card": "#f7f7f9",
-  "--m-card-border": "rgba(0,0,0,0.058)",
-  "--m-icon-surface": "rgba(255,255,255,0.92)",
+  "--m-second": "#8e8e95",
+  "--m-tile": "rgba(0,0,0,0.05)",
+  "--m-field": "rgba(0,0,0,0.07)",
+  "--m-line": "rgba(0,0,0,0.09)",
+  "--m-shadow": "0 2px 10px rgba(0,0,0,0.05)",
+  "--m-shadow-lg": "0 -12px 40px rgba(0,0,0,0.18)",
+  "--m-promo": "#5b21e0",
+  "--m-scrim": "rgba(0,0,0,0.28)",
+  "--m-focus-ring": "rgba(0,0,0,0.22)",
+  "--m-head-hl": "color-mix(in srgb, #2563eb 24%, transparent)",
+  "--m-callout-definition-line": "color-mix(in srgb, #2563eb 20%, var(--m-line))",
+  "--m-callout-definition-bg": "color-mix(in srgb, #dbeafe 44%, var(--m-surface))",
+  "--m-callout-example-line": "color-mix(in srgb, #16a34a 20%, var(--m-line))",
+  "--m-callout-example-bg": "color-mix(in srgb, #dcfce7 40%, var(--m-surface))",
+  "--m-callout-mistake-line": "color-mix(in srgb, #dc2626 20%, var(--m-line))",
+  "--m-callout-mistake-bg": "color-mix(in srgb, #fee2e2 38%, var(--m-surface))",
+  "--m-callout-takeaway-line": "color-mix(in srgb, #f59e0b 22%, var(--m-line))",
+  "--m-callout-takeaway-bg": "color-mix(in srgb, #fef3c7 44%, var(--m-surface))",
+  "--m-drag-easy-bg": "rgba(230,246,234,0.9)",
+  "--m-drag-easy-ink": "#16a34a",
+  "--m-drag-again-bg": "rgba(253,233,230,0.9)",
+  "--m-drag-again-ink": "#dc2626",
+  "--m-exit-easy-bg": "#e6f6ea",
+  "--m-exit-easy-line": "#67d48a",
+  "--m-exit-again-bg": "#fde9e6",
+  "--m-exit-again-line": "#f28b82",
 };
 
 export const DARK_TOKENS: Record<string, string> = {
-  "--m-canvas": "#000000",
+  "--m-bg": "#000000",
   "--m-surface": "#1c1c1e",
-  "--m-muted": "#2c2c2e",
-  "--m-sheet": "#1c1c1e",
   "--m-label": "#ffffff",
-  "--m-second": "#a1a1a8",
-  "--m-third": "#636366",
-  "--m-sep": "rgba(255,255,255,0.15)",
-  "--m-sep-strong": "rgba(255,255,255,0.25)",
-  "--m-tint": "#0a84ff",
-  "--m-tint-soft": "rgba(10,132,255,0.15)",
-  "--m-green": "#32d74b",
-  "--m-green-soft": "rgba(50,215,75,0.15)",
-  "--m-red": "#ff453a",
-  "--m-red-soft": "rgba(255,69,58,0.15)",
-  "--m-shadow": "0 8px 30px rgba(0,0,0,0.4)",
-  "--m-nav": "rgba(28,28,30,0.72)",
-  "--m-card-grad": "linear-gradient(180deg, #1c1c1e, #232325)",
-  "--m-hl-blue": "rgba(88,140,255,0.42)",
-  "--m-hl-orange": "rgba(232,132,52,0.5)",
-  "--m-hl-deep": "rgba(226,86,32,0.55)",
-  "--m-dock-toggle": "linear-gradient(135deg, #1b1b1f, #2a2a30)",
-  "--m-dock-toggle-color": "#ffffff",
-  "--m-tab-active": "linear-gradient(180deg, rgba(54,54,58,0.72), rgba(34,34,38,0.66))",
-  "--m-tab-active-shadow": "inset 0 1px 0 rgba(255,255,255,0.03), 0 4px 12px rgba(0,0,0,0.16)",
-  "--m-action-card": "#2a2a2c",
-  "--m-card-border": "rgba(255,255,255,0.108)",
-  "--m-icon-surface": "rgba(28,28,30,0.92)",
+  "--m-second": "#8e8e95",
+  "--m-tile": "rgba(255,255,255,0.09)",
+  "--m-field": "rgba(255,255,255,0.12)",
+  "--m-line": "rgba(255,255,255,0.14)",
+  "--m-shadow": "0 2px 10px rgba(0,0,0,0.5)",
+  "--m-shadow-lg": "0 -12px 40px rgba(0,0,0,0.75)",
+  "--m-promo": "#b18bff",
+  "--m-scrim": "rgba(0,0,0,0.5)",
+  "--m-focus-ring": "rgba(255,255,255,0.28)",
+  "--m-head-hl": "color-mix(in srgb, #2563eb 42%, transparent)",
+  "--m-callout-definition-line": "color-mix(in srgb, #2563eb 28%, var(--m-line))",
+  "--m-callout-definition-bg": "color-mix(in srgb, #1d4ed8 22%, var(--m-surface))",
+  "--m-callout-example-line": "color-mix(in srgb, #16a34a 28%, var(--m-line))",
+  "--m-callout-example-bg": "color-mix(in srgb, #15803d 22%, var(--m-surface))",
+  "--m-callout-mistake-line": "color-mix(in srgb, #dc2626 28%, var(--m-line))",
+  "--m-callout-mistake-bg": "color-mix(in srgb, #b91c1c 20%, var(--m-surface))",
+  "--m-callout-takeaway-line": "color-mix(in srgb, #f59e0b 30%, var(--m-line))",
+  "--m-callout-takeaway-bg": "color-mix(in srgb, #b45309 22%, var(--m-surface))",
+  "--m-drag-easy-bg": "color-mix(in srgb, var(--m-surface) 78%, #32d74b)",
+  "--m-drag-easy-ink": "#32d74b",
+  "--m-drag-again-bg": "color-mix(in srgb, var(--m-surface) 78%, #ff453a)",
+  "--m-drag-again-ink": "#ff453a",
+  "--m-exit-easy-bg": "color-mix(in srgb, var(--m-surface) 82%, #32d74b)",
+  "--m-exit-easy-line": "color-mix(in srgb, #32d74b 45%, rgba(255,255,255,0.25))",
+  "--m-exit-again-bg": "color-mix(in srgb, var(--m-surface) 82%, #ff453a)",
+  "--m-exit-again-line": "color-mix(in srgb, #ff453a 45%, rgba(255,255,255,0.25))",
 };
 
 export const TABS = [
-  { id: "notes", label: "Zapiski", icon: "📝" },
-  { id: "study", label: "Učenje", icon: "🧠" },
-  { id: "chat", label: "Klepet", icon: "💬" },
-  { id: "transcript", label: "Prepis", icon: "📜" },
+  { id: "notes", label: "Zapiski", icon: "description", tint: "#f45f5a" },
+  { id: "flashcards", label: "Flashcards", icon: "style", tint: "oklch(0.66 0.15 295)" },
+  { id: "quiz", label: "Kviz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
+  { id: "test", label: "Test", icon: "assignment", tint: "oklch(0.66 0.15 150)" },
+  { id: "transcript", label: "Prepis", icon: "text_snippet", tint: "oklch(0.66 0.15 250)" },
 ] as const;
 
 export type NoteTab = (typeof TABS)[number]["id"];
 
-export const STUDY_MODES = [
-  { id: "flashcards", label: "Flashcards" },
-  { id: "quiz", label: "Kviz" },
-  { id: "practice_test", label: "Test" },
-] as const;
-
-export type StudyMode = (typeof STUDY_MODES)[number]["id"];
+/** What the phone's nav bar names each study screen. Flashcards names nothing. */
+export const SUB_SCREEN_TITLES: Record<NoteTab, string> = {
+  notes: "",
+  flashcards: "",
+  quiz: "Kviz",
+  test: "Vadbeni test",
+  transcript: "Prepis",
+};
 
 export type NoteThemeKey = "is" | "micro" | "anatomy" | "stats";
 
@@ -397,215 +371,248 @@ export const THEME_STUDY: Record<NoteThemeKey, ThemeStudy> = {
   },
 };
 
-export type NoteSegment = { text: string; hl?: "orange" | "deep" | "blue" | "underline" | null };
+/*
+ * A note body, in the blocks the design's own renderer takes: a highlighted
+ * heading, bulleted lines, plain lines and the four callouts. `blockStyle`
+ * below is the artboard's function, transcribed.
+ */
+export type NoteBlockKind =
+  | "h2"
+  | "li"
+  | "p"
+  | "callout-definition"
+  | "callout-example"
+  | "callout-common_mistake"
+  | "callout-key_takeaway";
 
-export type NoteBody = {
-  overview: NoteSegment[];
-  callout: string;
-  points: NoteSegment[][];
-  why: string;
+export type NoteBlock = { text: string; kind: NoteBlockKind };
+
+/*
+ * The left rule stays one colour in both themes; the fill and the hairline
+ * change with it, so each callout reads as a tint of its own colour rather
+ * than a washed-out block on a dark page. The pairs live in landing.css.
+ */
+const CALLOUTS: Record<string, { edge: string; token: string }> = {
+  definition: { edge: "#2563eb", token: "definition" },
+  example: { edge: "#16a34a", token: "example" },
+  common_mistake: { edge: "#dc2626", token: "mistake" },
+  key_takeaway: { edge: "#f59e0b", token: "takeaway" },
 };
 
-export const NOTE_BODIES: Record<NoteThemeKey, NoteBody> = {
-  is: {
-    overview: [
-      { text: "Poslovni informacijski sistemi (IS)", hl: "orange" },
-      { text: "so ključni za zbiranje, obdelavo in posredovanje informacij, ki podpirajo upravljanje in odločanje v podjetjih. Z razvojem od funkcijskih do" },
-      { text: "integriranih", hl: "deep" },
-      { text: "rešitev, kot so" },
-      { text: "ERP sistemi", hl: "blue" },
-      { text: ", se povečuje učinkovitost in preglednost poslovanja. Razumevanje poslovnih procesov in njihova prenova, podprta z informatiko," },
-      { text: "sta bistvena za konkurenčnost", hl: "underline" },
-      { text: "." },
-    ],
-    callout: "Ključno: Integriran sistem hrani podatke v eni bazi, zato pot od dogodka do odločitve traja minute in ne dni.",
-    points: [
-      [{ text: "Transakcijski sistemi zajemajo podatke, poslovodski jih povzamejo v poročila." }],
-      [{ text: "ERP", hl: "blue" }, { text: "poveže finance, nabavo, proizvodnjo in kadre v eno bazo." }],
-      [{ text: "Prenova procesov pred uvedbo prepreči prenos slabih praks." }],
-    ],
-    why: "Podjetje, ki podatke zbira ročno, izgublja čas in dela napake. Integriran sistem skrajša pot od dogodka do odločitve, kar je pogosto vprašanje na izpitu.",
-  },
-  micro: {
-    overview: [
-      { text: "Cenovna elastičnost povpraševanja", hl: "orange" },
-      { text: "pove, za koliko odstotkov se spremeni povpraševana količina, če se cena spremeni za en odstotek. Kadar je koeficient večji od 1, je povpraševanje" },
-      { text: "elastično", hl: "deep" },
-      { text: "in dvig cene zniža skupni prihodek; kadar je manjši od 1, je" },
-      { text: "neelastično", hl: "blue" },
-      { text: ". Elastičnost je odvisna od števila substitutov, deleža v proračunu in časa," },
-      { text: "zato je ključna za odločitve o cenah", hl: "underline" },
-      { text: "." },
-    ],
-    callout: "Ključno: Prihodek je največji tam, kjer je elastičnost enaka 1 — nad to točko vsak dvig cene prihodek zmanjša.",
-    points: [
-      [{ text: "Koeficient", hl: "blue" }, { text: "= odstotna sprememba količine / odstotna sprememba cene." }],
-      [{ text: "Več substitutov in daljše obdobje pomenita bolj elastično povpraševanje." }],
-      [{ text: "Nujne dobrine so neelastične, luksuzne pa elastične." }],
-    ],
-    why: "Podjetje, ki elastičnosti svojih izdelkov ne pozna, napačno postavi ceno in izgubi prihodek. Na izpitu se to preverja z izračunom koeficienta in razlago učinka na prihodek.",
-  },
-  anatomy: {
-    overview: [
-      { text: "Živčni sistem", hl: "orange" },
-      { text: "sprejema, obdeluje in prenaša informacije po telesu. Osnovna enota je" },
-      { text: "nevron", hl: "deep" },
-      { text: ", ki dražljaj prevaja po aksonu do" },
-      { text: "sinapse", hl: "blue" },
-      { text: ", kjer se signal prenese kemično. Delimo ga na osrednji del z možgani in hrbtenjačo ter obkrajni del," },
-      { text: "ki povezuje telo z okoljem", hl: "underline" },
-      { text: "." },
-    ],
-    callout: "Ključno: Akcijski potencial je odziv po načelu vse ali nič — jakost dražljaja se kodira s frekvenco impulzov, ne z njihovo velikostjo.",
-    points: [
-      [{ text: "Nevron sestavljajo dendriti, celično telo, akson in sinaptični končiči." }],
-      [{ text: "Mielinska ovojnica", hl: "blue" }, { text: "močno pospeši prevajanje impulza po aksonu." }],
-      [{ text: "Refleksni lok teče od receptorja prek hrbtenjače do efektorja." }],
-    ],
-    why: "Pot dražljaja od receptorja do odziva je osnova za razlago refleksov in bolezni živčevja — tipično izpitno vprašanje.",
-  },
-  stats: {
-    overview: [
-      { text: "Hipotezno testiranje", hl: "orange" },
-      { text: "je postopek, s katerim iz vzorca sklepamo o celotni populaciji. Postavimo" },
-      { text: "ničelno hipotezo", hl: "deep" },
-      { text: ", ki trdi, da razlike ni, in ji nasproti alternativno hipotezo. Iz podatkov izračunamo" },
-      { text: "p-vrednost", hl: "blue" },
-      { text: "in jo primerjamo s stopnjo značilnosti, ki jo določimo vnaprej," },
-      { text: "zato je sklep ponovljiv in preverljiv", hl: "underline" },
-      { text: "." },
-    ],
-    callout: "Ključno: Statistična značilnost pove le, da razlika verjetno ni naključna — ne pove, kako velika ali praktično pomembna je.",
-    points: [
-      [{ text: "Ničelna hipoteza", hl: "blue" }, { text: "predpostavlja, da razlike med skupinama ni." }],
-      [{ text: "P-vrednost pod stopnjo značilnosti (običajno 0,05) pomeni zavrnitev ničelne hipoteze." }],
-      [{ text: "Napaka prve vrste zavrne pravilno hipotezo, napaka druge vrste spregleda pravo razliko." }],
-    ],
-    why: "Brez pravilno zastavljene hipoteze in razumevanja p-vrednosti so sklepi iz podatkov lahko napačni. Na izpitu se to preverja z izračunom in razlago odločitve o zavrnitvi.",
-  },
+export function blockStyle(kind: NoteBlockKind): CSSProperties {
+  if (kind === "h2") {
+    return {
+      display: "inline-block",
+      margin: "30.4px 0 11.2px",
+      padding: "1.6px 5.12px",
+      borderRadius: "6.72px",
+      background: "var(--m-head-hl)",
+      color: "var(--m-label)",
+      fontSize: "21.12px",
+      fontWeight: 800,
+      letterSpacing: "-0.035em",
+    };
+  }
+  if (kind.startsWith("callout-")) {
+    const c = CALLOUTS[kind.slice(8)] ?? CALLOUTS.definition;
+    return {
+      margin: "16px 0",
+      padding: "13.6px 16px 13.6px 18.4px",
+      borderRadius: "14px",
+      border: `1px solid var(--m-callout-${c.token}-line)`,
+      borderLeft: `4px solid ${c.edge}`,
+      background: `var(--m-callout-${c.token}-bg)`,
+      fontSize: "16.96px",
+      lineHeight: 1.82,
+      letterSpacing: "-0.015em",
+    };
+  }
+  return {
+    position: "relative",
+    margin: "0 0 8.8px",
+    paddingLeft: "16.8px",
+    fontSize: "16.96px",
+    lineHeight: 1.82,
+    letterSpacing: "-0.015em",
+  };
+}
+
+export const NOTE_BODIES: Record<NoteThemeKey, NoteBlock[]> = {
+  is: [
+    { kind: "h2", text: "Pregled" },
+    {
+      kind: "p",
+      text: "Poslovni informacijski sistemi zbirajo, obdelujejo in posredujejo informacije, ki podpirajo upravljanje in odločanje. Z razvojem od funkcijskih do integriranih rešitev, kot so ERP sistemi, se povečuje učinkovitost in preglednost poslovanja.",
+    },
+    {
+      kind: "callout-definition",
+      text: "Integriran sistem hrani podatke v eni bazi, zato pot od dogodka do odločitve traja minute in ne dni.",
+    },
+    { kind: "h2", text: "Ključni pojmi" },
+    { kind: "li", text: "Transakcijski sistemi zajemajo podatke, poslovodski jih povzamejo v poročila." },
+    { kind: "li", text: "ERP poveže finance, nabavo, proizvodnjo in kadre v eno bazo." },
+    { kind: "li", text: "Prenova procesov pred uvedbo prepreči prenos slabih praks." },
+    { kind: "callout-common_mistake", text: "Pozor: informatika v slabem procesu ga le pospeši — najprej prenova, šele nato uvedba." },
+    { kind: "h2", text: "Za izpit" },
+    {
+      kind: "callout-key_takeaway",
+      text: "Zapomni si: integriran sistem skrajša pot od dogodka do odločitve, kar je pogosto izpitno vprašanje.",
+    },
+    { kind: "li", text: "Znaj primerjati funkcijske in integrirane sisteme na primeru." },
+  ],
+  micro: [
+    { kind: "h2", text: "Pregled" },
+    {
+      kind: "p",
+      text: "Cenovna elastičnost povpraševanja pove, za koliko odstotkov se spremeni povpraševana količina, če se cena spremeni za en odstotek. Kadar je koeficient večji od 1, je povpraševanje elastično in dvig cene zniža skupni prihodek.",
+    },
+    {
+      kind: "callout-definition",
+      text: "Koeficient elastičnosti = odstotna sprememba količine / odstotna sprememba cene.",
+    },
+    { kind: "h2", text: "Ključni pojmi" },
+    { kind: "li", text: "Več substitutov in daljše obdobje pomenita bolj elastično povpraševanje." },
+    { kind: "li", text: "Nujne dobrine so neelastične, luksuzne pa elastične." },
+    { kind: "li", text: "Prihodek je največji tam, kjer je elastičnost enaka 1." },
+    { kind: "callout-common_mistake", text: "Pozor: premik krivulje ni isto kot premik po krivulji." },
+    { kind: "h2", text: "Za izpit" },
+    {
+      kind: "callout-key_takeaway",
+      text: "Zapomni si: nad točko enotske elastičnosti vsak dvig cene skupni prihodek zmanjša.",
+    },
+    { kind: "li", text: "Znaj izračunati koeficient in razložiti učinek na prihodek." },
+  ],
+  anatomy: [
+    { kind: "h2", text: "Pregled" },
+    {
+      kind: "p",
+      text: "Živčni sistem sprejema, obdeluje in prenaša informacije po telesu. Osnovna enota je nevron, ki dražljaj prevaja po aksonu do sinapse, kjer se signal prenese kemično.",
+    },
+    {
+      kind: "callout-definition",
+      text: "Akcijski potencial je odziv po načelu vse ali nič — jakost dražljaja se kodira s frekvenco impulzov.",
+    },
+    { kind: "h2", text: "Ključni pojmi" },
+    { kind: "li", text: "Nevron sestavljajo dendriti, celično telo, akson in sinaptični končiči." },
+    { kind: "li", text: "Mielinska ovojnica močno pospeši prevajanje impulza po aksonu." },
+    { kind: "li", text: "Refleksni lok teče od receptorja prek hrbtenjače do efektorja." },
+    { kind: "callout-common_mistake", text: "Pozor: močnejši dražljaj ne pomeni večjega impulza, ampak pogostejšega." },
+    { kind: "h2", text: "Za izpit" },
+    {
+      kind: "callout-key_takeaway",
+      text: "Zapomni si: pot dražljaja od receptorja do odziva je osnova za razlago refleksov.",
+    },
+    { kind: "li", text: "Znaj narisati refleksni lok in poimenovati vse člene." },
+  ],
+  stats: [
+    { kind: "h2", text: "Pregled" },
+    {
+      kind: "p",
+      text: "Hipotezno testiranje je postopek, s katerim iz vzorca sklepamo o celotni populaciji. Postavimo ničelno hipotezo, izračunamo p-vrednost in jo primerjamo s stopnjo značilnosti, ki jo določimo vnaprej.",
+    },
+    {
+      kind: "callout-definition",
+      text: "P-vrednost je verjetnost, da bi ob veljavni ničelni hipotezi dobili tako ali bolj skrajen rezultat.",
+    },
+    { kind: "h2", text: "Ključni pojmi" },
+    { kind: "li", text: "Ničelna hipoteza predpostavlja, da razlike med skupinama ni." },
+    { kind: "li", text: "P-vrednost pod stopnjo značilnosti (običajno 0,05) pomeni zavrnitev ničelne hipoteze." },
+    { kind: "li", text: "Napaka prve vrste zavrne pravilno hipotezo, napaka druge vrste spregleda pravo razliko." },
+    { kind: "callout-common_mistake", text: "Pozor: statistična značilnost ne pove, kako velika ali praktično pomembna je razlika." },
+    { kind: "h2", text: "Za izpit" },
+    {
+      kind: "callout-key_takeaway",
+      text: "Zapomni si: sklep je ponovljiv le, če je stopnja značilnosti določena vnaprej.",
+    },
+    { kind: "li", text: "Znaj izračunati p-vrednost in utemeljiti odločitev o zavrnitvi." },
+  ],
 };
+
+/*
+ * Read-aloud highlighting, matching `.note-read-word` in globals.css exactly:
+ * a pale wash behind everything already spoken, a solid marker with a thin ring
+ * on the word being read, and its own dark pair for each. The span wraps the
+ * word alone — the spaces between words sit outside it, which is what keeps the
+ * marks as tight word-shaped chips instead of one ragged band.
+ */
+const READ_HL = {
+  readBg: "#ffedd5",
+  readColor: "#7c2d12",
+  currentBg: "#fb923c",
+  currentColor: "#431407",
+  currentRing: "rgba(251, 146, 60, 0.28)",
+  darkReadBg: "rgba(251, 146, 60, 0.22)",
+  darkReadColor: "#fed7aa",
+  darkCurrentBg: "#c2410c",
+  darkCurrentColor: "#fff7ed",
+  darkCurrentRing: "rgba(251, 146, 60, 0.36)",
+};
+
+export type BodyWord = { index: number; text: string };
+export type BodyLine = { kind: NoteBlockKind; words: BodyWord[] };
+
+/** Splits a body into words carrying one running index, as the design does. */
+export function tokenizeBody(blocks: NoteBlock[]): BodyLine[] {
+  let index = 0;
+  return blocks.map((block) => ({
+    kind: block.kind,
+    words: block.text
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((text) => ({ index: index++, text })),
+  }));
+}
+
+export function readWordStyle(state: "cur" | "read" | "", dark: boolean): CSSProperties {
+  const base: CSSProperties = {
+    borderRadius: "4.48px",
+    padding: "0.48px 1.6px",
+    boxDecorationBreak: "clone",
+    WebkitBoxDecorationBreak: "clone",
+    transition: "background-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease",
+  };
+  if (state === "read") {
+    return {
+      ...base,
+      background: dark ? READ_HL.darkReadBg : READ_HL.readBg,
+      color: dark ? READ_HL.darkReadColor : READ_HL.readColor,
+    };
+  }
+  if (state === "cur") {
+    return {
+      ...base,
+      background: dark ? READ_HL.darkCurrentBg : READ_HL.currentBg,
+      color: dark ? READ_HL.darkCurrentColor : READ_HL.currentColor,
+      boxShadow: `0 0 0 1.76px ${dark ? READ_HL.darkCurrentRing : READ_HL.currentRing}`,
+    };
+  }
+  return base;
+}
 
 export const INITIAL_NOTES: PreviewNote[] = [
-  { id: "n1", title: "Poslovni informacijski sistemi – 4. predavanje", source: "audio", date: "12. avgust", status: "ready" },
-  { id: "n2", title: "Mikroekonomija: elastičnost povpraševanja", source: "pdf", date: "9. avgust", status: "ready" },
-  { id: "n3", title: "Anatomija – živčni sistem", source: "audio", date: "7. avgust", status: "ready" },
-  { id: "n4", title: "Članek: Kako deluje ERP", source: "link", date: "5. avgust", status: "ready" },
-  { id: "n5", title: "Statistika – hipotezno testiranje", source: "text", date: "2. avgust", status: "ready" },
+  { id: "n1", emoji: "📊", title: "Poslovni informacijski sistemi – 4. predavanje", source: "audio", date: "28. 8. 2026", status: "ready" },
+  { id: "n2", emoji: "📈", title: "Mikroekonomija: elastičnost povpraševanja", source: "pdf", date: "27. 8. 2026", status: "ready" },
+  { id: "n3", emoji: "🧠", title: "Anatomija – živčni sistem", source: "audio", date: "26. 8. 2026", status: "ready" },
+  { id: "n4", emoji: "⚖️", title: "Članek: Kako deluje ERP", source: "link", date: "24. 8. 2026", status: "ready" },
+  { id: "n5", emoji: "🎲", title: "Statistika – hipotezno testiranje", source: "text", date: "20. 8. 2026", status: "ready" },
 ];
 
 export const FOLDERS: PreviewFolder[] = [
-  { id: "f1", name: "Poslovni IS", icon: "📘", noteIds: ["n1", "n4"] },
-  { id: "f2", name: "Biologija", icon: "🧬", noteIds: ["n3"] },
-  { id: "f3", name: "Ekonomija", icon: "📈", noteIds: ["n2", "n5"] },
+  { id: "f1", name: "Predavanja", icon: "📘", noteIds: ["n1", "n3"] },
+  { id: "f2", name: "Izpiti", icon: "🎓", noteIds: ["n2", "n4", "n5"] },
 ];
 
-export const SOURCE_META: Record<SourceKind, { icon: string; label: string }> = {
-  audio: { icon: "🎙️", label: "Zvok" },
-  pdf: { icon: "📄", label: "PDF" },
-  text: { icon: "📄", label: "Besedilo" },
-  link: { icon: "🔗", label: "Povezava" },
+export const SOURCE_LABELS: Record<SourceKind, string> = {
+  audio: "Zvok",
+  pdf: "PDF",
+  text: "Besedilo",
+  link: "Povezava",
 };
 
-export const STATUS_LABELS: Record<NoteStatus, string> = {
-  uploading: "Nalaganje",
-  queued: "V čakalni vrsti",
-  transcribing: "Prepisovanje",
-  generating_notes: "Ustvarjanje zapiskov",
-  ready: "Pripravljeno",
-  failed: "Napaka",
-};
-
-export const SEGMENT_BASE: CSSProperties = {
-  flex: 1,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  minHeight: "34px",
-  border: 0,
-  borderRadius: "6px",
-  fontSize: "14px",
-  fontWeight: 500,
-  fontFamily: "inherit",
-  cursor: "pointer",
-  color: "var(--m-label)",
-  transition: "background-color 0.15s ease, box-shadow 0.15s ease",
-};
-
-export function completionShell(): CSSProperties {
-  return {
-    display: "grid",
-    gap: "16px",
-    alignContent: "space-evenly",
-    justifyItems: "center",
-    width: "100%",
-    minHeight: "462px",
-    margin: "auto",
-    padding: "34px 14px",
-    borderRadius: "16px",
-    border: "1px solid var(--m-sep)",
-    background:
-      "radial-gradient(circle at top, rgba(10,132,255,0.18), transparent 55%), linear-gradient(180deg, var(--m-surface), var(--m-muted))",
-    boxShadow: "var(--m-shadow)",
-  };
-}
-
-export function completionAction(): CSSProperties {
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "7.2px",
-    width: "100%",
-    minHeight: "50px",
-    padding: "0 18px",
-    borderRadius: "999px",
-    border: "1px solid var(--m-sep)",
-    background: "var(--m-surface)",
-    color: "var(--m-label)",
-    fontSize: "16px",
-    fontWeight: 600,
-    fontFamily: "inherit",
-    cursor: "pointer",
-    transition: "transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease",
-  };
-}
-
-export function completionBadge(): CSSProperties {
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "4px",
-    minHeight: "24px",
-    padding: "0 10px",
-    borderRadius: "999px",
-    background: "color-mix(in srgb, var(--m-tint) 16%, var(--m-surface))",
-    color: "var(--m-tint)",
-    fontSize: "11px",
-    fontWeight: 700,
-    letterSpacing: "0.05em",
-    textTransform: "uppercase",
-  };
-}
-
+/** The percentage a results screen reports, clamped and rounded. */
 export function completionPct(done: number, total: number): number {
   if (!total) return 0;
   return Math.max(0, Math.min(100, Math.round((done / total) * 100)));
-}
-
-export function ringStyle(pct: number): CSSProperties {
-  return {
-    position: "relative",
-    display: "grid",
-    placeItems: "center",
-    width: "108px",
-    height: "108px",
-    padding: "7px",
-    borderRadius: "50%",
-    background: `conic-gradient(var(--m-tint) ${pct}%, color-mix(in srgb, var(--m-muted) 86%, transparent) ${pct}% 100%)`,
-    boxShadow: "inset 0 0 0 1px var(--m-sep), 0 0 36px rgba(10,132,255,0.10)",
-    transition: "background 700ms cubic-bezier(0.4,0,0.2,1)",
-    flex: "0 0 auto",
-  };
 }
 
 export function noteTheme(title: string | undefined | null): NoteThemeKey {
@@ -616,30 +623,3 @@ export function noteTheme(title: string | undefined | null): NoteThemeKey {
   return "is";
 }
 
-export type SegmentWord = { text: string; hl: NoteSegment["hl"]; space: string };
-
-export function segmentWords(segments: NoteSegment[]): SegmentWord[] {
-  const out: SegmentWord[] = [];
-  segments.forEach((seg) => {
-    (seg.text || "")
-      .split(/\s+/)
-      .filter(Boolean)
-      .forEach((word) => {
-        if (out.length && /^[.,;:!?)—]+$/.test(word)) {
-          out[out.length - 1].text += word;
-          return;
-        }
-        const glue = out.length === 0 || /^[.,;:!?)—]/.test(word);
-        out.push({ text: word, hl: seg.hl || null, space: glue ? "" : " " });
-      });
-  });
-  return out;
-}
-
-export function lectureSummary(count: number): string {
-  const rest = count % 100;
-  if (rest === 1) return `${count} zapisek`;
-  if (rest === 2) return `${count} zapiska`;
-  if (rest === 3 || rest === 4) return `${count} zapiski`;
-  return `${count} zapiskov`;
-}

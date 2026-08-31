@@ -1289,7 +1289,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
               padding: "8px 10px",
               border: "1px solid var(--m-callout-takeaway-line)",
               borderLeft: "3px solid #f59e0b",
-              borderRadius: "10px",
+              borderRadius: "14px",
               background: "var(--m-callout-takeaway-bg)",
               textAlign: "left",
             }}

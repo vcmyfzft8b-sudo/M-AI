@@ -441,15 +441,24 @@
   opacity: 0;
 }
 
+/*
+ * `flex: 0 0 auto`, and no `min-width: 0`: on a narrow phone the bar runs out
+ * of room and flex chose the wordmark as the thing to squash. The box kept its
+ * height but lost width, and `object-fit: contain` then letterboxed the image
+ * inside it — so the logo rendered visibly smaller than the one desktop shows
+ * rather than simply being cropped. Everything else in the bar is fixed-size
+ * too, so the row is sized rather than negotiated.
+ */
 .landing-v2-brand {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
-  min-width: 0;
   color: var(--l-label);
 }
 
 .landing-v2-lockup {
   display: inline-flex;
+  flex: 0 0 auto;
   height: clamp(2.35rem, 4.35vw, 3.45rem);
   width: calc(clamp(2.35rem, 4.35vw, 3.45rem) * 480 / 148);
 }
@@ -562,6 +571,20 @@
   display: inline;
 }
 
+.landing-v2-nav-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.7rem;
+}
+
+@media (max-width: 767px) {
+  .landing-v2-nav-actions {
+    gap: 0.35rem;
+  }
+}
+
 /*
  * The page's sections, inline in the bar. A hairline after the logo separates
  * the brand from the navigation, which is what stops the first link reading as
@@ -662,11 +685,15 @@
   font-weight: 550;
 }
 
-/* Small print, at the foot of the panel where small print goes. */
+/*
+ * Small print, at the foot of the panel where small print goes. Stacked rather
+ * than wrapped: three links on one row leave the third orphaned on a line of
+ * its own on a narrow phone, which reads as a mistake rather than a column.
+ */
 .landing-v2-menu-fine {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 1.1rem;
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
   margin-top: auto;
   padding-top: 2rem;
 }
@@ -674,6 +701,7 @@
 .landing-v2-menu-fine a {
   color: var(--l-second);
   font-size: 0.92rem;
+  line-height: 1.3;
 }
 
 .landing-v2-menu-fine a:hover {
@@ -716,6 +744,29 @@
   min-height: 2.75rem;
   padding: 0 1.05rem;
   font-size: 0.95rem;
+}
+
+/* The phone's bar is the tightest row on the page. The CTA gives up its
+   minimum and some padding so the wordmark can stay full size. */
+@media (max-width: 767px) {
+  .landing-cta-nav {
+    min-width: 0;
+    padding: 0 0.85rem;
+  }
+}
+
+/* A 320px phone fits the wordmark, the CTA and the menu button and nothing
+   else: measured at 122 + 116 + 44 with no room left for the gaps between
+   them, so the CTA gives up a little more here. */
+@media (max-width: 360px) {
+  .landing-cta-nav {
+    padding: 0 0.7rem;
+    font-size: 0.88rem;
+  }
+
+  .landing-v2-menu-button {
+    width: 2.35rem;
+  }
 }
 
 .landing-v2 .landing-cta-light {
@@ -1500,8 +1551,8 @@
  * globe, the phone carries the globe alone in a circle the size of the CTA
  * beside it — the arrangement Airbnb, Booking and Apple all land on.
  *
- * The full list also lives in the footer (`.landing-footer-language`), which is
- * where most visitors look for one.
+ * The phone moves it into the menu panel, where there is room for the
+ * language's name beside the globe.
  */
 
 .landing-language {
@@ -1600,35 +1651,3 @@
   }
 }
 
-/* The footer list: the placement visitors actually go looking for. */
-.landing-footer-language ul {
-  display: grid;
-  gap: 0.55rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.landing-footer-language button {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--l-second);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.92rem;
-  line-height: 1.35;
-}
-
-.landing-footer-language button:hover,
-.landing-footer-language button.is-active {
-  color: var(--l-label);
-}
-
-.landing-footer-language button.is-active {
-  font-weight: 650;
-}
-
-.landing-footer-language button[aria-busy="true"] {
-  opacity: 0.55;
-}

@@ -555,7 +555,7 @@ export const hr: Messages = {
   "error.notFound.copy": "Poveznica je možda zastarjela ili pogrešno upisana. Provjeri adresu ili se vrati na početak.",
   "error.500.title": "Nešto je pošlo po zlu.",
   "error.500.copy": "Zabilježili smo grešku i pregledavamo je. Pokušaj ponovno ili se vrati za nekoliko minuta.",
-  "error.backHome": "Natrag na početnu stranicu",
+  "error.backHome": "Natrag na početnu",
   "error.digest": "Kod greške: {digest}",
 
   /* ---- Legal links ---- */

@@ -549,7 +549,7 @@ export const en: Messages = {
   "error.notFound.copy": "The link may be out of date or mistyped. Check the address, or go back to the start.",
   "error.500.title": "Something went wrong.",
   "error.500.copy": "We have logged the error and are looking into it. Try again, or come back in a few minutes.",
-  "error.backHome": "Back to the home page",
+  "error.backHome": "Back home",
   "error.digest": "Error code: {digest}",
 
   /* ---- Legal links ---- */

@@ -108,7 +108,7 @@ export function LandingNav() {
 
         <nav
           aria-label={t("nav.main")}
-          style={{ display: "flex", alignItems: "center", gap: "0.7rem", justifyContent: "flex-end" }}
+          className="landing-v2-nav-actions"
         >
           {/* Desktop keeps the switcher in the bar. Before the CTA: someone who
               landed on the wrong language needs to fix that before they are

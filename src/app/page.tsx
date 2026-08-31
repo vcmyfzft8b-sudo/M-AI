@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { FooterLanguagePicker } from "@/components/language-picker";
 import { LandingFaq } from "@/components/landing/landing-faq";
 import { LandingFeatureShowcase } from "@/components/landing/landing-feature-showcase";
 import { LandingFlowDemo } from "@/components/landing/landing-flow-demo";
@@ -204,8 +203,6 @@ export default async function HomePage() {
               <Link href="/legal/privacy-policy">{t("landing.footer.privacy")}</Link>
               <Link href="/legal/refund-policy">{t("landing.footer.refunds")}</Link>
             </div>
-
-            <FooterLanguagePicker />
           </nav>
         </div>
 

@@ -163,7 +163,6 @@ export function LanguageSettingsRow() {
  * Booking, Apple) keeps it as a quiet icon. Desktop has room for the language's
  * name beside the globe; the phone shows the globe alone.
  *
- * The full list also sits in the footer, where visitors are used to finding it.
  *
  * A plain popover rather than a `<select>`: the native control renders as the
  * operating system's language rather than the page's, and on iOS it covers the
@@ -233,41 +232,6 @@ export function LandingLanguagePicker({ asRow = false }: { asRow?: boolean } = {
           }}
         />
       ) : null}
-    </div>
-  );
-}
-
-/**
- * The footer control: the five languages laid out in full, the placement most
- * marketing sites use. Nothing opens — a visitor scanning the footer for their
- * language sees it and clicks it.
- */
-export function FooterLanguagePicker() {
-  const { locale, t } = useTranslations();
-  const { change, pendingLocale } = useLocaleChange();
-
-  return (
-    <div className="landing-v2-footer-group landing-footer-language">
-      <h2>{t("settings.language.title")}</h2>
-      <ul>
-        {LOCALES.map((option) => (
-          <li key={option}>
-            <button
-              type="button"
-              className={option === locale ? "is-active" : undefined}
-              aria-current={option === locale ? "true" : undefined}
-              aria-busy={pendingLocale === option}
-              onClick={() => {
-                if (option !== locale) {
-                  change(option);
-                }
-              }}
-            >
-              {LOCALE_LABELS[option]}
-            </button>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

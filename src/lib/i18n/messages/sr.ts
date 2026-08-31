@@ -555,7 +555,7 @@ export const sr: Messages = {
   "error.notFound.copy": "Link je možda zastareo ili pogrešno upisan. Proveri adresu ili se vrati na početak.",
   "error.500.title": "Nešto je pošlo naopako.",
   "error.500.copy": "Zabeležili smo grešku i pregledamo je. Pokušaj ponovo ili se vrati za nekoliko minuta.",
-  "error.backHome": "Nazad na početnu stranicu",
+  "error.backHome": "Nazad na početnu",
   "error.digest": "Kod greške: {digest}",
 
   /* ---- Legal links ---- */

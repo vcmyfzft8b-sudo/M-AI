@@ -41,6 +41,10 @@ export default async function AppHomePage({
           return null;
         }),
   ]);
+  // Whether the settings gear wears the "add to home screen" dot. Read off the
+  // profile the entitlement state already loaded — null means this account has
+  // never opened the guide, on any device, which is exactly who the dot is for.
+  const installGuideSeen = Boolean(appState?.profile?.install_guide_seen_at);
   const host = (await headers()).get("host") ?? "";
   const showDevDashboard =
     process.env.NODE_ENV !== "production" &&
@@ -58,6 +62,7 @@ export default async function AppHomePage({
       hasPaidAccess={Boolean(appState?.hasPaidAccess)}
       trialLectureId={appState?.trialLectureId ?? null}
       canSpinWheel={wheel ? wheel.canSpin && !wheel.spunToday : null}
+      installGuideSeen={installGuideSeen}
       showDevDashboard={showDevDashboard}
     />
   );

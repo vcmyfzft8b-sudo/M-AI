@@ -159,6 +159,7 @@ export type Database = {
           discount_wheel_spun_at: string | null;
           discount_wheel_coupon: string | null;
           discount_wheel_redeemed_at: string | null;
+          install_guide_seen_at: string | null;
         };
         Insert: {
           id: string;
@@ -193,6 +194,7 @@ export type Database = {
           discount_wheel_spun_at?: string | null;
           discount_wheel_coupon?: string | null;
           discount_wheel_redeemed_at?: string | null;
+          install_guide_seen_at?: string | null;
         };
         Update: {
           email?: string | null;
@@ -226,6 +228,7 @@ export type Database = {
           discount_wheel_spun_at?: string | null;
           discount_wheel_coupon?: string | null;
           discount_wheel_redeemed_at?: string | null;
+          install_guide_seen_at?: string | null;
         };
       };
       billing_subscriptions: {

@@ -169,7 +169,7 @@ export function LanguageSettingsRow() {
  * operating system's language rather than the page's, and on iOS it covers the
  * hero with a wheel.
  */
-export function LandingLanguagePicker() {
+export function LandingLanguagePicker({ asRow = false }: { asRow?: boolean } = {}) {
   const { locale, t } = useTranslations();
   const [open, setOpen] = useState(false);
   const { change, pendingLocale } = useLocaleChange();
@@ -202,7 +202,7 @@ export function LandingLanguagePicker() {
   }, [open]);
 
   return (
-    <div className="landing-language" ref={containerRef}>
+    <div className={asRow ? "landing-language landing-language-row" : "landing-language"} ref={containerRef}>
       <button
         type="button"
         className="landing-language-trigger"
@@ -212,8 +212,11 @@ export function LandingLanguagePicker() {
         onClick={() => setOpen((value) => !value)}
       >
         <Msym name="language" size="1.2rem" />
-        {/* Hidden below the phone breakpoint, where the globe alone carries it. */}
+        {/* In the bar this is hidden on a phone, where the globe alone carries
+            it; as a row it is a labelled line like the ones above it. */}
+        {asRow ? <span className="landing-language-row-label">{t("nav.language")}</span> : null}
         <span className="landing-language-name">{LOCALE_LABELS[locale]}</span>
+        {asRow ? <Msym name="expand_more" size="1.3rem" fill={false} weight={400} /> : null}
       </button>
 
       {open ? (

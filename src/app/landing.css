@@ -504,6 +504,12 @@
   }
 }
 
+/* The panel's own close button is not the bar's, and does not follow the
+   breakpoint that hides the opener. */
+.landing-v2-menu .landing-v2-menu-button {
+  display: inline-flex;
+}
+
 .landing-v2-menu {
   position: fixed;
   inset: 0;
@@ -556,71 +562,128 @@
   display: inline;
 }
 
-.landing-v2-menu-scroll {
-  display: grid;
-  align-content: start;
-  gap: 2rem;
-  margin-top: 2.25rem;
-  min-height: 0;
-  overflow-y: auto;
+/*
+ * The page's sections, inline in the bar. A hairline after the logo separates
+ * the brand from the navigation, which is what stops the first link reading as
+ * part of the wordmark.
+ */
+.landing-v2-nav-links {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: clamp(1rem, 2vw, 1.9rem);
+  margin: 0;
+  padding: 0 0 0 clamp(1rem, 2vw, 1.9rem);
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  list-style: none;
+}
+
+.landing-v2-nav.is-scrolled .landing-v2-nav-links {
+  border-left-color: rgba(0, 0, 0, 0.12);
+}
+
+.landing-v2-nav-links a {
+  color: var(--l-label);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  opacity: 0.82;
+  transition: opacity 160ms ease;
+}
+
+.landing-v2-nav-links a:hover {
+  opacity: 1;
+}
+
+/* Below the phone breakpoint they live in the menu panel instead. */
+@media (max-width: 767px) {
+  .landing-v2-nav-links {
+    display: none;
+  }
 }
 
 .landing-v2-menu-links {
   display: grid;
-  gap: 0.15rem;
-  margin: 0;
+  gap: 0;
+  margin: 1.75rem 0 0;
   padding: 0;
   list-style: none;
 }
 
-.landing-v2-menu-links a {
+.landing-v2-menu-links a,
+.landing-v2-menu-links .landing-language-trigger {
   display: flex;
+  width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.85rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  height: auto;
+  padding: 1rem 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 0;
+  background: none;
   color: var(--l-label);
-  font-size: 1.35rem;
+  font-size: 1.3rem;
   font-weight: 650;
   letter-spacing: -0.01em;
 }
 
-.landing-v2-menu-links a .msym {
+.landing-v2-menu-links li:first-child a {
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.landing-v2-menu-links .msym {
   color: var(--l-second);
 }
 
-.landing-v2-menu-group {
-  display: grid;
-  justify-items: start;
-  gap: 0.55rem;
+/*
+ * The switcher as one of the rows rather than a pill under a heading of its
+ * own: same height, same rule beneath it, current language where the other
+ * rows put their chevron.
+ */
+.landing-v2-menu-links .landing-language {
+  width: 100%;
 }
 
-.landing-v2-menu-group h2 {
-  margin: 0 0 0.2rem;
-  color: var(--l-label);
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.landing-v2-menu-links .landing-language-trigger:hover {
+  background: none;
 }
 
-.landing-v2-menu-group a {
+.landing-language-row-label {
+  flex: 1;
+  text-align: left;
+}
+
+.landing-v2-menu-links .landing-language-name {
   color: var(--l-second);
-  font-size: 0.98rem;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
+  font-size: 1.05rem;
+  font-weight: 550;
 }
 
-.landing-v2-menu-group a:hover {
+/* Small print, at the foot of the panel where small print goes. */
+.landing-v2-menu-fine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  margin-top: auto;
+  padding-top: 2rem;
+}
+
+.landing-v2-menu-fine a {
+  color: var(--l-second);
+  font-size: 0.92rem;
+}
+
+.landing-v2-menu-fine a:hover {
   color: var(--l-label);
 }
 
 .landing-v2-menu-actions {
   display: grid;
   gap: 0.7rem;
-  margin-top: auto;
-  padding-top: 1.6rem;
+  padding-top: 1.1rem;
 }
 
 .landing-v2-menu-actions .landing-cta {

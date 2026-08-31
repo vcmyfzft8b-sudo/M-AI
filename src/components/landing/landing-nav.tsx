@@ -95,6 +95,17 @@ export function LandingNav() {
         >
           {lockup}
         </Link>
+
+        {/* The same sections the phone's panel lists, inline where there is
+            room for them. */}
+        <ul className="landing-v2-nav-links landing-v2-nav-desktop-only">
+          {MENU_SECTIONS.map((item) => (
+            <li key={item.href}>
+              <a href={item.href}>{t(item.labelKey)}</a>
+            </li>
+          ))}
+        </ul>
+
         <nav
           aria-label={t("nav.main")}
           style={{ display: "flex", alignItems: "center", gap: "0.7rem", justifyContent: "flex-end" }}
@@ -135,35 +146,34 @@ export function LandingNav() {
             </button>
           </div>
 
-          <div className="landing-v2-menu-scroll">
-            {/* The page's own sections. Closing on the way out is the point:
-                the anchor scrolls the page behind the panel. */}
-            <ul className="landing-v2-menu-links">
-              {MENU_SECTIONS.map((item) => (
-                <li key={item.href}>
-                  <a href={item.href} onClick={() => setMenuOpen(false)}>
-                    {t(item.labelKey)}
-                    <Msym name="chevron_right" size="1.4rem" fill={false} weight={400} />
-                  </a>
-                </li>
-              ))}
-            </ul>
-
-            <div className="landing-v2-menu-group">
-              <h2>{t("nav.language")}</h2>
-              <LandingLanguagePicker />
-            </div>
-
-            <div className="landing-v2-menu-group">
-              <h2>{t("landing.footer.support")}</h2>
-              <a href={`mailto:${BRAND_SUPPORT_EMAIL}`}>{BRAND_SUPPORT_EMAIL}</a>
-              {MENU_LEGAL.map((item) => (
-                <Link key={item.href} href={item.href}>
+          {/* One list, language included: three separate blocks with their own
+              headings read as three unrelated panels stacked in one screen. */}
+          <ul className="landing-v2-menu-links">
+            {MENU_SECTIONS.map((item) => (
+              <li key={item.href}>
+                {/* The anchor scrolls the page behind the panel, so the panel
+                    has to be out of the way by the time it lands. */}
+                <a href={item.href} onClick={() => setMenuOpen(false)}>
                   {t(item.labelKey)}
-                </Link>
-              ))}
-            </div>
-          </div>
+                  <Msym name="chevron_right" size="1.4rem" fill={false} weight={400} />
+                </a>
+              </li>
+            ))}
+            <li>
+              <LandingLanguagePicker asRow />
+            </li>
+          </ul>
+
+          {/* Quiet, and close to the buttons: the small print belongs at the
+              foot of the panel, not in the middle of it. */}
+          <nav className="landing-v2-menu-fine" aria-label={t("landing.footer.support")}>
+            <a href={`mailto:${BRAND_SUPPORT_EMAIL}`}>{BRAND_SUPPORT_EMAIL}</a>
+            {MENU_LEGAL.map((item) => (
+              <Link key={item.href} href={item.href}>
+                {t(item.labelKey)}
+              </Link>
+            ))}
+          </nav>
 
           {/* Both links leave the page, which unmounts the panel — there is
               nothing to close on the way out. */}

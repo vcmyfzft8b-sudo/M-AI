@@ -173,6 +173,20 @@ export default function RootLayout({
   return (
     <html lang="sl" suppressHydrationWarning>
       <head>
+        {/*
+          * iOS will not use an `apple-touch-startup-image` unless the page also
+          * claims `apple-mobile-web-app-capable`, and Next no longer emits it:
+          * `appleWebApp.capable` renders the standards-track
+          * `mobile-web-app-capable` instead, which iOS ignores. The launch
+          * screens were served, correctly sized, matched by their media
+          * queries, and silently unused because of this one missing line.
+          *
+          * Measured by taking production's own HTML, serving it unchanged from
+          * localhost — blank launch screen — and then adding only this tag:
+          * the mark appeared. Do not remove it on the grounds that the
+          * metadata API already covers it. It does not.
+          */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link rel="stylesheet" href={MATERIAL_SYMBOLS_HREF} />

@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 
 import { BillingPortalButton } from "@/components/billing-portal-button";
 import { InstantLink } from "@/components/instant-link";
@@ -44,6 +44,13 @@ const THEME_OPTIONS: Array<{ value: ThemePreference; label: string }> = [
 /** Platform never changes for the life of a page, so there is nothing to watch. */
 function subscribeToNothing() {
   return () => {};
+}
+
+/** Re-read the "has the guide been opened" flag when anything sets it. */
+function subscribeToInstallGuideSeen(onStoreChange: () => void) {
+  window.addEventListener(INSTALL_GUIDE_SEEN_EVENT, onStoreChange);
+
+  return () => window.removeEventListener(INSTALL_GUIDE_SEEN_EVENT, onStoreChange);
 }
 
 type ConfirmKind = "logout" | "delete" | "share";
@@ -97,8 +104,6 @@ export function SettingsScreen({
   });
   const [toast, setToast] = useState<string | null>(null);
   const [isInstallGuideOpen, setIsInstallGuideOpen] = useState(false);
-  /* Same badge as the gear carries, on the row that answers it. */
-  const [showInstallHint, setShowInstallHint] = useState(false);
 
   /*
    * Phones only: a desktop has no home screen to add to, so the row would be
@@ -110,14 +115,18 @@ export function SettingsScreen({
     () => false,
   );
 
-  useEffect(() => {
-    const sync = () => setShowInstallHint(shouldOfferInstallGuide(installGuideSeen));
-
-    sync();
-    window.addEventListener(INSTALL_GUIDE_SEEN_EVENT, sync);
-
-    return () => window.removeEventListener(INSTALL_GUIDE_SEEN_EVENT, sync);
-  }, [installGuideSeen]);
+  /*
+   * Read during render rather than in an effect, the way `isPhone` above is.
+   * As an effect this settled after the first paint, which was invisible while
+   * it only toggled a dot on a row that was already there — but it now decides
+   * whether a card sits above everything else, and arriving late shoved the
+   * whole screen down a frame in.
+   */
+  const showInstallHint = useSyncExternalStore(
+    subscribeToInstallGuideSeen,
+    () => shouldOfferInstallGuide(installGuideSeen),
+    () => false,
+  );
 
   const preference = useSyncExternalStore(
     subscribeToThemePreference,
@@ -375,8 +384,13 @@ export function SettingsScreen({
               * moment it is opened — or the app is already installed —
               * `showInstallHint` goes false and the row returns to the list
               * below, where it stays available without taking the top spot.
+              *
+              * `isPhone` as well as the hint: `showInstallHint` is the "has
+              * this been read" half only, and says nothing about whether the
+              * device has a home screen to add to. Without it a desktop gets a
+              * card for a gesture its machine does not have.
               */}
-            {showInstallHint ? (
+            {isPhone && showInstallHint ? (
               <button
                 type="button"
                 className="memo-install-cta"

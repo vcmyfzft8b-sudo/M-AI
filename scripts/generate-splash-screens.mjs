@@ -1,7 +1,7 @@
 /**
  * Renders the installed app's launch screens and home-screen icons.
  *
- * Run after changing the lockup, the canvas colours, or the device matrix:
+ * Run after changing the mark, the canvas colours, or the device matrix:
  *
  *   node scripts/generate-splash-screens.mjs
  *
@@ -29,16 +29,20 @@ const publicDir = path.join(root, "public");
 const splashDir = path.join(publicDir, "splash");
 const iconDir = path.join(publicDir, "icons");
 
-const LOCKUP = path.join(publicDir, "memo-lockup.png");
 const MARK = path.join(publicDir, "memo-logo-compressed.png");
 
-/** The lockup, centred on a flat canvas, at the size the launch screen wants. */
+/**
+ * The mark, centred on a flat canvas, at the size the launch screen wants.
+ *
+ * The mark alone, not the lockup: the launch screen answers "did the thing I
+ * tapped open?", and the thing they tapped is the brain on the home screen.
+ * Repeating it is the answer; spelling the name out underneath is a poster.
+ */
 async function renderSplash({ pixelWidth, pixelHeight, theme }) {
-  // The lockup is sized against the shorter edge so a landscape screen does not
-  // stretch it across the whole width, and it stays clear of the notch and the
-  // home indicator on every device in the matrix.
+  // Sized against the shorter edge, so the mark lands well clear of the notch
+  // and the home indicator on every device in the matrix.
   const logoWidth = Math.round(Math.min(pixelWidth, pixelHeight) * SPLASH_LOGO_SCALE);
-  const logo = await sharp(LOCKUP).resize({ width: logoWidth }).toBuffer();
+  const logo = await sharp(MARK).resize({ width: logoWidth }).toBuffer();
 
   return sharp({
     create: {
@@ -52,8 +56,8 @@ async function renderSplash({ pixelWidth, pixelHeight, theme }) {
     /*
      * A flat field with one illustration on it is exactly what an indexed PNG
      * is good at, but only with dithering off: the noise it sprays across the
-     * lockup's gradients defeats every row filter and quadruples the file for
-     * a difference nobody can see at 128 colours.
+     * mark's gradients defeats every row filter and quadruples the file for a
+     * difference nobody can see at 128 colours.
      */
     .png({ compressionLevel: 9, palette: true, colours: 128, dither: 0, effort: 10 })
     .toBuffer();

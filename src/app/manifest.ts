@@ -1,10 +1,6 @@
 import type { MetadataRoute } from "next";
 
-import {
-  BRAND_NAME,
-  SEO_BRAND_NAME,
-  SEO_SITE_DESCRIPTION,
-} from "@/lib/brand";
+import { SEO_BRAND_NAME, SEO_SITE_DESCRIPTION } from "@/lib/brand";
 import { SPLASH_BACKGROUNDS } from "@/lib/splash-screens";
 
 /**
@@ -28,7 +24,10 @@ import { SPLASH_BACKGROUNDS } from "@/lib/splash-screens";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: SEO_BRAND_NAME,
-    short_name: BRAND_NAME,
+    // The label under the home-screen icon. `short_name` beats the
+    // `apple-mobile-web-app-title` that used to supply it, so the bare "Memo"
+    // this once held quietly renamed the installed app.
+    short_name: SEO_BRAND_NAME,
     description: SEO_SITE_DESCRIPTION,
     lang: "sl",
     start_url: "/app",

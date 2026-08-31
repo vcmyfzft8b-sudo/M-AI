@@ -467,6 +467,11 @@
  * is the arrangement almost every marketing site converges on once the bar runs
  * out of width. Desktop keeps them all in the bar and hides the button.
  */
+/*
+ * The bare glyph, not a button in a ring: the nav already carries a filled CTA
+ * and an outlined globe, and a third enclosed shape beside them read as clutter.
+ * The 2.75rem box stays for the tap target — only the ring is gone.
+ */
 .landing-v2-menu-button {
   display: none;
   align-items: center;
@@ -477,24 +482,16 @@
   width: 2.75rem;
   height: 2.75rem;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 999px;
-  background: transparent;
+  border: 0;
+  background: none;
   color: inherit;
   cursor: pointer;
-  transition: background-color 160ms ease, border-color 160ms ease;
+  opacity: 0.9;
+  transition: opacity 160ms ease;
 }
 
 .landing-v2-menu-button:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.landing-v2-nav.is-scrolled .landing-v2-menu-button {
-  border-color: rgba(0, 0, 0, 0.14);
-}
-
-.landing-v2-nav.is-scrolled .landing-v2-menu-button:hover {
-  background: rgba(0, 0, 0, 0.06);
+  opacity: 1;
 }
 
 @media (max-width: 767px) {
@@ -542,9 +539,8 @@
   gap: 0.7rem;
 }
 
-/* The panel's own close button is always the dark-page variant: the panel does
+/* The switcher inside the panel is always the dark-page variant: the panel does
    not scroll, so `.is-scrolled` on the header behind it means nothing here. */
-.landing-v2-menu .landing-v2-menu-button,
 .landing-v2-menu .landing-language-trigger {
   border-color: rgba(255, 255, 255, 0.16);
 }

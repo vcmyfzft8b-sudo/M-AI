@@ -295,15 +295,20 @@ export function LibraryFolderMenu({
       }
 
       const target = event.target;
-      if (
-        target instanceof Element &&
-        target.closest(".library-folder-mobile-sheet")
-      ) {
+
+      /*
+       * Every phone sheet — and the scrim behind it — lives in a portal and
+       * closes itself through `dismiss`, so the exit gets to play. Closing
+       * here as well would unmount the sheet on the same mousedown, before
+       * the scrim's own click ever ran, and the folders sheet would vanish
+       * without the drop the rest of them do.
+       */
+      if (target instanceof Element && target.closest(".memo-portal")) {
         return;
       }
 
       if (!shellRef.current?.contains(target as Node)) {
-        setIsOpen(false);
+        animateCloseFolderSheet();
       }
     }
 
@@ -422,14 +427,19 @@ export function LibraryFolderMenu({
   }
 
 
+  /*
+   * Picking a folder leaves the sheet the same way the X and the scrim do:
+   * the list behind it changes at once, and the sheet drops out of frame over
+   * it rather than blinking away.
+   */
   function handleSelectAllNotes() {
     onSelectFolder(null, null);
-    closeFolderSheet();
+    animateCloseFolderSheet();
   }
 
   function handleSelectFolder(folder: LibraryFolder) {
     onSelectFolder(folder.id, folder.lectureIds);
-    closeFolderSheet();
+    animateCloseFolderSheet();
   }
 
   async function handleCreateFolder() {

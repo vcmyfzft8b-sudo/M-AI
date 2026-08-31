@@ -203,14 +203,13 @@ export function SettingsScreen({
   );
 
   const rows: SettingsRow[] = [
-    ...(isPhone
+    ...(isPhone && !showInstallHint
       ? [
           {
             id: "install",
             emoji: "📲",
             title: "Dodaj na začetni zaslon",
             detail: "Odpri Memo kot aplikacijo",
-            className: showInstallHint ? "has-dot" : "",
             // Opening it is the whole of "seen": the badge is there to get
             // somebody to look once, so it goes the moment they do, not when
             // they close the sheet or read to the end of it.
@@ -366,6 +365,38 @@ export function SettingsScreen({
         <div className="memo-screen-scroll">
           <div className="memo-page">
             <h1>Nastavitve</h1>
+
+            {/*
+              * Until somebody has looked at it once, the guide comes before
+              * the theme, the plan and the account. Everything else on this
+              * screen is for people already using the app; this is the one
+              * thing that changes how they use it, and buried eight rows down
+              * under a dot it was reaching nobody. It leaves on its own: the
+              * moment it is opened — or the app is already installed —
+              * `showInstallHint` goes false and the row returns to the list
+              * below, where it stays available without taking the top spot.
+              */}
+            {showInstallHint ? (
+              <button
+                type="button"
+                className="memo-install-cta"
+                onClick={() => {
+                  markInstallGuideSeen();
+                  setIsInstallGuideOpen(true);
+                }}
+              >
+                <span className="memo-install-cta-copy">
+                  <span className="memo-install-cta-title">
+                    <Emoji symbol="📲" size="1.15rem" />
+                    <span>Dodaj Memo na začetni zaslon</span>
+                  </span>
+                  <span className="memo-install-cta-detail">
+                    Odpre se čez cel zaslon, brez vrstice brskalnika. Pokaži mi, kako.
+                  </span>
+                </span>
+                <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
+              </button>
+            ) : null}
 
             {/*
               * The phone puts each group under its own heading and drops the

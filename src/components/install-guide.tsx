@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 
+import { InstallShot } from "@/components/install-shot";
 import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
 import { sheetClass, useSheet } from "@/components/use-sheet";
@@ -78,23 +78,7 @@ export function InstallGuide({ open, onClose }: { open: boolean; onClose: () => 
                 </div>
 
                 <div className="memo-install-shot">
-                  {/*
-                    * Served exactly as they sit in `public`: the shots are
-                    * already cut to the width they render at, and 40 KB of
-                    * WebP is smaller than the optimiser's own round trip on a
-                    * cold cache. Eager, because a step-by-step guide whose
-                    * pictures arrive one scroll behind the words is worse than
-                    * useless — the whole set is a quarter of a megabyte.
-                    */}
-                  <Image
-                    src={step.src}
-                    alt={step.alt}
-                    width={750}
-                    height={1631}
-                    sizes="(max-width: 1099px) 60vw, 15rem"
-                    loading="eager"
-                    unoptimized
-                  />
+                  <InstallShot step={step} sizes="(max-width: 1099px) 60vw, 15rem" />
                   {step.highlight ? (
                     <span className="memo-install-highlight" style={step.highlight} />
                   ) : null}

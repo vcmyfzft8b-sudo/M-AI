@@ -34,55 +34,67 @@ export const INSTALL_GUIDE_SEEN_EVENT = "memo-install-guide-seen";
  * is no longer on screen. The View More step is written as a conditional
  * because the sheet stays expanded once it has been opened before.
  *
+ * Every step is shot twice, once in each appearance, because a guide made of
+ * dark screenshots inside a light app reads as somebody else's phone. Which
+ * pair is shown is decided in CSS rather than here; see `.memo-shot-light`.
+ *
  * Shared with the onboarding paywall, which shows the same set: one set of
  * images and one set of words, so the two places that explain this cannot
  * drift into explaining it differently.
  *
  * `highlight` is a box drawn over the shot to point at the control being
  * described, in percentages so it survives the image being served at any size.
+ * The two appearances share one box: the screenshots are the same screens at
+ * the same size, so the control does not move between them.
  */
 export const HOME_SCREEN_STEPS = [
   {
     title: "Odpri meni v Safariju",
     description: "Spodaj desno pritisni gumb s tremi pikami.",
-    src: "/onboarding/add-to-home-1-menu.webp",
+    light: "/onboarding/add-to-home-1-menu-light.webp",
+    dark: "/onboarding/add-to-home-1-menu-dark.webp",
     alt: "Memo v Safariju, z gumbom menija spodaj desno",
-    highlight: { left: "80%", top: "90.8%", width: "12%", height: "5%" },
+    highlight: { left: "79.8%", top: "90.6%", width: "12.4%", height: "5.2%" },
   },
   {
     title: "Pritisni Share",
     description: "V meniju izberi Share.",
-    src: "/onboarding/add-to-home-2-share.webp",
-    alt: "Safari meni z možnostjo Share",
-    highlight: { left: "33%", top: "59.6%", width: "63%", height: "4.8%" },
+    light: "/onboarding/add-to-home-2-share-light.webp",
+    dark: "/onboarding/add-to-home-2-share-dark.webp",
+    alt: "Safari meni z označeno možnostjo Share",
+    highlight: { left: "33%", top: "59.4%", width: "63.2%", height: "5%" },
   },
   {
     title: "Razširi seznam",
     description: "Če Add to Home Screen ne vidiš, pritisni View More.",
-    src: "/onboarding/add-to-home-3-more.webp",
-    alt: "Delilni meni z gumbom View More",
-    highlight: { left: "75.8%", top: "85.8%", width: "18%", height: "11.2%" },
+    light: "/onboarding/add-to-home-3-more-light.webp",
+    dark: "/onboarding/add-to-home-3-more-dark.webp",
+    alt: "Delilni meni z označenim gumbom View More",
+    highlight: { left: "75.6%", top: "85%", width: "18%", height: "12.2%" },
   },
   {
     title: "Izberi Add to Home Screen",
     description: "Na seznamu pritisni Add to Home Screen.",
-    src: "/onboarding/add-to-home-4-add.webp",
-    alt: "Razširjen delilni meni z možnostjo Add to Home Screen",
-    highlight: { left: "4.8%", top: "71%", width: "90.4%", height: "4.8%" },
+    light: "/onboarding/add-to-home-4-add-light.webp",
+    dark: "/onboarding/add-to-home-4-add-dark.webp",
+    alt: "Razširjen delilni meni z označeno možnostjo Add to Home Screen",
+    highlight: { left: "4.6%", top: "70.8%", width: "90.8%", height: "5%" },
   },
   {
     title: "Potrdi z Add",
     description: "Ime lahko pustiš, kot je, in zgoraj desno pritisneš Add.",
-    src: "/onboarding/add-to-home-5-confirm.webp",
-    alt: "Potrditveno okno Add to Home Screen za Memo",
-    highlight: { left: "79.2%", top: "9.6%", width: "16.6%", height: "5.6%" },
+    light: "/onboarding/add-to-home-5-confirm-light.webp",
+    dark: "/onboarding/add-to-home-5-confirm-dark.webp",
+    alt: "Potrditveno okno Add to Home Screen za Memo AI",
+    highlight: { left: "79%", top: "9.4%", width: "17%", height: "5.8%" },
   },
   {
-    title: "Memo je na začetnem zaslonu",
+    title: "Memo AI je na začetnem zaslonu",
     description: "Od tod se odpre čez cel zaslon, brez vrstice brskalnika.",
-    src: "/onboarding/add-to-home-6-done.webp",
-    alt: "Ikona Memo na začetnem zaslonu iPhona",
-    highlight: { left: "51.8%", top: "21.8%", width: "17.6%", height: "11.8%" },
+    light: "/onboarding/add-to-home-6-done-light.webp",
+    dark: "/onboarding/add-to-home-6-done-dark.webp",
+    alt: "Ikona Memo AI na začetnem zaslonu iPhona",
+    highlight: { left: "52%", top: "22.1%", width: "17.2%", height: "10.1%" },
   },
 ] as const;
 

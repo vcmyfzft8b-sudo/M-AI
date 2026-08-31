@@ -19,10 +19,14 @@ export function SettingsLoading() {
 
       <div className="memo-screen-scroll">
         <div className="memo-page">
-          <div
-            className="app-loading-pill"
-            style={{ height: "1.75rem", width: "11rem", marginBottom: "1.2rem" }}
-          />
+          {/* Inside the real heading, so the row matches its loaded height and
+              margins exactly and nothing below it moves on arrival. */}
+          <h1>
+            <span
+              className="app-loading-pill"
+              style={{ display: "inline-block", height: "1.15rem", width: "11rem" }}
+            />
+          </h1>
 
           <div className="memo-settings-heading memo-only-mobile" style={{ minHeight: "1.875rem" }}>
             <span className="app-loading-pill" style={{ display: "block", height: "1.15rem", width: "5rem" }} />

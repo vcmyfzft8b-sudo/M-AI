@@ -14,8 +14,17 @@ export function SupportIndexLoading() {
 
       <div className="memo-screen-scroll">
         <div className="memo-page">
+          {/* The pill rides inside the real heading, so the row is exactly as
+              tall as the loaded one — a pill sized by hand was 10px short of
+              the phone's heading and every section below it jumped on
+              arrival. */}
           <div className="memo-support-head">
-            <div className="app-loading-pill" style={{ height: "1.75rem", width: "7rem" }} />
+            <h1>
+              <span
+                className="app-loading-pill"
+                style={{ display: "inline-block", height: "1.15rem", width: "7rem" }}
+              />
+            </h1>
           </div>
 
           {SKELETON_SECTIONS.map((section, index) => (
@@ -56,10 +65,15 @@ export function SupportArticleLoading() {
 
       <div className="memo-screen-scroll">
         <div className="memo-page">
-          <div
-            className="app-loading-pill"
-            style={{ height: "1.75rem", width: "min(24rem, 70%)", marginBottom: "1.2rem" }}
-          />
+          {/* Same reason as the index: the real title element carries the
+              margins and the line height, so the body below it does not move
+              when the article arrives. */}
+          <h1 className="memo-article-title" aria-hidden="true">
+            <span
+              className="app-loading-pill"
+              style={{ display: "inline-block", height: "1.15rem", width: "min(24rem, 70%)" }}
+            />
+          </h1>
 
           <div className="memo-help-intro">
             {ARTICLE_LINES.map((line, index) => (

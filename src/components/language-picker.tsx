@@ -101,7 +101,9 @@ export function LanguageSettingsRow() {
   const { locale, t } = useTranslations();
   const [open, setOpen] = useState(false);
   const { change, pendingLocale } = useLocaleChange();
-  const sheet = useSheet(useCallback(() => setOpen(false), []));
+  // The sheet owns a scrolling list, so only the grabber and the heading above
+  // the list may start a drag — a finger on the languages pans them.
+  const sheet = useSheet(useCallback(() => setOpen(false), []), { scrollable: true });
 
   return (
     <>
@@ -131,8 +133,11 @@ export function LanguageSettingsRow() {
             aria-label={t("settings.language.title")}
             {...sheet.dragProps}
           >
-            <h2>{t("settings.language.title")}</h2>
-            <p>{t("settings.language.description")}</p>
+            <div className="memo-grab" data-drag-handle />
+            <div data-drag-zone>
+              <h2>{t("settings.language.title")}</h2>
+              <p>{t("settings.language.description")}</p>
+            </div>
             <LocaleOptionList
               className="memo-language-options"
               active={locale}

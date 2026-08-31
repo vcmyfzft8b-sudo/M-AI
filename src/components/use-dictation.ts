@@ -115,6 +115,15 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
   const stopTimerRef = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
+  /*
+   * Bumped by every `start()` and by every `stop()`. A start that comes back
+   * from the permission prompt holding a stale token was stopped while it
+   * waited — there is no recorder yet for `stop()` to reach, so this is the only
+   * way it can say so.
+   */
+  const startTokenRef = useRef(0);
+  /** True from the tap until the permission prompt answers, so one tap opens one prompt. */
+  const startingRef = useRef(false);
   // Read through a ref so a re-render mid-session does not need a new recorder.
   const onTextRef = useRef(onText);
 
@@ -219,6 +228,9 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
   const stop = useCallback(() => {
     const recorder = recorderRef.current;
 
+    // Cancels a `start()` still waiting on the permission prompt.
+    startTokenRef.current += 1;
+
     if (stopTimerRef.current !== null) {
       window.clearTimeout(stopTimerRef.current);
       stopTimerRef.current = null;
@@ -236,9 +248,12 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
   }, [releaseStream]);
 
   const start = useCallback(async () => {
-    if (!canRecord() || recorderRef.current) {
+    if (!canRecord() || recorderRef.current || startingRef.current) {
       return;
     }
+
+    const token = (startTokenRef.current += 1);
+    startingRef.current = true;
 
     setError(null);
     setStatus("starting");
@@ -248,7 +263,10 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (mediaError) {
-      if (mountedRef.current) {
+      startingRef.current = false;
+
+      // Nobody is waiting for this answer any more, so it is not worth an error.
+      if (mountedRef.current && startTokenRef.current === token) {
         setStatus("idle");
         setError(describeGetUserMediaError(mediaError));
       }
@@ -256,8 +274,10 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
       return;
     }
 
+    startingRef.current = false;
+
     // Unmounted, or stopped, while the permission prompt was up.
-    if (!mountedRef.current) {
+    if (!mountedRef.current || startTokenRef.current !== token) {
       stream.getTracks().forEach((track) => track.stop());
       return;
     }

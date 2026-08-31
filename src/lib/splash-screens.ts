@@ -113,7 +113,8 @@ export type SplashScreen = {
 
 /**
  * Every `<link rel="apple-touch-startup-image">` the layout renders: one per
- * device, per colour scheme, portrait only.
+ * device, per colour scheme, portrait only. `SPLASH_THEMES` is ordered light
+ * then dark and must stay that way — see the media query below.
  *
  * Landscape is deliberately absent. Covering it honestly needed two links per
  * device — browsers disagree on whether `device-width` follows the device or
@@ -135,7 +136,14 @@ export function splashScreens(): SplashScreen[] {
         file,
         url: `/${file}`,
         media: [
-          `(prefers-color-scheme: ${theme})`,
+          // Only the dark image asks for a colour scheme. iOS honours
+          // `prefers-color-scheme: dark` here but not `: light` — a light-
+          // qualified link matches nothing and the app opens to a blank
+          // screen, which is exactly what shipped and had to be measured to
+          // be believed. So light is the unqualified fallback and dark
+          // overrides it. Order matters: light is emitted first, and the dark
+          // link that follows wins on a dark device.
+          ...(theme === "dark" ? ["(prefers-color-scheme: dark)"] : []),
           `(device-width: ${device.width}px)`,
           `(device-height: ${device.height}px)`,
           `(-webkit-device-pixel-ratio: ${device.ratio})`,

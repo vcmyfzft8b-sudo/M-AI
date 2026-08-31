@@ -114,3 +114,49 @@ test("every device the app supports is covered in portrait", () => {
     );
   }
 });
+
+/**
+ * The second thing iOS did silently. `(prefers-color-scheme: dark)` is honoured
+ * in a launch-screen media query; `(prefers-color-scheme: light)` is not — a
+ * light-qualified link matches nothing, and a phone in light mode opens to a
+ * blank screen exactly as if no launch screen had been declared at all.
+ *
+ * Measured on an iPhone 17 Pro simulator (iOS 26.5) with two links to visibly
+ * different images: unqualified, then dark-qualified. In light mode the
+ * unqualified image appeared; in dark mode the dark-qualified one did. So light
+ * has to be the bare fallback and dark the override, and the dark link has to
+ * come second for it to win.
+ */
+test("light is the unqualified fallback and dark overrides it", () => {
+  const screens = splashScreens();
+
+  for (const screen of screens) {
+    const qualified = screen.media.includes("prefers-color-scheme");
+
+    if (screen.theme === "dark") {
+      assert.ok(
+        screen.media.includes("(prefers-color-scheme: dark)"),
+        `${screen.file} is the dark image but does not ask for a dark scheme`,
+      );
+    } else {
+      assert.ok(
+        !qualified,
+        `${screen.file} asks for a colour scheme; iOS ignores a light-qualified launch screen and the app opens blank`,
+      );
+    }
+  }
+
+  // Both match on a dark device, so the dark one must be declared last.
+  for (const device of SPLASH_DEVICES) {
+    const forDevice = screens.filter((s) => s.media.includes(`(device-width: ${device.width}px)`)
+      && s.media.includes(`(device-height: ${device.height}px)`)
+      && s.media.includes(`(-webkit-device-pixel-ratio: ${device.ratio})`));
+    const light = forDevice.findIndex((s) => s.theme === "light");
+    const dark = forDevice.findIndex((s) => s.theme === "dark");
+    assert.ok(light !== -1 && dark !== -1, `${device.devices} is missing a colour scheme`);
+    assert.ok(
+      screens.indexOf(forDevice[light]) < screens.indexOf(forDevice[dark]),
+      `${device.devices}: the dark link must follow the unqualified one to win on a dark device`,
+    );
+  }
+});

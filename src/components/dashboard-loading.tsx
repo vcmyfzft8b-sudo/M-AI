@@ -1,35 +1,37 @@
-import { Emoji } from "@/components/msym";
-
 const SKELETON_ACTION_TILES = [0, 1, 2, 3];
 const SKELETON_NOTE_ROWS = [0, 1, 2, 3];
 
 /*
- * The promo card, drawn for real rather than as a pill.
+ * The promo card's slot, held open as a pill like everything else here.
  *
- * Both cards are always in the markup and CSS shows whichever the hint on
- * `<html>` names, because the skeleton is server-rendered and the hint lives
- * in `localStorage` — a decision made in React would have to wait for
- * hydration, which is the delay this is here to remove. See
+ * The slot is kept — the home screen puts a card there and a skeleton that
+ * leaves the gap out would let the note list jump up the screen and back down
+ * the moment the data lands — but what stands in it is grey. Drawing the real
+ * card meant the skeleton announced "Odkleni Premium" or handed out a gift
+ * while the rest of the screen was still blank pills, which reads as a
+ * finished advert bolted onto a loading screen rather than as a screen that is
+ * loading.
+ *
+ * Which card is coming does not matter, because both are the same box: one
+ * placeholder covers either. It is still gated on the hint on `<html>` so that
+ * an account with no card — a subscriber — gets no slot at all. See
  * src/lib/home-promo-hint.ts.
  */
-function PromoCardPlaceholders() {
+function PromoCardPlaceholder() {
   return (
-    <>
-      <div className="memo-promo" data-promo-hint="wheel">
-        <span className="memo-promo-copy">
-          <span>Dobil si popust!</span>
-          <span>Odkleni najboljše funkcije ceneje</span>
-        </span>
-        <Emoji symbol="🎁" size="2rem" />
-      </div>
-      <div className="memo-promo upgrade" data-promo-hint="upgrade">
-        <span className="memo-promo-copy">
-          <span>Odkleni Premium</span>
-          <span>Neomejeni zapiski in učna orodja</span>
-        </span>
-        <Emoji symbol="⚡" size="2rem" />
-      </div>
-    </>
+    <div className="memo-promo" data-promo-hint="">
+      <span className="memo-promo-copy">
+        <span className="app-loading-pill" style={{ height: "1.1rem", width: "11rem" }} />
+        <span
+          className="app-loading-pill"
+          style={{ height: "0.95rem", width: "15rem", marginTop: "0.35rem" }}
+        />
+      </span>
+      <span
+        className="app-loading-pill"
+        style={{ height: "2rem", width: "2rem", borderRadius: "999px", flex: "none" }}
+      />
+    </div>
   );
 }
 
@@ -48,15 +50,14 @@ function PromoCardPlaceholders() {
  * a skeleton that leaves it out makes the controls flicker away and back on
  * every navigation home.
  *
- * The promo card is the one thing drawn for real rather than as a pill: it is
- * the card the last visit showed, and a grey stand-in for a card that is about
- * to say "Dobil si popust!" would only be a second thing appearing late.
+ * The promo card is a pill too, but its slot is only held open when the hint
+ * says a card is coming, so the list below it does not move when one lands.
  */
 export function DashboardLoading({
   /*
    * Off for the creator demo, which shares this skeleton but is a public page:
-   * the hint belongs to whoever last signed in on this browser, and their gift
-   * card has no business flashing over somebody else's recording.
+   * the hint belongs to whoever last signed in on this browser, and the demo's
+   * own screen has no promo slot to hold open.
    */
   promoPlaceholder = true,
 }: {
@@ -123,7 +124,7 @@ export function DashboardLoading({
         </div>
 
         <div className="memo-home-body">
-          {promoPlaceholder ? <PromoCardPlaceholders /> : null}
+          {promoPlaceholder ? <PromoCardPlaceholder /> : null}
 
           <div className="memo-note-list">
             {SKELETON_NOTE_ROWS.map((row) => (

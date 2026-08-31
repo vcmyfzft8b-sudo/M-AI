@@ -231,31 +231,3 @@ test("the canvas, the app background and the launch screens are the same colours
     );
   }
 });
-
-/**
- * The white flash. iOS cross-fades its launch image into the web view, and a
- * web view that has painted nothing is white, so a dark-themed app went mark →
- * white → app. Both of these settle the canvas before any stylesheet is
- * fetched: `color-scheme` stops the pre-CSS default being white on a dark
- * device, and the inline rules pin it to the launch screens' own colours.
- *
- * They cannot live in redesign.css, which is the whole point — that is a
- * separate request, and the flash happens during it.
- */
-test("the canvas is painted before any stylesheet loads", () => {
-  const layout = readSource("src/app/layout.tsx");
-
-  assert.match(
-    layout,
-    /<meta\s+name="color-scheme"\s+content="light dark"/,
-    "without this the pre-CSS canvas is white on a dark device, which is the flash",
-  );
-
-  // The inline block has to name both launch-screen colours to match them.
-  for (const [theme, colour] of Object.entries(SPLASH_BACKGROUNDS)) {
-    assert.ok(
-      layout.includes(`background-color:${colour}`),
-      `the inline canvas has no ${theme} value of ${colour}, so it flashes a different colour than the launch screen`,
-    );
-  }
-});

@@ -204,32 +204,6 @@ export default function RootLayout({
           * metadata API already covers it. It does not.
           */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        {/*
-          * The white flash between the launch screen and the app.
-          *
-          * iOS cross-fades its launch image into the web view, and a web view
-          * with nothing painted yet is white — so a dark-themed app faded from
-          * the mark on #121214, through white, into #121214 again. Caught by
-          * photographing the launch: one frame of the mark ghosted on near-white.
-          *
-          * Both lines below settle it before a single byte of CSS is fetched.
-          * `color-scheme` tells the browser this document has a dark rendering,
-          * so the canvas it paints before any stylesheet arrives follows the
-          * system instead of defaulting to white; the inline rules then pin that
-          * canvas to the exact colours the launch screens use. They duplicate
-          * the `:root` block in redesign.css on purpose — that file is a
-          * separate request, and this has to be true during the request.
-          */}
-        <meta name="color-scheme" content="light dark" />
-        <style
-          dangerouslySetInnerHTML={{
-            __html:
-              ":root{background-color:#f1f1f5}" +
-              ':root[data-theme="dark"]{background-color:#121214}' +
-              "@media(prefers-color-scheme:dark){" +
-              ':root:not([data-theme="light"]){background-color:#121214}}',
-          }}
-        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link rel="stylesheet" href={MATERIAL_SYMBOLS_HREF} />

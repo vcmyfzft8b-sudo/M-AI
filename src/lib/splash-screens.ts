@@ -78,21 +78,27 @@ export const SPLASH_THEMES = ["light", "dark"] as const;
 export type SplashTheme = (typeof SPLASH_THEMES)[number];
 
 /**
- * The two canvas colours from redesign.css. The launch image is chosen by the
- * system colour scheme, which is the same thing the app follows until someone
- * overrides it in settings — a manual override cannot reach a picture iOS
- * cached at install time, so a light-on-dark override sees one light frame.
+ * `--bg` from redesign.css, both themes — the colour the app itself paints, not
+ * the `:root` canvas behind it. The dark one matters: the canvas is pure black,
+ * and a launch screen in pure black reads as a device that has not woken up
+ * yet. #121214 is the same near-black every screen of the app is drawn on, so
+ * the launch screen looks like the app arriving early rather than a fault.
+ *
+ * The image is chosen by the system colour scheme, which is what the app
+ * follows until someone overrides it in settings — a manual override cannot
+ * reach a picture iOS cached at install time, so it sees one mismatched frame.
  */
 export const SPLASH_BACKGROUNDS: Record<SplashTheme, string> = {
   light: "#f1f1f5",
-  dark: "#000000",
+  dark: "#121214",
 };
 
 /**
- * Fraction of the screen's shorter edge the brain mark spans. The mark is
- * square-ish, so this is a good deal smaller than a wordmark would want.
+ * Fraction of the screen's shorter edge the brain mark spans. Small: a launch
+ * screen is a held breath, not a billboard, and the mark reads as a mark rather
+ * than an illustration at about a third of the width.
  */
-export const SPLASH_LOGO_SCALE = 0.38;
+export const SPLASH_LOGO_SCALE = 0.3;
 
 export type SplashScreen = {
   /** Path under `public/`, without the leading slash. */

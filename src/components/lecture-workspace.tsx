@@ -5805,12 +5805,6 @@ export function LectureWorkspace({
     </>
   );
 
-  const lectureIsProcessing =
-    shouldPollLecture(detail.lecture.status) ||
-    (detail.flashcards.length === 0 && shouldPollAsset(detail.studyAsset?.status)) ||
-    shouldPollAsset(detail.quizAsset?.status) ||
-    shouldPollAsset(detail.practiceTestAsset?.status);
-
   function selectNoteTab(tab: (typeof NOTE_TABS)[number]) {
     if (tab.id === "notes") {
       setActiveTab("notes");
@@ -5937,12 +5931,6 @@ export function LectureWorkspace({
 
             {detail.lecture.error_message ? (
               <p className="memo-inline-error">{detail.lecture.error_message}</p>
-            ) : null}
-
-            {lectureIsProcessing ? (
-              <p className="memo-note-processing">
-                Obdelava še poteka. Ta pogled se samodejno osvežuje.
-              </p>
             ) : null}
 
             {activeTabId === "notes" ? <div className="memo-study-divider-off" /> : null}

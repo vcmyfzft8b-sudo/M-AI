@@ -2966,16 +2966,6 @@
   cursor: pointer;
 }
 
-.memo-note-processing {
-  margin: 0.9rem 0 0;
-  padding: 0.75rem 1rem;
-  border-radius: 14px;
-  background: var(--tile);
-  color: var(--muted);
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
 .memo-bubble-copy {
   margin: 0;
   white-space: pre-wrap;

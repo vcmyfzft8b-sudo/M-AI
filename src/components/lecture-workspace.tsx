@@ -5952,7 +5952,7 @@ export function LectureWorkspace({
    */
   const noteMenu =
     detail.lecture.status === "failed" &&
-    canRetryLectureFailure(detail.lecture.processing_metadata) ? (
+    canRetryLectureFailure(detail.lecture) ? (
       <div className="memo-note-actions">
         <button type="button" className="memo-note-action" onClick={handleRetry}>
           {isRetrying ? (

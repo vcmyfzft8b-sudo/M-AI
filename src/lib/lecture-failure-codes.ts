@@ -65,7 +65,14 @@ export function canRetryLectureFailureCode(code: string | null | undefined) {
   return !(typeof code === "string" && UNRETRYABLE_LECTURE_FAILURE_CODES.has(code));
 }
 
-/** Convenience for the two render sites, which both hold the raw metadata. */
-export function canRetryLectureFailure(processingMetadata: unknown) {
-  return canRetryLectureFailureCode(readLectureFailureCode(processingMetadata));
+/**
+ * Convenience for the two render sites, which both hold a lecture row.
+ *
+ * It takes the row rather than the metadata on purpose: passing `lecture` to a function that
+ * wanted `lecture.processing_metadata` reads perfectly and silently returns true for every
+ * failure, because a row has no `failure` key and an unreadable code means "still retryable".
+ * Requiring `processing_metadata` on the argument turns that slip into a type error.
+ */
+export function canRetryLectureFailure(lecture: { processing_metadata: unknown }) {
+  return canRetryLectureFailureCode(readLectureFailureCode(lecture.processing_metadata));
 }

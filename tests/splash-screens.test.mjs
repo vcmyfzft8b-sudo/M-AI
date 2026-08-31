@@ -231,3 +231,34 @@ test("the canvas, the app background and the launch screens are the same colours
     );
   }
 });
+
+/**
+ * The service worker exists for the white frame between the launch screen and
+ * the app: iOS holds its launch image until first paint, first paint waits on
+ * render-blocking CSS, and a document that has painted nothing is white.
+ * Keeping the build's assets in the cache is what removes the wait.
+ *
+ * What it must never do is cache a page. Memo's HTML is per-account, so a
+ * cached navigation is one person's notes handed to whoever opens the app
+ * next. The scope is content-hashed build output, where a changed file is a
+ * changed URL and a stale hit is impossible.
+ */
+test("the service worker caches build output and nothing else", () => {
+  const sw = readSource("public/sw.js");
+
+  assert.match(
+    sw,
+    /startsWith\("\/_next\/static\/"\)/,
+    "the cacheable test must be the content-hashed build directory",
+  );
+
+  // Anything that could carry account data, or change behind a stable URL.
+  for (const forbidden of ["/api/", "navigate", "text/html"]) {
+    assert.ok(
+      !sw.includes(forbidden),
+      `the service worker mentions ${forbidden}; it must not cache pages or API replies`,
+    );
+  }
+
+  assert.match(sw, /request\.method !== "GET"/, "only GETs may be served from cache");
+});

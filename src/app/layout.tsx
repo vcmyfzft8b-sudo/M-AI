@@ -3,6 +3,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import { KeyboardInset } from "@/components/keyboard-inset";
+import { ServiceWorkerRegistration } from "@/components/service-worker";
 import { ThemeController } from "@/components/theme-controller";
 import { VisitTracker } from "@/components/visit-tracker";
 import {
@@ -247,6 +248,7 @@ export default function RootLayout({
       </head>
       <body>
         <ThemeController />
+        <ServiceWorkerRegistration />
         <KeyboardInset />
         {children}
         <VisitTracker />

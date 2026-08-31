@@ -17,6 +17,13 @@
 
 const CACHE = "memo-static-v1";
 
+/**
+ * Roughly several deploys' worth of chunks. High enough that normal use — one
+ * build, many screens, each adding its own — never trims; low enough that the
+ * cache cannot grow until the browser evicts all of it.
+ */
+const MAX_ENTRIES = 300;
+
 /** Content-hashed build output, and nothing else. */
 function isCacheable(url) {
   return url.origin === self.location.origin && url.pathname.startsWith("/_next/static/");
@@ -49,18 +56,45 @@ self.addEventListener("message", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE);
+      const wanted = urls.filter((url) => {
+        try {
+          return isCacheable(new URL(url));
+        } catch {
+          return false;
+        }
+      });
+
       await Promise.all(
-        urls
-          .filter((url) => {
-            try {
-              return isCacheable(new URL(url));
-            } catch {
-              return false;
-            }
-          })
-          // One bad entry must not abandon the rest, which `cache.addAll` would.
-          .map((url) => cache.add(url).catch(() => {})),
+        // One bad entry must not abandon the rest, which `cache.addAll` would.
+        wanted.map((url) => cache.add(url).catch(() => {})),
       );
+
+      /*
+       * Hashed filenames mean a deploy never overwrites an entry, it adds one,
+       * so left alone this cache only grows — and an origin that runs out of
+       * storage gets the whole thing evicted, which is the flash back and
+       * worse.
+       *
+       * Only trim when it is actually oversized, though. Each page sends the
+       * chunks *it* used, so dropping everything outside the current list on
+       * every message would have the home screen evicting the note screen's
+       * assets and back again forever. Past the cap, that same list is the best
+       * evidence available of what is still current, and a cache this size is
+       * already several deploys of rubbish.
+       */
+      const entries = await cache.keys();
+
+      if (entries.length > MAX_ENTRIES) {
+        const keep = new Set(wanted.map((url) => new URL(url).pathname));
+
+        await Promise.all(
+          entries.map(async (request) => {
+            if (!keep.has(new URL(request.url).pathname)) {
+              await cache.delete(request).catch(() => {});
+            }
+          }),
+        );
+      }
     })(),
   );
 });

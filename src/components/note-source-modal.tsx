@@ -480,7 +480,7 @@ export function NoteSourceModal({
 
   function redirectToPaywall() {
     onClose();
-    router.push("/app/start");
+    navigateWithFeedback("/app/start");
   }
 
   const replaceAudioSource = useCallback(async (nextSource: AudioSource) => {

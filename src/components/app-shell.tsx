@@ -9,10 +9,6 @@ import { useCreatorDemoBasePath } from "@/components/creator-demo/creator-demo-c
 import { InstantLink } from "@/components/instant-link";
 import { Msym } from "@/components/msym";
 import {
-  shouldHandleLinkNavigation,
-  useInstantNavigation,
-} from "@/components/navigation-loading";
-import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
   BRAND_LOCKUP_WIDTH,
@@ -47,7 +43,6 @@ export function AppShell({
   const demoBasePath = useCreatorDemoBasePath();
   const clientPathname = usePathname();
   const router = useRouter();
-  const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
 
   // `usePathname` is null on the very first server-rendered pass in some
   // contexts, so the header-provided path seeds it.
@@ -75,21 +70,11 @@ export function AppShell({
     [isNote, pathname],
   );
 
-  function handleNavLinkClick(event: React.MouseEvent<HTMLAnchorElement>, href: string) {
-    if (!shouldHandleLinkNavigation(event)) {
-      return;
-    }
-
-    event.preventDefault();
-    navigateWithFeedback(href);
-  }
-
   // Onboarding and checkout own the whole viewport; the app chrome would only
   // get in the way.
   if (isOnboarding) {
     return (
       <div className={`memo memo-shell ${className}`.trim()}>
-        {navigationOverlay}
         <main>{children}</main>
       </div>
     );
@@ -99,14 +84,11 @@ export function AppShell({
     <AppLayoutProvider>
       {({ chatOpen, registerChatSlot }) => (
         <div className={`memo memo-shell ${className}`.trim()}>
-          {navigationOverlay}
-
           <header className="memo-header">
             <InstantLink
               href="/app"
               className="memo-header-brand"
               aria-label={`Domov ${SEO_BRAND_NAME}`}
-              onClick={(event) => handleNavLinkClick(event, "/app")}
             >
               <Image
                 src={BRAND_LOCKUP_SRC}
@@ -122,7 +104,6 @@ export function AppShell({
                 <InstantLink
                   href="/app/start"
                   className="memo-subscribe-cta"
-                  onClick={(event) => handleNavLinkClick(event, "/app/start")}
                 >
                   <span>Neomejeni zapiski</span>
                   <Msym name="bolt" size="1.35rem" />
@@ -151,7 +132,6 @@ export function AppShell({
                     aria-current={item.active ? "page" : undefined}
                     aria-label={item.label}
                     title={item.label}
-                    onClick={(event) => handleNavLinkClick(event, item.href)}
                   >
                     <span className="memo-rail-icon">
                       <Msym name={item.icon} size="1.5rem" />

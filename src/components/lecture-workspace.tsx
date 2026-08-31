@@ -3879,13 +3879,25 @@ export function LectureWorkspace({
             {showChatMic ? (
               <button
                 type="button"
-                disabled={composerDisabled}
-                className={`memo-chat-send mic ${dictation.listening ? "listening" : ""}`.trim()}
+                disabled={composerDisabled || dictation.transcribing}
+                className={`memo-chat-send mic ${dictation.listening ? "listening" : ""} ${
+                  dictation.transcribing ? "transcribing" : ""
+                }`.trim()}
                 onClick={dictation.toggle}
                 aria-pressed={dictation.listening}
-                aria-label={dictation.listening ? "Ustavi narekovanje" : "Narekuj vprašanje"}
+                aria-label={
+                  dictation.transcribing
+                    ? "Prepisujem povedano"
+                    : dictation.listening
+                      ? "Ustavi narekovanje"
+                      : "Narekuj vprašanje"
+                }
               >
-                <Msym name={dictation.listening ? "stop" : "mic"} size="1.35rem" />
+                {dictation.transcribing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Msym name={dictation.listening ? "stop" : "mic"} size="1.35rem" />
+                )}
               </button>
             ) : (
               <button
@@ -3905,6 +3917,8 @@ export function LectureWorkspace({
 
           {dictation.error ? (
             <p className="memo-chat-status danger">{dictation.error}</p>
+          ) : dictation.transcribing ? (
+            <p className="memo-chat-status">Prepisujem povedano…</p>
           ) : chatError ? (
             <p className="memo-chat-status danger">{chatError}</p>
           ) : detail.lecture.status !== "ready" ? (
@@ -5984,12 +5998,15 @@ export function LectureWorkspace({
             {dictation.supported ? (
               <button
                 type="button"
-                className={`memo-m-chatbar-mic ${dictation.listening ? "listening" : ""}`.trim()}
+                className={`memo-m-chatbar-mic ${dictation.listening ? "listening" : ""} ${
+                  dictation.transcribing ? "transcribing" : ""
+                }`.trim()}
                 onClick={() => {
                   setIsMobileChatOpen(true);
-                  dictation.start();
+                  dictation.toggle();
                 }}
-                aria-label="Narekuj vprašanje"
+                aria-pressed={dictation.listening}
+                aria-label={dictation.listening ? "Ustavi narekovanje" : "Narekuj vprašanje"}
               />
             ) : null}
           </div>

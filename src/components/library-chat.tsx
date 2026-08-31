@@ -399,6 +399,16 @@ export function LibraryChat({
     }, []),
   });
   const showMic = dictation.supported && !sendReady;
+  /*
+   * Dictation has two things worth saying — that it is still transcribing, and
+   * why it gave up — and three composers to say them under, so the line is
+   * built once and dropped beneath each of them.
+   */
+  const dictationNotice = dictation.error ? (
+    <p className="memo-chat-status danger">{dictation.error}</p>
+  ) : dictation.transcribing ? (
+    <p className="memo-chat-status">Prepisujem povedano…</p>
+  ) : null;
 
   return (
     <>
@@ -440,24 +450,34 @@ export function LibraryChat({
             ) : null}
             <button
               type="button"
+              disabled={dictation.transcribing}
               aria-label={
                 showMic
-                  ? dictation.listening
-                    ? "Ustavi narekovanje"
-                    : "Narekuj vprašanje"
+                  ? dictation.transcribing
+                    ? "Prepisujem povedano"
+                    : dictation.listening
+                      ? "Ustavi narekovanje"
+                      : "Narekuj vprašanje"
                   : "Pošlji"
               }
               className={`memo-send ${showMic ? "mic" : ""} ${
                 dictation.listening ? "listening" : ""
-              } ${sendReady ? "ready" : ""}`.trim()}
+              } ${dictation.transcribing ? "transcribing" : ""} ${
+                sendReady ? "ready" : ""
+              }`.trim()}
               onClick={() => (showMic ? dictation.toggle() : void send())}
             >
-              <Msym
-                name={showMic ? (dictation.listening ? "stop" : "mic") : "arrow_upward"}
-                size="1.4rem"
-              />
+              {dictation.transcribing ? (
+                <Msym name="progress_activity" className="memo-spin" size="1.4rem" />
+              ) : (
+                <Msym
+                  name={showMic ? (dictation.listening ? "stop" : "mic") : "arrow_upward"}
+                  size="1.4rem"
+                />
+              )}
             </button>
           </div>
+          {dictationNotice}
         </div>
       )}
 
@@ -551,18 +571,34 @@ export function LibraryChat({
                     )}
                     <button
                       type="button"
-                      aria-label={showMic ? "Narekuj vprašanje" : "Pošlji"}
+                      disabled={dictation.transcribing}
+                      aria-label={
+                        showMic
+                          ? dictation.transcribing
+                            ? "Prepisujem povedano"
+                            : dictation.listening
+                              ? "Ustavi narekovanje"
+                              : "Narekuj vprašanje"
+                          : "Pošlji"
+                      }
                       className={`memo-send ${showMic ? "mic" : ""} ${
                         dictation.listening ? "listening" : ""
-                      } ${sendReady ? "ready" : ""}`.trim()}
+                      } ${dictation.transcribing ? "transcribing" : ""} ${
+                        sendReady ? "ready" : ""
+                      }`.trim()}
                       onClick={() => (showMic ? dictation.toggle() : void send())}
                     >
-                      <Msym
-                        name={showMic ? (dictation.listening ? "stop" : "mic") : "arrow_upward"}
-                        size="1.4rem"
-                      />
+                      {dictation.transcribing ? (
+                        <Msym name="progress_activity" className="memo-spin" size="1.4rem" />
+                      ) : (
+                        <Msym
+                          name={showMic ? (dictation.listening ? "stop" : "mic") : "arrow_upward"}
+                          size="1.4rem"
+                        />
+                      )}
                     </button>
                   </div>
+                  {dictationNotice}
                 </div>
               </div>
             </div>
@@ -717,18 +753,34 @@ export function LibraryChat({
                     />
                     <button
                       type="button"
-                      aria-label={showMic ? "Narekuj vprašanje" : "Pošlji"}
+                      disabled={dictation.transcribing}
+                      aria-label={
+                        showMic
+                          ? dictation.transcribing
+                            ? "Prepisujem povedano"
+                            : dictation.listening
+                              ? "Ustavi narekovanje"
+                              : "Narekuj vprašanje"
+                          : "Pošlji"
+                      }
                       className={`memo-chat-send ${showMic ? "mic" : ""} ${
                         dictation.listening ? "listening" : ""
-                      } ${sendReady ? "ready" : ""}`.trim()}
+                      } ${dictation.transcribing ? "transcribing" : ""} ${
+                        sendReady ? "ready" : ""
+                      }`.trim()}
                       onClick={() => (showMic ? dictation.toggle() : void send())}
                     >
-                      <Msym
-                        name={showMic ? (dictation.listening ? "stop" : "mic") : "arrow_upward"}
-                        size="1.5rem"
-                      />
+                      {dictation.transcribing ? (
+                        <Msym name="progress_activity" className="memo-spin" size="1.5rem" />
+                      ) : (
+                        <Msym
+                          name={showMic ? (dictation.listening ? "stop" : "mic") : "arrow_upward"}
+                          size="1.5rem"
+                        />
+                      )}
                     </button>
                   </div>
+                  {dictationNotice}
                 </div>
               </div>
             </div>

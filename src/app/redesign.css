@@ -2824,6 +2824,16 @@
   color: #fff;
 }
 
+/* Between the stop and the words arriving the recording is on its way to the
+   transcriber. The control keeps its place and goes quiet rather than
+   disappearing, so nothing under the thumb moves while it waits. */
+.memo-chat-send.mic.transcribing,
+.memo-send.mic.transcribing {
+  background: var(--surface);
+  color: var(--muted);
+  cursor: default;
+}
+
 /* The bar it overlays is the phone's; there is nothing to sit on above that. */
 .memo-m-chatbar-mic {
   display: none;
@@ -9025,6 +9035,10 @@
 
   .memo-m-chatbar-mic.listening {
     background: rgba(244, 95, 90, 0.5);
+  }
+
+  .memo-m-chatbar-mic.transcribing {
+    background: rgba(244, 95, 90, 0.2);
   }
 
   .memo-dock:has(.memo-dock-pill.reading) .memo-m-chatbar-mic,

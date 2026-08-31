@@ -4,6 +4,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import { I18nProvider } from "@/components/i18n-provider";
 import { KeyboardInset } from "@/components/keyboard-inset";
+import { ServiceWorkerRegistration } from "@/components/service-worker";
 import { ThemeController } from "@/components/theme-controller";
 import { VisitTracker } from "@/components/visit-tracker";
 import { SEO_BRAND_NAME, SEO_SITE_URL } from "@/lib/brand";
@@ -33,6 +34,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "arrow_forward",
   "arrow_upward",
   "assignment",
+  "battery_full",
   "bolt",
   "cancel",
   "chat_bubble",
@@ -79,6 +81,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "replay_10",
   "search",
   "settings",
+  "signal_cellular_alt",
   "skip_next",
   "skip_previous",
   "speed",
@@ -88,6 +91,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "text_snippet",
   "tune",
   "warning",
+  "wifi",
 ].join(",");
 
 const MATERIAL_SYMBOLS_HREF =
@@ -267,6 +271,7 @@ export default async function RootLayout({
       <body>
         <I18nProvider locale={locale} messages={getMessages(locale)}>
           <ThemeController />
+          <ServiceWorkerRegistration />
           <KeyboardInset />
           {children}
           <VisitTracker />

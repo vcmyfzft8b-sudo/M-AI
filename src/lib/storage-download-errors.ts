@@ -79,3 +79,31 @@ export function isTransientStorageDownloadError(error: unknown) {
 
   return TRANSIENT_MESSAGE_FRAGMENTS.some((fragment) => message.includes(fragment));
 }
+
+export const TRANSIENT_STORAGE_RETRY_DELAYS_MS = [500, 1_500];
+
+// Every storage call in supabase-js reports failure the same way — `{ data, error }`, never a
+// throw — so one wrapper covers uploads and signed-URL reads as well as downloads, and the
+// classification above is on the HTTP status rather than on which verb was used. The caller keeps
+// its own error handling: this only re-runs the operation, and hands back the last result whether
+// it succeeded or not. Only wrap operations that are safe to repeat.
+export async function retryTransientStorageOperation<T extends { error: unknown }>(
+  operation: () => Promise<T>,
+  delaysMs: readonly number[] = TRANSIENT_STORAGE_RETRY_DELAYS_MS,
+): Promise<T> {
+  let result = await operation();
+
+  for (let attempt = 0; attempt < delaysMs.length; attempt += 1) {
+    if (!result.error || !isTransientStorageDownloadError(result.error)) {
+      return result;
+    }
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, delaysMs[attempt] ?? 0);
+    });
+
+    result = await operation();
+  }
+
+  return result;
+}

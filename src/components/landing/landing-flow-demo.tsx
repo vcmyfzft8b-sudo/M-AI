@@ -4,6 +4,7 @@ import type { CSSProperties, DragEvent, PointerEvent as ReactPointerEvent } from
 import { Component } from "react";
 
 import { useT } from "@/components/i18n-provider";
+import { Msym } from "@/components/msym";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
 
@@ -14,6 +15,24 @@ import type { Translate } from "@/lib/i18n/translate";
  * language it was written in whatever the interface is set to. Same boundary
  * as memo-app-preview-data.ts — see the note at the top of that file.
  */
+
+/*
+ * The study tabs, from the redesign's note screen: one pill per mode, each with
+ * its own Material Symbol and its own tint, which the active one wears as a
+ * wash and a ring. Sized down for this card — the shapes are the app's, the
+ * scale is the marketing page's.
+ */
+const STUDY_TABS = [
+  { id: "cards", labelKey: "flowDemo.tabCards", icon: "style", tint: "oklch(0.66 0.15 295)" },
+  { id: "quiz", labelKey: "flowDemo.tabQuiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
+  { id: "test", labelKey: "flowDemo.tabTest", icon: "assignment", tint: "oklch(0.66 0.15 150)" },
+] as const satisfies ReadonlyArray<{
+  id: "cards" | "quiz" | "test";
+  labelKey: MessageKey;
+  icon: string;
+  tint: string;
+}>;
+
 type FlowSource = {
   id: string;
   icon: string;
@@ -916,20 +935,24 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
     this.setState((p) => ({ sTIdx: p.sTIdx + 1, sTVal: "", sTShown: false, sTOk: false }));
   };
 
-  tabStyle(id: FlowDemoState["sTab"]): CSSProperties {
+  tabStyle(id: FlowDemoState["sTab"], tint: string): CSSProperties {
     const on = this.state.sTab === id;
     return {
-      flex: 1,
-      padding: "6px 0",
-      border: "none",
-      borderRadius: "7px",
-      background: on ? "var(--l-surface)" : "transparent",
-      fontSize: "12.5px",
-      fontWeight: on ? 600 : 500,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "5px",
+      flex: "0 0 auto",
+      height: "28px",
+      padding: "0 10px",
+      border: 0,
+      borderRadius: "999px",
+      background: on ? `color-mix(in oklch, ${tint} 16%, var(--l-surface))` : "var(--l-surface)",
+      boxShadow: on ? `inset 0 0 0 1.5px ${tint}` : "var(--l-shadow)",
+      color: "var(--l-label)",
       fontFamily: "inherit",
-      color: on ? "var(--l-label)" : "var(--l-second)",
       cursor: "pointer",
-      transition: "background 200ms ease, color 200ms ease",
+      transition: "background 180ms ease, box-shadow 180ms ease",
     };
   }
 
@@ -977,7 +1000,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
       overflow: "hidden",
       alignSelf: "stretch",
       padding: "13px 14px",
-      borderRadius: "18px",
+      borderRadius: "20px",
       background: "var(--l-surface)",
       border: over ? "1px solid var(--l-flow)" : "1px solid var(--l-line)",
       boxShadow: over ? "0 0 0 6px var(--l-flow-soft), var(--l-shadow)" : "var(--l-shadow)",
@@ -995,7 +1018,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
       minWidth: 0,
       minHeight: "58px",
       padding: "10px 11px",
-      borderRadius: "14px",
+      borderRadius: "18px",
       boxSizing: "border-box",
       background: stage >= 1 ? "var(--l-surface-62)" : "transparent",
       border: stage >= 1 ? "1px solid var(--l-line)" : "1px dashed var(--l-line)",
@@ -1053,6 +1076,8 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
             </span>
           </div>
           <div style={dropRowStyle}>
+            {/* The library row, in the redesign's shape: the emoji on a tile
+                rather than a hairline circle, and its heavier title. */}
             <span
               style={{
                 display: "inline-flex",
@@ -1061,18 +1086,19 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
                 flexShrink: 0,
                 alignItems: "center",
                 justifyContent: "center",
-                borderRadius: "50%",
-                background: "var(--l-line)",
+                borderRadius: "999px",
+                background: "var(--m-tile)",
                 fontSize: "15px",
               }}
             >
               {dropIcon}
             </span>
-            <span style={{ display: "grid", gap: "4px", minWidth: 0, flex: 1, textAlign: "left" }}>
+            <span style={{ display: "grid", gap: "3px", minWidth: 0, flex: 1, textAlign: "left" }}>
               <span
                 style={{
                   fontSize: "14.7px",
-                  fontWeight: 500,
+                  fontWeight: 650,
+                  letterSpacing: "-0.025em",
                   color: "var(--l-label)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
@@ -1081,7 +1107,9 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
               >
                 {dropTitle}
               </span>
-              <span style={{ fontSize: "12.5px", lineHeight: 1.3, color: "var(--l-second)" }}>{dropSubtitle}</span>
+              <span style={{ fontSize: "12.5px", lineHeight: 1.3, letterSpacing: "-0.015em", color: "var(--l-second)" }}>
+                {dropSubtitle}
+              </span>
             </span>
             {/* Laid out in every stage, shown only while the source is being
                 processed. Adding and removing it changed this card's height,
@@ -1120,7 +1148,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
                 gap: "10px",
                 minWidth: 0,
                 padding: "8px 11px",
-                borderRadius: "14px",
+                borderRadius: "18px",
                 boxSizing: "border-box",
                 border: "1px solid var(--l-line)",
                 background: "var(--l-surface-62)",
@@ -1202,7 +1230,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
       overflow: "hidden",
       alignSelf: "stretch",
       padding: "15px 14px",
-      borderRadius: "18px",
+      borderRadius: "20px",
       border: "1px solid var(--l-line)",
       background: "var(--l-surface)",
       boxShadow: "var(--l-shadow)",
@@ -1255,7 +1283,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
               justifySelf: "start",
               padding: "1.6px 5.1px",
               borderRadius: "6.7px",
-              background: "rgba(37,99,235,0.42)",
+              background: "var(--m-head-hl)",
               fontSize: "15px",
               fontWeight: 700,
               color: "var(--l-label)",
@@ -1273,11 +1301,11 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
               textAlign: "left",
             }}
           >
-              <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "rgba(232,132,52,0.42)" }}>
+              <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-marker)" }}>
                 Poslovni informacijski sistemi
               </span>{" "}
               zbirajo in obdelujejo informacije, ki podpirajo{" "}
-              <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "rgba(37,99,235,0.42)" }}>
+              <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-head-hl)" }}>
                 odločanje v podjetjih
               </span>
               .
@@ -1289,7 +1317,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
               justifySelf: "start",
               padding: "1.6px 5.1px",
               borderRadius: "6.7px",
-              background: "rgba(37,99,235,0.42)",
+              background: "var(--m-head-hl)",
               fontSize: "13.4px",
               fontWeight: 700,
               color: "var(--l-label)",
@@ -1308,10 +1336,10 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
               display: "grid",
               gap: "2px",
               padding: "8px 10px",
-              border: "1px solid rgba(245,158,11,0.3)",
+              border: "1px solid var(--m-callout-takeaway-line)",
               borderLeft: "3px solid #f59e0b",
-              borderRadius: "10px",
-              background: "rgba(180,83,9,0.22)",
+              borderRadius: "14px",
+              background: "var(--m-callout-takeaway-bg)",
               textAlign: "left",
             }}
           >
@@ -1545,7 +1573,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
       overflow: "visible",
       alignSelf: "stretch",
       padding: "14px",
-      borderRadius: "18px",
+      borderRadius: "20px",
       border: "1px solid var(--l-line)",
       background: "var(--l-surface)",
       boxShadow: "var(--l-shadow)",
@@ -1601,7 +1629,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
       padding: "14px 12px",
       boxSizing: "border-box",
       border: "1px solid var(--l-line)",
-      borderRadius: "14px",
+      borderRadius: "18px",
       background: "var(--l-surface-62)",
       backfaceVisibility: "hidden",
       WebkitBackfaceVisibility: "hidden",
@@ -1632,16 +1660,15 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
         </h3>
         <div style={studyCardStyle}>
           <div style={studyBodyStyle}>
-            <div style={{ display: "flex", width: "100%", padding: "2px", borderRadius: "8px", background: "var(--l-line)" }}>
-              <button type="button" onClick={() => this.selectTab("cards")} style={this.tabStyle("cards")}>
-                {this.props.t("flowDemo.tabCards")}
-              </button>
-              <button type="button" onClick={() => this.selectTab("quiz")} style={this.tabStyle("quiz")}>
-                {this.props.t("flowDemo.tabQuiz")}
-              </button>
-              <button type="button" onClick={() => this.selectTab("test")} style={this.tabStyle("test")}>
-                {this.props.t("flowDemo.tabTest")}
-              </button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", width: "100%" }}>
+              {STUDY_TABS.map((tab) => (
+                <button key={tab.id} type="button" onClick={() => this.selectTab(tab.id)} style={this.tabStyle(tab.id, tab.tint)}>
+                  <Msym name={tab.icon} size="14px" fill={false} weight={500} style={{ color: tab.tint }} />
+                  <span style={{ fontSize: "12.5px", fontWeight: 750, letterSpacing: "-0.025em", whiteSpace: "nowrap" }}>
+                    {this.props.t(tab.labelKey)}
+                  </span>
+                </button>
+              ))}
             </div>
 
             {s.sTab === "cards" && !cardsDone ? (
@@ -1661,7 +1688,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      borderRadius: "14px",
+                      borderRadius: "18px",
                       fontSize: "30px",
                       pointerEvents: "none",
                       background:
@@ -1712,7 +1739,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
                   padding: "12px",
                   boxSizing: "border-box",
                   border: "1px solid var(--l-line)",
-                  borderRadius: "14px",
+                  borderRadius: "18px",
                   background: "var(--l-surface-62)",
                 }}
               >
@@ -1802,7 +1829,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
                   padding: "12px",
                   boxSizing: "border-box",
                   border: "1px solid var(--l-line)",
-                  borderRadius: "14px",
+                  borderRadius: "18px",
                   background: "var(--l-surface-62)",
                 }}
               >

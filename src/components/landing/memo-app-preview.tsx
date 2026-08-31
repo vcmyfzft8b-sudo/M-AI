@@ -1,332 +1,343 @@
 "use client";
 
-/* Interactive phone mockup of the Memo AI app shown in the landing hero.
-   Ported from the bundled design (self-running guided tour; any user
-   interaction stops the tour and hands over control). */
+/*
+ * The interactive phone mockup in the landing hero.
+ *
+ * It is a transcription of the redesign's own phone artboard —
+ * `MemoMobile.dc.html`, the 390×844 document bundled inside
+ * "Memo AI Desktop Redesign (standalone).html" — rather than a sketch of it:
+ * the tokens, the sizes, the Material Symbols and the screen structure are the
+ * artboard's, so what the hero shows is the app people actually get. It is
+ * written as a self-contained component (its own `--m-` tokens, inline styles)
+ * because it renders inside the landing page, which has a palette of its own
+ * and must not load the app's stylesheet.
+ *
+ * It runs a guided tour on its own; any user interaction stops the tour and
+ * hands the phone over.
+ */
 
 import Image from "next/image";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { Component } from "react";
 
-import { useTranslations } from "@/components/i18n-provider";
-import type { Locale } from "@/lib/i18n/locales";
-import { formatCalendarDate } from "@/lib/utils";
+import { Emoji, Msym } from "@/components/msym";
 import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, SEO_BRAND_NAME } from "@/lib/brand";
-import type { MessageKey } from "@/lib/i18n/messages/keys";
-import type { Translate } from "@/lib/i18n/translate";
 
 import { PREVIEW_STOP_TOUR_EVENT, PREVIEW_TOUR_STOPPED_EVENT } from "./memo-app-preview-events";
 
 import {
-  completionAction,
-  completionBadge,
+  blockStyle,
   completionPct,
-  completionShell,
+  type BodyLine,
+  CAPTURE,
+  type CaptureMode,
+  type ChatMessage,
+  CREATE_OPTIONS,
   DARK_TOKENS,
   FOLDERS,
   HELP_SECTIONS,
-  PREVIEW_HELP_TITLE_KEYS,
   INITIAL_NOTES,
-  lectureSummary,
   LIGHT_TOKENS,
   NOTE_BODIES,
+  type NoteBlock,
   noteTheme,
   type NoteTab,
   type PreviewFolder,
   type PreviewNote,
   type PreviewTheme,
-  QUICK_ACTIONS,
-  ringStyle,
-  SEGMENT_BASE,
-  segmentWords,
-  type SegmentWord,
-  SHEET_CONTENT,
-  type SheetMode,
-  SOURCE_META,
-  SOURCE_MODES,
-  SOURCE_VARIANTS,
-  STATUS_LABEL_KEYS,
-  STUDY_MODES,
-  type StudyMode,
-  PREVIEW_TODAY,
+  readWordStyle,
+  SOURCE_LABELS,
+  SUB_SCREEN_TITLES,
   TABS,
   THEME_OPTIONS,
   THEME_STUDY,
-  type ChatMessage,
+  tokenizeBody,
 } from "./memo-app-preview-data";
+
+/* The artboard is 390×844 with a 48px corner; every number below is its own,
+   converted from rem at the 16px root it is drawn against. */
+const PHONE_W = 390;
+const PHONE_H = 844;
+const STATUS_H = 54;
+/* The screen plus the bezel and the case around it — what actually has to fit. */
+const FRAME_W = PHONE_W + 24 + 7;
+const FRAME_H = PHONE_H + 24 + 7;
+
+/* The flashcard's own box, and the throw distance the design tunes against. */
+const CARD_W = 353;
+const CARD_H = 416;
+const CARD_DRAG_TRIGGER = 120;
 
 type TapState = { x: number; y: number; n: number } | null;
 type CursorState = { x: number; y: number; press: boolean; seen: boolean; drag?: boolean } | null;
 
+type Screen = "home" | "note" | "sub" | "capture";
+type Sheet = "create" | "folders" | "newFolder" | "actions" | "rename" | "delete" | "settings" | "support" | "chat";
+
 type PreviewProps = {
   autoTour?: boolean;
-  /**
-   * The translator, as a prop rather than a hook: this is a class component,
-   * and the wrapper below is what reads the context. Only the replica's own
-   * chrome goes through it — the study material it displays stays in the
-   * language it was written in, as `memo-app-preview-data.ts` explains.
-   */
-  t: Translate<MessageKey>;
-  /** For `Intl`, which the replica's date column goes through the same as the real one. */
-  locale: Locale;
 };
 
 type PreviewState = {
   scale: number;
   measured: boolean;
-  screen: "home" | "note" | "support" | "settings";
+  screen: Screen;
+  sheet: Sheet | null;
+  sheetClosing: boolean;
   noteId: string | null;
   notes: PreviewNote[];
   query: string;
-  sheetMode: SheetMode | null;
-  createMenuOpen: boolean;
-  dockOpen: boolean;
-  busyLabel: string | null;
-  createAudio: boolean;
+  captureMode: CaptureMode;
+  captureText: string;
+  recordSeconds: number;
   tab: NoteTab;
-  studyMode: StudyMode;
-  cardIndex: number;
-  flipped: boolean;
-  quizIndex: number;
-  quizPick: number | null;
-  cardAnswers: Array<"easy" | "again" | undefined>;
+  cardPos: number;
+  cardFlipped: boolean;
+  cardAnswers: Record<number, "easy" | "again">;
   cardsDone: boolean;
-  quizAnswers: number[];
+  quizNo: number;
+  quizPick: number | null;
+  quizCorrect: number;
   quizDone: boolean;
+  testNo: number;
+  testAnswers: Record<number, string>;
+  testFocused: boolean;
+  testDone: boolean;
   cardDragX: number;
-  cardDragY: number;
-  cardDragActive: boolean;
-  cardPhase: "idle" | "exit" | "enter";
-  cardExitDir: number;
-  flipPhase: "out" | "mid" | "in" | null;
-  showHint: boolean;
+  cardDragging: boolean;
+  cardExit: "easy" | "again" | null;
+  exitX: number;
+  exitY: number;
+  exitRot: number;
+  /* Bumped per swipe so the clone remounts and its animation replays — two
+     swipes the same way would otherwise reuse a finished animation. */
+  exitToken: number;
   tap: TapState;
   cursor: CursorState;
-  practiceAnswers: Record<string, string>;
-  practiceUnknown: string[];
-  testGraded: boolean;
   reading: boolean;
   readPaused: boolean;
   readWord: number;
+  headP: number;
   swipeId: string | null;
-  swipeOffset: number;
-  folderSheetOpen: boolean;
+  swipeX: number;
+  swipeDragging: boolean;
   folderId: string | null;
+  folders: PreviewFolder[];
+  targetId: string | null;
+  renameValue: string;
+  newFolderName: string;
   theme: PreviewTheme;
-  openHelp: string | null;
   dragKey: string | null;
   dragOffset: number;
-  folders: PreviewFolder[];
-  renameId: string | null;
-  renameValue: string;
-  deleteId: string | null;
-  folderModal: "new" | "edit" | null;
-  folderModalId: string | null;
-  folderNameValue: string;
-  folderPickIds: string[];
-  chatInput: string;
-  messages: ChatMessage[];
-  sourceVariant: number;
-  language: string;
+  chatDraft: string;
+  chat: ChatMessage[];
 };
 
-/* Eased rather than linear, and fully clear ~26px before the element ends, so
-   rows dissolve into the screen instead of meeting the bezel at a hard edge.
-   The stops are in the mockup's own (unscaled) pixel space. */
-const APP_MAIN_FEATHER = [
-  "linear-gradient(to bottom",
-  "transparent 0",
-  "#000 18px",
-  "#000 calc(100% - 172px)",
-  "rgba(0, 0, 0, 0.78) calc(100% - 128px)",
-  "rgba(0, 0, 0, 0.4) calc(100% - 86px)",
-  "rgba(0, 0, 0, 0.12) calc(100% - 52px)",
-  "transparent calc(100% - 26px))",
-].join(", ");
+/* ── Shared pieces of the artboard ────────────────────────────── */
 
-const SHEET_BACKDROP: CSSProperties = {
-  position: "absolute",
-  inset: 0,
-  border: 0,
-  background: "rgba(0,0,0,0.45)",
-  backdropFilter: "blur(10px)",
-  WebkitBackdropFilter: "blur(10px)",
-  cursor: "pointer",
+/* `.scroll` masks: the home list fades in from under the floating top bar. */
+const HOME_SCROLL_MASK = "linear-gradient(to bottom, transparent 0, transparent 33.6px, #000 62.4px)";
+/* The chip rows fade out at their right edge instead of being cut. */
+const CHIPROW_MASK = "linear-gradient(90deg, #000 0, #000 calc(100% - 35.2px), transparent 100%)";
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+/* The round white control: back, actions, settings, close. */
+function roundBtn(size: number): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: `${size}px`,
+    height: `${size}px`,
+    flex: "0 0 auto",
+    padding: 0,
+    border: 0,
+    borderRadius: "999px",
+    background: "var(--m-surface)",
+    color: "var(--m-label)",
+    boxShadow: "var(--m-shadow)",
+    fontFamily: "inherit",
+    cursor: "pointer",
+  };
+}
+
+/* The tile circle a sheet's close button sits on. */
+function tileBtn(size: number): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: `${size}px`,
+    height: `${size}px`,
+    flex: "0 0 auto",
+    padding: 0,
+    border: 0,
+    borderRadius: "999px",
+    background: "var(--m-tile)",
+    color: "var(--m-label)",
+    fontFamily: "inherit",
+    cursor: "pointer",
+  };
+}
+
+/* The coral commit: "Nov zapisek", "Ustvari zapisek", "Nova mapa". */
+function coralPill(extra?: CSSProperties): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    height: "56.8px",
+    border: 0,
+    borderRadius: "999px",
+    background: "linear-gradient(135deg, #ff6d68, #f45f5a)",
+    color: "#ffffff",
+    boxShadow: "0 12px 24px rgba(244,95,90,0.24)",
+    fontFamily: "inherit",
+    fontSize: "17.92px",
+    fontWeight: 700,
+    cursor: "pointer",
+    ...extra,
+  };
+}
+
+/* The tile-grey secondary: every "Prekliči". */
+function ghostPill(height: number): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    width: "100%",
+    height: `${height}px`,
+    border: 0,
+    borderRadius: "999px",
+    background: "var(--m-tile)",
+    color: "var(--m-label)",
+    fontFamily: "inherit",
+    fontSize: "16.32px",
+    fontWeight: 650,
+    cursor: "pointer",
+  };
+}
+
+/* `.memo-sheet-option`, `.memo-folder-row`, the settings rows: one surface. */
+const SURFACE_CARD: CSSProperties = {
+  borderRadius: "20px",
+  background: "var(--m-surface)",
+  boxShadow: "var(--m-shadow)",
+  overflow: "hidden",
 };
 
-const SHEET_HANDLE = (
-  <span
+/* The grabber every bottom sheet carries. */
+const GRAB = (
+  <div
     data-sheet-handle
     aria-hidden="true"
     style={{
-      justifySelf: "center",
-      alignSelf: "center",
-      display: "flex",
-      alignItems: "center",
-      width: "24px",
-      height: "13px",
-      marginBottom: "-5.6px",
+      width: "41.6px",
+      height: "5.12px",
+      margin: "0 auto 14.4px",
+      borderRadius: "999px",
+      background: "var(--m-second)",
+      opacity: 0.5,
       cursor: "grab",
     }}
-  >
-    <span style={{ width: "100%", height: "2.6px", borderRadius: "999px", background: "rgba(134,134,139,0.36)" }} />
-  </span>
+  />
 );
 
-function sheetCloseButton(onClose: () => void, label: string): ReactNode {
-  return (
-    <button
-      type="button"
-      onClick={onClose}
-      aria-label={label}
+/* The wider grab zone the full-height sheets use. */
+const GRAB_WIDE = (
+  <div
+    data-sheet-handle
+    aria-hidden="true"
+    style={{ width: "54.4px", height: "25.6px", margin: "6.4px auto -6.4px", padding: "9.6px 0", cursor: "grab" }}
+  >
+    <span
       style={{
-        position: "absolute",
-        top: "16px",
-        right: "16px",
-        zIndex: 5,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: "44px",
-        height: "44px",
-        margin: 0,
-        border: 0,
+        display: "block",
+        width: "41.6px",
+        height: "5.12px",
+        margin: "0 auto",
         borderRadius: "999px",
-        background: "var(--m-muted)",
-        color: "var(--m-label)",
-        fontSize: "15px",
-        lineHeight: 1,
-        fontFamily: "inherit",
-        cursor: "pointer",
+        background: "var(--m-second)",
+        opacity: 0.5,
       }}
-    >
-      <span style={{ display: "block", transform: "translateY(-0.5px)" }}>✕</span>
-    </button>
-  );
-}
+    />
+  </div>
+);
 
-function sheetTitleRow(title: string, onClose: () => void, closeLabel: string): ReactNode {
+/* A sheet's centred title with its close at the right edge. */
+function sheetTitle(title: string, onClose: () => void, marginBottom = 17.6): ReactNode {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "44px minmax(0, 1fr) 44px", alignItems: "center", minHeight: "50px" }}>
-      <h2
-        style={{
-          gridColumn: 2,
-          margin: 0,
-          textAlign: "center",
-          fontSize: "19px",
-          fontWeight: 650,
-          letterSpacing: "-0.03em",
-          color: "var(--m-label)",
-        }}
-      >
-        {title}
-      </h2>
-      {sheetCloseButton(onClose, closeLabel)}
+    <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: `${marginBottom}px` }}>
+      <span style={{ fontSize: "20px", fontWeight: 750, letterSpacing: "-0.03em" }}>{title}</span>
+      <button type="button" aria-label="Zapri" onClick={onClose} style={{ ...tileBtn(46.4), position: "absolute", right: 0 }}>
+        <Msym name="close" size="23.2px" fill={false} weight={500} />
+      </button>
     </div>
   );
 }
 
-const MODAL_PRIMARY: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  minHeight: "48px",
-  border: 0,
-  borderRadius: "12px",
-  background: "var(--m-tint)",
-  color: "#fff",
-  fontSize: "16px",
-  fontWeight: 600,
-  fontFamily: "inherit",
-  cursor: "pointer",
-};
+/* A grouped card's hairline: transparent above the first row. */
+function divider(first: boolean, dark: boolean): string {
+  if (first) return "transparent";
+  return dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.07)";
+}
 
-const MODAL_SECONDARY: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  minHeight: "48px",
-  border: 0,
-  borderRadius: "12px",
-  background: "var(--m-muted)",
-  color: "var(--m-tint)",
-  fontSize: "16px",
-  fontWeight: 600,
-  fontFamily: "inherit",
-  cursor: "pointer",
-};
-
-const MODAL_INPUT: CSSProperties = {
-  width: "100%",
-  minHeight: "44px",
-  padding: "8px 12px",
-  border: 0,
-  borderRadius: "10px",
-  background: "var(--m-muted)",
-  color: "var(--m-label)",
-  fontSize: "16px",
-  fontFamily: "inherit",
-  outline: "none",
-};
-
-class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
+export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
   state: PreviewState = {
     scale: 0.82,
     measured: false,
     screen: "home",
+    sheet: null,
+    sheetClosing: false,
     noteId: null,
     notes: INITIAL_NOTES,
     query: "",
-    sheetMode: null,
-    createMenuOpen: false,
-    dockOpen: false,
-    busyLabel: null,
-    createAudio: false,
+    captureMode: "upload",
+    captureText: "",
+    recordSeconds: 0,
     tab: "notes",
-    studyMode: "flashcards",
-    cardIndex: 0,
-    flipped: false,
-    quizIndex: 0,
-    quizPick: null,
-    cardAnswers: [],
+    cardPos: 0,
+    cardFlipped: false,
+    cardAnswers: {},
     cardsDone: false,
-    quizAnswers: [],
+    quizNo: 1,
+    quizPick: null,
+    quizCorrect: 0,
     quizDone: false,
+    testNo: 1,
+    testAnswers: {},
+    testFocused: false,
+    testDone: false,
     cardDragX: 0,
-    cardDragY: 0,
-    cardDragActive: false,
-    cardPhase: "idle",
-    cardExitDir: 1,
-    flipPhase: null,
-    showHint: false,
+    cardDragging: false,
+    cardExit: null,
+    exitX: 0,
+    exitY: 0,
+    exitRot: 0,
+    exitToken: 0,
     tap: null,
     cursor: null,
-    practiceAnswers: {},
-    practiceUnknown: [],
-    testGraded: false,
     reading: false,
     readPaused: false,
     readWord: 0,
+    headP: 0,
     swipeId: null,
-    swipeOffset: 0,
-    folderSheetOpen: false,
+    swipeX: 0,
+    swipeDragging: false,
     folderId: null,
+    folders: FOLDERS,
+    targetId: null,
+    renameValue: "",
+    newFolderName: "",
     theme: "system",
-    openHelp: null,
     dragKey: null,
     dragOffset: 0,
-    folders: FOLDERS,
-    renameId: null,
-    renameValue: "",
-    deleteId: null,
-    folderModal: null,
-    folderModalId: null,
-    folderNameValue: "",
-    folderPickIds: [],
-    chatInput: "",
-    messages: [],
-    sourceVariant: 0,
-    language: "sl",
+    chatDraft: "",
+    chat: [],
   };
 
   private mount: HTMLDivElement | null = null;
@@ -335,90 +346,93 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
   private tourTimers: number[] = [];
   private touring = false;
   private stopTour: (() => void) | null = null;
-  private tourLoop: number | undefined;
   private readTimer: number | null = null;
   private cardTourRaf: number | null = null;
   private cardRaf: number | null = null;
-  private cardDragging = false;
-  private flipping = false;
-  private suppressClick = false;
+  private dragMoved = false;
+  private dragId = -1;
+  private dragStart = 0;
+  private dragWidth = CARD_W;
+  private cardExitTimer: number | null = null;
+  private suppressTap = false;
   private resizeObserver: ResizeObserver | null = null;
   private viewObserver: IntersectionObserver | null = null;
   private tourStarted = false;
   private tourDismissed = false;
   private onResize: (() => void) | null = null;
   private onStopRequest: (() => void) | null = null;
+  private closeTimer: number | null = null;
+  private homeScroll: HTMLDivElement | null = null;
+  private tabsRow: HTMLDivElement | null = null;
+  private centredTab: string | null = null;
+  private idleRaf: number | null = null;
+  private snapRaf: number | null = null;
 
   componentDidMount() {
     this.measure();
-    // The hero callout sits outside this component, so it asks for the
-    // handover by event rather than by reaching into the instance.
-    this.onStopRequest = () => this.dismissTour();
-    window.addEventListener(PREVIEW_STOP_TOUR_EVENT, this.onStopRequest);
-    // Start the guided tour only once the mockup is actually in view —
-    // on mobile it sits below the fold, so it should not play unseen.
-    if (this.mount && typeof IntersectionObserver !== "undefined") {
+    this.onResize = () => this.measure();
+    window.addEventListener("resize", this.onResize);
+    if (typeof ResizeObserver !== "undefined" && this.mount) {
+      this.resizeObserver = new ResizeObserver(() => this.measure());
+      this.resizeObserver.observe(this.mount);
+      if (this.mount.parentElement) this.resizeObserver.observe(this.mount.parentElement);
+    }
+    if (typeof IntersectionObserver !== "undefined" && this.mount) {
       this.viewObserver = new IntersectionObserver(
         (entries) => {
           entries.forEach((entry) => {
             if (!entry.isIntersecting || this.tourStarted) return;
             this.tourStarted = true;
-            this.viewObserver?.disconnect();
-            this.viewObserver = null;
             this.startAutoTour();
           });
         },
-        { threshold: 0.35 },
+        { threshold: 0.25 },
       );
       this.viewObserver.observe(this.mount);
-    } else {
-      this.tourStarted = true;
-      this.startAutoTour();
     }
-    if (typeof ResizeObserver !== "undefined" && this.mount) {
-      this.resizeObserver = new ResizeObserver(() => this.measure());
-      this.resizeObserver.observe(this.mount);
-    }
-    this.onResize = () => this.measure();
-    window.addEventListener("resize", this.onResize);
+    this.onStopRequest = () => this.dismissTour();
+    window.addEventListener(PREVIEW_STOP_TOUR_EVENT, this.onStopRequest);
+  }
+
+  componentDidUpdate() {
+    this.centreActiveTab();
   }
 
   componentWillUnmount() {
     this.timers.forEach((id) => window.clearTimeout(id));
-    if (this.readTimer) window.clearInterval(this.readTimer);
-    window.clearInterval(this.tourLoop);
     this.tourTimers.forEach((id) => window.clearTimeout(id));
+    if (this.readTimer) window.clearInterval(this.readTimer);
     if (this.cardTourRaf) window.cancelAnimationFrame(this.cardTourRaf);
     if (this.cardRaf) window.cancelAnimationFrame(this.cardRaf);
-    this.detachTourListeners();
-    this.viewObserver?.disconnect();
-    this.resizeObserver?.disconnect();
+    if (this.closeTimer) window.clearTimeout(this.closeTimer);
+    if (this.cardExitTimer) window.clearTimeout(this.cardExitTimer);
+    this.cancelHeaderSnap();
     if (this.onResize) window.removeEventListener("resize", this.onResize);
     if (this.onStopRequest) window.removeEventListener(PREVIEW_STOP_TOUR_EVENT, this.onStopRequest);
+    this.resizeObserver?.disconnect();
+    this.viewObserver?.disconnect();
+    this.detachTourListeners();
   }
 
   /* Hand the mockup over to the visitor. Safe to call before the tour has
-     started (it sits behind an IntersectionObserver): the tour is then
-     cancelled outright rather than stopped after the fact. */
+     started, so the callout can dismiss it at any point. */
   dismissTour() {
-    if (this.tourDismissed) return;
     this.tourDismissed = true;
     this.tourStarted = true;
-    this.viewObserver?.disconnect();
-    this.viewObserver = null;
     if (this.stopTour) {
       this.stopTour();
-    } else {
-      window.dispatchEvent(new Event(PREVIEW_TOUR_STOPPED_EVENT));
+      return;
     }
+    window.dispatchEvent(new Event(PREVIEW_TOUR_STOPPED_EVENT));
   }
 
   measure() {
+    if (!this.mount) return;
+    // Walk up past any shrink-to-fit box (whose width the phone itself sets)
+    // to the first ancestor that actually constrains it.
     let node: HTMLElement | null = this.mount;
     let available = 0;
-    // Walk up past any shrink-to-fit box (whose width the phone itself sets)
-    // until an ancestor reports a width the content cannot influence.
-    while (node && available < 120) {
+    for (let i = 0; i < 4 && node; i += 1) {
       available = Math.max(available, node.clientWidth || 0);
       node = node.parentElement;
     }
@@ -426,13 +440,13 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
     // Cap the scale by the viewport so the whole mockup stays visible.
     const stacked = window.innerWidth < 800;
     // Narrow screens keep side breathing room.
-    const widthCap = stacked ? (window.innerWidth * 0.68) / 415 : 0.82;
+    const widthCap = stacked ? (window.innerWidth * 0.68) / FRAME_W : 0.82;
     // Fit the phone (plus nav and callout) in the viewport only on the
     // side-by-side hero. On phones innerHeight changes as the browser chrome
     // collapses, which would resize the mockup mid-scroll.
-    const heightCap = stacked ? 0.82 : (window.innerHeight - 250) / 883;
+    const heightCap = stacked ? 0.82 : (window.innerHeight - 250) / FRAME_H;
     const maxScale = Math.max(0.42, Math.min(0.82, widthCap, heightCap));
-    const raw = Math.max(0.42, Math.min(maxScale, (available - 6) / 415));
+    const raw = Math.max(0.42, Math.min(maxScale, (available - 6) / FRAME_W));
     // Quantize so sub-pixel container changes cannot nudge the size.
     const next = Math.round(raw * 200) / 200;
     if (!this.state.measured || Math.abs(next - this.state.scale) > 0.001) {
@@ -441,9 +455,12 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
   }
 
   startAutoTour() {
-    if (this.props.autoTour === false || !this.mount || this.tourDismissed) return;
+    if (this.props.autoTour === false || !this.mount || this.tourDismissed || this.touring) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     this.touring = true;
+    // Clear rather than drop: an already-scheduled script would otherwise keep
+    // firing alongside the new one, and the two would fight over the screen.
+    this.tourTimers.forEach((id) => window.clearTimeout(id));
     this.tourTimers = [];
     this.stopTour = () => {
       if (!this.touring) return;
@@ -455,18 +472,15 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
         window.cancelAnimationFrame(this.cardTourRaf);
         this.cardTourRaf = null;
       }
-      window.clearInterval(this.tourLoop);
-      this.tourLoop = undefined;
-      // freeze in place: stop advancing, keep the current screen and highlight
+      // Freeze in place: stop advancing, keep the current screen and highlight.
       if (this.readTimer) {
         window.clearInterval(this.readTimer);
         this.readTimer = null;
       }
       this.setState((c) => ({
-        showHint: false,
         tap: null,
         cursor: null,
-        cardDragActive: false,
+        cardDragging: false,
         readPaused: c.reading || c.readPaused,
         reading: false,
       }));
@@ -479,189 +493,21 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
     this.runTourScript();
   }
 
-  runTourScript() {
-    const step = (ms: number, fn: () => void) => {
-      this.tourTimers.push(
-        window.setTimeout(() => {
-          if (this.touring) fn();
-        }, ms),
-      );
-    };
-
-    let at = 0;
-    const wait = (ms: number) => {
-      at += ms;
-      return at;
-    };
-    const doAt = (ms: number, fn: () => void) => step(wait(ms), fn);
-
-    const tourNoteId = "tour-note";
-
-    doAt(1300, () => this.tapThen('[data-tap="create"]', 0, () => this.setState({ createMenuOpen: true })));
-    doAt(1900, () => this.tapThen('[data-tap="quick"]', 1, () => this.openSheet("upload")));
-    doAt(1500, () => this.tapThen('[data-tap="audio"]', 0, () => this.setState({ createAudio: true })));
-    doAt(1700, () => this.tapThen('[data-tap="ustvari"]', 0, () => this.setState({ busyLabel: this.props.t("capture.busy.preparing") })));
-    doAt(1100, () => this.setState({ busyLabel: this.props.t("capture.busy.uploadingFile") }));
-    doAt(1600, () =>
-      this.setState((s) => ({
-        busyLabel: null,
-        sheetMode: null,
-        notes: [
-          { id: tourNoteId, title: "Predavanje IS – 4. teden", source: "audio", date: PREVIEW_TODAY, status: "queued" },
-          ...s.notes,
-        ],
-      })),
-    );
-    doAt(2000, () => this.updateStatus(tourNoteId, "transcribing"));
-    doAt(2800, () => this.updateStatus(tourNoteId, "generating_notes"));
-    doAt(3000, () => this.updateStatus(tourNoteId, "ready"));
-    doAt(1600, () =>
-      this.tapThen('[data-tap="note"]', 0, () =>
-        this.setState({ screen: "note", noteId: tourNoteId, tab: "notes", readWord: 0, readPaused: false }),
-      ),
-    );
-    doAt(1500, () => {
-      this.toggleRead();
-      this.setState({ showHint: true });
-    });
-
-    doAt(11000, () => {
-      if (this.state.reading) this.toggleRead();
-      this.tapThen('[data-tap="tab"]', 1, () =>
-        this.setState({ showHint: false, tab: "study", studyMode: "flashcards", cardIndex: 0, flipped: false, cardAnswers: [], cardsDone: false }),
-      );
-    });
-
-    const cardCount = 3;
-    for (let c = 0; c < cardCount; c += 1) {
-      const easy = c !== 1;
-      doAt(1800, () => this.tapThen('[data-tap="card"]', 0, () => this.flipCard()));
-      doAt(2000, () => this.animateCardDrag(easy ? 1 : -1, 460));
-      doAt(1300, () => {});
-    }
-
-    doAt(2600, () =>
-      this.tapThen('[data-tap="mode"]', 1, () =>
-        this.setState({ tab: "study", studyMode: "quiz", quizIndex: 0, quizPick: null, quizAnswers: [], quizDone: false }),
-      ),
-    );
-    const quizCount = 2;
-    for (let q = 0; q < quizCount; q += 1) {
-      doAt(600, () => {
-        const main = this.appMain();
-        if (main) main.scrollTo({ top: 0, behavior: "smooth" });
-      });
-      doAt(2000, () => {
-        const list = this.studyData().quiz;
-        const idx = this.state.quizIndex % list.length;
-        this.tapThen('[data-tap="quiz-opt"]', list[idx].correct, () =>
-          this.setState((c) => {
-            const picks = (c.quizAnswers || []).slice();
-            picks[idx] = list[idx].correct;
-            return { quizPick: list[idx].correct, quizAnswers: picks };
-          }),
-        );
-      });
-      doAt(1200, () => this.scrollIntoTour('[data-tap="quiz-next"]', 0));
-      doAt(2200, () => {
-        this.tapThen('[data-tap="quiz-next"]', 0, () =>
-          this.setState((c) =>
-            q < quizCount - 1
-              ? { quizIndex: c.quizIndex + 1, quizPick: null, quizDone: c.quizDone }
-              : { quizIndex: c.quizIndex, quizPick: c.quizPick, quizDone: true },
-          ),
-        );
-      });
-    }
-
-    doAt(3000, () =>
-      this.tapThen('[data-tap="mode"]', 2, () =>
-        this.setState({ studyMode: "practice_test", testGraded: false, practiceAnswers: {}, practiceUnknown: [] }),
-      ),
-    );
-    const answers = [
-      "Funkcijski IS pokrivajo en oddelek, integrirani pa povežejo vse oddelke v skupno bazo.",
-      "Brez prenove procesov ERP le pospeši obstoječe napake, zato je prenova pogoj za uspeh.",
-    ];
-    answers.forEach((text, index) => {
-      doAt(600, () => this.scrollIntoTour('[data-tap="answer"]', index));
-      doAt(900, () => this.tapAt('[data-tap="answer"]', index));
-      doAt(700, () => {});
-      for (let i = 1; i <= text.length; i += 2) {
-        const chunk = text.slice(0, i);
-        const pause = /[ ,.]/.test(text[i - 1] || "") ? 120 : 46;
-        doAt(pause, () => {
-          const id = this.studyData().practice[index].id;
-          this.setState((c) => ({ practiceAnswers: { ...c.practiceAnswers, [id]: chunk } }));
-        });
-      }
-      doAt(900, () => {});
-    });
-    doAt(900, () => this.scrollIntoTour('[data-tap="submit"]', 0));
-    doAt(1200, () => this.tapThen('[data-tap="submit"]', 0, () => this.setState({ testGraded: true })));
-    doAt(900, () => this.scrollTourBottom());
-
-    doAt(5200, () =>
-      this.tapThen('[data-tap="tab"]', 0, () => {
-        this.setState({ tab: "notes", readWord: 0, readPaused: false });
-        const main = this.appMain();
-        if (main) main.scrollTop = 0;
-      }),
-    );
-    doAt(400, () => {
-      const m = this.appMain();
-      if (m) m.scrollTo({ top: 0, behavior: "smooth" });
-    });
-    doAt(1100, () => {
-      this.toggleRead();
-      this.setState({ showHint: true });
-    });
-    doAt(12000, () => {
-      if (this.state.reading) this.toggleRead();
-      this.setState({ showHint: false, tab: "notes", readWord: 0, readPaused: false });
-    });
-    doAt(1200, () => this.tapThen('[data-tap="dock"]', 0, () => this.setState({ dockOpen: true })));
-    doAt(1200, () => this.tapThen('[data-tap="dock-item"]', 0, () => this.setState({ screen: "home", dockOpen: false })));
-    doAt(2200, () => {
-      this.setState({
-        screen: "home",
-        noteId: null,
-        notes: INITIAL_NOTES,
-        tab: "notes",
-        studyMode: "flashcards",
-        cardIndex: 0,
-        flipped: false,
-        cardAnswers: [],
-        cardsDone: false,
-        quizAnswers: [],
-        quizDone: false,
-        quizIndex: 0,
-        quizPick: null,
-        testGraded: false,
-        practiceAnswers: {},
-        practiceUnknown: [],
-        readWord: 0,
-        tap: null,
-        busyLabel: null,
-        sheetMode: null,
-        createMenuOpen: false,
-        dockOpen: false,
-      });
-      this.tourTimers.forEach((id) => window.clearTimeout(id));
-      this.tourTimers = [];
-      this.tourTimers.push(
-        window.setTimeout(() => {
-          if (this.touring) this.runTourScript();
-        }, 1400),
-      );
-    });
-  }
-
   detachTourListeners() {
     if (!this.stopTour || !this.mount) return;
     (["pointerdown", "wheel", "keydown", "touchstart"] as const).forEach((type) =>
       this.mount?.removeEventListener(type, this.stopTour as EventListener),
     );
+  }
+
+  /*
+   * The stage is drawn at 1:1 and scaled down as a whole, so a pointer delta —
+   * which arrives in screen pixels — has to be divided by that scale before it
+   * is used as a translate inside the stage. Without this the card trails the
+   * finger by the scale factor, which reads as drag lag.
+   */
+  toStage(px: number): number {
+    return px / (this.state.scale || 1);
   }
 
   appMain(): HTMLElement | null {
@@ -672,206 +518,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
     this.timers.push(window.setTimeout(fn, ms));
   }
 
-  startSwipe(event: ReactPointerEvent, id: string) {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const startOffset = this.state.swipeId === id ? this.state.swipeOffset : 0;
-    let dragging = false;
-    this.suppressClick = false;
-
-    const move = (e: PointerEvent) => {
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      if (!dragging && (Math.abs(dx) <= 8 || Math.abs(dx) <= Math.abs(dy))) return;
-      dragging = true;
-      this.suppressClick = true;
-      const offset = Math.min(0, Math.max(-144, startOffset + dx));
-      this.setState({ swipeId: id, swipeOffset: offset });
-    };
-
-    const end = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", end);
-      window.removeEventListener("pointercancel", end);
-      if (!dragging) {
-        if (this.state.swipeId === id && this.state.swipeOffset < 0) {
-          this.suppressClick = true;
-          this.setState({ swipeId: null, swipeOffset: 0 });
-        }
-        return;
-      }
-      const open = this.state.swipeOffset < -72;
-      this.setState({ swipeId: open ? id : null, swipeOffset: open ? -144 : 0 });
-      this.later(() => {
-        this.suppressClick = false;
-      }, 60);
-    };
-
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", end);
-    window.addEventListener("pointercancel", end);
-  }
-
-  sheetDragStart(event: ReactPointerEvent, key: string, close: () => void) {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    const target = event.target;
-    const handle = target instanceof Element ? target.closest("[data-sheet-handle]") : null;
-    const interactive = target instanceof Element ? target.closest("button, a, input, textarea, select, label") : null;
-    if (interactive && !handle) return;
-
-    const startY = event.clientY;
-    let offset = 0;
-
-    const move = (e: PointerEvent) => {
-      offset = Math.max(0, e.clientY - startY);
-      this.setState({ dragKey: key, dragOffset: offset });
-    };
-    const end = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", end);
-      window.removeEventListener("pointercancel", end);
-      if (offset > 80) {
-        this.setState({ dragKey: key, dragOffset: 900 });
-        this.later(() => {
-          this.setState({ dragKey: null, dragOffset: 0 });
-          close();
-        }, 180);
-        return;
-      }
-      this.setState({ dragKey: null, dragOffset: 0 });
-    };
-
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", end);
-    window.addEventListener("pointercancel", end);
-  }
-
-  sheet(key: string, close: () => void, extra?: CSSProperties) {
-    const dragging = this.state.dragKey === key;
-    const offset = dragging ? this.state.dragOffset : 0;
-    return {
-      onPointerDown: (event: ReactPointerEvent) => this.sheetDragStart(event, key, close),
-      style: {
-        position: "absolute",
-        insetInline: 0,
-        top: "75.2px",
-        bottom: 0,
-        display: "grid",
-        gap: "16px",
-        boxSizing: "border-box",
-        padding: "11.2px 16px 20px",
-        border: "1px solid var(--m-sep)",
-        borderBottom: 0,
-        borderRadius: "34px 34px 0 0",
-        background: "var(--m-sheet)",
-        boxShadow: "0 -18px 54px rgba(0,0,0,0.2)",
-        animation: "memo-sheet-in 260ms cubic-bezier(0.22, 1, 0.36, 1)",
-        overflow: "hidden",
-        touchAction: "none",
-        transform: offset ? `translateY(${offset}px)` : undefined,
-        transition: dragging && offset < 900 ? "none" : "transform 180ms cubic-bezier(0.22, 1, 0.36, 1)",
-        ...extra,
-      } as CSSProperties,
-    };
-  }
-
-  saveRename() {
-    const title = this.state.renameValue.trim();
-    if (!title) return;
-    this.setState((c) => ({
-      notes: c.notes.map((note) => (note.id === c.renameId ? { ...note, title } : note)),
-      renameId: null,
-      renameValue: "",
-    }));
-  }
-
-  wordStyle(word: SegmentWord | { hl?: SegmentWord["hl"] }, spoken: boolean, reading: boolean, current: boolean): CSSProperties {
-    let bg: string | null = null;
-    if (word.hl === "orange") bg = "var(--m-hl-orange)";
-    else if (word.hl === "deep") bg = "var(--m-hl-deep)";
-    else if (word.hl === "blue") bg = "var(--m-hl-blue)";
-    const isCurrent = reading && current;
-    const isRead = reading && spoken && !current;
-    const style: CSSProperties = {
-      display: "inline",
-      padding: bg ? "1.6px 5.1px" : "0.5px 1.6px",
-      borderRadius: bg ? "6.7px" : "4.5px",
-      background: isCurrent ? "var(--m-read-now)" : isRead ? "rgba(251,146,60,0.22)" : bg || "transparent",
-      // Reading highlight keeps the normal text colour: black on light, white on dark.
-      color: "var(--m-label)",
-      boxShadow: isCurrent ? "0 0 0 1.8px rgba(251,146,60,0.36)" : "none",
-      boxDecorationBreak: "clone",
-      WebkitBoxDecorationBreak: "clone",
-      transition: "background-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease",
-    };
-    if (word.hl === "underline") {
-      style.textDecoration = "underline";
-      style.textDecorationColor = "#ff6b9a";
-      style.textDecorationThickness = "2px";
-      style.textUnderlineOffset = "3px";
-    }
-    return style;
-  }
-
-  activeNote(): PreviewNote | undefined {
-    return this.state.notes.find((n) => n.id === this.state.noteId) ?? this.state.notes[0];
-  }
-
-  studyData() {
-    return THEME_STUDY[noteTheme(this.activeNote()?.title)];
-  }
-
-  noteBody() {
-    return NOTE_BODIES[noteTheme(this.activeNote()?.title)];
-  }
-
-  toggleRead() {
-    if (this.state.reading) {
-      // pause: keep the highlight exactly where it stopped
-      if (this.readTimer) window.clearInterval(this.readTimer);
-      this.readTimer = null;
-      this.setState({ reading: false, readPaused: true });
-      return;
-    }
-
-    const total = segmentWords(this.noteBody().overview).length;
-    this.setState((c) => ({
-      reading: true,
-      readPaused: false,
-      readWord: (c.readWord || 0) >= total - 1 ? 0 : c.readWord || 0,
-    }));
-    if (this.readTimer) window.clearInterval(this.readTimer);
-    this.readTimer = window.setInterval(() => {
-      this.setState((c) => {
-        const next = (c.readWord || 0) + 1;
-        if (next >= total) {
-          if (this.readTimer) window.clearInterval(this.readTimer);
-          this.readTimer = null;
-          return { reading: false, readPaused: true, readWord: total - 1 };
-        }
-        return { readWord: next } as Partial<PreviewState> as Pick<PreviewState, "readWord">;
-      });
-    }, 460);
-  }
-
-  cardNavStyle(enabled: boolean): CSSProperties {
-    return {
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      width: "46px",
-      height: "46px",
-      border: "1px solid var(--m-sep)",
-      borderRadius: "999px",
-      background: "var(--m-muted)",
-      color: "var(--m-label)",
-      fontSize: "16px",
-      fontFamily: "inherit",
-      opacity: enabled ? 1 : 0.4,
-      cursor: enabled ? "pointer" : "default",
-    };
-  }
+  /* ── The tour's own pointer ───────────────────────────────── */
 
   tapAt(selector: string, index: number) {
     if (!this.touring || !this.stage) return;
@@ -908,12 +555,6 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
     main.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
   }
 
-  scrollTourBottom() {
-    if (!this.touring || !this.stage) return;
-    const main = this.appMain();
-    if (main) main.scrollTo({ top: main.scrollHeight, behavior: "smooth" });
-  }
-
   tapThen(selector: string, index: number, fn: () => void) {
     const first = !this.state.cursor;
     this.tapAt(selector, index);
@@ -924,10 +565,534 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
     );
   }
 
+  /* ── The tour's script ────────────────────────────────────── */
+
+  runTourScript() {
+    const step = (ms: number, fn: () => void) => {
+      this.tourTimers.push(
+        window.setTimeout(() => {
+          if (this.touring) fn();
+        }, ms),
+      );
+    };
+
+    let at = 0;
+    const doAt = (ms: number, fn: () => void) => {
+      at += ms;
+      step(at, fn);
+    };
+
+    const tourNoteId = "tour-note";
+
+    doAt(1300, () => this.tapThen('[data-tap="create"]', 0, () => this.setState({ sheet: "create" })));
+    doAt(1900, () =>
+      this.tapThen('[data-tap="create-option"]', 1, () =>
+        this.setState({ sheet: null, screen: "capture", captureMode: "upload", captureText: CAPTURE.upload.pickedText ?? "" }),
+      ),
+    );
+    doAt(2100, () =>
+      this.tapThen('[data-tap="capture-cta"]', 0, () =>
+        this.setState((s) => ({
+          screen: "home",
+          notes: [
+            {
+              id: tourNoteId,
+              emoji: "🔊",
+              title: CAPTURE.upload.noteTitle,
+              source: "audio",
+              date: "danes",
+              status: "queued",
+            },
+            ...s.notes,
+          ],
+        })),
+      ),
+    );
+    doAt(2000, () => this.updateStatus(tourNoteId, "transcribing"));
+    doAt(2800, () => this.updateStatus(tourNoteId, "generating_notes"));
+    doAt(2600, () => this.updateStatus(tourNoteId, "ready"));
+    doAt(1600, () =>
+      this.tapThen('[data-tap="note"]', 0, () =>
+        this.setState({ screen: "note", noteId: tourNoteId, tab: "notes", readWord: 0, readPaused: false }),
+      ),
+    );
+
+    /* The listen pill: the dock opens into its player and reads the note. */
+    doAt(1600, () => this.tapThen('[data-tap="listen"]', 0, () => this.toggleRead()));
+    doAt(11000, () => {
+      if (this.state.reading) this.toggleRead();
+      this.setState({ reading: false, readPaused: false, readWord: 0 });
+    });
+
+    /* Flashcards: flip, then swipe the card away — twice known, once not. */
+    doAt(900, () => this.tapThen('[data-tap="tab"]', 1, () => this.selectTab("flashcards")));
+    for (let c = 0; c < 3; c += 1) {
+      const easy = c !== 1;
+      doAt(1800, () => this.tapThen('[data-tap="card"]', 0, () => this.flipCard()));
+      doAt(2000, () => this.animateCardDrag(easy ? 1 : -1, 460));
+      doAt(1300, () => {});
+    }
+
+    /* Kviz: answer each question correctly, so it advances on its own. */
+    doAt(2200, () => this.tapThen('[data-tap="tab"]', 2, () => this.selectTab("quiz")));
+    for (let q = 0; q < 2; q += 1) {
+      doAt(2000, () => {
+        const list = this.studyData().quiz;
+        const idx = (this.state.quizNo - 1) % list.length;
+        this.tapThen('[data-tap="quiz-opt"]', list[idx].correct, () => this.pickQuiz(list[idx].correct));
+      });
+      doAt(1400, () => {});
+    }
+
+    /* Test: type an answer, then move on. */
+    doAt(2200, () => this.tapThen('[data-tap="tab"]', 3, () => this.selectTab("test")));
+    const answer = "Ravnotežna cena je cena, pri kateri je ponujena količina enaka povpraševani.";
+    /*
+     * Tap into the answer box, and only start writing once the press has
+     * actually landed. The pointer takes ~520ms to travel and `tapThen` runs
+     * its callback 150ms after that, so the wait here has to clear ~670ms —
+     * typing sooner filled a field the cursor had not reached yet.
+     */
+    doAt(900, () => this.tapThen('[data-tap="answer"]', 0, () => this.setState({ testFocused: true })));
+    doAt(900, () => {});
+    for (let i = 1; i <= answer.length; i += 2) {
+      const chunk = answer.slice(0, i);
+      const pause = /[ ,.]/.test(answer[i - 1] || "") ? 110 : 42;
+      doAt(pause, () => this.setState((c) => ({ testAnswers: { ...c.testAnswers, [c.testNo]: chunk } })));
+    }
+    doAt(1000, () => this.tapThen('[data-tap="test-next"]', 0, () => this.nextTest()));
+    doAt(2600, () => {});
+
+    /* Back out to the library, then start over. */
+    doAt(1200, () => this.tapThen('[data-tap="sub-back"]', 0, () => this.setState({ screen: "note", tab: "notes" })));
+    doAt(1400, () => this.tapThen('[data-tap="note-back"]', 0, () => this.setState({ screen: "home" })));
+    doAt(2400, () => {
+      this.setState({
+        screen: "home",
+        sheet: null,
+        noteId: null,
+        notes: INITIAL_NOTES,
+        tab: "notes",
+        cardPos: 0,
+        cardFlipped: false,
+        cardAnswers: {},
+        cardsDone: false,
+        quizNo: 1,
+        quizPick: null,
+        quizCorrect: 0,
+        quizDone: false,
+        testNo: 1,
+        testAnswers: {},
+        testDone: false,
+        testFocused: false,
+        readWord: 0,
+        reading: false,
+        readPaused: false,
+        tap: null,
+        captureText: "",
+      });
+      this.tourTimers.forEach((id) => window.clearTimeout(id));
+      this.tourTimers = [];
+      this.tourTimers.push(
+        window.setTimeout(() => {
+          if (this.touring) this.runTourScript();
+        }, 1400),
+      );
+    });
+  }
+
+  /* ── Gestures ─────────────────────────────────────────────── */
+
+  /* A note row slides left to reveal Uredi / Izbriši behind it. */
+  startRowSwipe(event: ReactPointerEvent, id: string) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startOffset = this.state.swipeId === id ? this.state.swipeX : 0;
+    let dragging = false;
+    this.suppressTap = false;
+
+    const move = (e: PointerEvent) => {
+      const dx = this.toStage(e.clientX - startX);
+      const dy = this.toStage(e.clientY - startY);
+      if (!dragging && (Math.abs(dx) <= 8 || Math.abs(dx) <= Math.abs(dy))) return;
+      dragging = true;
+      this.suppressTap = true;
+      this.setState({ swipeId: id, swipeX: Math.min(0, Math.max(-144, startOffset + dx)), swipeDragging: true });
+    };
+
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      if (!dragging) {
+        if (this.state.swipeId === id && this.state.swipeX < 0) {
+          this.suppressTap = true;
+          this.setState({ swipeId: null, swipeX: 0, swipeDragging: false });
+        }
+        return;
+      }
+      const open = this.state.swipeX < -72;
+      this.setState({ swipeId: open ? id : null, swipeX: open ? -144 : 0, swipeDragging: false });
+      this.later(() => {
+        this.suppressTap = false;
+      }, 60);
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  }
+
+  /*
+   * The collapsing home header, the way the app does it: `headP` runs 0 → 1
+   * over the first 80px of scroll, the title fades out and the search field
+   * folds up from its top edge, and its contents counter-scale so they cut out
+   * rather than being squashed. The range is fixed rather than derived from the
+   * scroll height, which would feed the collapse back into the scroll metrics.
+   */
+  onHomeScroll = (event: { currentTarget: HTMLDivElement }) => {
+    const el = event.currentTarget;
+    const p = Math.max(0, Math.min(1, el.scrollTop / 80));
+    if (Math.abs(p - this.state.headP) > 0.01) this.setState({ headP: p });
+    this.queueHeaderSnap(el);
+  };
+
+  /* Releasing mid-range would leave the header frozen half-folded, so once the
+     scroller goes idle it settles to whichever end is nearer. */
+  queueHeaderSnap(el: HTMLDivElement) {
+    this.cancelHeaderSnap();
+    let last = el.scrollTop;
+    let stable = 0;
+    const tick = () => {
+      const top = el.scrollTop;
+      stable = top === last ? stable + 1 : 0;
+      last = top;
+      // ~8 stable frames (~130ms) means momentum and any animation finished.
+      if (stable < 8) {
+        this.idleRaf = window.requestAnimationFrame(tick);
+        return;
+      }
+      this.idleRaf = null;
+      if (top > 0 && top < 80) this.runHeaderSnap(el, top > 32 ? 80 : 0);
+    };
+    this.idleRaf = window.requestAnimationFrame(tick);
+  }
+
+  /* Its own tween with scroll-behavior forced to auto: the scroller's smooth
+     scrolling would otherwise animate every step and fight this. */
+  runHeaderSnap(el: HTMLDivElement, target: number) {
+    const from = el.scrollTop;
+    const dist = target - from;
+    if (!dist) return;
+    const prev = el.style.scrollBehavior;
+    el.style.scrollBehavior = "auto";
+    const start = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / 260);
+      const e = 1 - Math.pow(1 - t, 3);
+      el.scrollTop = from + dist * e;
+      if (t < 1) {
+        this.snapRaf = window.requestAnimationFrame(step);
+        return;
+      }
+      el.scrollTop = target;
+      el.style.scrollBehavior = prev;
+      this.snapRaf = null;
+    };
+    this.snapRaf = window.requestAnimationFrame(step);
+  }
+
+  cancelHeaderSnap = () => {
+    if (this.idleRaf) {
+      window.cancelAnimationFrame(this.idleRaf);
+      this.idleRaf = null;
+    }
+    if (this.snapRaf) {
+      window.cancelAnimationFrame(this.snapRaf);
+      this.snapRaf = null;
+      if (this.homeScroll) this.homeScroll.style.scrollBehavior = "";
+    }
+  };
+
+  /* Every bottom sheet tracks the finger and dismisses past 110px. */
+  sheetDragStart(event: ReactPointerEvent, key: string, close: () => void) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const target = event.target;
+    const handle = target instanceof Element ? target.closest("[data-sheet-handle]") : null;
+    const interactive = target instanceof Element ? target.closest("button, a, input, textarea, select, label") : null;
+    if (interactive && !handle) return;
+
+    const startY = event.clientY;
+    let offset = 0;
+
+    const move = (e: PointerEvent) => {
+      offset = Math.max(0, this.toStage(e.clientY - startY));
+      this.setState({ dragKey: key, dragOffset: offset });
+    };
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      if (offset > 110) {
+        this.setState({ dragKey: null, dragOffset: 0 });
+        close();
+        return;
+      }
+      this.setState({ dragKey: null, dragOffset: 0 });
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  }
+
+  /* The sheet shells: `sheetStyle` and `fullSheetStyle` from the artboard. */
+  sheetProps(key: string, close: () => void, extra?: CSSProperties) {
+    const dragging = this.state.dragKey === key;
+    const offset = dragging ? this.state.dragOffset : 0;
+    const closing = this.state.sheetClosing;
+    return {
+      onPointerDown: (event: ReactPointerEvent) => this.sheetDragStart(event, key, close),
+      style: {
+        position: "absolute",
+        inset: "auto 0 0 0",
+        zIndex: 6,
+        padding: "9.6px 18.4px 32px",
+        maxHeight: `${PHONE_H - STATUS_H}px`,
+        overflowY: "auto",
+        borderRadius: "34px 34px 0 0",
+        background: "var(--m-bg)",
+        boxShadow: "var(--m-shadow-lg)",
+        touchAction: "none",
+        ...(closing
+          ? {
+              transform: "translateY(105%)",
+              opacity: 0.85,
+              transition: "transform 0.26s cubic-bezier(0.4,0,0.9,0.4), opacity 0.22s ease",
+            }
+          : {
+              transform: offset ? `translateY(${offset}px)` : "translateY(0)",
+              transition: dragging ? "none" : "transform 0.42s cubic-bezier(0.32,1.3,0.5,1)",
+              animation: "memo-sheet-up 0.34s cubic-bezier(0.22,1,0.36,1)",
+            }),
+        ...extra,
+      } as CSSProperties,
+    };
+  }
+
+  fullSheetProps(key: string, close: () => void, surface: boolean) {
+    const dragging = this.state.dragKey === key;
+    const offset = dragging ? this.state.dragOffset : 0;
+    const closing = this.state.sheetClosing;
+    return {
+      onPointerDown: (event: ReactPointerEvent) => this.sheetDragStart(event, key, close),
+      style: {
+        position: "absolute",
+        inset: `${STATUS_H}px 0 0 0`,
+        zIndex: 7,
+        display: "flex",
+        flexDirection: "column",
+        borderRadius: "34px 34px 0 0",
+        background: surface ? "var(--m-surface)" : "var(--m-bg)",
+        boxShadow: "var(--m-shadow-lg)",
+        overflow: "hidden",
+        touchAction: "pan-y",
+        ...(closing
+          ? {
+              transform: "translateY(105%)",
+              opacity: 0.9,
+              transition: "transform 0.26s cubic-bezier(0.4,0,0.9,0.4), opacity 0.22s ease",
+            }
+          : {
+              transform: offset ? `translateY(${offset}px)` : "translateY(0)",
+              transition: dragging ? "none" : "transform 0.42s cubic-bezier(0.32,1.3,0.5,1)",
+              animation: "memo-sheet-up 0.36s cubic-bezier(0.22,1,0.36,1)",
+            }),
+      } as CSSProperties,
+    };
+  }
+
+  /* ── Note, study and reading state ────────────────────────── */
+
+  activeNote(): PreviewNote | undefined {
+    return this.state.notes.find((n) => n.id === this.state.noteId) ?? this.state.notes[0];
+  }
+
+  studyData() {
+    return THEME_STUDY[noteTheme(this.activeNote()?.title)];
+  }
+
+  noteBlocks(): NoteBlock[] {
+    return NOTE_BODIES[noteTheme(this.activeNote()?.title)];
+  }
+
+  bodyLines(): BodyLine[] {
+    return tokenizeBody(this.noteBlocks());
+  }
+
+  isDark(): boolean {
+    if (this.state.theme === "dark") return true;
+    if (this.state.theme === "light") return false;
+    return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+
+  /* The tab pills. Zapiski is the note screen; the rest are their own. */
+  selectTab(tab: NoteTab) {
+    if (tab === "notes") {
+      this.setState({ tab: "notes", screen: "note" });
+      return;
+    }
+    this.setState({
+      tab,
+      screen: "sub",
+      quizNo: 1,
+      quizPick: null,
+      quizCorrect: 0,
+      quizDone: false,
+      cardPos: 0,
+      cardFlipped: false,
+      cardAnswers: {},
+      cardsDone: false,
+      cardExit: null,
+      testNo: 1,
+      testDone: false,
+      testAnswers: {},
+      testFocused: false,
+    });
+  }
+
+  toggleRead() {
+    if (this.state.reading) {
+      if (this.readTimer) window.clearInterval(this.readTimer);
+      this.readTimer = null;
+      this.setState({ reading: false, readPaused: true });
+      return;
+    }
+
+    const total = this.bodyLines().reduce((n, line) => n + line.words.length, 0);
+    this.setState((c) => ({
+      reading: true,
+      readPaused: false,
+      readWord: (c.readWord || 0) >= total - 1 ? 0 : c.readWord || 0,
+    }));
+    if (this.readTimer) window.clearInterval(this.readTimer);
+    this.readTimer = window.setInterval(() => {
+      this.setState((c) => {
+        const next = (c.readWord || 0) + 1;
+        if (next >= total) {
+          if (this.readTimer) window.clearInterval(this.readTimer);
+          this.readTimer = null;
+          return { reading: false, readPaused: true, readWord: total - 1 };
+        }
+        return { readWord: next } as Pick<PreviewState, "readWord">;
+      });
+    }, 420);
+  }
+
+  stopRead() {
+    if (this.readTimer) window.clearInterval(this.readTimer);
+    this.readTimer = null;
+    this.setState({ reading: false, readPaused: false, readWord: 0 });
+  }
+
+  /* ── Flashcards ───────────────────────────────────────────── */
+
+  cardQueue(): number[] {
+    return this.studyData().cards.map((_, i) => i);
+  }
+
+  flipCard() {
+    if (this.dragMoved || this.state.cardExit) return;
+    this.setState((c) => ({ cardFlipped: !c.cardFlipped }));
+  }
+
+  /*
+   * The swipe, as the app plays it: the answer is recorded and the deck moves
+   * on in the same commit that starts the exit, so the card under the finger is
+   * already the next question while a blank clone carries the old one off from
+   * exactly where it was let go. Advancing afterwards instead would park the
+   * old card back at centre for the length of the animation, which is what made
+   * the release read as a stutter.
+   */
+  swipeCard(answer: "easy" | "again", releaseDx?: number) {
+    if (this.state.cardExit) return;
+    const dx = releaseDx === undefined ? this.state.cardDragX : releaseDx;
+    const width = this.dragWidth || CARD_W;
+    const queue = this.cardQueue();
+    this.setState((c) => {
+      const last = c.cardPos >= queue.length - 1;
+      return {
+        cardAnswers: { ...c.cardAnswers, [queue[c.cardPos]]: answer },
+        cardExit: answer,
+        // Percentages, so the clone's keyframes stay resolution-independent.
+        exitX: (dx / width) * 100,
+        exitY: ((-Math.abs(dx) * 0.04) / CARD_H) * 100,
+        exitRot: Math.max(-8, Math.min(8, (dx / CARD_DRAG_TRIGGER) * 8)),
+        exitToken: c.exitToken + 1,
+        cardFlipped: false,
+        cardDragX: 0,
+        cardDragging: false,
+        cardsDone: last,
+        cardPos: last ? c.cardPos : c.cardPos + 1,
+      };
+    });
+    if (this.cardExitTimer) window.clearTimeout(this.cardExitTimer);
+    this.cardExitTimer = window.setTimeout(() => this.setState({ cardExit: null }), 200);
+  }
+
+  onCardDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (this.state.cardExit) return;
+    this.dragId = event.pointerId;
+    this.dragMoved = false;
+    this.dragStart = event.clientX;
+    // Unscaled, so the trigger below is in the same units as the drag.
+    this.dragWidth = event.currentTarget.offsetWidth || CARD_W;
+    // Capture, so a finger that leaves the card still steers it.
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* not every pointer can be captured; the drag still works without it */
+    }
+    this.setState({ cardDragging: true, cardDragX: 0 });
+  };
+
+  onCardMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!this.state.cardDragging || this.dragId !== event.pointerId) return;
+    const dx = this.toStage(event.clientX - this.dragStart);
+    if (Math.abs(dx) > 8) this.dragMoved = true;
+    this.setState({ cardDragX: dx });
+  };
+
+  onCardUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!this.state.cardDragging) return;
+    const dx = this.state.cardDragX;
+    // Scales with the card, within bounds, so the throw feels the same at any size.
+    const trigger = Math.min(150, Math.max(88, (this.dragWidth || CARD_W) * 0.28));
+    this.setState({ cardDragging: false, cardDragX: 0 });
+    if (Math.abs(dx) >= trigger) {
+      this.swipeCard(dx > 0 ? "easy" : "again", dx);
+      return;
+    }
+    // Release the capture so a tap still reaches the face and flips it.
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      /* nothing was captured */
+    }
+    this.later(() => {
+      this.dragMoved = false;
+    }, 80);
+  };
+
+  onCardCancel = () => this.setState({ cardDragging: false, cardDragX: 0 });
+
+  /* The tour swipes a card the way a thumb would, then lets go. */
   animateCardDrag(dir: number, duration: number) {
     if (this.cardTourRaf) window.cancelAnimationFrame(this.cardTourRaf);
     const startedAt = performance.now();
-    const reach = 235;
+    const reach = 190;
     let base: { x: number; y: number } | null = null;
     if (this.stage) {
       const node = this.stage.querySelector('[data-tap="card"]');
@@ -944,193 +1109,268 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
     const tick = (now: number) => {
       if (!this.touring) return;
       const t = Math.min(1, (now - startedAt) / duration);
-      // ease-in-out with a small hesitation, like a real thumb
+      // Ease-in-out with a small hesitation, like a real thumb.
       const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
       const wobble = Math.sin(t * Math.PI * 2) * 5 * (1 - t);
       const dx = dir * (e * reach + wobble);
-      const dy = e * 16;
       this.setState((c) => ({
-        cardDragActive: true,
+        cardDragging: true,
         cardDragX: dx,
-        cardDragY: dy,
-        cursor: base ? { x: base.x + dx, y: base.y + dy * 0.18, press: true, seen: true, drag: true } : c.cursor,
+        cursor: base ? { x: base.x + dx, y: base.y - Math.abs(dx) * 0.04, press: true, seen: true, drag: true } : c.cursor,
       }));
       if (t < 1) {
         this.cardTourRaf = window.requestAnimationFrame(tick);
         return;
       }
       this.cardTourRaf = null;
-      this.commitSwipe(dir);
+      this.swipeCard(dir > 0 ? "easy" : "again", dir * reach);
     };
     this.cardTourRaf = window.requestAnimationFrame(tick);
   }
 
-  commitSwipe(dir: number) {
-    this.cardDragging = true;
-    this.setState({ cardPhase: "exit", cardExitDir: dir, cardDragActive: false, flipPhase: null });
-    this.later(() => {
-      this.gradeCard(dir > 0 ? "easy" : "again");
-      // land the next card with no transition, then let it ease in
-      this.setState({ cardPhase: "enter", cardDragX: 0, cardDragY: 0 });
-      window.requestAnimationFrame(() => window.requestAnimationFrame(() => this.setState({ cardPhase: "idle" })));
-      this.later(() => {
-        this.cardDragging = false;
-      }, 60);
-    }, 210);
+  /* ── Kviz and test ────────────────────────────────────────── */
+
+  pickQuiz(index: number) {
+    const list = this.studyData().quiz;
+    const q = list[(this.state.quizNo - 1) % list.length];
+    if (this.state.quizPick !== null) return;
+    const correct = index === q.correct;
+    this.setState((c) => ({ quizPick: index, quizCorrect: c.quizCorrect + (correct ? 1 : 0) }));
+    // Correct answers move on by themselves; a miss stops at the sheet.
+    if (correct) this.later(() => this.nextQuiz(), 780);
   }
 
-  flipCard() {
-    if (this.cardDragging || this.flipping) return;
-    this.flipping = true;
-    this.setState({ flipPhase: "out" });
-    this.later(() => {
-      this.setState((c) => ({ flipped: !c.flipped, flipPhase: "mid" }));
-      window.requestAnimationFrame(() => window.requestAnimationFrame(() => this.setState({ flipPhase: "in" })));
-      this.later(() => {
-        this.setState({ flipPhase: null });
-        this.flipping = false;
-      }, 200);
-    }, 150);
+  nextQuiz() {
+    const total = this.studyData().quiz.length;
+    this.setState((c) =>
+      c.quizNo >= total ? { quizDone: true, quizNo: c.quizNo, quizPick: null } : { quizDone: false, quizNo: c.quizNo + 1, quizPick: null },
+    );
   }
 
-  startCardDrag(event: ReactPointerEvent) {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    const startX = event.clientX;
-    const startY = event.clientY;
-    let dx = 0;
-    let dy = 0;
-    let dragging = false;
-
-    const move = (e: PointerEvent) => {
-      dx = e.clientX - startX;
-      dy = e.clientY - startY;
-      if (!dragging && Math.abs(dx) < 8) return;
-      dragging = true;
-      this.cardDragging = true;
-      if (this.cardRaf) return;
-      this.cardRaf = window.requestAnimationFrame(() => {
-        this.cardRaf = null;
-        this.setState({ cardDragX: dx, cardDragY: dy, cardDragActive: true });
-      });
-    };
-
-    const end = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", end);
-      window.removeEventListener("pointercancel", end);
-      if (this.cardRaf) {
-        window.cancelAnimationFrame(this.cardRaf);
-        this.cardRaf = null;
-      }
-      if (!dragging) return;
-      if (Math.abs(dx) > 70) {
-        this.commitSwipe(dx < 0 ? -1 : 1);
-        return;
-      }
-      this.setState({ cardDragX: 0, cardDragY: 0, cardDragActive: false });
-      this.later(() => {
-        this.cardDragging = false;
-      }, 60);
-    };
-
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", end);
-    window.addEventListener("pointercancel", end);
+  nextTest() {
+    const total = this.studyData().practice.length;
+    this.setState((c) =>
+      c.testNo >= total
+        ? { testDone: true, testNo: c.testNo, testFocused: false }
+        : { testDone: false, testNo: c.testNo + 1, testFocused: false },
+    );
   }
 
-  gradeCard(answer: "easy" | "again") {
-    this.setState((c) => {
-      const answers = (c.cardAnswers || []).slice();
-      const cards = this.studyData().cards;
-      answers[c.cardIndex % cards.length] = answer;
-      const complete = cards.every((_, i) => Boolean(answers[i]));
-      return {
-        cardAnswers: answers,
-        cardsDone: complete,
-        cardIndex: complete ? c.cardIndex : (c.cardIndex + 1) % cards.length,
-        flipped: false,
-      };
-    });
-  }
-
-  segment(active: boolean): CSSProperties {
-    return active
-      ? { ...SEGMENT_BASE, background: "var(--m-surface)", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
-      : { ...SEGMENT_BASE, background: "transparent" };
-  }
-
-  openSheet(mode: SheetMode) {
-    this.setState({ sheetMode: mode, createMenuOpen: false, busyLabel: null, sourceVariant: 0 });
-  }
-
-  create() {
-    const mode = this.state.sheetMode;
-    if (!mode) return;
-    const base = SHEET_CONTENT[mode];
-    const variants = SOURCE_VARIANTS[mode];
-    const config = { ...base, ...variants[(this.state.sourceVariant || 0) % variants.length] };
-
-    this.setState({ busyLabel: this.props.t("capture.busy.preparing") });
-    this.later(() => this.setState({ busyLabel: mode === "link" ? this.props.t("capture.busy.queueing") : this.props.t("capture.busy.uploadingFile") }), 700);
-    this.later(() => {
-      const id = `n${Date.now()}`;
-      this.setState((s) => ({
-        busyLabel: null,
-        sheetMode: null,
-        notes: [{ id, title: config.noteTitle, source: config.source, date: PREVIEW_TODAY, status: "queued" }, ...s.notes],
-      }));
-      this.later(() => this.updateStatus(id, "transcribing"), 1400);
-      this.later(() => this.updateStatus(id, "generating_notes"), 3200);
-      this.later(() => this.updateStatus(id, "ready"), 5200);
-    }, 1900);
-  }
+  /* ── Library actions ──────────────────────────────────────── */
 
   updateStatus(id: string, status: PreviewNote["status"]) {
+    this.setState((s) => ({ notes: s.notes.map((note) => (note.id === id ? { ...note, status } : note)) }));
+  }
+
+  addNote() {
+    const spec = CAPTURE[this.state.captureMode];
+    const id = `n${Date.now()}`;
     this.setState((s) => ({
-      notes: s.notes.map((note) => (note.id === id ? { ...note, status } : note)),
+      screen: "home",
+      captureText: "",
+      notes: [{ id, emoji: spec.emoji, title: spec.noteTitle, source: spec.source, date: "danes", status: "queued" }, ...s.notes],
+    }));
+    this.later(() => this.updateStatus(id, "transcribing"), 1400);
+    this.later(() => this.updateStatus(id, "generating_notes"), 3200);
+    this.later(() => this.updateStatus(id, "ready"), 5200);
+  }
+
+  saveRename() {
+    const title = this.state.renameValue.trim();
+    if (!title) return;
+    this.setState((c) => ({
+      notes: c.notes.map((note) => (note.id === c.targetId ? { ...note, title } : note)),
+      sheet: null,
+      targetId: null,
+      renameValue: "",
     }));
   }
 
   sendChat() {
-    const text = this.state.chatInput.trim();
+    const text = this.state.chatDraft.trim();
     if (!text) return;
-    this.setState((s) => ({
-      chatInput: "",
-      messages: [...(s.messages.length ? s.messages : this.studyData().chat), { role: "user", text }],
-    }));
+    this.setState((s) => ({ chatDraft: "", chat: [...s.chat, { role: "user", text }] }));
     this.later(() => {
-      this.setState((s) => ({
-        messages: [...s.messages, { role: "assistant", text: this.studyData().chatReply }],
-      }));
+      this.setState((s) => ({ chat: [...s.chat, { role: "assistant", text: this.studyData().chatReply }] }));
     }, 900);
   }
 
   /* ── Screens ──────────────────────────────────────────────── */
 
-  renderHome(filtered: PreviewNote[]) {
+  /* The phone's own status bar, above every screen. */
+  renderStatusBar() {
+    return (
+      <div
+        aria-hidden="true"
+        style={{
+          position: "relative",
+          zIndex: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          height: `${STATUS_H}px`,
+          padding: "0 32px 0 35.2px",
+          fontSize: "16.32px",
+          fontWeight: 650,
+          letterSpacing: "-0.02em",
+          flex: "0 0 auto",
+        }}
+      >
+        <span>12:45</span>
+        <span style={{ display: "flex", alignItems: "center", gap: "6.4px" }}>
+          <Msym name="signal_cellular_alt" size="16.8px" />
+          <Msym name="wifi" size="16.8px" />
+          <Msym name="battery_full" size="18.4px" />
+        </span>
+      </div>
+    );
+  }
+
+  renderHome(visible: PreviewNote[]) {
     const s = this.state;
-    const activeFolder = s.folders.find((folder) => folder.id === s.folderId) ?? null;
+    const folderLabel = s.folders.find((f) => f.id === s.folderId)?.name ?? "Vsi zapiski";
+    const headP = s.headP;
+    /* The field's own contents go before it does, rather than fading with it. */
+    const headSharp = headP > 0.02 ? 0 : 1;
 
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px", paddingTop: "14.4px" }}>
-        <section style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
-          <h2 style={{ margin: "0 0 1.6px", fontSize: "15px", fontWeight: 650, letterSpacing: "-0.03em", color: "var(--m-label)" }}>
-            {this.props.t("library.myNotes")}
-          </h2>
+      <div style={{ position: "absolute", inset: `${STATUS_H}px 0 0 0`, display: "flex", flexDirection: "column" }}>
+        <div
+          style={{
+            position: "absolute",
+            top: "8px",
+            left: "18.4px",
+            right: "18.4px",
+            zIndex: 5,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            pointerEvents: "none",
+          }}
+        >
+          {/* Above the fold and inside a transformed, masked box, where a lazy
+              image is not reliably triggered — so it is fetched eagerly. */}
+          <Image
+            src={BRAND_LOCKUP_SRC}
+            alt={SEO_BRAND_NAME}
+            width={BRAND_LOCKUP_WIDTH}
+            height={BRAND_LOCKUP_HEIGHT}
+            priority
+            style={{ position: "relative", zIndex: 1, height: "49.6px", width: "auto", objectFit: "contain" }}
+          />
+          <button
+            type="button"
+            aria-label="Nastavitve"
+            data-tap="settings"
+            onClick={() => this.setState({ sheet: "settings" })}
+            style={{ ...roundBtn(49.6), position: "relative", zIndex: 1, pointerEvents: "auto" }}
+          >
+            <Msym name="settings" size="25.6px" fill={false} weight={500} />
+          </button>
+        </div>
 
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "20px", width: "100%" }}>
+        <div
+          data-app-main
+          ref={(node) => {
+            this.homeScroll = node;
+          }}
+          onScroll={this.onHomeScroll}
+          onPointerDown={this.cancelHeaderSnap}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            padding: "64px 0 192px",
+            maskImage: HOME_SCROLL_MASK,
+            WebkitMaskImage: HOME_SCROLL_MASK,
+          }}
+        >
+          {/* Title and search fold away over the first 80px of scroll — see
+              `onHomeScroll`. Both scroll with the list rather than being
+              pinned, so the scroll metrics never change under the collapse,
+              and the opaque folder bar below passes over them. */}
+          <h1
+            style={{
+              position: "relative",
+              zIndex: 3,
+              background: "var(--m-bg)",
+              margin: "7.2px 18.4px 0",
+              fontSize: "21.6px",
+              fontWeight: 800,
+              letterSpacing: "-0.04em",
+              lineHeight: 1.3,
+              height: "33.6px",
+              overflow: "hidden",
+              opacity: clamp01(1 - headP * 1.9),
+              transition: "opacity 0.1s linear",
+            }}
+          >
+            Moji zapiski
+          </h1>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "11.2px",
+              margin: "12.8px 18.4px 0",
+              padding: "0 16.8px",
+              height: "44px",
+              borderRadius: "999px",
+              background: "var(--m-field)",
+              overflow: "hidden",
+              position: "relative",
+              zIndex: 3,
+              // Scaled from its top edge, so it folds up into the bar rather
+              // than shrinking towards its own middle.
+              transformOrigin: "top center",
+              willChange: "transform",
+              transform: `scaleY(${Math.max(0.06, 1 - headP)})`,
+              opacity: clamp01(1 - (headP - 0.6) * 2.5),
+              transition: "opacity 0.1s linear",
+            }}
+          >
+            <Msym
+              name="search"
+              size="20.8px"
+              fill={false}
+              weight={600}
+              style={{ color: "var(--m-label)", opacity: headSharp, transition: "opacity 0.08s linear" }}
+            />
+            <input
+              value={s.query}
+              onChange={(e) => this.setState({ query: e.target.value })}
+              placeholder="Išči po zapiskih in prepisih"
+              style={{
+                width: "100%",
+                minWidth: 0,
+                border: 0,
+                background: "transparent",
+                outline: "none",
+                color: "var(--m-label)",
+                fontFamily: "inherit",
+                fontSize: "16.32px",
+                letterSpacing: "-0.02em",
+                // The contents counter-scale, so the placeholder and the glyph
+                // are never squashed on the way down — they cut out early.
+                transform: `scaleY(${1 / Math.max(0.06, 1 - headP)})`,
+                opacity: headSharp,
+                transition: "opacity 0.1s linear",
+              }}
+            />
+          </div>
+
+          <div style={{ position: "relative", zIndex: 3, padding: "13.6px 18.4px 8.8px", background: "var(--m-bg)" }}>
             <button
               type="button"
-              onClick={() => this.setState({ folderSheetOpen: true, swipeId: null, swipeOffset: 0, dockOpen: false })}
+              onClick={() => this.setState({ sheet: "folders" })}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "7px",
-                flexShrink: 0,
-                maxWidth: "216px",
-                minHeight: "32px",
-                padding: "3px 11px 3px 10px",
-                border: "1px solid var(--m-sep)",
+                gap: "8.8px",
+                height: "43.2px",
+                padding: "0 14.4px 0 12px",
+                border: 0,
                 borderRadius: "999px",
                 background: "var(--m-surface)",
                 color: "var(--m-label)",
@@ -1139,74 +1379,114 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
                 cursor: "pointer",
               }}
             >
-              <span style={{ fontSize: "13px" }}>📁</span>
-              <span
-                style={{
-                  maxWidth: "131px",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  fontSize: "15.4px",
-                  fontWeight: 650,
-                  letterSpacing: "-0.03em",
-                }}
-              >
-                {activeFolder ? activeFolder.name : this.props.t("folders.allNotes")}
-              </span>
-              <span style={{ fontSize: "12px", color: "var(--m-second)" }}>▾</span>
+              <Emoji symbol="📁" size="17.6px" />
+              <span style={{ fontSize: "16.32px", fontWeight: 700, letterSpacing: "-0.025em" }}>{folderLabel}</span>
+              <Msym name="expand_more" size="19.2px" fill={false} weight={500} />
             </button>
-            <div
-              style={{
-                order: -1,
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                width: "100%",
-                minWidth: 0,
-                minHeight: "37px",
-                padding: "6px 12px",
-                borderRadius: "10px",
-                background: "var(--m-muted)",
-              }}
-            >
-              <span style={{ fontSize: "15px" }}>🔎</span>
-              <input
-                value={s.query}
-                onChange={(e) => this.setState({ query: e.target.value })}
-                placeholder={this.props.t("preview.searchByTitle")}
-                style={{
-                  width: "100%",
-                  minWidth: 0,
-                  border: 0,
-                  background: "transparent",
-                  color: "var(--m-label)",
-                  outline: "none",
-                  fontSize: "16px",
-                  fontFamily: "inherit",
-                }}
-              />
-            </div>
           </div>
 
-          {filtered.length > 0 ? (
-            <div style={{ display: "grid", gap: "9.8px", minWidth: 0 }}>
-              {filtered.map((note) => {
-                const offset = s.swipeId === note.id ? s.swipeOffset : 0;
-                const actionButtonStyle: CSSProperties = {
-                  display: "inline-flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "5.6px",
-                  padding: 0,
-                  border: 0,
-                  background: "transparent",
-                  fontFamily: "inherit",
-                  pointerEvents: offset < 0 ? "auto" : "none",
-                  cursor: "pointer",
-                };
+          <div style={{ padding: "0 18.4px" }}>
+            <div style={{ display: "grid", gap: "11.2px" }}>
+              {visible.map((note) => {
+                const open = s.swipeId === note.id;
+                const offset = open ? s.swipeX : 0;
                 return (
-                  <div key={note.id} style={{ position: "relative", width: "100%", minWidth: 0, borderRadius: "18px", overflow: "visible" }}>
+                  <div key={note.id} style={{ position: "relative", borderRadius: "20px", animation: "memo-row-in 0.32s cubic-bezier(0.22,1,0.36,1) both" }}>
+                    <div
+                      role="link"
+                      tabIndex={0}
+                      data-tap="note"
+                      onPointerDown={(event) => this.startRowSwipe(event, note.id)}
+                      onClick={() => {
+                        if (this.suppressTap) {
+                          this.suppressTap = false;
+                          return;
+                        }
+                        if (open) {
+                          this.setState({ swipeId: null, swipeX: 0 });
+                          return;
+                        }
+                        if (note.status !== "ready") return;
+                        this.setState({ screen: "note", noteId: note.id, tab: "notes", readWord: 0, readPaused: false });
+                      }}
+                      style={{
+                        position: "relative",
+                        zIndex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "14.4px",
+                        width: "100%",
+                        padding: "15.2px 19.2px",
+                        borderRadius: "20px",
+                        background: "var(--m-surface)",
+                        boxShadow: "var(--m-shadow)",
+                        color: "var(--m-label)",
+                        cursor: "grab",
+                        userSelect: "none",
+                        touchAction: "pan-y",
+                        transform: `translateX(${offset}px)`,
+                        transition: s.swipeDragging && open ? "none" : "transform 180ms cubic-bezier(0.22,1,0.36,1)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          width: "48px",
+                          height: "48px",
+                          flex: "0 0 auto",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderRadius: "999px",
+                          background: "var(--m-tile)",
+                        }}
+                      >
+                        <Emoji symbol={note.emoji} size="21.6px" />
+                      </span>
+                      <span style={{ display: "grid", gap: "3.2px", minWidth: 0, flex: 1 }}>
+                        <span style={{ fontSize: "17.28px", fontWeight: 650, letterSpacing: "-0.025em", lineHeight: 1.25 }}>
+                          {note.title}
+                        </span>
+                        <span style={{ color: "var(--m-second)", fontSize: "14.72px", letterSpacing: "-0.015em" }}>
+                          {note.status === "ready"
+                            ? `${note.date} • ${SOURCE_LABELS[note.source]}`
+                            : "Ustvarjanje zapiskov…"}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="Dejanja zapiska"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          this.suppressTap = false;
+                          this.setState(
+                            open
+                              ? { swipeId: null, swipeX: 0, swipeDragging: false }
+                              : { swipeId: note.id, swipeX: -144, swipeDragging: false },
+                          );
+                        }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flex: "0 0 auto",
+                          width: "32px",
+                          height: "32px",
+                          marginRight: "-5.6px",
+                          padding: 0,
+                          border: 0,
+                          borderRadius: "999px",
+                          background: "transparent",
+                          color: "var(--m-second)",
+                          cursor: "pointer",
+                          opacity: open ? 0.9 : 0.55,
+                          transition: "opacity 0.2s ease",
+                        }}
+                      >
+                        <Msym name="chevron_right" size="20px" fill={false} weight={500} />
+                      </button>
+                    </div>
+
                     <div
                       style={{
                         position: "absolute",
@@ -1214,909 +1494,28 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
                         zIndex: 0,
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "space-between",
+                        justifyContent: "flex-end",
                         gap: "5.6px",
                         width: "130.4px",
-                        padding: "0 5.6px 0 0",
-                        pointerEvents: "none",
+                        paddingLeft: "5.6px",
+                        pointerEvents: open || offset < 0 ? "auto" : "none",
                       }}
                     >
                       <button
                         type="button"
-                        onClick={() => this.setState({ swipeId: null, swipeOffset: 0, renameId: note.id, renameValue: note.title })}
-                        aria-label={this.props.t("common.edit")}
-                        style={actionButtonStyle}
-                      >
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: "46.4px",
-                            height: "46.4px",
-                            borderRadius: "999px",
-                            border: "1px solid var(--m-sep)",
-                            background: "var(--m-surface)",
-                            color: "var(--m-label)",
-                            fontSize: "17.6px",
-                            boxShadow: "0 7.2px 16px rgba(0,0,0,0.24)",
-                          }}
-                        >
-                          ✏️
-                        </span>
-                        <span style={{ color: "var(--m-second)", fontSize: "10.9px", fontWeight: 650, lineHeight: 1, textAlign: "center", whiteSpace: "nowrap" }}>
-                          {this.props.t("common.edit")}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => this.setState({ swipeId: null, swipeOffset: 0, deleteId: note.id })}
-                        aria-label={this.props.t("common.delete")}
-                        style={actionButtonStyle}
-                      >
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: "46.4px",
-                            height: "46.4px",
-                            borderRadius: "999px",
-                            border: "1px solid var(--m-red)",
-                            background: "var(--m-red)",
-                            color: "#fff",
-                            fontSize: "17.6px",
-                            boxShadow: "0 8.8px 19.2px rgba(255,69,58,0.28)",
-                          }}
-                        >
-                          🗑️
-                        </span>
-                        <span style={{ color: "var(--m-red)", fontSize: "10.9px", fontWeight: 650, lineHeight: 1, textAlign: "center", whiteSpace: "nowrap" }}>
-                          {this.props.t("common.delete")}
-                        </span>
-                      </button>
-                    </div>
-                    <div
-                      role="link"
-                      tabIndex={0}
-                      data-tap="note"
-                      onPointerDown={(event) => this.startSwipe(event, note.id)}
-                      onClick={() => {
-                        if (this.suppressClick) {
-                          this.suppressClick = false;
-                          return;
-                        }
-                        if (note.status !== "ready") return;
-                        this.setState({ screen: "note", noteId: note.id, tab: "notes", swipeId: null, swipeOffset: 0, dockOpen: false });
-                      }}
-                      style={{
-                        position: "relative",
-                        zIndex: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "11.2px",
-                        width: "100%",
-                        minHeight: "97.3px",
-                        padding: "18.1px 16px",
-                        border: "1px solid var(--m-sep)",
-                        borderRadius: "18px",
-                        background: "var(--m-surface)",
-                        boxShadow: "var(--m-shadow)",
-                        transform: `translateX(${offset}px)`,
-                        transition: "transform 180ms cubic-bezier(0.22, 1, 0.36, 1)",
-                        touchAction: "pan-y",
-                        userSelect: "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <span
+                        aria-label="Uredi"
+                        onClick={() => this.setState({ sheet: "rename", targetId: note.id, renameValue: note.title, swipeId: null, swipeX: 0 })}
                         style={{
-                          display: "inline-flex",
-                          width: "36px",
-                          height: "36px",
-                          flexShrink: 0,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          borderRadius: "50%",
-                          background: "var(--m-muted)",
-                          fontSize: "15px",
-                        }}
-                      >
-                        {SOURCE_META[note.source].icon}
-                      </span>
-                      <span style={{ display: "grid", gap: "4px", minWidth: 0, flex: 1 }}>
-                        <span
-                          style={{
-                            fontSize: "14.7px",
-                            fontWeight: 500,
-                            color: "var(--m-label)",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {note.title}
-                        </span>
-                        <span style={{ fontSize: "12.5px", lineHeight: 1.3, color: "var(--m-second)" }}>
-                          {this.props.t(SOURCE_META[note.source].labelKey)} • {formatCalendarDate(note.date, this.props.locale)}
-                        </span>
-                      </span>
-                      {note.status !== "ready" ? (
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            flexShrink: 0,
-                            minHeight: "24px",
-                            padding: "0 9px",
-                            borderRadius: "4px",
-                            background: "var(--m-muted)",
-                            color: "var(--m-second)",
-                            fontSize: "11px",
-                            fontWeight: 500,
-                            letterSpacing: "0.04em",
-                            textTransform: "uppercase",
-                          }}
-                        >
-                          {this.props.t(STATUS_LABEL_KEYS[note.status])}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                justifyItems: "center",
-                gap: "6px",
-                padding: "34px 18px",
-                border: "1px solid var(--m-sep)",
-                borderRadius: "18px",
-                background: "var(--m-surface)",
-                textAlign: "center",
-              }}
-            >
-              <span
-                style={{
-                  display: "inline-flex",
-                  width: "44px",
-                  height: "44px",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: "50%",
-                  background: "var(--m-muted)",
-                  fontSize: "20px",
-                }}
-              >
-                📝
-              </span>
-              <p style={{ margin: "6px 0 0", fontSize: "16px", color: "var(--m-label)" }}>{this.props.t("library.empty.noMatchTitle")}</p>
-              <p style={{ margin: 0, fontSize: "13.6px", color: "var(--m-second)" }}>
-                {this.props.t("preview.emptyBody")}
-              </p>
-            </div>
-          )}
-        </section>
-      </div>
-    );
-  }
-
-  renderNotesTab() {
-    const s = this.state;
-    const themeKey = noteTheme(this.activeNote()?.title);
-    const body = this.noteBody();
-    const readShown = Boolean(s.reading || s.readPaused);
-    const words = segmentWords(body.overview);
-
-    const highlightHeading = (text: string): ReactNode => (
-      <span
-        style={{
-          display: "inline",
-          padding: "1.6px 5.1px",
-          borderRadius: "6.7px",
-          background: "color-mix(in srgb, #2563eb 24%, transparent)",
-          color: "var(--m-label)",
-          boxDecorationBreak: "clone",
-          WebkitBoxDecorationBreak: "clone",
-        }}
-      >
-        {text}
-      </span>
-    );
-
-    const figure = (src: string, href: string, caption: string): ReactNode => (
-      <figure
-        style={{
-          position: "relative",
-          width: "100%",
-          margin: "16px auto",
-          border: "1px solid var(--m-sep)",
-          borderRadius: "8px",
-          overflow: "hidden",
-          background: "var(--m-muted)",
-        }}
-      >
-        <span style={{ position: "relative", display: "block", width: "100%", height: "208px", background: "#ffffff" }}>
-          <Image
-            src={src}
-            alt=""
-            fill
-            loading="lazy"
-            sizes="400px"
-            style={{ objectFit: "contain", pointerEvents: "none" }}
-          />
-        </span>
-        <figcaption
-          style={{
-            position: "absolute",
-            left: "10.4px",
-            bottom: "10.4px",
-            display: "flex",
-            alignItems: "center",
-            gap: "12.8px",
-            padding: "2.4px 6.4px",
-            borderRadius: "6px",
-            background: "rgba(255,255,255,0.88)",
-            fontSize: "13.4px",
-            color: "#4b5563",
-            pointerEvents: "none",
-          }}
-        >
-          <a href={href} target="_blank" rel="noreferrer" style={{ color: "inherit", pointerEvents: "auto" }}>
-            {caption}
-          </a>
-        </figcaption>
-      </figure>
-    );
-
-    return (
-      <div style={{ position: "relative", padding: "17.6px", border: "1px solid var(--m-sep)", borderRadius: "18px", background: "var(--m-surface)", minWidth: 0 }}>
-        <h2 style={{ margin: "0 0 11.2px", fontSize: "21.1px", fontWeight: 700, lineHeight: 1.35, color: "var(--m-label)" }}>
-          {highlightHeading("Hiter pregled")}
-        </h2>
-        <p style={{ margin: 0, fontSize: "16.96px", lineHeight: 1.82, color: "var(--m-label)" }}>
-          {words.map((w, i) => (
-            <span key={i}>
-              {w.space}
-              <span style={this.wordStyle(w, readShown && i <= s.readWord, readShown, readShown && i === s.readWord)}>{w.text}</span>
-            </span>
-          ))}
-        </p>
-        {/* Mirrors the production key_takeaway callout (globals.css). */}
-        <div
-          style={{
-            margin: "16px 0 0",
-            padding: "13.6px 15.2px 13.6px 17px",
-            border: "1px solid color-mix(in srgb, #f59e0b 22%, var(--m-sep))",
-            borderLeft: "4px solid #f59e0b",
-            borderRadius: "14px",
-            background: "var(--m-callout)",
-            fontSize: "16.96px",
-            lineHeight: 1.82,
-            color: "var(--m-label)",
-          }}
-        >
-          {body.callout}
-        </div>
-
-        {themeKey === "is"
-          ? figure(
-              "/notes/is-pyramid.png",
-              "https://commons.wikimedia.org/wiki/File:Four-Level-Pyramid-model.png",
-              "Ravni informacijskih sistemov · Wikimedia Commons, CC BY-SA 3.0",
-            )
-          : null}
-        {themeKey === "micro"
-          ? figure(
-              "/notes/micro-elasticity.png",
-              "https://commons.wikimedia.org/wiki/File:Price_elasticity_of_demand.svg",
-              "Krivulji ponudbe in povpraševanja · Wikimedia Commons, CC BY-SA 3.0",
-            )
-          : null}
-        {themeKey === "anatomy"
-          ? figure(
-              "/notes/anatomy-neuron.png",
-              "https://commons.wikimedia.org/wiki/File:Complete_neuron_cell_diagram_en.svg",
-              "Zgradba nevrona · Wikimedia Commons, javna last",
-            )
-          : null}
-        {themeKey === "stats"
-          ? figure(
-              "/notes/stats-p-value.png",
-              "https://commons.wikimedia.org/wiki/File:P-value_in_statistical_significance_testing.svg",
-              "P-vrednost pri testiranju značilnosti · Wikimedia Commons, CC BY-SA 4.0",
-            )
-          : null}
-
-        <h3 style={{ margin: "30.4px 0 11.2px", fontSize: "18.24px", fontWeight: 700, lineHeight: 1.35, color: "var(--m-label)" }}>
-          {highlightHeading(this.props.t("preview.keyPoints"))}
-        </h3>
-        <ul style={{ display: "grid", gap: "8.8px", margin: "11.2px 0 16.8px", paddingLeft: 0, listStyle: "none" }}>
-          {body.points.map((parts, pi) => (
-            <li key={pi} style={{ position: "relative", paddingLeft: "16.8px", fontSize: "16.96px", lineHeight: 1.82, color: "var(--m-label)" }}>
-              <span
-                aria-hidden="true"
-                style={{
-                  position: "absolute",
-                  top: "0.14em",
-                  left: 0,
-                  color: "color-mix(in srgb, var(--m-label) 72%, transparent)",
-                  fontSize: "0.72em",
-                  fontWeight: 850,
-                  lineHeight: "inherit",
-                }}
-              >
-                •
-              </span>
-              {parts.map((part, i) => (
-                <span key={i}>
-                  {i === 0 ? "" : " "}
-                  <span style={this.wordStyle(part, false, false, false)}>{part.text}</span>
-                </span>
-              ))}
-            </li>
-          ))}
-        </ul>
-        <h3 style={{ margin: "30.4px 0 11.2px", fontSize: "18.24px", fontWeight: 700, lineHeight: 1.35, color: "var(--m-label)" }}>
-          {highlightHeading("Zakaj je to pomembno")}
-        </h3>
-        <p style={{ margin: 0, fontSize: "16.96px", lineHeight: 1.82, color: "var(--m-label)" }}>{body.why}</p>
-        {themeKey === "is"
-          ? figure(
-              "/notes/is-erp-modules.png",
-              "https://commons.wikimedia.org/wiki/File:ERP_modules.svg",
-              "Moduli ERP · Wikimedia Commons, CC BY-SA 3.0",
-            )
-          : null}
-        {themeKey === "micro"
-          ? figure(
-              "/notes/micro-inelastic-demand.png",
-              "https://commons.wikimedia.org/wiki/File:InelasticDemand.svg",
-              "Neelastično povpraševanje · Wikimedia Commons, CC BY-SA 4.0",
-            )
-          : null}
-        {themeKey === "stats"
-          ? figure(
-              "/notes/stats-normal-distribution.png",
-              "https://commons.wikimedia.org/wiki/File:Normal_Distribution_Sigma.svg",
-              "Normalna porazdelitev in standardni odkloni · Wikimedia Commons, CC BY-SA 3.0",
-            )
-          : null}
-        <div style={{ height: "54.4px" }} />
-      </div>
-    );
-  }
-
-  renderStudyTab() {
-    const s = this.state;
-    const study = this.studyData();
-    const CARDS = study.cards;
-    const QUIZ = study.quiz;
-    const PRACTICE = study.practice;
-    const card = CARDS[s.cardIndex % CARDS.length];
-    const quiz = QUIZ[s.quizIndex % QUIZ.length];
-
-    const cardPhase = s.cardPhase || "idle";
-    const flipPhase = s.flipPhase || null;
-    const cardX = cardPhase === "exit" ? (s.cardExitDir > 0 ? 620 : -620) : s.cardDragX || 0;
-    const cardY = cardPhase === "enter" ? 12 : (s.cardDragY || 0) * 0.18;
-    const flipDeg = flipPhase === "out" ? 84 : flipPhase === "mid" ? -84 : 0;
-    const cardTransform =
-      `translate3d(${cardX.toFixed(1)}px, ${cardY.toFixed(1)}px, 0)` +
-      ` rotate(${(cardX / 24).toFixed(2)}deg)` +
-      ` rotateY(${flipDeg}deg)` +
-      ` scale(${cardPhase === "enter" ? 0.96 : 1})`;
-    const cardTransition =
-      s.cardDragActive || cardPhase === "enter" || flipPhase === "mid"
-        ? "none"
-        : cardPhase === "exit"
-          ? "transform 210ms cubic-bezier(0.32, 0.72, 0.4, 1), opacity 190ms ease-out"
-          : flipPhase === "out"
-            ? "transform 150ms ease-in"
-            : flipPhase === "in"
-              ? "transform 200ms cubic-bezier(0.22, 1, 0.36, 1)"
-              : "transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 240ms ease-out";
-
-    const knownCount = s.cardAnswers.filter((a) => a === "easy").length;
-    const missedCount = s.cardAnswers.filter((a) => a === "again").length;
-    const cardsSummaryVisible = s.studyMode === "flashcards" && s.cardsDone;
-    const cardsDeckVisible = s.studyMode === "flashcards" && !s.cardsDone;
-    const quizCorrect = s.quizAnswers.filter((pick, i) => pick === QUIZ[i]?.correct).length;
-    const quizSummaryVisible = s.studyMode === "quiz" && s.quizDone;
-    const quizBoardVisible = s.studyMode === "quiz" && !s.quizDone;
-    const quizAnswered = s.quizPick !== null;
-
-    const ringInner = (
-      <div
-        style={{
-          position: "absolute",
-          inset: "7px",
-          borderRadius: "50%",
-          background: "linear-gradient(180deg, var(--m-surface), var(--m-muted))",
-          boxShadow: "inset 0 0 0 1px var(--m-sep), 0 10px 24px rgba(0,0,0,0.08)",
-        }}
-      />
-    );
-
-    const summary = (opts: {
-      badge: string;
-      title: string;
-      pct: number;
-      pctLabel: string;
-      metricLabel: string;
-      metric: string;
-      action: string;
-      tap: string;
-      onRestart: () => void;
-    }) => (
-      <div style={completionShell()}>
-        <div style={{ display: "grid", gap: "8.8px", justifyItems: "center", textAlign: "center" }}>
-          <span style={completionBadge()}>{opts.badge}</span>
-          <div style={{ display: "grid", gap: "8.8px", justifyItems: "center", textAlign: "center" }}>
-            <h3 style={{ margin: 0, fontSize: "16.5px", fontWeight: 720, letterSpacing: "-0.04em", color: "var(--m-label)", overflowWrap: "anywhere" }}>
-              {opts.title}
-            </h3>
-          </div>
-        </div>
-        <div style={{ display: "grid", justifyItems: "center", gap: "10px" }}>
-          <div style={ringStyle(opts.pct)}>
-            {ringInner}
-            <div style={{ position: "relative", zIndex: 1, display: "grid", gap: "1.9px", justifyItems: "center", textAlign: "center" }}>
-              <strong style={{ fontSize: "23px", lineHeight: 1, letterSpacing: "-0.05em", color: "var(--m-label)" }}>{opts.pct}%</strong>
-              <span
-                style={{
-                  maxWidth: "10ch",
-                  fontSize: "9.6px",
-                  fontWeight: 700,
-                  letterSpacing: "0.05em",
-                  lineHeight: 1.2,
-                  textTransform: "uppercase",
-                  color: "var(--m-second)",
-                }}
-              >
-                {opts.pctLabel}
-              </span>
-            </div>
-          </div>
-          <div style={{ display: "grid", gap: "7px", justifyItems: "center", textAlign: "center" }}>
-            <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--m-second)" }}>
-              {opts.metricLabel}
-            </span>
-            <strong style={{ fontSize: "25px", lineHeight: 1, letterSpacing: "-0.06em", color: "var(--m-label)", whiteSpace: "nowrap" }}>
-              {opts.metric}
-            </strong>
-          </div>
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "5.8px", width: "100%" }}>
-          <button type="button" data-tap={opts.tap} onClick={opts.onRestart} style={completionAction()}>
-            <span style={{ fontSize: "12.8px" }}>🔄</span>
-            {opts.action}
-          </button>
-        </div>
-      </div>
-    );
-
-    return (
-      <div style={{ display: "grid", gap: "14px", padding: "17.6px", border: "1px solid var(--m-sep)", borderRadius: "18px", background: "var(--m-surface)", minWidth: 0 }}>
-        <div style={{ display: "inline-flex", width: "100%", padding: "2px", borderRadius: "8px", background: "var(--m-muted)" }}>
-          {STUDY_MODES.map((mode) => (
-            <button
-              key={mode.id}
-              type="button"
-              data-tap="mode"
-              onClick={() => this.setState({ studyMode: mode.id })}
-              style={this.segment(s.studyMode === mode.id)}
-            >
-              {this.props.t(mode.labelKey)}
-            </button>
-          ))}
-        </div>
-
-        {cardsSummaryVisible
-          ? summary({
-              badge: missedCount === 0 ? this.props.t("study.completed") : this.props.t("study.roundCompleted", { cycle: 1 }),
-              title: this.props.t(missedCount === 0 ? "study.cards.allDone" : "study.cards.repeatMissed"),
-              pct: completionPct(knownCount, CARDS.length),
-              pctLabel: this.props.t(missedCount === 0 ? "study.setCompleted" : "study.roundScore"),
-              metricLabel: "Pravilno v tem krogu",
-              metric: `${knownCount} / ${CARDS.length}`,
-              action:
-                missedCount === 0
-                  ? this.props.t("study.restartSet")
-                  : this.props.t("study.repeatMissedCards", { count: missedCount }),
-              tap: "restart-cards",
-              onRestart: () => this.setState({ cardsDone: false, cardIndex: 0, flipped: false, cardAnswers: [] }),
-            })
-          : null}
-
-        {cardsDeckVisible ? (
-          <div style={{ display: "grid", gap: "14px", perspective: "1000px" }}>
-            <button
-              type="button"
-              data-tap="card"
-              onClick={() => this.flipCard()}
-              onPointerDown={(event) => this.startCardDrag(event)}
-              style={{
-                position: "relative",
-                display: "flex",
-                flexDirection: "column",
-                gap: "14px",
-                width: "100%",
-                minHeight: "232px",
-                padding: "18px",
-                border: "1px solid var(--m-sep)",
-                borderRadius: "20px",
-                background: "var(--m-card-grad)",
-                boxShadow: "var(--m-shadow)",
-                fontFamily: "inherit",
-                overflow: "hidden",
-                touchAction: "pan-y",
-                userSelect: "none",
-                transform: cardTransform,
-                opacity: cardPhase === "exit" || cardPhase === "enter" ? 0 : 1,
-                willChange: "transform, opacity",
-                transformStyle: "preserve-3d",
-                backfaceVisibility: "hidden",
-                transition: cardTransition,
-                cursor: "pointer",
-              }}
-            >
-              <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", width: "100%", fontSize: "12.5px", fontWeight: 700, color: "var(--m-second)" }}>
-                <span>
-                  {(s.cardIndex % CARDS.length) + 1} / {CARDS.length}
-                </span>
-                <span
-                  style={{
-                    color: s.cardAnswers[s.cardIndex % CARDS.length] === "again" ? "var(--m-red)" : "var(--m-green)",
-                    fontSize: "12.5px",
-                    fontWeight: 700,
-                  }}
-                >
-                  {s.cardAnswers[s.cardIndex % CARDS.length] === "again"
-                    ? this.props.t("study.cards.didntKnow")
-                    : s.cardAnswers[s.cardIndex % CARDS.length] === "easy"
-                      ? this.props.t("study.cards.knew")
-                      : ""}
-                </span>
-              </span>
-              <span
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "18px",
-                  fontWeight: 600,
-                  lineHeight: 1.4,
-                  color: "var(--m-label)",
-                  textAlign: "center",
-                }}
-              >
-                {s.flipped ? card.back : card.front}
-              </span>
-              <span style={{ fontSize: "12.5px", fontWeight: 650, color: "var(--m-second)" }}>
-                {this.props.t(s.flipped ? "preview.backToQuestion" : "preview.showAnswer")}
-              </span>
-              <span
-                aria-hidden="true"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: "20px",
-                  background:
-                    cardX < 0
-                      ? "color-mix(in srgb, var(--m-red) 22%, transparent)"
-                      : "color-mix(in srgb, var(--m-green) 22%, transparent)",
-                  fontSize: "36px",
-                  opacity: cardPhase === "enter" ? 0 : Math.min(1, Math.abs(cardX) / 90),
-                  pointerEvents: "none",
-                  transition: s.cardDragActive ? "none" : "opacity 190ms ease",
-                }}
-              >
-                {cardX < 0 ? "❌" : "✅"}
-              </span>
-            </button>
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
-              <button
-                type="button"
-                onClick={() => this.setState((c) => ({ cardIndex: Math.max(0, c.cardIndex - 1), flipped: false }))}
-                aria-label={this.props.t("study.cards.previous")}
-                style={this.cardNavStyle(s.cardIndex > 0)}
-              >
-                ←
-              </button>
-              <button
-                type="button"
-                onClick={() => this.gradeCard("again")}
-                aria-label="Nisem vedel"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "7px",
-                  minWidth: "74px",
-                  minHeight: "46px",
-                  padding: "0 14px",
-                  border: "1px solid var(--m-red)",
-                  borderRadius: "999px",
-                  background: "var(--m-red-soft)",
-                  color: "var(--m-red)",
-                  fontSize: "15px",
-                  fontWeight: 700,
-                  fontFamily: "inherit",
-                  cursor: "pointer",
-                }}
-              >
-                <span style={{ fontSize: "16px" }}>✕</span>
-                <span>{missedCount}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => this.gradeCard("easy")}
-                aria-label={this.props.t("study.cards.knew")}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "7px",
-                  minWidth: "74px",
-                  minHeight: "46px",
-                  padding: "0 14px",
-                  border: "1px solid var(--m-green)",
-                  borderRadius: "999px",
-                  background: "var(--m-green-soft)",
-                  color: "var(--m-green)",
-                  fontSize: "15px",
-                  fontWeight: 700,
-                  fontFamily: "inherit",
-                  cursor: "pointer",
-                }}
-              >
-                <span>{knownCount}</span>
-                <span style={{ fontSize: "16px" }}>✓</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => this.setState((c) => ({ cardIndex: Math.min(CARDS.length - 1, c.cardIndex + 1), flipped: false }))}
-                aria-label="Naslednja kartica"
-                style={this.cardNavStyle(s.cardIndex < CARDS.length - 1)}
-              >
-                →
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        {quizSummaryVisible
-          ? summary({
-              badge: quizCorrect === QUIZ.length ? this.props.t("study.completed") : this.props.t("study.roundCompleted", { cycle: 1 }),
-              title: this.props.t(quizCorrect === QUIZ.length ? "quiz.allDone" : "quiz.repeatMissed"),
-              pct: completionPct(quizCorrect, QUIZ.length),
-              pctLabel: this.props.t(quizCorrect === QUIZ.length ? "study.setCompleted" : "study.roundScore"),
-              metricLabel: this.props.t(quizCorrect === QUIZ.length ? "quiz.questionsDone" : "study.correctThisRound"),
-              metric: `${quizCorrect} / ${QUIZ.length}`,
-              action:
-                quizCorrect === QUIZ.length
-                  ? this.props.t("quiz.restart")
-                  : this.props.t("quiz.repeatMissedQuestions", { count: QUIZ.length - quizCorrect }),
-              tap: "restart-quiz",
-              onRestart: () => this.setState({ quizDone: false, quizIndex: 0, quizPick: null, quizAnswers: [] }),
-            })
-          : null}
-
-        {quizBoardVisible ? (
-          <div style={{ display: "grid", gap: "14px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "12.8px", fontWeight: 700, color: "var(--m-second)" }}>
-              <span>
-                {(s.quizIndex % QUIZ.length) + 1} / {QUIZ.length}
-              </span>
-            </div>
-            <div style={{ display: "grid", gap: "14px" }}>
-              <p style={{ margin: 0, fontSize: "17.6px", fontWeight: 600, lineHeight: 1.35, color: "var(--m-label)" }}>{quiz.question}</p>
-              <div style={{ display: "grid", gap: "9px" }}>
-                {quiz.options.map((label, index) => {
-                  const picked = s.quizPick === index;
-                  const isCorrect = index === quiz.correct;
-                  let background = "var(--m-surface)";
-                  let color = "var(--m-label)";
-                  let border = "1px solid var(--m-sep)";
-                  if (quizAnswered && isCorrect) {
-                    background = "var(--m-green-soft)";
-                    color = "var(--m-green)";
-                    border = "1px solid var(--m-green)";
-                  } else if (quizAnswered && picked) {
-                    background = "var(--m-red-soft)";
-                    color = "var(--m-red)";
-                    border = "1px solid var(--m-red)";
-                  }
-                  return (
-                    <button
-                      key={label}
-                      type="button"
-                      data-tap="quiz-opt"
-                      onClick={() => {
-                        if (this.state.quizPick === null) {
-                          this.setState((c) => {
-                            const picks = (c.quizAnswers || []).slice();
-                            picks[c.quizIndex % QUIZ.length] = index;
-                            return { quizPick: index, quizAnswers: picks };
-                          });
-                        }
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "12px",
-                        width: "100%",
-                        minHeight: "52px",
-                        padding: "12px 14px",
-                        border,
-                        borderRadius: "14px",
-                        background,
-                        color,
-                        fontSize: "15px",
-                        fontWeight: 500,
-                        fontFamily: "inherit",
-                        cursor: quizAnswered ? "default" : "pointer",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: "26px",
-                          height: "26px",
-                          flexShrink: 0,
-                          borderRadius: "999px",
-                          background: "var(--m-muted)",
-                          color: "var(--m-second)",
-                          fontSize: "12.5px",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {String.fromCharCode(65 + index)}
-                      </span>
-                      <span style={{ flex: 1, minWidth: 0, textAlign: "left", fontSize: "15px", lineHeight: 1.4 }}>{label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {quizAnswered ? (
-                <div style={{ display: "grid", gap: "6px", padding: "13px 15px", border: "1px solid var(--m-sep)", borderRadius: "14px", background: "var(--m-muted)" }}>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: "14.5px",
-                      fontWeight: 700,
-                      color: s.quizPick === quiz.correct ? "var(--m-green)" : "var(--m-red)",
-                    }}
-                  >
-                    {this.props.t(s.quizPick === quiz.correct ? "preview.correct" : "preview.incorrect")}
-                  </p>
-                  <p style={{ margin: 0, fontSize: "14.2px", lineHeight: 1.5, color: "var(--m-second)" }}>{quiz.explanation}</p>
-                </div>
-              ) : null}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <button
-                type="button"
-                onClick={() => this.setState((c) => ({ quizIndex: Math.max(0, c.quizIndex - 1), quizPick: null }))}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flex: 1,
-                  minHeight: "46px",
-                  border: "1px solid var(--m-sep)",
-                  borderRadius: "14px",
-                  background: "var(--m-muted)",
-                  color: "var(--m-tint)",
-                  fontSize: "15px",
-                  fontWeight: 600,
-                  fontFamily: "inherit",
-                  opacity: s.quizIndex % QUIZ.length === 0 ? 0.5 : 1,
-                  cursor: "pointer",
-                }}
-              >
-                {this.props.t("common.back")}
-              </button>
-              <button
-                type="button"
-                data-tap="quiz-next"
-                onClick={() =>
-                  this.setState((c) =>
-                    c.quizIndex % QUIZ.length === QUIZ.length - 1
-                      ? { quizIndex: c.quizIndex, quizPick: c.quizPick, quizDone: true }
-                      : { quizIndex: c.quizIndex + 1, quizPick: null, quizDone: c.quizDone },
-                  )
-                }
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flex: 1,
-                  minHeight: "46px",
-                  border: 0,
-                  borderRadius: "14px",
-                  background: "var(--m-tint)",
-                  color: "#fff",
-                  fontSize: "15px",
-                  fontWeight: 600,
-                  fontFamily: "inherit",
-                  opacity: s.quizPick === null ? 0.5 : 1,
-                  cursor: "pointer",
-                }}
-              >
-                {this.props.t(s.quizIndex % QUIZ.length === QUIZ.length - 1 ? "preview.finish" : "common.next")}
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        {s.studyMode === "practice_test" ? (
-          <div style={{ display: "grid", gap: "12px" }}>
-            {!s.testGraded ? (
-              <div style={{ display: "grid", gap: "12px" }}>
-                {PRACTICE.map((question, index) => {
-                  const unknown = s.practiceUnknown.indexOf(question.id) !== -1;
-                  return (
-                    <div key={question.id} style={{ display: "grid", gap: "10px", padding: "15px", border: "1px solid var(--m-sep)", borderRadius: "16px", background: "var(--m-muted)" }}>
-                      <span style={{ fontSize: "12.5px", fontWeight: 700, letterSpacing: "0.04em", color: "var(--m-second)" }}>
-                        {this.props.t("quiz.questionN", { index: index + 1 })}
-                      </span>
-                      <p style={{ margin: 0, fontSize: "16px", fontWeight: 600, lineHeight: 1.35, color: "var(--m-label)" }}>
-                        {question.prompt}
-                      </p>
-                      <textarea
-                        data-tap="answer"
-                        value={s.practiceAnswers[question.id] || ""}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          this.setState((c) => ({ practiceAnswers: { ...c.practiceAnswers, [question.id]: value } }));
-                        }}
-                        placeholder={this.props.t("preview.answerPlaceholder")}
-                        style={{
-                          width: "100%",
-                          minHeight: "104px",
-                          padding: "12px",
-                          border: 0,
-                          borderRadius: "10px",
-                          background: "var(--m-surface)",
-                          color: "var(--m-label)",
-                          fontSize: "16px",
-                          fontFamily: "inherit",
-                          lineHeight: 1.45,
-                          resize: "none",
-                          outline: "none",
-                          opacity: unknown ? 0.5 : 1,
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          this.setState((c) => ({
-                            practiceUnknown: unknown
-                              ? c.practiceUnknown.filter((id) => id !== question.id)
-                              : c.practiceUnknown.concat(question.id),
-                          }))
-                        }
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "9px",
+                          display: "grid",
+                          alignContent: "center",
+                          justifyItems: "center",
+                          gap: "4.8px",
+                          flex: "0 0 59.2px",
+                          width: "59.2px",
                           padding: 0,
                           border: 0,
                           background: "transparent",
-                          color: "var(--m-label)",
-                          fontSize: "14.5px",
+                          color: "var(--m-second)",
                           fontFamily: "inherit",
                           cursor: "pointer",
                         }}
@@ -2126,1164 +1525,2272 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
                             display: "inline-flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            width: "20px",
-                            height: "20px",
-                            borderRadius: "6px",
-                            border: unknown ? 0 : "1px solid var(--m-sep-strong)",
-                            background: unknown ? "var(--m-tint)" : "transparent",
-                            color: "#fff",
-                            fontSize: "12px",
-                            fontWeight: 700,
+                            width: "40px",
+                            height: "40px",
+                            borderRadius: "999px",
+                            background: "var(--m-tile)",
                           }}
                         >
-                          {unknown ? "✓" : ""}
+                          <Emoji symbol="✏️" size="17.6px" />
                         </span>
-                        <span>{this.props.t("test.dontKnow")}</span>
+                        <span style={{ fontSize: "11.52px", fontWeight: 650 }}>Uredi</span>
                       </button>
-                    </div>
-                  );
-                })}
-                <button
-                  type="button"
-                  data-tap="submit"
-                  onClick={() => this.setState({ testGraded: true })}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minHeight: "48px",
-                    border: 0,
-                    borderRadius: "14px",
-                    background: "var(--m-tint)",
-                    color: "#fff",
-                    fontSize: "16px",
-                    fontWeight: 600,
-                    fontFamily: "inherit",
-                    cursor: "pointer",
-                  }}
-                >
-                  {this.props.t("test.submit")}
-                </button>
-              </div>
-            ) : (
-              <div style={completionShell()}>
-                <div style={{ display: "grid", gap: "8.8px", justifyItems: "center", textAlign: "center" }}>
-                  <div style={{ display: "grid", gap: "8.8px", justifyItems: "center", textAlign: "center" }}>
-                    <p style={{ margin: 0, maxWidth: "38ch", fontSize: "9.9px", lineHeight: 1.2, color: "var(--m-second)", overflowWrap: "anywhere" }}>
-                      {this.props.t("preview.attemptOne")}
-                    </p>
-                  </div>
-                </div>
-                <div style={{ display: "grid", justifyItems: "center", gap: "10px" }}>
-                  <div style={ringStyle(80)}>
-                    {ringInner}
-                    <div style={{ position: "relative", zIndex: 1, display: "grid", gap: "1.9px", justifyItems: "center", textAlign: "center" }}>
-                      <strong style={{ fontSize: "23px", lineHeight: 1, letterSpacing: "-0.05em", color: "var(--m-label)" }}>80%</strong>
-                      <span
+                      <button
+                        type="button"
+                        aria-label="Izbriši"
+                        onClick={() => this.setState({ sheet: "delete", targetId: note.id, swipeId: null, swipeX: 0 })}
                         style={{
-                          maxWidth: "10ch",
-                          fontSize: "9.6px",
-                          fontWeight: 700,
-                          letterSpacing: "0.05em",
-                          lineHeight: 1.2,
-                          textTransform: "uppercase",
-                          color: "var(--m-second)",
+                          display: "grid",
+                          alignContent: "center",
+                          justifyItems: "center",
+                          gap: "4.8px",
+                          flex: "0 0 59.2px",
+                          width: "59.2px",
+                          padding: 0,
+                          border: 0,
+                          background: "transparent",
+                          color: "#ff3b30",
+                          fontFamily: "inherit",
+                          cursor: "pointer",
                         }}
                       >
-                        {this.props.t("study.score")}
-                      </span>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "40px",
+                            height: "40px",
+                            borderRadius: "999px",
+                            background: "rgba(255,59,48,0.12)",
+                          }}
+                        >
+                          <Emoji symbol="🗑️" size="17.6px" />
+                        </span>
+                        <span style={{ fontSize: "11.52px", fontWeight: 650 }}>Izbriši</span>
+                      </button>
                     </div>
                   </div>
-                  <div style={{ display: "grid", gap: "7px", justifyItems: "center", textAlign: "center" }}>
-                    <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--m-second)" }}>
-                      {this.props.t("test.pointsScored")}
-                    </span>
-                    <strong style={{ fontSize: "25px", lineHeight: 1, letterSpacing: "-0.06em", color: "var(--m-label)", whiteSpace: "nowrap" }}>
-                      8 / 10
-                    </strong>
-                  </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "5.8px", width: "100%" }}>
-                  {[
-                    [this.props.t("test.average"), "80%"],
-                    [this.props.t("test.best"), "80%"],
-                    [this.props.t("test.lowest"), "80%"],
-                    [this.props.t("test.attemptsShort"), "1"],
-                  ].map(([label, value]) => (
-                    <div key={label} style={{ display: "grid", gap: "4.8px", minWidth: 0, padding: "7.4px 8.3px", borderRadius: "18px", border: "1px solid var(--m-sep)", background: "var(--m-surface)" }}>
-                      <span style={{ fontSize: "8.6px", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--m-second)" }}>
-                        {label}
-                      </span>
-                      <strong style={{ fontSize: "12.2px", lineHeight: 1.05, letterSpacing: "-0.04em", color: "var(--m-label)" }}>{value}</strong>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "5.8px", width: "100%" }}>
-                  <button
-                    type="button"
-                    data-tap="restart-test"
-                    onClick={() => this.setState({ testGraded: false, practiceAnswers: {}, practiceUnknown: [] })}
-                    style={completionAction()}
-                  >
-                    <span style={{ fontSize: "12.8px" }}>🔄</span>
-                    {this.props.t("study.test.startNew")}
-                  </button>
-                </div>
+                );
+              })}
+            </div>
+
+            {visible.length === 0 ? (
+              <div style={{ display: "grid", justifyItems: "center", gap: "8px", padding: "56px 16px" }}>
+                <Emoji symbol="📝" size="32px" />
+                <p style={{ margin: 0, fontSize: "16.8px", fontWeight: 650 }}>
+                  {s.query ? "Ni ujemajočih zapiskov" : "Ta mapa je prazna"}
+                </p>
+                <p style={{ margin: 0, color: "var(--m-second)", fontSize: "15.2px", textAlign: "center" }}>
+                  {s.query ? "Poskusi krajši iskalni izraz." : "Dodaj zapiske v to mapo ali se vrni na vse."}
+                </p>
               </div>
-            )}
+            ) : null}
           </div>
+        </div>
+
+        <div
+          style={{
+            position: "absolute",
+            inset: "auto 18.4px 30.4px 18.4px",
+            zIndex: 4,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "14.4px",
+          }}
+        >
+          <button
+            type="button"
+            aria-label="Klepet"
+            onClick={() => this.setState({ sheet: "chat" })}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "56.8px",
+              height: "56.8px",
+              flex: "0 0 auto",
+              padding: 0,
+              border: "2px solid var(--m-line)",
+              borderRadius: "999px",
+              background: "var(--m-surface)",
+              color: "var(--m-label)",
+              boxShadow: "var(--m-shadow)",
+              cursor: "pointer",
+            }}
+          >
+            <Msym name="chat_bubble" size="25.6px" fill={false} weight={500} />
+          </button>
+          <button
+            type="button"
+            data-tap="create"
+            onClick={() => this.setState({ sheet: "create" })}
+            style={coralPill({
+              flex: "0 0 auto",
+              minWidth: "198.4px",
+              padding: "0 20.8px",
+              border: "2px solid rgba(0,0,0,0.2)",
+              gap: "9.6px",
+            })}
+          >
+            <Msym name="edit_square" size="22.4px" fill={false} weight={500} />
+            <span style={{ fontSize: "17.92px", fontWeight: 650 }}>Nov zapisek</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  activeTabId(): NoteTab {
+    return this.state.screen === "note" ? "notes" : this.state.tab;
+  }
+
+  /*
+   * Bring the pill that is on into view, the way the design's `tabsRef` does:
+   * centred where there is room, clamped to the ends. Only when the selection
+   * actually changes, so a row the visitor has scrolled by hand stays put.
+   */
+  centreActiveTab() {
+    const el = this.tabsRow;
+    const active = this.activeTabId();
+    if (!el || this.centredTab === active) return;
+    this.centredTab = active;
+    const on = el.querySelector<HTMLElement>(`[data-tab="${active}"]`);
+    if (!on) return;
+    const target = on.offsetLeft - (el.clientWidth - on.offsetWidth) / 2;
+    const left = Math.max(0, Math.min(target, el.scrollWidth - el.clientWidth));
+    if (Math.abs(el.scrollLeft - left) > 2) el.scrollTo({ left, behavior: "smooth" });
+  }
+
+  /* The chip row of note tabs, shared by the note and study screens. */
+  renderTabs(margin: string, padding: string) {
+    const active = this.activeTabId();
+    return (
+      <div
+        ref={(node) => {
+          this.tabsRow = node;
+          if (node) this.centreActiveTab();
+        }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "9.6px",
+          margin,
+          padding,
+          overflowX: "auto",
+          scrollbarWidth: "none",
+          scrollBehavior: "smooth",
+          maskImage: CHIPROW_MASK,
+          WebkitMaskImage: CHIPROW_MASK,
+        }}
+      >
+        {TABS.map((tab) => {
+          const on = active === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              data-tap="tab"
+              data-tab={tab.id}
+              onClick={() => this.selectTab(tab.id)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "7.2px",
+                flex: "0 0 auto",
+                height: "35.2px",
+                padding: "0 13.6px",
+                border: 0,
+                borderRadius: "999px",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                color: "var(--m-label)",
+                background: on ? `color-mix(in oklch, ${tab.tint} 16%, var(--m-surface))` : "var(--m-surface)",
+                boxShadow: on ? `inset 0 0 0 1.5px ${tab.tint}` : "var(--m-shadow)",
+                transition: "background 0.18s ease, transform 0.18s ease",
+              }}
+            >
+              <Msym name={tab.icon} size="18.4px" fill={false} weight={500} style={{ color: tab.tint }} />
+              <span style={{ fontSize: "15.2px", fontWeight: 750, letterSpacing: "-0.025em", whiteSpace: "nowrap" }}>
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  /* The note itself: chrome, tabs, title, body, and the dock beneath. */
+  renderNote() {
+    const s = this.state;
+    const note = this.activeNote();
+    const lines = this.bodyLines();
+    const reading = s.reading || s.readPaused;
+    const dark = this.isDark();
+    const total = lines.reduce((n, line) => n + line.words.length, 0);
+    const elapsed = (() => {
+      const seconds = Math.round((s.readWord / Math.max(1, total)) * 214);
+      return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+    })();
+
+    return (
+      <div style={{ position: "absolute", inset: `${STATUS_H}px 0 0 0`, display: "flex", flexDirection: "column", background: "var(--m-bg)" }}>
+        <div
+          style={{
+            position: "relative",
+            zIndex: 3,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            padding: "8px 18.4px 11.2px",
+          }}
+        >
+          <button type="button" aria-label="Nazaj" data-tap="note-back" onClick={() => this.setState({ screen: "home" })} style={roundBtn(46.4)}>
+            <Msym name="arrow_back" size="24px" fill={false} weight={500} />
+          </button>
+          <Emoji symbol={note?.emoji ?? "📝"} size="24px" />
+          <button type="button" aria-label="Dejanja" onClick={() => this.setState({ sheet: "actions", targetId: note?.id ?? null })} style={roundBtn(46.4)}>
+            <Msym name="more_horiz" size="21.6px" />
+          </button>
+        </div>
+
+        <div data-app-main style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "3.2px 18.4px 112px" }}>
+          {this.renderTabs("1.6px -18.4px 14.4px", "2.4px 18.4px 8px")}
+
+          <h1 style={{ margin: "0 0 12px", fontSize: "26.4px", fontWeight: 800, letterSpacing: "-0.04em", lineHeight: 1.18 }}>
+            {note?.title ?? ""}
+          </h1>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "13.6px", marginBottom: "17.6px" }}>
+            <span
+              style={{
+                flex: "1 1 auto",
+                minWidth: 0,
+                color: "var(--m-second)",
+                fontSize: "14.72px",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {note ? `${note.date} • ${SOURCE_LABELS[note.source]}` : ""}
+            </span>
+          </div>
+
+          <div style={{ marginTop: "25.6px", WebkitUserSelect: "text", userSelect: "text" }}>
+            {lines.map((line, i) => (
+              <div key={i} style={blockStyle(line.kind)}>
+                {line.kind === "li" ? "•  " : null}
+                {line.words.map((word, wi) => (
+                  // The word alone carries the mark; the space after it stays
+                  // outside, so a run of spoken words reads as word-shaped
+                  // chips rather than one band with ragged ends.
+                  <span key={word.index}>
+                    {wi === 0 ? null : " "}
+                    <span
+                      style={readWordStyle(
+                        reading ? (word.index === s.readWord ? "cur" : word.index < s.readWord ? "read" : "") : "",
+                        dark,
+                      )}
+                    >
+                      {word.text}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* The dock: a listen pill that grows into a player, and the way into
+            chat, trading the row's width between them. */}
+        <div style={{ position: "absolute", inset: "auto 18.4px 25.6px 18.4px", zIndex: 4, display: "flex", alignItems: "center", gap: "11.2px" }}>
+          <div
+            style={{
+              position: "relative",
+              flex: "0 0 auto",
+              height: "54.4px",
+              borderRadius: "999px",
+              background: "var(--m-surface)",
+              boxShadow: "0 8px 22px rgba(0,0,0,0.16)",
+              width: reading ? "calc(100% - 65.6px)" : "54.4px",
+              maxWidth: "calc(100% - 65.6px)",
+              transition: "width 0.38s cubic-bezier(0.32,0.72,0,1)",
+            }}
+          >
+            <button
+              type="button"
+              aria-label="Poslušaj"
+              data-tap="listen"
+              onClick={() => this.toggleRead()}
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+                border: 0,
+                borderRadius: "999px",
+                background: "transparent",
+                color: "var(--m-label)",
+                cursor: "pointer",
+                opacity: reading ? 0 : 1,
+                pointerEvents: reading ? "none" : "auto",
+                transition: `opacity 0.2s ease ${reading ? "0s" : "0.1s"}`,
+              }}
+            >
+              <Msym name="headphones" size="24.8px" fill={false} weight={500} />
+            </button>
+
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: "4.8px",
+                padding: "0 6.4px",
+                opacity: reading ? 1 : 0,
+                pointerEvents: reading ? "auto" : "none",
+                transition: `opacity 0.2s ease ${reading ? "0.1s" : "0s"}`,
+              }}
+            >
+              <button
+                type="button"
+                aria-label="Predvajaj branje"
+                onClick={() => this.toggleRead()}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "41.6px",
+                  height: "41.6px",
+                  flex: "0 0 auto",
+                  padding: 0,
+                  border: 0,
+                  borderRadius: "999px",
+                  background: "var(--m-label)",
+                  color: "var(--m-bg)",
+                  cursor: "pointer",
+                }}
+              >
+                <Msym name={s.reading ? "pause" : "play_arrow"} size="21.6px" />
+              </button>
+              <span style={{ display: "block", flex: 1, minWidth: 0, height: "3px", margin: "0 9.6px", borderRadius: "999px", background: "var(--m-field)" }}>
+                <span
+                  style={{
+                    display: "block",
+                    width: `${Math.round((s.readWord / Math.max(1, total)) * 100)}%`,
+                    height: "100%",
+                    borderRadius: "999px",
+                    background: "var(--m-label)",
+                    transition: "width 0.2s linear",
+                  }}
+                />
+              </span>
+              <span style={{ flex: "0 0 auto", color: "var(--m-second)", fontSize: "13.76px", fontWeight: 650, fontVariantNumeric: "tabular-nums" }}>
+                {elapsed}
+              </span>
+              <button
+                type="button"
+                aria-label="Hitrost branja"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: "41.6px",
+                  height: "41.6px",
+                  flex: "0 0 auto",
+                  marginLeft: "8px",
+                  padding: "0 7.2px",
+                  border: 0,
+                  borderRadius: "999px",
+                  background: "var(--m-tile)",
+                  color: "var(--m-label)",
+                  fontFamily: "inherit",
+                  fontSize: "15.04px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                1x
+              </button>
+              <button
+                type="button"
+                aria-label="Zapri branje"
+                onClick={() => this.stopRead()}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "41.6px",
+                  height: "41.6px",
+                  flex: "0 0 auto",
+                  padding: 0,
+                  border: 0,
+                  borderRadius: "999px",
+                  background: "transparent",
+                  color: "var(--m-second)",
+                  cursor: "pointer",
+                }}
+              >
+                <Msym name="close" size="19.2px" />
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            aria-label="Klepetaj s tem zapiskom"
+            onClick={() => this.setState({ sheet: "chat" })}
+            style={{
+              position: "relative",
+              flex: "0 0 auto",
+              marginLeft: "auto",
+              height: "54.4px",
+              padding: 0,
+              border: 0,
+              borderRadius: "999px",
+              cursor: "pointer",
+              overflow: "hidden",
+              fontFamily: "inherit",
+              textAlign: "left",
+              color: "var(--m-second)",
+              width: reading ? "54.4px" : "calc(100% - 65.6px)",
+              background: reading ? "#17171a" : "var(--m-surface)",
+              boxShadow: "0 8px 22px rgba(0,0,0,0.16)",
+              transition: "width 0.38s cubic-bezier(0.32,0.72,0,1), background 0.3s ease",
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                left: "18.4px",
+                right: "54.4px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                fontSize: "16.8px",
+                letterSpacing: "-0.02em",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                opacity: reading ? 0 : 1,
+                transition: "opacity 0.18s ease",
+              }}
+            >
+              Klepetaj s tem zapiskom
+            </span>
+            <span
+              style={{
+                position: "absolute",
+                top: "6.4px",
+                right: "6.4px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "41.6px",
+                height: "41.6px",
+                borderRadius: "999px",
+                background: "#17171a",
+                color: "#fff",
+              }}
+            >
+              <Msym name="mic" size="21.6px" style={{ position: "absolute", opacity: reading ? 0 : 1, transition: "opacity 0.2s ease" }} />
+              <Msym
+                name="chat_bubble"
+                size="21.6px"
+                style={{ position: "absolute", opacity: reading ? 1 : 0, transition: "opacity 0.2s ease" }}
+              />
+            </span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* Each study mode is its own screen, as the design draws it: the same
+     chrome, its own title, and a chat bar along the bottom. */
+  renderSub() {
+    const s = this.state;
+    const study = this.studyData();
+    const done =
+      (s.tab === "flashcards" && s.cardsDone) ||
+      (s.tab === "quiz" && s.quizDone) ||
+      (s.tab === "test" && s.testDone);
+
+    return (
+      <div style={{ position: "absolute", inset: `${STATUS_H}px 0 0 0`, display: "flex", flexDirection: "column", background: "var(--m-bg)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "8px 18.4px 12.8px" }}>
+          <button
+            type="button"
+            aria-label="Nazaj"
+            data-tap="sub-back"
+            onClick={() => this.setState({ screen: "note", tab: "notes" })}
+            style={roundBtn(46.4)}
+          >
+            <Msym name="arrow_back" size="24px" fill={false} weight={500} />
+          </button>
+          <span style={{ flex: 1, minWidth: 0, textAlign: "center", fontSize: "17.92px", fontWeight: 750, letterSpacing: "-0.03em" }}>
+            {SUB_SCREEN_TITLES[s.tab]}
+          </span>
+          <button
+            type="button"
+            aria-label="Dejanja"
+            onClick={() => this.setState({ sheet: "actions", targetId: this.activeNote()?.id ?? null })}
+            style={roundBtn(46.4)}
+          >
+            <Msym name="more_horiz" size="21.6px" />
+          </button>
+        </div>
+
+        {this.renderTabs("0 0 9.6px", "2.4px 18.4px 6.4px")}
+
+        <div data-app-main style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 18.4px 128px" }}>
+          {done ? this.renderResults() : null}
+          {!done && s.tab === "flashcards" ? this.renderCards() : null}
+          {!done && s.tab === "quiz" ? this.renderQuiz() : null}
+          {!done && s.tab === "test" ? this.renderTest() : null}
+          {s.tab === "transcript" ? this.renderTranscript() : null}
+        </div>
+
+        {s.tab === "quiz" && s.quizPick !== null && s.quizPick !== study.quiz[(s.quizNo - 1) % study.quiz.length].correct
+          ? this.renderQuizMiss()
+          : null}
+
+        {/* Only the reading screens carry a chat bar; the design leaves the
+            three study screens to their own controls. */}
+        {s.tab === "transcript" ? (
+        <div
+          style={{
+            position: "absolute",
+            inset: "auto 18.4px 25.6px 18.4px",
+            display: "flex",
+            alignItems: "center",
+            gap: "9.6px",
+            height: "57.6px",
+            padding: "0 9.6px 0 19.2px",
+            borderRadius: "999px",
+            background: "var(--m-field)",
+          }}
+        >
+          <input
+            readOnly
+            placeholder="Klepet s tem zapiskom"
+            onFocus={() => this.setState({ sheet: "chat" })}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              border: 0,
+              background: "transparent",
+              outline: "none",
+              color: "var(--m-label)",
+              fontFamily: "inherit",
+              fontSize: "16.8px",
+              letterSpacing: "-0.02em",
+            }}
+          />
+          <button
+            type="button"
+            aria-label="Narekuj"
+            onClick={() => this.setState({ sheet: "chat" })}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "43.2px",
+              height: "43.2px",
+              border: 0,
+              borderRadius: "999px",
+              background: "var(--m-surface)",
+              color: "var(--m-label)",
+              cursor: "pointer",
+            }}
+          >
+            <Msym name="mic" size="21.6px" />
+          </button>
+        </div>
         ) : null}
       </div>
     );
   }
 
-  renderChatTab() {
+  renderCards() {
     const s = this.state;
-    const messages = s.messages.length ? s.messages : this.studyData().chat;
-    return (
-      <div
-        style={{
-          display: "grid",
-          gridTemplateRows: "minmax(0, 1fr) auto",
-          height: "380px",
-          border: "1px solid var(--m-sep)",
-          borderRadius: "18px",
-          background: "var(--m-surface)",
-          overflow: "hidden",
-          minWidth: 0,
-        }}
-      >
-        <div style={{ display: "grid", alignContent: "start", gap: "12px", padding: "17.6px 17.6px 12px", overflowY: "auto" }}>
-          {messages.map((message, i) => (
-            <div
-              key={i}
-              style={{
-                alignSelf: message.role === "user" ? "flex-end" : "flex-start",
-                justifySelf: message.role === "user" ? "end" : "start",
-                maxWidth: "84%",
-                padding: "12px 14px",
-                borderRadius: message.role === "user" ? "18px 18px 6px 18px" : "18px 18px 18px 6px",
-                background: message.role === "user" ? "var(--m-tint)" : "var(--m-muted)",
-                color: message.role === "user" ? "#fff" : "var(--m-label)",
-                fontSize: "15px",
-                lineHeight: 1.45,
-              }}
-            >
-              {message.text}
-            </div>
-          ))}
-        </div>
-        <div style={{ display: "grid", gap: "8px", padding: "12px 17.6px 15px", borderTop: "1px solid var(--m-sep)" }}>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: "8px" }}>
-            <textarea
-              value={s.chatInput}
-              onChange={(e) => this.setState({ chatInput: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  this.sendChat();
-                }
-              }}
-              placeholder={this.props.t("preview.askAboutLecture")}
-              rows={1}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                minHeight: "44px",
-                maxHeight: "88px",
-                padding: "11px 14px",
-                border: 0,
-                borderRadius: "14px",
-                background: "var(--m-muted)",
-                color: "var(--m-label)",
-                fontSize: "16px",
-                fontFamily: "inherit",
-                lineHeight: 1.35,
-                resize: "none",
-                outline: "none",
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => this.sendChat()}
-              aria-label={this.props.t("chat.send")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: "44px",
-                height: "44px",
-                flexShrink: 0,
-                border: 0,
-                borderRadius: "999px",
-                background: "var(--m-tint)",
-                color: "#fff",
-                fontSize: "16px",
-                fontFamily: "inherit",
-                cursor: "pointer",
-              }}
-            >
-              ➤
-            </button>
-          </div>
-          <p style={{ margin: 0, fontSize: "12.5px", lineHeight: 1.4, color: "var(--m-second)" }}>
-            {this.props.t("preview.answersStayWithLecture")}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  renderTranscriptTab() {
-    return (
-      <div style={{ display: "grid", gap: "16px", padding: "17.6px", border: "1px solid var(--m-sep)", borderRadius: "18px", background: "var(--m-surface)", minWidth: 0 }}>
-        {this.studyData().transcript.map((line) => (
-          <div key={line.time} style={{ display: "grid", gap: "4px" }}>
-            <p style={{ margin: 0, fontSize: "12.8px", fontWeight: 600, color: "var(--m-second)" }}>{line.time}</p>
-            <p style={{ margin: 0, fontSize: "15.7px", lineHeight: 1.9, color: "var(--m-label)", whiteSpace: "pre-wrap" }}>{line.text}</p>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  renderNote() {
-    const s = this.state;
-    const note = this.activeNote();
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px", minWidth: 0 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div style={{ minWidth: 0 }}>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "32px",
-                fontWeight: 700,
-                letterSpacing: "-0.04em",
-                lineHeight: 1.1,
-                color: "var(--m-label)",
-                overflowWrap: "anywhere",
-              }}
-            >
-              {note?.title ?? ""}
-            </h1>
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "9.6px", marginTop: "6.4px" }}>
-              <span style={{ fontSize: "14.7px", lineHeight: 1.4, color: "var(--m-second)" }}>{note?.date ?? ""}</span>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: "inline-flex", width: "100%", marginBottom: "2.4px", padding: "2px", borderRadius: "8px", background: "var(--m-muted)" }}>
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              data-tap="tab"
-              onClick={() => {
-                if (tab.id !== "notes" && this.state.reading) this.toggleRead();
-                this.setState({ tab: tab.id });
-              }}
-              aria-label={this.props.t(tab.labelKey)}
-              title={this.props.t(tab.labelKey)}
-              style={this.segment(s.tab === tab.id)}
-            >
-              {tab.icon}
-            </button>
-          ))}
-        </div>
-
-        {s.tab === "notes" ? this.renderNotesTab() : null}
-        {s.tab === "study" ? this.renderStudyTab() : null}
-        {s.tab === "chat" ? this.renderChatTab() : null}
-        {s.tab === "transcript" ? this.renderTranscriptTab() : null}
-      </div>
-    );
-  }
-
-  renderSupport() {
-    const s = this.state;
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "18px", paddingTop: "14.4px" }}>
-        <h1 style={{ margin: 0, fontSize: "34px", fontWeight: 700, letterSpacing: "-0.045em", lineHeight: 1.02, color: "var(--m-label)" }}>
-          {this.props.t("help.title")}
-        </h1>
-        {HELP_SECTIONS.map((section, sectionIndex) => (
-          <section key={section.titleKey} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            <h2 style={{ margin: 0, fontSize: "19px", fontWeight: 650, letterSpacing: "-0.03em", color: "var(--m-label)" }}>
-              {this.props.t(section.titleKey)}
-            </h2>
-            <div style={{ display: "grid", gap: "9.8px" }}>
-              {section.items.map((item, itemIndex) => {
-                const key = `${sectionIndex}-${itemIndex}`;
-                const isOpen = s.openHelp === key;
-                return (
-                  <button
-                    key={item.titleKey}
-                    type="button"
-                    onClick={() => this.setState({ openHelp: isOpen ? null : key })}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      padding: "17px 18px",
-                      border: "1px solid var(--m-sep)",
-                      borderRadius: "18px",
-                      background: "var(--m-surface)",
-                      boxShadow: "var(--m-shadow)",
-                      fontFamily: "inherit",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <span style={{ display: "flex", alignItems: "center", gap: "12px", width: "100%" }}>
-                      <span style={{ flex: 1, minWidth: 0, fontSize: "15px", fontWeight: 500, color: "var(--m-label)", textAlign: "left" }}>
-                        {this.props.t(PREVIEW_HELP_TITLE_KEYS[item.titleKey])}
-                      </span>
-                      <span
-                        style={{
-                          color: "var(--m-third)",
-                          fontSize: "17px",
-                          transform: isOpen ? "rotate(90deg)" : "none",
-                          transition: "transform 180ms ease",
-                        }}
-                      >
-                        ›
-                      </span>
-                    </span>
-                    {isOpen ? (
-                      <span style={{ display: "block", marginTop: "10px", fontSize: "14px", lineHeight: 1.55, color: "var(--m-second)", textAlign: "left" }}>
-                        {this.props.t(item.bodyKey)}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
-    );
-  }
-
-  renderSettings() {
-    const s = this.state;
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "18px", paddingTop: "14.4px" }}>
-        <h1 style={{ margin: 0, fontSize: "34px", fontWeight: 700, letterSpacing: "-0.045em", lineHeight: 1.02, color: "var(--m-label)" }}>
-          {this.props.t("nav.settings")}
-        </h1>
-
-        <section style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <h2 style={{ margin: 0, fontSize: "19px", fontWeight: 650, letterSpacing: "-0.03em", color: "var(--m-label)" }}>{this.props.t("settings.theme.heading")}</h2>
-          <div style={{ display: "grid", gap: "10px" }}>
-            {THEME_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => this.setState({ theme: option.value })}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  width: "100%",
-                  minHeight: "66px",
-                  padding: "12px 16px",
-                  border: s.theme === option.value ? "1px solid var(--m-tint)" : "1px solid var(--m-sep)",
-                  borderRadius: "22px",
-                  background: s.theme === option.value ? "var(--m-tint-soft)" : "var(--m-card-grad)",
-                  boxShadow: "var(--m-shadow)",
-                  fontFamily: "inherit",
-                  cursor: "pointer",
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "40px",
-                    height: "40px",
-                    flexShrink: 0,
-                    borderRadius: "50%",
-                    background: "var(--m-muted)",
-                    fontSize: "17px",
-                  }}
-                >
-                  {option.icon}
-                </span>
-                <span style={{ flex: 1, textAlign: "left", fontSize: "16px", fontWeight: 600, color: "var(--m-label)" }}>{this.props.t(option.labelKey)}</span>
-                <span style={{ color: "var(--m-tint)", fontSize: "16px", fontWeight: 700, opacity: s.theme === option.value ? 1 : 0 }}>✓</span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <h2 style={{ margin: 0, fontSize: "19px", fontWeight: 650, letterSpacing: "-0.03em", color: "var(--m-label)" }}>{this.props.t("settings.subscription.heading")}</h2>
-          <div style={{ display: "grid", gap: "12px", padding: "18px 20px", border: "1px solid var(--m-sep)", borderRadius: "26px", background: "var(--m-card-grad)", boxShadow: "var(--m-shadow)" }}>
-            <div style={{ minWidth: 0 }}>
-              <p style={{ margin: "0 0 6px", fontSize: "11.5px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--m-second)" }}>
-                {this.props.t("settings.plan.eyebrow")}
-              </p>
-              <p style={{ margin: 0, fontSize: "16px", fontWeight: 600, color: "var(--m-label)" }}>{this.props.t("preview.planName")}</p>
-              <p style={{ margin: "4px 0 0", fontSize: "13.6px", color: "var(--m-second)" }}>{this.props.t("preview.planUntil")}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => this.setState({ screen: "settings" })}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
-                minHeight: "44px",
-                border: 0,
-                borderRadius: "12px",
-                background: "var(--m-muted)",
-                color: "var(--m-tint)",
-                fontSize: "15px",
-                fontWeight: 600,
-                fontFamily: "inherit",
-                cursor: "pointer",
-              }}
-            >
-              {this.props.t("preview.managePlan")}
-            </button>
-          </div>
-        </section>
-
-        <section style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <h2 style={{ margin: 0, fontSize: "19px", fontWeight: 650, letterSpacing: "-0.03em", color: "var(--m-label)" }}>{this.props.t("settings.account.heading")}</h2>
-          <div style={{ display: "grid", gap: "12px", padding: "18px 20px", border: "1px solid var(--m-sep)", borderRadius: "26px", background: "var(--m-card-grad)", boxShadow: "var(--m-shadow)" }}>
-            <div style={{ minWidth: 0 }}>
-              <p style={{ margin: "0 0 6px", fontSize: "11.5px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--m-second)" }}>
-                {this.props.t("settings.account.signedIn")}
-              </p>
-              <p style={{ margin: 0, fontSize: "16px", fontWeight: 600, color: "var(--m-label)", overflowWrap: "anywhere" }}>
-                student@memoai.eu
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => this.setState({ screen: "home" })}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                minHeight: "44px",
-                border: 0,
-                borderRadius: "12px",
-                background: "var(--m-red-soft)",
-                color: "var(--m-red)",
-                fontSize: "15px",
-                fontWeight: 600,
-                fontFamily: "inherit",
-                cursor: "pointer",
-              }}
-            >
-              {this.props.t("settings.signOut")}
-            </button>
-          </div>
-          <div style={{ display: "grid", gap: "10px" }}>
-            {[
-              { icon: "🎟️", title: this.props.t("settings.rows.redeem") },
-              { icon: "🔒", title: "Zasebnost" },
-              { icon: "📤", title: "Deli" },
-              { icon: "💡", title: "Predlagaj funkcijo" },
-            ].map((link) => (
-              <button
-                key={link.title}
-                type="button"
-                onClick={() => this.setState({ screen: "support", openHelp: null })}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  width: "100%",
-                  minHeight: "62px",
-                  padding: "12px 16px",
-                  border: "1px solid var(--m-sep)",
-                  borderRadius: "22px",
-                  background: "var(--m-card-grad)",
-                  boxShadow: "var(--m-shadow)",
-                  fontFamily: "inherit",
-                  cursor: "pointer",
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "40px",
-                    height: "40px",
-                    flexShrink: 0,
-                    borderRadius: "50%",
-                    background: "var(--m-muted)",
-                    fontSize: "17px",
-                  }}
-                >
-                  {link.icon}
-                </span>
-                <span style={{ flex: 1, textAlign: "left", fontSize: "16px", fontWeight: 600, color: "var(--m-label)" }}>{link.title}</span>
-                <span style={{ color: "var(--m-third)", fontSize: "17px" }}>›</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      </div>
-    );
-  }
-
-  /* ── Overlays ─────────────────────────────────────────────── */
-
-  renderFolderSheet() {
-    const s = this.state;
-    const folderSheet = this.sheet("folders", () => this.setState({ folderSheetOpen: false }), {
-      gridTemplateRows: "auto auto minmax(0, 1fr)",
-      gap: "14px",
+    const cards = this.studyData().cards;
+    const queue = this.cardQueue();
+    const card = cards[queue[s.cardPos] ?? 0];
+    const next = queue[s.cardPos + 1];
+    const dragX = s.cardDragging ? s.cardDragX : 0;
+    const progress = Math.min(1, Math.abs(dragX) / CARD_DRAG_TRIGGER);
+    const dragRotation = Math.max(-8, Math.min(8, (dragX / CARD_DRAG_TRIGGER) * 8));
+    /*
+     * The verdict only exists once the card has actually travelled, exactly as
+     * `flashcardDragDirection` does in the app. Deriving it from the sign alone
+     * would call a resting card "easy" — `-0 >= 0` is true in JavaScript — so
+     * the first frame of a leftward drag painted the green tick before flipping
+     * to the red cross, and the overlay's colour transition stretched that into
+     * a visible flash.
+     */
+    const dragVerdict = Math.abs(dragX) > 4 ? (dragX < 0 ? "again" : "easy") : null;
+    const missed = Object.values(s.cardAnswers).filter((a) => a === "again").length;
+    const known = Object.values(s.cardAnswers).filter((a) => a === "easy").length;
+    const face: CSSProperties = {
+      position: "absolute",
+      inset: 0,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "11.2px",
+      minHeight: "416px",
+      padding: "32px 27.2px",
+      border: 0,
+      borderRadius: "26px",
+      cursor: "pointer",
+      fontFamily: "inherit",
+      color: "var(--m-label)",
+      backfaceVisibility: "hidden",
+      WebkitBackfaceVisibility: "hidden",
+      background: "var(--m-surface)",
+    };
+    const navBtn = (enabled: boolean): CSSProperties => ({
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "52.8px",
+      height: "52.8px",
+      flex: "0 0 auto",
+      padding: 0,
+      border: 0,
+      borderRadius: "999px",
+      background: "var(--m-tile)",
+      color: "var(--m-label)",
+      cursor: enabled ? "pointer" : "default",
+      opacity: enabled ? 1 : 0.4,
     });
-    const allFolders: Array<{ id: string | null; name: string; icon: string; noteIds: string[] | null }> = [
-      { id: null, name: this.props.t("folders.allNotes"), icon: "🗂️", noteIds: null },
-      ...s.folders,
-    ];
+    const verdict = (again: boolean): CSSProperties => ({
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "7.2px",
+      minWidth: "86.4px",
+      height: "52.8px",
+      flex: "0 0 auto",
+      padding: "0 17.6px",
+      border: 0,
+      borderRadius: "999px",
+      cursor: "pointer",
+      fontFamily: "inherit",
+      fontSize: "16.8px",
+      fontWeight: 750,
+      background: again ? "rgba(244,95,90,0.14)" : "rgba(22,163,74,0.12)",
+      color: again ? "#f45f5a" : "#16a34a",
+    });
+
     return (
-      <div style={{ position: "absolute", inset: 0, zIndex: 115 }}>
-        <button type="button" onClick={() => this.setState({ folderSheetOpen: false })} aria-label={this.props.t("folders.closeList")} style={SHEET_BACKDROP} />
-        <section style={folderSheet.style} onPointerDown={folderSheet.onPointerDown}>
-          {SHEET_HANDLE}
-          {sheetTitleRow(this.props.t("folders.title"), () => this.setState({ folderSheetOpen: false }), this.props.t("folders.closeList"))}
-          <div style={{ display: "grid", alignContent: "start", gap: "12.8px", minHeight: 0, overflowY: "auto" }}>
-            {allFolders.map((folder) => {
-              const count = folder.noteIds ? s.notes.filter((note) => folder.noteIds!.indexOf(note.id) !== -1).length : s.notes.length;
-              const active = s.folderId === folder.id;
+      <div>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "16px" }}>
+          <span style={{ fontSize: "22.4px", fontWeight: 800, letterSpacing: "-0.03em" }}>Kartica {s.cardPos + 1}</span>
+          <span style={{ color: "var(--m-second)", fontSize: "20px", fontWeight: 700, letterSpacing: "-0.02em" }}>
+            {queue.length - s.cardPos - 1} ostalo
+          </span>
+        </div>
+        <div style={{ position: "relative", height: "16.8px", margin: "12.8px 0 0", borderRadius: "999px", background: "var(--m-field)" }}>
+          <div
+            style={{
+              width: `${Math.round((s.cardPos / Math.max(1, queue.length)) * 100)}%`,
+              height: "100%",
+              borderRadius: "999px",
+              background: "var(--m-label)",
+              transition: "width 0.32s cubic-bezier(0.22,1,0.36,1)",
+            }}
+          />
+        </div>
+
+        <div style={{ position: "relative", marginTop: "67.2px" }}>
+          {next !== undefined ? (
+            <div
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "11.2px",
+                minHeight: "416px",
+                padding: "32px 27.2px",
+                borderRadius: "26px",
+                background: "var(--m-surface)",
+                boxShadow: "var(--m-shadow)",
+                pointerEvents: "none",
+                transform: `translateY(${(14 - Math.min(14, Math.abs(dragX) * 0.12)).toFixed(1)}px) scale(${(0.955 + Math.min(0.045, Math.abs(dragX) * 0.0004)).toFixed(3)})`,
+                transition: s.cardDragging || s.cardExit ? "none" : "transform 0.26s cubic-bezier(0.22,1,0.36,1)",
+              }}
+            >
+              <span style={{ fontSize: "20.8px", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.32, textAlign: "center", opacity: 0.5 }}>
+                {cards[next].front}
+              </span>
+            </div>
+          ) : null}
+
+          <div style={{ position: "relative", zIndex: 2, perspective: "1400px" }}>
+            <div
+              data-tap="card"
+              onPointerDown={this.onCardDown}
+              onPointerMove={this.onCardMove}
+              onPointerUp={this.onCardUp}
+              onPointerCancel={this.onCardCancel}
+              onClick={() => this.flipCard()}
+              style={{
+                position: "relative",
+                touchAction: "pan-y",
+                cursor: "grab",
+                transform: `translate3d(${dragX.toFixed(1)}px, ${(-Math.abs(dragX) * 0.04).toFixed(1)}px, 0) rotate(${dragRotation.toFixed(2)}deg)`,
+                transition: s.cardDragging || s.cardExit ? "none" : "transform 0.26s cubic-bezier(0.22,1,0.36,1)",
+              }}
+            >
+              <div
+                style={{
+                  position: "relative",
+                  minHeight: "416px",
+                  transformStyle: "preserve-3d",
+                  transform: s.cardFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+                  transition: s.cardExit ? "none" : "transform 0.36s cubic-bezier(0.22,1,0.36,1)",
+                }}
+              >
+                <div style={{ ...face, boxShadow: "var(--m-shadow)", transform: "translateZ(1px)" }}>
+                  <span style={{ fontSize: "20.8px", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.32, textAlign: "center" }}>
+                    {card.front}
+                  </span>
+                  <span style={{ color: "var(--m-second)", fontSize: "19.2px", letterSpacing: "-0.02em" }}>Tapni za obrat</span>
+                </div>
+                <div
+                  style={{
+                    ...face,
+                    transform: "rotateY(180deg) translateZ(1px)",
+                    boxShadow: "var(--m-shadow), inset 0 0 0 1px var(--m-line)",
+                  }}
+                >
+                  <span style={{ fontSize: "19.52px", fontWeight: 700, letterSpacing: "-0.025em", lineHeight: 1.42, textAlign: "center" }}>
+                    {card.back}
+                  </span>
+                  <span style={{ color: "var(--m-second)", fontSize: "19.2px", letterSpacing: "-0.02em" }}>Tapni za obrat</span>
+                </div>
+              </div>
+              <div
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  borderRadius: "24px",
+                  pointerEvents: "none",
+                  transition: "opacity 0.12s linear, background-color 0.12s ease, color 0.12s ease",
+                  opacity: s.cardDragging && dragVerdict ? progress : 0,
+                  background:
+                    dragVerdict === "again"
+                      ? "var(--m-drag-again-bg)"
+                      : dragVerdict === "easy"
+                        ? "var(--m-drag-easy-bg)"
+                        : "transparent",
+                  color:
+                    dragVerdict === "again"
+                      ? "var(--m-drag-again-ink)"
+                      : dragVerdict === "easy"
+                        ? "var(--m-drag-easy-ink)"
+                        : "transparent",
+                }}
+              >
+                <Emoji symbol={dragVerdict === "again" ? "❌" : "✅"} size="36px" />
+              </div>
+            </div>
+
+            {s.cardExit ? (
+              <div
+                key={s.exitToken}
+                aria-hidden="true"
+                style={{
+                  ["--ex" as string]: `${s.exitX.toFixed(2)}%`,
+                  ["--ey" as string]: `${s.exitY.toFixed(2)}%`,
+                  ["--er" as string]: `${s.exitRot.toFixed(2)}deg`,
+                  position: "absolute",
+                  inset: 0,
+                  zIndex: 3,
+                  display: "grid",
+                  placeItems: "center",
+                  minHeight: "416px",
+                  borderRadius: "26px",
+                  pointerEvents: "none",
+                  animation: `memo-card-exit-${s.cardExit === "again" ? "left" : "right"} 0.185s cubic-bezier(0.22,0.61,0.36,1) forwards`,
+                  background: s.cardExit === "again" ? "var(--m-exit-again-bg)" : "var(--m-exit-easy-bg)",
+                  boxShadow:
+                    s.cardExit === "again"
+                      ? "inset 0 0 0 1.5px var(--m-exit-again-line)"
+                      : "inset 0 0 0 1.5px var(--m-exit-easy-line)",
+                }}
+              >
+                <Emoji symbol={s.cardExit === "again" ? "❌" : "✅"} size="36px" />
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "9.6px", marginTop: "25.6px" }}>
+          <button
+            type="button"
+            aria-label="Prejšnja kartica"
+            onClick={() => this.setState((c) => ({ cardPos: Math.max(0, c.cardPos - 1), cardFlipped: false }))}
+            style={navBtn(s.cardPos > 0)}
+          >
+            <Msym name="arrow_back" size="22.4px" fill={false} weight={500} />
+          </button>
+          <button type="button" aria-label="Še ponovim" onClick={() => this.swipeCard("again")} style={verdict(true)}>
+            <Msym name="close" size="22.4px" />
+            <span>{missed}</span>
+          </button>
+          <button type="button" aria-label="Znam" onClick={() => this.swipeCard("easy")} style={verdict(false)}>
+            <span>{known}</span>
+            <Msym name="check" size="22.4px" />
+          </button>
+          <button
+            type="button"
+            aria-label="Naslednja kartica"
+            onClick={() => this.setState((c) => ({ cardPos: Math.min(queue.length - 1, c.cardPos + 1), cardFlipped: false }))}
+            style={navBtn(s.cardPos < queue.length - 1)}
+          >
+            <Msym name="arrow_forward" size="22.4px" fill={false} weight={500} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  renderQuiz() {
+    const s = this.state;
+    const list = this.studyData().quiz;
+    const q = list[(s.quizNo - 1) % list.length];
+    const revealed = s.quizPick !== null;
+
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "16px" }}>
+          <span style={{ fontSize: "20px", fontWeight: 800, letterSpacing: "-0.03em" }}>Vprašanje {s.quizNo}</span>
+          <span style={{ color: "var(--m-second)", fontSize: "15.68px", fontWeight: 650 }}>
+            {s.quizNo} / {list.length}
+          </span>
+        </div>
+        <div style={{ height: "12px", margin: "11.2px 0 22.4px", borderRadius: "999px", background: "var(--m-field)" }}>
+          <div
+            style={{
+              width: `${Math.round((s.quizNo / list.length) * 100)}%`,
+              height: "100%",
+              borderRadius: "999px",
+              background: "var(--m-label)",
+              transition: "width 0.32s cubic-bezier(0.22,1,0.36,1)",
+            }}
+          />
+        </div>
+        <div style={{ animation: `memo-q-in-${s.quizNo % 2 ? "a" : "b"} 0.3s cubic-bezier(0.22,1,0.36,1) both` }}>
+          <p style={{ margin: "0 0 20.8px", fontSize: "21.6px", fontWeight: 750, letterSpacing: "-0.03em", lineHeight: 1.3 }}>
+            {q.question}
+          </p>
+          <div style={{ display: "grid", gap: "12px" }}>
+            {q.options.map((label, index) => {
+              const correct = index === q.correct;
+              const picked = s.quizPick === index;
+              const state = !revealed ? "idle" : correct ? "correct" : picked ? "wrong" : "idle";
               return (
                 <button
-                  key={folder.id ?? "all"}
+                  key={label}
                   type="button"
-                  onClick={() => this.setState({ folderId: folder.id, folderSheetOpen: false })}
+                  data-tap="quiz-opt"
+                  onClick={() => this.pickQuiz(index)}
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "13.6px",
+                    gap: "12.8px",
                     width: "100%",
-                    minHeight: "79.2px",
-                    padding: "14.4px 16px",
-                    border: active ? "1px solid var(--m-tint)" : "1px solid var(--m-sep)",
-                    borderRadius: "22px",
-                    background: active ? "var(--m-tint-soft)" : "var(--m-muted)",
-                    color: "var(--m-label)",
-                    textAlign: "left",
-                    fontSize: "14.7px",
-                    fontWeight: 600,
+                    minHeight: "67.2px",
+                    padding: "0 19.2px",
+                    borderRadius: "18px",
+                    cursor: revealed ? "default" : "pointer",
                     fontFamily: "inherit",
-                    cursor: "pointer",
+                    fontSize: "17.28px",
+                    fontWeight: 650,
+                    letterSpacing: "-0.02em",
+                    transition: "background 0.18s ease, color 0.18s ease, border-color 0.18s ease",
+                    ...(state === "correct"
+                      ? { border: "1.5px solid #34c759", background: "rgba(52,199,89,0.14)", color: "#2aa34a" }
+                      : state === "wrong"
+                        ? { border: "1.5px solid #ff3b30", background: "rgba(255,59,48,0.14)", color: "#ff3b30" }
+                        : { border: 0, background: "var(--m-surface)", color: "var(--m-label)", boxShadow: "var(--m-shadow)" }),
                   }}
                 >
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: "13.6px", minWidth: 0, flex: 1 }}>
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: "44px",
-                        height: "44px",
-                        flexShrink: 0,
-                        borderRadius: "999px",
-                        background: "var(--m-surface)",
-                        fontSize: "17px",
-                      }}
-                    >
-                      {folder.icon}
-                    </span>
-                    <span style={{ display: "grid", gap: "1.9px", minWidth: 0, textAlign: "left" }}>
-                      <span style={{ fontSize: "14.7px", fontWeight: 600, color: "var(--m-label)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {folder.name}
-                      </span>
-                      <span style={{ fontSize: "12.8px", color: "var(--m-second)" }}>{lectureSummary(count)}</span>
-                    </span>
-                  </span>
-                  <span style={{ display: "inline-flex", flexShrink: 0, color: "var(--m-tint)", fontSize: "17.6px", fontWeight: 700, opacity: active ? 1 : 0 }}>
-                    ✓
-                  </span>
+                  <span style={{ flex: 1, textAlign: "left" }}>{label}</span>
+                  {state !== "idle" ? <Msym name={state === "correct" ? "check_circle" : "cancel"} size="22.4px" /> : null}
                 </button>
               );
             })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* A miss stops the quiz at the design's sheet rather than moving on. */
+  renderQuizMiss() {
+    const list = this.studyData().quiz;
+    const q = list[(this.state.quizNo - 1) % list.length];
+    const button = (primary: boolean): CSSProperties => ({
+      height: "54.4px",
+      border: 0,
+      borderRadius: "18px",
+      background: primary ? "var(--m-label)" : "var(--m-tile)",
+      color: primary ? "var(--m-bg)" : "var(--m-label)",
+      cursor: "pointer",
+      fontFamily: "inherit",
+      fontSize: "17.28px",
+      fontWeight: 700,
+    });
+    return (
+      <div
+        style={{
+          position: "absolute",
+          inset: "auto 0 0 0",
+          zIndex: 6,
+          padding: "19.2px 18.4px 32px",
+          borderRadius: "30px 30px 0 0",
+          background: "var(--m-surface)",
+          boxShadow: "var(--m-shadow-lg)",
+          animation: "memo-sheet-up 0.24s cubic-bezier(0.22,1,0.36,1)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12.8px" }}>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "41.6px",
+              height: "41.6px",
+              borderRadius: "999px",
+              background: "rgba(255,59,48,0.16)",
+              color: "#ff3b30",
+            }}
+          >
+            <Msym name="cancel" size="21.6px" />
+          </span>
+          <span style={{ fontSize: "19.2px", fontWeight: 800, letterSpacing: "-0.03em", color: "#ff3b30" }}>Ups, ni pravilno.</span>
+        </div>
+        <p style={{ margin: "16px 0 19.2px", fontSize: "17.28px", fontWeight: 600 }}>
+          Pravilen odgovor: {q.options[q.correct]}
+        </p>
+        <div style={{ display: "grid", gap: "11.2px" }}>
+          <button type="button" onClick={() => this.setState({ sheet: "chat" }, () => this.nextQuiz())} style={button(false)}>
+            Preglej zakaj
+          </button>
+          <button type="button" onClick={() => this.nextQuiz()} style={button(true)}>
+            Razumem
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  renderTest() {
+    const s = this.state;
+    const list = this.studyData().practice;
+    const question = list[(s.testNo - 1) % list.length];
+    const last = s.testNo >= list.length;
+
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "16px" }}>
+          <span style={{ fontSize: "20px", fontWeight: 800, letterSpacing: "-0.03em" }}>Vprašanje {s.testNo}</span>
+          <span style={{ color: "var(--m-second)", fontSize: "15.68px", fontWeight: 650 }}>
+            {s.testNo} / {list.length}
+          </span>
+        </div>
+        <div style={{ height: "12px", margin: "11.2px 0 22.4px", borderRadius: "999px", background: "var(--m-field)" }}>
+          <div
+            style={{
+              width: `${Math.round((s.testNo / list.length) * 100)}%`,
+              height: "100%",
+              borderRadius: "999px",
+              background: "var(--m-label)",
+              transition: "width 0.32s cubic-bezier(0.22,1,0.36,1)",
+            }}
+          />
+        </div>
+        <p style={{ margin: "0 0 19.2px", fontSize: "20.8px", fontWeight: 750, letterSpacing: "-0.03em", lineHeight: 1.32 }}>
+          {question.prompt}
+        </p>
+        <textarea
+          data-tap="answer"
+          value={s.testAnswers[s.testNo] ?? ""}
+          onChange={(e) => {
+            const value = e.target.value;
+            this.setState((c) => ({ testAnswers: { ...c.testAnswers, [c.testNo]: value } }));
+          }}
+          placeholder="Napiši svoj odgovor…"
+          onFocus={() => this.setState({ testFocused: true })}
+          onBlur={() => this.setState({ testFocused: false })}
+          style={{
+            width: "100%",
+            height: "208px",
+            padding: "17.6px 19.2px",
+            border: 0,
+            borderRadius: "22px",
+            background: "var(--m-surface)",
+            color: "var(--m-label)",
+            boxShadow: s.testFocused
+              ? "var(--m-shadow), inset 0 0 0 1.5px var(--m-focus-ring)"
+              : "var(--m-shadow)",
+            outline: "none",
+            fontFamily: "inherit",
+            fontSize: "16.8px",
+            lineHeight: 1.5,
+            resize: "none",
+          }}
+        />
+        <div style={{ display: "flex", gap: "11.2px", marginTop: "16px" }}>
+          <button
+            type="button"
+            onClick={() => this.setState((c) => ({ testNo: Math.max(1, c.testNo - 1) }))}
+            style={{
+              flex: "1 1 0",
+              height: "54.4px",
+              border: 0,
+              borderRadius: "999px",
+              fontFamily: "inherit",
+              fontSize: "16.8px",
+              fontWeight: 700,
+              background: "var(--m-tile)",
+              color: s.testNo > 1 ? "var(--m-label)" : "var(--m-second)",
+              cursor: s.testNo > 1 ? "pointer" : "default",
+              opacity: s.testNo > 1 ? 1 : 0.5,
+            }}
+          >
+            Nazaj
+          </button>
+          <button
+            type="button"
+            data-tap="test-next"
+            onClick={() => this.nextTest()}
+            style={{
+              flex: "1 1 0",
+              height: "54.4px",
+              border: 0,
+              borderRadius: "999px",
+              background: "var(--m-label)",
+              color: "var(--m-bg)",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: "17.28px",
+              fontWeight: 750,
+            }}
+          >
+            {last ? "Oddaj test" : "Naprej"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* The transcript screen is the player and the text under it, as the design
+     pairs them — the same screen the audio tab shows. */
+  renderTranscript() {
+    const round = (size: number): CSSProperties => ({
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: `${size}px`,
+      height: `${size}px`,
+      border: 0,
+      borderRadius: "999px",
+      background: "var(--m-tile)",
+      color: "var(--m-second)",
+      cursor: "pointer",
+    });
+
+    return (
+      <>
+        <div style={{ padding: "21.6px 22.4px 24px", borderRadius: "26px", background: "var(--m-surface)", boxShadow: "var(--m-shadow)" }}>
+          <div style={{ position: "relative", height: "6.4px", borderRadius: "999px", background: "var(--m-field)" }}>
+            <div style={{ width: "18%", height: "100%", borderRadius: "999px", background: "var(--m-label)" }} />
+            <span
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "18%",
+                width: "13.6px",
+                height: "13.6px",
+                margin: "-6.8px 0 0 -6.8px",
+                borderRadius: "999px",
+                background: "var(--m-label)",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+              }}
+            />
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginTop: "12.8px",
+              color: "var(--m-second)",
+              fontSize: "14.4px",
+              fontWeight: 650,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            <span>12:48</span>
+            <span>1 h 12 min</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "21.6px", marginTop: "20px" }}>
+            <button type="button" aria-label="Nazaj 10 s" style={round(48)}>
+              <Msym name="replay_10" size="24px" fill={false} weight={500} />
+            </button>
             <button
               type="button"
+              aria-label="Predvajaj"
+              style={{ ...round(67.2), background: "var(--m-label)", color: "var(--m-bg)" }}
+            >
+              <Msym name="play_arrow" size="32px" />
+            </button>
+            <button type="button" aria-label="Naprej 10 s" style={round(48)}>
+              <Msym name="forward_10" size="24px" fill={false} weight={500} />
+            </button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginTop: "17.6px" }}>
+            <button
+              type="button"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6.4px",
+                height: "38.4px",
+                padding: "0 15.2px",
+                border: 0,
+                borderRadius: "999px",
+                background: "var(--m-tile)",
+                color: "var(--m-label)",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                fontSize: "15.68px",
+                fontWeight: 700,
+              }}
+            >
+              <Msym name="speed" size="18.4px" fill={false} weight={500} />
+              1x
+            </button>
+          </div>
+        </div>
+
+        <div style={{ paddingTop: "19.2px" }}>
+          {this.studyData().transcript.map((line) => (
+            <div key={line.time} style={blockStyle("li")}>
+              {`•  ${line.time} — ${line.text}`}
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  }
+
+  /*
+   * The results screen. Its wording, its thresholds and which buttons appear
+   * are the design's: a pass is 70%, a test always reports 100% and offers no
+   * repeat, and only a miss offers one.
+   */
+  renderResults() {
+    const s = this.state;
+    const study = this.studyData();
+    const cardsTotal = this.cardQueue().length;
+    const cardsKnown = cardsTotal - Object.values(s.cardAnswers).filter((a) => a === "again").length;
+
+    const pct =
+      s.tab === "quiz"
+        ? completionPct(s.quizCorrect, study.quiz.length)
+        : s.tab === "flashcards"
+          ? completionPct(cardsKnown, cardsTotal)
+          : 100;
+    const good = pct >= 70;
+    const tint = good ? "#2aa34a" : "#f45f5a";
+    const isTest = s.tab === "test";
+
+    const restartCards = () => this.setState({ cardPos: 0, cardFlipped: false, cardAnswers: {}, cardsDone: false });
+    const restartQuiz = () => this.setState({ quizNo: 1, quizPick: null, quizCorrect: 0, quizDone: false });
+    const restartTest = () => this.setState({ testNo: 1, testAnswers: {}, testDone: false });
+
+    const hasPrimary = !isTest && !good;
+    const primaryLabel = s.tab === "quiz" ? "Ponovi zgrešena vprašanja" : "Ponovi zgrešene kartice";
+    const secondaryLabel = s.tab === "quiz" ? "Nov kviz" : isTest ? "Začni nov test" : "Začni komplet znova";
+    const onRestart = s.tab === "quiz" ? restartQuiz : isTest ? restartTest : restartCards;
+
+    const action = (primary: boolean): CSSProperties => ({
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "8px",
+      height: "57.6px",
+      padding: "0 22.4px",
+      border: 0,
+      borderRadius: "999px",
+      background: primary ? "var(--m-label)" : "var(--m-tile)",
+      color: primary ? "var(--m-bg)" : "var(--m-label)",
+      cursor: "pointer",
+      fontFamily: "inherit",
+      fontSize: primary ? "17.28px" : "16.8px",
+      fontWeight: primary ? 750 : 700,
+    });
+    const line: CSSProperties = { color: "var(--m-second)", fontSize: "17.6px", fontWeight: 650 };
+    const score: CSSProperties = { color: tint, fontWeight: 800 };
+
+    return (
+      <div style={{ display: "grid", justifyItems: "center", padding: "35.2px 0 0", animation: "memo-pop-in 0.32s cubic-bezier(0.22,1,0.36,1) both" }}>
+        <div style={{ position: "relative", display: "grid", placeItems: "center", width: "192px", height: "192px" }}>
+          <div style={{ display: "grid", placeItems: "center", width: "150.4px", height: "150.4px", borderRadius: "999px", background: "var(--m-tile)" }}>
+            <Emoji symbol={isTest ? "📨" : good ? "🎉" : "💪"} size="70.4px" />
+          </div>
+          <span
+            style={{
+              position: "absolute",
+              top: "3.2px",
+              right: 0,
+              padding: "7.2px 12.8px",
+              borderRadius: "14px",
+              transform: "rotate(-8deg)",
+              fontSize: "24px",
+              fontWeight: 850,
+              letterSpacing: "-0.03em",
+              background: `color-mix(in srgb, ${tint} 16%, var(--m-surface))`,
+              color: tint,
+              animation: "memo-prize-pop 0.5s cubic-bezier(0.22,1,0.36,1) both 0.12s",
+            }}
+          >
+            {isTest ? "100 %" : `${pct} %`}
+          </span>
+        </div>
+
+        <span style={{ marginTop: "22.4px", fontSize: "28px", fontWeight: 800, letterSpacing: "-0.04em", textAlign: "center" }}>
+          {isTest ? "Test oddan." : good ? "Odlično opravljeno!" : "Poskusimo še enkrat."}
+        </span>
+        <span style={{ ...line, marginTop: "11.2px" }}>
+          <span style={score}>{isTest ? "100 %" : `${pct} %`}</span> {isTest ? "oddano" : "pravilno"}
+        </span>
+        <span style={{ ...line, marginTop: "4px" }}>
+          opravljeno v <span style={score}>01:06</span>
+        </span>
+
+        <div style={{ display: "grid", gap: "11.2px", width: "100%", marginTop: "41.6px" }}>
+          {hasPrimary ? (
+            <button type="button" onClick={onRestart} style={action(true)}>
+              <Msym name="replay" size="19.2px" fill={false} weight={500} />
+              <span style={{ letterSpacing: "-0.025em" }}>{primaryLabel}</span>
+            </button>
+          ) : null}
+          <button type="button" onClick={onRestart} style={action(false)}>
+            <Msym name="refresh" size="19.2px" fill={false} weight={500} />
+            <span style={{ letterSpacing: "-0.025em" }}>{secondaryLabel}</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* The capture screen each create option opens. */
+  renderCapture() {
+    const s = this.state;
+    const spec = CAPTURE[s.captureMode];
+    const isRecord = s.captureMode === "record";
+    const isFile = s.captureMode === "upload" || s.captureMode === "file";
+
+    return (
+      <div style={{ position: "absolute", inset: `${STATUS_H}px 0 0 0`, display: "flex", flexDirection: "column", background: "var(--m-bg)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "8px 18.4px 11.2px" }}>
+          <span style={{ flex: 1, fontSize: "17.28px", fontWeight: 750, letterSpacing: "-0.03em" }}>{spec.title}</span>
+          <button type="button" aria-label="Zapri" onClick={() => this.setState({ screen: "home" })} style={roundBtn(46.4)}>
+            <Msym name="close" size="23.2px" fill={false} weight={500} />
+          </button>
+        </div>
+
+        <div data-app-main style={{ flex: 1, display: "flex", flexDirection: "column", gap: "17.6px", padding: "16px 18.4px 32px" }}>
+          {isRecord ? (
+            <div style={{ display: "grid", justifyItems: "center", gap: "22.4px", padding: "56px 0 0" }}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "144px",
+                  height: "144px",
+                  borderRadius: "999px",
+                  background: "rgba(244,95,90,0.14)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "102.4px",
+                    height: "102.4px",
+                    borderRadius: "999px",
+                    background: "linear-gradient(135deg, #ff6d68, #f45f5a)",
+                    color: "#fff",
+                  }}
+                >
+                  <Msym name="mic" size="41.6px" />
+                </div>
+              </div>
+              <span style={{ fontSize: "32px", fontWeight: 750, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>0:00</span>
+              <span style={{ color: "var(--m-second)", fontSize: "16px" }}>Snemanje poteka – zapisek nastane, ko ustaviš.</span>
+            </div>
+          ) : null}
+
+          {/* The demo already has a file in hand, so the picker opens on it —
+              the same box, with the chosen file in place of the invitation. */}
+          {isFile ? (
+            <div
+              style={{
+                display: "grid",
+                justifyItems: "center",
+                gap: "9.6px",
+                padding: "48px 24px",
+                border: "2px dashed var(--m-line)",
+                borderRadius: "24px",
+                background: "var(--m-surface)",
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "67.2px",
+                  height: "67.2px",
+                  borderRadius: "999px",
+                  background: "var(--m-tile)",
+                }}
+              >
+                <Emoji symbol={spec.emoji} size="28.8px" />
+              </span>
+              <span style={{ fontSize: "17.28px", fontWeight: 700, letterSpacing: "-0.025em", textAlign: "center" }}>
+                {spec.pickedName}
+              </span>
+              <span style={{ color: "var(--m-second)", fontSize: "15.2px", textAlign: "center" }}>{spec.pickedMeta}</span>
+              <button
+                type="button"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6.4px",
+                  marginTop: "3.2px",
+                  height: "38.4px",
+                  padding: "0 15.2px",
+                  border: 0,
+                  borderRadius: "999px",
+                  background: "var(--m-tile)",
+                  color: "var(--m-label)",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  fontSize: "15.68px",
+                  fontWeight: 700,
+                }}
+              >
+                <Msym name="cloud_upload" size="18.4px" fill={false} weight={500} />
+                Izberi drugo
+              </button>
+            </div>
+          ) : null}
+
+          {s.captureMode === "link" ? (
+            <textarea
+              value={s.captureText}
+              onChange={(e) => this.setState({ captureText: e.target.value })}
+              placeholder={spec.placeholder}
+              style={{
+                width: "100%",
+                height: "224px",
+                padding: "17.6px 19.2px",
+                border: 0,
+                borderRadius: "22px",
+                background: "var(--m-surface)",
+                color: "var(--m-label)",
+                boxShadow: "var(--m-shadow)",
+                outline: "none",
+                fontFamily: "inherit",
+                fontSize: "16.8px",
+                lineHeight: 1.5,
+                resize: "none",
+              }}
+            />
+          ) : null}
+
+          <div style={{ marginTop: "auto", display: "grid", gap: "11.2px" }}>
+            <button type="button" data-tap="capture-cta" onClick={() => this.addNote()} style={coralPill({ width: "100%" })}>
+              {spec.cta}
+            </button>
+            <button type="button" onClick={() => this.setState({ screen: "home" })} style={ghostPill(48)}>
+              Prekliči
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Sheets ───────────────────────────────────────────────── */
+
+  /*
+   * The design's dismissal: the sheet drops out of frame and dims slightly
+   * before it is unmounted, rather than vanishing. `swapSheet` is the same
+   * move with another sheet arriving in its place.
+   */
+  closeSheet = () => {
+    if (!this.state.sheet || this.state.sheetClosing) return;
+    this.setState({ sheetClosing: true });
+    if (this.closeTimer) window.clearTimeout(this.closeTimer);
+    this.closeTimer = window.setTimeout(() => {
+      this.setState({ sheet: null, sheetClosing: false, dragKey: null, dragOffset: 0 });
+    }, 260);
+  };
+
+  swapSheet = (next: Sheet) => {
+    this.setState({ sheetClosing: true });
+    if (this.closeTimer) window.clearTimeout(this.closeTimer);
+    this.closeTimer = window.setTimeout(() => {
+      this.setState({ sheet: next, sheetClosing: false, dragKey: null, dragOffset: 0 });
+    }, 240);
+  };
+
+  renderScrim() {
+    return (
+      <button
+        type="button"
+        aria-label="Zapri"
+        onClick={this.closeSheet}
+        style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 5,
+          border: 0,
+          padding: 0,
+          cursor: "pointer",
+          background: "var(--m-scrim)",
+          backdropFilter: "blur(6px)",
+          WebkitBackdropFilter: "blur(6px)",
+          opacity: this.state.sheetClosing ? 0 : 1,
+          transition: "opacity 0.26s ease",
+          animation: this.state.sheetClosing ? undefined : "memo-fade-in 0.2s ease-out",
+        }}
+      />
+    );
+  }
+
+  renderCreateSheet() {
+    const sheet = this.sheetProps("create", this.closeSheet);
+    return (
+      <div onPointerDown={sheet.onPointerDown} style={sheet.style}>
+        {GRAB}
+        {sheetTitle("Nov zapisek", this.closeSheet)}
+        <div style={{ display: "grid", gap: "12.8px" }}>
+          {CREATE_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              data-tap="create-option"
               onClick={() =>
-                this.setState({ folderSheetOpen: false, folderModal: "new", folderModalId: null, folderNameValue: "", folderPickIds: [] })
+                this.setState({
+                  sheet: null,
+                  screen: "capture",
+                  captureMode: option.id,
+                  captureText: CAPTURE[option.id].pickedText ?? "",
+                })
               }
               style={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "space-between",
-                gap: "13.6px",
+                gap: "16.8px",
                 width: "100%",
-                minHeight: "51.6px",
-                padding: "14.4px 14.4px",
-                border: "1px solid var(--m-sep)",
-                borderRadius: "14px",
+                height: "73.6px",
+                padding: "0 19.2px",
+                border: 0,
+                borderRadius: "20px",
                 background: "var(--m-surface)",
                 color: "var(--m-label)",
-                fontSize: "14.7px",
-                fontWeight: 600,
+                boxShadow: "var(--m-shadow)",
+                cursor: "pointer",
                 fontFamily: "inherit",
                 textAlign: "left",
-                cursor: "pointer",
               }}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "12px", background: "var(--m-muted)", fontSize: "14px" }}>
-                ➕
-              </span>
-              <span style={{ flex: 1 }}>{this.props.t("folders.new")}</span>
-              <span style={{ color: "var(--m-third)", fontSize: "17px" }}>›</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => this.setState({ folderSheetOpen: false, folderModal: "edit" })}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "13.6px",
-                width: "100%",
-                minHeight: "51.6px",
-                padding: "14.4px 14.4px",
-                border: "1px solid var(--m-sep)",
-                borderRadius: "14px",
-                background: "var(--m-surface)",
-                color: "var(--m-label)",
-                fontSize: "14.7px",
-                fontWeight: 600,
-                fontFamily: "inherit",
-                textAlign: "left",
-                cursor: "pointer",
-              }}
-            >
-              <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "12px", background: "var(--m-muted)", fontSize: "14px" }}>
-                ✏️
-              </span>
-              <span style={{ flex: 1 }}>{this.props.t("folders.edit")}</span>
-              <span style={{ color: "var(--m-third)", fontSize: "17px" }}>›</span>
-            </button>
-          </div>
-        </section>
-      </div>
-    );
-  }
-
-  renderRenameSheet() {
-    const s = this.state;
-    const close = () => this.setState({ renameId: null, renameValue: "" });
-    const renameSheet = this.sheet("rename", close, {
-      top: "auto",
-      height: "460px",
-      gridTemplateRows: "auto auto minmax(0, 1fr)",
-      gap: "16px",
-      padding: "13.6px 16px 20px",
-    });
-    return (
-      <div style={{ position: "absolute", inset: 0, zIndex: 125 }}>
-        <button type="button" onClick={close} aria-label={this.props.t("common.close")} style={SHEET_BACKDROP} />
-        <section style={renameSheet.style} onPointerDown={renameSheet.onPointerDown}>
-          {SHEET_HANDLE}
-          {sheetTitleRow(this.props.t("library.rename.title"), close, this.props.t("common.close"))}
-          <div style={{ display: "grid", gap: "16px", alignContent: "start" }}>
-            <p style={{ margin: 0, fontSize: "14.5px", lineHeight: 1.45, color: "var(--m-second)" }}>
-              {this.props.t("preview.renameHint")}
-            </p>
-            <label style={{ display: "grid", gap: "7px" }}>
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--m-second)" }}>{this.props.t("preview.noteTitleField")}</span>
-              <input
-                value={s.renameValue}
-                onChange={(e) => this.setState({ renameValue: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") this.saveRename();
+              <span
+                style={{
+                  display: "inline-flex",
+                  width: "48px",
+                  height: "48px",
+                  flex: "0 0 auto",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "999px",
+                  background: "var(--m-tile)",
                 }}
-                placeholder={this.props.t("note.untitled")}
-                style={MODAL_INPUT}
-              />
-            </label>
-            <button type="button" onClick={() => this.saveRename()} style={{ ...MODAL_PRIMARY, opacity: s.renameValue.trim() ? 1 : 0.5 }}>
-              {this.props.t("library.rename.save")}
+              >
+                <Emoji symbol={option.emoji} size="21.6px" />
+              </span>
+              <span style={{ fontSize: "17.92px", fontWeight: 700, letterSpacing: "-0.025em" }}>{option.label}</span>
             </button>
-            <button type="button" onClick={close} style={MODAL_SECONDARY}>
-              {this.props.t("common.cancel")}
-            </button>
-          </div>
-        </section>
+          ))}
+        </div>
       </div>
     );
   }
 
-  renderDeleteSheet() {
+  renderFoldersSheet() {
     const s = this.state;
-    const close = () => this.setState({ deleteId: null });
-    const deleteSheet = this.sheet("delete", close, {
-      top: "auto",
-      height: "460px",
-      gridTemplateRows: "auto auto minmax(0, 1fr)",
-      gap: "16px",
-      padding: "13.6px 16px 20px",
-    });
-    const deleteTitle = s.notes.find((note) => note.id === s.deleteId)?.title || "";
+    const dark = this.isDark();
+    const sheet = this.sheetProps("folders", this.closeSheet);
+    const options: Array<{ id: string | null; name: string; icon: string }> = [
+      { id: null, name: "Vsi zapiski", icon: "🗂️" },
+      ...s.folders.map((f) => ({ id: f.id, name: f.name, icon: f.icon })),
+    ];
     return (
-      <div style={{ position: "absolute", inset: 0, zIndex: 125 }}>
-        <button type="button" onClick={close} aria-label={this.props.t("common.close")} style={SHEET_BACKDROP} />
-        <section style={deleteSheet.style} onPointerDown={deleteSheet.onPointerDown}>
-          {SHEET_HANDLE}
-          {sheetTitleRow(this.props.t("library.delete.title"), close, this.props.t("common.close"))}
-          <div style={{ display: "grid", gap: "16px", alignContent: "start" }}>
-            <p style={{ margin: 0, fontSize: "14.5px", lineHeight: 1.5, color: "var(--m-second)" }}>
-              {this.props.t("preview.deleteBefore")}
-              <span style={{ color: "var(--m-label)", fontWeight: 600 }}>{deleteTitle}</span>
-              {this.props.t("preview.deleteAfter")}
-            </p>
-            <button
-              type="button"
-              onClick={() => this.setState((c) => ({ notes: c.notes.filter((note) => note.id !== c.deleteId), deleteId: null }))}
-              style={{ ...MODAL_PRIMARY, background: "var(--m-red)" }}
-            >
-              {this.props.t("library.delete.title")}
-            </button>
-            <button type="button" onClick={close} style={MODAL_SECONDARY}>
-              {this.props.t("common.cancel")}
-            </button>
-          </div>
-        </section>
+      <div onPointerDown={sheet.onPointerDown} style={sheet.style}>
+        {GRAB}
+        {sheetTitle("Mape", this.closeSheet, 16)}
+        <div style={SURFACE_CARD}>
+          {options.map((folder, i) => (
+            <div key={folder.id ?? "all"} style={{ display: "flex", alignItems: "center", borderTop: `1px solid ${divider(i === 0, dark)}` }}>
+              <button
+                type="button"
+                onClick={() => this.setState({ folderId: folder.id, sheet: null })}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14.4px",
+                  flex: 1,
+                  minWidth: 0,
+                  height: "64px",
+                  padding: "0 9.6px 0 19.2px",
+                  border: 0,
+                  background: "transparent",
+                  color: "var(--m-label)",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  textAlign: "left",
+                }}
+              >
+                <Emoji symbol={folder.icon} size="19.2px" />
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontSize: "17.28px",
+                    fontWeight: 650,
+                    letterSpacing: "-0.025em",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {folder.name}
+                </span>
+                {s.folderId === folder.id ? <Msym name="check" size="21.6px" fill={false} weight={500} /> : null}
+              </button>
+              {folder.id ? (
+                <button
+                  type="button"
+                  aria-label="Možnosti mape"
+                  onClick={() =>
+                    this.setState((c) => ({
+                      folders: c.folders.filter((f) => f.id !== folder.id),
+                      folderId: c.folderId === folder.id ? null : c.folderId,
+                    }))
+                  }
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "48px",
+                    height: "64px",
+                    flex: "0 0 auto",
+                    padding: 0,
+                    border: 0,
+                    background: "transparent",
+                    color: "var(--m-second)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Msym name="more_horiz" size="24px" fill={false} weight={500} />
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", marginTop: "22.4px" }}>
+          <button
+            type="button"
+            onClick={() => {
+              this.setState({ newFolderName: "" });
+              this.swapSheet("newFolder");
+            }}
+            style={coralPill({
+              minWidth: "200px",
+              height: "57.6px",
+              padding: "0 32px",
+              fontSize: "18.4px",
+              letterSpacing: "-0.02em",
+              boxShadow: "0 12px 26px rgba(244,95,90,0.28)",
+            })}
+          >
+            Nova mapa
+          </button>
+        </div>
       </div>
     );
   }
 
   renderNewFolderSheet() {
     const s = this.state;
-    const close = () => this.setState({ folderModal: null, folderModalId: null });
-    const newFolderSheet = this.sheet("newFolder", () => this.setState({ folderModal: null }), {
-      gridTemplateRows: "auto auto auto minmax(0, 1fr) auto auto",
-      gap: "12px",
+    const sheet = this.sheetProps("newFolder", this.closeSheet);
+    const create = () => {
+      const name = s.newFolderName.trim();
+      if (!name) return;
+      this.setState((c) => ({
+        folders: c.folders.concat({ id: `f${Date.now()}`, name, icon: "📁", noteIds: [] }),
+        newFolderName: "",
+      }));
+      this.swapSheet("folders");
+    };
+    return (
+      <div onPointerDown={sheet.onPointerDown} style={sheet.style}>
+        {GRAB}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "20.8px" }}>
+          <span style={{ fontSize: "20px", fontWeight: 750, letterSpacing: "-0.03em" }}>Nova mapa</span>
+          <button
+            type="button"
+            onClick={create}
+            style={{
+              position: "absolute",
+              right: 0,
+              height: "40px",
+              padding: "0 16px",
+              border: 0,
+              borderRadius: "999px",
+              background: "transparent",
+              color: "var(--m-label)",
+              fontFamily: "inherit",
+              fontSize: "16.32px",
+              fontWeight: 700,
+              opacity: s.newFolderName.trim() ? 1 : 0.4,
+              cursor: "pointer",
+            }}
+          >
+            Končano
+          </button>
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "22.4px" }}>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "96px",
+              height: "96px",
+              borderRadius: "999px",
+              background: "var(--m-tile)",
+            }}
+          >
+            <Emoji symbol="📁" size="41.6px" />
+          </span>
+        </div>
+        <input
+          value={s.newFolderName}
+          onChange={(e) => this.setState({ newFolderName: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") create();
+          }}
+          placeholder="Ime"
+          maxLength={32}
+          style={{
+            width: "100%",
+            height: "57.6px",
+            padding: "0 19.2px",
+            border: 0,
+            borderRadius: "999px",
+            background: "var(--m-field)",
+            color: "var(--m-label)",
+            outline: "none",
+            fontFamily: "inherit",
+            fontSize: "17.28px",
+            fontWeight: 600,
+          }}
+        />
+        <p style={{ margin: "14.4px 0 0", textAlign: "center", color: "var(--m-second)", fontSize: "15.2px" }}>
+          Zapiske lahko kadar koli premakneš v to mapo.
+        </p>
+      </div>
+    );
+  }
+
+  renderActionsSheet() {
+    const s = this.state;
+    const sheet = this.sheetProps("actions", this.closeSheet);
+    const note = s.notes.find((n) => n.id === s.targetId);
+    const row = (danger: boolean): CSSProperties => ({
+      display: "flex",
+      alignItems: "center",
+      gap: "14.4px",
+      height: "62.4px",
+      padding: "0 19.2px",
+      border: 0,
+      borderRadius: "20px",
+      background: "var(--m-surface)",
+      color: danger ? "#ff3b30" : "var(--m-label)",
+      boxShadow: "var(--m-shadow)",
+      cursor: "pointer",
+      fontFamily: "inherit",
+      fontSize: "17.28px",
+      fontWeight: 650,
     });
     return (
-      <div style={{ position: "absolute", inset: 0, zIndex: 126 }}>
-        <button type="button" onClick={close} aria-label={this.props.t("common.close")} style={SHEET_BACKDROP} />
-        <section style={newFolderSheet.style} onPointerDown={newFolderSheet.onPointerDown}>
-          {SHEET_HANDLE}
-          {sheetTitleRow(
-            this.props.t(s.folderModalId ? "folders.editOne" : "folders.new"),
-            close,
-            this.props.t("common.close"),
-          )}
-          <label style={{ display: "grid", gap: "7px" }}>
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--m-second)" }}>{this.props.t("folders.name")}</span>
-            <input
-              value={s.folderNameValue}
-              onChange={(e) => this.setState({ folderNameValue: e.target.value })}
-              placeholder="Biologija, Matematika, Zgodovina..."
-              style={MODAL_INPUT}
-            />
-          </label>
-          <div style={{ display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", gap: "8px", minHeight: 0 }}>
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--m-second)" }}>{this.props.t("folders.addLectures")}</span>
-            <div
-              style={{
-                display: "grid",
-                alignContent: "start",
-                gap: "8px",
-                minHeight: 0,
-                overflowY: "auto",
-                padding: "8px",
-                border: "1px solid var(--m-sep)",
-                borderRadius: "16px",
-                background: "var(--m-muted)",
-              }}
-            >
-              {s.notes.map((note) => {
-                const picked = s.folderPickIds.indexOf(note.id) !== -1;
-                return (
-                  <button
-                    key={note.id}
-                    type="button"
-                    onClick={() =>
-                      this.setState((c) => ({
-                        folderPickIds: picked ? c.folderPickIds.filter((id) => id !== note.id) : c.folderPickIds.concat(note.id),
-                      }))
-                    }
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                      width: "100%",
-                      padding: "10px 12px",
-                      border: "1px solid var(--m-sep)",
-                      borderRadius: "12px",
-                      background: picked ? "var(--m-tint-soft)" : "var(--m-surface)",
-                      fontFamily: "inherit",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: "20px",
-                        height: "20px",
-                        flexShrink: 0,
-                        borderRadius: "6px",
-                        border: picked ? 0 : "1px solid var(--m-sep-strong)",
-                        background: picked ? "var(--m-tint)" : "transparent",
-                        color: "#fff",
-                        fontSize: "12px",
-                        fontWeight: 700,
-                      }}
-                    >
-                      ✓
-                    </span>
-                    <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left", fontSize: "14.5px", color: "var(--m-label)" }}>
-                      {note.title}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+      <div onPointerDown={sheet.onPointerDown} style={sheet.style}>
+        {GRAB}
+        <p style={{ margin: "0 0 14.4px", textAlign: "center", color: "var(--m-second)", fontSize: "15.68px" }}>{note?.title ?? ""}</p>
+        <div style={{ display: "grid", gap: "11.2px" }}>
           <button
             type="button"
             onClick={() => {
-              const name = s.folderNameValue.trim();
-              if (!name) return;
-              this.setState((c) => ({
-                folders: c.folders.concat({ id: `f${Date.now()}`, name, icon: "📁", noteIds: c.folderPickIds.slice() }),
-                folderModal: null,
-                folderNameValue: "",
-                folderPickIds: [],
-              }));
+              this.setState({ renameValue: note?.title ?? "" });
+              this.swapSheet("rename");
             }}
-            style={{ ...MODAL_PRIMARY, opacity: s.folderNameValue.trim() ? 1 : 0.5 }}
+            style={row(false)}
           >
-            {s.folderModalId ? this.props.t("folders.save") : this.props.t("folders.createOne")}
+            <Msym name="edit" size="22.4px" />
+            Preimenuj
           </button>
-          <button type="button" onClick={close} style={MODAL_SECONDARY}>
-            {this.props.t("common.cancel")}
+          <button type="button" onClick={() => this.swapSheet("delete")} style={row(true)}>
+            <Msym name="delete" size="22.4px" />
+            Izbriši
           </button>
-        </section>
+          <button type="button" onClick={this.closeSheet} style={{ ...ghostPill(56), borderRadius: "20px" }}>
+            Prekliči
+          </button>
+        </div>
       </div>
     );
   }
 
-  renderEditFoldersSheet() {
+  renderRenameSheet() {
     const s = this.state;
-    const close = () => this.setState({ folderModal: null, folderModalId: null });
-    const editFoldersSheet = this.sheet("editFolders", () => this.setState({ folderModal: null }), {
-      gridTemplateRows: "auto auto minmax(0, 1fr) auto",
-      gap: "12px",
-    });
+    const sheet = this.sheetProps("rename", this.closeSheet);
     return (
-      <div style={{ position: "absolute", inset: 0, zIndex: 126 }}>
-        <button type="button" onClick={close} aria-label={this.props.t("common.close")} style={SHEET_BACKDROP} />
-        <section style={editFoldersSheet.style} onPointerDown={editFoldersSheet.onPointerDown}>
-          {SHEET_HANDLE}
-          {sheetTitleRow(this.props.t("folders.edit"), close, this.props.t("common.close"))}
-          <div style={{ display: "grid", alignContent: "start", gap: "10px", minHeight: 0, overflowY: "auto" }}>
-            {s.folders.map((folder) => (
-              <div key={folder.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", border: "1px solid var(--m-sep)", borderRadius: "18px", background: "var(--m-surface)" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", flexShrink: 0, borderRadius: "12px", background: "var(--m-muted)", fontSize: "15px" }}>
-                  {folder.icon}
-                </span>
-                <input
-                  value={folder.name}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    this.setState((c) => ({
-                      folders: c.folders.map((item) => (item.id === folder.id ? { ...item, name: value } : item)),
-                    }));
-                  }}
+      <div onPointerDown={sheet.onPointerDown} style={sheet.style}>
+        {GRAB}
+        <span style={{ display: "block", marginBottom: "14.4px", textAlign: "center", fontSize: "20px", fontWeight: 750, letterSpacing: "-0.03em" }}>
+          Preimenuj zapisek
+        </span>
+        <input
+          value={s.renameValue}
+          onChange={(e) => this.setState({ renameValue: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") this.saveRename();
+          }}
+          placeholder="Naslov zapiska"
+          style={{
+            width: "100%",
+            height: "54.4px",
+            padding: "0 17.6px",
+            border: 0,
+            borderRadius: "18px",
+            background: "var(--m-surface)",
+            color: "var(--m-label)",
+            boxShadow: "var(--m-shadow)",
+            outline: "none",
+            fontFamily: "inherit",
+            fontSize: "17.28px",
+          }}
+        />
+        <div style={{ display: "grid", gap: "11.2px", marginTop: "16px" }}>
+          <button
+            type="button"
+            onClick={() => this.saveRename()}
+            style={coralPill({ width: "100%", height: "54.4px", boxShadow: "none", fontSize: "17.28px" })}
+          >
+            Shrani naslov
+          </button>
+          <button type="button" onClick={this.closeSheet} style={ghostPill(49.6)}>
+            Prekliči
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  renderDeleteSheet() {
+    const s = this.state;
+    const sheet = this.sheetProps("delete", this.closeSheet);
+    const note = s.notes.find((n) => n.id === s.targetId);
+    return (
+      <div onPointerDown={sheet.onPointerDown} style={sheet.style}>
+        {GRAB}
+        <span style={{ display: "block", marginBottom: "8px", textAlign: "center", fontSize: "20px", fontWeight: 750, letterSpacing: "-0.03em" }}>
+          Izbriši zapisek
+        </span>
+        <p style={{ margin: "0 0 17.6px", textAlign: "center", color: "var(--m-second)", fontSize: "16px", lineHeight: 1.4 }}>
+          »{note?.title ?? ""}« bo trajno izbrisan. Tega ni mogoče razveljaviti.
+        </p>
+        <div style={{ display: "grid", gap: "11.2px" }}>
+          <button
+            type="button"
+            onClick={() =>
+              this.setState((c) => ({ notes: c.notes.filter((n) => n.id !== c.targetId), sheet: null, targetId: null }))
+            }
+            style={{
+              height: "54.4px",
+              border: 0,
+              borderRadius: "999px",
+              background: "#ff3b30",
+              color: "#fff",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: "17.28px",
+              fontWeight: 700,
+            }}
+          >
+            Izbriši zapisek
+          </button>
+          <button type="button" onClick={this.closeSheet} style={ghostPill(49.6)}>
+            Prekliči
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* Settings is a full-height sheet, as the design lays it out. */
+  renderSettingsSheet() {
+    const s = this.state;
+    const dark = this.isDark();
+    const sheet = this.fullSheetProps("settings", this.closeSheet, false);
+    const heading: CSSProperties = { margin: "24px 0 11.2px", fontSize: "20px", fontWeight: 750, letterSpacing: "-0.03em" };
+    const eyebrow: CSSProperties = {
+      margin: 0,
+      color: "var(--m-second)",
+      fontSize: "11.52px",
+      fontWeight: 700,
+      letterSpacing: "0.16em",
+      textTransform: "uppercase",
+    };
+    const accountItems = [
+      { id: "redeem", emoji: "🎟️", label: "Unovči kodo" },
+      { id: "privacy", emoji: "🔒", label: "Zasebnost" },
+      { id: "share", emoji: "📤", label: "Deli" },
+      { id: "feature", emoji: "💡", label: "Predlagaj funkcijo" },
+    ];
+
+    return (
+      <div onPointerDown={sheet.onPointerDown} style={sheet.style}>
+        {GRAB_WIDE}
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "14.4px 18.4px 0" }}>
+          <button type="button" aria-label="Zapri" onClick={this.closeSheet} style={roundBtn(46.4)}>
+            <Msym name="close" size="23.2px" fill={false} weight={500} />
+          </button>
+        </div>
+        <h1 style={{ margin: "5.6px 18.4px 0", fontSize: "28px", fontWeight: 800, letterSpacing: "-0.04em" }}>Nastavitve</h1>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 18.4px 40px" }}>
+          <h2 style={{ ...heading, marginTop: 0 }}>Tema</h2>
+          <div style={{ display: "flex", gap: "6.4px", padding: "5.6px", borderRadius: "999px", background: "var(--m-field)" }}>
+            {THEME_OPTIONS.map((option) => {
+              const on = s.theme === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => this.setState({ theme: option.value })}
                   style={{
                     flex: 1,
-                    minWidth: 0,
-                    minHeight: "40px",
-                    padding: "6px 10px",
+                    height: "44.8px",
                     border: 0,
-                    borderRadius: "10px",
-                    background: "var(--m-muted)",
-                    color: "var(--m-label)",
-                    fontSize: "15px",
-                    fontFamily: "inherit",
-                    outline: "none",
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    this.setState((c) => ({
-                      folders: c.folders.filter((item) => item.id !== folder.id),
-                      folderId: c.folderId === folder.id ? null : c.folderId,
-                    }))
-                  }
-                  aria-label={this.props.t("folders.delete")}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "40px",
-                    height: "40px",
-                    flexShrink: 0,
-                    border: "1px solid var(--m-red)",
                     borderRadius: "999px",
-                    background: "var(--m-red-soft)",
-                    color: "var(--m-red)",
-                    fontSize: "15px",
-                    fontFamily: "inherit",
                     cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontSize: "16px",
+                    fontWeight: 700,
+                    letterSpacing: "-0.02em",
+                    background: on ? "var(--m-surface)" : "transparent",
+                    color: on ? "var(--m-label)" : "var(--m-second)",
+                    boxShadow: on ? "var(--m-shadow)" : "none",
+                    transform: on ? "scale(1)" : "scale(0.97)",
+                    transition: "background 0.24s cubic-bezier(0.22,1,0.36,1), color 0.2s ease, transform 0.16s cubic-bezier(0.22,1,0.36,1)",
                   }}
                 >
-                  🗑️
+                  {option.label}
                 </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
-          <button type="button" onClick={close} style={MODAL_PRIMARY}>
-            {this.props.t("common.done")}
-          </button>
-        </section>
-      </div>
-    );
-  }
 
-  renderCreateMenu() {
-    const createSheet = this.sheet("create", () => this.setState({ createMenuOpen: false }), {
-      gridTemplateRows: "auto auto minmax(0, 1fr)",
-    });
-    const close = () => this.setState({ createMenuOpen: false });
-    return (
-      <div style={{ position: "absolute", inset: 0, zIndex: 110 }}>
-        <button type="button" onClick={close} aria-label={this.props.t("common.close")} style={SHEET_BACKDROP} />
-        <section style={createSheet.style} onPointerDown={createSheet.onPointerDown}>
-          {SHEET_HANDLE}
-          {sheetTitleRow(this.props.t("library.newNote"), close, this.props.t("common.close"))}
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", alignContent: "stretch", gap: "10.4px", minHeight: 0, overflowY: "auto" }}>
-            {QUICK_ACTIONS.map((action) => (
+          <h2 style={heading}>Naročnina</h2>
+          <div style={{ padding: "17.6px 19.2px", borderRadius: "20px", background: "var(--m-surface)", boxShadow: "var(--m-shadow)" }}>
+            <p style={eyebrow}>Paket</p>
+            <p style={{ margin: "4.8px 0 2.4px", fontSize: "18.4px", fontWeight: 750, letterSpacing: "-0.03em" }}>Mesečno (aktivno)</p>
+            <p style={{ margin: "0 0 14.4px", color: "var(--m-second)", fontSize: "15.2px" }}>Aktivno do 28. 9. 2026</p>
+            <button type="button" style={coralPill({ width: "100%", height: "52.8px", fontSize: "16.8px", fontWeight: 750, boxShadow: "0 10px 22px rgba(244,95,90,0.24)" })}>
+              <Emoji symbol="✨" size="16px" />
+              Upravljaj naročnino
+            </button>
+          </div>
+
+          <h2 style={heading}>Račun</h2>
+          <div style={{ padding: "17.6px 19.2px", borderRadius: "20px", background: "var(--m-surface)", boxShadow: "var(--m-shadow)" }}>
+            <p style={eyebrow}>Prijavljen</p>
+            <p style={{ margin: "4.8px 0 14.4px", fontSize: "16.8px", fontWeight: 650, letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis" }}>
+              ana.kovac@student.uni-lj.si
+            </p>
+            <button type="button" onClick={this.closeSheet} style={ghostPill(48)}>
+              Odjava
+            </button>
+          </div>
+
+          <div style={{ ...SURFACE_CARD, marginTop: "12.8px" }}>
+            {accountItems.map((item, i) => (
               <button
-                key={action.id}
+                key={item.id}
                 type="button"
-                data-tap="quick"
-                onClick={() => this.openSheet(action.id)}
+                onClick={() => this.swapSheet("support")}
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "12px",
+                  gap: "14.4px",
                   width: "100%",
-                  minHeight: "68px",
-                  padding: "12px 14.4px",
-                  border: "1px solid var(--m-card-border)",
-                  borderRadius: "20px",
-                  background: "var(--m-action-card)",
-                  textAlign: "left",
-                  fontFamily: "inherit",
+                  height: "67.2px",
+                  padding: "0 19.2px",
+                  border: 0,
+                  borderTop: `1px solid ${divider(i === 0, dark)}`,
+                  background: "transparent",
+                  color: "var(--m-label)",
                   cursor: "pointer",
+                  fontFamily: "inherit",
+                  textAlign: "left",
                 }}
               >
                 <span
                   style={{
                     display: "inline-flex",
-                    width: "37.6px",
-                    height: "37.6px",
-                    flexShrink: 0,
+                    width: "43.2px",
+                    height: "43.2px",
+                    flex: "0 0 auto",
                     alignItems: "center",
                     justifyContent: "center",
-                    borderRadius: "50%",
-                    fontSize: "19.2px",
-                    color: action.accent === "record" ? "var(--m-red)" : "var(--m-label)",
-                    background: action.accent === "record" ? "var(--m-red-soft)" : "var(--m-icon-surface)",
+                    borderRadius: "999px",
+                    background: "var(--m-tile)",
                   }}
                 >
-                  {action.icon}
+                  <Emoji symbol={item.emoji} size="20px" />
                 </span>
-                <span style={{ display: "grid", gap: "1.9px", minWidth: 0, flex: 1 }}>
-                  <span style={{ fontSize: "15.04px", fontWeight: 600, color: "var(--m-label)" }}>{this.props.t(action.labelKey)}</span>
-                  <span style={{ fontSize: "12.48px", lineHeight: 1.35, color: "var(--m-second)" }}>{this.props.t(action.detailKey)}</span>
-                </span>
-                <span style={{ color: "var(--m-third)", fontSize: "17.6px" }}>›</span>
+                <span style={{ flex: 1, fontSize: "17.6px", fontWeight: 650, letterSpacing: "-0.025em" }}>{item.label}</span>
+                <Msym name="chevron_right" size="23.2px" fill={false} weight={400} style={{ color: "var(--m-second)" }} />
               </button>
             ))}
           </div>
-        </section>
+
+          <h2 style={heading}>Pomoč</h2>
+          <div style={{ borderRadius: "20px", background: "var(--m-surface)", boxShadow: "var(--m-shadow)" }}>
+            <button
+              type="button"
+              onClick={() => this.swapSheet("support")}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "14.4px",
+                width: "100%",
+                height: "67.2px",
+                padding: "0 19.2px",
+                border: 0,
+                background: "transparent",
+                color: "var(--m-label)",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                textAlign: "left",
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-flex",
+                  width: "43.2px",
+                  height: "43.2px",
+                  flex: "0 0 auto",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "999px",
+                  background: "var(--m-tile)",
+                }}
+              >
+                <Msym name="help" size="21.6px" />
+              </span>
+              <span style={{ flex: 1, fontSize: "17.6px", fontWeight: 650, letterSpacing: "-0.025em" }}>Center za pomoč</span>
+              <Msym name="chevron_right" size="23.2px" fill={false} weight={400} style={{ color: "var(--m-second)" }} />
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
-  renderSourceSheet() {
-    const s = this.state;
-    if (!s.sheetMode) return null;
-    const close = () => this.setState({ sheetMode: null, busyLabel: null });
-    const sourceSheet = this.sheet("source", close, {
-      gridTemplateRows: "auto auto minmax(0, 1fr)",
-      gap: "16px",
-      padding: "11.2px 16px 20px",
-    });
-    const sheet = SHEET_CONTENT[s.sheetMode];
-    const variants = SOURCE_VARIANTS[s.sheetMode];
-    const variant = variants[(s.sourceVariant || 0) % variants.length];
-    const isBusy = Boolean(s.busyLabel);
-
+  renderSupportSheet() {
+    const dark = this.isDark();
+    const sheet = this.fullSheetProps("support", this.closeSheet, false);
     return (
-      <div style={{ position: "absolute", inset: 0, zIndex: 120 }}>
-        <button
-          type="button"
-          onClick={close}
-          aria-label={this.props.t("common.close")}
-          style={{ ...SHEET_BACKDROP, background: "rgba(12,15,25,0.56)" }}
-        />
-        <section style={sourceSheet.style} onPointerDown={sourceSheet.onPointerDown}>
-          {SHEET_HANDLE}
-          <div style={{ display: "grid", gridTemplateColumns: "44px minmax(0, 1fr) 44px", alignItems: "center", minHeight: "50px", flex: "0 0 auto" }}>
-            <h2 style={{ gridColumn: 2, margin: 0, textAlign: "center", fontSize: "19.5px", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--m-label)" }}>
-              {this.props.t(sheet.titleKey)}
-            </h2>
-            {sheetCloseButton(close, this.props.t("common.close"))}
+      <div onPointerDown={sheet.onPointerDown} style={{ ...sheet.style, zIndex: 8 }}>
+        {GRAB_WIDE}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 18.4px 0" }}>
+          <h1 style={{ margin: 0, fontSize: "25.6px", fontWeight: 800, letterSpacing: "-0.04em" }}>Pomoč</h1>
+          <button type="button" aria-label="Nazaj" onClick={() => this.swapSheet("settings")} style={roundBtn(46.4)}>
+            <Msym name="arrow_back" size="24px" fill={false} weight={500} />
+          </button>
+        </div>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 18.4px 40px" }}>
+          <div
+            style={{
+              display: "grid",
+              gap: "6.4px",
+              marginBottom: "22.4px",
+              padding: "17.6px 19.2px",
+              borderRadius: "20px",
+              background: "var(--m-surface)",
+              boxShadow: "var(--m-shadow)",
+            }}
+          >
+            <p style={{ margin: 0, fontSize: "16.32px", letterSpacing: "-0.015em" }}>Živjo! Tukaj je ekipa Memo AI.</p>
+            <p style={{ margin: 0, fontSize: "16.32px", letterSpacing: "-0.015em" }}>Za najhitrejši odgovor preveri spodnje vire.</p>
           </div>
-
-          {isBusy ? (
-            <div style={{ display: "grid", alignContent: "center", alignSelf: "stretch", minHeight: 0, overflow: "hidden" }}>
-              <div role="status" aria-live="polite" style={{ display: "grid", gap: "13.6px", width: "min(100%, 384px)", margin: "0 auto", textAlign: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8.8px", color: "var(--m-label)" }}>
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      display: "inline-block",
-                      width: "16px",
-                      height: "16px",
-                      flex: "none",
-                      border: "2px solid color-mix(in srgb, currentColor 25%, transparent)",
-                      borderTopColor: "currentColor",
-                      borderRadius: "999px",
-                      animation: "memo-spin 0.85s linear infinite",
-                    }}
-                  />
-                  <p style={{ margin: 0, color: "inherit", fontSize: "16px", fontWeight: 600 }}>{s.busyLabel}</p>
-                </div>
-                <p style={{ margin: 0, color: "var(--m-second)", fontSize: "14.08px", lineHeight: 1.45 }}>
-                  {this.props.t("capture.dontCloseScreen")}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => this.setState({ busyLabel: null })}
-                  style={{
-                    display: "inline-flex",
-                    width: "100%",
-                    minHeight: "53.6px",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "8px",
-                    border: 0,
-                    borderRadius: "20px",
-                    background: "var(--m-muted)",
-                    color: "var(--m-tint)",
-                    fontSize: "16.8px",
-                    fontWeight: 600,
-                    fontFamily: "inherit",
-                    cursor: "pointer",
-                  }}
-                >
-                  {this.props.t("common.cancel")}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ display: "inline-flex", width: "100%", padding: "2px", borderRadius: "8px", background: "var(--m-muted)" }}>
-                {SOURCE_MODES.map((mode) => (
+          {HELP_SECTIONS.map((section) => (
+            <div key={section.title} style={{ marginBottom: "22.4px" }}>
+              <h2 style={{ margin: "0 0 11.2px", fontSize: "19.2px", fontWeight: 750, letterSpacing: "-0.03em" }}>{section.title}</h2>
+              <div style={SURFACE_CARD}>
+                {section.items.map((item, i) => (
                   <button
-                    key={mode.id}
+                    key={item}
                     type="button"
-                    onClick={() => this.setState({ sheetMode: mode.id, sourceVariant: 0 })}
-                    aria-label={this.props.t(mode.labelKey)}
-                    style={this.segment(s.sheetMode === mode.id)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "14.4px",
+                      width: "100%",
+                      minHeight: "62.4px",
+                      padding: "9.6px 19.2px",
+                      border: 0,
+                      borderTop: `1px solid ${divider(i === 0, dark)}`,
+                      background: "transparent",
+                      color: "var(--m-label)",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      textAlign: "left",
+                    }}
                   >
-                    {mode.icon}
+                    <span style={{ flex: 1, fontSize: "16.8px", fontWeight: 600, letterSpacing: "-0.02em" }}>{item}</span>
+                    <Msym name="chevron_right" size="22.4px" fill={false} weight={400} style={{ color: "var(--m-second)" }} />
                   </button>
                 ))}
               </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
-              <button
-                type="button"
-                onClick={() => this.setState((c) => ({ createAudio: !c.createAudio }))}
+  renderChatSheet() {
+    const s = this.state;
+    const noteScoped = s.screen === "note" || s.screen === "sub";
+    const sheet = this.fullSheetProps("chat", this.closeSheet, true);
+    /* Inside a note the chat is pinned to it; from the library it opens on the
+       design's default scope, the recent notes. */
+    const scope = noteScoped ? (this.activeNote()?.title ?? "Ta zapisek") : "Moji zapiski";
+    const scopeTitle = noteScoped ? scope : "Nedavni zapiski";
+
+    return (
+      <div onPointerDown={sheet.onPointerDown} style={sheet.style}>
+        {GRAB_WIDE}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: "8.8px 18.4px 9.6px" }}>
+          <button
+            type="button"
+            aria-label="Nov klepet"
+            onClick={() => this.setState({ chat: [], chatDraft: "" })}
+            style={{ ...tileBtn(46.4), position: "absolute", left: "18.4px" }}
+          >
+            <Msym name="edit_square" size="23.2px" fill={false} weight={500} />
+          </button>
+          <span style={{ display: "grid", justifyItems: "center", gap: "1.6px", maxWidth: "calc(100% - 128px)", minWidth: 0 }}>
+            <span style={{ fontSize: "18.88px", fontWeight: 750, letterSpacing: "-0.03em" }}>Klepet z:</span>
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5.6px",
+                maxWidth: "100%",
+                minWidth: 0,
+                color: "var(--m-second)",
+                fontSize: "15.2px",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              <Emoji symbol="📌" size="13.6px" />
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{scopeTitle}</span>
+            </span>
+          </span>
+          <button type="button" aria-label="Zapri" onClick={this.closeSheet} style={{ ...tileBtn(46.4), position: "absolute", right: "18.4px" }}>
+            <Msym name="close" size="23.2px" fill={false} weight={500} />
+          </button>
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "flex-end",
+            gap: "14.4px",
+            overflowY: "auto",
+            padding: "16px 18.4px",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              paddingLeft: "14.4px",
+              borderLeft: "3px solid var(--m-promo)",
+              fontSize: "16.32px",
+              lineHeight: 1.42,
+              letterSpacing: "-0.02em",
+            }}
+          >
+            Živjo, jaz sem Memo. Kaj te zanima o tvojih zapiskih? Ta klepet se ne shrani v tvoj račun.
+          </p>
+          {s.chat.map((message, i) => (
+            <div
+              key={i}
+              style={
+                message.role === "user"
+                  ? {
+                      alignSelf: "flex-end",
+                      maxWidth: "78%",
+                      padding: "11.2px 16px",
+                      borderRadius: "20px 20px 6px 20px",
+                      background: "linear-gradient(135deg, #ff6d68, #f45f5a)",
+                      color: "#ffffff",
+                      fontSize: "16.32px",
+                      lineHeight: 1.4,
+                      whiteSpace: "pre-wrap",
+                    }
+                  : {
+                      alignSelf: "flex-start",
+                      maxWidth: "82%",
+                      padding: "11.2px 16px",
+                      borderRadius: "20px 20px 20px 6px",
+                      background: "var(--m-tile)",
+                      color: "var(--m-label)",
+                      fontSize: "16.32px",
+                      lineHeight: 1.5,
+                      whiteSpace: "pre-wrap",
+                    }
+              }
+            >
+              {message.text}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ position: "relative", padding: "0 18.4px 25.6px" }}>
+          <div style={{ display: "grid", gap: "8.8px", padding: "12px", borderRadius: "22px", background: "var(--m-field)" }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6.4px",
+                justifySelf: "start",
+                flex: "0 0 auto",
+                whiteSpace: "nowrap",
+                maxWidth: "100%",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                height: "38.4px",
+                padding: "0 12px",
+                border: "1px solid var(--m-line)",
+                borderRadius: "999px",
+                background: "var(--m-surface)",
+                color: "var(--m-label)",
+              }}
+            >
+              <span style={{ fontSize: "16.32px", fontWeight: 700, letterSpacing: "-0.025em" }}>{scope}</span>
+              {noteScoped ? null : (
+                <>
+                  <span style={{ color: "var(--m-second)", fontSize: "16.32px", letterSpacing: "-0.02em" }}>nedavni</span>
+                  <Msym name="expand_more" size="18.4px" fill={false} weight={500} />
+                </>
+              )}
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "9.6px" }}>
+              <input
+                value={s.chatDraft}
+                onChange={(e) => this.setState({ chatDraft: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    this.sendChat();
+                  }
+                }}
+                placeholder="Vprašaj karkoli o svojih zapiskih"
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  padding: 0,
+                  flex: "1 1 auto",
+                  minWidth: 0,
+                  padding: "0 5.6px",
                   border: 0,
                   background: "transparent",
+                  outline: "none",
                   color: "var(--m-label)",
-                  fontSize: "15px",
                   fontFamily: "inherit",
-                  cursor: "pointer",
+                  fontSize: "17.28px",
+                  letterSpacing: "-0.02em",
                 }}
-              >
-                <span
-                  data-tap="audio"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "22px",
-                    height: "22px",
-                    borderRadius: "6px",
-                    border: s.createAudio ? 0 : "1px solid var(--m-sep-strong)",
-                    background: s.createAudio ? "var(--m-tint)" : "transparent",
-                    color: "#fff",
-                    fontSize: "13px",
-                    fontWeight: 700,
-                  }}
-                >
-                  {s.createAudio ? "✓" : ""}
-                </span>
-                <span>{this.props.t("capture.createAudio")}</span>
-              </button>
-
-              <div style={{ display: "grid", gap: "8px", padding: "16px 18px", border: "1px solid var(--m-sep)", borderRadius: "18px", background: "var(--m-surface)" }}>
-                <p style={{ margin: 0, fontSize: "11.5px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--m-second)" }}>
-                  {this.props.t(sheet.cardLabelKey)}
-                </p>
-                <p style={{ margin: 0, fontSize: "16px", fontWeight: 500, color: "var(--m-label)", overflowWrap: "anywhere" }}>{variant.cardTitle}</p>
-                <p style={{ margin: 0, fontSize: "13.5px", color: "var(--m-second)" }}>
-                  {variant.cardMetaKey ? this.props.t(variant.cardMetaKey) : variant.cardMeta}
-                </p>
-              </div>
-
+              />
               <button
                 type="button"
-                data-tap="ustvari"
-                onClick={() => this.create()}
+                aria-label="Pošlji"
+                onClick={() => this.sendChat()}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: "8px",
-                  minHeight: "48px",
+                  width: "48px",
+                  height: "48px",
+                  flex: "0 0 auto",
+                  padding: 0,
                   border: 0,
-                  borderRadius: "12px",
-                  background: "var(--m-tint)",
-                  color: "#fff",
-                  fontSize: "16px",
-                  fontWeight: 600,
-                  fontFamily: "inherit",
+                  borderRadius: "999px",
                   cursor: "pointer",
+                  transition: "background 0.18s ease, color 0.18s ease",
+                  background: s.chatDraft.trim() ? "linear-gradient(135deg, #ff6d68, #f45f5a)" : "var(--m-tile)",
+                  color: s.chatDraft.trim() ? "#ffffff" : "var(--m-second)",
                 }}
               >
-                <span>{sheet.createIcon}</span>
-                <span>{this.props.t("capture.create")}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => this.setState((c) => ({ sourceVariant: (c.sourceVariant || 0) + 1 }))}
-                style={MODAL_SECONDARY}
-              >
-                {this.props.t(sheet.secondaryKey)}
+                <Msym name="arrow_upward" size="24px" />
               </button>
             </div>
-          )}
-        </section>
+          </div>
+        </div>
       </div>
     );
   }
@@ -3293,13 +3800,13 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
   render() {
     const s = this.state;
     const k = s.scale;
-    const radius = 55 * k;
+    const radius = 48 * k;
     const search = s.query.trim().toLowerCase();
-    const activeFolder = s.folders.find((folder) => folder.id === s.folderId) ?? null;
-    const filtered = s.notes.filter((note) => {
-      if (activeFolder && activeFolder.noteIds.indexOf(note.id) === -1) return false;
+    const folder = s.folders.find((f) => f.id === s.folderId) ?? null;
+    const visible = s.notes.filter((note) => {
+      if (folder && folder.noteIds.indexOf(note.id) === -1) return false;
       if (!search) return true;
-      return note.title.toLowerCase().includes(search) || this.props.t(SOURCE_META[note.source].labelKey).toLowerCase().includes(search);
+      return note.title.toLowerCase().includes(search) || SOURCE_LABELS[note.source].toLowerCase().includes(search);
     });
 
     const rootStyle: CSSProperties = {
@@ -3310,6 +3817,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
       alignItems: "flex-start",
       width: "100%",
       fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI', sans-serif",
+      WebkitFontSmoothing: "antialiased",
       // The server cannot know the viewport, so the mockup stays hidden until
       // it has been measured — otherwise it would paint at the default scale
       // and visibly shrink once the client measures it. The reserved height
@@ -3321,23 +3829,8 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
     if (s.theme === "light") Object.assign(rootStyle, LIGHT_TOKENS);
     if (s.theme === "dark") Object.assign(rootStyle, DARK_TOKENS);
 
-    const dockOpen = s.dockOpen;
-    const dockItems = [
-      { id: "home", icon: "🏠", label: "Domov" },
-      { id: "support", icon: "❓", label: this.props.t("nav.help") },
-      { id: "settings", icon: "⚙️", label: this.props.t("nav.settings") },
-    ].filter((item) => (s.screen === "home" ? item.id !== "settings" : item.id !== "home"));
-
-    const pillLabelStyle: CSSProperties = {
-      display: "block",
-      maxWidth: dockOpen ? "0px" : "160px",
-      opacity: dockOpen ? 0 : 1,
-      overflow: "hidden",
-      whiteSpace: "nowrap",
-      transition: "max-width 220ms cubic-bezier(0.22,1,0.36,1), opacity 160ms ease",
-    };
-
-    const showReadPill = s.screen === "note" && s.tab === "notes";
+    /* A full-height sheet covers the status bar; a bottom one does not. */
+    const sheetIsFull = s.sheet === "settings" || s.sheet === "support" || s.sheet === "chat";
 
     return (
       <div
@@ -3375,11 +3868,11 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
             <div
               style={{
                 position: "relative",
-                width: `${Math.round(393 * k)}px`,
-                height: `${Math.round(852 * k)}px`,
+                width: `${Math.round(PHONE_W * k)}px`,
+                height: `${Math.round(PHONE_H * k)}px`,
                 overflow: "hidden",
                 borderRadius: `${radius}px`,
-                background: "var(--m-canvas)",
+                background: "var(--m-bg)",
                 color: "var(--m-label)",
               }}
             >
@@ -3391,16 +3884,37 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
                   position: "absolute",
                   top: 0,
                   left: 0,
-                  width: "393px",
-                  height: "852px",
+                  width: `${PHONE_W}px`,
+                  height: `${PHONE_H}px`,
                   transform: `scale(${k})`,
                   transformOrigin: "top left",
-                  display: "flex",
-                  flexDirection: "column",
-                  background: "var(--m-canvas)",
+                  background: "var(--m-bg)",
+                  color: "var(--m-label)",
+                  // The artboard is drawn against a UA default line box; the
+                  // landing page's own 1.5 would retune every row's height.
+                  lineHeight: "normal",
                   overflow: "hidden",
                 }}
               >
+                {this.renderStatusBar()}
+
+                {s.screen === "home" ? this.renderHome(visible) : null}
+                {s.screen === "note" ? this.renderNote() : null}
+                {s.screen === "sub" ? this.renderSub() : null}
+                {s.screen === "capture" ? this.renderCapture() : null}
+
+                {s.sheet && !sheetIsFull ? this.renderScrim() : null}
+                {s.sheet === "create" ? this.renderCreateSheet() : null}
+                {s.sheet === "folders" ? this.renderFoldersSheet() : null}
+                {s.sheet === "newFolder" ? this.renderNewFolderSheet() : null}
+                {s.sheet === "actions" ? this.renderActionsSheet() : null}
+                {s.sheet === "rename" ? this.renderRenameSheet() : null}
+                {s.sheet === "delete" ? this.renderDeleteSheet() : null}
+                {s.sheet === "settings" ? this.renderSettingsSheet() : null}
+                {s.sheet === "support" ? this.renderSupportSheet() : null}
+                {s.sheet === "chat" ? this.renderChatSheet() : null}
+
+                {/* The tour's own pointer, drawn over everything it touches. */}
                 {s.tap ? (
                   <span
                     aria-hidden="true"
@@ -3467,6 +3981,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
                   </span>
                 ) : null}
 
+                {/* The Dynamic Island and the home indicator, as the frame draws them. */}
                 <div
                   aria-hidden="true"
                   style={{
@@ -3496,285 +4011,6 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
                     }}
                   />
                 </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-end",
-                    justifyContent: "space-between",
-                    height: "54px",
-                    padding: "0 30px 6px 34px",
-                    fontSize: "15px",
-                    fontWeight: 600,
-                    letterSpacing: "0.2px",
-                    flex: "0 0 auto",
-                  }}
-                >
-                  <span>9:41</span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ display: "inline-flex", alignItems: "flex-end", gap: "2px", height: "11px" }}>
-                      <span style={{ width: "3px", height: "4px", borderRadius: "1px", background: "currentColor" }} />
-                      <span style={{ width: "3px", height: "6px", borderRadius: "1px", background: "currentColor" }} />
-                      <span style={{ width: "3px", height: "8px", borderRadius: "1px", background: "currentColor" }} />
-                      <span style={{ width: "3px", height: "11px", borderRadius: "1px", background: "currentColor" }} />
-                    </span>
-                    <span style={{ fontSize: "12px", fontWeight: 600, lineHeight: 1 }}>5G</span>
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        width: "25px",
-                        height: "12px",
-                        padding: "1.5px",
-                        border: "1px solid var(--m-sep-strong)",
-                        borderRadius: "3.5px",
-                      }}
-                    >
-                      <span style={{ width: "70%", height: "100%", borderRadius: "2px", background: "currentColor" }} />
-                    </span>
-                  </span>
-                </div>
-
-                <header
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "12px",
-                    minHeight: "60px",
-                    padding: "0 16px",
-                    background: "var(--m-canvas)",
-                    borderBottom: "1px solid var(--m-sep-strong)",
-                    flex: "0 0 auto",
-                  }}
-                >
-                  <span style={{ display: "inline-flex", alignItems: "center", height: "36px" }}>
-                    <Image
-                      src={BRAND_LOCKUP_SRC}
-                      alt={SEO_BRAND_NAME}
-                      width={BRAND_LOCKUP_WIDTH}
-                      height={BRAND_LOCKUP_HEIGHT}
-                      style={{ height: "100%", width: "auto", objectFit: "contain" }}
-                    />
-                  </span>
-                </header>
-
-                <div
-                  data-app-main
-                  style={{
-                    flex: 1,
-                    minHeight: 0,
-                    overflowY: "auto",
-                    overflowX: "hidden",
-                    padding: "9.6px 15.2px 130px",
-                    maskImage: APP_MAIN_FEATHER,
-                    WebkitMaskImage: APP_MAIN_FEATHER,
-                  }}
-                >
-                  {s.screen === "home" ? this.renderHome(filtered) : null}
-                  {s.screen === "note" ? this.renderNote() : null}
-                  {s.screen === "support" ? this.renderSupport() : null}
-                  {s.screen === "settings" ? this.renderSettings() : null}
-                </div>
-
-                <div
-                  style={
-                    dockOpen
-                      ? {
-                          position: "absolute",
-                          left: "16px",
-                          bottom: "24px",
-                          zIndex: 80,
-                          display: "grid",
-                          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                          alignItems: "center",
-                          width: "280px",
-                          minHeight: "51px",
-                          padding: "0 2.6px",
-                          border: "2px solid var(--m-sep-strong)",
-                          borderRadius: "999px",
-                          background: "var(--m-nav)",
-                          backdropFilter: "blur(24px) saturate(180%)",
-                          WebkitBackdropFilter: "blur(24px) saturate(180%)",
-                          boxShadow: "0 14px 28px rgba(0,0,0,0.18)",
-                        }
-                      : { position: "absolute", left: "16px", bottom: "24px", zIndex: 80, display: "inline-flex", alignItems: "center" }
-                  }
-                >
-                  <button
-                    type="button"
-                    data-tap="dock"
-                    onClick={() => {
-                      if (dockOpen) {
-                        this.setState({ dockOpen: false, screen: s.screen === "home" ? "settings" : "home", openHelp: null });
-                        return;
-                      }
-                      this.setState({ dockOpen: true });
-                    }}
-                    aria-label="Navigacija"
-                    style={
-                      dockOpen
-                        ? {
-                            justifySelf: "center",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: "51px",
-                            height: "51px",
-                            border: "2px solid transparent",
-                            borderRadius: "999px",
-                            background: "transparent",
-                            color: "var(--m-label)",
-                            fontSize: "17px",
-                            fontFamily: "inherit",
-                            boxShadow: "none",
-                            cursor: "pointer",
-                          }
-                        : {
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: "51px",
-                            height: "51px",
-                            border: "2px solid var(--m-sep-strong)",
-                            borderRadius: "999px",
-                            background: "var(--m-dock-toggle)",
-                            color: "var(--m-dock-toggle-color)",
-                            fontSize: "17px",
-                            fontFamily: "inherit",
-                            boxShadow: "0 14px 28px rgba(0,0,0,0.2)",
-                            cursor: "pointer",
-                          }
-                    }
-                  >
-                    {s.screen === "home" ? "⚙️" : "🏠"}
-                  </button>
-                  {dockOpen
-                    ? dockItems.map((item) => {
-                        const active =
-                          (item.id === "home" && (s.screen === "home" || s.screen === "note")) ||
-                          (item.id === "support" && s.screen === "support") ||
-                          (item.id === "settings" && s.screen === "settings");
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            data-tap="dock-item"
-                            onClick={() =>
-                              this.setState({
-                                dockOpen: false,
-                                screen: item.id === "home" ? "home" : (item.id as PreviewState["screen"]),
-                                swipeId: null,
-                                swipeOffset: 0,
-                                openHelp: null,
-                              })
-                            }
-                            aria-label={item.label}
-                            style={{
-                              justifySelf: "center",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              width: "51px",
-                              height: "51px",
-                              border: 0,
-                              borderRadius: "999px",
-                              background: active ? "var(--m-tab-active)" : "transparent",
-                              boxShadow: active ? "var(--m-tab-active-shadow)" : "none",
-                              color: "var(--m-label)",
-                              fontSize: "17px",
-                              fontFamily: "inherit",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {item.icon}
-                          </button>
-                        );
-                      })
-                    : null}
-                </div>
-
-                {s.screen === "home" ? (
-                  <button
-                    type="button"
-                    data-tap="create"
-                    onClick={() => this.setState({ createMenuOpen: true, dockOpen: false })}
-                    style={{
-                      position: "absolute",
-                      right: "16px",
-                      bottom: "24px",
-                      zIndex: 70,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: dockOpen ? "0px" : "8px",
-                      minHeight: "51px",
-                      width: dockOpen ? "51px" : "auto",
-                      minWidth: dockOpen ? "51px" : "178px",
-                      padding: dockOpen ? 0 : "0 18px",
-                      border: "2px solid rgba(255,255,255,0.2)",
-                      borderRadius: "999px",
-                      background: "linear-gradient(135deg, #ff6d68, #f45f5a)",
-                      color: "#fff",
-                      fontSize: "16px",
-                      fontWeight: 650,
-                      fontFamily: "inherit",
-                      boxShadow: "0 12px 24px rgba(244,95,90,0.24)",
-                      overflow: "hidden",
-                      transition:
-                        "min-width 220ms cubic-bezier(0.22,1,0.36,1), width 220ms cubic-bezier(0.22,1,0.36,1), padding 220ms cubic-bezier(0.22,1,0.36,1), gap 180ms ease",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <span>➕</span>
-                    <span style={pillLabelStyle}>{this.props.t("library.newNote")}</span>
-                  </button>
-                ) : null}
-
-                {showReadPill ? (
-                  <button
-                    type="button"
-                    onClick={() => this.toggleRead()}
-                    style={{
-                      position: "absolute",
-                      right: "16px",
-                      bottom: "24px",
-                      zIndex: 70,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      minHeight: "51px",
-                      width: dockOpen ? "51px" : "auto",
-                      minWidth: dockOpen ? "51px" : "168px",
-                      gap: dockOpen ? "0px" : "8px",
-                      padding: dockOpen ? 0 : "0 18px",
-                      overflow: "hidden",
-                      transition:
-                        "min-width 220ms cubic-bezier(0.22,1,0.36,1), width 220ms cubic-bezier(0.22,1,0.36,1), padding 220ms cubic-bezier(0.22,1,0.36,1), gap 180ms ease",
-                      border: "2px solid rgba(255,255,255,0.2)",
-                      borderRadius: "999px",
-                      background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
-                      color: "#fff",
-                      fontSize: "16px",
-                      fontWeight: 650,
-                      fontFamily: "inherit",
-                      boxShadow: "0 12px 24px rgba(37,99,235,0.24)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <span>{s.reading ? "⏸️" : "🎧"}</span>
-                    <span style={pillLabelStyle}>{this.props.t(s.reading ? "readAloud.pause" : "readAloud.listen")}</span>
-                  </button>
-                ) : null}
-
-                {s.folderSheetOpen ? this.renderFolderSheet() : null}
-                {s.renameId ? this.renderRenameSheet() : null}
-                {s.deleteId ? this.renderDeleteSheet() : null}
-                {s.folderModal === "new" ? this.renderNewFolderSheet() : null}
-                {s.folderModal === "edit" ? this.renderEditFoldersSheet() : null}
-                {s.createMenuOpen ? this.renderCreateMenu() : null}
-                {s.sheetMode ? this.renderSourceSheet() : null}
-
                 <div
                   aria-hidden="true"
                   style={{
@@ -3797,17 +4033,4 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
       </div>
     );
   }
-}
-
-/**
- * The preview as the page uses it.
- *
- * `MemoAppPreviewView` is a class — it drives a scripted tour through
- * `setState` and needs the instance — so the translator is read here and handed
- * down as a prop rather than pulled from a hook inside it.
- */
-export function MemoAppPreview(props: Omit<PreviewProps, "t" | "locale">) {
-  const { t, locale } = useTranslations();
-
-  return <MemoAppPreviewView {...props} t={t} locale={locale} />;
 }

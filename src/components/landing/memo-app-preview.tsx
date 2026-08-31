@@ -4090,5 +4090,12 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
 export function MemoAppPreview(props: Omit<PreviewProps, "t" | "locale">) {
   const { t, locale } = useTranslations();
 
-  return <MemoAppPreviewView {...props} t={t} locale={locale} />;
+  /*
+   * Keyed by locale so a language change remounts it. The sample library lives
+   * in state and is built once in the constructor, so without this the replica
+   * kept the titles of whichever language it was first rendered in while every
+   * label around them switched — Croatian chrome over English note titles.
+   * Restarting the demo in the new language is the right outcome anyway.
+   */
+  return <MemoAppPreviewView key={locale} {...props} t={t} locale={locale} />;
 }

@@ -13,6 +13,7 @@ import {
 } from "@/lib/storage";
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const NOTE_MEDIA_UPLOAD_MAX_BYTES = 16 * 1024;
 
@@ -32,7 +33,7 @@ export async function POST(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -57,7 +58,7 @@ export async function POST(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID zapiska." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;
@@ -67,14 +68,14 @@ export async function POST(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canAccessLectureContent(user.id, id);
 
   if (!access.allowed) {
     return createBillingRequiredResponse(
-      "Za urejanje tega zapiska je potreben plačljiv paket.",
+      await tr("api.paidRequired.edit"),
       access.code,
     );
   }
@@ -86,7 +87,7 @@ export async function POST(
 
   if (!isSupportedScanImageMimeType(mimeType, parsed.data.fileName)) {
     return NextResponse.json(
-      { error: "Podprte so fotografije JPG, PNG, WebP, HEIC ali HEIF." },
+      { error: await tr("api.supportedPhotoTypes") },
       { status: 400 },
     );
   }
@@ -105,7 +106,7 @@ export async function POST(
 
   if (error || !data?.token) {
     return NextResponse.json(
-      { error: error?.message ?? "Nalaganja fotografije ni bilo mogoče pripraviti." },
+      { error: error?.message ?? await tr("api.photoUploadFailed") },
       { status: 500 },
     );
   }

@@ -1,4 +1,8 @@
+"use client";
+
 import Image from "next/image";
+
+import { useT } from "@/components/i18n-provider";
 
 /**
  * The three dots that stand in for Memo AI while it is thinking.
@@ -13,8 +17,10 @@ import Image from "next/image";
  * note chat's answers are plain bubbles, so the dots are one too.
  */
 export function TypingDots({ withAvatar = false }: { withAvatar?: boolean }) {
+  const t = useT();
+
   return (
-    <div className="memo-typing" role="status" aria-label="Memo AI piše">
+    <div className="memo-typing" role="status" aria-label={t("chat.typing")}>
       {withAvatar ? (
         <span className="memo-avatar">
           <Image src="/memo-mascot.png" alt="" width={320} height={288} />

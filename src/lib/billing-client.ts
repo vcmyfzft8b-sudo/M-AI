@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+import type { Translate } from "@/lib/i18n/translate";
 
 export class BillingRequiredError extends Error {
   redirectTo: string;
@@ -75,7 +77,15 @@ export function getApiErrorMessage(payload: ApiErrorPayload | null | undefined, 
   return fallback;
 }
 
-export async function parseApiResponse<T>(response: Response): Promise<T> {
+/**
+ * `t` is passed in because this runs in the browser but outside React. The
+ * message the API sent is already in the reader's language and is preferred;
+ * these two are the fallbacks for a response that carried none.
+ */
+export async function parseApiResponse<T>(
+  response: Response,
+  t: Translate<MessageKey>,
+): Promise<T> {
   const clonedResponse = response.clone();
   const payload = (await response.json().catch(() => null)) as
     | (T & { error?: unknown; redirectTo?: string; code?: string })
@@ -84,7 +94,7 @@ export async function parseApiResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     if (response.status === 402 && payload?.redirectTo) {
       throw new BillingRequiredError(
-        getApiErrorMessage(payload, "Za to dejanje je potreben plačljiv paket."),
+        getApiErrorMessage(payload, t("billing.actionNeedsPlan")),
         payload.redirectTo,
       );
     }
@@ -94,7 +104,7 @@ export async function parseApiResponse<T>(response: Response): Promise<T> {
       getApiErrorMessage(
         payload,
         (fallbackText.trim().length > 0 ? fallbackText.trim().slice(0, 240) : null) ??
-          "Zahteve ni bilo mogoče dokončati.",
+          t("billing.requestFailed"),
       ),
     );
   }

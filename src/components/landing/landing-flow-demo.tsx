@@ -3,7 +3,18 @@
 import type { CSSProperties, DragEvent, PointerEvent as ReactPointerEvent } from "react";
 import { Component } from "react";
 
+import { useT } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+import type { Translate } from "@/lib/i18n/translate";
+
+/*
+ * The interface around the demo is translated; the material inside it is not.
+ * File names, note titles, the note itself and the flashcards, quiz and test
+ * questions all stand in for the learner's own coursework, which stays in the
+ * language it was written in whatever the interface is set to. Same boundary
+ * as memo-app-preview-data.ts — see the note at the top of that file.
+ */
 
 /*
  * The study tabs, from the redesign's note screen: one pill per mode, each with
@@ -12,10 +23,15 @@ import { Msym } from "@/components/msym";
  * scale is the marketing page's.
  */
 const STUDY_TABS = [
-  { id: "cards", label: "Flashcards", icon: "style", tint: "oklch(0.66 0.15 295)" },
-  { id: "quiz", label: "Kviz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
-  { id: "test", label: "Test", icon: "assignment", tint: "oklch(0.66 0.15 150)" },
-] as const;
+  { id: "cards", labelKey: "flowDemo.tabCards", icon: "style", tint: "oklch(0.66 0.15 295)" },
+  { id: "quiz", labelKey: "flowDemo.tabQuiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
+  { id: "test", labelKey: "flowDemo.tabTest", icon: "assignment", tint: "oklch(0.66 0.15 150)" },
+] as const satisfies ReadonlyArray<{
+  id: "cards" | "quiz" | "test";
+  labelKey: MessageKey;
+  icon: string;
+  tint: string;
+}>;
 
 type FlowSource = {
   id: string;
@@ -23,9 +39,9 @@ type FlowSource = {
   kind: string;
   kindColor: string;
   label: string;
-  sub: string;
-  noteTitle: string;
-  noteSub: string;
+  sub: (t: Translate<MessageKey>) => string;
+  noteTitleKey: MessageKey;
+  noteSub: (t: Translate<MessageKey>) => string;
 };
 
 const FLOW_SOURCES: FlowSource[] = [
@@ -36,9 +52,9 @@ const FLOW_SOURCES: FlowSource[] = [
     // Deeper than the brand orange, which only reached 3:1 on the white chip.
     kindColor: "#b4431d",
     label: "predavanje-4.mp3",
-    sub: "Zvok · 48:12",
-    noteTitle: "Predavanje IS – 4. teden",
-    noteSub: "Zvok · danes",
+    sub: (t) => `${t("flowDemo.kindAudio")} · 48:12`,
+    noteTitleKey: "flowDemo.noteTitle.audio",
+    noteSub: (t) => `${t("flowDemo.kindAudio")} · ${t("flowDemo.today")}`,
   },
   {
     id: "pdf",
@@ -46,9 +62,9 @@ const FLOW_SOURCES: FlowSource[] = [
     kind: "pdf",
     kindColor: "#d0342c",
     label: "skripta-IS.pdf",
-    sub: "PDF · 24 strani",
-    noteTitle: "Skripta IS – poglavje 4",
-    noteSub: "PDF · danes",
+    sub: (t) => `${t("flowDemo.kindPdf")} · ${t("flowDemo.pages", { count: 24 })}`,
+    noteTitleKey: "flowDemo.noteTitle.pdf",
+    noteSub: (t) => `${t("flowDemo.kindPdf")} · ${t("flowDemo.today")}`,
   },
   {
     id: "doc",
@@ -56,64 +72,80 @@ const FLOW_SOURCES: FlowSource[] = [
     kind: "docx",
     kindColor: "#2b579a",
     label: "seminarska-erp.docx",
-    sub: "Word · 12 strani",
-    noteTitle: "Seminarska: Kako deluje ERP",
-    noteSub: "Word · danes",
+    sub: (t) => `${t("flowDemo.kindWord")} · ${t("flowDemo.pages", { count: 12 })}`,
+    noteTitleKey: "flowDemo.noteTitle.doc",
+    noteSub: (t) => `${t("flowDemo.kindWord")} · ${t("flowDemo.today")}`,
   },
 ];
 
 const STUDY_CARDS = [
-  { q: "Kaj je transakcijski informacijski sistem?", a: "Sistem, ki zajema in obdeluje dnevne poslovne transakcije." },
-  { q: "Čemu služi odločitveni sistem?", a: "Analizi podatkov za taktične in strateške odločitve vodstva." },
-  { q: "Kaj povezuje ERP?", a: "Procese celotnega podjetja v en integriran sistem." },
-];
+  { qKey: "flowDemo.card1Q", aKey: "flowDemo.card1A" },
+  { qKey: "flowDemo.card2Q", aKey: "flowDemo.card2A" },
+  { qKey: "flowDemo.card3Q", aKey: "flowDemo.card3A" },
+] as const satisfies ReadonlyArray<{ qKey: MessageKey; aKey: MessageKey }>;
 
 const STUDY_QUIZ = [
   {
-    q: "Kateri sistem obdeluje dnevne transakcije?",
-    options: ["Transakcijski", "Odločitveni", "Ekspertni", "Informacijski portal"],
+    qKey: "flowDemo.quiz1Q",
+    optionKeys: ["flowDemo.quiz1O1", "flowDemo.quiz1O2", "flowDemo.quiz1O3", "flowDemo.quiz1O4"],
     correct: 0,
   },
   {
-    q: "Kaj pomeni ERP?",
-    options: ["Elektronski račun", "Načrtovanje virov podjetja", "Poročilo prodaje", "Enotni registrski profil"],
+    qKey: "flowDemo.quiz2Q",
+    optionKeys: ["flowDemo.quiz2O1", "flowDemo.quiz2O2", "flowDemo.quiz2O3", "flowDemo.quiz2O4"],
     correct: 1,
   },
   {
-    q: "Kdo najpogosteje uporablja odločitveni sistem?",
-    options: ["Stranke", "Dobavitelji", "Vodstvo", "Zunanji revizor"],
+    qKey: "flowDemo.quiz3Q",
+    optionKeys: ["flowDemo.quiz3O1", "flowDemo.quiz3O2", "flowDemo.quiz3O3", "flowDemo.quiz3O4"],
     correct: 2,
   },
   {
-    q: "Zakaj so kakovostni podatki ključni?",
-    options: ["Znižajo ceno strojne opreme", "Pospešijo internet", "Brez njih so odločitve slabe", "Nadomeščajo vodstvo"],
+    qKey: "flowDemo.quiz4Q",
+    optionKeys: ["flowDemo.quiz4O1", "flowDemo.quiz4O2", "flowDemo.quiz4O3", "flowDemo.quiz4O4"],
     correct: 2,
   },
-];
+] as const satisfies ReadonlyArray<{
+  qKey: MessageKey;
+  optionKeys: readonly MessageKey[];
+  correct: number;
+}>;
 
+/*
+ * `keysKey` holds the word stems an answer is matched against, comma separated
+ * — they have to be the reader's language, because the answer they type is.
+ */
 const STUDY_TEST = [
-  {
-    q: "Naštej eno prednost ERP sistema.",
-    keys: ["integr", "povez", "enot", "podat", "proces", "učinkovit"],
-    a: "Enotni podatki in povezani procesi.",
-  },
-  {
-    q: "Kaj je izhod transakcijskega sistema?",
-    keys: ["podat", "zapis", "transakcij", "poročil"],
-    a: "Zapisi o transakcijah za nadaljnjo obdelavo.",
-  },
-  {
-    q: "Zakaj vodstvo potrebuje odločitveni sistem?",
-    keys: ["analiz", "scenarij", "odloč", "napoved", "primerj"],
-    a: "Ker primerja scenarije in podpira odločitve.",
-  },
-];
+  { qKey: "flowDemo.test1Q", keysKey: "flowDemo.test1Keys", aKey: "flowDemo.test1A" },
+  { qKey: "flowDemo.test2Q", keysKey: "flowDemo.test2Keys", aKey: "flowDemo.test2A" },
+  { qKey: "flowDemo.test3Q", keysKey: "flowDemo.test3Keys", aKey: "flowDemo.test3A" },
+] as const satisfies ReadonlyArray<{ qKey: MessageKey; keysKey: MessageKey; aKey: MessageKey }>;
 
-const PAST_NOTES = [
-  { icon: "🎙️", title: "Predavanje IS – 3. teden", sub: "Zvok · včeraj" },
-  { icon: "📄", title: "Skripta IS – poglavje 2", sub: "PDF · v torek" },
-  { icon: "📝", title: "Seminarska: ERP", sub: "Word · v petek" },
-  { icon: "🎙️", title: "Predavanje IS – 2. teden", sub: "Zvok · prejšnji teden" },
+const PAST_NOTES: Array<{
+  icon: string;
+  titleKey: MessageKey;
+  sub: (t: Translate<MessageKey>) => string;
+}> = [
+  {
+    icon: "🎙️",
+    titleKey: "flowDemo.past.lecture3",
+    sub: (t) => `${t("flowDemo.kindAudio")} · ${t("flowDemo.yesterday")}`,
+  },
+  {
+    icon: "📄",
+    titleKey: "flowDemo.past.script2",
+    sub: (t) => `${t("flowDemo.kindPdf")} · ${t("flowDemo.onTuesday")}`,
+  },
+  {
+    icon: "📝",
+    titleKey: "flowDemo.past.seminar",
+    sub: (t) => `${t("flowDemo.kindWord")} · ${t("flowDemo.onFriday")}`,
+  },
+  {
+    icon: "🎙️",
+    titleKey: "flowDemo.past.lecture2",
+    sub: (t) => `${t("flowDemo.kindAudio")} · ${t("flowDemo.lastWeek")}`,
+  },
 ];
 
 // Chip geometry lives in landing.css so it can shrink to fit three across
@@ -215,6 +247,8 @@ type FlowGhost = {
 
 type FlowDemoProps = {
   storyAutoplay?: boolean;
+  /** Injected by the wrapper below, because a class cannot call a hook. */
+  t: Translate<MessageKey>;
 };
 
 type FlowDemoState = {
@@ -243,7 +277,7 @@ type FlowDemoState = {
   touchGhost: { icon: string; label: string; x: number; y: number } | null;
 };
 
-export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
+class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
   state: FlowDemoState = {
     flowStage: 0,
     noteStep: 0,
@@ -890,7 +924,10 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
     if (!this.state.sTShown) {
       if (!this.state.sTVal.trim()) return;
       const low = this.state.sTVal.toLowerCase();
-      const ok = t.keys.some((k) => low.indexOf(k) >= 0);
+      const ok = this.props
+        .t(t.keysKey)
+        .split(",")
+        .some((stem) => low.indexOf(stem.trim().toLowerCase()) >= 0);
       this.setState((p) => ({ sTShown: true, sTScore: p.sTScore + (ok ? 1 : 0), sTOk: ok }));
       return;
     }
@@ -988,8 +1025,19 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
     };
 
     const dropIcon = stage >= 1 ? (s.flowSource ? s.flowSource.icon : "🎙️") : "⬇️";
-    const dropTitle = stage >= 1 ? (s.flowSource ? s.flowSource.noteTitle : "Nov zapisek") : "Spusti vir sem";
-    const dropSubtitle = stage >= 1 ? (s.flowSource ? s.flowSource.noteSub : "danes") : "Zvok, PDF, dokument ali fotografija";
+    const t = this.props.t;
+    const dropTitle =
+      stage >= 1
+        ? s.flowSource
+          ? t(s.flowSource.noteTitleKey)
+          : t("flowDemo.newNote")
+        : t("flowDemo.dropTitle");
+    const dropSubtitle =
+      stage >= 1
+        ? s.flowSource
+          ? s.flowSource.noteSub(t)
+          : t("flowDemo.today")
+        : t("flowDemo.dropSubtitle");
 
     return (
       <article
@@ -1010,7 +1058,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
       >
         <span style={this.nodeStyle(1, { pulse: true, over: true })} />
         <h3 style={{ margin: "0.35rem 0 0", color: "var(--l-label)", fontSize: "1.35rem", fontWeight: 600, lineHeight: 1.25 }}>
-          Posnemi ali naloži
+          {t("flowDemo.step1Title")}
         </h3>
         <div
           ref={(el) => {
@@ -1024,10 +1072,10 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
             <span style={{ fontSize: "10.6px", fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--l-second)" }}>
-              Zapiski
+              {t("flowDemo.libraryLabel")}
             </span>
             <span style={{ fontSize: "10.6px", fontWeight: 600, color: "var(--l-second)" }}>
-              {stage >= 1 ? "5 zapiskov" : "4 zapiski"}
+              {t("flowDemo.noteCount", { count: stage >= 1 ? 5 : 4 })}
             </span>
           </div>
           <div style={dropRowStyle}>
@@ -1091,12 +1139,12 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                 visibility: stage === 1 ? "visible" : "hidden",
               }}
             >
-              Ustvarjanje zapiskov
+              {this.props.t("flowDemo.statusWritingNotes")}
             </span>
           </div>
           {PAST_NOTES.map((row) => (
             <div
-              key={row.title}
+              key={row.titleKey}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -1138,15 +1186,19 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {row.title}
+                  {t(row.titleKey)}
                 </span>
-                <span style={{ fontSize: "11.4px", lineHeight: 1.3, color: "var(--l-second)" }}>{row.sub}</span>
+                <span style={{ fontSize: "11.4px", lineHeight: 1.3, color: "var(--l-second)" }}>{row.sub(t)}</span>
               </span>
             </div>
           ))}
         </div>
         <p style={{ ...STATUS_BASE, color: stage >= 2 ? "var(--l-label)" : "var(--l-second)" }}>
-          {stage === 0 ? "Povleci ali klikni" : stage === 1 ? "Prepisujem…" : "Vir dodan"}
+          {stage === 0
+            ? t("flowDemo.statusDragOrClick")
+            : stage === 1
+              ? t("flowDemo.statusTranscribing")
+              : t("flowDemo.statusSourceAdded")}
         </p>
       </article>
     );
@@ -1224,7 +1276,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
       >
         <span style={this.nodeStyle(1)} />
         <h3 style={{ margin: "0.35rem 0 0", color: "var(--l-label)", fontSize: "1.35rem", fontWeight: 600, lineHeight: 1.25 }}>
-          Dobi zapiske
+          {this.props.t("flowDemo.step2Title")}
         </h3>
         <div style={noteCardStyle}>
           <span
@@ -1240,7 +1292,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
               color: "var(--l-label)",
             }}
           >
-            Hiter pregled
+            {this.props.t("flowDemo.note.overview")}
           </span>
           <p
             style={{
@@ -1253,11 +1305,11 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
             }}
           >
               <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-marker)" }}>
-                Poslovni informacijski sistemi
+                {this.props.t("flowDemo.note.leadA")}
               </span>{" "}
-              zbirajo in obdelujejo informacije, ki podpirajo{" "}
+              {this.props.t("flowDemo.note.leadMid")}{" "}
               <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-head-hl)" }}>
-                odločanje v podjetjih
+                {this.props.t("flowDemo.note.leadB")}
               </span>
               .
             </p>
@@ -1274,12 +1326,24 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
               color: "var(--l-label)",
             }}
           >
-            Vrste sistemov
+            {this.props.t("flowDemo.note.typesHeading")}
           </span>
           <div style={{ display: "grid", gap: "5.5px", textAlign: "left" }}>
-            {bullet(noteVis >= 4, "Transakcijski", "– zajema dnevne poslovne dogodke.")}
-            {bullet(noteVis >= 5, "Odločitveni", "– analize za vodstvo in scenarije.")}
-            {bullet(noteVis >= 6, "ERP", "– poveže procese v enoten podatkovni model.")}
+            {bullet(
+              noteVis >= 4,
+              this.props.t("flowDemo.note.bullet1Term"),
+              this.props.t("flowDemo.note.bullet1Rest"),
+            )}
+            {bullet(
+              noteVis >= 5,
+              this.props.t("flowDemo.note.bullet2Term"),
+              this.props.t("flowDemo.note.bullet2Rest"),
+            )}
+            {bullet(
+              noteVis >= 6,
+              this.props.t("flowDemo.note.bullet3Term"),
+              this.props.t("flowDemo.note.bullet3Rest"),
+            )}
           </div>
           <div
             style={{
@@ -1295,10 +1359,10 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
             }}
           >
             <span style={{ fontSize: "10.6px", fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--l-label)" }}>
-              Ključno
+              {this.props.t("flowDemo.note.keyLabel")}
             </span>
             <span style={{ fontSize: "12.4px", lineHeight: 1.45, color: "var(--l-label)" }}>
-              Brez kakovostnih podatkov tudi najboljši sistem ne da dobrih odločitev.
+              {this.props.t("flowDemo.note.keyBody")}
             </span>
           </div>
           {/* Reserved like the lines above it, so the note does not settle
@@ -1316,7 +1380,11 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
           />
         </div>
         <p style={{ ...STATUS_BASE, color: stage >= 2 ? "var(--l-label)" : "var(--l-second)" }}>
-          {stage >= 2 ? "Zapiski pripravljeni" : stage === 1 ? "Pišem zapiske…" : ""}
+          {stage >= 2
+            ? this.props.t("flowDemo.statusNotesReady")
+            : stage === 1
+              ? this.props.t("flowDemo.statusWritingNotes")
+              : ""}
         </p>
       </article>
     );
@@ -1373,7 +1441,11 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
               textTransform: "uppercase",
             }}
           >
-            {s.sTab === "cards" ? "Zaključeno" : s.sTab === "quiz" ? "Kviz zaključen" : "Preizkus oddan"}
+            {s.sTab === "cards"
+              ? this.props.t("flowDemo.doneCards")
+              : s.sTab === "quiz"
+                ? this.props.t("flowDemo.doneQuiz")
+                : this.props.t("flowDemo.doneTest")}
           </span>
           <h3
             style={{
@@ -1388,13 +1460,13 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
           >
             {s.sTab === "cards"
               ? s.sKnown === cards.length
-                ? "Vse kartice so predelane"
-                : "Ponovi kartice, ki si jih zgrešil"
+                ? this.props.t("flowDemo.allCardsDone")
+                : this.props.t("flowDemo.repeatMissedCards")
               : s.sTab === "quiz"
                 ? s.sQScore === quiz.length
-                  ? "Vsa vprašanja so predelana"
-                  : "Ponovi vprašanja, ki si jih zgrešil"
-                : "Preizkus je ocenjen"}
+                  ? this.props.t("flowDemo.allQuestionsDone")
+                  : this.props.t("flowDemo.repeatMissedQuestions")
+                : this.props.t("flowDemo.testGraded")}
           </h3>
         </div>
         <div style={{ display: "grid", justifyItems: "center", gap: "7px" }}>
@@ -1434,13 +1506,21 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                   color: "var(--l-second)",
                 }}
               >
-                {s.sTab === "cards" ? "Znanih" : s.sTab === "quiz" ? "Pravilnih" : "Točk"}
+                {s.sTab === "cards"
+                  ? this.props.t("flowDemo.metricKnown")
+                  : s.sTab === "quiz"
+                    ? this.props.t("flowDemo.metricCorrect")
+                    : this.props.t("flowDemo.metricPoints")}
               </span>
             </div>
           </div>
           <div style={{ display: "grid", gap: "4px", justifyItems: "center", textAlign: "center" }}>
             <span style={{ fontSize: "8px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--l-second)" }}>
-              {s.sTab === "cards" ? "Znane kartice" : s.sTab === "quiz" ? "Pravilni odgovori" : "Dosežene točke"}
+              {s.sTab === "cards"
+                ? this.props.t("flowDemo.knownCards")
+                : s.sTab === "quiz"
+                  ? this.props.t("flowDemo.correctAnswers")
+                  : this.props.t("flowDemo.pointsScored")}
             </span>
             <strong style={{ fontSize: "18.6px", lineHeight: 1, letterSpacing: "-0.06em", color: "var(--l-label)", whiteSpace: "nowrap" }}>
               {metric}
@@ -1469,7 +1549,11 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
           }}
         >
           <span style={{ fontSize: "12px" }}>🔄</span>
-          {s.sTab === "cards" ? "Začni komplet znova" : s.sTab === "quiz" ? "Začni kviz znova" : "Začni nov preizkus"}
+          {s.sTab === "cards"
+            ? this.props.t("flowDemo.restartCards")
+            : s.sTab === "quiz"
+              ? this.props.t("flowDemo.restartQuiz")
+              : this.props.t("flowDemo.restartTest")}
         </button>
       </div>
     );
@@ -1587,7 +1671,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
       >
         <span style={this.nodeStyle(3)} />
         <h3 style={{ margin: "0.35rem 0 0", color: "var(--l-label)", fontSize: "1.35rem", fontWeight: 600, lineHeight: 1.25 }}>
-          Ponavljaj snov
+          {this.props.t("flowDemo.step3Title")}
         </h3>
         <div style={studyCardStyle}>
           <div style={studyBodyStyle}>
@@ -1596,7 +1680,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                 <button key={tab.id} type="button" onClick={() => this.selectTab(tab.id)} style={this.tabStyle(tab.id, tab.tint)}>
                   <Msym name={tab.icon} size="14px" fill={false} weight={500} style={{ color: tab.tint }} />
                   <span style={{ fontSize: "12.5px", fontWeight: 750, letterSpacing: "-0.025em", whiteSpace: "nowrap" }}>
-                    {tab.label}
+                    {this.props.t(tab.labelKey)}
                   </span>
                 </button>
               ))}
@@ -1646,13 +1730,13 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                   >
                     <div style={faceBase}>
                       <span style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--l-second)", textAlign: "left" }}>{cardCounter}</span>
-                      <span style={{ fontSize: "15px", fontWeight: 600, lineHeight: 1.35, color: "var(--l-label)" }}>{card.q}</span>
-                      <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--l-second)" }}>Pokaži odgovor</span>
+                      <span style={{ fontSize: "15px", fontWeight: 600, lineHeight: 1.35, color: "var(--l-label)" }}>{this.props.t(card.qKey)}</span>
+                      <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--l-second)" }}>{this.props.t("flowDemo.showAnswer")}</span>
                     </div>
                     <div style={{ ...faceBase, transform: "rotateY(180deg)" }}>
                       <span style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--l-second)", textAlign: "left" }}>{cardCounter}</span>
-                      <span style={{ fontSize: "13.4px", fontWeight: 500, lineHeight: 1.45, color: "var(--l-label)" }}>{card.a}</span>
-                      <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--l-second)" }}>Povleci levo ali desno</span>
+                      <span style={{ fontSize: "13.4px", fontWeight: 500, lineHeight: 1.45, color: "var(--l-label)" }}>{this.props.t(card.aKey)}</span>
+                      <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--l-second)" }}>{this.props.t("flowDemo.swipeHint")}</span>
                     </div>
                   </div>
                 </div>
@@ -1679,11 +1763,12 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                     {Math.min(s.sQIdx + 1, quiz.length)} / {quiz.length}
                   </span>
                   <span style={{ fontSize: "14px", fontWeight: 650, lineHeight: 1.32, color: "var(--l-label)", textAlign: "left" }}>
-                    {q.q}
+                    {this.props.t(q.qKey)}
                   </span>
                 </div>
                 <div style={{ display: "grid", gap: "6px" }}>
-                  {q.options.map((label, i) => {
+                  {q.optionKeys.map((optionKey, i) => {
+                    const label = this.props.t(optionKey);
                     const picked = s.sQPick === i;
                     const reveal = s.sQPick !== null;
                     const right = i === q.correct;
@@ -1769,7 +1854,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                     {Math.min(s.sTIdx + 1, test.length)} / {test.length}
                   </span>
                   <span style={{ fontSize: "14px", fontWeight: 650, lineHeight: 1.32, color: "var(--l-label)", textAlign: "left" }}>
-                    {t.q}
+                    {this.props.t(t.qKey)}
                   </span>
                 </div>
                 <input
@@ -1779,7 +1864,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                     this.studyTouch();
                     this.setState({ sTVal: e.target.value });
                   }}
-                  placeholder="Tvoj odgovor"
+                  placeholder={this.props.t("flowDemo.answerPlaceholder")}
                   style={{
                     width: "100%",
                     boxSizing: "border-box",
@@ -1807,7 +1892,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                     transition: "opacity 200ms ease",
                   }}
                 >
-                  {s.sTShown ? (s.sTOk ? `✓ ${t.a}` : t.a) : ""}
+                  {s.sTShown ? (s.sTOk ? `✓ ${this.props.t(t.aKey)}` : this.props.t(t.aKey)) : ""}
                 </span>
                 <button
                   type="button"
@@ -1825,7 +1910,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                     cursor: "pointer",
                   }}
                 >
-                  {s.sTShown ? "Naprej" : "Preveri"}
+                  {s.sTShown ? this.props.t("flowDemo.next") : this.props.t("flowDemo.check")}
                 </button>
               </div>
             ) : null}
@@ -1834,7 +1919,11 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
           </div>
         </div>
         <p style={{ ...STATUS_BASE, color: done3 ? "var(--l-label)" : "var(--l-second)" }}>
-          {done3 ? "Gradivo pripravljeno" : stage === 2 ? "Ustvarjam gradivo…" : ""}
+          {done3
+            ? this.props.t("flowDemo.statusMaterialReady")
+            : stage === 2
+              ? this.props.t("flowDemo.statusBuildingMaterial")
+              : ""}
         </p>
       </article>
     );
@@ -1854,7 +1943,9 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
         style={{ position: "relative" }}
       >
         <div style={{ display: "grid", justifyItems: "center", gap: "1.2rem", marginBottom: "3rem" }}>
-          <span style={{ color: "var(--l-second)", fontSize: "0.92rem" }}>Povleci vir v prvi korak</span>
+          <span style={{ color: "var(--l-second)", fontSize: "0.92rem" }}>
+            {this.props.t("flowDemo.dragSourceToStep")}
+          </span>
           <div className="landing-v2-flow-chips">
             {FLOW_SOURCES.map((chip, i) => (
               <div
@@ -1895,7 +1986,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                   </span>
                 </span>
                 <span className="landing-v2-flow-chip-name">{chip.label}</span>
-                <span className="landing-v2-flow-chip-sub">{chip.sub}</span>
+                <span className="landing-v2-flow-chip-sub">{chip.sub(this.props.t)}</span>
               </div>
             ))}
           </div>
@@ -1982,4 +2073,8 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
       </div>
     );
   }
+}
+
+export function LandingFlowDemo(props: Omit<FlowDemoProps, "t">) {
+  return <LandingFlowDemoView {...props} t={useT()} />;
 }

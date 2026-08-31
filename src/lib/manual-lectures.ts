@@ -60,11 +60,10 @@ import {
 import { createAiChunkSelector } from "@/lib/source-condensation-ai";
 import {
   isUnsupportedVideoContentType,
-  getUnsupportedVideoLinkMessage,
   isReadableLinkContentType,
 } from "@/lib/link-source-validation";
+import { expectedInputFailure, sourceLocaleMessage } from "@/lib/lecture-failure-text";
 import {
-  ExpectedLectureInputError,
   isExpectedLectureInputError,
 } from "@/lib/lecture-processing-errors";
 import {
@@ -73,7 +72,6 @@ import {
 } from "@/lib/link-fetch-errors";
 import {
   LINK_LOGIN_WALL_CODE,
-  LINK_LOGIN_WALL_MESSAGE,
   isLoginWallUrl,
   looksLikeLoginPage,
 } from "@/lib/link-login-walls";
@@ -823,30 +821,108 @@ function isNoisyReadableLine(line: string) {
     return true;
   }
 
-  return [
-    "pojdi na vsebino",
-    "glavni meni",
-    "navigacija",
-    "iskanje",
-    "išči",
-    "videz",
-    "ustvari račun",
-    "prijava",
-    "osebna orodja",
-    "orodja",
-    "dejanja",
-    "splošno",
-    "tiskanje/izvoz",
-    "v drugih projektih",
-    "uredi povezave",
-    "preberi",
-    "uredi stran",
-    "uredi kodo",
-    "zgodovina",
-    "vklopi kazalo vsebine",
-    "iz wikipedije, proste enciklopedije",
-  ].includes(lower);
+  return NOISY_PAGE_CHROME_LINES.has(lower);
 }
+
+/*
+ * Lines that are a page's own furniture rather than its material: the Wikipedia sidebar, the
+ * account links, the edit toolbar. Dropped so a note built from a scraped page is the article
+ * and not the interface around it.
+ *
+ * Written out per language rather than matched by pattern, because these are exact whole lines
+ * and a looser rule would eat real headings — "Zgodovina" is a sidebar link on Wikipedia and a
+ * section title in half the history articles ever written, which is why it is only ever removed
+ * as a line of its own.
+ *
+ * All four languages of the markets Memo serves, because the language of the page a learner
+ * pastes follows their material, not their interface: a Croatian student's link goes to
+ * hr.wikipedia.org, whose chrome says "Idi na sadržaj" where Slovenian says "Pojdi na vsebino".
+ * Serbian Wikipedia serves Latin and Cyrillic from the same article, so both scripts are listed.
+ */
+const NOISY_PAGE_CHROME_LINES = new Set([
+  // Slovenian
+  "pojdi na vsebino",
+  "glavni meni",
+  "navigacija",
+  "iskanje",
+  "išči",
+  "videz",
+  "ustvari račun",
+  "prijava",
+  "osebna orodja",
+  "orodja",
+  "dejanja",
+  "splošno",
+  "tiskanje/izvoz",
+  "v drugih projektih",
+  "uredi povezave",
+  "preberi",
+  "uredi stran",
+  "uredi kodo",
+  "zgodovina",
+  "vklopi kazalo vsebine",
+  "iz wikipedije, proste enciklopedije",
+  // Croatian
+  "idi na sadržaj",
+  "glavni izbornik",
+  "pretraživanje",
+  "traži",
+  "izgled",
+  "otvori račun",
+  "prijavi se",
+  "osobni alati",
+  "alati",
+  "radnje",
+  "općenito",
+  "ispis/izvoz",
+  "na drugim projektima",
+  "uredi poveznice",
+  "čitaj",
+  "uredi",
+  "uredi izvor",
+  "povijest",
+  "uključi/isključi sadržaj",
+  "izvor: wikipedija",
+  "iz wikipedije, slobodne enciklopedije",
+  // Bosnian
+  "idi na sadržaj",
+  "glavni meni",
+  "pretraga",
+  "lični alati",
+  "opće",
+  "štampanje/izvoz",
+  "na drugim projektima",
+  "uredi izvor",
+  "historija",
+  "s wikipedije, slobodne enciklopedije",
+  // Serbian, both scripts — sr.wikipedia serves the same article in either
+  "иди на садржај",
+  "главни мени",
+  "претрага",
+  "тражи",
+  "изглед",
+  "направи налог",
+  "пријави ме",
+  "лични алати",
+  "алатке",
+  "радње",
+  "опште",
+  "штампање/извоз",
+  "на другим пројектима",
+  "уреди везе",
+  "читај",
+  "уреди извор",
+  "историја",
+  "с википедије, слободне енциклопедије",
+  "napravi nalog",
+  "prijavi me",
+  "alatke",
+  "opšte",
+  "štampanje/izvoz",
+  "uredi veze",
+  "istorija",
+  "s vikipedije, slobodne enciklopedije",
+]);
 
 function cleanReadableWebpageText(text: string) {
   const lines = text
@@ -1019,10 +1095,7 @@ async function resolveHostAddresses(hostname: string) {
     const resolutionFailure = describeHostResolutionFailure(error);
 
     if (resolutionFailure) {
-      throw new ExpectedLectureInputError(
-        resolutionFailure.message,
-        resolutionFailure.code,
-      );
+      throw expectedInputFailure(resolutionFailure.code);
     }
 
     throw error;
@@ -1037,18 +1110,12 @@ async function assertPublicHostname(hostname: string) {
     normalizedHostname.endsWith(".localhost") ||
     normalizedHostname.endsWith(".local")
   ) {
-    throw new ExpectedLectureInputError(
-      "Ta povezava kaže na zasebno omrežje, zato je ne moremo odpreti. Prilepi javno dostopno povezavo.",
-      "private_network_link",
-    );
+    throw expectedInputFailure("private_network_link");
   }
 
   if (isIP(normalizedHostname) !== 0) {
     if (isDisallowedIpAddress(normalizedHostname)) {
-      throw new ExpectedLectureInputError(
-        "Ta povezava kaže na zasebno omrežje, zato je ne moremo odpreti. Prilepi javno dostopno povezavo.",
-        "private_network_link",
-      );
+      throw expectedInputFailure("private_network_link");
     }
 
     return;
@@ -1060,10 +1127,7 @@ async function assertPublicHostname(hostname: string) {
     addresses.length === 0 ||
     addresses.some((entry) => isDisallowedIpAddress(entry.address))
   ) {
-    throw new ExpectedLectureInputError(
-      "Ta povezava kaže na zasebno omrežje, zato je ne moremo odpreti. Prilepi javno dostopno povezavo.",
-      "private_network_link",
-    );
+    throw expectedInputFailure("private_network_link");
   }
 }
 
@@ -1071,10 +1135,7 @@ function resolveRedirectUrl(baseUrl: URL, location: string) {
   try {
     return new URL(location, baseUrl);
   } catch {
-    throw new ExpectedLectureInputError(
-      "Ta povezava se preusmerja na naslov, ki ga ne znamo prebrati. Odpri jo v brskalniku in prilepi končni naslov strani.",
-      "invalid_link_redirect",
-    );
+    throw expectedInputFailure("invalid_link_redirect");
   }
 }
 
@@ -1131,10 +1192,7 @@ async function fetchReadableWebpageResponse(
   sawLoginWall: boolean;
 }> {
   if (redirectCount > MAX_LINK_FETCH_REDIRECTS) {
-    throw new ExpectedLectureInputError(
-      "Ta povezava se preusmerja prevečkrat. Odpri jo v brskalniku in prilepi končni naslov strani.",
-      "too_many_link_redirects",
-    );
+    throw expectedInputFailure("too_many_link_redirects");
   }
 
   await assertPublicHostname(targetUrl.hostname);
@@ -1158,19 +1216,13 @@ async function fetchReadableWebpageResponse(
       const location = response.headers.get("location");
 
       if (!location) {
-        throw new ExpectedLectureInputError(
-          "Ta povezava se preusmerja na naslov, ki ga ne znamo prebrati. Odpri jo v brskalniku in prilepi končni naslov strani.",
-          "invalid_link_redirect",
-        );
+        throw expectedInputFailure("invalid_link_redirect");
       }
 
       const nextUrl = resolveRedirectUrl(targetUrl, location);
 
       if (nextUrl.protocol !== "http:" && nextUrl.protocol !== "https:") {
-        throw new ExpectedLectureInputError(
-          "Podprte so samo povezave, ki se začnejo s http:// ali https://.",
-          "unsupported_link_protocol",
-        );
+        throw expectedInputFailure("unsupported_link_protocol");
       }
 
       // Note where the chain went, but keep following it. A sign-in wall only ever
@@ -1190,17 +1242,14 @@ async function fetchReadableWebpageResponse(
     };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new ExpectedLectureInputError(
-        "Stran se ni odzvala dovolj hitro. Poskusi znova čez nekaj minut.",
-        "link_timeout",
-      );
+      throw expectedInputFailure("link_timeout");
     }
 
     if (!isExpectedLectureInputError(error)) {
       const fetchFailure = describeLinkFetchFailure(error);
 
       if (fetchFailure) {
-        throw new ExpectedLectureInputError(fetchFailure.message, fetchFailure.code);
+        throw expectedInputFailure(fetchFailure.code);
       }
     }
 
@@ -1219,29 +1268,20 @@ export async function fetchReadableWebpage(params: { url: string }) {
 
   if (!response.ok) {
     if (behindLogin || response.status === 401 || response.status === 403) {
-      throw new ExpectedLectureInputError(LINK_LOGIN_WALL_MESSAGE, LINK_LOGIN_WALL_CODE);
+      throw expectedInputFailure(LINK_LOGIN_WALL_CODE);
     }
 
-    throw new ExpectedLectureInputError(
-      "Te povezave ni bilo mogoče naložiti. Preveri, ali se odpre v brskalniku, in poskusi znova.",
-      "link_not_loadable",
-    );
+    throw expectedInputFailure("link_not_loadable");
   }
 
   const contentType = response.headers.get("content-type") ?? "";
 
   if (isUnsupportedVideoContentType(contentType)) {
-    throw new ExpectedLectureInputError(
-      getUnsupportedVideoLinkMessage(),
-      "unsupported_video_link",
-    );
+    throw expectedInputFailure("unsupported_video_link");
   }
 
   if (!isReadableLinkContentType(contentType)) {
-    throw new ExpectedLectureInputError(
-      "Ta povezava vodi do datoteke, ne do spletne strani. Če je to PDF, dokument ali predstavitev, jo prenesi in naloži v MemoAI — iz datoteke znamo narediti zapiske.",
-      "unsupported_link_content_type",
-    );
+    throw expectedInputFailure("unsupported_link_content_type");
   }
 
   const html = await readResponseBodyWithLimit(response, MAX_LINK_FETCH_BYTES);
@@ -1258,13 +1298,10 @@ export async function fetchReadableWebpage(params: { url: string }) {
     // `stripNoisyHtml` drops the `<form>` that holds all of its text. Say what actually
     // blocked us, so the learner is pointed at signing in rather than at retry.
     if (behindLogin || looksLikeLoginPage(html)) {
-      throw new ExpectedLectureInputError(LINK_LOGIN_WALL_MESSAGE, LINK_LOGIN_WALL_CODE);
+      throw expectedInputFailure(LINK_LOGIN_WALL_CODE);
     }
 
-    throw new ExpectedLectureInputError(
-      "Na tej strani ni dovolj berljivega besedila za zapiske. Prilepi povezavo do strani, ki ima več besedila.",
-      "link_not_enough_text",
-    );
+    throw expectedInputFailure("link_not_enough_text");
   }
 
   return {
@@ -1385,10 +1422,7 @@ export async function extractTextFromPdf(file: File) {
     // is the learner's file to fix and not a defect, so say so in a way they can act on instead of
     // failing the lecture with "Model returned empty text output." and paging us about it.
     if (error instanceof GeminiEmptyTextOutputError) {
-      throw new ExpectedLectureInputError(
-        "V tem PDF-ju ni bilo mogoče najti berljivega besedila. Če gre za skeniran dokument, strani naloži kot fotografije, da jih lahko preberemo.",
-        "pdf_no_text",
-      );
+      throw expectedInputFailure("pdf_no_text");
     }
 
     throw error;
@@ -1652,10 +1686,7 @@ async function fitSourceTextToPipeline(params: {
   }
 
   if (sourceChars > MAX_RAW_SOURCE_TEXT_CHARS) {
-    throw new ExpectedLectureInputError(
-      "To gradivo je preveliko za obdelavo naenkrat. Razdeli ga na nekaj delov in poskusi znova.",
-      "source_too_large",
-    );
+    throw expectedInputFailure("source_too_large");
   }
 
   const condensed = await condenseSourceMaterial({
@@ -1702,10 +1733,7 @@ export async function createLectureFromTextSource(params: {
   const cleanedText = normalizeWhitespace(params.text);
 
   if (cleanedText.length < 120) {
-    throw new ExpectedLectureInputError(
-      "Za zapiske potrebujemo malo več gradiva. Dodaj še nekaj besedila in poskusi znova.",
-      "source_too_short",
-    );
+    throw expectedInputFailure("source_too_short");
   }
 
   const fitted = await fitSourceTextToPipeline({
@@ -1799,7 +1827,7 @@ export async function createLectureFromTextSource(params: {
         .single();
 
       if (lectureError || !lecture) {
-        throw new Error(lectureError?.message ?? "Zapiska ni bilo mogoče ustvariti.");
+        throw new Error(lectureError?.message ?? sourceLocaleMessage("api.noteCreateFailed"));
       }
 
       lectureId = (lecture as { id: string }).id;
@@ -1815,7 +1843,7 @@ export async function createLectureFromTextSource(params: {
     }
 
     if (!lectureId) {
-      throw new Error("Zapiska ni bilo mogoče ustvariti.");
+      throw new Error(sourceLocaleMessage("api.noteCreateFailed"));
     }
 
     const activeLectureId = lectureId;
@@ -2013,10 +2041,7 @@ export async function prepareLectureFromTextSource(params: {
   const cleanedText = normalizeWhitespace(params.text);
 
   if (cleanedText.length < 120) {
-    throw new ExpectedLectureInputError(
-      "Za zapiske potrebujemo malo več gradiva. Dodaj še nekaj besedila in poskusi znova.",
-      "source_too_short",
-    );
+    throw expectedInputFailure("source_too_short");
   }
 
   const fitted = await fitSourceTextToPipeline({
@@ -2108,7 +2133,7 @@ export async function prepareLectureFromTextSource(params: {
     .single();
 
   if (error || !lecture) {
-    throw new Error(error?.message ?? "Zapiska ni bilo mogoče ustvariti.");
+    throw new Error(error?.message ?? sourceLocaleMessage("api.noteCreateFailed"));
   }
 
   return (lecture as { id: string }).id;

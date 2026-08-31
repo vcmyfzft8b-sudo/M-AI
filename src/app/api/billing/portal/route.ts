@@ -7,12 +7,14 @@ import {
   getViewerAppState,
 } from "@/lib/billing";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
+import { STRIPE_CHECKOUT_LOCALE } from "@/lib/i18n/locales";
+import { getLocale, tr } from "@/lib/i18n/server";
 
 export async function POST(request: Request) {
   const appState = await getViewerAppState();
 
   if (!appState) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -36,6 +38,8 @@ export async function POST(request: Request) {
 
     const stripe = getStripeClient();
     const session = await stripe.billingPortal.sessions.create({
+      // The portal is Stripe's page, in the language the app is being read in.
+      locale: STRIPE_CHECKOUT_LOCALE[await getLocale()],
       customer: customerId,
       return_url: getBillingPortalReturnUrl(request),
     });
@@ -44,7 +48,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Seje za portal naročnine ni bilo mogoče ustvariti.",
+        error: error instanceof Error ? error.message : await tr("api.portalSessionFailed"),
       },
       { status: 500 },
     );

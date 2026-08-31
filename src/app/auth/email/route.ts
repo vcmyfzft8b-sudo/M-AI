@@ -14,6 +14,7 @@ import {
   normalizeNextPath,
   sanitizeUserInput,
 } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const EMAIL_AUTH_MINUTE_LIMIT_SECONDS = 60;
 const EMAIL_AUTH_HOURLY_LIMIT = 10;
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
       email: "",
       mode: "login",
       next: "/app",
-      message: "Obrazec je neveljaven ali prevelik.",
+      message: await tr("api.formInvalidOrTooLarge"),
       messageType: "error",
       sentAt: 0,
     });
@@ -121,7 +122,7 @@ export async function POST(request: NextRequest) {
       email: parsed.data.email,
       mode: parsed.data.mode,
       next,
-      message: "Prijava z e-pošto za ta projekt ni omogočena.",
+      message: await tr("api.emailLoginDisabled"),
       messageType: "error",
       sentAt: 0,
     });
@@ -160,7 +161,7 @@ export async function POST(request: NextRequest) {
       email: parsed.data.email,
       mode: parsed.data.mode,
       next,
-      message: "Omejitve pošiljanja e-pošte ni bilo mogoče preveriti. Poskusi znova.",
+      message: await tr("api.emailRateCheckFailed"),
       messageType: "error",
       sentAt: 0,
     });
@@ -172,7 +173,7 @@ export async function POST(request: NextRequest) {
       email: parsed.data.email,
       mode: parsed.data.mode,
       next,
-      message: "Novo kodo lahko zahtevaš, ko se izteče 1-minutni časovnik.",
+      message: await tr("api.resendTimer"),
       messageType: "error",
       sentAt: new Date(recentMinuteRequest.created_at).getTime(),
       cooldownSeconds: EMAIL_AUTH_MINUTE_LIMIT_SECONDS,
@@ -190,7 +191,7 @@ export async function POST(request: NextRequest) {
       email: parsed.data.email,
       mode: parsed.data.mode,
       next,
-      message: "Ta e-naslov je pred kratkim zahteval preveč kod. Poskusi znova, ko se časovnik izteče.",
+      message: await tr("api.tooManyCodes"),
       messageType: "error",
       sentAt: oldestAllowedTime,
       cooldownSeconds: EMAIL_AUTH_HOURLY_LIMIT_SECONDS,
@@ -232,7 +233,7 @@ export async function POST(request: NextRequest) {
       email: parsed.data.email,
       mode: parsed.data.mode,
       next,
-      message: "Kodo smo poslali, vendar časovnika za ponovno pošiljanje ni bilo mogoče posodobiti. Počakaj minuto in poskusi znova.",
+      message: await tr("api.codeSentTimerFailed"),
       messageType: "info",
     });
     return applyCookies(NextResponse.redirect(retryUrl, { status: 303 }));
@@ -242,7 +243,7 @@ export async function POST(request: NextRequest) {
     email: normalizedEmail,
     mode: parsed.data.mode,
     next,
-    message: "Koda je poslana. Za nadaljevanje jo vnesi spodaj.",
+    message: await tr("api.codeSent"),
     messageType: "info",
     cooldownSeconds: EMAIL_AUTH_MINUTE_LIMIT_SECONDS,
   });

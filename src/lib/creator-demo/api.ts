@@ -10,6 +10,7 @@
  * the middle of a recording.
  */
 import { buildNoteTtsChunks, parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
+import { demoT } from "@/lib/creator-demo/demo-translator";
 import type { EditableNoteDoc } from "@/lib/note-doc";
 import {
   addDemoNoteMedia,
@@ -208,7 +209,7 @@ function ttsChunk(lectureId: string, chunkIndex: number) {
   const chunk = plan?.chunks[chunkIndex];
 
   if (!plan || !chunk) {
-    return json({ error: "Poslušanje ni na voljo." }, 404);
+    return json({ error: demoT("readAloud.unavailable") }, 404);
   }
 
   const wordCount = Math.max(1, chunk.wordEndIndex - chunk.wordStartIndex);
@@ -248,7 +249,7 @@ async function handleLectureRoute(
   if (rest.length === 0) {
     if (method === "GET") {
       lastDetailFetchAt = Date.now();
-      return detail ? json(detail) : json({ error: "Ni najdeno." }, 404);
+      return detail ? json(detail) : json({ error: demoT("api.notFound") }, 404);
     }
 
     if (method === "DELETE") {
@@ -304,7 +305,7 @@ async function handleLectureRoute(
 
       const body = await readJsonBody(init, input);
       const saved = saveDemoNoteDoc(lectureId, body.doc as EditableNoteDoc);
-      return saved ? json(saved) : json({ error: "Ni najdeno." }, 404);
+      return saved ? json(saved) : json({ error: demoT("api.notFound") }, 404);
     }
 
     case "note-media": {
@@ -324,7 +325,7 @@ async function handleLectureRoute(
 
       if (method === "DELETE" && tail[0]) {
         const result = deleteDemoNoteMedia(lectureId, tail[0]);
-        return result ? json(result) : json({ error: "Ni najdeno." }, 404);
+        return result ? json(result) : json({ error: demoT("api.notFound") }, 404);
       }
 
       const body = await readJsonBody(init, input);
@@ -340,7 +341,7 @@ async function handleLectureRoute(
         afterBlockId: typeof body.afterBlockId === "string" ? body.afterBlockId : "",
       });
 
-      return result ? json(result) : json({ error: "Ni najdeno." }, 404);
+      return result ? json(result) : json({ error: demoT("api.notFound") }, 404);
     }
 
     case "flashcards": {
@@ -353,7 +354,7 @@ async function handleLectureRoute(
         difficulty: (body.difficulty as "easy" | "medium" | "hard") ?? "medium",
       });
 
-      return flashcard ? json({ flashcard }) : json({ error: "Ni najdeno." }, 404);
+      return flashcard ? json({ flashcard }) : json({ error: demoT("api.notFound") }, 404);
     }
 
     case "practice-test": {
@@ -361,7 +362,7 @@ async function handleLectureRoute(
         const attempt = startDemoPracticeAttempt(lectureId);
 
         if (!attempt) {
-          return json({ error: "Ni najdeno." }, 404);
+          return json({ error: demoT("api.notFound") }, 404);
         }
 
         await waitForDetailRefreshWindow();
@@ -437,7 +438,7 @@ async function handleQuizQuestionRoute(
     difficulty: (body.difficulty as "easy" | "medium" | "hard") ?? "medium",
   });
 
-  return question ? json({ question }) : json({ error: "Ni najdeno." }, 404);
+  return question ? json({ question }) : json({ error: demoT("api.notFound") }, 404);
 }
 
 async function handleFolderRoute(
@@ -455,7 +456,7 @@ async function handleFolderRoute(
     }
 
     if (method === "POST") {
-      const folder = createDemoFolder(String(body.name ?? "Nova mapa"));
+      const folder = createDemoFolder(String(body.name ?? demoT("folders.new")));
       const withLectures = updateDemoFolder({
         folderId: folder.id,
         lectureIds: Array.isArray(body.lectureIds) ? (body.lectureIds as string[]) : [],
@@ -490,7 +491,7 @@ async function handleFolderRoute(
       lectureIds: Array.isArray(body.lectureIds) ? (body.lectureIds as string[]) : undefined,
     });
 
-    return folder ? json({ folder }) : json({ error: "Ni najdeno." }, 404);
+    return folder ? json({ folder }) : json({ error: demoT("api.notFound") }, 404);
   }
 
   return json({ ok: true });
@@ -551,7 +552,7 @@ async function handleDemoRequest(
           })
         : null;
 
-      return flashcard ? json({ flashcard }) : json({ error: "Ni najdeno." }, 404);
+      return flashcard ? json({ flashcard }) : json({ error: demoT("api.notFound") }, 404);
     }
 
     case "library-folders":

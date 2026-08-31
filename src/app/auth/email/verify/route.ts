@@ -11,6 +11,7 @@ import {
   sanitizeUserInput,
   verificationCodeSchema,
 } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const VERIFY_EMAIL_FORM_MAX_BYTES = 8 * 1024;
 
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
     retryUrl.searchParams.set("mode", "login");
     retryUrl.searchParams.set("next", "/app");
     retryUrl.searchParams.set("messageType", "error");
-    retryUrl.searchParams.set("message", "Obrazec je neveljaven ali prevelik.");
+    retryUrl.searchParams.set("message", await tr("api.formInvalidOrTooLarge"));
     return NextResponse.redirect(retryUrl, { status: 303 });
   }
 
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     retryUrl.searchParams.set("messageType", "error");
     retryUrl.searchParams.set(
       "message",
-      parsed.error.issues[0]?.message ?? "Vnesi potrditveno kodo iz e-pošte.",
+      parsed.error.issues[0]?.message ?? await tr("api.enterCode"),
     );
     return NextResponse.redirect(retryUrl, { status: 303 });
   }

@@ -7,6 +7,7 @@ import { createChatEventStream } from "@/lib/chat-stream";
 import { LIBRARY_CHAT_SCOPES, answerLibraryChat } from "@/lib/library-chat";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
+import { tr } from "@/lib/i18n/server";
 
 /**
  * Chat across the learner's whole library — the home ask-bar in the redesign.
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
   const user = await getOptionalUserOrPreviewBypass();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
   if (!appState?.hasPaidAccess) {
     return NextResponse.json(
       {
-        error: "Klepet z vsemi zapiski je na voljo z naročnino.",
+        error: await tr("api.libraryChatPaid"),
         code: "billing_required",
       },
       { status: 402 },
@@ -83,6 +84,7 @@ export async function POST(request: Request) {
 
   return createChatEventStream({
     label: "[library-chat]",
+    errorMessage: await tr("libraryChat.error.answerFailed"),
     run: (send) =>
       answerLibraryChat({
         userId: user.id,

@@ -8,6 +8,7 @@ import {
   InvalidAudioFileError,
   NoClearSpeechDetectedError,
 } from "@/lib/transcription/types";
+import { tr } from "@/lib/i18n/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -58,23 +59,23 @@ export async function POST(request: Request) {
     const candidate = formData.get("audio");
     file = candidate instanceof File ? candidate : null;
   } catch {
-    return NextResponse.json({ error: "Posnetka ni bilo mogoče prebrati." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.recordingUnreadable") }, { status: 400 });
   }
 
   if (!file || file.size === 0) {
-    return NextResponse.json({ error: "Posnetka ni bilo mogoče prebrati." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.recordingUnreadable") }, { status: 400 });
   }
 
   if (file.size > MAX_DICTATION_BYTES) {
     return NextResponse.json(
-      { error: "Posnetek je predolg. Povej vprašanje na kratko." },
+      { error: await tr("api.dictationTooLong") },
       { status: 413 },
     );
   }
 
   if (!isSupportedAudioMimeType(file.type || "", file.name)) {
     return NextResponse.json(
-      { error: "Tega zvočnega formata ne znam prebrati." },
+      { error: await tr("api.unreadableAudioFormat") },
       { status: 415 },
     );
   }
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
 
     if (error instanceof InvalidAudioFileError) {
       return NextResponse.json(
-        { error: "Posnetka ni bilo mogoče prebrati. Poskusi znova." },
+        { error: await tr("api.recordingUnreadableRetry") },
         { status: 422 },
       );
     }
@@ -116,7 +117,7 @@ export async function POST(request: Request) {
     console.error("Dictation transcription failed", error);
 
     return NextResponse.json(
-      { error: "Narekovanje trenutno ne deluje. Poskusi znova." },
+      { error: await tr("api.dictationFailed") },
       { status: 502 },
     );
   }

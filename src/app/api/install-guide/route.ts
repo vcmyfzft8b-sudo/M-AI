@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import { markInstallGuideSeenForUser } from "@/lib/install-guide-state";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
+import { tr } from "@/lib/i18n/server";
 
 /**
  * Records that the "add to home screen" guide was opened, so the red dot on
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
   const user = await getOptionalUserOrPreviewBypass();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({

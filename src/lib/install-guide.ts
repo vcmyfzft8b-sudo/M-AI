@@ -1,3 +1,5 @@
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+
 /*
  * Where the badge's state lives.
  *
@@ -49,54 +51,61 @@ export const INSTALL_GUIDE_SEEN_EVENT = "memo-install-guide-seen";
  */
 export const HOME_SCREEN_STEPS = [
   {
-    title: "Odpri meni v Safariju",
-    description: "Spodaj desno pritisni gumb s tremi pikami.",
+    titleKey: "install.step1.title",
+    descriptionKey: "install.step1.description",
     light: "/onboarding/add-to-home-1-menu-light.webp",
     dark: "/onboarding/add-to-home-1-menu-dark.webp",
-    alt: "Memo v Safariju, z gumbom menija spodaj desno",
+    altKey: "install.step1.alt",
     highlight: { left: "79.8%", top: "90.6%", width: "12.4%", height: "5.2%" },
   },
   {
-    title: "Pritisni Share",
-    description: "V meniju izberi Share.",
+    titleKey: "install.step2.title",
+    descriptionKey: "install.step2.description",
     light: "/onboarding/add-to-home-2-share-light.webp",
     dark: "/onboarding/add-to-home-2-share-dark.webp",
-    alt: "Safari meni z označeno možnostjo Share",
+    altKey: "install.step2.alt",
     highlight: { left: "33%", top: "59.4%", width: "63.2%", height: "5%" },
   },
   {
-    title: "Razširi seznam",
-    description: "Če Add to Home Screen ne vidiš, pritisni View More.",
+    titleKey: "install.step3.title",
+    descriptionKey: "install.step3.description",
     light: "/onboarding/add-to-home-3-more-light.webp",
     dark: "/onboarding/add-to-home-3-more-dark.webp",
-    alt: "Delilni meni z označenim gumbom View More",
+    altKey: "install.step3.alt",
     highlight: { left: "75.6%", top: "85%", width: "18%", height: "12.2%" },
   },
   {
-    title: "Izberi Add to Home Screen",
-    description: "Na seznamu pritisni Add to Home Screen.",
+    titleKey: "install.step4.title",
+    descriptionKey: "install.step4.description",
     light: "/onboarding/add-to-home-4-add-light.webp",
     dark: "/onboarding/add-to-home-4-add-dark.webp",
-    alt: "Razširjen delilni meni z označeno možnostjo Add to Home Screen",
+    altKey: "install.step4.alt",
     highlight: { left: "4.6%", top: "70.8%", width: "90.8%", height: "5%" },
   },
   {
-    title: "Potrdi z Add",
-    description: "Ime lahko pustiš, kot je, in zgoraj desno pritisneš Add.",
+    titleKey: "install.step5.title",
+    descriptionKey: "install.step5.description",
     light: "/onboarding/add-to-home-5-confirm-light.webp",
     dark: "/onboarding/add-to-home-5-confirm-dark.webp",
-    alt: "Potrditveno okno Add to Home Screen za Memo AI",
+    altKey: "install.step5.alt",
     highlight: { left: "79%", top: "9.4%", width: "17%", height: "5.8%" },
   },
   {
-    title: "Memo AI je na začetnem zaslonu",
-    description: "Od tod se odpre čez cel zaslon, brez vrstice brskalnika.",
+    titleKey: "install.step6.title",
+    descriptionKey: "install.step6.description",
     light: "/onboarding/add-to-home-6-done-light.webp",
     dark: "/onboarding/add-to-home-6-done-dark.webp",
-    alt: "Ikona Memo AI na začetnem zaslonu iPhona",
+    altKey: "install.step6.alt",
     highlight: { left: "52%", top: "22.1%", width: "17.2%", height: "10.1%" },
   },
-] as const;
+] as const satisfies ReadonlyArray<{
+  titleKey: MessageKey;
+  descriptionKey: MessageKey;
+  light: string;
+  dark: string;
+  altKey: MessageKey;
+  highlight: { left: string; top: string; width: string; height: string };
+}>;
 
 export type InstallPlatform = "ios" | "android" | "other";
 

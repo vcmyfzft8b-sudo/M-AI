@@ -1,3 +1,7 @@
+"use client";
+
+import { useT } from "@/components/i18n-provider";
+
 const SKELETON_SECTIONS = [
   [0, 1, 2, 3],
   [0, 1, 2],
@@ -52,12 +56,14 @@ const ARTICLE_LINES = ["full", "full", "short", "full", "full", "short"] as cons
 
 /** A single help article: heading, then body lines on the redesign's card. */
 export function SupportArticleLoading() {
+  const t = useT();
+
   return (
     <div
       className="memo-support-screen"
       data-route-skeleton=""
       aria-busy="true"
-      aria-label="Nalaganje članka pomoči"
+      aria-label={t("support.loadingArticle")}
     >
       <div className="memo-settings-topbar memo-only-mobile flex">
         <span className="memo-m-round app-loading-pill" />

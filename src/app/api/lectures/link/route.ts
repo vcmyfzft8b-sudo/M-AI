@@ -4,10 +4,10 @@ import { z } from "zod";
 import { createBillingRequiredResponse, getUserEntitlementState } from "@/lib/billing";
 import { enqueueLectureLinkProcessing } from "@/lib/jobs";
 import {
-  getUnsupportedVideoLinkMessage,
-  isUnsupportedVideoLinkMessage,
+  getUnsupportedVideoLinkMessageKey,
   isUnsupportedVideoUrl,
 } from "@/lib/link-source-validation";
+import { ExpectedLectureInputError } from "@/lib/lecture-processing-errors";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -18,6 +18,7 @@ import {
   languageHintSchema,
   optionalLectureIdSchema,
 } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const CREATE_LINK_LECTURE_MAX_BYTES = 16 * 1024;
 
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const entitlement = await getUserEntitlementState(user.id);
@@ -68,14 +69,17 @@ export async function POST(request: Request) {
 
   if (isUnsupportedVideoUrl(parsed.data.url)) {
     return NextResponse.json(
-      { error: getUnsupportedVideoLinkMessage(), code: "unsupported_video_link" },
+      {
+        error: await tr(getUnsupportedVideoLinkMessageKey()),
+        code: "unsupported_video_link",
+      },
       { status: 400 },
     );
   }
 
   if (!entitlement.hasPaidAccess && parsed.data.lectureId !== entitlement.trialLectureId) {
     return createBillingRequiredResponse(
-      "Brez plačljivega paketa lahko obdelaš samo svoje brezplačno poskusno gradivo.",
+      await tr("api.trialOnly.process"),
       "trial_exhausted",
     );
   }
@@ -84,7 +88,7 @@ export async function POST(request: Request) {
     const lectureId = parsed.data.lectureId;
 
     if (!lectureId) {
-      return NextResponse.json({ error: "Manjka ID zapiska." }, { status: 400 });
+      return NextResponse.json({ error: await tr("api.missingLectureId") }, { status: 400 });
     }
 
     const { data: lecture, error: lectureError } = await supabase
@@ -99,7 +103,7 @@ export async function POST(request: Request) {
     }
 
     if (!lecture) {
-      return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+      return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
     }
 
     const titleHint = new URL(parsed.data.url).hostname;
@@ -141,9 +145,21 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ lectureId });
   } catch (error) {
-    if (error instanceof Error && isUnsupportedVideoLinkMessage(error.message)) {
+    /*
+     * The deeper check for the same rejection. It compares the thrown error's
+     * `code` rather than its text: the text now exists in five languages, so
+     * matching on it would stop recognising this case the moment a reader is
+     * not using Slovenian.
+     */
+    if (
+      error instanceof ExpectedLectureInputError &&
+      error.code === "unsupported_video_link"
+    ) {
       return NextResponse.json(
-        { error: error.message, code: "unsupported_video_link" },
+        {
+          error: await tr(getUnsupportedVideoLinkMessageKey()),
+          code: "unsupported_video_link",
+        },
         { status: 400 },
       );
     }
@@ -151,7 +167,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : "Povezave ni bilo mogoče obdelati.",
+          error instanceof Error ? error.message : await tr("api.linkProcessFailed"),
       },
       { status: 500 },
     );

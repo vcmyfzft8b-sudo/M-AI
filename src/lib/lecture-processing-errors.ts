@@ -12,6 +12,24 @@ export class ExpectedLectureInputError extends Error {
   }
 }
 
+/**
+ * A run that was abandoned rather than refused: the invocation was killed before it could record
+ * anything, and a later reader found the row still in progress long past the point where that
+ * could be true.
+ *
+ * Deliberately not an `ExpectedLectureInputError` — nothing about the learner's input caused it,
+ * so it must keep reaching Sentry and keep its retry button. It carries a code only so the note
+ * screen can name the failure in the reader's language.
+ */
+export class LectureProcessingStalledError extends Error {
+  readonly code = "processing_stalled";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "LectureProcessingStalledError";
+  }
+}
+
 export function isExpectedLectureInputError(error: unknown) {
   return (
     error instanceof ExpectedLectureInputError ||
@@ -48,6 +66,10 @@ export function isExpectedLectureInputFailure(error: unknown) {
  */
 export function toLectureFailureCode(error: unknown) {
   if (error instanceof ExpectedLectureInputError && error.code.length > 0) {
+    return error.code;
+  }
+
+  if (error instanceof LectureProcessingStalledError) {
     return error.code;
   }
 

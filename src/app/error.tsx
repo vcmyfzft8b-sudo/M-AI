@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
 import Link from "next/link";
 
+import { useT } from "@/components/i18n-provider";
 import { ErrorScreen } from "@/components/error-screen";
 
 export default function AppError({
@@ -13,6 +14,8 @@ export default function AppError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const t = useT();
+
   useEffect(() => {
     Sentry.captureException(error);
   }, [error]);
@@ -20,17 +23,19 @@ export default function AppError({
   return (
     <ErrorScreen
       code="500"
-      title="Nekaj je šlo narobe."
-      description="Napako smo zabeležili in jo pregledujemo. Poskusi znova ali se vrni čez nekaj minut."
+      title={t("error.500.title")}
+      description={t("error.500.copy")}
       actions={
         <>
           <button type="button" className="error-screen-primary" onClick={reset}>
-            Poskusi znova
+            {t("common.retry")}
           </button>
           <Link href="/" className="error-screen-secondary">
-            Nazaj na domačo stran
+            {t("error.backHome")}
           </Link>
-          {error.digest ? <p className="error-screen-digest">Koda napake: {error.digest}</p> : null}
+          {error.digest ? (
+            <p className="error-screen-digest">{t("error.digest", { digest: error.digest })}</p>
+          ) : null}
         </>
       }
     />

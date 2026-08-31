@@ -21,10 +21,12 @@ export type NoteTtsPlaybackRate = (typeof NOTE_TTS_PLAYBACK_RATES)[number];
 
 export const DEFAULT_NOTE_TTS_PLAYBACK_RATE: NoteTtsPlaybackRate = 1;
 
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+
 export const NOTE_TTS_HIGHLIGHT_COLORS = [
   {
     id: "orange",
-    label: "Oranžna",
+    labelKey: "color.orange",
     readBackground: "#ffedd5",
     readColor: "#7c2d12",
     currentBackground: "#fb923c",
@@ -38,7 +40,7 @@ export const NOTE_TTS_HIGHLIGHT_COLORS = [
   },
   {
     id: "yellow",
-    label: "Rumena",
+    labelKey: "color.yellow",
     readBackground: "#fef3c7",
     readColor: "#78350f",
     currentBackground: "#facc15",
@@ -52,7 +54,7 @@ export const NOTE_TTS_HIGHLIGHT_COLORS = [
   },
   {
     id: "green",
-    label: "Zelena",
+    labelKey: "color.green",
     readBackground: "#dcfce7",
     readColor: "#14532d",
     currentBackground: "#4ade80",
@@ -66,7 +68,7 @@ export const NOTE_TTS_HIGHLIGHT_COLORS = [
   },
   {
     id: "blue",
-    label: "Modra",
+    labelKey: "color.blue",
     readBackground: "#dbeafe",
     readColor: "#1e3a8a",
     currentBackground: "#60a5fa",
@@ -80,7 +82,7 @@ export const NOTE_TTS_HIGHLIGHT_COLORS = [
   },
   {
     id: "pink",
-    label: "Roza",
+    labelKey: "color.pink",
     readBackground: "#fce7f3",
     readColor: "#831843",
     currentBackground: "#f472b6",
@@ -92,7 +94,20 @@ export const NOTE_TTS_HIGHLIGHT_COLORS = [
     darkCurrentColor: "#fdf2f8",
     darkCurrentRing: "rgba(244, 114, 182, 0.36)",
   },
-] as const;
+] as const satisfies ReadonlyArray<{
+  id: string;
+  labelKey: MessageKey;
+  readBackground: string;
+  readColor: string;
+  currentBackground: string;
+  currentColor: string;
+  currentRing: string;
+  darkReadBackground: string;
+  darkReadColor: string;
+  darkCurrentBackground: string;
+  darkCurrentColor: string;
+  darkCurrentRing: string;
+}>;
 
 export type NoteTtsHighlightColorId = (typeof NOTE_TTS_HIGHLIGHT_COLORS)[number]["id"];
 

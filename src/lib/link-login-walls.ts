@@ -13,11 +13,9 @@
 // They only ever change the wording of a failure: the caller consults them after a fetch
 // has already failed or come back too thin, never to decide whether to keep reading.
 
+// The wording lives in the message catalogues, under `failure.link_requires_login`, so the
+// learner reads it in their own language; this module only decides *that* a sign-in wall was hit.
 export const LINK_LOGIN_WALL_CODE = "link_requires_login";
-
-export const LINK_LOGIN_WALL_MESSAGE =
-  "Za ogled te povezave je potrebna prijava, zato je nismo mogli prebrati. " +
-  "Odpri jo v brskalniku, kjer si prijavljen, shrani gradivo kot datoteko (npr. PDF) in ga naloži sem.";
 
 // Matched against whole path segments, never as substrings, so an article at
 // /blog/login-security is not mistaken for a login form.

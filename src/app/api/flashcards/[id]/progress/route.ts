@@ -7,6 +7,7 @@ import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const FLASHCARD_PROGRESS_MAX_BYTES = 4 * 1024;
 
@@ -24,7 +25,7 @@ export async function POST(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -49,7 +50,7 @@ export async function POST(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID kartice." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidFlashcardId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;
@@ -60,20 +61,20 @@ export async function POST(
     .maybeSingle();
 
   if (flashcardError) {
-    return NextResponse.json({ error: flashcardError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   const flashcardRow = flashcard as { id: string; lecture_id: string } | null;
 
   if (!flashcardRow) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canUseLectureFeatures(user.id, flashcardRow.lecture_id, "study");
 
   if (!access.allowed) {
     return createBillingRequiredResponse(
-      "Brez plačljivega paketa so kartice na voljo samo za tvoje poskusno gradivo.",
+      await tr("api.trialOnly.cards"),
       access.code,
     );
   }
@@ -86,7 +87,7 @@ export async function POST(
     .maybeSingle();
 
   if (existingError) {
-    return NextResponse.json({ error: existingError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   const existingProgress = (existing ?? null) as FlashcardProgressRow | null;
@@ -111,7 +112,7 @@ export async function POST(
     .single();
 
   if (progressError) {
-    return NextResponse.json({ error: progressError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   return NextResponse.json({ progress });

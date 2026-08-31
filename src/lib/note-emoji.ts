@@ -21,35 +21,48 @@ const SOURCE_EMOJI: Record<string, string> = {
   youtube: "📺",
 };
 
-/** Keyword → emoji, longest match wins. Slovenian first, English alongside. */
+/*
+ * Keyword → emoji, longest match wins.
+ *
+ * Stems rather than words, and one list across every language Memo ships in, because the title
+ * being matched is the learner's — written in whatever language their material is in — not the
+ * language the interface happens to be set to. A Croatian student's "Povijest" and a Serbian
+ * student's "Istorija" have to land on the same scroll as a Slovenian "Zgodovina".
+ *
+ * Most Slovenian stems already cover Croatian, Bosnian and Serbian: "matematik", "biologij" and
+ * "psiholog" are shared. The entries below add the ones that are not — mainly where the
+ * ijekavian/ekavian split or a different loanword moves the stem ("povijest"/"istorij",
+ * "znanost"/"nauk", "tvrtk", "preduzeć") — plus the words those markets use for an exam.
+ */
 const TOPIC_EMOJI: Array<[string[], string]> = [
-  [["mikroekonom", "makroekonom", "ekonom", "econom", "trg", "inflacij"], "📈"],
-  [["statistik", "verjetnost", "statistic", "probabil"], "🎲"],
-  [["matematik", "algebra", "analiz", "integral", "odvod", "math", "calculus"], "➗"],
+  [["mikroekonom", "makroekonom", "ekonom", "econom", "trg", "tržišt", "inflacij"], "📈"],
+  [["statistik", "verjetnost", "vjerojatn", "verovatn", "statistic", "probabil"], "🎲"],
+  [["matematik", "algebra", "analiz", "integral", "odvod", "izvod", "math", "calculus"], "➗"],
   [["geometrij", "trigonom", "geometry"], "📐"],
-  [["anatomij", "nevro", "možgan", "anatomy", "neuro", "brain"], "🧠"],
-  [["medicin", "bolezn", "klinič", "medicine", "clinical", "patolog"], "🩺"],
-  [["biologij", "celic", "genetik", "biology", "cell", "dna", "evolucij"], "🧬"],
-  [["kemij", "molekul", "chemistry", "reakcij"], "⚗️"],
+  [["anatomij", "nevro", "neuro", "možgan", "mozg", "anatomy", "brain"], "🧠"],
+  [["medicin", "bolezn", "bolest", "klinič", "medicine", "clinical", "patolog"], "🩺"],
+  [["biologij", "celic", "ćelij", "stanic", "genetik", "biology", "cell", "dna", "evolucij"], "🧬"],
+  [["kemij", "hemij", "molekul", "chemistry", "reakcij"], "⚗️"],
   [["fizik", "mehanik", "kvantn", "physics", "quantum", "termodinam"], "⚛️"],
-  [["pravo", "pogodb", "zakon", "ustav", "law", "legal", "obligacij"], "⚖️"],
+  [["pravo", "pogodb", "ugovor", "zakon", "ustav", "law", "legal", "obligacij"], "⚖️"],
   [["algoritm", "podatkovn", "programir", "algorithm", "data structure", "koda", "code"], "🕸️"],
-  [["računalni", "informatik", "computer", "software", "omrež", "network"], "💻"],
-  [["umetna intelig", "strojno uč", "machine learning", "nevronsk", "artificial intel"], "🤖"],
-  [["zgodovin", "history", "vojn", "revolucij", "antik"], "📜"],
-  [["geograf", "geolog", "geography", "podnebj", "climate"], "🌍"],
-  [["psiholog", "vedenj", "psychology", "kognitiv"], "🫀"],
-  [["sociolog", "družb", "politolog", "sociology", "politic"], "🏛️"],
+  [["računalni", "računarstv", "informatik", "computer", "software", "omrež", "mrež", "network"], "💻"],
+  [["umetna intelig", "umjetna intelig", "veštačka intelig", "vještačka intelig", "strojno uč", "mašinsko uč", "machine learning", "nevronsk", "neuronsk", "artificial intel"], "🤖"],
+  [["zgodovin", "povijest", "istorij", "history", "vojn", "rat", "revolucij", "antik"], "📜"],
+  [["geograf", "geolog", "geography", "podnebj", "klim", "climate"], "🌍"],
+  [["psiholog", "vedenj", "ponašanj", "psychology", "kognitiv"], "🫀"],
+  [["sociolog", "družb", "društv", "politolog", "sociology", "politic"], "🏛️"],
   [["filozof", "etik", "philosoph", "ethic", "logik"], "🤔"],
-  [["jezik", "slovnic", "književn", "literatur", "language", "grammar"], "📖"],
-  [["marketing", "prodaj", "oglaš", "brand"], "📣"],
-  [["računovod", "finanč", "finance", "accounting", "davk", "bilanc"], "💶"],
-  [["management", "podjetni", "vodenj", "business", "strateg"], "🧭"],
-  [["arhitektur", "gradben", "architect", "construction"], "🏗️"],
-  [["strojni", "elektro", "engineer", "inženir"], "⚙️"],
-  [["umetnost", "glasb", "art", "music", "design", "oblikovanj"], "🎨"],
-  [["šport", "trening", "sport", "fitness"], "🏃"],
-  [["izpit", "kolokvij", "exam", "test", "ponovitev"], "📝"],
+  [["jezik", "slovnic", "gramatik", "književn", "literatur", "language", "grammar"], "📖"],
+  [["marketing", "prodaj", "oglaš", "reklam", "brand"], "📣"],
+  [["računovod", "finanč", "finansij", "finance", "accounting", "davk", "porez", "bilanc"], "💶"],
+  [["management", "menadžment", "podjetni", "poduzetni", "preduzetni", "vodenj", "business", "strateg"], "🧭"],
+  [["arhitektur", "gradben", "građevin", "architect", "construction"], "🏗️"],
+  [["strojni", "mašinstv", "elektro", "engineer", "inženir", "inženjer"], "⚙️"],
+  [["umetnost", "umjetnost", "glasb", "muzik", "art", "music", "design", "oblikovanj", "dizajn"], "🎨"],
+  [["šport", "sport", "trening", "fitness"], "🏃"],
+  [["naravoslov", "prirodn znanost", "prirodn nauk", "science"], "🔬"],
+  [["izpit", "ispit", "kolokvij", "matur", "exam", "test", "ponovitev", "ponavljanj"], "📝"],
 ];
 
 /** A varied fallback set, so untitled or unmatched notes still look distinct. */

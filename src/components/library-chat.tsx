@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useT } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
 import { useInstantNavigation } from "@/components/navigation-loading";
@@ -10,6 +11,7 @@ import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { readChatStream } from "@/lib/chat-stream-client";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 
 /**
@@ -30,7 +32,11 @@ type Message = {
   text: string;
 };
 
-const SUGGESTIONS = ["Kaj naj ponovim?", "Poišči povezave", "Naredi načrt učenja"];
+const SUGGESTIONS: MessageKey[] = [
+  "libraryChat.suggestion.review",
+  "libraryChat.suggestion.links",
+  "libraryChat.suggestion.plan",
+];
 
 export function LibraryChat({
   folders,
@@ -45,6 +51,7 @@ export function LibraryChat({
   onOpenChange: (open: boolean) => void;
   hasPaidAccess: boolean;
 }) {
+  const t = useT();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const logRef = useRef<HTMLDivElement | null>(null);
   const scopeRef = useRef<HTMLDivElement | null>(null);
@@ -63,11 +70,11 @@ export function LibraryChat({
   const scopeFolder = folders.find((folder) => folder.id === scopeFolderId) ?? null;
   const scopeLabel =
     scope === "folder"
-      ? (scopeFolder?.name ?? "Mapa")
-      : scope === "all"
-        ? "Vsi zapiski"
-        : "Nedavni zapiski";
-  const detailLabel = useTranscripts ? "s prepisi" : "brez prepisov";
+      ? (scopeFolder?.name ?? t("libraryChat.scope.folder"))
+      : t(scope === "all" ? "libraryChat.scope.all" : "libraryChat.scope.recent");
+  const detailLabel = t(
+    useTranscripts ? "libraryChat.withTranscripts" : "libraryChat.withoutTranscripts",
+  );
   const readyCount = lectures.filter((lecture) => lecture.status === "ready").length;
   /*
    * With nothing in the library there is nothing to scope to, so the picker
@@ -183,13 +190,13 @@ export function LibraryChat({
        * is read frame by frame, anything else is parsed as it always was.
        */
       const payload = response.headers.get("Content-Type")?.includes("text/event-stream")
-        ? await readChatStream<{ answer?: string }>(response, setStreamingAnswer)
+        ? await readChatStream<{ answer?: string }>(response, setStreamingAnswer, t)
         : ((await response.json().catch(() => null)) as { answer?: string; error?: string } | null);
 
       if (!response.ok || !payload?.answer) {
         throw new Error(
           (payload as { error?: string } | null)?.error ??
-            "Odgovora ni bilo mogoče pripraviti.",
+            t("libraryChat.error.answerFailed"),
         );
       }
 
@@ -198,7 +205,7 @@ export function LibraryChat({
         { id: `a${Date.now()}`, role: "assistant", text: payload.answer as string },
       ]);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Odgovora ni bilo mogoče pripraviti.");
+      setError(caught instanceof Error ? caught.message : t("libraryChat.error.answerFailed"));
     } finally {
       setIsTyping(false);
       setStreamingAnswer("");
@@ -208,27 +215,29 @@ export function LibraryChat({
   function renderScopeMenu(align: "left" | "right") {
     return (
       <div className={`memo-scope-menu ${align === "left" ? "left" : ""}`.trim()}>
-        <p className="memo-scope-caption">Zapiski za iskanje</p>
+        <p className="memo-scope-caption">{t("libraryChat.scopeCaption")}</p>
 
         {(
           [
             {
               id: "recent" as const,
               emoji: "🕐",
-              label: "Nedavni zapiski",
-              detail: `Najnovejših ${Math.min(25, Math.max(readyCount, 1))} zapiskov`,
+              label: t("libraryChat.scope.recent"),
+              detail: t("libraryChat.scope.recentDetail", {
+                count: Math.min(25, Math.max(readyCount, 1)),
+              }),
             },
             {
               id: "all" as const,
               emoji: "📒",
-              label: "Vsi zapiski",
-              detail: "Povzetki vseh zapiskov",
+              label: t("libraryChat.scope.all"),
+              detail: t("libraryChat.scope.allDetail"),
             },
             {
               id: "folder" as const,
               emoji: "📁",
-              label: "Mapa",
-              detail: scopeFolder?.name ?? "Izberi mapo",
+              label: t("libraryChat.scope.folder"),
+              detail: scopeFolder?.name ?? t("folders.choose"),
             },
           ] as const
         ).map((option) => {
@@ -268,7 +277,7 @@ export function LibraryChat({
               {option.id === "folder" && isFolderSubOpen ? (
                 <div className="memo-scope-sub">
                   {folders.length === 0 ? (
-                    <p className="memo-scope-sub-empty">Ni map.</p>
+                    <p className="memo-scope-sub-empty">{t("libraryChat.noFolders")}</p>
                   ) : (
                     folders.map((folder) => (
                       <button
@@ -300,7 +309,7 @@ export function LibraryChat({
 
         <div className="memo-menu-sep" style={{ margin: "0.5rem 1.5rem 0" }} />
         <p className="memo-scope-caption" style={{ margin: "0.8rem 1.5rem 0.1rem" }}>
-          Raven podrobnosti
+          {t("libraryChat.detailLevel")}
         </p>
 
         <div className="memo-scope-toggle-row">
@@ -309,16 +318,18 @@ export function LibraryChat({
           </span>
           <span className="memo-scope-option-copy">
             <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-              <span>Uporabi prepise</span>
-              <span className="memo-pill-count">25 max</span>
+              <span>{t("libraryChat.useTranscripts")}</span>
+              <span className="memo-pill-count">
+                {t("libraryChat.transcriptLimit", { count: 25 })}
+              </span>
             </span>
-            <span>Vključi celotne prepise</span>
+            <span>{t("libraryChat.useTranscriptsDetail")}</span>
           </span>
           <button
             type="button"
             role="switch"
             aria-checked={useTranscripts}
-            aria-label="Uporabi prepise"
+            aria-label={t("libraryChat.useTranscripts")}
             className={`memo-switch ${useTranscripts ? "on" : ""}`.trim()}
             onClick={() => setUseTranscripts((current) => !current)}
           >
@@ -338,16 +349,14 @@ export function LibraryChat({
               <Image src="/memo-mascot.png" alt="" width={320} height={288} />
             </span>
             <p>
-              {hasNotes
-                ? "Živjo, jaz sem Memo AI. Vprašaj me karkoli o svojih zapiskih. Ta pogovor se ne shrani v tvoj račun."
-                : "Živjo, jaz sem Memo AI. Zapiskov še nimaš, a lahko vseeno vprašaš karkoli — razložim ti tudi brez njih. Ta pogovor se ne shrani v tvoj račun."}
+              {t(hasNotes ? "libraryChat.introWithNotes" : "libraryChat.introNoNotes")}
             </p>
           </div>
         ) : (
           <p className="memo-m-chat-intro">
-            {hasNotes
-              ? "Živjo, jaz sem Memo AI. Kaj te zanima o tvojih zapiskih? Ta klepet se ne shrani v tvoj račun."
-              : "Živjo, jaz sem Memo AI. Zapiskov še nimaš, a lahko vseeno vprašaš karkoli — razložim ti tudi brez njih. Ta klepet se ne shrani v tvoj račun."}
+            {t(
+              hasNotes ? "libraryChat.introMobileWithNotes" : "libraryChat.introMobileNoNotes",
+            )}
           </p>
         )}
 
@@ -407,7 +416,7 @@ export function LibraryChat({
   const dictationNotice = dictation.error ? (
     <p className="memo-chat-status danger">{dictation.error}</p>
   ) : dictation.transcribing ? (
-    <p className="memo-chat-status">Prepisujem povedano…</p>
+    <p className="memo-chat-status">{t("chat.status.transcribing")}</p>
   ) : null;
 
   return (
@@ -429,8 +438,8 @@ export function LibraryChat({
                   void send();
                 }
               }}
-              placeholder={hasNotes ? "Vprašaj karkoli o svojih zapiskih" : "Vprašaj karkoli"}
-              aria-label={hasNotes ? "Vprašaj karkoli o svojih zapiskih" : "Vprašaj karkoli"}
+              placeholder={t(hasNotes ? "libraryChat.askAboutNotes" : "libraryChat.askAnything")}
+              aria-label={t(hasNotes ? "libraryChat.askAboutNotes" : "libraryChat.askAnything")}
             />
             {hasNotes ? (
               <div ref={scopeRef} style={{ position: "relative", flex: "0 0 auto" }}>
@@ -455,11 +464,11 @@ export function LibraryChat({
               aria-label={
                 showMic
                   ? dictation.transcribing
-                    ? "Prepisujem povedano"
+                    ? t("chat.dictate.transcribing")
                     : dictation.listening
-                      ? "Ustavi narekovanje"
-                      : "Narekuj vprašanje"
-                  : "Pošlji"
+                      ? t("chat.dictate.stop")
+                      : t("chat.dictate.start")
+                  : t("libraryChat.send")
               }
               className={`memo-send ${showMic ? "mic" : ""} ${
                 dictation.listening ? "listening" : ""
@@ -488,7 +497,7 @@ export function LibraryChat({
           <div className="memo-only-desktop">
             <button
               type="button"
-              aria-label="Zapri klepet"
+              aria-label={t("chat.close")}
               className="memo-homechat-scrim"
               onClick={() => onOpenChange(false)}
             />
@@ -497,10 +506,10 @@ export function LibraryChat({
             <div className="memo-homechat-wrap">
             <div className="memo-homechat-panel" role="dialog" aria-modal="true">
               <div className="memo-homechat-head">
-                <span>Klepet z zapiski</span>
+                <span>{t("libraryChat.title")}</span>
                 <button
                   type="button"
-                  aria-label="Nov pogovor"
+                  aria-label={t("libraryChat.newConversation")}
                   className="memo-homechat-head-btn"
                   onClick={() => {
                     setMessages([]);
@@ -511,7 +520,7 @@ export function LibraryChat({
                 </button>
                 <button
                   type="button"
-                  aria-label="Zapri klepet"
+                  aria-label={t("chat.close")}
                   className="memo-homechat-head-btn"
                   onClick={() => onOpenChange(false)}
                 >
@@ -525,14 +534,16 @@ export function LibraryChat({
 
               <div className="memo-homechat-foot">
                 <div className="memo-chip-row memo-chiprow">
-                  {SUGGESTIONS.map((label) => (
+                  {SUGGESTIONS.map((suggestionKey) => (
                     <button
-                      key={label}
+                      key={suggestionKey}
                       type="button"
                       className="memo-chip round"
-                      onClick={() => void send(label)}
+                      /* Sent as it reads: the assistant answers in the
+                         language it is asked in. */
+                      onClick={() => void send(t(suggestionKey))}
                     >
-                      {label}
+                      {t(suggestionKey)}
                     </button>
                   ))}
                 </div>
@@ -547,8 +558,8 @@ export function LibraryChat({
                         void send();
                       }
                     }}
-                    placeholder="Vprašaj dodatno vprašanje"
-                    aria-label="Vprašaj dodatno vprašanje"
+                    placeholder={t("libraryChat.askFollowUp")}
+                    aria-label={t("libraryChat.askFollowUp")}
                   />
                   <div className="memo-homechat-composer-row">
                     {hasNotes ? (
@@ -576,11 +587,11 @@ export function LibraryChat({
                       aria-label={
                         showMic
                           ? dictation.transcribing
-                            ? "Prepisujem povedano"
+                            ? t("chat.dictate.transcribing")
                             : dictation.listening
-                              ? "Ustavi narekovanje"
-                              : "Narekuj vprašanje"
-                          : "Pošlji"
+                              ? t("chat.dictate.stop")
+                              : t("chat.dictate.start")
+                          : t("libraryChat.send")
                       }
                       className={`memo-send ${showMic ? "mic" : ""} ${
                         dictation.listening ? "listening" : ""
@@ -610,7 +621,7 @@ export function LibraryChat({
           <div className="memo-only-mobile">
             <button
               type="button"
-              aria-label="Zapri klepet"
+              aria-label={t("chat.close")}
               className={sheetClass("memo-scrim", chatSheet.closing)}
               onClick={() => chatSheet.dismiss()}
             />
@@ -626,7 +637,7 @@ export function LibraryChat({
               <div className="memo-m-chat-head" data-drag-zone>
                 <button
                   type="button"
-                  aria-label="Nov klepet"
+                  aria-label={t("libraryChat.newChat")}
                   className="memo-m-chat-head-btn left"
                   onClick={() => {
                     setMessages([]);
@@ -639,7 +650,7 @@ export function LibraryChat({
                   {hasNotes ? (
                     <>
                       <button type="button" onClick={() => setIsScopeMenuOpen((c) => !c)}>
-                        Klepet z:
+                        {t("libraryChat.chattingWith")}
                       </button>
                       <span className="memo-m-chat-scope">
                         <Emoji symbol="📌" size="0.85rem" />
@@ -647,12 +658,12 @@ export function LibraryChat({
                       </span>
                     </>
                   ) : (
-                    <span className="memo-m-chat-title">Klepet z Memo AI</span>
+                    <span className="memo-m-chat-title">{t("libraryChat.titleMobile")}</span>
                   )}
                 </span>
                 <button
                   type="button"
-                  aria-label="Zapri"
+                  aria-label={t("common.close")}
                   className="memo-m-chat-head-btn right"
                   onClick={() => chatSheet.dismiss()}
                 >
@@ -668,7 +679,7 @@ export function LibraryChat({
                 {isScopeMenuOpen && hasNotes ? (
                   <div ref={scopeRef} className="memo-m-source-menu">
                     <div className="memo-m-source-row">
-                      <span>Uporabi prepise (max 25)</span>
+                      <span>{t("libraryChat.useTranscriptsMax")}</span>
                       <button
                         type="button"
                         role="switch"
@@ -682,8 +693,8 @@ export function LibraryChat({
                     <div className="memo-menu-sep" style={{ margin: "0 1.25rem" }} />
                     {(
                       [
-                        { id: "recent" as const, label: "Nedavni zapiski" },
-                        { id: "all" as const, label: "Vsi zapiski" },
+                        { id: "recent" as const, label: t("libraryChat.scope.recent") },
+                        { id: "all" as const, label: t("libraryChat.scope.all") },
                         ...folders.map((folder) => ({
                           id: `folder:${folder.id}`,
                           label: folder.name,
@@ -730,7 +741,7 @@ export function LibraryChat({
                       onClick={() => setIsScopeMenuOpen((current) => !current)}
                     >
                       <span style={{ fontWeight: 700, letterSpacing: "-0.025em" }}>
-                        Klepet z:
+                        {t("libraryChat.chattingWith")}
                       </span>
                       <span style={{ color: "var(--muted)" }}>{scopeLabel}</span>
                       <Msym name="expand_more" size="1.15rem" fill={false} weight={500} />
@@ -746,11 +757,11 @@ export function LibraryChat({
                           void send();
                         }
                       }}
-                      placeholder={hasNotes ? "Vprašaj karkoli o svojih zapiskih" : "Vprašaj karkoli"}
+                      placeholder={t(hasNotes ? "libraryChat.askAboutNotes" : "libraryChat.askAnything")}
                       enterKeyHint="send"
                       autoCapitalize="sentences"
                       autoComplete="off"
-                      aria-label={hasNotes ? "Vprašaj karkoli o svojih zapiskih" : "Vprašaj karkoli"}
+                      aria-label={t(hasNotes ? "libraryChat.askAboutNotes" : "libraryChat.askAnything")}
                     />
                     <button
                       type="button"
@@ -758,11 +769,11 @@ export function LibraryChat({
                       aria-label={
                         showMic
                           ? dictation.transcribing
-                            ? "Prepisujem povedano"
+                            ? t("chat.dictate.transcribing")
                             : dictation.listening
-                              ? "Ustavi narekovanje"
-                              : "Narekuj vprašanje"
-                          : "Pošlji"
+                              ? t("chat.dictate.stop")
+                              : t("chat.dictate.start")
+                          : t("libraryChat.send")
                       }
                       className={`memo-chat-send ${showMic ? "mic" : ""} ${
                         dictation.listening ? "listening" : ""

@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/components/i18n-provider";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
@@ -16,6 +17,7 @@ export function SupportArticleScreen({
   content: string;
   backHref?: string;
 }) {
+  const t = useT();
   const { navigateWithFeedback, overlay: navigationOverlay, isNavigating } = useInstantNavigation();
 
   return (
@@ -24,7 +26,7 @@ export function SupportArticleScreen({
       <div className="memo-settings-topbar memo-only-mobile flex">
         <button
           type="button"
-          aria-label="Nazaj"
+          aria-label={t("common.back")}
           className="memo-m-round"
           aria-busy={isNavigating}
           onClick={() => navigateWithFeedback(backHref)}
@@ -37,7 +39,7 @@ export function SupportArticleScreen({
         <div className="memo-page">
           <div className="memo-breadcrumb memo-only-desktop">
             <button type="button" aria-busy={isNavigating} onClick={() => navigateWithFeedback(backHref)}>
-              Pomoč
+              {t("help.title")}
             </button>
             <Msym name="chevron_right" size="1.1rem" fill={false} weight={400} />
             <span className="memo-breadcrumb-current">{category}</span>

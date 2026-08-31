@@ -9,6 +9,7 @@ import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const LIBRARY_FOLDER_MAX_BYTES = 64 * 1024;
 
@@ -28,7 +29,7 @@ export async function PATCH(
   const user = await getRouteUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -45,7 +46,7 @@ export async function PATCH(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID mape." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidFolderId") }, { status: 400 });
   }
 
   const parsed = await parseJsonRequest(request, libraryFolderPayloadSchema, {
@@ -64,7 +65,7 @@ export async function PATCH(
   });
 
   if (!folder) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   return NextResponse.json({ folder });
@@ -77,7 +78,7 @@ export async function DELETE(
   const user = await getRouteUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -94,7 +95,7 @@ export async function DELETE(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID mape." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidFolderId") }, { status: 400 });
   }
 
   const deleted = await deleteLibraryFolder({
@@ -103,7 +104,7 @@ export async function DELETE(
   });
 
   if (!deleted) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   return NextResponse.json({ ok: true });

@@ -11,16 +11,21 @@
 // authority when no decoder will help.
 
 import { MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS } from "@/lib/constants";
-import { compressAudioForUpload } from "@/lib/file-compression-client";
+import { CompressionError, compressAudioForUpload } from "@/lib/file-compression-client";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { readWavDurationSeconds } from "@/lib/wav-duration";
 
 /** The transcoder writes mono 16 kHz mp3 at 48 kbps, so its bytes convert straight to seconds. */
 const COMPRESSED_AUDIO_BYTES_PER_SECOND = 6_000;
 
-export const AUDIO_TOO_LARGE_MESSAGE = "Zvočna datoteka je prevelika. Omejitev je 300 MB.";
-export const AUDIO_TOO_LONG_MESSAGE = "Zvočna datoteka je predolga. Omejitev je 3 ure.";
-export const AUDIO_UNREADABLE_MESSAGE =
-  "Te zvočne datoteke ni bilo mogoče pripraviti. Poskusi z drugim formatom (na primer mp3 ali m4a).";
+/*
+ * Thrown as `CompressionError`s so the wording is chosen where the failure is
+ * shown rather than here — this module runs in the browser, outside React, and
+ * has no translator of its own.
+ */
+export const AUDIO_TOO_LARGE_KEY = "audio.tooLarge" satisfies MessageKey;
+export const AUDIO_TOO_LONG_KEY = "audio.tooLong" satisfies MessageKey;
+export const AUDIO_UNREADABLE_KEY = "audio.unreadable" satisfies MessageKey;
 
 /**
  * Duration straight from the browser's demuxer. Resolves null instead of rejecting: a format the
@@ -92,7 +97,7 @@ export async function prepareAudioSourceForUpload(params: {
   // Checked before transcoding so a five-hour recording fails in a second rather than after
   // several minutes of work we are going to throw away.
   if (originalDuration != null && originalDuration > MAX_AUDIO_SECONDS) {
-    throw new Error(AUDIO_TOO_LONG_MESSAGE);
+    throw new CompressionError(AUDIO_TOO_LONG_KEY);
   }
 
   if (originalDuration == null || params.file.size > MAX_AUDIO_BYTES) {
@@ -115,15 +120,15 @@ export async function prepareAudioSourceForUpload(params: {
     null;
 
   if (durationSeconds == null) {
-    throw new Error(AUDIO_UNREADABLE_MESSAGE);
+    throw new CompressionError(AUDIO_UNREADABLE_KEY);
   }
 
   if (durationSeconds > MAX_AUDIO_SECONDS) {
-    throw new Error(AUDIO_TOO_LONG_MESSAGE);
+    throw new CompressionError(AUDIO_TOO_LONG_KEY);
   }
 
   if (compression.file.size > MAX_AUDIO_BYTES) {
-    throw new Error(AUDIO_TOO_LARGE_MESSAGE);
+    throw new CompressionError(AUDIO_TOO_LARGE_KEY);
   }
 
   return {

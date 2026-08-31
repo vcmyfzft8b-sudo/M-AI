@@ -17,6 +17,7 @@ import {
 import {
   createSupabaseServiceRoleClient,
 } from "@/lib/supabase/server";
+import { tr } from "@/lib/i18n/server";
 
 const MAX_SIGNATURE_BYTES = 65536;
 const MAX_TEXT_SNIFF_BYTES = 65536;
@@ -215,18 +216,22 @@ function matchesExpectedAudioSignature(bytes: Uint8Array, fileExtension: string)
   }
 }
 
+/**
+ * The refusals reach a person through an API response, so they are resolved in
+ * the language of the request the validation is running inside.
+ */
 export async function validateDocumentFileSignature(file: File) {
   if (file.size <= 0) {
     return {
       ok: false,
-      error: "Naložen dokument je prazen.",
+      error: await tr("file.documentEmpty"),
     };
   }
 
   if (file.size > MAX_DOCUMENT_BYTES) {
     return {
       ok: false,
-      error: "Datoteka dokumenta je prevelika. Trenutna omejitev je 4 MB.",
+      error: await tr("file.documentTooLarge"),
     };
   }
 
@@ -237,7 +242,7 @@ export async function validateDocumentFileSignature(file: File) {
   if (isPdfDocument(file)) {
     return isPdfSignature(sniffBytes)
       ? { ok: true }
-      : { ok: false, error: "Naložena datoteka ni veljaven PDF." };
+      : { ok: false, error: await tr("file.notValidPdf") };
   }
 
   if (isDocxDocument(file)) {
@@ -245,7 +250,7 @@ export async function validateDocumentFileSignature(file: File) {
 
     return isDocxSignature(documentBytes)
       ? { ok: true }
-      : { ok: false, error: "Naložena datoteka ni veljaven dokument DOCX." };
+      : { ok: false, error: await tr("file.notValidDocx") };
   }
 
   if (isPptxDocument(file)) {
@@ -253,30 +258,30 @@ export async function validateDocumentFileSignature(file: File) {
 
     return isPptxSignature(documentBytes)
       ? { ok: true }
-      : { ok: false, error: "Naložena datoteka ni veljavna predstavitev PPTX." };
+      : { ok: false, error: await tr("file.notValidPptx") };
   }
 
   if (isRtfDocument(file)) {
     return isRtfSignature(sniffBytes)
       ? { ok: true }
-      : { ok: false, error: "Naložena datoteka ni veljaven dokument RTF." };
+      : { ok: false, error: await tr("file.notValidRtf") };
   }
 
   if (isHtmlDocument(file)) {
     return looksLikeText(sniffBytes) && isHtmlSignature(sniffBytes)
       ? { ok: true }
-      : { ok: false, error: "Naložena datoteka ni veljaven dokument HTML." };
+      : { ok: false, error: await tr("file.notValidHtml") };
   }
 
   if (isPlainTextDocument(file)) {
     return isPlainTextSignature(sniffBytes)
       ? { ok: true }
-      : { ok: false, error: "Naložena besedilna datoteka vsebuje nepodprte binarne podatke." };
+      : { ok: false, error: await tr("file.binaryText") };
   }
 
   return {
     ok: false,
-    error: "Nepodprta vrsta dokumenta. Uporabi PDF, TXT, Markdown, HTML, RTF, DOCX ali PPTX.",
+    error: await tr("file.unsupportedDocumentType"),
   };
 }
 
@@ -285,7 +290,7 @@ async function fetchStorageObjectHead(path: string) {
   const { data, error } = await service.storage.from(STORAGE_BUCKET).createSignedUrl(path, 60);
 
   if (error || !data?.signedUrl) {
-    throw new Error(error?.message ?? "Naložene zvočne datoteke ni bilo mogoče preveriti.");
+    throw new Error(error?.message ?? (await tr("file.audioCheckFailed")));
   }
 
   const response = await fetch(data.signedUrl, {
@@ -296,7 +301,7 @@ async function fetchStorageObjectHead(path: string) {
   });
 
   if (!response.ok && response.status !== 206) {
-    throw new Error(`Naložene zvočne datoteke ni bilo mogoče preveriti (${response.status}).`);
+    throw new Error(await tr("file.audioCheckFailedStatus", { status: response.status }));
   }
 
   const contentRange = response.headers.get("content-range");
@@ -319,14 +324,14 @@ export async function validateStoredAudioFile(params: { path: string }) {
   if (!Number.isFinite(totalBytes) || totalBytes <= 0) {
     return {
       ok: false,
-      error: "Naložene zvočne datoteke ni bilo mogoče preveriti.",
+      error: await tr("file.audioCheckFailed"),
     };
   }
 
   if (totalBytes > MAX_AUDIO_BYTES) {
     return {
       ok: false,
-      error: "Zvočna datoteka je prevelika. Trenutna omejitev je 300 MB.",
+      error: await tr("file.audioTooLarge"),
     };
   }
 
@@ -335,7 +340,7 @@ export async function validateStoredAudioFile(params: { path: string }) {
   if (!matchesExpectedAudioSignature(headBytes, extension)) {
     return {
       ok: false,
-      error: `Naložena zvočna datoteka ne ustreza pričakovanemu formatu .${extension}.`,
+      error: await tr("file.audioFormatMismatch", { extension }),
     };
   }
 

@@ -5,6 +5,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { LandingAuthOptions } from "@/components/landing-auth-options";
 import { getAuthProviderAvailability } from "@/lib/auth-providers";
 import { getOptionalUser } from "@/lib/auth";
+import { getTranslations } from "@/lib/i18n/server";
 import { BRAND_NAME } from "@/lib/brand";
 import { hasPublicSupabaseEnv } from "@/lib/public-env";
 
@@ -18,6 +19,7 @@ export default async function ContinuePage() {
     }
   }
 
+  const { t } = await getTranslations();
   const providers = hasPublicSupabaseEnv
     ? await getAuthProviderAvailability()
     : { apple: false, email: false, google: false };
@@ -25,32 +27,29 @@ export default async function ContinuePage() {
   return (
     <main className="landing-shell landing-auth-page">
       <div className="landing-auth-wrap">
-        <Link href="/" className="landing-auth-brand" aria-label={`Domov ${BRAND_NAME}`}>
+        <Link href="/" className="landing-auth-brand" aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}>
           <BrandLogo compact priority />
         </Link>
 
         <section className="landing-auth-hero">
-          <h1 className="landing-auth-title">Prijava</h1>
-          <p className="landing-auth-copy">Prijavi se ali ustvari nov račun.</p>
+          <h1 className="landing-auth-title">{t("auth.signIn")}</h1>
+          <p className="landing-auth-copy">{t("auth.continue.copy")}</p>
         </section>
 
         <LandingAuthOptions providers={providers} next="/app/start" />
 
         <p className="landing-auth-legal">
-          Z nadaljevanjem se strinjaš s {`${BRAND_NAME}`}{" "}
-          <Link href="/legal/terms-of-use">pogoji uporabe</Link> in{" "}
-          <Link href="/legal/privacy-policy">politiko zasebnosti</Link>, vključno z AI
-          obdelavo zvoka, besedila, dokumentov in povezav. Potrjuješ tudi, da imaš
-          potrebna dovoljenja za snemanje, nalaganje in uporabo gradiva, ki ga pošlješ
-          v Memo.
+          {t("auth.legalBefore", { brand: BRAND_NAME })}
+          <Link href="/legal/terms-of-use">{t("legal.termsInline")}</Link>
+          {t("auth.legalAnd")}
+          <Link href="/legal/privacy-policy">{t("legal.privacyInline")}</Link>
+          {t("auth.legalAfterContinue")}
         </p>
 
         {!hasPublicSupabaseEnv ? (
           <div className="dashboard-surface-card landing-env-warning">
             <p className="ios-info ios-danger">
-              {isVercelPreview
-                ? "Vercel Preview nima nastavljenih `NEXT_PUBLIC_SUPABASE_URL` in/ali `NEXT_PUBLIC_SUPABASE_ANON_KEY`."
-                : "Manjkajo javne `Supabase` okoljske spremenljivke. Izpolni `.env.local`."}
+              {t(isVercelPreview ? "env.missingPreview" : "env.missingLocal")}
             </p>
           </div>
         ) : null}

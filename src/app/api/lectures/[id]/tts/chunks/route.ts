@@ -26,6 +26,7 @@ import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 // Generating a chunk means synthesizing the audio, transcribing it back for word alignment,
@@ -49,15 +50,18 @@ const ttsChunkRequestSchema = z.object({
   acceptsPendingStatus: z.boolean().default(false),
 });
 
-function createTtsLimitResponse(params: {
+async function createTtsLimitResponse(params: {
   secondsUsed: number;
   remainingSeconds: number;
   limitSeconds: number;
   hasPaidAccess: boolean;
 }) {
-  const error = params.hasPaidAccess
-    ? "Porabil si današnje ustvarjanje zvoka. Nov zvok bo na voljo po ponastavitvi ob 00:00. Že pripravljene dele lahko še vedno poslušaš."
-    : "Porabil si današnje brezplačno ustvarjanje zvoka. Za več zvoka nadgradi paket ali počakaj do ponastavitve ob 00:00. Že pripravljene dele lahko še vedno poslušaš.";
+  // A paid account has simply run out for the day; a free one is being told it
+  // could buy its way past the limit. Two different sentences, not one with a
+  // clause bolted on.
+  const error = await tr(
+    params.hasPaidAccess ? "api.ttsDailyLimitPaid" : "api.ttsDailyLimitFree",
+  );
 
   return NextResponse.json(
     {
@@ -94,7 +98,7 @@ async function createTtsLimitResponseIfQuotaCannotCreateChunk(params: {
     return null;
   }
 
-  return createTtsLimitResponse({
+  return await createTtsLimitResponse({
     secondsUsed: usage.secondsUsed,
     remainingSeconds: usage.remainingSeconds,
     limitSeconds: usage.limitSeconds,
@@ -105,13 +109,13 @@ async function createTtsLimitResponseIfQuotaCannotCreateChunk(params: {
 // The audio is on its way; the caller should ask again shortly. That is an accepted request, not a
 // failed one, so it answers 202 — a 503 here counted against the production error rate and made a
 // working generation look like an outage. Clients that predate the 202 still get the 503.
-function createPendingResponse(
+async function createPendingResponse(
   code: "tts_generation_pending" | "tts_provider_rate_limited",
   acceptsPendingStatus: boolean,
 ) {
   return NextResponse.json(
     {
-      error: "Zvok se še pripravlja. Poskusi znova čez trenutek.",
+      error: await tr("api.audioStillPreparing"),
       code,
     },
     {
@@ -173,7 +177,7 @@ export async function POST(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -198,7 +202,7 @@ export async function POST(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID zapiska." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;
@@ -208,7 +212,7 @@ export async function POST(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canUseLectureFeatures(user.id, id, "study");
@@ -216,7 +220,7 @@ export async function POST(
 
   if (!access.allowed) {
     return createBillingRequiredResponse(
-      "Pred ustvarjanjem zvoka za ta zapisek izberi paket.",
+      await tr("api.paidRequired.tts"),
       access.code,
     );
   }
@@ -228,7 +232,7 @@ export async function POST(
   });
 
   if (!detail) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const content = detail.artifact?.structured_notes_md
@@ -236,7 +240,7 @@ export async function POST(
     : "";
 
   if (detail.lecture.status !== "ready" || !content) {
-    return NextResponse.json({ error: "Zapiski še niso pripravljeni." }, { status: 409 });
+    return NextResponse.json({ error: await tr("note.notReady") }, { status: 409 });
   }
 
   const document = parseNoteTtsDocument(content);
@@ -244,7 +248,7 @@ export async function POST(
   const chunk = chunks[parsedBody.data.chunkIndex];
 
   if (!chunk) {
-    return NextResponse.json({ error: "Neveljaven del poslušanja." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidListenPart") }, { status: 400 });
   }
 
   const contentHash = hashNoteTtsContent(content);
@@ -273,7 +277,7 @@ export async function POST(
     // need looking at — the 500 below stays logged.
 
     if (error instanceof TtsQuotaLimitError) {
-      return createTtsLimitResponse({
+      return await createTtsLimitResponse({
         ...error.quota,
         hasPaidAccess: access.entitlement.hasPaidAccess,
       });
@@ -291,7 +295,10 @@ export async function POST(
         return quotaLimitResponse;
       }
 
-      return createPendingResponse("tts_generation_pending", parsedBody.data.acceptsPendingStatus);
+      return await createPendingResponse(
+        "tts_generation_pending",
+        parsedBody.data.acceptsPendingStatus,
+      );
     }
 
     // The note existed when this request checked it, two minutes ago, and the reader deleted it
@@ -299,7 +306,7 @@ export async function POST(
     // the start — a 500 said the server had broken, and put a stack in the error stream for a
     // deletion that worked exactly as intended.
     if (error instanceof LectureRemovedDuringTtsError) {
-      return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+      return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
     }
 
     if (isProviderRateLimitError(error)) {
@@ -314,7 +321,7 @@ export async function POST(
         return quotaLimitResponse;
       }
 
-      return createPendingResponse(
+      return await createPendingResponse(
         "tts_provider_rate_limited",
         parsedBody.data.acceptsPendingStatus,
       );
@@ -326,10 +333,10 @@ export async function POST(
       {
         error:
           process.env.NODE_ENV === "production" || isProviderRateLimitError(error)
-            ? "Zvoka ni bilo mogoče pripraviti."
+            ? await tr("api.audioPrepareFailed")
             : error instanceof Error
               ? error.message
-              : "Zvoka ni bilo mogoče pripraviti.",
+              : await tr("api.audioPrepareFailed"),
       },
       { status: 500 },
     );

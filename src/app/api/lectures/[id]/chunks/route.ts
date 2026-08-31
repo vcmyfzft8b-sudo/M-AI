@@ -9,6 +9,7 @@ import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { isSupportedAudioMimeType } from "@/lib/storage";
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { createSanitizedStringSchema, routeIdParamSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const PREPARE_CHUNKS_MAX_BYTES = 64 * 1024;
 
@@ -33,7 +34,7 @@ export async function POST(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -50,7 +51,7 @@ export async function POST(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID zapiska." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;
@@ -60,14 +61,14 @@ export async function POST(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canAccessLectureContent(user.id, id);
 
   if (!access.allowed) {
     return createBillingRequiredResponse(
-      "Za nalaganje tega zapiska je potreben plačljiv paket.",
+      await tr("api.paidRequired.upload"),
       access.code,
     );
   }
@@ -85,7 +86,7 @@ export async function POST(
       (chunk) => !isSupportedAudioMimeType(chunk.mimeType, `chunk-${chunk.index}`),
     )
   ) {
-    return NextResponse.json({ error: "Nepodprt format zvočnega dela." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.unsupportedAudioPart") }, { status: 400 });
   }
 
   const service = createSupabaseServiceRoleClient();
@@ -111,7 +112,7 @@ export async function POST(
 
     if (error || !signedUpload?.token) {
       return NextResponse.json(
-        { error: error?.message ?? "Ni bilo mogoče pripraviti cilja za nalaganje zvočnega dela." },
+        { error: error?.message ?? await tr("api.audioPartTargetFailed") },
         { status: 500 },
       );
     }
@@ -141,7 +142,7 @@ export async function POST(
     .eq("user_id", user.id);
 
   if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   return NextResponse.json({

@@ -5,6 +5,7 @@ import { generateLecturePracticeTest } from "@/lib/practice-test";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { getServerEnv } from "@/lib/server-env";
+import { tr } from "@/lib/i18n/server";
 
 const requestSchema = z.object({
   lectureId: z.string().uuid(),
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
   const requestSecret = getSecretFromRequest(request);
 
   if (!env.INTERNAL_JOB_SECRET || requestSecret !== env.INTERNAL_JOB_SECRET) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const parsed = await parseJsonRequest(request, requestSchema, {

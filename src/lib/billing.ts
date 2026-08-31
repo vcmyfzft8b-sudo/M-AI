@@ -5,6 +5,7 @@ import { cache } from "react";
 import Stripe from "stripe";
 
 import { PREVIEW_AUTH_BYPASS_USER_ID, getOptionalUserOrPreviewBypass } from "@/lib/auth";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { isPreviewPremiumEnabled } from "@/lib/preview-mode";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 import { getServerEnv } from "@/lib/server-env";
@@ -45,47 +46,52 @@ const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing", "past_due"])
 const TRIAL_CHAT_MESSAGE_LIMIT = 5;
 export const DEV_BILLING_OVERRIDE_COOKIE = "memo-dev-billing-override";
 
+/*
+ * The prices are the same everywhere Memo sells — one euro amount per plan,
+ * charged by Stripe in EUR — so only the words around them change per
+ * language, and they are carried as catalogue keys rather than as text.
+ */
 export const BILLING_PLANS: Record<
   BillingPlan,
   {
     id: BillingPlan;
-    label: string;
-    cadence: string;
+    labelKey: MessageKey;
+    cadenceKey: MessageKey;
     amount: number;
-    displayAmount?: string;
-    billingNote?: string;
+    displayAmount?: number;
+    billingNoteKey?: MessageKey;
     annualizedAmount: number;
-    blurb: string;
+    blurbKey: MessageKey;
   }
 > = {
   weekly: {
     id: "weekly",
-    label: "Tedensko",
-    cadence: "na teden",
+    labelKey: "billing.plan.weekly",
+    cadenceKey: "billing.cadence.week",
     amount: 10,
     annualizedAmount: 520,
-    blurb: "Najhitrejši način, da preizkusiš celoten izdelek.",
+    blurbKey: "billing.blurb.weekly",
   },
   monthly: {
     id: "monthly",
-    label: "Mesečno",
-    cadence: "na mesec",
+    labelKey: "billing.plan.monthly",
+    cadenceKey: "billing.cadence.month",
     amount: 20,
     annualizedAmount: 240,
-    blurb: "Najboljša privzeta izbira za večino študentov.",
+    blurbKey: "billing.blurb.monthly",
   },
   yearly: {
     id: "yearly",
-    label: "Letno",
-    cadence: "na mesec",
+    labelKey: "billing.plan.yearly",
+    cadenceKey: "billing.cadence.month",
     amount: 130,
     // €130 a year is €10.83 a month, not €11. Rounding the headline up prices
     // the plan above what is actually charged, which is the one direction a
     // price must never be wrong in.
-    displayAmount: "10,83",
-    billingNote: "Obračunano letno",
+    displayAmount: 10.83,
+    billingNoteKey: "billing.note.yearly",
     annualizedAmount: 130,
-    blurb: "Najnižja dejanska cena, če uporabljaš aplikacijo celo leto.",
+    blurbKey: "billing.blurb.yearly",
   },
 };
 
@@ -707,8 +713,13 @@ export function getPaywallPath() {
   return "/app/start";
 }
 
+/**
+ * `message` is written by the caller, which is inside a request and so knows
+ * the reader's language; there is no sensible default sentence to fall back on
+ * here, which is why it has none.
+ */
 export function createBillingRequiredResponse(
-  message = "Za to dejanje je potreben plačljiv paket.",
+  message: string,
   code: BillingRequiredCode = "subscription_required",
 ) {
   return NextResponse.json(

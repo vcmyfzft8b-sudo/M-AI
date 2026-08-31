@@ -9,6 +9,7 @@ import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const FLASHCARD_MUTATION_MAX_BYTES = 32 * 1024;
 
@@ -58,7 +59,7 @@ export async function PATCH(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -83,7 +84,7 @@ export async function PATCH(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID kartice." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidFlashcardId") }, { status: 400 });
   }
 
   const existing = await getOwnedFlashcard({
@@ -92,14 +93,14 @@ export async function PATCH(
   });
 
   if (!existing) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canUseLectureFeatures(user.id, existing.lecture_id, "study");
 
   if (!access.allowed) {
     return createBillingRequiredResponse(
-      "Brez plačljivega paketa so kartice na voljo samo za tvoje poskusno gradivo.",
+      await tr("api.trialOnly.cards"),
       access.code,
     );
   }
@@ -118,7 +119,7 @@ export async function PATCH(
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   return NextResponse.json({
@@ -142,7 +143,7 @@ export async function DELETE(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -159,7 +160,7 @@ export async function DELETE(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID kartice." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidFlashcardId") }, { status: 400 });
   }
 
   const existing = await getOwnedFlashcard({
@@ -168,14 +169,14 @@ export async function DELETE(
   });
 
   if (!existing) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canUseLectureFeatures(user.id, existing.lecture_id, "study");
 
   if (!access.allowed) {
     return createBillingRequiredResponse(
-      "Brez plačljivega paketa so kartice na voljo samo za tvoje poskusno gradivo.",
+      await tr("api.trialOnly.cards"),
       access.code,
     );
   }
@@ -184,7 +185,7 @@ export async function DELETE(
   const { error } = await service.from("flashcards").delete().eq("id", existing.id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   return NextResponse.json({ deletedFlashcardId: existing.id });

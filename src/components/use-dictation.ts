@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
+import { useT } from "@/components/i18n-provider";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+
 /**
  * A dictation session is a chat question, not a lecture. Anything longer than
  * this is somebody who forgot the microphone was open, so it stops itself and
@@ -12,9 +15,22 @@ const MAX_DICTATION_MS = 60_000;
 /** Below this there is no speech to find, only the tap that opened and closed it. */
 const MIN_DICTATION_BYTES = 1_200;
 
-const GENERIC_ERROR = "Narekovanje trenutno ne deluje. Poskusi znova.";
-const PERMISSION_ERROR = "Za narekovanje dovoli dostop do mikrofona.";
-const NO_MICROPHONE_ERROR = "Mikrofona ni bilo mogoče najti.";
+const GENERIC_ERROR = "dictation.genericError" satisfies MessageKey;
+const PERMISSION_ERROR = "dictation.permissionError" satisfies MessageKey;
+const NO_MICROPHONE_ERROR = "dictation.noMicrophone" satisfies MessageKey;
+
+/**
+ * What went wrong, in a form that can be translated at render rather than at
+ * the moment it happened.
+ *
+ * Two shapes because there are two sources. Failures this hook decides on
+ * itself carry a catalogue key; a failure the dictation endpoint reported
+ * arrives as a sentence it has already translated into the caller's language,
+ * and must be passed through untouched. Keeping the key unresolved also keeps
+ * the callbacks below free of `t`, which would otherwise have to be a
+ * dependency of every one of them.
+ */
+type DictationError = { key: MessageKey } | { message: string };
 
 type DictationStatus = "idle" | "starting" | "listening" | "transcribing";
 
@@ -107,7 +123,8 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
    */
   const supported = useSyncExternalStore(subscribeToNothing, canRecord, () => false);
   const [status, setStatus] = useState<DictationStatus>("idle");
-  const [error, setError] = useState<string | null>(null);
+  const t = useT();
+  const [error, setError] = useState<DictationError | null>(null);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -200,7 +217,8 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
 
       if (!response.ok) {
         setStatus("idle");
-        setError(payload?.error?.trim() || GENERIC_ERROR);
+        const reported = payload?.error?.trim();
+        setError(reported ? { message: reported } : { key: GENERIC_ERROR });
         return;
       }
 
@@ -217,7 +235,7 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
       }
 
       setStatus("idle");
-      setError(GENERIC_ERROR);
+      setError({ key: GENERIC_ERROR });
     } finally {
       if (abortRef.current === controller) {
         abortRef.current = null;
@@ -268,7 +286,7 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
       // Nobody is waiting for this answer any more, so it is not worth an error.
       if (mountedRef.current && startTokenRef.current === token) {
         setStatus("idle");
-        setError(describeGetUserMediaError(mediaError));
+        setError({ key: describeGetUserMediaError(mediaError) });
       }
 
       return;
@@ -293,7 +311,7 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
     } catch {
       releaseStream();
       setStatus("idle");
-      setError(GENERIC_ERROR);
+      setError({ key: GENERIC_ERROR });
       return;
     }
 
@@ -311,7 +329,7 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
 
       if (mountedRef.current) {
         setStatus("idle");
-        setError(GENERIC_ERROR);
+        setError({ key: GENERIC_ERROR });
       }
     };
 
@@ -330,7 +348,7 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
     } catch {
       releaseStream();
       setStatus("idle");
-      setError(GENERIC_ERROR);
+      setError({ key: GENERIC_ERROR });
       return;
     }
 
@@ -365,7 +383,9 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
     listening: status === "starting" || status === "listening",
     /** The upload and the transcription, during which the control is busy. */
     transcribing: status === "transcribing",
-    error,
+    /* Resolved here rather than where it was set, so a language change while a
+       failure is on screen re-renders it in the new one. */
+    error: error === null ? null : "key" in error ? t(error.key) : error.message,
     start,
     stop,
     toggle,

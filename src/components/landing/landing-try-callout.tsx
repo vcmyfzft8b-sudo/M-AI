@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { useT } from "@/components/i18n-provider";
+
 import { PREVIEW_STOP_TOUR_EVENT, PREVIEW_TOUR_STOPPED_EVENT } from "./memo-app-preview-events";
 
 /* Stacked hero only: on the side-by-side layout the phone is already in view,
@@ -32,6 +34,7 @@ function revealPhone(from: HTMLElement) {
    does the same thing, so it listens for the handover rather than only
    tracking its own click. */
 export function LandingTryCallout() {
+  const t = useT();
   const [handedOver, setHandedOver] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -54,7 +57,7 @@ export function LandingTryCallout() {
         if (buttonRef.current) revealPhone(buttonRef.current);
       }}
     >
-      Preizkusi kar tukaj{" "}
+      {t("landing.tryItHere")}{" "}
       <span className="landing-v2-try-finger" aria-hidden="true">
         👇
       </span>

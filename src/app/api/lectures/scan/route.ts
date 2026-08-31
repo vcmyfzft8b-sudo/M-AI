@@ -4,6 +4,8 @@ import { z } from "zod";
 import { createBillingRequiredResponse, getUserEntitlementState } from "@/lib/billing";
 import { MAX_SCAN_IMAGE_BYTES, MAX_SCAN_IMAGE_COUNT } from "@/lib/constants";
 import { enqueueLectureNotesGeneration, enqueueLectureScanProcessing } from "@/lib/jobs";
+import { LECTURE_FAILURE_MESSAGE_KEYS } from "@/lib/lecture-failure-codes";
+import { toLectureFailureCode } from "@/lib/lecture-processing-errors";
 import { extractTextFromImage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
 import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
@@ -24,6 +26,7 @@ import {
   optionalOriginalFileNameSchema,
   storagePathSchema,
 } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 export const maxDuration = 300;
 
@@ -85,14 +88,14 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const entitlement = await getUserEntitlementState(user.id);
 
   if (!entitlement.canCreateNotes) {
     return createBillingRequiredResponse(
-      "Tvoj brezplačni preizkus je porabljen. Nadgradi za novo gradivo.",
+      await tr("api.trialExhausted"),
       "trial_exhausted",
     );
   }
@@ -125,7 +128,7 @@ export async function POST(request: Request) {
 
       if (!entitlement.hasPaidAccess && lectureId !== entitlement.trialLectureId) {
         return createBillingRequiredResponse(
-          "Brez plačljivega paketa lahko obdelaš samo svoje brezplačno poskusno gradivo.",
+          await tr("api.trialOnly.process"),
           "trial_exhausted",
         );
       }
@@ -142,7 +145,7 @@ export async function POST(request: Request) {
       }
 
       if (!lecture) {
-        return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+        return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
       }
 
       for (const image of images) {
@@ -155,7 +158,7 @@ export async function POST(request: Request) {
           })
         ) {
           return NextResponse.json(
-            { error: "Neveljavna pot ali format fotografije." },
+            { error: await tr("api.invalidPhotoPathOrFormat") },
             { status: 400 },
           );
         }
@@ -217,7 +220,7 @@ export async function POST(request: Request) {
     });
 
     if (!parsedFields.success) {
-      return buildValidationErrorResponse(parsedFields.error);
+      return await buildValidationErrorResponse(parsedFields.error);
     }
 
     const fileCandidates = formData
@@ -232,12 +235,15 @@ export async function POST(request: Request) {
           : [];
 
     if (files.length === 0) {
-      return NextResponse.json({ error: "Najprej dodaj fotografijo za skeniranje." }, { status: 400 });
+      return NextResponse.json(
+        { error: await tr("api.scanAddPhotoFirst") },
+        { status: 400 },
+      );
     }
 
     if (files.length > MAX_SCAN_IMAGE_COUNT) {
       return NextResponse.json(
-        { error: `Dosegel si največ ${MAX_SCAN_IMAGE_COUNT} fotografij naenkrat.` },
+        { error: await tr("api.scanTooManyAtOnce", { count: MAX_SCAN_IMAGE_COUNT }) },
         { status: 400 },
       );
     }
@@ -245,14 +251,14 @@ export async function POST(request: Request) {
     for (const file of files) {
       if (!file.type.startsWith("image/")) {
         return NextResponse.json(
-          { error: "Za skeniranje uporabi slikovno datoteko." },
+          { error: await tr("api.scanNeedsImageFile") },
           { status: 400 },
         );
       }
 
       if (file.size > MAX_SCAN_IMAGE_BYTES) {
         return NextResponse.json(
-          { error: "Slika za skeniranje je prevelika. Omejitev je 10 MB." },
+          { error: await tr("api.scanImageTooLarge") },
           { status: 400 },
         );
       }
@@ -264,7 +270,7 @@ export async function POST(request: Request) {
         parsedFields.data.lectureId !== entitlement.trialLectureId
       ) {
         return createBillingRequiredResponse(
-          "Brez plačljivega paketa lahko obdelaš samo svoje brezplačno poskusno gradivo.",
+          await tr("api.trialOnly.process"),
           "trial_exhausted",
         );
       }
@@ -281,7 +287,7 @@ export async function POST(request: Request) {
       }
 
       if (!lecture) {
-        return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+        return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
       }
 
       const lectureId = parsedFields.data.lectureId;
@@ -310,8 +316,8 @@ export async function POST(request: Request) {
             if (!text) {
               throw new Error(
                 filesForProcessing.length === 1
-                  ? "Na fotografiji ni bilo mogoče najti berljivega besedila."
-                  : `Na fotografiji "${file.name}" ni bilo mogoče najti berljivega besedila.`,
+                  ? await tr("api.scanNoText")
+                  : await tr("api.scanNoTextInFile", { name: file.name }),
               );
             }
 
@@ -368,14 +374,14 @@ export async function POST(request: Request) {
     for (const file of files) {
       if (!file.type.startsWith("image/")) {
         return NextResponse.json(
-          { error: "Za skeniranje uporabi slikovno datoteko." },
+          { error: await tr("api.scanNeedsImageFile") },
           { status: 400 },
         );
       }
 
       if (file.size > MAX_SCAN_IMAGE_BYTES) {
         return NextResponse.json(
-          { error: "Slika za skeniranje je prevelika. Omejitev je 10 MB." },
+          { error: await tr("api.scanImageTooLarge") },
           { status: 400 },
         );
       }
@@ -390,8 +396,8 @@ export async function POST(request: Request) {
           {
             error:
               files.length === 1
-                ? "Na fotografiji ni bilo mogoče najti berljivega besedila."
-                : `Na fotografiji "${file.name}" ni bilo mogoče najti berljivega besedila.`,
+                ? await tr("api.scanNoText")
+                : await tr("api.scanNoTextInFile", { name: file.name }),
           },
           { status: 400 },
         );
@@ -406,9 +412,19 @@ export async function POST(request: Request) {
       fileNames: extractedFileNames,
     });
   } catch (error) {
+    /*
+     * An expected input failure — a photo with nothing readable on it — is
+     * advice to the learner, so it is resolved from its code into the language
+     * they are reading. Anything else is a defect, and its raw message is
+     * written in whatever language the thrower happened to use: the learner
+     * gets the generic sentence instead.
+     */
+    const failureCode = toLectureFailureCode(error);
+    const messageKey = failureCode ? LECTURE_FAILURE_MESSAGE_KEYS[failureCode] : null;
+
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Fotografije ni bilo mogoče skenirati.",
+        error: messageKey ? await tr(messageKey) : await tr("api.scanFailed"),
       },
       { status: 500 },
     );

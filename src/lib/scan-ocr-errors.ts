@@ -26,6 +26,12 @@ export type ScanOcrDiagnostics = {
 export class NoReadableScanTextError extends Error {
   diagnostics: ScanOcrDiagnostics;
 
+  /*
+   * The message is in the source language on purpose: it is what Sentry, the
+   * triage automation and the lecture row record. A learner never reads it —
+   * the screens resolve the `scan_not_enough_text` code this error maps to
+   * into their own language instead.
+   */
   constructor(diagnostics: ScanOcrDiagnostics) {
     super("Na fotografiji ni bilo mogoče najti dovolj berljivega besedila.");
     this.name = "NoReadableScanTextError";

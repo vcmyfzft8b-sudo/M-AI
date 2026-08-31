@@ -14,11 +14,16 @@ import { startTransition, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { useT, useTranslations } from "@/components/i18n-provider";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+import type { Translate } from "@/lib/i18n/translate";
 import { InstallShot } from "@/components/install-shot";
 import { HOME_SCREEN_STEPS } from "@/lib/install-guide";
 import { Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { clearOfferResume } from "@/lib/offer-resume";
+import { LOCALE_INTL_TAG, type Locale } from "@/lib/i18n/locales";
+import { formatCurrency } from "@/lib/utils";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -32,30 +37,27 @@ import {
   DAILY_GOAL_OPTIONS,
   EDUCATION_OPTIONS,
   ELEMENTARY_SCHOOL_OPTIONS,
-  ELEMENTARY_YEAR_OPTIONS,
   FEATURE_OPTIONS,
-  HIGH_SCHOOL_FOUR_YEAR_OPTIONS,
   HIGH_SCHOOL_OPTIONS,
-  HIGH_SCHOOL_YEAR_OPTIONS,
+  getOnboardingYearOptions,
   MOTIVATION_OPTIONS,
   ROLE_OPTIONS,
   SCHOOL_OPTIONS,
   SOURCE_OPTIONS,
   SUBJECT_OPTIONS,
   UNIVERSITY_SCHOOL_OPTIONS,
-  UNIVERSITY_YEAR_OPTIONS,
   type GradeScale,
 } from "@/lib/onboarding-options";
 
 type BillingPlanCard = {
   id: "weekly" | "monthly" | "yearly";
-  label: string;
-  cadence: string;
+  labelKey: MessageKey;
+  cadenceKey: MessageKey;
   amount: number;
-  displayAmount?: string;
-  billingNote?: string;
+  displayAmount?: number;
+  billingNoteKey?: MessageKey;
   annualizedAmount: number;
-  blurb: string;
+  blurbKey: MessageKey;
 };
 
 type OnboardingForm = {
@@ -79,8 +81,15 @@ const HOME_SCREEN_SWIPE_THRESHOLD_PX = 18;
 
 const ONBOARDING_STEP_COUNT = 16;
 
-function formatSlovenianGrade(value: number) {
-  return value.toFixed(1).replace(".", ",");
+/**
+ * The survey is global in English and local in the four home markets, so the
+ * decimal separator follows the selected locale rather than being hardcoded.
+ */
+function formatGrade(value: number, locale: Locale) {
+  return new Intl.NumberFormat(LOCALE_INTL_TAG[locale], {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(value);
 }
 
 function usesTenPointGrades(schoolLevel: string) {
@@ -101,8 +110,21 @@ function getGradeDefaults(schoolLevel: string) {
   };
 }
 
-function findLabel(options: readonly { value: string; label: string }[], value: string) {
-  return options.find((option) => option.value === value)?.label ?? value;
+/**
+ * The wording of an option, for the free-text summary stored on the profile.
+ *
+ * Falls back to the raw stored value, which is an English-ish slug — better
+ * than an empty sentence if an option is ever removed from the list while an
+ * answer still names it.
+ */
+function findLabel(
+  options: readonly { value: string; labelKey: MessageKey }[],
+  value: string,
+  t: Translate<MessageKey>,
+) {
+  const option = options.find((candidate) => candidate.value === value);
+
+  return option ? t(option.labelKey) : value;
 }
 
 function mapEducationLevel(schoolLevel: string): (typeof EDUCATION_OPTIONS)[number]["value"] {
@@ -142,28 +164,8 @@ function getSchoolOptionsForRole(role: string) {
   return SCHOOL_OPTIONS;
 }
 
-function getYearOptionsForRole(role: string, schoolLevel?: string) {
-  if (role === "elementary_student") {
-    return ELEMENTARY_YEAR_OPTIONS;
-  }
-
-  if (role === "high_school_student") {
-    if (schoolLevel === "high_school") {
-      return HIGH_SCHOOL_FOUR_YEAR_OPTIONS;
-    }
-
-    return HIGH_SCHOOL_YEAR_OPTIONS;
-  }
-
-  return UNIVERSITY_YEAR_OPTIONS;
-}
-
-function getYearQuestionForRole(role: string) {
-  if (role === "elementary_student") {
-    return "Kateri razred si?";
-  }
-
-  return "Kateri letnik si?";
+function getYearQuestionKey(role: string): MessageKey {
+  return role === "elementary_student" ? "onboarding.q.elementaryYear" : "onboarding.q.year";
 }
 
 function isStudentRole(role: string) {
@@ -256,11 +258,13 @@ function OnboardingOptionIcon({ icon }: { icon: string }) {
  * moment the screen contradicts itself.
  */
 function CheckoutBanner({ state }: { state: string | null }) {
+  const t = useT();
+
   if (state === "success") {
     return (
       <div className="app-start-banner success">
         <Check className="h-4 w-4" />
-        Plačilo prejeto. Stripe trenutno zaključuje aktivacijo naročnine.
+        {t("paywall.paymentReceived")}
       </div>
     );
   }
@@ -283,6 +287,7 @@ export function OnboardingPaywall({
   subscriptionTrialEligible?: boolean;
   plans: BillingPlanCard[];
 }) {
+  const { locale, t } = useTranslations();
   const router = useRouter();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const searchParams = useSearchParams();
@@ -316,7 +321,7 @@ export function OnboardingPaywall({
         ? HIGH_SCHOOL_OPTIONS[0].value
         : UNIVERSITY_SCHOOL_OPTIONS[0].value
       : HIGH_SCHOOL_OPTIONS[0].value,
-    schoolYear: HIGH_SCHOOL_YEAR_OPTIONS[0].value,
+    schoolYear: getOnboardingYearOptions(locale, "high_school_student", "high_school")[0].value,
     subject: SUBJECT_OPTIONS[1].value,
     motivation: "",
     targetGrade: Number.parseFloat(profile?.target_grade?.replace(",", ".") ?? "") || 4.5,
@@ -411,7 +416,7 @@ export function OnboardingPaywall({
     setForm((current) => {
       if (key === "role") {
         const schoolOptions = getSchoolOptionsForRole(String(value));
-        const yearOptions = getYearOptionsForRole(String(value), schoolOptions[0].value);
+        const yearOptions = getOnboardingYearOptions(locale, String(value), schoolOptions[0].value);
         const gradeDefaults = getGradeDefaults(schoolOptions[0].value);
 
         return {
@@ -424,7 +429,7 @@ export function OnboardingPaywall({
       }
 
       if (key === "schoolLevel") {
-        const yearOptions = getYearOptionsForRole(current.role, String(value));
+        const yearOptions = getOnboardingYearOptions(locale, current.role, String(value));
         const gradeDefaults = getGradeDefaults(String(value));
 
         return {
@@ -454,12 +459,16 @@ export function OnboardingPaywall({
 
   function buildProfilePayload(currentForm = form) {
     const subjectLabel = isStudentRole(currentForm.role)
-      ? findLabel(SUBJECT_OPTIONS, currentForm.subject).toLowerCase()
-      : findLabel(ROLE_OPTIONS, currentForm.role).toLowerCase();
-    const motivationLabel = findLabel(MOTIVATION_OPTIONS, currentForm.motivation || "improve_marks");
-    const featureLabel = findLabel(FEATURE_OPTIONS, currentForm.feature || "instant_notes");
-    const focusLabel = findLabel(CLASS_FOCUS_OPTIONS, currentForm.classFocus || "general_help");
-    const dailyLabel = findLabel(DAILY_GOAL_OPTIONS, currentForm.dailyGoal || "regular");
+      ? findLabel(SUBJECT_OPTIONS, currentForm.subject, t).toLowerCase()
+      : findLabel(ROLE_OPTIONS, currentForm.role, t).toLowerCase();
+    const motivationLabel = findLabel(
+      MOTIVATION_OPTIONS,
+      currentForm.motivation || "improve_marks",
+      t,
+    );
+    const featureLabel = findLabel(FEATURE_OPTIONS, currentForm.feature || "instant_notes", t);
+    const focusLabel = findLabel(CLASS_FOCUS_OPTIONS, currentForm.classFocus || "general_help", t);
+    const dailyLabel = findLabel(DAILY_GOAL_OPTIONS, currentForm.dailyGoal || "regular", t);
 
     const gradeScale: GradeScale = usesTenPointGrades(currentForm.schoolLevel) ? 10 : 5;
     const answeredValue = (key: keyof OnboardingForm) =>
@@ -467,8 +476,8 @@ export function OnboardingPaywall({
 
     return {
       educationLevel: mapEducationLevel(currentForm.schoolLevel),
-      currentAverageGrade: formatSlovenianGrade(currentForm.currentAverageGrade),
-      targetGrade: formatSlovenianGrade(currentForm.targetGrade),
+      currentAverageGrade: formatGrade(currentForm.currentAverageGrade, locale),
+      targetGrade: formatGrade(currentForm.targetGrade, locale),
       studyGoal: [
         `${motivationLabel}.`,
         `${featureLabel}.`,
@@ -517,7 +526,7 @@ export function OnboardingPaywall({
       });
 
       if (!response.ok) {
-        throw new Error("Onboardinga ni bilo mogoče shraniti.");
+        throw new Error(t("onboarding.error.saveFailed"));
       }
 
       startTransition(() => {
@@ -526,14 +535,19 @@ export function OnboardingPaywall({
       });
     } catch (error) {
       setBillingError(
-        error instanceof Error ? error.message : "Onboardinga ni bilo mogoče shraniti.",
+        error instanceof Error ? error.message : t("onboarding.error.saveFailed"),
       );
       setSavingProfile(false);
     }
   }
 
   function renderOptionList<Key extends keyof typeof form>(
-    options: readonly { value: string; label: string; description?: string; icon: string }[],
+    options: readonly {
+      value: string;
+      labelKey: MessageKey;
+      descriptionKey?: MessageKey;
+      icon: string;
+    }[],
     key: Key,
     mode: "auto" | "manual" = "auto",
   ) {
@@ -567,8 +581,8 @@ export function OnboardingPaywall({
                 <OnboardingOptionIcon icon={option.icon} />
               </span>
               <span>
-                <strong>{option.label}</strong>
-                {option.description ? <small>{option.description}</small> : null}
+                <strong>{t(option.labelKey)}</strong>
+                {option.descriptionKey ? <small>{t(option.descriptionKey)}</small> : null}
               </span>
             </button>
           );
@@ -580,19 +594,19 @@ export function OnboardingPaywall({
   function renderGradeStepper(key: "targetGrade" | "currentAverageGrade") {
     return (
       <div className="memo-onboarding-grade-wrap">
-        <div className="memo-onboarding-grade-stepper" aria-label="Izberi povprečno oceno">
+        <div className="memo-onboarding-grade-stepper" aria-label={t("onboarding.gradeStepper")}>
           <button
             type="button"
             onClick={() => updateGrade(key, -0.1)}
-            aria-label="Znižaj oceno"
+            aria-label={t("onboarding.lowerGrade")}
           >
             <Minus className="h-7 w-7" />
           </button>
-          <strong>{formatSlovenianGrade(form[key])}</strong>
+          <strong>{formatGrade(form[key], locale)}</strong>
           <button
             type="button"
             onClick={() => updateGrade(key, 0.1)}
-            aria-label="Zvišaj oceno"
+            aria-label={t("onboarding.raiseGrade")}
           >
             <Plus className="h-7 w-7" />
           </button>
@@ -604,42 +618,42 @@ export function OnboardingPaywall({
   function renderCurrentStep() {
     if (step === 0) {
       return {
-        title: "Kako si izvedel/a za Memo AI?",
+        title: t("onboarding.q.heardFrom"),
         body: renderOptionList(SOURCE_OPTIONS, "heardFrom"),
       };
     }
 
     if (step === 1) {
       return {
-        title: "Za koga je Memo AI?",
+        title: t("onboarding.q.audience"),
         body: renderOptionList(AUDIENCE_OPTIONS, "audience"),
       };
     }
 
     if (step === 2) {
       return {
-        title: "Kaj te najbolje opiše?",
+        title: t("onboarding.q.role"),
         body: renderOptionList(ROLE_OPTIONS, "role"),
       };
     }
 
     if (step === 3) {
       return {
-        title: "Kje se šolaš?",
+        title: t("onboarding.q.schoolLevel"),
         body: renderOptionList(getSchoolOptionsForRole(form.role), "schoolLevel"),
       };
     }
 
     if (step === 4) {
       return {
-        title: getYearQuestionForRole(form.role),
-        body: renderOptionList(getYearOptionsForRole(form.role, form.schoolLevel), "schoolYear"),
+        title: t(getYearQuestionKey(form.role)),
+        body: renderOptionList(getOnboardingYearOptions(locale, form.role, form.schoolLevel), "schoolYear"),
       };
     }
 
     if (step === 5) {
       return {
-        title: "Katero je tvoje glavno področje študija?",
+        title: t("onboarding.q.subject"),
         body: renderOptionList(SUBJECT_OPTIONS, "subject"),
       };
     }
@@ -649,74 +663,73 @@ export function OnboardingPaywall({
         title: null,
         body: (
           <div className="memo-onboarding-proof">
-            <h2>Si v dobri družbi!</h2>
-            <p>Veliko tvojih sošolcev že uporablja Memo AI za:</p>
+            <h2>{t("onboarding.proof.title")}</h2>
+            <p>{t("onboarding.proof.lead")}</p>
             <ul>
-              {[
-                "Podrobne zapiske s predavanj",
-                "AI vaje za izpite/teste",
-                "Natančne prepise",
-                "Klepet z dolgimi PDF-ji in dokumenti",
-              ].map((item) => (
-                <li key={item}>
+              {(
+                [
+                  "onboarding.proof.notes",
+                  "onboarding.proof.practice",
+                  "onboarding.proof.transcripts",
+                  "onboarding.proof.chat",
+                ] as const
+              ).map((itemKey) => (
+                <li key={itemKey}>
                   <span aria-hidden="true">
                     <Check className="h-7 w-7" />
                   </span>
-                  <strong>{item}</strong>
+                  <strong>{t(itemKey)}</strong>
                 </li>
               ))}
             </ul>
           </div>
         ),
-        action: "Nadaljuj",
+        action: t("onboarding.continue"),
       };
     }
 
     if (step === 7) {
       return {
-        title: "Kaj te pripelje v Memo AI?",
+        title: t("onboarding.q.motivation"),
         body: renderOptionList(MOTIVATION_OPTIONS, "motivation", "manual"),
-        action: "Nadaljuj",
+        action: t("onboarding.continue"),
         disabled: !form.motivation,
       };
     }
 
     if (step === 8) {
       return {
-        title: "Kakšna je tvoja povprečna ocena zdaj?",
-        copy: "Približek je v redu.",
+        title: t("onboarding.q.currentGrade"),
+        copy: t("onboarding.q.currentGradeCopy"),
         body: renderGradeStepper("currentAverageGrade"),
-        action: gradeTouched.currentAverageGrade ? "Nadaljuj" : "Preskoči",
+        action: t(gradeTouched.currentAverageGrade ? "onboarding.continue" : "onboarding.skip"),
       };
     }
 
     if (step === 9) {
       return {
-        title: "Kakšna je tvoja ciljna povprečna ocena?",
+        title: t("onboarding.q.targetGrade"),
         body: renderGradeStepper("targetGrade"),
-        action: gradeTouched.targetGrade ? "Nadaljuj" : "Preskoči",
+        action: t(gradeTouched.targetGrade ? "onboarding.continue" : "onboarding.skip"),
       };
     }
 
     if (step === 10) {
       return {
-        title: "Na pravem mestu si.",
+        title: t("onboarding.testimonial.title"),
         body: (
           <div className="memo-onboarding-testimonial">
             <div>
-              <strong>Študent financ</strong>
-              <span>Univerza v Ljubljani</span>
+              <strong>{t("onboarding.testimonial.author")}</strong>
+              <span>{t("onboarding.testimonial.school")}</span>
             </div>
-            <p>
-              Nepogrešljivo za hiter tempo na fakulteti. V predavalnici sem bolj miren,
-              ker vem, da lahko pozneje znova pregledam vse pomembne razlage.
-            </p>
-            <div className="memo-onboarding-stars" aria-label="5 od 5 zvezdic">
+            <p>{t("onboarding.testimonial.quote")}</p>
+            <div className="memo-onboarding-stars" aria-label={t("onboarding.testimonial.stars")}>
               ★★★★★
             </div>
           </div>
         ),
-        action: "Nadaljuj",
+        action: t("onboarding.continue"),
       };
     }
 
@@ -725,14 +738,18 @@ export function OnboardingPaywall({
         title: null,
         body: (
           <div className="memo-onboarding-progress-story">
-            <h2>Naredil/a si prvi korak!</h2>
-            <p>Z rednim delom ti Memo AI pomaga doseči dolgoročen napredek.</p>
-            <div className="memo-onboarding-chart" aria-label="Primer napredka ocen">
+            <h2>{t("onboarding.progress.title")}</h2>
+            <p>{t("onboarding.progress.copy")}</p>
+            <div className="memo-onboarding-chart" aria-label={t("onboarding.progress.chartLabel")}>
               <div className="memo-onboarding-chart-header">
-                <strong>Tvoje ocene</strong>
+                <strong>{t("onboarding.progress.yourGrades")}</strong>
                 <div>
-                  <span className="memo-onboarding-legend-primary">z Memo AI</span>
-                  <span className="memo-onboarding-legend-muted">samostojno</span>
+                  <span className="memo-onboarding-legend-primary">
+                    {t("onboarding.progress.withMemo")}
+                  </span>
+                  <span className="memo-onboarding-legend-muted">
+                    {t("onboarding.progress.alone")}
+                  </span>
                 </div>
               </div>
               <div className="memo-onboarding-chart-lines" aria-hidden="true">
@@ -754,13 +771,13 @@ export function OnboardingPaywall({
             </div>
           </div>
         ),
-        action: "Nadaljuj",
+        action: t("onboarding.continue"),
       };
     }
 
     if (step === 12) {
       return {
-        title: "Kateri del Memo AI-ja ti bo najbolj pomagal?",
+        title: t("onboarding.q.feature"),
         body: (
           <div className="memo-onboarding-feature-grid">
             {FEATURE_OPTIONS.map((option) => (
@@ -774,26 +791,26 @@ export function OnboardingPaywall({
                 }}
               >
                 <span aria-hidden="true">{option.icon}</span>
-                <strong>{option.label}</strong>
+                <strong>{t(option.labelKey)}</strong>
               </button>
             ))}
           </div>
         ),
-        action: "Nadaljuj",
+        action: t("onboarding.continue"),
         disabled: !form.feature,
       };
     }
 
     if (step === 13) {
       return {
-        title: "Imaš v mislih določen predmet ali izpit/test, pri katerem naj ti Memo AI pomaga?",
+        title: t("onboarding.q.classFocus"),
         body: renderOptionList(CLASS_FOCUS_OPTIONS, "classFocus"),
       };
     }
 
     if (step === 14) {
       return {
-        title: "Kakšen je tvoj dnevni študijski cilj?",
+        title: t("onboarding.q.dailyGoal"),
         body: (
           <div className="memo-onboarding-option-list">
             {DAILY_GOAL_OPTIONS.map((option) => (
@@ -815,7 +832,7 @@ export function OnboardingPaywall({
                   <OnboardingOptionIcon icon={option.icon} />
                 </span>
                 <span>
-                  <strong>{option.label}</strong>
+                  <strong>{t(option.labelKey)}</strong>
                 </span>
               </button>
             ))}
@@ -825,7 +842,7 @@ export function OnboardingPaywall({
     }
 
     return {
-      title: "Dodaj Memo AI na homescreen",
+      title: t("onboarding.homeScreenTitle"),
       body: (
         <div className="memo-onboarding-home-wrap">
           <div
@@ -906,11 +923,11 @@ export function OnboardingPaywall({
           >
             <div className="memo-onboarding-home-track">
               {HOME_SCREEN_STEPS.map((item) => (
-                <article key={item.title} className="memo-onboarding-home-card">
+                <article key={item.titleKey} className="memo-onboarding-home-card">
                   <div className="memo-onboarding-home-copy">
                     <div>
-                      <strong>{item.title}</strong>
-                      <p>{item.description}</p>
+                      <strong>{t(item.titleKey)}</strong>
+                      <p>{t(item.descriptionKey)}</p>
                     </div>
                   </div>
                   <div className="memo-onboarding-home-visual">
@@ -933,23 +950,23 @@ export function OnboardingPaywall({
             </div>
           </div>
 
-          <div className="memo-onboarding-home-controls" aria-label="Koraki za Home Screen">
+          <div className="memo-onboarding-home-controls" aria-label={t("onboarding.homeScreenSteps")}>
             <button
               type="button"
               onClick={() => goToHomeScreenStep(homeScreenStep - 1)}
               disabled={homeScreenStep === 0}
-              aria-label="Prejšnji korak"
+              aria-label={t("onboarding.previousStep")}
             >
               <ChevronLeft className="h-6 w-6" />
             </button>
             <div>
               {HOME_SCREEN_STEPS.map((item, index) => (
                 <button
-                  key={item.title}
+                  key={item.titleKey}
                   type="button"
                   className={homeScreenStep === index ? "active" : ""}
                   onClick={() => goToHomeScreenStep(index)}
-                  aria-label={`Prikaži korak ${index + 1}`}
+                  aria-label={t("onboarding.showStep", { index: index + 1 })}
                 />
               ))}
             </div>
@@ -957,14 +974,14 @@ export function OnboardingPaywall({
               type="button"
               onClick={() => goToHomeScreenStep(homeScreenStep + 1)}
               disabled={homeScreenStep === HOME_SCREEN_STEPS.length - 1}
-              aria-label="Naslednji korak"
+              aria-label={t("onboarding.nextStep")}
             >
               <ArrowRight className="h-6 w-6" />
             </button>
           </div>
         </div>
       ),
-      action: "Končaj",
+      action: t("onboarding.finish"),
     };
   }
 
@@ -984,13 +1001,13 @@ export function OnboardingPaywall({
       const payload = (await response.json()) as { url?: string; error?: string };
 
       if (!response.ok || !payload.url) {
-        throw new Error(payload.error ?? "Plačila ni bilo mogoče začeti.");
+        throw new Error(payload.error ?? t("paywall.error.checkoutFailed"));
       }
 
       window.location.href = payload.url;
     } catch (error) {
       setBillingError(
-        error instanceof Error ? error.message : "Plačila ni bilo mogoče začeti.",
+        error instanceof Error ? error.message : t("paywall.error.checkoutFailed"),
       );
     } finally {
       setCheckoutPlan(null);
@@ -1033,7 +1050,7 @@ export function OnboardingPaywall({
                 setStep((current) => getPreviousOnboardingStep(current, form.role))
               }
               disabled={step === 0 || savingProfile}
-              aria-label="Nazaj"
+              aria-label={t("common.back")}
             >
               <ChevronLeft className="h-9 w-9" />
             </button>
@@ -1053,7 +1070,7 @@ export function OnboardingPaywall({
             <div className="memo-onboarding-actions">
               <button
                 type="button"
-                className={`memo-onboarding-pill-button ${currentStep.action === "Preskoči" ? "secondary" : ""}`}
+                className={`memo-onboarding-pill-button ${currentStep.action === t("onboarding.skip") ? "secondary" : ""}`}
                 onClick={() => {
                   if (step === ONBOARDING_STEP_COUNT - 1) {
                     void submitOnboarding();
@@ -1084,7 +1101,7 @@ export function OnboardingPaywall({
             type="button"
             className="memo-close-button app-start-close-button"
             onClick={() => navigateWithFeedback("/app")}
-            aria-label="Zapri ponudbo naročnine"
+            aria-label={t("paywall.close")}
           >
             <Msym name="close" size="1.45rem" fill={false} weight={500} />
           </button>
@@ -1116,37 +1133,39 @@ export function OnboardingPaywall({
         </div>
       )}
 
-      <h1 className="memo-paywall-title">Nadgradi in ustvarjaj več zapiskov</h1>
+      <h1 className="memo-paywall-title">{t("paywall.title")}</h1>
 
       <div className="memo-paywall-benefits">
-        {[
-          {
-            title: "Neomejeni zapiski",
-            copy: "Naloži neomejeno PDF-jev in zvoka",
-            icon: "📝",
-          },
-          {
-            title: "Pametna učna orodja",
-            copy: "Personalizirane vaje za boljše rezultate",
-            icon: "💡",
-          },
-          {
-            title: "Uči se 10x hitreje",
-            copy: "Pospeši učenje z AI podporo",
-            icon: "⚡",
-          },
-        ].map((benefit) => (
-          <div className="memo-paywall-benefit" key={benefit.title}>
+        {(
+          [
+            {
+              titleKey: "paywall.benefit.notesTitle",
+              copyKey: "paywall.benefit.notesCopy",
+              icon: "📝",
+            },
+            {
+              titleKey: "paywall.benefit.toolsTitle",
+              copyKey: "paywall.benefit.toolsCopy",
+              icon: "💡",
+            },
+            {
+              titleKey: "paywall.benefit.speedTitle",
+              copyKey: "paywall.benefit.speedCopy",
+              icon: "⚡",
+            },
+          ] as const
+        ).map((benefit) => (
+          <div className="memo-paywall-benefit" key={benefit.titleKey}>
             <span aria-hidden="true">{benefit.icon}</span>
             <div>
-              <strong>{benefit.title}</strong>
-              <p>{benefit.copy}</p>
+              <strong>{t(benefit.titleKey)}</strong>
+              <p>{t(benefit.copyKey)}</p>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="memo-paywall-plan-grid" role="radiogroup" aria-label="Izberi paket">
+      <div className="memo-paywall-plan-grid" role="radiogroup" aria-label={t("paywall.choosePlan")}>
         {paywallPlans.map((plan) => {
           const selected = selectedPaywallPlan === plan.id;
           const activePlan = subscription?.plan === plan.id && hasPaidAccess;
@@ -1154,15 +1173,12 @@ export function OnboardingPaywall({
           const yearlySavings = annualizedMonthly > plan.annualizedAmount
             ? Math.round((1 - plan.annualizedAmount / annualizedMonthly) * 100)
             : 0;
-          const displayPrice =
-            plan.id === "yearly"
-              ? `€${plan.displayAmount ?? plan.amount}`
-              : `€${plan.displayAmount ?? plan.amount}`;
-          const suffix = "/ mesec";
+          const displayPrice = formatCurrency(plan.displayAmount ?? plan.amount, locale);
+          const suffix = t("paywall.perMonth");
           const detail =
             plan.id === "yearly"
-              ? `Obračunano letno: €${plan.annualizedAmount}`
-              : "Obračunano mesečno";
+              ? t("paywall.billedYearly", { amount: formatCurrency(plan.annualizedAmount, locale) })
+              : t("paywall.billedMonthly");
 
           return (
             <button
@@ -1174,10 +1190,10 @@ export function OnboardingPaywall({
               aria-checked={selected}
             >
               {plan.id === "yearly" ? (
-                <span className="memo-paywall-plan-badge">Najbolj priljubljeno</span>
+                <span className="memo-paywall-plan-badge">{t("paywall.mostPopular")}</span>
               ) : null}
               <span className="memo-paywall-plan-header">
-                <strong>{plan.label}</strong>
+                <strong>{t(plan.labelKey)}</strong>
                 <span className="memo-paywall-radio" aria-hidden="true">
                   {selected || activePlan ? <span /> : null}
                 </span>
@@ -1188,7 +1204,9 @@ export function OnboardingPaywall({
               </span>
               <span className="memo-paywall-plan-detail">{detail}</span>
               {plan.id === "yearly" && yearlySavings > 0 ? (
-                <span className="memo-paywall-save">Prihrani {yearlySavings}%</span>
+                <span className="memo-paywall-save">
+                  {t("paywall.save", { percent: yearlySavings })}
+                </span>
               ) : null}
             </button>
           );
@@ -1197,7 +1215,7 @@ export function OnboardingPaywall({
 
       <p className="memo-paywall-due">
         <CircleCheck className="h-5 w-5" />
-        {subscriptionTrialEligible ? "Danes brez plačila" : "Varno plačilo prek Stripe"}
+        {t(subscriptionTrialEligible ? "paywall.nothingToday" : "paywall.securePayment")}
       </p>
 
       <button
@@ -1212,10 +1230,12 @@ export function OnboardingPaywall({
         {checkoutPlan === selectedPaywallPlan ? null : (
           <span className="memo-paywall-cta-label">
             {subscription?.plan === selectedPaywallPlan && hasPaidAccess
-              ? "Trenutni paket"
-              : subscriptionTrialEligible
-                ? "Začni 3-dnevni brezplačni preizkus"
-                : "Nadaljuj na plačilo"}
+              ? t("paywall.currentPlan")
+              : t(
+                  subscriptionTrialEligible
+                    ? "paywall.startTrial"
+                    : "paywall.continueToPayment",
+                )}
           </span>
         )}
       </button>
@@ -1223,7 +1243,7 @@ export function OnboardingPaywall({
       <div className="memo-paywall-foot">
         <span>
           <CircleCheck className="h-5 w-5" />
-          Prekliči kadarkoli
+          {t("paywall.cancelAnytime")}
         </span>
       </div>
     </section>

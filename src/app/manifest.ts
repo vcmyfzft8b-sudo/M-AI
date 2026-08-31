@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
-import { SEO_BRAND_NAME, SEO_SITE_DESCRIPTION } from "@/lib/brand";
+import { SEO_BRAND_NAME } from "@/lib/brand";
+import { getTranslations } from "@/lib/i18n/server";
 import { SPLASH_BACKGROUNDS } from "@/lib/splash-screens";
 
 /**
@@ -20,16 +21,26 @@ import { SPLASH_BACKGROUNDS } from "@/lib/splash-screens";
  * a tablet turned sideways reaches the desktop rail layout at 1100px, and the
  * launch screens below cover landscape too. Which way to hold the device is the
  * reader's call.
+ *
+ * Async, because the description and `lang` follow the visitor's language.
+ *
+ * A `<link rel="manifest">` is fetched without cookies unless the tag opts in,
+ * so the language cookie is usually absent here and detection falls through to
+ * the country header — which Vercel does attach. That is the right outcome
+ * anyway: the manifest describes the app to the operating system at install
+ * time, where the country the device is in is the better signal.
  */
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const { locale, t } = await getTranslations();
+
   return {
     name: SEO_BRAND_NAME,
     // The label under the home-screen icon. `short_name` beats the
     // `apple-mobile-web-app-title` that used to supply it, so the bare "Memo"
     // this once held quietly renamed the installed app.
     short_name: SEO_BRAND_NAME,
-    description: SEO_SITE_DESCRIPTION,
-    lang: "sl",
+    description: t("meta.description"),
+    lang: locale,
     start_url: "/app",
     scope: "/",
     display: "standalone",

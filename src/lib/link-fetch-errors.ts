@@ -1,5 +1,11 @@
+/**
+ * What went wrong, as a code.
+ *
+ * It used to carry the sentence as well. The only caller now throws
+ * `expectedInputFailure(code)`, which derives the wording from the message catalogue — so the
+ * learner reads it in their own language and there is one place the words live rather than two.
+ */
 export type LinkFetchFailure = {
-  message: string;
   code: string;
 };
 
@@ -22,10 +28,7 @@ const TLS_ERROR_CODES = new Set([
 
 const DNS_ERROR_CODES = new Set(["EAI_AGAIN", "ENOTFOUND"]);
 
-const HOST_NOT_FOUND_FAILURE: LinkFetchFailure = {
-  message: "Spletne strani na tej povezavi ni bilo mogoče najti. Preveri, ali je naslov pravilen.",
-  code: "link_host_not_found",
-};
+const HOST_NOT_FOUND_FAILURE: LinkFetchFailure = { code: "link_host_not_found" };
 
 const CONNECTION_ERROR_CODES = new Set([
   "ECONNREFUSED",
@@ -96,10 +99,7 @@ export function describeLinkFetchFailure(error: unknown): LinkFetchFailure | nul
       TLS_MESSAGE_FRAGMENTS.some((fragment) => message.includes(fragment)),
     )
   ) {
-    return {
-      message: "Spletna stran na tej povezavi ima neveljavno varnostno potrdilo, zato je nismo mogli odpreti.",
-      code: "link_tls_failed",
-    };
+    return { code: "link_tls_failed" };
   }
 
   if (codes.some((code) => DNS_ERROR_CODES.has(code))) {
@@ -107,10 +107,7 @@ export function describeLinkFetchFailure(error: unknown): LinkFetchFailure | nul
   }
 
   if (codes.some((code) => CONNECTION_ERROR_CODES.has(code))) {
-    return {
-      message: "Do spletne strani na tej povezavi ni bilo mogoče priti. Poskusi znova čez nekaj minut.",
-      code: "link_unreachable",
-    };
+    return { code: "link_unreachable" };
   }
 
   return null;

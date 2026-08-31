@@ -20,26 +20,90 @@ export const MATH_FORMATTING_INSTRUCTIONS = `Formula formatting rules:
 - For multi-line derivations, use one display math block with an aligned environment inside: $$\\begin{aligned} a &= b \\\\ c &= d \\end{aligned}$$.
 - Never write raw dollar-sign inline math, broken subscripts like $Yt$ or $I{t/0}$, or plain text formulas like Yt / Y0 100.`;
 
+/*
+ * A note's furniture — its section headings and its callout labels — is a set of literal strings
+ * handed to the model, so unlike the body it cannot simply follow the source. It follows the
+ * language the source was detected in, and English is the fallback for a language with no set
+ * here rather than the default for everyone.
+ *
+ * Bosnian has its own set because the two words that differ from Croatian in it — "Poređenje"
+ * and "greška" — are exactly the two that would read as foreign. It is only reached through an
+ * explicitly stored `bs` hint: the detector answers ijekavian material as `hr` (see
+ * `refineBcsVariety`), which is the closer of the two wrong answers when it cannot tell.
+ */
+const STRUCTURED_PLUS_LABELS: Record<string, Record<string, string>> = {
+  sl: {
+    overview: "## Hiter pregled",
+    keyThings: "## Ključne stvari, ki jih moraš znati",
+    topicExample: "## 1. Ime teme",
+    coreIdea: "### Glavna ideja",
+    detailedNotes: "### Podrobni zapiski",
+    keyTerms: "### Ključni pojmi",
+    example: "### Primer",
+    compare: "### Primerjava",
+    process: "### Proces",
+    checkYourself: "### Preveri svoje znanje",
+    finalReview: "## Končni pregled",
+    definition: "Definicija",
+    commonMistake: "Pogosta napaka",
+    keyTakeaway: "Ključno",
+  },
+  hr: {
+    overview: "## Brzi pregled",
+    keyThings: "## Ključne stvari koje moraš znati",
+    topicExample: "## 1. Naziv teme",
+    coreIdea: "### Glavna ideja",
+    detailedNotes: "### Detaljne bilješke",
+    keyTerms: "### Ključni pojmovi",
+    example: "### Primjer",
+    compare: "### Usporedba",
+    process: "### Proces",
+    checkYourself: "### Provjeri svoje znanje",
+    finalReview: "## Završni pregled",
+    definition: "Definicija",
+    commonMistake: "Česta pogreška",
+    keyTakeaway: "Ključno",
+  },
+  bs: {
+    overview: "## Brzi pregled",
+    keyThings: "## Ključne stvari koje moraš znati",
+    topicExample: "## 1. Naziv teme",
+    coreIdea: "### Glavna ideja",
+    detailedNotes: "### Detaljne bilješke",
+    keyTerms: "### Ključni pojmovi",
+    example: "### Primjer",
+    compare: "### Poređenje",
+    process: "### Proces",
+    checkYourself: "### Provjeri svoje znanje",
+    finalReview: "## Završni pregled",
+    definition: "Definicija",
+    commonMistake: "Česta greška",
+    keyTakeaway: "Ključno",
+  },
+  sr: {
+    overview: "## Brzi pregled",
+    keyThings: "## Ključne stvari koje moraš znati",
+    topicExample: "## 1. Naziv teme",
+    coreIdea: "### Glavna ideja",
+    detailedNotes: "### Detaljne beleške",
+    keyTerms: "### Ključni pojmovi",
+    example: "### Primer",
+    compare: "### Poređenje",
+    process: "### Proces",
+    checkYourself: "### Proveri svoje znanje",
+    finalReview: "## Završni pregled",
+    definition: "Definicija",
+    commonMistake: "Česta greška",
+    keyTakeaway: "Ključno",
+  },
+};
+
 export function getStructuredPlusLabels(outputLanguage?: string | null) {
   const languageCode = normalizeNoteLanguage(outputLanguage);
+  const labels = STRUCTURED_PLUS_LABELS[languageCode];
 
-  if (languageCode === "sl") {
-    return {
-      overview: "## Hiter pregled",
-      keyThings: "## Ključne stvari, ki jih moraš znati",
-      topicExample: "## 1. Ime teme",
-      coreIdea: "### Glavna ideja",
-      detailedNotes: "### Podrobni zapiski",
-      keyTerms: "### Ključni pojmi",
-      example: "### Primer",
-      compare: "### Primerjava",
-      process: "### Proces",
-      checkYourself: "### Preveri svoje znanje",
-      finalReview: "## Končni pregled",
-      definition: "Definicija",
-      commonMistake: "Pogosta napaka",
-      keyTakeaway: "Ključno",
-    };
+  if (labels) {
+    return labels;
   }
 
   return {

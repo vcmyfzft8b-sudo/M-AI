@@ -53,7 +53,7 @@ export function SettingsLoading() {
             <span className="app-loading-pill" style={{ display: "block", height: "1.15rem", width: "6.5rem" }} />
           </div>
 
-          {/* Naročnina: overline, plan, detail, then the action. */}
+          {/* Subscription: overline, plan, detail, then the action. */}
           <div className="memo-card-row">
             <span className="memo-card-row-copy">
               <span className="app-loading-pill" style={{ height: "0.78rem", width: "4rem" }} />

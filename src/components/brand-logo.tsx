@@ -4,12 +4,17 @@ import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
   BRAND_LOCKUP_WIDTH,
-  BRAND_TAGLINE,
   SEO_BRAND_NAME,
 } from "@/lib/brand";
 
+/**
+ * `subtitle` defaults to nothing rather than to the tagline. Every caller
+ * either renders the lockup `compact` or passes an empty subtitle, so the
+ * tagline default was never drawn; keeping it would mean this shared component
+ * reaching for translated copy it does not use.
+ */
 export function BrandLogo({
-  subtitle = BRAND_TAGLINE,
+  subtitle = "",
   compact = false,
   priority = false,
 }: {

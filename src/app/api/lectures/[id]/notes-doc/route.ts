@@ -14,6 +14,7 @@ import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const NOTES_DOC_MAX_BYTES = 256 * 1024;
 
@@ -32,7 +33,7 @@ export async function PATCH(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -57,7 +58,7 @@ export async function PATCH(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID zapiska." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;
@@ -67,14 +68,14 @@ export async function PATCH(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canAccessLectureContent(user.id, id);
 
   if (!access.allowed) {
     return createBillingRequiredResponse(
-      "Za urejanje tega zapiska je potreben plačljiv paket.",
+      await tr("api.paidRequired.edit"),
       access.code,
     );
   }
@@ -82,7 +83,7 @@ export async function PATCH(
   const artifact = await readLectureArtifactForNoteDoc(id);
 
   if (!artifact) {
-    return NextResponse.json({ error: "Zapiski še niso pripravljeni." }, { status: 409 });
+    return NextResponse.json({ error: await tr("note.notReady") }, { status: 409 });
   }
 
   const currentRevision = artifact.editable_notes_revision ?? 0;
@@ -90,7 +91,7 @@ export async function PATCH(
   if (currentRevision !== parsed.data.expectedRevision) {
     return NextResponse.json(
       {
-        error: "Zapiski so se medtem spremenili. Osveži stran in poskusi znova.",
+        error: await tr("api.notesChanged"),
         revision: currentRevision,
         doc: parseStoredNoteDoc(artifact),
       },
@@ -112,7 +113,7 @@ export async function PATCH(
     const latest = await readLectureArtifactForNoteDoc(id);
     return NextResponse.json(
       {
-        error: "Zapiski so se medtem spremenili. Osveži stran in poskusi znova.",
+        error: await tr("api.notesChanged"),
         revision: latest?.editable_notes_revision ?? 0,
         doc: latest ? parseStoredNoteDoc(latest) : nextDoc,
       },

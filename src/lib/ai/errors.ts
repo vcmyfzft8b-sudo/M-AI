@@ -23,6 +23,17 @@ function getErrorText(error: unknown) {
 // sees only this text. The English "temporarily overloaded" answered "retryable" by accident,
 // through the provider keyword it happened to contain; the Slovenian wording would not, so the
 // classifier below matches that sentence by name and the verdict survives the translation.
+/*
+ * A second reason these stay in one language: the reader does not see them.
+ *
+ * They are written into the lecture row's `error_message` by a background run
+ * that has no reader and no request, so they cannot know which of five
+ * languages to use. `toAiFailureCode` below turns each of them back into a
+ * code, the pipeline records that code, and the note screen resolves it into
+ * the reader's own language at render time. What is left here is an internal
+ * marker — for the classifier above, for Sentry, and for anyone reading the
+ * table — and must not be translated, or the classifier stops recognising it.
+ */
 export const AI_SAVE_TIMEOUT_MESSAGE =
   "Shranjevanje zapiskov je trajalo predolgo. Poskusi znova čez minuto.";
 export const AI_PROVIDER_OVERLOADED_MESSAGE =
@@ -167,5 +178,37 @@ export function toUserFacingAiErrorMessage(error: unknown) {
     return error;
   }
 
-  return "Pri obdelavi je prišlo do nepričakovane napake.";
+  return AI_UNEXPECTED_MESSAGE;
+}
+
+/** The generic last resort, named so `toAiFailureCode` can recognise it too. */
+export const AI_UNEXPECTED_MESSAGE = "Pri obdelavi je prišlo do nepričakovane napake.";
+
+/**
+ * The failure code for one of the sentences this module writes, or null for anything else.
+ *
+ * The pipeline asks this only after `toLectureFailureCode` has come back empty — an AI or budget
+ * failure carries no `ExpectedLectureInputError`, so the sentence is the only thing left to
+ * recognise it by. Matching our own constants by identity is safe in a way that matching a
+ * learner-facing sentence is not: these four are never translated, precisely so that this and
+ * `isRetryableAiError` keep working across an Inngest step boundary.
+ */
+export function toAiFailureCode(message: string): string | null {
+  if (message === AI_SAVE_TIMEOUT_MESSAGE) {
+    return "ai_save_timeout";
+  }
+
+  if (message === AI_PROVIDER_OVERLOADED_MESSAGE) {
+    return "ai_provider_overloaded";
+  }
+
+  if (message === AI_PROCESSING_TOO_LONG_MESSAGE) {
+    return "ai_processing_too_long";
+  }
+
+  if (message === AI_UNEXPECTED_MESSAGE) {
+    return "ai_unexpected";
+  }
+
+  return null;
 }

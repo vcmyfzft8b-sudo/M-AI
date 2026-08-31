@@ -5,6 +5,8 @@
  * because they answer over the same frames and a second reader would only be a
  * second thing to get subtly wrong.
  */
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+import type { Translate } from "@/lib/i18n/translate";
 
 /**
  * Reads the chat SSE stream, handing each token to `onDelta` as it lands and
@@ -17,6 +19,12 @@
 export async function readChatStream<TResult>(
   response: Response,
   onDelta: (updater: (current: string) => string) => void,
+  /*
+   * The server writes the sentence in the reader's language and this only has
+   * to cover the frame that arrives with none — but it runs outside React, so
+   * the caller hands its translator down.
+   */
+  t: Translate<MessageKey>,
 ): Promise<TResult | null> {
   if (!response.body) {
     return null;
@@ -66,7 +74,7 @@ export async function readChatStream<TResult>(
 
     if (event === "error") {
       throw new Error(
-        (parsed as { error?: string }).error ?? "Odgovora ni bilo mogoče ustvariti.",
+        (parsed as { error?: string }).error ?? t("chat.error.answerFailed"),
       );
     }
   };

@@ -3,6 +3,7 @@ import { AlertCircle, ChevronLeft } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand-logo";
 import { BRAND_NAME } from "@/lib/brand";
+import { getTranslations } from "@/lib/i18n/server";
 import { sanitizeUserInput } from "@/lib/validation";
 
 export default async function AuthErrorPage({
@@ -10,6 +11,7 @@ export default async function AuthErrorPage({
 }: {
   searchParams: Promise<{ message?: string }>;
 }) {
+  const { t } = await getTranslations();
   const params = await searchParams;
   const message = typeof params.message === "string"
     ? sanitizeUserInput(params.message).slice(0, 240)
@@ -19,14 +21,14 @@ export default async function AuthErrorPage({
     <main className="landing-shell auth-shell">
       <header className="ios-nav landing-nav">
         <div className="ios-nav-inner landing-nav-inner">
-          <Link href="/" className="landing-brand-link" aria-label={`Domov ${BRAND_NAME}`}>
+          <Link href="/" className="landing-brand-link" aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}>
             <BrandLogo compact />
           </Link>
 
           <div className="landing-nav-actions">
             <Link href="/" className="app-back-button">
               <ChevronLeft className="h-5 w-5" />
-              Nazaj
+              {t("common.back")}
             </Link>
           </div>
         </div>
@@ -38,19 +40,16 @@ export default async function AuthErrorPage({
             <div className="auth-check-icon error">
               <AlertCircle className="h-6 w-6" />
             </div>
-            <p className="auth-eyebrow">Napaka pri prijavi</p>
-            <h1 className="auth-title">Prijava ni uspela</h1>
-            <p className="auth-copy">
-              {message ??
-                "Poskusi drugo metodo prijave ali preveri, ali so ponudniki prijave pravilno nastavljeni."}
-            </p>
+            <p className="auth-eyebrow">{t("auth.error.eyebrow")}</p>
+            <h1 className="auth-title">{t("auth.error.title")}</h1>
+            <p className="auth-copy">{message ?? t("auth.error.copy")}</p>
 
             <div className="auth-check-actions">
               <Link href="/auth/login?next=/app/start" className="ios-primary-button auth-submit-button">
-                Nazaj na prijavo
+                {t("auth.error.backToLogin")}
               </Link>
               <Link href="/auth/signup?next=/app/start" className="auth-secondary-link">
-                Ustvari račun
+                {t("auth.createAccount")}
               </Link>
             </div>
           </div>

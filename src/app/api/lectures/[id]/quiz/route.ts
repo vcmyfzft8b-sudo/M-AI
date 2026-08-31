@@ -7,6 +7,7 @@ import { queueLectureQuizGeneration } from "@/lib/quiz";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 export const maxDuration = 300;
 
@@ -20,7 +21,7 @@ export async function GET(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -37,7 +38,7 @@ export async function GET(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID zapiska." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;
@@ -47,14 +48,14 @@ export async function GET(
   });
 
   if (!detail) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canUseLectureFeatures(user.id, id, "quiz");
 
   if (!access.allowed) {
     return createBillingRequiredResponse(
-      "Brez plačljivega paketa je kviz na voljo samo za tvoje poskusno gradivo.",
+      await tr("api.trialOnly.quiz"),
       access.code,
     );
   }
@@ -77,7 +78,7 @@ export async function POST(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -94,7 +95,7 @@ export async function POST(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID zapiska." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;
@@ -104,21 +105,21 @@ export async function POST(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canUseLectureFeatures(user.id, id, "quiz");
 
   if (!access.allowed) {
     return createBillingRequiredResponse(
-      "Brez plačljivega paketa je kviz na voljo samo za tvoje poskusno gradivo.",
+      await tr("api.trialOnly.quiz"),
       access.code,
     );
   }
 
   if (lecture.status !== "ready") {
     return NextResponse.json(
-      { error: "Ustvarjanje kviza je na voljo, ko je zapisek pripravljen." },
+      { error: await tr("api.quizReadyOnly") },
       { status: 409 },
     );
   }
@@ -128,7 +129,7 @@ export async function POST(
   } catch (error) {
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Ustvarjanja kviza ni bilo mogoče uvrstiti v čakalno vrsto.",
+        error: error instanceof Error ? error.message : await tr("api.quizQueueFailed"),
       },
       { status: 500 },
     );

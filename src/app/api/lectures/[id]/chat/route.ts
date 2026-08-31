@@ -8,6 +8,7 @@ import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { chatQuestionSchema, routeIdParamSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const chatSchema = z.object({
   question: chatQuestionSchema,
@@ -28,7 +29,7 @@ export async function POST(
   const user = await getOptionalUserOrPreviewBypass();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -53,7 +54,7 @@ export async function POST(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID zapiska." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;
@@ -63,7 +64,7 @@ export async function POST(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const chatAccess = await canSendTrialChatMessage(user.id, id);
@@ -71,15 +72,15 @@ export async function POST(
   if (!chatAccess.allowed) {
     return createBillingRequiredResponse(
       chatAccess.code === "trial_chat_limit_reached"
-        ? "Porabil si vseh 5 brezplačnih sporočil za ta klepet."
-        : "Brez plačljivega paketa lahko klepetaš samo o svojem poskusnem gradivu.",
+        ? await tr("api.chatLimitReached")
+        : await tr("api.trialOnly.chat"),
       chatAccess.code,
     );
   }
 
   if (lecture.status !== "ready") {
     return NextResponse.json(
-      { error: "Klepet je na voljo, ko je obdelava zapiska končana." },
+      { error: await tr("api.chatNotReady") },
       { status: 409 },
     );
   }

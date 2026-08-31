@@ -1,3 +1,11 @@
+"use client";
+
+/*
+ * A client component only so the one string on it — the screen reader's label —
+ * can be read in the reader's language. Everything else here is static markup.
+ */
+import { useT } from "@/components/i18n-provider";
+
 const SKELETON_TABS = [0, 1, 2, 3, 4];
 const SKELETON_PARAGRAPHS = [
   ["full", "full", "short"],
@@ -17,12 +25,14 @@ const SKELETON_PARAGRAPHS = [
  * way back off the screen for as long as the note takes to arrive.
  */
 export function LectureWorkspaceLoading() {
+  const t = useT();
+
   return (
     <div
       className="memo-note-screen"
       data-route-skeleton=""
       role="status"
-      aria-label="Nalaganje zapiska"
+      aria-label={t("note.loading")}
       aria-busy="true"
     >
       {/* Phone: back, the note's emoji, actions. */}

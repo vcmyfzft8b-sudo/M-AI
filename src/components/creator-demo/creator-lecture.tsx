@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { useCreatorDemoDetail } from "@/components/creator-demo/creator-demo-provider";
+import { useT } from "@/components/i18n-provider";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { InstantLink } from "@/components/instant-link";
 import { LectureWorkspaceLoading } from "@/components/lecture-loading";
@@ -19,6 +20,7 @@ export function CreatorLecture({
   lectureId: string;
   initialDetail: LectureDetail | null;
 }) {
+  const t = useT();
   const detail = useCreatorDemoDetail(lectureId, initialDetail);
   const [timedOut, setTimedOut] = useState(false);
 
@@ -43,12 +45,12 @@ export function CreatorLecture({
             <div className="app-empty-state-icon">
               <EmojiIcon symbol="📝" size="1.25rem" />
             </div>
-            <p className="ios-row-title">Tega zapiska ni v demu</p>
+            <p className="ios-row-title">{t("creatorDemo.missingTitle")}</p>
             <p className="ios-row-subtitle mt-2">
-              Demo zapiski se ponastavijo, ko zapreš zavihek. Vrni se na seznam in ustvari novega.
+              {t("creatorDemo.missingBody")}
             </p>
             <InstantLink href="/app" className="app-home-highlight-link">
-              <span>Nazaj na zapiske</span>
+              <span>{t("creatorDemo.backToNotes")}</span>
               <EmojiIcon symbol="›" size="1.1rem" />
             </InstantLink>
           </div>

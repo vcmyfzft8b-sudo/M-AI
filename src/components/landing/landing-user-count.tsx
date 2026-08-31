@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 
+import { useTranslations } from "@/components/i18n-provider";
 import {
   formatUserCount,
-  registeredUsersLabel,
   USER_COUNT_BASE,
   USER_COUNT_PER_MINUTE,
 } from "@/lib/social-proof";
@@ -38,10 +38,12 @@ function readStoredCount(): number | null {
   }
 }
 
-/* The hero's "N registriranih uporabnikov" figure. Renders the baseline on
-   the server so hydration matches, then ticks upward for as long as the
-   visitor is on the page. */
+/* The hero's "N registered users" figure. Renders the baseline on the server
+   so hydration matches, then ticks upward for as long as the visitor is on the
+   page. The noun after the number follows the count, and each language draws
+   its plural boundaries differently — see `landing.registeredUsers`. */
 export function LandingUserCount() {
+  const { locale, t } = useTranslations();
   const [count, setCount] = useState(USER_COUNT_BASE);
 
   useEffect(() => {
@@ -68,7 +70,8 @@ export function LandingUserCount() {
 
   return (
     <span>
-      <strong>{formatUserCount(count)}</strong> {registeredUsersLabel(count)}
+      <strong>{formatUserCount(count, locale)}</strong>{" "}
+      {t("landing.registeredUsers", { count })}
     </span>
   );
 }

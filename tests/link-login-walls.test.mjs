@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { bs } from "../src/lib/i18n/messages/bs.ts";
+import { en } from "../src/lib/i18n/messages/en.ts";
+import { hr } from "../src/lib/i18n/messages/hr.ts";
+import { sl } from "../src/lib/i18n/messages/sl.ts";
+import { sr } from "../src/lib/i18n/messages/sr.ts";
+
+const CATALOGUES = { sl, en, hr, bs, sr };
+
 import {
   LINK_LOGIN_WALL_CODE,
-  LINK_LOGIN_WALL_MESSAGE,
   isLoginWallUrl,
   looksLikeLoginPage,
 } from "../src/lib/link-login-walls.ts";
@@ -82,12 +89,31 @@ test("an ordinary article is not mistaken for a sign-in form", () => {
   assert.equal(looksLikeLoginPage(""), false);
 });
 
-test("the learner-facing message names the cause and the way out", () => {
+test("the learner-facing message names the cause and the way out, in every language", () => {
   assert.equal(LINK_LOGIN_WALL_CODE, "link_requires_login");
-  // The message is what lands in the red panel on the dashboard, so it has to be
-  // Slovenian like the rest of that surface, and it has to point somewhere other than
-  // the retry button, which can never clear a sign-in wall.
-  assert.match(LINK_LOGIN_WALL_MESSAGE, /prijava/i);
-  assert.match(LINK_LOGIN_WALL_MESSAGE, /naloži/i);
-  assert.ok(!/[a-z]{3,} the [a-z]{3,}/i.test(LINK_LOGIN_WALL_MESSAGE));
+
+  // The message is what lands in the red panel on the dashboard. It has to point somewhere
+  // other than the retry button, which can never clear a sign-in wall — so in each of the five
+  // languages it must both name the sign-in and tell the learner to upload the file instead.
+  const NAMES_THE_CAUSE = {
+    sl: /prijav/i,
+    en: /sign-in|signed in/i,
+    hr: /prijav/i,
+    bs: /prijav/i,
+    sr: /prijav/i,
+  };
+  const NAMES_THE_WAY_OUT = {
+    sl: /naloži/i,
+    en: /upload/i,
+    hr: /učitaj/i,
+    bs: /učitaj/i,
+    sr: /učitaj/i,
+  };
+
+  for (const [locale, catalogue] of Object.entries(CATALOGUES)) {
+    const message = catalogue["failure.link_requires_login"];
+
+    assert.match(message, NAMES_THE_CAUSE[locale], `${locale} does not name the sign-in`);
+    assert.match(message, NAMES_THE_WAY_OUT[locale], `${locale} does not offer the way out`);
+  }
 });

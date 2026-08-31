@@ -11,6 +11,8 @@ import {
   enqueueLectureProcessing,
   enqueueLectureScanProcessing,
 } from "@/lib/jobs";
+import { sourceLocaleMessage } from "@/lib/lecture-failure-text";
+import { LectureProcessingStalledError } from "@/lib/lecture-processing-errors";
 import { isRecord } from "@/lib/lecture-source-metadata";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -18,6 +20,7 @@ import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { extractScanImageStoragePaths } from "@/lib/scan-image-uploads";
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { lectureTitleSchema, routeIdParamSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const UPDATE_LECTURE_MAX_BYTES = 8 * 1024;
 const STALE_NOTES_GENERATION_MS = 6 * 60 * 1000;
@@ -137,7 +140,7 @@ export async function GET(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -154,7 +157,7 @@ export async function GET(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID zapiska." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;
@@ -164,14 +167,14 @@ export async function GET(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canAccessLectureContent(user.id, id);
 
   if (!access.allowed) {
     return createBillingRequiredResponse(
-      "Za dostop do tega zapiska je potreben plačljiv paket.",
+      await tr("api.paidRequired.access"),
       access.code,
     );
   }
@@ -183,7 +186,7 @@ export async function GET(
   });
 
   if (!detail) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const processingUpdatedAt =
@@ -212,7 +215,9 @@ export async function GET(
     after(async () => {
       await markLecturePipelineFailed({
         lectureId: detail.lecture.id,
-        error: new Error("Obdelava se je zataknila. Poskusi znova."),
+        error: new LectureProcessingStalledError(
+          sourceLocaleMessage("failure.processing_stalled"),
+        ),
       });
     });
   } else if (
@@ -267,7 +272,7 @@ export async function DELETE(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -284,7 +289,7 @@ export async function DELETE(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID zapiska." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;
@@ -294,7 +299,7 @@ export async function DELETE(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const service = createSupabaseServiceRoleClient();
@@ -305,7 +310,7 @@ export async function DELETE(
     .eq("user_id", user.id);
 
   if (noteMediaError) {
-    return NextResponse.json({ error: noteMediaError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   const { error } = await supabase
@@ -315,7 +320,7 @@ export async function DELETE(
     .eq("user_id", user.id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   const chunkPaths = parseAudioChunkManifest(
@@ -348,7 +353,7 @@ export async function PATCH(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -373,7 +378,7 @@ export async function PATCH(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID zapiska." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;
@@ -383,7 +388,7 @@ export async function PATCH(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const { error } = await supabase
@@ -393,7 +398,7 @@ export async function PATCH(
     .eq("user_id", user.id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, title: parsed.data.title });

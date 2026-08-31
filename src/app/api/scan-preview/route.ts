@@ -4,6 +4,7 @@ import sharp from "sharp";
 
 import { MAX_SCAN_IMAGE_BYTES } from "@/lib/constants";
 import { normalizeMimeType } from "@/lib/storage";
+import { tr } from "@/lib/i18n/server";
 
 export const runtime = "nodejs";
 
@@ -21,11 +22,11 @@ function isPreviewableScanImage(file: File) {
 
 async function createScanPreview(file: File) {
   if (!isPreviewableScanImage(file)) {
-    throw new Error("Ta format ne potrebuje ločenega predogleda.");
+    throw new Error(await tr("api.noPreviewNeeded"));
   }
 
   if (file.size <= 0 || file.size > MAX_SCAN_IMAGE_BYTES) {
-    throw new Error("Fotografija je prevelika za predogled.");
+    throw new Error(await tr("api.photoTooLargeForPreview"));
   }
 
   const inputBuffer = Buffer.from(await file.arrayBuffer());
@@ -61,11 +62,11 @@ export async function POST(request: Request) {
   }
 
   if (files.length === 0) {
-    return NextResponse.json({ error: "Manjka fotografija za predogled." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.missingPhotoPreview") }, { status: 400 });
   }
 
   if (files.length > 10) {
-    return NextResponse.json({ error: "Preveč fotografij za predogled." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.tooManyPhotos") }, { status: 400 });
   }
 
   try {
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Failed to create scan image preview", error);
     return NextResponse.json(
-      { error: "Predogleda fotografije ni bilo mogoče ustvariti." },
+      { error: await tr("api.scanPreviewFailed") },
       { status: 422 },
     );
   }

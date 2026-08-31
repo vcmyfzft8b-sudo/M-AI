@@ -58,10 +58,9 @@ test("no two devices claim the same media query", () => {
   const screens = splashScreens();
   const byMedia = new Set(screens.map((screen) => screen.media));
 
-  // One portrait link plus the two landscape spellings, per colour scheme.
   assert.equal(
     screens.length,
-    SPLASH_DEVICES.length * 3 * SPLASH_THEMES.length,
+    SPLASH_DEVICES.length * SPLASH_THEMES.length,
     "a device is missing a link",
   );
   assert.equal(
@@ -69,4 +68,49 @@ test("no two devices claim the same media query", () => {
     screens.length,
     "two media queries collide, so one device would get the other's launch screen",
   );
+});
+
+/**
+ * The bug this file exists for. The first cut emitted 120 links — portrait plus
+ * two landscape spellings per device per theme — and iOS quietly used none of
+ * them: a freshly added web app opened into the same black rectangle as before.
+ * 46 links renders; 120 does not. Both were measured on an iPhone 17 Pro
+ * simulator (iOS 26.5) by adding the page to the home screen and photographing
+ * the launch, so the real ceiling is somewhere in between and unknown.
+ *
+ * 64 is a deliberately conservative guess at a safe budget. If a future device
+ * pushes past it, the answer is to drop a colour scheme or retire old hardware,
+ * never to raise the number on the assumption that it was arbitrary.
+ */
+const SAFE_LINK_BUDGET = 64;
+
+test("the launch-screen link set stays under the budget iOS will read", () => {
+  const count = splashScreens().length;
+  assert.ok(
+    count <= SAFE_LINK_BUDGET,
+    `${count} launch-screen links: past ${SAFE_LINK_BUDGET}, iOS is liable to ignore all of them and open to a blank screen`,
+  );
+});
+
+test("every device the app supports is covered in portrait", () => {
+  // Sizes read off Apple's simulator profiles. These are the ones a black
+  // launch screen was actually reported on, plus the hardware that shipped
+  // alongside them; losing one silently is the regression to catch.
+  const required = [
+    [360, 780, 3], // iPhone 12/13 mini
+    [390, 844, 3], // iPhone 12/13/14/16e/17e
+    [393, 852, 3], // iPhone 14 Pro/15/16
+    [402, 874, 3], // iPhone 16 Pro/17/17 Pro
+    [420, 912, 3], // iPhone Air
+    [430, 932, 3], // iPhone 14 Pro Max/15 Plus/16 Plus
+    [440, 956, 3], // iPhone 16 Pro Max/17 Pro Max
+    [834, 1210, 2], // iPad Pro 11" (M4/M5)
+  ];
+
+  for (const [width, height, ratio] of required) {
+    assert.ok(
+      SPLASH_DEVICES.some((d) => d.width === width && d.height === height && d.ratio === ratio),
+      `${width}x${height}@${ratio} has no launch screen`,
+    );
+  }
 });

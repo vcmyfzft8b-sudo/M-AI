@@ -100,6 +100,22 @@ const DASHBOARD_MUTATION_TIMEOUT_MS = 18_000;
 const DASHBOARD_NOTE_ACTION_REVEAL_PX = 144;
 /** How far a finger travels before the gesture counts as a swipe and not a tap. */
 const DASHBOARD_NOTE_DRAG_SLOP_PX = 5;
+/**
+ * How far it travels before that gesture's *direction* is read. Reading it at
+ * the tap slop above meant deciding on 5px, where the direction is mostly the
+ * jerk the hand starts with — so a quick, arcing flick was handed to the
+ * scroller and the row never moved, while the same swipe done slowly worked.
+ * Roughly where the browser makes up its own mind about a pan.
+ */
+const DASHBOARD_NOTE_DRAG_DIRECTION_PX = 10;
+/**
+ * How much more vertical than horizontal a gesture must be before it belongs
+ * to the list rather than to the row. Merely "more y than x" is not an answer
+ * at this distance. Over-claiming is the safe side: `touch-action: pan-y`
+ * leaves the browser its veto, and a pan it takes arrives here as a
+ * pointercancel that settles the row back.
+ */
+const DASHBOARD_NOTE_DRAG_AXIS_BIAS = 1.5;
 /** Past either end the row still follows the finger, at a fraction of the distance. */
 const DASHBOARD_NOTE_DRAG_RUBBER_BAND = 0.3;
 /** px/ms. A flick this quick decides the row on its own, however far it travelled. */
@@ -369,54 +385,57 @@ const NoteRow = memo(function NoteRow({
     releaseSurfaceRef.current = release;
   }
 
-  function updateDrag(event: PointerEvent) {
-    const current = dragRef.current;
-
-    if (!current || current.pointerId !== event.pointerId) {
-      return;
-    }
-
-    const deltaX = event.clientX - current.startX;
-
+  /**
+   * One pointer sample. Coalesced samples are replayed through this in order,
+   * so a swipe that outran the frame rate is measured on what the finger
+   * actually did rather than on the one position that survived to a frame.
+   *
+   * Returns false once the gesture has been given up as a scroll.
+   */
+  function trackSample(
+    current: DashboardNoteDragState,
+    clientX: number,
+    clientY: number,
+    time: number,
+  ) {
     if (current.axis === "pending") {
-      const deltaY = event.clientY - current.startY;
+      const deltaX = clientX - current.startX;
+      const deltaY = clientY - current.startY;
 
-      if (
-        Math.abs(deltaX) < DASHBOARD_NOTE_DRAG_SLOP_PX &&
-        Math.abs(deltaY) < DASHBOARD_NOTE_DRAG_SLOP_PX
-      ) {
-        return;
+      // Too early to read a direction out of it.
+      if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < DASHBOARD_NOTE_DRAG_DIRECTION_PX) {
+        return true;
       }
 
       // The browser owns vertical pans here (touch-action: pan-y), so a gesture
-      // that leans vertical is the list scrolling: let go of it rather than
-      // spend the rest of the swipe fighting the scroller.
-      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+      // that clearly leans vertical is the list scrolling: let go of it rather
+      // than spend the rest of the swipe fighting the scroller.
+      if (Math.abs(deltaY) > Math.abs(deltaX) * DASHBOARD_NOTE_DRAG_AXIS_BIAS) {
         dragRef.current = null;
         cleanupDragListenersRef.current?.();
         surfaceRef.current?.classList.remove("dragging");
-        return;
+        return false;
       }
 
       current.axis = "x";
-      // Re-anchor on the point the swipe was recognised at, so the row picks the
-      // finger up where it is instead of jumping the slop distance to meet it.
-      current.startX = event.clientX;
-      current.lastX = event.clientX;
-      current.lastTime = event.timeStamp;
-      current.hasVelocity = false;
+      // Give the row everything the finger has already covered bar the slop it
+      // took to tell a swipe from a tap. Re-anchoring on this sample instead
+      // threw the whole first move away — nothing at all on a slow drag, half
+      // the gesture at flick speed, which is why the row only kept up when it
+      // was dragged slowly.
+      current.startX += deltaX < 0 ? -DASHBOARD_NOTE_DRAG_SLOP_PX : DASHBOARD_NOTE_DRAG_SLOP_PX;
       suppressClickRef.current = true;
       cancelPrefetch();
       surfaceRef.current?.classList.add("dragging");
-      return;
+      // `lastX`/`lastTime` are deliberately left where the finger went down, so
+      // the velocity below is measured across the burst that opened the swipe.
+      // Resetting them here dropped the fastest part of every flick.
     }
 
-    event.preventDefault();
-
-    const elapsed = event.timeStamp - current.lastTime;
+    const elapsed = time - current.lastTime;
 
     if (elapsed > 0) {
-      const instant = (event.clientX - current.lastX) / elapsed;
+      const instant = (clientX - current.lastX) / elapsed;
       // Smoothed from the second sample on, so one stuttering frame at lift-off
       // cannot decide the row. The first is taken whole: a short flick is only a
       // couple of events long, and easing into it from zero would read every
@@ -425,12 +444,38 @@ const NoteRow = memo(function NoteRow({
         ? current.velocity * 0.7 + instant * 0.3
         : instant;
       current.hasVelocity = true;
-      current.lastX = event.clientX;
-      current.lastTime = event.timeStamp;
+      current.lastX = clientX;
+      current.lastTime = time;
     }
 
-    current.offset = rubberBand(current.startOffset + deltaX);
-    paintOffset(current.offset);
+    current.offset = rubberBand(current.startOffset + (clientX - current.startX));
+    return true;
+  }
+
+  function updateDrag(event: PointerEvent) {
+    const current = dragRef.current;
+
+    if (!current || current.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (current.axis === "x") {
+      event.preventDefault();
+    }
+
+    // A swipe faster than the display hands its dropped samples over here.
+    const coalesced = event.getCoalescedEvents?.() ?? [];
+    const samples = coalesced.length > 0 ? coalesced : [event];
+
+    for (const sample of samples) {
+      if (!trackSample(current, sample.clientX, sample.clientY, sample.timeStamp)) {
+        return;
+      }
+    }
+
+    if (current.axis === "x") {
+      paintOffset(current.offset);
+    }
   }
 
   function finishDrag(event: PointerEvent) {
@@ -450,6 +495,12 @@ const NoteRow = memo(function NoteRow({
       }
       return;
     }
+
+    // The finger can still travel between the last move and the lift, which on
+    // a flick is a real part of the distance. Its speed is not folded in: a
+    // lift usually reports no displacement at all, and reading that as a stop
+    // would cancel the flick that just happened.
+    current.offset = rubberBand(current.startOffset + (event.clientX - current.startX));
 
     // A flick decides the row whatever distance it covered; a slow drag lands
     // wherever it was let go of.

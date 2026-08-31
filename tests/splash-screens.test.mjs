@@ -3,6 +3,10 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+function readSource(relativePath) {
+  return readFileSync(fileURLToPath(new URL(`../${relativePath}`, import.meta.url)), "utf8");
+}
+
 import {
   SPLASH_DEVICES,
   SPLASH_THEMES,
@@ -159,4 +163,27 @@ test("light is the unqualified fallback and dark overrides it", () => {
       `${device.devices}: the dark link must follow the unqualified one to win on a dark device`,
     );
   }
+});
+
+/**
+ * The line the whole feature hangs from. iOS only honours
+ * `apple-touch-startup-image` on a page that also claims
+ * `apple-mobile-web-app-capable`, and Next does not emit it: the metadata
+ * API's `appleWebApp.capable` renders the standards-track
+ * `mobile-web-app-capable`, which iOS ignores.
+ *
+ * Without the hand-written tag the launch screens are served, correctly sized,
+ * matched by their media queries — and never drawn. Measured by serving
+ * production's own HTML from localhost unchanged (blank) and then adding only
+ * this tag (the mark appeared). There is no assertion that can catch its
+ * absence at runtime, so it is pinned here.
+ */
+test("the layout declares apple-mobile-web-app-capable by hand", () => {
+  const layout = readSource("src/app/layout.tsx");
+
+  assert.match(
+    layout,
+    /<meta\s+name="apple-mobile-web-app-capable"\s+content="yes"/,
+    "without this tag iOS ignores every launch screen and the app opens blank",
+  );
 });

@@ -112,6 +112,13 @@ export const rateLimitPresets = {
     { windowSeconds: 3600, maxRequests: 80, scope: "user" },
   ] satisfies RateLimitRule[],
   chat: [{ windowSeconds: 300, maxRequests: 30, scope: "user" }] satisfies RateLimitRule[],
+  // A dictated question costs a few seconds of transcription, so the ceiling is
+  // generous enough to talk through a whole session and low enough that a stuck
+  // client cannot bill an account into the ground.
+  dictation: [
+    { windowSeconds: 300, maxRequests: 40, scope: "user" },
+    { windowSeconds: 3600, maxRequests: 200, scope: "user" },
+  ] satisfies RateLimitRule[],
   expensiveChat: [
     { windowSeconds: 300, maxRequests: 12, scope: "user" },
     { windowSeconds: 3600, maxRequests: 60, scope: "user" },

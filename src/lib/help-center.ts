@@ -59,7 +59,7 @@ Koristno je vključiti:
 - kaj si želel doseči
 - kje si se zataknil
 - kakšen rezultat si pričakoval
-- ali gre za težavo pri zvoku, besedilu, PDF-ju ali povezavi`,
+- ali gre za težavo pri zvoku, dokumentu, PDF-ju ali povezavi`,
   },
   {
     slug: "video-isnt-working",
@@ -73,7 +73,7 @@ Memo lahko obdela samo vsebino, ki je javno dostopna in dovolj berljiva za povze
 
 - preveri, da stran ne zahteva prijave
 - uporabi neposreden URL strani
-- če imaš gradivo drugje, naloži PDF ali prilepi besedilo`,
+- če imaš gradivo drugje, naloži PDF ali dokument`,
   },
   {
     slug: "audio-upload-issue",

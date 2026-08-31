@@ -2824,6 +2824,16 @@
   color: #fff;
 }
 
+/* Between the stop and the words arriving the recording is on its way to the
+   transcriber. The control keeps its place and goes quiet rather than
+   disappearing, so nothing under the thumb moves while it waits. */
+.memo-chat-send.mic.transcribing,
+.memo-send.mic.transcribing {
+  background: var(--surface);
+  color: var(--muted);
+  cursor: default;
+}
+
 /* The bar it overlays is the phone's; there is nothing to sit on above that. */
 .memo-m-chatbar-mic {
   display: none;
@@ -2964,16 +2974,6 @@
   color: var(--text);
   box-shadow: var(--shadow);
   cursor: pointer;
-}
-
-.memo-note-processing {
-  margin: 0.9rem 0 0;
-  padding: 0.75rem 1rem;
-  border-radius: 14px;
-  background: var(--tile);
-  color: var(--muted);
-  font-size: 0.95rem;
-  font-weight: 600;
 }
 
 .memo-bubble-copy {
@@ -8496,16 +8496,31 @@
     color: var(--text);
     cursor: grab;
     user-select: none;
+    /* Vertical stays the list's to scroll; horizontal is the swipe's, and the
+       browser hands it over without waiting to see which way the finger goes. */
     touch-action: pan-y;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
     text-align: left;
     border: 0;
+    /* The release only: while a finger is down the row is driven frame by frame
+       from JS, which removes the transition below. */
     transition:
-      transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 240ms cubic-bezier(0.32, 0.72, 0, 1),
       box-shadow 0.18s ease;
   }
 
   .memo-swipe-surface.dragging {
     transition: none;
+    cursor: grabbing;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .memo-swipe-surface {
+      transition:
+        transform 0.01ms linear,
+        box-shadow 0.18s ease;
+    }
   }
 
   .memo-swipe-actions {
@@ -9230,6 +9245,10 @@
 
   .memo-m-chatbar-mic.listening {
     background: rgba(244, 95, 90, 0.5);
+  }
+
+  .memo-m-chatbar-mic.transcribing {
+    background: rgba(244, 95, 90, 0.2);
   }
 
   .memo-dock:has(.memo-dock-pill.reading) .memo-m-chatbar-mic,

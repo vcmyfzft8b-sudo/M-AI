@@ -64,9 +64,23 @@ self.addEventListener("message", (event) => {
         }
       });
 
+      /*
+       * Only what is missing. A worker's own `cache.add` does not pass through
+       * its fetch handler, so re-adding an entry always leaves the cache to be
+       * refetched — and this message arrives on every page load. The files are
+       * `immutable`, so those refetches are served by the HTTP cache rather
+       * than the network, but the work is still pointless and it is a lot of
+       * requests to raise for nothing.
+       */
+      const missing = (
+        await Promise.all(
+          wanted.map(async (url) => ((await cache.match(url)) ? null : url)),
+        )
+      ).filter(Boolean);
+
       await Promise.all(
         // One bad entry must not abandon the rest, which `cache.addAll` would.
-        wanted.map((url) => cache.add(url).catch(() => {})),
+        missing.map((url) => cache.add(url).catch(() => {})),
       );
 
       /*

@@ -60,7 +60,9 @@ function getNavigationSkeleton(href: string, demoBasePath: string | null): React
   }
 
   if (pathname === "/app") {
-    return <DashboardLoading />;
+    // The demo shows the same home screen but is a public page; the promo hint
+    // on this browser belongs to whoever signed in on it, not to the demo.
+    return <DashboardLoading promoPlaceholder={!demoBasePath} />;
   }
 
   return null;

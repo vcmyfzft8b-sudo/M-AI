@@ -180,6 +180,17 @@ export default function RootLayout({
                     document.documentElement.style.colorScheme = "";
                   }
                 } catch (error) {}
+                try {
+                  // Which promo card the home screen last showed, so its
+                  // skeleton can draw that card instead of a hole where it
+                  // goes. See src/lib/home-promo-hint.ts.
+                  var promo = localStorage.getItem("memo-home-promo");
+                  if (promo === "wheel" || promo === "upgrade") {
+                    document.documentElement.dataset.homePromo = promo;
+                  } else {
+                    document.documentElement.removeAttribute("data-home-promo");
+                  }
+                } catch (error) {}
               })();
             `,
           }}

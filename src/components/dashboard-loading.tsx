@@ -1,5 +1,37 @@
+import { Emoji } from "@/components/msym";
+
 const SKELETON_ACTION_TILES = [0, 1, 2, 3];
 const SKELETON_NOTE_ROWS = [0, 1, 2, 3];
+
+/*
+ * The promo card, drawn for real rather than as a pill.
+ *
+ * Both cards are always in the markup and CSS shows whichever the hint on
+ * `<html>` names, because the skeleton is server-rendered and the hint lives
+ * in `localStorage` — a decision made in React would have to wait for
+ * hydration, which is the delay this is here to remove. See
+ * src/lib/home-promo-hint.ts.
+ */
+function PromoCardPlaceholders() {
+  return (
+    <>
+      <div className="memo-promo" data-promo-hint="wheel">
+        <span className="memo-promo-copy">
+          <span>Dobil si popust!</span>
+          <span>Odkleni najboljše funkcije ceneje</span>
+        </span>
+        <Emoji symbol="🎁" size="2rem" />
+      </div>
+      <div className="memo-promo upgrade" data-promo-hint="upgrade">
+        <span className="memo-promo-copy">
+          <span>Odkleni Premium</span>
+          <span>Neomejeni zapiski in učna orodja</span>
+        </span>
+        <Emoji symbol="⚡" size="2rem" />
+      </div>
+    </>
+  );
+}
 
 /**
  * The home screen while it loads.
@@ -15,8 +47,21 @@ const SKELETON_NOTE_ROWS = [0, 1, 2, 3];
  * part of that. It belongs to the home screen rather than to the app shell, so
  * a skeleton that leaves it out makes the controls flicker away and back on
  * every navigation home.
+ *
+ * The promo card is the one thing drawn for real rather than as a pill: it is
+ * the card the last visit showed, and a grey stand-in for a card that is about
+ * to say "Dobil si popust!" would only be a second thing appearing late.
  */
-export function DashboardLoading() {
+export function DashboardLoading({
+  /*
+   * Off for the creator demo, which shares this skeleton but is a public page:
+   * the hint belongs to whoever last signed in on this browser, and their gift
+   * card has no business flashing over somebody else's recording.
+   */
+  promoPlaceholder = true,
+}: {
+  promoPlaceholder?: boolean;
+} = {}) {
   return (
     <div className="memo-home-screen" aria-hidden="true" data-route-skeleton="">
       {/* Phone: the lockup and the gear, exactly where the real ones sit. */}
@@ -78,6 +123,8 @@ export function DashboardLoading() {
         </div>
 
         <div className="memo-home-body">
+          {promoPlaceholder ? <PromoCardPlaceholders /> : null}
+
           <div className="memo-note-list">
             {SKELETON_NOTE_ROWS.map((row) => (
               <div key={row} className="memo-swipe-row">

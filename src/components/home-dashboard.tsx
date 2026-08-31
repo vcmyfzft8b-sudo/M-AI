@@ -98,6 +98,14 @@ const CREATE_OPTIONS = [
 
 const DASHBOARD_MUTATION_TIMEOUT_MS = 18_000;
 const DASHBOARD_NOTE_ACTION_REVEAL_PX = 144;
+/** How far a finger travels before the gesture counts as a swipe and not a tap. */
+const DASHBOARD_NOTE_DRAG_SLOP_PX = 5;
+/** Past either end the row still follows the finger, at a fraction of the distance. */
+const DASHBOARD_NOTE_DRAG_RUBBER_BAND = 0.3;
+/** px/ms. A flick this quick decides the row on its own, however far it travelled. */
+const DASHBOARD_NOTE_FLICK_VELOCITY = 0.4;
+/** Long enough for the settle transition below to finish before we drop the layer. */
+const DASHBOARD_NOTE_SETTLE_MS = 400;
 
 type DashboardNoteDragState = {
   pointerId: number;
@@ -105,7 +113,12 @@ type DashboardNoteDragState = {
   startY: number;
   startOffset: number;
   offset: number;
-  isDragging: boolean;
+  /** "pending" until the slop is crossed and the gesture turns out to be horizontal. */
+  axis: "pending" | "x";
+  lastX: number;
+  lastTime: number;
+  velocity: number;
+  hasVelocity: boolean;
 };
 
 async function fetchDashboardMutation(
@@ -185,11 +198,14 @@ const NoteRow = memo(function NoteRow({
     isNavigating: isOpening,
   } = useInstantNavigation();
   const sourceType = getEffectiveLectureSourceType(lecture);
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
+  // The swipe never touches React state: it writes the transform straight to the
+  // node, so a finger on one row cannot re-render the list underneath it.
   const dragRef = useRef<DashboardNoteDragState | null>(null);
   const cleanupDragListenersRef = useRef<(() => void) | null>(null);
+  const releaseSurfaceRef = useRef<(() => void) | null>(null);
+  const cancelPrefetchRef = useRef<(() => void) | null>(null);
   const suppressClickRef = useRef(false);
-  const [dragState, setDragState] = useState<DashboardNoteDragState | null>(null);
-  const noteOffset = dragState?.offset ?? (isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0);
   const title = lecture.title?.trim() || "Neimenovan zapisek";
   const emoji = noteEmoji(lecture);
   const isProcessing = shouldPollLectureStatus(lecture.status);
@@ -203,9 +219,26 @@ const NoteRow = memo(function NoteRow({
   useEffect(
     () => () => {
       cleanupDragListenersRef.current?.();
+      releaseSurfaceRef.current?.();
+      cancelPrefetchRef.current?.();
     },
     [],
   );
+
+  // The open/closed position is owned imperatively too, so that a list refresh
+  // mid-gesture (the status poll swaps every lecture object) cannot snap the row
+  // back under the finger.
+  useEffect(() => {
+    const node = surfaceRef.current;
+
+    if (!useSwipeActions || !node || dragRef.current) {
+      return;
+    }
+
+    node.style.transform = isMenuOpen
+      ? `translateX(${-DASHBOARD_NOTE_ACTION_REVEAL_PX}px)`
+      : "";
+  }, [isMenuOpen, useSwipeActions]);
 
   function openLecture() {
     if (isOpening) {
@@ -251,52 +284,197 @@ const NoteRow = memo(function NoteRow({
     );
   }
 
-  function updateDrag(clientX: number, clientY: number, pointerId: number, preventDefault?: () => void) {
-    const current = dragRef.current;
+  function paintOffset(offset: number) {
+    const node = surfaceRef.current;
 
-    if (!current || current.pointerId !== pointerId) {
-      return;
+    if (node) {
+      node.style.transform = `translateX(${offset}px)`;
     }
-
-    const deltaX = clientX - current.startX;
-    const deltaY = clientY - current.startY;
-    const isHorizontalDrag =
-      current.isDragging || (Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY));
-
-    if (!isHorizontalDrag) {
-      return;
-    }
-
-    preventDefault?.();
-    suppressClickRef.current = true;
-
-    const nextDrag = {
-      ...current,
-      offset: Math.min(
-        0,
-        Math.max(-DASHBOARD_NOTE_ACTION_REVEAL_PX, current.startOffset + deltaX),
-      ),
-      isDragging: true,
-    };
-    dragRef.current = nextDrag;
-    setDragState(nextDrag);
   }
 
-  function finishDrag(pointerId: number) {
-    const current = dragRef.current;
+  /** Past either end the row keeps following the finger, but grudgingly. */
+  function rubberBand(offset: number) {
+    if (offset > 0) {
+      return offset * DASHBOARD_NOTE_DRAG_RUBBER_BAND;
+    }
 
-    if (!current || current.pointerId !== pointerId) {
+    if (offset < -DASHBOARD_NOTE_ACTION_REVEAL_PX) {
+      return (
+        -DASHBOARD_NOTE_ACTION_REVEAL_PX +
+        (offset + DASHBOARD_NOTE_ACTION_REVEAL_PX) * DASHBOARD_NOTE_DRAG_RUBBER_BAND
+      );
+    }
+
+    return offset;
+  }
+
+  function cancelPrefetch() {
+    cancelPrefetchRef.current?.();
+    cancelPrefetchRef.current = null;
+  }
+
+  // Warming the note route is a whole render pass on the main thread. On
+  // touch-down that lands in the frames the swipe needs, which is what made the
+  // first centimetre of the drag stick, so it waits for an idle one instead: a
+  // tap leaves the thread free and it still fires within a few ms.
+  function schedulePrefetch() {
+    if (cancelPrefetchRef.current) {
       return;
     }
 
-    const shouldOpen = current.offset < -DASHBOARD_NOTE_ACTION_REVEAL_PX / 2;
-    if (shouldOpen !== isMenuOpen) {
-      onToggleMenu(lecture.id);
+    const warm = () => {
+      cancelPrefetchRef.current = null;
+      safeRouterPrefetch(router, href);
+    };
+
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(warm, { timeout: 600 });
+      cancelPrefetchRef.current = () => window.cancelIdleCallback(handle);
+      return;
+    }
+
+    const handle = window.setTimeout(warm, 0);
+    cancelPrefetchRef.current = () => window.clearTimeout(handle);
+  }
+
+  /** Hand the row back to the CSS transition, and let its layer go once it lands. */
+  function settleTo(offset: number) {
+    const node = surfaceRef.current;
+
+    if (!node) {
+      return;
+    }
+
+    releaseSurfaceRef.current?.();
+    node.classList.remove("dragging");
+    node.style.transform = offset === 0 ? "" : `translateX(${offset}px)`;
+
+    const release = () => {
+      node.removeEventListener("transitionend", handleTransitionEnd);
+      window.clearTimeout(timer);
+      releaseSurfaceRef.current = null;
+
+      if (!dragRef.current) {
+        node.style.willChange = "";
+      }
+    };
+    const handleTransitionEnd = (event: TransitionEvent) => {
+      if (event.propertyName === "transform") {
+        release();
+      }
+    };
+    const timer = window.setTimeout(release, DASHBOARD_NOTE_SETTLE_MS);
+
+    node.addEventListener("transitionend", handleTransitionEnd);
+    releaseSurfaceRef.current = release;
+  }
+
+  function updateDrag(event: PointerEvent) {
+    const current = dragRef.current;
+
+    if (!current || current.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const deltaX = event.clientX - current.startX;
+
+    if (current.axis === "pending") {
+      const deltaY = event.clientY - current.startY;
+
+      if (
+        Math.abs(deltaX) < DASHBOARD_NOTE_DRAG_SLOP_PX &&
+        Math.abs(deltaY) < DASHBOARD_NOTE_DRAG_SLOP_PX
+      ) {
+        return;
+      }
+
+      // The browser owns vertical pans here (touch-action: pan-y), so a gesture
+      // that leans vertical is the list scrolling: let go of it rather than
+      // spend the rest of the swipe fighting the scroller.
+      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+        dragRef.current = null;
+        cleanupDragListenersRef.current?.();
+        surfaceRef.current?.classList.remove("dragging");
+        return;
+      }
+
+      current.axis = "x";
+      // Re-anchor on the point the swipe was recognised at, so the row picks the
+      // finger up where it is instead of jumping the slop distance to meet it.
+      current.startX = event.clientX;
+      current.lastX = event.clientX;
+      current.lastTime = event.timeStamp;
+      current.hasVelocity = false;
+      suppressClickRef.current = true;
+      cancelPrefetch();
+      surfaceRef.current?.classList.add("dragging");
+      return;
+    }
+
+    event.preventDefault();
+
+    const elapsed = event.timeStamp - current.lastTime;
+
+    if (elapsed > 0) {
+      const instant = (event.clientX - current.lastX) / elapsed;
+      // Smoothed from the second sample on, so one stuttering frame at lift-off
+      // cannot decide the row. The first is taken whole: a short flick is only a
+      // couple of events long, and easing into it from zero would read every
+      // one of them as a third of the speed the finger actually had.
+      current.velocity = current.hasVelocity
+        ? current.velocity * 0.7 + instant * 0.3
+        : instant;
+      current.hasVelocity = true;
+      current.lastX = event.clientX;
+      current.lastTime = event.timeStamp;
+    }
+
+    current.offset = rubberBand(current.startOffset + deltaX);
+    paintOffset(current.offset);
+  }
+
+  function finishDrag(event: PointerEvent) {
+    const current = dragRef.current;
+
+    if (!current || current.pointerId !== event.pointerId) {
+      return;
     }
 
     dragRef.current = null;
-    setDragState(null);
     cleanupDragListenersRef.current?.();
+
+    if (current.axis !== "x") {
+      // A tap: nothing moved, so there is nothing to settle.
+      if (surfaceRef.current) {
+        surfaceRef.current.style.willChange = "";
+      }
+      return;
+    }
+
+    // A flick decides the row whatever distance it covered; a slow drag lands
+    // wherever it was let go of.
+    const shouldOpen =
+      current.velocity < -DASHBOARD_NOTE_FLICK_VELOCITY ||
+      (current.velocity <= DASHBOARD_NOTE_FLICK_VELOCITY &&
+        current.offset < -DASHBOARD_NOTE_ACTION_REVEAL_PX / 2);
+
+    settleTo(shouldOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0);
+
+    if (shouldOpen !== isMenuOpen) {
+      onToggleMenu(lecture.id);
+    }
+  }
+
+  function cancelDrag(event: PointerEvent) {
+    const current = dragRef.current;
+
+    if (!current || current.pointerId !== event.pointerId) {
+      return;
+    }
+
+    dragRef.current = null;
+    cleanupDragListenersRef.current?.();
+    settleTo(isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0);
   }
 
   function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
@@ -306,42 +484,43 @@ const NoteRow = memo(function NoteRow({
 
     cleanupDragListenersRef.current?.();
 
-    // Warm the note route on touch-down so the skeleton has real content to
-    // swap in by the time the tap completes.
     if (!isMenuOpen) {
-      safeRouterPrefetch(router, href);
+      schedulePrefetch();
     }
 
-    const nextDrag = {
+    const startOffset = isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0;
+
+    dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      startOffset: isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0,
-      offset: isMenuOpen ? -DASHBOARD_NOTE_ACTION_REVEAL_PX : 0,
-      isDragging: false,
+      startOffset,
+      offset: startOffset,
+      axis: "pending",
+      lastX: event.clientX,
+      lastTime: event.timeStamp,
+      velocity: 0,
+      hasVelocity: false,
     };
-    dragRef.current = nextDrag;
     suppressClickRef.current = false;
-    if (isMenuOpen) {
-      setDragState(nextDrag);
+
+    // Promote the row while the finger is still settling, so the first frame of
+    // the swipe is a composite rather than a fresh layer.
+    if (surfaceRef.current) {
+      surfaceRef.current.style.willChange = "transform";
     }
 
-    const handleWindowPointerMove = (moveEvent: PointerEvent) => {
-      updateDrag(moveEvent.clientX, moveEvent.clientY, moveEvent.pointerId, () =>
-        moveEvent.preventDefault(),
-      );
-    };
-    const handleWindowPointerEnd = (endEvent: PointerEvent) => {
-      finishDrag(endEvent.pointerId);
-    };
+    const handleWindowPointerMove = (moveEvent: PointerEvent) => updateDrag(moveEvent);
+    const handleWindowPointerUp = (upEvent: PointerEvent) => finishDrag(upEvent);
+    const handleWindowPointerCancel = (cancelEvent: PointerEvent) => cancelDrag(cancelEvent);
 
     window.addEventListener("pointermove", handleWindowPointerMove, { passive: false });
-    window.addEventListener("pointerup", handleWindowPointerEnd);
-    window.addEventListener("pointercancel", handleWindowPointerEnd);
+    window.addEventListener("pointerup", handleWindowPointerUp);
+    window.addEventListener("pointercancel", handleWindowPointerCancel);
     cleanupDragListenersRef.current = () => {
       window.removeEventListener("pointermove", handleWindowPointerMove);
-      window.removeEventListener("pointerup", handleWindowPointerEnd);
-      window.removeEventListener("pointercancel", handleWindowPointerEnd);
+      window.removeEventListener("pointerup", handleWindowPointerUp);
+      window.removeEventListener("pointercancel", handleWindowPointerCancel);
       cleanupDragListenersRef.current = null;
     };
   }
@@ -377,14 +556,14 @@ const NoteRow = memo(function NoteRow({
     <div className={`memo-swipe-row ${isMenuOpen ? "open" : ""}`.trim()}>
       {navigationOverlay}
       <div
+        ref={surfaceRef}
         role="link"
         tabIndex={0}
-        className={`memo-swipe-surface ${dragState ? "dragging" : ""}`.trim()}
+        className="memo-swipe-surface"
         onPointerDown={handlePointerDown}
         onDragStart={(event) => event.preventDefault()}
         onClick={handleSurfaceClick}
         onKeyDown={handleSurfaceKeyDown}
-        style={{ transform: `translateX(${noteOffset}px)` }}
       >
         <span className="memo-note-emoji">
           <Emoji symbol={emoji} size="1.35rem" />
@@ -413,7 +592,7 @@ const NoteRow = memo(function NoteRow({
 
       <div
         ref={isMenuOpen ? attachMenuRef : undefined}
-        className={`memo-swipe-actions ${isMenuOpen || noteOffset < 0 ? "on" : ""}`.trim()}
+        className={`memo-swipe-actions ${isMenuOpen ? "on" : ""}`.trim()}
         onPointerDown={(event) => event.stopPropagation()}
       >
         <button

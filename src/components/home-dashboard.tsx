@@ -22,7 +22,7 @@ import { flushSync } from "react-dom";
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
 import {
   detectInstallPlatform,
-  INSTALL_GUIDE_SEEN_KEY,
+  INSTALL_GUIDE_SEEN_EVENT,
   shouldOfferInstallGuide,
 } from "@/lib/install-guide";
 import { DiscountOffer } from "@/components/discount-offer";
@@ -708,6 +708,7 @@ export function HomeDashboard({
   hasPaidAccess,
   trialLectureId,
   canSpinWheel: initialCanSpinWheel = null,
+  installGuideSeen = false,
   showDevDashboard,
 }: {
   lectures: AppLectureListItem[];
@@ -718,6 +719,12 @@ export function HomeDashboard({
   trialLectureId: string | null;
   /** Whether the wheel has a spin left, as the server saw it while rendering. */
   canSpinWheel?: boolean | null;
+  /**
+   * Whether this account has already opened the home screen guide. Read from
+   * the profile so the gear's badge is answered once, for good, rather than
+   * once in every browser they sign in from.
+   */
+  installGuideSeen?: boolean;
   showDevDashboard: boolean;
 }) {
   const router = useRouter();
@@ -777,13 +784,15 @@ export function HomeDashboard({
   useEffect(() => {
     // Phones only — matching the settings row the badge is pointing at.
     const sync = () =>
-      setShowInstallHint(detectInstallPlatform() !== "other" && shouldOfferInstallGuide());
+      setShowInstallHint(
+        detectInstallPlatform() !== "other" && shouldOfferInstallGuide(installGuideSeen),
+      );
 
     sync();
-    window.addEventListener(INSTALL_GUIDE_SEEN_KEY, sync);
+    window.addEventListener(INSTALL_GUIDE_SEEN_EVENT, sync);
 
-    return () => window.removeEventListener(INSTALL_GUIDE_SEEN_KEY, sync);
-  }, []);
+    return () => window.removeEventListener(INSTALL_GUIDE_SEEN_EVENT, sync);
+  }, [installGuideSeen]);
   const [manualModal, setManualModal] = useState<NoteSourceMode | null>(null);
   const [isMobileCreateMenuOpen, setIsMobileCreateMenuOpen] = useState(false);
   const [libraryLectures, setLibraryLectures] = useState(lectures);

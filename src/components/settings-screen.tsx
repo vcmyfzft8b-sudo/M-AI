@@ -15,7 +15,7 @@ import { BRAND_NAME, BRAND_SUPPORT_EMAIL } from "@/lib/brand";
 import type { ThemePreference } from "@/lib/theme";
 import {
   detectInstallPlatform,
-  INSTALL_GUIDE_SEEN_KEY,
+  INSTALL_GUIDE_SEEN_EVENT,
   markInstallGuideSeen,
   shouldOfferInstallGuide,
 } from "@/lib/install-guide";
@@ -67,12 +67,19 @@ export function SettingsScreen({
   planLabel,
   planDetail,
   hasSubscription,
+  installGuideSeen = false,
   isDemo = false,
 }: {
   email: string;
   planLabel: string;
   planDetail: string;
   hasSubscription: boolean;
+  /**
+   * Whether this account has already opened the home screen guide. Read from
+   * the profile so the badge is answered once and stays answered on every
+   * device, rather than once per browser.
+   */
+  installGuideSeen?: boolean;
   /** The creator demo has no account: sign-out and deletion are hidden. */
   isDemo?: boolean;
 }) {
@@ -104,13 +111,13 @@ export function SettingsScreen({
   );
 
   useEffect(() => {
-    const sync = () => setShowInstallHint(shouldOfferInstallGuide());
+    const sync = () => setShowInstallHint(shouldOfferInstallGuide(installGuideSeen));
 
     sync();
-    window.addEventListener(INSTALL_GUIDE_SEEN_KEY, sync);
+    window.addEventListener(INSTALL_GUIDE_SEEN_EVENT, sync);
 
-    return () => window.removeEventListener(INSTALL_GUIDE_SEEN_KEY, sync);
-  }, []);
+    return () => window.removeEventListener(INSTALL_GUIDE_SEEN_EVENT, sync);
+  }, [installGuideSeen]);
 
   const preference = useSyncExternalStore(
     subscribeToThemePreference,

@@ -1,4 +1,23 @@
-export const INSTALL_GUIDE_SEEN_KEY = "memo-install-guide-seen";
+/*
+ * Where the badge's state lives.
+ *
+ * The account is the source of truth (`profiles.install_guide_seen_at`, read
+ * on the server and handed to the screens that draw the dot); this key is a
+ * local echo of it, so a browser that has already been answered stays quiet
+ * even when the write to the account failed.
+ *
+ * `-v2` because the old key was the *only* record of it, per browser. Everyone
+ * carrying a stale "true" from that arrangement — including people who cleared
+ * it on one device and never saw the badge on another — gets one clean look
+ * under the account-backed rule.
+ */
+const INSTALL_GUIDE_SEEN_KEY = "memo-install-guide-seen-v2";
+
+/**
+ * Fired when the guide is opened, so the gear's badge and the settings row's
+ * badge go out together without either of them polling storage.
+ */
+export const INSTALL_GUIDE_SEEN_EVENT = "memo-install-guide-seen";
 
 /*
  * Adding Memo to the home screen, in real screenshots taken on a real iPhone.
@@ -90,13 +109,19 @@ export function isInstalled() {
   return Boolean(iosStandalone) || window.matchMedia("(display-mode: standalone)").matches;
 }
 
-/** Whether the guide still has something to say to this person. */
-export function shouldOfferInstallGuide() {
+/**
+ * Whether the guide still has something to say to this person.
+ *
+ * `seenOnAccount` comes from the profile and is the answer that travels: once
+ * it is true the badge is gone on every device. The local flag only covers the
+ * gap where the account could not be asked or could not be told.
+ */
+export function shouldOfferInstallGuide(seenOnAccount = false) {
   if (typeof window === "undefined") {
     return false;
   }
 
-  if (isInstalled()) {
+  if (seenOnAccount || isInstalled()) {
     return false;
   }
 
@@ -109,11 +134,37 @@ export function shouldOfferInstallGuide() {
   }
 }
 
+/*
+ * One write per page load. Opening the guide twice is easy — the row stays
+ * there after the sheet is closed — and the second POST would say nothing the
+ * first did not.
+ */
+let seenReported = false;
+
 export function markInstallGuideSeen() {
   try {
     window.localStorage.setItem(INSTALL_GUIDE_SEEN_KEY, "true");
-    window.dispatchEvent(new Event(INSTALL_GUIDE_SEEN_KEY));
   } catch {
-    // Nothing to do: the guide simply offers itself again next time.
+    // Nothing to do: the account write below is the one that has to land.
   }
+
+  window.dispatchEvent(new Event(INSTALL_GUIDE_SEEN_EVENT));
+
+  if (seenReported) {
+    return;
+  }
+
+  seenReported = true;
+
+  /*
+   * Fire and forget. The badge is already gone on screen, and a failure here
+   * only means it is offered once more on the next visit — worth nothing to
+   * report to somebody who just asked to read about home screens.
+   *
+   * `keepalive` because the very next thing this person does may be leaving
+   * for Safari's share menu.
+   */
+  void fetch("/api/install-guide", { method: "POST", keepalive: true }).catch(() => {
+    seenReported = false;
+  });
 }

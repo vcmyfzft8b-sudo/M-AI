@@ -170,6 +170,42 @@ test("every migration applies in order on an empty database", options, async () 
   ]);
 });
 
+test("every existing account starts owed the home screen guide", options, async () => {
+  const { query } = await migratedDatabase();
+
+  const [user] = await query(
+    `insert into auth.users (email) values ('installer@memo.app') returning id`,
+  );
+
+  // Null is what draws the red dot, and migration 0038 deliberately does not
+  // backfill: an account that predates the column is an account that has never
+  // been shown the guide.
+  const [before] = await query(`select install_guide_seen_at from public.profiles where id = $1`, [
+    user.id,
+  ]);
+  assert.equal(before.install_guide_seen_at, null);
+
+  // The write the API route makes, including its "first one wins" guard.
+  const mark = async (at) =>
+    query(
+      `update public.profiles set install_guide_seen_at = $2
+        where id = $1 and install_guide_seen_at is null
+        returning install_guide_seen_at`,
+      [user.id, at],
+    );
+
+  const first = await mark("2026-08-31T10:00:00Z");
+  assert.equal(first.length, 1, "opening the guide records the moment");
+
+  const second = await mark("2026-09-05T10:00:00Z");
+  assert.deepEqual(second, [], "a second open must not move the recorded moment");
+
+  const [after] = await query(`select install_guide_seen_at from public.profiles where id = $1`, [
+    user.id,
+  ]);
+  assert.equal(after.install_guide_seen_at.toISOString(), "2026-08-31T10:00:00.000Z");
+});
+
 test("admin tables are service-role only", options, async () => {
   const { query } = await migratedDatabase();
 

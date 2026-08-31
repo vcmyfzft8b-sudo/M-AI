@@ -10469,6 +10469,13 @@
     max-height: calc(100dvh - var(--memo-kb) - 54px);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    /*
+     * Where anything scrolls a field into view — WebKit clearing the keyboard,
+     * or the sheet's own correction — it stops this far short of the edge. Without
+     * it the focused field lands flush against the top, which under a 34px
+     * rounded corner means half of it is cut off.
+     */
+    scroll-padding: 1.1rem 0;
     padding: 0.6rem 1.15rem
       calc(2rem + max(0px, var(--memo-safe-bottom) - var(--memo-kb)));
     border-radius: 34px 34px 0 0;

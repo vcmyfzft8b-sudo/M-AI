@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
 import { sheetClass, useSheet } from "@/components/use-sheet";
+import { clearOfferResume, markOfferResume, readOfferResume } from "@/lib/offer-resume";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -34,6 +35,26 @@ const SPIN_DEGREES = 3390;
 const OFFER_SECONDS = 10 * 60;
 
 const SPIN_MS = 6250;
+
+/**
+ * Where the countdown starts before the server has answered.
+ *
+ * A freshly won offer starts at the full ten minutes. A restored one starts on
+ * the deadline the note kept from before checkout, so the clock picks up where
+ * the buyer left it instead of jumping back up and then correcting itself a
+ * round trip later.
+ */
+function remainingSeconds(restored: boolean) {
+  if (!restored) {
+    return OFFER_SECONDS;
+  }
+
+  const expiresAt = readOfferResume().expiresAt;
+
+  return expiresAt === null
+    ? OFFER_SECONDS
+    : Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
+}
 
 const CONFETTI_COLORS = ["#ff6d68", "#ffb347", "#34c759", "#0066cc", "#b18bff", "#ff9a94"];
 
@@ -107,12 +128,11 @@ export function DiscountOffer({
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /*
-   * The offer's ten minutes, counted from the moment it opens. The server is
-   * what actually enforces the window — it measures from the recorded spin and
-   * refuses the coupon after it — so this is the honest display of a deadline
-   * rather than the deadline itself.
+   * The offer's ten minutes. The server is what actually enforces the window —
+   * it measures from the recorded spin and refuses the coupon after it — so
+   * this is the honest display of a deadline rather than the deadline itself.
    */
-  const [secondsLeft, setSecondsLeft] = useState(OFFER_SECONDS);
+  const [secondsLeft, setSecondsLeft] = useState(() => remainingSeconds(offerRestored));
 
   useEffect(
     () => () => {
@@ -122,6 +142,30 @@ export function DiscountOffer({
     },
     [],
   );
+
+  /*
+   * Coming back from Stripe without the page being rebuilt.
+   *
+   * Safari and Chrome keep the page alive when the buyer navigates back, so
+   * this component comes back exactly as it left: the button still says
+   * "Odpiram…" and is still disabled, and `boughtRef` still says a purchase is
+   * carrying the coupon — which would leave a live offer nobody could act on
+   * and a prize that closing the sheet no longer withdraws. The trip is over,
+   * so the sheet is put back the way it was before it started.
+   */
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) {
+        return;
+      }
+
+      boughtRef.current = false;
+      setIsCheckingOut(false);
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
 
   async function spin() {
     if (isSpinning || hasWon) {
@@ -157,6 +201,13 @@ export function DiscountOffer({
     // The purchase carries the coupon from here on, so leaving this screen
     // must not withdraw it.
     boughtRef.current = true;
+    /*
+     * And the offer is not closed by going to Stripe — only by closing it. The
+     * note is what puts the sheet back when the buyer returns, whichever way
+     * they come back, and it carries the prize's deadline so the countdown
+     * resumes rather than restarting; see src/lib/offer-resume.ts.
+     */
+    markOfferResume(expiresAtRef.current);
     setIsCheckingOut(true);
     setError(null);
 
@@ -177,6 +228,10 @@ export function DiscountOffer({
 
       window.location.href = payload.url;
     } catch (caught) {
+      // Nothing was opened, so there is nothing to come back from: the sheet is
+      // still here, and the note would only resurrect it after the next reload.
+      boughtRef.current = false;
+      clearOfferResume();
       setError(caught instanceof Error ? caught.message : "Nakupa ni bilo mogoče začeti.");
       setIsCheckingOut(false);
     }
@@ -188,9 +243,24 @@ export function DiscountOffer({
    */
   useEffect(() => {
     if (!offerOpen) {
-      setSecondsLeft(OFFER_SECONDS);
+      setSecondsLeft(remainingSeconds(offerRestored));
       expiresAtRef.current = null;
       return;
+    }
+
+    /*
+     * A restored sheet starts on the deadline it left with rather than on a
+     * fresh ten minutes: the fetch below is a round trip away, and putting a
+     * minute back on a clock the buyer has been watching is worse than being a
+     * second out until the server answers.
+     */
+    if (offerRestored) {
+      const remembered = readOfferResume().expiresAt;
+
+      if (remembered !== null) {
+        expiresAtRef.current = remembered;
+        setSecondsLeft(Math.max(0, Math.round((remembered - Date.now()) / 1000)));
+      }
     }
 
     /*
@@ -207,12 +277,42 @@ export function DiscountOffer({
 
     void fetch("/api/discount-wheel")
       .then((response) => (response.ok ? response.json() : null))
-      .then((state: { prizeExpiresAt?: string | null } | null) => {
-        const expiresAt = state?.prizeExpiresAt ? Date.parse(state.prizeExpiresAt) : Number.NaN;
+      .then((state: { prizeExpiresAt?: string | null; hasUnredeemedPrize?: boolean } | null) => {
+        if (cancelled || !state) {
+          return;
+        }
 
-        if (!cancelled && Number.isFinite(expiresAt)) {
+        /*
+         * A restored offer can outlive the prize it is selling. Coming back
+         * from Stripe puts a buyer where they left off, and if they left off
+         * long enough — a checkout tab abandoned for a quarter of an hour —
+         * the ten minutes are gone and checkout would quietly charge full
+         * price under a headline that says half. The server is the only one
+         * who knows, so the sheet closes on its word rather than opening on a
+         * fresh countdown it cannot honour.
+         *
+         * Only when restoring. A sheet the wheel has just opened is trusted
+         * even if the server says there is nothing banked, because that is
+         * what a failed spin looks like — and the answer to it is the error
+         * the sheet already shows and an honest full-price checkout, not the
+         * offer vanishing out from under the tap that opened it.
+         */
+        if (offerRestored && state.hasUnredeemedPrize === false) {
+          closeOfferRef.current?.();
+          return;
+        }
+
+        const expiresAt = state.prizeExpiresAt ? Date.parse(state.prizeExpiresAt) : Number.NaN;
+
+        if (Number.isFinite(expiresAt)) {
           expiresAtRef.current = expiresAt;
           setSecondsLeft(Math.max(0, Math.round((expiresAt - Date.now()) / 1000)));
+
+          // So the next trip through checkout resumes on the server's deadline
+          // rather than on whatever the last one happened to know.
+          if (offerRestored) {
+            markOfferResume(expiresAt);
+          }
         }
       })
       .catch(() => {});
@@ -238,7 +338,7 @@ export function DiscountOffer({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [offerOpen]);
+  }, [offerOpen, offerRestored]);
 
   const wheelSheet = useSheet(
     useCallback(() => onWheelOpenChange(false), [onWheelOpenChange]),
@@ -263,6 +363,13 @@ export function DiscountOffer({
         void fetch("/api/discount-wheel", { method: "DELETE" }).catch(() => {});
       }
 
+      /*
+       * This is the close the flag was waiting for. Every way out lands here —
+       * the cross, the scrim, the drag, and the countdown reaching zero — so
+       * closing the sheet is the one thing that stops it coming back, which is
+       * what "still there until you close it" has to mean.
+       */
+      clearOfferResume();
       onOfferOpenChange(false);
       onWheelOpenChange(false);
     }, [onOfferOpenChange, onWheelOpenChange]),

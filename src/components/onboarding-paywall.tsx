@@ -10,13 +10,14 @@ import {
   Minus,
   Plus,
 } from "lucide-react";
-import { startTransition, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { HOME_SCREEN_STEPS } from "@/lib/install-guide";
 import { Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
+import { clearOfferResume } from "@/lib/offer-resume";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -1005,6 +1006,18 @@ export function OnboardingPaywall({
   const effectiveOnboardingComplete = onboardingComplete;
   const checkoutState = searchParams.get("checkout");
   const hasNotice = checkoutState === "success" || Boolean(billingError);
+
+  /*
+   * A completed purchase ends the wheel's offer, so the note that would put its
+   * sheet back on the home screen goes with it. Not left to `hasPaidAccess`:
+   * the subscription only lands once Stripe's webhook has been processed, and
+   * the buyer can reach the home screen before that.
+   */
+  useEffect(() => {
+    if (checkoutState === "success") {
+      clearOfferResume();
+    }
+  }, [checkoutState]);
   const monthlyPlan = plans.find((plan) => plan.id === "monthly");
   const yearlyPlan = plans.find((plan) => plan.id === "yearly");
   const paywallPlans = [yearlyPlan, monthlyPlan].filter(

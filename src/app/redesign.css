@@ -428,9 +428,9 @@
   display: none;
 }
 
-/* The home skeleton's promo cards. Phone-only like the real one, and shown
-   only when `<html>` carries the matching hint — see the rules beside
-   `.memo-promo`. */
+/* The home skeleton's stand-in for the promo card. Phone-only like the real
+   one, and shown only when `<html>` says a card is coming — see the rules
+   beside `.memo-promo`. */
 [data-promo-hint] {
   display: none;
 }
@@ -8528,19 +8528,22 @@
   }
 
   /*
-   * The skeleton's copies of the two cards. Both are in the markup and the
-   * hint on `<html>` picks one, so the card the home screen last showed is
-   * painted with the skeleton rather than a moment after it — the real card
-   * then takes the same slot and nothing moves. `src/lib/home-promo-hint.ts`
-   * writes the hint; the inline script in the root layout applies it before
-   * the first paint.
+   * The skeleton's stand-in for whichever card is coming. It is the same box
+   * with grey pills in it rather than a copy of either card, because a loading
+   * screen should not be the thing that says "Odkleni Premium".
+   *
+   * It appears only when `<html>` carries a hint, so the slot is held open for
+   * an account that has a card and left out for one that does not — the real
+   * card then takes the same space and the list below it does not move.
+   * `src/lib/home-promo-hint.ts` writes the hint; the inline script in the
+   * root layout applies it before the first paint.
    */
   .memo-promo[data-promo-hint] {
     display: none;
+    cursor: default;
   }
 
-  :root[data-home-promo="wheel"] .memo-promo[data-promo-hint="wheel"],
-  :root[data-home-promo="upgrade"] .memo-promo[data-promo-hint="upgrade"] {
+  :root[data-home-promo] .memo-promo[data-promo-hint] {
     display: flex;
   }
 

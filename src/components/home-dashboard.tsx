@@ -47,6 +47,7 @@ import {
 import { POLL_INTERVAL_MS } from "@/lib/constants";
 import { rememberHomePromo } from "@/lib/home-promo-hint";
 import { canRetryLectureFailure } from "@/lib/lecture-failure-codes";
+import { clearOfferResume, isOfferResumePending, markOfferResume } from "@/lib/offer-resume";
 import {
   getEffectiveLectureSourceType,
   getLectureSourceDetail,
@@ -745,23 +746,28 @@ export function HomeDashboard({
   const [isLibraryChatOpen, setIsLibraryChatOpen] = useState(false);
   const [isWheelOpen, setIsWheelOpen] = useState(false);
   /*
-   * Seeded from the URL rather than opened in an effect: an effect runs after
+   * Seeded during render rather than opened in an effect: an effect runs after
    * the first paint, so returning from Stripe showed the home screen for a
    * frame before the offer appeared. It was never dismissed — it should be
    * there the moment the page draws.
+   *
+   * Two sources, because Stripe's cancel URL is only one of the ways back.
+   * `offer=1` arrives when the buyer uses Stripe's own back link; the note in
+   * `sessionStorage` is there however they return, including the browser's
+   * back gesture and a reload of the web view. Reading storage during render
+   * is safe here: the sheet lives in a portal that draws nothing until after
+   * hydration, so the server and the first client pass agree either way.
    */
-  const [isOfferOpen, setIsOfferOpen] = useState(
-    () => searchParams.get("offer") === "1",
-  );
+  const isOfferResumed =
+    searchParams.get("offer") === "1" || isOfferResumePending();
+  const [isOfferOpen, setIsOfferOpen] = useState(() => isOfferResumed);
   /*
    * True when the offer is being restored after a trip to Stripe rather than
    * opened by the wheel. It was never really dismissed, so it should already
    * be there when the page draws — sliding it up again would say it had gone
    * away and come back.
    */
-  const [isOfferRestored, setIsOfferRestored] = useState(
-    () => searchParams.get("offer") === "1",
-  );
+  const [isOfferRestored, setIsOfferRestored] = useState(() => isOfferResumed);
   const [hasClaimedDiscount, setHasClaimedDiscount] = useState(false);
   /*
    * Whether the wheel has a spin left, as the server sees it. Null until the
@@ -1296,20 +1302,42 @@ export function HomeDashboard({
   const { attachScroll, attachScreen } = useCollapsingHeader();
 
   /*
-   * Stripe sends a cancelled discount checkout back with `offer=1`. Reopening
-   * the sheet puts the buyer where they left off — the prize is still theirs
-   * until it is spent or its ten minutes run out, and the server is the one
+   * Putting the offer back after a trip to Stripe.
+   *
+   * The sheet is already open by now — the state above is seeded during render
+   * — so what is left is tidying the URL, and marking the offer as still open
+   * for the reload after this one. A buyer who goes to Stripe, comes back, and
+   * then refreshes has still not closed the offer, and the query string does
+   * not survive a refresh.
+   *
+   * The prize is still theirs either way: it is spent by buying, by closing
+   * the sheet, or by its ten minutes running out, and the server is the one
    * that decides which.
    */
   useEffect(() => {
-    if (searchParams.get("offer") !== "1") {
+    if (!isOfferResumed) {
       return;
     }
 
+    markOfferResume();
     setIsOfferOpen(true);
     setIsOfferRestored(true);
-    router.replace(homeHref, { scroll: false });
-  }, [homeHref, router, searchParams]);
+
+    if (searchParams.get("offer") === "1") {
+      router.replace(homeHref, { scroll: false });
+    }
+  }, [homeHref, isOfferResumed, router, searchParams]);
+
+  /*
+   * A bought subscription ends the offer as surely as closing it does, and the
+   * note would otherwise outlive the thing it points at — reopening a dead
+   * sheet on the next visit to the home screen.
+   */
+  useEffect(() => {
+    if (hasPaidAccess) {
+      clearOfferResume();
+    }
+  }, [hasPaidAccess]);
 
   useEffect(() => {
     if (hasPaidAccess) {

@@ -77,6 +77,88 @@
   transform: translateY(-50%);
 }
 
+/*
+ * The home-screen prompt at the top of Settings, shown until it has been
+ * opened once. It borrows the settings row's shape rather than inventing a
+ * banner: it is still a row that opens a sheet, just the first one and with
+ * its reason written out. The coral edge is the only thing marking it as
+ * new — a filled card would read as an advertisement on a screen that has
+ * none.
+ */
+.memo-install-cta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  margin: 0 0 1.25rem;
+  padding: 0.95rem 1.05rem;
+  /* `--coral` is a gradient and cannot be a border colour; this is its first stop. */
+  border: 1px solid #ff6d68;
+  border-radius: 1.15rem;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.memo-install-cta-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.memo-install-cta-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 650;
+  font-size: 1rem;
+}
+
+.memo-install-cta-detail {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+/*
+ * The guide's screenshots come in both appearances and CSS picks the pair, in
+ * the same three states the rest of the redesign uses: explicit override wins,
+ * otherwise follow the system. Doing this in JS would mean answering during the
+ * server render, before the stored preference is readable, and swapping the
+ * whole set on hydration — on the one screen whose job is to look like the
+ * reader's own phone.
+ *
+ * Every selector is anchored on `:root` to outweigh the `.memo-install-shot
+ * img` and `.memo-onboarding-home-visual img` rules that set `display: block`
+ * further down. Without that the hidden half of the set is still displayed and
+ * the guide shows each step twice, which is how this was found.
+ */
+:root img.memo-shot-dark {
+  display: none;
+}
+
+:root[data-theme="dark"] img.memo-shot-dark {
+  display: block;
+}
+
+:root[data-theme="dark"] img.memo-shot-light {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) img.memo-shot-dark {
+    display: block;
+  }
+
+  :root:not([data-theme="light"]) img.memo-shot-light {
+    display: none;
+  }
+}
+
 .memo-install-head {
   display: flex;
   align-items: center;

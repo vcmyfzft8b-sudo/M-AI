@@ -14,6 +14,7 @@ import { startTransition, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { InstallShot } from "@/components/install-shot";
 import { HOME_SCREEN_STEPS } from "@/lib/install-guide";
 import { Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
@@ -905,7 +906,7 @@ export function OnboardingPaywall({
           >
             <div className="memo-onboarding-home-track">
               {HOME_SCREEN_STEPS.map((item) => (
-                <article key={item.src} className="memo-onboarding-home-card">
+                <article key={item.title} className="memo-onboarding-home-card">
                   <div className="memo-onboarding-home-copy">
                     <div>
                       <strong>{item.title}</strong>
@@ -913,14 +914,7 @@ export function OnboardingPaywall({
                     </div>
                   </div>
                   <div className="memo-onboarding-home-visual">
-                    <Image
-                      src={item.src}
-                      alt={item.alt}
-                      width={1170}
-                      height={2532}
-                      sizes="(max-width: 640px) 100vw, 35rem"
-                      unoptimized
-                    />
+                    <InstallShot step={item} sizes="(max-width: 640px) 100vw, 35rem" />
                     {"highlight" in item ? (
                       <span
                         className="memo-onboarding-home-highlight"
@@ -951,7 +945,7 @@ export function OnboardingPaywall({
             <div>
               {HOME_SCREEN_STEPS.map((item, index) => (
                 <button
-                  key={item.src}
+                  key={item.title}
                   type="button"
                   className={homeScreenStep === index ? "active" : ""}
                   onClick={() => goToHomeScreenStep(index)}

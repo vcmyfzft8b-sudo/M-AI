@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 
+import { InstallShot } from "@/components/install-shot";
 import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
 import { sheetClass, useSheet } from "@/components/use-sheet";
@@ -78,13 +78,7 @@ export function InstallGuide({ open, onClose }: { open: boolean; onClose: () => 
                 </div>
 
                 <div className="memo-install-shot">
-                  <Image
-                    src={step.src}
-                    alt={step.alt}
-                    width={390}
-                    height={844}
-                    sizes="(max-width: 1099px) 60vw, 15rem"
-                  />
+                  <InstallShot step={step} sizes="(max-width: 1099px) 60vw, 15rem" />
                   {step.highlight ? (
                     <span className="memo-install-highlight" style={step.highlight} />
                   ) : null}

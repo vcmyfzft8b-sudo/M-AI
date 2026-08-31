@@ -916,9 +916,10 @@ export function OnboardingPaywall({
                     <Image
                       src={item.src}
                       alt={item.alt}
-                      width={1170}
-                      height={2532}
+                      width={750}
+                      height={1631}
                       sizes="(max-width: 640px) 100vw, 35rem"
+                      loading="eager"
                       unoptimized
                     />
                     {"highlight" in item ? (

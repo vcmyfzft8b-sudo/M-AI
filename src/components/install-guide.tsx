@@ -78,12 +78,22 @@ export function InstallGuide({ open, onClose }: { open: boolean; onClose: () => 
                 </div>
 
                 <div className="memo-install-shot">
+                  {/*
+                    * Served exactly as they sit in `public`: the shots are
+                    * already cut to the width they render at, and 40 KB of
+                    * WebP is smaller than the optimiser's own round trip on a
+                    * cold cache. Eager, because a step-by-step guide whose
+                    * pictures arrive one scroll behind the words is worse than
+                    * useless — the whole set is a quarter of a megabyte.
+                    */}
                   <Image
                     src={step.src}
                     alt={step.alt}
-                    width={390}
-                    height={844}
+                    width={750}
+                    height={1631}
                     sizes="(max-width: 1099px) 60vw, 15rem"
+                    loading="eager"
+                    unoptimized
                   />
                   {step.highlight ? (
                     <span className="memo-install-highlight" style={step.highlight} />

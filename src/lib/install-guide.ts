@@ -20,43 +20,69 @@ const INSTALL_GUIDE_SEEN_KEY = "memo-install-guide-seen-v2";
 export const INSTALL_GUIDE_SEEN_EVENT = "memo-install-guide-seen";
 
 /*
- * Adding Memo to the home screen, in real screenshots taken on a real iPhone.
+ * Adding Memo to the home screen, step by step.
  *
- * Shared with the onboarding paywall, which is where they came from — one set
- * of images and one set of words, so the two places that explain this cannot
+ * Shot on an iPhone 17 Pro simulator running iOS 26.5, from `/creator` — the
+ * signed-out view of the app itself, so the screen behind the menus is the
+ * library rather than the marketing page. That is where someone reading this
+ * actually is. Recapture with `xcrun simctl io <udid> screenshot` after any
+ * iOS release that moves these controls, then re-measure `highlight`.
+ *
+ * Six steps, not four. iOS 26 moved Share into the `...` menu and collapses
+ * the share sheet, so "Add to Home Screen" is two taps further down than it
+ * used to be — the old four-step guide sent people looking for a button that
+ * is no longer on screen. The View More step is written as a conditional
+ * because the sheet stays expanded once it has been opened before.
+ *
+ * Shared with the onboarding paywall, which shows the same set: one set of
+ * images and one set of words, so the two places that explain this cannot
  * drift into explaining it differently.
  *
- * `highlight` is a box drawn over the shot to point at the row being described,
- * in percentages so it survives the image being served at any size.
+ * `highlight` is a box drawn over the shot to point at the control being
+ * described, in percentages so it survives the image being served at any size.
  */
 export const HOME_SCREEN_STEPS = [
   {
-    title: "Klikni Share",
-    description: "V Safariju odpri meni in pritisni Share.",
-    src: "/onboarding/add-home-screen-menu.png",
+    title: "Odpri meni v Safariju",
+    description: "Spodaj desno pritisni gumb s tremi pikami.",
+    src: "/onboarding/add-to-home-1-menu.webp",
+    alt: "Memo v Safariju, z gumbom menija spodaj desno",
+    highlight: { left: "80%", top: "90.8%", width: "12%", height: "5%" },
+  },
+  {
+    title: "Pritisni Share",
+    description: "V meniju izberi Share.",
+    src: "/onboarding/add-to-home-2-share.webp",
     alt: "Safari meni z možnostjo Share",
-    highlight: { left: "27.4%", top: "58.75%", width: "64.2%", height: "4.15%" },
+    highlight: { left: "33%", top: "59.6%", width: "63%", height: "4.8%" },
+  },
+  {
+    title: "Razširi seznam",
+    description: "Če Add to Home Screen ne vidiš, pritisni View More.",
+    src: "/onboarding/add-to-home-3-more.webp",
+    alt: "Delilni meni z gumbom View More",
+    highlight: { left: "75.8%", top: "85.8%", width: "18%", height: "11.2%" },
   },
   {
     title: "Izberi Add to Home Screen",
-    description: "V share meniju pritisni Add to Home Screen.",
-    src: "/onboarding/add-home-screen-share.png",
-    alt: "iPhone delilni meni z možnostjo Add to Home Screen",
-    highlight: { left: "5.2%", top: "78.65%", width: "89.6%", height: "5.15%" },
+    description: "Na seznamu pritisni Add to Home Screen.",
+    src: "/onboarding/add-to-home-4-add.webp",
+    alt: "Razširjen delilni meni z možnostjo Add to Home Screen",
+    highlight: { left: "4.8%", top: "71%", width: "90.4%", height: "4.8%" },
   },
   {
-    title: "Pritisni Add",
-    description: "Ime lahko pustiš Memo AI in potrdiš z Add.",
-    src: "/onboarding/add-home-screen-add.png",
-    alt: "Potrditev Add to Home Screen za Memo AI",
-    highlight: { left: "78.5%", top: "8.4%", width: "18.2%", height: "5.4%" },
+    title: "Potrdi z Add",
+    description: "Ime lahko pustiš, kot je, in zgoraj desno pritisneš Add.",
+    src: "/onboarding/add-to-home-5-confirm.webp",
+    alt: "Potrditveno okno Add to Home Screen za Memo",
+    highlight: { left: "79.2%", top: "9.6%", width: "16.6%", height: "5.6%" },
   },
   {
-    title: "Memo AI je zdaj na Home Screenu",
-    description: "Naslednjič ga odpreš kot aplikacijo.",
-    src: "/onboarding/add-home-screen-result.png",
-    alt: "Memo AI ikona na začetnem zaslonu iPhona",
-    highlight: { left: "3.6%", top: "7.6%", width: "20.4%", height: "9.6%" },
+    title: "Memo je na začetnem zaslonu",
+    description: "Od tod se odpre čez cel zaslon, brez vrstice brskalnika.",
+    src: "/onboarding/add-to-home-6-done.webp",
+    alt: "Ikona Memo na začetnem zaslonu iPhona",
+    highlight: { left: "51.8%", top: "21.8%", width: "17.6%", height: "11.8%" },
   },
 ] as const;
 

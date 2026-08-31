@@ -3,7 +3,10 @@ import test from "node:test";
 
 import { StorageApiError } from "@supabase/storage-js";
 
-import { isTransientStorageDownloadError } from "../src/lib/storage-download-errors.ts";
+import {
+  isTransientStorageDownloadError,
+  retryTransientStorageOperation,
+} from "../src/lib/storage-download-errors.ts";
 
 test("retries the real StorageApiError Supabase returns for a read-after-write miss", () => {
   // storage-api answers a not-yet-visible object with HTTP 400 and a "404" body code on
@@ -81,4 +84,66 @@ test("tolerates junk without throwing", () => {
   assert.equal(isTransientStorageDownloadError("Object not found"), false);
   assert.equal(isTransientStorageDownloadError([]), false);
   assert.equal(isTransientStorageDownloadError({ status: "not-a-number", message: "" }), false);
+});
+
+test("classifies the bare 520 Supabase Storage answered the read-aloud route with", () => {
+  // The production failure carried no message at all: `Error [StorageApiError]:` with
+  // `status: 520, statusCode: "520"`. Classification has to come off the status alone.
+  assert.equal(isTransientStorageDownloadError(new StorageApiError("", 520, "520")), true);
+  assert.equal(
+    isTransientStorageDownloadError({ __isStorageError: true, status: 520, statusCode: "520" }),
+    true,
+  );
+});
+
+test("retries a transient storage operation until it succeeds", async () => {
+  const attempts = [];
+  const result = await retryTransientStorageOperation(async () => {
+    attempts.push(attempts.length);
+
+    return attempts.length < 3
+      ? { data: null, error: new StorageApiError("", 520, "520") }
+      : { data: { signedUrl: "https://example.test/audio.mp3" }, error: null };
+  }, [0, 0]);
+
+  assert.equal(attempts.length, 3);
+  assert.equal(result.error, null);
+  assert.equal(result.data.signedUrl, "https://example.test/audio.mp3");
+});
+
+test("gives up on a transient failure once the delays run out, keeping the last error", async () => {
+  let calls = 0;
+  const result = await retryTransientStorageOperation(async () => {
+    calls += 1;
+
+    return { data: null, error: new StorageApiError("", 520, "520") };
+  }, [0, 0]);
+
+  // Two delays means three attempts, and the caller still gets the failure to throw.
+  assert.equal(calls, 3);
+  assert.equal(result.error.status, 520);
+});
+
+test("does not repeat an operation that failed for a non-transient reason", async () => {
+  let calls = 0;
+  const result = await retryTransientStorageOperation(async () => {
+    calls += 1;
+
+    return { data: null, error: new StorageApiError("Bucket not found", 404, "404") };
+  }, [0, 0]);
+
+  assert.equal(calls, 1);
+  assert.equal(result.error.message, "Bucket not found");
+});
+
+test("does not repeat an operation that succeeded", async () => {
+  let calls = 0;
+  const result = await retryTransientStorageOperation(async () => {
+    calls += 1;
+
+    return { data: { path: "audio.mp3" }, error: null };
+  }, [0, 0]);
+
+  assert.equal(calls, 1);
+  assert.equal(result.data.path, "audio.mp3");
 });

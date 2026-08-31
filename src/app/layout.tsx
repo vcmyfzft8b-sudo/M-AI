@@ -11,6 +11,7 @@ import {
   SEO_SITE_DESCRIPTION,
   SEO_SITE_URL,
 } from "@/lib/brand";
+import { splashScreens } from "@/lib/splash-screens";
 
 import "katex/dist/katex.min.css";
 import "./globals.css";
@@ -95,8 +96,17 @@ const MATERIAL_SYMBOLS_HREF =
   "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,-50..200" +
   `&icon_names=${MATERIAL_SYMBOL_NAMES}&display=block`;
 
+/**
+ * The launch screens an installed Memo shows before its first paint. iOS only
+ * accepts an image whose pixel size matches the device exactly, so there is one
+ * per screen, per orientation, per colour scheme — see src/lib/splash-screens.ts.
+ * Next's metadata API has no field for these, so they go in the head by hand.
+ */
+const APPLE_STARTUP_IMAGES = splashScreens();
+
 export const metadata: Metadata = {
   metadataBase: new URL(SEO_SITE_URL),
+  manifest: "/manifest.webmanifest",
   title: {
     default: siteTitle,
     template: `%s | ${SEO_BRAND_NAME}`,
@@ -166,6 +176,14 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link rel="stylesheet" href={MATERIAL_SYMBOLS_HREF} />
+        {APPLE_STARTUP_IMAGES.map((screen) => (
+          <link
+            key={screen.media}
+            rel="apple-touch-startup-image"
+            href={screen.url}
+            media={screen.media}
+          />
+        ))}
         <script
           dangerouslySetInnerHTML={{
             __html: `

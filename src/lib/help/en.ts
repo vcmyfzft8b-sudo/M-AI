@@ -313,8 +313,8 @@ This policy explains when we refund payment for a Memo AI subscription, how much
 
 ## 1. In short
 
-- **request within 5 days of payment** — we refund 50% of the amount paid
-- **request more than 5 days after payment** — no refund
+- **request within 24 hours of payment** — we refund 50% of the amount paid
+- **request more than 24 hours after payment** — no refund
 - **cancelling the subscription** — at any time; access continues to the end of the period already paid for
 - **our mistake, or a double charge** — refunded in full
 - **your statutory right of withdrawal as a consumer** — applies alongside this policy and takes precedence over it
@@ -323,20 +323,20 @@ This policy explains when we refund payment for a Memo AI subscription, how much
 
 This policy covers subscriptions bought directly in Memo AI through Stripe.
 
-It applies to each individual payment, including automatic renewals. The 5-day window starts again for every payment, from the date of the charge.
+It applies to each individual payment, including automatic renewals. The 24-hour window starts again for every payment, from the time of the charge.
 
-## 3. Partial refund within 5 days
+## 3. Partial refund within 24 hours
 
-If you send a refund request within **5 calendar days of the date of the charge**, we refund **50% of the amount paid** for that period.
+If you send a refund request within **24 hours of the time of the charge**, we refund **50% of the amount paid** for that period.
 
-- the window starts on the day the payment was charged
-- the date your request arrives at info@memoai.eu is the one that counts
+- the window starts at the moment the payment was charged
+- the time your request arrives at info@memoai.eu is the one that counts
 - when a refund is approved the subscription is cancelled, and paid access ends as soon as the refund is issued
 - a partial refund is available once per billing period
 
-## 4. After 5 days
+## 4. After 24 hours
 
-For requests sent **more than 5 calendar days** after the charge, there is no refund.
+For requests sent **more than 24 hours** after the charge, there is no refund.
 
 You can still cancel the subscription at any time. In that case no new period is charged, and paid access stays with you until the end of the period already paid for.
 

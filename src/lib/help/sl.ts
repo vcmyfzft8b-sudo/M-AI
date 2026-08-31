@@ -306,8 +306,8 @@ Ta politika pojasnjuje, kdaj vrnemo plačilo za naročnino Memo AI, v kakšnem d
 
 ## 1. Na kratko
 
-- **zahteva v 5 dneh od plačila** — vrnemo 50 % plačanega zneska
-- **zahteva po 5 dneh od plačila** — vračila ni
+- **zahteva v 24 urah od plačila** — vrnemo 50 % plačanega zneska
+- **zahteva po 24 urah od plačila** — vračila ni
 - **preklic naročnine** — kadar koli; dostop ostane do konca plačanega obdobja
 - **naša napaka ali dvojna bremenitev** — vrnemo v celoti
 - **zakonska pravica potrošnika do odstopa** — velja poleg te politike in ima prednost pred njo
@@ -316,20 +316,20 @@ Ta politika pojasnjuje, kdaj vrnemo plačilo za naročnino Memo AI, v kakšnem d
 
 Ta politika velja za naročnine, kupljene neposredno v Memo AI prek Stripe.
 
-Velja za vsako posamezno plačilo, tudi za samodejno podaljšanje. Rok 5 dni se za vsako plačilo šteje znova, od datuma bremenitve.
+Velja za vsako posamezno plačilo, tudi za samodejno podaljšanje. Rok 24 ur se za vsako plačilo šteje znova, od trenutka bremenitve.
 
-## 3. Delno vračilo v 5 dneh
+## 3. Delno vračilo v 24 urah
 
-Če v **5 koledarskih dneh od dneva bremenitve** pošlješ zahtevo za vračilo, ti vrnemo **50 % plačanega zneska** za to obdobje.
+Če v **24 urah od trenutka bremenitve** pošlješ zahtevo za vračilo, ti vrnemo **50 % plačanega zneska** za to obdobje.
 
-- rok začne teči na dan, ko je bilo plačilo obračunano
-- šteje datum, ko tvoja zahteva prispe na info@memoai.eu
+- rok začne teči v trenutku, ko je bilo plačilo obračunano
+- šteje čas, ko tvoja zahteva prispe na info@memoai.eu
 - ob odobrenem vračilu se naročnina prekliče, plačljivi dostop pa preneha takoj po izvedbi vračila
 - delno vračilo je mogoče enkrat na obračunsko obdobje
 
-## 4. Po 5 dneh
+## 4. Po 24 urah
 
-Za zahteve, poslane **po izteku 5 koledarskih dni** od bremenitve, vračila ni.
+Za zahteve, poslane **več kot 24 ur** po bremenitvi, vračila ni.
 
 Naročnino lahko še vedno kadar koli prekličeš. V tem primeru se ne obračuna novo obdobje, plačljivi dostop pa ti ostane do konca že plačanega obdobja.
 

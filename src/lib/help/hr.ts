@@ -313,8 +313,8 @@ Ova politika objašnjava kada vraćamo uplatu za pretplatu na Memo AI, u kojem u
 
 ## 1. Ukratko
 
-- **zahtjev u roku od 5 dana od uplate** — vraćamo 50 % uplaćenog iznosa
-- **zahtjev nakon 5 dana od uplate** — nema povrata
+- **zahtjev u roku od 24 sata od uplate** — vraćamo 50 % uplaćenog iznosa
+- **zahtjev nakon 24 sata od uplate** — nema povrata
 - **otkazivanje pretplate** — bilo kada; pristup ostaje do kraja plaćenog razdoblja
 - **naša pogreška ili dvostruko terećenje** — vraćamo u cijelosti
 - **zakonsko pravo potrošača na odustanak** — vrijedi uz ovu politiku i ima prednost pred njom
@@ -323,20 +323,20 @@ Ova politika objašnjava kada vraćamo uplatu za pretplatu na Memo AI, u kojem u
 
 Ova politika odnosi se na pretplate kupljene izravno u Memo AI putem Stripea.
 
-Vrijedi za svaku pojedinu uplatu, uključujući automatsko produljenje. Rok od 5 dana za svaku se uplatu računa iznova, od datuma terećenja.
+Vrijedi za svaku pojedinu uplatu, uključujući automatsko produljenje. Rok od 24 sata za svaku se uplatu računa iznova, od trenutka terećenja.
 
-## 3. Djelomični povrat u roku od 5 dana
+## 3. Djelomični povrat u roku od 24 sata
 
-Ako u roku od **5 kalendarskih dana od dana terećenja** pošalješ zahtjev za povrat, vraćamo ti **50 % uplaćenog iznosa** za to razdoblje.
+Ako u roku od **24 sata od trenutka terećenja** pošalješ zahtjev za povrat, vraćamo ti **50 % uplaćenog iznosa** za to razdoblje.
 
-- rok počinje teći na dan kada je uplata obračunata
-- računa se datum kada tvoj zahtjev stigne na info@memoai.eu
+- rok počinje teći u trenutku kada je uplata obračunata
+- računa se vrijeme kada tvoj zahtjev stigne na info@memoai.eu
 - kada je povrat odobren, pretplata se otkazuje, a plaćeni pristup prestaje odmah nakon izvršenja povrata
 - djelomični povrat moguć je jednom po obračunskom razdoblju
 
-## 4. Nakon 5 dana
+## 4. Nakon 24 sata
 
-Za zahtjeve poslane **nakon isteka 5 kalendarskih dana** od terećenja nema povrata.
+Za zahtjeve poslane **više od 24 sata** nakon terećenja nema povrata.
 
 Pretplatu i dalje možeš otkazati bilo kada. U tom se slučaju novo razdoblje ne obračunava, a plaćeni pristup ostaje ti do kraja već plaćenog razdoblja.
 

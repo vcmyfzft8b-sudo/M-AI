@@ -92,10 +92,11 @@ export type SplashScreen = {
  *
  * A landscape screen gets two links to the one image. Browsers disagree on
  * whether `device-width` follows the device or the viewport once the screen is
- * rotated — Safari is documented to keep it on the device's natural edge, which
- * is what every splash generator emits, but Chrome swaps the two, and there is
- * no way to settle it from a desktop. Both spellings are cheap, they cannot
- * both match at once, and between them one is right on whatever iOS does.
+ * rotated: every splash generator emits the device's natural edge for both
+ * orientations, which implies Safari keeps it there, while Chrome demonstrably
+ * swaps the two. Which one iOS does cannot be settled from a desktop, so both
+ * spellings are emitted. They cannot both match at once, and between them one
+ * is right whichever way it goes.
  */
 export function splashScreens(): SplashScreen[] {
   const screens: SplashScreen[] = [];

@@ -17,7 +17,13 @@ import { SPLASH_BACKGROUNDS } from "@/lib/splash-screens";
  * scripts/generate-splash-screens.mjs writes.
  *
  * `start_url` is the app, not the landing page: someone who kept Memo on their
- * home screen has already been sold.
+ * home screen has already been sold. Signed out, /app sends them to / anyway.
+ *
+ * There is deliberately no `orientation`. Declaring one locks rotation on
+ * Android, and the app has a landscape answer on both sides of its breakpoint:
+ * a tablet turned sideways reaches the desktop rail layout at 1100px, and the
+ * launch screens below cover landscape too. Which way to hold the device is the
+ * reader's call.
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -28,7 +34,6 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/app",
     scope: "/",
     display: "standalone",
-    orientation: "portrait",
     background_color: SPLASH_BACKGROUNDS.light,
     theme_color: SPLASH_BACKGROUNDS.light,
     icons: [

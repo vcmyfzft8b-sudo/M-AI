@@ -16,19 +16,28 @@
  *
  * The values are literals rather than tokens because the tokens live on
  * `.memo`, and this is the one element that sits above them. They are the same
- * two values `--bg` holds.
+ * two values `--bg` holds — which the dark one had quietly stopped being,
+ * sitting at pure black while the app itself was drawn on #121214. So the
+ * frames between pages were darker than either side of them.
+ *
+ * Android reads this. Its launch screen has no per-theme control — the
+ * manifest carries one `background_color` — but Chrome may override that from
+ * whatever `prefers-color-scheme` says here, which is the only way the two
+ * appearances can differ there. Keep these in step with `--bg` and with the
+ * launch screens in src/lib/splash-screens.ts; all three are the same colour
+ * wearing three hats.
  */
 :root {
   background-color: #f1f1f5;
 }
 
 :root[data-theme="dark"] {
-  background-color: #000000;
+  background-color: #121214;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    background-color: #000000;
+    background-color: #121214;
   }
 }
 

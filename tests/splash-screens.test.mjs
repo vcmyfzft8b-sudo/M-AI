@@ -8,6 +8,7 @@ function readSource(relativePath) {
 }
 
 import {
+  SPLASH_BACKGROUNDS,
   SPLASH_DEVICES,
   SPLASH_THEMES,
   splashScreens,
@@ -186,4 +187,47 @@ test("the layout declares apple-mobile-web-app-capable by hand", () => {
     /<meta\s+name="apple-mobile-web-app-capable"\s+content="yes"/,
     "without this tag iOS ignores every launch screen and the app opens blank",
   );
+});
+
+/**
+ * Three files name the same two colours: the launch screens are drawn on them,
+ * `--bg` paints the app on them, and `:root` paints the canvas between pages
+ * with them. They had already drifted once — the dark canvas sat at pure black
+ * while everything else used #121214, so the frames between pages were darker
+ * than either side of them, and Android had the wrong colour to derive its own
+ * launch screen from.
+ *
+ * Android is why this is pinned rather than left to care. Its launch screen
+ * has no per-theme control of its own: the manifest carries a single
+ * `background_color`, and the only way the two appearances differ there is if
+ * Chrome overrides it from the `prefers-color-scheme` rules in this stylesheet.
+ * Whatever these say is what an Android user opens into.
+ */
+test("the canvas, the app background and the launch screens are the same colours", () => {
+  const css = readSource("src/app/redesign.css");
+
+  const canvasLight = css.match(/:root\s*\{\s*background-color:\s*(#[0-9a-f]{6})/i)?.[1];
+  const canvasDark = css.match(
+    /:root\[data-theme="dark"\]\s*\{\s*background-color:\s*(#[0-9a-f]{6})/i,
+  )?.[1];
+
+  assert.equal(
+    canvasLight?.toLowerCase(),
+    SPLASH_BACKGROUNDS.light,
+    "the light canvas does not match the light launch screens",
+  );
+  assert.equal(
+    canvasDark?.toLowerCase(),
+    SPLASH_BACKGROUNDS.dark,
+    "the dark canvas does not match the dark launch screens; on Android this is the launch screen",
+  );
+
+  // `--bg` is what the app itself paints; a mismatch is a visible seam between
+  // the launch screen and the first frame of the app.
+  for (const [theme, colour] of Object.entries(SPLASH_BACKGROUNDS)) {
+    assert.ok(
+      css.includes(`--bg: ${colour};`),
+      `--bg has no ${theme} value of ${colour}, so the app does not match its own launch screen`,
+    );
+  }
 });

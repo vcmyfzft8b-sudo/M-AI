@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -103,6 +103,23 @@ const MATERIAL_SYMBOLS_HREF =
  * Next's metadata API has no field for these, so they go in the head by hand.
  */
 const APPLE_STARTUP_IMAGES = splashScreens();
+
+/**
+ * The colour the installed app's own chrome takes on Android — its title bar
+ * and, together with the CSS canvas above, what Chrome may draw the launch
+ * screen on. The manifest can only carry one `background_color`, so a media
+ * query here is the only way the two appearances differ there at all.
+ *
+ * These are `--bg` from redesign.css, the same pair the iOS launch screens are
+ * drawn on. iOS ignores the tag outright (measured in #178), so it costs
+ * nothing there and is the whole mechanism on Android.
+ */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f1f1f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#121214" },
+  ],
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(SEO_SITE_URL),

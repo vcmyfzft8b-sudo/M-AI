@@ -345,41 +345,16 @@ a:visited {
 }
 
 .memo-paywall-shell {
+  /*
+   * Light is the base; dark is the override. These were the other way round,
+   * so the dark gradient was what painted in every moment before a media query
+   * or a `data-theme` attribute resolved — the dark paywall flashing on the way
+   * to Stripe and back. A colour whose only light definition lives in a media
+   * query has no light definition at first paint.
+   */
   --memo-paywall-purple: var(--tint);
   --memo-paywall-purple-soft: var(--tint-soft);
   --memo-paywall-panel: rgba(30, 28, 38, 0.86);
-  --memo-paywall-border: rgba(255, 255, 255, 0.12);
-  --memo-paywall-bg:
-    radial-gradient(circle at 50% -10%, rgba(10, 132, 255, 0.38), transparent 34%),
-    radial-gradient(circle at 50% 8%, rgba(10, 132, 255, 0.22), transparent 42%),
-    linear-gradient(180deg, #0b3158 0%, #061828 36%, #050505 100%);
-  --memo-paywall-text: #ffffff;
-  --memo-paywall-title-text: #ffffff;
-  --memo-paywall-close-color: rgba(255, 255, 255, 0.92);
-  --memo-paywall-benefit-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.035));
-  --memo-paywall-benefit-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
-  --memo-paywall-benefit-title: #ffffff;
-  --memo-paywall-benefit-copy: rgba(255, 255, 255, 0.56);
-  --memo-paywall-plan-border: rgba(255, 255, 255, 0.11);
-  --memo-paywall-plan-bg: rgba(15, 15, 17, 0.84);
-  --memo-paywall-plan-text: rgba(255, 255, 255, 0.45);
-  --memo-paywall-plan-selected-bg: linear-gradient(180deg, rgba(10, 132, 255, 0.18), rgba(7, 28, 48, 0.88));
-  --memo-paywall-plan-selected-text: #ffffff;
-  --memo-paywall-badge-bg: #17131f;
-  --memo-paywall-badge-text: #ffffff;
-  --memo-paywall-price-muted: rgba(255, 255, 255, 0.48);
-  --memo-paywall-muted: rgba(255, 255, 255, 0.6);
-  --memo-paywall-muted-soft: rgba(255, 255, 255, 0.43);
-  --memo-paywall-cta-shadow: 0 1rem 3rem rgba(10, 132, 255, 0.3);
-  gap: 1.05rem;
-  align-content: start;
-  overflow: hidden auto;
-  padding: max(4.75rem, env(safe-area-inset-top)) 1.5rem max(1.2rem, env(safe-area-inset-bottom));
-  background: var(--memo-paywall-bg);
-  color: var(--memo-paywall-text);
-}
-
-:root[data-theme="light"] .memo-paywall-shell {
   --memo-paywall-border: rgba(0, 0, 0, 0.09);
   --memo-paywall-bg:
     radial-gradient(circle at 50% -10%, rgba(0, 102, 204, 0.16), transparent 35%),
@@ -403,34 +378,66 @@ a:visited {
   --memo-paywall-muted: rgba(0, 0, 0, 0.58);
   --memo-paywall-muted-soft: rgba(0, 0, 0, 0.46);
   --memo-paywall-cta-shadow: 0 1rem 2.5rem rgba(0, 102, 204, 0.2);
+  gap: 1.05rem;
+  align-content: start;
+  overflow: hidden auto;
+  padding: max(4.75rem, env(safe-area-inset-top)) 1.5rem max(1.2rem, env(safe-area-inset-bottom));
+  background: var(--memo-paywall-bg);
+  color: var(--memo-paywall-text);
 }
 
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]) .memo-paywall-shell,
-  :root[data-theme="system"] .memo-paywall-shell {
-    --memo-paywall-border: rgba(0, 0, 0, 0.09);
+/* Dark, where dark is chosen or preferred. */
+:root[data-theme="dark"] .memo-paywall-shell {
+  --memo-paywall-border: rgba(255, 255, 255, 0.12);
+  --memo-paywall-bg:
+    radial-gradient(circle at 50% -10%, rgba(10, 132, 255, 0.38), transparent 34%),
+    radial-gradient(circle at 50% 8%, rgba(10, 132, 255, 0.22), transparent 42%),
+    linear-gradient(180deg, #0b3158 0%, #061828 36%, #050505 100%);
+  --memo-paywall-text: #ffffff;
+  --memo-paywall-title-text: #ffffff;
+  --memo-paywall-close-color: rgba(255, 255, 255, 0.92);
+  --memo-paywall-benefit-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.035));
+  --memo-paywall-benefit-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --memo-paywall-benefit-title: #ffffff;
+  --memo-paywall-benefit-copy: rgba(255, 255, 255, 0.56);
+  --memo-paywall-plan-border: rgba(255, 255, 255, 0.11);
+  --memo-paywall-plan-bg: rgba(15, 15, 17, 0.84);
+  --memo-paywall-plan-text: rgba(255, 255, 255, 0.45);
+  --memo-paywall-plan-selected-bg: linear-gradient(180deg, rgba(10, 132, 255, 0.18), rgba(7, 28, 48, 0.88));
+  --memo-paywall-plan-selected-text: #ffffff;
+  --memo-paywall-badge-bg: #17131f;
+  --memo-paywall-badge-text: #ffffff;
+  --memo-paywall-price-muted: rgba(255, 255, 255, 0.48);
+  --memo-paywall-muted: rgba(255, 255, 255, 0.6);
+  --memo-paywall-muted-soft: rgba(255, 255, 255, 0.43);
+  --memo-paywall-cta-shadow: 0 1rem 3rem rgba(10, 132, 255, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .memo-paywall-shell {
+    --memo-paywall-border: rgba(255, 255, 255, 0.12);
     --memo-paywall-bg:
-      radial-gradient(circle at 50% -10%, rgba(0, 102, 204, 0.16), transparent 35%),
-      radial-gradient(circle at 50% 8%, rgba(0, 102, 204, 0.1), transparent 42%),
-      linear-gradient(180deg, #f4f8ff 0%, #ffffff 42%, #f6f7fb 100%);
-    --memo-paywall-text: var(--label);
-    --memo-paywall-title-text: var(--label);
-    --memo-paywall-close-color: rgba(0, 0, 0, 0.58);
-    --memo-paywall-benefit-bg: rgba(255, 255, 255, 0.78);
-    --memo-paywall-benefit-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), 0 0.7rem 2rem rgba(0, 0, 0, 0.05);
-    --memo-paywall-benefit-title: var(--label);
-    --memo-paywall-benefit-copy: rgba(0, 0, 0, 0.52);
-    --memo-paywall-plan-border: rgba(0, 0, 0, 0.11);
-    --memo-paywall-plan-bg: rgba(255, 255, 255, 0.84);
-    --memo-paywall-plan-text: rgba(0, 0, 0, 0.5);
-    --memo-paywall-plan-selected-bg: linear-gradient(180deg, rgba(0, 102, 204, 0.12), rgba(255, 255, 255, 0.94));
-    --memo-paywall-plan-selected-text: var(--label);
-    --memo-paywall-badge-bg: #ffffff;
-    --memo-paywall-badge-text: var(--label);
-    --memo-paywall-price-muted: rgba(0, 0, 0, 0.52);
-    --memo-paywall-muted: rgba(0, 0, 0, 0.58);
-    --memo-paywall-muted-soft: rgba(0, 0, 0, 0.46);
-    --memo-paywall-cta-shadow: 0 1rem 2.5rem rgba(0, 102, 204, 0.2);
+      radial-gradient(circle at 50% -10%, rgba(10, 132, 255, 0.38), transparent 34%),
+      radial-gradient(circle at 50% 8%, rgba(10, 132, 255, 0.22), transparent 42%),
+      linear-gradient(180deg, #0b3158 0%, #061828 36%, #050505 100%);
+    --memo-paywall-text: #ffffff;
+    --memo-paywall-title-text: #ffffff;
+    --memo-paywall-close-color: rgba(255, 255, 255, 0.92);
+    --memo-paywall-benefit-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.035));
+    --memo-paywall-benefit-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+    --memo-paywall-benefit-title: #ffffff;
+    --memo-paywall-benefit-copy: rgba(255, 255, 255, 0.56);
+    --memo-paywall-plan-border: rgba(255, 255, 255, 0.11);
+    --memo-paywall-plan-bg: rgba(15, 15, 17, 0.84);
+    --memo-paywall-plan-text: rgba(255, 255, 255, 0.45);
+    --memo-paywall-plan-selected-bg: linear-gradient(180deg, rgba(10, 132, 255, 0.18), rgba(7, 28, 48, 0.88));
+    --memo-paywall-plan-selected-text: #ffffff;
+    --memo-paywall-badge-bg: #17131f;
+    --memo-paywall-badge-text: #ffffff;
+    --memo-paywall-price-muted: rgba(255, 255, 255, 0.48);
+    --memo-paywall-muted: rgba(255, 255, 255, 0.6);
+    --memo-paywall-muted-soft: rgba(255, 255, 255, 0.43);
+    --memo-paywall-cta-shadow: 0 1rem 3rem rgba(10, 132, 255, 0.3);
   }
 }
 
@@ -439,13 +446,11 @@ a:visited {
   padding-inline: 1.1rem;
 }
 
+/* The paywall used to strip this back to a bare glyph. It is the app's close
+   button now — same size, ground, outline and shadow as every other one — so
+   only the glyph colour is left to the paywall's own palette. */
 .memo-paywall-shell .app-start-close-button {
-  width: 2.65rem;
-  height: 2.65rem;
-  border-color: transparent;
-  background: transparent;
   color: var(--memo-paywall-close-color);
-  box-shadow: none;
 }
 
 .memo-paywall-brand {
@@ -2403,7 +2408,15 @@ a:visited {
   }
 
   .memo-paywall-shell {
+    /*
+     * `min-height`, not `height`: the shell fills the screen when it fits and
+     * grows past it when it does not. With the cancelled-payment banner on top
+     * the content is taller than the viewport, and a fixed height left the
+     * call to action below the fold with nothing able to scroll to it.
+     */
     min-height: 100dvh;
+    max-height: none;
+    overflow-y: auto;
     padding: max(4.65rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
   }
 
@@ -3863,23 +3876,39 @@ select:disabled {
   border-radius: 14px;
 }
 
-.note-source-docs-textarea-wrap {
-  padding-inline: 4px;
-}
-
-.note-source-inline-textarea {
-  min-height: 13.75rem;
-  resize: vertical;
-}
-
-.note-source-inline-textarea-compact {
-  min-height: 4.5rem;
-}
-
 .note-source-docs-file-card {
   display: grid;
   gap: 0.35rem;
   padding: 0.95rem 1rem;
+}
+
+/* The picker leaves as soon as a file is staged, so the card carries the way back out. */
+.note-source-prepared-card {
+  position: relative;
+}
+
+.note-source-prepared-card .note-source-docs-file-name,
+.note-source-prepared-card .note-source-card-label {
+  padding-right: 2.25rem;
+}
+
+.note-source-prepared-remove {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
+  background: color-mix(in srgb, var(--surface-solid) 88%, var(--fill-primary));
+  color: var(--secondary-label);
+}
+
+.note-source-prepared-remove:disabled {
+  opacity: 0.45;
 }
 
 .note-source-docs-file-name {
@@ -4169,85 +4198,6 @@ select:disabled {
 
 .note-source-guide-copy {
   font-size: 0.92rem;
-}
-
-.note-source-busy-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.55rem;
-  color: var(--blue);
-}
-
-.note-source-loading-spinner {
-  flex: none;
-}
-
-.note-source-busy-title {
-  margin: 0;
-  color: inherit;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.note-source-busy-copy {
-  margin: 0;
-  color: var(--secondary-label);
-  font-size: 0.88rem;
-  line-height: 1.45;
-}
-
-.note-source-subsheet-backdrop {
-  z-index: 62;
-  background: rgba(12, 15, 25, 0.42);
-}
-
-.note-source-subsheet-wrap {
-  z-index: 63;
-  align-items: center;
-  justify-content: center;
-  padding:
-    max(1rem, env(safe-area-inset-top))
-    1rem
-    max(1rem, env(safe-area-inset-bottom));
-  overflow-y: auto;
-}
-
-.note-source-subsheet-wrap.keyboard-open {
-  align-items: center;
-  justify-content: center;
-}
-
-.note-source-subsheet-stack {
-  width: min(100%, 31rem);
-  margin: auto;
-  transform: translateY(0);
-}
-
-.note-source-subsheet-wrap.keyboard-open .note-source-subsheet-stack {
-  margin: auto;
-  transform: translateY(-3.25rem);
-}
-
-.note-source-subsheet {
-  max-width: none;
-  max-height: min(31rem, calc(100dvh - 8rem));
-  overflow-y: auto;
-}
-
-.note-source-subsheet-wrap.keyboard-open .note-source-subsheet {
-  max-height: min(31rem, calc(100dvh - 8rem));
-}
-
-.note-source-subsheet-textarea {
-  min-height: 8.5rem;
-  max-height: 8.5rem;
-  padding: 0.9rem 1rem;
-  line-height: 1.5;
-}
-
-.note-source-subsheet-wrap.keyboard-open .note-source-subsheet-textarea {
-  max-height: 8.5rem;
 }
 
 .ios-meta {
@@ -9233,86 +9183,14 @@ select:disabled {
   text-align: center;
 }
 
-.lecture-notes-processing {
-  display: grid;
-  place-items: center;
-  min-height: min(42vh, 20rem);
-  padding: 0.75rem 1rem;
-}
-
 .lecture-empty-message {
   margin: 0 auto;
   color: var(--secondary-label);
   text-align: center;
 }
 
-.lecture-study-generation-notice {
-  display: grid;
-  justify-items: center;
-  gap: 0.75rem;
-  width: min(100%, 30rem);
-  margin: 0.55rem auto 0;
-  color: var(--secondary-label);
-  text-align: center;
-}
-
-.lecture-study-generation-progress {
-  position: relative;
-  width: min(100%, 16rem);
-  height: 0.62rem;
-  overflow: hidden;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--separator) 46%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, white 8%, transparent);
-}
-
-.lecture-study-generation-progress span {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 46%;
-  border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--tint) 88%, white),
-    color-mix(in srgb, var(--green) 78%, var(--tint)),
-    color-mix(in srgb, var(--tint) 88%, white)
-  );
-  box-shadow: 0 0 1.2rem color-mix(in srgb, var(--tint) 32%, transparent);
-  animation: lecture-study-generation-progress 1.25s cubic-bezier(0.45, 0, 0.2, 1) infinite;
-}
-
-.lecture-study-generation-copy {
-  display: grid;
-  gap: 0.25rem;
-  justify-items: center;
-}
-
-.lecture-study-generation-copy p {
-  margin: 0;
-  max-width: 36ch;
-  font-size: 0.88rem;
-  line-height: 1.5;
-}
-
-.lecture-study-generation-stage {
-  color: var(--label);
-  font-weight: 700;
-}
-
 .lecture-study-create-button {
   margin: 0.3rem auto 0;
-}
-
-@keyframes lecture-study-generation-progress {
-  0%,
-  8% {
-    transform: translateX(-110%);
-  }
-
-  92%,
-  100% {
-    transform: translateX(245%);
-  }
 }
 
 .lecture-markdown > :first-child {
@@ -13995,27 +13873,6 @@ select:disabled {
 
   .note-source-modal-body-text .note-source-photo-previews {
     margin-top: 0 !important;
-  }
-
-  .note-source-modal-body-text .note-source-docs-textarea-wrap {
-    min-height: 0;
-    padding-inline: 0;
-  }
-
-  .note-source-modal-body-text .note-source-inline-textarea {
-    min-height: 6.25rem;
-    max-height: min(7.25rem, 17dvh);
-    resize: none;
-    overflow-y: auto;
-  }
-
-  .note-source-modal-body-text .note-source-inline-textarea-compact {
-    min-height: 2.65rem;
-    max-height: 3rem;
-  }
-
-  .note-source-modal-body-photos .note-source-docs-textarea-wrap {
-    align-self: start;
   }
 
   .note-source-modal-body-photos .note-source-photo-previews {

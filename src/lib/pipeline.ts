@@ -9,10 +9,16 @@ import {
   toUserFacingAiErrorMessage,
 } from "@/lib/ai/errors";
 import { chatAnswerSchema } from "@/lib/ai/schemas";
-import { generateStructuredObject } from "@/lib/ai/json";
+import { generateStructuredObject, streamStructuredObject } from "@/lib/ai/json";
 import { createEmbeddings } from "@/lib/ai/embeddings";
 import { parseAudioChunkManifest } from "@/lib/audio-processing";
 import { CHAT_MATCH_COUNT } from "@/lib/constants";
+import {
+  buildTutorHistory,
+  buildTutorInstructions,
+  TUTOR_HISTORY_TURN_LIMIT,
+  type TutorHistoryTurn,
+} from "@/lib/ai/tutor-prompt";
 import { sanitizeJsonForDatabase } from "@/lib/database-text";
 import {
   attachDocumentImagesToNotes,
@@ -24,7 +30,7 @@ import {
   LectureNoLongerExistsError,
   toLectureFailureCode,
 } from "@/lib/lecture-processing-errors";
-import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
+import { detectSourceLanguage } from "@/lib/languages";
 import {
   getEffectiveLectureSourceType,
   getInitialNoteAudioVoice,
@@ -210,6 +216,8 @@ async function updateLectureProcessingState(params: {
   errorMessage?: string | null;
   durationSeconds?: number | null;
   title?: string | null;
+  /** Undefined leaves whatever the lecture already has; null clears it. */
+  emoji?: string | null;
 }) {
   const supabase = createSupabaseServiceRoleClient();
   const stored = parseProcessingMetadata(params.processingMetadata);
@@ -235,6 +243,7 @@ async function updateLectureProcessingState(params: {
         error_message: params.errorMessage ?? null,
         duration_seconds: params.durationSeconds,
         title: params.title,
+        ...(params.emoji === undefined ? {} : { emoji: params.emoji }),
         processing_metadata: {
           ...metadata,
           processing: {
@@ -702,12 +711,40 @@ export async function generateLectureNotesFromStoredTranscript(params: {
     throw artifactError;
   }
 
+  /*
+   * Record what language the notes came out in.
+   *
+   * Nobody picks one any more — the model writes in whatever the source was —
+   * but read-aloud still needs a concrete code to align its audio against, and
+   * the assistant reads it too. Detecting it from the finished notes rather
+   * than from the transcript is the closer question: the notes are the thing
+   * that gets spoken.
+   *
+   * A failure to detect is left alone rather than written as a guess; the
+   * consumers already treat a missing language as "work it out yourself".
+   */
+  const detectedLanguage = detectSourceLanguage(notes.structuredNotesMd);
+
+  if (detectedLanguage && detectedLanguage !== lecture.language_hint) {
+    const { error: languageError } = await supabase
+      .from("lectures")
+      .update({ language_hint: detectedLanguage } as never)
+      .eq("id", lecture.id);
+
+    if (languageError) {
+      // Not worth failing a finished note over: everything downstream has a
+      // sane behaviour for an unknown language.
+      console.warn("Failed to record detected note language", languageError);
+    }
+  }
+
   await updateLectureProcessingState({
     lectureId: lecture.id,
     processingMetadata: lecture.processing_metadata,
     stage: "checking_document_images",
     durationSeconds: lecture.duration_seconds,
     title: notes.title,
+    emoji: notes.emoji ?? null,
   });
 
   const documentImages = getStoredDocumentImagesFromMetadata(manualModelMetadata);
@@ -761,7 +798,13 @@ export async function generateLectureNotesFromStoredTranscript(params: {
       lectureId: lecture.id,
       content: notes.structuredNotesMd,
       title: notes.title,
-      languageHint: lecture.language_hint,
+      /*
+       * The language just detected, not the one this row was loaded with: the
+       * row in hand predates the update a few lines above, and it is null on
+       * every note made since the language picker went. Reading it here would
+       * have read a Slovenian note aloud in an English voice.
+       */
+      languageHint: detectedLanguage ?? lecture.language_hint,
       voice: getInitialNoteAudioVoice(lecture.processing_metadata),
     });
   }
@@ -1122,33 +1165,85 @@ type RpcMatchResult = {
   similarity: number;
 };
 
+/**
+ * Streams the answer when there is somewhere to send it and the stage is routed
+ * through the gateway, and returns null whenever it cannot — no handler, not
+ * routed, or the stream broke. Null means "use the ordinary call", so a
+ * streaming failure costs a retry rather than the answer.
+ *
+ * The partial text already shown is discarded on failure: the fallback re-runs
+ * the whole call, and half of one answer followed by all of another would read
+ * as gibberish. Callers replace what they have rendered with the final text.
+ */
+async function streamChatAnswer(
+  call: {
+    schema: typeof chatAnswerSchema;
+    stage: "chat";
+    instructions: string;
+    input: string;
+  },
+  onDelta: ((text: string) => void) | undefined,
+) {
+  if (!onDelta) {
+    return null;
+  }
+
+  try {
+    return await streamStructuredObject({ ...call, streamField: "answer", onDelta });
+  } catch (error) {
+    console.error("[chat] streaming failed, falling back to a plain call", error);
+    return null;
+  }
+}
+
 export async function answerLectureChat(params: {
   lectureId: string;
   userId: string;
   question: string;
+  /**
+   * Chat is the one stage a learner watches happen, so when a delta handler is
+   * supplied the answer is streamed as it is written. The model, prompt and
+   * schema are identical either way; only the delivery differs, and a stream
+   * that fails falls back to the ordinary call rather than the learner losing
+   * the answer.
+   */
+  onDelta?: (text: string) => void;
 }) {
   const supabase = createSupabaseServiceRoleClient();
 
-  const [{ data: artifact }, { data: lecture }, embeddingResponse] = await Promise.all([
-    supabase
-      .from("lecture_artifacts")
-      .select("*")
-      .eq("lecture_id", params.lectureId)
-      .maybeSingle(),
-    supabase
-      .from("lectures")
-      .select("language_hint")
-      .eq("id", params.lectureId)
-      .maybeSingle(),
-    createEmbeddings([params.question]),
-  ]);
+  const [{ data: artifact }, { data: lecture }, { data: priorMessages }, embeddingResponse] =
+    await Promise.all([
+      supabase
+        .from("lecture_artifacts")
+        .select("*")
+        .eq("lecture_id", params.lectureId)
+        .maybeSingle(),
+      supabase
+        .from("lectures")
+        .select("title")
+        .eq("id", params.lectureId)
+        .maybeSingle(),
+      /*
+       * The conversation so far. Newest first here because that is what a
+       * limit can be applied to; it is flipped back before it is sent, since
+       * the model should read it in the order it happened.
+       */
+      supabase
+        .from("chat_messages")
+        .select("role, content")
+        .eq("lecture_id", params.lectureId)
+        .eq("user_id", params.userId)
+        .order("created_at", { ascending: false })
+        .limit(TUTOR_HISTORY_TURN_LIMIT),
+      createEmbeddings([params.question]),
+    ]);
 
   const queryEmbedding = serializeVector(embeddingResponse[0]);
   const artifactRow = (artifact ?? null) as {
     summary: string;
     key_topics: string[];
   } | null;
-  const lectureRow = (lecture ?? null) as { language_hint: string | null } | null;
+  const lectureRow = (lecture ?? null) as { title: string | null } | null;
 
   const { data: matches, error: matchError } = await supabase.rpc(
     "match_transcript_segments" as never,
@@ -1165,13 +1260,19 @@ export async function answerLectureChat(params: {
 
   const context = (matches ?? []) as RpcMatchResult[];
 
-  const answer = await generateStructuredObject({
+  const conversation = buildTutorHistory(
+    ((priorMessages ?? []) as TutorHistoryTurn[]).slice().reverse(),
+  );
+
+  const call = {
     schema: chatAnswerSchema,
-    stage: "chat",
-    instructions: `${buildGeneratedContentLanguageInstruction(lectureRow?.language_hint)} Answer the student using only the supplied lecture context. If the answer is not fully supported, say that the lecture does not clearly state it. Cite only transcript chunks that are genuinely relevant.`,
+    stage: "chat" as const,
+    instructions: buildTutorInstructions("lecture"),
     input: JSON.stringify(
       {
         question: params.question,
+        conversation,
+        noteTitle: lectureRow?.title ?? null,
         summary: artifactRow?.summary ?? null,
         keyTopics: artifactRow?.key_topics ?? [],
         context,
@@ -1179,7 +1280,9 @@ export async function answerLectureChat(params: {
       null,
       2,
     ),
-  });
+  };
+
+  const answer = (await streamChatAnswer(call, params.onDelta)) ?? (await generateStructuredObject(call));
 
   const citations = answer.citations.map((citation) => ({
     idx: citation.idx,

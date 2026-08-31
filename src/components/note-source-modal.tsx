@@ -2,13 +2,11 @@
 
 import * as Sentry from "@sentry/nextjs";
 import {
-  ChevronDown,
   Loader2,
   Trash2,
   X,
 } from "lucide-react";
 import {
-  type CSSProperties,
   useCallback,
   useEffect,
   useMemo,
@@ -24,10 +22,11 @@ import {
   useCreatorDemoBasePath,
   useIsCollegeCreatorDemo,
 } from "@/components/creator-demo/creator-demo-context";
-import { EmojiIcon } from "@/components/emoji-icon";
 import { LiveAudioWave } from "@/components/live-audio-wave";
 import { useInstantNavigation } from "@/components/navigation-loading";
-import { ViewportPortal } from "@/components/viewport-portal";
+import { MemoPortal } from "@/components/memo-portal";
+import { sheetClass, useSheet } from "@/components/use-sheet";
+import { Emoji, Msym } from "@/components/msym";
 import { createAudioLectureWithProcessingChunks } from "@/lib/audio-lecture-upload";
 import {
   AUDIO_FILE_INPUT_ACCEPT,
@@ -52,7 +51,6 @@ import {
   compressScanImageForUpload,
 } from "@/lib/file-compression-client";
 import { prepareAudioSourceForUpload } from "@/lib/audio-source-preparation";
-import { NOTE_LANGUAGE_OPTIONS } from "@/lib/languages";
 import {
   getExtensionForMimeType,
   isSupportedScanImageMimeType,
@@ -154,6 +152,11 @@ function isAudioSourceFile(file: File) {
   return (SUPPORTED_AUDIO_EXTENSIONS as readonly string[]).includes(extension);
 }
 
+/** The tile emoji beside the modal's title, per capture mode. */
+function modeEmoji(mode: NoteSourceMode) {
+  return MODES.find((item) => item.id === mode)?.icon ?? "📝";
+}
+
 function sheetTitle(mode: NoteSourceMode) {
   if (mode === "record") {
     return "Posnemi predavanje";
@@ -167,7 +170,7 @@ function sheetTitle(mode: NoteSourceMode) {
     return "Dodaj povezavo";
   }
 
-  return "Prilepi besedilo ali dokument";
+  return "Naloži dokument ali fotografije";
 }
 
 function sheetDescription() {
@@ -338,7 +341,6 @@ export function NoteSourceModal({
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
-  const inlineTextAreaRef = useRef<HTMLTextAreaElement | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -362,9 +364,7 @@ export function NoteSourceModal({
   const [pdfSource, setPdfSource] = useState<File | null>(null);
   const [photoSources, setPhotoSources] = useState<PhotoSource[]>([]);
   const [activePhotoPreviewId, setActivePhotoPreviewId] = useState<string | null>(null);
-  const [textValue, setTextValue] = useState("");
   const [linkValue, setLinkValue] = useState("");
-  const [languageHint, setLanguageHint] = useState("sl");
   const [createInitialAudio, setCreateInitialAudio] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -373,11 +373,17 @@ export function NoteSourceModal({
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [isTextEditorOpen, setIsTextEditorOpen] = useState(false);
-  const [textEditorKeyboardOffset, setTextEditorKeyboardOffset] = useState(0);
   const [visualizerStream, setVisualizerStream] = useState<MediaStream | null>(null);
   const [showAudioImportGuide, setShowAudioImportGuide] = useState(false);
   const [sourceSheetDragOffset, setSourceSheetDragOffset] = useState(0);
+
+  /*
+   * The sheet keeps its own drag — its close is layered, stepping back out of
+   * the photo preview before it leaves — but the exit is the
+   * design's shared one rather than a jump off the bottom of the screen.
+   */
+  const sourceSheet = useSheet(onClose);
+  const dismissSourceSheet = sourceSheet.dismiss;
 
   useEffect(() => {
     if (mode) {
@@ -394,12 +400,6 @@ export function NoteSourceModal({
     onClose();
     router.replace("/app/start");
   }, [canCreateNotes, onClose, open, router]);
-
-  useEffect(() => {
-    if (selectedMode !== "text" && isTextEditorOpen) {
-      setIsTextEditorOpen(false);
-    }
-  }, [isTextEditorOpen, selectedMode]);
 
   // Creator demo: stage a file for the visible source, so the creator can hit
   // "Ustvari" immediately. Picking their own file — or recording for real —
@@ -452,44 +452,8 @@ export function NoteSourceModal({
     }
   }, [isCreatorDemo, isRecording, open, selectedMode]);
 
-  useEffect(() => {
-    if (!isTextEditorOpen || typeof window === "undefined") {
-      setTextEditorKeyboardOffset(0);
-      return;
-    }
-
-    const viewport = window.visualViewport;
-
-    if (!viewport) {
-      setTextEditorKeyboardOffset(0);
-      return;
-    }
-
-    const updateKeyboardOffset = () => {
-      const keyboardOffset = Math.max(
-        0,
-        Math.round(window.innerHeight - viewport.height - viewport.offsetTop),
-      );
-
-      setTextEditorKeyboardOffset(keyboardOffset > 120 ? keyboardOffset : 0);
-    };
-
-    updateKeyboardOffset();
-    viewport.addEventListener("resize", updateKeyboardOffset);
-    viewport.addEventListener("scroll", updateKeyboardOffset);
-    window.addEventListener("orientationchange", updateKeyboardOffset);
-
-    return () => {
-      viewport.removeEventListener("resize", updateKeyboardOffset);
-      viewport.removeEventListener("scroll", updateKeyboardOffset);
-      window.removeEventListener("orientationchange", updateKeyboardOffset);
-    };
-  }, [isTextEditorOpen]);
-
   const preparedRecording = audioSource?.origin === "recording" ? audioSource : null;
   const preparedUpload = audioSource?.origin === "upload" ? audioSource : null;
-  const trimmedTextValue = textValue.trim();
-  const combinedTextSource = trimmedTextValue;
   const trimmedLinkValue = linkValue.trim();
   const linkVideoError = useMemo(
     () => getUnsupportedVideoUrlMessage(trimmedLinkValue),
@@ -498,8 +462,13 @@ export function NoteSourceModal({
   // Only advertise YouTube where captions can actually be fetched: the deployment's egress
   // decides that, and promising it elsewhere sends the learner back to paste the same link twice.
   const youtubeImportEnabled = isYoutubeCaptionImportEnabled();
-  const canGenerateText =
-    Boolean(pdfSource) || photoSources.length > 0 || combinedTextSource.length >= 120;
+  const hasPhotoSources = photoSources.length > 0;
+  const canGenerateText = Boolean(pdfSource) || hasPhotoSources;
+  /*
+   * One source per note: a document fills the slot on its own, so the picker leaves with it.
+   * Photos are the exception — they stack up to MAX_SCAN_IMAGE_COUNT pages of one set of notes.
+   */
+  const canAddDocumentSource = !pdfSource && photoSources.length < MAX_SCAN_IMAGE_COUNT;
   const canGenerateLink = trimmedLinkValue.length > 0 && !linkVideoError;
   const activePhotoPreview =
     photoSources.find((photoSource) => photoSource.id === activePhotoPreviewId) ?? null;
@@ -508,34 +477,6 @@ export function NoteSourceModal({
   useEffect(() => {
     photoSourcesRef.current = photoSources;
   }, [photoSources]);
-
-  useEffect(() => {
-    if (!open || selectedMode !== "text") {
-      return;
-    }
-
-    const textarea = inlineTextAreaRef.current;
-
-    if (!textarea) {
-      return;
-    }
-
-    const rootFontSize =
-      Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
-    const compactHeight = 4.5 * rootFontSize;
-    const emptyHeight = 6.25 * rootFontSize;
-    const filledMinHeight = 7.25 * rootFontSize;
-    const maxHeight = Math.min(
-      9.5 * rootFontSize,
-      Math.max(filledMinHeight, window.innerHeight * 0.18),
-    );
-    const minHeight = pdfSource ? compactHeight : trimmedTextValue ? filledMinHeight : emptyHeight;
-
-    textarea.style.height = `${minHeight}px`;
-    const nextHeight = Math.min(maxHeight, Math.max(minHeight, textarea.scrollHeight));
-    textarea.style.height = `${nextHeight}px`;
-    textarea.style.overflowY = textarea.scrollHeight > nextHeight + 1 ? "auto" : "hidden";
-  }, [open, pdfSource, selectedMode, textValue, trimmedTextValue]);
 
   function redirectToPaywall() {
     onClose();
@@ -629,9 +570,7 @@ export function NoteSourceModal({
       return [];
     });
     setActivePhotoPreviewId(null);
-    setTextValue("");
     setLinkValue("");
-    setLanguageHint("sl");
     setCreateInitialAudio(false);
     setIsRecording(false);
     setIsPaused(false);
@@ -639,7 +578,6 @@ export function NoteSourceModal({
     setError(null);
     setBusyLabel(null);
     setIsCancelling(false);
-    setIsTextEditorOpen(false);
     setShowAudioImportGuide(false);
     activeRequestControllerRef.current = null;
     createdLectureIdRef.current = null;
@@ -674,7 +612,6 @@ export function NoteSourceModal({
         timeoutMessage: "Priprava zapiska traja predolgo. Osveži stran in poskusi znova.",
         body: JSON.stringify({
           sourceType,
-          languageHint,
         }),
       });
 
@@ -683,7 +620,7 @@ export function NoteSourceModal({
       createdLectureIdRef.current = payload.lectureId;
       return payload.lectureId as string;
     },
-    [languageHint],
+    [],
   );
 
   const handleCancelBusyAction = useCallback(async () => {
@@ -911,6 +848,7 @@ export function NoteSourceModal({
   const requestClose = useCallback(() => {
     sourceSheetDragStartYRef.current = null;
     sourceSheetDragOffsetRef.current = 0;
+
     setSourceSheetDragOffset(0);
 
     if (activePhotoPreviewId) {
@@ -920,11 +858,6 @@ export function NoteSourceModal({
 
     if (showAudioImportGuide) {
       setShowAudioImportGuide(false);
-      return;
-    }
-
-    if (isTextEditorOpen) {
-      setIsTextEditorOpen(false);
       return;
     }
 
@@ -938,14 +871,13 @@ export function NoteSourceModal({
       return;
     }
 
-    onClose();
+    dismissSourceSheet();
   }, [
     busyLabel,
+    dismissSourceSheet,
     handleCancelBusyAction,
     activePhotoPreviewId,
     isRecording,
-    isTextEditorOpen,
-    onClose,
     showAudioImportGuide,
     stopRecording,
   ]);
@@ -1013,13 +945,8 @@ export function NoteSourceModal({
     }
 
     function handleWindowPointerEnd() {
-      if (sourceSheetDragOffsetRef.current > 80) {
-        sourceSheetDragStartYRef.current = null;
-        sourceSheetDragOffsetRef.current = window.innerHeight;
-        setSourceSheetDragOffset(window.innerHeight);
-        window.setTimeout(() => {
-          requestCloseRef.current();
-        }, 180);
+      if (sourceSheetDragOffsetRef.current > 110) {
+        requestCloseRef.current();
         return;
       }
 
@@ -1049,7 +976,7 @@ export function NoteSourceModal({
    * added to the demo library.
    */
   async function createDemoNote(
-    kind: "record" | "upload" | "text" | "pdf" | "photo" | "link",
+    kind: "record" | "upload" | "pdf" | "photo" | "link",
     stages: string[],
   ) {
     cancelRequestedRef.current = false;
@@ -1146,7 +1073,6 @@ export function NoteSourceModal({
       const result = await createAudioLectureWithProcessingChunks({
         file: audioSource.file,
         durationSeconds: Math.max(audioSource.durationSeconds, 1),
-        languageHint,
         createInitialAudio,
         initialAudioVoice: getInitialAudioVoice(),
         normalizeBeforeUpload: audioSource.origin === "recording",
@@ -1179,74 +1105,6 @@ export function NoteSourceModal({
           submitError instanceof Error
             ? submitError.message
             : "Zvočnega zapiska ni bilo mogoče ustvariti.",
-        );
-      }
-    } finally {
-      activeRequestControllerRef.current = null;
-      setBusyLabel(null);
-      setIsCancelling(false);
-    }
-  }
-
-  async function createTextLecture() {
-    if (combinedTextSource.length < 120) {
-      setError("Prilepi vsaj krajši vzorec besedila.");
-      return;
-    }
-
-    if (isCreatorDemo) {
-      await createDemoNote("text", ["Pripravljam...", "Dodajam v vrsto..."]);
-      return;
-    }
-
-    try {
-      setBusyLabel("Pripravljam...");
-      setError(null);
-      cancelRequestedRef.current = false;
-      const lectureId = await createManualLecture("text");
-
-      if (cancelRequestedRef.current) {
-        await deleteCreatedLecture();
-        return;
-      }
-
-      const controller = new AbortController();
-      activeRequestControllerRef.current = controller;
-      setBusyLabel("Dodajam v vrsto...");
-
-      const response = await fetch("/api/lectures/text", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          lectureId,
-          text: combinedTextSource,
-          languageHint,
-          createInitialAudio,
-          initialAudioVoice: getInitialAudioVoice(),
-        }),
-      });
-
-      await parseApiResponse<{ lectureId: string }>(response);
-
-      onClose();
-      createdLectureIdRef.current = null;
-      navigateWithFeedback(`/app/lectures/${lectureId}`);
-      router.refresh();
-    } catch (submitError) {
-      await deleteCreatedLecture();
-      if (redirectToBillingIfNeeded({ error: submitError, router })) {
-        onClose();
-        return;
-      }
-
-      if (!cancelRequestedRef.current) {
-        setError(
-          submitError instanceof Error
-            ? submitError.message
-            : "Besedilnega zapiska ni bilo mogoče ustvariti.",
         );
       }
     } finally {
@@ -1356,10 +1214,10 @@ export function NoteSourceModal({
           "Dodajanje fotografij v obdelavo traja predolgo. Osveži stran in poskusi znova.",
         body: JSON.stringify({
           lectureId,
-          languageHint,
           createInitialAudio,
           initialAudioVoice: getInitialAudioVoice(),
-          text: combinedTextSource,
+          // The photos are the whole source now — the sheet no longer takes pasted text.
+          text: "",
           images: filesForUpload.map(({ file, index, mimeType }) => {
             const uploadTarget = uploadTargetsByIndex.get(index);
 
@@ -1445,7 +1303,6 @@ export function NoteSourceModal({
         body: JSON.stringify({
           lectureId,
           url: trimmedLinkValue,
-          languageHint,
           createInitialAudio,
           initialAudioVoice: getInitialAudioVoice(),
         }),
@@ -1587,10 +1444,8 @@ export function NoteSourceModal({
     const canUseNativeHeicPreview = canPreviewHeicNatively();
     const nextPhotoSources = preparedFiles.map((file) => createPhotoSource(file, canUseNativeHeicPreview));
 
-    setPdfSource(null);
     setPhotoSources((current) => [...current, ...nextPhotoSources]);
     setError(null);
-    setIsTextEditorOpen(false);
 
     const heicPhotoSources = nextPhotoSources.filter(
       (photoSource) => photoSource.previewStatus === "queued",
@@ -1624,12 +1479,6 @@ export function NoteSourceModal({
     }
 
     setPdfSource(preparedFile);
-    setPhotoSources((current) => {
-      current.forEach((photoSource) => revokePhotoSourcePreviewUrls(photoSource));
-      return [];
-    });
-    setActivePhotoPreviewId(null);
-    setTextValue("");
     setError(null);
   }
 
@@ -1705,7 +1554,19 @@ export function NoteSourceModal({
       return;
     }
 
+    // One source per note: a staged document is replaced only by removing it first, and a
+    // document never lands on top of staged photos.
+    if (pdfSource) {
+      setError("Dodaš lahko en dokument. Odstrani izbranega, če želiš naložiti drugega.");
+      return;
+    }
+
     const allImages = files.every((file) => isScanPhotoFile(file));
+
+    if (!allImages && photoSources.length > 0) {
+      setError("Odstrani naložene fotografije, če želiš namesto njih naložiti dokument.");
+      return;
+    }
 
     try {
       if (allImages) {
@@ -1821,8 +1682,7 @@ export function NoteSourceModal({
       formData.append("lectureId", lectureId);
       formData.append("file", uploadFile);
       formData.append("originalFileName", pdfSource.name);
-      formData.append("languageHint", languageHint);
-      formData.append("createInitialAudio", String(createInitialAudio));
+        formData.append("createInitialAudio", String(createInitialAudio));
       formData.append("initialAudioVoice", getInitialAudioVoice());
 
       const controller = new AbortController();
@@ -1862,26 +1722,45 @@ export function NoteSourceModal({
     }
   }
 
+  /**
+   * The redesign's action row: Prekliči beside the primary call to action.
+   * While a request is in flight the row collapses to a single Prekliči, which
+   * cancels that request rather than closing the sheet — the existing
+   * behaviour, and the more useful one at that moment.
+   */
+  function renderModalActions(primary: React.ReactNode) {
+    if (busyLabel) {
+      return (
+        <div className="memo-modal-actions">
+          <button
+            type="button"
+            className="ios-secondary-button wide"
+            disabled={isCancelling}
+            onClick={() => void handleCancelBusyAction()}
+          >
+            {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Prekliči
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="memo-modal-actions">
+        <button type="button" className="ios-secondary-button" onClick={requestClose}>
+          Prekliči
+        </button>
+        {primary}
+      </div>
+    );
+  }
+
   function renderBusyOrGenerateButton(params: {
     canGenerate: boolean;
     onGenerate: () => void;
     generateIcon: string;
   }) {
-    if (busyLabel) {
-      return (
-        <button
-          type="button"
-          className="ios-secondary-button"
-          disabled={isCancelling}
-          onClick={() => void handleCancelBusyAction()}
-        >
-          {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          Prekliči
-        </button>
-      );
-    }
-
-    return (
+    return renderModalActions(
       <button
         type="button"
         className="ios-primary-button"
@@ -1895,22 +1774,111 @@ export function NoteSourceModal({
           params.onGenerate();
         }}
       >
-        <EmojiIcon symbol={params.generateIcon} size="1rem" />
-        Ustvari
-      </button>
+        Ustvari zapisek
+      </button>,
     );
   }
 
+  /**
+   * Whatever source is already staged for this mode, drawn as one card.
+   *
+   * It heads the screen rather than sitting among the options, because it is
+   * the answer to what the screen is asking: everything below it — the audio
+   * switch, the picker, the actions — is about that file.
+   */
+  function renderPreparedSourceCard() {
+    if (selectedMode === "record" && preparedRecording) {
+      return (
+        <div className="ios-card note-source-prepared-card">
+          <p className="note-source-card-label">Pripravljen posnetek</p>
+          <p className="ios-row-title mt-3">{preparedRecording.file.name}</p>
+          <p className="ios-row-subtitle">
+            {formatTimestamp(preparedRecording.durationSeconds * 1000)}
+          </p>
+        </div>
+      );
+    }
+
+    if (selectedMode === "upload" && preparedUpload) {
+      return (
+        <div className="ios-card note-source-prepared-card">
+          <p className="note-source-card-label">Izbrana datoteka</p>
+          <p className="ios-row-title mt-3">{preparedUpload.file.name}</p>
+          <p className="ios-row-subtitle">
+            {formatTimestamp(preparedUpload.durationSeconds * 1000)}
+          </p>
+          {isCreatorDemo ? null : (
+            <button
+              type="button"
+              className="note-source-prepared-remove"
+              disabled={Boolean(busyLabel)}
+              onClick={clearAudioSource}
+              aria-label="Odstrani izbrano datoteko"
+              title="Odstrani izbrano datoteko"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    if (selectedMode === "text" && pdfSource) {
+      return (
+        <div className="ios-card note-source-docs-file-card note-source-prepared-card">
+          <p className="note-source-card-label">Izbran dokument</p>
+          <p className="ios-row-title note-source-docs-file-name">{pdfSource.name}</p>
+          <p className="ios-row-subtitle note-source-docs-file-copy">
+            Iz njega nastane zapisek. Odstrani ga, če želiš naložiti drugega.
+          </p>
+          {isCreatorDemo ? null : (
+            <button
+              type="button"
+              className="note-source-prepared-remove"
+              disabled={Boolean(busyLabel)}
+              onClick={() => {
+                setPdfSource(null);
+                setError(null);
+              }}
+              aria-label="Odstrani izbran dokument"
+              title="Odstrani izbran dokument"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    return null;
+  }
+
+  /**
+   * Opting into the read-aloud audio up front. Kept from production — the note
+   * screen's listen dock has nothing to play without it — and dressed as the
+   * redesign's switch row.
+   */
   function renderInitialAudioOption() {
     return (
-      <label className="note-source-audio-option">
-        <input
-          type="checkbox"
-          checked={createInitialAudio}
-          onChange={(event) => setCreateInitialAudio(event.target.checked)}
-        />
-        <span>Ustvari zvok</span>
-      </label>
+      <div className="memo-capture-row static">
+        <span className="memo-capture-row-tile">
+          <Emoji symbol="🎧" size="1.15rem" />
+        </span>
+        <span className="memo-capture-row-copy">
+          <span>Ustvari zvok</span>
+          <span>Da lahko zapiske tudi poslušaš.</span>
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={createInitialAudio}
+          aria-label="Ustvari zvok"
+          className={`memo-switch ${createInitialAudio ? "on" : ""}`.trim()}
+          onClick={() => setCreateInitialAudio(!createInitialAudio)}
+        >
+          <span />
+        </button>
+      </div>
     );
   }
 
@@ -1919,18 +1887,29 @@ export function NoteSourceModal({
       return null;
     }
 
+    /*
+     * The same stage caption and bar the note screen uses while the pipeline
+     * runs, so uploading a source and generating from it read as one wait
+     * rather than as two unrelated screens. The blue spinner this replaced was
+     * the last of the pre-redesign palette left in the sheet.
+     */
     return (
-      <div className="note-source-loading-state" aria-live="polite">
-        <div className="note-source-busy-row">
-          <Loader2 className="h-4 w-4 animate-spin note-source-loading-spinner" />
-          <p className="note-source-busy-title">{busyLabel}</p>
-        </div>
-        <p className="note-source-busy-copy">
+      <div
+        className="note-source-loading-state memo-gen-head"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <p className="memo-gen-stage">{busyLabel}</p>
+        <p className="memo-gen-copy">
           Ne zapiraj tega zaslona. Ko bo vse pripravljeno, se bo zaprl samodejno.
         </p>
+        <span className="memo-gen-track" aria-hidden="true">
+          <span />
+        </span>
         <button
           type="button"
-          className="ios-secondary-button"
+          className="ios-secondary-button note-source-busy-cancel"
           disabled={isCancelling}
           onClick={() => void handleCancelBusyAction()}
         >
@@ -1955,7 +1934,7 @@ export function NoteSourceModal({
   const modalContent = (
     <>
       <div
-        className="ios-sheet-backdrop note-source-modal-backdrop"
+        className={sheetClass("ios-sheet-backdrop note-source-modal-backdrop", sourceSheet.closing)}
         onClick={requestClose}
         aria-hidden="true"
       />
@@ -1967,14 +1946,20 @@ export function NoteSourceModal({
       >
         <div className="ios-sheet-stack note-source-modal-stack">
           <section
-            className="ios-sheet note-source-sheet note-source-modal mobile-draggable-sheet"
+            className={sheetClass(
+              "ios-sheet note-source-sheet note-source-modal mobile-draggable-sheet",
+              sourceSheet.closing,
+            )}
             onPointerDown={handleSourceSheetPointerDown}
             onClickCapture={handleSourceSheetClickCapture}
             onDragOver={handleFileDragOver}
             onDrop={handleSheetDrop}
+            data-dragging={
+              sourceSheetDragOffset > 0 && !sourceSheet.closing ? "true" : undefined
+            }
             style={
-              sourceSheetDragOffset > 0
-                ? { transform: `translateY(${sourceSheetDragOffset}px)` }
+              sourceSheetDragOffset > 0 && !sourceSheet.closing
+                ? { transform: `translateY(${sourceSheetDragOffset}px)`, transition: "none" }
                 : undefined
             }
           >
@@ -1982,16 +1967,21 @@ export function NoteSourceModal({
               type="button"
               className="mobile-sheet-drag-handle note-source-modal-drag-handle"
               aria-label="Povleci navzdol za zapiranje"
+              data-drag-handle
             />
             <div className="ios-sheet-header note-source-header">
-              <div className="note-source-header-main">
-                {/* No back button: the close button and the drag-down gesture
-                    both route through requestClose, which steps back out of the
-                    guide to the audio options rather than closing the sheet. */}
-                <h2 className="ios-sheet-title">
-                  {showAudioImportGuide ? "Uvozi zvok iz telefona" : sheetTitle(selectedMode)}
-                </h2>
-              </div>
+              <span className="memo-modal-tile">
+                <Emoji
+                  symbol={showAudioImportGuide ? "📱" : modeEmoji(selectedMode)}
+                  size="1.3rem"
+                />
+              </span>
+              {/* No back button: the close button and the drag-down gesture
+                  both route through requestClose, which steps back out of the
+                  guide to the audio options rather than closing the sheet. */}
+              <h2 className="ios-sheet-title">
+                {showAudioImportGuide ? "Uvozi zvok iz telefona" : sheetTitle(selectedMode)}
+              </h2>
               <button
                 type="button"
                 onClick={requestClose}
@@ -1999,7 +1989,7 @@ export function NoteSourceModal({
                 className="app-close-button ios-sheet-header-close"
                 aria-label="Zapri"
               >
-                <EmojiIcon symbol="✖️" size="1rem" />
+                <Msym name="close" size="1.45rem" fill={false} weight={500} />
               </button>
             </div>
 
@@ -2062,25 +2052,19 @@ export function NoteSourceModal({
                     Za predavanje uporabi sistemski snemalnik. Zvok shrani v Datoteke. Nato ga tukaj v zavihku za nalaganje pretvori v zapiske.
                   </p>
                 </section>
+
+                <div className="memo-modal-actions">
+                  <button
+                    type="button"
+                    className="ios-secondary-button wide"
+                    onClick={() => setShowAudioImportGuide(false)}
+                  >
+                    Nazaj
+                  </button>
+                </div>
               </div>
             ) : (
               <>
-                {!isRecording ? (
-                  <div className="mt-6 ios-segmented note-source-segmented">
-                    {MODES.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setSelectedMode(item.id)}
-                        className={`ios-segment ${selectedMode === item.id ? "active" : ""}`}
-                        aria-label={item.label}
-                        title={item.label}
-                      >
-                        <EmojiIcon symbol={item.icon} size="1.05rem" />
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
                 <div
                   className={cn(
                     "mt-6 space-y-4 note-source-modal-body",
@@ -2090,87 +2074,68 @@ export function NoteSourceModal({
                       "note-source-modal-body-photos",
                   )}
                 >
+                  {renderPreparedSourceCard()}
+
                   {selectedMode === "record" && !isRecording ? (
                     <button
                       type="button"
-                      className="ios-card note-source-guide-entry"
+                      className="memo-capture-row"
                       onClick={() => setShowAudioImportGuide(true)}
                     >
-                      <div className="note-source-guide-entry-copy">
-                        <p className="note-source-guide-entry-title">
-                          Kako lahko snemaš tudi z ugasnjenim telefonom?
-                        </p>
-                        <p className="note-source-guide-entry-text">
-                          Shrani posnetek in ga tukaj naloži kasneje.
-                        </p>
-                      </div>
-                      <span className="note-source-guide-entry-arrow" aria-hidden="true">
-                        ›
+                      <span className="memo-capture-row-tile">
+                        <Emoji symbol="📱" size="1.15rem" />
                       </span>
+                      <span className="memo-capture-row-copy">
+                        <span>Kako snemaš z ugasnjenim telefonom?</span>
+                        <span>Shrani posnetek in ga tukaj naloži kasneje.</span>
+                      </span>
+                      <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
                     </button>
-                  ) : null}
-
-                  {!isRecording ? (
-                    <div>
-                      <label className="note-source-field-label">
-                        Jezik
-                      </label>
-                      <div className="relative note-source-select-wrap">
-                        <select
-                          value={languageHint}
-                          onChange={(event) => setLanguageHint(event.target.value)}
-                          className="ios-select appearance-none pr-10"
-                        >
-                          {NOTE_LANGUAGE_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--secondary-label)]" />
-                      </div>
-                    </div>
                   ) : null}
 
                   {!isRecording ? renderInitialAudioOption() : null}
 
                   {selectedMode === "record" ? (
                     <>
-                      {preparedRecording ? (
-                        <div className="ios-card">
-                          <p className="note-source-card-label">Pripravljen posnetek</p>
-                          <p className="ios-row-title mt-3">{preparedRecording.file.name}</p>
-                          <p className="ios-row-subtitle">
-                            {formatTimestamp(preparedRecording.durationSeconds * 1000)}
-                          </p>
-                        </div>
-                      ) : null}
-
-                      {isRecording ? (
-                        <div className="ios-card">
-                          <p className="note-source-card-label">Snemanje</p>
-                          <p className="ios-row-title mt-3">
-                            {isPaused ? "Snemanje je začasno ustavljeno" : "Snemanje poteka"}
-                          </p>
-                          <p className="ios-row-subtitle">
+                      {/* The design draws the orb, the clock and the hint for
+                          the whole of the record screen — it has no separate
+                          "before you start" state, because its timer runs from
+                          the moment the screen opens. Here the microphone has
+                          to be asked for first, so the same screen sits at
+                          0:00 until it is. */}
+                      {preparedRecording ? null : (
+                        <div className="memo-record">
+                          <div className={`memo-record-orb ${isPaused ? "paused" : ""}`.trim()}>
+                            <span className="ring" />
+                            <span className="halo" />
+                            <span className="core">
+                              <Msym name="mic" className="memo-record-orb-mic" fill />
+                            </span>
+                          </div>
+                          <span className="memo-record-clock">
                             {formatTimestamp(elapsedSeconds * 1000)}
-                          </p>
-                          <div className="mt-4 px-4 py-4 text-[var(--label)]">
+                          </span>
+                          {/* The real input level, rather than the artboard's
+                              decorative bars. */}
+                          {isRecording ? (
                             <LiveAudioWave
                               stream={visualizerStream}
-                              active={isRecording && !isPaused}
-                              className="mx-auto max-w-[14rem]"
+                              active={!isPaused}
+                              className="memo-record-wave"
                             />
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {isRecording ? (
-                        <div className="note-source-recording-actions">
+                          ) : null}
+                          <span className="memo-record-hint">
+                            {!isRecording
+                              ? "Pritisni Začni snemanje, ko se predavanje začne."
+                              : isPaused
+                                ? "Snemanje je začasno ustavljeno"
+                                : "Snemanje poteka – zapisek nastane, ko ustaviš."}
+                          </span>
+                          {isRecording ? (
                           <button
                             type="button"
                             disabled={Boolean(busyLabel)}
-                            className="ios-secondary-button"
+                            className="memo-record-pause"
                             onClick={() => {
                               if (busyLabel) {
                                 return;
@@ -2184,10 +2149,25 @@ export function NoteSourceModal({
                               pauseRecording();
                             }}
                           >
-                            <EmojiIcon symbol={isPaused ? "▶️" : "⏸️"} size="1rem" />
-                            {isPaused ? "Nadaljuj snemanje" : "Začasno ustavi snemanje"}
+                            <Msym name={isPaused ? "play_arrow" : "pause"} size="1.15rem" />
+                            {isPaused ? "Nadaljuj snemanje" : "Začasno ustavi"}
                           </button>
+                          ) : null}
+                        </div>
+                      )}
 
+                      {isRecording ? (
+                        <div className="memo-modal-actions">
+                          {/* The design pairs Prekliči with the call to action.
+                              Pausing has no counterpart there, so it keeps its
+                              own round control beside the orb. */}
+                          <button
+                            type="button"
+                            className="ios-secondary-button"
+                            onClick={requestClose}
+                          >
+                            Prekliči
+                          </button>
                           <button
                             type="button"
                             disabled={Boolean(busyLabel)}
@@ -2200,12 +2180,8 @@ export function NoteSourceModal({
                               void stopRecording();
                             }}
                           >
-                            {busyLabel ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <EmojiIcon symbol="🎙️" size="1rem" />
-                            )}
-                            {busyLabel ?? "Ustavi snemanje"}
+                            {busyLabel ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                            {busyLabel ?? "Ustavi in ustvari zapisek"}
                           </button>
                         </div>
                       ) : null}
@@ -2235,35 +2211,30 @@ export function NoteSourceModal({
                       ) : null}
 
                       {!isRecording && !preparedRecording ? (
-                        <button
-                          type="button"
-                          disabled={Boolean(busyLabel)}
-                          className="ios-primary-button"
-                          onClick={() => void startRecording()}
-                        >
-                          {busyLabel ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <EmojiIcon symbol="🎙️" size="1rem" />
-                          )}
-                          {busyLabel ?? "Začni snemanje"}
-                        </button>
+                        <div className="memo-modal-actions">
+                          <button
+                            type="button"
+                            className="ios-secondary-button"
+                            onClick={requestClose}
+                          >
+                            Prekliči
+                          </button>
+                          <button
+                            type="button"
+                            disabled={Boolean(busyLabel)}
+                            className="ios-primary-button"
+                            onClick={() => void startRecording()}
+                          >
+                            {busyLabel ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                            {busyLabel ?? "Začni snemanje"}
+                          </button>
+                        </div>
                       ) : null}
                     </>
                   ) : null}
 
                   {selectedMode === "upload" ? (
                     <>
-                      {preparedUpload ? (
-                        <div className="ios-card">
-                          <p className="note-source-card-label">Izbrana datoteka</p>
-                          <p className="ios-row-title mt-3">{preparedUpload.file.name}</p>
-                          <p className="ios-row-subtitle">
-                            {formatTimestamp(preparedUpload.durationSeconds * 1000)}
-                          </p>
-                        </div>
-                      ) : null}
-
                       <input
                         ref={uploadInputRef}
                         type="file"
@@ -2272,11 +2243,11 @@ export function NoteSourceModal({
                         className="hidden"
                       />
 
-                      {isCreatorDemo ? null : (
+                      {isCreatorDemo || preparedUpload ? null : (
                         <button
                           type="button"
                           disabled={Boolean(busyLabel)}
-                          className="ios-secondary-button"
+                          className="memo-dropzone"
                           onClick={() => {
                             if (!canCreateNotes) {
                               redirectToPaywall();
@@ -2286,8 +2257,12 @@ export function NoteSourceModal({
                             uploadInputRef.current?.click();
                           }}
                         >
-                          <EmojiIcon symbol="📤" size="1rem" />
-                          {preparedUpload ? "Izberi drugo zvočno datoteko" : "Izberi zvočno datoteko"}
+                          <Msym name="cloud_upload" className="memo-dropzone-icon" />
+                          <span className="memo-dropzone-lead">Izberi datoteko</span>
+                          <span className="memo-dropzone-title">MP3, M4A, WAV ali WEBM</span>
+                          <span className="memo-dropzone-hint">
+                            povleci sem ali klikni Izberi datoteko
+                          </span>
                         </button>
                       )}
 
@@ -2305,8 +2280,7 @@ export function NoteSourceModal({
                         <label className="note-source-field-label">
                           Povezava
                         </label>
-                        <div className="ios-search">
-                          <EmojiIcon symbol="🔎" size="0.95rem" />
+                        <div className="ios-search note-source-link-field">
                           <input
                             value={linkValue}
                             readOnly={isCreatorDemo}
@@ -2342,32 +2316,7 @@ export function NoteSourceModal({
 
                   {selectedMode === "text" ? (
                     <>
-                      {pdfSource ? (
-                        <div className="ios-card note-source-docs-file-card">
-                          <p className="note-source-card-label">Izbran dokument</p>
-                          <p className="ios-row-title note-source-docs-file-name">{pdfSource.name}</p>
-                          <p className="ios-row-subtitle note-source-docs-file-copy">
-                            Uporabljen bo, dokler ponovno ne začneš tipkati.
-                          </p>
-                        </div>
-                      ) : null}
-
-                      {!pdfSource && photoSources.length === 0 ? (
-                        <div className="note-source-docs-textarea-wrap">
-                          <textarea
-                            ref={inlineTextAreaRef}
-                            value={textValue}
-                            readOnly={isCreatorDemo}
-                            onChange={(event) => {
-                              setTextValue(event.target.value);
-                            }}
-                            className="ios-textarea note-source-inline-textarea"
-                            placeholder="Sem prilepi zapiske ali besedilo..."
-                          />
-                        </div>
-                      ) : null}
-
-                      {!pdfSource && photoSources.length > 0 ? (
+                      {photoSources.length > 0 ? (
                         <div className="note-source-photo-previews" aria-label="Naložene fotografije">
                           <p className="ios-row-subtitle note-source-docs-file-copy note-source-docs-status-copy">
                             {formatUploadedPhotoCount(photoSources.length)}
@@ -2426,7 +2375,9 @@ export function NoteSourceModal({
                       <input
                         ref={pdfInputRef}
                         type="file"
-                        accept={DOCUMENT_OR_IMAGE_INPUT_ACCEPT}
+                        accept={
+                          hasPhotoSources ? SCAN_IMAGE_INPUT_ACCEPT : DOCUMENT_OR_IMAGE_INPUT_ACCEPT
+                        }
                         multiple
                         onChange={handlePdfPick}
                         className="hidden"
@@ -2442,11 +2393,11 @@ export function NoteSourceModal({
                         className="hidden"
                       />
 
-                      {isCreatorDemo ? null : (
+                      {isCreatorDemo || !canAddDocumentSource ? null : (
                         <div className="note-source-docs-actions note-source-docs-actions-bottom">
                           <button
                             type="button"
-                            className="ios-secondary-button note-source-docs-action-button"
+                            className="memo-dropzone"
                             disabled={Boolean(busyLabel)}
                             onClick={() => {
                               if (!canCreateNotes) {
@@ -2457,8 +2408,18 @@ export function NoteSourceModal({
                               pdfInputRef.current?.click();
                             }}
                           >
-                            <EmojiIcon symbol="📤" size="1rem" />
-                            Datoteka
+                            <Msym name="cloud_upload" className="memo-dropzone-icon" />
+                            <span className="memo-dropzone-lead">
+                              {hasPhotoSources ? "Dodaj fotografije" : "Izberi datoteko"}
+                            </span>
+                            <span className="memo-dropzone-title">
+                              {hasPhotoSources
+                                ? `Do ${MAX_SCAN_IMAGE_COUNT} fotografij skupaj`
+                                : "PDF, DOCX, PPTX ali slika"}
+                            </span>
+                            <span className="memo-dropzone-hint">
+                              povleci sem ali klikni {hasPhotoSources ? "Dodaj fotografije" : "Izberi datoteko"}
+                            </span>
                           </button>
 
                           <button
@@ -2474,7 +2435,7 @@ export function NoteSourceModal({
                               scanInputRef.current?.click();
                             }}
                           >
-                            <EmojiIcon symbol="📷" size="1rem" />
+                            <Msym name="photo_camera" />
                             Skeniraj
                           </button>
                         </div>
@@ -2488,12 +2449,7 @@ export function NoteSourceModal({
                             return;
                           }
 
-                          if (photoSources.length > 0) {
-                            void createPhotoLecture();
-                            return;
-                          }
-
-                          void createTextLecture();
+                          void createPhotoLecture();
                         },
                         generateIcon: "📄",
                       })}
@@ -2559,122 +2515,13 @@ export function NoteSourceModal({
           </div>
         </div>
       ) : null}
-
-      {selectedMode === "text" && isTextEditorOpen ? (
-        <>
-          <div
-            className="ios-sheet-backdrop note-source-subsheet-backdrop"
-            onClick={() => setIsTextEditorOpen(false)}
-            aria-hidden="true"
-          />
-          <div
-            className={`ios-sheet-wrap note-source-subsheet-wrap ${
-              textEditorKeyboardOffset > 0 ? "keyboard-open" : ""
-            }`}
-            style={
-              {
-                "--text-editor-keyboard-offset": `${textEditorKeyboardOffset}px`,
-              } as CSSProperties
-            }
-            role="presentation"
-          >
-            <div className="ios-sheet-stack note-source-subsheet-stack">
-              <section
-                className="ios-sheet dashboard-note-dialog note-source-subsheet"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="paste-text-title"
-              >
-                <div className="ios-sheet-header">
-                  <h2 id="paste-text-title" className="ios-sheet-title">
-                    Prilepi besedilo
-                  </h2>
-                  <button
-                    type="button"
-                    className="app-close-button ios-sheet-header-close"
-                    onClick={() => setIsTextEditorOpen(false)}
-                    aria-label="Zapri okno za lepljenje besedila"
-                    disabled={Boolean(busyLabel)}
-                  >
-                    <EmojiIcon symbol="✖️" size="1rem" />
-                  </button>
-                </div>
-
-                <div className="dashboard-note-dialog-body">
-                  <p className="ios-subtitle dashboard-note-dialog-copy">
-                    Sem prilepi zapiske predavanja, prosojnice ali besedilo članka. Fotografije
-                    ostanejo naložene ločeno.
-                  </p>
-
-                  <textarea
-                    value={textValue}
-                    readOnly={isCreatorDemo}
-                    onChange={(event) => {
-                      const nextValue = event.target.value;
-
-                      if (pdfSource && nextValue.trim().length > 0) {
-                        setPdfSource(null);
-                      }
-                      setTextValue(nextValue);
-                    }}
-                    className="ios-textarea note-source-subsheet-textarea"
-                    placeholder="Prilepi vsebino predavanja ali članka..."
-                    autoFocus
-                  />
-
-                  <div className="dashboard-note-dialog-actions">
-                    <button
-                      type="button"
-                      className="ios-primary-button"
-                      disabled={Boolean(busyLabel)}
-                      onClick={() => setIsTextEditorOpen(false)}
-                    >
-                      Končano
-                    </button>
-                    {textValue.trim().length > 0 ? (
-                      <button
-                        type="button"
-                        className="ios-secondary-button"
-                        disabled={Boolean(busyLabel)}
-                        onClick={() => {
-                          setTextValue("");
-                        }}
-                      >
-                        Počisti besedilo
-                      </button>
-                    ) : null}
-                    {photoSources.length > 0 ? (
-                      <button
-                        type="button"
-                        className="ios-secondary-button"
-                        disabled={Boolean(busyLabel)}
-                        onClick={() => {
-                          setPhotoSources((current) => {
-                            current.forEach((photoSource) => {
-                              revokePhotoSourcePreviewUrls(photoSource);
-                            });
-                            return [];
-                          });
-                          setActivePhotoPreviewId(null);
-                        }}
-                      >
-                        Počisti fotografije
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              </section>
-            </div>
-          </div>
-        </>
-      ) : null}
     </>
   );
 
   return (
     <>
       {navigationOverlay}
-      <ViewportPortal>{modalContent}</ViewportPortal>
+      <MemoPortal>{modalContent}</MemoPortal>
     </>
   );
 }

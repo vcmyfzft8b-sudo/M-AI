@@ -1,75 +1,36 @@
 "use client";
 
-import { ChevronLeft } from "lucide-react";
-import { useEffect, useRef, useState, startTransition } from "react";
+import Image from "next/image";
+import { useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
-import { BrandLogo } from "@/components/brand-logo";
+import { AppLayoutProvider } from "@/components/app-layout-context";
 import { useCreatorDemoBasePath } from "@/components/creator-demo/creator-demo-context";
-import { EmojiIcon } from "@/components/emoji-icon";
 import { InstantLink } from "@/components/instant-link";
+import { Msym } from "@/components/msym";
 import {
   shouldHandleLinkNavigation,
   useInstantNavigation,
 } from "@/components/navigation-loading";
-import { BRAND_NAME } from "@/lib/brand";
+import {
+  BRAND_LOCKUP_HEIGHT,
+  BRAND_LOCKUP_SRC,
+  BRAND_LOCKUP_WIDTH,
+  SEO_BRAND_NAME,
+} from "@/lib/brand";
 import { unmapDemoPathname } from "@/lib/creator-demo/paths";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 
-const TAB_ITEMS = [
-  { href: "/app", displayLabel: "Domov", icon: "🏠" },
-  { href: "/app/support", displayLabel: "Pomoč", icon: "❓" },
-  { href: "/app/settings", displayLabel: "Nastavitve", icon: "⚙️" },
+/**
+ * The desktop rail. The phone design has no persistent navigation at all —
+ * Pomoč and Nastavitve are reached from the gear on the home screen — so this
+ * only renders from 1100px up.
+ */
+const RAIL_ITEMS = [
+  { href: "/app", label: "Domov", icon: "home" },
+  { href: "/app/support", label: "Pomoč", icon: "help" },
+  { href: "/app/settings", label: "Nastavitve", icon: "settings" },
 ];
-const PULL_REFRESH_SPOKES = Array.from({ length: 8 }, (_, index) => index);
-
-function getChrome(pathname: string) {
-  if (pathname === "/app/start") {
-    return {
-      title: "Začni",
-      subtitle: "Prilagodi aplikacijo in izberi paket",
-      backHref: null,
-    };
-  }
-
-  if (pathname.startsWith("/app/lectures/")) {
-    return {
-      title: "Zapisek",
-      subtitle: "Preglej in klepetaj o vsebini",
-      backHref: "/app",
-    };
-  }
-
-  if (pathname.startsWith("/app/support/") && pathname !== "/app/support") {
-    return {
-      title: "Pomoč",
-      subtitle: "Vodnik za uporabo",
-      backHref: "/app/support",
-    };
-  }
-
-  if (pathname === "/app/support") {
-    return {
-      title: "Pomoč",
-      subtitle: "Vodniki",
-      backHref: null,
-    };
-  }
-
-  if (pathname === "/app/settings") {
-    return {
-      title: "Nastavitve",
-      subtitle: "Tema in račun",
-      backHref: null,
-    };
-  }
-
-  return {
-    title: "Zapiski",
-    subtitle: "Celotna knjižnica na enem mestu",
-    backHref: null,
-  };
-}
 
 export function AppShell({
   children,
@@ -84,255 +45,35 @@ export function AppShell({
   className?: string;
 }) {
   const demoBasePath = useCreatorDemoBasePath();
-  const clientPathname = unmapDemoPathname(usePathname(), demoBasePath);
+  const clientPathname = usePathname();
   const router = useRouter();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
-  const [pathname, setPathname] = useState(() =>
-    unmapDemoPathname(initialPathname, demoBasePath),
-  );
-  const [pullDistance, setPullDistance] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isPulling, setIsPulling] = useState(false);
-  const [isMobileDockOpen, setIsMobileDockOpen] = useState(false);
-  const touchStartYRef = useRef<number | null>(null);
-  const pullEligibleRef = useRef(false);
-  const pullDistanceRef = useRef(0);
-  const mobileDockRef = useRef<HTMLElement | null>(null);
-  const shouldHideNavigation = pathname === "/app/start";
-  const chrome = getChrome(pathname);
-  const backHref = chrome.backHref;
-  const isHomePage = pathname === "/app";
-  const createHref = "/app?mode=record";
-  const subscribeHref = "/app/start";
-  const showCreateCta = !shouldHideNavigation;
-  const showSubscribeCta = !hasPaidAccess && showCreateCta && isHomePage;
-  const subscribeLabel = "Kupi";
-  const pullThreshold = 168;
-  const cappedPullDistance = Math.min(pullDistance, 220);
-  const isLecturePage = pathname.startsWith("/app/lectures/");
+
+  // `usePathname` is null on the very first server-rendered pass in some
+  // contexts, so the header-provided path seeds it.
+  const pathname = unmapDemoPathname(clientPathname ?? initialPathname, demoBasePath);
+
+  const isOnboarding = pathname === "/app/start";
+  const isNote = pathname.startsWith("/app/lectures/");
+  const isHome = pathname === "/app";
 
   useEffect(() => {
-    setPathname(clientPathname);
-  }, [clientPathname]);
-
-  useEffect(() => {
-    for (const item of TAB_ITEMS) {
+    for (const item of RAIL_ITEMS) {
       safeRouterPrefetch(router, item.href);
     }
   }, [router]);
 
-  useEffect(() => {
-    if (typeof document === "undefined") {
-      return;
-    }
-
-    document.body.dataset.mobileDockOpen = isMobileDockOpen ? "true" : "false";
-    return () => {
-      delete document.body.dataset.mobileDockOpen;
-    };
-  }, [isMobileDockOpen]);
-
-  useEffect(() => {
-    function handleMobileDockClose() {
-      setIsMobileDockOpen(false);
-    }
-
-    window.addEventListener("memoai:mobile-dock-close", handleMobileDockClose);
-    return () => {
-      window.removeEventListener("memoai:mobile-dock-close", handleMobileDockClose);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isMobileDockOpen) {
-      return;
-    }
-
-    function handlePointerDown(event: PointerEvent) {
-      const target = event.target;
-
-      if (
-        target instanceof Node &&
-        mobileDockRef.current?.contains(target)
-      ) {
-        return;
-      }
-
-      setIsMobileDockOpen(false);
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown, true);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown, true);
-    };
-  }, [isMobileDockOpen]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const mobileBreakpoint = 1100;
-
-    const resetGesture = () => {
-      touchStartYRef.current = null;
-      pullEligibleRef.current = false;
-      pullDistanceRef.current = 0;
-      setIsPulling(false);
-      setPullDistance(0);
-    };
-
-    function isScrollableAtTop(target: EventTarget | null) {
-      let node = target instanceof HTMLElement ? target : null;
-
-      while (node && node !== document.body) {
-        const style = window.getComputedStyle(node);
-        const canScrollY =
-          (style.overflowY === "auto" || style.overflowY === "scroll") &&
-          node.scrollHeight > node.clientHeight;
-
-        if (canScrollY) {
-          return node.scrollTop <= 0;
-        }
-
-        node = node.parentElement;
-      }
-
-      return window.scrollY <= 0;
-    }
-
-    const mobileSheetSelector =
-      ".mobile-create-menu, .mobile-create-menu-backdrop, .library-folder-mobile-sheet, .library-folder-mobile-sheet-backdrop, .library-folder-modal, .library-folder-modal-overlay, .note-read-usage-popover, .note-read-usage-mobile-backdrop, .dashboard-note-dialog, .dashboard-note-dialog-backdrop, .study-manager-sheet, .study-manager-backdrop, .note-source-modal-wrap, .note-source-modal-backdrop";
-
-    function hasActiveMobileSheet() {
-      return window.innerWidth < mobileBreakpoint && Boolean(document.querySelector(mobileSheetSelector));
-    }
-
-    function isInsideMobileSheet(target: EventTarget | null) {
-      return (
-        target instanceof HTMLElement &&
-        Boolean(target.closest(mobileSheetSelector))
-      );
-    }
-
-    function isInsideSwipeActionRow(target: EventTarget | null) {
-      return (
-        target instanceof HTMLElement &&
-        Boolean(target.closest(".dashboard-note-swipe-row, .dashboard-note-actions"))
-      );
-    }
-
-    function handleTouchStart(event: TouchEvent) {
-      if (
-        window.innerWidth >= mobileBreakpoint ||
-        isRefreshing ||
-        event.touches.length !== 1 ||
-        hasActiveMobileSheet() ||
-        isInsideMobileSheet(event.target) ||
-        isInsideSwipeActionRow(event.target)
-      ) {
-        resetGesture();
-        return;
-      }
-
-      touchStartYRef.current = event.touches[0]?.clientY ?? null;
-      pullEligibleRef.current = window.scrollY <= 0 && isScrollableAtTop(event.target);
-    }
-
-    function handleTouchMove(event: TouchEvent) {
-      if (
-        hasActiveMobileSheet() ||
-        isInsideMobileSheet(event.target) ||
-        isInsideSwipeActionRow(event.target)
-      ) {
-        resetGesture();
-        return;
-      }
-
-      if (!pullEligibleRef.current || touchStartYRef.current == null || isRefreshing) {
-        return;
-      }
-
-      if (window.scrollY > 0 || !isScrollableAtTop(event.target)) {
-        resetGesture();
-        return;
-      }
-
-      const deltaY = (event.touches[0]?.clientY ?? 0) - touchStartYRef.current;
-
-      if (deltaY <= 0) {
-        setPullDistance(0);
-        return;
-      }
-
-      event.preventDefault();
-      const nextPullDistance = Math.min(deltaY * 0.4, 220);
-      pullDistanceRef.current = nextPullDistance;
-      setIsPulling(true);
-      setPullDistance(nextPullDistance);
-    }
-
-    function handleTouchEnd() {
-      if (!pullEligibleRef.current || isRefreshing) {
-        resetGesture();
-        return;
-      }
-
-      const shouldRefresh = pullDistanceRef.current >= pullThreshold;
-      resetGesture();
-
-      if (!shouldRefresh) {
-        return;
-      }
-
-      setIsRefreshing(true);
-      startTransition(() => router.refresh());
-      window.setTimeout(() => {
-        setIsRefreshing(false);
-      }, 900);
-    }
-
-    window.addEventListener("touchstart", handleTouchStart, { passive: true });
-    window.addEventListener("touchmove", handleTouchMove, { passive: false });
-    window.addEventListener("touchend", handleTouchEnd);
-    window.addEventListener("touchcancel", handleTouchEnd);
-
-    return () => {
-      window.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchmove", handleTouchMove);
-      window.removeEventListener("touchend", handleTouchEnd);
-      window.removeEventListener("touchcancel", handleTouchEnd);
-    };
-  }, [isRefreshing, router]);
-
-  const pullProgress = Math.min(cappedPullDistance / pullThreshold, 1);
-  const pullIndicatorVisible = isRefreshing || cappedPullDistance > 8;
-  const mobilePullOffset = isRefreshing ? 54 : Math.round(cappedPullDistance * 0.94);
-  const pullIndicatorStyle = {
-    opacity: pullIndicatorVisible ? 1 : 0,
-    transform: `translate(-50%, ${Math.round(-22 + mobilePullOffset * 0.78)}px) scale(${0.9 + pullProgress * 0.1})`,
-  };
-  const mobilePullContentStyle = {
-    transform:
-      mobilePullOffset > 0 ? `translate3d(0, ${mobilePullOffset}px, 0)` : undefined,
-    transition: isPulling ? "none" : "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)",
-  };
-  const mobileDockToggleItem = isHomePage ? TAB_ITEMS[2] : TAB_ITEMS[0];
-  const isTabItemActive = (item: (typeof TAB_ITEMS)[number]) =>
-    item.href === "/app"
-      ? pathname === "/app" || isLecturePage
-      : pathname === item.href || pathname.startsWith(`${item.href}/`);
-  const isMobileDockToggleActive = isTabItemActive(mobileDockToggleItem);
-
-  function handleMobileDockToggle() {
-    if (isMobileDockOpen) {
-      setIsMobileDockOpen(false);
-      navigateWithFeedback(mobileDockToggleItem.href);
-      return;
-    }
-
-    setIsMobileDockOpen((current) => !current);
-  }
+  const railItems = useMemo(
+    () =>
+      RAIL_ITEMS.map((item) => ({
+        ...item,
+        active:
+          item.href === "/app"
+            ? pathname === "/app" || isNote
+            : pathname === item.href || pathname.startsWith(`${item.href}/`),
+      })),
+    [isNote, pathname],
+  );
 
   function handleNavLinkClick(event: React.MouseEvent<HTMLAnchorElement>, href: string) {
     if (!shouldHandleLinkNavigation(event)) {
@@ -343,222 +84,98 @@ export function AppShell({
     navigateWithFeedback(href);
   }
 
-  function renderPullToRefreshIndicator() {
+  // Onboarding and checkout own the whole viewport; the app chrome would only
+  // get in the way.
+  if (isOnboarding) {
     return (
-      <div
-        className={`pull-refresh-indicator${isRefreshing ? " refreshing" : ""}`}
-        style={pullIndicatorStyle}
-        aria-hidden={!pullIndicatorVisible}
-      >
-        <div
-          className="pull-refresh-spinner"
-          style={{
-            transform: isRefreshing
-              ? "rotate(0deg)"
-              : `rotate(${Math.round(pullProgress * 140)}deg) scale(${0.88 + pullProgress * 0.12})`,
-          }}
-        >
-          {PULL_REFRESH_SPOKES.map((spoke) => (
-            <span
-              key={spoke}
-              className="pull-refresh-spinner-spoke"
-              style={
-                {
-                  "--pull-refresh-spoke-index": spoke,
-                  "--pull-refresh-spoke-opacity": 0.12 + pullProgress * 0.7,
-                } as React.CSSProperties
-              }
-            />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (shouldHideNavigation) {
-    return (
-      <div className={`ios-app-shell ${className}`.trim()}>
+      <div className={`memo memo-shell ${className}`.trim()}>
         {navigationOverlay}
-        {renderPullToRefreshIndicator()}
-        <div className="app-shell-pull-content" style={mobilePullContentStyle}>
-          <main className="ios-content app-shell-content app-shell-content-start">{children}</main>
-        </div>
+        <main>{children}</main>
       </div>
     );
   }
 
   return (
-    <div className={`ios-app-shell desktop-shell ${className}`.trim()}>
-      {navigationOverlay}
-      {renderPullToRefreshIndicator()}
-      <div className="desktop-brandline">
-        <InstantLink
-          href="/app"
-          className="desktop-brandline-brand"
-          onClick={(event) => handleNavLinkClick(event, "/app")}
-        >
-          <BrandLogo subtitle="" />
-        </InstantLink>
+    <AppLayoutProvider>
+      {({ chatOpen, registerChatSlot }) => (
+        <div className={`memo memo-shell ${className}`.trim()}>
+          {navigationOverlay}
 
-        <div className="desktop-brandline-actions">
-          {backHref ? (
+          <header className="memo-header">
             <InstantLink
-              href={backHref}
-              className="app-back-button desktop-brandline-back"
-              onClick={(event) => handleNavLinkClick(event, backHref)}
+              href="/app"
+              className="memo-header-brand"
+              aria-label={`Domov ${SEO_BRAND_NAME}`}
+              onClick={(event) => handleNavLinkClick(event, "/app")}
             >
-              <ChevronLeft className="h-5 w-5" />
-              Nazaj
+              <Image
+                src={BRAND_LOCKUP_SRC}
+                alt={SEO_BRAND_NAME}
+                width={BRAND_LOCKUP_WIDTH}
+                height={BRAND_LOCKUP_HEIGHT}
+                priority
+              />
             </InstantLink>
-          ) : null}
 
-          {showSubscribeCta ? (
-            <InstantLink href={subscribeHref} className="app-subscribe-cta" aria-label={subscribeLabel}>
-              <EmojiIcon symbol="✨" />
-              <span>{subscribeLabel}</span>
-            </InstantLink>
-          ) : null}
-        </div>
-      </div>
-
-      <aside className="desktop-sidebar">
-        <div className="desktop-sidebar-inner">
-          <InstantLink
-            href="/app"
-            className="nota-sidebar-brand"
-            onClick={(event) => handleNavLinkClick(event, "/app")}
-          >
-            <BrandLogo />
-          </InstantLink>
-
-          {showCreateCta ? (
-            <InstantLink
-              href={createHref}
-              className="nota-sidebar-cta"
-              onClick={(event) => handleNavLinkClick(event, createHref)}
-            >
-              <EmojiIcon symbol="➕" size="1rem" />
-            Nov zapisek
-            </InstantLink>
-          ) : null}
-
-          <nav className="desktop-sidebar-nav" aria-label="Stranska navigacija">
-            {TAB_ITEMS.map((item) => {
-              const active =
-                item.href === "/app"
-                  ? pathname === "/app" || pathname.startsWith("/app/lectures/")
-                  : pathname === item.href || pathname.startsWith(`${item.href}/`);
-
-              return (
+            <div className="memo-header-actions">
+              {hasPaidAccess ? null : (
                 <InstantLink
-                  key={item.href}
-                  href={item.href}
-                  className={`desktop-sidebar-link ${active ? "active" : ""}`}
-                  aria-current={active ? "page" : undefined}
-                  onClick={(event) => handleNavLinkClick(event, item.href)}
+                  href="/app/start"
+                  className="memo-subscribe-cta"
+                  onClick={(event) => handleNavLinkClick(event, "/app/start")}
                 >
-                  <span className="desktop-sidebar-link-icon">
-                    <EmojiIcon symbol={item.icon} size="1rem" />
-                  </span>
-                  <span>{item.displayLabel}</span>
+                  <span>Neomejeni zapiski</span>
+                  <Msym name="bolt" size="1.35rem" />
                 </InstantLink>
-              );
-            })}
-          </nav>
-        </div>
-      </aside>
-
-      <div className="desktop-main">
-        <div className="app-shell-pull-content" style={mobilePullContentStyle}>
-          <header className="ios-nav app-topbar">
-            <div className="ios-nav-inner app-topbar-inner">
-              <InstantLink
-                href="/app"
-                className="app-topbar-brand"
-                aria-label={`Domov ${BRAND_NAME}`}
-                onClick={(event) => handleNavLinkClick(event, "/app")}
-              >
-                <BrandLogo compact />
-              </InstantLink>
-
-              <div className="app-topbar-copy">
-                <div className="app-topbar-title">{chrome.title}</div>
-                <div className="app-topbar-subtitle">{chrome.subtitle}</div>
-              </div>
-
-              {showSubscribeCta ? (
-                <div className="ios-nav-actions app-topbar-subscribe-actions">
-                  <InstantLink href={subscribeHref} className="app-subscribe-cta" aria-label={subscribeLabel}>
-                    <EmojiIcon symbol="✨" />
-                    <span>{subscribeLabel}</span>
-                  </InstantLink>
-                </div>
-              ) : null}
-
-              {showCreateCta ? (
-                <div className="ios-nav-actions app-topbar-actions">
-                  <InstantLink
-                    href={createHref}
-                    className="app-topbar-cta"
-                    onClick={(event) => handleNavLinkClick(event, createHref)}
-                  >
-                    <EmojiIcon symbol="➕" size="1rem" />
-                    <span>Nov zapisek</span>
-                  </InstantLink>
-                </div>
-              ) : null}
+              )}
             </div>
           </header>
 
-          <main className="ios-content app-shell-content">{children}</main>
-        </div>
-      </div>
+          <div
+            className={[
+              "memo-grid",
+              isHome ? "home" : "",
+              isNote ? "note" : "",
+              chatOpen ? "with-chat" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            <aside className={`memo-rail ${isNote && chatOpen ? "collapsed" : ""}`.trim()}>
+              <nav aria-label="Glavna navigacija">
+                {railItems.map((item) => (
+                  <InstantLink
+                    key={item.href}
+                    href={item.href}
+                    className={`memo-rail-item ${item.active ? "active" : ""}`.trim()}
+                    aria-current={item.active ? "page" : undefined}
+                    aria-label={item.label}
+                    title={item.label}
+                    onClick={(event) => handleNavLinkClick(event, item.href)}
+                  >
+                    <span className="memo-rail-icon">
+                      <Msym name={item.icon} size="1.5rem" />
+                    </span>
+                    {isNote && chatOpen ? null : <span>{item.label}</span>}
+                  </InstantLink>
+                ))}
+              </nav>
+            </aside>
 
-      <nav
-        ref={mobileDockRef}
-        className={`ios-tabbar ${isMobileDockOpen ? "mobile-open" : "mobile-collapsed"}`}
-        aria-label="Glavna navigacija"
-      >
-        <button
-          type="button"
-          className={`mobile-dock-toggle ${isMobileDockToggleActive ? "active" : ""}`}
-          onClick={handleMobileDockToggle}
-          aria-label={
-            isMobileDockOpen
-              ? `Pojdi na ${mobileDockToggleItem.displayLabel}`
-              : "Odpri navigacijo"
-          }
-          aria-expanded={isMobileDockOpen}
-        >
-          <EmojiIcon symbol={mobileDockToggleItem.icon} size="1.05rem" />
-        </button>
-        <div className="ios-tabbar-inner">
-          {TAB_ITEMS.map((item) => {
-            const active = isTabItemActive(item);
+            {/*
+              * `app-shell-content` is what the navigation overlay looks for: it
+              * portals the route skeleton in here, so the skeleton gets this
+              * column's width and padding and the rail beside it stays put.
+              * Without the hook the overlay falls back to a fixed layer over
+              * the whole window, which covers the rail while a page loads.
+              */}
+            <main className="memo-main app-shell-content">{children}</main>
 
-            return (
-              <InstantLink
-                key={item.href}
-                href={item.href}
-                className={`ios-tab-item ${active ? "active" : ""} ${
-                  item.href === mobileDockToggleItem.href ? "mobile-toggle-item" : ""
-                }`}
-                aria-current={active ? "page" : undefined}
-                onClick={(event) => {
-                  event.preventDefault();
-                  setIsMobileDockOpen(false);
-                  navigateWithFeedback(item.href);
-                }}
-              >
-                <span className="ios-tab-item-icon">
-                  <EmojiIcon symbol={item.icon} size="1.05rem" />
-                </span>
-                <span className="ios-tab-item-label">{item.displayLabel}</span>
-              </InstantLink>
-            );
-          })}
+            {/* Third grid column; the note screen portals its chat panel here. */}
+            {chatOpen ? <div className="memo-chat-slot" ref={registerChatSlot} /> : null}
+          </div>
         </div>
-      </nav>
-    </div>
+      )}
+    </AppLayoutProvider>
   );
 }

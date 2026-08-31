@@ -36,6 +36,7 @@ function buildProcessingMetadata(pack: DemoNotePack): Json {
   return {
     manualImport: {
       sourceType: pack.sourceType,
+      modelMetadata: pack.pageCount ? { sourcePageCount: pack.pageCount } : {},
     },
   };
 }
@@ -128,6 +129,9 @@ export function buildDemoLectureRow(params: {
     id: params.id,
     user_id: DEMO_USER_ID,
     title: params.title ?? params.pack.title,
+    // The demo has no pipeline to pick one, so the client derives it from the
+    // title exactly as it does for a real note with no stored emoji.
+    emoji: null,
     source_type: params.pack.sourceType === "audio" ? "audio" : "text",
     access_tier: "paid",
     storage_path: null,

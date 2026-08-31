@@ -283,7 +283,7 @@ async function generateCardsForConceptBatch(params: {
     (total, concept) => total + concept.recommendedCardCount,
     0,
   );
-  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
+  const languageInstruction = buildGeneratedContentLanguageInstruction();
   const conceptFallbackCardKind = new Map(
     params.concepts.map((concept) => [concept.conceptKey, concept.preferredCardStyle]),
   );

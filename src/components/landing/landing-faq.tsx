@@ -9,7 +9,7 @@ const FAQ_ROWS = [
   },
   {
     q: "Katere formate lahko naložim?",
-    a: "Zvočne posnetke (mp3, m4a, wav), PDF-je in dokumente, povezave do virov ali kar prilepljeno besedilo.",
+    a: "Zvočne posnetke (mp3, m4a, wav), PDF-je in dokumente, fotografije zapiskov ali povezave do virov.",
   },
   {
     q: "Ali deluje v slovenščini?",

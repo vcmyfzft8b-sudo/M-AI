@@ -28,7 +28,11 @@ const createLectureSchema = z.object({
   fileName: optionalUploadFileNameSchema,
   size: z.number().int().positive().max(MAX_AUDIO_BYTES),
   durationSeconds: z.number().positive().max(MAX_AUDIO_SECONDS),
-  languageHint: languageHintSchema.default("sl"),
+  // Kept optional for clients that still send it — a retry replays the
+  // language a lecture was already transcribed in. Nothing asks a user for
+  // one any more, and a default here would assert Slovenian over every
+  // source the pipeline is now meant to detect for itself.
+  languageHint: languageHintSchema.optional(),
   createInitialAudio: z.boolean().optional().default(false),
   initialAudioVoice: z.enum(NOTE_TTS_VOICES).optional(),
 });
@@ -95,7 +99,7 @@ export async function POST(request: Request) {
         source_type: "audio",
         access_tier: entitlement.hasPaidAccess ? "paid" : "trial",
         status: "uploading",
-        language_hint: parsed.data.languageHint,
+        language_hint: parsed.data.languageHint ?? null,
         duration_seconds: Math.round(parsed.data.durationSeconds),
         processing_metadata: {
           createInitialAudio: parsed.data.createInitialAudio,

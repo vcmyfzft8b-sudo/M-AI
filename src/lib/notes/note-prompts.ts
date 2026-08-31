@@ -192,6 +192,16 @@ export const knowledgeExtractionSchema = z.object({
 
 export const noteOutlineSchema = z.object({
   title: z.string().min(3),
+  /**
+   * One topical emoji for the note, which every note row and note header in the
+   * app draws beside the title.
+   *
+   * Optional on purpose: it arrived after the pipeline shipped, so cached
+   * outlines from before it have no emoji, and a model that skips the field
+   * must not fail an otherwise finished note. The client falls back to deriving
+   * one from the title (src/lib/note-emoji.ts).
+   */
+  emoji: z.string().min(1).max(8).nullish(),
   summary: z.string().min(40),
   keyTopics: z.array(z.string().min(2)).min(3),
   topics: z
@@ -370,7 +380,7 @@ export function buildKnowledgeExtractionInstructions(params: {
   outputLanguage?: string | null;
   sourceType: "audio" | "document";
 }) {
-  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
+  const languageInstruction = buildGeneratedContentLanguageInstruction();
   const sourceNoun = params.sourceType === "audio" ? "spoken lecture transcript" : "course material";
 
   return `${languageInstruction}
@@ -395,7 +405,7 @@ ${MATH_FORMATTING_INSTRUCTIONS}`;
 }
 
 export function buildNoteOutlineInstructions(params: { outputLanguage?: string | null }) {
-  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
+  const languageInstruction = buildGeneratedContentLanguageInstruction();
 
   return `${languageInstruction}
 
@@ -415,7 +425,9 @@ Let the material decide the shape. A source with few real ideas gets few topics.
 
 Every retained id must appear in exactly one topic, and every id must be either retained or dropped.
 
-Also return a title, a summary of 2-3 sentences covering the whole source, and the key topics.`;
+Also return a title, a summary of 2-3 sentences covering the whole source, and the key topics.
+
+Return one emoji that stands for the note's subject — what the material is about, not how it was captured. A microeconomics lecture is a chart, an anatomy lecture a brain, a law lecture a scale. Pick a single, widely-supported emoji; never a flag, and never a generic document or microphone.`;
 }
 
 /**
@@ -571,7 +583,7 @@ export function buildSourceNoteInstructions(params: {
   /** Set when the source is split into consecutive parts; see planSourceWriteWindows. */
   window?: { index: number; count: number };
 }) {
-  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
+  const languageInstruction = buildGeneratedContentLanguageInstruction();
   const labels = getStructuredPlusLabels(params.outputLanguage);
   const window = params.window;
   const windowed = window && window.count > 1;

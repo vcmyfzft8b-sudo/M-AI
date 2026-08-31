@@ -40,7 +40,6 @@ function assertNotAborted(signal?: AbortSignal) {
 export async function createAudioLectureWithProcessingChunks(params: {
   file: File;
   durationSeconds: number;
-  languageHint: string;
   createInitialAudio?: boolean;
   initialAudioVoice?: NoteTtsVoice;
   normalizeBeforeUpload?: boolean;
@@ -81,7 +80,6 @@ export async function createAudioLectureWithProcessingChunks(params: {
       fileName: uploadFile.name,
       size: uploadFile.size,
       durationSeconds: Math.max(params.durationSeconds, 1),
-      languageHint: params.languageHint,
       createInitialAudio: params.createInitialAudio === true,
       initialAudioVoice: params.initialAudioVoice,
     }),

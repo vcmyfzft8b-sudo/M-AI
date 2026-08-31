@@ -7,222 +7,6 @@ export type HelpArticle = {
 
 export const HELP_ARTICLES: HelpArticle[] = [
   {
-    slug: "terms-of-use",
-    title: "Pogoji uporabe",
-    category: "Račun in dostop",
-    content: `# Pogoji uporabe
-
-Ti pogoji so pravno zavezujoča pogodba med tabo in upravljavcem storitve Memo AI. Preberi jih, preden ustvariš račun ali kupiš naročnino.
-
-## 1. Kdo smo
-
-Memo AI je spletna storitev, dostopna na memoai.eu (v nadaljevanju »Memo AI«, »mi« ali »nas«).
-
-Za vsa vprašanja, zahtevke in obvestila po teh pogojih piši na info@memoai.eu.
-
-## 2. Sprejem pogojev
-
-Z ustvarjanjem računa, prijavo ali uporabo Memo AI potrjuješ, da si te pogoje prebral, jih razumeš in se z njimi strinjaš. Če se z njimi ne strinjaš, Memo AI ne uporabljaj.
-
-Skupaj s temi pogoji veljata tudi:
-
-- politika zasebnosti, ki pojasnjuje, kako ravnamo z osebnimi podatki
-- politika vračil, ki ureja preklice in vračila plačil
-
-Pogodba je sklenjena v slovenskem jeziku. Besedilo pogodbe hranimo v obliki teh objavljenih pogojev in ti je ves čas dostopno na tej strani.
-
-## 3. Kdo lahko uporablja Memo AI
-
-- za uporabo moraš biti star najmanj 16 let
-- če si mlajši od 18 let, moraš imeti soglasje starša ali zakonitega zastopnika, ki s temi pogoji soglaša v tvojem imenu
-- račun je oseben; podatkov za prijavo ne deli in računa ne prenašaj na drugo osebo
-- če Memo AI uporabljaš v imenu šole, podjetja ali druge organizacije, potrjuješ, da imaš pooblastilo, da to organizacijo zavežeš s temi pogoji
-
-Memo AI je namenjen osebni študijski uporabi. Za uporabo v ustanovi ali podjetju z lastnimi zahtevami glede hrambe, brisanja ali pogodbenih določil se pred uporabo obrni na nas.
-
-## 4. Račun in varnost
-
-- ob registraciji navedi resnične podatke in e-naslov, do katerega dejansko dostopaš
-- odgovoren si za varnost svojega e-predala, prijavnih kod in povezanih računov Google ali Apple
-- za vso dejavnost na svojem računu odgovarjaš sam, razen če je do nje prišlo po naši krivdi
-- če sumiš na nepooblaščen dostop, nas nemudoma obvesti na info@memoai.eu
-
-## 5. Kaj Memo AI je
-
-Memo AI je učno orodje, ki deluje z umetno inteligenco. Iz gradiva, ki ga pošlješ, ustvarja prepise, povzetke, strukturirane zapiske, kartice, kvize, teste in odgovore v klepetu ter omogoča izvoz in urejanje knjižnice zapiskov.
-
-Memo AI ni:
-
-- nadomestilo za predavanja, študijsko literaturo ali lastno delo
-- strokovni nasvet katere koli vrste, zlasti ne medicinski, pravni, finančni, davčni ali varnostni
-- storitev hrambe podatkov, na katero bi se smel zanašati kot na edini izvod svojega gradiva
-
-Za lastne varnostne kopije pomembnega gradiva poskrbi sam.
-
-## 6. Brezplačna uporaba in preizkusno obdobje
-
-- brez naročnine lahko ustvariš omejeno količino vsebine, vključno z enim preizkusnim zapiskom in omejenim številom sporočil v klepetu
-- ob prvem nakupu naročnine lahko dobiš 3-dnevno brezplačno preizkusno obdobje, če izpolnjuješ pogoje zanj
-- brezplačno preizkusno obdobje pripada eni osebi enkrat; do njega niso upravičeni uporabniki, ki so pri nas že imeli naročnino
-- če preizkusnega obdobja ne prekličeš pred iztekom, se naročnina samodejno nadaljuje in plačilo se obračuna po veljavnem ceniku
-- obseg brezplačne uporabe lahko spremenimo za naprej
-
-## 7. Naročnine, cene in plačila
-
-- Memo AI se prodaja kot ponavljajoča se naročnina; aktualne cene in obdobja so navedeni na strani s cenami in v Stripe Checkout pred potrditvijo nakupa
-- vse cene so navedene v evrih; ali je davek vključen ali se prišteje, je jasno prikazano pred zaključkom nakupa
-- plačila v našem imenu obdeluje Stripe; celotnih podatkov o tvoji kartici ne prejmemo in ne hranimo
-- naročnina se samodejno podaljšuje ob koncu vsakega obračunskega obdobja, dokler je ne prekličeš
-- plačilo za novo obdobje se obračuna na dan podaljšanja s plačilnim sredstvom, shranjenim pri Stripe
-- če plačilo ne uspe, lahko dostop do plačljivih funkcij začasno omejimo, dokler plačilo ni poravnano
-- promocijske in darilne kode veljajo pod pogoji, navedenimi ob kodi, in jih ni mogoče zamenjati za gotovino
-- cene lahko spremenimo; o spremembi te obvestimo najmanj 30 dni pred njeno uveljavitvijo, sprememba pa velja za naslednje obračunsko obdobje. Če se s ceno ne strinjaš, lahko naročnino prekličeš pred uveljavitvijo
-
-Račun za vsako plačilo prejmeš na e-naslov, povezan s tvojim računom.
-
-## 8. Preklic
-
-Naročnino lahko kadar koli prekličeš v nastavitvah računa ali prek povezave do Stripe portala. Preklic začne veljati ob koncu tekočega plačanega obdobja; do takrat plačljive funkcije ostanejo na voljo. Preklic sam po sebi ne pomeni vračila že plačanega zneska.
-
-Vračila ureja politika vračil.
-
-## 9. Tvoje odgovornosti
-
-- nalagaš, snemaš, lepiš ali povezuješ lahko samo gradivo, ki ga imaš v lasti ali ga smeš uporabljati
-- odgovoren si za zakonitost in točnost vsebine, ki jo pošlješ
-- upoštevati moraš pravila svoje šole, fakultete ali delodajalca glede snemanja in deljenja gradiv
-- rezultate, ki jih ustvari Memo AI, moraš pred uporabo preveriti
-
-## 10. Dovoljenja za snemanje in gradiva
-
-Z uporabo Memo AI potrjuješ, da imaš pred snemanjem, nalaganjem, lepljenjem ali povezovanjem vsebine vsa potrebna dovoljenja in pravice. To vključuje dovoljenja šole, učitelja, predavatelja, ustanove, delodajalca, udeležencev snemanja ali drugih imetnikov pravic, kadar so taka dovoljenja potrebna.
-
-Ne snemaj predavanj, pogovorov ali drugih oseb in ne nalagaj prosojnic, zapiskov, učnih gradiv, dokumentov ali drugih datotek, če za to nimaš dovoljenja oziroma zakonske podlage. Odgovoren si, da tvoja uporaba Memo AI ne krši pravil šole, pogodbenih omejitev, avtorskih pravic, zasebnosti, pravil o snemanju ali drugih veljavnih zakonov in pravil.
-
-V Memo AI ne nalagaj posebnih vrst osebnih podatkov drugih ljudi, na primer zdravstvenih podatkov, podatkov o veroizpovedi, političnem prepričanju ali spolni usmerjenosti, razen če imaš za to veljavno pravno podlago.
-
-## 11. Prepovedana uporaba
-
-Memo AI ne smeš uporabljati, da bi:
-
-- nalagal zlonamerno programsko opremo ali poskušal ogroziti varnost storitve
-- dostopal do delov storitve, računov ali podatkov, do katerih nimaš pravice
-- obšel omejitve količine, plačilno steno, preizkusne omejitve ali tehnične zaščite
-- storitev samodejno zajemal, obratno inženiril ali izvajal obremenitvene teste brez našega pisnega dovoljenja
-- ustvarjal ali širil nezakonito, žaljivo, zavajajočo ali nasilno vsebino
-- posegal v pravice drugih, vključno z avtorskimi pravicami in pravico do zasebnosti
-- storitev preprodajal, oddajal v najem ali jo ponujal kot lastno storitev
-- kršil akademska pravila o poštenosti ali oddajal ustvarjeno vsebino kot lastno delo, kadar to ni dovoljeno
-- uporabljal Memo AI za samodejno množično obdelavo gradiva, ki ni povezana z lastnim študijem
-
-## 12. Tvoja vsebina
-
-Gradivo, ki ga pošlješ v Memo AI, ostane tvoje. Zaradi delovanja storitve nam podeljuješ neizključno, časovno omejeno in prostorsko neomejeno pravico, da to gradivo shranimo, prikažemo, obdelamo in posredujemo našim ponudnikom obdelave izključno zato, da lahko izvedemo funkcije, ki jih zahtevaš.
-
-Ta pravica preneha, ko vsebino izbrišeš ali ko izbrišemo tvoj račun, razen kadar moramo podatke še hraniti zaradi zakonskih obveznosti.
-
-Tvoje vsebine ne prodajamo in je ne uporabljamo za oglaševanje.
-
-## 13. Naše pravice
-
-Memo AI, njegova programska oprema, oblikovanje, blagovna znamka in vsebina, ki ni tvoja, so naša last ali last naših dajalcev licenc. S sklenitvijo naročnine dobiš osebno, neprenosljivo in nevključno pravico do uporabe storitve v skladu s temi pogoji, ne pa tudi lastninske pravice na njej.
-
-## 14. AI obdelava in omejitve rezultatov
-
-Za prepise, povzetke, kartice, kvize, odgovore v klepetu in izluščanje vsebine iz dokumentov lahko Memo AI tvojo vsebino obdela pri zunanjih AI in infrastrukturnih ponudnikih.
-
-To lahko vključuje:
-
-- zvočne posnetke in naložene zvočne datoteke
-- prilepljeno besedilo in zapiske
-- PDF-je in druge podprte dokumente
-- javne spletne povezave, za katere želiš, da jih Memo AI prebere
-- metapodatke, potrebne za delovanje, varnost in izboljšave storitve
-
-Seznam ponudnikov in podlage za obdelavo so navedeni v politiki zasebnosti.
-
-Memo AI lahko ustvari napake, nepopolne odgovore ali zavajajoče učno gradivo. Preden se zaneseš na rezultate pri izpitih, seminarskih nalogah, medicinskih, pravnih, finančnih, skladnostnih ali varnostno kritičnih odločitvah, jih moraš preveriti sam.
-
-## 15. Razpoložljivost in spremembe storitve
-
-Prizadevamo si za nemoteno delovanje, ne obljubljamo pa neprekinjene razpoložljivosti. Storitev je lahko začasno nedosegljiva zaradi vzdrževanja, napak, posodobitev ali motenj pri zunanjih ponudnikih.
-
-Posamezne funkcije lahko spreminjamo, dodajamo ali ukinjamo. Če bi bila sprememba za plačljive uporabnike bistveno neugodna, te o njej obvestimo vnaprej, ti pa lahko naročnino prekličeš.
-
-## 16. Ukrepanje in prekinitev računa
-
-Dostop lahko začasno omejimo, onemogočimo nekatere funkcije ali odstranimo vsebino, kadar je uporaba videti zlorabna, nezakonita, nevarna ali škodljiva za storitev ali druge uporabnike.
-
-Pri hujših ali ponavljajočih se kršitvah lahko račun ukinemo. Kadar je to izvedljivo in dopustno, te o razlogu obvestimo in ti damo možnost, da ukrep pojasniš ali odpraviš. Če račun ukinemo brez tvoje krivde, ti sorazmerni del vnaprej plačane naročnine vrnemo.
-
-Svoj račun lahko kadar koli ukineš tako, da nam pišeš na info@memoai.eu.
-
-## 17. Jamstva
-
-Storitev je na voljo takšna, kot je. V obsegu, ki ga dovoljuje zakon, ne dajemo jamstev, da bo storitev brez napak, neprekinjena ali primerna za točno določen namen, in ne jamčimo za točnost rezultatov, ki jih ustvari AI.
-
-To ne posega v obvezna jamstva, ki ti kot potrošniku pripadajo po slovenskem in evropskem pravu.
-
-## 18. Omejitev odgovornosti
-
-V obsegu, ki ga dovoljuje zakon, ne odgovarjamo za:
-
-- izgubljeni dobiček, izgubo priložnosti, izgubo podatkov ali posredno škodo
-- posledice odločitev, ki si jih sprejel na podlagi nepreverjenih rezultatov AI
-- ravnanje tretjih oseb ali izpad njihovih storitev
-- škodo, ki je nastala zaradi tvoje kršitve teh pogojev
-
-Naša skupna odgovornost iz posameznega zahtevka je omejena na znesek, ki si nam ga plačal v 12 mesecih pred dogodkom, ki je povzročil škodo.
-
-Nič v teh pogojih ne izključuje in ne omejuje odgovornosti za namen, hudo malomarnost, smrt ali telesno poškodbo ter odgovornosti, ki je po zakonu ni mogoče izključiti. Če si potrošnik, ti ostanejo v celoti na voljo vse pravice po Zakonu o varstvu potrošnikov.
-
-## 19. Tvoja odškodninska odgovornost
-
-Če zaradi tvoje kršitve teh pogojev ali zaradi gradiva, ki si ga poslal brez ustreznih pravic, proti nam zahtevek vloži tretja oseba, nam povrneš utemeljene stroške, ki nam pri tem nastanejo. To velja le v obsegu, v katerem je zahtevek posledica tvojega ravnanja.
-
-## 20. Spremembe pogojev
-
-Te pogoje lahko spremenimo, ko se izdelek, zakonodaja ali ponudniki spremenijo.
-
-- o bistvenih spremembah te obvestimo po e-pošti ali v aplikaciji najmanj 30 dni pred uveljavitvijo
-- manjše popravke, ki ne posegajo v tvoje pravice, objavimo neposredno na tej strani
-- če po uveljavitvi nadaljuješ z uporabo, to pomeni, da sprejemaš posodobljeno različico
-- če se s spremembo ne strinjaš, lahko pred njeno uveljavitvijo prekličeš naročnino
-
-## 21. Prenehanje
-
-Ob prenehanju pogodbe preneha tvoja pravica do uporabe storitve. Vsebina, povezana s tvojim računom, se obravnava v skladu s politiko zasebnosti. Določbe o intelektualni lastnini, omejitvi odgovornosti, odškodninski odgovornosti in reševanju sporov veljajo tudi po prenehanju.
-
-## 22. Veljavno pravo in reševanje sporov
-
-Za te pogoje velja pravo Republike Slovenije, brez uporabe kolizijskih pravil. Če si potrošnik s prebivališčem v drugi državi EU, te ta izbira ne prikrajša za varstvo, ki ti ga zagotavljajo prisilni predpisi tvoje države.
-
-Spore najprej poskusimo rešiti sporazumno; piši nam na info@memoai.eu in odgovorili ti bomo v razumnem roku.
-
-Kot potrošnik lahko uporabiš tudi:
-
-- postopek izvensodnega reševanja potrošniških sporov, kadar je ta na voljo. Trenutno ne priznavamo nobenega izvajalca izvensodnega reševanja potrošniških sporov kot pristojnega za reševanje sporov iz teh pogojev
-- pritožbo pri Tržnem inšpektoratu Republike Slovenije
-
-Za spore, ki jih ni mogoče rešiti sporazumno, je pristojno stvarno pristojno sodišče v Republiki Sloveniji. Če si potrošnik, to ne posega v tvojo pravico, da tožbo vložiš pri sodišču v kraju svojega prebivališča.
-
-## 23. Končne določbe
-
-- če je posamezna določba teh pogojev neveljavna, ostanejo druge določbe v veljavi
-- teh pogojev ne moreš prenesti na drugo osebo brez našega soglasja; mi jih lahko prenesemo ob statusni spremembi ali prodaji dejavnosti, pri čemer se tvoje pravice ne poslabšajo
-- če kakšne pravice ne uveljavimo takoj, se ji s tem ne odpovemo
-- ti pogoji skupaj s politiko zasebnosti in politiko vračil predstavljajo celoten dogovor med tabo in nami glede uporabe Memo AI
-
-## 24. Kontakt
-
-info@memoai.eu
-
----
-
-**Zakonska pravica potrošnika do odstopa.** Če si potrošnik s prebivališčem v EU ali EGP, imaš po zakonu pravico, da v 14 dneh od sklenitve naročniške pogodbe od nje odstopiš, brez navedbe razloga. Ker se storitev na tvojo izrecno zahtevo začne izvajati takoj po nakupu, ob nakupu izrecno zahtevaš, da se izvajanje začne pred iztekom odstopnega roka; če med odstopnim rokom odstopiš, ti vrnemo plačani znesek, zmanjšan za sorazmerni del, ki ustreza storitvi, opravljeni do dneva odstopa. Ta zakonska pravica velja poleg politike vračil: če ti zakon v konkretnem primeru daje višje vračilo, kot ga predvideva politika vračil, velja zakon. Za odstop zadostuje jasna izjava po e-pošti na info@memoai.eu, uporabiš pa lahko tudi obrazec za odstop iz priloge k Zakonu o varstvu potrošnikov. Nič v teh pogojih ali v politiki vračil ne omejuje pravic, ki ti kot potrošniku pripadajo po prisilnih predpisih.
-`,
-  },
-  {
     slug: "family-plan",
     title: "Družinski paket?",
     category: "Pogosto",
@@ -236,7 +20,7 @@ Za zdaj ima vsak račun svojo knjižnico zapiskov in zgodovino obdelav.
 
 - prijavi se z računom, ki naj bo lastnik zapiskov
 - zapiske po potrebi kopiraj iz prikaza zapiska
-- za bolj dosledne rezultate uporabljaj enake jezikovne nastavitve`,
+- za bolj dosledne rezultate nalagaj gradivo istega predmeta v isti račun`,
   },
   {
     slug: "gift-coconote",
@@ -254,11 +38,11 @@ Za uporabo Memo naj si prejemnik ustvari svoj račun, nato pa pri plačilu v Str
     category: "Pogosto",
     content: `# Podprti jeziki
 
-Aplikacija lahko obdela večjezično gradivo, vendar so rezultati najboljši, če pred ustvarjanjem zapiska izbereš pravi izvorni jezik.
+Jezika ni treba nastavljati. Memo AI prebere gradivo in zapiske, kartice in kvize napiše v jeziku, v katerem je gradivo samo.
 
 ## Priporočila
 
-- pred oddajo izberi dejanski jezik posnetka ali besedila
+- gradivo naloži takšno, kot je — prevajanje vnaprej ni potrebno
 - pri mešanju jezikov pomagajo krajši posnetki
 - tehnični angleški izrazi lahko ostanejo v končnem rezultatu, kadar so del izvorne vsebine`,
   },
@@ -275,7 +59,7 @@ Koristno je vključiti:
 - kaj si želel doseči
 - kje si se zataknil
 - kakšen rezultat si pričakoval
-- ali gre za težavo pri zvoku, besedilu, PDF-ju ali povezavi`,
+- ali gre za težavo pri zvoku, dokumentu, PDF-ju ali povezavi`,
   },
   {
     slug: "video-isnt-working",
@@ -289,7 +73,7 @@ Memo lahko obdela samo vsebino, ki je javno dostopna in dovolj berljiva za povze
 
 - preveri, da stran ne zahteva prijave
 - uporabi neposreden URL strani
-- če imaš gradivo drugje, naloži PDF ali prilepi besedilo`,
+- če imaš gradivo drugje, naloži PDF ali dokument`,
   },
   {
     slug: "audio-upload-issue",
@@ -312,11 +96,11 @@ Podprti formati so MP3, M4A, WAV, OGG in WEBM.
     category: "Snemanje in zapiski",
     content: `# Kakovost prepisa
 
-Kakovost prepisa je odvisna od čistosti zvoka, prekrivanja govorcev in izbranega izvornega jezika.
+Kakovost prepisa je odvisna od čistosti zvoka in prekrivanja govorcev. Jezik prepozna Memo AI sam.
 
 ## Kako izboljšati rezultate
 
-- pred obdelavo izberi pravilen jezik
+- posnemi čim bližje govorcu
 - pri pogovorih omogoči zajem več govorcev
 - zmanjša ozadni hrup
 - zelo dolge posnetke razdeli na manjše dele`,
@@ -363,7 +147,6 @@ Kontakt za vprašanja o zasebnosti in za uveljavljanje pravic: info@memoai.eu
 **Podatki iz uvodne nastavitve**
 
 - odgovori v uvodnem vprašalniku, na primer študijsko področje, način uporabe in razlog za uporabo
-- jezikovne nastavitve
 
 **Vsebina, ki jo pošlješ**
 
@@ -634,6 +417,222 @@ To politiko lahko spremenimo. Za posamezno plačilo vedno velja različica, obja
 ## 12. Kontakt
 
 info@memoai.eu
+`,
+  },
+  {
+    slug: "terms-of-use",
+    title: "Pogoji uporabe",
+    category: "Račun in dostop",
+    content: `# Pogoji uporabe
+
+Ti pogoji so pravno zavezujoča pogodba med tabo in upravljavcem storitve Memo AI. Preberi jih, preden ustvariš račun ali kupiš naročnino.
+
+## 1. Kdo smo
+
+Memo AI je spletna storitev, dostopna na memoai.eu (v nadaljevanju »Memo AI«, »mi« ali »nas«).
+
+Za vsa vprašanja, zahtevke in obvestila po teh pogojih piši na info@memoai.eu.
+
+## 2. Sprejem pogojev
+
+Z ustvarjanjem računa, prijavo ali uporabo Memo AI potrjuješ, da si te pogoje prebral, jih razumeš in se z njimi strinjaš. Če se z njimi ne strinjaš, Memo AI ne uporabljaj.
+
+Skupaj s temi pogoji veljata tudi:
+
+- politika zasebnosti, ki pojasnjuje, kako ravnamo z osebnimi podatki
+- politika vračil, ki ureja preklice in vračila plačil
+
+Pogodba je sklenjena v slovenskem jeziku. Besedilo pogodbe hranimo v obliki teh objavljenih pogojev in ti je ves čas dostopno na tej strani.
+
+## 3. Kdo lahko uporablja Memo AI
+
+- za uporabo moraš biti star najmanj 16 let
+- če si mlajši od 18 let, moraš imeti soglasje starša ali zakonitega zastopnika, ki s temi pogoji soglaša v tvojem imenu
+- račun je oseben; podatkov za prijavo ne deli in računa ne prenašaj na drugo osebo
+- če Memo AI uporabljaš v imenu šole, podjetja ali druge organizacije, potrjuješ, da imaš pooblastilo, da to organizacijo zavežeš s temi pogoji
+
+Memo AI je namenjen osebni študijski uporabi. Za uporabo v ustanovi ali podjetju z lastnimi zahtevami glede hrambe, brisanja ali pogodbenih določil se pred uporabo obrni na nas.
+
+## 4. Račun in varnost
+
+- ob registraciji navedi resnične podatke in e-naslov, do katerega dejansko dostopaš
+- odgovoren si za varnost svojega e-predala, prijavnih kod in povezanih računov Google ali Apple
+- za vso dejavnost na svojem računu odgovarjaš sam, razen če je do nje prišlo po naši krivdi
+- če sumiš na nepooblaščen dostop, nas nemudoma obvesti na info@memoai.eu
+
+## 5. Kaj Memo AI je
+
+Memo AI je učno orodje, ki deluje z umetno inteligenco. Iz gradiva, ki ga pošlješ, ustvarja prepise, povzetke, strukturirane zapiske, kartice, kvize, teste in odgovore v klepetu ter omogoča izvoz in urejanje knjižnice zapiskov.
+
+Memo AI ni:
+
+- nadomestilo za predavanja, študijsko literaturo ali lastno delo
+- strokovni nasvet katere koli vrste, zlasti ne medicinski, pravni, finančni, davčni ali varnostni
+- storitev hrambe podatkov, na katero bi se smel zanašati kot na edini izvod svojega gradiva
+
+Za lastne varnostne kopije pomembnega gradiva poskrbi sam.
+
+## 6. Brezplačna uporaba in preizkusno obdobje
+
+- brez naročnine lahko ustvariš omejeno količino vsebine, vključno z enim preizkusnim zapiskom in omejenim številom sporočil v klepetu
+- ob prvem nakupu naročnine lahko dobiš 3-dnevno brezplačno preizkusno obdobje, če izpolnjuješ pogoje zanj
+- brezplačno preizkusno obdobje pripada eni osebi enkrat; do njega niso upravičeni uporabniki, ki so pri nas že imeli naročnino
+- če preizkusnega obdobja ne prekličeš pred iztekom, se naročnina samodejno nadaljuje in plačilo se obračuna po veljavnem ceniku
+- obseg brezplačne uporabe lahko spremenimo za naprej
+
+## 7. Naročnine, cene in plačila
+
+- Memo AI se prodaja kot ponavljajoča se naročnina; aktualne cene in obdobja so navedeni na strani s cenami in v Stripe Checkout pred potrditvijo nakupa
+- vse cene so navedene v evrih; ali je davek vključen ali se prišteje, je jasno prikazano pred zaključkom nakupa
+- plačila v našem imenu obdeluje Stripe; celotnih podatkov o tvoji kartici ne prejmemo in ne hranimo
+- naročnina se samodejno podaljšuje ob koncu vsakega obračunskega obdobja, dokler je ne prekličeš
+- plačilo za novo obdobje se obračuna na dan podaljšanja s plačilnim sredstvom, shranjenim pri Stripe
+- če plačilo ne uspe, lahko dostop do plačljivih funkcij začasno omejimo, dokler plačilo ni poravnano
+- promocijske in darilne kode veljajo pod pogoji, navedenimi ob kodi, in jih ni mogoče zamenjati za gotovino
+- cene lahko spremenimo; o spremembi te obvestimo najmanj 30 dni pred njeno uveljavitvijo, sprememba pa velja za naslednje obračunsko obdobje. Če se s ceno ne strinjaš, lahko naročnino prekličeš pred uveljavitvijo
+
+Račun za vsako plačilo prejmeš na e-naslov, povezan s tvojim računom.
+
+## 8. Preklic
+
+Naročnino lahko kadar koli prekličeš v nastavitvah računa ali prek povezave do Stripe portala. Preklic začne veljati ob koncu tekočega plačanega obdobja; do takrat plačljive funkcije ostanejo na voljo. Preklic sam po sebi ne pomeni vračila že plačanega zneska.
+
+Vračila ureja politika vračil.
+
+## 9. Tvoje odgovornosti
+
+- nalagaš, snemaš, lepiš ali povezuješ lahko samo gradivo, ki ga imaš v lasti ali ga smeš uporabljati
+- odgovoren si za zakonitost in točnost vsebine, ki jo pošlješ
+- upoštevati moraš pravila svoje šole, fakultete ali delodajalca glede snemanja in deljenja gradiv
+- rezultate, ki jih ustvari Memo AI, moraš pred uporabo preveriti
+
+## 10. Dovoljenja za snemanje in gradiva
+
+Z uporabo Memo AI potrjuješ, da imaš pred snemanjem, nalaganjem, lepljenjem ali povezovanjem vsebine vsa potrebna dovoljenja in pravice. To vključuje dovoljenja šole, učitelja, predavatelja, ustanove, delodajalca, udeležencev snemanja ali drugih imetnikov pravic, kadar so taka dovoljenja potrebna.
+
+Ne snemaj predavanj, pogovorov ali drugih oseb in ne nalagaj prosojnic, zapiskov, učnih gradiv, dokumentov ali drugih datotek, če za to nimaš dovoljenja oziroma zakonske podlage. Odgovoren si, da tvoja uporaba Memo AI ne krši pravil šole, pogodbenih omejitev, avtorskih pravic, zasebnosti, pravil o snemanju ali drugih veljavnih zakonov in pravil.
+
+V Memo AI ne nalagaj posebnih vrst osebnih podatkov drugih ljudi, na primer zdravstvenih podatkov, podatkov o veroizpovedi, političnem prepričanju ali spolni usmerjenosti, razen če imaš za to veljavno pravno podlago.
+
+## 11. Prepovedana uporaba
+
+Memo AI ne smeš uporabljati, da bi:
+
+- nalagal zlonamerno programsko opremo ali poskušal ogroziti varnost storitve
+- dostopal do delov storitve, računov ali podatkov, do katerih nimaš pravice
+- obšel omejitve količine, plačilno steno, preizkusne omejitve ali tehnične zaščite
+- storitev samodejno zajemal, obratno inženiril ali izvajal obremenitvene teste brez našega pisnega dovoljenja
+- ustvarjal ali širil nezakonito, žaljivo, zavajajočo ali nasilno vsebino
+- posegal v pravice drugih, vključno z avtorskimi pravicami in pravico do zasebnosti
+- storitev preprodajal, oddajal v najem ali jo ponujal kot lastno storitev
+- kršil akademska pravila o poštenosti ali oddajal ustvarjeno vsebino kot lastno delo, kadar to ni dovoljeno
+- uporabljal Memo AI za samodejno množično obdelavo gradiva, ki ni povezana z lastnim študijem
+
+## 12. Tvoja vsebina
+
+Gradivo, ki ga pošlješ v Memo AI, ostane tvoje. Zaradi delovanja storitve nam podeljuješ neizključno, časovno omejeno in prostorsko neomejeno pravico, da to gradivo shranimo, prikažemo, obdelamo in posredujemo našim ponudnikom obdelave izključno zato, da lahko izvedemo funkcije, ki jih zahtevaš.
+
+Ta pravica preneha, ko vsebino izbrišeš ali ko izbrišemo tvoj račun, razen kadar moramo podatke še hraniti zaradi zakonskih obveznosti.
+
+Tvoje vsebine ne prodajamo in je ne uporabljamo za oglaševanje.
+
+## 13. Naše pravice
+
+Memo AI, njegova programska oprema, oblikovanje, blagovna znamka in vsebina, ki ni tvoja, so naša last ali last naših dajalcev licenc. S sklenitvijo naročnine dobiš osebno, neprenosljivo in nevključno pravico do uporabe storitve v skladu s temi pogoji, ne pa tudi lastninske pravice na njej.
+
+## 14. AI obdelava in omejitve rezultatov
+
+Za prepise, povzetke, kartice, kvize, odgovore v klepetu in izluščanje vsebine iz dokumentov lahko Memo AI tvojo vsebino obdela pri zunanjih AI in infrastrukturnih ponudnikih.
+
+To lahko vključuje:
+
+- zvočne posnetke in naložene zvočne datoteke
+- prilepljeno besedilo in zapiske
+- PDF-je in druge podprte dokumente
+- javne spletne povezave, za katere želiš, da jih Memo AI prebere
+- metapodatke, potrebne za delovanje, varnost in izboljšave storitve
+
+Seznam ponudnikov in podlage za obdelavo so navedeni v politiki zasebnosti.
+
+Memo AI lahko ustvari napake, nepopolne odgovore ali zavajajoče učno gradivo. Preden se zaneseš na rezultate pri izpitih, seminarskih nalogah, medicinskih, pravnih, finančnih, skladnostnih ali varnostno kritičnih odločitvah, jih moraš preveriti sam.
+
+## 15. Razpoložljivost in spremembe storitve
+
+Prizadevamo si za nemoteno delovanje, ne obljubljamo pa neprekinjene razpoložljivosti. Storitev je lahko začasno nedosegljiva zaradi vzdrževanja, napak, posodobitev ali motenj pri zunanjih ponudnikih.
+
+Posamezne funkcije lahko spreminjamo, dodajamo ali ukinjamo. Če bi bila sprememba za plačljive uporabnike bistveno neugodna, te o njej obvestimo vnaprej, ti pa lahko naročnino prekličeš.
+
+## 16. Ukrepanje in prekinitev računa
+
+Dostop lahko začasno omejimo, onemogočimo nekatere funkcije ali odstranimo vsebino, kadar je uporaba videti zlorabna, nezakonita, nevarna ali škodljiva za storitev ali druge uporabnike.
+
+Pri hujših ali ponavljajočih se kršitvah lahko račun ukinemo. Kadar je to izvedljivo in dopustno, te o razlogu obvestimo in ti damo možnost, da ukrep pojasniš ali odpraviš. Če račun ukinemo brez tvoje krivde, ti sorazmerni del vnaprej plačane naročnine vrnemo.
+
+Svoj račun lahko kadar koli ukineš tako, da nam pišeš na info@memoai.eu.
+
+## 17. Jamstva
+
+Storitev je na voljo takšna, kot je. V obsegu, ki ga dovoljuje zakon, ne dajemo jamstev, da bo storitev brez napak, neprekinjena ali primerna za točno določen namen, in ne jamčimo za točnost rezultatov, ki jih ustvari AI.
+
+To ne posega v obvezna jamstva, ki ti kot potrošniku pripadajo po slovenskem in evropskem pravu.
+
+## 18. Omejitev odgovornosti
+
+V obsegu, ki ga dovoljuje zakon, ne odgovarjamo za:
+
+- izgubljeni dobiček, izgubo priložnosti, izgubo podatkov ali posredno škodo
+- posledice odločitev, ki si jih sprejel na podlagi nepreverjenih rezultatov AI
+- ravnanje tretjih oseb ali izpad njihovih storitev
+- škodo, ki je nastala zaradi tvoje kršitve teh pogojev
+
+Naša skupna odgovornost iz posameznega zahtevka je omejena na znesek, ki si nam ga plačal v 12 mesecih pred dogodkom, ki je povzročil škodo.
+
+Nič v teh pogojih ne izključuje in ne omejuje odgovornosti za namen, hudo malomarnost, smrt ali telesno poškodbo ter odgovornosti, ki je po zakonu ni mogoče izključiti. Če si potrošnik, ti ostanejo v celoti na voljo vse pravice po Zakonu o varstvu potrošnikov.
+
+## 19. Tvoja odškodninska odgovornost
+
+Če zaradi tvoje kršitve teh pogojev ali zaradi gradiva, ki si ga poslal brez ustreznih pravic, proti nam zahtevek vloži tretja oseba, nam povrneš utemeljene stroške, ki nam pri tem nastanejo. To velja le v obsegu, v katerem je zahtevek posledica tvojega ravnanja.
+
+## 20. Spremembe pogojev
+
+Te pogoje lahko spremenimo, ko se izdelek, zakonodaja ali ponudniki spremenijo.
+
+- o bistvenih spremembah te obvestimo po e-pošti ali v aplikaciji najmanj 30 dni pred uveljavitvijo
+- manjše popravke, ki ne posegajo v tvoje pravice, objavimo neposredno na tej strani
+- če po uveljavitvi nadaljuješ z uporabo, to pomeni, da sprejemaš posodobljeno različico
+- če se s spremembo ne strinjaš, lahko pred njeno uveljavitvijo prekličeš naročnino
+
+## 21. Prenehanje
+
+Ob prenehanju pogodbe preneha tvoja pravica do uporabe storitve. Vsebina, povezana s tvojim računom, se obravnava v skladu s politiko zasebnosti. Določbe o intelektualni lastnini, omejitvi odgovornosti, odškodninski odgovornosti in reševanju sporov veljajo tudi po prenehanju.
+
+## 22. Veljavno pravo in reševanje sporov
+
+Za te pogoje velja pravo Republike Slovenije, brez uporabe kolizijskih pravil. Če si potrošnik s prebivališčem v drugi državi EU, te ta izbira ne prikrajša za varstvo, ki ti ga zagotavljajo prisilni predpisi tvoje države.
+
+Spore najprej poskusimo rešiti sporazumno; piši nam na info@memoai.eu in odgovorili ti bomo v razumnem roku.
+
+Kot potrošnik lahko uporabiš tudi:
+
+- postopek izvensodnega reševanja potrošniških sporov, kadar je ta na voljo. Trenutno ne priznavamo nobenega izvajalca izvensodnega reševanja potrošniških sporov kot pristojnega za reševanje sporov iz teh pogojev
+- pritožbo pri Tržnem inšpektoratu Republike Slovenije
+
+Za spore, ki jih ni mogoče rešiti sporazumno, je pristojno stvarno pristojno sodišče v Republiki Sloveniji. Če si potrošnik, to ne posega v tvojo pravico, da tožbo vložiš pri sodišču v kraju svojega prebivališča.
+
+## 23. Končne določbe
+
+- če je posamezna določba teh pogojev neveljavna, ostanejo druge določbe v veljavi
+- teh pogojev ne moreš prenesti na drugo osebo brez našega soglasja; mi jih lahko prenesemo ob statusni spremembi ali prodaji dejavnosti, pri čemer se tvoje pravice ne poslabšajo
+- če kakšne pravice ne uveljavimo takoj, se ji s tem ne odpovemo
+- ti pogoji skupaj s politiko zasebnosti in politiko vračil predstavljajo celoten dogovor med tabo in nami glede uporabe Memo AI
+
+## 24. Kontakt
+
+info@memoai.eu
+
+---
+
+**Zakonska pravica potrošnika do odstopa.** Če si potrošnik s prebivališčem v EU ali EGP, imaš po zakonu pravico, da v 14 dneh od sklenitve naročniške pogodbe od nje odstopiš, brez navedbe razloga. Ker se storitev na tvojo izrecno zahtevo začne izvajati takoj po nakupu, ob nakupu izrecno zahtevaš, da se izvajanje začne pred iztekom odstopnega roka; če med odstopnim rokom odstopiš, ti vrnemo plačani znesek, zmanjšan za sorazmerni del, ki ustreza storitvi, opravljeni do dneva odstopa. Ta zakonska pravica velja poleg politike vračil: če ti zakon v konkretnem primeru daje višje vračilo, kot ga predvideva politika vračil, velja zakon. Za odstop zadostuje jasna izjava po e-pošti na info@memoai.eu, uporabiš pa lahko tudi obrazec za odstop iz priloge k Zakonu o varstvu potrošnikov. Nič v teh pogojih ali v politiki vračil ne omejuje pravic, ki ti kot potrošniku pripadajo po prisilnih predpisih.
 `,
   },
 ];

@@ -43,8 +43,22 @@ export const noteArtifactSchema = z.object({
   structuredNotesMd: z.string().min(300),
 });
 
+/*
+ * The description on `answer` is not documentation: it is sent to the model as
+ * part of the response schema, which is the last thing it reads before it
+ * writes. The closing question is the rule that goes missing first when an
+ * answer runs long, and restating it here — at the field itself — is what makes
+ * it stick.
+ */
 export const chatAnswerSchema = z.object({
-  answer: z.string().min(10),
+  answer: z
+    .string()
+    .min(10)
+    .describe(
+      "The reply, in the language of the learner's last message. Simple, short enough to read " +
+        "on a phone, and ending with exactly one short question unless they were only saying " +
+        "thanks or goodbye.",
+    ),
   citations: z.array(citationSchema).max(4),
 });
 

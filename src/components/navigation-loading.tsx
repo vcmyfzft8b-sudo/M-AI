@@ -255,8 +255,16 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
             contentHost,
           )
         : createPortal(
+            /*
+             * `memo-portal` carries the redesign's token block. The fallback
+             * portals onto `document.body`, outside the `.memo` shell, where
+             * `--bg` and the `--memo-safe-*` insets are undefined — which makes
+             * every `calc()` built on them invalid and collapses the skeleton
+             * into a narrow, transparent box. This is the same wrapper
+             * `MemoPortal` uses for sheets, for the same reason.
+             */
             <div
-              className="navigation-loading-overlay"
+              className="navigation-loading-overlay memo-portal"
               data-navigation-overlay=""
               role="status"
               style={{ top: `${pending.top}px`, left: `${pending.left}px` }}

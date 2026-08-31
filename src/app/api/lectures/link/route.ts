@@ -24,7 +24,11 @@ const CREATE_LINK_LECTURE_MAX_BYTES = 16 * 1024;
 const createLinkLectureSchema = z.object({
   lectureId: optionalLectureIdSchema,
   url: httpUrlSchema,
-  languageHint: languageHintSchema.default("sl"),
+  // Kept optional for clients that still send it — a retry replays the
+  // language a lecture was already transcribed in. Nothing asks a user for
+  // one any more, and a default here would assert Slovenian over every
+  // source the pipeline is now meant to detect for itself.
+  languageHint: languageHintSchema.optional(),
   createInitialAudio: z.boolean().optional().default(false),
   initialAudioVoice: z.enum(NOTE_TTS_VOICES).optional(),
 });
@@ -107,7 +111,7 @@ export async function POST(request: Request) {
           status: "queued",
           error_message: null,
           title: titleHint,
-          language_hint: parsed.data.languageHint,
+          language_hint: parsed.data.languageHint ?? null,
           processing_metadata: {
             createInitialAudio: parsed.data.createInitialAudio,
             initialAudioVoice: parsed.data.initialAudioVoice ?? null,

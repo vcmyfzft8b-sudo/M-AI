@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { cache } from "react";
 import Stripe from "stripe";
 
-import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
+import { PREVIEW_AUTH_BYPASS_USER_ID, getOptionalUserOrPreviewBypass } from "@/lib/auth";
+import { isPreviewPremiumEnabled } from "@/lib/preview-mode";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 import { getServerEnv } from "@/lib/server-env";
 import { resolveSiteOrigin } from "@/lib/site-url";
@@ -78,7 +79,10 @@ export const BILLING_PLANS: Record<
     label: "Letno",
     cadence: "na mesec",
     amount: 130,
-    displayAmount: "11",
+    // €130 a year is €10.83 a month, not €11. Rounding the headline up prices
+    // the plan above what is actually charged, which is the one direction a
+    // price must never be wrong in.
+    displayAmount: "10,83",
     billingNote: "Obračunano letno",
     annualizedAmount: 130,
     blurb: "Najnižja dejanska cena, če uporabljaš aplikacijo celo leto.",
@@ -483,6 +487,41 @@ export const getViewerAppState = cache(async function getViewerAppState() {
 
   const entitlement = await getUserEntitlementState(user.id);
 
+  /*
+   * The preview bypass signs in as an account with no profile row, so
+   * `onboardingComplete` is false and the app layout bounces it to /app/start
+   * before it can reach a single screen. Onboarding is not what anyone opens
+   * the bypass to look at, so it counts as done for this one account.
+   *
+   * Nothing else is faked: it still has no subscription, so it sees exactly
+   * what an unpaid account sees. And the bypass itself only exists when
+   * PREVIEW_AUTH_BYPASS is set, which production is not.
+   */
+  if (user.id === PREVIEW_AUTH_BYPASS_USER_ID) {
+    /*
+     * ...and a subscription when the premium cookie is set, so the same
+     * account can be flipped between the paywalled view and the paid one. It
+     * is the entitlement that is faked, not a billing row: nothing is written,
+     * and nothing about Stripe changes.
+     */
+    const previewPremium = await isPreviewPremiumEnabled();
+
+    return {
+      user,
+      ...entitlement,
+      onboardingComplete: true,
+      ...(previewPremium
+        ? {
+            hasPaidAccess: true,
+            canCreateNotes: true,
+            canAccessPaywalledCreation: false,
+            shouldShowTrialEntry: false,
+            hasTrialLectureAvailable: false,
+          }
+        : {}),
+    };
+  }
+
   return {
     user,
     ...entitlement,
@@ -644,8 +683,20 @@ export function getBillingSuccessUrl(request?: BillingRequestLike) {
   return `${resolveSiteOrigin(request)}/app/start?checkout=success`;
 }
 
-export function getBillingCancelUrl(request?: BillingRequestLike) {
-  return `${resolveSiteOrigin(request)}/app/start?checkout=cancelled`;
+/**
+ * Where Stripe sends a buyer who backed out.
+ *
+ * A checkout started from the prize wheel returns to the offer rather than to
+ * the standard paywall: that buyer was shown a discounted price on a countdown,
+ * and dropping them onto a full-price screen loses the thing they came for.
+ * `offer=1` is what the home screen reads to reopen it.
+ */
+export function getBillingCancelUrl(request?: BillingRequestLike, fromOffer = false) {
+  const origin = resolveSiteOrigin(request);
+
+  return fromOffer
+    ? `${origin}/app?checkout=cancelled&offer=1`
+    : `${origin}/app/start?checkout=cancelled`;
 }
 
 export function getBillingPortalReturnUrl(request?: BillingRequestLike) {

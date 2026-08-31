@@ -6,6 +6,7 @@ import { getCurrentAbortSignal } from "@/lib/abort-context";
 import { isMandatoryReasoningModel, resolveWireReasoningEffort } from "@/lib/ai/model-config";
 import { GeminiTruncatedOutputError } from "@/lib/ai/structured-output";
 import { parseStructuredText } from "@/lib/ai/structured-output";
+import { JsonStringFieldScanner } from "@/lib/ai/stream-json";
 import type { GeminiUsageContext, GeminiUsageMetadata } from "@/lib/ai/usage-logging";
 import { logGeminiUsageEvent } from "@/lib/ai/usage-logging";
 
@@ -249,5 +250,205 @@ export async function generateStructuredObjectWithOpenRouter<TSchema extends z.Z
     });
 
     throw error;
+  }
+}
+
+/**
+ * The same structured call, streamed.
+ *
+ * Chat is the one stage a learner watches happen, so its answer is delivered as
+ * it is written rather than in one lump at the end. Everything else is held
+ * constant on purpose — same model, same prompt, same schema, same usage log —
+ * so the answer cannot differ from the one the non-streaming path would have
+ * produced. `onDelta` receives the prose as it is decoded out of the JSON; the
+ * validated object is still returned at the end, citations and all.
+ *
+ * A caller that cannot stream (or a stream that dies mid-flight) is expected to
+ * fall back to `generateStructuredObjectWithOpenRouter`, which is why this
+ * throws plainly instead of salvaging a partial answer.
+ */
+export async function streamStructuredObjectWithOpenRouter<TSchema extends z.ZodTypeAny>(params: {
+  schema: TSchema;
+  instructions: string;
+  input: string;
+  model: string;
+  apiKey: string;
+  /** The top-level string field whose text is streamed to `onDelta`. */
+  streamField: string;
+  onDelta: (text: string) => void;
+  maxOutputTokens?: number;
+  thinkingLevel?: string | null;
+  timeoutMs?: number;
+  usageContext?: GeminiUsageContext;
+}): Promise<z.infer<TSchema>> {
+  const routedModel = openRouterModelId(params.model);
+  const responseSchema = z.toJSONSchema(params.schema);
+  const maxOutputTokens = params.maxOutputTokens;
+  const budgetSignal = getCurrentAbortSignal();
+  const timeoutSignal = AbortSignal.timeout(params.timeoutMs ?? 180_000);
+  let usage: OpenRouterResponse["usage"];
+
+  try {
+    const raw = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      signal: budgetSignal ? AbortSignal.any([timeoutSignal, budgetSignal]) : timeoutSignal,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${params.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: routedModel,
+        stream: true,
+        // Asked for explicitly: the gateway omits usage from a streamed
+        // response otherwise, and the cost report would lose these calls.
+        stream_options: { include_usage: true },
+        messages: [
+          { role: "system", content: params.instructions },
+          {
+            role: "user",
+            content: `Return exactly one JSON object that matches this JSON schema:\n${JSON.stringify(
+              responseSchema,
+            )}\n\nSource input:\n${params.input}`,
+          },
+        ],
+        ...(maxOutputTokens ? { max_tokens: maxOutputTokens } : {}),
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "structured_output",
+            strict: true,
+            schema: toStrictJsonSchema(responseSchema),
+          },
+        },
+        ...buildReasoningBlock(routedModel, params.thinkingLevel),
+        ...buildProviderBlock(routedModel),
+      }),
+    });
+
+    if (!raw.ok || !raw.body) {
+      throw new Error(`OpenRouter ${routedModel}: stream failed (${raw.status}).`);
+    }
+
+    const scanner = new JsonStringFieldScanner(params.streamField);
+    let text = "";
+    let finishReason: string | undefined;
+
+    for await (const event of readSseData(raw.body)) {
+      if (event === "[DONE]") {
+        break;
+      }
+
+      let payload: OpenRouterStreamChunk;
+
+      try {
+        payload = JSON.parse(event) as OpenRouterStreamChunk;
+      } catch {
+        // The gateway interleaves comment lines and keep-alives; skip them.
+        continue;
+      }
+
+      if (payload.error) {
+        throw new Error(
+          `OpenRouter ${routedModel}: ${payload.error.message ?? "stream failed"}`,
+        );
+      }
+
+      if (payload.usage) {
+        usage = payload.usage;
+      }
+
+      const choice = payload.choices?.[0];
+      finishReason = choice?.finish_reason ?? finishReason;
+      const delta = choice?.delta?.content;
+
+      if (!delta) {
+        continue;
+      }
+
+      text += delta;
+      const revealed = scanner.push(delta);
+
+      if (revealed) {
+        params.onDelta(revealed);
+      }
+    }
+
+    const trimmed = text.trim();
+
+    if (!trimmed) {
+      if (finishReason === "length" && maxOutputTokens) {
+        throw new GeminiTruncatedOutputError(maxOutputTokens);
+      }
+
+      throw new Error(`OpenRouter ${routedModel} returned an empty stream.`);
+    }
+
+    const parsed = parseStructuredText(params.schema, trimmed);
+
+    await logGeminiUsageEvent({
+      model: params.model,
+      stage: params.usageContext?.stage ?? "openrouter_structured_text",
+      attemptIndex: 0,
+      success: true,
+      context: params.usageContext,
+      usageMetadata: toUsageMetadata(usage),
+      metadata: { maxOutputTokens, gateway: "openrouter", routedModel, streamed: true },
+    });
+
+    return parsed;
+  } catch (error) {
+    await logGeminiUsageEvent({
+      model: params.model,
+      stage: params.usageContext?.stage ?? "openrouter_structured_text",
+      attemptIndex: 0,
+      success: false,
+      context: params.usageContext,
+      usageMetadata: toUsageMetadata(usage),
+      metadata: { maxOutputTokens, gateway: "openrouter", routedModel, streamed: true },
+      error,
+    });
+
+    throw error;
+  }
+}
+
+type OpenRouterStreamChunk = {
+  error?: { message?: string };
+  choices?: { delta?: { content?: string }; finish_reason?: string }[];
+  usage?: OpenRouterResponse["usage"];
+};
+
+/** Yields the payload of each `data:` line in an SSE body, in order. */
+async function* readSseData(body: ReadableStream<Uint8Array>) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // A line can be split across reads, so the tail is always held back.
+      let newline = buffer.indexOf("\n");
+
+      while (newline !== -1) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+
+        if (line.startsWith("data:")) {
+          yield line.slice(5).trim();
+        }
+
+        newline = buffer.indexOf("\n");
+      }
+    }
+  } finally {
+    reader.releaseLock();
   }
 }

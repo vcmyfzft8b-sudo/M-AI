@@ -3876,23 +3876,39 @@ select:disabled {
   border-radius: 14px;
 }
 
-.note-source-docs-textarea-wrap {
-  padding-inline: 4px;
-}
-
-.note-source-inline-textarea {
-  min-height: 13.75rem;
-  resize: vertical;
-}
-
-.note-source-inline-textarea-compact {
-  min-height: 4.5rem;
-}
-
 .note-source-docs-file-card {
   display: grid;
   gap: 0.35rem;
   padding: 0.95rem 1rem;
+}
+
+/* The picker leaves as soon as a file is staged, so the card carries the way back out. */
+.note-source-prepared-card {
+  position: relative;
+}
+
+.note-source-prepared-card .note-source-docs-file-name,
+.note-source-prepared-card .note-source-card-label {
+  padding-right: 2.25rem;
+}
+
+.note-source-prepared-remove {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
+  background: color-mix(in srgb, var(--surface-solid) 88%, var(--fill-primary));
+  color: var(--secondary-label);
+}
+
+.note-source-prepared-remove:disabled {
+  opacity: 0.45;
 }
 
 .note-source-docs-file-name {
@@ -4208,59 +4224,6 @@ select:disabled {
   color: var(--secondary-label);
   font-size: 0.88rem;
   line-height: 1.45;
-}
-
-.note-source-subsheet-backdrop {
-  z-index: 62;
-  background: rgba(12, 15, 25, 0.42);
-}
-
-.note-source-subsheet-wrap {
-  z-index: 63;
-  align-items: center;
-  justify-content: center;
-  padding:
-    max(1rem, env(safe-area-inset-top))
-    1rem
-    max(1rem, env(safe-area-inset-bottom));
-  overflow-y: auto;
-}
-
-.note-source-subsheet-wrap.keyboard-open {
-  align-items: center;
-  justify-content: center;
-}
-
-.note-source-subsheet-stack {
-  width: min(100%, 31rem);
-  margin: auto;
-  transform: translateY(0);
-}
-
-.note-source-subsheet-wrap.keyboard-open .note-source-subsheet-stack {
-  margin: auto;
-  transform: translateY(-3.25rem);
-}
-
-.note-source-subsheet {
-  max-width: none;
-  max-height: min(31rem, calc(100dvh - 8rem));
-  overflow-y: auto;
-}
-
-.note-source-subsheet-wrap.keyboard-open .note-source-subsheet {
-  max-height: min(31rem, calc(100dvh - 8rem));
-}
-
-.note-source-subsheet-textarea {
-  min-height: 8.5rem;
-  max-height: 8.5rem;
-  padding: 0.9rem 1rem;
-  line-height: 1.5;
-}
-
-.note-source-subsheet-wrap.keyboard-open .note-source-subsheet-textarea {
-  max-height: 8.5rem;
 }
 
 .ios-meta {
@@ -14008,27 +13971,6 @@ select:disabled {
 
   .note-source-modal-body-text .note-source-photo-previews {
     margin-top: 0 !important;
-  }
-
-  .note-source-modal-body-text .note-source-docs-textarea-wrap {
-    min-height: 0;
-    padding-inline: 0;
-  }
-
-  .note-source-modal-body-text .note-source-inline-textarea {
-    min-height: 6.25rem;
-    max-height: min(7.25rem, 17dvh);
-    resize: none;
-    overflow-y: auto;
-  }
-
-  .note-source-modal-body-text .note-source-inline-textarea-compact {
-    min-height: 2.65rem;
-    max-height: 3rem;
-  }
-
-  .note-source-modal-body-photos .note-source-docs-textarea-wrap {
-    align-self: start;
   }
 
   .note-source-modal-body-photos .note-source-photo-previews {

@@ -5624,7 +5624,10 @@ export function LectureWorkspace({
   const noteSourceDetail = getLectureSourceDetail(detail.lecture);
   const noteMetaLine = [
     formatCalendarDate(detail.lecture.created_at),
-    getLectureSourceLabel(getEffectiveLectureSourceType(detail.lecture)),
+    getLectureSourceLabel(
+      getEffectiveLectureSourceType(detail.lecture),
+      detail.lecture.processing_metadata,
+    ),
     noteSourceDetail,
   ]
     .filter(Boolean)

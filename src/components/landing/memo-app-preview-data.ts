@@ -23,7 +23,7 @@ export type SheetMode = "record" | "upload" | "text" | "link";
 export const QUICK_ACTIONS: Array<{ id: SheetMode; label: string; detail: string; icon: string; accent: string }> = [
   { id: "record", label: "Posnemi predavanje", detail: "Začni z enim dotikom", icon: "🎙️", accent: "record" },
   { id: "upload", label: "Naloži zvok", detail: "MP3, M4A, WAV ali WEBM", icon: "📤", accent: "default" },
-  { id: "text", label: "Prilepi besedilo ali PDF", detail: "Pretvori gradivo v strukturirane zapiske", icon: "📄", accent: "default" },
+  { id: "text", label: "Naloži PDF ali dokument", detail: "Pretvori gradivo v strukturirane zapiske", icon: "📄", accent: "default" },
   { id: "link", label: "Dodaj povezavo", detail: "Spletni članek ali vir", icon: "🔗", accent: "default" },
 ];
 
@@ -68,7 +68,7 @@ export const SHEET_CONTENT: Record<
     source: "audio",
   },
   text: {
-    title: "Prilepi besedilo ali dokument",
+    title: "Naloži dokument ali fotografije",
     cardLabel: "Izbran dokument",
     cardTitle: "Poslovni-IS-skripta.pdf",
     cardMeta: "24 strani • 3,1 MB",
@@ -121,7 +121,7 @@ export const HELP_SECTIONS = [
   {
     title: "Snemanje in zapiski",
     items: [
-      { title: "Video povezava ne deluje", body: "Povezave do videov (YouTube, Drive) niso podprte. Naloži zvok ali prilepi besedilo." },
+      { title: "Video povezava ne deluje", body: "Povezave do videov (YouTube, Drive) niso podprte. Naloži zvok ali dokument." },
       { title: "Ne morem naložiti zvoka", body: "Datoteka mora biti krajša od 3 ur in manjša od 300 MB. Uporabi MP3, M4A, WAV ali WEBM." },
       { title: "Prepis je prekratek ali netočen", body: "Telefon približaj predavatelju in se izogibaj hrupu. Krajše datoteke dajo natančnejši prepis." },
     ],

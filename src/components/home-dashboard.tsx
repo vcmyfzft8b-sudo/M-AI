@@ -74,8 +74,8 @@ const QUICK_ACTIONS = [
   },
   {
     id: "text" as const,
-    label: "Naloži PDF ali besedilo",
-    icon: "text_fields",
+    label: "Naloži dokument",
+    icon: "description",
     accent: "",
     filled: true,
   },
@@ -92,7 +92,7 @@ const QUICK_ACTIONS = [
 const CREATE_OPTIONS = [
   { id: "record" as const, emoji: "🎙️", label: "Posnemi zvok" },
   { id: "upload" as const, emoji: "🔊", label: "Naloži zvok" },
-  { id: "text" as const, emoji: "📚", label: "PDF, datoteka ali besedilo" },
+  { id: "text" as const, emoji: "📚", label: "PDF, dokument ali fotografija" },
   { id: "link" as const, emoji: "🔗", label: "Spletna povezava" },
 ] as const;
 
@@ -141,9 +141,9 @@ async function fetchDashboardMutation(
 function sourceMeta(lecture: AppLectureListItem, sourceType: string) {
   const detail = getLectureSourceDetail(lecture);
 
-  return detail
-    ? `${getLectureSourceLabel(sourceType)}, ${detail}`
-    : getLectureSourceLabel(sourceType);
+  const label = getLectureSourceLabel(sourceType, lecture.processing_metadata);
+
+  return detail ? `${label}, ${detail}` : label;
 }
 
 function shouldPollLectureStatus(status: AppLectureListItem["status"]) {
@@ -1017,7 +1017,7 @@ export function HomeDashboard({
     return (
       lecture.title?.toLowerCase().includes(search) ||
       lecture.error_message?.toLowerCase().includes(search) ||
-      getLectureSourceLabel(getEffectiveLectureSourceType(lecture))
+      getLectureSourceLabel(getEffectiveLectureSourceType(lecture), lecture.processing_metadata)
         .toLowerCase()
         .includes(search)
     );
@@ -1152,7 +1152,7 @@ export function HomeDashboard({
           <div className="memo-only-desktop">
             <h1 className="memo-home-h1">Nov zapisek</h1>
             <p className="memo-home-sub">
-              Posnemi ali naloži zvok, prilepi besedilo ali povezavo
+              Posnemi ali naloži zvok, dokument ali povezavo
             </p>
 
             <div className="memo-quick-grid">

@@ -88,13 +88,18 @@ export function lectureShowsTranscript(params: {
 }
 
 /** How the redesign names each source: "Zvok", "PDF", "Povezava"… */
-export function getLectureSourceLabel(sourceType: string) {
+export function getLectureSourceLabel(sourceType: string, processingMetadata?: unknown) {
   if (sourceType === "link") {
     return "Povezava";
   }
 
   if (sourceType === "text") {
-    return "Besedilo";
+    /*
+     * Photographed notes are filed as manual "text" imports, so this type covers two very
+     * different things. The picker no longer takes pasted text, which leaves photos as the
+     * only source still landing here — "Besedilo" is now only the name for the older notes.
+     */
+    return isScanLectureMetadata(processingMetadata) ? "Fotografije" : "Besedilo";
   }
 
   if (sourceType === "pdf") {

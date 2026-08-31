@@ -2008,18 +2008,29 @@ export function NoteSourceModal({
       return null;
     }
 
+    /*
+     * The same stage caption and bar the note screen uses while the pipeline
+     * runs, so uploading a source and generating from it read as one wait
+     * rather than as two unrelated screens. The blue spinner this replaced was
+     * the last of the pre-redesign palette left in the sheet.
+     */
     return (
-      <div className="note-source-loading-state" aria-live="polite">
-        <div className="note-source-busy-row">
-          <Loader2 className="h-4 w-4 animate-spin note-source-loading-spinner" />
-          <p className="note-source-busy-title">{busyLabel}</p>
-        </div>
-        <p className="note-source-busy-copy">
+      <div
+        className="note-source-loading-state memo-gen-head"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <p className="memo-gen-stage">{busyLabel}</p>
+        <p className="memo-gen-copy">
           Ne zapiraj tega zaslona. Ko bo vse pripravljeno, se bo zaprl samodejno.
         </p>
+        <span className="memo-gen-track" aria-hidden="true">
+          <span />
+        </span>
         <button
           type="button"
-          className="ios-secondary-button"
+          className="ios-secondary-button note-source-busy-cancel"
           disabled={isCancelling}
           onClick={() => void handleCancelBusyAction()}
         >

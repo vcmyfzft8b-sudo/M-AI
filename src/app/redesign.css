@@ -4879,8 +4879,7 @@
 /* --- empty and generating states ------------------------------------------ */
 
 .memo-panel .lecture-study-empty,
-.memo-panel .lecture-empty-card,
-.memo-panel .lecture-notes-processing {
+.memo-panel .lecture-empty-card {
   display: grid;
   justify-items: center;
   gap: 0.5rem;
@@ -4890,6 +4889,224 @@
   background: var(--surface);
   box-shadow: var(--shadow);
   text-align: center;
+}
+
+/*
+ * Waiting for the pipeline: uploading a source, writing the note, building the
+ * cards, the quiz and the test.
+ *
+ * The two route skeletons already settle what waiting looks like here — the
+ * screen's own class names, filled with `.app-loading-pill`, so the placeholder
+ * lands where the real thing will. A generation wait is minutes rather than
+ * milliseconds, so it adds the one thing a skeleton cannot say: which stage is
+ * running. That caption sits above the ghost, never inside a second card — the
+ * panel is already a surface, and a card on a card was what made this read as a
+ * stray box rather than as the screen filling in.
+ */
+.memo-gen {
+  display: grid;
+  gap: 1.6rem;
+  animation: memo-pop-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.memo-gen-head {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.memo-gen-stage {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-wrap: pretty;
+}
+
+.memo-gen-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+/*
+ * An indeterminate bar in the same shape as the study screens' own progress
+ * bars (`.memo-progress`), because that is the bar this product already means
+ * by progress. The fill is coral: nothing is measurable here, so it reads as
+ * activity rather than as a position, and coral is where the eye goes.
+ */
+.memo-gen-track {
+  position: relative;
+  height: 0.6rem;
+  margin-top: 0.7rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--track);
+}
+
+.memo-gen-track > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  border-radius: inherit;
+  background: var(--coral);
+  animation: memo-gen-sweep 1.5s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+@keyframes memo-gen-sweep {
+  0%,
+  6% {
+    transform: translateX(-105%);
+  }
+
+  94%,
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+/*
+ * Reduced motion stops the sweep at its first frame, which is off the left end
+ * — an empty track reads as broken rather than as still. A full, quieter bar
+ * says the same thing without moving.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .memo-gen-track > span {
+    width: 100%;
+    transform: none;
+    opacity: 0.55;
+  }
+}
+
+.memo-gen-preview {
+  display: grid;
+  gap: 1.5rem;
+}
+
+/* The note body's own rhythm: a heading, then lines, then a gap. */
+.memo-gen-para {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.memo-gen-heading {
+  height: 1.32rem;
+  width: 11rem;
+}
+
+.memo-gen-line {
+  height: 1.05rem;
+}
+
+.memo-gen-line.short {
+  width: 58%;
+}
+
+/*
+ * The three study surfaces, each at the size its own screen draws: the deck's
+ * count row and its card face, the quiz's card and four options, the test's
+ * prompt and answer box. The heights come from `.memo-card-face`,
+ * `.memo-quiz-option` and `.memo-test-input`, so a change there is a change
+ * here too rather than a drift the placeholder never hears about.
+ */
+.memo-gen-deckhead {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.memo-gen-cardhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.memo-gen-cardhead > span:first-child {
+  height: 1.5rem;
+  width: 8rem;
+}
+
+.memo-gen-cardhead > span:last-child {
+  height: 1.35rem;
+  width: 5rem;
+}
+
+.memo-gen-bar {
+  display: block;
+  border-radius: 999px;
+}
+
+.memo-gen-bar.cards {
+  height: 1.05rem;
+}
+
+.memo-gen-bar.quiz {
+  height: 0.6rem;
+}
+
+.memo-gen-bar.test {
+  height: 0.75rem;
+}
+
+.memo-gen-face {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.9rem;
+  min-height: 22rem;
+  padding: 2rem 1.7rem;
+  border-radius: 26px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-gen-face > span {
+  height: 1.4rem;
+}
+
+.memo-gen-face > span:nth-child(1) {
+  width: 76%;
+}
+
+.memo-gen-face > span:nth-child(2) {
+  width: 52%;
+}
+
+.memo-gen-quizcard {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1.6rem 1.7rem 1.5rem;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-gen-prompt {
+  display: block;
+  height: 1.45rem;
+  width: 82%;
+  margin-bottom: 0.5rem;
+}
+
+.memo-gen-option {
+  height: 4.4rem;
+  border-radius: 18px;
+}
+
+.memo-gen-testblock {
+  display: grid;
+}
+
+.memo-gen-testblock .memo-gen-prompt {
+  margin-bottom: 1.2rem;
+}
+
+.memo-gen-testinput {
+  display: block;
+  height: 13rem;
+  border-radius: 22px;
 }
 
 .memo-panel .lecture-inline-note,
@@ -7428,21 +7645,21 @@
   cursor: pointer;
 }
 
-.note-source-modal .note-source-busy-row {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
+/*
+ * The sheet's own wait. It carries the note screen's caption and bar
+ * (`.memo-gen-head`), left-aligned with the rest of the sheet's content, and
+ * ends in the same Prekliči the action row would have shown.
+ */
+.note-source-modal .note-source-loading-state {
+  width: 100%;
+  max-width: 26rem;
+  margin: 0 auto;
+  text-align: left;
 }
 
-.note-source-modal .note-source-busy-title {
-  font-size: 1.05rem;
-  font-weight: 750;
-  letter-spacing: -0.02em;
-}
-
-.note-source-modal .note-source-busy-copy {
-  color: var(--muted);
-  font-size: 0.95rem;
+.note-source-modal .note-source-busy-cancel {
+  width: 100%;
+  margin-top: 1.6rem;
 }
 
 /* --- practice test detail -------------------------------------------------- */
@@ -7508,28 +7725,6 @@
   font-family: inherit;
   font-size: 1.08rem;
   font-weight: 750;
-}
-
-.memo-panel .lecture-study-generation-notice {
-  display: grid;
-  justify-items: center;
-  gap: 0.4rem;
-  padding: 2.4rem 1rem;
-  border-radius: 24px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  text-align: center;
-}
-
-.memo-panel .lecture-study-generation-stage {
-  font-size: 1.05rem;
-  font-weight: 750;
-  letter-spacing: -0.02em;
-}
-
-.memo-panel .lecture-study-generation-copy {
-  color: var(--muted);
-  font-size: 0.95rem;
 }
 
 /* ===========================================================================
@@ -11119,6 +11314,18 @@
 
   .note-source-modal.mobile-draggable-sheet .note-source-modal-body > * {
     flex-shrink: 0;
+  }
+
+  /*
+   * The wait sits in the middle of the sheet. Production pins it to the sheet
+   * grid's third row, which the phone sheet does not have — that placed it in
+   * an implicit row below the body and left the caption sitting on the very
+   * bottom edge with an empty screen above it.
+   */
+  .note-source-modal.mobile-draggable-sheet .note-source-modal-body-loading {
+    grid-row: auto;
+    justify-content: center;
+    margin-top: 0 !important;
   }
 
   .note-source-modal.mobile-draggable-sheet .memo-capture-row {

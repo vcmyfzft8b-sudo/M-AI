@@ -94,34 +94,27 @@ export function detectInstallPlatform(): InstallPlatform {
 }
 
 /**
- * True when the app is already running from the home screen, in which case
- * there is nothing to explain and no reason to draw attention to it.
- *
- * `standalone` is the iOS-only property; the media query covers everyone else.
- */
-export function isInstalled() {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  const iosStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone;
-
-  return Boolean(iosStandalone) || window.matchMedia("(display-mode: standalone)").matches;
-}
-
-/**
  * Whether the guide still has something to say to this person.
  *
- * `seenOnAccount` comes from the profile and is the answer that travels: once
- * it is true the badge is gone on every device. The local flag only covers the
- * gap where the account could not be asked or could not be told.
+ * One rule, and only one: the badge is owed to every account until that
+ * account opens the guide. `seenOnAccount` comes from the profile and is the
+ * answer that travels — once it is true the badge is gone on every device. The
+ * local flag only covers the gap where the account could not be told.
+ *
+ * Notably *not* a condition: whether the app is already running from the home
+ * screen. It used to be one, on the reasoning that somebody who has installed
+ * it has nothing left to read — but the phone the app was installed on is not
+ * the only phone they own, `display-mode: standalone` is a fact about the
+ * window rather than about the person, and it silently took the badge away
+ * from accounts that had never once been shown it. Everybody gets their one
+ * look; opening it is what ends it.
  */
 export function shouldOfferInstallGuide(seenOnAccount = false) {
   if (typeof window === "undefined") {
     return false;
   }
 
-  if (seenOnAccount || isInstalled()) {
+  if (seenOnAccount) {
     return false;
   }
 

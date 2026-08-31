@@ -774,10 +774,9 @@ export function HomeDashboard({
    */
   const [canSpinWheel, setCanSpinWheel] = useState<boolean | null>(initialCanSpinWheel);
   /*
-   * Whether to badge the settings gear. Read after mount rather than during
-   * render: it comes from `localStorage` and from `display-mode`, neither of
-   * which the server can know, and a badge that renders on the server would
-   * flash on for everyone who has already dismissed it.
+   * Whether to badge the settings gear. The account's answer comes from the
+   * server, but which device is looking does not, so this is settled after
+   * mount: the phone check and the local echo are both browser facts.
    */
   const [showInstallHint, setShowInstallHint] = useState(false);
 

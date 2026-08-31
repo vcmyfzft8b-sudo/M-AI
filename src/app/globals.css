@@ -453,6 +453,28 @@ a:visited {
   color: var(--memo-paywall-close-color);
 }
 
+/*
+ * Checkout and billing notices. These stand in the wordmark's row rather than
+ * adding one — see the comment in onboarding-paywall.tsx. The minimum height
+ * is roughly the lockup's, so swapping one for the other barely moves the
+ * screen, and the inline padding keeps a wide notice clear of the close
+ * button sharing this band.
+ */
+.memo-paywall-notices {
+  display: flex;
+  width: min(100%, 31rem);
+  min-height: min(3.6rem, 7.4dvh);
+  align-items: center;
+  justify-content: center;
+  padding-inline: 3.4rem;
+}
+
+.memo-paywall-notices .app-start-banner {
+  max-width: 100%;
+  box-shadow: var(--shadow-soft);
+  text-align: center;
+}
+
 .memo-paywall-brand {
   display: inline-flex;
   align-items: center;
@@ -2403,21 +2425,39 @@ a:visited {
 @media (max-width: 768px) {
   .app-start-panel-paywall {
     min-height: auto;
-    align-content: start;
-    padding-top: 4.5rem;
+    /*
+     * Centred, not top-anchored. The blocks below cap out at their designed
+     * rem sizes, so a tall phone has height left over once everything fits;
+     * anchoring to the top left all of it pooled under the footer.
+     */
+    align-content: center;
+    padding-top: 0;
   }
 
   .memo-paywall-shell {
     /*
-     * `min-height`, not `height`: the shell fills the screen when it fits and
-     * grows past it when it does not. With the cancelled-payment banner on top
-     * the content is taller than the viewport, and a fixed height left the
-     * call to action below the fold with nothing able to scroll to it.
+     * One screen. This used to be `min-height`, because the cancelled-payment
+     * banner made the content taller than the viewport and a fixed height hid
+     * the call to action. That banner is gone and the notices that remain
+     * stand in the wordmark's row rather than adding one, so the column is a
+     * fixed set of blocks again — and redesign.css caps every one of them
+     * against the viewport height, so it fits.
+     *
+     * `auto` rather than `hidden` is the safety net: nothing should ever reach
+     * for it, but a translation that runs a line long must not be able to put
+     * the call to action somewhere unreachable.
      */
-    min-height: 100dvh;
+    height: 100dvh;
     max-height: none;
     overflow-y: auto;
-    padding: max(4.65rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+    /*
+     * The top band only has to clear the notch: the close button floats at the
+     * right edge, well clear of the centred logo, so the content starts beside
+     * it rather than below it.
+     */
+    padding: max(min(3.4rem, 5dvh), calc(env(safe-area-inset-top) + 0.35rem))
+      clamp(0.9rem, 3vw, 1rem)
+      max(min(0.85rem, 1.2dvh), calc(env(safe-area-inset-bottom) + 0.3rem));
   }
 
   .app-start-panel-paywall .app-start-dismiss-row {

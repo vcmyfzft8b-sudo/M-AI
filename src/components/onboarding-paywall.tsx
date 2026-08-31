@@ -14,7 +14,6 @@ import { startTransition, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { EmojiIcon } from "@/components/emoji-icon";
 import { HOME_SCREEN_STEPS } from "@/lib/install-guide";
 import { Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
@@ -243,21 +242,23 @@ function OnboardingOptionIcon({ icon }: { icon: string }) {
   return <>{icon}</>;
 }
 
+/**
+ * Only the one message the buyer cannot work out for themselves.
+ *
+ * Backing out of Stripe used to return to a "payment cancelled" pill. It told
+ * a buyer who had just pressed the browser's back button something they
+ * already knew, and it cost the paywall a row it does not have: the screen is
+ * sized to fit exactly once, so the extra line pushed the call to action past
+ * the fold and turned the whole thing into a scroller. `success` stays — the
+ * subscription is not live until the webhook lands, and that gap is the one
+ * moment the screen contradicts itself.
+ */
 function CheckoutBanner({ state }: { state: string | null }) {
   if (state === "success") {
     return (
       <div className="app-start-banner success">
         <Check className="h-4 w-4" />
         Plačilo prejeto. Stripe trenutno zaključuje aktivacijo naročnine.
-      </div>
-    );
-  }
-
-  if (state === "cancelled") {
-    return (
-      <div className="app-start-banner">
-        <EmojiIcon symbol="🧾" size="1rem" />
-        Plačilo je bilo preklicano. Spodaj lahko ponovno izbereš paket.
       </div>
     );
   }
@@ -1002,6 +1003,8 @@ export function OnboardingPaywall({
   }
 
   const effectiveOnboardingComplete = onboardingComplete;
+  const checkoutState = searchParams.get("checkout");
+  const hasNotice = checkoutState === "success" || Boolean(billingError);
   const monthlyPlan = plans.find((plan) => plan.id === "monthly");
   const yearlyPlan = plans.find((plan) => plan.id === "yearly");
   const paywallPlans = [yearlyPlan, monthlyPlan].filter(
@@ -1081,20 +1084,30 @@ export function OnboardingPaywall({
         </div>
       ) : null}
 
-      <CheckoutBanner state={searchParams.get("checkout")} />
-      {billingError ? <div className="app-start-banner">{billingError}</div> : null}
-
-      <div className="memo-paywall-brand">
-        <span className="memo-paywall-logo">
-          <Image
-            src={BRAND_LOCKUP_SRC}
-            alt={SEO_BRAND_NAME}
-            width={BRAND_LOCKUP_WIDTH}
-            height={BRAND_LOCKUP_HEIGHT}
-            priority
-          />
-        </span>
-      </div>
+      {/* A notice takes the wordmark's place rather than a row of its own. The
+          screen is laid out to land on exactly one viewport, so a row added on
+          top of the full column is a row that pushes the footer under the fold
+          — which is how the old cancelled-payment banner turned this into a
+          scroller. The wordmark is the one block here that says nothing the
+          buyer needs, so it is the one that stands aside. */}
+      {hasNotice ? (
+        <div className="memo-paywall-notices" role="status" aria-live="polite">
+          <CheckoutBanner state={checkoutState} />
+          {billingError ? <div className="app-start-banner">{billingError}</div> : null}
+        </div>
+      ) : (
+        <div className="memo-paywall-brand">
+          <span className="memo-paywall-logo">
+            <Image
+              src={BRAND_LOCKUP_SRC}
+              alt={SEO_BRAND_NAME}
+              width={BRAND_LOCKUP_WIDTH}
+              height={BRAND_LOCKUP_HEIGHT}
+              priority
+            />
+          </span>
+        </div>
+      )}
 
       <h1 className="memo-paywall-title">Nadgradi in ustvarjaj več zapiskov</h1>
 

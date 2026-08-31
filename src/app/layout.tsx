@@ -36,6 +36,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "arrow_forward",
   "arrow_upward",
   "assignment",
+  "battery_full",
   "bolt",
   "cancel",
   "chat_bubble",
@@ -81,6 +82,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "replay_10",
   "search",
   "settings",
+  "signal_cellular_alt",
   "skip_next",
   "skip_previous",
   "speed",
@@ -90,6 +92,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "text_snippet",
   "tune",
   "warning",
+  "wifi",
 ].join(",");
 
 const MATERIAL_SYMBOLS_HREF =

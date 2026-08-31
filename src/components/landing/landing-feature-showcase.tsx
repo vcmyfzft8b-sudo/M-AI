@@ -137,7 +137,7 @@ function NotesPanel() {
           justifySelf: "start",
           padding: "2.5px 7px",
           borderRadius: "6.7px",
-          background: "rgba(88,140,255,0.30)",
+          background: "var(--m-head-hl)",
           color: "var(--l-label)",
           fontSize: "12.5px",
           fontWeight: 700,
@@ -148,14 +148,14 @@ function NotesPanel() {
         Hiter pregled
       </span>
       <span style={writeLine(0.35)}>
-        <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "rgba(232,132,52,0.5)" }}>
+        <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-marker)" }}>
           Poslovni informacijski sistemi
         </span>
       </span>
       <span style={writeLine(0.7)}>zbirajo in obdelujejo informacije,</span>
       <span style={writeLine(1.05)}>
         ki podpirajo{" "}
-        <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "rgba(226,86,32,0.55)" }}>odločanje</span>.
+        <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-marker)" }}>odločanje</span>.
       </span>
       <div
         style={{
@@ -163,9 +163,10 @@ function NotesPanel() {
           gap: "4px",
           marginTop: "3px",
           padding: "9px 11px",
-          borderLeft: "3px solid rgba(232,132,52,0.75)",
-          borderRadius: "10px",
-          background: "rgba(232,132,52,0.12)",
+          border: "1px solid var(--m-callout-takeaway-line)",
+          borderLeft: "3px solid #f59e0b",
+          borderRadius: "14px",
+          background: "var(--m-callout-takeaway-bg)",
           animation: "memo-fx-write 5.2s linear 1.45s infinite both",
         }}
       >
@@ -404,7 +405,7 @@ function ReadPanel() {
     justifySelf: "start",
     padding: "2.5px 7px",
     borderRadius: "6.7px",
-    background: "rgba(88,140,255,0.30)",
+    background: "var(--m-head-hl)",
     color: "var(--l-label)",
     fontSize: "12.5px",
     fontWeight: 700,
@@ -446,9 +447,10 @@ function ReadPanel() {
           display: "grid",
           gap: "3px",
           padding: "8px 10px",
-          borderLeft: "3px solid rgba(232,132,52,0.75)",
-          borderRadius: "10px",
-          background: "rgba(232,132,52,0.12)",
+          border: "1px solid var(--m-callout-takeaway-line)",
+          borderLeft: "3px solid #f59e0b",
+          borderRadius: "14px",
+          background: "var(--m-callout-takeaway-bg)",
         }}
       >
         <span style={{ fontSize: "9.5px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--l-flow)" }}>

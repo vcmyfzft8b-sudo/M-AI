@@ -527,6 +527,7 @@ export function SettingsScreen({
             aria-modal="true"
             {...confirmSheet.dragProps}
           >
+            <div className="memo-grab" data-drag-handle />
             <span className={`memo-confirm-tile ${confirm === "delete" ? "danger" : ""}`.trim()}>
               <Emoji symbol={confirmCopy[confirm].emoji} size="1.4rem" />
             </span>

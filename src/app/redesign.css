@@ -6048,6 +6048,12 @@
   }
 }
 
+/* The grabber belongs to the phone's bottom sheet; the centred dialog has no
+   edge to be dragged off. Turned back on in the phone layer. */
+.memo-confirm .memo-grab {
+  display: none;
+}
+
 .memo-confirm-tile {
   display: inline-flex;
   align-items: center;
@@ -9967,18 +9973,43 @@
     color: var(--text);
   }
 
+  /*
+   * On the phone this is a bottom sheet, and it is the *same* bottom sheet as
+   * every other one: `.memo-sheet`'s surface, shadow, padding and height cap,
+   * not the centred dialog's lighter card. It kept the desktop card's
+   * `--surface` fill and drop shadow long after it had moved to the bottom
+   * edge, which read as a different kind of overlay from the sheets beside it.
+   */
   .memo-confirm-fixed {
     top: auto;
     left: 0;
     right: 0;
     bottom: var(--memo-kb);
-    transform: none;
+    transform: translateY(0);
     width: auto;
+    max-height: calc(100dvh - var(--memo-kb) - 54px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     border-radius: 34px 34px 0 0;
-    padding: 1.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    background: var(--bg);
+    box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
+  /* The grabber the design gives every sheet, hidden on the desktop dialog. */
+  .memo-confirm .memo-grab {
+    display: block;
+  }
+
+  /* The heading follows the grabber rather than the card's top padding. */
+  .memo-confirm-fixed h2 {
+    margin-top: 0.4rem;
+  }
+
+  .memo-confirm-fixed .memo-confirm-tile + h2 {
+    margin-top: 1.1rem;
+  }
 
   .memo-support-screen {
     position: fixed;
@@ -10257,6 +10288,7 @@
   .memo-sheet-full.closing,
   .memo-action-sheet.closing,
   .memo-dialog.closing,
+  .memo-confirm-fixed.closing,
   .library-folder-mobile-sheet.closing,
   .library-folder-modal.closing,
   .note-source-modal.closing,
@@ -12150,7 +12182,8 @@
   display: grid;
   gap: 0.25rem;
   /* Five languages and a laptop in a shallow window: the list scrolls, the
-     sheet does not grow past the screen. */
+     dialog does not grow past the screen. On the phone the sheet itself is the
+     scroller — see the phone layer — so this cap is lifted there. */
   max-height: min(22rem, 45vh);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -12195,3 +12228,29 @@
 
 /* `.memo-spin` already exists above and centres the glyph in its own box, so
    the turning icon does not orbit. Reused rather than redeclared. */
+
+@media (max-width: 1099px) {
+  /*
+   * As a bottom sheet the panel is the scroller — one scrolling surface, the
+   * way every other sheet that owns a list behaves. Leaving the cap on the
+   * list as well nested two scrollers inside a sheet that was already tall
+   * enough to be scrolled.
+   */
+  .memo-language-sheet {
+    touch-action: pan-y;
+  }
+
+  .memo-language-sheet .memo-language-options {
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .memo-language-sheet p {
+    margin-bottom: 0.6rem;
+  }
+
+  /* Nothing hovers on a phone; the press state is what reads there. */
+  .memo-language-option:active {
+    background: var(--tile);
+  }
+}

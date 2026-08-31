@@ -1376,7 +1376,6 @@ export function LectureWorkspace({
   const deletingStudyItemIdsRef = useRef(new Set<string>());
   const [isStudyManagerOpen, setIsStudyManagerOpen] = useState(false);
   const [studyManagerSearch, setStudyManagerSearch] = useState("");
-  const [studyManagerInputFocused, setStudyManagerInputFocused] = useState(false);
   const [studyManagerItemDrag, setStudyManagerItemDrag] =
     useState<StudyManagerItemDragState | null>(null);
   const [openStudyManagerActionItemId, setOpenStudyManagerActionItemId] = useState<string | null>(
@@ -3481,7 +3480,6 @@ export function LectureWorkspace({
 
   const closeStudyManager = useCallback(() => {
     studyManagerItemDragRef.current = null;
-    setStudyManagerInputFocused(false);
     setStudyManagerItemDrag(null);
     setOpenStudyManagerActionItemId(null);
     setIsStudyManagerOpen(false);
@@ -3536,6 +3534,68 @@ export function LectureWorkspace({
     };
   }, [animateCloseStudyManager, isStudyManagerOpen]);
 
+  /*
+   * The sheet shortens from the bottom when the keyboard opens — `--memo-kb`
+   * takes the keys' height out of its `max-height` — and it is its own
+   * scroller, so a field that was in view a moment ago can end up above the
+   * new edge. Focusing a field is only half of it: the field has to be pulled
+   * back into view again once the keys have actually arrived, which is what
+   * `visualViewport` reports and a focus event cannot.
+   */
+  useEffect(() => {
+    if (!isStudyManagerOpen) {
+      return;
+    }
+
+    const sheet = studyManagerSheetRef.current;
+
+    if (!sheet) {
+      return;
+    }
+
+    let frame = 0;
+
+    const reveal = () => {
+      const focused = document.activeElement;
+
+      /*
+       * Fields only. A button is what the keyboard is *not* about, and where a
+       * tap on one already moves the sheet — the row edit buttons scroll it
+       * back to the form — chasing the button instead would undo that.
+       *
+       * `nearest` scrolls the least that still shows the field, so a form
+       * already in view is left exactly where the reader put it.
+       */
+      if (
+        focused instanceof HTMLElement &&
+        sheet.contains(focused) &&
+        focused.matches("input, textarea, select")
+      ) {
+        focused.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
+    };
+
+    /*
+     * Twice: once now, and once after the frame in which `--memo-kb` lands.
+     * `KeyboardInset` publishes the inset from this same `resize`, and which of
+     * the two listeners runs first is only a matter of which component mounted
+     * first — the second pass is what makes the outcome not depend on that.
+     */
+    const revealNowAndAfterResize = () => {
+      reveal();
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(reveal);
+    };
+
+    sheet.addEventListener("focusin", revealNowAndAfterResize);
+    window.visualViewport?.addEventListener("resize", revealNowAndAfterResize);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      sheet.removeEventListener("focusin", revealNowAndAfterResize);
+      window.visualViewport?.removeEventListener("resize", revealNowAndAfterResize);
+    };
+  }, [isStudyManagerOpen]);
 
   function getStudyManagerItemOffset(itemId: string) {
     if (studyManagerItemDrag?.id === itemId) {
@@ -3688,7 +3748,6 @@ export function LectureWorkspace({
 
   async function handleFlashcardFormSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStudyManagerInputFocused(false);
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
@@ -3787,7 +3846,6 @@ export function LectureWorkspace({
 
   async function handleQuizQuestionFormSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStudyManagerInputFocused(false);
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
@@ -4323,7 +4381,6 @@ export function LectureWorkspace({
       const openStudyManager = () => {
         window.dispatchEvent(new Event("memoai:mobile-dock-close"));
         studyManagerItemDragRef.current = null;
-            setStudyManagerInputFocused(false);
         setStudyManagerItemDrag(null);
         setOpenStudyManagerActionItemId(null);
         setIsStudyManagerOpen(true);
@@ -5121,9 +5178,7 @@ export function LectureWorkspace({
                 <div
                   ref={studyManagerSheetRef}
                   className={sheetClass(
-                    `study-manager-sheet mobile-draggable-sheet ${
-                      studyManagerInputFocused ? "keyboard-open" : ""
-                    }`,
+                    "study-manager-sheet mobile-draggable-sheet",
                     studyManagerSheet.closing,
                   )}
                   role="dialog"
@@ -5166,12 +5221,6 @@ export function LectureWorkspace({
                       <form
                         onSubmit={handleFlashcardFormSubmit}
                         className="study-manager-form study-manager-form-flashcards"
-                        onFocusCapture={() => setStudyManagerInputFocused(true)}
-                        onBlurCapture={(event) => {
-                          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                            setStudyManagerInputFocused(false);
-                          }
-                        }}
                       >
                         {editingFlashcardId ? (
                           <div className="study-manager-form-header">
@@ -5300,12 +5349,6 @@ export function LectureWorkspace({
                       <form
                         onSubmit={handleQuizQuestionFormSubmit}
                         className="study-manager-form study-manager-form-quiz"
-                        onFocusCapture={() => setStudyManagerInputFocused(true)}
-                        onBlurCapture={(event) => {
-                          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                            setStudyManagerInputFocused(false);
-                          }
-                        }}
                       >
                         {editingQuizQuestionId ? (
                           <div className="study-manager-form-header">

@@ -13573,18 +13573,6 @@ select:disabled {
     touch-action: none;
   }
 
-  .study-manager-sheet.keyboard-open {
-    height: calc(100dvh - var(--study-manager-mobile-top));
-    max-height: calc(100dvh - var(--study-manager-mobile-top));
-    overflow-y: auto;
-    align-content: start;
-    padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
-  }
-
-  .study-manager-sheet.keyboard-open .study-manager-list {
-    padding-bottom: 1rem;
-  }
-
   .study-manager-drag-handle {
     z-index: 2;
     touch-action: none;

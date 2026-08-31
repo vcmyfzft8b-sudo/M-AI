@@ -8233,10 +8233,17 @@
    * Sheets that live inside a full-screen wrapper are pinned to the bottom of
    * *that*, so subtracting the keyboard from their own height is not enough —
    * the wrapper has to end above the keys or the sheet stays behind them.
+   *
+   * `.study-manager-backdrop` is deliberately not in this list. It is the only
+   * one of these that is both the scrim and the sheet's parent, and its
+   * `backdrop-filter` makes it the containing block for the fixed sheet inside
+   * it — so ending the scrim above the keys subtracted `--memo-kb` a second
+   * time, and the edit sheet sat a whole keyboard's height above the keyboard
+   * with its header pushed off the top of the screen. The scrim stays the full
+   * viewport and the sheet alone reads the inset.
    */
   .note-source-modal-wrap,
   .library-folder-modal-overlay,
-  .study-manager-backdrop,
   .memo-portal .ios-sheet-wrap {
     bottom: var(--memo-kb);
   }
@@ -10419,7 +10426,15 @@
   }
 
 
-  /* The study manager is a bottom sheet on the phone. */
+  /*
+   * The study manager is a bottom sheet on the phone, and the only thing the
+   * keyboard has to move: it sits on top of the keys, and shortens rather than
+   * slides so the header and the close button stay reachable while typing.
+   *
+   * The bottom padding clears the home indicator, which the keyboard covers
+   * when it is up — subtracting the inset collapses that gap to nothing rather
+   * than leaving a strip of dead sheet resting on the keys.
+   */
   .study-manager-sheet {
     top: auto;
     left: 0;
@@ -10428,7 +10443,10 @@
     transform: none;
     width: auto;
     max-height: calc(100dvh - var(--memo-kb) - 54px);
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.6rem 1.15rem
+      calc(2rem + max(0px, var(--memo-safe-bottom) - var(--memo-kb)));
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);

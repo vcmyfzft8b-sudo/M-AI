@@ -11631,3 +11631,331 @@
     display: none;
   }
 }
+
+/* ===========================================================================
+   Paywall: one screen, never a scroller
+   ---------------------------------------------------------------------------
+   The paywall is the screen the business runs through, and it only works when
+   the price, the plan cards and the call to action are visible at once. Every
+   block above already had a hand-tuned size per breakpoint, but those sizes
+   were tuned against width — so a short viewport (an iPhone SE, a phone with
+   the URL bar showing, a laptop with a deep browser chrome) pushed the footer
+   under the fold and the screen quietly became a scroller.
+
+   So each vertical metric is capped against the viewport's own height here.
+   `min()` means the cap only bites when the screen is short: on a tall one
+   every term resolves to the designed rem value and nothing below changes
+   anything. `dvh`, not `vh`, because the bar-visible height is the one that
+   has to fit — that is the state the buyer starts in.
+
+   The coefficients are sized against a 550px-tall viewport, which is what an
+   iPhone SE leaves once Safari's bars are showing — the shortest screen the
+   site still supports.
+   ========================================================================= */
+
+@media (max-width: 1099px) {
+  .memo-paywall-shell {
+    gap: min(0.72rem, 1dvh);
+  }
+
+  .memo-paywall-logo {
+    --lockup-h: min(clamp(3.15rem, 10.5vw, 4.45rem), 7.4dvh);
+  }
+
+  .memo-paywall-title {
+    margin-bottom: min(0.72rem, 1dvh);
+    font-size: min(clamp(1.6rem, 7.4vw, 2.35rem), 4.1dvh);
+    line-height: 1.06;
+  }
+
+  .memo-paywall-benefits {
+    gap: min(0.68rem, 0.9dvh);
+  }
+
+  .memo-paywall-benefit {
+    --pw-benefit-icon: min(3.35rem, 6.2dvh);
+    grid-template-columns: calc(var(--pw-benefit-icon) + 0.5rem) minmax(0, 1fr);
+    min-height: min(4.65rem, 8dvh);
+    padding-block: min(0.66rem, 0.85dvh);
+  }
+
+  .memo-paywall-benefit > span {
+    width: var(--pw-benefit-icon);
+    height: var(--pw-benefit-icon);
+    font-size: min(1.5rem, 2.9dvh);
+  }
+
+  .memo-paywall-benefit strong {
+    font-size: min(clamp(1.02rem, 4.25vw, 1.28rem), 2.4dvh);
+  }
+
+  .memo-paywall-benefit p {
+    margin-top: min(0.18rem, 0.4dvh);
+    font-size: min(clamp(0.82rem, 3.4vw, 1rem), 2dvh);
+  }
+
+  /* Floored at 1rem so the "most popular" badge, which hangs 0.9rem above the
+     card, still clears the benefit above it on the shortest screens. */
+  .memo-paywall-plan-grid {
+    margin-top: max(1rem, min(1.85rem, 2.2dvh));
+  }
+
+  .memo-paywall-plan {
+    min-height: min(9rem, 15.5dvh);
+    gap: min(0.34rem, 0.6dvh);
+    padding-top: min(1.35rem, 2dvh);
+    padding-bottom: min(0.9rem, 1.2dvh);
+  }
+
+  /*
+   * One line, always. "Najbolj priljubljeno" is long enough to wrap inside a
+   * half-width card, and the second line grew downwards over the plan's own
+   * name — invisible at full height, but the card's top padding shrinks with
+   * the viewport and the badge ended up sitting on top of "Letno". Sized off
+   * the card's width instead so it stays a single row and its overhang stays
+   * the one value the grid's top margin is cleared for.
+   */
+  .memo-paywall-plan-badge {
+    padding: min(0.32rem, 0.65dvh) 0.5rem;
+    font-size: min(0.58rem, 2.4vw);
+    white-space: nowrap;
+  }
+
+  .memo-paywall-plan-header strong {
+    font-size: min(1rem, 2.2dvh);
+  }
+
+  .memo-paywall-radio {
+    width: min(1.55rem, 3dvh);
+    height: min(1.55rem, 3dvh);
+  }
+
+  .memo-paywall-plan-price {
+    font-size: min(1.72rem, 3.2dvh);
+  }
+
+  .memo-paywall-plan-detail {
+    font-size: min(0.82rem, 1.8dvh);
+  }
+
+  .memo-paywall-save {
+    padding-block: min(0.34rem, 0.7dvh);
+    font-size: min(0.62rem, 1.4dvh);
+  }
+
+  .memo-paywall-due {
+    font-size: min(0.98rem, 2.1dvh);
+  }
+
+  .memo-paywall-due svg {
+    width: min(1.25rem, 2.4dvh);
+    height: min(1.25rem, 2.4dvh);
+  }
+
+  .memo-paywall-cta {
+    height: min(3.7rem, 6.6dvh);
+  }
+
+  .memo-paywall-foot {
+    font-size: min(0.78rem, 1.8dvh);
+  }
+
+  .memo-paywall-foot svg {
+    width: min(1.25rem, 2.2dvh);
+    height: min(1.25rem, 2.2dvh);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   ...and the same cap on the desktop layer, whose blocks are sized from a
+   different set of values. A laptop window is routinely shorter than the
+   1000-odd pixels this screen wants at full size — a 1280x720 display with the
+   browser chrome open leaves about 600 — and until these caps existed that
+   window scrolled exactly like the phone did.
+   ------------------------------------------------------------------------- */
+
+@media (min-width: 1100px) {
+  .app-start-panel-paywall {
+    padding-top: min(clamp(5rem, 10vh, 7rem), 5dvh);
+    padding-bottom: min(clamp(2rem, 4vw, 3rem), 3.2dvh);
+  }
+
+  .memo-paywall-shell {
+    gap: min(1.5rem, 1.6dvh);
+  }
+
+  .memo-paywall-logo {
+    --lockup-h: min(clamp(4rem, 16.5vw, 5.15rem), 7.5dvh);
+  }
+
+  .memo-paywall-title {
+    margin-bottom: min(1.35rem, 1.4dvh);
+    font-size: min(clamp(2.05rem, 8vw, 3rem), 4.1dvh);
+  }
+
+  .memo-paywall-benefits {
+    gap: min(0.95rem, 1.2dvh);
+  }
+
+  .memo-paywall-benefit {
+    --pw-benefit-icon: min(4.05rem, 5.5dvh);
+    grid-template-columns: calc(var(--pw-benefit-icon) + 0.6rem) minmax(0, 1fr);
+    min-height: min(5.6rem, 7.6dvh);
+    padding-block: min(1rem, 1dvh);
+  }
+
+  .memo-paywall-benefit > span {
+    width: var(--pw-benefit-icon);
+    height: var(--pw-benefit-icon);
+    font-size: min(1.6rem, 2.6dvh);
+  }
+
+  .memo-paywall-benefit strong {
+    font-size: min(clamp(1.24rem, 4.8vw, 1.7rem), 2.7dvh);
+  }
+
+  .memo-paywall-benefit p {
+    font-size: min(clamp(1rem, 3.9vw, 1.26rem), 2.1dvh);
+  }
+
+  .memo-paywall-plan-grid {
+    margin-top: max(1.3rem, min(1.85rem, 1.9dvh));
+  }
+
+  .memo-paywall-plan {
+    min-height: min(10rem, 14dvh);
+    gap: min(0.45rem, 0.7dvh);
+    padding-top: min(1.5rem, 2dvh);
+    padding-bottom: min(1rem, 1.3dvh);
+  }
+
+  .memo-paywall-plan-badge {
+    padding-block: min(0.45rem, 0.75dvh);
+    font-size: min(0.68rem, 1.4dvh);
+    white-space: nowrap;
+  }
+
+  .memo-paywall-plan-header strong {
+    font-size: min(clamp(1.15rem, 4.5vw, 1.45rem), 2.5dvh);
+  }
+
+  .memo-paywall-radio {
+    width: min(1.85rem, 3dvh);
+    height: min(1.85rem, 3dvh);
+  }
+
+  .memo-paywall-plan-price {
+    font-size: min(2rem, 3.5dvh);
+  }
+
+  .memo-paywall-plan-detail {
+    font-size: min(clamp(0.92rem, 3.4vw, 1.12rem), 1.9dvh);
+  }
+
+  .memo-paywall-save {
+    padding-block: min(0.46rem, 0.75dvh);
+    font-size: min(0.72rem, 1.4dvh);
+  }
+
+  .memo-paywall-due {
+    font-size: min(clamp(1rem, 4vw, 1.25rem), 2.2dvh);
+  }
+
+  .memo-paywall-due svg {
+    width: min(1.25rem, 2.4dvh);
+    height: min(1.25rem, 2.4dvh);
+  }
+
+  .memo-paywall-cta {
+    height: min(4rem, 6.1dvh);
+  }
+
+  .memo-paywall-foot {
+    font-size: min(clamp(0.92rem, 3.4vw, 1.08rem), 1.9dvh);
+  }
+
+  .memo-paywall-foot svg {
+    width: min(1.25rem, 2.2dvh);
+    height: min(1.25rem, 2.2dvh);
+  }
+}
+
+/* ===========================================================================
+   The discount offer, on one screen too
+   ---------------------------------------------------------------------------
+   This is the other paywall, and it is the one a buyer lands on straight after
+   backing out of Stripe — `getBillingCancelUrl` sends a discounted checkout
+   back to `?offer=1`. It was sized against a tall phone, so on anything
+   shorter the countdown and the plans filled the sheet and the button you are
+   meant to press sat below the fold, behind a scroll nobody expects in a
+   modal.
+
+   Same treatment as the main paywall: every vertical metric capped against the
+   viewport height, `min()` so the caps only bite on a short screen. The body
+   keeps its `overflow-y: auto` as a safety net.
+   ========================================================================= */
+
+.memo-offer-body {
+  padding-top: min(1.4rem, 2.2dvh);
+  padding-bottom: min(2rem, 3dvh);
+}
+
+.memo-offer-logo {
+  height: min(4.6rem, 7.6dvh);
+  width: calc(min(4.6rem, 7.6dvh) * 480 / 148);
+}
+
+.memo-offer-kicker {
+  margin-top: min(1.8rem, 2.4dvh);
+  font-size: min(1.35rem, 2.5dvh);
+}
+
+.memo-offer-headline {
+  font-size: min(3.6rem, 7.2dvh);
+}
+
+.memo-offer-sub {
+  margin-top: min(0.5rem, 0.8dvh);
+  font-size: min(1.05rem, 2.1dvh);
+}
+
+.memo-offer-timer {
+  margin-top: min(0.35rem, 0.6dvh);
+  font-size: min(2.9rem, 5.6dvh);
+}
+
+.memo-offer-plans {
+  gap: min(0.7rem, 1.1dvh);
+  padding-top: min(2rem, 2.8dvh);
+}
+
+.memo-offer-plan {
+  padding-block: min(1rem, 1.4dvh);
+}
+
+.memo-offer-plan-copy > span:first-child {
+  font-size: min(1.08rem, 2.2dvh);
+}
+
+.memo-offer-plan-copy > span:last-child {
+  font-size: min(0.92rem, 1.9dvh);
+}
+
+.memo-offer-price {
+  font-size: min(1.05rem, 2.1dvh);
+}
+
+.memo-offer-billing {
+  font-size: min(0.82rem, 1.7dvh);
+}
+
+.memo-offer-cta {
+  height: min(3.8rem, 6.2dvh);
+  margin-top: min(0.5rem, 0.8dvh);
+  font-size: min(1.15rem, 2.3dvh);
+}
+
+.memo-offer-fine {
+  margin-top: min(0.2rem, 0.4dvh);
+  font-size: min(0.95rem, 1.9dvh);
+}

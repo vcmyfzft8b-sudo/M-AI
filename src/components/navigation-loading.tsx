@@ -7,6 +7,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useTransition,
   type MouseEvent,
   type ReactNode,
 } from "react";
@@ -162,6 +163,10 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
   const currentPathname = usePathname();
   const demoBasePath = useCreatorDemoBasePath();
   const cancelPaintWaitRef = useRef<(() => void) | null>(null);
+  const [isRouting, startRouting] = useTransition();
+  // Whether the transition below has actually begun, so that the ~two frames
+  // between the click and `router.push` are not read as a finished navigation.
+  const [routingStarted, setRoutingStarted] = useState(false);
   const [pending, setPending] = useState<{
     href: string;
     top: number;
@@ -177,6 +182,23 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
     getPathnameFromHref(pending.href) !== currentPathname
   ) {
     setPending(null);
+  }
+
+  // The comparison above cannot see a destination that redirects straight back
+  // to where the click came from: the URL never changes, so the target is
+  // never reached and nowhere else is either, and the overlay would stand
+  // until the failsafe. Routing inside a transition gives the signal that
+  // catches it — the router has finished, and we are not where we were going.
+  if (isRouting && !routingStarted) {
+    setRoutingStarted(true);
+  }
+
+  if (!isRouting && routingStarted) {
+    setRoutingStarted(false);
+
+    if (pending && getPathnameFromHref(pending.href) !== currentPathname) {
+      setPending(null);
+    }
   }
 
   // The target committed. The URL flips while the route is still streaming its loading.tsx,
@@ -295,7 +317,7 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
 
     // Two frames: enough for the overlay to be on screen before the router
     // starts competing for the main thread.
-    afterPaint(() => router.push(href));
+    afterPaint(() => startRouting(() => router.push(href)));
   }
 
   const skeleton = pending ? getNavigationSkeleton(pending.href, demoBasePath) : null;

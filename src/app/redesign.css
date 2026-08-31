@@ -733,7 +733,11 @@
   position: fixed;
   top: 0;
   left: 0;
-  z-index: 120;
+  /* Above every sheet, dialog and toast in the app — the phone reaches this
+     path from inside them (the note chat's "Nadgradi" sits under a scrim at
+     125, the read-aloud sheet at 1190), and feedback painted behind the
+     surface that started the navigation is the bug, not the fix. */
+  z-index: 2000;
   display: block;
   height: 3px;
   width: 8%;

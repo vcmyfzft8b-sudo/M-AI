@@ -22,6 +22,15 @@ type InstantLinkProps = LinkProps &
   };
 
 /**
+ * True for a path the app's own router owns. Anything else — an absolute URL,
+ * a protocol-relative one, `mailto:` — leaves the document, which the feedback
+ * path cannot see the end of: it would hold its overlay until the failsafe.
+ */
+function isInAppPath(href: string) {
+  return href.startsWith("/") && !href.startsWith("//");
+}
+
+/**
  * The app's link. It prefetches on intent, and — this is the "instant" part —
  * routes the click through the layout's navigation feedback so the destination's
  * skeleton paints in the click frame. Doing that here rather than at each call
@@ -91,6 +100,7 @@ export const InstantLink = forwardRef<HTMLAnchorElement, InstantLinkProps>(funct
          */
         if (
           !navigationFeedback ||
+          !isInAppPath(href) ||
           replace ||
           scroll === false ||
           !shouldHandleLinkNavigation(event)

@@ -102,6 +102,17 @@ self.addEventListener("message", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
+      /*
+       * A worker has to boot before it can decide anything, and the page load
+       * waits on that — which showed up as time-to-first-byte going from 115ms
+       * to 363ms once this was installed, handing back most of what caching the
+       * CSS had won. Navigation preload starts the request for the page in
+       * parallel with that boot, so the two overlap instead of queueing.
+       */
+      if (self.registration.navigationPreload) {
+        await self.registration.navigationPreload.enable().catch(() => {});
+      }
+
       const names = await caches.keys();
       await Promise.all(names.filter((name) => name !== CACHE).map((name) => caches.delete(name)));
       await self.clients.claim();
@@ -113,6 +124,23 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
 
   if (request.method !== "GET") {
+    return;
+  }
+
+  /*
+   * Pages are never cached — they carry one account's notes. But the preload
+   * above only helps if its response is actually used, so navigations are
+   * answered with it and fall back to the network. Still nothing stored.
+   */
+  if (request.mode === "navigate") {
+    event.respondWith(
+      (async () => {
+        const preloaded = await event.preloadResponse;
+
+        return preloaded || fetch(request);
+      })(),
+    );
+
     return;
   }
 

@@ -253,12 +253,28 @@ test("the service worker caches build output and nothing else", () => {
   );
 
   // Anything that could carry account data, or change behind a stable URL.
-  for (const forbidden of ["/api/", "navigate", "text/html"]) {
+  for (const forbidden of ["/api/", "text/html"]) {
     assert.ok(
       !sw.includes(forbidden),
       `the service worker mentions ${forbidden}; it must not cache pages or API replies`,
     );
   }
+
+  /*
+   * Navigations are answered — that is how the preloaded response gets used —
+   * but the branch that answers them must never reach a cache. A page is one
+   * account's notes; storing one would hand them to whoever opens the app next.
+   */
+  const navigateBranch = sw.slice(
+    sw.indexOf('request.mode === "navigate"'),
+    sw.indexOf("if (!isCacheable(url))"),
+  );
+
+  assert.ok(navigateBranch.length > 0, "the navigation branch has moved; re-check this assertion");
+  assert.ok(
+    !navigateBranch.includes("cache"),
+    "the navigation branch touches a cache; pages must never be stored",
+  );
 
   assert.match(sw, /request\.method !== "GET"/, "only GETs may be served from cache");
 });

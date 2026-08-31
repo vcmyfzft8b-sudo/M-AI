@@ -19,6 +19,7 @@ import {
 } from "@/lib/note-tts-text";
 import { isMissingLectureReferenceError } from "@/lib/postgres-errors";
 import { getServerEnv, requireSonioxEnv } from "@/lib/server-env";
+import { retryTransientStorageOperation } from "@/lib/storage-download-errors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 export type TtsAlignmentWord = {
@@ -870,12 +871,18 @@ async function getCachedTtsChunkRow(params: TtsGenerationIdentity) {
   return data as LectureTtsChunkRow | null;
 }
 
+// Signing is the last thing every path here does, including the one that has already synthesized,
+// uploaded and charged the audio — so a storage fault this late threw away roughly two minutes of
+// finished work and answered the reader with a 500, for a call that only reads object metadata.
+// Production saw Supabase answer it with a bare 520 (StorageApiError, empty message). Repeating a
+// signed-URL read changes nothing, so retry it before giving up.
 async function signTtsChunk(row: LectureTtsChunkRow) {
-  const { data: signedUrl, error: signedUrlError } =
-    await createSupabaseServiceRoleClient()
+  const { data: signedUrl, error: signedUrlError } = await retryTransientStorageOperation(() =>
+    createSupabaseServiceRoleClient()
       .storage
       .from(STORAGE_BUCKET)
-      .createSignedUrl(row.audio_storage_path, 10 * 60);
+      .createSignedUrl(row.audio_storage_path, 10 * 60),
+  );
 
   if (signedUrlError || !signedUrl?.signedUrl) {
     throw signedUrlError ?? new Error("Could not create a signed TTS audio URL.");
@@ -978,12 +985,15 @@ async function generateTtsChunk(params: {
     voice: params.voice,
   });
   const service = createSupabaseServiceRoleClient();
-  const { error: uploadError } = await service.storage
-    .from(STORAGE_BUCKET)
-    .upload(audioStoragePath, Buffer.from(audio), {
+  // Same storage fault, one step earlier: here it costs the whole synthesis, because the caller
+  // releases the quota reservation and the reader has to pay for the generation again. The upload
+  // upserts a path derived from the content hash, so repeating it is safe.
+  const { error: uploadError } = await retryTransientStorageOperation(() =>
+    service.storage.from(STORAGE_BUCKET).upload(audioStoragePath, Buffer.from(audio), {
       contentType: TTS_OUTPUT_MIME_TYPE,
       upsert: true,
-    });
+    }),
+  );
 
   if (uploadError) {
     throw uploadError;

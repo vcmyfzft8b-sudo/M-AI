@@ -20,15 +20,17 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 
 import { BrandLogo } from "@/components/brand-logo";
+import { useT } from "@/components/i18n-provider";
 import { CollegeRainbowWave } from "@/components/creator-demo/college-rainbow-wave";
 import { ViewportPortal } from "@/components/viewport-portal";
 import {
   LIVE_NOTE_HIGHLIGHTS,
   LIVE_NOTE_SEGMENTS,
-  LIVE_NOTE_STATUS_STEPS,
+  LIVE_NOTE_STATUS_STEP_KEYS,
   LIVE_NOTE_TITLE,
   type LiveNoteSegment,
 } from "@/lib/creator-demo/college-live-note";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { mapAppHref } from "@/lib/creator-demo/paths";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import { formatTimestamp } from "@/lib/utils";
@@ -65,11 +67,11 @@ const FIGURE_MAX_WIDTH_PERCENT = 62;
 const STATUS_STEP_MS = 3600;
 const DESKTOP_QUERY = "(min-width: 1024px)";
 
-const FINISH_STAGES = [
-  "Zaključujem snemanje...",
-  "Dokončujem zapiske...",
-  "Ustvarjam kartice in kviz...",
-] as const;
+const FINISH_STAGE_KEYS = [
+  "creatorDemo.finishRecording",
+  "creatorDemo.finishNotes",
+  "creatorDemo.finishStudy",
+] as const satisfies readonly MessageKey[];
 const FINISH_STAGE_MS = 520;
 
 type LiveBlock =
@@ -364,6 +366,7 @@ export function CollegeLiveRecording({
   basePath: string | null;
   onClose: () => void;
 }) {
+  const t = useT();
   const router = useRouter();
   const isDesktop = useIsDesktop();
   const noteScrollRef = useRef<HTMLDivElement | null>(null);
@@ -375,7 +378,7 @@ export function CollegeLiveRecording({
     Math.round(HEAD_START_MS / 1000),
   );
   const [statusStep, setStatusStep] = useState(0);
-  const [finishStage, setFinishStage] = useState<string | null>(null);
+  const [finishStage, setFinishStage] = useState<MessageKey | null>(null);
 
   const isComplete = typedChars >= SCRIPT.totalChars;
 
@@ -409,7 +412,7 @@ export function CollegeLiveRecording({
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      setStatusStep((value) => (value + 1) % LIVE_NOTE_STATUS_STEPS.length);
+      setStatusStep((value) => (value + 1) % LIVE_NOTE_STATUS_STEP_KEYS.length);
     }, STATUS_STEP_MS);
 
     return () => window.clearInterval(intervalId);
@@ -525,7 +528,7 @@ export function CollegeLiveRecording({
       return;
     }
 
-    for (const stage of FINISH_STAGES) {
+    for (const stage of FINISH_STAGE_KEYS) {
       setFinishStage(stage);
       await new Promise((resolve) => window.setTimeout(resolve, FINISH_STAGE_MS));
     }
@@ -563,7 +566,9 @@ export function CollegeLiveRecording({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [finishStage, onClose]);
 
-  const statusLabel = isComplete ? "Zapiski so pripravljeni" : LIVE_NOTE_STATUS_STEPS[statusStep];
+  const statusLabel = isComplete
+    ? t("creatorDemo.liveNotesReady")
+    : t(LIVE_NOTE_STATUS_STEP_KEYS[statusStep]);
 
   return (
     <ViewportPortal>
@@ -586,7 +591,7 @@ export function CollegeLiveRecording({
               camera the writing is the whole story, and every bit of chrome
               around it competes with the wave for attention. */}
           {isDesktop ? (
-            <section className="college-live-note-pane" aria-label="Zapiski nastajajo v živo">
+            <section className="college-live-note-pane" aria-label={t("creatorDemo.liveNotePane")}>
               <div className="college-live-note-scroll">
                 <div className="lecture-workspace lecture-workspace-full">
                   <div className="workspace-panel-stack lecture-main-column">
@@ -648,7 +653,7 @@ export function CollegeLiveRecording({
             </section>
           ) : null}
 
-          <section className="college-live-stage" aria-label="Poslušanje predavanja">
+          <section className="college-live-stage" aria-label={t("creatorDemo.liveStage")}>
             <div className="college-live-aurora" aria-hidden="true" />
             <div className="college-live-halo" aria-hidden="true" />
             <CollegeRainbowWave className="college-live-canvas" />
@@ -659,8 +664,8 @@ export function CollegeLiveRecording({
               </p>
               <p className="college-live-stage-hint">
                 {isDesktop
-                  ? "Memo AI posluša predavanje in sproti piše zapiske."
-                  : "Memo AI posluša predavanje in iz njega pripravi zapiske."}
+                  ? t("creatorDemo.liveHintDesktop")
+                  : t("creatorDemo.liveHintMobile")}
               </p>
             </div>
 
@@ -676,7 +681,7 @@ export function CollegeLiveRecording({
           {finishStage ? (
             <p className="college-live-finishing" aria-live="polite">
               <span className="college-live-finishing-spinner" aria-hidden="true" />
-              {finishStage}
+              {t(finishStage)}
             </p>
           ) : (
             <button

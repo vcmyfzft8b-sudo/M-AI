@@ -2,6 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 
+import { tr } from "@/lib/i18n/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 type RateLimitScope = "ip" | "user" | "user_or_ip";
@@ -136,6 +137,12 @@ export const rateLimitPresets = {
     { windowSeconds: 300, maxRequests: 120, scope: "user" },
     { windowSeconds: 3600, maxRequests: 600, scope: "user" },
   ] satisfies RateLimitRule[],
+  // Switching language is a cookie write and at most one profile update, and
+  // somebody comparing two languages will flip back and forth a few times. Kept
+  // in memory: it is not worth a database round trip to police.
+  localePreference: [
+    { windowSeconds: 300, maxRequests: 60, scope: "user_or_ip", storage: "memory" },
+  ] satisfies RateLimitRule[],
   internal: [
     { windowSeconds: 60, maxRequests: 90, scope: "ip" },
     { windowSeconds: 3600, maxRequests: 1500, scope: "ip" },
@@ -233,10 +240,10 @@ function consumeMemoryRateLimit(params: {
   };
 }
 
-function buildRateLimitedResponse(result: RateLimitResult | null, rule: RateLimitRule) {
+async function buildRateLimitedResponse(result: RateLimitResult | null, rule: RateLimitRule) {
   return NextResponse.json(
     {
-      error: "Preveč zahtevkov.",
+      error: await tr("api.tooManyRequests"),
       retryAfterSeconds: result?.retry_after_seconds ?? rule.windowSeconds,
     },
     {
@@ -273,7 +280,7 @@ export async function enforceRateLimit(params: {
       });
 
       if (!result.allowed) {
-        return buildRateLimitedResponse(result, rule);
+        return await buildRateLimitedResponse(result, rule);
       }
 
       continue;
@@ -322,7 +329,7 @@ export async function enforceRateLimit(params: {
     const result = (Array.isArray(data) ? data[0] : data) as RateLimitResult | null;
 
     if (!result?.allowed) {
-      return buildRateLimitedResponse(result, rule);
+      return await buildRateLimitedResponse(result, rule);
     }
   }
 

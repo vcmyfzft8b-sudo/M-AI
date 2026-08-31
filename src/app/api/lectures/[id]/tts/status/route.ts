@@ -11,6 +11,7 @@ import { getTtsUsageState, hasUnlimitedTtsUsage } from "@/lib/note-tts";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export async function GET(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -41,7 +42,7 @@ export async function GET(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID zapiska." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;

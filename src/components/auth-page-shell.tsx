@@ -6,6 +6,7 @@ import { AuthBackLink } from "@/components/auth-back-link";
 import { BrandLogo } from "@/components/brand-logo";
 import { EmailAuthForm } from "@/components/email-auth-form";
 import { BRAND_NAME } from "@/lib/brand";
+import { getTranslations } from "@/lib/i18n/server";
 
 type AuthMode = "login" | "signup";
 
@@ -62,24 +63,23 @@ export async function AuthPageShell(props: {
   prefilledEmail?: string;
 }) {
   const providers = await getAuthProviderAvailability();
+  const { t } = await getTranslations();
   const loginMode = props.mode === "login";
-  const title = loginMode ? "Dobrodošel nazaj" : "Ustvari svoj račun";
-  const copy = loginMode
-    ? "Nadaljuj tam, kjer si ostal, s prepisom, zapiski, karticami in klepetom."
-    : "Začni z enim predavanjem in v enem prostoru dobi prepis, povzetek, kartice in klepet.";
-  const googleLabel = loginMode ? "Prijava z Google" : "Ustvari račun z Google";
-  const appleLabel = loginMode ? "Prijava z Apple" : "Ustvari račun z Apple";
-  const emailLabel = loginMode ? "Pošlji mi prijavno povezavo" : "Pošlji mi povezavo za registracijo";
+  const title = t(loginMode ? "auth.welcomeBack" : "auth.createAccountTitle");
+  const copy = t(loginMode ? "auth.loginCopy" : "auth.signupCopy");
+  const googleLabel = t(loginMode ? "auth.googleLogin" : "auth.googleSignup");
+  const appleLabel = t(loginMode ? "auth.appleLogin" : "auth.appleSignup");
+  const emailLabel = t(loginMode ? "auth.emailLoginCta" : "auth.emailSignupCta");
   const switchHref = loginMode ? "/auth/signup" : "/auth/login";
-  const switchLabel = loginMode ? "Ustvari račun" : "Prijava";
-  const switchCopy = loginMode ? "Si tukaj prvič?" : "Že imaš račun?";
+  const switchLabel = t(loginMode ? "auth.createAccount" : "auth.signIn");
+  const switchCopy = t(loginMode ? "auth.firstTime" : "auth.haveAccount");
 
   return (
     <main className="landing-shell auth-shell">
       <header className="ios-nav landing-nav">
         <div className="ios-nav-inner landing-nav-inner">
           {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-          <a href="/" className="landing-brand-link" aria-label={`Domov ${BRAND_NAME}`}>
+          <a href="/" className="landing-brand-link" aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}>
             <BrandLogo compact />
           </a>
 
@@ -92,7 +92,7 @@ export async function AuthPageShell(props: {
       <div className="ios-content">
         <section className="auth-stage">
           <div className="auth-panel">
-            <p className="auth-eyebrow">{loginMode ? "Prijava" : "Registracija"}</p>
+            <p className="auth-eyebrow">{t(loginMode ? "auth.signIn" : "auth.signUp")}</p>
             <h1 className="auth-title">{title}</h1>
             <p className="auth-copy">{copy}</p>
 
@@ -116,31 +116,30 @@ export async function AuthPageShell(props: {
             {providers.email ? (
               <>
                 <div className="auth-divider">
-                  <span>ali</span>
+                  <span>{t("auth.or")}</span>
                 </div>
 
                 <EmailAuthForm
                   buttonClassName="ios-primary-button auth-submit-button"
                   defaultEmail={props.prefilledEmail}
                   formClassName="auth-email-form"
-                  helperText="Na tvoj e-naslov bomo poslali potrditveno kodo."
+                  helperText={t("auth.emailHelper")}
                   inputWrapperClassName="auth-field"
                   mode={props.mode}
                   next={props.next}
-                  placeholder="Vnesi svoj e-naslov"
-                  pendingLabel="Pošiljam kodo..."
+                  placeholder={t("auth.emailPlaceholder")}
+                  pendingLabel={t("auth.sendingCode")}
                   submitLabel={emailLabel}
                 />
               </>
             ) : null}
 
             <p className="auth-legal-copy">
-              Z nadaljevanjem se strinjaš s {`${BRAND_NAME}`}{" "}
-              <Link href="/legal/terms-of-use">pogoji uporabe</Link> in{" "}
-              <Link href="/legal/privacy-policy">politiko zasebnosti</Link>, vključno
-              z obdelavo zvoka, besedila, dokumentov in povezav pri AI ponudnikih. Potrjuješ
-              tudi, da imaš potrebna dovoljenja za snemanje, nalaganje in uporabo gradiva,
-              ki ga pošlješ v Memo.
+              {t("auth.legalBefore", { brand: BRAND_NAME })}
+              <Link href="/legal/terms-of-use">{t("legal.termsInline")}</Link>
+              {t("auth.legalAnd")}
+              <Link href="/legal/privacy-policy">{t("legal.privacyInline")}</Link>
+              {t("auth.legalAfterShell")}
             </p>
 
             <p className="auth-switch-copy">

@@ -2,30 +2,27 @@
 
 import { useState } from "react";
 
-const FAQ_ROWS = [
-  {
-    q: "Kako dolgo traja obdelava predavanja?",
-    a: "Uro dolgo predavanje je običajno obdelano v nekaj minutah – prepis, zapiski in gradivo za učenje nastanejo skupaj.",
-  },
-  {
-    q: "Katere formate lahko naložim?",
-    a: "Zvočne posnetke (mp3, m4a, wav), PDF-je in dokumente, fotografije zapiskov ali povezave do virov.",
-  },
-  {
-    q: "Ali deluje v slovenščini?",
-    a: "Da. Prepis in zapiski nastanejo v jeziku predavanja, gradivo za učenje pa lahko dobiš tudi v drugem jeziku.",
-  },
-  {
-    q: "Kaj se zgodi z mojimi posnetki?",
-    a: "Posnetki in zapiski ostanejo tvoji – vidiš jih samo ti in jih lahko kadarkoli izbrišeš.",
-  },
-  {
-    q: "Koliko stane?",
-    a: "Začneš s 3-dnevnim brezplačnim preizkusom. Plačaš šele, če se odločiš, da nadaljuješ.",
-  },
-] as const;
+import { useT } from "@/components/i18n-provider";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+
+/*
+ * The language answer used to promise study material "in another language too",
+ * which the app has not done since it started writing every note in the
+ * language of the source it was given (see `buildGeneratedContentLanguageInstruction`
+ * in src/lib/languages.ts). Translating that claim into four more languages
+ * would have spread a promise the product does not keep, so the answer now
+ * says what actually happens.
+ */
+const FAQ_ROWS: Array<{ q: MessageKey; a: MessageKey }> = [
+  { q: "landing.faq.processing.q", a: "landing.faq.processing.a" },
+  { q: "landing.faq.formats.q", a: "landing.faq.formats.a" },
+  { q: "landing.faq.language.q", a: "landing.faq.language.a" },
+  { q: "landing.faq.recordings.q", a: "landing.faq.recordings.a" },
+  { q: "landing.faq.price.q", a: "landing.faq.price.a" },
+];
 
 export function LandingFaq() {
+  const t = useT();
   const [open, setOpen] = useState(0);
 
   return (
@@ -61,7 +58,7 @@ export function LandingFaq() {
                   transition: "color 240ms ease",
                 }}
               >
-                {row.q}
+                {t(row.q)}
               </span>
               <span
                 aria-hidden="true"
@@ -108,7 +105,7 @@ export function LandingFaq() {
                   transition: "padding-bottom 380ms cubic-bezier(0.22,1,0.36,1)",
                 }}
               >
-                {row.a}
+                {t(row.a)}
               </p>
             </div>
           </div>

@@ -12,9 +12,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { createPortal } from "react-dom";
 
+import { useT } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
 import { useAnnotateWidth } from "@/components/use-annotate-width";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+import type { Translate } from "@/lib/i18n/translate";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import {
   DEFAULT_NOTE_TTS_HIGHLIGHT_COLOR_ID,
@@ -132,12 +135,10 @@ type ActiveChunk = TtsChunkResponse;
 const AUTO_SCROLL_IDLE_MS = 5_000;
 const NOTE_TTS_RATE_STORAGE_KEY = "memo-note-tts-rate";
 const NOTE_TTS_COLOR_STORAGE_KEY = "memo-note-tts-color";
-const TTS_DAILY_LIMIT_MESSAGE = "Porabil si današnje ustvarjanje zvoka.";
-const TTS_FREE_DAILY_LIMIT_MESSAGE =
-  "Porabil si današnje brezplačno ustvarjanje zvoka. Za več zvoka nadgradi paket ali počakaj do ponastavitve ob 00:00. Že pripravljene dele lahko še vedno poslušaš od začetka do mesta, kjer je zvok pripravljen.";
-const TTS_PAID_DAILY_LIMIT_MESSAGE =
-  "Porabil si današnje ustvarjanje zvoka. Nov zvok bo na voljo po ponastavitvi ob 00:00. Že pripravljene dele lahko še vedno poslušaš od začetka do mesta, kjer je zvok pripravljen.";
-const TTS_GENERATION_PROGRESS_LABEL = "Ustvarjam zvok";
+const TTS_DAILY_LIMIT_KEY = "readAloud.dailyLimitShort" satisfies MessageKey;
+const TTS_FREE_DAILY_LIMIT_KEY = "readAloud.dailyLimitFree" satisfies MessageKey;
+const TTS_PAID_DAILY_LIMIT_KEY = "readAloud.dailyLimitPaid" satisfies MessageKey;
+const TTS_GENERATION_PROGRESS_KEY = "stage.lecture.preparingAudio" satisfies MessageKey;
 
 function getTtsGenerationProgressPercent(startedAt: number, workloadChunks = 1) {
   const workload = Math.max(1, workloadChunks);
@@ -204,13 +205,17 @@ function getChunkCacheKey(voice: NoteTtsVoice, chunkIndex: number) {
   return `${voice}:${chunkIndex}`;
 }
 
-function getDailyLimitDisplayMessage(
+/**
+ * A free account is being told it could buy its way past the daily limit; a
+ * paid one is simply out until midnight. Two sentences, picked by tier.
+ */
+function getDailyLimitDisplayKey(
   status: TtsStatusResponse | null,
   fallbackTier?: TtsStatusResponse["tier"],
-) {
+): MessageKey {
   return (status?.tier ?? fallbackTier) === "free"
-    ? TTS_FREE_DAILY_LIMIT_MESSAGE
-    : TTS_PAID_DAILY_LIMIT_MESSAGE;
+    ? TTS_FREE_DAILY_LIMIT_KEY
+    : TTS_PAID_DAILY_LIMIT_KEY;
 }
 
 class TtsRequestError extends Error {
@@ -304,6 +309,7 @@ function QuotaUsageMenu({
   onVoiceChange: (voice: NoteTtsVoice) => void;
   onHighlightColorChange: (colorId: NoteTtsHighlightColorId) => void;
 }) {
+  const t = useT();
   const menuRef = useRef<HTMLDetailsElement | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -340,22 +346,22 @@ function QuotaUsageMenu({
         type="button"
         data-drag-handle="true"
         className="mobile-sheet-drag-handle note-read-usage-drag-handle"
-        aria-label="Povleci navzdol za zapiranje"
+        aria-label={t("folders.dragToClose")}
       />
       <div
         className="note-read-usage-bar"
         role="progressbar"
         aria-label={
           isLimitReached
-            ? "Limit ustvarjanja zvoka dosežen"
+            ? t("readAloud.limitReached")
             : status.hasUnlimitedUsage
-              ? "Brez dnevne omejitve ustvarjanja zvoka"
-              : `Preostalo ${remainingPercent} % dnevnega ustvarjanja zvoka, porabljeno ${usedPercent} %`
+              ? t("readAloud.noDailyLimitLong")
+              : t("readAloud.quotaLabel", { remaining: remainingPercent, used: usedPercent })
         }
         aria-valuetext={
           status.hasUnlimitedUsage
-            ? "Brez dnevne omejitve ustvarjanja zvoka"
-            : `${remainingPercent} % preostalo, ${usedPercent} % porabljeno`
+            ? t("readAloud.noDailyLimitLong")
+            : t("readAloud.quotaValueText", { remaining: remainingPercent, used: usedPercent })
         }
         aria-valuemin={0}
         aria-valuemax={100}
@@ -365,12 +371,12 @@ function QuotaUsageMenu({
         <span className="note-read-usage-bar-label">{remainingLabel}</span>
       </div>
       <div className="note-read-usage-reset">
-        {status.hasUnlimitedUsage ? "Brez dnevne omejitve" : "Ponastavi se ob 00:00"}
+        {t(status.hasUnlimitedUsage ? "readAloud.noDailyLimit" : "readAloud.resetsAt")}
       </div>
       <div className="note-read-settings-divider" />
       <div className="note-read-setting-group">
-        <span className="note-read-setting-label">Hitrost</span>
-        <div className="note-read-rate-options" role="group" aria-label="Hitrost branja">
+        <span className="note-read-setting-label">{t("readAloud.speed")}</span>
+        <div className="note-read-rate-options" role="group" aria-label={t("readAloud.speedGroup")}>
           {NOTE_TTS_PLAYBACK_RATES.map((rate) => (
             <button
               key={rate}
@@ -384,7 +390,7 @@ function QuotaUsageMenu({
         </div>
       </div>
       <label className="note-read-setting-group">
-        <span className="note-read-setting-label">Glas</span>
+        <span className="note-read-setting-label">{t("readAloud.voice")}</span>
         <span className="note-read-setting-select-wrap">
           <select
             className="note-read-setting-select"
@@ -406,8 +412,8 @@ function QuotaUsageMenu({
         </span>
       </label>
       <div className="note-read-setting-group">
-        <span className="note-read-setting-label">Barva</span>
-        <div className="note-read-color-options" role="group" aria-label="Barva označevanja">
+        <span className="note-read-setting-label">{t("readAloud.color")}</span>
+        <div className="note-read-color-options" role="group" aria-label={t("note.annotate.colorGroup")}>
           {NOTE_TTS_HIGHLIGHT_COLORS.map((color) => (
             <button
               key={color.id}
@@ -437,12 +443,12 @@ function QuotaUsageMenu({
           className="note-read-usage-trigger"
           aria-label={
             isLimitReached
-              ? "Limit ustvarjanja zvoka dosežen"
+              ? t("readAloud.limitReached")
               : status.hasUnlimitedUsage
-                ? "Brez dnevne omejitve ustvarjanja zvoka"
-              : `Preostalo ${remainingPercent} % dnevnega ustvarjanja zvoka`
+                ? t("readAloud.noDailyLimitLong")
+              : t("readAloud.quotaShort", { remaining: remainingPercent })
           }
-          title="Nastavitve poslušanja"
+          title={t("readAloud.settings")}
         >
           <Msym name="tune" size="1.25rem" fill={false} weight={500} />
         </summary>
@@ -456,7 +462,7 @@ function QuotaUsageMenu({
             type="button"
             className={sheetClass("note-read-usage-mobile-backdrop", settingsSheet.closing)}
             onClick={animateCloseMenu}
-            aria-label="Zapri nastavitve poslušanja"
+            aria-label={t("readAloud.closeSettings")}
           />
           <div
             className={sheetClass(
@@ -465,7 +471,7 @@ function QuotaUsageMenu({
             )}
             role="dialog"
             aria-modal="true"
-            aria-label="Nastavitve poslušanja"
+            aria-label={t("readAloud.settings")}
             {...settingsSheet.dragProps}
           >
             {menuContent}
@@ -476,7 +482,12 @@ function QuotaUsageMenu({
   );
 }
 
-async function parseResponse<T>(response: Response): Promise<T> {
+/**
+ * `t` is passed in because this runs outside the component. The `error` a
+ * response carries is already in the reader's language — the API translates it
+ * — so it is used as-is; only the messages decided here need resolving.
+ */
+async function parseResponse<T>(response: Response, t: Translate<MessageKey>): Promise<T> {
   const payload = (await response.json().catch(() => ({}))) as T & {
     code?: string;
     error?: string;
@@ -492,21 +503,21 @@ async function parseResponse<T>(response: Response): Promise<T> {
   // retry policy keys off the code, not the status.
   if (response.ok && isTtsChunkPendingPayload(payload)) {
     throw new TtsRequestError(
-      payload.error || "Zvok se še pripravlja. Poskusi znova čez trenutek.",
+      payload.error || t("readAloud.stillPreparing"),
       payload.code,
       response.status,
     );
   }
 
   if (!response.ok) {
-    let message = payload.error || "Zvoka ni bilo mogoče pripraviti.";
+    let message = payload.error || t("api.audioPrepareFailed");
 
     if (payload.code === "tts_daily_limit_reached") {
-      message = TTS_DAILY_LIMIT_MESSAGE;
+      message = t(TTS_DAILY_LIMIT_KEY);
     } else if (message.includes("HTTP 429")) {
-      message = "Zvok se še pripravlja. Poskusi znova čez trenutek.";
+      message = t("readAloud.stillPreparing");
     } else if (response.status === 429 && !payload.error) {
-      message = "Preveč zahtevkov. Poskusi znova čez trenutek.";
+      message = t("readAloud.tooManyRequests");
     }
 
     const quota =
@@ -911,6 +922,7 @@ function InlineNoteMedia({
   onLayoutChange?: (blockId: string, update: NoteMediaBlockLayoutUpdate) => void;
   onDelete?: (mediaId: string) => void;
 }) {
+  const t = useT();
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [liveLayout, setLiveLayout] = useState<NoteMediaBlockLayoutUpdate | null>(null);
@@ -1137,11 +1149,11 @@ function InlineNoteMedia({
           }
           onMove?.(block.id, "up");
         }}
-        aria-label="Premakni gor"
-        title="Premakni gor"
+        aria-label={t("noteMedia.moveUp")}
+        title={t("noteMedia.moveUp")}
       >
         <ArrowUp aria-hidden="true" />
-        {compact ? <span>Gor</span> : null}
+        {compact ? <span>{t("noteMedia.up")}</span> : null}
       </button>
       <button
         type="button"
@@ -1154,11 +1166,11 @@ function InlineNoteMedia({
           }
           onMove?.(block.id, "down");
         }}
-        aria-label="Premakni dol"
-        title="Premakni dol"
+        aria-label={t("noteMedia.moveDown")}
+        title={t("noteMedia.moveDown")}
       >
         <ArrowDown aria-hidden="true" />
-        {compact ? <span>Dol</span> : null}
+        {compact ? <span>{t("noteMedia.down")}</span> : null}
       </button>
       <button
         type="button"
@@ -1172,11 +1184,11 @@ function InlineNoteMedia({
           }
           onDelete?.(block.mediaId);
         }}
-        aria-label={deleting ? "Brišem fotografijo" : "Izbriši fotografijo"}
+        aria-label={t(deleting ? "noteMedia.deleting" : "noteMedia.delete")}
         aria-busy={deleting}
       >
         {deleting ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
-        <span>{deleting ? "Brišem" : "Izbriši"}</span>
+        <span>{t(deleting ? "noteMedia.deletingShort" : "common.delete")}</span>
       </button>
     </>
   );
@@ -1240,8 +1252,8 @@ function InlineNoteMedia({
               }
               setIsActionMenuOpen((current) => !current);
             }}
-            aria-label="Možnosti fotografije"
-            title="Možnosti fotografije"
+            aria-label={t("noteMedia.options")}
+            title={t("noteMedia.options")}
             aria-expanded={isActionMenuOpen}
           >
             <MoreHorizontal aria-hidden="true" />
@@ -1259,8 +1271,8 @@ function InlineNoteMedia({
         onPointerMove={handleResizePointerMove}
         onPointerUp={handleResizePointerEnd}
         onPointerCancel={handleResizePointerEnd}
-        aria-label="Spremeni velikost fotografije"
-        title="Spremeni velikost fotografije"
+        aria-label={t("noteMedia.resize")}
+        title={t("noteMedia.resize")}
       />
       {isPreviewOpen ? (
         <MemoPortal>
@@ -1268,7 +1280,7 @@ function InlineNoteMedia({
             className="note-media-preview"
             role="dialog"
             aria-modal="true"
-            aria-label="Pregled fotografije"
+            aria-label={t("noteMedia.preview")}
             onClick={(event) => {
               event.stopPropagation();
               setIsPreviewOpen(false);
@@ -1281,7 +1293,7 @@ function InlineNoteMedia({
                 event.stopPropagation();
                 setIsPreviewOpen(false);
               }}
-              aria-label="Zapri fotografijo"
+              aria-label={t("noteMedia.closePreview")}
             >
               <X aria-hidden="true" />
             </button>
@@ -1445,6 +1457,7 @@ export function NoteReadAloud({
   onLayoutMediaBlock?: (blockId: string, update: NoteMediaBlockLayoutUpdate) => void;
   onDeleteMedia?: (mediaId: string) => void;
 }) {
+  const t = useT();
   const document = useMemo(() => parseNoteTtsDocument(content), [content]);
   const chunks = useMemo(() => buildNoteTtsChunks(document), [document]);
   const mediaById = useMemo(() => new Map(noteMedia.map((media) => [media.id, media])), [noteMedia]);
@@ -1888,7 +1901,7 @@ export function NoteReadAloud({
         const response = await fetch(`/api/lectures/${lectureId}/tts/status`, {
           cache: "no-store",
         });
-        const payload = await parseResponse<TtsStatusResponse>(response);
+        const payload = await parseResponse<TtsStatusResponse>(response, t);
 
         if (!cancelled) {
           const nextStatus =
@@ -1913,7 +1926,7 @@ export function NoteReadAloud({
       } catch (statusError) {
         if (!cancelled) {
           const message = statusError instanceof Error ? statusError.message : "";
-          setError(/failed to fetch|load failed|network/i.test(message) ? null : "Poslušanje ni na voljo.");
+          setError(/failed to fetch|load failed|network/i.test(message) ? null : t("readAloud.unavailable"));
         }
       } finally {
         if (!cancelled) {
@@ -1927,7 +1940,7 @@ export function NoteReadAloud({
     return () => {
       cancelled = true;
     };
-  }, [chunks.length, document.words.length, lectureId]);
+  }, [chunks.length, document.words.length, lectureId, t]);
 
   useEffect(() => {
     setPlaybackRate(getStoredPlaybackRate());
@@ -2032,7 +2045,7 @@ export function NoteReadAloud({
       generationProgressWorkloadRef.current = Math.max(1, workloadChunks);
 
       setTtsGenerationProgress({
-        label: TTS_GENERATION_PROGRESS_LABEL,
+        label: t(TTS_GENERATION_PROGRESS_KEY),
         percent: 5,
       });
 
@@ -2068,7 +2081,7 @@ export function NoteReadAloud({
       current
         ? {
             ...current,
-            label: TTS_GENERATION_PROGRESS_LABEL,
+            label: t(TTS_GENERATION_PROGRESS_KEY),
             percent: 100,
           }
         : current,
@@ -2177,7 +2190,7 @@ export function NoteReadAloud({
                   acceptsPendingStatus: true,
                 }),
               });
-              const payload = await parseResponse<TtsChunkResponse>(response);
+              const payload = await parseResponse<TtsChunkResponse>(response, t);
               updateQuota(payload);
               prefetchedChunksRef.current.set(cacheKey, payload);
 
@@ -2217,7 +2230,7 @@ export function NoteReadAloud({
         return await request;
       } catch (chunkError) {
         const message =
-          chunkError instanceof Error ? chunkError.message : "Poslušanje ni na voljo.";
+          chunkError instanceof Error ? chunkError.message : t("readAloud.unavailable");
         const requestError = chunkError instanceof TtsRequestError ? chunkError : null;
         const errorCode = requestError?.code;
         const currentStatus: TtsStatusResponse | null = requestError?.quota
@@ -2238,10 +2251,14 @@ export function NoteReadAloud({
               hasUnlimitedUsage: requestError.quota.hasUnlimitedUsage,
             }
           : statusRef.current;
-        const isDailyLimit =
-          errorCode === "tts_daily_limit_reached" ||
-          message === "Limit dosežen." ||
-          message === TTS_DAILY_LIMIT_MESSAGE;
+        /*
+         * The code, and only the code. This used to also compare the message
+         * against two Slovenian sentences; those strings now arrive in
+         * whichever of five languages the reader is using, so matching on them
+         * would silently stop recognising the limit. Every path that reports it
+         * sets `tts_daily_limit_reached` — the route and `note-tts.ts` both do.
+         */
+        const isDailyLimit = errorCode === "tts_daily_limit_reached";
         const canTreatPendingAsCreationLimit =
           errorCode === "tts_generation_pending" ||
           errorCode === "tts_provider_rate_limited" ||
@@ -2253,7 +2270,7 @@ export function NoteReadAloud({
             isCreationQuotaUnavailableForChunk(chunkIndex, currentStatus)
           );
         const displayMessage = shouldShowCreationLimit
-          ? getDailyLimitDisplayMessage(currentStatus, requestError?.tier)
+          ? t(getDailyLimitDisplayKey(currentStatus, requestError?.tier))
           : message;
 
         if (!options?.silent) {
@@ -2287,6 +2304,7 @@ export function NoteReadAloud({
       lectureId,
       resetPlaybackToStart,
       selectedVoice,
+      t,
       updateQuota,
     ],
   );
@@ -2620,7 +2638,7 @@ export function NoteReadAloud({
         }
       } catch {
         if (playbackRequestIdRef.current === requestId) {
-          setError("Za začetek poslušanja pritisni še enkrat.");
+          setError(t("readAloud.pressAgain"));
           setIsPlaying(false);
           setIsStartingPlayback(false);
         }
@@ -2632,6 +2650,7 @@ export function NoteReadAloud({
       loadPlaybackStartBuffer,
       playbackRate,
       setPlaybackWordState,
+      t,
     ],
   );
 
@@ -2667,7 +2686,7 @@ export function NoteReadAloud({
         await audio.play();
       } catch {
         if (playbackRequestIdRef.current === requestId) {
-          setError("Za začetek poslušanja pritisni še enkrat.");
+          setError(t("readAloud.pressAgain"));
           setIsStartingPlayback(false);
         }
       }
@@ -2684,7 +2703,7 @@ export function NoteReadAloud({
         const response = await fetch(`/api/lectures/${lectureId}/tts/status`, {
           cache: "no-store",
         });
-        const payload = await parseResponse<TtsStatusResponse>(response);
+        const payload = await parseResponse<TtsStatusResponse>(response, t);
         playbackStatus =
           payload.reason === "notes_not_ready" && chunks.length > 0
             ? {
@@ -2698,7 +2717,7 @@ export function NoteReadAloud({
         statusRef.current = playbackStatus;
         setStatus(playbackStatus);
       } catch (statusError) {
-        setError(statusError instanceof Error ? statusError.message : "Poslušanje ni na voljo.");
+        setError(statusError instanceof Error ? statusError.message : t("readAloud.unavailable"));
         return;
       } finally {
         setIsFetchingChunk(false);
@@ -2706,7 +2725,7 @@ export function NoteReadAloud({
     }
 
     if (!playbackStatus.available) {
-      setError("Poslušanje ni na voljo.");
+      setError(t("readAloud.unavailable"));
       return;
     }
 
@@ -2723,6 +2742,7 @@ export function NoteReadAloud({
     lectureId,
     playChunk,
     status,
+    t,
   ]);
 
   useEffect(() => {
@@ -2851,14 +2871,15 @@ export function NoteReadAloud({
     Boolean(status && !status.available) ||
     chunks.length === 0;
   const isPreparingPlayback = isFetchingChunk || isStartingPlayback;
-  const playButtonLabel =
+  const playButtonLabel = t(
     isPreparingPlayback
-      ? "Pripravljam..."
+      ? "readAloud.preparing"
       : isPlaying
-        ? "Premor"
+        ? "readAloud.pause"
         : activeChunk
-          ? "Nadaljuj"
-          : "Poslušaj";
+          ? "readAloud.resume"
+          : "readAloud.listen",
+  );
 
   /**
    * The dock, exactly as the redesign draws it: one pill that morphs between
@@ -2945,7 +2966,7 @@ export function NoteReadAloud({
           type="button"
           className="memo-dock-close"
           onClick={stopReading}
-          aria-label="Zapri branje"
+          aria-label={t("readAloud.close")}
         >
           <Msym name="close" size="1.45rem" fill={false} weight={500} />
         </button>

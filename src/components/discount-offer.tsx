@@ -3,9 +3,11 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useT } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
 import { sheetClass, useSheet } from "@/components/use-sheet";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { clearOfferResume, markOfferResume, readOfferResume } from "@/lib/offer-resume";
 import {
   BRAND_LOCKUP_HEIGHT,
@@ -60,11 +62,12 @@ const CONFETTI_COLORS = ["#ff6d68", "#ffb347", "#34c759", "#0066cc", "#b18bff", 
 
 type OfferPlan = {
   id: "yearly" | "monthly";
-  label: string;
-  price: string;
+  labelKey: MessageKey;
+  priceKey: MessageKey;
   /** The small print under the price: what is actually charged, and when. */
-  billing: string;
-  badge: string;
+  billingKey: MessageKey;
+  /** Null on the plan the design leaves unbadged. */
+  badgeKey: MessageKey | null;
 };
 
 /**
@@ -74,8 +77,8 @@ type OfferPlan = {
 const OFFER_PLANS: OfferPlan[] = [
   {
     id: "yearly",
-    label: "Enkratna ponudba",
-    price: "€1,25/teden",
+    labelKey: "offer.plan.oneOff",
+    priceKey: "offer.plan.oneOffPrice",
     /*
      * One line of small print, not two. The card used to say the same thing
      * twice — a "first year / then" line beside a "billed yearly" line — and
@@ -85,15 +88,15 @@ const OFFER_PLANS: OfferPlan[] = [
      * the price goes up afterwards is the one thing a buyer cannot find out
      * later, so it is not the sort of text to trim.
      */
-    billing: "Obračunano letno: €65, nato €130",
-    badge: "PRIHRANI 50 %",
+    billingKey: "offer.plan.oneOffBilling",
+    badgeKey: "offer.plan.saveBadge",
   },
   {
     id: "monthly",
-    label: "Mesečno",
-    price: "€10/mesec",
-    billing: "Obračunano mesečno: €10, nato €20",
-    badge: "",
+    labelKey: "billing.plan.monthly",
+    priceKey: "offer.plan.monthlyPrice",
+    billingKey: "offer.plan.monthlyBilling",
+    badgeKey: null,
   },
 ];
 
@@ -114,6 +117,7 @@ export function DiscountOffer({
   /** Fired once the prize is banked, so the home card can stop offering it. */
   onClaimed: () => void;
 }) {
+  const t = useT();
   const spinTimerRef = useRef<number | null>(null);
   /** Set once checkout has been started, so leaving does not withdraw a prize
    *  the purchase is already carrying. */
@@ -181,14 +185,14 @@ export function DiscountOffer({
       const response = await fetch("/api/discount-wheel", { method: "POST" });
 
       if (!response.ok) {
-        throw new Error("Nagrade ni bilo mogoče shraniti.");
+        throw new Error(t("offer.error.prizeSave"));
       }
 
       onClaimed();
     } catch {
       // The wheel still resolves; checkout simply will not carry a coupon, and
       // the learner sees the ordinary price rather than a broken screen.
-      setError("Nagrade ni bilo mogoče shraniti. Popust morda ne bo upoštevan.");
+      setError(t("offer.error.prizeSaveDetail"));
     }
 
     spinTimerRef.current = window.setTimeout(() => {
@@ -223,7 +227,7 @@ export function DiscountOffer({
         | null;
 
       if (!response.ok || !payload?.url) {
-        throw new Error(payload?.error ?? "Nakupa ni bilo mogoče začeti.");
+        throw new Error(payload?.error ?? t("offer.error.checkout"));
       }
 
       window.location.href = payload.url;
@@ -232,7 +236,7 @@ export function DiscountOffer({
       // still here, and the note would only resurrect it after the next reload.
       boughtRef.current = false;
       clearOfferResume();
-      setError(caught instanceof Error ? caught.message : "Nakupa ni bilo mogoče začeti.");
+      setError(caught instanceof Error ? caught.message : t("offer.error.checkout"));
       setIsCheckingOut(false);
     }
   }
@@ -392,7 +396,7 @@ export function DiscountOffer({
     <MemoPortal>
       <button
         type="button"
-        aria-label="Zapri"
+        aria-label={t("common.close")}
         className={sheetClass("memo-scrim", isClosing)}
         onClick={() => {
           if (offerOpen) {
@@ -419,7 +423,7 @@ export function DiscountOffer({
           <div className="memo-wheel-close-row" data-drag-zone>
             <button
               type="button"
-              aria-label="Zapri"
+              aria-label={t("common.close")}
               className="memo-close-button"
               onClick={() => closeWheel()}
             >
@@ -451,13 +455,15 @@ export function DiscountOffer({
             <span className="memo-emoji" style={{ fontSize: "2rem" }}>
               🎁
             </span>
-            <h1 className="memo-wheel-title">Zavrti kolo sreče</h1>
+            <h1 className="memo-wheel-title">{t("offer.wheelTitle")}</h1>
             <p className="memo-wheel-sub">
-              {hasWon
-                ? "Popust je zaklenjen — uporabi ga zdaj."
-                : isSpinning
-                  ? "Vrti se…"
-                  : "En vrtljaj, en popust — velja samo danes."}
+              {t(
+                hasWon
+                  ? "offer.wheelWon"
+                  : isSpinning
+                    ? "offer.wheelSpinning"
+                    : "offer.wheelIdle",
+              )}
             </p>
 
             <div className="memo-wheel">
@@ -495,8 +501,8 @@ export function DiscountOffer({
 
             {hasWon ? (
               <div className="memo-wheel-prize">
-                <p>50 % popusta</p>
-                <p>Tvoja enkratna nagrada 🎉</p>
+                <p>{t("offer.prizeAmount")}</p>
+                <p>{t("offer.prizeCaption")}</p>
               </div>
             ) : null}
 
@@ -515,7 +521,7 @@ export function DiscountOffer({
               }}
               disabled={isSpinning && !hasWon}
             >
-              {hasWon ? "Prevzemi popust" : isSpinning ? "Vrtim…" : "Zavrti kolo"}
+              {hasWon ? t("offer.claim") : t(isSpinning ? "offer.spinning" : "offer.spin")}
             </button>
           </div>
         </div>
@@ -535,7 +541,7 @@ export function DiscountOffer({
           <div className="memo-offer-head" data-drag-zone>
             <button
               type="button"
-              aria-label="Zapri ponudbo"
+              aria-label={t("offer.close")}
               className="memo-offer-close"
               onClick={() => closeOffer()}
             >
@@ -551,9 +557,9 @@ export function DiscountOffer({
               height={BRAND_LOCKUP_HEIGHT}
               className="memo-offer-logo"
             />
-            <p className="memo-offer-kicker">Tvoja enkratna ponudba</p>
-            <p className="memo-offer-headline">50 % ceneje</p>
-            <p className="memo-offer-sub">Ko zapreš ponudbo, je ni več.</p>
+            <p className="memo-offer-kicker">{t("offer.kicker")}</p>
+            <p className="memo-offer-headline">{t("offer.headline")}</p>
+            <p className="memo-offer-sub">{t("offer.sub")}</p>
 
             {/* Big numbers and nothing else. The urgency is the number. */}
             <p
@@ -573,18 +579,18 @@ export function DiscountOffer({
                   className={`memo-offer-plan ${plan === offerPlan.id ? "selected" : ""}`.trim()}
                   onClick={() => setPlan(offerPlan.id)}
                 >
-                  {offerPlan.badge ? (
-                    <span className="memo-offer-badge">{offerPlan.badge}</span>
+                  {offerPlan.badgeKey ? (
+                    <span className="memo-offer-badge">{t(offerPlan.badgeKey)}</span>
                   ) : null}
                   <span className="memo-offer-radio" />
                   {/* Name over its small print on the left, the headline price
                       on the right — the long billing line needs the full width
                       of the card, not the sliver beside the price. */}
                   <span className="memo-offer-plan-copy">
-                    <span>{offerPlan.label}</span>
-                    <span className="memo-offer-billing">{offerPlan.billing}</span>
+                    <span>{t(offerPlan.labelKey)}</span>
+                    <span className="memo-offer-billing">{t(offerPlan.billingKey)}</span>
                   </span>
-                  <span className="memo-offer-price">{offerPlan.price}</span>
+                  <span className="memo-offer-price">{t(offerPlan.priceKey)}</span>
                 </button>
               ))}
 
@@ -596,9 +602,9 @@ export function DiscountOffer({
                 onClick={() => void startCheckout()}
                 disabled={isCheckingOut}
               >
-                {isCheckingOut ? "Odpiram…" : "Nadaljuj"}
+                {t(isCheckingOut ? "offer.opening" : "common.continue")}
               </button>
-              <p className="memo-offer-fine">Brez obveznosti. Prekliči kadarkoli.</p>
+              <p className="memo-offer-fine">{t("offer.fine")}</p>
             </div>
           </div>
         </div>

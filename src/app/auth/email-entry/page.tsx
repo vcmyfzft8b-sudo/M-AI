@@ -5,6 +5,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { EmailEntryForm } from "@/components/email-entry-form";
 import { getOptionalUser } from "@/lib/auth";
 import { BRAND_NAME } from "@/lib/brand";
+import { getTranslations } from "@/lib/i18n/server";
 import { normalizeNextPath, sanitizeUserInput } from "@/lib/validation";
 
 type SearchParams = Promise<{
@@ -19,6 +20,7 @@ export default async function EmailEntryPage({
   searchParams?: SearchParams;
 }) {
   const user = await getOptionalUser();
+  const { t } = await getTranslations();
   const params = await searchParams;
   const next = normalizeNextPath(params?.next);
   const mode = params?.mode === "login" ? "login" : "signup";
@@ -36,14 +38,14 @@ export default async function EmailEntryPage({
 
       <section className="landing-auth-wrap email-entry-wrap">
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-        <a href="/" className="landing-auth-brand email-entry-brand" aria-label={`Domov ${BRAND_NAME}`}>
+        <a href="/" className="landing-auth-brand email-entry-brand" aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}>
           <BrandLogo compact priority />
         </a>
 
         <div className="landing-auth-hero email-entry-copy">
-          <h1 className="landing-auth-title email-entry-title">Kateri je tvoj e-naslov?</h1>
+          <h1 className="landing-auth-title email-entry-title">{t("auth.emailEntryTitle")}</h1>
           <p className="landing-auth-copy email-entry-text">
-            Vnesi svoj e-naslov in poslali ti bomo potrditveno kodo.
+            {t("auth.emailEntryCopy")}
           </p>
         </div>
 

@@ -15,6 +15,8 @@ import {
 import { getDiscountWheelState } from "@/lib/discount-wheel";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
+import { STRIPE_CHECKOUT_LOCALE } from "@/lib/i18n/locales";
+import { getLocale, tr } from "@/lib/i18n/server";
 
 const checkoutSchema = z.object({
   plan: z.enum(PURCHASABLE_BILLING_PLAN_IDS),
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
   const appState = await getViewerAppState();
 
   if (!appState) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -39,7 +41,7 @@ export async function POST(request: Request) {
   }
 
   if (!appState.onboardingComplete) {
-    return NextResponse.json({ error: "Najprej dokončaj uvodno nastavitev." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.finishOnboarding") }, { status: 400 });
   }
 
   const parsed = await parseJsonRequest(request, checkoutSchema, {
@@ -93,6 +95,9 @@ export async function POST(request: Request) {
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
+      // Stripe's own chrome — field labels, the pay button, card errors — in
+      // the language the app is being read in.
+      locale: STRIPE_CHECKOUT_LOCALE[await getLocale()],
       customer: customerId,
       line_items: [
         {
@@ -111,8 +116,10 @@ export async function POST(request: Request) {
       // be captured at the moment of purchase, not at sign-up.
       custom_text: {
         submit: {
-          message:
-            "Z nakupom izrecno zahtevaš, da se izvajanje storitve začne takoj in pred iztekom 14-dnevnega odstopnega roka. Če kot potrošnik med tem rokom odstopiš, ti vrnemo plačilo, zmanjšano za sorazmerni del že opravljene storitve. Veljata tudi pogoji uporabe in politika vračil na memoai.eu/legal.",
+          // Stripe renders this on its own hosted page, so it has to be
+          // handed over already translated — the checkout locale below only
+          // covers Stripe's own chrome.
+          message: await tr("api.checkoutConsent"),
         },
       },
       customer_update: {
@@ -141,7 +148,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Checkout seje ni bilo mogoče ustvariti.",
+        error: error instanceof Error ? error.message : await tr("api.checkoutSessionFailed"),
       },
       { status: 500 },
     );

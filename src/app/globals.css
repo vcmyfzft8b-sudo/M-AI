@@ -10721,6 +10721,18 @@ select:disabled {
   text-decoration: none;
 }
 
+/*
+ * "This is a translation; the Slovenian version prevails." Shown only on a
+ * translated page, under whatever fine print the document itself carries, and
+ * set apart from it by a rule — it is a statement about the document rather
+ * than a clause of it.
+ */
+.legal-page-prevailing {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid color-mix(in srgb, var(--secondary-label) 18%, transparent);
+}
+
 .legal-page-body a {
   color: var(--label);
   text-decoration: underline;

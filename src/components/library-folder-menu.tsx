@@ -11,11 +11,12 @@ import {
 
 import { useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
+import { useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
-import { formatRelativeDate } from "@/lib/utils";
+import { formatCalendarDate, formatClockTime } from "@/lib/utils";
 
 type LibraryFolder = AppLibraryFolder;
 type StoredLibraryFolder = Pick<AppLibraryFolder, "id" | "name" | "lectureIds">;
@@ -122,13 +123,7 @@ function toggleLectureId(currentIds: string[], lectureId: string) {
     : [...currentIds, lectureId];
 }
 
-function lectureSummary(count: number) {
-  if (count === 1) {
-    return "1 predavanje";
-  }
 
-  return `${count} predavanj`;
-}
 
 /** How long the design's sheet exit runs before the sheet may unmount. */
 
@@ -145,8 +140,22 @@ export function LibraryFolderMenu({
   selectedFolderId: string | null;
   onSelectFolder: (folderId: string | null, lectureIds: string[] | null) => void;
 }) {
+  const { locale, t } = useTranslations();
   const isCreatorDemo = useIsCreatorDemo();
   const shellRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * "31. 8. 2026 ob 14:05", with the word between the two parts coming from the
+   * catalogue rather than from `Intl`, which has no opinion about it.
+   */
+  const formatCreatedAt = useCallback(
+    (isoString: string) =>
+      t("date.dateAtTime", {
+        date: formatCalendarDate(isoString, locale),
+        time: formatClockTime(isoString, locale),
+      }),
+    [locale, t],
+  );
   const hasRestoredSelectionRef = useRef(false);
   const hasMigratedLocalFoldersRef = useRef(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -219,7 +228,7 @@ export function LibraryFolderMenu({
   }, []);
 
   /*
-   * The picker, the "Nova mapa" modal and the folder editor are one sheet each
+   * The picker, the "new folder" modal and the folder editor are one sheet each
    * on the phone, and all three leave the way the design leaves a sheet: the
    * drag carries straight into the exit rather than springing back first.
    */
@@ -596,7 +605,7 @@ export function LibraryFolderMenu({
    */
   function renderFolderMenuOptions() {
     const options = [
-      { id: null as string | null, name: "Vsi zapiski", onSelect: handleSelectAllNotes },
+      { id: null as string | null, name: t("folders.allNotes"), onSelect: handleSelectAllNotes },
       ...liveFolders.map((folder) => ({
         id: folder.id,
         name: folder.name,
@@ -635,12 +644,12 @@ export function LibraryFolderMenu({
           }}
         >
           <Msym name="add" size="1.2rem" fill={false} weight={500} />
-          <span className="memo-menu-item-label">Nova mapa</span>
+          <span className="memo-menu-item-label">{t("folders.new")}</span>
         </button>
 
         <button type="button" className="memo-menu-item" onClick={handleOpenEditModal}>
           <Msym name="edit" size="1.15rem" weight={500} />
-          <span className="memo-menu-item-label">Uredi mape</span>
+          <span className="memo-menu-item-label">{t("folders.edit")}</span>
         </button>
       </>
     );
@@ -657,7 +666,7 @@ export function LibraryFolderMenu({
       >
         <Emoji symbol="📁" size="1.2rem" />
         <span className="memo-folder-chip-label">
-          {selectedFolder?.name ?? "Vsi zapiski"}
+          {selectedFolder?.name ?? t("folders.allNotes")}
         </span>
         <Msym name="arrow_drop_down" size="1.2rem" />
       </button>
@@ -670,7 +679,7 @@ export function LibraryFolderMenu({
         aria-expanded={isOpen}
       >
         <Emoji symbol="📁" size="1.1rem" />
-        <span>{selectedFolder?.name ?? "Vsi zapiski"}</span>
+        <span>{selectedFolder?.name ?? t("folders.allNotes")}</span>
         <Msym name="expand_more" size="1.2rem" fill={false} weight={500} />
       </button>
 
@@ -693,7 +702,7 @@ export function LibraryFolderMenu({
               <button
                 type="button"
                 className="mobile-sheet-drag-handle library-folder-mobile-sheet-handle"
-                aria-label="Povleci navzdol za zapiranje map"
+                aria-label={t("folders.dragToCloseList")}
                 data-drag-handle
               />
               <div className="library-folder-mobile-sheet-header">
@@ -704,7 +713,7 @@ export function LibraryFolderMenu({
                   type="button"
                   className="app-close-button library-folder-mobile-sheet-close"
                   onClick={animateCloseFolderSheet}
-                  aria-label="Zapri mape"
+                  aria-label={t("folders.closeList")}
                 >
                   <Msym name="close" size="1.45rem" fill={false} weight={500} />
                 </button>
@@ -721,7 +730,7 @@ export function LibraryFolderMenu({
                       onClick={handleSelectAllNotes}
                     >
                       <Emoji symbol="📁" size="1.2rem" />
-                      <span className="memo-folder-row-label">Vsi zapiski</span>
+                      <span className="memo-folder-row-label">{t("folders.allNotes")}</span>
                       {selectedFolderId === null ? (
                         <Msym name="check" size="1.35rem" fill={false} weight={500} />
                       ) : null}
@@ -748,7 +757,7 @@ export function LibraryFolderMenu({
                           setIsOpen(false);
                           setFolderActionTarget(folder);
                         }}
-                        aria-label={`Možnosti mape ${folder.name}`}
+                        aria-label={t("folders.options", { name: folder.name })}
                       >
                         <Msym name="more_horiz" size="1.5rem" fill={false} weight={500} />
                       </button>
@@ -767,7 +776,7 @@ export function LibraryFolderMenu({
                       setIsCreateModalOpen(true);
                     }}
                   >
-                    Nova mapa
+                    {t("folders.new")}
                   </button>
                 </div>
               </div>
@@ -797,21 +806,21 @@ export function LibraryFolderMenu({
               <button
                 type="button"
                 className="mobile-sheet-drag-handle library-folder-modal-drag-handle"
-                aria-label="Povleci navzdol za zapiranje"
+                aria-label={t("folders.dragToClose")}
                 data-drag-handle
               />
               <button
                 type="button"
                 className="app-close-button library-folder-modal-close memo-only-desktop"
                 onClick={animateCloseCreateModal}
-                aria-label="Zapri okno za novo mapo"
+                aria-label={t("folders.closeNew")}
               >
                 <EmojiIcon symbol="✖️" size="1rem" />
               </button>
 
               <div className="library-folder-modal-header">
                 <h3 id="new-folder-title" className="library-folder-modal-title">
-                  Nova mapa
+                  {t("folders.new")}
                 </h3>
                 {/* The phone confirms from the header; desktop keeps its
                     footer button. */}
@@ -822,7 +831,7 @@ export function LibraryFolderMenu({
                   disabled={isCreatingFolder || folderName.trim().length === 0}
                   aria-busy={isCreatingFolder}
                 >
-                  Končano
+                  {t("common.done")}
                 </button>
               </div>
 
@@ -834,13 +843,13 @@ export function LibraryFolderMenu({
 
               <div className="library-folder-modal-body">
                 <label className="library-folder-modal-field">
-                  <span className="memo-only-desktop">Ime</span>
+                  <span className="memo-only-desktop">{t("folders.name")}</span>
                   <input
                     value={folderName}
                     onChange={(event) => setFolderName(event.target.value)}
-                    placeholder="Biologija, Matematika, Zgodovina..."
+                    placeholder={t("folders.nameExamples")}
                     className="ios-input"
-                    aria-label="Ime mape"
+                    aria-label={t("folders.nameLabel")}
                     maxLength={32}
                     disabled={isCreatingFolder}
                   />
@@ -849,7 +858,7 @@ export function LibraryFolderMenu({
                 {/* The phone creates the folder empty and says so; notes are
                     moved in from the folder's own editor afterwards. */}
                 <div className="library-folder-modal-field memo-only-desktop">
-                  <span>Dodaj predavanja</span>
+                  <span>{t("folders.addLectures")}</span>
                   <div className="library-folder-lecture-picker modal">
                     {lectures.length > 0 ? (
                       lectures.map((lecture) => (
@@ -866,17 +875,17 @@ export function LibraryFolderMenu({
                           />
                           <span>
                             <span className="library-folder-lecture-title">
-                              {lecture.title ?? "Neimenovan zapisek"}
+                              {lecture.title ?? t("note.untitled")}
                             </span>
                             <span className="library-folder-lecture-meta">
-                              {formatRelativeDate(lecture.created_at)}
+                              {formatCreatedAt(lecture.created_at)}
                             </span>
                           </span>
                         </label>
                       ))
                     ) : (
                       <p className="library-folder-empty">
-                        Najprej ustvari zapiske, nato jih razporedi v mape.
+                        {t("folders.emptyLectures")}
                       </p>
                     )}
                   </div>
@@ -884,7 +893,7 @@ export function LibraryFolderMenu({
               </div>
 
               <p className="memo-folder-hint memo-only-mobile">
-                Zapiske lahko kadar koli premakneš v to mapo.
+                {t("folders.hintMobile")}
               </p>
 
               <button
@@ -897,7 +906,7 @@ export function LibraryFolderMenu({
                 {isCreatingFolder ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : null}
-                {isCreatingFolder ? "Ustvarjam..." : "Ustvari"}
+                {isCreatingFolder ? t("folders.creating") : t("folders.create")}
               </button>
             </div>
           </div>
@@ -918,7 +927,7 @@ export function LibraryFolderMenu({
             className={sheetClass("memo-action-sheet", folderActionSheet.closing)}
             role="dialog"
             aria-modal="true"
-            aria-label={`Možnosti mape ${folderActionTarget.name}`}
+            aria-label={t("folders.options", { name: folderActionTarget.name })}
             {...folderActionSheet.dragProps}
           >
             <span className="mobile-sheet-drag-handle" data-drag-handle="true" />
@@ -935,7 +944,7 @@ export function LibraryFolderMenu({
                 }}
               >
                 <Msym name="drive_file_rename_outline" size="1.4rem" fill={false} weight={500} />
-                Preimenuj mapo
+                {t("folders.rename")}
               </button>
 
               <button
@@ -949,7 +958,7 @@ export function LibraryFolderMenu({
                 }}
               >
                 <Msym name="folder_delete" size="1.4rem" fill={false} weight={500} />
-                Izbriši mapo
+                {t("folders.delete")}
               </button>
 
               <button
@@ -960,7 +969,7 @@ export function LibraryFolderMenu({
                   setIsOpen(true);
                 }}
               >
-                Prekliči
+                {t("common.cancel")}
               </button>
             </div>
           </section>
@@ -971,7 +980,7 @@ export function LibraryFolderMenu({
         <MemoPortal>
           <button
             type="button"
-            aria-label="Zapri"
+            aria-label={t("common.close")}
             className={sheetClass("memo-scrim", folderDeleteSheet.closing)}
             onClick={() => folderDeleteSheet.dismiss()}
           />
@@ -984,11 +993,10 @@ export function LibraryFolderMenu({
           >
             <div className="memo-grab" data-drag-handle />
             <span id="folder-delete-title" className="memo-folder-delete-title">
-              Izbriši mapo
+              {t("folders.delete")}
             </span>
             <p className="memo-folder-delete-copy">
-              Mapa »{folderDeleteTarget.name}« bo izbrisana. Zapiski v njej ostanejo med
-              vsemi zapiski.
+              {t("folders.deleteBody", { name: folderDeleteTarget.name })}
             </p>
             <div className="memo-folder-delete-actions">
               <button
@@ -1003,7 +1011,7 @@ export function LibraryFolderMenu({
                 {deletingFolderId ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : null}
-                Izbriši mapo
+                {t("folders.delete")}
               </button>
               <button
                 type="button"
@@ -1011,7 +1019,7 @@ export function LibraryFolderMenu({
                 disabled={Boolean(deletingFolderId)}
                 onClick={() => folderDeleteSheet.dismiss(() => setIsOpen(true))}
               >
-                Prekliči
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -1021,13 +1029,13 @@ export function LibraryFolderMenu({
       {isEditModalOpen ? (
         <MemoPortal>
           {/*
-            * The phone renames on its own sheet — title, Končano, one field —
+            * The phone renames on its own sheet — title, a done button, one field —
             * as the artboard draws it. The editor below, with its folder
             * picker and its three stacked buttons, is desktop's.
             */}
           <button
             type="button"
-            aria-label="Zapri"
+            aria-label={t("common.close")}
             className={sheetClass("memo-scrim memo-only-mobile", editModalSheet.closing)}
             onClick={animateCancelEdit}
           />
@@ -1038,12 +1046,12 @@ export function LibraryFolderMenu({
             )}
             role="dialog"
             aria-modal="true"
-            aria-label="Preimenuj mapo"
+            aria-label={t("folders.rename")}
             {...editModalSheet.dragProps}
           >
             <div className="memo-grab" data-drag-handle />
             <div className="memo-folder-name-head">
-              <span className="memo-folder-name-title">Preimenuj</span>
+              <span className="memo-folder-name-title">{t("common.rename")}</span>
               <button
                 type="button"
                 className="memo-folder-done"
@@ -1051,7 +1059,7 @@ export function LibraryFolderMenu({
                 disabled={isFolderEditBusy || editingName.trim().length === 0}
                 aria-busy={isSavingFolder}
               >
-                Končano
+                {t("common.done")}
               </button>
             </div>
             <input
@@ -1067,13 +1075,13 @@ export function LibraryFolderMenu({
                 event.currentTarget.blur();
                 void handleSaveFolder();
               }}
-              placeholder="Ime mape"
+              placeholder={t("folders.nameLabel")}
               enterKeyHint="done"
               autoCapitalize="sentences"
               autoCorrect="off"
               autoComplete="off"
               maxLength={32}
-              aria-label="Ime mape"
+              aria-label={t("folders.nameLabel")}
               disabled={isFolderEditBusy}
             />
           </div>
@@ -1100,21 +1108,21 @@ export function LibraryFolderMenu({
             <button
               type="button"
               className="mobile-sheet-drag-handle library-folder-modal-drag-handle"
-              aria-label="Povleci navzdol za zapiranje"
+              aria-label={t("folders.dragToClose")}
               data-drag-handle
             />
             <button
               type="button"
               className="app-close-button library-folder-modal-close"
               onClick={animateCancelEdit}
-              aria-label="Zapri okno za urejanje map"
+              aria-label={t("folders.closeEditor")}
             >
               <EmojiIcon symbol="✖️" size="1rem" />
             </button>
 
             <div className="library-folder-modal-header">
               <h3 id="edit-folder-title" className="library-folder-modal-title">
-                Uredi mapo
+                {t("folders.editOne")}
               </h3>
             </div>
 
@@ -1127,7 +1135,7 @@ export function LibraryFolderMenu({
             <div className="library-folder-modal-body">
               {liveFolders.length > 1 ? (
                 <div className="library-folder-modal-field">
-                  <span>Izberi mapo</span>
+                  <span>{t("folders.choose")}</span>
                   <div className="library-folder-modal-folder-list">
                     {liveFolders.map((folder) => (
                       <button
@@ -1140,7 +1148,7 @@ export function LibraryFolderMenu({
                         <span>
                           <span className="library-folder-saved-title">{folder.name}</span>
                           <span className="library-folder-saved-meta">
-                            {lectureSummary(folder.lectureIds.length)}
+                            {t("folders.lectureCount", { count: folder.lectureIds.length })}
                           </span>
                         </span>
                       </button>
@@ -1150,7 +1158,7 @@ export function LibraryFolderMenu({
               ) : null}
 
               <label className="library-folder-modal-field">
-                <span>Ime</span>
+                <span>{t("folders.name")}</span>
                 <input
                   value={editingName}
                   onChange={(event) => setEditingName(event.target.value)}
@@ -1160,7 +1168,7 @@ export function LibraryFolderMenu({
               </label>
 
               <div className="library-folder-modal-field">
-                <span>Dodaj predavanja</span>
+                <span>{t("folders.addLectures")}</span>
                 <div className="library-folder-lecture-picker modal">
                   {lectures.length > 0 ? (
                     lectures.map((lecture) => (
@@ -1177,17 +1185,17 @@ export function LibraryFolderMenu({
                         />
                         <span>
                           <span className="library-folder-lecture-title">
-                            {lecture.title ?? "Neimenovan zapisek"}
+                            {lecture.title ?? t("note.untitled")}
                           </span>
                           <span className="library-folder-lecture-meta">
-                            {formatRelativeDate(lecture.created_at)}
+                            {formatCreatedAt(lecture.created_at)}
                           </span>
                         </span>
                       </label>
                     ))
                   ) : (
                     <p className="library-folder-empty">
-                      Najprej ustvari zapiske, nato jih razporedi v mape.
+                      {t("folders.emptyLectures")}
                     </p>
                   )}
                 </div>
@@ -1205,7 +1213,7 @@ export function LibraryFolderMenu({
                 {isSavingFolder ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : null}
-                {isSavingFolder ? "Shranjujem..." : "Shrani spremembe"}
+                {isSavingFolder ? t("folders.saving") : t("folders.saveChanges")}
               </button>
               <button
                 type="button"
@@ -1213,7 +1221,7 @@ export function LibraryFolderMenu({
                 onClick={handleCancelEdit}
                 disabled={isFolderEditBusy}
               >
-                Prekliči
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -1231,7 +1239,7 @@ export function LibraryFolderMenu({
                 ) : (
                   <Msym name="delete" size="1.15rem" fill={false} weight={500} />
                 )}
-                {deletingFolderId === editingFolderId ? "Brišem..." : "Izbriši mapo"}
+                {deletingFolderId === editingFolderId ? t("folders.deleting") : t("folders.delete")}
               </button>
             </div>
             </div>

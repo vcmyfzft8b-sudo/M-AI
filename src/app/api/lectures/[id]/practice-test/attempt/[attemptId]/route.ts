@@ -5,6 +5,7 @@ import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { getPracticeTestAttemptForUser } from "@/lib/practice-test";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { tr } from "@/lib/i18n/server";
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -21,7 +22,7 @@ export async function GET(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -38,7 +39,7 @@ export async function GET(
   const parsedParams = paramsSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljavni parametri." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidParams") }, { status: 400 });
   }
 
   const lecture = await ensureUserOwnsLecture({

@@ -21,6 +21,7 @@ import {
   optionalUploadFileNameSchema,
   routeIdParamSchema,
 } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const PREPARE_SCAN_UPLOADS_MAX_BYTES = 32 * 1024;
 const SIGNED_UPLOAD_MAX_ATTEMPTS = 3;
@@ -107,7 +108,7 @@ export async function POST(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -124,7 +125,7 @@ export async function POST(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID zapiska." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;
@@ -141,7 +142,7 @@ export async function POST(
 
   if (!access.allowed) {
     return createBillingRequiredResponse(
-      "Za nalaganje tega zapiska je potreben plačljiv paket.",
+      await tr("api.paidRequired.upload"),
       access.code,
     );
   }
@@ -262,8 +263,8 @@ export async function POST(
       return NextResponse.json(
         {
           error: isTransient
-            ? "Shramba je trenutno preobremenjena. Poskusi znova čez trenutek."
-            : getStorageErrorMessage(error) ?? "Ni bilo mogoče pripraviti nalaganja fotografij.",
+            ? await tr("api.storageBusy")
+            : getStorageErrorMessage(error) ?? await tr("api.photoUploadPrepFailed"),
         },
         {
           status: isTransient ? 503 : 500,

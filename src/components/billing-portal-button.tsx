@@ -4,8 +4,10 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import { EmojiIcon } from "@/components/emoji-icon";
+import { useT } from "@/components/i18n-provider";
 
 export function BillingPortalButton() {
+  const t = useT();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,7 +22,7 @@ export function BillingPortalButton() {
       const payload = (await response.json()) as { url?: string; error?: string };
 
       if (!response.ok || !payload.url) {
-        throw new Error(payload.error ?? "Portala za obračun ni bilo mogoče odpreti.");
+        throw new Error(payload.error ?? t("billing.portalFailed"));
       }
 
       window.location.href = payload.url;
@@ -28,7 +30,7 @@ export function BillingPortalButton() {
       setError(
         portalError instanceof Error
           ? portalError.message
-          : "Portala za obračun ni bilo mogoče odpreti.",
+          : t("billing.portalFailed"),
       );
     } finally {
       setLoading(false);
@@ -39,7 +41,7 @@ export function BillingPortalButton() {
     <div className="settings-action-stack">
       <button type="button" className="settings-inline-action" onClick={handleClick} disabled={loading}>
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <EmojiIcon symbol="💳" size="0.95rem" />}
-        Uredi naročnino
+        {t("billing.manageSubscription")}
       </button>
       {error ? (
         <p className="settings-action-error" role="status">

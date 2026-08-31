@@ -3,7 +3,9 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 
 import { CreatorDemoBasePathProvider } from "@/components/creator-demo/creator-demo-context";
+import { useT } from "@/components/i18n-provider";
 import { createCreatorDemoFetch } from "@/lib/creator-demo/api";
+import { setCreatorDemoTranslator } from "@/lib/creator-demo/demo-translator";
 import { CREATOR_DEMO_BASE_PATH, setCreatorDemoClientBasePath } from "@/lib/creator-demo/paths";
 import {
   getCreatorDemoState,
@@ -80,6 +82,12 @@ export function CreatorDemoProvider({
   basePath?: string;
   children: React.ReactNode;
 }) {
+  /*
+   * Registered during render, alongside the runtime install and for the same
+   * reason: the store and the offline API are called from child effects, which
+   * run before this component's own would.
+   */
+  setCreatorDemoTranslator(useT());
   installCreatorDemoRuntime(seed, basePath);
 
   // Re-assert on mount so an effect remount that skips render (StrictMode,

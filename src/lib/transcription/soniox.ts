@@ -38,6 +38,8 @@ function getSonioxClient() {
  * `normalizeNoteLanguage` cannot say that — it answers "en" for anything it
  * does not recognise — so the check is against the codes themselves.
  */
+const TRANSCRIPTION_LANGUAGE_HINTS = new Set(["en", "sl", "de", "hr", "it"]);
+
 function resolveLanguageHints(languageHint: string | null) {
   const normalized = languageHint?.trim().toLowerCase();
 
@@ -45,7 +47,10 @@ function resolveLanguageHints(languageHint: string | null) {
     return null;
   }
 
-  const known = NOTE_LANGUAGE_OPTIONS.some((option) => option.value === normalized);
+  // Only the codes this transcriber has been run against. `NOTE_LANGUAGE_OPTIONS` also carries
+  // the ones added for note furniture (bs, sr), and an untested hint is worse than none: an
+  // unknown code leaves the field empty, which is the provider's own auto-detect.
+  const known = TRANSCRIPTION_LANGUAGE_HINTS.has(normalized);
 
   return known ? [normalized] : null;
 }

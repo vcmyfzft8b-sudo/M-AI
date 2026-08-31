@@ -19,6 +19,7 @@ import {
 } from "@/lib/storage";
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { createSanitizedStringSchema, languageHintSchema, optionalUploadFileNameSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const CREATE_LECTURE_MAX_BYTES = 8 * 1024;
 const DELETE_LECTURES_MAX_BYTES = 16 * 1024;
@@ -48,14 +49,14 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const entitlement = await getUserEntitlementState(user.id);
 
   if (!entitlement.canCreateNotes) {
     return createBillingRequiredResponse(
-      "Tvoj brezplačni preizkus je porabljen. Nadgradi za novo gradivo.",
+      await tr("api.trialExhausted"),
       "trial_exhausted",
     );
   }
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
 
   if (!isSupportedAudioMimeType(mimeType, parsed.data.fileName)) {
     return NextResponse.json(
-      { error: "Nepodprt zvočni format." },
+      { error: await tr("api.unsupportedAudio") },
       { status: 400 },
     );
   }
@@ -112,7 +113,7 @@ export async function POST(request: Request) {
 
   if (lectureError || !lecture) {
     return NextResponse.json(
-      { error: lectureError?.message ?? "Zapiska ni bilo mogoče ustvariti." },
+      { error: lectureError?.message ?? await tr("api.noteCreateFailed") },
       { status: 500 },
     );
   }
@@ -125,7 +126,7 @@ export async function POST(request: Request) {
     if (!trialClaim.allowed) {
       await supabase.from("lectures").delete().eq("id", createdLecture.id).eq("user_id", user.id);
       return createBillingRequiredResponse(
-        "Tvoj brezplačni preizkus je že porabljen. Nadgradi za novo gradivo.",
+        await tr("api.trialAlreadyUsed"),
         "trial_exhausted",
       );
     }
@@ -152,7 +153,7 @@ export async function POST(request: Request) {
 
   if (signedError || !signedUpload?.token) {
     return NextResponse.json(
-      { error: signedError?.message ?? "Ni bilo mogoče pripraviti cilja za nalaganje." },
+      { error: signedError?.message ?? await tr("api.uploadTargetFailed") },
       { status: 500 },
     );
   }
@@ -171,7 +172,7 @@ export async function DELETE(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({

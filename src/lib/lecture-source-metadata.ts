@@ -1,4 +1,6 @@
 import type { LectureArtifactRow, LectureRow } from "@/lib/database.types";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+import type { Translate } from "@/lib/i18n/translate";
 import {
   DEFAULT_NOTE_TTS_VOICE,
   NOTE_TTS_VOICES,
@@ -87,30 +89,34 @@ export function lectureShowsTranscript(params: {
   );
 }
 
-/** How the redesign names each source: "Zvok", "PDF", "Povezava"… */
-export function getLectureSourceLabel(sourceType: string, processingMetadata?: unknown) {
+/** How the redesign names each source: "Audio", "PDF", "Link"… */
+export function getLectureSourceLabel(
+  sourceType: string,
+  processingMetadata: unknown,
+  t: Translate<MessageKey>,
+) {
   if (sourceType === "link") {
-    return "Povezava";
+    return t("source.link");
   }
 
   if (sourceType === "text") {
     /*
      * Photographed notes are filed as manual "text" imports, so this type covers two very
      * different things. The picker no longer takes pasted text, which leaves photos as the
-     * only source still landing here — "Besedilo" is now only the name for the older notes.
+     * only source still landing here — "Text" is now only the name for the older notes.
      */
-    return isScanLectureMetadata(processingMetadata) ? "Fotografije" : "Besedilo";
+    return t(isScanLectureMetadata(processingMetadata) ? "source.photos" : "source.text");
   }
 
   if (sourceType === "pdf") {
-    return "PDF";
+    return t("source.pdf");
   }
 
   if (sourceType === "presentation") {
-    return "Predstavitev";
+    return t("source.presentation");
   }
 
-  return "Zvok";
+  return t("source.audio");
 }
 
 /**
@@ -125,11 +131,12 @@ export function getLectureSourceLabel(sourceType: string, processingMetadata?: u
  */
 export function getLectureSourceDetail(
   lecture: Pick<LectureRow, "source_type" | "duration_seconds" | "processing_metadata">,
+  t: Translate<MessageKey>,
 ) {
   const sourceType = getEffectiveLectureSourceType(lecture);
 
   if (sourceType === "audio") {
-    return formatSourceDuration(lecture.duration_seconds);
+    return formatSourceDuration(lecture.duration_seconds, t);
   }
 
   if (sourceType === "pdf" || sourceType === "presentation") {
@@ -139,16 +146,22 @@ export function getLectureSourceDetail(
       return null;
     }
 
-    return sourceType === "presentation"
-      ? `${pageCount} ${slovenianPlural(pageCount, "prosojnica", "prosojnici", "prosojnice", "prosojnic")}`
-      : `${pageCount} ${slovenianPlural(pageCount, "stran", "strani", "strani", "strani")}`;
+    /*
+     * The count and its noun used to be joined here, with the Slovenian rule
+     * (`count % 100`) written out below. Every language draws the plural
+     * boundaries somewhere different, so the whole phrase is now one message
+     * with a set of plural forms and `Intl.PluralRules` chooses between them.
+     */
+    return t(sourceType === "presentation" ? "source.slides" : "source.pages", {
+      count: pageCount,
+    });
   }
 
   return null;
 }
 
 /** "48 min" under an hour, "1 h 12 min" above it, as the design writes them. */
-function formatSourceDuration(durationSeconds: number | null) {
+function formatSourceDuration(durationSeconds: number | null, t: Translate<MessageKey>) {
   if (!durationSeconds || durationSeconds <= 0) {
     return null;
   }
@@ -158,10 +171,12 @@ function formatSourceDuration(durationSeconds: number | null) {
   const minutes = totalMinutes % 60;
 
   if (!hours) {
-    return `${totalMinutes} min`;
+    return t("source.duration.minutes", { minutes: totalMinutes });
   }
 
-  return minutes ? `${hours} h ${minutes} min` : `${hours} h`;
+  return minutes
+    ? t("source.duration.hoursMinutes", { hours, minutes })
+    : t("source.duration.hours", { hours });
 }
 
 function getSourcePageCount(metadata: unknown) {
@@ -191,29 +206,4 @@ function getSourcePageCount(metadata: unknown) {
   }
 
   return pageNumbers.size || null;
-}
-
-/** Slovenian counts take four forms, by the count modulo 100. */
-function slovenianPlural(
-  count: number,
-  one: string,
-  two: string,
-  few: string,
-  many: string,
-) {
-  const remainder = count % 100;
-
-  if (remainder === 1) {
-    return one;
-  }
-
-  if (remainder === 2) {
-    return two;
-  }
-
-  if (remainder === 3 || remainder === 4) {
-    return few;
-  }
-
-  return many;
 }

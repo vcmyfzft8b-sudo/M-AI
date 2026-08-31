@@ -20,6 +20,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { flushSync } from "react-dom";
 
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
+import { useT, useTranslations } from "@/components/i18n-provider";
 import {
   detectInstallPlatform,
   INSTALL_GUIDE_SEEN_EVENT,
@@ -46,7 +47,7 @@ import {
 } from "@/lib/brand";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
 import { rememberHomePromo } from "@/lib/home-promo-hint";
-import { canRetryLectureFailure } from "@/lib/lecture-failure-codes";
+import { canRetryLectureFailure, lectureFailureMessage } from "@/lib/lecture-failure-codes";
 import { clearOfferResume, isOfferResumePending, markOfferResume } from "@/lib/offer-resume";
 import {
   getEffectiveLectureSourceType,
@@ -55,6 +56,8 @@ import {
 } from "@/lib/lecture-source-metadata";
 import { noteEmoji } from "@/lib/note-emoji";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+import type { Translate } from "@/lib/i18n/translate";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 import { formatCalendarDate } from "@/lib/utils";
 
@@ -62,40 +65,40 @@ import { formatCalendarDate } from "@/lib/utils";
 const QUICK_ACTIONS = [
   {
     id: "record" as const,
-    label: "Posnemi predavanje",
+    labelKey: "library.quickAction.record" satisfies MessageKey,
     icon: "radio_button_checked",
     accent: "record",
     filled: true,
   },
   {
     id: "link" as const,
-    label: "Dodaj povezavo",
+    labelKey: "library.quickAction.link" satisfies MessageKey,
     icon: "link",
     accent: "",
     filled: true,
   },
   {
     id: "text" as const,
-    label: "Naloži dokument",
+    labelKey: "library.quickAction.document" satisfies MessageKey,
     icon: "description",
     accent: "",
     filled: true,
   },
   {
     id: "upload" as const,
-    label: "Naloži zvok",
+    labelKey: "library.quickAction.audio" satisfies MessageKey,
     icon: "cloud_upload",
     accent: "",
     filled: true,
   },
 ] as const;
 
-/** Phone home: the same entry points, as the "Nov zapisek" sheet lists them. */
+/** Phone home: the same entry points, as the "new note" sheet lists them. */
 const CREATE_OPTIONS = [
-  { id: "record" as const, emoji: "🎙️", label: "Posnemi zvok" },
-  { id: "upload" as const, emoji: "🔊", label: "Naloži zvok" },
-  { id: "text" as const, emoji: "📚", label: "PDF, dokument ali fotografija" },
-  { id: "link" as const, emoji: "🔗", label: "Spletna povezava" },
+  { id: "record" as const, emoji: "🎙️", labelKey: "library.create.record" satisfies MessageKey },
+  { id: "upload" as const, emoji: "🔊", labelKey: "library.quickAction.audio" satisfies MessageKey },
+  { id: "text" as const, emoji: "📚", labelKey: "library.create.text" satisfies MessageKey },
+  { id: "link" as const, emoji: "🔗", labelKey: "library.create.link" satisfies MessageKey },
 ] as const;
 
 const DASHBOARD_MUTATION_TIMEOUT_MS = 18_000;
@@ -139,9 +142,15 @@ type DashboardNoteDragState = {
   hasVelocity: boolean;
 };
 
+/**
+ * `timeoutMessage` is passed in rather than written here because this runs
+ * outside a component and has no access to the translator. The caller is a
+ * screen; it has one.
+ */
 async function fetchDashboardMutation(
   input: Parameters<typeof fetch>[0],
   init: RequestInit = {},
+  timeoutMessage = "",
 ) {
   const controller = new AbortController();
   let timedOut = false;
@@ -157,9 +166,7 @@ async function fetchDashboardMutation(
     });
   } catch (error) {
     if (timedOut) {
-      throw new Error(
-        "Lokalni strežnik se ni odzval. Osveži stran ali ponovno zaženi localhost.",
-      );
+      throw new Error(timeoutMessage);
     }
 
     throw error;
@@ -168,11 +175,15 @@ async function fetchDashboardMutation(
   }
 }
 
-/** "Zvok, 1 h 12 min" where the design has a detail to print, "Zvok" where not. */
-function sourceMeta(lecture: AppLectureListItem, sourceType: string) {
-  const detail = getLectureSourceDetail(lecture);
+/** "Audio, 1 h 12 min" where the design has a detail to print, "Audio" where not. */
+function sourceMeta(
+  lecture: AppLectureListItem,
+  sourceType: string,
+  t: Translate<MessageKey>,
+) {
+  const detail = getLectureSourceDetail(lecture, t);
 
-  const label = getLectureSourceLabel(sourceType, lecture.processing_metadata);
+  const label = getLectureSourceLabel(sourceType, lecture.processing_metadata, t);
 
   return detail ? `${label}, ${detail}` : label;
 }
@@ -209,6 +220,7 @@ const NoteRow = memo(function NoteRow({
   onOpenDelete,
   attachMenuRef,
 }: NoteRowProps) {
+  const { locale, t } = useTranslations();
   const router = useRouter();
   const {
     navigateWithFeedback,
@@ -224,15 +236,15 @@ const NoteRow = memo(function NoteRow({
   const releaseSurfaceRef = useRef<(() => void) | null>(null);
   const cancelPrefetchRef = useRef<(() => void) | null>(null);
   const suppressClickRef = useRef(false);
-  const title = lecture.title?.trim() || "Neimenovan zapisek";
+  const title = lecture.title?.trim() || t("note.untitled");
   const emoji = noteEmoji(lecture);
   const isProcessing = shouldPollLectureStatus(lecture.status);
   const isFailed = lecture.status === "failed";
   const meta = isProcessing
-    ? "Ustvarjanje zapiskov…"
+    ? t("note.generating")
     : isFailed
-      ? "Obdelava ni uspela"
-      : `${formatCalendarDate(lecture.created_at)} • ${sourceMeta(lecture, sourceType)}`;
+      ? t("note.processingFailed")
+      : `${formatCalendarDate(lecture.created_at, locale)} • ${sourceMeta(lecture, sourceType, t)}`;
 
   useEffect(
     () => () => {
@@ -604,7 +616,7 @@ const NoteRow = memo(function NoteRow({
     openLecture();
   }
 
-  // Phone: the row slides left to reveal Uredi / Izbriši.
+  // Phone: the row slides left to reveal the edit and delete actions.
   return (
     <div className={`memo-swipe-row ${isMenuOpen ? "open" : ""}`.trim()}>
       {navigationOverlay}
@@ -629,7 +641,7 @@ const NoteRow = memo(function NoteRow({
 
         <button
           type="button"
-          aria-label={`Dejanja za ${title}`}
+          aria-label={t("library.row.actions", { title })}
           aria-expanded={isMenuOpen}
           className={`memo-note-chevron ${isMenuOpen ? "open" : ""}`.trim()}
           /*
@@ -662,7 +674,7 @@ const NoteRow = memo(function NoteRow({
       >
         <button
           type="button"
-          aria-label={`Preimenuj ${title}`}
+          aria-label={t("library.row.rename", { title })}
           disabled={isBusy}
           onClick={() => onOpenRename(lecture)}
           className="memo-swipe-action"
@@ -670,11 +682,11 @@ const NoteRow = memo(function NoteRow({
           <span className="memo-swipe-action-circle">
             <Emoji symbol="✏️" size="1.1rem" />
           </span>
-          <span>Uredi</span>
+          <span>{t("common.edit")}</span>
         </button>
         <button
           type="button"
-          aria-label={`Izbriši ${title}`}
+          aria-label={t("library.row.delete", { title })}
           disabled={isBusy}
           onClick={() => onOpenDelete(lecture)}
           className="memo-swipe-action danger"
@@ -686,7 +698,7 @@ const NoteRow = memo(function NoteRow({
               <Emoji symbol="🗑️" size="1.1rem" />
             )}
           </span>
-          <span>Izbriši</span>
+          <span>{t("common.delete")}</span>
         </button>
       </div>
     </div>
@@ -728,6 +740,7 @@ export function HomeDashboard({
   installGuideSeen?: boolean;
   showDevDashboard: boolean;
 }) {
+  const t = useT();
   const router = useRouter();
   const {
     navigateWithFeedback: navigateDashboardWithFeedback,
@@ -1101,7 +1114,7 @@ export function HomeDashboard({
       setOpenMenuLectureId(null);
       setDashboardActionError(null);
       setRenameTarget(lecture);
-      setRenameValue(lecture.title?.trim() || "Neimenovan zapisek");
+      setRenameValue(lecture.title?.trim() || t("note.untitled"));
     });
     renameInputRef.current?.focus({ preventScroll: true });
   }
@@ -1166,13 +1179,15 @@ export function HomeDashboard({
     try {
       setDashboardActionError(null);
       setBusyLectureId(target.id);
-      const response = await fetchDashboardMutation(`/api/lectures/${target.id}`, {
-        method: "DELETE",
-      });
+      const response = await fetchDashboardMutation(
+        `/api/lectures/${target.id}`,
+        { method: "DELETE" },
+        t("library.error.localServer"),
+      );
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? "Zapiska ni bilo mogoče izbrisati.");
+        throw new Error(payload?.error ?? t("library.error.deleteFailed"));
       }
 
       setLibraryLectures((current) => current.filter((lecture) => lecture.id !== target.id));
@@ -1180,7 +1195,7 @@ export function HomeDashboard({
       startTransition(() => router.refresh());
     } catch (error) {
       setDashboardActionError(
-        error instanceof Error ? error.message : "Zapiska ni bilo mogoče izbrisati.",
+        error instanceof Error ? error.message : t("library.error.deleteFailed"),
       );
     } finally {
       setBusyLectureId(null);
@@ -1191,19 +1206,21 @@ export function HomeDashboard({
     try {
       setDashboardActionError(null);
       setBusyLectureId(id);
-      const response = await fetchDashboardMutation(`/api/lectures/${id}/retry`, {
-        method: "POST",
-      });
+      const response = await fetchDashboardMutation(
+        `/api/lectures/${id}/retry`,
+        { method: "POST" },
+        t("library.error.localServer"),
+      );
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? "Ponovni poskus ni uspel.");
+        throw new Error(payload?.error ?? t("library.error.retryFailed"));
       }
 
       startTransition(() => router.refresh());
     } catch (error) {
       setDashboardActionError(
-        error instanceof Error ? error.message : "Ponovni poskus ni uspel.",
+        error instanceof Error ? error.message : t("library.error.retryFailed"),
       );
     } finally {
       setBusyLectureId(null);
@@ -1215,7 +1232,7 @@ export function HomeDashboard({
       return;
     }
 
-    const currentTitle = renameTarget.title?.trim() || "Neimenovan zapisek";
+    const currentTitle = renameTarget.title?.trim() || t("note.untitled");
     const nextTitle = renameValue.trim();
 
     if (!nextTitle || nextTitle === currentTitle) {
@@ -1231,17 +1248,21 @@ export function HomeDashboard({
     try {
       setDashboardActionError(null);
       setBusyLectureId(target.id);
-      const response = await fetchDashboardMutation(`/api/lectures/${target.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetchDashboardMutation(
+        `/api/lectures/${target.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ title: nextTitle }),
         },
-        body: JSON.stringify({ title: nextTitle }),
-      });
+        t("library.error.localServer"),
+      );
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? "Naslova ni bilo mogoče shraniti.");
+        throw new Error(payload?.error ?? t("library.error.renameFailed"));
       }
 
       setLibraryLectures((current) =>
@@ -1259,7 +1280,7 @@ export function HomeDashboard({
       startTransition(() => router.refresh());
     } catch (error) {
       setDashboardActionError(
-        error instanceof Error ? error.message : "Naslova ni bilo mogoče shraniti.",
+        error instanceof Error ? error.message : t("library.error.renameFailed"),
       );
     } finally {
       setBusyLectureId(null);
@@ -1278,7 +1299,11 @@ export function HomeDashboard({
     return (
       lecture.title?.toLowerCase().includes(search) ||
       lecture.error_message?.toLowerCase().includes(search) ||
-      getLectureSourceLabel(getEffectiveLectureSourceType(lecture), lecture.processing_metadata)
+      getLectureSourceLabel(
+        getEffectiveLectureSourceType(lecture),
+        lecture.processing_metadata,
+        t,
+      )
         .toLowerCase()
         .includes(search)
     );
@@ -1437,7 +1462,9 @@ export function HomeDashboard({
           <InstantLink
             href="/app/settings"
             className={`memo-m-round ${showInstallHint ? "has-dot" : ""}`.trim()}
-            aria-label={showInstallHint ? "Nastavitve (1 novost)" : "Nastavitve"}
+            aria-label={
+              showInstallHint ? t("library.settings.withBadge") : t("nav.settings")
+            }
           >
             <Msym name="settings" size="1.6rem" fill={false} weight={500} />
           </InstantLink>
@@ -1461,10 +1488,8 @@ export function HomeDashboard({
               two prompts to buy stacked above the library read as nagging. */}
 
           <div className="memo-only-desktop">
-            <h1 className="memo-home-h1">Nov zapisek</h1>
-            <p className="memo-home-sub">
-              Posnemi ali naloži zvok, dokument ali povezavo
-            </p>
+            <h1 className="memo-home-h1">{t("library.newNote")}</h1>
+            <p className="memo-home-sub">{t("library.newNoteSub")}</p>
 
             <div className="memo-quick-grid">
               {QUICK_ACTIONS.map((action) => (
@@ -1477,25 +1502,25 @@ export function HomeDashboard({
                   <span className={`memo-quick-tile ${action.accent}`.trim()}>
                     <Msym name={action.icon} size="1.45rem" fill={action.filled} />
                   </span>
-                  <span className="memo-quick-label">{action.label}</span>
+                  <span className="memo-quick-label">{t(action.labelKey)}</span>
                 </button>
               ))}
             </div>
 
-            <h2 className="memo-home-h2">Moji zapiski</h2>
+            <h2 className="memo-home-h2">{t("library.myNotes")}</h2>
           </div>
 
           {/* The title and the search scroll away with the list; while they
               go, the title fades and the field folds. The folder pill below is
               opaque and sits above them, so they pass under it. */}
-          <h1 className="memo-m-title memo-only-mobile">Moji zapiski</h1>
+          <h1 className="memo-m-title memo-only-mobile">{t("library.myNotes")}</h1>
 
           <div className="memo-m-search memo-only-mobile flex">
             <Msym name="search" size="1.3rem" fill={false} weight={600} />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Išči po zapiskih in prepisih"
+              placeholder={t("library.search.placeholderLong")}
               type="search"
               inputMode="search"
               enterKeyHint="search"
@@ -1503,7 +1528,7 @@ export function HomeDashboard({
               autoCorrect="off"
               autoComplete="off"
               spellCheck={false}
-              aria-label="Išči po zapiskih"
+              aria-label={t("library.search.placeholder")}
             />
           </div>
 
@@ -1533,8 +1558,8 @@ export function HomeDashboard({
                 onChange={(event) => setQuery(event.target.value)}
                 onFocus={() => setIsSearchOpen(true)}
                 onBlur={() => setIsSearchOpen(false)}
-                placeholder="Išči po zapiskih"
-                aria-label="Išči po zapiskih"
+                placeholder={t("library.search.placeholder")}
+                aria-label={t("library.search.placeholder")}
               />
             </div>
           </div>
@@ -1560,8 +1585,8 @@ export function HomeDashboard({
                 onClick={() => setIsWheelOpen(true)}
               >
                 <span className="memo-promo-copy">
-                  <span>Dobil si popust!</span>
-                  <span>Odkleni najboljše funkcije ceneje</span>
+                  <span>{t("library.promo.discountTitle")}</span>
+                  <span>{t("library.promo.discountDetail")}</span>
                 </span>
                 <Emoji symbol="🎁" size="2rem" />
               </button>
@@ -1572,8 +1597,8 @@ export function HomeDashboard({
                 onClick={() => navigateDashboardWithFeedback(startHref)}
               >
                 <span className="memo-promo-copy">
-                  <span>Odkleni Premium</span>
-                  <span>Neomejeni zapiski in učna orodja</span>
+                  <span>{t("library.promo.upgradeTitle")}</span>
+                  <span>{t("library.promo.upgradeDetail")}</span>
                 </span>
                 <Emoji symbol="⚡" size="2rem" />
               </button>
@@ -1592,10 +1617,15 @@ export function HomeDashboard({
                     </span>
                     <span className="memo-note-copy">
                       <span className="memo-note-title">
-                        {lecture.title ?? "Neimenovan zapisek"}
+                        {lecture.title ?? t("note.untitled")}
                       </span>
                       <span className="memo-note-meta">
-                        {lecture.error_message ?? "Obdelava ni uspela."}
+                        {/* The code first: the stored message was written in
+                            whatever language the pipeline ran in, which is not
+                            necessarily this reader's. */}
+                        {lectureFailureMessage(lecture.processing_metadata, t) ??
+                          lecture.error_message ??
+                          t("note.processingFailedSentence")}
                       </span>
                     </span>
                     <span className="memo-failed-actions">
@@ -1609,7 +1639,7 @@ export function HomeDashboard({
                           {busyLectureId === lecture.id ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : null}
-                          Poskusi znova
+                          {t("common.retry")}
                         </button>
                       ) : null}
                       <button
@@ -1618,7 +1648,7 @@ export function HomeDashboard({
                         onClick={() => openDeleteModal(lecture)}
                         disabled={busyLectureId === lecture.id}
                       >
-                        Izbriši
+                        {t("common.delete")}
                       </button>
                     </span>
                   </div>
@@ -1654,11 +1684,11 @@ export function HomeDashboard({
             {filteredLectures.length === 0 ? (
               <div className="memo-empty">
                 <Emoji symbol="📝" size="2rem" />
-                <p>{search ? "Ni ujemajočih zapiskov" : "Še ni zapiskov"}</p>
                 <p>
-                  {search
-                    ? "Poskusi krajši iskalni izraz."
-                    : "Posnemi predavanje ali naloži gradivo in Memo pripravi zapiske."}
+                  {t(search ? "library.empty.noMatchTitle" : "library.empty.noNotesTitle")}
+                </p>
+                <p>
+                  {t(search ? "library.empty.noMatchBody" : "library.empty.noNotesBody")}
                 </p>
               </div>
             ) : null}
@@ -1669,7 +1699,7 @@ export function HomeDashboard({
         <div className="memo-m-homebar memo-only-mobile flex">
           <button
             type="button"
-            aria-label="Klepet z zapiski"
+            aria-label={t("library.chatFab")}
             className="memo-m-chat-fab"
             onClick={() => setIsLibraryChatOpen(true)}
           >
@@ -1688,7 +1718,7 @@ export function HomeDashboard({
             }}
           >
             <Msym name="edit_square" size="1.4rem" fill={false} weight={500} />
-            <span>Nov zapisek</span>
+            <span>{t("library.newNote")}</span>
           </button>
         </div>
       </div>
@@ -1732,7 +1762,7 @@ export function HomeDashboard({
         <MemoPortal>
           <button
             type="button"
-            aria-label="Zapri"
+            aria-label={t("common.close")}
             className={sheetClass("memo-scrim", dialogSheet.closing)}
             onClick={closeRenameModal}
           />
@@ -1748,7 +1778,7 @@ export function HomeDashboard({
           >
             <div className="memo-grab" data-drag-handle />
             <span id="rename-note-title" className="memo-sheet-heading">
-              Preimenuj zapisek
+              {t("library.rename.title")}
             </span>
             <input
               ref={renameInputRef}
@@ -1761,7 +1791,7 @@ export function HomeDashboard({
                   void handleRenameLecture();
                 }
               }}
-              placeholder="Naslov zapiska"
+              placeholder={t("library.rename.placeholder")}
               enterKeyHint="done"
               autoCapitalize="sentences"
               autoCorrect="off"
@@ -1780,7 +1810,7 @@ export function HomeDashboard({
                 {busyLectureId === renameTarget.id ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : null}
-                Shrani naslov
+                {t("library.rename.save")}
               </button>
               <button
                 type="button"
@@ -1788,7 +1818,7 @@ export function HomeDashboard({
                 onClick={closeRenameModal}
                 disabled={busyLectureId === renameTarget.id}
               >
-                Prekliči
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -1799,7 +1829,7 @@ export function HomeDashboard({
         <MemoPortal>
           <button
             type="button"
-            aria-label="Zapri"
+            aria-label={t("common.close")}
             className={sheetClass("memo-scrim", dialogSheet.closing)}
             onClick={closeDeleteModal}
           />
@@ -1812,11 +1842,12 @@ export function HomeDashboard({
           >
             <div className="memo-grab" data-drag-handle />
             <span id="delete-note-title" className="memo-sheet-heading">
-              Izbriši zapisek
+              {t("library.delete.title")}
             </span>
             <p className="memo-sheet-copy">
-              Zapisek »{deleteTarget.title?.trim() || "Neimenovan zapisek"}« bo trajno
-              izbrisan skupaj s prepisom, karticami in kvizi.
+              {t("library.delete.body", {
+                title: deleteTarget.title?.trim() || t("note.untitled"),
+              })}
             </p>
             {dashboardActionError ? (
               <p className="memo-inline-error">{dashboardActionError}</p>
@@ -1831,7 +1862,7 @@ export function HomeDashboard({
                 {busyLectureId === deleteTarget.id ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : null}
-                Izbriši zapisek
+                {t("library.delete.title")}
               </button>
               <button
                 type="button"
@@ -1839,7 +1870,7 @@ export function HomeDashboard({
                 onClick={closeDeleteModal}
                 disabled={busyLectureId === deleteTarget.id}
               >
-                Prekliči
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -1851,7 +1882,7 @@ export function HomeDashboard({
         <MemoPortal>
           <button
             type="button"
-            aria-label="Zapri"
+            aria-label={t("common.close")}
             className={sheetClass("memo-scrim", createSheet.closing)}
             onClick={animateCloseMobileCreateMenu}
           />
@@ -1864,11 +1895,11 @@ export function HomeDashboard({
           >
             <div className="memo-grab memo-create-drag-handle" data-drag-handle />
             <div className="memo-sheet-title">
-              <span id="mobile-create-menu-title">Nov zapisek</span>
+              <span id="mobile-create-menu-title">{t("library.newNote")}</span>
               <button
                 type="button"
                 className="memo-sheet-close"
-                aria-label="Zapri"
+                aria-label={t("common.close")}
                 onClick={animateCloseMobileCreateMenu}
               >
                 <Msym name="close" size="1.45rem" fill={false} weight={500} />
@@ -1888,7 +1919,7 @@ export function HomeDashboard({
                   <span className="memo-sheet-option-tile">
                     <Emoji symbol={option.emoji} size="1.35rem" />
                   </span>
-                  <span className="memo-sheet-option-label">{option.label}</span>
+                  <span className="memo-sheet-option-label">{t(option.labelKey)}</span>
                 </button>
               ))}
             </div>

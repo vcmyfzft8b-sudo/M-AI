@@ -20,6 +20,7 @@ import {
   createSupabaseServerClient,
   createSupabaseServiceRoleClient,
 } from "@/lib/supabase/server";
+import { tr } from "@/lib/i18n/server";
 
 const gradeSchema = z.number().min(1).max(10).nullish();
 
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({

@@ -7,6 +7,7 @@ import {
   spinDiscountWheel,
 } from "@/lib/discount-wheel";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
+import { tr } from "@/lib/i18n/server";
 
 /** Whether this account still has a spin, and what it already won. */
 export async function GET() {
@@ -15,7 +16,7 @@ export async function GET() {
   const user = await getOptionalUserOrPreviewBypass();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   return NextResponse.json(await getDiscountWheelState(user.id));
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
   const user = await getOptionalUserOrPreviewBypass();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[discount-wheel] spin failed", error);
     return NextResponse.json(
-      { error: "Nagrade ni bilo mogoče shraniti. Poskusi znova." },
+      { error: await tr("api.prizeSaveFailed") },
       { status: 500 },
     );
   }
@@ -65,7 +66,7 @@ export async function DELETE() {
   const user = await getOptionalUserOrPreviewBypass();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   await markDiscountWheelSpent(user.id);

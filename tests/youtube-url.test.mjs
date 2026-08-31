@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { parseYoutubeVideoId } from "../src/lib/youtube-url.ts";
 import {
-  getUnsupportedVideoLinkMessage,
+  getUnsupportedVideoLinkMessageKey,
   isUnsupportedVideoUrl,
 } from "../src/lib/link-source-validation.ts";
 
@@ -82,12 +82,16 @@ test("YouTube videos are refused up front where captions cannot be fetched", () 
 });
 
 test("the rejection only promises YouTube where YouTube can be fetched", () => {
+  // The rejection is a message key now — the sentence is chosen per reader, from one of five
+  // catalogues — so the guarantee is asserted where it is decided: which key is returned.
   withYoutubeImport("on", () => {
-    assert.match(getUnsupportedVideoLinkMessage(), /YouTube videe s podnapisi/);
+    assert.equal(getUnsupportedVideoLinkMessageKey(), "failure.unsupported_video_link");
   });
   // Offering captions we cannot fetch sends the learner back to paste the same link again.
   withYoutubeImport(undefined, () => {
-    assert.doesNotMatch(getUnsupportedVideoLinkMessage(), /YouTube videe s podnapisi/);
-    assert.match(getUnsupportedVideoLinkMessage(), /ne pa iz videov/);
+    assert.equal(
+      getUnsupportedVideoLinkMessageKey(),
+      "failure.unsupported_video_link_no_youtube",
+    );
   });
 });

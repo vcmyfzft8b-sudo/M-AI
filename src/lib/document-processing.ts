@@ -27,6 +27,7 @@ import {
 } from "@/lib/storage";
 import { captureBackgroundError } from "@/lib/monitoring";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { sourceLocaleMessage } from "@/lib/lecture-failure-text";
 
 type StoredDocumentSource = {
   path: string;
@@ -119,7 +120,7 @@ async function downloadStoredDocument(document: StoredDocumentSource) {
   const { data: blob, error } = await storage.download(document.path);
 
   if (error || !blob) {
-    throw new Error(error?.message ?? "Naloženega dokumenta ni bilo mogoče prebrati.");
+    throw new Error(error?.message ?? sourceLocaleMessage("pipeline.documentUnreadable"));
   }
 
   const mimeType = normalizeUploadDocumentMimeType({

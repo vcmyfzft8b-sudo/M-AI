@@ -4,10 +4,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { useT } from "@/components/i18n-provider";
 import { LandingLoadingLink } from "@/components/landing-loading-link";
+import { LandingLanguagePicker } from "@/components/language-picker";
 import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, SEO_BRAND_NAME } from "@/lib/brand";
 
 export function LandingNav() {
+  const t = useT();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -34,7 +37,11 @@ export function LandingNav() {
   return (
     <header className={`landing-v2-nav${scrolled ? " is-scrolled" : ""}`}>
       <div className="landing-v2-navbar">
-        <Link href="#top" className="landing-v2-brand" aria-label={`Domov ${SEO_BRAND_NAME}`}>
+        <Link
+          href="#top"
+          className="landing-v2-brand"
+          aria-label={t("nav.homeBrand", { brand: SEO_BRAND_NAME })}
+        >
           <span className="landing-v2-lockup">
             <Image
               src={BRAND_LOCKUP_SRC}
@@ -46,11 +53,14 @@ export function LandingNav() {
           </span>
         </Link>
         <nav
-          aria-label="Glavna navigacija"
+          aria-label={t("nav.main")}
           style={{ display: "flex", alignItems: "center", gap: "0.7rem", justifyContent: "flex-end" }}
         >
+          {/* Before the CTA: someone who landed on the wrong language needs to
+              fix that before they are asked to sign up in it. */}
+          <LandingLanguagePicker />
           <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-nav landing-cta-light">
-            Preizkusi za 0 €
+            {t("landing.cta.tryFree")}
           </LandingLoadingLink>
         </nav>
       </div>

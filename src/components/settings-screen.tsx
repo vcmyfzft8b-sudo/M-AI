@@ -4,7 +4,9 @@ import { Loader2 } from "lucide-react";
 import { useCallback, useState, useSyncExternalStore } from "react";
 
 import { BillingPortalButton } from "@/components/billing-portal-button";
+import { useTranslations } from "@/components/i18n-provider";
 import { InstantLink } from "@/components/instant-link";
+import { LanguageSettingsRow } from "@/components/language-picker";
 import { Emoji, Msym } from "@/components/msym";
 import { useAppHref } from "@/components/creator-demo/creator-demo-context";
 import { InstallGuide } from "@/components/install-guide";
@@ -12,6 +14,7 @@ import { MemoPortal } from "@/components/memo-portal";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { BRAND_NAME, BRAND_SUPPORT_EMAIL } from "@/lib/brand";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { ThemePreference } from "@/lib/theme";
 import {
   detectInstallPlatform,
@@ -35,10 +38,10 @@ import {
  * Desktop order. The phone artboard leads with Sistem instead, which the
  * stylesheet reorders rather than this list — one DOM, two orders.
  */
-const THEME_OPTIONS: Array<{ value: ThemePreference; label: string }> = [
-  { value: "light", label: "Svetla" },
-  { value: "dark", label: "Temna" },
-  { value: "system", label: "Sistem" },
+const THEME_OPTIONS: Array<{ value: ThemePreference; labelKey: MessageKey }> = [
+  { value: "light", labelKey: "settings.theme.light" },
+  { value: "dark", labelKey: "settings.theme.dark" },
+  { value: "system", labelKey: "settings.theme.system" },
 ];
 
 /** Platform never changes for the life of a page, so there is nothing to watch. */
@@ -90,6 +93,7 @@ export function SettingsScreen({
   /** The creator demo has no account: sign-out and deletion are hidden. */
   isDemo?: boolean;
 }) {
+  const t = useTranslations().t;
   const { navigateWithFeedback, overlay: navigationOverlay, isNavigating } = useInstantNavigation();
   const homeHref = useAppHref("/app");
   const startHref = useAppHref("/app/start");
@@ -135,18 +139,14 @@ export function SettingsScreen({
   );
 
   const shareHref = `mailto:?subject=${encodeURIComponent(
-    `Preizkusi ${BRAND_NAME}`,
-  )}&body=${encodeURIComponent(
-    `Uporabljam ${BRAND_NAME} za zapiske predavanj in mislim, da bi ti lahko prišel prav.`,
-  )}`;
+    t("settings.share.mailSubject", { brand: BRAND_NAME }),
+  )}&body=${encodeURIComponent(t("settings.share.mailBody", { brand: BRAND_NAME }))}`;
 
   // There is no self-serve deletion endpoint; the request goes to support, which
   // is what the confirmation copy promises.
   const deleteRequestHref = `mailto:${BRAND_SUPPORT_EMAIL}?subject=${encodeURIComponent(
-    "Zahteva za izbris računa",
-  )}&body=${encodeURIComponent(
-    `Prosim za izbris računa ${email} in vseh povezanih podatkov.`,
-  )}`;
+    t("settings.delete.mailSubject"),
+  )}&body=${encodeURIComponent(t("settings.delete.mailBody", { email }))}`;
 
   function showToast(message: string) {
     setToast(message);
@@ -205,7 +205,7 @@ export function SettingsScreen({
           aria-pressed={preference === option.value}
           onClick={() => setThemePreference(option.value)}
         >
-          {option.label}
+          {t(option.labelKey)}
         </button>
       ))}
     </div>
@@ -217,8 +217,8 @@ export function SettingsScreen({
           {
             id: "install",
             emoji: "📲",
-            title: "Dodaj na začetni zaslon",
-            detail: "Odpri Memo kot aplikacijo",
+            title: t("settings.install.title"),
+            detail: t("settings.install.detail"),
             // Opening it is the whole of "seen": the badge is there to get
             // somebody to look once, so it goes the moment they do, not when
             // they close the sheet or read to the end of it.
@@ -232,20 +232,25 @@ export function SettingsScreen({
     {
       id: "redeem",
       emoji: "🎟️",
-      title: "Unovči kodo",
+      title: t("settings.rows.redeem"),
       href: "/app/support/redeem-code",
     },
     {
       id: "privacy",
       emoji: "🔒",
-      title: "Zasebnost",
+      title: t("settings.rows.privacy"),
       href: "/legal/privacy-policy",
     },
-    { id: "share", emoji: "📤", title: "Deli", onSelect: () => setConfirm("share") },
+    {
+      id: "share",
+      emoji: "📤",
+      title: t("settings.rows.share"),
+      onSelect: () => setConfirm("share"),
+    },
     {
       id: "feature",
       emoji: "💡",
-      title: "Predlagaj funkcijo",
+      title: t("settings.rows.feature"),
       href: "/app/support/feature-request",
     },
   ];
@@ -259,7 +264,7 @@ export function SettingsScreen({
     {
       id: "logout",
       emoji: "👤",
-      title: "Odjava",
+      title: t("settings.signOut"),
       detail: email,
       // The phone has this on the Račun card above instead.
       className: "memo-only-desktop",
@@ -268,7 +273,7 @@ export function SettingsScreen({
     {
       id: "delete",
       emoji: "🗑️",
-      title: "Izbriši račun",
+      title: t("settings.delete.row"),
       danger: true,
       onSelect: () => setConfirm("delete"),
     },
@@ -277,22 +282,21 @@ export function SettingsScreen({
   const confirmCopy: Record<ConfirmKind, { emoji: string; title: string; body: string; cta: string }> = {
     logout: {
       emoji: "👤",
-      title: "Se želiš odjaviti?",
-      body: `Odjavljen boš iz računa ${email} na tej napravi.`,
-      cta: "Odjava",
+      title: t("settings.logout.title"),
+      body: t("settings.logout.body", { email }),
+      cta: t("settings.signOut"),
     },
     delete: {
       emoji: "🗑️",
-      title: "Izbriši račun?",
-      body:
-        "Vsi zapiski, kartice in kvizi bodo trajno izbrisani. Zahtevo obdelamo ročno — poslali ti bomo potrditev po e-pošti.",
-      cta: "Pošlji zahtevo",
+      title: t("settings.delete.title"),
+      body: t("settings.delete.body"),
+      cta: t("settings.delete.cta"),
     },
     share: {
       emoji: "📤",
-      title: `Deli ${BRAND_NAME}`,
-      body: `Pošlji povabilo sošolcu — uporabljam ${BRAND_NAME} za zapiske predavanj in mislim, da bi ti lahko prišel prav.`,
-      cta: "Odpri e-pošto",
+      title: t("settings.share.title", { brand: BRAND_NAME }),
+      body: t("settings.share.body", { brand: BRAND_NAME }),
+      cta: t("settings.share.cta"),
     },
   };
 
@@ -311,11 +315,7 @@ export function SettingsScreen({
      */
     if (isDemo && (kind === "logout" || kind === "delete")) {
       confirmSheet.dismiss();
-      showToast(
-        kind === "logout"
-          ? "V predstavitvi ni računa za odjavo"
-          : "V predstavitvi ni računa za izbris",
-      );
+      showToast(t(kind === "logout" ? "settings.demo.noLogout" : "settings.demo.noDelete"));
       return;
     }
 
@@ -339,13 +339,13 @@ export function SettingsScreen({
 
     if (kind === "delete") {
       window.location.href = deleteRequestHref;
-      showToast("Zahteva za izbris pripravljena");
+      showToast(t("settings.toast.deleteReady"));
       return;
     }
 
     if (kind === "share") {
       window.location.href = shareHref;
-      showToast("Povabilo pripravljeno");
+      showToast(t("settings.toast.shareReady"));
     }
   }
 
@@ -357,7 +357,7 @@ export function SettingsScreen({
         <div className="memo-settings-topbar memo-only-mobile flex">
           <button
             type="button"
-            aria-label="Zapri"
+            aria-label={t("common.close")}
             // An X closes a screen, so it is the app's close button rather
             // than the library header's slightly larger round control.
             className="memo-close-button"
@@ -373,7 +373,7 @@ export function SettingsScreen({
             library's does. On desktop the wrapper is `display: contents`. */}
         <div className="memo-screen-scroll">
           <div className="memo-page">
-            <h1>Nastavitve</h1>
+            <h1>{t("settings.title")}</h1>
 
             {/*
               * Until somebody has looked at it once, the guide comes before
@@ -402,10 +402,10 @@ export function SettingsScreen({
                 <span className="memo-install-cta-copy">
                   <span className="memo-install-cta-title">
                     <Emoji symbol="📲" size="1.15rem" />
-                    <span>Dodaj Memo na začetni zaslon</span>
+                    <span>{t("settings.install.ctaTitle")}</span>
                   </span>
                   <span className="memo-install-cta-detail">
-                    Odpre se čez cel zaslon, brez vrstice brskalnika. Pokaži mi, kako.
+                    {t("settings.install.ctaDetail")}
                   </span>
                 </span>
                 <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
@@ -416,21 +416,25 @@ export function SettingsScreen({
               * The phone puts each group under its own heading and drops the
               * explanatory line the desktop artboard keeps beside "Tema".
               */}
-            <h2 className="memo-settings-heading memo-only-mobile">Tema</h2>
+            <h2 className="memo-settings-heading memo-only-mobile">
+              {t("settings.theme.heading")}
+            </h2>
 
             <div className="memo-card-row memo-settings-theme">
               <span className="memo-card-row-copy memo-only-desktop">
-                <span className="memo-card-row-title">Tema</span>
-                <span className="memo-card-row-detail">Svetla ali temna postavitev</span>
+                <span className="memo-card-row-title">{t("settings.theme.heading")}</span>
+                <span className="memo-card-row-detail">{t("settings.theme.detail")}</span>
               </span>
               {themeSegment}
             </div>
 
-            <h2 className="memo-settings-heading memo-only-mobile">Naročnina</h2>
+            <h2 className="memo-settings-heading memo-only-mobile">
+              {t("settings.subscription.heading")}
+            </h2>
 
             <div className="memo-card-row">
               <span className="memo-card-row-copy">
-                <span className="memo-eyebrow">Paket</span>
+                <span className="memo-eyebrow">{t("settings.plan.eyebrow")}</span>
                 <span className="memo-card-row-title">{planLabel}</span>
                 <span className="memo-card-row-detail">{planDetail}</span>
               </span>
@@ -439,27 +443,29 @@ export function SettingsScreen({
               ) : (
                 <InstantLink href={startHref} className="memo-primary-pill">
                   <Emoji symbol="✨" size="1rem" />
-                  <span>Izberi paket</span>
+                  <span>{t("settings.plan.choose")}</span>
                 </InstantLink>
               )}
             </div>
 
             <p className="memo-fine-print">
-              Preklic in vračila ureja{" "}
+              {t("settings.finePrint.refundBefore")}
               <InstantLink href="/legal/refund-policy" className="memo-underline-link">
-                politika vračil
+                {t("settings.finePrint.refundLink")}
               </InstantLink>
               .
             </p>
 
             {accountRows.length > 0 ? (
               <>
-                <h2 className="memo-settings-heading memo-only-mobile">Račun</h2>
+                <h2 className="memo-settings-heading memo-only-mobile">
+                  {t("settings.account.heading")}
+                </h2>
 
                 {/* The phone names the account on its own card, as the design does. */}
                 <div className="memo-card-row memo-settings-account memo-only-mobile">
                   <span className="memo-card-row-copy">
-                    <span className="memo-eyebrow">Prijavljen</span>
+                    <span className="memo-eyebrow">{t("settings.account.signedIn")}</span>
                     <span className="memo-card-row-title">{email}</span>
                   </span>
                   <button
@@ -472,7 +478,7 @@ export function SettingsScreen({
                     {isLoggingOut ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                     ) : null}
-                    {isLoggingOut ? "Odjavljam..." : "Odjava"}
+                    {isLoggingOut ? t("settings.signingOut") : t("settings.signOut")}
                   </button>
                 </div>
               </>
@@ -480,11 +486,16 @@ export function SettingsScreen({
 
             {/* The phone groups the rows into one card; desktop keeps them apart. */}
             <div className="memo-settings-list">
+              {/* Its own component: the row opens a sheet and posts the
+                  choice, which none of the plain rows above do. */}
+              <LanguageSettingsRow />
               {rows.map(renderRow)}
               {accountRows.map(renderRow)}
             </div>
 
-            <h2 className="memo-settings-heading memo-only-mobile">Pomoč</h2>
+            <h2 className="memo-settings-heading memo-only-mobile">
+              {t("settings.help.heading")}
+            </h2>
 
             {/* Desktop reaches the help centre from the rail, so this card is
                 the phone's only. */}
@@ -493,7 +504,7 @@ export function SettingsScreen({
                 id: "help",
                 emoji: "❓",
                 icon: "help",
-                title: "Center za pomoč",
+                title: t("settings.rows.help"),
                 href: "/app/support",
               })}
             </div>
@@ -505,7 +516,7 @@ export function SettingsScreen({
         <MemoPortal>
           <button
             type="button"
-            aria-label="Prekliči"
+            aria-label={t("common.cancel")}
             className={sheetClass("memo-scrim", confirmSheet.closing)}
             onClick={() => confirmSheet.dismiss()}
             disabled={isLoggingOut}
@@ -528,7 +539,7 @@ export function SettingsScreen({
                 onClick={() => confirmSheet.dismiss()}
                 disabled={isLoggingOut}
               >
-                Prekliči
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -540,7 +551,7 @@ export function SettingsScreen({
                 {isLoggingOut ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : null}
-                {isLoggingOut ? "Odjavljam..." : confirmCopy[confirm].cta}
+                {isLoggingOut ? t("settings.signingOut") : confirmCopy[confirm].cta}
               </button>
             </div>
           </div>

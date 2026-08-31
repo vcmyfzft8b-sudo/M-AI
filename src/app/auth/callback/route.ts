@@ -1,9 +1,18 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  DEFAULT_LOCALE,
+  LOCALE_COOKIE,
+  LOCALE_COOKIE_MAX_AGE,
+  localeForCountry,
+  parseLocale,
+} from "@/lib/i18n/locales";
+import { reconcileLocaleOnSignIn } from "@/lib/i18n/profile-locale";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
 import { normalizeNextPath, sanitizeUserInput } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const validEmailOtpTypes: EmailOtpType[] = [
   "email",
@@ -51,10 +60,10 @@ export async function GET(request: NextRequest) {
     fallbackUrl.searchParams.set("message", sanitizeUserInput(
       authErrorDescription ??
         (authErrorCode === "otp_expired"
-          ? "Ta prijavna povezava je potekla. Zahtevaj novo e-pošto in poskusi znova."
+          ? await tr("api.loginLinkExpired")
           : authError
-            ? "Prijava je bila preklicana ali zavrnjena."
-            : "Manjka avtentikacijska koda."),
+            ? await tr("api.loginCancelled")
+            : await tr("api.missingAuthCode")),
     ).slice(0, 240));
     return NextResponse.redirect(fallbackUrl, { status: 303 });
   }
@@ -68,7 +77,7 @@ export async function GET(request: NextRequest) {
           type: otpType,
         })
       : {
-          error: new Error("Neveljavna vrsta potrditve e-pošte."),
+          error: new Error(await tr("api.invalidOtpType")),
         };
 
   if (error) {
@@ -82,5 +91,32 @@ export async function GET(request: NextRequest) {
   const successUrl = request.nextUrl.clone();
   successUrl.pathname = next;
   successUrl.search = "";
-  return applyCookies(NextResponse.redirect(successUrl, { status: 303 }));
+  const response = applyCookies(NextResponse.redirect(successUrl, { status: 303 }));
+
+  /*
+   * Signing in is the one moment an account's saved language can reach a
+   * browser that has never been told it — a new phone, or one whose cookies
+   * were cleared. Re-stamp the cookie from the profile here, or save the
+   * language this session was already reading if the account has none yet.
+   */
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    const requestLocale =
+      parseLocale(request.cookies.get(LOCALE_COOKIE)?.value) ??
+      localeForCountry(request.headers.get("x-vercel-ip-country")) ??
+      DEFAULT_LOCALE;
+
+    const locale = await reconcileLocaleOnSignIn(user.id, requestLocale);
+
+    response.cookies.set(LOCALE_COOKIE, locale, {
+      path: "/",
+      maxAge: LOCALE_COOKIE_MAX_AGE,
+      sameSite: "lax",
+    });
+  }
+
+  return response;
 }

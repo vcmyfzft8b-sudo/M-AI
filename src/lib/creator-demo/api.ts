@@ -10,6 +10,7 @@
  * the middle of a recording.
  */
 import { buildNoteTtsChunks, parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
+import { demoT } from "@/lib/creator-demo/demo-translator";
 import type { EditableNoteDoc } from "@/lib/note-doc";
 import {
   addDemoNoteMedia,
@@ -208,7 +209,7 @@ function ttsChunk(lectureId: string, chunkIndex: number) {
   const chunk = plan?.chunks[chunkIndex];
 
   if (!plan || !chunk) {
-    return json({ error: "Poslušanje ni na voljo." }, 404);
+    return json({ error: demoT("readAloud.unavailable") }, 404);
   }
 
   const wordCount = Math.max(1, chunk.wordEndIndex - chunk.wordStartIndex);
@@ -455,7 +456,7 @@ async function handleFolderRoute(
     }
 
     if (method === "POST") {
-      const folder = createDemoFolder(String(body.name ?? "Nova mapa"));
+      const folder = createDemoFolder(String(body.name ?? demoT("folders.new")));
       const withLectures = updateDemoFolder({
         folderId: folder.id,
         lectureIds: Array.isArray(body.lectureIds) ? (body.lectureIds as string[]) : [],

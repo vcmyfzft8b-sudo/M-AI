@@ -2,22 +2,19 @@ import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
+import { I18nProvider } from "@/components/i18n-provider";
 import { KeyboardInset } from "@/components/keyboard-inset";
 import { ThemeController } from "@/components/theme-controller";
 import { VisitTracker } from "@/components/visit-tracker";
-import {
-  BRAND_SHORTLINE,
-  SEO_BRAND_NAME,
-  SEO_SITE_DESCRIPTION,
-  SEO_SITE_URL,
-} from "@/lib/brand";
+import { SEO_BRAND_NAME, SEO_SITE_URL } from "@/lib/brand";
+import { LOCALE_OG_TAG } from "@/lib/i18n/locales";
+import { getMessages } from "@/lib/i18n/messages";
+import { getLocale, getTranslations } from "@/lib/i18n/server";
 import { splashScreens } from "@/lib/splash-screens";
 
 import "katex/dist/katex.min.css";
 import "./globals.css";
 import "./redesign.css";
-
-const siteTitle = `${SEO_BRAND_NAME} | ${BRAND_SHORTLINE}`;
 
 /**
  * The redesign draws every glyph from Material Symbols Rounded. `next/font`
@@ -63,6 +60,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "home",
   "ink_highlighter",
   "ios_share",
+  "language",
   "link",
   "mic",
   "more_horiz",
@@ -121,74 +119,95 @@ export const viewport: Viewport = {
   ],
 };
 
-export const metadata: Metadata = {
-  metadataBase: new URL(SEO_SITE_URL),
-  manifest: "/manifest.webmanifest",
-  title: {
-    default: siteTitle,
-    template: `%s | ${SEO_BRAND_NAME}`,
-  },
-  description: SEO_SITE_DESCRIPTION,
-  applicationName: SEO_BRAND_NAME,
-  openGraph: {
-    title: siteTitle,
-    description: SEO_SITE_DESCRIPTION,
-    url: "/",
-    siteName: SEO_BRAND_NAME,
-    locale: "sl_SI",
-    type: "website",
-  },
-  twitter: {
-    card: "summary",
-    title: siteTitle,
-    description: SEO_SITE_DESCRIPTION,
-  },
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: SEO_BRAND_NAME,
-  },
-  icons: {
-    icon: [
-      {
-        url: "/favicon.ico",
-        sizes: "any",
-        type: "image/x-icon",
-      },
-      {
-        url: "/memo-favicon-96x96.png",
-        sizes: "96x96",
-        type: "image/png",
-      },
-      {
-        url: "/memo-favicon-32x32.png",
-        sizes: "32x32",
-        type: "image/png",
-      },
-      {
-        url: "/memo-favicon-16x16.png",
-        sizes: "16x16",
-        type: "image/png",
-      },
-    ],
-    shortcut: "/favicon.ico",
-    apple: [
-      {
-        url: "/apple-touch-icon.png",
-        sizes: "180x180",
-        type: "image/png",
-      },
-    ],
-  },
-};
+/**
+ * Title, description and Open Graph in the language this visitor is being
+ * served, which is a cookie read — so this is `generateMetadata` rather than a
+ * static `metadata` object. Everything that is not language (icons, manifest,
+ * the Apple web-app flags) is unchanged.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const { locale, t } = await getTranslations();
+  const siteTitle = `${SEO_BRAND_NAME} | ${t("meta.shortline")}`;
+  const description = t("meta.description");
 
-export default function RootLayout({
+  return {
+    metadataBase: new URL(SEO_SITE_URL),
+    manifest: "/manifest.webmanifest",
+    title: {
+      default: siteTitle,
+      template: `%s | ${SEO_BRAND_NAME}`,
+    },
+    description,
+    applicationName: SEO_BRAND_NAME,
+    openGraph: {
+      title: siteTitle,
+      description,
+      url: "/",
+      siteName: SEO_BRAND_NAME,
+      locale: LOCALE_OG_TAG[locale],
+      type: "website",
+    },
+    twitter: {
+      card: "summary",
+      title: siteTitle,
+      description,
+    },
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "default",
+      title: SEO_BRAND_NAME,
+    },
+    icons: {
+      icon: [
+        {
+          url: "/favicon.ico",
+          sizes: "any",
+          type: "image/x-icon",
+        },
+        {
+          url: "/memo-favicon-96x96.png",
+          sizes: "96x96",
+          type: "image/png",
+        },
+        {
+          url: "/memo-favicon-32x32.png",
+          sizes: "32x32",
+          type: "image/png",
+        },
+        {
+          url: "/memo-favicon-16x16.png",
+          sizes: "16x16",
+          type: "image/png",
+        },
+      ],
+      shortcut: "/favicon.ico",
+      apple: [
+        {
+          url: "/apple-touch-icon.png",
+          sizes: "180x180",
+          type: "image/png",
+        },
+      ],
+    },
+  };
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+
   return (
-    <html lang="sl" suppressHydrationWarning>
+    /*
+     * `lang` is the locale code rather than the full BCP 47 tag, so that it
+     * matches what the client provider writes back on the one request where
+     * the two can disagree (a signed-in visitor on a device whose cookie was
+     * seeded by geo). `hreflang` on the document is not in play: the app
+     * serves every language from the same URL by design.
+     */
+    <html lang={locale} suppressHydrationWarning>
       <head>
         {/*
           * iOS will not use an `apple-touch-startup-image` unless the page also
@@ -246,10 +265,12 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <ThemeController />
-        <KeyboardInset />
-        {children}
-        <VisitTracker />
+        <I18nProvider locale={locale} messages={getMessages(locale)}>
+          <ThemeController />
+          <KeyboardInset />
+          {children}
+          <VisitTracker />
+        </I18nProvider>
         <Analytics />
         <SpeedInsights />
       </body>

@@ -3,15 +3,26 @@
 import type { CSSProperties, DragEvent, PointerEvent as ReactPointerEvent } from "react";
 import { Component } from "react";
 
+import { useT } from "@/components/i18n-provider";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+import type { Translate } from "@/lib/i18n/translate";
+
+/*
+ * The interface around the demo is translated; the material inside it is not.
+ * File names, note titles, the note itself and the flashcards, quiz and test
+ * questions all stand in for the learner's own coursework, which stays in the
+ * language it was written in whatever the interface is set to. Same boundary
+ * as memo-app-preview-data.ts — see the note at the top of that file.
+ */
 type FlowSource = {
   id: string;
   icon: string;
   kind: string;
   kindColor: string;
   label: string;
-  sub: string;
+  sub: (t: Translate<MessageKey>) => string;
   noteTitle: string;
-  noteSub: string;
+  noteSub: (t: Translate<MessageKey>) => string;
 };
 
 const FLOW_SOURCES: FlowSource[] = [
@@ -22,9 +33,9 @@ const FLOW_SOURCES: FlowSource[] = [
     // Deeper than the brand orange, which only reached 3:1 on the white chip.
     kindColor: "#b4431d",
     label: "predavanje-4.mp3",
-    sub: "Zvok · 48:12",
+    sub: (t) => `${t("flowDemo.kindAudio")} · 48:12`,
     noteTitle: "Predavanje IS – 4. teden",
-    noteSub: "Zvok · danes",
+    noteSub: (t) => `${t("flowDemo.kindAudio")} · ${t("flowDemo.today")}`,
   },
   {
     id: "pdf",
@@ -32,9 +43,9 @@ const FLOW_SOURCES: FlowSource[] = [
     kind: "pdf",
     kindColor: "#d0342c",
     label: "skripta-IS.pdf",
-    sub: "PDF · 24 strani",
+    sub: (t) => `${t("flowDemo.kindPdf")} · ${t("flowDemo.pages", { count: 24 })}`,
     noteTitle: "Skripta IS – poglavje 4",
-    noteSub: "PDF · danes",
+    noteSub: (t) => `${t("flowDemo.kindPdf")} · ${t("flowDemo.today")}`,
   },
   {
     id: "doc",
@@ -42,9 +53,9 @@ const FLOW_SOURCES: FlowSource[] = [
     kind: "docx",
     kindColor: "#2b579a",
     label: "seminarska-erp.docx",
-    sub: "Word · 12 strani",
+    sub: (t) => `${t("flowDemo.kindWord")} · ${t("flowDemo.pages", { count: 12 })}`,
     noteTitle: "Seminarska: Kako deluje ERP",
-    noteSub: "Word · danes",
+    noteSub: (t) => `${t("flowDemo.kindWord")} · ${t("flowDemo.today")}`,
   },
 ];
 
@@ -95,11 +106,31 @@ const STUDY_TEST = [
   },
 ];
 
-const PAST_NOTES = [
-  { icon: "🎙️", title: "Predavanje IS – 3. teden", sub: "Zvok · včeraj" },
-  { icon: "📄", title: "Skripta IS – poglavje 2", sub: "PDF · v torek" },
-  { icon: "📝", title: "Seminarska: ERP", sub: "Word · v petek" },
-  { icon: "🎙️", title: "Predavanje IS – 2. teden", sub: "Zvok · prejšnji teden" },
+const PAST_NOTES: Array<{
+  icon: string;
+  title: string;
+  sub: (t: Translate<MessageKey>) => string;
+}> = [
+  {
+    icon: "🎙️",
+    title: "Predavanje IS – 3. teden",
+    sub: (t) => `${t("flowDemo.kindAudio")} · ${t("flowDemo.yesterday")}`,
+  },
+  {
+    icon: "📄",
+    title: "Skripta IS – poglavje 2",
+    sub: (t) => `${t("flowDemo.kindPdf")} · ${t("flowDemo.onTuesday")}`,
+  },
+  {
+    icon: "📝",
+    title: "Seminarska: ERP",
+    sub: (t) => `${t("flowDemo.kindWord")} · ${t("flowDemo.onFriday")}`,
+  },
+  {
+    icon: "🎙️",
+    title: "Predavanje IS – 2. teden",
+    sub: (t) => `${t("flowDemo.kindAudio")} · ${t("flowDemo.lastWeek")}`,
+  },
 ];
 
 // Chip geometry lives in landing.css so it can shrink to fit three across
@@ -201,6 +232,8 @@ type FlowGhost = {
 
 type FlowDemoProps = {
   storyAutoplay?: boolean;
+  /** Injected by the wrapper below, because a class cannot call a hook. */
+  t: Translate<MessageKey>;
 };
 
 type FlowDemoState = {
@@ -229,7 +262,7 @@ type FlowDemoState = {
   touchGhost: { icon: string; label: string; x: number; y: number } | null;
 };
 
-export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
+class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
   state: FlowDemoState = {
     flowStage: 0,
     noteStep: 0,
@@ -970,8 +1003,15 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
     };
 
     const dropIcon = stage >= 1 ? (s.flowSource ? s.flowSource.icon : "🎙️") : "⬇️";
-    const dropTitle = stage >= 1 ? (s.flowSource ? s.flowSource.noteTitle : "Nov zapisek") : "Spusti vir sem";
-    const dropSubtitle = stage >= 1 ? (s.flowSource ? s.flowSource.noteSub : "danes") : "Zvok, PDF, dokument ali fotografija";
+    const t = this.props.t;
+    const dropTitle =
+      stage >= 1 ? (s.flowSource ? s.flowSource.noteTitle : t("flowDemo.newNote")) : t("flowDemo.dropTitle");
+    const dropSubtitle =
+      stage >= 1
+        ? s.flowSource
+          ? s.flowSource.noteSub(t)
+          : t("flowDemo.today")
+        : t("flowDemo.dropSubtitle");
 
     return (
       <article
@@ -992,7 +1032,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
       >
         <span style={this.nodeStyle(1, { pulse: true, over: true })} />
         <h3 style={{ margin: "0.35rem 0 0", color: "var(--l-label)", fontSize: "1.35rem", fontWeight: 600, lineHeight: 1.25 }}>
-          Posnemi ali naloži
+          {t("flowDemo.step1Title")}
         </h3>
         <div
           ref={(el) => {
@@ -1006,10 +1046,10 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
             <span style={{ fontSize: "10.6px", fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--l-second)" }}>
-              Zapiski
+              {t("flowDemo.libraryLabel")}
             </span>
             <span style={{ fontSize: "10.6px", fontWeight: 600, color: "var(--l-second)" }}>
-              {stage >= 1 ? "5 zapiskov" : "4 zapiski"}
+              {t("flowDemo.noteCount", { count: stage >= 1 ? 5 : 4 })}
             </span>
           </div>
           <div style={dropRowStyle}>
@@ -1117,13 +1157,17 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                 >
                   {row.title}
                 </span>
-                <span style={{ fontSize: "11.4px", lineHeight: 1.3, color: "var(--l-second)" }}>{row.sub}</span>
+                <span style={{ fontSize: "11.4px", lineHeight: 1.3, color: "var(--l-second)" }}>{row.sub(t)}</span>
               </span>
             </div>
           ))}
         </div>
         <p style={{ ...STATUS_BASE, color: stage >= 2 ? "var(--l-label)" : "var(--l-second)" }}>
-          {stage === 0 ? "Povleci ali klikni" : stage === 1 ? "Prepisujem…" : "Vir dodan"}
+          {stage === 0
+            ? t("flowDemo.statusDragOrClick")
+            : stage === 1
+              ? t("flowDemo.statusTranscribing")
+              : t("flowDemo.statusSourceAdded")}
         </p>
       </article>
     );
@@ -1201,7 +1245,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
       >
         <span style={this.nodeStyle(1)} />
         <h3 style={{ margin: "0.35rem 0 0", color: "var(--l-label)", fontSize: "1.35rem", fontWeight: 600, lineHeight: 1.25 }}>
-          Dobi zapiske
+          {this.props.t("flowDemo.step2Title")}
         </h3>
         <div style={noteCardStyle}>
           <span
@@ -1293,7 +1337,11 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
           />
         </div>
         <p style={{ ...STATUS_BASE, color: stage >= 2 ? "var(--l-label)" : "var(--l-second)" }}>
-          {stage >= 2 ? "Zapiski pripravljeni" : stage === 1 ? "Pišem zapiske…" : ""}
+          {stage >= 2
+            ? this.props.t("flowDemo.statusNotesReady")
+            : stage === 1
+              ? this.props.t("flowDemo.statusWritingNotes")
+              : ""}
         </p>
       </article>
     );
@@ -1350,7 +1398,11 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
               textTransform: "uppercase",
             }}
           >
-            {s.sTab === "cards" ? "Zaključeno" : s.sTab === "quiz" ? "Kviz zaključen" : "Preizkus oddan"}
+            {s.sTab === "cards"
+              ? this.props.t("flowDemo.doneCards")
+              : s.sTab === "quiz"
+                ? this.props.t("flowDemo.doneQuiz")
+                : this.props.t("flowDemo.doneTest")}
           </span>
           <h3
             style={{
@@ -1365,13 +1417,13 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
           >
             {s.sTab === "cards"
               ? s.sKnown === cards.length
-                ? "Vse kartice so predelane"
-                : "Ponovi kartice, ki si jih zgrešil"
+                ? this.props.t("flowDemo.allCardsDone")
+                : this.props.t("flowDemo.repeatMissedCards")
               : s.sTab === "quiz"
                 ? s.sQScore === quiz.length
-                  ? "Vsa vprašanja so predelana"
-                  : "Ponovi vprašanja, ki si jih zgrešil"
-                : "Preizkus je ocenjen"}
+                  ? this.props.t("flowDemo.allQuestionsDone")
+                  : this.props.t("flowDemo.repeatMissedQuestions")
+                : this.props.t("flowDemo.testGraded")}
           </h3>
         </div>
         <div style={{ display: "grid", justifyItems: "center", gap: "7px" }}>
@@ -1411,13 +1463,21 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                   color: "var(--l-second)",
                 }}
               >
-                {s.sTab === "cards" ? "Znanih" : s.sTab === "quiz" ? "Pravilnih" : "Točk"}
+                {s.sTab === "cards"
+                  ? this.props.t("flowDemo.metricKnown")
+                  : s.sTab === "quiz"
+                    ? this.props.t("flowDemo.metricCorrect")
+                    : this.props.t("flowDemo.metricPoints")}
               </span>
             </div>
           </div>
           <div style={{ display: "grid", gap: "4px", justifyItems: "center", textAlign: "center" }}>
             <span style={{ fontSize: "8px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--l-second)" }}>
-              {s.sTab === "cards" ? "Znane kartice" : s.sTab === "quiz" ? "Pravilni odgovori" : "Dosežene točke"}
+              {s.sTab === "cards"
+                ? this.props.t("flowDemo.knownCards")
+                : s.sTab === "quiz"
+                  ? this.props.t("flowDemo.correctAnswers")
+                  : this.props.t("flowDemo.pointsScored")}
             </span>
             <strong style={{ fontSize: "18.6px", lineHeight: 1, letterSpacing: "-0.06em", color: "var(--l-label)", whiteSpace: "nowrap" }}>
               {metric}
@@ -1446,7 +1506,11 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
           }}
         >
           <span style={{ fontSize: "12px" }}>🔄</span>
-          {s.sTab === "cards" ? "Začni komplet znova" : s.sTab === "quiz" ? "Začni kviz znova" : "Začni nov preizkus"}
+          {s.sTab === "cards"
+            ? this.props.t("flowDemo.restartCards")
+            : s.sTab === "quiz"
+              ? this.props.t("flowDemo.restartQuiz")
+              : this.props.t("flowDemo.restartTest")}
         </button>
       </div>
     );
@@ -1564,19 +1628,19 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
       >
         <span style={this.nodeStyle(3)} />
         <h3 style={{ margin: "0.35rem 0 0", color: "var(--l-label)", fontSize: "1.35rem", fontWeight: 600, lineHeight: 1.25 }}>
-          Ponavljaj snov
+          {this.props.t("flowDemo.step3Title")}
         </h3>
         <div style={studyCardStyle}>
           <div style={studyBodyStyle}>
             <div style={{ display: "flex", width: "100%", padding: "2px", borderRadius: "8px", background: "var(--l-line)" }}>
               <button type="button" onClick={() => this.selectTab("cards")} style={this.tabStyle("cards")}>
-                Flashcards
+                {this.props.t("flowDemo.tabCards")}
               </button>
               <button type="button" onClick={() => this.selectTab("quiz")} style={this.tabStyle("quiz")}>
-                Kviz
+                {this.props.t("flowDemo.tabQuiz")}
               </button>
               <button type="button" onClick={() => this.selectTab("test")} style={this.tabStyle("test")}>
-                Test
+                {this.props.t("flowDemo.tabTest")}
               </button>
             </div>
 
@@ -1625,12 +1689,12 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                     <div style={faceBase}>
                       <span style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--l-second)", textAlign: "left" }}>{cardCounter}</span>
                       <span style={{ fontSize: "15px", fontWeight: 600, lineHeight: 1.35, color: "var(--l-label)" }}>{card.q}</span>
-                      <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--l-second)" }}>Pokaži odgovor</span>
+                      <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--l-second)" }}>{this.props.t("flowDemo.showAnswer")}</span>
                     </div>
                     <div style={{ ...faceBase, transform: "rotateY(180deg)" }}>
                       <span style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--l-second)", textAlign: "left" }}>{cardCounter}</span>
                       <span style={{ fontSize: "13.4px", fontWeight: 500, lineHeight: 1.45, color: "var(--l-label)" }}>{card.a}</span>
-                      <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--l-second)" }}>Povleci levo ali desno</span>
+                      <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--l-second)" }}>{this.props.t("flowDemo.swipeHint")}</span>
                     </div>
                   </div>
                 </div>
@@ -1757,7 +1821,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                     this.studyTouch();
                     this.setState({ sTVal: e.target.value });
                   }}
-                  placeholder="Tvoj odgovor"
+                  placeholder={this.props.t("flowDemo.answerPlaceholder")}
                   style={{
                     width: "100%",
                     boxSizing: "border-box",
@@ -1803,7 +1867,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                     cursor: "pointer",
                   }}
                 >
-                  {s.sTShown ? "Naprej" : "Preveri"}
+                  {s.sTShown ? this.props.t("flowDemo.next") : this.props.t("flowDemo.check")}
                 </button>
               </div>
             ) : null}
@@ -1812,7 +1876,11 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
           </div>
         </div>
         <p style={{ ...STATUS_BASE, color: done3 ? "var(--l-label)" : "var(--l-second)" }}>
-          {done3 ? "Gradivo pripravljeno" : stage === 2 ? "Ustvarjam gradivo…" : ""}
+          {done3
+            ? this.props.t("flowDemo.statusMaterialReady")
+            : stage === 2
+              ? this.props.t("flowDemo.statusBuildingMaterial")
+              : ""}
         </p>
       </article>
     );
@@ -1832,7 +1900,9 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
         style={{ position: "relative" }}
       >
         <div style={{ display: "grid", justifyItems: "center", gap: "1.2rem", marginBottom: "3rem" }}>
-          <span style={{ color: "var(--l-second)", fontSize: "0.92rem" }}>Povleci vir v prvi korak</span>
+          <span style={{ color: "var(--l-second)", fontSize: "0.92rem" }}>
+            {this.props.t("flowDemo.dragSourceToStep")}
+          </span>
           <div className="landing-v2-flow-chips">
             {FLOW_SOURCES.map((chip, i) => (
               <div
@@ -1873,7 +1943,7 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
                   </span>
                 </span>
                 <span className="landing-v2-flow-chip-name">{chip.label}</span>
-                <span className="landing-v2-flow-chip-sub">{chip.sub}</span>
+                <span className="landing-v2-flow-chip-sub">{chip.sub(this.props.t)}</span>
               </div>
             ))}
           </div>
@@ -1960,4 +2030,8 @@ export class LandingFlowDemo extends Component<FlowDemoProps, FlowDemoState> {
       </div>
     );
   }
+}
+
+export function LandingFlowDemo(props: Omit<FlowDemoProps, "t">) {
+  return <LandingFlowDemoView {...props} t={useT()} />;
 }

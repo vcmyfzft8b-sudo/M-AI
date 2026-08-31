@@ -3,6 +3,8 @@ export const NOTE_LANGUAGE_OPTIONS = [
   { value: "sl", label: "Slovenian" },
   { value: "de", label: "German" },
   { value: "hr", label: "Croatian" },
+  { value: "bs", label: "Bosnian" },
+  { value: "sr", label: "Serbian" },
   { value: "it", label: "Italian" },
 ] as const;
 
@@ -49,10 +51,46 @@ export function buildGeneratedContentLanguageInstruction() {
 const LANGUAGE_MARKERS: Record<string, readonly string[]> = {
   en: ["the", "and", "of", "that", "with", "this", "which", "from", "there", "because"],
   sl: ["ki", "oziroma", "kjer", "lahko", "tudi", "zato", "pri", "med", "svoj", "vendar"],
-  hr: ["što", "koji", "ali", "kada", "ovdje", "također", "prema", "svoj", "jer", "nakon"],
+  // Croatian, Bosnian and Serbian share these; which of the three it is comes from the
+  // orthography, not the vocabulary, so `refineBcsVariety` decides that afterwards.
+  hr: ["što", "šta", "koji", "ali", "kada", "također", "takođe", "prema", "jer", "nakon"],
   de: ["der", "die", "das", "und", "nicht", "eine", "auch", "sich", "werden", "wenn"],
   it: ["che", "non", "della", "per", "come", "anche", "sono", "questo", "quando", "perché"],
 };
+
+/*
+ * Serbian is written ekavian and Croatian and Bosnian are written ijekavian, and the words that
+ * differ are ordinary enough to appear in any page of notes. That split is what separates the
+ * three; their stop words do not, which is why they share one marker list above.
+ *
+ * Bosnian is deliberately not a third answer here. It is ijekavian like Croatian and differs
+ * from it in vocabulary rather than orthography — too little to call from a page of text, and
+ * the cost of guessing wrong is a heading reading "Usporedba" instead of "Poređenje". Bosnian
+ * material is answered as `hr`, whose ijekavian furniture reads correctly in it.
+ */
+const EKAVIAN_MARKERS = [
+  "gde", "ovde", "onde", "posle", "pre", "vreme", "uvek", "deo", "delu", "mesto", "mestu",
+  "sledeći", "razume", "razumeti", "celo", "ceo", "primer", "primeri", "primera", "beleške",
+  "takođe", "nedelja", "greška",
+];
+
+const IJEKAVIAN_MARKERS = [
+  "gdje", "ovdje", "ondje", "poslije", "prije", "vrijeme", "uvijek", "dio", "dijelu", "mjesto",
+  "mjestu", "sljedeći", "razumije", "razumjeti", "cijelo", "cijeli", "primjer", "primjeri",
+  "primjera", "bilješke", "također", "tjedan", "pogreška",
+];
+
+function countMarkers(words: readonly string[], markers: readonly string[]) {
+  return words.reduce((total, word) => total + (markers.includes(word) ? 1 : 0), 0);
+}
+
+/** Which of the three the shared `hr` bucket actually is. */
+function refineBcsVariety(words: readonly string[]) {
+  const ekavian = countMarkers(words, EKAVIAN_MARKERS);
+  const ijekavian = countMarkers(words, IJEKAVIAN_MARKERS);
+
+  return ekavian > ijekavian ? "sr" : "hr";
+}
 
 /** Below this the sample is too short for the counts to mean anything. */
 const MIN_WORDS_FOR_DETECTION = 12;
@@ -101,5 +139,5 @@ export function detectSourceLanguage(text: string): string | null {
     return null;
   }
 
-  return best[0];
+  return best[0] === "hr" ? refineBcsVariety(words) : best[0];
 }

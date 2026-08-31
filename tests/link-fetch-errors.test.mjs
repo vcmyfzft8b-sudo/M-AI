@@ -17,8 +17,9 @@ test("classifies the incomplete certificate chain that reached production", () =
   );
   cause.code = "UNABLE_TO_VERIFY_LEAF_SIGNATURE";
 
+  // The classifier answers with a code; the wording now lives in the message catalogues, one
+  // per language, and is resolved where the failure is shown.
   assert.deepEqual(describeLinkFetchFailure(new TypeError("fetch failed", { cause })), {
-    message: "Spletna stran na tej povezavi ima neveljavno varnostno potrdilo, zato je nismo mogli odpreti.",
     code: "link_tls_failed",
   });
 });
@@ -94,10 +95,7 @@ test("classifies the resolver rejection that reached production", () => {
   error.syscall = "getaddrinfo";
   error.hostname = "www.";
 
-  assert.deepEqual(describeHostResolutionFailure(error), {
-    message: "Spletne strani na tej povezavi ni bilo mogoče najti. Preveri, ali je naslov pravilen.",
-    code: "link_host_not_found",
-  });
+  assert.deepEqual(describeHostResolutionFailure(error), { code: "link_host_not_found" });
 });
 
 test("classifies a resolver rejection whatever code the platform picked", () => {

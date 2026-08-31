@@ -22,6 +22,7 @@ import {
   markInitialNoteAudioPreparing,
   prepareInitialNoteTtsChunksSafely,
 } from "@/lib/note-tts";
+import { sourceLocaleMessage } from "@/lib/lecture-failure-text";
 
 const SCAN_OCR_CONCURRENCY = 3;
 const SCAN_STORAGE_DOWNLOAD_MAX_ATTEMPTS = 3;
@@ -167,7 +168,7 @@ async function downloadStoredScanImage(image: StoredScanImage) {
 
   // error_message is shown to the user, so keep it Slovenian rather than forwarding
   // Supabase's English text. The original error rides along for Sentry.
-  throw new Error("Fotografije ni bilo mogoče prebrati.", { cause: lastDownloadError });
+  throw new Error(sourceLocaleMessage("pipeline.scanUnreadable"), { cause: lastDownloadError });
 }
 
 export async function processStoredScanLecture(

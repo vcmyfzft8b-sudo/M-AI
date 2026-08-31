@@ -14,6 +14,8 @@ import {
   isPptxDocument,
   isRtfDocument,
 } from "@/lib/document-files";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+import type { Translate } from "@/lib/i18n/translate";
 import {
   getExtensionForMimeType,
   normalizeUploadAudioMimeType,
@@ -108,28 +110,55 @@ function formatMegabytes(bytes: number) {
   return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
 }
 
-function fileTooLargeMessage(kind: "audio" | "document" | "photo", maxBytes: number) {
-  if (kind === "audio") {
-    return `Zvočna datoteka je tudi po stiskanju prevelika. Največja velikost je ${formatMegabytes(maxBytes)}.`;
-  }
+/**
+ * A compression failure the user is meant to read, carried as a catalogue key
+ * rather than as a sentence.
+ *
+ * This module runs in the browser but outside React, so it has no translator.
+ * Throwing the key and resolving it where the message is rendered also fixes a
+ * second problem: the audio path below used to decide whether an error was
+ * "too large" by comparing its message text, which stops working the moment
+ * that text exists in five languages. It compares `key` now.
+ */
+export class CompressionError extends Error {
+  readonly key: MessageKey;
+  readonly values?: Record<string, string>;
 
-  if (kind === "photo") {
-    return `Slika je tudi po stiskanju prevelika. Največja velikost je ${formatMegabytes(maxBytes)}.`;
+  constructor(key: MessageKey, values?: Record<string, string>) {
+    super(key);
+    this.name = "CompressionError";
+    this.key = key;
+    this.values = values;
   }
-
-  return `Dokumenta po stiskanju ni bilo mogoče pripraviti v dovolj berljivi obliki za obdelavo. Poskusi z jasnejsim ali krajsim dokumentom.`;
 }
 
-function unsupportedCompressionMessage(kind: "audio" | "document" | "photo") {
-  if (kind === "audio") {
-    return "Zvočne datoteke ni bilo mogoče stisniti dovolj. Poskusi s krajšo ali že stisnjeno datoteko.";
+/** The message for a `CompressionError`, or the plain text of any other error. */
+export function compressionErrorMessage(error: unknown, t: Translate<MessageKey>) {
+  if (error instanceof CompressionError) {
+    return t(error.key, error.values);
   }
 
-  if (kind === "photo") {
-    return "Slike ni bilo mogoče stisniti dovolj. Poskusi z manjšo fotografijo ali formatom JPG/WebP.";
-  }
+  return error instanceof Error ? error.message : null;
+}
 
-  return "Dokumenta ni bilo mogoče pripraviti za obdelavo. Poskusi ga izvoziti kot PDF ali odstrani elemente, ki niso del gradiva.";
+const TOO_LARGE_KEYS = {
+  audio: "compress.audioTooLarge",
+  photo: "compress.photoTooLarge",
+  document: "compress.documentTooLarge",
+} as const satisfies Record<string, MessageKey>;
+
+const UNSUPPORTED_KEYS = {
+  audio: "compress.audioUnsupported",
+  photo: "compress.photoUnsupported",
+  document: "compress.documentUnsupported",
+} as const satisfies Record<string, MessageKey>;
+
+function fileTooLargeError(kind: "audio" | "document" | "photo", maxBytes: number) {
+  return new CompressionError(TOO_LARGE_KEYS[kind], { limit: formatMegabytes(maxBytes) });
+}
+
+function unsupportedCompressionError(kind: "audio" | "document" | "photo") {
+  return new CompressionError(UNSUPPORTED_KEYS[kind]);
 }
 
 function isAbortError(error: unknown) {
@@ -145,7 +174,7 @@ async function canvasToBlob(
     canvas.toBlob(
       (blob) => {
         if (!blob) {
-          reject(new Error("Slike ni bilo mogoče stisniti."));
+          reject(new CompressionError("compress.imageFailed"));
           return;
         }
 
@@ -167,7 +196,7 @@ async function loadImageBitmap(blob: Blob) {
       const image = await new Promise<HTMLImageElement>((resolve, reject) => {
         const element = new Image();
         element.onload = () => resolve(element);
-        element.onerror = () => reject(new Error("Slike ni bilo mogoče prebrati."));
+        element.onerror = () => reject(new CompressionError("compress.imageUnreadable"));
         element.src = objectUrl;
       });
 
@@ -187,7 +216,7 @@ async function renderRasterBlobToJpeg(
   const height = source.height;
 
   if (width <= 0 || height <= 0) {
-    throw new Error("Slike ni bilo mogoče prebrati.");
+    throw new CompressionError("compress.imageUnreadable");
   }
 
   const scale = Math.min(1, profile.maxDimension / Math.max(width, height));
@@ -200,7 +229,7 @@ async function renderRasterBlobToJpeg(
   const context = canvas.getContext("2d");
 
   if (!context) {
-    throw new Error("Slike ni bilo mogoče stisniti.");
+    throw new CompressionError("compress.imageFailed");
   }
 
   context.fillStyle = PDF_RENDER_BACKGROUND;
@@ -233,7 +262,7 @@ async function compressRasterImageFile(params: {
       : MAX_COMPRESSIBLE_DOCUMENT_BYTES;
 
   if (params.file.size > maxCompressibleBytes) {
-    throw new Error(fileTooLargeMessage(params.kind, params.maxBytes));
+    throw fileTooLargeError(params.kind, params.maxBytes);
   }
 
   let bestBlob: Blob | null = null;
@@ -270,7 +299,7 @@ async function compressRasterImageFile(params: {
     };
   }
 
-  throw new Error(fileTooLargeMessage(params.kind, params.maxBytes));
+  throw fileTooLargeError(params.kind, params.maxBytes);
 }
 
 function isCanvasCompressibleImage(file: File) {
@@ -292,7 +321,7 @@ export async function compressScanImageForUpload(file: File): Promise<Compressio
   }
 
   if (!isCanvasCompressibleImage(file)) {
-    throw new Error(unsupportedCompressionMessage("photo"));
+    throw unsupportedCompressionError("photo");
   }
 
   return compressRasterImageFile({
@@ -345,7 +374,7 @@ function getOfficeRemovableBulkPaths(zip: JSZip, file: File) {
 
 async function compressOfficeDocument(file: File): Promise<CompressionResult> {
   if (file.size > MAX_COMPRESSIBLE_DOCUMENT_BYTES) {
-    throw new Error(fileTooLargeMessage("document", MAX_DOCUMENT_BYTES));
+    throw fileTooLargeError("document", MAX_DOCUMENT_BYTES);
   }
 
   const { default: JSZip } = await import("jszip");
@@ -450,7 +479,7 @@ async function compressOfficeDocument(file: File): Promise<CompressionResult> {
     };
   }
 
-  throw new Error(fileTooLargeMessage("document", MAX_DOCUMENT_BYTES));
+  throw fileTooLargeError("document", MAX_DOCUMENT_BYTES);
 }
 
 function truncateTextToBytes(text: string, maxBytes: number) {
@@ -483,7 +512,7 @@ async function compressTextDocument(file: File): Promise<CompressionResult> {
   });
 
   if (compressedFile.size > MAX_DOCUMENT_BYTES) {
-    throw new Error(fileTooLargeMessage("document", MAX_DOCUMENT_BYTES));
+    throw fileTooLargeError("document", MAX_DOCUMENT_BYTES);
   }
 
   return {
@@ -630,7 +659,7 @@ async function renderPdfAsJpegPages(sourceBytes: Uint8Array, profile: RasterComp
       const context = canvas.getContext("2d");
 
       if (!context) {
-        throw new Error("PDF-ja ni bilo mogoče stisniti.");
+        throw new CompressionError("compress.pdfFailed");
       }
 
       context.fillStyle = PDF_RENDER_BACKGROUND;
@@ -666,7 +695,7 @@ async function renderPdfAsJpegPages(sourceBytes: Uint8Array, profile: RasterComp
 
 async function compressPdfDocument(file: File): Promise<CompressionResult> {
   if (file.size > MAX_COMPRESSIBLE_DOCUMENT_BYTES) {
-    throw new Error(fileTooLargeMessage("document", MAX_DOCUMENT_BYTES));
+    throw fileTooLargeError("document", MAX_DOCUMENT_BYTES);
   }
 
   const sourceBytes = new Uint8Array(await file.arrayBuffer());
@@ -686,7 +715,7 @@ async function compressPdfDocument(file: File): Promise<CompressionResult> {
     }
   }
 
-  throw new Error(fileTooLargeMessage("document", MAX_DOCUMENT_BYTES));
+  throw fileTooLargeError("document", MAX_DOCUMENT_BYTES);
 }
 
 export async function compressDocumentForUpload(file: File): Promise<CompressionResult> {
@@ -728,7 +757,7 @@ export async function compressDocumentForUpload(file: File): Promise<Compression
     }
   }
 
-  throw new Error(unsupportedCompressionMessage("document"));
+  throw unsupportedCompressionError("document");
 }
 
 function isBulkyAudioFile(file: File) {
@@ -764,7 +793,7 @@ export async function compressAudioForUpload(
   }
 
   if (file.size > MAX_COMPRESSIBLE_AUDIO_BYTES) {
-    throw new Error(fileTooLargeMessage("audio", MAX_AUDIO_BYTES));
+    throw fileTooLargeError("audio", MAX_AUDIO_BYTES);
   }
 
   try {
@@ -830,7 +859,7 @@ export async function compressAudioForUpload(
       );
 
       if (compressedFile.size > MAX_AUDIO_BYTES) {
-        throw new Error(fileTooLargeMessage("audio", MAX_AUDIO_BYTES));
+        throw fileTooLargeError("audio", MAX_AUDIO_BYTES);
       }
 
       return {
@@ -843,7 +872,8 @@ export async function compressAudioForUpload(
       await ffmpeg.deleteDir(inputDirectory).catch(() => null);
     }
   } catch (error) {
-    if (error instanceof Error && error.message === fileTooLargeMessage("audio", MAX_AUDIO_BYTES)) {
+    // By key, not by text: the message exists in five languages now.
+    if (error instanceof CompressionError && error.key === TOO_LARGE_KEYS.audio) {
       throw error;
     }
 
@@ -851,6 +881,6 @@ export async function compressAudioForUpload(
     // exists: without it a transcode failure is indistinguishable from an unsupported file.
     console.error("Audio compression failed.", error);
 
-    throw new Error(unsupportedCompressionMessage("audio"));
+    throw unsupportedCompressionError("audio");
   }
 }

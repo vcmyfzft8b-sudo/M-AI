@@ -31,6 +31,7 @@ import {
   optionalDocumentLectureIdSchema,
   optionalOriginalFileNameSchema,
 } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 export const maxDuration = 300;
 const PDF_UPLOAD_MAX_BYTES = MAX_DOCUMENT_BYTES + 256 * 1024;
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const entitlement = await getUserEntitlementState(user.id);
@@ -98,7 +99,7 @@ export async function POST(request: Request) {
   const inputFile = formData.get("file");
 
   if (!parsedFields.success) {
-    return buildValidationErrorResponse(parsedFields.error);
+    return await buildValidationErrorResponse(parsedFields.error);
   }
 
   const { lectureId, originalFileName, languageHint, createInitialAudio, initialAudioVoice } =
@@ -106,19 +107,19 @@ export async function POST(request: Request) {
 
   if (!entitlement.hasPaidAccess && lectureId !== entitlement.trialLectureId) {
     return createBillingRequiredResponse(
-      "Brez plačljivega paketa lahko obdelaš samo svoje brezplačno poskusno gradivo.",
+      await tr("api.trialOnly.process"),
       "trial_exhausted",
     );
   }
 
   if (!(inputFile instanceof File)) {
-    return NextResponse.json({ error: "Manjka datoteka dokumenta." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.missingDocumentFile") }, { status: 400 });
   }
 
   if (isLegacyPowerPointDocument(inputFile)) {
     return NextResponse.json(
       {
-        error: "Stare PowerPoint datoteke .ppt še niso podprte. Shrani jo kot .pptx ali PDF in poskusi znova.",
+        error: await tr("api.pptNotSupported"),
       },
       { status: 400 },
     );
@@ -127,7 +128,7 @@ export async function POST(request: Request) {
   if (!isSupportedDocumentFile(inputFile)) {
     return NextResponse.json(
       {
-        error: "Nepodprta vrsta dokumenta. Uporabi PDF, TXT, Markdown, HTML, RTF, DOCX ali PPTX.",
+        error: await tr("file.unsupportedDocumentType"),
       },
       { status: 400 },
     );
@@ -143,7 +144,7 @@ export async function POST(request: Request) {
     const sourceFileName = originalFileName || inputFile.name;
 
     if (!lectureId) {
-      return NextResponse.json({ error: "Manjka ID zapiska." }, { status: 400 });
+      return NextResponse.json({ error: await tr("api.missingLectureId") }, { status: 400 });
     }
 
     const { data: lecture, error: lectureError } = await supabase
@@ -234,7 +235,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : "Dokumenta ni bilo mogoče obdelati.",
+          error instanceof Error ? error.message : await tr("api.documentProcessFailed"),
       },
       { status: 500 },
     );

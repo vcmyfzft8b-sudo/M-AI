@@ -8,7 +8,12 @@ import Image from "next/image";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { Component } from "react";
 
+import { useTranslations } from "@/components/i18n-provider";
+import type { Locale } from "@/lib/i18n/locales";
+import { formatCalendarDate } from "@/lib/utils";
 import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, SEO_BRAND_NAME } from "@/lib/brand";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+import type { Translate } from "@/lib/i18n/translate";
 
 import { PREVIEW_STOP_TOUR_EVENT, PREVIEW_TOUR_STOPPED_EVENT } from "./memo-app-preview-events";
 
@@ -20,6 +25,7 @@ import {
   DARK_TOKENS,
   FOLDERS,
   HELP_SECTIONS,
+  PREVIEW_HELP_TITLE_KEYS,
   INITIAL_NOTES,
   lectureSummary,
   LIGHT_TOKENS,
@@ -39,9 +45,10 @@ import {
   SOURCE_META,
   SOURCE_MODES,
   SOURCE_VARIANTS,
-  STATUS_LABELS,
+  STATUS_LABEL_KEYS,
   STUDY_MODES,
   type StudyMode,
+  PREVIEW_TODAY,
   TABS,
   THEME_OPTIONS,
   THEME_STUDY,
@@ -53,6 +60,15 @@ type CursorState = { x: number; y: number; press: boolean; seen: boolean; drag?:
 
 type PreviewProps = {
   autoTour?: boolean;
+  /**
+   * The translator, as a prop rather than a hook: this is a class component,
+   * and the wrapper below is what reads the context. Only the replica's own
+   * chrome goes through it — the study material it displays stays in the
+   * language it was written in, as `memo-app-preview-data.ts` explains.
+   */
+  t: Translate<MessageKey>;
+  /** For `Intl`, which the replica's date column goes through the same as the real one. */
+  locale: Locale;
 };
 
 type PreviewState = {
@@ -253,7 +269,7 @@ const MODAL_INPUT: CSSProperties = {
   outline: "none",
 };
 
-export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
+class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
   state: PreviewState = {
     scale: 0.82,
     measured: false,
@@ -484,14 +500,14 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
     doAt(1300, () => this.tapThen('[data-tap="create"]', 0, () => this.setState({ createMenuOpen: true })));
     doAt(1900, () => this.tapThen('[data-tap="quick"]', 1, () => this.openSheet("upload")));
     doAt(1500, () => this.tapThen('[data-tap="audio"]', 0, () => this.setState({ createAudio: true })));
-    doAt(1700, () => this.tapThen('[data-tap="ustvari"]', 0, () => this.setState({ busyLabel: "Pripravljam..." })));
-    doAt(1100, () => this.setState({ busyLabel: "Nalagam datoteko..." }));
+    doAt(1700, () => this.tapThen('[data-tap="ustvari"]', 0, () => this.setState({ busyLabel: this.props.t("capture.busy.preparing") })));
+    doAt(1100, () => this.setState({ busyLabel: this.props.t("capture.busy.uploadingFile") }));
     doAt(1600, () =>
       this.setState((s) => ({
         busyLabel: null,
         sheetMode: null,
         notes: [
-          { id: tourNoteId, title: "Predavanje IS – 4. teden", source: "audio", date: "danes", status: "queued" },
+          { id: tourNoteId, title: "Predavanje IS – 4. teden", source: "audio", date: PREVIEW_TODAY, status: "queued" },
           ...s.notes,
         ],
       })),
@@ -1054,14 +1070,14 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
     const variants = SOURCE_VARIANTS[mode];
     const config = { ...base, ...variants[(this.state.sourceVariant || 0) % variants.length] };
 
-    this.setState({ busyLabel: "Pripravljam..." });
-    this.later(() => this.setState({ busyLabel: mode === "link" ? "Dodajam v vrsto..." : "Nalagam datoteko..." }), 700);
+    this.setState({ busyLabel: this.props.t("capture.busy.preparing") });
+    this.later(() => this.setState({ busyLabel: mode === "link" ? this.props.t("capture.busy.queueing") : this.props.t("capture.busy.uploadingFile") }), 700);
     this.later(() => {
       const id = `n${Date.now()}`;
       this.setState((s) => ({
         busyLabel: null,
         sheetMode: null,
-        notes: [{ id, title: config.noteTitle, source: config.source, date: "danes", status: "queued" }, ...s.notes],
+        notes: [{ id, title: config.noteTitle, source: config.source, date: PREVIEW_TODAY, status: "queued" }, ...s.notes],
       }));
       this.later(() => this.updateStatus(id, "transcribing"), 1400);
       this.later(() => this.updateStatus(id, "generating_notes"), 3200);
@@ -1099,7 +1115,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
       <div style={{ display: "flex", flexDirection: "column", gap: "16px", paddingTop: "14.4px" }}>
         <section style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
           <h2 style={{ margin: "0 0 1.6px", fontSize: "15px", fontWeight: 650, letterSpacing: "-0.03em", color: "var(--m-label)" }}>
-            Moji zapiski
+            {this.props.t("library.myNotes")}
           </h2>
 
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "20px", width: "100%" }}>
@@ -1135,7 +1151,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                   letterSpacing: "-0.03em",
                 }}
               >
-                {activeFolder ? activeFolder.name : "Vsi zapiski"}
+                {activeFolder ? activeFolder.name : this.props.t("folders.allNotes")}
               </span>
               <span style={{ fontSize: "12px", color: "var(--m-second)" }}>▾</span>
             </button>
@@ -1157,7 +1173,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
               <input
                 value={s.query}
                 onChange={(e) => this.setState({ query: e.target.value })}
-                placeholder="Išči po naslovu"
+                placeholder={this.props.t("preview.searchByTitle")}
                 style={{
                   width: "100%",
                   minWidth: 0,
@@ -1208,7 +1224,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                       <button
                         type="button"
                         onClick={() => this.setState({ swipeId: null, swipeOffset: 0, renameId: note.id, renameValue: note.title })}
-                        aria-label="Uredi"
+                        aria-label={this.props.t("common.edit")}
                         style={actionButtonStyle}
                       >
                         <span
@@ -1229,13 +1245,13 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                           ✏️
                         </span>
                         <span style={{ color: "var(--m-second)", fontSize: "10.9px", fontWeight: 650, lineHeight: 1, textAlign: "center", whiteSpace: "nowrap" }}>
-                          Uredi
+                          {this.props.t("common.edit")}
                         </span>
                       </button>
                       <button
                         type="button"
                         onClick={() => this.setState({ swipeId: null, swipeOffset: 0, deleteId: note.id })}
-                        aria-label="Izbriši"
+                        aria-label={this.props.t("common.delete")}
                         style={actionButtonStyle}
                       >
                         <span
@@ -1256,7 +1272,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                           🗑️
                         </span>
                         <span style={{ color: "var(--m-red)", fontSize: "10.9px", fontWeight: 650, lineHeight: 1, textAlign: "center", whiteSpace: "nowrap" }}>
-                          Izbriši
+                          {this.props.t("common.delete")}
                         </span>
                       </button>
                     </div>
@@ -1322,7 +1338,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                           {note.title}
                         </span>
                         <span style={{ fontSize: "12.5px", lineHeight: 1.3, color: "var(--m-second)" }}>
-                          {SOURCE_META[note.source].label} • {note.date}
+                          {this.props.t(SOURCE_META[note.source].labelKey)} • {formatCalendarDate(note.date, this.props.locale)}
                         </span>
                       </span>
                       {note.status !== "ready" ? (
@@ -1342,7 +1358,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                             textTransform: "uppercase",
                           }}
                         >
-                          {STATUS_LABELS[note.status]}
+                          {this.props.t(STATUS_LABEL_KEYS[note.status])}
                         </span>
                       ) : null}
                     </div>
@@ -1377,9 +1393,9 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
               >
                 📝
               </span>
-              <p style={{ margin: "6px 0 0", fontSize: "16px", color: "var(--m-label)" }}>Ni ujemajočih zapiskov</p>
+              <p style={{ margin: "6px 0 0", fontSize: "16px", color: "var(--m-label)" }}>{this.props.t("library.empty.noMatchTitle")}</p>
               <p style={{ margin: 0, fontSize: "13.6px", color: "var(--m-second)" }}>
-                Poskusi krajši iskalni izraz ali počisti iskanje.
+                {this.props.t("preview.emptyBody")}
               </p>
             </div>
           )}
@@ -1516,7 +1532,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
           : null}
 
         <h3 style={{ margin: "30.4px 0 11.2px", fontSize: "18.24px", fontWeight: 700, lineHeight: 1.35, color: "var(--m-label)" }}>
-          {highlightHeading("Ključne točke")}
+          {highlightHeading(this.props.t("preview.keyPoints"))}
         </h3>
         <ul style={{ display: "grid", gap: "8.8px", margin: "11.2px 0 16.8px", paddingLeft: 0, listStyle: "none" }}>
           {body.points.map((parts, pi) => (
@@ -1694,23 +1710,23 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
               onClick={() => this.setState({ studyMode: mode.id })}
               style={this.segment(s.studyMode === mode.id)}
             >
-              {mode.label}
+              {this.props.t(mode.labelKey)}
             </button>
           ))}
         </div>
 
         {cardsSummaryVisible
           ? summary({
-              badge: missedCount === 0 ? "Zaključeno" : "Krog 1 zaključen",
-              title: missedCount === 0 ? "Vse kartice so predelane" : "Ponovi kartice, ki si jih zgrešil",
+              badge: missedCount === 0 ? this.props.t("study.completed") : this.props.t("study.roundCompleted", { cycle: 1 }),
+              title: this.props.t(missedCount === 0 ? "study.cards.allDone" : "study.cards.repeatMissed"),
               pct: completionPct(knownCount, CARDS.length),
-              pctLabel: missedCount === 0 ? "Komplet opravljen" : "Rezultat kroga",
+              pctLabel: this.props.t(missedCount === 0 ? "study.setCompleted" : "study.roundScore"),
               metricLabel: "Pravilno v tem krogu",
               metric: `${knownCount} / ${CARDS.length}`,
               action:
                 missedCount === 0
-                  ? "Začni komplet znova"
-                  : `Ponovi ${missedCount}${missedCount === 1 ? " zgrešeno kartico" : " zgrešene kartice"}`,
+                  ? this.props.t("study.restartSet")
+                  : this.props.t("study.repeatMissedCards", { count: missedCount }),
               tap: "restart-cards",
               onRestart: () => this.setState({ cardsDone: false, cardIndex: 0, flipped: false, cardAnswers: [] }),
             })
@@ -1760,9 +1776,9 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                   }}
                 >
                   {s.cardAnswers[s.cardIndex % CARDS.length] === "again"
-                    ? "Nisem vedel"
+                    ? this.props.t("study.cards.didntKnow")
                     : s.cardAnswers[s.cardIndex % CARDS.length] === "easy"
-                      ? "Vedel sem"
+                      ? this.props.t("study.cards.knew")
                       : ""}
                 </span>
               </span>
@@ -1782,7 +1798,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                 {s.flipped ? card.back : card.front}
               </span>
               <span style={{ fontSize: "12.5px", fontWeight: 650, color: "var(--m-second)" }}>
-                {s.flipped ? "Nazaj na vprašanje" : "Pokaži odgovor"}
+                {this.props.t(s.flipped ? "preview.backToQuestion" : "preview.showAnswer")}
               </span>
               <span
                 aria-hidden="true"
@@ -1811,7 +1827,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
               <button
                 type="button"
                 onClick={() => this.setState((c) => ({ cardIndex: Math.max(0, c.cardIndex - 1), flipped: false }))}
-                aria-label="Prejšnja kartica"
+                aria-label={this.props.t("study.cards.previous")}
                 style={this.cardNavStyle(s.cardIndex > 0)}
               >
                 ←
@@ -1844,7 +1860,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
               <button
                 type="button"
                 onClick={() => this.gradeCard("easy")}
-                aria-label="Vedel sem"
+                aria-label={this.props.t("study.cards.knew")}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -1880,16 +1896,16 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
 
         {quizSummaryVisible
           ? summary({
-              badge: quizCorrect === QUIZ.length ? "Zaključeno" : "Krog 1 zaključen",
-              title: quizCorrect === QUIZ.length ? "Vsa vprašanja so predelana" : "Ponovi vprašanja, ki si jih zgrešil",
+              badge: quizCorrect === QUIZ.length ? this.props.t("study.completed") : this.props.t("study.roundCompleted", { cycle: 1 }),
+              title: this.props.t(quizCorrect === QUIZ.length ? "quiz.allDone" : "quiz.repeatMissed"),
               pct: completionPct(quizCorrect, QUIZ.length),
-              pctLabel: quizCorrect === QUIZ.length ? "Komplet opravljen" : "Rezultat kroga",
-              metricLabel: quizCorrect === QUIZ.length ? "Predelana vprašanja" : "Pravilno v tem krogu",
+              pctLabel: this.props.t(quizCorrect === QUIZ.length ? "study.setCompleted" : "study.roundScore"),
+              metricLabel: this.props.t(quizCorrect === QUIZ.length ? "quiz.questionsDone" : "study.correctThisRound"),
               metric: `${quizCorrect} / ${QUIZ.length}`,
               action:
                 quizCorrect === QUIZ.length
-                  ? "Začni kviz znova"
-                  : `Ponovi ${QUIZ.length - quizCorrect}${QUIZ.length - quizCorrect === 1 ? " zgrešeno vprašanje" : " zgrešeni vprašanji"}`,
+                  ? this.props.t("quiz.restart")
+                  : this.props.t("quiz.repeatMissedQuestions", { count: QUIZ.length - quizCorrect }),
               tap: "restart-quiz",
               onRestart: () => this.setState({ quizDone: false, quizIndex: 0, quizPick: null, quizAnswers: [] }),
             })
@@ -1983,7 +1999,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                       color: s.quizPick === quiz.correct ? "var(--m-green)" : "var(--m-red)",
                     }}
                   >
-                    {s.quizPick === quiz.correct ? "Pravilno" : "Napačno"}
+                    {this.props.t(s.quizPick === quiz.correct ? "preview.correct" : "preview.incorrect")}
                   </p>
                   <p style={{ margin: 0, fontSize: "14.2px", lineHeight: 1.5, color: "var(--m-second)" }}>{quiz.explanation}</p>
                 </div>
@@ -2010,7 +2026,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                   cursor: "pointer",
                 }}
               >
-                Nazaj
+                {this.props.t("common.back")}
               </button>
               <button
                 type="button"
@@ -2039,7 +2055,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                   cursor: "pointer",
                 }}
               >
-                {s.quizIndex % QUIZ.length === QUIZ.length - 1 ? "Zaključi" : "Naprej"}
+                {this.props.t(s.quizIndex % QUIZ.length === QUIZ.length - 1 ? "preview.finish" : "common.next")}
               </button>
             </div>
           </div>
@@ -2054,7 +2070,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                   return (
                     <div key={question.id} style={{ display: "grid", gap: "10px", padding: "15px", border: "1px solid var(--m-sep)", borderRadius: "16px", background: "var(--m-muted)" }}>
                       <span style={{ fontSize: "12.5px", fontWeight: 700, letterSpacing: "0.04em", color: "var(--m-second)" }}>
-                        Vprašanje {index + 1}
+                        {this.props.t("quiz.questionN", { index: index + 1 })}
                       </span>
                       <p style={{ margin: 0, fontSize: "16px", fontWeight: 600, lineHeight: 1.35, color: "var(--m-label)" }}>
                         {question.prompt}
@@ -2066,7 +2082,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                           const value = e.target.value;
                           this.setState((c) => ({ practiceAnswers: { ...c.practiceAnswers, [question.id]: value } }));
                         }}
-                        placeholder="Sem napiši svoj odgovor..."
+                        placeholder={this.props.t("preview.answerPlaceholder")}
                         style={{
                           width: "100%",
                           minHeight: "104px",
@@ -2122,7 +2138,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                         >
                           {unknown ? "✓" : ""}
                         </span>
-                        <span>Ne vem</span>
+                        <span>{this.props.t("test.dontKnow")}</span>
                       </button>
                     </div>
                   );
@@ -2146,7 +2162,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                     cursor: "pointer",
                   }}
                 >
-                  Oddaj preizkus
+                  {this.props.t("test.submit")}
                 </button>
               </div>
             ) : (
@@ -2154,7 +2170,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                 <div style={{ display: "grid", gap: "8.8px", justifyItems: "center", textAlign: "center" }}>
                   <div style={{ display: "grid", gap: "8.8px", justifyItems: "center", textAlign: "center" }}>
                     <p style={{ margin: 0, maxWidth: "38ch", fontSize: "9.9px", lineHeight: 1.2, color: "var(--m-second)", overflowWrap: "anywhere" }}>
-                      Poskus 1
+                      {this.props.t("preview.attemptOne")}
                     </p>
                   </div>
                 </div>
@@ -2174,13 +2190,13 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                           color: "var(--m-second)",
                         }}
                       >
-                        Rezultat
+                        {this.props.t("study.score")}
                       </span>
                     </div>
                   </div>
                   <div style={{ display: "grid", gap: "7px", justifyItems: "center", textAlign: "center" }}>
                     <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--m-second)" }}>
-                      Dosežene točke
+                      {this.props.t("test.pointsScored")}
                     </span>
                     <strong style={{ fontSize: "25px", lineHeight: 1, letterSpacing: "-0.06em", color: "var(--m-label)", whiteSpace: "nowrap" }}>
                       8 / 10
@@ -2189,10 +2205,10 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "5.8px", width: "100%" }}>
                   {[
-                    ["Povprečje", "80%"],
-                    ["Najboljši rezultat", "80%"],
-                    ["Najnižji rezultat", "80%"],
-                    ["Poskusi", "1"],
+                    [this.props.t("test.average"), "80%"],
+                    [this.props.t("test.best"), "80%"],
+                    [this.props.t("test.lowest"), "80%"],
+                    [this.props.t("test.attemptsShort"), "1"],
                   ].map(([label, value]) => (
                     <div key={label} style={{ display: "grid", gap: "4.8px", minWidth: 0, padding: "7.4px 8.3px", borderRadius: "18px", border: "1px solid var(--m-sep)", background: "var(--m-surface)" }}>
                       <span style={{ fontSize: "8.6px", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--m-second)" }}>
@@ -2210,7 +2226,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                     style={completionAction()}
                   >
                     <span style={{ fontSize: "12.8px" }}>🔄</span>
-                    Začni nov preizkus
+                    {this.props.t("study.test.startNew")}
                   </button>
                 </div>
               </div>
@@ -2268,7 +2284,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                   this.sendChat();
                 }
               }}
-              placeholder="Vprašaj o tem predavanju"
+              placeholder={this.props.t("preview.askAboutLecture")}
               rows={1}
               style={{
                 flex: 1,
@@ -2290,7 +2306,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
             <button
               type="button"
               onClick={() => this.sendChat()}
-              aria-label="Pošlji sporočilo"
+              aria-label={this.props.t("chat.send")}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -2311,7 +2327,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
             </button>
           </div>
           <p style={{ margin: 0, fontSize: "12.5px", lineHeight: 1.4, color: "var(--m-second)" }}>
-            Odgovori ostajajo vezani na to predavanje.
+            {this.props.t("preview.answersStayWithLecture")}
           </p>
         </div>
       </div>
@@ -2367,8 +2383,8 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                 if (tab.id !== "notes" && this.state.reading) this.toggleRead();
                 this.setState({ tab: tab.id });
               }}
-              aria-label={tab.label}
-              title={tab.label}
+              aria-label={this.props.t(tab.labelKey)}
+              title={this.props.t(tab.labelKey)}
               style={this.segment(s.tab === tab.id)}
             >
               {tab.icon}
@@ -2389,12 +2405,12 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "18px", paddingTop: "14.4px" }}>
         <h1 style={{ margin: 0, fontSize: "34px", fontWeight: 700, letterSpacing: "-0.045em", lineHeight: 1.02, color: "var(--m-label)" }}>
-          Pomoč
+          {this.props.t("help.title")}
         </h1>
         {HELP_SECTIONS.map((section, sectionIndex) => (
-          <section key={section.title} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <section key={section.titleKey} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <h2 style={{ margin: 0, fontSize: "19px", fontWeight: 650, letterSpacing: "-0.03em", color: "var(--m-label)" }}>
-              {section.title}
+              {this.props.t(section.titleKey)}
             </h2>
             <div style={{ display: "grid", gap: "9.8px" }}>
               {section.items.map((item, itemIndex) => {
@@ -2402,7 +2418,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                 const isOpen = s.openHelp === key;
                 return (
                   <button
-                    key={item.title}
+                    key={item.titleKey}
                     type="button"
                     onClick={() => this.setState({ openHelp: isOpen ? null : key })}
                     style={{
@@ -2419,7 +2435,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                   >
                     <span style={{ display: "flex", alignItems: "center", gap: "12px", width: "100%" }}>
                       <span style={{ flex: 1, minWidth: 0, fontSize: "15px", fontWeight: 500, color: "var(--m-label)", textAlign: "left" }}>
-                        {item.title}
+                        {this.props.t(PREVIEW_HELP_TITLE_KEYS[item.titleKey])}
                       </span>
                       <span
                         style={{
@@ -2434,7 +2450,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                     </span>
                     {isOpen ? (
                       <span style={{ display: "block", marginTop: "10px", fontSize: "14px", lineHeight: 1.55, color: "var(--m-second)", textAlign: "left" }}>
-                        {item.body}
+                        {this.props.t(item.bodyKey)}
                       </span>
                     ) : null}
                   </button>
@@ -2452,11 +2468,11 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "18px", paddingTop: "14.4px" }}>
         <h1 style={{ margin: 0, fontSize: "34px", fontWeight: 700, letterSpacing: "-0.045em", lineHeight: 1.02, color: "var(--m-label)" }}>
-          Nastavitve
+          {this.props.t("nav.settings")}
         </h1>
 
         <section style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <h2 style={{ margin: 0, fontSize: "19px", fontWeight: 650, letterSpacing: "-0.03em", color: "var(--m-label)" }}>Tema</h2>
+          <h2 style={{ margin: 0, fontSize: "19px", fontWeight: 650, letterSpacing: "-0.03em", color: "var(--m-label)" }}>{this.props.t("settings.theme.heading")}</h2>
           <div style={{ display: "grid", gap: "10px" }}>
             {THEME_OPTIONS.map((option) => (
               <button
@@ -2493,7 +2509,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                 >
                   {option.icon}
                 </span>
-                <span style={{ flex: 1, textAlign: "left", fontSize: "16px", fontWeight: 600, color: "var(--m-label)" }}>{option.label}</span>
+                <span style={{ flex: 1, textAlign: "left", fontSize: "16px", fontWeight: 600, color: "var(--m-label)" }}>{this.props.t(option.labelKey)}</span>
                 <span style={{ color: "var(--m-tint)", fontSize: "16px", fontWeight: 700, opacity: s.theme === option.value ? 1 : 0 }}>✓</span>
               </button>
             ))}
@@ -2501,14 +2517,14 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
         </section>
 
         <section style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <h2 style={{ margin: 0, fontSize: "19px", fontWeight: 650, letterSpacing: "-0.03em", color: "var(--m-label)" }}>Naročnina</h2>
+          <h2 style={{ margin: 0, fontSize: "19px", fontWeight: 650, letterSpacing: "-0.03em", color: "var(--m-label)" }}>{this.props.t("settings.subscription.heading")}</h2>
           <div style={{ display: "grid", gap: "12px", padding: "18px 20px", border: "1px solid var(--m-sep)", borderRadius: "26px", background: "var(--m-card-grad)", boxShadow: "var(--m-shadow)" }}>
             <div style={{ minWidth: 0 }}>
               <p style={{ margin: "0 0 6px", fontSize: "11.5px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--m-second)" }}>
-                Paket
+                {this.props.t("settings.plan.eyebrow")}
               </p>
-              <p style={{ margin: 0, fontSize: "16px", fontWeight: 600, color: "var(--m-label)" }}>Memo AI Pro (aktivno)</p>
-              <p style={{ margin: "4px 0 0", fontSize: "13.6px", color: "var(--m-second)" }}>Aktivno do 12. september 2026</p>
+              <p style={{ margin: 0, fontSize: "16px", fontWeight: 600, color: "var(--m-label)" }}>{this.props.t("preview.planName")}</p>
+              <p style={{ margin: "4px 0 0", fontSize: "13.6px", color: "var(--m-second)" }}>{this.props.t("preview.planUntil")}</p>
             </div>
             <button
               type="button"
@@ -2529,17 +2545,17 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                 cursor: "pointer",
               }}
             >
-              Upravljaj naročnino
+              {this.props.t("preview.managePlan")}
             </button>
           </div>
         </section>
 
         <section style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <h2 style={{ margin: 0, fontSize: "19px", fontWeight: 650, letterSpacing: "-0.03em", color: "var(--m-label)" }}>Račun</h2>
+          <h2 style={{ margin: 0, fontSize: "19px", fontWeight: 650, letterSpacing: "-0.03em", color: "var(--m-label)" }}>{this.props.t("settings.account.heading")}</h2>
           <div style={{ display: "grid", gap: "12px", padding: "18px 20px", border: "1px solid var(--m-sep)", borderRadius: "26px", background: "var(--m-card-grad)", boxShadow: "var(--m-shadow)" }}>
             <div style={{ minWidth: 0 }}>
               <p style={{ margin: "0 0 6px", fontSize: "11.5px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--m-second)" }}>
-                Prijavljen
+                {this.props.t("settings.account.signedIn")}
               </p>
               <p style={{ margin: 0, fontSize: "16px", fontWeight: 600, color: "var(--m-label)", overflowWrap: "anywhere" }}>
                 student@memoai.eu
@@ -2563,12 +2579,12 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                 cursor: "pointer",
               }}
             >
-              Odjava
+              {this.props.t("settings.signOut")}
             </button>
           </div>
           <div style={{ display: "grid", gap: "10px" }}>
             {[
-              { icon: "🎟️", title: "Unovči kodo" },
+              { icon: "🎟️", title: this.props.t("settings.rows.redeem") },
               { icon: "🔒", title: "Zasebnost" },
               { icon: "📤", title: "Deli" },
               { icon: "💡", title: "Predlagaj funkcijo" },
@@ -2626,15 +2642,15 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
       gap: "14px",
     });
     const allFolders: Array<{ id: string | null; name: string; icon: string; noteIds: string[] | null }> = [
-      { id: null, name: "Vsi zapiski", icon: "🗂️", noteIds: null },
+      { id: null, name: this.props.t("folders.allNotes"), icon: "🗂️", noteIds: null },
       ...s.folders,
     ];
     return (
       <div style={{ position: "absolute", inset: 0, zIndex: 115 }}>
-        <button type="button" onClick={() => this.setState({ folderSheetOpen: false })} aria-label="Zapri mape" style={SHEET_BACKDROP} />
+        <button type="button" onClick={() => this.setState({ folderSheetOpen: false })} aria-label={this.props.t("folders.closeList")} style={SHEET_BACKDROP} />
         <section style={folderSheet.style} onPointerDown={folderSheet.onPointerDown}>
           {SHEET_HANDLE}
-          {sheetTitleRow("Mape", () => this.setState({ folderSheetOpen: false }), "Zapri mape")}
+          {sheetTitleRow(this.props.t("folders.title"), () => this.setState({ folderSheetOpen: false }), this.props.t("folders.closeList"))}
           <div style={{ display: "grid", alignContent: "start", gap: "12.8px", minHeight: 0, overflowY: "auto" }}>
             {allFolders.map((folder) => {
               const count = folder.noteIds ? s.notes.filter((note) => folder.noteIds!.indexOf(note.id) !== -1).length : s.notes.length;
@@ -2719,7 +2735,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
               <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "12px", background: "var(--m-muted)", fontSize: "14px" }}>
                 ➕
               </span>
-              <span style={{ flex: 1 }}>Nova mapa</span>
+              <span style={{ flex: 1 }}>{this.props.t("folders.new")}</span>
               <span style={{ color: "var(--m-third)", fontSize: "17px" }}>›</span>
             </button>
             <button
@@ -2747,7 +2763,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
               <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "12px", background: "var(--m-muted)", fontSize: "14px" }}>
                 ✏️
               </span>
-              <span style={{ flex: 1 }}>Uredi mape</span>
+              <span style={{ flex: 1 }}>{this.props.t("folders.edit")}</span>
               <span style={{ color: "var(--m-third)", fontSize: "17px" }}>›</span>
             </button>
           </div>
@@ -2768,31 +2784,31 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
     });
     return (
       <div style={{ position: "absolute", inset: 0, zIndex: 125 }}>
-        <button type="button" onClick={close} aria-label="Zapri" style={SHEET_BACKDROP} />
+        <button type="button" onClick={close} aria-label={this.props.t("common.close")} style={SHEET_BACKDROP} />
         <section style={renameSheet.style} onPointerDown={renameSheet.onPointerDown}>
           {SHEET_HANDLE}
-          {sheetTitleRow("Preimenuj zapisek", close, "Zapri")}
+          {sheetTitleRow(this.props.t("library.rename.title"), close, this.props.t("common.close"))}
           <div style={{ display: "grid", gap: "16px", alignContent: "start" }}>
             <p style={{ margin: 0, fontSize: "14.5px", lineHeight: 1.45, color: "var(--m-second)" }}>
-              Daj temu zapisku bolj jasen naslov, ne da zapustiš stran.
+              {this.props.t("preview.renameHint")}
             </p>
             <label style={{ display: "grid", gap: "7px" }}>
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--m-second)" }}>Naslov</span>
+              <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--m-second)" }}>{this.props.t("preview.noteTitleField")}</span>
               <input
                 value={s.renameValue}
                 onChange={(e) => this.setState({ renameValue: e.target.value })}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") this.saveRename();
                 }}
-                placeholder="Neimenovan zapisek"
+                placeholder={this.props.t("note.untitled")}
                 style={MODAL_INPUT}
               />
             </label>
             <button type="button" onClick={() => this.saveRename()} style={{ ...MODAL_PRIMARY, opacity: s.renameValue.trim() ? 1 : 0.5 }}>
-              Shrani naslov
+              {this.props.t("library.rename.save")}
             </button>
             <button type="button" onClick={close} style={MODAL_SECONDARY}>
-              Prekliči
+              {this.props.t("common.cancel")}
             </button>
           </div>
         </section>
@@ -2813,23 +2829,25 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
     const deleteTitle = s.notes.find((note) => note.id === s.deleteId)?.title || "";
     return (
       <div style={{ position: "absolute", inset: 0, zIndex: 125 }}>
-        <button type="button" onClick={close} aria-label="Zapri" style={SHEET_BACKDROP} />
+        <button type="button" onClick={close} aria-label={this.props.t("common.close")} style={SHEET_BACKDROP} />
         <section style={deleteSheet.style} onPointerDown={deleteSheet.onPointerDown}>
           {SHEET_HANDLE}
-          {sheetTitleRow("Izbriši zapisek", close, "Zapri")}
+          {sheetTitleRow(this.props.t("library.delete.title"), close, this.props.t("common.close"))}
           <div style={{ display: "grid", gap: "16px", alignContent: "start" }}>
             <p style={{ margin: 0, fontSize: "14.5px", lineHeight: 1.5, color: "var(--m-second)" }}>
-              Izbriši <span style={{ color: "var(--m-label)", fontWeight: 600 }}>{deleteTitle}</span>? Tega ni mogoče razveljaviti.
+              {this.props.t("preview.deleteBefore")}
+              <span style={{ color: "var(--m-label)", fontWeight: 600 }}>{deleteTitle}</span>
+              {this.props.t("preview.deleteAfter")}
             </p>
             <button
               type="button"
               onClick={() => this.setState((c) => ({ notes: c.notes.filter((note) => note.id !== c.deleteId), deleteId: null }))}
               style={{ ...MODAL_PRIMARY, background: "var(--m-red)" }}
             >
-              Izbriši zapisek
+              {this.props.t("library.delete.title")}
             </button>
             <button type="button" onClick={close} style={MODAL_SECONDARY}>
-              Prekliči
+              {this.props.t("common.cancel")}
             </button>
           </div>
         </section>
@@ -2846,12 +2864,16 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
     });
     return (
       <div style={{ position: "absolute", inset: 0, zIndex: 126 }}>
-        <button type="button" onClick={close} aria-label="Zapri" style={SHEET_BACKDROP} />
+        <button type="button" onClick={close} aria-label={this.props.t("common.close")} style={SHEET_BACKDROP} />
         <section style={newFolderSheet.style} onPointerDown={newFolderSheet.onPointerDown}>
           {SHEET_HANDLE}
-          {sheetTitleRow(s.folderModalId ? "Uredi mapo" : "Nova mapa", close, "Zapri")}
+          {sheetTitleRow(
+            this.props.t(s.folderModalId ? "folders.editOne" : "folders.new"),
+            close,
+            this.props.t("common.close"),
+          )}
           <label style={{ display: "grid", gap: "7px" }}>
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--m-second)" }}>Ime</span>
+            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--m-second)" }}>{this.props.t("folders.name")}</span>
             <input
               value={s.folderNameValue}
               onChange={(e) => this.setState({ folderNameValue: e.target.value })}
@@ -2860,7 +2882,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
             />
           </label>
           <div style={{ display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", gap: "8px", minHeight: 0 }}>
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--m-second)" }}>Dodaj predavanja</span>
+            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--m-second)" }}>{this.props.t("folders.addLectures")}</span>
             <div
               style={{
                 display: "grid",
@@ -2938,10 +2960,10 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
             }}
             style={{ ...MODAL_PRIMARY, opacity: s.folderNameValue.trim() ? 1 : 0.5 }}
           >
-            {s.folderModalId ? "Shrani mapo" : "Ustvari mapo"}
+            {s.folderModalId ? this.props.t("folders.save") : this.props.t("folders.createOne")}
           </button>
           <button type="button" onClick={close} style={MODAL_SECONDARY}>
-            Prekliči
+            {this.props.t("common.cancel")}
           </button>
         </section>
       </div>
@@ -2957,10 +2979,10 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
     });
     return (
       <div style={{ position: "absolute", inset: 0, zIndex: 126 }}>
-        <button type="button" onClick={close} aria-label="Zapri" style={SHEET_BACKDROP} />
+        <button type="button" onClick={close} aria-label={this.props.t("common.close")} style={SHEET_BACKDROP} />
         <section style={editFoldersSheet.style} onPointerDown={editFoldersSheet.onPointerDown}>
           {SHEET_HANDLE}
-          {sheetTitleRow("Uredi mape", close, "Zapri")}
+          {sheetTitleRow(this.props.t("folders.edit"), close, this.props.t("common.close"))}
           <div style={{ display: "grid", alignContent: "start", gap: "10px", minHeight: 0, overflowY: "auto" }}>
             {s.folders.map((folder) => (
               <div key={folder.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", border: "1px solid var(--m-sep)", borderRadius: "18px", background: "var(--m-surface)" }}>
@@ -2997,7 +3019,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                       folderId: c.folderId === folder.id ? null : c.folderId,
                     }))
                   }
-                  aria-label="Izbriši mapo"
+                  aria-label={this.props.t("folders.delete")}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -3020,7 +3042,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
             ))}
           </div>
           <button type="button" onClick={close} style={MODAL_PRIMARY}>
-            Končano
+            {this.props.t("common.done")}
           </button>
         </section>
       </div>
@@ -3034,10 +3056,10 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
     const close = () => this.setState({ createMenuOpen: false });
     return (
       <div style={{ position: "absolute", inset: 0, zIndex: 110 }}>
-        <button type="button" onClick={close} aria-label="Zapri" style={SHEET_BACKDROP} />
+        <button type="button" onClick={close} aria-label={this.props.t("common.close")} style={SHEET_BACKDROP} />
         <section style={createSheet.style} onPointerDown={createSheet.onPointerDown}>
           {SHEET_HANDLE}
-          {sheetTitleRow("Nov zapisek", close, "Zapri")}
+          {sheetTitleRow(this.props.t("library.newNote"), close, this.props.t("common.close"))}
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", alignContent: "stretch", gap: "10.4px", minHeight: 0, overflowY: "auto" }}>
             {QUICK_ACTIONS.map((action) => (
               <button
@@ -3077,8 +3099,8 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                   {action.icon}
                 </span>
                 <span style={{ display: "grid", gap: "1.9px", minWidth: 0, flex: 1 }}>
-                  <span style={{ fontSize: "15.04px", fontWeight: 600, color: "var(--m-label)" }}>{action.label}</span>
-                  <span style={{ fontSize: "12.48px", lineHeight: 1.35, color: "var(--m-second)" }}>{action.detail}</span>
+                  <span style={{ fontSize: "15.04px", fontWeight: 600, color: "var(--m-label)" }}>{this.props.t(action.labelKey)}</span>
+                  <span style={{ fontSize: "12.48px", lineHeight: 1.35, color: "var(--m-second)" }}>{this.props.t(action.detailKey)}</span>
                 </span>
                 <span style={{ color: "var(--m-third)", fontSize: "17.6px" }}>›</span>
               </button>
@@ -3108,16 +3130,16 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
         <button
           type="button"
           onClick={close}
-          aria-label="Zapri"
+          aria-label={this.props.t("common.close")}
           style={{ ...SHEET_BACKDROP, background: "rgba(12,15,25,0.56)" }}
         />
         <section style={sourceSheet.style} onPointerDown={sourceSheet.onPointerDown}>
           {SHEET_HANDLE}
           <div style={{ display: "grid", gridTemplateColumns: "44px minmax(0, 1fr) 44px", alignItems: "center", minHeight: "50px", flex: "0 0 auto" }}>
             <h2 style={{ gridColumn: 2, margin: 0, textAlign: "center", fontSize: "19.5px", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--m-label)" }}>
-              {sheet.title}
+              {this.props.t(sheet.titleKey)}
             </h2>
-            {sheetCloseButton(close, "Zapri")}
+            {sheetCloseButton(close, this.props.t("common.close"))}
           </div>
 
           {isBusy ? (
@@ -3140,7 +3162,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                   <p style={{ margin: 0, color: "inherit", fontSize: "16px", fontWeight: 600 }}>{s.busyLabel}</p>
                 </div>
                 <p style={{ margin: 0, color: "var(--m-second)", fontSize: "14.08px", lineHeight: 1.45 }}>
-                  Ne zapiraj tega zaslona. Ko bo vse pripravljeno, se bo zaprl samodejno.
+                  {this.props.t("capture.dontCloseScreen")}
                 </p>
                 <button
                   type="button"
@@ -3162,7 +3184,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                     cursor: "pointer",
                   }}
                 >
-                  Prekliči
+                  {this.props.t("common.cancel")}
                 </button>
               </div>
             </div>
@@ -3174,7 +3196,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                     key={mode.id}
                     type="button"
                     onClick={() => this.setState({ sheetMode: mode.id, sourceVariant: 0 })}
-                    aria-label={mode.label}
+                    aria-label={this.props.t(mode.labelKey)}
                     style={this.segment(s.sheetMode === mode.id)}
                   >
                     {mode.icon}
@@ -3216,15 +3238,17 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                 >
                   {s.createAudio ? "✓" : ""}
                 </span>
-                <span>Ustvari zvok</span>
+                <span>{this.props.t("capture.createAudio")}</span>
               </button>
 
               <div style={{ display: "grid", gap: "8px", padding: "16px 18px", border: "1px solid var(--m-sep)", borderRadius: "18px", background: "var(--m-surface)" }}>
                 <p style={{ margin: 0, fontSize: "11.5px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--m-second)" }}>
-                  {sheet.cardLabel}
+                  {this.props.t(sheet.cardLabelKey)}
                 </p>
                 <p style={{ margin: 0, fontSize: "16px", fontWeight: 500, color: "var(--m-label)", overflowWrap: "anywhere" }}>{variant.cardTitle}</p>
-                <p style={{ margin: 0, fontSize: "13.5px", color: "var(--m-second)" }}>{variant.cardMeta}</p>
+                <p style={{ margin: 0, fontSize: "13.5px", color: "var(--m-second)" }}>
+                  {variant.cardMetaKey ? this.props.t(variant.cardMetaKey) : variant.cardMeta}
+                </p>
               </div>
 
               <button
@@ -3248,14 +3272,14 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                 }}
               >
                 <span>{sheet.createIcon}</span>
-                <span>Ustvari</span>
+                <span>{this.props.t("capture.create")}</span>
               </button>
               <button
                 type="button"
                 onClick={() => this.setState((c) => ({ sourceVariant: (c.sourceVariant || 0) + 1 }))}
                 style={MODAL_SECONDARY}
               >
-                {sheet.secondary}
+                {this.props.t(sheet.secondaryKey)}
               </button>
             </div>
           )}
@@ -3275,7 +3299,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
     const filtered = s.notes.filter((note) => {
       if (activeFolder && activeFolder.noteIds.indexOf(note.id) === -1) return false;
       if (!search) return true;
-      return note.title.toLowerCase().includes(search) || SOURCE_META[note.source].label.toLowerCase().includes(search);
+      return note.title.toLowerCase().includes(search) || this.props.t(SOURCE_META[note.source].labelKey).toLowerCase().includes(search);
     });
 
     const rootStyle: CSSProperties = {
@@ -3300,8 +3324,8 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
     const dockOpen = s.dockOpen;
     const dockItems = [
       { id: "home", icon: "🏠", label: "Domov" },
-      { id: "support", icon: "❓", label: "Pomoč" },
-      { id: "settings", icon: "⚙️", label: "Nastavitve" },
+      { id: "support", icon: "❓", label: this.props.t("nav.help") },
+      { id: "settings", icon: "⚙️", label: this.props.t("nav.settings") },
     ].filter((item) => (s.screen === "home" ? item.id !== "settings" : item.id !== "home"));
 
     const pillLabelStyle: CSSProperties = {
@@ -3703,7 +3727,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                     }}
                   >
                     <span>➕</span>
-                    <span style={pillLabelStyle}>Nov zapisek</span>
+                    <span style={pillLabelStyle}>{this.props.t("library.newNote")}</span>
                   </button>
                 ) : null}
 
@@ -3739,7 +3763,7 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
                     }}
                   >
                     <span>{s.reading ? "⏸️" : "🎧"}</span>
-                    <span style={pillLabelStyle}>{s.reading ? "Premor" : "Poslušaj"}</span>
+                    <span style={pillLabelStyle}>{this.props.t(s.reading ? "readAloud.pause" : "readAloud.listen")}</span>
                   </button>
                 ) : null}
 
@@ -3773,4 +3797,17 @@ export class MemoAppPreview extends Component<PreviewProps, PreviewState> {
       </div>
     );
   }
+}
+
+/**
+ * The preview as the page uses it.
+ *
+ * `MemoAppPreviewView` is a class — it drives a scripted tour through
+ * `setState` and needs the instance — so the translator is read here and handed
+ * down as a prop rather than pulled from a hook inside it.
+ */
+export function MemoAppPreview(props: Omit<PreviewProps, "t" | "locale">) {
+  const { t, locale } = useTranslations();
+
+  return <MemoAppPreviewView {...props} t={t} locale={locale} />;
 }

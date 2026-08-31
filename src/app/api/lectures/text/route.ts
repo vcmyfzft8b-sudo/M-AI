@@ -10,6 +10,7 @@ import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { languageHintSchema, noteTextSchema, optionalLectureIdSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 // Just under Vercel's ~4.5 MB serverless request-body limit, mirroring the document route: the
 // paste itself is allowed to be huge because oversized text is compressed before the pipeline.
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const entitlement = await getUserEntitlementState(user.id);
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
 
   if (!entitlement.hasPaidAccess && parsed.data.lectureId !== entitlement.trialLectureId) {
     return createBillingRequiredResponse(
-      "Brez plačljivega paketa lahko obdelaš samo svoje brezplačno poskusno gradivo.",
+      await tr("api.trialOnly.process"),
       "trial_exhausted",
     );
   }
@@ -111,7 +112,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : "Besedila ni bilo mogoče obdelati.",
+          error instanceof Error ? error.message : await tr("api.textProcessFailed"),
       },
       { status: 500 },
     );

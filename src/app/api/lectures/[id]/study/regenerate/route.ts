@@ -6,6 +6,7 @@ import { enqueueLectureStudyGeneration } from "@/lib/jobs";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 export const maxDuration = 300;
 
@@ -19,11 +20,11 @@ export async function POST(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   if (!(await hasPaidAccessForUserId(user.id))) {
-    return createBillingRequiredResponse("Pred ponovnim ustvarjanjem kartic izberi paket.");
+    return createBillingRequiredResponse(await tr("api.paidRequired.regenCards"));
   }
 
   const limited = await enforceRateLimit({
@@ -40,7 +41,7 @@ export async function POST(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID zapiska." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;
@@ -55,7 +56,7 @@ export async function POST(
 
   if (lecture.status !== "ready") {
     return NextResponse.json(
-      { error: "Učna orodja je mogoče ponovno ustvariti, ko je zapisek pripravljen." },
+      { error: await tr("api.studyRegenReadyOnly") },
       { status: 409 },
     );
   }

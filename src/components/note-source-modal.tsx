@@ -22,6 +22,7 @@ import {
   useCreatorDemoBasePath,
   useIsCollegeCreatorDemo,
 } from "@/components/creator-demo/creator-demo-context";
+import { useT } from "@/components/i18n-provider";
 import { LiveAudioWave } from "@/components/live-audio-wave";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { MemoPortal } from "@/components/memo-portal";
@@ -40,6 +41,7 @@ import {
 } from "@/lib/constants";
 import { parseApiResponse, redirectToBillingIfNeeded } from "@/lib/billing-client";
 import { mapAppHref } from "@/lib/creator-demo/paths";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import {
   createSafeTransportFileName,
@@ -48,6 +50,7 @@ import {
 } from "@/lib/document-files";
 import {
   compressDocumentForUpload,
+  compressionErrorMessage,
   compressScanImageForUpload,
 } from "@/lib/file-compression-client";
 import { prepareAudioSourceForUpload } from "@/lib/audio-source-preparation";
@@ -58,7 +61,7 @@ import {
   normalizeUploadScanImageMimeType,
 } from "@/lib/storage";
 import {
-  getUnsupportedVideoUrlMessage,
+  getUnsupportedVideoUrlMessageKey,
   isYoutubeCaptionImportEnabled,
 } from "@/lib/link-source-validation";
 import {
@@ -105,15 +108,21 @@ type PhotoSource = {
   previewStatus: "queued" | "converting" | "ready" | "failed";
 };
 
+/*
+ * Only the emoji is read from this table now (see `modeIcon` below) — the
+ * segmented control it once fed was replaced by the sheet title. The label keys
+ * stay beside their icons because the two belong together, and the audio-import
+ * guide names one of these modes in its instructions.
+ */
 const MODES: Array<{
   id: NoteSourceMode;
-  label: string;
+  labelKey: MessageKey;
   icon: string;
 }> = [
-  { id: "record", label: "Snemaj", icon: "🎙️" },
-  { id: "upload", label: "Naloži", icon: "📤" },
-  { id: "text", label: "Dokumenti", icon: "📄" },
-  { id: "link", label: "Povezava", icon: "🔗" },
+  { id: "record", labelKey: "capture.mode.record", icon: "🎙️" },
+  { id: "upload", labelKey: "capture.mode.upload", icon: "📤" },
+  { id: "text", labelKey: "capture.mode.text", icon: "📄" },
+  { id: "link", labelKey: "capture.mode.link", icon: "🔗" },
 ];
 
 function pickRecorderMimeType() {
@@ -157,20 +166,20 @@ function modeEmoji(mode: NoteSourceMode) {
   return MODES.find((item) => item.id === mode)?.icon ?? "📝";
 }
 
-function sheetTitle(mode: NoteSourceMode) {
+function sheetTitleKey(mode: NoteSourceMode): MessageKey {
   if (mode === "record") {
-    return "Posnemi predavanje";
+    return "library.quickAction.record";
   }
 
   if (mode === "upload") {
-    return "Naloži zvok";
+    return "library.quickAction.audio";
   }
 
   if (mode === "link") {
-    return "Dodaj povezavo";
+    return "library.quickAction.link";
   }
 
-  return "Naloži dokument ali fotografije";
+  return "capture.title.text";
 }
 
 function sheetDescription() {
@@ -211,9 +220,15 @@ const DOCUMENT_OR_IMAGE_INPUT_ACCEPT = `${DOCUMENT_FILE_INPUT_ACCEPT},${SCAN_IMA
 const LOCAL_API_REQUEST_TIMEOUT_MS = 30_000;
 const SCAN_PREVIEW_TIMEOUT_MS = 18_000;
 
+/**
+ * `timeoutMessage` is required rather than defaulted, because this runs outside
+ * the component and has no translator to fall back on. Every caller is inside
+ * one and already says which wait timed out, which is the more useful message
+ * anyway.
+ */
 async function fetchWithTimeout(
   input: Parameters<typeof fetch>[0],
-  init: RequestInit & { timeoutMessage?: string; timeoutMs?: number } = {},
+  init: RequestInit & { timeoutMessage: string; timeoutMs?: number },
 ) {
   const { timeoutMessage, timeoutMs = LOCAL_API_REQUEST_TIMEOUT_MS, signal, ...fetchInit } = init;
   const controller = new AbortController();
@@ -239,10 +254,7 @@ async function fetchWithTimeout(
     });
   } catch (error) {
     if (timedOut) {
-      throw new Error(
-        timeoutMessage ??
-          "Lokalni strežnik se ni odzval dovolj hitro. Osveži stran in poskusi znova.",
-      );
+      throw new Error(timeoutMessage);
     }
 
     throw error;
@@ -250,24 +262,6 @@ async function fetchWithTimeout(
     window.clearTimeout(timeoutId);
     signal?.removeEventListener("abort", abortFromParent);
   }
-}
-
-function formatUploadedPhotoCount(count: number) {
-  const remainder100 = count % 100;
-
-  if (remainder100 === 1) {
-    return `${count} fotografija naložena`;
-  }
-
-  if (remainder100 === 2) {
-    return `${count} fotografiji naloženi`;
-  }
-
-  if (remainder100 === 3 || remainder100 === 4) {
-    return `${count} fotografije naložene`;
-  }
-
-  return `${count} fotografij naloženih`;
 }
 
 function isHeicPhoto(file: File) {
@@ -333,6 +327,7 @@ export function NoteSourceModal({
   onClose: () => void;
   canCreateNotes?: boolean;
 }) {
+  const t = useT();
   const router = useRouter();
   const demoBasePath = useCreatorDemoBasePath();
   const isCreatorDemo = demoBasePath != null;
@@ -455,10 +450,11 @@ export function NoteSourceModal({
   const preparedRecording = audioSource?.origin === "recording" ? audioSource : null;
   const preparedUpload = audioSource?.origin === "upload" ? audioSource : null;
   const trimmedLinkValue = linkValue.trim();
-  const linkVideoError = useMemo(
-    () => getUnsupportedVideoUrlMessage(trimmedLinkValue),
-    [trimmedLinkValue],
-  );
+  const linkVideoError = useMemo(() => {
+    const key = getUnsupportedVideoUrlMessageKey(trimmedLinkValue);
+
+    return key ? t(key) : null;
+  }, [t, trimmedLinkValue]);
   // Only advertise YouTube where captions can actually be fetched: the deployment's egress
   // decides that, and promising it elsewhere sends the learner back to paste the same link twice.
   const youtubeImportEnabled = isYoutubeCaptionImportEnabled();
@@ -529,14 +525,12 @@ export function NoteSourceModal({
 
       setAudioSource(null);
       setError(
-        validationError instanceof Error
-          ? validationError.message
-          : "Zvoka ni bilo mogoče pripraviti.",
+        compressionErrorMessage(validationError, t) ?? t("api.audioPrepareFailed"),
       );
     } finally {
       setBusyLabel(null);
     }
-  }, [audioSource]);
+  }, [audioSource, t]);
 
   const clearAudioSource = useCallback(() => {
     setAudioSource((current) => {
@@ -609,25 +603,25 @@ export function NoteSourceModal({
           "Content-Type": "application/json",
         },
         signal: controller.signal,
-        timeoutMessage: "Priprava zapiska traja predolgo. Osveži stran in poskusi znova.",
+        timeoutMessage: t("capture.error.notePrepTooLong"),
         body: JSON.stringify({
           sourceType,
         }),
       });
 
-      const payload = await parseApiResponse<{ lectureId: string }>(response);
+      const payload = await parseApiResponse<{ lectureId: string }>(response, t);
 
       createdLectureIdRef.current = payload.lectureId;
       return payload.lectureId as string;
     },
-    [],
+    [t],
   );
 
   const handleCancelBusyAction = useCallback(async () => {
     cancelRequestedRef.current = true;
     activeRequestControllerRef.current?.abort();
     setIsCancelling(true);
-    setBusyLabel((current) => current ?? "Preklicujem...");
+    setBusyLabel((current) => current ?? t("capture.busy.cancelling"));
     await deleteCreatedLecture();
     setBusyLabel(null);
     setIsCancelling(false);
@@ -712,9 +706,7 @@ export function NoteSourceModal({
       });
     } catch (uploadError) {
       setError(
-        uploadError instanceof Error
-          ? uploadError.message
-          : "Datoteke ni bilo mogoče pripraviti.",
+        compressionErrorMessage(uploadError, t) ?? t("capture.error.filePrepFailed"),
       );
     } finally {
       event.target.value = "";
@@ -728,7 +720,7 @@ export function NoteSourceModal({
     }
 
     if (!recordingSupported) {
-      setError("Ta brskalnik ne podpira snemanja znotraj aplikacije.");
+      setError(t("capture.error.noRecordingSupport"));
       return;
     }
 
@@ -793,9 +785,7 @@ export function NoteSourceModal({
       }, 1000);
     } catch (recordError) {
       setError(
-        recordError instanceof Error
-          ? recordError.message
-          : "Snemanja ni bilo mogoče začeti.",
+        compressionErrorMessage(recordError, t) ?? t("capture.error.recordStartFailed"),
       );
     }
   }
@@ -1040,24 +1030,22 @@ export function NoteSourceModal({
     } catch (createError) {
       stopProcessing();
       setError(
-        createError instanceof Error
-          ? createError.message
-          : "Zapiska ni bilo mogoče ustvariti.",
+        compressionErrorMessage(createError, t) ?? t("api.noteCreateFailed"),
       );
     }
   }
 
   async function createAudioLecture() {
     if (!audioSource) {
-      setError("Najprej izberi ali posnemi zvok.");
+      setError(t("capture.error.pickAudioFirst"));
       return;
     }
 
     if (isCreatorDemo) {
       await createDemoNote(audioSource.origin === "recording" ? "record" : "upload", [
-        "Pripravljam...",
-        "Nalagam zvok...",
-        "Dodajam v vrsto...",
+        t("capture.busy.preparing"),
+        t("capture.busy.uploadingAudio"),
+        t("capture.busy.queueing"),
       ]);
       return;
     }
@@ -1071,6 +1059,7 @@ export function NoteSourceModal({
       setError(null);
       cancelRequestedRef.current = false;
       const result = await createAudioLectureWithProcessingChunks({
+        t,
         file: audioSource.file,
         durationSeconds: Math.max(audioSource.durationSeconds, 1),
         createInitialAudio,
@@ -1102,9 +1091,7 @@ export function NoteSourceModal({
 
       if (!cancelRequestedRef.current) {
         setError(
-          submitError instanceof Error
-            ? submitError.message
-            : "Zvočnega zapiska ni bilo mogoče ustvariti.",
+          compressionErrorMessage(submitError, t) ?? t("capture.error.audioNoteFailed"),
         );
       }
     } finally {
@@ -1116,23 +1103,23 @@ export function NoteSourceModal({
 
   async function createPhotoLecture() {
     if (photoSources.length === 0) {
-      setError("Najprej dodaj fotografijo.");
+      setError(t("capture.error.addPhotoFirst"));
       return;
     }
 
     if (isCreatorDemo) {
       await createDemoNote("photo", [
-        "Pripravljam...",
+        t("capture.busy.preparing"),
         photoSources.length === 1
-          ? "Nalagam fotografijo..."
+          ? t("capture.busy.uploadingPhoto")
           : `Nalagam fotografije (${photoSources.length})...`,
-        "Dodajam v vrsto...",
+        t("capture.busy.queueing"),
       ]);
       return;
     }
 
     try {
-      setBusyLabel("Pripravljam...");
+      setBusyLabel(t("capture.busy.preparing"));
       setError(null);
       cancelRequestedRef.current = false;
       const lectureId = await createManualLecture("text");
@@ -1153,7 +1140,7 @@ export function NoteSourceModal({
       const controller = new AbortController();
       activeRequestControllerRef.current = controller;
 
-      setBusyLabel("Pripravljam nalaganje fotografij...");
+      setBusyLabel(t("capture.busy.preparingPhotoUploads"));
       const uploadTargetsResponse = await fetchWithTimeout(`/api/lectures/${lectureId}/scan-uploads`, {
         method: "POST",
         headers: {
@@ -1161,7 +1148,7 @@ export function NoteSourceModal({
         },
         signal: controller.signal,
         timeoutMessage:
-          "Priprava nalaganja fotografij traja predolgo. Preveri povezavo in poskusi znova.",
+          t("capture.error.photoUploadPrepTooLong"),
         body: JSON.stringify({
           files: filesForUpload.map(({ file, index, mimeType }) => ({
             index,
@@ -1171,7 +1158,7 @@ export function NoteSourceModal({
           })),
         }),
       });
-      const uploadTargets = await parseApiResponse<ScanUploadResponse>(uploadTargetsResponse);
+      const uploadTargets = await parseApiResponse<ScanUploadResponse>(uploadTargetsResponse, t);
       const uploadTargetsByIndex = new Map(
         uploadTargets.uploads.map((upload) => [upload.index, upload] as const),
       );
@@ -1181,13 +1168,16 @@ export function NoteSourceModal({
         const uploadTarget = uploadTargetsByIndex.get(uploadFile.index);
 
         if (!uploadTarget) {
-          throw new Error(`Manjka cilj za fotografijo ${position + 1}.`);
+          throw new Error(t("capture.error.missingPhotoTarget", { index: position + 1 }));
         }
 
         setBusyLabel(
           filesForUpload.length === 1
-            ? "Nalagam fotografijo..."
-            : `Nalagam fotografijo ${position + 1} od ${filesForUpload.length}...`,
+            ? t("capture.busy.uploadingPhoto")
+            : t("capture.busy.uploadingPhotoN", {
+                index: position + 1,
+                total: filesForUpload.length,
+              }),
         );
 
         const uploadResult = await supabase.storage
@@ -1202,7 +1192,7 @@ export function NoteSourceModal({
         }
       }
 
-      setBusyLabel("Dodajam v vrsto...");
+      setBusyLabel(t("capture.busy.queueing"));
 
       const response = await fetchWithTimeout("/api/lectures/scan", {
         method: "POST",
@@ -1211,7 +1201,7 @@ export function NoteSourceModal({
         },
         signal: controller.signal,
         timeoutMessage:
-          "Dodajanje fotografij v obdelavo traja predolgo. Osveži stran in poskusi znova.",
+          t("capture.error.photoQueueTooLong"),
         body: JSON.stringify({
           lectureId,
           createInitialAudio,
@@ -1236,7 +1226,7 @@ export function NoteSourceModal({
         }),
       });
 
-      await parseApiResponse<{ lectureId: string }>(response);
+      await parseApiResponse<{ lectureId: string }>(response, t);
 
       onClose();
       createdLectureIdRef.current = null;
@@ -1251,9 +1241,7 @@ export function NoteSourceModal({
 
       if (!cancelRequestedRef.current) {
         setError(
-          submitError instanceof Error
-            ? submitError.message
-            : "Zapiska iz fotografij ni bilo mogoče ustvariti.",
+          compressionErrorMessage(submitError, t) ?? t("capture.error.photoNoteFailed"),
         );
       }
     } finally {
@@ -1265,7 +1253,7 @@ export function NoteSourceModal({
 
   async function createLinkLecture() {
     if (!trimmedLinkValue) {
-      setError("Najprej prilepi povezavo.");
+      setError(t("capture.error.pasteLinkFirst"));
       return;
     }
 
@@ -1275,12 +1263,12 @@ export function NoteSourceModal({
     }
 
     if (isCreatorDemo) {
-      await createDemoNote("link", ["Pripravljam...", "Berem povezavo...", "Dodajam v vrsto..."]);
+      await createDemoNote("link", [t("capture.busy.preparing"), t("capture.busy.readingLink"), t("capture.busy.queueing")]);
       return;
     }
 
     try {
-      setBusyLabel("Pripravljam...");
+      setBusyLabel(t("capture.busy.preparing"));
       setError(null);
       cancelRequestedRef.current = false;
       const lectureId = await createManualLecture("link");
@@ -1292,7 +1280,7 @@ export function NoteSourceModal({
 
       const controller = new AbortController();
       activeRequestControllerRef.current = controller;
-      setBusyLabel("Dodajam v vrsto...");
+      setBusyLabel(t("capture.busy.queueing"));
 
       const response = await fetch("/api/lectures/link", {
         method: "POST",
@@ -1308,7 +1296,7 @@ export function NoteSourceModal({
         }),
       });
 
-      await parseApiResponse<{ lectureId: string }>(response);
+      await parseApiResponse<{ lectureId: string }>(response, t);
 
       onClose();
       createdLectureIdRef.current = null;
@@ -1323,9 +1311,7 @@ export function NoteSourceModal({
 
       if (!cancelRequestedRef.current) {
         setError(
-          submitError instanceof Error
-            ? submitError.message
-            : "Spletnega zapiska ni bilo mogoče ustvariti.",
+          compressionErrorMessage(submitError, t) ?? t("capture.error.linkNoteFailed"),
         );
       }
     } finally {
@@ -1354,21 +1340,21 @@ export function NoteSourceModal({
           Accept: "image/jpeg",
         },
         timeoutMs: SCAN_PREVIEW_TIMEOUT_MS,
-        timeoutMessage: "Predogled fotografije traja predolgo.",
+        timeoutMessage: t("capture.error.previewTooLong"),
         body: formData,
       });
 
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(
-          typeof payload?.error === "string" ? payload.error : "Predogleda ni bilo mogoče ustvariti.",
+          typeof payload?.error === "string" ? payload.error : t("capture.error.previewFailed"),
         );
       }
 
       const previewBlob = await response.blob();
 
       if (!previewBlob.type.startsWith("image/")) {
-        throw new Error("Predogleda ni bilo mogoče prebrati.");
+        throw new Error(t("capture.error.previewUnreadable"));
       }
 
       const previewObjectUrl = URL.createObjectURL(previewBlob);
@@ -1417,25 +1403,25 @@ export function NoteSourceModal({
 
   async function preparePhotoFiles(files: File[]) {
     if (photoSources.length + files.length > MAX_SCAN_IMAGE_COUNT) {
-      throw new Error(`Dosegel si največ ${MAX_SCAN_IMAGE_COUNT} fotografij.`);
+      throw new Error(t("capture.error.tooManyPhotos", { count: MAX_SCAN_IMAGE_COUNT }));
     }
 
     const preparedFiles: File[] = [];
 
     for (const file of files) {
       if (!isScanPhotoFile(file)) {
-        throw new Error("Za skeniranje uporabi fotografijo ali sliko.");
+        throw new Error(t("capture.error.scanNeedsImage"));
       }
 
       let preparedFile = file;
 
       if (preparedFile.size > MAX_SCAN_IMAGE_BYTES) {
-        setBusyLabel(files.length === 1 ? "Stiskam fotografijo..." : "Stiskam fotografije...");
+        setBusyLabel(files.length === 1 ? t("capture.busy.compressingPhoto") : t("capture.busy.compressingPhotos"));
         preparedFile = (await compressScanImageForUpload(preparedFile)).file;
       }
 
       if (preparedFile.size > MAX_SCAN_IMAGE_BYTES) {
-        throw new Error("Slika je tudi po stiskanju prevelika. Omejitev je 10 MB.");
+        throw new Error(t("capture.error.imageTooLarge"));
       }
 
       preparedFiles.push(preparedFile);
@@ -1460,22 +1446,22 @@ export function NoteSourceModal({
 
   async function prepareDocumentFile(file: File) {
     if (isLegacyPowerPointDocument(file)) {
-      throw new Error("Stare PowerPoint datoteke .ppt še niso podprte. Shrani jo kot .pptx ali PDF in poskusi znova.");
+      throw new Error(t("api.pptNotSupported"));
     }
 
     if (!isSupportedDocumentFile(file)) {
-      throw new Error("Uporabi PDF, TXT, Markdown, HTML, RTF, DOCX ali PPTX.");
+      throw new Error(t("capture.error.unsupportedDocument"));
     }
 
     let preparedFile = file;
 
     if (preparedFile.size > MAX_DOCUMENT_BYTES) {
-      setBusyLabel("Stiskam dokument...");
+      setBusyLabel(t("capture.busy.compressingDocument"));
       preparedFile = (await compressDocumentForUpload(preparedFile)).file;
     }
 
     if (preparedFile.size > MAX_DOCUMENT_BYTES) {
-      throw new Error("Dokumenta po stiskanju ni bilo mogoče pripraviti v dovolj berljivi obliki za obdelavo.");
+      throw new Error(t("capture.error.docCompressUnreadable"));
     }
 
     setPdfSource(preparedFile);
@@ -1535,7 +1521,7 @@ export function NoteSourceModal({
       }
 
       setError(
-        scanError instanceof Error ? scanError.message : "Fotografije ni bilo mogoče skenirati.",
+        compressionErrorMessage(scanError, t) ?? t("api.scanFailed"),
       );
     } finally {
       setBusyLabel(null);
@@ -1557,14 +1543,14 @@ export function NoteSourceModal({
     // One source per note: a staged document is replaced only by removing it first, and a
     // document never lands on top of staged photos.
     if (pdfSource) {
-      setError("Dodaš lahko en dokument. Odstrani izbranega, če želiš naložiti drugega.");
+      setError(t("capture.error.oneDocumentOnly"));
       return;
     }
 
     const allImages = files.every((file) => isScanPhotoFile(file));
 
     if (!allImages && photoSources.length > 0) {
-      setError("Odstrani naložene fotografije, če želiš namesto njih naložiti dokument.");
+      setError(t("capture.error.removePhotosFirst"));
       return;
     }
 
@@ -1575,7 +1561,7 @@ export function NoteSourceModal({
       }
 
       if (files.length > 1) {
-        throw new Error("Izberi en dokument ali do 10 fotografij.");
+        throw new Error(t("capture.error.tooManyFiles"));
       }
 
       await prepareDocumentFile(files[0]);
@@ -1586,9 +1572,7 @@ export function NoteSourceModal({
       }
 
       setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Datoteke ni bilo mogoče pripraviti.",
+        compressionErrorMessage(submitError, t) ?? t("capture.error.filePrepFailed"),
       );
     }
   }
@@ -1649,17 +1633,17 @@ export function NoteSourceModal({
 
   async function createPdfLecture() {
     if (!pdfSource) {
-      setError("Najprej izberi dokument.");
+      setError(t("capture.error.pickDocumentFirst"));
       return;
     }
 
     if (isCreatorDemo) {
-      await createDemoNote("pdf", ["Pripravljam...", "Nalagam dokument...", "Dodajam v vrsto..."]);
+      await createDemoNote("pdf", [t("capture.busy.preparing"), t("capture.busy.uploadingDocument"), t("capture.busy.queueing")]);
       return;
     }
 
     try {
-      setBusyLabel("Pripravljam...");
+      setBusyLabel(t("capture.busy.preparing"));
       setError(null);
       cancelRequestedRef.current = false;
       const lectureId = await createManualLecture("pdf");
@@ -1687,7 +1671,7 @@ export function NoteSourceModal({
 
       const controller = new AbortController();
       activeRequestControllerRef.current = controller;
-      setBusyLabel("Nalagam dokument...");
+      setBusyLabel(t("capture.busy.uploadingDocument"));
 
       const response = await fetch("/api/lectures/pdf", {
         method: "POST",
@@ -1695,7 +1679,7 @@ export function NoteSourceModal({
         body: formData,
       });
 
-      await parseApiResponse<{ lectureId: string }>(response);
+      await parseApiResponse<{ lectureId: string }>(response, t);
 
       onClose();
       createdLectureIdRef.current = null;
@@ -1710,9 +1694,7 @@ export function NoteSourceModal({
 
       if (!cancelRequestedRef.current) {
         setError(
-          submitError instanceof Error
-            ? submitError.message
-            : "Zapiska iz dokumenta ni bilo mogoče ustvariti.",
+          compressionErrorMessage(submitError, t) ?? t("capture.error.docNoteFailed"),
         );
       }
     } finally {
@@ -1723,8 +1705,8 @@ export function NoteSourceModal({
   }
 
   /**
-   * The redesign's action row: Prekliči beside the primary call to action.
-   * While a request is in flight the row collapses to a single Prekliči, which
+   * The redesign's action row: a cancel beside the primary call to action.
+   * While a request is in flight the row collapses to a single cancel, which
    * cancels that request rather than closing the sheet — the existing
    * behaviour, and the more useful one at that moment.
    */
@@ -1739,7 +1721,7 @@ export function NoteSourceModal({
             onClick={() => void handleCancelBusyAction()}
           >
             {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Prekliči
+            {t("common.cancel")}
           </button>
         </div>
       );
@@ -1748,7 +1730,7 @@ export function NoteSourceModal({
     return (
       <div className="memo-modal-actions">
         <button type="button" className="ios-secondary-button" onClick={requestClose}>
-          Prekliči
+          {t("common.cancel")}
         </button>
         {primary}
       </div>
@@ -1774,7 +1756,7 @@ export function NoteSourceModal({
           params.onGenerate();
         }}
       >
-        Ustvari zapisek
+        {t("capture.createNote")}
       </button>,
     );
   }
@@ -1790,7 +1772,7 @@ export function NoteSourceModal({
     if (selectedMode === "record" && preparedRecording) {
       return (
         <div className="ios-card note-source-prepared-card">
-          <p className="note-source-card-label">Pripravljen posnetek</p>
+          <p className="note-source-card-label">{t("capture.preparedRecording")}</p>
           <p className="ios-row-title mt-3">{preparedRecording.file.name}</p>
           <p className="ios-row-subtitle">
             {formatTimestamp(preparedRecording.durationSeconds * 1000)}
@@ -1802,7 +1784,7 @@ export function NoteSourceModal({
     if (selectedMode === "upload" && preparedUpload) {
       return (
         <div className="ios-card note-source-prepared-card">
-          <p className="note-source-card-label">Izbrana datoteka</p>
+          <p className="note-source-card-label">{t("capture.selectedFile")}</p>
           <p className="ios-row-title mt-3">{preparedUpload.file.name}</p>
           <p className="ios-row-subtitle">
             {formatTimestamp(preparedUpload.durationSeconds * 1000)}
@@ -1813,8 +1795,8 @@ export function NoteSourceModal({
               className="note-source-prepared-remove"
               disabled={Boolean(busyLabel)}
               onClick={clearAudioSource}
-              aria-label="Odstrani izbrano datoteko"
-              title="Odstrani izbrano datoteko"
+              aria-label={t("capture.removeSelectedFile")}
+              title={t("capture.removeSelectedFile")}
             >
               <X className="h-4 w-4" />
             </button>
@@ -1826,10 +1808,10 @@ export function NoteSourceModal({
     if (selectedMode === "text" && pdfSource) {
       return (
         <div className="ios-card note-source-docs-file-card note-source-prepared-card">
-          <p className="note-source-card-label">Izbran dokument</p>
+          <p className="note-source-card-label">{t("capture.selectedDocument")}</p>
           <p className="ios-row-title note-source-docs-file-name">{pdfSource.name}</p>
           <p className="ios-row-subtitle note-source-docs-file-copy">
-            Iz njega nastane zapisek. Odstrani ga, če želiš naložiti drugega.
+            {t("capture.documentReplaceHint")}
           </p>
           {isCreatorDemo ? null : (
             <button
@@ -1840,8 +1822,8 @@ export function NoteSourceModal({
                 setPdfSource(null);
                 setError(null);
               }}
-              aria-label="Odstrani izbran dokument"
-              title="Odstrani izbran dokument"
+              aria-label={t("capture.removeSelectedDocument")}
+              title={t("capture.removeSelectedDocument")}
             >
               <X className="h-4 w-4" />
             </button>
@@ -1865,14 +1847,14 @@ export function NoteSourceModal({
           <Emoji symbol="🎧" size="1.15rem" />
         </span>
         <span className="memo-capture-row-copy">
-          <span>Ustvari zvok</span>
-          <span>Da lahko zapiske tudi poslušaš.</span>
+          <span>{t("capture.createAudio")}</span>
+          <span>{t("capture.createAudioDetail")}</span>
         </span>
         <button
           type="button"
           role="switch"
           aria-checked={createInitialAudio}
-          aria-label="Ustvari zvok"
+          aria-label={t("capture.createAudio")}
           className={`memo-switch ${createInitialAudio ? "on" : ""}`.trim()}
           onClick={() => setCreateInitialAudio(!createInitialAudio)}
         >
@@ -1902,7 +1884,7 @@ export function NoteSourceModal({
       >
         <p className="memo-gen-stage">{busyLabel}</p>
         <p className="memo-gen-copy">
-          Ne zapiraj tega zaslona. Ko bo vse pripravljeno, se bo zaprl samodejno.
+          {t("capture.dontCloseScreen")}
         </p>
         <span className="memo-gen-track" aria-hidden="true">
           <span />
@@ -1914,7 +1896,7 @@ export function NoteSourceModal({
           onClick={() => void handleCancelBusyAction()}
         >
           {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          Prekliči
+          {t("common.cancel")}
         </button>
       </div>
     );
@@ -1942,7 +1924,7 @@ export function NoteSourceModal({
         className="ios-sheet-wrap note-source-modal-wrap"
         role="dialog"
         aria-modal="true"
-        aria-label="Nov zapisek"
+        aria-label={t("library.newNote")}
       >
         <div className="ios-sheet-stack note-source-modal-stack">
           <section
@@ -1966,7 +1948,7 @@ export function NoteSourceModal({
             <button
               type="button"
               className="mobile-sheet-drag-handle note-source-modal-drag-handle"
-              aria-label="Povleci navzdol za zapiranje"
+              aria-label={t("folders.dragToClose")}
               data-drag-handle
             />
             <div className="ios-sheet-header note-source-header">
@@ -1980,14 +1962,18 @@ export function NoteSourceModal({
                   both route through requestClose, which steps back out of the
                   guide to the audio options rather than closing the sheet. */}
               <h2 className="ios-sheet-title">
-                {showAudioImportGuide ? "Uvozi zvok iz telefona" : sheetTitle(selectedMode)}
+                {t(
+                  showAudioImportGuide
+                    ? "capture.importAudioTitle"
+                    : sheetTitleKey(selectedMode),
+                )}
               </h2>
               <button
                 type="button"
                 onClick={requestClose}
                 disabled={isCancelling}
                 className="app-close-button ios-sheet-header-close"
-                aria-label="Zapri"
+                aria-label={t("common.close")}
               >
                 <Msym name="close" size="1.45rem" fill={false} weight={500} />
               </button>
@@ -2004,53 +1990,49 @@ export function NoteSourceModal({
             ) : showAudioImportGuide ? (
               <div className="mt-6 space-y-4 note-source-modal-body">
                 <section className="ios-card note-source-guide-hero">
-                  <p className="note-source-card-label">Zakaj to obstaja</p>
-                  <p className="note-source-guide-title">
-                    Posnemi predavanje, tudi ko je zaslon telefona ugasnjen, nato pa posnetek naloži kasneje.
+                  <p className="note-source-card-label">{t("capture.guide.whyLabel")}</p>
+                  <p className="note-source-guide-title">{t("capture.guide.whyTitle")}</p>
+                  <p className="note-source-guide-copy">{t("capture.guide.whyCopy")}</p>
+                </section>
+
+                <section className="ios-card note-source-guide-section">
+                  <p className="note-source-card-label">{t("capture.guide.step1Label")}</p>
+                  <p className="note-source-guide-step-title">{t("capture.guide.step1Title")}</p>
+                  <p className="note-source-guide-copy">{t("capture.guide.step1Copy1")}</p>
+                  <p className="note-source-guide-copy">{t("capture.guide.step1Copy2")}</p>
+                </section>
+
+                <section className="ios-card note-source-guide-section">
+                  <p className="note-source-card-label">{t("capture.guide.step2Label")}</p>
+                  <p className="note-source-guide-step-title">{t("capture.guide.step2Title")}</p>
+                  <p className="note-source-guide-copy">{t("capture.guide.step2Copy1")}</p>
+                  <p className="note-source-guide-copy">{t("capture.guide.step2Copy2")}</p>
+                </section>
+
+                <section className="ios-card note-source-guide-section">
+                  <p className="note-source-card-label">{t("capture.guide.step3Label")}</p>
+                  <p className="note-source-guide-step-title">{t("capture.guide.step3Title")}</p>
+                  {/* The bolded words are the app's own controls, so they come
+                      from the same keys those controls render — a translated
+                      instruction that names an untranslated button is worse
+                      than no instruction. */}
+                  <p className="note-source-guide-copy">
+                    {t("capture.guide.step3Copy1a")}
+                    <strong>{t("capture.mode.upload")}</strong>
+                    {t("capture.guide.step3Copy1b")}
+                    <strong>{t("capture.pickAudioFile")}</strong>
+                    {t("capture.guide.step3Copy1c")}
                   </p>
                   <p className="note-source-guide-copy">
-                    Snemanje znotraj aplikacije deluje le, dokler je ta aplikacija odprta. Pri daljših predavanjih je lažje, da najprej snemaš v privzeti aplikaciji telefona, nato posnetek premakneš v aplikacijo Datoteke in ga tukaj naložiš.
+                    {t("capture.guide.step3Copy2a")}
+                    <strong>{t("capture.create")}</strong>
+                    {t("capture.guide.step3Copy2b")}
                   </p>
                 </section>
 
                 <section className="ios-card note-source-guide-section">
-                  <p className="note-source-card-label">Korak 1</p>
-                  <p className="note-source-guide-step-title">Posnemi v običajni aplikaciji za zvok na telefonu</p>
-                  <p className="note-source-guide-copy">
-                    Na iPhonu uporabi Voice Memos. Na Androidu uporabi Recorder ali katerokoli vgrajeno aplikacijo za snemanje, ki shrani datoteko na napravo.
-                  </p>
-                  <p className="note-source-guide-copy">
-                    Snemanje tam zaženi pred začetkom predavanja. Telefon lahko zakleneš, ugasneš zaslon ali popolnoma zapreš to aplikacijo. Snemanje bo teklo v sistemski aplikaciji, ne v tej aplikaciji.
-                  </p>
-                </section>
-
-                <section className="ios-card note-source-guide-section">
-                  <p className="note-source-card-label">Korak 2</p>
-                  <p className="note-source-guide-step-title">Premakni posnetek v aplikacijo Datoteke</p>
-                  <p className="note-source-guide-copy">
-                    Po predavanju odpri posnetek v aplikaciji za snemanje in poišči možnosti, kot so Deli, Izvozi, Shrani v Datoteke, Prenesi ali Kopiraj v Datoteke.
-                  </p>
-                  <p className="note-source-guide-copy">
-                    Zvok shrani na mesto, ki ga boš hitro našel, na primer Prenosi, Na mojem iPhonu, iCloud Drive ali mapo Datoteke na Androidu. Če tvoj telefon ta korak poimenuje drugače, uporabi možnost, ki posnetek shrani kot datoteko.
-                  </p>
-                </section>
-
-                <section className="ios-card note-source-guide-section">
-                  <p className="note-source-card-label">Korak 3</p>
-                  <p className="note-source-guide-step-title">Tukaj ga naloži prek izbirnika datotek</p>
-                  <p className="note-source-guide-copy">
-                    Vrni se v to aplikacijo, odpri potek za zvočni zapisek, preklopi na <strong>Naloži</strong>, pritisni <strong>Izberi zvočno datoteko</strong> in izberi posnetek, ki si ga shranil v Datoteke.
-                  </p>
-                  <p className="note-source-guide-copy">
-                    Ko je datoteka izbrana, pritisni <strong>Ustvari</strong>. Aplikacija bo ta zvok predavanja pretvorila v zapiske in ostalo učno gradivo.
-                  </p>
-                </section>
-
-                <section className="ios-card note-source-guide-section">
-                  <p className="note-source-card-label">Na kratko</p>
-                  <p className="note-source-guide-copy">
-                    Za predavanje uporabi sistemski snemalnik. Zvok shrani v Datoteke. Nato ga tukaj v zavihku za nalaganje pretvori v zapiske.
-                  </p>
+                  <p className="note-source-card-label">{t("capture.guide.summaryLabel")}</p>
+                  <p className="note-source-guide-copy">{t("capture.guide.summaryCopy")}</p>
                 </section>
 
                 <div className="memo-modal-actions">
@@ -2059,7 +2041,7 @@ export function NoteSourceModal({
                     className="ios-secondary-button wide"
                     onClick={() => setShowAudioImportGuide(false)}
                   >
-                    Nazaj
+                    {t("common.back")}
                   </button>
                 </div>
               </div>
@@ -2086,8 +2068,8 @@ export function NoteSourceModal({
                         <Emoji symbol="📱" size="1.15rem" />
                       </span>
                       <span className="memo-capture-row-copy">
-                        <span>Kako snemaš z ugasnjenim telefonom?</span>
-                        <span>Shrani posnetek in ga tukaj naloži kasneje.</span>
+                        <span>{t("capture.recordOffscreenTitle")}</span>
+                        <span>{t("capture.recordOffscreenDetail")}</span>
                       </span>
                       <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
                     </button>
@@ -2126,10 +2108,10 @@ export function NoteSourceModal({
                           ) : null}
                           <span className="memo-record-hint">
                             {!isRecording
-                              ? "Pritisni Začni snemanje, ko se predavanje začne."
+                              ? t("capture.recordHintIdle")
                               : isPaused
-                                ? "Snemanje je začasno ustavljeno"
-                                : "Snemanje poteka – zapisek nastane, ko ustaviš."}
+                                ? t("capture.recordPaused")
+                                : t("capture.recordActive")}
                           </span>
                           {isRecording ? (
                           <button
@@ -2150,7 +2132,7 @@ export function NoteSourceModal({
                             }}
                           >
                             <Msym name={isPaused ? "play_arrow" : "pause"} size="1.15rem" />
-                            {isPaused ? "Nadaljuj snemanje" : "Začasno ustavi"}
+                            {isPaused ? t("capture.resumeRecording") : t("capture.pauseRecording")}
                           </button>
                           ) : null}
                         </div>
@@ -2158,7 +2140,7 @@ export function NoteSourceModal({
 
                       {isRecording ? (
                         <div className="memo-modal-actions">
-                          {/* The design pairs Prekliči with the call to action.
+                          {/* The design pairs the cancel with the call to action.
                               Pausing has no counterpart there, so it keeps its
                               own round control beside the orb. */}
                           <button
@@ -2166,7 +2148,7 @@ export function NoteSourceModal({
                             className="ios-secondary-button"
                             onClick={requestClose}
                           >
-                            Prekliči
+                            {t("common.cancel")}
                           </button>
                           <button
                             type="button"
@@ -2181,7 +2163,7 @@ export function NoteSourceModal({
                             }}
                           >
                             {busyLabel ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                            {busyLabel ?? "Ustavi in ustvari zapisek"}
+                            {busyLabel ?? t("capture.stopAndCreate")}
                           </button>
                         </div>
                       ) : null}
@@ -2217,7 +2199,7 @@ export function NoteSourceModal({
                             className="ios-secondary-button"
                             onClick={requestClose}
                           >
-                            Prekliči
+                            {t("common.cancel")}
                           </button>
                           <button
                             type="button"
@@ -2226,7 +2208,7 @@ export function NoteSourceModal({
                             onClick={() => void startRecording()}
                           >
                             {busyLabel ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                            {busyLabel ?? "Začni snemanje"}
+                            {busyLabel ?? t("capture.startRecording")}
                           </button>
                         </div>
                       ) : null}
@@ -2258,10 +2240,10 @@ export function NoteSourceModal({
                           }}
                         >
                           <Msym name="cloud_upload" className="memo-dropzone-icon" />
-                          <span className="memo-dropzone-lead">Izberi datoteko</span>
-                          <span className="memo-dropzone-title">MP3, M4A, WAV ali WEBM</span>
+                          <span className="memo-dropzone-lead">{t("capture.pickFile")}</span>
+                          <span className="memo-dropzone-title">{t("capture.audioFormats")}</span>
                           <span className="memo-dropzone-hint">
-                            povleci sem ali klikni Izberi datoteko
+                            {t("capture.dropHint", { action: t("capture.pickFile") })}
                           </span>
                         </button>
                       )}
@@ -2278,7 +2260,7 @@ export function NoteSourceModal({
                     <>
                       <div>
                         <label className="note-source-field-label">
-                          Povezava
+                          {t("capture.linkLabel")}
                         </label>
                         <div className="ios-search note-source-link-field">
                           <input
@@ -2300,8 +2282,8 @@ export function NoteSourceModal({
                         ) : (
                           <p className="ios-info mt-2">
                             {youtubeImportEnabled
-                              ? "Članki, blogi, spletne strani in YouTube videi s podnapisi."
-                              : "Članki, blogi in druge besedilne spletne strani."}
+                              ? t("capture.linkHintYoutube")
+                              : t("capture.linkHint")}
                           </p>
                         )}
                       </div>
@@ -2317,9 +2299,9 @@ export function NoteSourceModal({
                   {selectedMode === "text" ? (
                     <>
                       {photoSources.length > 0 ? (
-                        <div className="note-source-photo-previews" aria-label="Naložene fotografije">
+                        <div className="note-source-photo-previews" aria-label={t("capture.uploadedPhotos")}>
                           <p className="ios-row-subtitle note-source-docs-file-copy note-source-docs-status-copy">
-                            {formatUploadedPhotoCount(photoSources.length)}
+                            {t("capture.uploadedPhotoCount", { count: photoSources.length })}
                           </p>
                           <div className="note-source-photo-grid">
                             {visiblePhotoSources.map((photoSource) => {
@@ -2333,7 +2315,9 @@ export function NoteSourceModal({
                                     type="button"
                                     className="note-source-photo-open"
                                     onClick={() => setActivePhotoPreviewId(photoSource.id)}
-                                    aria-label={`Odpri fotografijo ${originalIndex + 1}`}
+                                    aria-label={t("capture.openPhoto", {
+                                      index: originalIndex + 1,
+                                    })}
                                   >
                                     {photoSource.previewUrl ? (
                                       // eslint-disable-next-line @next/next/no-img-element
@@ -2341,7 +2325,7 @@ export function NoteSourceModal({
                                         src={photoSource.previewUrl}
                                         alt={
                                           photoSource.file.name ||
-                                          `Fotografija ${originalIndex + 1}`
+                                          t("capture.photoAlt", { index: originalIndex + 1 })
                                         }
                                         className="note-source-photo-image"
                                         onError={() => handlePhotoPreviewImageError(photoSource.id)}
@@ -2349,10 +2333,10 @@ export function NoteSourceModal({
                                     ) : (
                                       <span className="note-source-photo-preview-status">
                                         {photoSource.previewStatus === "failed"
-                                          ? "Ni predogleda"
+                                          ? t("capture.noPreview")
                                           : photoSource.previewStatus === "queued"
-                                            ? "Čaka..."
-                                            : "Predogled..."}
+                                            ? t("capture.waiting")
+                                            : t("capture.previewing")}
                                       </span>
                                     )}
                                   </button>
@@ -2360,8 +2344,10 @@ export function NoteSourceModal({
                                     type="button"
                                     className="note-source-photo-remove"
                                     onClick={() => removePhotoSource(photoSource.id)}
-                                    aria-label={`Odstrani fotografijo ${originalIndex + 1}`}
-                                    title="Odstrani fotografijo"
+                                    aria-label={t("capture.removePhotoIndexed", {
+                                      index: originalIndex + 1,
+                                    })}
+                                    title={t("capture.removePhoto")}
                                   >
                                     <X className="h-4 w-4" />
                                   </button>
@@ -2410,15 +2396,19 @@ export function NoteSourceModal({
                           >
                             <Msym name="cloud_upload" className="memo-dropzone-icon" />
                             <span className="memo-dropzone-lead">
-                              {hasPhotoSources ? "Dodaj fotografije" : "Izberi datoteko"}
+                              {t(hasPhotoSources ? "capture.addPhotos" : "capture.pickFile")}
                             </span>
                             <span className="memo-dropzone-title">
                               {hasPhotoSources
-                                ? `Do ${MAX_SCAN_IMAGE_COUNT} fotografij skupaj`
-                                : "PDF, DOCX, PPTX ali slika"}
+                                ? t("capture.photoLimit", { count: MAX_SCAN_IMAGE_COUNT })
+                                : t("capture.documentFormats")}
                             </span>
                             <span className="memo-dropzone-hint">
-                              povleci sem ali klikni {hasPhotoSources ? "Dodaj fotografije" : "Izberi datoteko"}
+                              {t("capture.dropHint", {
+                                action: t(
+                                  hasPhotoSources ? "capture.addPhotos" : "capture.pickFile",
+                                ),
+                              })}
                             </span>
                           </button>
 
@@ -2436,7 +2426,7 @@ export function NoteSourceModal({
                             }}
                           >
                             <Msym name="photo_camera" />
-                            Skeniraj
+                            {t("capture.scan")}
                           </button>
                         </div>
                       )}
@@ -2469,27 +2459,27 @@ export function NoteSourceModal({
           className="note-source-photo-viewer"
           role="dialog"
           aria-modal="true"
-          aria-label="Predogled fotografije"
+          aria-label={t("capture.photoPreview")}
         >
           <button
             type="button"
             className="note-source-photo-viewer-backdrop"
             onClick={() => setActivePhotoPreviewId(null)}
-            aria-label="Zapri predogled fotografije"
+            aria-label={t("capture.closePhotoPreview")}
           />
           <div className="note-source-photo-viewer-stage">
             {activePhotoPreview.previewUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={activePhotoPreview.previewUrl}
-                alt={activePhotoPreview.file.name || "Predogled fotografije"}
+                alt={activePhotoPreview.file.name || t("capture.photoPreview")}
                 className="note-source-photo-viewer-image"
               />
             ) : (
               <p className="note-source-photo-viewer-status">
                 {activePhotoPreview.previewStatus === "failed"
-                  ? "Predogleda te fotografije ni bilo mogoče prikazati."
-                  : "Predogled fotografije se pripravlja..."}
+                  ? t("capture.previewUnavailable")
+                  : t("capture.previewPreparing")}
               </p>
             )}
           </div>
@@ -2498,8 +2488,8 @@ export function NoteSourceModal({
               type="button"
               className="note-source-photo-viewer-icon-button"
               onClick={() => removePhotoSource(activePhotoPreview.id)}
-              aria-label="Odstrani fotografijo"
-              title="Odstrani fotografijo"
+              aria-label={t("capture.removePhoto")}
+              title={t("capture.removePhoto")}
             >
               <Trash2 className="h-5 w-5" />
             </button>
@@ -2507,8 +2497,8 @@ export function NoteSourceModal({
               type="button"
               className="note-source-photo-viewer-icon-button"
               onClick={() => setActivePhotoPreviewId(null)}
-              aria-label="Zapri predogled fotografije"
-              title="Zapri"
+              aria-label={t("capture.closePhotoPreview")}
+              title={t("common.close")}
             >
               <X className="h-5 w-5" />
             </button>

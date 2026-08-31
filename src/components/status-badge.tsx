@@ -1,37 +1,42 @@
+"use client";
+
+import { useT } from "@/components/i18n-provider";
 import type { LectureStatus } from "@/lib/database.types";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { cn } from "@/lib/utils";
 
 const statusMap: Record<
   LectureStatus,
-  { label: string; className: string }
+  { labelKey: MessageKey; className: string }
 > = {
   uploading: {
-    label: "Nalaganje",
+    labelKey: "status.uploading",
     className: "bg-[var(--tertiary-background)] text-[var(--secondary-label)]",
   },
   queued: {
-    label: "V čakalni vrsti",
+    labelKey: "status.queued",
     className: "bg-[var(--tertiary-background)] text-[var(--secondary-label)]",
   },
   transcribing: {
-    label: "Prepisovanje",
+    labelKey: "status.transcribing",
     className: "bg-[var(--tertiary-background)] text-[var(--secondary-label)]",
   },
   generating_notes: {
-    label: "Ustvarjanje zapiskov",
+    labelKey: "status.generatingNotes",
     className: "bg-[var(--tertiary-background)] text-[var(--secondary-label)]",
   },
   ready: {
-    label: "Pripravljeno",
+    labelKey: "status.ready",
     className: "bg-[var(--green-soft)] text-[var(--green)]",
   },
   failed: {
-    label: "Napaka",
+    labelKey: "status.failed",
     className: "bg-[var(--red-soft)] text-[var(--red)]",
   },
 };
 
 export function StatusBadge({ status }: { status: LectureStatus }) {
+  const t = useT();
   const config = statusMap[status];
 
   return (
@@ -41,7 +46,7 @@ export function StatusBadge({ status }: { status: LectureStatus }) {
         config.className,
       )}
     >
-      {config.label}
+      {t(config.labelKey)}
     </span>
   );
 }

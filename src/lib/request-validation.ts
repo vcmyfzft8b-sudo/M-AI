@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { tr } from "@/lib/i18n/server";
+
 const encoder = new TextEncoder();
 
 function getContentLength(request: Request) {
@@ -26,10 +28,15 @@ function buildPayloadErrorResponse(message: string, status: 400 | 413) {
   );
 }
 
-export function buildValidationErrorResponse(error: z.ZodError) {
+/**
+ * Async because the one human-readable line in it is translated. The
+ * `validation` payload beside it stays as Zod wrote it: it names fields, not
+ * problems, and no screen shows it to anybody.
+ */
+export async function buildValidationErrorResponse(error: z.ZodError) {
   return NextResponse.json(
     {
-      error: "Neveljavni podatki v zahtevi.",
+      error: await tr("api.invalidRequestData"),
       validation: error.flatten(),
     },
     { status: 400, headers: { "Cache-Control": "no-store" } },
@@ -119,7 +126,7 @@ export async function parseJsonRequest<TSchema extends z.ZodTypeAny>(
   if (!parsed.success) {
     return {
       success: false,
-      response: buildValidationErrorResponse(parsed.error),
+      response: await buildValidationErrorResponse(parsed.error),
     };
   }
 

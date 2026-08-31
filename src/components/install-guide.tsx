@@ -1,6 +1,6 @@
 "use client";
 
-
+import { useT } from "@/components/i18n-provider";
 import { InstallShot } from "@/components/install-shot";
 import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
@@ -23,6 +23,7 @@ import { HOME_SCREEN_STEPS } from "@/lib/install-guide";
  * where the control lives is the only honest thing an app can do here.
  */
 export function InstallGuide({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT();
   const sheet = useSheet(onClose, { scrollable: true });
 
   if (!open) {
@@ -33,7 +34,7 @@ export function InstallGuide({ open, onClose }: { open: boolean; onClose: () => 
     <MemoPortal>
       <button
         type="button"
-        aria-label="Zapri"
+        aria-label={t("common.close")}
         className={sheetClass("memo-scrim", sheet.closing)}
         onClick={() => sheet.dismiss()}
       />
@@ -41,7 +42,7 @@ export function InstallGuide({ open, onClose }: { open: boolean; onClose: () => 
         className={sheetClass("memo-sheet-full memo-install-sheet", sheet.closing)}
         role="dialog"
         aria-modal="true"
-        aria-label="Dodaj Memo na začetni zaslon"
+        aria-label={t("settings.install.ctaTitle")}
         {...sheet.dragProps}
       >
         <div className="memo-grab-wide" data-drag-handle>
@@ -49,10 +50,10 @@ export function InstallGuide({ open, onClose }: { open: boolean; onClose: () => 
         </div>
 
         <div className="memo-install-head" data-drag-zone>
-          <span className="memo-install-title">Memo na začetnem zaslonu</span>
+          <span className="memo-install-title">{t("install.sheetTitle")}</span>
           <button
             type="button"
-            aria-label="Zapri"
+            aria-label={t("common.close")}
             className="memo-close-button"
             onClick={() => sheet.dismiss()}
           >
@@ -62,18 +63,17 @@ export function InstallGuide({ open, onClose }: { open: boolean; onClose: () => 
 
         <div className="memo-install-body memo-scroll">
           <p className="memo-install-lead">
-            Dodaj Memo med aplikacije: odpre se čez cel zaslon, brez vrstice brskalnika, in je
-            vedno pri roki.
+            {t("install.lead")}
           </p>
 
           <ol className="memo-install-steps">
             {HOME_SCREEN_STEPS.map((step, index) => (
-              <li key={step.title} className="memo-install-step">
+              <li key={step.titleKey} className="memo-install-step">
                 <div className="memo-install-step-head">
                   <span className="memo-install-step-number">{index + 1}</span>
                   <span className="memo-install-step-copy">
-                    <span>{step.title}</span>
-                    <span>{step.description}</span>
+                    <span>{t(step.titleKey)}</span>
+                    <span>{t(step.descriptionKey)}</span>
                   </span>
                 </div>
 

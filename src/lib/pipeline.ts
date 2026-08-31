@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import {
   AI_SOURCE_TOO_EXTENSIVE_MESSAGE,
+  toAiFailureCode,
   isBudgetOverrunFailure,
   toUserFacingAiErrorMessage,
 } from "@/lib/ai/errors";
@@ -1032,7 +1033,10 @@ export async function markLecturePipelineFailed(params: {
     : toErrorMessage(params.error);
   const failureCode = budgetRetriesExhausted
     ? "source_too_large"
-    : toLectureFailureCode(params.error);
+    : // The input-failure code first; failing that, the AI/budget sentence this module wrote is
+      // the only thing left to recognise the failure by. Either way the row ends up with a code,
+      // which is what lets the note screen show the reason in the reader's language.
+      (toLectureFailureCode(params.error) ?? toAiFailureCode(learnerMessage));
 
   const logPayload = {
     lectureId: params.lectureId,

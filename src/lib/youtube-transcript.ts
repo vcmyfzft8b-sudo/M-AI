@@ -1,19 +1,20 @@
 import "server-only";
 
-import { ExpectedLectureInputError } from "@/lib/lecture-processing-errors";
 import type { StructuredSourceBlock } from "@/lib/text-source-processing";
+import { expectedInputFailure } from "@/lib/lecture-failure-text";
 
 const PLAYER_TIMEOUT_MS = 15_000;
 const CAPTION_FETCH_TIMEOUT_MS = 15_000;
 
-const NO_CAPTIONS_MESSAGE =
-  "Ta YouTube video nima podnapisov, zato iz njega še ne znamo narediti zapiskov. Poskusi z videom, ki ima podnapise (tudi samodejni so v redu).";
-const VIDEO_NOT_LOADABLE_MESSAGE =
-  "YouTube videa ni bilo mogoče naložiti. Preveri, ali je video javen, in poskusi znova.";
-// A datacenter IP is refused by YouTube's bot wall no matter which client asks, so telling the
-// learner to check whether their video is public sends them to fix something that is not broken.
-const VIDEO_BLOCKED_MESSAGE =
-  "YouTube trenutno zavrača naše zahteve za podnapise tega videa. To ni napaka tvojega videa — poskusi znova pozneje ali uporabi drug vir.";
+/*
+ * The three ways a YouTube import fails are raised by code — `youtube_no_captions`,
+ * `link_not_loadable` and `youtube_request_blocked` — and their wording lives in the message
+ * catalogues, one per language, resolved where the failed note is read.
+ *
+ * `youtube_request_blocked` is its own code rather than being folded into "could not load":
+ * a datacenter IP is refused by YouTube's bot wall no matter which client asks, so telling the
+ * learner to check whether their video is public sends them to fix something that is not broken.
+ */
 
 type CaptionTrack = {
   baseUrl: string;
@@ -282,11 +283,11 @@ export async function fetchYoutubeTranscriptSource(params: {
   const handshake = await fetchPlayerResponse(params.videoId);
 
   if (!handshake) {
-    throw new ExpectedLectureInputError(VIDEO_NOT_LOADABLE_MESSAGE, "link_not_loadable");
+    throw expectedInputFailure("link_not_loadable");
   }
 
   if ("blocked" in handshake) {
-    throw new ExpectedLectureInputError(VIDEO_BLOCKED_MESSAGE, "youtube_request_blocked");
+    throw expectedInputFailure("youtube_request_blocked");
   }
 
   const tracks =
@@ -294,7 +295,7 @@ export async function fetchYoutubeTranscriptSource(params: {
   const track = pickCaptionTrack(tracks, params.languageHint ?? null);
 
   if (!track?.baseUrl) {
-    throw new ExpectedLectureInputError(NO_CAPTIONS_MESSAGE, "youtube_no_captions");
+    throw expectedInputFailure("youtube_no_captions");
   }
 
   const captionUrl = track.baseUrl;
@@ -307,11 +308,11 @@ export async function fetchYoutubeTranscriptSource(params: {
       CAPTION_FETCH_TIMEOUT_MS,
     );
   } catch {
-    throw new ExpectedLectureInputError(VIDEO_NOT_LOADABLE_MESSAGE, "link_not_loadable");
+    throw expectedInputFailure("link_not_loadable");
   }
 
   if (!captionResponse.ok) {
-    throw new ExpectedLectureInputError(VIDEO_NOT_LOADABLE_MESSAGE, "link_not_loadable");
+    throw expectedInputFailure("link_not_loadable");
   }
 
   const events = decodeCaptionEvents(await captionResponse.text());
@@ -319,7 +320,7 @@ export async function fetchYoutubeTranscriptSource(params: {
   const text = blocks.map((block) => block.text).join("\n\n");
 
   if (text.length < 200) {
-    throw new ExpectedLectureInputError(NO_CAPTIONS_MESSAGE, "youtube_no_captions");
+    throw expectedInputFailure("youtube_no_captions");
   }
 
   return {

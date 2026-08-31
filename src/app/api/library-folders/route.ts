@@ -10,6 +10,7 @@ import {
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { tr } from "@/lib/i18n/server";
 
 const LIBRARY_FOLDER_MAX_BYTES = 64 * 1024;
 
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
   const user = await getRouteUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
   const user = await getRouteUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -83,7 +84,7 @@ export async function PUT(request: Request) {
   const user = await getRouteUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({

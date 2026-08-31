@@ -1,6 +1,8 @@
 "use client";
 
 import { STORAGE_BUCKET } from "@/lib/constants";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+import type { Translate } from "@/lib/i18n/translate";
 import {
   shouldUseClientAudioChunking,
   type AudioChunkManifest,
@@ -46,12 +48,18 @@ export async function createAudioLectureWithProcessingChunks(params: {
   onStageChange?: (stage: UploadStage, message: string) => void;
   onLectureCreated?: (lectureId: string) => void;
   signal?: AbortSignal;
+  /**
+   * The caller's translator. This runs in the browser but outside React, so
+   * the stage captions and failure messages it produces have to be handed a
+   * way to speak the reader's language.
+   */
+  t: Translate<MessageKey>;
 }) {
   let uploadFile = params.file;
 
   if (params.normalizeBeforeUpload) {
     assertNotAborted(params.signal);
-    params.onStageChange?.("preparing-chunks", "Pripravljam posnetek...");
+    params.onStageChange?.("preparing-chunks", params.t("audio.upload.normalising"));
 
     const normalizedRecording = await normalizeRecordedAudioForUpload({
       file: params.file,
@@ -67,7 +75,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
   const supabase = createSupabaseBrowserClient();
 
   assertNotAborted(params.signal);
-  params.onStageChange?.("creating", "Pripravljam...");
+  params.onStageChange?.("creating", params.t("capture.busy.preparing"));
 
   const createResponse = await fetch("/api/lectures", {
     method: "POST",
@@ -85,14 +93,15 @@ export async function createAudioLectureWithProcessingChunks(params: {
     }),
   });
 
-  const createData = await parseApiResponse<CreateLectureResponse>(createResponse);
+  const createData = await parseApiResponse<CreateLectureResponse>(createResponse, params.t);
 
   params.onLectureCreated?.(createData.lectureId);
 
   assertNotAborted(params.signal);
-  params.onStageChange?.("uploading-original", "Nalagam zvok...");
+  params.onStageChange?.("uploading-original", params.t("capture.busy.uploadingAudio"));
 
   await uploadAudioFileToSignedUrl({
+    t: params.t,
     supabase,
     path: createData.path,
     token: createData.token,
@@ -109,7 +118,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
   if (shouldChunk) {
     try {
       assertNotAborted(params.signal);
-      params.onStageChange?.("preparing-chunks", "Pripravljam zvočne dele...");
+      params.onStageChange?.("preparing-chunks", params.t("audio.upload.preparingChunks"));
 
       const chunks = await createAudioProcessingChunks({
         file: uploadFile,
@@ -134,7 +143,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
         }),
       });
 
-      const manifestData = await parseApiResponse<ChunkUploadResponse>(manifestResponse);
+      const manifestData = await parseApiResponse<ChunkUploadResponse>(manifestResponse, params.t);
 
       const uploadsByIndex = new Map(
         manifestData.uploads.map((upload) => [upload.index, upload] as const),
@@ -144,7 +153,10 @@ export async function createAudioLectureWithProcessingChunks(params: {
         assertNotAborted(params.signal);
         params.onStageChange?.(
           "uploading-chunks",
-          `Nalagam zvočne dele (${position + 1}/${chunks.length})...`,
+          params.t("audio.upload.uploadingChunk", {
+            index: position + 1,
+            total: chunks.length,
+          }),
         );
 
         const uploadTarget = uploadsByIndex.get(chunk.index);
@@ -154,6 +166,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
         }
 
         await uploadAudioFileToSignedUrl({
+          t: params.t,
           supabase,
           path: uploadTarget.path,
           token: uploadTarget.token,
@@ -172,7 +185,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
   }
 
   assertNotAborted(params.signal);
-  params.onStageChange?.("finalizing", "Začenjam obdelavo...");
+  params.onStageChange?.("finalizing", params.t("audio.upload.finalizing"));
 
   const finalizeResponse = await fetch(`/api/lectures/${createData.lectureId}/finalize`, {
     method: "POST",
@@ -185,7 +198,7 @@ export async function createAudioLectureWithProcessingChunks(params: {
     }),
   });
 
-  await parseApiResponse(finalizeResponse);
+  await parseApiResponse(finalizeResponse, params.t);
 
   return {
     lectureId: createData.lectureId,
@@ -203,21 +216,19 @@ function shouldRetryWithRawBody(error: { message?: string; name?: string }) {
   );
 }
 
-function createUploadError(error: { message?: string; name?: string }) {
+function createUploadError(error: { message?: string; name?: string }, t: Translate<MessageKey>) {
   if (shouldRetryWithRawBody(error)) {
-    return new Error(
-      "Zvočnega posnetka ni bilo mogoče naložiti. Preveri povezavo in poskusi znova.",
-    );
+    return new Error(t("audio.upload.failedRetry"));
   }
 
-  return new Error(error.message ?? "Zvočnega posnetka ni bilo mogoče naložiti.");
+  return new Error(error.message ?? t("audio.upload.failed"));
 }
 
-async function readUploadBytes(file: File) {
+async function readUploadBytes(file: File, t: Translate<MessageKey>) {
   try {
     return await file.arrayBuffer();
   } catch (error) {
-    throw createUploadError(error instanceof Error ? error : {});
+    throw createUploadError(error instanceof Error ? error : {}, t);
   }
 }
 
@@ -281,6 +292,7 @@ async function uploadRawBytesToSignedUrl(params: {
 }
 
 async function uploadAudioFileToSignedUrl(params: {
+  t: Translate<MessageKey>;
   supabase: ReturnType<typeof createSupabaseBrowserClient>;
   path: string;
   token: string;
@@ -311,7 +323,7 @@ async function uploadAudioFileToSignedUrl(params: {
   }
 
   assertNotAborted(params.signal);
-  const fileBytes = await readUploadBytes(params.file);
+  const fileBytes = await readUploadBytes(params.file, params.t);
   assertNotAborted(params.signal);
 
   try {
@@ -323,7 +335,7 @@ async function uploadAudioFileToSignedUrl(params: {
       signal: params.signal,
     });
   } catch (error) {
-    throw createUploadError(error instanceof Error ? error : {});
+    throw createUploadError(error instanceof Error ? error : {}, params.t);
   }
 }
 

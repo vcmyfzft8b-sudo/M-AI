@@ -20,11 +20,11 @@ import {
   BRAND_LOCKUP_WIDTH,
   BRAND_NAME,
   BRAND_SUPPORT_EMAIL,
-  BRAND_TAGLINE,
   SEO_BRAND_NAME,
-  SEO_SITE_DESCRIPTION,
   SEO_SITE_URL,
 } from "@/lib/brand";
+import { getTranslations } from "@/lib/i18n/server";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { hasPublicSupabaseEnv } from "@/lib/public-env";
 
 import "./landing.css";
@@ -46,30 +46,37 @@ export const metadata: Metadata = {
   },
 };
 
-const HOMEPAGE_JSON_LD = {
-  "@context": "https://schema.org",
-  "@type": "WebApplication",
-  name: SEO_BRAND_NAME,
-  alternateName: BRAND_NAME,
-  url: `${SEO_SITE_URL}/`,
-  applicationCategory: "EducationalApplication",
-  operatingSystem: "Web",
-  inLanguage: "sl",
-  description: SEO_SITE_DESCRIPTION,
-  offers: {
-    "@type": "Offer",
-    price: "0",
-    priceCurrency: "EUR",
-  },
-  featureList: [
-    "AI zapiski predavanj",
-    "Prepisi audio posnetkov",
-    "Povzetki iz PDF-jev in dokumentov",
-    "Flashcardi iz zapiskov",
-    "Kvizi in testi za učenje",
-    "AI klepet z gradivom",
-  ],
-};
+/**
+ * The structured description search engines read. Built per request rather
+ * than once at module load, because `inLanguage`, the description and the
+ * feature list all follow the language this visitor is being served.
+ */
+function buildHomepageJsonLd(locale: string, t: (key: MessageKey) => string) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: SEO_BRAND_NAME,
+    alternateName: BRAND_NAME,
+    url: `${SEO_SITE_URL}/`,
+    applicationCategory: "EducationalApplication",
+    operatingSystem: "Web",
+    inLanguage: locale,
+    description: t("meta.description"),
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "EUR",
+    },
+    featureList: [
+      t("landing.seo.featureNotes"),
+      t("landing.seo.featureTranscripts"),
+      t("landing.seo.featureSummaries"),
+      t("landing.seo.featureFlashcards"),
+      t("landing.seo.featureQuizzes"),
+      t("landing.seo.featureChat"),
+    ],
+  };
+}
 
 export default async function HomePage() {
   if (hasPublicSupabaseEnv) {
@@ -79,13 +86,15 @@ export default async function HomePage() {
     }
   }
 
+  const { locale, t } = await getTranslations();
+
   return (
     <main className={`landing-v2 ${interTight.variable}`}>
       <LandingScrollReveal />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(HOMEPAGE_JSON_LD).replace(/</g, "\\u003c"),
+          __html: JSON.stringify(buildHomepageJsonLd(locale, t)).replace(/</g, "\\u003c"),
         }}
       />
 
@@ -105,23 +114,23 @@ export default async function HomePage() {
               <LandingUserCount />
             </p>
             <h1 id="landing-public-title" className="landing-v2-hero-title">
-              Nikoli več ne piši zapiskov!
+              {t("landing.hero.title")}
             </h1>
-            <p className="landing-v2-hero-lead">
-              Memo AI je tvoj AI notetaker za predavanja. Iz audio posnetkov, PDF-jev, dokumentov in
-              povezav pripravi zapiske, prepise, flashcarde, kvize, teste in AI chat.
-            </p>
+            <p className="landing-v2-hero-lead">{t("landing.hero.lead")}</p>
             <div className="landing-v2-hero-actions">
               <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-light">
-                Preizkusi za 0 €
+                {t("landing.cta.tryFree")}
               </LandingLoadingLink>
               <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-dark">
-                Prijavi se
+                {t("landing.cta.signIn")}
               </LandingLoadingLink>
             </div>
           </div>
 
-          <div className="landing-v2-hero-preview" aria-label={`Predogled aplikacije ${SEO_BRAND_NAME}`}>
+          <div
+            className="landing-v2-hero-preview"
+            aria-label={t("landing.hero.previewLabel", { brand: SEO_BRAND_NAME })}
+          >
             <LandingTryCallout />
             <MemoAppPreview />
           </div>
@@ -131,7 +140,7 @@ export default async function HomePage() {
       <section className="landing-v2-section" aria-labelledby="landing-workflow-title">
         <div className="landing-v2-section-head landing-v2-section-head-center" data-scroll-reveal="">
           <h2 id="landing-workflow-title" className="landing-v2-section-title">
-            Memo AI vse poenostavi.
+            {t("landing.workflow.title")}
           </h2>
         </div>
         <LandingFlowDemo />
@@ -140,7 +149,7 @@ export default async function HomePage() {
       <section className="landing-v2-section" aria-labelledby="landing-feature-title">
         <div className="landing-v2-section-head" data-scroll-reveal="">
           <h2 id="landing-feature-title" className="landing-v2-section-title">
-            Zajemi, uredi in se uči hitreje
+            {t("landing.features.title")}
           </h2>
         </div>
         <LandingFeatureShowcase />
@@ -149,26 +158,23 @@ export default async function HomePage() {
       <section id="examples" className="landing-v2-section" aria-labelledby="landing-faq-title">
         <div className="landing-v2-section-head" data-scroll-reveal="" style={{ marginBottom: "2.75rem" }}>
           <h2 id="landing-faq-title" className="landing-v2-section-title">
-            Pogosta vprašanja
+            {t("landing.faq.title")}
           </h2>
         </div>
 
         <LandingFaq />
 
         <div className="landing-v2-final-cta" data-scroll-reveal="">
-          <h2>Naloži prvo predavanje.</h2>
-          <p className="landing-v2-final-cta-lead">
-            Uro dolgo predavanje je obdelano v nekaj minutah – prepis, zapiski, flashcarde in kviz
-            nastanejo skupaj.
-          </p>
+          <h2>{t("landing.finalCta.title")}</h2>
+          <p className="landing-v2-final-cta-lead">{t("landing.finalCta.lead")}</p>
           <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-light">
-            Preizkusi za 0 €
+            {t("landing.cta.tryFree")}
           </LandingLoadingLink>
-          <p className="landing-v2-final-cta-note">3 dni brezplačno · plačaš šele, če nadaljuješ</p>
+          <p className="landing-v2-final-cta-note">{t("landing.finalCta.note")}</p>
           <ul className="landing-v2-final-cta-points">
-            <li>Deluje v slovenščini</li>
-            <li>Zvok, PDF, dokumenti in povezave</li>
-            <li>Posnetki ostanejo tvoji</li>
+            <li>{t("landing.finalCta.pointLanguage")}</li>
+            <li>{t("landing.finalCta.pointSources")}</li>
+            <li>{t("landing.finalCta.pointOwnership")}</li>
           </ul>
         </div>
       </section>
@@ -184,16 +190,16 @@ export default async function HomePage() {
                 height={BRAND_LOCKUP_HEIGHT}
               />
             </span>
-            <p>{BRAND_TAGLINE}</p>
+            <p>{t("meta.tagline")}</p>
           </div>
 
-          <nav className="landing-v2-footer-nav" aria-label="Noga">
+          <nav className="landing-v2-footer-nav" aria-label={t("landing.footer.label")}>
             <div className="landing-v2-footer-group">
-              <h2>Podpora</h2>
+              <h2>{t("landing.footer.support")}</h2>
               <a href={`mailto:${BRAND_SUPPORT_EMAIL}`}>{BRAND_SUPPORT_EMAIL}</a>
-              <Link href="/legal/terms-of-use">Pogoji uporabe</Link>
-              <Link href="/legal/privacy-policy">Politika zasebnosti</Link>
-              <Link href="/legal/refund-policy">Politika vračil</Link>
+              <Link href="/legal/terms-of-use">{t("landing.footer.terms")}</Link>
+              <Link href="/legal/privacy-policy">{t("landing.footer.privacy")}</Link>
+              <Link href="/legal/refund-policy">{t("landing.footer.refunds")}</Link>
             </div>
           </nav>
         </div>

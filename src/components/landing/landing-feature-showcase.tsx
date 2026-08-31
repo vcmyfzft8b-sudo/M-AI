@@ -3,14 +3,26 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Fragment, useState } from "react";
 
+import { useT } from "@/components/i18n-provider";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+
+/*
+ * The six things the product does, each with a small animated illustration.
+ *
+ * The captions are product copy and are translated. What the illustrations
+ * *contain* — a sample lecture on business information systems, its bullet
+ * points and its quiz — is left in Slovenian: it stands in for the learner's
+ * own material, which is in their own language whatever the interface is set
+ * to. See the note at the top of memo-app-preview-data.ts.
+ */
 const FEATURES = [
-  { title: "Posnemi ali naloži", desc: "Predavanja, PDF-je, dokumente, fotografije zapiskov in povezave." },
-  { title: "Dobi clean zapiske", desc: "Urejeni zapiski in prepisi brez ročnega prepisovanja." },
-  { title: "Flashcardi", desc: "Ključni pojmi se spremenijo v kartice za hitro ponavljanje." },
-  { title: "Kvizi", desc: "Preveri razumevanje z vprašanji iz svojega gradiva." },
-  { title: "Testi", desc: "Vadi daljše odgovore in pripravo na preverjanje znanja." },
-  { title: "Poslušaj zapiske", desc: "Aplikacija ti zapiske prebere na glas, tudi brez gledanja v ekran." },
-] as const;
+  { titleKey: "showcase.captureTitle", descKey: "showcase.captureDesc" },
+  { titleKey: "showcase.notesTitle", descKey: "showcase.notesDesc" },
+  { titleKey: "showcase.cardsTitle", descKey: "showcase.cardsDesc" },
+  { titleKey: "showcase.quizTitle", descKey: "showcase.quizDesc" },
+  { titleKey: "showcase.testsTitle", descKey: "showcase.testsDesc" },
+  { titleKey: "showcase.listenTitle", descKey: "showcase.listenDesc" },
+] as const satisfies ReadonlyArray<{ titleKey: MessageKey; descKey: MessageKey }>;
 
 function readWord(text: string, delay: number, bold?: boolean): ReactNode {
   return (
@@ -38,6 +50,8 @@ function readSequence(words: string[], startDelay: number, boldFirst?: boolean):
 }
 
 function WavePanel() {
+  const t = useT();
+
   return (
     <div style={{ display: "grid", gap: "12px", width: "100%", maxWidth: "17rem", justifyItems: "center" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", height: "34px" }}>
@@ -98,7 +112,9 @@ function WavePanel() {
           >
             Predavanje IS – 4. teden
           </span>
-          <span style={{ fontSize: "11.5px", color: "var(--l-second)" }}>Zvok · danes</span>
+          <span style={{ fontSize: "11.5px", color: "var(--l-second)" }}>
+            {`${t("flowDemo.kindAudio")} · ${t("flowDemo.today")}`}
+          </span>
         </span>
       </div>
       <span
@@ -114,7 +130,7 @@ function WavePanel() {
           animation: "memo-fx-fade 3.8s ease-in-out infinite",
         }}
       >
-        Prepisovanje
+        {t("showcase.transcribing")}
       </span>
     </div>
   );
@@ -465,6 +481,7 @@ function ReadPanel() {
 const PANELS = [WavePanel, NotesPanel, FlashcardPanel, QuizPanel, TestPanel, ReadPanel];
 
 export function LandingFeatureShowcase() {
+  const t = useT();
   const [active, setActive] = useState(0);
 
   return (
@@ -474,7 +491,7 @@ export function LandingFeatureShowcase() {
           const on = active === i;
           const Panel = PANELS[i];
           return (
-            <Fragment key={feature.title}>
+            <Fragment key={feature.titleKey}>
             <button
               type="button"
               onClick={() => setActive(i)}
@@ -513,7 +530,7 @@ export function LandingFeatureShowcase() {
                     transition: "color 260ms ease",
                   }}
                 >
-                  {feature.title}
+                  {t(feature.titleKey)}
                 </span>
                 {/* The title's colour already marks the active row; dimming
                     this line as well pushed it under 3:1 against the page. */}
@@ -524,7 +541,7 @@ export function LandingFeatureShowcase() {
                     lineHeight: 1.45,
                   }}
                 >
-                  {feature.desc}
+                  {t(feature.descKey)}
                 </span>
               </span>
             </button>

@@ -10,6 +10,7 @@ import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSanitizedStringSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -45,7 +46,7 @@ export async function POST(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -62,7 +63,7 @@ export async function POST(
   const parsedParams = paramsSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljavni parametri." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidParams") }, { status: 400 });
   }
 
   const parsed = await parseJsonRequest(request, submitSchema, {

@@ -1,5 +1,8 @@
+"use client";
+
 import Image from "next/image";
 
+import { useT } from "@/components/i18n-provider";
 import type { HOME_SCREEN_STEPS } from "@/lib/install-guide";
 
 type Step = (typeof HOME_SCREEN_STEPS)[number];
@@ -25,6 +28,8 @@ const SHOT_HEIGHT = 1631;
  * behind the words is worse than no pictures.
  */
 export function InstallShot({ step, sizes }: { step: Step; sizes: string }) {
+  const t = useT();
+
   return (
     <>
       {(["light", "dark"] as const).map((theme) => (
@@ -32,7 +37,7 @@ export function InstallShot({ step, sizes }: { step: Step; sizes: string }) {
           key={theme}
           className={`memo-shot-${theme}`}
           src={step[theme]}
-          alt={step.alt}
+          alt={t(step.altKey)}
           width={SHOT_WIDTH}
           height={SHOT_HEIGHT}
           sizes={sizes}

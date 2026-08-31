@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { sourceLocaleMessage } from "@/lib/lecture-failure-text";
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import {
   getInvocationBudgetMs,
@@ -14,14 +15,15 @@ import {
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 // Starting an attempt builds the question bank inline when there is none, or when the stored one
 // is stale — a multi-call generation, and the reason this route needs the same 300s every other
 // lecture route allows. It was the one route that never declared it.
 export const maxDuration = 300;
-// Shown to the reader who pressed "start", so keep it about what they can do next.
-const ATTEMPT_BUDGET_MESSAGE =
-  "Priprava preizkusa je trajala predolgo in se je ustavila. Poskusi znova.";
+// Recorded on the stalled generation for triage, in the source language; the reader who pressed
+// "start" is answered with `api.testStartTimedOut` in their own.
+const ATTEMPT_BUDGET_MESSAGE = sourceLocaleMessage("api.testStartTimedOut");
 
 export async function POST(
   request: Request,
@@ -34,7 +36,7 @@ export async function POST(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const limited = await enforceRateLimit({
@@ -51,7 +53,7 @@ export async function POST(
   const parsedParams = routeIdParamSchema.safeParse(await context.params);
 
   if (!parsedParams.success) {
-    return NextResponse.json({ error: "Neveljaven ID zapiska." }, { status: 400 });
+    return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
   const { id } = parsedParams.data;
@@ -69,7 +71,7 @@ export async function POST(
 
   if (!access.allowed) {
     return createBillingRequiredResponse(
-      "Brez plačljivega paketa je preizkus znanja na voljo samo za tvoje poskusno gradivo.",
+      await tr("api.trialOnly.test"),
       access.code,
     );
   }
@@ -101,11 +103,15 @@ export async function POST(
 
       // Not a bad request: the work was accepted and ran out of time. A 504 from the platform was
       // an HTML gateway page the client could only show as a raw fragment.
-      return NextResponse.json({ error: error.message }, { status: 503 });
+      // The row keeps the source-language sentence for triage; the reader gets their own.
+      return NextResponse.json(
+        { error: await tr("api.testStartTimedOut") },
+        { status: 503 },
+      );
     }
 
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Preizkusa znanja ni bilo mogoče zagnati." },
+      { error: error instanceof Error ? error.message : await tr("api.testStartFailed") },
       { status: 400 },
     );
   }

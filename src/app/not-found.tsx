@@ -2,20 +2,25 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { ErrorScreen } from "@/components/error-screen";
+import { getTranslations } from "@/lib/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Strani ni mogoče najti",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getTranslations();
 
-export default function NotFound() {
+  return { title: t("error.notFound.metaTitle") };
+}
+
+export default async function NotFound() {
+  const { t } = await getTranslations();
+
   return (
     <ErrorScreen
       code="404"
-      title="Te strani ni."
-      description="Povezava je morda zastarela ali napačno vnesena. Preveri naslov ali se vrni na začetek."
+      title={t("error.notFound.title")}
+      description={t("error.notFound.copy")}
       actions={
         <Link href="/" className="error-screen-primary">
-          Nazaj na domačo stran
+          {t("error.backHome")}
         </Link>
       }
     />

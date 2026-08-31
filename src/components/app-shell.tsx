@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { AppLayoutProvider } from "@/components/app-layout-context";
 import { useCreatorDemoBasePath } from "@/components/creator-demo/creator-demo-context";
+import { useT } from "@/components/i18n-provider";
 import { InstantLink } from "@/components/instant-link";
 import { Msym } from "@/components/msym";
 import {
@@ -14,18 +15,19 @@ import {
   BRAND_LOCKUP_WIDTH,
   SEO_BRAND_NAME,
 } from "@/lib/brand";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { unmapDemoPathname } from "@/lib/creator-demo/paths";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 
 /**
  * The desktop rail. The phone design has no persistent navigation at all —
- * Pomoč and Nastavitve are reached from the gear on the home screen — so this
+ * help and settings are reached from the gear on the home screen — so this
  * only renders from 1100px up.
  */
-const RAIL_ITEMS = [
-  { href: "/app", label: "Domov", icon: "home" },
-  { href: "/app/support", label: "Pomoč", icon: "help" },
-  { href: "/app/settings", label: "Nastavitve", icon: "settings" },
+const RAIL_ITEMS: Array<{ href: string; labelKey: MessageKey; icon: string }> = [
+  { href: "/app", labelKey: "nav.home", icon: "home" },
+  { href: "/app/support", labelKey: "nav.help", icon: "help" },
+  { href: "/app/settings", labelKey: "nav.settings", icon: "settings" },
 ];
 
 export function AppShell({
@@ -40,6 +42,7 @@ export function AppShell({
   /** Extra class on the shell root, for surface-specific styling. */
   className?: string;
 }) {
+  const t = useT();
   const demoBasePath = useCreatorDemoBasePath();
   const clientPathname = usePathname();
   const router = useRouter();
@@ -62,12 +65,13 @@ export function AppShell({
     () =>
       RAIL_ITEMS.map((item) => ({
         ...item,
+        label: t(item.labelKey),
         active:
           item.href === "/app"
             ? pathname === "/app" || isNote
             : pathname === item.href || pathname.startsWith(`${item.href}/`),
       })),
-    [isNote, pathname],
+    [isNote, pathname, t],
   );
 
   // Onboarding and checkout own the whole viewport; the app chrome would only
@@ -88,7 +92,7 @@ export function AppShell({
             <InstantLink
               href="/app"
               className="memo-header-brand"
-              aria-label={`Domov ${SEO_BRAND_NAME}`}
+              aria-label={t("nav.homeBrand", { brand: SEO_BRAND_NAME })}
             >
               <Image
                 src={BRAND_LOCKUP_SRC}
@@ -105,7 +109,7 @@ export function AppShell({
                   href="/app/start"
                   className="memo-subscribe-cta"
                 >
-                  <span>Neomejeni zapiski</span>
+                  <span>{t("shell.unlimitedNotes")}</span>
                   <Msym name="bolt" size="1.35rem" />
                 </InstantLink>
               )}
@@ -123,7 +127,7 @@ export function AppShell({
               .join(" ")}
           >
             <aside className={`memo-rail ${isNote && chatOpen ? "collapsed" : ""}`.trim()}>
-              <nav aria-label="Glavna navigacija">
+              <nav aria-label={t("nav.main")}>
                 {railItems.map((item) => (
                   <InstantLink
                     key={item.href}

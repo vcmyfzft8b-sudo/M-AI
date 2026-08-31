@@ -1,27 +1,49 @@
 import { clsx, type ClassValue } from "clsx";
 
+import { LOCALE_INTL_TAG, type Locale } from "@/lib/i18n/locales";
+
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
 }
 
+/*
+ * Every market Memo ships in — Slovenia, Croatia, Bosnia and Herzegovina,
+ * Serbia — is on Central European Time, so one zone covers all four and the
+ * date a note was created reads the same on both sides of a border. English is
+ * the odd one out, and deliberately: it is the fallback for "somewhere else",
+ * which is not a timezone we can name. The app's own reporting is Ljubljana
+ * time throughout (see src/lib/admin/ranges.ts), and a note stamped in a
+ * different zone from the report that counts it would be worse than a note
+ * stamped an hour off.
+ */
 const APP_TIME_ZONE = "Europe/Ljubljana";
 
-const calendarDateFormatter = new Intl.DateTimeFormat("sl-SI", {
-  day: "numeric",
-  month: "numeric",
-  year: "numeric",
-  timeZone: APP_TIME_ZONE,
-});
+/**
+ * `Intl.DateTimeFormat` is expensive to construct and a library screen asks for
+ * the same one on every row, so each locale's formatters are built once.
+ */
+const calendarDateFormatters = new Map<Locale, Intl.DateTimeFormat>();
+const clockTimeFormatters = new Map<Locale, Intl.DateTimeFormat>();
 
-const calendarDateTimeFormatter = new Intl.DateTimeFormat("sl-SI", {
-  day: "numeric",
-  month: "numeric",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-  timeZone: APP_TIME_ZONE,
-});
+function getFormatter(
+  cache: Map<Locale, Intl.DateTimeFormat>,
+  locale: Locale,
+  options: Intl.DateTimeFormatOptions,
+) {
+  const cached = cache.get(locale);
+
+  if (cached) {
+    return cached;
+  }
+
+  const formatter = new Intl.DateTimeFormat(LOCALE_INTL_TAG[locale], {
+    ...options,
+    timeZone: APP_TIME_ZONE,
+  });
+  cache.set(locale, formatter);
+
+  return formatter;
+}
 
 export function formatTimestamp(ms: number) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -40,34 +62,37 @@ export function formatTimestamp(ms: number) {
     .join(":");
 }
 
-export function formatLectureDuration(seconds: number | null) {
-  if (!seconds) {
-    return "Neznano trajanje";
-  }
-
-  return formatTimestamp(seconds * 1000);
+/**
+ * A calendar date in the reader's language: `31. 8. 2026` in Slovenian,
+ * Croatian, Bosnian and Serbian, `31/08/2026` in English.
+ *
+ * This used to assemble the parts by hand around a hard-coded `sl-SI`, which
+ * put a Slovenian date order in front of every reader. `Intl` already knows
+ * each locale's order and separators, so it does the joining now — and it
+ * produces exactly the same string as before for Slovenian.
+ */
+export function formatCalendarDate(isoString: string, locale: Locale) {
+  return getFormatter(calendarDateFormatters, locale, {
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+  }).format(new Date(isoString));
 }
 
-export function formatRelativeDate(isoString: string) {
-  const parts = calendarDateTimeFormatter.formatToParts(new Date(isoString));
-  const valueByType = new Map(parts.map((part) => [part.type, part.value]));
-  const day = valueByType.get("day") ?? "";
-  const month = valueByType.get("month") ?? "";
-  const year = valueByType.get("year") ?? "";
-  const hour = valueByType.get("hour") ?? "00";
-  const minute = valueByType.get("minute") ?? "00";
-
-  return `${day}. ${month}. ${year} ob ${hour}:${minute}`;
-}
-
-export function formatCalendarDate(isoString: string) {
-  const parts = calendarDateFormatter.formatToParts(new Date(isoString));
-  const valueByType = new Map(parts.map((part) => [part.type, part.value]));
-  const day = valueByType.get("day") ?? "";
-  const month = valueByType.get("month") ?? "";
-  const year = valueByType.get("year") ?? "";
-
-  return `${day}. ${month}. ${year}`;
+/**
+ * The time of day, 24-hour in every locale we ship — including English, where
+ * the market is Europe rather than the US and the app's own recordings and
+ * timestamps are 24-hour throughout.
+ *
+ * Callers join this to a date with the `date.dateAtTime` message, because the
+ * word between them ("ob", "at", "u") is not something `Intl` will supply.
+ */
+export function formatClockTime(isoString: string, locale: Locale) {
+  return getFormatter(clockTimeFormatters, locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(isoString));
 }
 
 export function stripCodeFences(value: string) {

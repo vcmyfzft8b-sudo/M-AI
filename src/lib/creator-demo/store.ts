@@ -10,6 +10,7 @@
  * and resets when the tab is closed.
  */
 import type { FlashcardConfidenceBucket } from "@/lib/database.types";
+import { demoT } from "@/lib/creator-demo/demo-translator";
 import {
   buildDemoLectureDetail,
   buildDemoSeed,
@@ -501,12 +502,12 @@ export function submitDemoPracticeAttempt(params: {
                 : 5;
 
         const rationale = declaredUnknown
-          ? "Označil si, da odgovora ne veš. Preberi razlago in poskusi znova."
+          ? demoT("creatorDemo.gradeUnknown")
           : score >= 4
-            ? "Odgovor zajame glavno idejo in jo pravilno razloži."
+            ? demoT("creatorDemo.gradeGood")
             : score > 0
-              ? "Odgovor gre v pravo smer, a je prekratek za polno število točk."
-              : "Odgovora ni bilo mogoče oceniti, ker je prazen.";
+              ? demoT("creatorDemo.gradePartial")
+              : demoT("creatorDemo.gradeEmpty");
 
         return {
           ...answer,

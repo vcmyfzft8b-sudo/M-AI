@@ -10,6 +10,7 @@ import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { languageHintSchema } from "@/lib/validation";
+import { tr } from "@/lib/i18n/server";
 
 const CREATE_MANUAL_LECTURE_MAX_BYTES = 8 * 1024;
 
@@ -29,14 +30,14 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Nedovoljen dostop." }, { status: 401 });
+    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
   }
 
   const entitlement = await getUserEntitlementState(user.id);
 
   if (!entitlement.canCreateNotes) {
     return createBillingRequiredResponse(
-      "Tvoj brezplačni preizkus je porabljen. Nadgradi za novo gradivo.",
+      await tr("api.trialExhausted"),
       "trial_exhausted",
     );
   }
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
 
   if (error || !lecture) {
     return NextResponse.json(
-      { error: error?.message ?? "Zapiska ni bilo mogoče ustvariti." },
+      { error: error?.message ?? await tr("api.noteCreateFailed") },
       { status: 500 },
     );
   }
@@ -99,7 +100,7 @@ export async function POST(request: Request) {
         .eq("user_id", user.id);
 
       return createBillingRequiredResponse(
-        "Tvoj brezplačni preizkus je že porabljen. Nadgradi za novo gradivo.",
+        await tr("api.trialAlreadyUsed"),
         "trial_exhausted",
       );
     }

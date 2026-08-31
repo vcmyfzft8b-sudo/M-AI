@@ -15,6 +15,8 @@
  * Nothing here is generated at runtime and nothing is transcribed: this is a
  * scripted playback for video, and it only exists under `/creator/college`.
  */
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+
 import { DEMO_CREATE_PACKS, getDemoNotePack } from "@/lib/creator-demo/content";
 
 export type LiveNoteSegment =
@@ -178,11 +180,12 @@ export const LIVE_NOTE_TOTAL_CHARS = LIVE_NOTE_SEGMENTS.reduce(
  * Captions under the wave, replayed on a loop so the stage always reads as
  * "the app is working on it" rather than sitting still.
  */
-export const LIVE_NOTE_STATUS_STEPS = [
-  "Poslušam predavanje",
-  "Razumem povedano",
-  "Pišem zapiske",
-  "Dodajam sliko",
-  "Označujem ključno",
-  "Pripravljam kartice",
-] as const;
+/** Keys, not sentences: the recording pane renders these in the reader's language. */
+export const LIVE_NOTE_STATUS_STEP_KEYS = [
+  "creatorDemo.liveStepListening",
+  "creatorDemo.liveStepUnderstanding",
+  "creatorDemo.liveStepWriting",
+  "creatorDemo.liveStepFigure",
+  "creatorDemo.liveStepHighlighting",
+  "creatorDemo.liveStepCards",
+] as const satisfies readonly MessageKey[];

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { useT } from "@/components/i18n-provider";
+
 function formatCountdown(seconds: number) {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
@@ -19,6 +21,7 @@ export function CheckEmailCard(props: {
   sentAt: number;
   cooldownSeconds: number;
 }) {
+  const t = useT();
   const [code, setCode] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [pendingAction, setPendingAction] = useState<"verify" | "resend" | null>(null);
@@ -97,7 +100,7 @@ export function CheckEmailCard(props: {
             minLength={6}
             maxLength={8}
             autoComplete="one-time-code"
-            placeholder="Vnesi kodo"
+            placeholder={t("auth.enterCodePlaceholder")}
             className="auth-code-input check-email-code-input"
             value={code}
             onChange={(event) => {
@@ -116,13 +119,12 @@ export function CheckEmailCard(props: {
           aria-busy={pendingAction === "verify"}
         >
           {pendingAction === "verify" ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /> : null}
-          <span>{pendingAction === "verify" ? "Preverjam..." : "Nadaljuj"}</span>
+          <span>{t(pendingAction === "verify" ? "auth.verifying" : "common.continue")}</span>
         </button>
       </form>
 
       <p className={`auth-status-note check-email-status-note ${props.messageType === "error" ? "error" : ""}`}>
-        {props.message ??
-          "Koda velja 5 minut. Če zahtevaš novo, uporabi samo najnovejšo kodo."}
+        {props.message ?? t("auth.codeValidNote")}
       </p>
 
       <div className="auth-check-actions check-email-actions">
@@ -145,14 +147,14 @@ export function CheckEmailCard(props: {
             aria-busy={pendingAction === "resend"}
           >
             {pendingAction === "resend"
-              ? "Pošiljam..."
+              ? t("auth.sending")
               : secondsLeft > 0
-                ? `Novo kodo pošlji čez ${formatCountdown(secondsLeft)}`
-                : "Pošlji novo kodo"}
+                ? t("auth.resendIn", { countdown: formatCountdown(secondsLeft) })
+                : t("auth.resendNow")}
           </button>
         </form>
         <Link href="/" className="auth-secondary-link auth-tertiary-button check-email-secondary">
-          Uporabi drugo metodo
+          {t("auth.useAnotherMethod")}
         </Link>
       </div>
     </div>

@@ -1155,3 +1155,91 @@
   color: var(--l-second);
   font-size: 0.82rem;
 }
+
+/* --- language picker (landing nav) ---------------------------------------- */
+
+/*
+ * A popover rather than a `<select>`: the native control renders its list in
+ * the operating system's language rather than the page's, and on iOS it covers
+ * the hero with a wheel. Sits left of the CTA in the nav on every width; on the
+ * narrowest phones the trigger drops its label and keeps the globe.
+ */
+
+.landing-language {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.landing-language-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 2.4rem;
+  padding: 0 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.landing-language-trigger:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.landing-v2-nav.is-scrolled .landing-language-trigger {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.landing-language-menu {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  z-index: 60;
+  display: grid;
+  gap: 0.15rem;
+  min-width: 12rem;
+  padding: 0.35rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
+  color: #101014;
+}
+
+.landing-language-menu .memo-language-option {
+  padding: 0.6rem 0.75rem;
+  border-radius: 12px;
+  color: inherit;
+  font-size: 0.98rem;
+}
+
+.landing-language-menu .memo-language-option:hover,
+.landing-language-menu .memo-language-option.active {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  .landing-language-menu {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: #1b1b20;
+    color: #f4f4f6;
+  }
+
+  .landing-language-menu .memo-language-option:hover,
+  .landing-language-menu .memo-language-option.active {
+    background: rgba(255, 255, 255, 0.09);
+  }
+}
+
+@media (max-width: 400px) {
+  .landing-language-trigger span:not(.msym) {
+    display: none;
+  }
+}

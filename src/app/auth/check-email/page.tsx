@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { CheckEmailCard } from "@/components/check-email-card";
 import { BRAND_NAME } from "@/lib/brand";
+import { getTranslations } from "@/lib/i18n/server";
 import { normalizeNextPath, sanitizeUserInput } from "@/lib/validation";
 
 type SearchParams = Promise<{
@@ -21,11 +22,12 @@ export default async function CheckEmailPage({
 }: {
   searchParams?: SearchParams;
 }) {
+  const { t } = await getTranslations();
   const params = await searchParams;
   const normalizedEmail = typeof params?.email === "string"
     ? sanitizeUserInput(params.email).slice(0, 320)
     : "";
-  const email = normalizedEmail || "tvoj e-naslov";
+  const email = normalizedEmail || t("auth.yourEmail");
   const mode = params?.mode === "signup" ? "signup" : "login";
   const next = normalizeNextPath(params?.next);
   const message = typeof params?.message === "string"
@@ -40,20 +42,22 @@ export default async function CheckEmailPage({
       <div className="check-email-topbar">
         <Link href="/" className="app-back-button">
           <ChevronLeft className="h-5 w-5" />
-          Nazaj
+          {t("common.back")}
         </Link>
       </div>
 
       <section className="landing-auth-wrap check-email-wrap">
-        <Link href="/" className="landing-auth-brand check-email-brand" aria-label={`Domov ${BRAND_NAME}`}>
+        <Link href="/" className="landing-auth-brand check-email-brand" aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}>
           <BrandLogo compact priority />
         </Link>
 
         <div className="check-email-hero">
-          <p className="check-email-eyebrow">Preveri e-pošto</p>
-          <h1 className="check-email-title">Vnesi kodo</h1>
+          <p className="check-email-eyebrow">{t("auth.checkEmail.eyebrow")}</p>
+          <h1 className="check-email-title">{t("auth.checkEmail.title")}</h1>
           <p className="check-email-copy">
-            Na <strong>{email}</strong> smo poslali potrditveno kodo. Velja 5 minut. Če zahtevaš novo, uporabi samo najnovejšo kodo.
+            {t("auth.checkEmail.copyBefore")}
+            <strong>{email}</strong>
+            {t("auth.checkEmail.copyAfter")}
           </p>
         </div>
 

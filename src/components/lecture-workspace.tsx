@@ -17,6 +17,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useAppLayout } from "@/components/app-layout-context";
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
+import { useT, useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { NoteReadAloud } from "@/components/note-read-aloud";
@@ -29,7 +30,7 @@ import {
   redirectToBillingIfNeeded,
 } from "@/lib/billing-client";
 import type { FlashcardConfidenceBucket, StudyAssetStatus } from "@/lib/database.types";
-import { canRetryLectureFailure } from "@/lib/lecture-failure-codes";
+import { canRetryLectureFailure, lectureFailureMessage } from "@/lib/lecture-failure-codes";
 import {
   getEffectiveLectureSourceType,
   getLectureSourceDetail,
@@ -38,6 +39,8 @@ import {
   lectureShowsTranscript,
   shouldCreateInitialNoteAudio,
 } from "@/lib/lecture-source-metadata";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+import type { Translate } from "@/lib/i18n/translate";
 import { isNoteEnrichmentPending } from "@/lib/note-enrichment-status";
 import { noteEmoji } from "@/lib/note-emoji";
 import type { EditableNoteDoc, NoteAnnotation, NoteAnnotationKind } from "@/lib/note-doc";
@@ -223,7 +226,12 @@ type StudySessionSnapshot = {
 };
 
 const STUDY_SESSION_STORAGE_KEY_PREFIX = "lecture-study-session:";
-const NETWORK_REQUEST_ERROR_MESSAGE = "Povezava je bila prekinjena. Poskusi znova.";
+/*
+ * The one error whose text is decided here rather than by the server: an
+ * aborted `fetch` never reached one. Resolved through the caller's `t` so it
+ * arrives in the reader's language like every other failure on this screen.
+ */
+const NETWORK_REQUEST_ERROR_KEY = "error.network" satisfies MessageKey;
 const FAST_DETAIL_POLL_INTERVAL_MS = 5000;
 const MIN_DETAIL_REFRESH_INTERVAL_MS = 3000;
 const STUDY_SESSION_SAVE_DEBOUNCE_MS = 5000;
@@ -251,9 +259,13 @@ function isInterruptedFetchError(error: unknown) {
   return error instanceof TypeError && /failed to fetch|load failed|network/i.test(error.message);
 }
 
-function getRequestErrorMessage(error: unknown, fallback: string) {
+function getRequestErrorMessage(
+  error: unknown,
+  fallback: string,
+  t: Translate<MessageKey>,
+) {
   if (isInterruptedFetchError(error)) {
-    return NETWORK_REQUEST_ERROR_MESSAGE;
+    return t(NETWORK_REQUEST_ERROR_KEY);
   }
 
   return error instanceof Error ? error.message : fallback;
@@ -268,24 +280,36 @@ function getRequestErrorMessage(error: unknown, fallback: string) {
  * background and border.
  */
 const NOTE_TABS = [
-  { id: "notes", view: null, label: "Zapiski", icon: "description", tint: "#f45f5a" },
+  { id: "notes", view: null, labelKey: "note.tab.notes", icon: "description", tint: "#f45f5a" },
   {
     id: "flashcards",
     view: "flashcards",
-    label: "Flashcards",
+    labelKey: "note.tab.flashcards",
     icon: "style",
     tint: "oklch(0.66 0.15 295)",
   },
-  { id: "quiz", view: "quiz", label: "Kviz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
+  { id: "quiz", view: "quiz", labelKey: "note.tab.quiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
   {
     id: "test",
     view: "practice_test",
-    label: "Test",
+    labelKey: "note.tab.test",
     icon: "assignment",
     tint: "oklch(0.66 0.15 150)",
   },
-  { id: "transcript", view: null, label: "Prepis", icon: "text_snippet", tint: "oklch(0.66 0.15 250)" },
-] as const;
+  {
+    id: "transcript",
+    view: null,
+    labelKey: "note.tab.transcript",
+    icon: "text_snippet",
+    tint: "oklch(0.66 0.15 250)",
+  },
+] as const satisfies ReadonlyArray<{
+  id: string;
+  view: StudyMaterialView | null;
+  labelKey: MessageKey;
+  icon: string;
+  tint: string;
+}>;
 
 type NoteTabId = (typeof NOTE_TABS)[number]["id"];
 
@@ -293,11 +317,11 @@ type NoteTabId = (typeof NOTE_TABS)[number]["id"];
 const STICK_TO_BOTTOM_PX = 120;
 
 /** Opening prompts in the chat panel, as the redesign lists them. */
-const CHAT_SUGGESTIONS = [
-  "Povzemi predavanje",
-  "Razloži ključni pojem",
-  "Naredi 5 vprašanj",
-  "Podaljšaj zapiske",
+const CHAT_SUGGESTIONS: MessageKey[] = [
+  "chat.suggestion.summarize",
+  "chat.suggestion.explain",
+  "chat.suggestion.questions",
+  "chat.suggestion.extend",
 ];
 
 function getNoteTabs({ showsTranscript }: { showsTranscript: boolean }) {
@@ -583,11 +607,8 @@ function mergeLectureDetailForRefresh(current: LectureDetail, next: LectureDetai
   return merged;
 }
 
-function confidenceLabel(value: FlashcardConfidenceBucket) {
-  if (value === "again") {
-    return "Nisem vedel";
-  }
-  return "Vedel sem";
+function confidenceLabel(value: FlashcardConfidenceBucket, t: Translate<MessageKey>) {
+  return t(value === "again" ? "study.cards.didntKnow" : "study.cards.knew");
 }
 
 const FLASHCARD_EXIT_ANIMATION_MS = 193;
@@ -683,64 +704,69 @@ function getScanTranscriptFallback(detail: LectureDetail) {
   ];
 }
 
-function formatScanTranscriptLabel(label: string | null) {
-  if (!label?.trim()) {
-    return "Prepis fotografije";
+/**
+ * The label a photographed page carries in the transcript list.
+ *
+ * The stored label is the extractor's own English "Page 3", so the number is
+ * pulled out and re-rendered through the catalogue rather than having the word
+ * swapped in place — which is the same thing in Slovenian and Croatian, and not
+ * in a language that puts the number first.
+ */
+function formatScanTranscriptLabel(label: string | null, t: Translate<MessageKey>) {
+  const trimmed = label?.trim();
+
+  if (!trimmed) {
+    return t("transcript.photoLabel");
   }
 
-  return label.trim().replace(/^Page\s+(\d+)/i, "Stran $1");
+  const pageMatch = /^Page\s+(\d+)/i.exec(trimmed);
+
+  return pageMatch ? t("transcript.page", { number: pageMatch[1] }) : trimmed;
 }
 
-function studyStageLabel(stage: unknown) {
-  if (stage === "building_sections") {
-    return "Gradim učne sklope";
-  }
+/*
+ * Each generation stage maps to one message. Written as lookup tables rather
+ * than as chains of `if`, so that a stage the backend adds shows up here as a
+ * missing entry rather than as a silent fall-through to the default caption.
+ */
+const STUDY_STAGE_KEYS: Record<string, MessageKey> = {
+  building_sections: "stage.study.buildingSections",
+  planning_coverage: "stage.study.planningCoverage",
+  generating_cards: "stage.study.generatingCards",
+  repairing_coverage: "stage.study.repairingCoverage",
+  publishing_deck: "stage.study.publishingDeck",
+};
 
-  if (stage === "planning_coverage") {
-    return "Izluščujem pojme";
-  }
+const QUIZ_STAGE_KEYS: Record<string, MessageKey> = {
+  generating_questions: "stage.quiz.generating",
+  publishing_quiz: "stage.quiz.publishing",
+  ready: "stage.quiz.ready",
+};
 
-  if (stage === "generating_cards") {
-    return "Ustvarjam kartice";
-  }
+const PRACTICE_TEST_STAGE_KEYS: Record<string, MessageKey> = {
+  generating_question_bank: "stage.test.generating",
+  ready: "stage.test.ready",
+};
 
-  if (stage === "repairing_coverage") {
-    return "Zapolnjujem vrzeli";
-  }
-
-  if (stage === "publishing_deck") {
-    return "Preverjam pokritost";
-  }
-
-  return "Pripravljam učna orodja";
+function stageLabel(
+  stage: unknown,
+  keys: Record<string, MessageKey>,
+  fallback: MessageKey,
+  t: Translate<MessageKey>,
+) {
+  return t((typeof stage === "string" ? keys[stage] : undefined) ?? fallback);
 }
 
-function quizStageLabel(stage: unknown) {
-  if (stage === "generating_questions") {
-    return "Ustvarjam kviz";
-  }
-
-  if (stage === "publishing_quiz") {
-    return "Objavljam kviz";
-  }
-
-  if (stage === "ready") {
-    return "Kviz je pripravljen";
-  }
-
-  return "Pripravljam kviz";
+function studyStageLabel(stage: unknown, t: Translate<MessageKey>) {
+  return stageLabel(stage, STUDY_STAGE_KEYS, "stage.study.default", t);
 }
 
-function practiceTestStageLabel(stage: unknown) {
-  if (stage === "generating_question_bank") {
-    return "Sestavljam vprašanja";
-  }
+function quizStageLabel(stage: unknown, t: Translate<MessageKey>) {
+  return stageLabel(stage, QUIZ_STAGE_KEYS, "stage.quiz.default", t);
+}
 
-  if (stage === "ready") {
-    return "Preizkus je pripravljen";
-  }
-
-  return "Pripravljam preizkus";
+function practiceTestStageLabel(stage: unknown, t: Translate<MessageKey>) {
+  return stageLabel(stage, PRACTICE_TEST_STAGE_KEYS, "stage.test.default", t);
 }
 
 function getLectureProcessingStage(metadata: unknown) {
@@ -751,51 +777,33 @@ function getLectureProcessingStage(metadata: unknown) {
   return typeof metadata.processing.stage === "string" ? metadata.processing.stage : null;
 }
 
+const LECTURE_STAGE_KEYS: Record<string, MessageKey> = {
+  preparing_audio: "stage.lecture.preparingAudio",
+  extracting_document_text: "stage.lecture.extractingDocument",
+  extracting_scan_text: "stage.lecture.extractingScan",
+  annotating_notes: "stage.lecture.annotating",
+  checking_document_images: "stage.lecture.checkingImages",
+  reading_link: "stage.lecture.readingLink",
+};
+
+const LECTURE_STATUS_STAGE_KEYS: Record<string, MessageKey> = {
+  uploading: "stage.lecture.uploading",
+  queued: "stage.lecture.queued",
+  transcribing: "stage.lecture.transcribing",
+  generating_notes: "stage.lecture.generatingNotes",
+};
+
 function lectureProcessingStageLabel(
   status: LectureDetail["lecture"]["status"],
-  processingStage?: string | null,
+  processingStage: string | null | undefined,
+  t: Translate<MessageKey>,
 ) {
-  if (processingStage === "preparing_audio") {
-    return "Ustvarjam zvok";
-  }
+  // The named stage is more specific than the row's status, so it wins.
+  const key =
+    (processingStage ? LECTURE_STAGE_KEYS[processingStage] : undefined) ??
+    LECTURE_STATUS_STAGE_KEYS[status];
 
-  if (processingStage === "extracting_document_text") {
-    return "Berem dokument";
-  }
-
-  if (processingStage === "extracting_scan_text") {
-    return "Berem fotografije";
-  }
-
-  if (processingStage === "annotating_notes") {
-    return "Označujem pomembne dele";
-  }
-
-  if (processingStage === "checking_document_images") {
-    return "Dodajam slike iz gradiva";
-  }
-
-  if (processingStage === "reading_link") {
-    return "Berem povezavo";
-  }
-
-  if (status === "uploading") {
-    return "Nalagam gradivo";
-  }
-
-  if (status === "queued") {
-    return "Pripravljam obdelavo";
-  }
-
-  if (status === "transcribing") {
-    return "Prepisujem predavanje";
-  }
-
-  if (status === "generating_notes") {
-    return "Ustvarjam zapiske";
-  }
-
-  return "Pripravljam zapiske";
+  return t(key ?? "stage.lecture.default");
 }
 
 type GenerationPreview = "notes" | "cards" | "quiz" | "test";
@@ -890,18 +898,21 @@ function GenerationSkeleton({ kind }: { kind: GenerationPreview }) {
  */
 function StudyGenerationNotice({
   stageCopy,
-  bodyCopy = "Ustvarjanje teče v ozadju. Lahko zapreš ta pogled in se vrneš čez nekaj minut.",
+  bodyCopy,
   preview,
 }: {
   stageCopy: string;
+  /** Defaults to the generic "this runs in the background" line. */
   bodyCopy?: string;
   preview: GenerationPreview;
 }) {
+  const t = useT();
+  const body = bodyCopy ?? t("study.generatingBody");
   return (
     <div className="memo-gen" role="status" aria-live="polite" aria-busy="true">
       <div className="memo-gen-head">
         <p className="memo-gen-stage">{stageCopy}</p>
-        <p className="memo-gen-copy">{bodyCopy}</p>
+        <p className="memo-gen-copy">{body}</p>
         <span className="memo-gen-track" aria-hidden="true">
           <span />
         </span>
@@ -1242,19 +1253,13 @@ function ChatBubble({ message }: { message: ChatMessageWithCitations }) {
  * and the stylesheet picks, so this needs no viewport state on the client.
  */
 /** What the phone navbar calls each study screen. Flashcards names nothing. */
-const SUB_SCREEN_TITLES: Record<string, string> = {
-  flashcards: "",
-  quiz: "Kviz",
-  test: "Vadbeni test",
-  transcript: "Prepis",
+/* Flashcards names nothing — the design's own mapping — so it has no key. */
+const SUB_SCREEN_TITLE_KEYS: Record<string, MessageKey | null> = {
+  flashcards: null,
+  quiz: "note.tab.quiz",
+  test: "note.subScreen.test",
+  transcript: "note.tab.transcript",
 };
-
-const flipHint = (
-  <>
-    <span className="memo-only-desktop">Klikni za obrat</span>
-    <span className="memo-only-mobile">Tapni za obrat</span>
-  </>
-);
 
 export function LectureWorkspace({
   initialDetail,
@@ -1267,6 +1272,7 @@ export function LectureWorkspace({
   trialLectureId: string | null;
   initialTrialChatMessagesRemaining: number;
 }) {
+  const { locale, t } = useTranslations();
   const router = useRouter();
   const { navigateWithFeedback, overlay: navigationOverlay, navigatingTo } = useInstantNavigation();
   const notePathname = usePathname();
@@ -2070,7 +2076,7 @@ export function LectureWorkspace({
     "stage" in detail.studyAsset.model_metadata
       ? detail.studyAsset.model_metadata.stage
       : null;
-  const studyStageCopy = studyStageLabel(studyStage);
+  const studyStageCopy = studyStageLabel(studyStage, t);
   const quizStage =
     detail.quizAsset?.model_metadata &&
     typeof detail.quizAsset.model_metadata === "object" &&
@@ -2078,7 +2084,7 @@ export function LectureWorkspace({
     "stage" in detail.quizAsset.model_metadata
       ? detail.quizAsset.model_metadata.stage
       : null;
-  const quizStageCopy = quizStageLabel(quizStage);
+  const quizStageCopy = quizStageLabel(quizStage, t);
   const practiceTestStage =
     detail.practiceTestAsset?.model_metadata &&
     typeof detail.practiceTestAsset.model_metadata === "object" &&
@@ -2086,10 +2092,23 @@ export function LectureWorkspace({
     "stage" in detail.practiceTestAsset.model_metadata
       ? detail.practiceTestAsset.model_metadata.stage
       : null;
-  const practiceTestStageCopy = practiceTestStageLabel(practiceTestStage);
+  const practiceTestStageCopy = practiceTestStageLabel(practiceTestStage, t);
   const lectureProcessingStageCopy = lectureProcessingStageLabel(
     detail.lecture.status,
     getLectureProcessingStage(detail.lecture.processing_metadata),
+    t,
+  );
+
+  /*
+   * "Click to flip" on a mouse, "Tap to flip" on a phone. Both are rendered and
+   * the stylesheet shows one — the breakpoint is a CSS fact here, not a
+   * JavaScript one, so there is nothing to measure.
+   */
+  const flipHint = (
+    <>
+      <span className="memo-only-desktop">{t("study.cards.flipDesktop")}</span>
+      <span className="memo-only-mobile">{t("study.cards.flipMobile")}</span>
+    </>
   );
   const totalFlashcards = studyDeck.length;
   const flashcardFirstPassKnownCount = studyDeck.reduce((total, flashcard) => {
@@ -2233,14 +2252,14 @@ export function LectureWorkspace({
       const response = await fetch(`/api/lectures/${detail.lecture.id}/study`, {
         method: "POST",
       });
-      await parseApiResponse<{ ok: true }>(response);
+      await parseApiResponse<{ ok: true }>(response, t);
     } catch (error) {
       if (redirectToBillingIfNeeded({ error, router })) {
         return;
       }
 
       setIsAwaitingStudyGeneration(false);
-      setStudyError(getRequestErrorMessage(error, "Učnih orodij ni bilo mogoče ponovno ustvariti."));
+      setStudyError(getRequestErrorMessage(error, t("error.studyRegenerate"), t));
       return;
     } finally {
       setIsRegeneratingStudy(false);
@@ -2258,14 +2277,14 @@ export function LectureWorkspace({
       const response = await fetch(`/api/lectures/${detail.lecture.id}/quiz`, {
         method: "POST",
       });
-      await parseApiResponse<{ ok: true }>(response);
+      await parseApiResponse<{ ok: true }>(response, t);
     } catch (error) {
       if (redirectToBillingIfNeeded({ error, router })) {
         return;
       }
 
       setIsAwaitingQuizGeneration(false);
-      setStudyError(getRequestErrorMessage(error, "Kviza ni bilo mogoče ustvariti."));
+      setStudyError(getRequestErrorMessage(error, t("error.quizCreate"), t));
       return;
     } finally {
       setIsRegeneratingQuiz(false);
@@ -2288,7 +2307,7 @@ export function LectureWorkspace({
       const response = await fetch(`/api/lectures/${detail.lecture.id}/practice-test/attempt`, {
         method: "POST",
       });
-      payload = await parseApiResponse(response);
+      payload = await parseApiResponse(response, t);
     } catch (error) {
       if (redirectToBillingIfNeeded({ error, router })) {
         return;
@@ -2296,7 +2315,7 @@ export function LectureWorkspace({
 
       setIsAwaitingPracticeTestGeneration(false);
       setStudyError(
-        getRequestErrorMessage(error, "Novega preizkusa ni bilo mogoče začeti."),
+        getRequestErrorMessage(error, t("error.testStart"), t),
       );
       return;
     } finally {
@@ -2520,14 +2539,14 @@ export function LectureWorkspace({
       );
       payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
     } catch (error) {
-      setStudyError(getRequestErrorMessage(error, "Preizkusa ni bilo mogoče oddati."));
+      setStudyError(getRequestErrorMessage(error, t("error.testSubmit"), t));
       return;
     } finally {
       setIsSubmittingPracticeTest(false);
     }
 
     if (!response.ok) {
-      setStudyError(getApiErrorMessage(payload, "Preizkusa ni bilo mogoče oddati."));
+      setStudyError(getApiErrorMessage(payload, t("error.testSubmit")));
       return;
     }
 
@@ -2681,7 +2700,7 @@ export function LectureWorkspace({
       setRepeatQueue(previousRepeatQueue);
       setActiveFlashcardIndex(previousActiveFlashcardIndex);
       setFlashcardRoundSummary(previousRoundSummary);
-      setStudyError(getRequestErrorMessage(error, "Napredka pri karticah ni bilo mogoče shraniti."));
+      setStudyError(getRequestErrorMessage(error, t("error.cardProgress"), t));
       return;
     }
 
@@ -2703,7 +2722,7 @@ export function LectureWorkspace({
       setActiveFlashcardIndex(previousActiveFlashcardIndex);
       setFlashcardRoundSummary(previousRoundSummary);
       setStudyError(
-        getApiErrorMessage(payload, "Napredka pri karticah ni bilo mogoče shraniti."),
+        getApiErrorMessage(payload, t("error.cardProgress")),
       );
       return;
     }
@@ -2943,10 +2962,10 @@ export function LectureWorkspace({
        * event stream is read frame by frame, anything else is parsed as before.
        */
       payload = response.headers.get("Content-Type")?.includes("text/event-stream")
-        ? await readChatStream<ChatResponse>(response, setStreamingAnswer)
+        ? await readChatStream<ChatResponse>(response, setStreamingAnswer, t)
         : ((await response.json().catch(() => null)) as ChatResponse | null);
     } catch (error) {
-      setChatError(getRequestErrorMessage(error, "Odgovora ni bilo mogoče ustvariti."));
+      setChatError(getRequestErrorMessage(error, t("chat.error.answerFailed"), t));
       setDetail((current) => ({
         ...current,
         chatMessages: current.chatMessages.filter(
@@ -2964,7 +2983,7 @@ export function LectureWorkspace({
         setTrialChatMessagesRemaining(0);
         setChatError(null);
       } else {
-        setChatError(getApiErrorMessage(payload, "Odgovora ni bilo mogoče ustvariti."));
+        setChatError(getApiErrorMessage(payload, t("chat.error.answerFailed")));
       }
 
       setDetail((current) => ({
@@ -2978,7 +2997,7 @@ export function LectureWorkspace({
 
     const chatAnswer = payload?.answer;
     if (!chatAnswer) {
-      setChatError("Odgovora ni bilo mogoče ustvariti.");
+      setChatError(t("chat.error.answerFailed"));
       setDetail((current) => ({
         ...current,
         chatMessages: current.chatMessages.filter(
@@ -3303,7 +3322,7 @@ export function LectureWorkspace({
           byteSize: file.size,
         }),
       });
-      const uploadPayload = await parseApiResponse<NoteMediaUploadResponse>(uploadResponse);
+      const uploadPayload = await parseApiResponse<NoteMediaUploadResponse>(uploadResponse, t);
       const supabase = createSupabaseBrowserClient();
       const uploadResult = await supabase.storage
         .from(STORAGE_BUCKET)
@@ -3330,7 +3349,7 @@ export function LectureWorkspace({
           expectedRevision: detail.editableNoteRevision,
         }),
       });
-      const finalizePayload = await parseApiResponse<NoteMediaFinalizeResponse>(finalizeResponse);
+      const finalizePayload = await parseApiResponse<NoteMediaFinalizeResponse>(finalizeResponse, t);
 
       applySavedNoteDoc(finalizePayload);
 
@@ -3371,7 +3390,7 @@ export function LectureWorkspace({
             : current.artifact,
         };
       });
-      setNoteError(getRequestErrorMessage(error, "Fotografije ni bilo mogoče dodati."));
+      setNoteError(getRequestErrorMessage(error, t("error.photoAdd"), t));
     } finally {
       setOptimisticNoteMedia((current) =>
         current.filter((media) => media.id !== optimisticMediaId),
@@ -3461,7 +3480,7 @@ export function LectureWorkspace({
       const response = await fetch(`/api/lectures/${detail.lecture.id}/note-media/${mediaId}`, {
         method: "DELETE",
       });
-      const payload = await parseApiResponse<NotesDocResponse & { deletedMediaId?: string }>(response);
+      const payload = await parseApiResponse<NotesDocResponse & { deletedMediaId?: string }>(response, t);
       applySavedNoteDoc(payload);
       setDetail((current) => ({
         ...current,
@@ -3469,7 +3488,7 @@ export function LectureWorkspace({
       }));
       setSelectedMediaBlockId(null);
     } catch (error) {
-      setNoteError(getRequestErrorMessage(error, "Fotografije ni bilo mogoče izbrisati."));
+      setNoteError(getRequestErrorMessage(error, t("error.photoDelete"), t));
     } finally {
       deletingNoteMediaIdsRef.current.delete(mediaId);
       setDeletingNoteMediaIds(new Set(deletingNoteMediaIdsRef.current));
@@ -3782,7 +3801,7 @@ export function LectureWorkspace({
           }),
         },
       );
-      const payload = await parseApiResponse<FlashcardMutationResponse>(response);
+      const payload = await parseApiResponse<FlashcardMutationResponse>(response, t);
       const savedFlashcard = payload.flashcard;
 
       setDetail((current) => {
@@ -3813,7 +3832,7 @@ export function LectureWorkspace({
 
       startFlashcardCreate();
     } catch (error) {
-      setStudyError(getRequestErrorMessage(error, "Kartice ni bilo mogoče shraniti."));
+      setStudyError(getRequestErrorMessage(error, t("error.cardSave"), t));
     } finally {
       setIsSavingStudyItem(false);
     }
@@ -3833,7 +3852,7 @@ export function LectureWorkspace({
       const response = await fetch(`/api/flashcards/${flashcardId}`, {
         method: "DELETE",
       });
-      await parseApiResponse<{ deletedFlashcardId: string }>(response);
+      await parseApiResponse<{ deletedFlashcardId: string }>(response, t);
       setDetail((current) => ({
         ...current,
         flashcards: current.flashcards.filter((flashcard) => flashcard.id !== flashcardId),
@@ -3847,7 +3866,7 @@ export function LectureWorkspace({
       });
       setActiveFlashcardIndex((current) => Math.max(0, current - 1));
     } catch (error) {
-      setStudyError(getRequestErrorMessage(error, "Kartice ni bilo mogoče izbrisati."));
+      setStudyError(getRequestErrorMessage(error, t("error.cardDelete"), t));
     } finally {
       deletingStudyItemIdsRef.current.delete(flashcardId);
       setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
@@ -3875,7 +3894,7 @@ export function LectureWorkspace({
           body: JSON.stringify(quizQuestionForm),
         },
       );
-      const payload = await parseApiResponse<QuizQuestionMutationResponse>(response);
+      const payload = await parseApiResponse<QuizQuestionMutationResponse>(response, t);
       const savedQuestion = payload.question;
 
       setDetail((current) => {
@@ -3917,7 +3936,7 @@ export function LectureWorkspace({
 
       startQuizQuestionCreate();
     } catch (error) {
-      setStudyError(getRequestErrorMessage(error, "Vprašanja ni bilo mogoče shraniti."));
+      setStudyError(getRequestErrorMessage(error, t("error.questionSave"), t));
     } finally {
       setIsSavingStudyItem(false);
     }
@@ -3937,7 +3956,7 @@ export function LectureWorkspace({
       const response = await fetch(`/api/lectures/${detail.lecture.id}/quiz/questions/${questionId}`, {
         method: "DELETE",
       });
-      await parseApiResponse<{ deletedQuestionId: string }>(response);
+      await parseApiResponse<{ deletedQuestionId: string }>(response, t);
       setDetail((current) => ({
         ...current,
         quizQuestions: current.quizQuestions.filter((question) => question.id !== questionId),
@@ -3955,7 +3974,7 @@ export function LectureWorkspace({
       });
       setActiveQuizQuestionIndex((current) => Math.max(0, current - 1));
     } catch (error) {
-      setStudyError(getRequestErrorMessage(error, "Vprašanja ni bilo mogoče izbrisati."));
+      setStudyError(getRequestErrorMessage(error, t("error.questionDelete"), t));
     } finally {
       deletingStudyItemIdsRef.current.delete(questionId);
       setDeletingStudyItemIds(new Set(deletingStudyItemIdsRef.current));
@@ -3984,9 +4003,8 @@ export function LectureWorkspace({
               <Image src="/memo-mascot.png" alt="" width={320} height={288} />
             </span>
             <p>
-              Živjo, jaz sem Memo AI. Vprašaj me karkoli o tem predavanju — povzetek, razlago
-              pojma ali primer za izpit.
-              {showsTranscript ? " Kot kontekst uporabim zapiske in prepis." : ""}
+              {t("chat.intro")}
+              {showsTranscript ? t("chat.introTranscript") : ""}
             </p>
           </div>
 
@@ -4012,14 +4030,16 @@ export function LectureWorkspace({
         <div className="memo-chat-foot">
           {detail.chatMessages.length === 0 && !composerDisabled ? (
             <div className="memo-chip-row memo-chiprow">
-              {CHAT_SUGGESTIONS.map((suggestion) => (
+              {CHAT_SUGGESTIONS.map((suggestionKey) => (
                 <button
-                  key={suggestion}
+                  key={suggestionKey}
                   type="button"
                   className="memo-chip"
-                  onClick={() => void submitChatQuestion(suggestion)}
+                  /* The prompt is sent as it reads on screen: the assistant
+                     answers in the language it is asked in. */
+                  onClick={() => void submitChatQuestion(t(suggestionKey))}
                 >
-                  {suggestion}
+                  {t(suggestionKey)}
                 </button>
               ))}
             </div>
@@ -4031,8 +4051,8 @@ export function LectureWorkspace({
               onChange={(event) => setQuestion(event.target.value)}
               onKeyDown={handleChatKeyDown}
               disabled={composerDisabled}
-              placeholder="Napiši svoje vprašanje"
-              aria-label="Napiši svoje vprašanje"
+              placeholder={t("chat.placeholder")}
+              aria-label={t("chat.placeholder")}
             />
             {/*
               * One control, two jobs: an empty field offers the microphone, and
@@ -4051,10 +4071,10 @@ export function LectureWorkspace({
                 aria-pressed={dictation.listening}
                 aria-label={
                   dictation.transcribing
-                    ? "Prepisujem povedano"
+                    ? t("chat.dictate.transcribing")
                     : dictation.listening
-                      ? "Ustavi narekovanje"
-                      : "Narekuj vprašanje"
+                      ? t("chat.dictate.stop")
+                      : t("chat.dictate.start")
                 }
               >
                 {dictation.transcribing ? (
@@ -4068,7 +4088,7 @@ export function LectureWorkspace({
                 type="submit"
                 disabled={composerDisabled}
                 className={`memo-chat-send ${question.trim() ? "ready" : ""}`.trim()}
-                aria-label="Pošlji sporočilo"
+                aria-label={t("chat.send")}
               >
                 {isSending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -4082,22 +4102,20 @@ export function LectureWorkspace({
           {dictation.error ? (
             <p className="memo-chat-status danger">{dictation.error}</p>
           ) : dictation.transcribing ? (
-            <p className="memo-chat-status">Prepisujem povedano…</p>
+            <p className="memo-chat-status">{t("chat.status.transcribing")}</p>
           ) : chatError ? (
             <p className="memo-chat-status danger">{chatError}</p>
           ) : detail.lecture.status !== "ready" ? (
-            <p className="memo-chat-status">Na voljo bo po koncu obdelave.</p>
+            <p className="memo-chat-status">{t("chat.status.notReady")}</p>
           ) : chatLimitReached ? (
             <div className="memo-chat-limit">
-              <p className="memo-chat-status">
-                Porabil si brezplačna sporočila za ta zapisek.
-              </p>
+              <p className="memo-chat-status">{t("chat.limitReached")}</p>
               <button
                 type="button"
                 className="memo-button-outline small"
                 onClick={() => navigateWithFeedback(startHref)}
               >
-                Nadgradi
+                {t("chat.upgrade")}
               </button>
             </div>
           ) : null}
@@ -4121,8 +4139,8 @@ export function LectureWorkspace({
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => notePhotoInputRef.current?.click()}
           disabled={isSavingNoteDoc || !selectedNoteBlockId}
-          aria-label="Dodaj fotografijo"
-          title="Dodaj fotografijo"
+          aria-label={t("note.annotate.photo")}
+          title={t("note.annotate.photo")}
         >
           <Msym name="add_photo_alternate" size="1.25rem" fill={false} weight={500} />
         </button>
@@ -4136,8 +4154,8 @@ export function LectureWorkspace({
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => void handleApplyAnnotation("highlight")}
             disabled={isSavingNoteDoc}
-            aria-label="Označi"
-            title="Označi"
+            aria-label={t("note.annotate.highlight")}
+            title={t("note.annotate.highlight")}
             style={
               {
                 "--marker-cur": activeHighlightColor.value,
@@ -4146,7 +4164,7 @@ export function LectureWorkspace({
             }
           >
             <Msym name="ink_highlighter" size="1.25rem" fill={false} weight={500} />
-            <span className="memo-annotate-label">Označi</span>
+            <span className="memo-annotate-label">{t("note.annotate.highlight")}</span>
           </button>
           <button
             type="button"
@@ -4154,8 +4172,8 @@ export function LectureWorkspace({
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => void handleApplyAnnotation("underline")}
             disabled={isSavingNoteDoc}
-            aria-label="Podčrtaj"
-            title="Podčrtaj"
+            aria-label={t("note.annotate.underline")}
+            title={t("note.annotate.underline")}
           >
             <span
               className="memo-annotate-underline"
@@ -4170,15 +4188,15 @@ export function LectureWorkspace({
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => setIsHighlightPaletteOpen((current) => !current)}
             disabled={isSavingNoteDoc}
-            aria-label="Barva"
-            title="Barva"
+            aria-label={t("note.annotate.color")}
+            title={t("note.annotate.color")}
           >
             <Msym name="palette" size="1.25rem" fill={false} weight={500} />
           </button>
           {photoDockButton}
           <div
             className={`memo-swatches ${isHighlightPaletteOpen ? "open" : ""}`.trim()}
-            aria-label="Barva označevanja"
+            aria-label={t("note.annotate.colorGroup")}
           >
             {NOTE_HIGHLIGHT_COLORS.map((color) => (
               <button
@@ -4274,16 +4292,16 @@ export function LectureWorkspace({
             <div className="memo-note-body">
               <StudyGenerationNotice
                 preview="notes"
-                stageCopy={notesArtifactLoadFailed ? "Nalaganje zapiskov" : lectureProcessingStageCopy}
-                bodyCopy={
-                  notesArtifactLoadFailed
-                    ? "Zapiski so pripravljeni, vendar se niso naložili v tem poskusu. Poskušamo znova."
-                    : "Obdelava teče v ozadju. Lahko zapreš ta pogled in se vrneš čez nekaj minut."
+                stageCopy={
+                  notesArtifactLoadFailed ? t("note.loadingNotes") : lectureProcessingStageCopy
                 }
+                bodyCopy={t(
+                  notesArtifactLoadFailed ? "note.loadFailedBody" : "note.processingBody",
+                )}
               />
             </div>
           ) : (
-            <p className="ios-info lecture-empty-message">Zapiski še niso pripravljeni.</p>
+            <p className="ios-info lecture-empty-message">{t("note.notReady")}</p>
           )}
         </div>
       );
@@ -4296,9 +4314,7 @@ export function LectureWorkspace({
       const currentFlashcardAnswerLabel =
         currentFlashcardAnswer == null
           ? null
-          : currentFlashcardAnswer === "again"
-            ? "Nisem vedel"
-            : "Vedel sem";
+          : t(currentFlashcardAnswer === "again" ? "study.cards.didntKnow" : "study.cards.knew");
       const currentFlashcardAnswerClass =
         currentFlashcardAnswer == null
           ? "unanswered"
@@ -4425,28 +4441,28 @@ export function LectureWorkspace({
                       onClick={openStudyManager}
                     >
                       <Msym name="edit_square" size="1.2rem" fill={false} weight={500} />
-                      <span>Uredi</span>
+                      <span>{t("study.edit")}</span>
                     </button>
                   ) : null}
                   {activeStudyView === "practice_test" ? (
-                    <span className="lecture-study-status demo">Demo</span>
+                    <span className="lecture-study-status demo">{t("study.demoBadge")}</span>
                   ) : null}
                 </div>
               </div>
 
               <div className="ios-segmented lecture-study-mode-switch">
                 {([
-                  { id: "flashcards", label: "Flashcards" },
-                  { id: "quiz", label: "Kviz" },
-                  { id: "practice_test", label: "Test" },
-                ] as const).map((item) => (
+                  { id: "flashcards", labelKey: "note.tab.flashcards" },
+                  { id: "quiz", labelKey: "note.tab.quiz" },
+                  { id: "practice_test", labelKey: "note.tab.test" },
+                ] as const satisfies ReadonlyArray<{ id: StudyMaterialView; labelKey: MessageKey }>).map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => setActiveStudyView(item.id)}
                     className={`ios-segment ${activeStudyView === item.id ? "active" : ""}`}
                   >
-                    <span>{item.label}</span>
+                    <span>{t(item.labelKey)}</span>
                   </button>
                 ))}
               </div>
@@ -4467,15 +4483,17 @@ export function LectureWorkspace({
                     </div>
                     <p className="memo-study-empty-title">
                       {detail.lecture.status !== "ready"
-                        ? "Učna orodja se odklenejo, ko je obdelava zapiska končana."
+                        ? t("study.locked")
                         : detail.studyAsset?.status === "failed"
-                          ? "Ustvarjanje kartic ni uspelo."
-                          : "Ustvari kartice, ko si pripravljen."}
+                          ? t("study.cards.failed")
+                          : t("study.cards.emptyTitle")}
                     </p>
                     <p className="memo-study-empty-copy">
-                      {detail.lecture.status !== "ready"
-                        ? "Najprej nastanejo zapiski. Nato lahko kartice ustvariš ročno."
-                        : "Ustvari učni komplet v istem jeziku in iz iste vsebine kot tvoji zapiski."}
+                      {t(
+                        detail.lecture.status !== "ready"
+                          ? "study.cards.lockedBody"
+                          : "study.cards.emptyBody",
+                      )}
                     </p>
                     {detail.lecture.status === "ready" ? (
                       <button
@@ -4489,7 +4507,7 @@ export function LectureWorkspace({
                         ) : (
                           <Msym name="style" size="1.2rem" fill={false} weight={500} />
                         )}
-                        Ustvari kartice
+                        {t("study.cards.create")}
                       </button>
                     ) : null}
                   </div>
@@ -4498,18 +4516,24 @@ export function LectureWorkspace({
                 <StudyCompletionCard
                   eyebrow={
                     visibleFlashcardRoundSummary.missed === 0
-                      ? "Zaključeno"
-                      : `Krog ${visibleFlashcardRoundSummary.cycle} zaključen`
+                      ? t("study.completed")
+                      : t("study.roundCompleted", { cycle: visibleFlashcardRoundSummary.cycle })
                   }
                   title={
-                    visibleFlashcardRoundSummary.missed === 0
-                      ? "Vse kartice so predelane"
-                      : "Ponovi kartice, ki si jih zgrešil"
+                    t(
+                      visibleFlashcardRoundSummary.missed === 0
+                        ? "study.cards.allDone"
+                        : "study.cards.repeatMissed",
+                    )
                   }
                   percentage={visibleFlashcardRoundSummary.missed === 0 ? 100 : visibleFlashcardRoundPercent}
-                  percentageLabel={visibleFlashcardRoundSummary.missed === 0 ? "Komplet opravljen" : "Rezultat kroga"}
+                  percentageLabel={t(
+                    visibleFlashcardRoundSummary.missed === 0
+                      ? "study.setCompleted"
+                      : "study.roundScore",
+                  )}
                   primaryMetric={{
-                    label: "Pravilno v tem krogu",
+                    label: t("study.correctThisRound"),
                     value: `${visibleFlashcardRoundSummary.known}/${visibleFlashcardRoundSummary.total}`,
                   }}
                   actions={
@@ -4518,11 +4542,11 @@ export function LectureWorkspace({
                         type="button"
                         onClick={restartFlashcardReview}
                         className="lecture-study-refresh lecture-study-restart"
-                        aria-label="Začni znova"
-                        title="Začni znova"
+                        aria-label={t("study.restart")}
+                        title={t("study.restart")}
                       >
                         <Msym name="replay" size="1.2rem" fill={false} weight={500} />
-                        Začni komplet znova
+                        {t("study.restartSet")}
                       </button>
                     ) : (
                       <button
@@ -4531,8 +4555,9 @@ export function LectureWorkspace({
                         className="lecture-study-refresh lecture-study-restart"
                       >
                         <Msym name="replay" size="1.2rem" fill={false} weight={500} />
-                        Ponovi {visibleFlashcardRoundSummary.missed}{" "}
-                        {visibleFlashcardRoundSummary.missed === 1 ? "zgrešeno kartico" : "zgrešene kartice"}
+                        {t("study.repeatMissedCards", {
+                          count: visibleFlashcardRoundSummary.missed,
+                        })}
                       </button>
                     )
                   }
@@ -4543,10 +4568,12 @@ export function LectureWorkspace({
                       progress bar. */}
                   <div className="memo-study-head">
                     <span className="memo-study-head-title">
-                      Kartica {activeFlashcardIndex + 1}
+                      {t("study.cards.cardN", { index: activeFlashcardIndex + 1 })}
                     </span>
                     <span className="memo-study-head-count">
-                      {Math.max(0, reviewQueue.length - activeFlashcardIndex - 1)} ostalo
+                      {t("study.cards.remaining", {
+                        count: Math.max(0, reviewQueue.length - activeFlashcardIndex - 1),
+                      })}
                     </span>
                   </div>
                   <div className="memo-progress cards">
@@ -4648,8 +4675,8 @@ export function LectureWorkspace({
                         onClick={() => handleFlashcardNavigate("previous")}
                         disabled={!canNavigatePreviousFlashcard}
                         className="lecture-flashcard-nav-button previous"
-                        aria-label="Prejšnja kartica"
-                        title="Prejšnja kartica"
+                        aria-label={t("study.cards.previous")}
+                        title={t("study.cards.previous")}
                       >
                         <ArrowLeft aria-hidden="true" />
                       </button>
@@ -4659,8 +4686,8 @@ export function LectureWorkspace({
                         className={`lecture-flashcard-review-button again ${
                           currentFlashcardAnswer === "again" ? "selected" : ""
                         }`}
-                        aria-label={confidenceLabel("again")}
-                        title={confidenceLabel("again")}
+                        aria-label={confidenceLabel("again", t)}
+                        title={confidenceLabel("again", t)}
                       >
                         <X aria-hidden="true" />
                         <span>{flashcardMissedCount}</span>
@@ -4671,8 +4698,8 @@ export function LectureWorkspace({
                         className={`lecture-flashcard-review-button easy ${
                           currentFlashcardAnswer && currentFlashcardAnswer !== "again" ? "selected" : ""
                         }`}
-                        aria-label={confidenceLabel("easy")}
-                        title={confidenceLabel("easy")}
+                        aria-label={confidenceLabel("easy", t)}
+                        title={confidenceLabel("easy", t)}
                       >
                         <span>{flashcardKnownCount}</span>
                         <Check aria-hidden="true" />
@@ -4682,8 +4709,8 @@ export function LectureWorkspace({
                         onClick={() => handleFlashcardNavigate("next")}
                         disabled={!canNavigateNextFlashcard}
                         className="lecture-flashcard-nav-button next"
-                        aria-label="Naslednja kartica"
-                        title="Naslednja kartica"
+                        aria-label={t("study.cards.next")}
+                        title={t("study.cards.next")}
                       >
                         <ArrowRight aria-hidden="true" />
                       </button>
@@ -4692,12 +4719,12 @@ export function LectureWorkspace({
                 </>
               ) : (
                 <StudyCompletionCard
-                  eyebrow="Zaključeno"
-                  title="Učenje s karticami je končano"
+                  eyebrow={t("study.completed")}
+                  title={t("study.cards.finishedTitle")}
                   percentage={flashcardConfidencePercent}
-                  percentageLabel="Rezultat"
+                  percentageLabel={t("study.score")}
                   primaryMetric={{
-                    label: "Pravilni odgovori",
+                    label: t("study.correctAnswers"),
                     value: `${flashcardFirstPassKnownCount}/${totalFlashcards}`,
                   }}
                   actions={
@@ -4705,11 +4732,11 @@ export function LectureWorkspace({
                       type="button"
                       onClick={restartFlashcardReview}
                       className="lecture-study-refresh lecture-study-restart"
-                      aria-label="Začni znova"
-                      title="Začni znova"
+                      aria-label={t("study.restart")}
+                      title={t("study.restart")}
                     >
                       <Msym name="replay" size="1.2rem" fill={false} weight={500} />
-                      Začni komplet znova
+                      {t("study.restartSet")}
                     </button>
                   }
                 />
@@ -4725,15 +4752,17 @@ export function LectureWorkspace({
                     </div>
                     <p className="memo-study-empty-title">
                       {detail.lecture.status !== "ready"
-                        ? "Učna orodja se odklenejo, ko je obdelava zapiska končana."
+                        ? t("study.locked")
                         : detail.quizAsset?.status === "failed"
-                          ? "Ustvarjanje kviza ni uspelo."
-                          : "Ustvari kviz, ko si pripravljen."}
+                          ? t("study.quiz.failed")
+                          : t("study.quiz.emptyTitle")}
                     </p>
                     <p className="memo-study-empty-copy">
-                      {detail.lecture.status !== "ready"
-                        ? "Najprej nastanejo zapiski. Nato lahko kvize ustvariš ročno."
-                        : "Ustvari vprašanja z več izbirami v istem jeziku kot tvoji zapiski."}
+                      {t(
+                        detail.lecture.status !== "ready"
+                          ? "study.quiz.lockedBody"
+                          : "study.quiz.emptyBody",
+                      )}
                     </p>
                     {detail.lecture.status === "ready" ? (
                       <button
@@ -4747,7 +4776,7 @@ export function LectureWorkspace({
                         ) : (
                           <Msym name="quiz" size="1.2rem" fill={false} weight={500} />
                         )}
-                        Ustvari kviz
+                        {t("study.quiz.create")}
                       </button>
                     ) : null}
                   </div>
@@ -4756,18 +4785,22 @@ export function LectureWorkspace({
                 <StudyCompletionCard
                   eyebrow={
                     quizRoundSummary.missed === 0
-                      ? "Zaključeno"
-                      : `Krog ${quizRoundSummary.cycle} zaključen`
+                      ? t("study.completed")
+                      : t("study.roundCompleted", { cycle: quizRoundSummary.cycle })
                   }
                   title={
-                    quizRoundSummary.missed === 0
-                      ? "Vsa vprašanja so predelana"
-                      : "Ponovi vprašanja, ki si jih zgrešil"
+                    t(quizRoundSummary.missed === 0 ? "quiz.allDone" : "quiz.repeatMissed")
                   }
                   percentage={quizRoundSummary.missed === 0 ? 100 : quizRoundPercent}
-                  percentageLabel={quizRoundSummary.missed === 0 ? "Komplet opravljen" : "Rezultat kroga"}
+                  percentageLabel={t(
+                    quizRoundSummary.missed === 0 ? "study.setCompleted" : "study.roundScore",
+                  )}
                   primaryMetric={{
-                    label: quizRoundSummary.missed === 0 ? "Predelana vprašanja" : "Pravilno v tem krogu",
+                    label: t(
+                      quizRoundSummary.missed === 0
+                        ? "quiz.questionsDone"
+                        : "study.correctThisRound",
+                    ),
                     value:
                       quizRoundSummary.missed === 0
                         ? `${totalQuizQuestions}/${totalQuizQuestions}`
@@ -4781,7 +4814,7 @@ export function LectureWorkspace({
                         className="lecture-study-refresh lecture-study-restart"
                       >
                         <Msym name="replay" size="1.2rem" fill={false} weight={500} />
-                        Začni kviz znova
+                        {t("quiz.restart")}
                       </button>
                     ) : (
                       <button
@@ -4790,8 +4823,7 @@ export function LectureWorkspace({
                         className="lecture-study-refresh lecture-study-restart"
                       >
                         <Msym name="replay" size="1.2rem" fill={false} weight={500} />
-                        Ponovi {quizRoundSummary.missed}{" "}
-                        {quizRoundSummary.missed === 1 ? "zgrešeno vprašanje" : "zgrešena vprašanja"}
+                        {t("quiz.repeatMissedQuestions", { count: quizRoundSummary.missed })}
                       </button>
                     )
                   }
@@ -4806,9 +4838,11 @@ export function LectureWorkspace({
                       the right. */}
                   <div className="memo-quiz-head">
                     <span className="memo-quiz-count">
-                      Vprašanje {activeQuizQuestionIndex + 1}
-                      <span className="memo-only-desktop"> od {quizRoundCount}</span>
-                      {quizRound > 1 ? ` · Krog ${quizRound}` : ""}
+                      {t("quiz.questionN", { index: activeQuizQuestionIndex + 1 })}
+                      <span className="memo-only-desktop">
+                        {t("quiz.ofTotal", { total: quizRoundCount })}
+                      </span>
+                      {quizRound > 1 ? t("quiz.roundN", { round: quizRound }) : ""}
                     </span>
                     <span className="memo-quiz-total memo-only-mobile">
                       {activeQuizQuestionIndex + 1} / {quizRoundCount}
@@ -4827,7 +4861,7 @@ export function LectureWorkspace({
                   </div>
 
                   <div className="lecture-quiz-card">
-                    <span className="memo-quiz-eyebrow">Izberi en odgovor</span>
+                    <span className="memo-quiz-eyebrow">{t("quiz.chooseOne")}</span>
                     <p className="lecture-quiz-prompt">{activeQuizQuestion.prompt}</p>
 
                     <div className="lecture-quiz-options">
@@ -4870,8 +4904,10 @@ export function LectureWorkspace({
                           <Msym name="cancel" size="1.25rem" />
                         </span>
                         <span className="memo-quiz-result-copy">
-                          <span className="memo-quiz-result-title">Ups, ni pravilno.</span>
-                          <span>Pravilen odgovor je {correctQuizOptionLetter}</span>
+                          <span className="memo-quiz-result-title">{t("quiz.wrongTitle")}</span>
+                          <span>
+                            {t("quiz.correctAnswerIs", { letter: correctQuizOptionLetter })}
+                          </span>
                         </span>
                         <div className="memo-quiz-result-actions">
                           <button
@@ -4879,14 +4915,14 @@ export function LectureWorkspace({
                             onClick={reviewQuizAnswerInChat}
                             className="memo-quiz-result-ghost"
                           >
-                            Preglej zakaj
+                            {t("quiz.reviewWhy")}
                           </button>
                           <button
                             type="button"
                             onClick={() => moveQuizQuestion(1)}
                             className="memo-quiz-result-primary"
                           >
-                            Razumem
+                            {t("quiz.understood")}
                           </button>
                         </div>
                       </div>
@@ -4895,12 +4931,12 @@ export function LectureWorkspace({
                 </div>
               ) : (
                 <StudyCompletionCard
-                  eyebrow="Odlično"
-                  title="Kviz je zaključen"
+                  eyebrow={t("quiz.excellent")}
+                  title={t("quiz.finished")}
                   percentage={100}
-                  percentageLabel="Komplet opravljen"
+                  percentageLabel={t("study.setCompleted")}
                   primaryMetric={{
-                    label: "Predelana vprašanja",
+                    label: t("quiz.questionsDone"),
                     value: `${totalQuizQuestions}/${totalQuizQuestions}`,
                   }}
                   actions={
@@ -4910,7 +4946,7 @@ export function LectureWorkspace({
                       className="lecture-study-refresh lecture-study-restart"
                     >
                       <Msym name="replay" size="1.2rem" fill={false} weight={500} />
-                      Začni kviz znova
+                      {t("quiz.restart")}
                     </button>
                   }
                 />
@@ -4925,19 +4961,23 @@ export function LectureWorkspace({
                   </div>
                   <p className="memo-study-empty-title">
                     {detail.lecture.status !== "ready"
-                      ? "Učna orodja se odklenejo, ko je obdelava zapiska končana."
+                      ? t("study.locked")
                       : detail.practiceTestAsset?.status === "failed"
-                        ? "Ustvarjanje preizkusa ni uspelo."
-                        : hasCompletedPracticeTest
-                          ? "Začni nov preizkus, ko si pripravljen."
-                          : "Ustvari svoj prvi preizkus."}
+                        ? t("study.test.failed")
+                        : t(
+                            hasCompletedPracticeTest
+                              ? "study.test.emptyTitleAgain"
+                              : "study.test.emptyTitleNew",
+                          )}
                   </p>
                   <p className="memo-study-empty-copy">
                     {detail.lecture.status !== "ready"
-                      ? "Najprej nastanejo zapiski. Nato lahko začneš preizkus."
-                      : hasCompletedPracticeTest
-                        ? "Vsak nov preizkus prinese nov naključen nabor odprtih vprašanj."
-                        : "Najprej ustvari prvi nabor samostojnih odprtih vprašanj, nato preglej rezultate in po koncu začni nove preizkuse."}
+                      ? t("study.test.lockedBody")
+                      : t(
+                          hasCompletedPracticeTest
+                            ? "study.test.emptyBodyAgain"
+                            : "study.test.emptyBodyNew",
+                        )}
                   </p>
                   {detail.lecture.status === "ready" ? (
                     <button
@@ -4949,7 +4989,9 @@ export function LectureWorkspace({
                       {isStartingPracticeTest ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : null}
-                      {hasCompletedPracticeTest ? "Začni nov preizkus" : "Ustvari preizkus"}
+                      {t(
+                        hasCompletedPracticeTest ? "study.test.startNew" : "study.test.create",
+                      )}
                     </button>
                   ) : null}
                 </div>
@@ -4977,7 +5019,9 @@ export function LectureWorkspace({
                   <div className="lecture-practice-shell">
                     <div className="lecture-practice-stage">
                       <div className="memo-test-meta">
-                        <span className="memo-test-no">Vprašanje {index + 1}</span>
+                        <span className="memo-test-no">
+                          {t("quiz.questionN", { index: index + 1 })}
+                        </span>
                         <span className="memo-test-count">
                           {index + 1} / {total}
                         </span>
@@ -4991,14 +5035,14 @@ export function LectureWorkspace({
                       </div>
 
                       <p className="lecture-practice-prompt">
-                        {answer.question?.prompt ?? "Vprašanje ni na voljo."}
+                        {answer.question?.prompt ?? t("test.questionUnavailable")}
                       </p>
                       <textarea
                         value={practiceTextAnswers[questionId] ?? ""}
                         onChange={(event) => handlePracticeAnswerChange(questionId, event.target.value)}
                         disabled={isUnknown}
                         className="ios-textarea lecture-practice-textarea"
-                        placeholder="Napiši svoj odgovor…"
+                        placeholder={t("test.answerPlaceholder")}
                       />
 
                       <div className="lecture-practice-controls">
@@ -5010,7 +5054,7 @@ export function LectureWorkspace({
                               handlePracticeUnknownToggle(questionId, event.target.checked)
                             }
                           />
-                          Ne vem
+                          {t("test.dontKnow")}
                         </label>
                       </div>
 
@@ -5021,7 +5065,7 @@ export function LectureWorkspace({
                           disabled={index === 0}
                           onClick={() => setPracticeQuestionIndex((current) => Math.max(0, current - 1))}
                         >
-                          Nazaj
+                          {t("common.back")}
                         </button>
                         <button
                           type="button"
@@ -5043,7 +5087,7 @@ export function LectureWorkspace({
                           {isLast && isSubmittingPracticeTest ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : null}
-                          {isLast ? "Oddaj preizkus" : "Naprej"}
+                          {t(isLast ? "test.submit" : "common.next")}
                         </button>
                       </div>
                     </div>
@@ -5057,37 +5101,39 @@ export function LectureWorkspace({
                     <StudyCompletionCard
                       eyebrow=""
                       title=""
-                      subtitle={`Poskus ${detail.practiceTestHistorySummary.attemptCount}`}
+                      subtitle={t("test.attemptN", {
+                        count: detail.practiceTestHistorySummary.attemptCount,
+                      })}
                       percentage={visiblePracticeAttemptPercentage}
-                      percentageLabel="Rezultat"
+                      percentageLabel={t("study.score")}
                       primaryMetric={{
-                        label: "Dosežene točke",
+                        label: t("test.pointsScored"),
                         value: `${visiblePracticeAttempt.total_score ?? 0}/${visiblePracticeAttempt.max_score ?? 0}`,
                       }}
                       secondaryMetrics={[
                         {
-                          label: "Povprečje",
+                          label: t("test.average"),
                           value:
                             detail.practiceTestHistorySummary.averagePercentage == null
                               ? "-"
                               : `${Math.round(detail.practiceTestHistorySummary.averagePercentage)}%`,
                         },
                         {
-                          label: "Najboljši rezultat",
+                          label: t("test.best"),
                           value:
                             detail.practiceTestHistorySummary.bestPercentage == null
                               ? "-"
                               : `${Math.round(detail.practiceTestHistorySummary.bestPercentage)}%`,
                         },
                         {
-                          label: "Najnižji rezultat",
+                          label: t("test.lowest"),
                           value:
                             detail.practiceTestHistorySummary.lowestPercentage == null
                               ? "-"
                               : `${Math.round(detail.practiceTestHistorySummary.lowestPercentage)}%`,
                         },
                         {
-                          label: "Poskusi",
+                          label: t("test.attempts"),
                           value: String(detail.practiceTestHistorySummary.attemptCount),
                         },
                       ]}
@@ -5102,7 +5148,7 @@ export function LectureWorkspace({
                             {isStartingPracticeTest ? (
                               <Loader2 className="h-5 w-5 animate-spin" />
                             ) : null}
-                            Začni nov preizkus
+                            {t("study.test.startNew")}
                           </button>
                         ) : null
                       }
@@ -5113,7 +5159,9 @@ export function LectureWorkspace({
                         <span className="lecture-practice-breakdown-icon" aria-hidden="true">
                           📝
                         </span>
-                        <span className="lecture-practice-breakdown-label">Podrobnosti poskusa</span>
+                        <span className="lecture-practice-breakdown-label">
+                          {t("test.breakdown")}
+                        </span>
                         <span className="lecture-practice-breakdown-chevron" aria-hidden="true">
                           ▾
                         </span>
@@ -5123,7 +5171,7 @@ export function LectureWorkspace({
                           <details key={answer.id} className="lecture-practice-feedback-card">
                             <summary className="lecture-practice-feedback-summary">
                               <span className="lecture-practice-feedback-label">
-                                Vprašanje {index + 1}
+                                {t("quiz.questionN", { index: index + 1 })}
                               </span>
                               <span className="lecture-practice-feedback-meta">
                                 <span>{answer.score ?? 0}/5</span>
@@ -5139,11 +5187,12 @@ export function LectureWorkspace({
                               <p className="lecture-practice-prompt">{answer.question?.prompt}</p>
                               {answer.typed_answer ? (
                                 <p className="lecture-practice-feedback-copy">
-                                  <strong>Tvoj odgovor:</strong> {answer.typed_answer}
+                                  <strong>{t("test.yourAnswer")}</strong> {answer.typed_answer}
                                 </p>
                               ) : null}
                               <p className="lecture-practice-feedback-copy">
-                                <strong>Razlaga:</strong> {answer.grading_rationale ?? "Brez povratne informacije."}
+                                <strong>{t("test.explanation")}</strong>{" "}
+                                {answer.grading_rationale ?? t("test.noFeedback")}
                               </p>
                             </div>
                           </details>
@@ -5156,11 +5205,8 @@ export function LectureWorkspace({
                     <div className="memo-study-empty-orb">
                       <Emoji symbol="📝" size="4.4rem" />
                     </div>
-                    <span className="memo-study-empty-title">Vadbeni test</span>
-                    <span className="memo-study-empty-copy">
-                      Odprta vprašanja iz tega predavanja. Odgovore napišeš s svojimi
-                      besedami, Memo pa jih oceni in pojasni.
-                    </span>
+                    <span className="memo-study-empty-title">{t("note.subScreen.test")}</span>
+                    <span className="memo-study-empty-copy">{t("test.intro")}</span>
                     {!isPracticeTestGenerating ? (
                       <button
                         type="button"
@@ -5173,7 +5219,7 @@ export function LectureWorkspace({
                         ) : (
                           <Msym name="assignment" size="1.2rem" fill={false} weight={500} />
                         )}
-                        Začni nov preizkus
+                        {t("study.test.startNew")}
                       </button>
                     ) : null}
                   </div>
@@ -5198,7 +5244,9 @@ export function LectureWorkspace({
                   )}
                   role="dialog"
                   aria-modal="true"
-                  aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
+                  aria-label={t(
+                    activeStudyView === "flashcards" ? "manager.editCards" : "manager.editQuiz",
+                  )}
                   onClick={(event) => event.stopPropagation()}
                   {...studyManagerSheet.dragProps}
                 >
@@ -5210,22 +5258,32 @@ export function LectureWorkspace({
                   <button
                     type="button"
                     className="mobile-sheet-drag-handle study-manager-drag-handle"
-                    aria-label="Povleci navzdol za zapiranje"
+                    aria-label={t("folders.dragToClose")}
                     data-drag-handle
                   />
                   <div className="study-manager-header">
                     <div>
                       <p className="study-manager-eyebrow">
-                        {activeStudyView === "flashcards" ? "Flashcards" : "Kviz"}
+                        {t(
+                          activeStudyView === "flashcards"
+                            ? "note.tab.flashcards"
+                            : "note.tab.quiz",
+                        )}
                       </p>
-                      <h2>{activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi vprašanja"}</h2>
+                      <h2>
+                        {t(
+                          activeStudyView === "flashcards"
+                            ? "manager.editCards"
+                            : "manager.editQuestions",
+                        )}
+                      </h2>
                     </div>
                     <button
                       type="button"
                       className="app-close-button study-manager-icon-button"
                       onClick={animateCloseStudyManager}
-                      aria-label="Zapri"
-                      title="Zapri"
+                      aria-label={t("common.close")}
+                      title={t("common.close")}
                     >
                       <Msym name="close" size="1.45rem" fill={false} weight={500} />
                     </button>
@@ -5241,12 +5299,12 @@ export function LectureWorkspace({
                           <div className="study-manager-form-header">
                             <button type="button" onClick={startFlashcardCreate}>
                               <Msym name="add" size="1.1rem" />
-                              Nova
+                              {t("manager.newCard")}
                             </button>
                           </div>
                         ) : null}
                         <label>
-                          <span>Vprašanje</span>
+                          <span>{t("manager.question")}</span>
                           <textarea
                             value={flashcardForm.front}
                             onChange={(event) =>
@@ -5257,7 +5315,7 @@ export function LectureWorkspace({
                           />
                         </label>
                         <label>
-                          <span>Odgovor</span>
+                          <span>{t("manager.answer")}</span>
                           <textarea
                             value={flashcardForm.back}
                             onChange={(event) =>
@@ -5273,7 +5331,7 @@ export function LectureWorkspace({
                           ) : (
                             <Msym name="check" size="1.15rem" />
                           )}
-                          {editingFlashcardId ? "Shrani kartico" : "Dodaj kartico"}
+                          {t(editingFlashcardId ? "manager.saveCard" : "manager.addCard")}
                         </button>
                       </form>
 
@@ -5282,7 +5340,7 @@ export function LectureWorkspace({
                         <input
                           value={studyManagerSearch}
                           onChange={(event) => setStudyManagerSearch(event.target.value)}
-                          placeholder="Poišči..."
+                          placeholder={t("manager.searchPlaceholder")}
                         />
                       </div>
 
@@ -5302,7 +5360,10 @@ export function LectureWorkspace({
                               className={`study-manager-item ${isItemSwipeActive ? "is-swiping" : ""}`}
                               data-swipe-open={openStudyManagerActionItemId === flashcard.id ? "true" : undefined}
                             >
-                              <div className="study-manager-item-actions" aria-label="Dejanja kartice">
+                              <div
+                                className="study-manager-item-actions"
+                                aria-label={t("manager.cardActions")}
+                              >
                                 <button
                                   type="button"
                                   className="danger"
@@ -5322,7 +5383,7 @@ export function LectureWorkspace({
                                     )}
                                   </span>
                                   <span className="study-manager-action-label">
-                                    {isDeleting ? "Brisanje" : "Izbriši"}
+                                    {t(isDeleting ? "manager.deleting" : "common.delete")}
                                   </span>
                                 </button>
                               </div>
@@ -5369,12 +5430,12 @@ export function LectureWorkspace({
                           <div className="study-manager-form-header">
                             <button type="button" onClick={startQuizQuestionCreate}>
                               <Msym name="add" size="1.1rem" />
-                              Novo
+                              {t("manager.newQuestion")}
                             </button>
                           </div>
                         ) : null}
                         <label>
-                          <span>Vprašanje</span>
+                          <span>{t("manager.question")}</span>
                           <textarea
                             value={quizQuestionForm.prompt}
                             onChange={(event) =>
@@ -5398,7 +5459,9 @@ export function LectureWorkspace({
                                       correctOptionIndex: index,
                                     }))
                                   }
-                                  aria-label={`Pravilen odgovor ${String.fromCharCode(65 + index)}`}
+                                  aria-label={t("manager.correctOption", {
+                                    letter: String.fromCharCode(65 + index),
+                                  })}
                                 />
                                 <input
                                   value={option}
@@ -5421,7 +5484,9 @@ export function LectureWorkspace({
                           ) : (
                             <Msym name="check" size="1.15rem" />
                           )}
-                          {editingQuizQuestionId ? "Shrani vprašanje" : "Dodaj vprašanje"}
+                          {t(
+                            editingQuizQuestionId ? "manager.saveQuestion" : "manager.addQuestion",
+                          )}
                         </button>
                       </form>
 
@@ -5430,7 +5495,7 @@ export function LectureWorkspace({
                         <input
                           value={studyManagerSearch}
                           onChange={(event) => setStudyManagerSearch(event.target.value)}
-                          placeholder="Poišči..."
+                          placeholder={t("manager.searchPlaceholder")}
                         />
                       </div>
 
@@ -5450,7 +5515,10 @@ export function LectureWorkspace({
                               className={`study-manager-item ${isItemSwipeActive ? "is-swiping" : ""}`}
                               data-swipe-open={openStudyManagerActionItemId === question.id ? "true" : undefined}
                             >
-                              <div className="study-manager-item-actions" aria-label="Dejanja vprašanja">
+                              <div
+                                className="study-manager-item-actions"
+                                aria-label={t("manager.questionActions")}
+                              >
                                 <button
                                   type="button"
                                   className="danger"
@@ -5470,7 +5538,7 @@ export function LectureWorkspace({
                                     )}
                                   </span>
                                   <span className="study-manager-action-label">
-                                    {isDeleting ? "Brisanje" : "Izbriši"}
+                                    {t(isDeleting ? "manager.deleting" : "common.delete")}
                                   </span>
                                 </button>
                               </div>
@@ -5522,10 +5590,12 @@ export function LectureWorkspace({
                   type="button"
                   className="mobile-study-manage-pill memo-only-mobile flex"
                   onClick={openStudyManager}
-                  aria-label={activeStudyView === "flashcards" ? "Uredi kartice" : "Uredi kviz"}
+                  aria-label={t(
+                    activeStudyView === "flashcards" ? "manager.editCards" : "manager.editQuiz",
+                  )}
                 >
                   <Msym name="edit_square" size="1.3rem" fill={false} weight={500} />
-                  <span className="mobile-study-manage-pill-label">Uredi</span>
+                  <span className="mobile-study-manage-pill-label">{t("study.edit")}</span>
                 </button>,
                 dockSlot,
               )
@@ -5553,7 +5623,7 @@ export function LectureWorkspace({
                 <div key={segment.id} className="memo-transcript-row">
                   <span className="memo-transcript-time">
                     {isScanTranscript
-                      ? formatScanTranscriptLabel(segment.speaker_label)
+                      ? formatScanTranscriptLabel(segment.speaker_label, t)
                       : formatTimestamp(segment.start_ms)}
                   </span>
                   <span className="memo-transcript-text">{segment.text}</span>
@@ -5563,8 +5633,8 @@ export function LectureWorkspace({
           ) : (
             <div className="memo-empty">
               <Emoji symbol="📜" size="2rem" />
-              <p>Prepis se še pripravlja.</p>
-              <p>Ko bo pripravljen, se bo prikazal tukaj.</p>
+              <p>{t("transcript.emptyTitle")}</p>
+              <p>{t("transcript.emptyBody")}</p>
             </div>
           )}
         </div>
@@ -5575,6 +5645,18 @@ export function LectureWorkspace({
   }
 
   const noteEmojiSymbol = detail.lecture.emoji?.trim() || noteEmoji(detail.lecture);
+
+  /*
+   * Why the code and not the row: `error_message` is written by the pipeline in
+   * the background, long before anybody opens the note, so it carries whatever
+   * language that run used. The failure code stored beside it does not, and it
+   * resolves here in the language on screen. The stored message stays as the
+   * fallback for rows that predate the codes.
+   */
+  const noteFailureMessage =
+    lectureFailureMessage(detail.lecture.processing_metadata, t) ??
+    detail.lecture.error_message;
+
 
   function navigateHome() {
     // Leaving the note is a whole-screen swap, so it goes through the shared
@@ -5602,14 +5684,14 @@ export function LectureWorkspace({
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? "Naslova ni bilo mogoče shraniti.");
+        throw new Error(payload?.error ?? t("library.error.renameFailed"));
       }
 
       setIsNoteActionBusy(false);
       renameSheet.dismiss(() => startTransition(() => router.refresh()));
     } catch (error) {
       setNoteActionError(
-        error instanceof Error ? error.message : "Naslova ni bilo mogoče shraniti.",
+        error instanceof Error ? error.message : t("library.error.renameFailed"),
       );
       setIsNoteActionBusy(false);
     }
@@ -5625,7 +5707,7 @@ export function LectureWorkspace({
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? "Zapiska ni bilo mogoče izbrisati.");
+        throw new Error(payload?.error ?? t("library.error.deleteFailed"));
       }
 
       // The note is gone, so there is nothing to come back to: leave for the
@@ -5634,7 +5716,7 @@ export function LectureWorkspace({
       navigateWithFeedback(homeHref);
     } catch (error) {
       setNoteActionError(
-        error instanceof Error ? error.message : "Zapiska ni bilo mogoče izbrisati.",
+        error instanceof Error ? error.message : t("library.error.deleteFailed"),
       );
       setIsNoteActionBusy(false);
     }
@@ -5659,6 +5741,10 @@ export function LectureWorkspace({
           : activeStudyView === "quiz"
             ? "quiz"
             : "test";
+
+  /* The phone navbar names the study screen it is on. Flashcards names nothing. */
+  const subScreenTitleKey = SUB_SCREEN_TITLE_KEYS[activeTabId] ?? null;
+  const subScreenTitle = subScreenTitleKey ? t(subScreenTitleKey) : "";
 
   /**
    * Desktop shows the conversation as the grid's third column, so it is
@@ -5692,7 +5778,7 @@ export function LectureWorkspace({
             {isChatExpanded ? (
               <button
                 type="button"
-                aria-label="Pomanjšaj klepet"
+                aria-label={t("chat.collapse")}
                 className="memo-chat-scrim"
                 onClick={() => setIsChatExpanded(false)}
               />
@@ -5706,7 +5792,7 @@ export function LectureWorkspace({
                   <span style={{ flex: 1 }} />
                   <button
                     type="button"
-                    aria-label={isChatExpanded ? "Pomanjšaj" : "Razširi"}
+                    aria-label={t(isChatExpanded ? "chat.collapseShort" : "chat.expand")}
                     className="memo-icon-button"
                     onClick={() => setIsChatExpanded((current) => !current)}
                   >
@@ -5719,7 +5805,7 @@ export function LectureWorkspace({
                   </button>
                   <button
                     type="button"
-                    aria-label="Zapri klepet"
+                    aria-label={t("chat.close")}
                     className="memo-icon-button"
                     onClick={() => {
                       setIsChatDismissed(true);
@@ -5730,7 +5816,7 @@ export function LectureWorkspace({
                   </button>
                 </div>
 
-                <h2>Klepet s tem zapiskom</h2>
+                <h2>{t("chat.title")}</h2>
                 <div className="memo-chat-rule" />
               </div>
 
@@ -5745,7 +5831,7 @@ export function LectureWorkspace({
     <MemoPortal>
       <button
         type="button"
-        aria-label="Zapri klepet"
+        aria-label={t("chat.close")}
         className={sheetClass("memo-scrim memo-only-mobile", chatSheet.closing)}
         onClick={() => chatSheet.dismiss()}
       />
@@ -5765,7 +5851,7 @@ export function LectureWorkspace({
         </div>
         <div className="memo-m-chat-head" data-drag-zone>
           <span className="memo-m-chat-heading">
-            <span className="memo-m-chat-title">Klepet s tem zapiskom</span>
+            <span className="memo-m-chat-title">{t("chat.title")}</span>
           </span>
           <button
             type="button"
@@ -5789,15 +5875,16 @@ export function LectureWorkspace({
     </>
   );
 
-  const lectureTitle = detail.lecture.title?.trim() || "Predavanje v obdelavi";
+  const lectureTitle = detail.lecture.title?.trim() || t("note.processingTitle");
   // The phone prints the source beside the date — "28. 8. 2026, Zvok,
   // 1 h 12 min" — where desktop shows the date alone.
-  const noteSourceDetail = getLectureSourceDetail(detail.lecture);
+  const noteSourceDetail = getLectureSourceDetail(detail.lecture, t);
   const noteMetaLine = [
-    formatCalendarDate(detail.lecture.created_at),
+    formatCalendarDate(detail.lecture.created_at, locale),
     getLectureSourceLabel(
       getEffectiveLectureSourceType(detail.lecture),
       detail.lecture.processing_metadata,
+      t,
     ),
     noteSourceDetail,
   ]
@@ -5816,7 +5903,7 @@ export function LectureWorkspace({
         <MemoPortal>
           <button
             type="button"
-            aria-label="Zapri"
+            aria-label={t("common.close")}
             className={sheetClass("memo-scrim memo-only-mobile", noteActionsSheet.closing)}
             onClick={() => noteActionsSheet.dismiss()}
           />
@@ -5824,7 +5911,7 @@ export function LectureWorkspace({
             className={sheetClass("memo-action-sheet memo-only-mobile", noteActionsSheet.closing)}
             role="dialog"
             aria-modal="true"
-            aria-label={`Dejanja zapiska ${lectureTitle}`}
+            aria-label={t("note.actionsSheet", { title: lectureTitle })}
             {...noteActionsSheet.dragProps}
           >
             <span className="mobile-sheet-drag-handle" data-drag-handle="true" />
@@ -5841,7 +5928,7 @@ export function LectureWorkspace({
                 }}
               >
                 <Msym name="edit" size="1.4rem" fill weight={500} />
-                Preimenuj
+                {t("common.rename")}
               </button>
 
               <button
@@ -5853,7 +5940,7 @@ export function LectureWorkspace({
                 }}
               >
                 <Msym name="delete" size="1.4rem" fill weight={500} />
-                Izbriši
+                {t("common.delete")}
               </button>
 
               <button
@@ -5861,7 +5948,7 @@ export function LectureWorkspace({
                 className="memo-action-sheet-cancel"
                 onClick={() => noteActionsSheet.dismiss()}
               >
-                Prekliči
+                {t("common.cancel")}
               </button>
             </div>
           </section>
@@ -5872,7 +5959,7 @@ export function LectureWorkspace({
         <MemoPortal>
           <button
             type="button"
-            aria-label="Zapri"
+            aria-label={t("common.close")}
             className={sheetClass("memo-scrim memo-only-mobile", renameSheet.closing)}
             onClick={() => renameSheet.dismiss()}
           />
@@ -5885,7 +5972,7 @@ export function LectureWorkspace({
           >
             <div className="memo-grab" data-drag-handle />
             <span id="note-rename-title" className="memo-sheet-heading">
-              Preimenuj zapisek
+              {t("library.rename.title")}
             </span>
             <input
               className="memo-sheet-field"
@@ -5900,7 +5987,7 @@ export function LectureWorkspace({
                 event.currentTarget.blur();
                 void renameNote();
               }}
-              placeholder="Naslov zapiska"
+              placeholder={t("library.rename.placeholder")}
               enterKeyHint="done"
               autoCapitalize="sentences"
               autoCorrect="off"
@@ -5915,7 +6002,7 @@ export function LectureWorkspace({
                 disabled={isNoteActionBusy}
               >
                 {isNoteActionBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Shrani
+                {t("common.save")}
               </button>
               <button
                 type="button"
@@ -5923,7 +6010,7 @@ export function LectureWorkspace({
                 onClick={() => renameSheet.dismiss()}
                 disabled={isNoteActionBusy}
               >
-                Prekliči
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -5934,7 +6021,7 @@ export function LectureWorkspace({
         <MemoPortal>
           <button
             type="button"
-            aria-label="Zapri"
+            aria-label={t("common.close")}
             className={sheetClass("memo-scrim memo-only-mobile", deleteSheet.closing)}
             onClick={() => deleteSheet.dismiss()}
           />
@@ -5947,12 +6034,9 @@ export function LectureWorkspace({
           >
             <div className="memo-grab" data-drag-handle />
             <span id="note-delete-title" className="memo-sheet-heading">
-              Izbriši zapisek
+              {t("library.delete.title")}
             </span>
-            <p className="memo-sheet-copy">
-              Zapisek »{lectureTitle}« bo trajno izbrisan skupaj s prepisom, karticami in
-              kvizi.
-            </p>
+            <p className="memo-sheet-copy">{t("library.delete.body", { title: lectureTitle })}</p>
             {noteActionError ? <p className="memo-inline-error">{noteActionError}</p> : null}
             <div className="memo-sheet-actions">
               <button
@@ -5962,7 +6046,7 @@ export function LectureWorkspace({
                 disabled={isNoteActionBusy}
               >
                 {isNoteActionBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Izbriši zapisek
+                {t("library.delete.title")}
               </button>
               <button
                 type="button"
@@ -5970,7 +6054,7 @@ export function LectureWorkspace({
                 onClick={() => deleteSheet.dismiss()}
                 disabled={isNoteActionBusy}
               >
-                Prekliči
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -6009,7 +6093,7 @@ export function LectureWorkspace({
           aria-current={activeTabId === tab.id ? "page" : undefined}
         >
           <Msym name={tab.icon} size="1.2rem" fill={false} weight={500} />
-          <span>{tab.label}</span>
+          <span>{t(tab.labelKey)}</span>
         </button>
       ))}
     </div>
@@ -6030,7 +6114,7 @@ export function LectureWorkspace({
           ) : (
             <Msym name="refresh" size="1.15rem" fill={false} weight={500} />
           )}
-          <span>Poskusi znova</span>
+          <span>{t("common.retry")}</span>
         </button>
       </div>
     ) : null;
@@ -6043,7 +6127,7 @@ export function LectureWorkspace({
         <div className="memo-m-navbar memo-only-mobile flex">
           <button
             type="button"
-            aria-label="Nazaj"
+            aria-label={t("common.back")}
             className="memo-m-navbtn"
             onClick={navigateHome}
           >
@@ -6055,11 +6139,11 @@ export function LectureWorkspace({
           {activeTabId === "notes" ? (
             <Emoji symbol={noteEmojiSymbol} className="memo-m-noteemoji" size="1.5rem" />
           ) : (
-            <span className="memo-m-navtitle">{SUB_SCREEN_TITLES[activeTabId]}</span>
+            <span className="memo-m-navtitle">{subScreenTitle}</span>
           )}
           <button
             type="button"
-            aria-label="Dejanja"
+            aria-label={t("note.actions")}
             className="memo-m-navbtn filled"
             onClick={() => {
               setNoteRenameValue(lectureTitle);
@@ -6074,10 +6158,10 @@ export function LectureWorkspace({
         <div className="memo-note-card">
           <div className="memo-breadcrumb memo-only-desktop">
             <button type="button" onClick={navigateHome}>
-              Moji zapiski
+              {t("library.myNotes")}
             </button>
             <Msym name="chevron_right" size="1.1rem" fill={false} weight={400} />
-            <span className="memo-breadcrumb-current">Podrobnosti zapiska</span>
+            <span className="memo-breadcrumb-current">{t("note.breadcrumbCurrent")}</span>
           </div>
 
           <div className="memo-note-scroll" ref={noteScrollRef}>
@@ -6097,15 +6181,15 @@ export function LectureWorkspace({
             {noteMenu}
 
             <div className="memo-note-date memo-only-desktop">
-              <span>{formatCalendarDate(detail.lecture.created_at)}</span>
+              <span>{formatCalendarDate(detail.lecture.created_at, locale)}</span>
             </div>
 
             <div className="memo-m-note-meta memo-only-mobile flex memo-notes-tab-only">
               <span>{noteMetaLine}</span>
             </div>
 
-            {detail.lecture.error_message ? (
-              <p className="memo-inline-error">{detail.lecture.error_message}</p>
+            {noteFailureMessage ? (
+              <p className="memo-inline-error">{noteFailureMessage}</p>
             ) : null}
 
             {activeTabId === "notes" ? <div className="memo-study-divider-off" /> : null}
@@ -6123,12 +6207,12 @@ export function LectureWorkspace({
             {isChatDismissed && activeTabId !== "quiz" ? (
               <button
                 type="button"
-                aria-label="Odpri klepet"
+                aria-label={t("chat.open")}
                 className="memo-chat-fab memo-only-desktop"
                 onClick={() => setIsChatDismissed(false)}
               >
                 <Msym name="forum" size="1.35rem" />
-                <span>Klepet</span>
+                <span>{t("chat.label")}</span>
               </button>
             ) : null}
 
@@ -6136,9 +6220,9 @@ export function LectureWorkspace({
               type="button"
               className="memo-m-chatbar memo-only-mobile"
               onClick={() => setIsMobileChatOpen(true)}
-              aria-label="Klepetaj s tem zapiskom"
+              aria-label={t("chat.mobileBar")}
             >
-              <span className="memo-m-chatbar-label">Klepetaj s tem zapiskom</span>
+              <span className="memo-m-chatbar-label">{t("chat.mobileBar")}</span>
               <span className="memo-m-chatbar-icon">
                 <Msym name="mic" size="1.35rem" className="mic" />
                 <Msym name="chat_bubble" size="1.35rem" className="bubble" />
@@ -6164,7 +6248,9 @@ export function LectureWorkspace({
                   dictation.toggle();
                 }}
                 aria-pressed={dictation.listening}
-                aria-label={dictation.listening ? "Ustavi narekovanje" : "Narekuj vprašanje"}
+                aria-label={t(
+                  dictation.listening ? "chat.dictate.stop" : "chat.dictate.start",
+                )}
               />
             ) : null}
           </div>

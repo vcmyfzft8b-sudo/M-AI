@@ -6,6 +6,8 @@ import { BrandLogo } from "@/components/brand-logo";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { BRAND_NAME, SEO_BRAND_NAME } from "@/lib/brand";
 import { getHelpArticle, splitArticleFinePrint } from "@/lib/help-center";
+import { SOURCE_LOCALE, type Locale } from "@/lib/i18n/locales";
+import { getLocale, getTranslations } from "@/lib/i18n/server";
 
 /**
  * Public home for the legal documents. They also exist under /app/support, but
@@ -16,12 +18,12 @@ import { getHelpArticle, splitArticleFinePrint } from "@/lib/help-center";
  */
 const PUBLIC_LEGAL_SLUGS = ["terms-of-use", "privacy-policy", "refund-policy"] as const;
 
-function getPublicLegalArticle(slug: string) {
+function getPublicLegalArticle(slug: string, locale: Locale) {
   if (!PUBLIC_LEGAL_SLUGS.includes(slug as (typeof PUBLIC_LEGAL_SLUGS)[number])) {
     return null;
   }
 
-  return getHelpArticle(slug);
+  return getHelpArticle(slug, locale);
 }
 
 export function generateStaticParams() {
@@ -34,7 +36,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const article = getPublicLegalArticle(slug);
+  const article = getPublicLegalArticle(slug, await getLocale());
 
   if (!article) {
     return {};
@@ -53,7 +55,8 @@ export default async function LegalPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const article = getPublicLegalArticle(slug);
+  const { locale, t } = await getTranslations();
+  const article = getPublicLegalArticle(slug, locale);
 
   if (!article) {
     notFound();
@@ -65,12 +68,12 @@ export default async function LegalPage({
   return (
     <main className="landing-shell landing-public-page">
       <header className="landing-public-nav">
-        <Link href="/" className="landing-public-brand" aria-label={`Domov ${BRAND_NAME}`}>
+        <Link href="/" className="landing-public-brand" aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}>
           <BrandLogo subtitle="" priority />
         </Link>
-        <nav className="landing-public-links" aria-label="Glavna navigacija">
+        <nav className="landing-public-links" aria-label={t("nav.main")}>
           <Link href="/" className="landing-public-nav-cta">
-            Nazaj na domačo stran
+            {t("error.backHome")}
           </Link>
         </nav>
       </header>
@@ -88,7 +91,7 @@ export default async function LegalPage({
             © {new Date().getFullYear()} {SEO_BRAND_NAME}
           </p>
           <p className="landing-public-footer-legal-links">
-            {otherLegalArticles(article.slug).map((other) => (
+            {otherLegalArticles(article.slug, locale).map((other) => (
               <Link key={other.slug} href={`/legal/${other.slug}`}>
                 {other.title}
               </Link>
@@ -97,9 +100,19 @@ export default async function LegalPage({
         </div>
       </footer>
 
-      {finePrint ? (
+      {/*
+        * Below the fine print, and only on a translation: these documents were
+        * drafted in Slovenian, and a translated clause that reads slightly
+        * differently must not be the one a dispute turns on. Saying so is
+        * ordinary practice for multilingual terms and is what makes the
+        * translations safe to publish.
+        */}
+      {finePrint || locale !== SOURCE_LOCALE ? (
         <aside className="legal-page-fineprint markdown">
-          <MarkdownRenderer content={finePrint} />
+          {finePrint ? <MarkdownRenderer content={finePrint} /> : null}
+          {locale === SOURCE_LOCALE ? null : (
+            <p className="legal-page-prevailing">{t("legal.prevailingNotice")}</p>
+          )}
         </aside>
       ) : null}
     </main>
@@ -107,8 +120,8 @@ export default async function LegalPage({
 }
 
 /** Every public legal document except the one being read, for the footer cross-links. */
-function otherLegalArticles(currentSlug: string) {
+function otherLegalArticles(currentSlug: string, locale: Locale) {
   return PUBLIC_LEGAL_SLUGS.filter((slug) => slug !== currentSlug)
-    .map((slug) => getHelpArticle(slug))
+    .map((slug) => getHelpArticle(slug, locale))
     .filter((article) => article !== null);
 }

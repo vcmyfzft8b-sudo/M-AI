@@ -1,5 +1,28 @@
 import type { CSSProperties } from "react";
 
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+
+/*
+ * The landing page's phone preview: a working replica of the app, driven by
+ * this data.
+ *
+ * Two kinds of string live here, and only one of them is translated.
+ *
+ * The app's own chrome — tab names, sheet titles, quick actions, status
+ * labels, the help rows — carries message keys, because that is the product,
+ * and a Croatian visitor being shown a Slovenian interface is being shown the
+ * wrong product.
+ *
+ * The study material — the note bodies, flashcards, quiz questions,
+ * transcripts and the chat about them — is deliberately left in Slovenian. It
+ * stands in for "a lecture this student uploaded", and a student's own
+ * material is in their own language whatever the interface is set to. Making
+ * it convincing in another market is a matter of writing that market a lecture
+ * of its own, not of translating this one; until someone does, Slovenian
+ * material under a Croatian interface reads as somebody else's notes, which is
+ * exactly what it is.
+ */
+
 export type SourceKind = "audio" | "pdf" | "text" | "link";
 export type NoteStatus = "uploading" | "queued" | "transcribing" | "generating_notes" | "ready" | "failed";
 
@@ -7,6 +30,11 @@ export type PreviewNote = {
   id: string;
   title: string;
   source: SourceKind;
+  /**
+   * An ISO date, formatted per locale by the replica exactly as the real
+   * library formats a note's — a written-out month would be Slovenian in every
+   * language, and the date column is chrome, not the learner's material.
+   */
   date: string;
   status: NoteStatus;
 };
@@ -20,127 +48,189 @@ export type PreviewFolder = {
 
 export type SheetMode = "record" | "upload" | "text" | "link";
 
-export const QUICK_ACTIONS: Array<{ id: SheetMode; label: string; detail: string; icon: string; accent: string }> = [
-  { id: "record", label: "Posnemi predavanje", detail: "Začni z enim dotikom", icon: "🎙️", accent: "record" },
-  { id: "upload", label: "Naloži zvok", detail: "MP3, M4A, WAV ali WEBM", icon: "📤", accent: "default" },
-  { id: "text", label: "Naloži PDF ali dokument", detail: "Pretvori gradivo v strukturirane zapiske", icon: "📄", accent: "default" },
-  { id: "link", label: "Dodaj povezavo", detail: "Spletni članek ali vir", icon: "🔗", accent: "default" },
+export const QUICK_ACTIONS: Array<{
+  id: SheetMode;
+  labelKey: MessageKey;
+  detailKey: MessageKey;
+  icon: string;
+  accent: string;
+}> = [
+  {
+    id: "record",
+    labelKey: "library.quickAction.record",
+    detailKey: "preview.quick.recordDetail",
+    icon: "🎙️",
+    accent: "record",
+  },
+  {
+    id: "upload",
+    labelKey: "preview.quick.uploadLabel",
+    detailKey: "capture.audioFormats",
+    icon: "📤",
+    accent: "default",
+  },
+  {
+    id: "text",
+    labelKey: "preview.quick.textLabel",
+    detailKey: "preview.quick.textDetail",
+    icon: "📄",
+    accent: "default",
+  },
+  {
+    id: "link",
+    labelKey: "library.quickAction.link",
+    detailKey: "preview.quick.linkDetail",
+    icon: "🔗",
+    accent: "default",
+  },
 ];
 
-export const SOURCE_MODES: Array<{ id: SheetMode; label: string; icon: string }> = [
-  { id: "record", label: "Snemaj", icon: "🎙️" },
-  { id: "upload", label: "Naloži", icon: "📤" },
-  { id: "text", label: "Dokumenti", icon: "📄" },
-  { id: "link", label: "Povezava", icon: "🔗" },
+export const SOURCE_MODES: Array<{ id: SheetMode; labelKey: MessageKey; icon: string }> = [
+  { id: "record", labelKey: "capture.mode.record", icon: "🎙️" },
+  { id: "upload", labelKey: "capture.mode.upload", icon: "📤" },
+  { id: "text", labelKey: "capture.mode.text", icon: "📄" },
+  { id: "link", labelKey: "capture.mode.link", icon: "🔗" },
 ];
 
 export const SHEET_CONTENT: Record<
   SheetMode,
   {
-    title: string;
-    cardLabel: string;
+    titleKey: MessageKey;
+    cardLabelKey: MessageKey;
+    /* The file name, its size and the note it becomes are the learner's own. */
     cardTitle: string;
+    cardMetaKey: MessageKey | null;
     cardMeta: string;
     createIcon: string;
-    secondary: string;
+    secondaryKey: MessageKey;
     noteTitle: string;
     source: SourceKind;
   }
 > = {
   record: {
-    title: "Posnemi predavanje",
-    cardLabel: "Pripravljen posnetek",
+    titleKey: "library.quickAction.record",
+    cardLabelKey: "capture.preparedRecording",
     cardTitle: "posnetek-predavanje-4.m4a",
-    cardMeta: "48:12 • posneto v aplikaciji",
+    cardMetaKey: "preview.sheet.recordMeta",
+    cardMeta: "",
     createIcon: "📄",
-    secondary: "Posnemi znova",
+    secondaryKey: "preview.sheet.recordAgain",
     noteTitle: "Posneto predavanje – 4. teden",
     source: "audio",
   },
   upload: {
-    title: "Naloži zvok",
-    cardLabel: "Izbrana datoteka",
+    titleKey: "preview.quick.uploadLabel",
+    cardLabelKey: "capture.selectedFile",
     cardTitle: "Predavanje-IS-4.m4a",
+    cardMetaKey: null,
     cardMeta: "51,2 MB • 47:38",
     createIcon: "📄",
-    secondary: "Izberi drugo datoteko",
+    secondaryKey: "preview.sheet.pickAnotherFile",
     noteTitle: "Predavanje IS – 4. teden",
     source: "audio",
   },
   text: {
-    title: "Naloži dokument ali fotografije",
-    cardLabel: "Izbran dokument",
+    titleKey: "capture.title.text",
+    cardLabelKey: "capture.selectedDocument",
     cardTitle: "Poslovni-IS-skripta.pdf",
-    cardMeta: "24 strani • 3,1 MB",
+    cardMetaKey: "preview.sheet.pageCount",
+    cardMeta: "",
     createIcon: "📄",
-    secondary: "Izberi drug dokument",
+    secondaryKey: "preview.sheet.pickAnotherDocument",
     noteTitle: "Poslovni IS – skripta",
     source: "pdf",
   },
   link: {
-    title: "Dodaj povezavo",
-    cardLabel: "Povezava",
+    titleKey: "library.quickAction.link",
+    cardLabelKey: "capture.linkLabel",
     cardTitle: "https://www.finance.si/erp-sistemi-v-praksi",
-    cardMeta: "Spletni članek • slovenščina",
+    cardMetaKey: "preview.sheet.webArticle",
+    cardMeta: "",
     createIcon: "📄",
-    secondary: "Prilepi drugo povezavo",
+    secondaryKey: "preview.sheet.pasteAnotherLink",
     noteTitle: "Članek: ERP sistemi v praksi",
     source: "link",
   },
 };
 
-export const SOURCE_VARIANTS: Record<SheetMode, Array<{ cardTitle: string; cardMeta: string; noteTitle: string }>> = {
+export const SOURCE_VARIANTS: Record<
+  SheetMode,
+  Array<{ cardTitle: string; cardMetaKey: MessageKey | null; cardMeta: string; noteTitle: string }>
+> = {
   record: [
-    { cardTitle: "posnetek-predavanje-4.m4a", cardMeta: "48:12 • posneto v aplikaciji", noteTitle: "Posneto predavanje – 4. teden" },
-    { cardTitle: "posnetek-vaje-2.m4a", cardMeta: "31:47 • posneto v aplikaciji", noteTitle: "Posnete vaje – 2. teden" },
+    { cardTitle: "posnetek-predavanje-4.m4a", cardMetaKey: "preview.sheet.recordMeta", cardMeta: "", noteTitle: "Posneto predavanje – 4. teden" },
+    { cardTitle: "posnetek-vaje-2.m4a", cardMetaKey: "preview.sheet.recordMeta2", cardMeta: "", noteTitle: "Posnete vaje – 2. teden" },
   ],
   upload: [
-    { cardTitle: "Predavanje-IS-4.m4a", cardMeta: "51,2 MB • 47:38", noteTitle: "Predavanje IS – 4. teden" },
-    { cardTitle: "Mikroekonomija-5.mp3", cardMeta: "38,6 MB • 36:02", noteTitle: "Mikroekonomija – 5. predavanje" },
+    { cardTitle: "Predavanje-IS-4.m4a", cardMetaKey: null, cardMeta: "51,2 MB • 47:38", noteTitle: "Predavanje IS – 4. teden" },
+    { cardTitle: "Mikroekonomija-5.mp3", cardMetaKey: null, cardMeta: "38,6 MB • 36:02", noteTitle: "Mikroekonomija – 5. predavanje" },
   ],
   text: [
-    { cardTitle: "Poslovni-IS-skripta.pdf", cardMeta: "24 strani • 3,1 MB", noteTitle: "Poslovni IS – skripta" },
-    { cardTitle: "Anatomija-zivcevje.pptx", cardMeta: "42 prosojnic • 8,4 MB", noteTitle: "Anatomija – živčevje" },
+    { cardTitle: "Poslovni-IS-skripta.pdf", cardMetaKey: "preview.sheet.pageCount", cardMeta: "", noteTitle: "Poslovni IS – skripta" },
+    { cardTitle: "Anatomija-zivcevje.pptx", cardMetaKey: "preview.sheet.slideCount", cardMeta: "", noteTitle: "Anatomija – živčevje" },
   ],
   link: [
-    { cardTitle: "https://www.finance.si/erp-sistemi-v-praksi", cardMeta: "Spletni članek • slovenščina", noteTitle: "Članek: ERP sistemi v praksi" },
-    { cardTitle: "https://sl.wikipedia.org/wiki/Informacijski_sistem", cardMeta: "Wikipedia • slovenščina", noteTitle: "Wikipedia: Informacijski sistem" },
+    { cardTitle: "https://www.finance.si/erp-sistemi-v-praksi", cardMetaKey: "preview.sheet.webArticle", cardMeta: "", noteTitle: "Članek: ERP sistemi v praksi" },
+    { cardTitle: "https://sl.wikipedia.org/wiki/Informacijski_sistem", cardMetaKey: "preview.sheet.wikipedia", cardMeta: "", noteTitle: "Wikipedia: Informacijski sistem" },
   ],
 };
 
+/* The help screen the replica shows, mirroring the real one in shorter form. */
 export const HELP_SECTIONS = [
   {
-    title: "Pogosto",
+    titleKey: "help.category.common",
     items: [
-      { title: "Družinski paket?", body: "Enega paketa ne moreš deliti med več računov. Vsak študent ima svojo knjižnico zapiskov." },
-      { title: "Ali lahko podarim Memo AI?", body: "Da. Kupiš kodo, jo pošlješ prijatelju, on pa jo unovči v nastavitvah." },
-      { title: "Ali podpirate moj jezik?", body: "Podpiramo slovenščino, angleščino, nemščino, hrvaščino in še 20 drugih jezikov." },
-      { title: "Predlog funkcije", body: "Napiši nam na info@memoai.eu. Predloge študentov uvrstimo v načrt razvoja." },
+      { titleKey: "family-plan" as const, bodyKey: "preview.help.family.body" },
+      { titleKey: "gift" as const, bodyKey: "preview.help.gift.body" },
+      { titleKey: "language" as const, bodyKey: "preview.help.language.body" },
+      { titleKey: "feature" as const, bodyKey: "preview.help.feature.body" },
     ],
   },
   {
-    title: "Snemanje in zapiski",
+    titleKey: "help.category.recording",
     items: [
-      { title: "Video povezava ne deluje", body: "Povezave do videov (YouTube, Drive) niso podprte. Naloži zvok ali dokument." },
-      { title: "Ne morem naložiti zvoka", body: "Datoteka mora biti krajša od 3 ur in manjša od 300 MB. Uporabi MP3, M4A, WAV ali WEBM." },
-      { title: "Prepis je prekratek ali netočen", body: "Telefon približaj predavatelju in se izogibaj hrupu. Krajše datoteke dajo natančnejši prepis." },
+      { titleKey: "video" as const, bodyKey: "preview.help.video.body" },
+      { titleKey: "audio" as const, bodyKey: "preview.help.audio.body" },
+      { titleKey: "transcript" as const, bodyKey: "preview.help.transcript.body" },
     ],
   },
   {
-    title: "Račun in dostop",
+    titleKey: "help.category.account",
     items: [
-      { title: "Unovči kodo", body: "Odpri Nastavitve, izberi Unovči kodo in vpiši 8-mestno kodo." },
-      { title: "Pogoji uporabe", body: "Memo AI je namenjen osebni študijski uporabi. Gradiva ne deli naprej brez dovoljenja avtorja." },
-      { title: "Politika zasebnosti", body: "Posnetki in zapiski so tvoji. Hranimo jih šifrirano, brisanje je takojšnje in trajno." },
+      { titleKey: "redeem" as const, bodyKey: "preview.help.redeem.body" },
+      { titleKey: "terms" as const, bodyKey: "preview.help.terms.body" },
+      { titleKey: "privacy" as const, bodyKey: "preview.help.privacy.body" },
     ],
   },
-];
+] as const satisfies ReadonlyArray<{
+  titleKey: MessageKey;
+  items: ReadonlyArray<{ titleKey: string; bodyKey: MessageKey }>;
+}>;
+
+/*
+ * The question each row asks. Taken from the real help centre so the replica
+ * and the article behind it never drift apart — the articles are per-language
+ * documents (src/lib/help), which the replica cannot reach without pulling the
+ * legal texts into the landing bundle, so the titles are mapped by slug.
+ */
+export const PREVIEW_HELP_TITLE_KEYS: Record<string, MessageKey> = {
+  "family-plan": "preview.help.familyTitle",
+  gift: "preview.help.gift.title",
+  language: "preview.help.languageTitle",
+  feature: "preview.help.featureTitle",
+  video: "preview.help.videoTitle",
+  audio: "preview.help.audioTitle",
+  transcript: "preview.help.transcriptTitle",
+  redeem: "settings.rows.redeem",
+  terms: "landing.footer.terms",
+  privacy: "landing.footer.privacy",
+};
 
 export const THEME_OPTIONS = [
-  { value: "system", label: "Sistem", icon: "💻" },
-  { value: "light", label: "Svetla", icon: "☀️" },
-  { value: "dark", label: "Temna", icon: "🌙" },
-] as const;
+  { value: "system", labelKey: "preview.theme.system", icon: "💻" },
+  { value: "light", labelKey: "settings.theme.light", icon: "☀️" },
+  { value: "dark", labelKey: "settings.theme.dark", icon: "🌙" },
+] as const satisfies ReadonlyArray<{ value: string; labelKey: MessageKey; icon: string }>;
 
 export type PreviewTheme = (typeof THEME_OPTIONS)[number]["value"];
 
@@ -207,19 +297,19 @@ export const DARK_TOKENS: Record<string, string> = {
 };
 
 export const TABS = [
-  { id: "notes", label: "Zapiski", icon: "📝" },
-  { id: "study", label: "Učenje", icon: "🧠" },
-  { id: "chat", label: "Klepet", icon: "💬" },
-  { id: "transcript", label: "Prepis", icon: "📜" },
-] as const;
+  { id: "notes", labelKey: "note.tab.notes", icon: "📝" },
+  { id: "study", labelKey: "preview.tab.study", icon: "🧠" },
+  { id: "chat", labelKey: "chat.label", icon: "💬" },
+  { id: "transcript", labelKey: "note.tab.transcript", icon: "📜" },
+] as const satisfies ReadonlyArray<{ id: string; labelKey: MessageKey; icon: string }>;
 
 export type NoteTab = (typeof TABS)[number]["id"];
 
 export const STUDY_MODES = [
-  { id: "flashcards", label: "Flashcards" },
-  { id: "quiz", label: "Kviz" },
-  { id: "practice_test", label: "Test" },
-] as const;
+  { id: "flashcards", labelKey: "note.tab.flashcards" },
+  { id: "quiz", labelKey: "note.tab.quiz" },
+  { id: "practice_test", labelKey: "note.tab.test" },
+] as const satisfies ReadonlyArray<{ id: string; labelKey: MessageKey }>;
 
 export type StudyMode = (typeof STUDY_MODES)[number]["id"];
 
@@ -485,34 +575,42 @@ export const NOTE_BODIES: Record<NoteThemeKey, NoteBody> = {
   },
 };
 
+/**
+ * "Today" for a note the visitor makes during the tour. A literal rather than
+ * `new Date()`, so the server's first render and the client's hydration agree
+ * on the string; the sample library is dated around it.
+ */
+export const PREVIEW_TODAY = "2026-08-14";
+
 export const INITIAL_NOTES: PreviewNote[] = [
-  { id: "n1", title: "Poslovni informacijski sistemi – 4. predavanje", source: "audio", date: "12. avgust", status: "ready" },
-  { id: "n2", title: "Mikroekonomija: elastičnost povpraševanja", source: "pdf", date: "9. avgust", status: "ready" },
-  { id: "n3", title: "Anatomija – živčni sistem", source: "audio", date: "7. avgust", status: "ready" },
-  { id: "n4", title: "Članek: Kako deluje ERP", source: "link", date: "5. avgust", status: "ready" },
-  { id: "n5", title: "Statistika – hipotezno testiranje", source: "text", date: "2. avgust", status: "ready" },
+  { id: "n1", title: "Poslovni informacijski sistemi – 4. predavanje", source: "audio", date: "2026-08-12", status: "ready" },
+  { id: "n2", title: "Mikroekonomija: elastičnost povpraševanja", source: "pdf", date: "2026-08-09", status: "ready" },
+  { id: "n3", title: "Anatomija – živčni sistem", source: "audio", date: "2026-08-07", status: "ready" },
+  { id: "n4", title: "Članek: Kako deluje ERP", source: "link", date: "2026-08-05", status: "ready" },
+  { id: "n5", title: "Statistika – hipotezno testiranje", source: "text", date: "2026-08-02", status: "ready" },
 ];
 
+/* Folder names are the learner's own, like the notes in them — see the note at the top. */
 export const FOLDERS: PreviewFolder[] = [
   { id: "f1", name: "Poslovni IS", icon: "📘", noteIds: ["n1", "n4"] },
   { id: "f2", name: "Biologija", icon: "🧬", noteIds: ["n3"] },
   { id: "f3", name: "Ekonomija", icon: "📈", noteIds: ["n2", "n5"] },
 ];
 
-export const SOURCE_META: Record<SourceKind, { icon: string; label: string }> = {
-  audio: { icon: "🎙️", label: "Zvok" },
-  pdf: { icon: "📄", label: "PDF" },
-  text: { icon: "📄", label: "Besedilo" },
-  link: { icon: "🔗", label: "Povezava" },
+export const SOURCE_META: Record<SourceKind, { icon: string; labelKey: MessageKey }> = {
+  audio: { icon: "🎙️", labelKey: "source.audio" },
+  pdf: { icon: "📄", labelKey: "source.pdf" },
+  text: { icon: "📄", labelKey: "source.text" },
+  link: { icon: "🔗", labelKey: "source.link" },
 };
 
-export const STATUS_LABELS: Record<NoteStatus, string> = {
-  uploading: "Nalaganje",
-  queued: "V čakalni vrsti",
-  transcribing: "Prepisovanje",
-  generating_notes: "Ustvarjanje zapiskov",
-  ready: "Pripravljeno",
-  failed: "Napaka",
+export const STATUS_LABEL_KEYS: Record<NoteStatus, MessageKey> = {
+  uploading: "status.uploading",
+  queued: "status.queued",
+  transcribing: "status.transcribing",
+  generating_notes: "status.generatingNotes",
+  ready: "status.ready",
+  failed: "status.failed",
 };
 
 export const SEGMENT_BASE: CSSProperties = {

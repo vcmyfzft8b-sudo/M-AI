@@ -48,10 +48,13 @@ test("the extraction refusal is thrown as an input failure, not a bare Error", (
     /throw new Error\("Knowledge extraction found no study-worthy content/,
     "the zero-item branch must not throw an unclassifiable bare Error",
   );
+  // The wording now comes from the message catalogue, resolved per reader, so what is
+  // asserted here is the part that matters to the failure path: an ExpectedLectureInputError
+  // carrying `source_no_study_content`. `expectedInputFailure` builds exactly that.
   assert.match(
     NOTE_GENERATION_SOURCE,
-    /throw new ExpectedLectureInputError\(\s*\n\s*"[^"]+",\s*\n\s*"source_no_study_content",/,
-    "the zero-item branch throws an ExpectedLectureInputError carrying its code",
+    /throw expectedInputFailure\("source_no_study_content"\)/,
+    "the zero-item branch throws an expected-input failure carrying its code",
   );
 });
 

@@ -23,9 +23,46 @@ function isCacheable(url) {
 }
 
 self.addEventListener("install", () => {
-  // Nothing is precached: the point is to keep what the app already fetched,
-  // not to predict a file list that changes every deploy.
   self.skipWaiting();
+});
+
+/*
+ * The page tells the worker what it just loaded.
+ *
+ * Caching only on `fetch` looks sufficient and is not: a worker does not
+ * control the page that registers it, so the very launch that installs it
+ * fetches every asset around it and stores none. The next launch then opens a
+ * cache that is still empty and flashes exactly as before — which is what the
+ * first cut of this did, measured.
+ *
+ * So after load the page reads back the build files it actually used and sends
+ * them here. No build-time manifest to generate, and no guessing: the list is
+ * whatever this page needed, on this deploy.
+ */
+self.addEventListener("message", (event) => {
+  const urls = event.data && event.data.type === "cache-build" ? event.data.urls : null;
+
+  if (!Array.isArray(urls)) {
+    return;
+  }
+
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(CACHE);
+      await Promise.all(
+        urls
+          .filter((url) => {
+            try {
+              return isCacheable(new URL(url));
+            } catch {
+              return false;
+            }
+          })
+          // One bad entry must not abandon the rest, which `cache.addAll` would.
+          .map((url) => cache.add(url).catch(() => {})),
+      );
+    })(),
+  );
 });
 
 self.addEventListener("activate", (event) => {

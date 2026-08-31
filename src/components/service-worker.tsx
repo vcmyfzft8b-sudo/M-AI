@@ -27,7 +27,32 @@ export function ServiceWorkerRegistration() {
     // After load, so registering never competes with the first paint it exists
     // to protect.
     const register = () => {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+      navigator.serviceWorker
+        .register("/sw.js")
+        .then(async () => {
+          /*
+           * Hand the worker the build files this page just used. It cannot
+           * catch them itself: it does not control the page that registers it,
+           * so on this launch every asset is fetched around it. Without this
+           * the next launch opens an empty cache and the white frame it exists
+           * to remove is still there.
+           */
+          const worker = (await navigator.serviceWorker.ready).active;
+
+          if (!worker) {
+            return;
+          }
+
+          const urls = performance
+            .getEntriesByType("resource")
+            .map((entry) => entry.name)
+            .filter((name) => name.includes("/_next/static/"));
+
+          if (urls.length > 0) {
+            worker.postMessage({ type: "cache-build", urls });
+          }
+        })
+        .catch(() => {});
     };
 
     if (document.readyState === "complete") {

@@ -20,40 +20,45 @@ export function SupportScreen({ basePath = "/app/support" }: { basePath?: string
   return (
     <div className="memo-support-screen">
       {navigationOverlay}
-      <div className="memo-page">
-        {/* The phone puts the title and the way back on one row, the title on
-            the left; desktop reaches this screen from the rail and needs no
-            back control at all. */}
-        <div className="memo-support-head">
-          <h1>Pomoč</h1>
-          <button
-            type="button"
-            aria-label="Nazaj"
-            className="memo-m-round memo-only-mobile flex"
-            aria-busy={isNavigating}
-            onClick={() => navigateWithFeedback(backHref)}
-          >
-            <Msym name="arrow_back" size="1.5rem" fill={false} weight={500} />
-          </button>
-        </div>
+      {/* The phone floats the way back over the screen, as the library floats
+          its settings control; desktop reaches this screen from the rail and
+          needs no back control at all. */}
+      <div className="memo-settings-topbar memo-only-mobile flex">
+        <button
+          type="button"
+          aria-label="Nazaj"
+          className="memo-m-round"
+          aria-busy={isNavigating}
+          onClick={() => navigateWithFeedback(backHref)}
+        >
+          <Msym name="arrow_back" size="1.5rem" fill={false} weight={500} />
+        </button>
+      </div>
 
-        {HELP_SECTIONS.map((section) => (
-          <div key={section.title} className="memo-help-section">
-            <h2>{section.title}</h2>
-            <div className="memo-help-group">
-              {section.items.map((item) => (
-                <InstantLink
-                  key={item.slug}
-                  href={`${basePath}/${item.slug}`}
-                  className="memo-help-toggle memo-help-item"
-                >
-                  <span>{item.title}</span>
-                  <Msym name="chevron_right" size="1.4rem" fill={false} weight={400} />
-                </InstantLink>
-              ))}
-            </div>
+      <div className="memo-screen-scroll">
+        <div className="memo-page">
+          <div className="memo-support-head">
+            <h1>Pomoč</h1>
           </div>
-        ))}
+
+          {HELP_SECTIONS.map((section) => (
+            <div key={section.title} className="memo-help-section">
+              <h2>{section.title}</h2>
+              <div className="memo-help-group">
+                {section.items.map((item) => (
+                  <InstantLink
+                    key={item.slug}
+                    href={`${basePath}/${item.slug}`}
+                    className="memo-help-toggle memo-help-item"
+                  >
+                    <span>{item.title}</span>
+                    <Msym name="chevron_right" size="1.4rem" fill={false} weight={400} />
+                  </InstantLink>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

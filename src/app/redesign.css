@@ -3039,17 +3039,6 @@
   white-space: pre-wrap;
 }
 
-.memo-bubble-citations {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.45rem;
-  font-size: 0.78rem;
-  font-weight: 650;
-  opacity: 0.75;
-  font-variant-numeric: tabular-nums;
-}
-
 .memo-chat-status {
   margin: 0.7rem 0 0;
   color: var(--muted);
@@ -5190,6 +5179,15 @@
 .memo-page {
   max-width: 60rem;
   animation: memo-fade-in 0.18s ease-out;
+}
+
+/*
+ * The phone's per-screen scroller. Desktop scrolls the document, so here the
+ * wrapper is not a box at all — the page below it lays out exactly as it did
+ * before the wrapper existed.
+ */
+.memo-screen-scroll {
+  display: contents;
 }
 
 .memo-page h1 {
@@ -8308,6 +8306,29 @@
     background: var(--bg);
   }
 
+  /*
+   * Every full-screen page scrolls the way the library does: the screen is a
+   * fixed frame, this is the one scroller inside it, and the content fades out
+   * at the top as it passes behind the floating controls instead of being cut
+   * off against the scroller's edge. The stops are the library's, and the top
+   * padding clears the bar the same way.
+   */
+  .memo-screen-scroll {
+    display: block;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-top: 4rem;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 2.1rem,
+      #000 3.9rem
+    );
+    mask-image: linear-gradient(to bottom, transparent 0, transparent 2.1rem, #000 3.9rem);
+  }
+
   /* --- mobile home -------------------------------------------------------- */
 
   .memo-m-topbar {
@@ -9628,19 +9649,36 @@
     inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    overflow: hidden;
     background: var(--bg);
   }
 
+  /*
+   * Floating, the way the library's header is: the control sits over the
+   * screen and the page fades out as it passes behind it, rather than the
+   * control scrolling away with the content.
+   */
   .memo-settings-topbar {
+    position: absolute;
+    top: 0.5rem;
+    left: 1.15rem;
+    right: 1.15rem;
+    z-index: 5;
     display: flex;
+    align-items: center;
     justify-content: flex-end;
-    padding: 0.9rem 1.15rem 0;
+    padding: 0;
+    /* The bar is only its controls; the content behind it stays reachable. */
+    pointer-events: none;
+  }
+
+  .memo-settings-topbar > * {
+    pointer-events: auto;
   }
 
   .memo-settings-screen .memo-page {
     max-width: none;
-    padding: 0.35rem 1.15rem calc(2.5rem + var(--memo-safe-bottom));
+    padding: 0 1.15rem calc(2.5rem + var(--memo-safe-bottom));
   }
 
   .memo-page h1 {
@@ -9812,22 +9850,21 @@
     inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    overflow: hidden;
     background: var(--bg);
   }
 
   .memo-support-screen .memo-page {
     max-width: none;
-    padding: 0.35rem 1.15rem calc(2.5rem + var(--memo-safe-bottom));
+    padding: 0 1.15rem calc(2.5rem + var(--memo-safe-bottom));
   }
 
-  /* Title left, the way back right, on one row — the design's help header. */
+  /* The way back floats over the screen, so the title has the row to itself
+     and scrolls away under it like the library's does. */
   .memo-support-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 0.75rem;
-    padding-top: 0.5rem;
   }
 
   .memo-support-head h1 {

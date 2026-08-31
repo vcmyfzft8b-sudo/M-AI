@@ -33,19 +33,21 @@ export function SupportArticleScreen({
         </button>
       </div>
 
-      <div className="memo-page">
-        <div className="memo-breadcrumb memo-only-desktop">
-          <button type="button" aria-busy={isNavigating} onClick={() => navigateWithFeedback(backHref)}>
-            Pomoč
-          </button>
-          <Msym name="chevron_right" size="1.1rem" fill={false} weight={400} />
-          <span className="memo-breadcrumb-current">{category}</span>
-        </div>
+      <div className="memo-screen-scroll">
+        <div className="memo-page">
+          <div className="memo-breadcrumb memo-only-desktop">
+            <button type="button" aria-busy={isNavigating} onClick={() => navigateWithFeedback(backHref)}>
+              Pomoč
+            </button>
+            <Msym name="chevron_right" size="1.1rem" fill={false} weight={400} />
+            <span className="memo-breadcrumb-current">{category}</span>
+          </div>
 
-        <h1 className="memo-article-title">{title}</h1>
+          <h1 className="memo-article-title">{title}</h1>
 
-        <div className="memo-help-intro memo-article-body">
-          <MarkdownRenderer content={content} />
+          <div className="memo-help-intro memo-article-body">
+            <MarkdownRenderer content={content} />
+          </div>
         </div>
       </div>
     </div>

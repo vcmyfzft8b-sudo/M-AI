@@ -1233,15 +1233,6 @@ function ChatBubble({ message }: { message: ChatMessageWithCitations }) {
   return (
     <div className={assistant ? "memo-bubble-bot" : "memo-bubble-user"}>
       <p className="memo-bubble-copy">{message.content}</p>
-      {message.citations.length > 0 ? (
-        <div className="memo-bubble-citations">
-          {message.citations.map((citation) => (
-            <span key={`${message.id}-${citation.idx}-${citation.startMs}`}>
-              {formatTimestamp(citation.startMs)}
-            </span>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -4214,10 +4205,15 @@ export function LectureWorkspace({
        * kind of dock; the photo control lives on the annotation row instead.
        */
       const dockToolbar = noteSelection ? annotationToolbar : null;
+      /*
+       * Only a failure earns a line above the note. Saving used to announce
+       * itself here, which pushed the whole note down the moment a highlight
+       * or a photo landed and pulled it back up when the save finished — the
+       * note jumped under the reader's finger for something that needs no
+       * acknowledgement. It saves quietly instead.
+       */
       const noteStatus = noteError ? (
         <span className="note-toolbar-status error">{noteError}</span>
-      ) : isSavingNoteDoc ? (
-        <span className="note-toolbar-status">Shranjujem...</span>
       ) : null;
 
       return (

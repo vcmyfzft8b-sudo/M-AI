@@ -48,14 +48,6 @@ function withStepBudget<T>(run: () => Promise<T>) {
 }
 
 /**
- * Runs the notes stage and classifies the generation guard's refusal on the throwing side of the
- * step, per docs/lecture-pipeline-inngest.md: across the step boundary the error class is
- * flattened to a bare StepError, so the refusal must be recorded on the lecture *here* — where
- * the object is still itself — and reported as a completed step, not a failed one. Letting it
- * fail the step would buy four retried refusals and then an unclassifiable error in the
- * function body's catch.
- */
-/**
  * Warms the note pipeline's checkpoints up to one phase, inside its own step budget, and never
  * fails its step. These steps exist because the default writer is ~3-5x slower than the Gemini it
  * replaced: extract, outline and write no longer reliably share one 300s invocation on a large
@@ -82,13 +74,24 @@ async function warmNotesPhase(lectureId: string, stopAfter: NotesGenerationPhase
   return { warmed: stopAfter };
 }
 
+/**
+ * Runs the notes stage and classifies the refusals it can end on — the generation guard's budget
+ * refusal, and the source failures the learner has to fix — on the throwing side of the step, per
+ * docs/lecture-pipeline-inngest.md: across the step boundary the error class is flattened to a
+ * bare StepError, so the refusal must be recorded on the lecture *here* — where the object is
+ * still itself — and reported as a completed step, not a failed one. Letting it fail the step
+ * would buy four retried refusals and then an unclassifiable error in the function body's catch.
+ *
+ * The transcription stage gets this from `runLectureStage`; the notes stage cannot reuse it
+ * because it also has to classify the budget refusal, which is not an input failure.
+ */
 async function runNotesStageWithGuard(lectureId: string) {
   try {
     await generateLectureNotesFromStoredTranscript({ lectureId });
 
     return { completed: true };
   } catch (error) {
-    if (isLectureGenerationBudgetExceededError(error)) {
+    if (isLectureGenerationBudgetExceededError(error) || isExpectedLectureInputFailure(error)) {
       await markLecturePipelineFailed({ lectureId, error });
 
       return { completed: false };

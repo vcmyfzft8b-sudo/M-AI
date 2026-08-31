@@ -102,9 +102,16 @@ run the stage inside its step, and on an expected input failure mark the lecture
 and return `{ completed: false }`. Anything else — a retryable AI error, a broken query, a
 budget deadline — still throws, still fails the step, and is still retried and reported.
 
-New stages should run through `runLectureStage`. Only the transcription step does today; the
-notes step and `processLectureNotesFunction` still classify after the boundary and have the same
-latent gap.
+New stages should run through `runLectureStage`. The transcription step does; the notes step
+cannot, because it also has to classify the generation guard's budget refusal, which is not an
+input failure — so `runNotesStageWithGuard` in [src/inngest/functions.ts](/src/inngest/functions.ts)
+asks `isExpectedLectureInputFailure` itself, on the throwing side, and both
+`processLectureFunction` and `processLectureNotesFunction` read its `{ completed: false }`.
+
+That gap was real until MEMOAI-WEB-36: an audio lecture whose transcript held nothing testable
+threw a bare `Error` out of the extraction step, so it was retried four times against a source
+that could not change, reported to Sentry as a defect, and left offering the learner a retry
+button that could not work.
 
 ## The invocation budget
 

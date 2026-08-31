@@ -4,6 +4,7 @@ import { chunkSummarySchema, noteArtifactSchema } from "@/lib/ai/schemas";
 import { generateStructuredObject } from "@/lib/ai/json";
 import { getServerEnv } from "@/lib/server-env";
 import { buildTranscriptWindows } from "@/lib/chunking";
+import { ExpectedLectureInputError } from "@/lib/lecture-processing-errors";
 import { buildGeneratedContentLanguageInstruction, detectSourceLanguage } from "@/lib/languages";
 import {
   buildKnowledgeExtractionInstructions,
@@ -275,8 +276,16 @@ async function generateNotesContentDriven(
     usageContext: params.usageContext,
   });
 
+  // A source the extraction found nothing testable in is the learner's material, not a defect:
+  // both passes read it at different granularities and neither came back with a claim. Retrying
+  // cannot change that — the per-window extractions are checkpointed, so every Inngest retry
+  // replays the same empty result and fails identically — which is why this is thrown as an
+  // expected input failure, with a code that takes the futile retry button off the failed note.
   if (items.length === 0) {
-    throw new Error("Knowledge extraction found no study-worthy content in the source.");
+    throw new ExpectedLectureInputError(
+      "V tem gradivu nismo našli snovi, iz katere bi lahko naredili zapiske. Naloži gradivo z več razlage in poskusi znova.",
+      "source_no_study_content",
+    );
   }
 
   if (params.stopAfter === "note_extract") {

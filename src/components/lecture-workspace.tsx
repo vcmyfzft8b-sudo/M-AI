@@ -231,6 +231,14 @@ const STUDY_SESSION_FAILED_RETRY_COOLDOWN_MS = 30_000;
 const STUDY_SESSION_KEEPALIVE_MAX_BYTES = 60 * 1024;
 const STUDY_MANAGER_ACTION_REVEAL_PX = 78;
 
+/**
+ * How long after the last `visualViewport` resize the soft keyboard is treated
+ * as having stopped moving. iOS animates the keys in over roughly a quarter of
+ * a second and scrolls the focused field into view somewhere in there; this is
+ * the margin that puts the study manager's own correction last.
+ */
+const KEYBOARD_SETTLE_MS = 300;
+
 function ignoreBackgroundRequestError() {
   return null;
 }
@@ -3537,10 +3545,15 @@ export function LectureWorkspace({
   /*
    * The sheet shortens from the bottom when the keyboard opens — `--memo-kb`
    * takes the keys' height out of its `max-height` — and it is its own
-   * scroller, so a field that was in view a moment ago can end up above the
-   * new edge. Focusing a field is only half of it: the field has to be pulled
-   * back into view again once the keys have actually arrived, which is what
-   * `visualViewport` reports and a focus event cannot.
+   * scroller, so a field that was in view a moment ago can end up outside the
+   * new edge.
+   *
+   * WebKit scrolls the sheet itself to clear the keys, and it overshoots: on a
+   * phone it puts the search field's top edge past the top of the sheet, half
+   * of it cut off under the rounded corner. It does that *after* the resize
+   * that announces the keys, so the correction has to outlast the animation —
+   * hence the three passes rather than one, and `scroll-padding` on the sheet
+   * so landing the field never means jamming it against an edge.
    */
   useEffect(() => {
     if (!isStudyManagerOpen) {
@@ -3554,6 +3567,7 @@ export function LectureWorkspace({
     }
 
     let frame = 0;
+    let settled = 0;
 
     const reveal = () => {
       const focused = document.activeElement;
@@ -3576,24 +3590,29 @@ export function LectureWorkspace({
     };
 
     /*
-     * Twice: once now, and once after the frame in which `--memo-kb` lands.
-     * `KeyboardInset` publishes the inset from this same `resize`, and which of
-     * the two listeners runs first is only a matter of which component mounted
-     * first — the second pass is what makes the outcome not depend on that.
+     * Now, next frame, and once the keyboard has stopped moving. The first
+     * pass is for the layout we can already see; the second is for the frame
+     * `--memo-kb` lands in, since `KeyboardInset` publishes the inset from
+     * this same `resize` and listener order is just mount order; the third is
+     * for WebKit, which scrolls the sheet on its own account while the keys
+     * animate and would otherwise get the last word.
      */
-    const revealNowAndAfterResize = () => {
+    const revealThroughTheKeyboard = () => {
       reveal();
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(reveal);
+      window.clearTimeout(settled);
+      settled = window.setTimeout(reveal, KEYBOARD_SETTLE_MS);
     };
 
-    sheet.addEventListener("focusin", revealNowAndAfterResize);
-    window.visualViewport?.addEventListener("resize", revealNowAndAfterResize);
+    sheet.addEventListener("focusin", revealThroughTheKeyboard);
+    window.visualViewport?.addEventListener("resize", revealThroughTheKeyboard);
 
     return () => {
       window.cancelAnimationFrame(frame);
-      sheet.removeEventListener("focusin", revealNowAndAfterResize);
-      window.visualViewport?.removeEventListener("resize", revealNowAndAfterResize);
+      window.clearTimeout(settled);
+      sheet.removeEventListener("focusin", revealThroughTheKeyboard);
+      window.visualViewport?.removeEventListener("resize", revealThroughTheKeyboard);
     };
   }, [isStudyManagerOpen]);
 

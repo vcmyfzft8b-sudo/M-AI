@@ -40,7 +40,7 @@ type FlowSource = {
   kindColor: string;
   label: string;
   sub: (t: Translate<MessageKey>) => string;
-  noteTitle: string;
+  noteTitleKey: MessageKey;
   noteSub: (t: Translate<MessageKey>) => string;
 };
 
@@ -53,7 +53,7 @@ const FLOW_SOURCES: FlowSource[] = [
     kindColor: "#b4431d",
     label: "predavanje-4.mp3",
     sub: (t) => `${t("flowDemo.kindAudio")} · 48:12`,
-    noteTitle: "Predavanje IS – 4. teden",
+    noteTitleKey: "flowDemo.noteTitle.audio",
     noteSub: (t) => `${t("flowDemo.kindAudio")} · ${t("flowDemo.today")}`,
   },
   {
@@ -63,7 +63,7 @@ const FLOW_SOURCES: FlowSource[] = [
     kindColor: "#d0342c",
     label: "skripta-IS.pdf",
     sub: (t) => `${t("flowDemo.kindPdf")} · ${t("flowDemo.pages", { count: 24 })}`,
-    noteTitle: "Skripta IS – poglavje 4",
+    noteTitleKey: "flowDemo.noteTitle.pdf",
     noteSub: (t) => `${t("flowDemo.kindPdf")} · ${t("flowDemo.today")}`,
   },
   {
@@ -73,81 +73,77 @@ const FLOW_SOURCES: FlowSource[] = [
     kindColor: "#2b579a",
     label: "seminarska-erp.docx",
     sub: (t) => `${t("flowDemo.kindWord")} · ${t("flowDemo.pages", { count: 12 })}`,
-    noteTitle: "Seminarska: Kako deluje ERP",
+    noteTitleKey: "flowDemo.noteTitle.doc",
     noteSub: (t) => `${t("flowDemo.kindWord")} · ${t("flowDemo.today")}`,
   },
 ];
 
 const STUDY_CARDS = [
-  { q: "Kaj je transakcijski informacijski sistem?", a: "Sistem, ki zajema in obdeluje dnevne poslovne transakcije." },
-  { q: "Čemu služi odločitveni sistem?", a: "Analizi podatkov za taktične in strateške odločitve vodstva." },
-  { q: "Kaj povezuje ERP?", a: "Procese celotnega podjetja v en integriran sistem." },
-];
+  { qKey: "flowDemo.card1Q", aKey: "flowDemo.card1A" },
+  { qKey: "flowDemo.card2Q", aKey: "flowDemo.card2A" },
+  { qKey: "flowDemo.card3Q", aKey: "flowDemo.card3A" },
+] as const satisfies ReadonlyArray<{ qKey: MessageKey; aKey: MessageKey }>;
 
 const STUDY_QUIZ = [
   {
-    q: "Kateri sistem obdeluje dnevne transakcije?",
-    options: ["Transakcijski", "Odločitveni", "Ekspertni", "Informacijski portal"],
+    qKey: "flowDemo.quiz1Q",
+    optionKeys: ["flowDemo.quiz1O1", "flowDemo.quiz1O2", "flowDemo.quiz1O3", "flowDemo.quiz1O4"],
     correct: 0,
   },
   {
-    q: "Kaj pomeni ERP?",
-    options: ["Elektronski račun", "Načrtovanje virov podjetja", "Poročilo prodaje", "Enotni registrski profil"],
+    qKey: "flowDemo.quiz2Q",
+    optionKeys: ["flowDemo.quiz2O1", "flowDemo.quiz2O2", "flowDemo.quiz2O3", "flowDemo.quiz2O4"],
     correct: 1,
   },
   {
-    q: "Kdo najpogosteje uporablja odločitveni sistem?",
-    options: ["Stranke", "Dobavitelji", "Vodstvo", "Zunanji revizor"],
+    qKey: "flowDemo.quiz3Q",
+    optionKeys: ["flowDemo.quiz3O1", "flowDemo.quiz3O2", "flowDemo.quiz3O3", "flowDemo.quiz3O4"],
     correct: 2,
   },
   {
-    q: "Zakaj so kakovostni podatki ključni?",
-    options: ["Znižajo ceno strojne opreme", "Pospešijo internet", "Brez njih so odločitve slabe", "Nadomeščajo vodstvo"],
+    qKey: "flowDemo.quiz4Q",
+    optionKeys: ["flowDemo.quiz4O1", "flowDemo.quiz4O2", "flowDemo.quiz4O3", "flowDemo.quiz4O4"],
     correct: 2,
   },
-];
+] as const satisfies ReadonlyArray<{
+  qKey: MessageKey;
+  optionKeys: readonly MessageKey[];
+  correct: number;
+}>;
 
+/*
+ * `keysKey` holds the word stems an answer is matched against, comma separated
+ * — they have to be the reader's language, because the answer they type is.
+ */
 const STUDY_TEST = [
-  {
-    q: "Naštej eno prednost ERP sistema.",
-    keys: ["integr", "povez", "enot", "podat", "proces", "učinkovit"],
-    a: "Enotni podatki in povezani procesi.",
-  },
-  {
-    q: "Kaj je izhod transakcijskega sistema?",
-    keys: ["podat", "zapis", "transakcij", "poročil"],
-    a: "Zapisi o transakcijah za nadaljnjo obdelavo.",
-  },
-  {
-    q: "Zakaj vodstvo potrebuje odločitveni sistem?",
-    keys: ["analiz", "scenarij", "odloč", "napoved", "primerj"],
-    a: "Ker primerja scenarije in podpira odločitve.",
-  },
-];
+  { qKey: "flowDemo.test1Q", keysKey: "flowDemo.test1Keys", aKey: "flowDemo.test1A" },
+  { qKey: "flowDemo.test2Q", keysKey: "flowDemo.test2Keys", aKey: "flowDemo.test2A" },
+  { qKey: "flowDemo.test3Q", keysKey: "flowDemo.test3Keys", aKey: "flowDemo.test3A" },
+] as const satisfies ReadonlyArray<{ qKey: MessageKey; keysKey: MessageKey; aKey: MessageKey }>;
 
 const PAST_NOTES: Array<{
   icon: string;
-  title: string;
+  titleKey: MessageKey;
   sub: (t: Translate<MessageKey>) => string;
 }> = [
   {
     icon: "🎙️",
-    title: "Predavanje IS – 3. teden",
+    titleKey: "flowDemo.past.lecture3",
     sub: (t) => `${t("flowDemo.kindAudio")} · ${t("flowDemo.yesterday")}`,
   },
   {
     icon: "📄",
-    title: "Skripta IS – poglavje 2",
+    titleKey: "flowDemo.past.script2",
     sub: (t) => `${t("flowDemo.kindPdf")} · ${t("flowDemo.onTuesday")}`,
   },
   {
     icon: "📝",
-    title: "Seminarska: ERP",
+    titleKey: "flowDemo.past.seminar",
     sub: (t) => `${t("flowDemo.kindWord")} · ${t("flowDemo.onFriday")}`,
   },
   {
     icon: "🎙️",
-    title: "Predavanje IS – 2. teden",
+    titleKey: "flowDemo.past.lecture2",
     sub: (t) => `${t("flowDemo.kindAudio")} · ${t("flowDemo.lastWeek")}`,
   },
 ];
@@ -928,7 +924,10 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
     if (!this.state.sTShown) {
       if (!this.state.sTVal.trim()) return;
       const low = this.state.sTVal.toLowerCase();
-      const ok = t.keys.some((k) => low.indexOf(k) >= 0);
+      const ok = this.props
+        .t(t.keysKey)
+        .split(",")
+        .some((stem) => low.indexOf(stem.trim().toLowerCase()) >= 0);
       this.setState((p) => ({ sTShown: true, sTScore: p.sTScore + (ok ? 1 : 0), sTOk: ok }));
       return;
     }
@@ -1028,7 +1027,11 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
     const dropIcon = stage >= 1 ? (s.flowSource ? s.flowSource.icon : "🎙️") : "⬇️";
     const t = this.props.t;
     const dropTitle =
-      stage >= 1 ? (s.flowSource ? s.flowSource.noteTitle : t("flowDemo.newNote")) : t("flowDemo.dropTitle");
+      stage >= 1
+        ? s.flowSource
+          ? t(s.flowSource.noteTitleKey)
+          : t("flowDemo.newNote")
+        : t("flowDemo.dropTitle");
     const dropSubtitle =
       stage >= 1
         ? s.flowSource
@@ -1141,7 +1144,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
           </div>
           {PAST_NOTES.map((row) => (
             <div
-              key={row.title}
+              key={row.titleKey}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -1183,7 +1186,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {row.title}
+                  {t(row.titleKey)}
                 </span>
                 <span style={{ fontSize: "11.4px", lineHeight: 1.3, color: "var(--l-second)" }}>{row.sub(t)}</span>
               </span>
@@ -1289,7 +1292,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
               color: "var(--l-label)",
             }}
           >
-            Hiter pregled
+            {this.props.t("flowDemo.note.overview")}
           </span>
           <p
             style={{
@@ -1302,11 +1305,11 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
             }}
           >
               <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-marker)" }}>
-                Poslovni informacijski sistemi
+                {this.props.t("flowDemo.note.leadA")}
               </span>{" "}
-              zbirajo in obdelujejo informacije, ki podpirajo{" "}
+              {this.props.t("flowDemo.note.leadMid")}{" "}
               <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-head-hl)" }}>
-                odločanje v podjetjih
+                {this.props.t("flowDemo.note.leadB")}
               </span>
               .
             </p>
@@ -1323,12 +1326,24 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
               color: "var(--l-label)",
             }}
           >
-            Vrste sistemov
+            {this.props.t("flowDemo.note.typesHeading")}
           </span>
           <div style={{ display: "grid", gap: "5.5px", textAlign: "left" }}>
-            {bullet(noteVis >= 4, "Transakcijski", "– zajema dnevne poslovne dogodke.")}
-            {bullet(noteVis >= 5, "Odločitveni", "– analize za vodstvo in scenarije.")}
-            {bullet(noteVis >= 6, "ERP", "– poveže procese v enoten podatkovni model.")}
+            {bullet(
+              noteVis >= 4,
+              this.props.t("flowDemo.note.bullet1Term"),
+              this.props.t("flowDemo.note.bullet1Rest"),
+            )}
+            {bullet(
+              noteVis >= 5,
+              this.props.t("flowDemo.note.bullet2Term"),
+              this.props.t("flowDemo.note.bullet2Rest"),
+            )}
+            {bullet(
+              noteVis >= 6,
+              this.props.t("flowDemo.note.bullet3Term"),
+              this.props.t("flowDemo.note.bullet3Rest"),
+            )}
           </div>
           <div
             style={{
@@ -1344,10 +1359,10 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
             }}
           >
             <span style={{ fontSize: "10.6px", fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--l-label)" }}>
-              Ključno
+              {this.props.t("flowDemo.note.keyLabel")}
             </span>
             <span style={{ fontSize: "12.4px", lineHeight: 1.45, color: "var(--l-label)" }}>
-              Brez kakovostnih podatkov tudi najboljši sistem ne da dobrih odločitev.
+              {this.props.t("flowDemo.note.keyBody")}
             </span>
           </div>
           {/* Reserved like the lines above it, so the note does not settle
@@ -1715,12 +1730,12 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
                   >
                     <div style={faceBase}>
                       <span style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--l-second)", textAlign: "left" }}>{cardCounter}</span>
-                      <span style={{ fontSize: "15px", fontWeight: 600, lineHeight: 1.35, color: "var(--l-label)" }}>{card.q}</span>
+                      <span style={{ fontSize: "15px", fontWeight: 600, lineHeight: 1.35, color: "var(--l-label)" }}>{this.props.t(card.qKey)}</span>
                       <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--l-second)" }}>{this.props.t("flowDemo.showAnswer")}</span>
                     </div>
                     <div style={{ ...faceBase, transform: "rotateY(180deg)" }}>
                       <span style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--l-second)", textAlign: "left" }}>{cardCounter}</span>
-                      <span style={{ fontSize: "13.4px", fontWeight: 500, lineHeight: 1.45, color: "var(--l-label)" }}>{card.a}</span>
+                      <span style={{ fontSize: "13.4px", fontWeight: 500, lineHeight: 1.45, color: "var(--l-label)" }}>{this.props.t(card.aKey)}</span>
                       <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--l-second)" }}>{this.props.t("flowDemo.swipeHint")}</span>
                     </div>
                   </div>
@@ -1748,11 +1763,12 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
                     {Math.min(s.sQIdx + 1, quiz.length)} / {quiz.length}
                   </span>
                   <span style={{ fontSize: "14px", fontWeight: 650, lineHeight: 1.32, color: "var(--l-label)", textAlign: "left" }}>
-                    {q.q}
+                    {this.props.t(q.qKey)}
                   </span>
                 </div>
                 <div style={{ display: "grid", gap: "6px" }}>
-                  {q.options.map((label, i) => {
+                  {q.optionKeys.map((optionKey, i) => {
+                    const label = this.props.t(optionKey);
                     const picked = s.sQPick === i;
                     const reveal = s.sQPick !== null;
                     const right = i === q.correct;
@@ -1838,7 +1854,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
                     {Math.min(s.sTIdx + 1, test.length)} / {test.length}
                   </span>
                   <span style={{ fontSize: "14px", fontWeight: 650, lineHeight: 1.32, color: "var(--l-label)", textAlign: "left" }}>
-                    {t.q}
+                    {this.props.t(t.qKey)}
                   </span>
                 </div>
                 <input
@@ -1876,7 +1892,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
                     transition: "opacity 200ms ease",
                   }}
                 >
-                  {s.sTShown ? (s.sTOk ? `✓ ${t.a}` : t.a) : ""}
+                  {s.sTShown ? (s.sTOk ? `✓ ${this.props.t(t.aKey)}` : this.props.t(t.aKey)) : ""}
                 </span>
                 <button
                   type="button"

@@ -461,6 +461,176 @@
   object-fit: contain;
 }
 
+/*
+ * The phone's nav: the logo, the call to action, and a hamburger. Everything
+ * else — the language switcher, sign in — moves into the panel it opens, which
+ * is the arrangement almost every marketing site converges on once the bar runs
+ * out of width. Desktop keeps them all in the bar and hides the button.
+ */
+.landing-v2-menu-button {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  /* Fixed, not flexible: the row is tight on a narrow phone and the button was
+     the thing flex chose to squash. */
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.landing-v2-menu-button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.landing-v2-nav.is-scrolled .landing-v2-menu-button {
+  border-color: rgba(0, 0, 0, 0.14);
+}
+
+.landing-v2-nav.is-scrolled .landing-v2-menu-button:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+@media (max-width: 767px) {
+  .landing-v2-nav-desktop-only {
+    display: none;
+  }
+
+  .landing-v2-menu-button {
+    display: inline-flex;
+  }
+}
+
+.landing-v2-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  padding: 1.1rem clamp(1rem, 5vw, 1.6rem) calc(1.6rem + env(safe-area-inset-bottom));
+  background: var(--l-page);
+  animation: landing-menu-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes landing-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-v2-menu {
+    animation: none;
+  }
+}
+
+.landing-v2-menu-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+/* The panel's own close button is always the dark-page variant: the panel does
+   not scroll, so `.is-scrolled` on the header behind it means nothing here. */
+.landing-v2-menu .landing-v2-menu-button,
+.landing-v2-menu .landing-language-trigger {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.landing-v2-menu .landing-language-trigger {
+  width: auto;
+  height: 2.6rem;
+  padding: 0 0.85rem;
+}
+
+/* Inside the panel there is room for the language's name again. */
+.landing-v2-menu .landing-language-name {
+  display: inline;
+}
+
+.landing-v2-menu-scroll {
+  display: grid;
+  align-content: start;
+  gap: 2rem;
+  margin-top: 2.25rem;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.landing-v2-menu-links {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-v2-menu-links a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--l-label);
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.landing-v2-menu-links a .msym {
+  color: var(--l-second);
+}
+
+.landing-v2-menu-group {
+  display: grid;
+  justify-items: start;
+  gap: 0.55rem;
+}
+
+.landing-v2-menu-group h2 {
+  margin: 0 0 0.2rem;
+  color: var(--l-label);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.landing-v2-menu-group a {
+  color: var(--l-second);
+  font-size: 0.98rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.landing-v2-menu-group a:hover {
+  color: var(--l-label);
+}
+
+.landing-v2-menu-actions {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: auto;
+  padding-top: 1.6rem;
+}
+
+.landing-v2-menu-actions .landing-cta {
+  width: 100%;
+}
+
 /* ── Glossy pill CTAs ──────────────────────────────────────── */
 .landing-cta {
   display: inline-flex;
@@ -1263,8 +1433,16 @@
 /*
  * A popover rather than a `<select>`: the native control renders its list in
  * the operating system's language rather than the page's, and on iOS it covers
- * the hero with a wheel. Sits left of the CTA in the nav on every width; on the
- * narrowest phones the trigger drops its label and keeps the globe.
+ * the hero with a wheel.
+ *
+ * Quiet on purpose. The nav's one filled shape is the call to action; a
+ * switcher styled as a second button competes with it, so this is an outline
+ * that fills only on hover. Desktop carries the language's name beside the
+ * globe, the phone carries the globe alone in a circle the size of the CTA
+ * beside it — the arrangement Airbnb, Booking and Apple all land on.
+ *
+ * The full list also lives in the footer (`.landing-footer-language`), which is
+ * where most visitors look for one.
  */
 
 .landing-language {
@@ -1275,28 +1453,34 @@
 
 .landing-language-trigger {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 0.3rem;
-  height: 2.4rem;
-  padding: 0 0.7rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  justify-content: center;
+  gap: 0.4rem;
+  height: 2.6rem;
+  padding: 0 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: transparent;
   color: inherit;
   cursor: pointer;
   font: inherit;
   font-size: 0.9rem;
   font-weight: 600;
   white-space: nowrap;
+  transition: background-color 160ms ease, border-color 160ms ease;
 }
 
 .landing-language-trigger:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .landing-v2-nav.is-scrolled .landing-language-trigger {
-  border-color: rgba(0, 0, 0, 0.12);
-  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.14);
+}
+
+.landing-v2-nav.is-scrolled .landing-language-trigger:hover {
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .landing-language-menu {
@@ -1340,8 +1524,52 @@
   }
 }
 
-@media (max-width: 400px) {
-  .landing-language-trigger span:not(.msym) {
+/*
+ * Phones: the globe alone, in a circle that matches the CTA's height so the two
+ * sit on one line rather than one looking clipped against the other. The name
+ * goes — at this width it either truncated or pushed the CTA off the edge.
+ */
+@media (max-width: 767px) {
+  .landing-language-name {
     display: none;
   }
+
+  .landing-language-trigger {
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+  }
+}
+
+/* The footer list: the placement visitors actually go looking for. */
+.landing-footer-language ul {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-footer-language button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--l-second);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.landing-footer-language button:hover,
+.landing-footer-language button.is-active {
+  color: var(--l-label);
+}
+
+.landing-footer-language button.is-active {
+  font-weight: 650;
+}
+
+.landing-footer-language button[aria-busy="true"] {
+  opacity: 0.55;
 }

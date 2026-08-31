@@ -155,9 +155,19 @@ export function LanguageSettingsRow() {
 }
 
 /**
- * The landing-page control. A plain popover rather than a `<select>`: the
- * native control renders as the operating system's language rather than the
- * page's, and on iOS it covers the hero with a wheel.
+ * The landing-page control, in the nav.
+ *
+ * A globe rather than a labelled button: the nav's one filled shape should be
+ * the call to action, and a switcher that reads as a second button competes
+ * with it — which is why every marketing site that keeps one up here (Airbnb,
+ * Booking, Apple) keeps it as a quiet icon. Desktop has room for the language's
+ * name beside the globe; the phone shows the globe alone.
+ *
+ * The full list also sits in the footer, where visitors are used to finding it.
+ *
+ * A plain popover rather than a `<select>`: the native control renders as the
+ * operating system's language rather than the page's, and on iOS it covers the
+ * hero with a wheel.
  */
 export function LandingLanguagePicker() {
   const { locale, t } = useTranslations();
@@ -198,12 +208,12 @@ export function LandingLanguagePicker() {
         className="landing-language-trigger"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={t("settings.language.title")}
+        aria-label={`${t("settings.language.title")}: ${LOCALE_LABELS[locale]}`}
         onClick={() => setOpen((value) => !value)}
       >
-        <Msym name="language" size="1.15rem" />
-        <span>{LOCALE_LABELS[locale]}</span>
-        <Msym name="expand_more" size="1.05rem" />
+        <Msym name="language" size="1.2rem" />
+        {/* Hidden below the phone breakpoint, where the globe alone carries it. */}
+        <span className="landing-language-name">{LOCALE_LABELS[locale]}</span>
       </button>
 
       {open ? (
@@ -220,6 +230,41 @@ export function LandingLanguagePicker() {
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The footer control: the five languages laid out in full, the placement most
+ * marketing sites use. Nothing opens — a visitor scanning the footer for their
+ * language sees it and clicks it.
+ */
+export function FooterLanguagePicker() {
+  const { locale, t } = useTranslations();
+  const { change, pendingLocale } = useLocaleChange();
+
+  return (
+    <div className="landing-v2-footer-group landing-footer-language">
+      <h2>{t("settings.language.title")}</h2>
+      <ul>
+        {LOCALES.map((option) => (
+          <li key={option}>
+            <button
+              type="button"
+              className={option === locale ? "is-active" : undefined}
+              aria-current={option === locale ? "true" : undefined}
+              aria-busy={pendingLocale === option}
+              onClick={() => {
+                if (option !== locale) {
+                  change(option);
+                }
+              }}
+            >
+              {LOCALE_LABELS[option]}
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -1,5 +1,8 @@
 import type { CSSProperties } from "react";
 
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+import type { Translate } from "@/lib/i18n/translate";
+
 export type SourceKind = "audio" | "pdf" | "text" | "link";
 export type NoteStatus = "uploading" | "queued" | "transcribing" | "generating_notes" | "ready" | "failed";
 
@@ -7,7 +10,18 @@ export type PreviewNote = {
   id: string;
   emoji: string;
   title: string;
+  /*
+   * Which sample lecture this note is. Carried on the row rather than guessed
+   * from the title, which used to be matched against Slovenian words and could
+   * not survive the title being translated.
+   */
+  theme: NoteThemeKey;
   source: SourceKind;
+  /**
+   * An ISO date, formatted per locale by the replica exactly as the real
+   * library formats a note's — a written-out date would be Slovenian in every
+   * language, and the date column is chrome, not the learner's material.
+   */
   date: string;
   status: NoteStatus;
 };
@@ -21,12 +35,20 @@ export type PreviewFolder = {
 
 export type CaptureMode = "record" | "upload" | "file" | "link";
 
+/*
+ * The replica's chrome is translated; the study material inside it is not.
+ * Every label, caption and status below carries a message key. The flashcards,
+ * quiz questions, transcript and note bodies further down stay in Slovenian:
+ * they stand in for the learner's own coursework, which is in whatever language
+ * it was written in however the interface is set.
+ */
+
 /* The create sheet's four rows, as `createOptions` lists them. */
-export const CREATE_OPTIONS: Array<{ id: CaptureMode; emoji: string; label: string }> = [
-  { id: "record", emoji: "🎙️", label: "Posnemi zvok" },
-  { id: "upload", emoji: "🔊", label: "Naloži zvok" },
-  { id: "file", emoji: "📚", label: "PDF, datoteka ali besedilo" },
-  { id: "link", emoji: "🔗", label: "Spletna povezava" },
+export const CREATE_OPTIONS: Array<{ id: CaptureMode; emoji: string; labelKey: MessageKey }> = [
+  { id: "record", emoji: "🎙️", labelKey: "preview.create.record" },
+  { id: "upload", emoji: "🔊", labelKey: "preview.create.upload" },
+  { id: "file", emoji: "📚", labelKey: "preview.create.file" },
+  { id: "link", emoji: "🔗", labelKey: "preview.create.link" },
 ];
 
 /*
@@ -36,47 +58,56 @@ export const CREATE_OPTIONS: Array<{ id: CaptureMode; emoji: string; label: stri
 export const CAPTURE: Record<
   CaptureMode,
   {
-    title: string;
-    cta: string;
+    titleKey: MessageKey;
+    ctaKey: MessageKey;
     emoji: string;
     source: SourceKind;
+    placeholderKey?: MessageKey;
+    /* The literal placeholder, for the one that is a URL in every language. */
     placeholder?: string;
-    noteTitle: string;
+    noteTitleKey: MessageKey;
     /* The demo already has something to work with, so the capture screen opens
        on a chosen file rather than an empty picker: this is what it shows. */
     pickedName?: string;
     pickedMeta?: string;
+    pickedMetaKey?: MessageKey;
     pickedText?: string;
   }
 > = {
-  record: { title: "Posnemi zvok", cta: "Ustavi in ustvari zapisek", emoji: "🎙️", source: "audio", noteTitle: "Nov posnetek predavanja" },
-  upload: {
-    title: "Naloži zvok",
-    cta: "Ustvari zapisek",
-    emoji: "🔊",
-    placeholder: "MP3, M4A, WAV ali WEBM",
+  record: {
+    titleKey: "preview.create.record",
+    ctaKey: "preview.capture.stopAndCreate",
+    emoji: "🎙️",
     source: "audio",
-    noteTitle: "Naložen posnetek",
+    noteTitleKey: "preview.noteTitle.record",
+  },
+  upload: {
+    titleKey: "preview.create.upload",
+    ctaKey: "preview.capture.create",
+    emoji: "🔊",
+    placeholderKey: "capture.audioFormats",
+    source: "audio",
+    noteTitleKey: "preview.noteTitle.upload",
     pickedName: "Predavanje-IS-4.m4a",
     pickedMeta: "51,2 MB • 47:38",
   },
   file: {
-    title: "PDF, datoteka ali besedilo",
-    cta: "Ustvari zapisek",
+    titleKey: "preview.create.file",
+    ctaKey: "preview.capture.create",
     emoji: "📚",
-    placeholder: "PDF, DOCX, PPTX ali slika",
+    placeholderKey: "preview.capture.fileFormats",
     source: "pdf",
-    noteTitle: "Naloženo gradivo",
+    noteTitleKey: "preview.noteTitle.file",
     pickedName: "Poslovni-IS-skripta.pdf",
-    pickedMeta: "24 strani • 3,1 MB",
+    pickedMetaKey: "preview.sheet.pageCount",
   },
   link: {
-    title: "Spletna povezava",
-    cta: "Ustvari zapisek",
+    titleKey: "preview.create.link",
+    ctaKey: "preview.capture.create",
     emoji: "🔗",
     placeholder: "https://…",
     source: "link",
-    noteTitle: "Uvožena povezava",
+    noteTitleKey: "preview.noteTitle.link",
     pickedText: "https://www.finance.si/erp-sistemi-v-praksi",
   },
 };
@@ -84,26 +115,36 @@ export const CAPTURE: Record<
 /* The help centre's three groups, exactly as the design's `helpSections` list
    them. The rows lead somewhere in the real app; here they are the design's
    own inert rows. */
-export const HELP_SECTIONS = [
+export const HELP_SECTIONS: Array<{ titleKey: MessageKey; itemKeys: MessageKey[] }> = [
   {
-    title: "Pogosto",
-    items: ["Družinski paket?", "Ali lahko podarim Memo?", "Ali podpirate moj jezik?", "Predlog funkcije"],
+    titleKey: "help.category.common",
+    itemKeys: [
+      "preview.help.familyTitle",
+      "preview.help.giftTitle",
+      "preview.help.languageTitle",
+      "preview.help.featureTitle",
+    ],
   },
   {
-    title: "Snemanje in zapiski",
-    items: ["Video povezava ne deluje", "Ne morem naložiti zvoka", "Prepis je prekratek ali netočen"],
+    titleKey: "help.category.recording",
+    itemKeys: ["preview.help.videoTitle", "preview.help.audioTitle", "preview.help.transcriptTitle"],
   },
   {
-    title: "Račun in dostop",
-    items: ["Unovči kodo", "Politika zasebnosti", "Politika vračil", "Pogoji uporabe"],
+    titleKey: "help.category.account",
+    itemKeys: [
+      "preview.help.redeemTitle",
+      "landing.footer.privacy",
+      "landing.footer.refunds",
+      "landing.footer.terms",
+    ],
   },
 ];
 
 export const THEME_OPTIONS = [
-  { value: "system", label: "Sistem", icon: "💻" },
-  { value: "light", label: "Svetla", icon: "☀️" },
-  { value: "dark", label: "Temna", icon: "🌙" },
-] as const;
+  { value: "system", labelKey: "settings.theme.system", icon: "💻" },
+  { value: "light", labelKey: "settings.theme.light", icon: "☀️" },
+  { value: "dark", labelKey: "settings.theme.dark", icon: "🌙" },
+] as const satisfies ReadonlyArray<{ value: string; labelKey: MessageKey; icon: string }>;
 
 export type PreviewTheme = (typeof THEME_OPTIONS)[number]["value"];
 
@@ -179,22 +220,22 @@ export const DARK_TOKENS: Record<string, string> = {
 };
 
 export const TABS = [
-  { id: "notes", label: "Zapiski", icon: "description", tint: "#f45f5a" },
-  { id: "flashcards", label: "Flashcards", icon: "style", tint: "oklch(0.66 0.15 295)" },
-  { id: "quiz", label: "Kviz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
-  { id: "test", label: "Test", icon: "assignment", tint: "oklch(0.66 0.15 150)" },
-  { id: "transcript", label: "Prepis", icon: "text_snippet", tint: "oklch(0.66 0.15 250)" },
-] as const;
+  { id: "notes", labelKey: "note.tab.notes", icon: "description", tint: "#f45f5a" },
+  { id: "flashcards", labelKey: "note.tab.flashcards", icon: "style", tint: "oklch(0.66 0.15 295)" },
+  { id: "quiz", labelKey: "note.tab.quiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
+  { id: "test", labelKey: "note.tab.test", icon: "assignment", tint: "oklch(0.66 0.15 150)" },
+  { id: "transcript", labelKey: "note.tab.transcript", icon: "text_snippet", tint: "oklch(0.66 0.15 250)" },
+] as const satisfies ReadonlyArray<{ id: string; labelKey: MessageKey; icon: string; tint: string }>;
 
 export type NoteTab = (typeof TABS)[number]["id"];
 
 /** What the phone's nav bar names each study screen. Flashcards names nothing. */
-export const SUB_SCREEN_TITLES: Record<NoteTab, string> = {
-  notes: "",
-  flashcards: "",
-  quiz: "Kviz",
-  test: "Vadbeni test",
-  transcript: "Prepis",
+export const SUB_SCREEN_TITLE_KEYS: Record<NoteTab, MessageKey | null> = {
+  notes: null,
+  flashcards: null,
+  quiz: "note.tab.quiz",
+  test: "preview.subScreen.test",
+  transcript: "note.tab.transcript",
 };
 
 export type NoteThemeKey = "is" | "micro" | "anatomy" | "stats";
@@ -210,164 +251,187 @@ export type ThemeStudy = {
   chatReply: string;
 };
 
-export const THEME_STUDY: Record<NoteThemeKey, ThemeStudy> = {
+/*
+ * The same shape, by key. The demo lecture is the first thing a visitor reads,
+ * so it is written in their language like everything else around it — the
+ * boundary that keeps a *learner's own* material in its original language
+ * applies inside the app, not to the marketing page's sample.
+ */
+export type ThemeStudyKeys = {
+  cards: Array<{ frontKey: MessageKey; backKey: MessageKey }>;
+  practice: Array<{ id: string; promptKey: MessageKey }>;
+  quiz: Array<{
+    questionKey: MessageKey;
+    optionKeys: MessageKey[];
+    correct: number;
+    explanationKey: MessageKey;
+  }>;
+  transcript: Array<{ time: string; textKey: MessageKey }>;
+  chat: Array<{ role: ChatMessage["role"]; textKey: MessageKey }>;
+  chatReplyKey: MessageKey;
+};
+
+const TIMES_IS = ["00:12", "04:38", "11:05", "23:41"].map(String);
+const TIMES_MICRO = ["00:20", "06:14", "14:52", "27:09"].map(String);
+const TIMES_ANATOMY = ["00:15", "05:47", "13:22", "25:36"].map(String);
+const TIMES_STATS = ["00:18", "07:42", "15:10", "26:55"].map(String);
+const CORRECT_IS_1 = 0;
+const CORRECT_IS_2 = 1;
+const CORRECT_MICRO_1 = 0;
+const CORRECT_MICRO_2 = 0;
+const CORRECT_ANATOMY_1 = 0;
+const CORRECT_ANATOMY_2 = 2;
+const CORRECT_STATS_1 = 0;
+const CORRECT_STATS_2 = 1;
+
+export const THEME_STUDY_KEYS: Record<NoteThemeKey, ThemeStudyKeys> = {
   is: {
     cards: [
-      { front: "Kaj je transakcijski informacijski sistem?", back: "Sistem, ki zajema in obdeluje vsakodnevne poslovne dogodke, npr. naročila in plačila." },
-      { front: "Kaj poveže ERP sistem?", back: "Finance, nabavo, proizvodnjo, prodajo in kadre v skupno podatkovno bazo." },
-      { front: "Zakaj je prenova procesov pomembna?", back: "Ker uvedba informatike v slab proces le pospeši slabe prakse." },
+      { frontKey: "pv.is.card1F", backKey: "pv.is.card1B" },
+      { frontKey: "pv.is.card2F", backKey: "pv.is.card2B" },
+      { frontKey: "pv.is.card3F", backKey: "pv.is.card3B" },
     ],
     practice: [
-      { id: "p1", prompt: "Primerjaj funkcijske in integrirane informacijske sisteme." },
-      { id: "p2", prompt: "Opiši, zakaj je prenova poslovnih procesov pogoj za uspešno uvedbo ERP." },
+      { id: "p1", promptKey: "pv.is.practice1" },
+      { id: "p2", promptKey: "pv.is.practice2" },
     ],
     quiz: [
       {
-        question: "Kaj je glavna prednost integriranih IS pred funkcijskimi?",
-        options: ["Skupna podatkovna baza in manj podvajanja", "Nižja cena licenc", "Manj uporabnikov v sistemu", "Krajši čas snemanja predavanj"],
-        correct: 0,
-        explanation: "Integrirani sistemi si delijo eno bazo, zato podatka ni treba vnašati večkrat, poročila pa so vedno skladna.",
+        questionKey: "pv.is.quiz1Q",
+        optionKeys: ["pv.is.quiz1O1", "pv.is.quiz1O2", "pv.is.quiz1O3", "pv.is.quiz1O4"],
+        correct: CORRECT_IS_1,
+        explanationKey: "pv.is.quiz1E",
       },
       {
-        question: "Kateri sistem podpira odločanje vodstva?",
-        options: ["Transakcijski sistem", "Poslovodski informacijski sistem", "Sistem za zajem podatkov", "Operacijski sistem"],
-        correct: 1,
-        explanation: "Poslovodski (MIS) sistemi povzamejo transakcijske podatke v poročila, ki jih vodstvo uporabi za odločitve.",
+        questionKey: "pv.is.quiz2Q",
+        optionKeys: ["pv.is.quiz2O1", "pv.is.quiz2O2", "pv.is.quiz2O3", "pv.is.quiz2O4"],
+        correct: CORRECT_IS_2,
+        explanationKey: "pv.is.quiz2E",
       },
     ],
     transcript: [
-      { time: "00:12", text: "Danes bomo pogledali, zakaj so poslovni informacijski sistemi jedro sodobnega podjetja." },
-      { time: "04:38", text: "Najprej ločimo transakcijske sisteme od poslovodskih, ker imajo različne uporabnike." },
-      { time: "11:05", text: "ERP je odgovor na razdrobljenost podatkov med oddelki." },
-      { time: "23:41", text: "Pred uvedbo je nujna prenova procesov, sicer digitaliziramo napake." },
+      { time: TIMES_IS[0], textKey: "pv.is.tr1" },
+      { time: TIMES_IS[1], textKey: "pv.is.tr2" },
+      { time: TIMES_IS[2], textKey: "pv.is.tr3" },
+      { time: TIMES_IS[3], textKey: "pv.is.tr4" },
     ],
     chat: [
-      { role: "assistant", text: "Živjo! Vprašaj me karkoli o tem zapisku." },
-      { role: "user", text: "Zakaj je ERP pomemben za izpit?" },
-      { role: "assistant", text: "Ker povezuje oddelke v eno bazo – profesor to pogosto vpraša skupaj s prenovo procesov." },
+      { role: "assistant", textKey: "preview.chatGreeting" },
+      { role: "user", textKey: "pv.is.chatQ" },
+      { role: "assistant", textKey: "pv.is.chatA" },
     ],
-    chatReply: "V zapisku to najdeš pod “Hiter pregled” – ERP poveže oddelke v skupno bazo in zmanjša podvajanje podatkov.",
+    chatReplyKey: "pv.is.chatReply",
   },
   micro: {
     cards: [
-      { front: "Kaj meri cenovna elastičnost povpraševanja?", back: "Za koliko odstotkov se spremeni povpraševana količina, če se cena spremeni za en odstotek." },
-      { front: "Kdaj je povpraševanje elastično?", back: "Ko je koeficient večji od 1 – takrat dvig cene zniža skupni prihodek." },
-      { front: "Kaj vpliva na elastičnost?", back: "Število substitutov, delež izdatka v proračunu in dolžina obdobja." },
+      { frontKey: "pv.micro.card1F", backKey: "pv.micro.card1B" },
+      { frontKey: "pv.micro.card2F", backKey: "pv.micro.card2B" },
+      { frontKey: "pv.micro.card3F", backKey: "pv.micro.card3B" },
     ],
     practice: [
-      { id: "p1", prompt: "Izračunaj koeficient elastičnosti in razloži učinek na skupni prihodek." },
-      { id: "p2", prompt: "Primerjaj elastičnost nujnih in luksuznih dobrin ter utemelji razliko." },
+      { id: "p1", promptKey: "pv.micro.practice1" },
+      { id: "p2", promptKey: "pv.micro.practice2" },
     ],
     quiz: [
       {
-        question: "Kaj velja pri elastičnem povpraševanju?",
-        options: ["Dvig cene zniža skupni prihodek", "Dvig cene poveča prihodek", "Količina se ne spremeni", "Krivulja ponudbe je navpična"],
-        correct: 0,
-        explanation: "Pri koeficientu nad 1 količina pade močneje, kot zraste cena, zato skupni prihodek upade.",
+        questionKey: "pv.micro.quiz1Q",
+        optionKeys: ["pv.micro.quiz1O1", "pv.micro.quiz1O2", "pv.micro.quiz1O3", "pv.micro.quiz1O4"],
+        correct: CORRECT_MICRO_1,
+        explanationKey: "pv.micro.quiz1E",
       },
       {
-        question: "Katera dobrina ima najbolj neelastično povpraševanje?",
-        options: ["Zdravila na recept", "Letalska karta za počitnice", "Večerja v restavraciji", "Nova igralna konzola"],
-        correct: 0,
-        explanation: "Nujne dobrine brez substitutov kupimo tudi ob višji ceni, zato je povpraševanje neelastično.",
+        questionKey: "pv.micro.quiz2Q",
+        optionKeys: ["pv.micro.quiz2O1", "pv.micro.quiz2O2", "pv.micro.quiz2O3", "pv.micro.quiz2O4"],
+        correct: CORRECT_MICRO_2,
+        explanationKey: "pv.micro.quiz2E",
       },
     ],
     transcript: [
-      { time: "00:20", text: "Elastičnost je razmerje med odstotno spremembo količine in odstotno spremembo cene." },
-      { time: "06:14", text: "Če je koeficient večji od ena, govorimo o elastičnem povpraševanju." },
-      { time: "14:52", text: "Poglejmo primer: dvig cene kave za deset odstotkov in padec količine za petnajst." },
-      { time: "27:09", text: "Prihodek je največji tam, kjer je elastičnost enaka ena." },
+      { time: TIMES_MICRO[0], textKey: "pv.micro.tr1" },
+      { time: TIMES_MICRO[1], textKey: "pv.micro.tr2" },
+      { time: TIMES_MICRO[2], textKey: "pv.micro.tr3" },
+      { time: TIMES_MICRO[3], textKey: "pv.micro.tr4" },
     ],
     chat: [
-      { role: "assistant", text: "Živjo! Vprašaj me karkoli o tem zapisku." },
-      { role: "user", text: "Kako izračunam elastičnost?" },
-      { role: "assistant", text: "Odstotno spremembo količine deliš z odstotno spremembo cene – predznak zanemariš, gledaš le velikost." },
+      { role: "assistant", textKey: "preview.chatGreeting" },
+      { role: "user", textKey: "pv.micro.chatQ" },
+      { role: "assistant", textKey: "pv.micro.chatA" },
     ],
-    chatReply: "V zapisku je to pod “Hiter pregled” – koeficient nad 1 pomeni elastično povpraševanje in nižji prihodek ob dvigu cene.",
+    chatReplyKey: "pv.micro.chatReply",
   },
   anatomy: {
     cards: [
-      { front: "Kateri so glavni deli nevrona?", back: "Dendriti, celično telo, akson in sinaptični končiči." },
-      { front: "Kaj naredi mielinska ovojnica?", back: "Pospeši prevajanje impulza s skoki med Ranvierjevimi zažemki." },
-      { front: "Kaj obsega osrednji živčni sistem?", back: "Možgane in hrbtenjačo." },
+      { frontKey: "pv.anatomy.card1F", backKey: "pv.anatomy.card1B" },
+      { frontKey: "pv.anatomy.card2F", backKey: "pv.anatomy.card2B" },
+      { frontKey: "pv.anatomy.card3F", backKey: "pv.anatomy.card3B" },
     ],
     practice: [
-      { id: "p1", prompt: "Opiši pot dražljaja od receptorja do efektorja." },
-      { id: "p2", prompt: "Razloži načelo vse ali nič pri akcijskem potencialu." },
+      { id: "p1", promptKey: "pv.anatomy.practice1" },
+      { id: "p2", promptKey: "pv.anatomy.practice2" },
     ],
     quiz: [
       {
-        question: "Kje se signal med nevronoma prenese kemično?",
-        options: ["V sinapsi", "V dendritu", "V mielinski ovojnici", "V celičnem jedru"],
-        correct: 0,
-        explanation: "V sinaptični špranji se sproščajo nevrotransmiterji, ki signal prenesejo na naslednji nevron.",
+        questionKey: "pv.anatomy.quiz1Q",
+        optionKeys: ["pv.anatomy.quiz1O1", "pv.anatomy.quiz1O2", "pv.anatomy.quiz1O3", "pv.anatomy.quiz1O4"],
+        correct: CORRECT_ANATOMY_1,
+        explanationKey: "pv.anatomy.quiz1E",
       },
       {
-        question: "Kaj spada v obkrajni živčni sistem?",
-        options: ["Hrbtenjača", "Možgansko deblo", "Periferni živec", "Mali možgani"],
-        correct: 2,
-        explanation: "Obkrajni živčni sistem sestavljajo živci in gangliji zunaj možganov in hrbtenjače.",
+        questionKey: "pv.anatomy.quiz2Q",
+        optionKeys: ["pv.anatomy.quiz2O1", "pv.anatomy.quiz2O2", "pv.anatomy.quiz2O3", "pv.anatomy.quiz2O4"],
+        correct: CORRECT_ANATOMY_2,
+        explanationKey: "pv.anatomy.quiz2E",
       },
     ],
     transcript: [
-      { time: "00:15", text: "Osnovna enota živčevja je nevron, ki dražljaj prevaja v obliki akcijskega potenciala." },
-      { time: "05:47", text: "Mielinska ovojnica omogoča skokovito prevajanje in s tem veliko hitrost." },
-      { time: "13:22", text: "V sinapsi se električni signal pretvori v kemičnega." },
-      { time: "25:36", text: "Refleksni lok pokazuje najkrajšo pot od receptorja do efektorja." },
+      { time: TIMES_ANATOMY[0], textKey: "pv.anatomy.tr1" },
+      { time: TIMES_ANATOMY[1], textKey: "pv.anatomy.tr2" },
+      { time: TIMES_ANATOMY[2], textKey: "pv.anatomy.tr3" },
+      { time: TIMES_ANATOMY[3], textKey: "pv.anatomy.tr4" },
     ],
     chat: [
-      { role: "assistant", text: "Živjo! Vprašaj me karkoli o tem zapisku." },
-      { role: "user", text: "Kaj moram vedeti o sinapsi?" },
-      { role: "assistant", text: "Da je to stik med nevronoma, kjer nevrotransmiterji prenesejo signal – prenos je enosmeren." },
+      { role: "assistant", textKey: "preview.chatGreeting" },
+      { role: "user", textKey: "pv.anatomy.chatQ" },
+      { role: "assistant", textKey: "pv.anatomy.chatA" },
     ],
-    chatReply: "V zapisku je to pod “Hiter pregled” – dražljaj potuje po aksonu do sinapse, kjer se prenese kemično.",
+    chatReplyKey: "pv.anatomy.chatReply",
   },
   stats: {
     cards: [
-      { front: "Kaj je ničelna hipoteza?", back: "Predpostavka, da razlike ni — testiramo, ali jo podatki ovržejo." },
-      { front: "Kaj pove p-vrednost?", back: "Verjetnost, da bi ob veljavni ničelni hipotezi dobili tako ali bolj skrajen rezultat." },
-      { front: "Kdaj ničelno hipotezo zavrnemo?", back: "Ko je p-vrednost manjša od izbrane stopnje značilnosti, običajno 0,05." },
+      { frontKey: "pv.stats.card1F", backKey: "pv.stats.card1B" },
+      { frontKey: "pv.stats.card2F", backKey: "pv.stats.card2B" },
+      { frontKey: "pv.stats.card3F", backKey: "pv.stats.card3B" },
     ],
     practice: [
-      { id: "p1", prompt: "Razloži razliko med napako prve in druge vrste." },
-      { id: "p2", prompt: "Opiši, zakaj nizka p-vrednost sama po sebi ne dokazuje velikega učinka." },
+      { id: "p1", promptKey: "pv.stats.practice1" },
+      { id: "p2", promptKey: "pv.stats.practice2" },
     ],
     quiz: [
       {
-        question: "Kaj pomeni p-vrednost 0,03 pri stopnji značilnosti 0,05?",
-        options: [
-          "Ničelno hipotezo zavrnemo",
-          "Ničelno hipotezo sprejmemo kot dokazano",
-          "Vzorec je premajhen",
-          "Rezultat je gotovo praktično pomemben",
-        ],
-        correct: 0,
-        explanation: "Ker je 0,03 < 0,05, je rezultat statistično značilen in ničelno hipotezo zavrnemo.",
+        questionKey: "pv.stats.quiz1Q",
+        optionKeys: ["pv.stats.quiz1O1", "pv.stats.quiz1O2", "pv.stats.quiz1O3", "pv.stats.quiz1O4"],
+        correct: CORRECT_STATS_1,
+        explanationKey: "pv.stats.quiz1E",
       },
       {
-        question: "Kaj je napaka prve vrste?",
-        options: [
-          "Ohranimo napačno ničelno hipotezo",
-          "Zavrnemo pravilno ničelno hipotezo",
-          "Napačno izmerimo vzorec",
-          "Uporabimo napačno formulo",
-        ],
-        correct: 1,
-        explanation: "Napaka prve vrste (alfa) pomeni, da zavrnemo ničelno hipotezo, ki je v resnici pravilna.",
+        questionKey: "pv.stats.quiz2Q",
+        optionKeys: ["pv.stats.quiz2O1", "pv.stats.quiz2O2", "pv.stats.quiz2O3", "pv.stats.quiz2O4"],
+        correct: CORRECT_STATS_2,
+        explanationKey: "pv.stats.quiz2E",
       },
     ],
     transcript: [
-      { time: "00:18", text: "Hipotezno testiranje je postopek, s katerim iz vzorca sklepamo o celotni populaciji." },
-      { time: "07:42", text: "Ničelna hipoteza trdi, da razlike ni; alternativna, da razlika obstaja." },
-      { time: "15:10", text: "P-vrednost primerjamo s stopnjo značilnosti, ki jo določimo vnaprej." },
-      { time: "26:55", text: "Statistična značilnost ni isto kot praktična pomembnost rezultata." },
+      { time: TIMES_STATS[0], textKey: "pv.stats.tr1" },
+      { time: TIMES_STATS[1], textKey: "pv.stats.tr2" },
+      { time: TIMES_STATS[2], textKey: "pv.stats.tr3" },
+      { time: TIMES_STATS[3], textKey: "pv.stats.tr4" },
     ],
     chat: [
-      { role: "assistant", text: "Živjo! Vprašaj me karkoli o tem zapisku." },
-      { role: "user", text: "Kdaj zavrnem ničelno hipotezo?" },
-      { role: "assistant", text: "Ko je p-vrednost manjša od stopnje značilnosti – najpogosteje 0,05." },
+      { role: "assistant", textKey: "preview.chatGreeting" },
+      { role: "user", textKey: "pv.stats.chatQ" },
+      { role: "assistant", textKey: "pv.stats.chatA" },
     ],
-    chatReply: "V zapisku je to pod “Hiter pregled” – p-vrednost pod stopnjo značilnosti pomeni, da ničelno hipotezo zavrnemo.",
+    chatReplyKey: "pv.stats.chatReply",
   },
 };
 
@@ -437,94 +501,60 @@ export function blockStyle(kind: NoteBlockKind): CSSProperties {
   };
 }
 
-export const NOTE_BODIES: Record<NoteThemeKey, NoteBlock[]> = {
+export type NoteBlockKeys = { textKey: MessageKey; kind: NoteBlockKind };
+
+export const NOTE_BODY_KEYS: Record<NoteThemeKey, NoteBlockKeys[]> = {
   is: [
-    { kind: "h2", text: "Pregled" },
-    {
-      kind: "p",
-      text: "Poslovni informacijski sistemi zbirajo, obdelujejo in posredujejo informacije, ki podpirajo upravljanje in odločanje. Z razvojem od funkcijskih do integriranih rešitev, kot so ERP sistemi, se povečuje učinkovitost in preglednost poslovanja.",
-    },
-    {
-      kind: "callout-definition",
-      text: "Integriran sistem hrani podatke v eni bazi, zato pot od dogodka do odločitve traja minute in ne dni.",
-    },
-    { kind: "h2", text: "Ključni pojmi" },
-    { kind: "li", text: "Transakcijski sistemi zajemajo podatke, poslovodski jih povzamejo v poročila." },
-    { kind: "li", text: "ERP poveže finance, nabavo, proizvodnjo in kadre v eno bazo." },
-    { kind: "li", text: "Prenova procesov pred uvedbo prepreči prenos slabih praks." },
-    { kind: "callout-common_mistake", text: "Pozor: informatika v slabem procesu ga le pospeši — najprej prenova, šele nato uvedba." },
-    { kind: "h2", text: "Za izpit" },
-    {
-      kind: "callout-key_takeaway",
-      text: "Zapomni si: integriran sistem skrajša pot od dogodka do odločitve, kar je pogosto izpitno vprašanje.",
-    },
-    { kind: "li", text: "Znaj primerjati funkcijske in integrirane sisteme na primeru." },
+    { kind: "h2", textKey: "pv.body.overview" },
+    { kind: "p", textKey: "pv.is.body1" },
+    { kind: "callout-definition", textKey: "pv.is.bodyDef" },
+    { kind: "h2", textKey: "pv.body.keyTerms" },
+    { kind: "li", textKey: "pv.is.bodyLi1" },
+    { kind: "li", textKey: "pv.is.bodyLi2" },
+    { kind: "li", textKey: "pv.is.bodyLi3" },
+    { kind: "callout-common_mistake", textKey: "pv.is.bodyMistake" },
+    { kind: "h2", textKey: "pv.body.forExam" },
+    { kind: "callout-key_takeaway", textKey: "pv.is.bodyKey" },
+    { kind: "li", textKey: "pv.is.bodyLast" },
   ],
   micro: [
-    { kind: "h2", text: "Pregled" },
-    {
-      kind: "p",
-      text: "Cenovna elastičnost povpraševanja pove, za koliko odstotkov se spremeni povpraševana količina, če se cena spremeni za en odstotek. Kadar je koeficient večji od 1, je povpraševanje elastično in dvig cene zniža skupni prihodek.",
-    },
-    {
-      kind: "callout-definition",
-      text: "Koeficient elastičnosti = odstotna sprememba količine / odstotna sprememba cene.",
-    },
-    { kind: "h2", text: "Ključni pojmi" },
-    { kind: "li", text: "Več substitutov in daljše obdobje pomenita bolj elastično povpraševanje." },
-    { kind: "li", text: "Nujne dobrine so neelastične, luksuzne pa elastične." },
-    { kind: "li", text: "Prihodek je največji tam, kjer je elastičnost enaka 1." },
-    { kind: "callout-common_mistake", text: "Pozor: premik krivulje ni isto kot premik po krivulji." },
-    { kind: "h2", text: "Za izpit" },
-    {
-      kind: "callout-key_takeaway",
-      text: "Zapomni si: nad točko enotske elastičnosti vsak dvig cene skupni prihodek zmanjša.",
-    },
-    { kind: "li", text: "Znaj izračunati koeficient in razložiti učinek na prihodek." },
+    { kind: "h2", textKey: "pv.body.overview" },
+    { kind: "p", textKey: "pv.micro.body1" },
+    { kind: "callout-definition", textKey: "pv.micro.bodyDef" },
+    { kind: "h2", textKey: "pv.body.keyTerms" },
+    { kind: "li", textKey: "pv.micro.bodyLi1" },
+    { kind: "li", textKey: "pv.micro.bodyLi2" },
+    { kind: "li", textKey: "pv.micro.bodyLi3" },
+    { kind: "callout-common_mistake", textKey: "pv.micro.bodyMistake" },
+    { kind: "h2", textKey: "pv.body.forExam" },
+    { kind: "callout-key_takeaway", textKey: "pv.micro.bodyKey" },
+    { kind: "li", textKey: "pv.micro.bodyLast" },
   ],
   anatomy: [
-    { kind: "h2", text: "Pregled" },
-    {
-      kind: "p",
-      text: "Živčni sistem sprejema, obdeluje in prenaša informacije po telesu. Osnovna enota je nevron, ki dražljaj prevaja po aksonu do sinapse, kjer se signal prenese kemično.",
-    },
-    {
-      kind: "callout-definition",
-      text: "Akcijski potencial je odziv po načelu vse ali nič — jakost dražljaja se kodira s frekvenco impulzov.",
-    },
-    { kind: "h2", text: "Ključni pojmi" },
-    { kind: "li", text: "Nevron sestavljajo dendriti, celično telo, akson in sinaptični končiči." },
-    { kind: "li", text: "Mielinska ovojnica močno pospeši prevajanje impulza po aksonu." },
-    { kind: "li", text: "Refleksni lok teče od receptorja prek hrbtenjače do efektorja." },
-    { kind: "callout-common_mistake", text: "Pozor: močnejši dražljaj ne pomeni večjega impulza, ampak pogostejšega." },
-    { kind: "h2", text: "Za izpit" },
-    {
-      kind: "callout-key_takeaway",
-      text: "Zapomni si: pot dražljaja od receptorja do odziva je osnova za razlago refleksov.",
-    },
-    { kind: "li", text: "Znaj narisati refleksni lok in poimenovati vse člene." },
+    { kind: "h2", textKey: "pv.body.overview" },
+    { kind: "p", textKey: "pv.anatomy.body1" },
+    { kind: "callout-definition", textKey: "pv.anatomy.bodyDef" },
+    { kind: "h2", textKey: "pv.body.keyTerms" },
+    { kind: "li", textKey: "pv.anatomy.bodyLi1" },
+    { kind: "li", textKey: "pv.anatomy.bodyLi2" },
+    { kind: "li", textKey: "pv.anatomy.bodyLi3" },
+    { kind: "callout-common_mistake", textKey: "pv.anatomy.bodyMistake" },
+    { kind: "h2", textKey: "pv.body.forExam" },
+    { kind: "callout-key_takeaway", textKey: "pv.anatomy.bodyKey" },
+    { kind: "li", textKey: "pv.anatomy.bodyLast" },
   ],
   stats: [
-    { kind: "h2", text: "Pregled" },
-    {
-      kind: "p",
-      text: "Hipotezno testiranje je postopek, s katerim iz vzorca sklepamo o celotni populaciji. Postavimo ničelno hipotezo, izračunamo p-vrednost in jo primerjamo s stopnjo značilnosti, ki jo določimo vnaprej.",
-    },
-    {
-      kind: "callout-definition",
-      text: "P-vrednost je verjetnost, da bi ob veljavni ničelni hipotezi dobili tako ali bolj skrajen rezultat.",
-    },
-    { kind: "h2", text: "Ključni pojmi" },
-    { kind: "li", text: "Ničelna hipoteza predpostavlja, da razlike med skupinama ni." },
-    { kind: "li", text: "P-vrednost pod stopnjo značilnosti (običajno 0,05) pomeni zavrnitev ničelne hipoteze." },
-    { kind: "li", text: "Napaka prve vrste zavrne pravilno hipotezo, napaka druge vrste spregleda pravo razliko." },
-    { kind: "callout-common_mistake", text: "Pozor: statistična značilnost ne pove, kako velika ali praktično pomembna je razlika." },
-    { kind: "h2", text: "Za izpit" },
-    {
-      kind: "callout-key_takeaway",
-      text: "Zapomni si: sklep je ponovljiv le, če je stopnja značilnosti določena vnaprej.",
-    },
-    { kind: "li", text: "Znaj izračunati p-vrednost in utemeljiti odločitev o zavrnitvi." },
+    { kind: "h2", textKey: "pv.body.overview" },
+    { kind: "p", textKey: "pv.stats.body1" },
+    { kind: "callout-definition", textKey: "pv.stats.bodyDef" },
+    { kind: "h2", textKey: "pv.body.keyTerms" },
+    { kind: "li", textKey: "pv.stats.bodyLi1" },
+    { kind: "li", textKey: "pv.stats.bodyLi2" },
+    { kind: "li", textKey: "pv.stats.bodyLi3" },
+    { kind: "callout-common_mistake", textKey: "pv.stats.bodyMistake" },
+    { kind: "h2", textKey: "pv.body.forExam" },
+    { kind: "callout-key_takeaway", textKey: "pv.stats.bodyKey" },
+    { kind: "li", textKey: "pv.stats.bodyLast" },
   ],
 };
 
@@ -589,24 +619,53 @@ export function readWordStyle(state: "cur" | "read" | "", dark: boolean): CSSPro
   return base;
 }
 
-export const INITIAL_NOTES: PreviewNote[] = [
-  { id: "n1", emoji: "📊", title: "Poslovni informacijski sistemi – 4. predavanje", source: "audio", date: "28. 8. 2026", status: "ready" },
-  { id: "n2", emoji: "📈", title: "Mikroekonomija: elastičnost povpraševanja", source: "pdf", date: "27. 8. 2026", status: "ready" },
-  { id: "n3", emoji: "🧠", title: "Anatomija – živčni sistem", source: "audio", date: "26. 8. 2026", status: "ready" },
-  { id: "n4", emoji: "⚖️", title: "Članek: Kako deluje ERP", source: "link", date: "24. 8. 2026", status: "ready" },
-  { id: "n5", emoji: "🎲", title: "Statistika – hipotezno testiranje", source: "text", date: "20. 8. 2026", status: "ready" },
+/**
+ * "Today" for a note the visitor makes during the tour. A literal rather than
+ * `new Date()`, so the server's first render and the client's hydration agree;
+ * the sample library is dated around it.
+ */
+export const PREVIEW_TODAY = "2026-08-29";
+
+export const INITIAL_NOTE_SEEDS: Array<{
+  id: string;
+  emoji: string;
+  titleKey: MessageKey;
+  theme: NoteThemeKey;
+  source: SourceKind;
+  date: string;
+  status: NoteStatus;
+}> = [
+  { id: "n1", emoji: "📊", titleKey: "pv.note1Title", theme: "is", source: "audio", date: "2026-08-28", status: "ready" },
+  { id: "n2", emoji: "📈", titleKey: "pv.note2Title", theme: "micro", source: "pdf", date: "2026-08-27", status: "ready" },
+  { id: "n3", emoji: "🧠", titleKey: "pv.note3Title", theme: "anatomy", source: "audio", date: "2026-08-26", status: "ready" },
+  { id: "n4", emoji: "⚖️", titleKey: "pv.note4Title", theme: "is", source: "link", date: "2026-08-24", status: "ready" },
+  { id: "n5", emoji: "🎲", titleKey: "pv.note5Title", theme: "stats", source: "text", date: "2026-08-20", status: "ready" },
 ];
 
-export const FOLDERS: PreviewFolder[] = [
-  { id: "f1", name: "Predavanja", icon: "📘", noteIds: ["n1", "n3"] },
-  { id: "f2", name: "Izpiti", icon: "🎓", noteIds: ["n2", "n4", "n5"] },
-];
+export function initialNotes(t: Translate<MessageKey>): PreviewNote[] {
+  return INITIAL_NOTE_SEEDS.map((seed) => ({
+    id: seed.id,
+    emoji: seed.emoji,
+    title: t(seed.titleKey),
+    theme: seed.theme,
+    source: seed.source,
+    date: seed.date,
+    status: seed.status,
+  }));
+}
 
-export const SOURCE_LABELS: Record<SourceKind, string> = {
-  audio: "Zvok",
-  pdf: "PDF",
-  text: "Besedilo",
-  link: "Povezava",
+export function initialFolders(t: Translate<MessageKey>): PreviewFolder[] {
+  return [
+    { id: "f1", name: t("pv.folderLectures"), icon: "📘", noteIds: ["n1", "n3"] },
+    { id: "f2", name: t("pv.folderExams"), icon: "🎓", noteIds: ["n2", "n4", "n5"] },
+  ];
+}
+
+export const SOURCE_LABEL_KEYS: Record<SourceKind, MessageKey> = {
+  audio: "source.audio",
+  pdf: "source.pdf",
+  text: "source.text",
+  link: "source.link",
 };
 
 /** The percentage a results screen reports, clamped and rounded. */
@@ -615,11 +674,26 @@ export function completionPct(done: number, total: number): number {
   return Math.max(0, Math.min(100, Math.round((done / total) * 100)));
 }
 
-export function noteTheme(title: string | undefined | null): NoteThemeKey {
-  const t = (title || "").toLowerCase();
-  if (/statist|hipotez|p-vrednost|verjetnost/.test(t)) return "stats";
-  if (/mikroekon|elasti|povpra|ekonom/.test(t)) return "micro";
-  if (/anatom|živč|zivc|nevro/.test(t)) return "anatomy";
-  return "is";
+
+/** The reader's-language view of a theme's study material. */
+export function resolveThemeStudy(theme: NoteThemeKey, t: Translate<MessageKey>): ThemeStudy {
+  const keys = THEME_STUDY_KEYS[theme];
+
+  return {
+    cards: keys.cards.map((card) => ({ front: t(card.frontKey), back: t(card.backKey) })),
+    practice: keys.practice.map((item) => ({ id: item.id, prompt: t(item.promptKey) })),
+    quiz: keys.quiz.map((question) => ({
+      question: t(question.questionKey),
+      options: question.optionKeys.map((key) => t(key)),
+      correct: question.correct,
+      explanation: t(question.explanationKey),
+    })),
+    transcript: keys.transcript.map((line) => ({ time: line.time, text: t(line.textKey) })),
+    chat: keys.chat.map((message) => ({ role: message.role, text: t(message.textKey) })),
+    chatReply: t(keys.chatReplyKey),
+  };
 }
 
+export function resolveNoteBody(theme: NoteThemeKey, t: Translate<MessageKey>): NoteBlock[] {
+  return NOTE_BODY_KEYS[theme].map((block) => ({ kind: block.kind, text: t(block.textKey) }));
+}

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { FooterLanguagePicker } from "@/components/language-picker";
 import { LandingFaq } from "@/components/landing/landing-faq";
 import { LandingFeatureShowcase } from "@/components/landing/landing-feature-showcase";
 import { LandingFlowDemo } from "@/components/landing/landing-flow-demo";
@@ -107,8 +108,10 @@ export default async function HomePage() {
               {/* Decorative: the count beside them carries the meaning, so
                   screen readers get the sentence and skip the portraits. */}
               <span className="landing-v2-hero-banner-avatars" aria-hidden="true">
+                {/* Eager and prioritised: they sit in the hero, and lazily
+                    loaded portraits left three empty rings on first paint. */}
                 {HERO_AVATARS.map((src) => (
-                  <Image key={src} src={src} alt="" width={56} height={56} />
+                  <Image key={src} src={src} alt="" width={56} height={56} priority />
                 ))}
               </span>
               <LandingUserCount />
@@ -137,7 +140,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="landing-v2-section" aria-labelledby="landing-workflow-title">
+      <section id="how-it-works" className="landing-v2-section" aria-labelledby="landing-workflow-title">
         <div className="landing-v2-section-head landing-v2-section-head-center" data-scroll-reveal="">
           <h2 id="landing-workflow-title" className="landing-v2-section-title">
             {t("landing.workflow.title")}
@@ -146,7 +149,7 @@ export default async function HomePage() {
         <LandingFlowDemo />
       </section>
 
-      <section className="landing-v2-section" aria-labelledby="landing-feature-title">
+      <section id="features" className="landing-v2-section" aria-labelledby="landing-feature-title">
         <div className="landing-v2-section-head" data-scroll-reveal="">
           <h2 id="landing-feature-title" className="landing-v2-section-title">
             {t("landing.features.title")}
@@ -155,7 +158,7 @@ export default async function HomePage() {
         <LandingFeatureShowcase />
       </section>
 
-      <section id="examples" className="landing-v2-section" aria-labelledby="landing-faq-title">
+      <section id="faq" className="landing-v2-section" aria-labelledby="landing-faq-title">
         <div className="landing-v2-section-head" data-scroll-reveal="" style={{ marginBottom: "2.75rem" }}>
           <h2 id="landing-faq-title" className="landing-v2-section-title">
             {t("landing.faq.title")}
@@ -201,6 +204,8 @@ export default async function HomePage() {
               <Link href="/legal/privacy-policy">{t("landing.footer.privacy")}</Link>
               <Link href="/legal/refund-policy">{t("landing.footer.refunds")}</Link>
             </div>
+
+            <FooterLanguagePicker />
           </nav>
         </div>
 

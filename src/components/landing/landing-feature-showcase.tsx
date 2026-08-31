@@ -110,7 +110,7 @@ function WavePanel() {
               textOverflow: "ellipsis",
             }}
           >
-            Predavanje IS – 4. teden
+            {t("flowDemo.noteTitle.audio")}
           </span>
           <span style={{ fontSize: "11.5px", color: "var(--l-second)" }}>
             {`${t("flowDemo.kindAudio")} · ${t("flowDemo.today")}`}
@@ -137,6 +137,7 @@ function WavePanel() {
 }
 
 function NotesPanel() {
+  const t = useT();
   const writeLine = (delay: number): CSSProperties => ({
     display: "block",
     whiteSpace: "nowrap",
@@ -161,17 +162,20 @@ function NotesPanel() {
           animation: "memo-fx-write 5.2s linear 0s infinite both",
         }}
       >
-        Hiter pregled
+        {t("flowDemo.note.overview")}
       </span>
       <span style={writeLine(0.35)}>
         <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-marker)" }}>
-          Poslovni informacijski sistemi
+          {t("flowDemo.note.leadA")}
         </span>
       </span>
-      <span style={writeLine(0.7)}>zbirajo in obdelujejo informacije,</span>
+      <span style={writeLine(0.7)}>{t("showcase.note.line1")}</span>
       <span style={writeLine(1.05)}>
-        ki podpirajo{" "}
-        <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-marker)" }}>odločanje</span>.
+        {t("showcase.note.line2Before")}{" "}
+        <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-marker)" }}>
+          {t("showcase.note.decision")}
+        </span>
+        .
       </span>
       <div
         style={{
@@ -187,10 +191,10 @@ function NotesPanel() {
         }}
       >
         <span style={{ fontSize: "9.5px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--l-flow)" }}>
-          Ključno
+          {t("flowDemo.note.keyLabel")}
         </span>
         <span style={{ fontSize: "12px", lineHeight: 1.5, color: "var(--l-label)" }}>
-          Integriran sistem hrani vse podatke na enem mestu.
+          {t("showcase.note.keyBody")}
         </span>
       </div>
     </div>
@@ -198,6 +202,7 @@ function NotesPanel() {
 }
 
 function FlashcardPanel() {
+  const t = useT();
   const face: CSSProperties = {
     position: "absolute",
     inset: 0,
@@ -245,9 +250,9 @@ function FlashcardPanel() {
                     textAlign: "center",
                   }}
                 >
-                  Kaj pomeni ERP?
+                  {t("showcase.card.front")}
                 </span>
-                <span style={{ fontSize: "12.5px", fontWeight: 650, color: "var(--l-second)" }}>Pokaži odgovor</span>
+                <span style={{ fontSize: "12.5px", fontWeight: 650, color: "var(--l-second)" }}>{t("flowDemo.showAnswer")}</span>
               </div>
               <div style={{ ...face, transform: "rotateY(180deg)" }}>
                 <span style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--l-second)" }}>1 / 8</span>
@@ -264,9 +269,9 @@ function FlashcardPanel() {
                     textAlign: "center",
                   }}
                 >
-                  Načrtovanje virov podjetja
+                  {t("showcase.card.back")}
                 </span>
-                <span style={{ fontSize: "12.5px", fontWeight: 650, color: "var(--l-second)" }}>Nazaj na vprašanje</span>
+                <span style={{ fontSize: "12.5px", fontWeight: 650, color: "var(--l-second)" }}>{t("preview.backToQuestion")}</span>
               </div>
             </div>
           </div>
@@ -293,6 +298,7 @@ function FlashcardPanel() {
 }
 
 function QuizPanel() {
+  const t = useT();
   const option = (letter: string, label: string, animated?: boolean): ReactNode => (
     <span
       style={{
@@ -333,15 +339,16 @@ function QuizPanel() {
 
   return (
     <div style={{ display: "grid", gap: "10px", width: "100%", maxWidth: "20rem", textAlign: "left" }}>
-      <span style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--l-second)" }}>1 / 4 · Kviz</span>
-      {option("A", "Transakcijski", true)}
-      {option("B", "Odločitveni")}
-      {option("C", "Ekspertni")}
+      <span style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--l-second)" }}>{t("showcase.quizCounter")}</span>
+      {option("A", t("showcase.quizA"), true)}
+      {option("B", t("showcase.quizB"))}
+      {option("C", t("showcase.quizC"))}
     </div>
   );
 }
 
 function TestPanel() {
+  const t = useT();
   return (
     <div
       style={{
@@ -358,10 +365,10 @@ function TestPanel() {
       }}
     >
       <span style={{ fontSize: "9.5px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--l-second)" }}>
-        1. Vprašanje
+        {t("showcase.testQuestionNo")}
       </span>
       <span style={{ fontSize: "13px", fontWeight: 600, lineHeight: 1.4, color: "var(--l-label)" }}>
-        Naštej eno prednost ERP sistema.
+        {t("showcase.testPrompt")}
       </span>
       <span
         style={{
@@ -387,7 +394,7 @@ function TestPanel() {
             animation: "memo-fx-type 4.4s steps(30, end) infinite",
           }}
         >
-          Enotni podatki za vse oddelke
+          {t("showcase.testAnswer")}
         </span>
         <span
           style={{
@@ -410,13 +417,14 @@ function TestPanel() {
           animation: "memo-fx-fade 4.4s ease-in-out infinite",
         }}
       >
-        ✓ Pravilno
+        {`✓ ${t("showcase.testCorrect")}`}
       </span>
     </div>
   );
 }
 
 function ReadPanel() {
+  const t = useT();
   const chip: CSSProperties = {
     justifySelf: "start",
     padding: "2.5px 7px",
@@ -436,26 +444,26 @@ function ReadPanel() {
 
   return (
     <div style={{ display: "grid", gap: "9px", width: "100%", maxWidth: "19rem", textAlign: "left" }}>
-      <span style={chip}>Hiter pregled</span>
+      <span style={chip}>{t("flowDemo.note.overview")}</span>
       <p style={{ margin: 0, fontSize: "12.8px", lineHeight: 1.8, color: "var(--l-label)" }}>
         {readSequence(
-          ["Podatkovni", "model", "povezuje", "procese", "v", "enoten", "sistem,", "ki", "podpira", "odločanje", "v", "podjetjih."],
+          t("showcase.read.lead").split(" "),
           0,
         )}
       </p>
-      <span style={chip}>Ključne vrste</span>
+      <span style={chip}>{t("showcase.read.keyTypes")}</span>
       <div style={{ display: "grid", gap: "4px" }}>
         <span style={bulletRow}>
           <span style={{ color: "var(--l-second)" }}>•</span>
-          <span>{readSequence(["Transakcijski", "–", "zajema", "dnevne", "poslovne", "dogodke."], 2.4, true)}</span>
+          <span>{readSequence(t("showcase.read.bullet1").split(" "), 2.4, true)}</span>
         </span>
         <span style={bulletRow}>
           <span style={{ color: "var(--l-second)" }}>•</span>
-          <span>{readSequence(["Odločitveni", "–", "analize", "za", "vodstvo", "in", "scenarije."], 3.6, true)}</span>
+          <span>{readSequence(t("showcase.read.bullet2").split(" "), 3.6, true)}</span>
         </span>
         <span style={bulletRow}>
           <span style={{ color: "var(--l-second)" }}>•</span>
-          <span>{readSequence(["ERP", "–", "poveže", "procese", "v", "enoten", "podatkovni", "model."], 5.0, true)}</span>
+          <span>{readSequence(t("showcase.read.bullet3").split(" "), 5.0, true)}</span>
         </span>
       </div>
       <div
@@ -470,10 +478,10 @@ function ReadPanel() {
         }}
       >
         <span style={{ fontSize: "9.5px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--l-flow)" }}>
-          Ključno
+          {t("flowDemo.note.keyLabel")}
         </span>
         <span style={{ fontSize: "12.2px", lineHeight: 1.6, color: "var(--l-label)" }}>
-          {readSequence(["Brez", "kakovostnih", "podatkov", "tudi", "najboljši", "sistem", "ne", "da", "dobrih", "odločitev."], 6.6)}
+          {readSequence(t("showcase.read.keyBody").split(" "), 6.6)}
         </span>
       </div>
     </div>

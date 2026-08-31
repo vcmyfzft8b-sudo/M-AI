@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   LECTURE_FAILURE_METADATA_KEY,
@@ -44,7 +46,7 @@ test("reads the code the pipeline stamps into processing metadata", () => {
   };
 
   assert.equal(readLectureFailureCode(metadata), "link_requires_login");
-  assert.equal(canRetryLectureFailure(metadata), false);
+  assert.equal(canRetryLectureFailure({ processing_metadata: metadata }), false);
 });
 
 test("malformed or missing metadata never hides the button", () => {
@@ -52,7 +54,7 @@ test("malformed or missing metadata never hides the button", () => {
   for (const value of [null, undefined, "", 0, [], {}, { failure: null }, { failure: [] },
                        { failure: {} }, { failure: { code: 42 } }, { failure: { code: "" } }]) {
     assert.equal(readLectureFailureCode(value), null);
-    assert.equal(canRetryLectureFailure(value), true);
+    assert.equal(canRetryLectureFailure({ processing_metadata: value }), true);
   }
 });
 
@@ -60,5 +62,45 @@ test("a later failure with no code clears an earlier verdict", () => {
   // markLecturePipelineFailed writes the key on every failure, so this is what a row looks like
   // after an unclassified failure follows a classified one. It must read as retryable again,
   // not keep answering with the stale code.
-  assert.equal(canRetryLectureFailure({ [LECTURE_FAILURE_METADATA_KEY]: { code: null } }), true);
+  assert.equal(
+    canRetryLectureFailure({
+      processing_metadata: { [LECTURE_FAILURE_METADATA_KEY]: { code: null } },
+    }),
+    true,
+  );
+});
+
+test("the verdict comes from a lecture row, not from a row read as metadata", () => {
+  // The dashboard used to hand the whole row to canRetryLectureFailure. A row carries no
+  // `failure` key of its own, so the code read as null and the "keep retry when unclassified"
+  // default handed a working-looking button to every unretryable failure on that surface.
+  // Passing the row is now the calling convention, so the mistake cannot come back.
+  const failedLecture = {
+    id: "9f0a2c1e-0000-4000-8000-000000000001",
+    status: "failed",
+    title: "Predavanje brez učne vsebine",
+    error_message: "V gradivu ni učne vsebine.",
+    processing_metadata: {
+      processing: { stage: "failed" },
+      [LECTURE_FAILURE_METADATA_KEY]: { code: "source_no_study_content" },
+    },
+  };
+
+  assert.equal(canRetryLectureFailure(failedLecture), false);
+
+  // The shape of the old bug, kept explicit: read the row where metadata was wanted and the
+  // code vanishes.
+  assert.equal(readLectureFailureCode(failedLecture), null);
+  assert.equal(readLectureFailureCode(failedLecture.processing_metadata), "source_no_study_content");
+});
+
+test("both surfaces that render a failure ask about the row", () => {
+  // The two call sites disagreed once — the note page hid the button while the dashboard showed
+  // it for the same note. Neither may go back to passing metadata.
+  for (const path of ["src/components/home-dashboard.tsx", "src/components/lecture-workspace.tsx"]) {
+    const source = readFileSync(fileURLToPath(new URL(`../${path}`, import.meta.url)), "utf8");
+
+    assert.match(source, /canRetryLectureFailure\(/);
+    assert.doesNotMatch(source, /canRetryLectureFailure\([^)]*\.processing_metadata\)/);
+  }
 });

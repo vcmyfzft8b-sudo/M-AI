@@ -45,6 +45,7 @@ import {
   SEO_BRAND_NAME,
 } from "@/lib/brand";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
+import { rememberHomePromo } from "@/lib/home-promo-hint";
 import { canRetryLectureFailure } from "@/lib/lecture-failure-codes";
 import {
   getEffectiveLectureSourceType,
@@ -1354,6 +1355,33 @@ export function HomeDashboard({
    */
   const showUpgradePromo =
     !hasPaidAccess && canSpinWheel !== null && !wheelAvailable && inLibraryView;
+  /*
+   * Which card the slot holds when the home screen is arrived at, which is
+   * always the library view — so this is deliberately not `showDiscountPromo`:
+   * a folder or a search hides the card without changing what the next visit
+   * should draw.
+   */
+  const promoHint = hasPaidAccess
+    ? "none"
+    : canSpinWheel === null
+      ? "none"
+      : wheelAvailable
+        ? "wheel"
+        : "upgrade";
+
+  /*
+   * Remembered for the route's skeleton, which paints before this screen has
+   * any data and would otherwise leave the card's place empty for as long as
+   * the home screen takes to load. Not from the demo: it is a public page and
+   * the card it shows is not the visitor's own.
+   */
+  useEffect(() => {
+    if (isCreatorDemo) {
+      return;
+    }
+
+    rememberHomePromo(promoHint);
+  }, [isCreatorDemo, promoHint]);
 
   return (
     <>

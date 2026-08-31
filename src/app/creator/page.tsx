@@ -9,7 +9,7 @@ export default function CreatorDemoHomePage() {
   const seed = getCreatorDemoSeed();
 
   return (
-    <Suspense fallback={<DashboardLoading />}>
+    <Suspense fallback={<DashboardLoading promoPlaceholder={false} />}>
       <CreatorHome
         initialLectures={toLectureListItems(seed)}
         initialFolders={seed.folders}

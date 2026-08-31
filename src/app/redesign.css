@@ -428,6 +428,13 @@
   display: none;
 }
 
+/* The home skeleton's promo cards. Phone-only like the real one, and shown
+   only when `<html>` carries the matching hint — see the rules beside
+   `.memo-promo`. */
+[data-promo-hint] {
+  display: none;
+}
+
 
 /* --- motion --------------------------------------------------------------- */
 
@@ -8497,6 +8504,23 @@
 
   .memo-promo:active {
     transform: scale(0.975);
+  }
+
+  /*
+   * The skeleton's copies of the two cards. Both are in the markup and the
+   * hint on `<html>` picks one, so the card the home screen last showed is
+   * painted with the skeleton rather than a moment after it — the real card
+   * then takes the same slot and nothing moves. `src/lib/home-promo-hint.ts`
+   * writes the hint; the inline script in the root layout applies it before
+   * the first paint.
+   */
+  .memo-promo[data-promo-hint] {
+    display: none;
+  }
+
+  :root[data-home-promo="wheel"] .memo-promo[data-promo-hint="wheel"],
+  :root[data-home-promo="upgrade"] .memo-promo[data-promo-hint="upgrade"] {
+    display: flex;
   }
 
   .memo-promo-copy {

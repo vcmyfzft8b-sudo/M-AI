@@ -360,93 +360,98 @@ export function SettingsScreen({
           </button>
         </div>
 
-        <div className="memo-page">
-          <h1>Nastavitve</h1>
+        {/* The phone scrolls this inside the screen rather than scrolling the
+            screen itself, so the close control can float above it the way the
+            library's does. On desktop the wrapper is `display: contents`. */}
+        <div className="memo-screen-scroll">
+          <div className="memo-page">
+            <h1>Nastavitve</h1>
 
-          {/*
-            * The phone puts each group under its own heading and drops the
-            * explanatory line the desktop artboard keeps beside "Tema".
-            */}
-          <h2 className="memo-settings-heading memo-only-mobile">Tema</h2>
+            {/*
+              * The phone puts each group under its own heading and drops the
+              * explanatory line the desktop artboard keeps beside "Tema".
+              */}
+            <h2 className="memo-settings-heading memo-only-mobile">Tema</h2>
 
-          <div className="memo-card-row memo-settings-theme">
-            <span className="memo-card-row-copy memo-only-desktop">
-              <span className="memo-card-row-title">Tema</span>
-              <span className="memo-card-row-detail">Svetla ali temna postavitev</span>
-            </span>
-            {themeSegment}
-          </div>
+            <div className="memo-card-row memo-settings-theme">
+              <span className="memo-card-row-copy memo-only-desktop">
+                <span className="memo-card-row-title">Tema</span>
+                <span className="memo-card-row-detail">Svetla ali temna postavitev</span>
+              </span>
+              {themeSegment}
+            </div>
 
-          <h2 className="memo-settings-heading memo-only-mobile">Naročnina</h2>
+            <h2 className="memo-settings-heading memo-only-mobile">Naročnina</h2>
 
-          <div className="memo-card-row">
-            <span className="memo-card-row-copy">
-              <span className="memo-eyebrow">Paket</span>
-              <span className="memo-card-row-title">{planLabel}</span>
-              <span className="memo-card-row-detail">{planDetail}</span>
-            </span>
-            {hasSubscription ? (
-              <BillingPortalButton />
-            ) : (
-              <InstantLink href={startHref} className="memo-primary-pill">
-                <Emoji symbol="✨" size="1rem" />
-                <span>Izberi paket</span>
+            <div className="memo-card-row">
+              <span className="memo-card-row-copy">
+                <span className="memo-eyebrow">Paket</span>
+                <span className="memo-card-row-title">{planLabel}</span>
+                <span className="memo-card-row-detail">{planDetail}</span>
+              </span>
+              {hasSubscription ? (
+                <BillingPortalButton />
+              ) : (
+                <InstantLink href={startHref} className="memo-primary-pill">
+                  <Emoji symbol="✨" size="1rem" />
+                  <span>Izberi paket</span>
+                </InstantLink>
+              )}
+            </div>
+
+            <p className="memo-fine-print">
+              Preklic in vračila ureja{" "}
+              <InstantLink href="/legal/refund-policy" className="memo-underline-link">
+                politika vračil
               </InstantLink>
-            )}
-          </div>
+              .
+            </p>
 
-          <p className="memo-fine-print">
-            Preklic in vračila ureja{" "}
-            <InstantLink href="/legal/refund-policy" className="memo-underline-link">
-              politika vračil
-            </InstantLink>
-            .
-          </p>
+            {accountRows.length > 0 ? (
+              <>
+                <h2 className="memo-settings-heading memo-only-mobile">Račun</h2>
 
-          {accountRows.length > 0 ? (
-            <>
-              <h2 className="memo-settings-heading memo-only-mobile">Račun</h2>
+                {/* The phone names the account on its own card, as the design does. */}
+                <div className="memo-card-row memo-settings-account memo-only-mobile">
+                  <span className="memo-card-row-copy">
+                    <span className="memo-eyebrow">Prijavljen</span>
+                    <span className="memo-card-row-title">{email}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="memo-settings-signout"
+                    onClick={() => setConfirm("logout")}
+                    disabled={isLoggingOut}
+                    aria-busy={isLoggingOut}
+                  >
+                    {isLoggingOut ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    ) : null}
+                    {isLoggingOut ? "Odjavljam..." : "Odjava"}
+                  </button>
+                </div>
+              </>
+            ) : null}
 
-              {/* The phone names the account on its own card, as the design does. */}
-              <div className="memo-card-row memo-settings-account memo-only-mobile">
-                <span className="memo-card-row-copy">
-                  <span className="memo-eyebrow">Prijavljen</span>
-                  <span className="memo-card-row-title">{email}</span>
-                </span>
-                <button
-                  type="button"
-                  className="memo-settings-signout"
-                  onClick={() => setConfirm("logout")}
-                  disabled={isLoggingOut}
-                  aria-busy={isLoggingOut}
-                >
-                  {isLoggingOut ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                  ) : null}
-                  {isLoggingOut ? "Odjavljam..." : "Odjava"}
-                </button>
-              </div>
-            </>
-          ) : null}
+            {/* The phone groups the rows into one card; desktop keeps them apart. */}
+            <div className="memo-settings-list">
+              {rows.map(renderRow)}
+              {accountRows.map(renderRow)}
+            </div>
 
-          {/* The phone groups the rows into one card; desktop keeps them apart. */}
-          <div className="memo-settings-list">
-            {rows.map(renderRow)}
-            {accountRows.map(renderRow)}
-          </div>
+            <h2 className="memo-settings-heading memo-only-mobile">Pomoč</h2>
 
-          <h2 className="memo-settings-heading memo-only-mobile">Pomoč</h2>
-
-          {/* Desktop reaches the help centre from the rail, so this card is
-              the phone's only. */}
-          <div className="memo-settings-list memo-settings-help memo-only-mobile grid">
-            {renderRow({
-              id: "help",
-              emoji: "❓",
-              icon: "help",
-              title: "Center za pomoč",
-              href: "/app/support",
-            })}
+            {/* Desktop reaches the help centre from the rail, so this card is
+                the phone's only. */}
+            <div className="memo-settings-list memo-settings-help memo-only-mobile grid">
+              {renderRow({
+                id: "help",
+                emoji: "❓",
+                icon: "help",
+                title: "Center za pomoč",
+                href: "/app/support",
+              })}
+            </div>
           </div>
         </div>
       </div>

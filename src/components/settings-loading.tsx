@@ -17,77 +17,83 @@ export function SettingsLoading() {
         <span className="memo-close-button app-loading-pill" />
       </div>
 
-      <div className="memo-page">
-        <div
-          className="app-loading-pill"
-          style={{ height: "1.75rem", width: "11rem", marginBottom: "1.2rem" }}
-        />
-
-        <div className="memo-settings-heading memo-only-mobile" style={{ minHeight: "1.875rem" }}>
-          <span className="app-loading-pill" style={{ display: "block", height: "1.15rem", width: "5rem" }} />
-        </div>
-
-        {/* Tema. The real card keeps its copy on desktop only and hands the
-            whole row to the segmented control on a phone, where it also drops
-            its padding — so the class does that here too rather than a guess. */}
-        <div className="memo-card-row memo-settings-theme">
-          <span className="memo-card-row-copy memo-only-desktop">
-            <span className="app-loading-pill" style={{ display: "block", height: "1.08rem", width: "5rem" }} />
+      <div className="memo-screen-scroll">
+        <div className="memo-page">
+          {/* Inside the real heading, so the row matches its loaded height and
+              margins exactly and nothing below it moves on arrival. */}
+          <h1>
             <span
               className="app-loading-pill"
-              style={{ display: "block", height: "0.95rem", width: "11rem", marginTop: "0.3rem" }}
+              style={{ display: "inline-block", height: "1.15rem", width: "11rem" }}
             />
-          </span>
-          <span
-            className="app-loading-pill"
-            style={{ display: "block", height: "3.5rem", width: "100%", borderRadius: "999px" }}
-          />
-        </div>
+          </h1>
 
-        <div className="memo-settings-heading memo-only-mobile" style={{ minHeight: "1.875rem" }}>
-          <span className="app-loading-pill" style={{ display: "block", height: "1.15rem", width: "6.5rem" }} />
-        </div>
+          <div className="memo-settings-heading memo-only-mobile" style={{ minHeight: "1.875rem" }}>
+            <span className="app-loading-pill" style={{ display: "block", height: "1.15rem", width: "5rem" }} />
+          </div>
 
-        {/* Naročnina: overline, plan, detail, then the action. */}
-        <div className="memo-card-row">
-          <span className="memo-card-row-copy">
-            <span className="app-loading-pill" style={{ height: "0.78rem", width: "4rem" }} />
-            <span
-              className="app-loading-pill"
-              style={{ height: "1.08rem", width: "11rem", marginTop: "0.4rem" }}
-            />
-            <span
-              className="app-loading-pill"
-              style={{ height: "0.95rem", width: "min(20rem, 90%)", marginTop: "0.35rem" }}
-            />
-          </span>
-          <span
-            className="app-loading-pill"
-            style={{ height: "3.3rem", width: "100%", borderRadius: "999px" }}
-          />
-        </div>
-
-        <div
-          className="app-loading-pill"
-          style={{ height: "0.95rem", width: "15rem", marginTop: "0.9rem" }}
-        />
-
-        <div className="memo-settings-heading memo-only-mobile" style={{ minHeight: "1.875rem" }}>
-          <span className="app-loading-pill" style={{ display: "block", height: "1.15rem", width: "4.5rem" }} />
-        </div>
-
-        <div className="memo-settings-list">
-          {SKELETON_ROWS.map((row) => (
-            <div key={row} className="memo-settings-row" style={{ cursor: "default" }}>
+          {/* Tema. The real card keeps its copy on desktop only and hands the
+              whole row to the segmented control on a phone, where it also drops
+              its padding — so the class does that here too rather than a guess. */}
+          <div className="memo-card-row memo-settings-theme">
+            <span className="memo-card-row-copy memo-only-desktop">
+              <span className="app-loading-pill" style={{ display: "block", height: "1.08rem", width: "5rem" }} />
               <span
-                className="memo-settings-tile app-loading-pill"
-                style={{ borderRadius: "999px" }}
+                className="app-loading-pill"
+                style={{ display: "block", height: "0.95rem", width: "11rem", marginTop: "0.3rem" }}
               />
-              <span className="memo-settings-copy">
-                <span className="app-loading-pill" style={{ height: "1.08rem", width: "9rem" }} />
-              </span>
-            </div>
-          ))}
+            </span>
+            <span
+              className="app-loading-pill"
+              style={{ display: "block", height: "3.5rem", width: "100%", borderRadius: "999px" }}
+            />
+          </div>
+
+          <div className="memo-settings-heading memo-only-mobile" style={{ minHeight: "1.875rem" }}>
+            <span className="app-loading-pill" style={{ display: "block", height: "1.15rem", width: "6.5rem" }} />
+          </div>
+
+          {/* Naročnina: overline, plan, detail, then the action. */}
+          <div className="memo-card-row">
+            <span className="memo-card-row-copy">
+              <span className="app-loading-pill" style={{ height: "0.78rem", width: "4rem" }} />
+              <span
+                className="app-loading-pill"
+                style={{ height: "1.08rem", width: "11rem", marginTop: "0.4rem" }}
+              />
+              <span
+                className="app-loading-pill"
+                style={{ height: "0.95rem", width: "min(20rem, 90%)", marginTop: "0.35rem" }}
+              />
+            </span>
+            <span
+              className="app-loading-pill"
+              style={{ height: "3.3rem", width: "100%", borderRadius: "999px" }}
+            />
+          </div>
+
+          <div
+            className="app-loading-pill"
+            style={{ height: "0.95rem", width: "15rem", marginTop: "0.9rem" }}
+          />
+
+          <div className="memo-settings-heading memo-only-mobile" style={{ minHeight: "1.875rem" }}>
+            <span className="app-loading-pill" style={{ display: "block", height: "1.15rem", width: "4.5rem" }} />
+          </div>
+
+          <div className="memo-settings-list">
+            {SKELETON_ROWS.map((row) => (
+              <div key={row} className="memo-settings-row" style={{ cursor: "default" }}>
+                <span
+                  className="memo-settings-tile app-loading-pill"
+                  style={{ borderRadius: "999px" }}
+                />
+                <span className="memo-settings-copy">
+                  <span className="app-loading-pill" style={{ height: "1.08rem", width: "9rem" }} />
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

@@ -58,7 +58,7 @@ export const BILLING_PLANS: Record<
     labelKey: MessageKey;
     cadenceKey: MessageKey;
     amount: number;
-    displayAmount?: string;
+    displayAmount?: number;
     billingNoteKey?: MessageKey;
     annualizedAmount: number;
     blurbKey: MessageKey;
@@ -88,7 +88,7 @@ export const BILLING_PLANS: Record<
     // €130 a year is €10.83 a month, not €11. Rounding the headline up prices
     // the plan above what is actually charged, which is the one direction a
     // price must never be wrong in.
-    displayAmount: "10,83",
+    displayAmount: 10.83,
     billingNoteKey: "billing.note.yearly",
     annualizedAmount: 130,
     blurbKey: "billing.blurb.yearly",

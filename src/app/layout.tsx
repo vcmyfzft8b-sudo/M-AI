@@ -8,7 +8,7 @@ import { ServiceWorkerRegistration } from "@/components/service-worker";
 import { ThemeController } from "@/components/theme-controller";
 import { VisitTracker } from "@/components/visit-tracker";
 import { SEO_BRAND_NAME, SEO_SITE_URL } from "@/lib/brand";
-import { LOCALE_OG_TAG } from "@/lib/i18n/locales";
+import { LOCALE_BCP47, LOCALE_OG_TAG } from "@/lib/i18n/locales";
 import { getMessages } from "@/lib/i18n/messages";
 import { getLocale, getTranslations } from "@/lib/i18n/server";
 import { splashScreens } from "@/lib/splash-screens";
@@ -205,14 +205,7 @@ export default async function RootLayout({
   const locale = await getLocale();
 
   return (
-    /*
-     * `lang` is the locale code rather than the full BCP 47 tag, so that it
-     * matches what the client provider writes back on the one request where
-     * the two can disagree (a signed-in visitor on a device whose cookie was
-     * seeded by geo). `hreflang` on the document is not in play: the app
-     * serves every language from the same URL by design.
-     */
-    <html lang={locale} suppressHydrationWarning>
+    <html lang={LOCALE_BCP47[locale]} suppressHydrationWarning>
       <head>
         {/*
           * iOS will not use an `apple-touch-startup-image` unless the page also

@@ -18,6 +18,7 @@ test("retry is withheld only where the cause travels with the input", () => {
   assert.equal(canRetryLectureFailureCode("unsupported_link_content_type"), false);
   assert.equal(canRetryLectureFailureCode("scan_not_enough_text"), false);
   assert.equal(canRetryLectureFailureCode("audio_no_clear_speech"), false);
+  assert.equal(canRetryLectureFailureCode("generation_budget_exceeded"), false);
 });
 
 test("transient failures keep the retry button", () => {

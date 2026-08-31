@@ -3,6 +3,8 @@
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { useState, type MouseEvent } from "react";
 
+import { useT } from "@/components/i18n-provider";
+
 /**
  * The way out of the auth pages, back to the landing page.
  *
@@ -15,12 +17,13 @@ import { useState, type MouseEvent } from "react";
 export function AuthBackLink({
   href = "/",
   className = "app-back-button",
-  label = "Nazaj",
+  label,
 }: {
   href?: string;
   className?: string;
   label?: string;
 }) {
+  const t = useT();
   const [isLeaving, setIsLeaving] = useState(false);
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
@@ -48,7 +51,7 @@ export function AuthBackLink({
       ) : (
         <ChevronLeft className="h-5 w-5" aria-hidden="true" />
       )}
-      {label}
+      {label ?? t("common.back")}
     </a>
   );
 }

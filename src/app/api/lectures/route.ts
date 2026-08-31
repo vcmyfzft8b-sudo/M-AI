@@ -201,7 +201,7 @@ export async function DELETE(request: Request) {
     .in("id", parsed.data.ids);
 
   if (ownedLecturesError) {
-    return NextResponse.json({ error: ownedLecturesError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   const ownedLectureRows = (ownedLectures ?? []) as Array<{
@@ -212,7 +212,7 @@ export async function DELETE(request: Request) {
   const lectureIds = ownedLectureRows.map((lecture) => lecture.id);
 
   if (lectureIds.length === 0) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const service = createSupabaseServiceRoleClient();
@@ -223,7 +223,7 @@ export async function DELETE(request: Request) {
     .in("lecture_id", lectureIds);
 
   if (noteMediaError) {
-    return NextResponse.json({ error: noteMediaError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   const { error: deleteError } = await supabase
@@ -233,7 +233,7 @@ export async function DELETE(request: Request) {
     .in("id", lectureIds);
 
   if (deleteError) {
-    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   const storagePaths = ownedLectureRows

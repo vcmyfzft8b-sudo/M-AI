@@ -1,14 +1,16 @@
+import type { Locale } from "./i18n/locales.ts";
+
 /*
  * Every option carries a `labelKey` rather than a label. The survey runs in
  * five languages; the stored `value` is what the database constrains and must
  * not move, so translation happens on the way to the screen.
  *
- * The school and year lists are Slovenian in structure as well as in wording —
- * nine years of osnovna šola, five of srednja šola. Croatia and Serbia have
- * eight and four. The wording is translated; the shape is not, so a Croatian
- * pupil is offered a ninth year that does not exist there. Splitting the lists
- * per market is a product decision with a schema behind it, not a translation
- * one, and is deliberately left alone here.
+ * The stored values stay common across markets, while the visible range is
+ * selected below. Slovenia and Bosnia and Herzegovina have nine primary-school
+ * years; Croatia and Serbia have eight. English is the global fallback and
+ * uses the broadly applicable eight-year list. Secondary technical/vocational
+ * programmes may reach a fifth year in Slovenia and Croatia, while the
+ * Bosnian, Serbian and global-English flows stop at four.
  */
 
 // Unused until the survey gets a real age step: these are the buckets the
@@ -128,6 +130,33 @@ export const HIGH_SCHOOL_YEAR_OPTIONS = [
 ] as const;
 
 export const HIGH_SCHOOL_FOUR_YEAR_OPTIONS = HIGH_SCHOOL_YEAR_OPTIONS.slice(0, 4);
+
+export const ELEMENTARY_EIGHT_YEAR_OPTIONS = ELEMENTARY_YEAR_OPTIONS.slice(0, 8);
+
+/** The school-year choices appropriate to the locale currently onboarding. */
+export function getOnboardingYearOptions(
+  locale: Locale,
+  role: string,
+  schoolLevel?: string,
+) {
+  if (role === "elementary_student") {
+    return locale === "sl" || locale === "bs"
+      ? ELEMENTARY_YEAR_OPTIONS
+      : ELEMENTARY_EIGHT_YEAR_OPTIONS;
+  }
+
+  if (role === "high_school_student") {
+    if (schoolLevel === "high_school") {
+      return HIGH_SCHOOL_FOUR_YEAR_OPTIONS;
+    }
+
+    return locale === "sl" || locale === "hr"
+      ? HIGH_SCHOOL_YEAR_OPTIONS
+      : HIGH_SCHOOL_FOUR_YEAR_OPTIONS;
+  }
+
+  return UNIVERSITY_YEAR_OPTIONS;
+}
 
 export const UNIVERSITY_YEAR_OPTIONS = [
   { value: "senior", labelKey: "onboarding.opt.uniYear4Plus", icon: "🌳" },

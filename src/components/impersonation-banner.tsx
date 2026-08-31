@@ -3,6 +3,8 @@
 import { Loader2, X } from "lucide-react";
 import { useState } from "react";
 
+import { useT } from "@/components/i18n-provider";
+
 /**
  * Marks a browser that is inside someone else's account, and gets the admin back out.
  *
@@ -13,9 +15,10 @@ import { useState } from "react";
  * that this is not your own account.
  */
 export function ImpersonationBanner({ targetEmail }: { targetEmail: string | null }) {
+  const t = useT();
   const [collapsed, setCollapsed] = useState(false);
   const [pending, setPending] = useState(false);
-  const label = targetEmail ?? "another account";
+  const label = targetEmail ?? t("impersonation.anotherAccount");
 
   if (collapsed) {
     return (
@@ -23,8 +26,8 @@ export function ImpersonationBanner({ targetEmail }: { targetEmail: string | nul
         type="button"
         className="impersonation-dot"
         onClick={() => setCollapsed(false)}
-        title={`Viewing as ${label} — click to expand`}
-        aria-label={`Viewing as ${label}. Expand impersonation controls.`}
+        title={t("impersonation.expandTitle", { account: label })}
+        aria-label={t("impersonation.expandLabel", { account: label })}
       />
     );
   }
@@ -33,7 +36,7 @@ export function ImpersonationBanner({ targetEmail }: { targetEmail: string | nul
     <div className="impersonation-pill" role="status">
       <span className="impersonation-dot-inline" aria-hidden="true" />
       <span className="impersonation-text">
-        Viewing as <strong>{label}</strong>
+        {t("impersonation.viewingAs")} <strong>{label}</strong>
       </span>
       <form
         action="/api/admin/impersonate/stop"
@@ -42,15 +45,15 @@ export function ImpersonationBanner({ targetEmail }: { targetEmail: string | nul
       >
         <button type="submit" className="impersonation-stop" data-pending={pending || undefined}>
           {pending ? <Loader2 size={12} className="impersonation-spin" aria-hidden="true" /> : null}
-          {pending ? "Leaving…" : "Stop"}
+          {pending ? t("impersonation.leaving") : t("impersonation.stop")}
         </button>
       </form>
       <button
         type="button"
         className="impersonation-collapse"
         onClick={() => setCollapsed(true)}
-        title="Collapse"
-        aria-label="Collapse impersonation controls"
+        title={t("impersonation.collapse")}
+        aria-label={t("impersonation.collapseLabel")}
       >
         <X size={12} aria-hidden="true" />
       </button>

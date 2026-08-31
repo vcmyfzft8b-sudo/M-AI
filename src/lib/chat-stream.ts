@@ -17,6 +17,8 @@ import "server-only";
 export function createChatEventStream<TResult>(params: {
   /** Logged prefix for a failure, e.g. "[chat]". */
   label: string;
+  /** Safe, already-localised sentence sent when the stream fails. */
+  errorMessage: string;
   run: (send: { delta: (text: string) => void }) => Promise<TResult>;
 }) {
   const encoder = new TextEncoder();
@@ -39,7 +41,7 @@ export function createChatEventStream<TResult>(params: {
          * the place to hand a raw database message to a browser.
          */
         console.error(`${params.label} stream failed`, error);
-        send("error", { error: "Odgovora ni bilo mogoče ustvariti. Poskusi znova." });
+        send("error", { error: params.errorMessage });
       } finally {
         controller.close();
       }

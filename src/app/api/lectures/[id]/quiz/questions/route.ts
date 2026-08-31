@@ -65,7 +65,7 @@ export async function POST(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canUseLectureFeatures(user.id, id, "quiz");
@@ -87,7 +87,7 @@ export async function POST(
     .maybeSingle();
 
   if (lastQuestionError) {
-    return NextResponse.json({ error: lastQuestionError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   const lastQuestionRow = lastQuestion as Pick<QuizQuestionRow, "idx"> | null;
@@ -109,7 +109,7 @@ export async function POST(
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   await service

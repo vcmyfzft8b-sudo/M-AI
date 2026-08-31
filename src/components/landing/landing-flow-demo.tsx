@@ -1139,7 +1139,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
                 visibility: stage === 1 ? "visible" : "hidden",
               }}
             >
-              Ustvarjanje zapiskov
+              {this.props.t("flowDemo.statusWritingNotes")}
             </span>
           </div>
           {PAST_NOTES.map((row) => (

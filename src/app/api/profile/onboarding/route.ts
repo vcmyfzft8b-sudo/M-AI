@@ -119,7 +119,7 @@ export async function POST(request: Request) {
     } as never, { onConflict: "id" });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

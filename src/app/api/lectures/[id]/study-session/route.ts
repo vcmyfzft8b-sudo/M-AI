@@ -116,7 +116,7 @@ async function updateStudySession(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canAccessLectureContent(user.id, id);
@@ -143,7 +143,7 @@ async function updateStudySession(
     );
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

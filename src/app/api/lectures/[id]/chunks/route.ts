@@ -61,7 +61,7 @@ export async function POST(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canAccessLectureContent(user.id, id);
@@ -142,7 +142,7 @@ export async function POST(
     .eq("user_id", user.id);
 
   if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   return NextResponse.json({

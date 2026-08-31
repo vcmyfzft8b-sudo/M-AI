@@ -93,7 +93,7 @@ export async function PATCH(
   });
 
   if (!existing) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canUseLectureFeatures(user.id, existing.lecture_id, "study");
@@ -119,7 +119,7 @@ export async function PATCH(
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   return NextResponse.json({
@@ -169,7 +169,7 @@ export async function DELETE(
   });
 
   if (!existing) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canUseLectureFeatures(user.id, existing.lecture_id, "study");
@@ -185,7 +185,7 @@ export async function DELETE(
   const { error } = await service.from("flashcards").delete().eq("id", existing.id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   return NextResponse.json({ deletedFlashcardId: existing.id });

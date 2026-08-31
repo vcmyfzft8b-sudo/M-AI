@@ -3,7 +3,13 @@
 import * as Sentry from "@sentry/nextjs";
 import { useEffect, useSyncExternalStore } from "react";
 
-import { DEFAULT_LOCALE, LOCALE_COOKIE, type Locale, parseLocale } from "@/lib/i18n/locales";
+import {
+  DEFAULT_LOCALE,
+  LOCALE_BCP47,
+  LOCALE_COOKIE,
+  type Locale,
+  parseLocale,
+} from "@/lib/i18n/locales";
 
 import "./globals.css";
 
@@ -95,7 +101,7 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html lang={locale}>
+    <html lang={LOCALE_BCP47[locale]}>
       <body>
         <main className="error-screen">
           <div className="error-screen-inner">

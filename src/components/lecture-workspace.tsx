@@ -210,7 +210,7 @@ const NOTE_HIGHLIGHT_COLORS = [
 
   return {
     id: colorId,
-    label: color?.label ?? colorId,
+    labelKey: color?.labelKey ?? "color.orange",
     value: color?.currentBackground ?? "#fb923c",
     /** Text colour that reads on top of `value`, for the brush button. */
     contrast: color?.currentColor ?? "#431407",
@@ -4209,8 +4209,8 @@ export function LectureWorkspace({
                 onPointerDown={(event) => event.preventDefault()}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => setSelectedHighlightColorId(color.id)}
-                aria-label={color.label}
-                title={color.label}
+                aria-label={t(color.labelKey)}
+                title={t(color.labelKey)}
               />
             ))}
           </div>
@@ -5855,7 +5855,7 @@ export function LectureWorkspace({
           </span>
           <button
             type="button"
-            aria-label="Zapri"
+            aria-label={t("common.close")}
             className="memo-m-chat-head-btn right"
             onClick={() => chatSheet.dismiss()}
           >

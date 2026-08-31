@@ -65,7 +65,7 @@ export async function POST(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const chatAccess = await canSendTrialChatMessage(user.id, id);
@@ -88,6 +88,7 @@ export async function POST(
 
   return createChatEventStream({
     label: "[chat]",
+    errorMessage: await tr("chat.error.answerFailed"),
     run: (send) =>
       answerLectureChat({
         lectureId: id,

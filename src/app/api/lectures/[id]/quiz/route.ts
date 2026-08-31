@@ -48,7 +48,7 @@ export async function GET(
   });
 
   if (!detail) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canUseLectureFeatures(user.id, id, "quiz");
@@ -105,7 +105,7 @@ export async function POST(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canUseLectureFeatures(user.id, id, "quiz");

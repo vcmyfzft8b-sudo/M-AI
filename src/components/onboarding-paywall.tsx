@@ -14,7 +14,7 @@ import { startTransition, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { useT } from "@/components/i18n-provider";
+import { useT, useTranslations } from "@/components/i18n-provider";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
 import { InstallShot } from "@/components/install-shot";
@@ -22,6 +22,8 @@ import { HOME_SCREEN_STEPS } from "@/lib/install-guide";
 import { Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { clearOfferResume } from "@/lib/offer-resume";
+import { LOCALE_INTL_TAG, type Locale } from "@/lib/i18n/locales";
+import { formatCurrency } from "@/lib/utils";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -35,18 +37,15 @@ import {
   DAILY_GOAL_OPTIONS,
   EDUCATION_OPTIONS,
   ELEMENTARY_SCHOOL_OPTIONS,
-  ELEMENTARY_YEAR_OPTIONS,
   FEATURE_OPTIONS,
-  HIGH_SCHOOL_FOUR_YEAR_OPTIONS,
   HIGH_SCHOOL_OPTIONS,
-  HIGH_SCHOOL_YEAR_OPTIONS,
+  getOnboardingYearOptions,
   MOTIVATION_OPTIONS,
   ROLE_OPTIONS,
   SCHOOL_OPTIONS,
   SOURCE_OPTIONS,
   SUBJECT_OPTIONS,
   UNIVERSITY_SCHOOL_OPTIONS,
-  UNIVERSITY_YEAR_OPTIONS,
   type GradeScale,
 } from "@/lib/onboarding-options";
 
@@ -55,7 +54,7 @@ type BillingPlanCard = {
   labelKey: MessageKey;
   cadenceKey: MessageKey;
   amount: number;
-  displayAmount?: string;
+  displayAmount?: number;
   billingNoteKey?: MessageKey;
   annualizedAmount: number;
   blurbKey: MessageKey;
@@ -83,13 +82,14 @@ const HOME_SCREEN_SWIPE_THRESHOLD_PX = 18;
 const ONBOARDING_STEP_COUNT = 16;
 
 /**
- * `3,5` rather than `3.5`. Every market Memo ships in writes a decimal comma —
- * Slovenia, Croatia, Bosnia and Serbia all do — and this string is stored on
- * the profile and read back by people, so it follows their convention rather
- * than the language currently on screen.
+ * The survey is global in English and local in the four home markets, so the
+ * decimal separator follows the selected locale rather than being hardcoded.
  */
-function formatGrade(value: number) {
-  return value.toFixed(1).replace(".", ",");
+function formatGrade(value: number, locale: Locale) {
+  return new Intl.NumberFormat(LOCALE_INTL_TAG[locale], {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(value);
 }
 
 function usesTenPointGrades(schoolLevel: string) {
@@ -162,22 +162,6 @@ function getSchoolOptionsForRole(role: string) {
   }
 
   return SCHOOL_OPTIONS;
-}
-
-function getYearOptionsForRole(role: string, schoolLevel?: string) {
-  if (role === "elementary_student") {
-    return ELEMENTARY_YEAR_OPTIONS;
-  }
-
-  if (role === "high_school_student") {
-    if (schoolLevel === "high_school") {
-      return HIGH_SCHOOL_FOUR_YEAR_OPTIONS;
-    }
-
-    return HIGH_SCHOOL_YEAR_OPTIONS;
-  }
-
-  return UNIVERSITY_YEAR_OPTIONS;
 }
 
 function getYearQuestionKey(role: string): MessageKey {
@@ -303,7 +287,7 @@ export function OnboardingPaywall({
   subscriptionTrialEligible?: boolean;
   plans: BillingPlanCard[];
 }) {
-  const t = useT();
+  const { locale, t } = useTranslations();
   const router = useRouter();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const searchParams = useSearchParams();
@@ -337,7 +321,7 @@ export function OnboardingPaywall({
         ? HIGH_SCHOOL_OPTIONS[0].value
         : UNIVERSITY_SCHOOL_OPTIONS[0].value
       : HIGH_SCHOOL_OPTIONS[0].value,
-    schoolYear: HIGH_SCHOOL_YEAR_OPTIONS[0].value,
+    schoolYear: getOnboardingYearOptions(locale, "high_school_student", "high_school")[0].value,
     subject: SUBJECT_OPTIONS[1].value,
     motivation: "",
     targetGrade: Number.parseFloat(profile?.target_grade?.replace(",", ".") ?? "") || 4.5,
@@ -432,7 +416,7 @@ export function OnboardingPaywall({
     setForm((current) => {
       if (key === "role") {
         const schoolOptions = getSchoolOptionsForRole(String(value));
-        const yearOptions = getYearOptionsForRole(String(value), schoolOptions[0].value);
+        const yearOptions = getOnboardingYearOptions(locale, String(value), schoolOptions[0].value);
         const gradeDefaults = getGradeDefaults(schoolOptions[0].value);
 
         return {
@@ -445,7 +429,7 @@ export function OnboardingPaywall({
       }
 
       if (key === "schoolLevel") {
-        const yearOptions = getYearOptionsForRole(current.role, String(value));
+        const yearOptions = getOnboardingYearOptions(locale, current.role, String(value));
         const gradeDefaults = getGradeDefaults(String(value));
 
         return {
@@ -492,8 +476,8 @@ export function OnboardingPaywall({
 
     return {
       educationLevel: mapEducationLevel(currentForm.schoolLevel),
-      currentAverageGrade: formatGrade(currentForm.currentAverageGrade),
-      targetGrade: formatGrade(currentForm.targetGrade),
+      currentAverageGrade: formatGrade(currentForm.currentAverageGrade, locale),
+      targetGrade: formatGrade(currentForm.targetGrade, locale),
       studyGoal: [
         `${motivationLabel}.`,
         `${featureLabel}.`,
@@ -618,7 +602,7 @@ export function OnboardingPaywall({
           >
             <Minus className="h-7 w-7" />
           </button>
-          <strong>{formatGrade(form[key])}</strong>
+          <strong>{formatGrade(form[key], locale)}</strong>
           <button
             type="button"
             onClick={() => updateGrade(key, 0.1)}
@@ -663,7 +647,7 @@ export function OnboardingPaywall({
     if (step === 4) {
       return {
         title: t(getYearQuestionKey(form.role)),
-        body: renderOptionList(getYearOptionsForRole(form.role, form.schoolLevel), "schoolYear"),
+        body: renderOptionList(getOnboardingYearOptions(locale, form.role, form.schoolLevel), "schoolYear"),
       };
     }
 
@@ -1189,14 +1173,11 @@ export function OnboardingPaywall({
           const yearlySavings = annualizedMonthly > plan.annualizedAmount
             ? Math.round((1 - plan.annualizedAmount / annualizedMonthly) * 100)
             : 0;
-          const displayPrice =
-            plan.id === "yearly"
-              ? `€${plan.displayAmount ?? plan.amount}`
-              : `€${plan.displayAmount ?? plan.amount}`;
+          const displayPrice = formatCurrency(plan.displayAmount ?? plan.amount, locale);
           const suffix = t("paywall.perMonth");
           const detail =
             plan.id === "yearly"
-              ? t("paywall.billedYearly", { amount: plan.annualizedAmount })
+              ? t("paywall.billedYearly", { amount: formatCurrency(plan.annualizedAmount, locale) })
               : t("paywall.billedMonthly");
 
           return (

@@ -422,8 +422,8 @@ function QuotaUsageMenu({
                 highlightColorId === color.id ? "active" : ""
               }`}
               onClick={() => onHighlightColorChange(color.id)}
-              aria-label={color.label}
-              title={color.label}
+              aria-label={t(color.labelKey)}
+              title={t(color.labelKey)}
               style={{ "--note-read-swatch-color": color.currentBackground } as CSSProperties}
             />
           ))}
@@ -1224,7 +1224,7 @@ function InlineNoteMedia({
     >
       <Image
         src={block.media.signedUrl}
-        alt={block.media.original_file_name ?? "Dodana fotografija"}
+        alt={block.media.original_file_name ?? t("noteMedia.addedPhoto")}
         width={1200}
         height={800}
         draggable={false}
@@ -1299,7 +1299,7 @@ function InlineNoteMedia({
             </button>
             <Image
               src={block.media.signedUrl}
-              alt={block.media.original_file_name ?? "Dodana fotografija"}
+              alt={block.media.original_file_name ?? t("noteMedia.addedPhoto")}
               width={1600}
               height={1200}
               draggable={false}
@@ -2072,7 +2072,7 @@ export function NoteReadAloud({
         });
       }, 450);
     },
-    [clearTtsGenerationProgressTimers],
+    [clearTtsGenerationProgressTimers, t],
   );
 
   const finishTtsGenerationProgress = useCallback(() => {
@@ -2090,7 +2090,7 @@ export function NoteReadAloud({
       setTtsGenerationProgress(null);
       generationProgressDismissRef.current = null;
     }, 650);
-  }, [clearTtsGenerationProgressTimers]);
+  }, [clearTtsGenerationProgressTimers, t]);
 
   const cancelTtsGenerationProgress = useCallback(() => {
     clearTtsGenerationProgressTimers();

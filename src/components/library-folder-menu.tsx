@@ -707,7 +707,7 @@ export function LibraryFolderMenu({
               />
               <div className="library-folder-mobile-sheet-header">
                 <h2 id="folders-sheet-title" className="library-folder-mobile-sheet-title">
-                  Mape
+                  {t("folders.title")}
                 </h2>
                 <button
                   type="button"

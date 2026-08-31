@@ -4,8 +4,10 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import { EmojiIcon } from "@/components/emoji-icon";
+import { useT } from "@/components/i18n-provider";
 
 export function LogoutForm() {
+  const t = useT();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   return (
@@ -32,7 +34,7 @@ export function LogoutForm() {
         ) : (
           <EmojiIcon symbol="🚪" size="0.95rem" />
         )}
-        {isSubmitting ? "Odjavljam..." : "Odjava"}
+        {t(isSubmitting ? "settings.signingOut" : "settings.signOut")}
       </button>
     </form>
   );

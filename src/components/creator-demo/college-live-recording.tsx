@@ -572,7 +572,7 @@ export function CollegeLiveRecording({
 
   return (
     <ViewportPortal>
-      <div className="college-live" role="dialog" aria-modal="true" aria-label="Snemanje predavanja">
+      <div className="college-live" role="dialog" aria-modal="true" aria-label={t("creatorDemo.recordingDialog")}>
         <header className="college-live-header">
           <span className="college-live-brand">
             <BrandLogo subtitle="" />
@@ -690,7 +690,7 @@ export function CollegeLiveRecording({
               onClick={() => void finishRecording()}
             >
               <span className="college-live-stop-icon" aria-hidden="true" />
-              Ustavi snemanje in odpri zapiske
+            {t("creatorDemo.stopAndOpenNotes")}
             </button>
           )}
         </footer>

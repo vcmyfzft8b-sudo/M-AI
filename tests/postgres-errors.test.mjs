@@ -73,7 +73,7 @@ test("the chunk route answers a deleted note the way it answers a missing one", 
   // stack and reporting the server as broken.
   assert.match(
     routeSource,
-    /error instanceof LectureRemovedDuringTtsError\)\s*\{\s*return NextResponse\.json\(\{ error: "Ni najdeno\." \}, \{ status: 404 \}\)/,
+    /error instanceof LectureRemovedDuringTtsError\)\s*\{\s*return NextResponse\.json\(\{ error: await tr\("api\.notFound"\) \}, \{ status: 404 \}\)/,
   );
   assert.ok(
     routeSource.indexOf("LectureRemovedDuringTtsError") <

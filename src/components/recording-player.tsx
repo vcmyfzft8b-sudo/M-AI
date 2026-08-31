@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useT } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
 
 /** The rates the design's speed chip cycles through. */
@@ -38,6 +39,7 @@ function clock(seconds: number) {
  * pieces of state would.
  */
 export function RecordingPlayer({ src }: { src: string }) {
+  const t = useT();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -117,7 +119,7 @@ export function RecordingPlayer({ src }: { src: string }) {
           step={0.1}
           value={elapsed}
           disabled={!duration}
-          aria-label="Premakni po posnetku"
+          aria-label={t("recording.seek")}
           onChange={(event) => seekTo(Number(event.target.value))}
         />
       </div>
@@ -131,7 +133,7 @@ export function RecordingPlayer({ src }: { src: string }) {
         <button
           type="button"
           className="memo-player-skip"
-          aria-label={`Nazaj ${SKIP_SECONDS} s`}
+          aria-label={t("recording.backSeconds", { seconds: SKIP_SECONDS })}
           onClick={() => seekTo(elapsed - SKIP_SECONDS)}
         >
           <Msym name="replay_10" size="1.45rem" fill={false} weight={500} />
@@ -140,7 +142,7 @@ export function RecordingPlayer({ src }: { src: string }) {
         <button
           type="button"
           className="memo-player-play"
-          aria-label={isPlaying ? "Ustavi" : "Predvajaj"}
+          aria-label={t(isPlaying ? "recording.pause" : "recording.play")}
           onClick={togglePlay}
         >
           <Msym name={isPlaying ? "pause" : "play_arrow"} size="1.9rem" fill />
@@ -149,7 +151,7 @@ export function RecordingPlayer({ src }: { src: string }) {
         <button
           type="button"
           className="memo-player-skip"
-          aria-label={`Naprej ${SKIP_SECONDS} s`}
+          aria-label={t("recording.forwardSeconds", { seconds: SKIP_SECONDS })}
           onClick={() => seekTo(elapsed + SKIP_SECONDS)}
         >
           <Msym name="forward_10" size="1.45rem" fill={false} weight={500} />
@@ -160,7 +162,7 @@ export function RecordingPlayer({ src }: { src: string }) {
         <button
           type="button"
           className="memo-player-rate"
-          aria-label="Hitrost predvajanja"
+          aria-label={t("recording.speed")}
           onClick={() => setRate((current) => RATES[(RATES.indexOf(current as 1) + 1) % RATES.length])}
         >
           <Msym name="speed" size="1.15rem" fill={false} weight={500} />

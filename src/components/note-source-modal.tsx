@@ -626,7 +626,7 @@ export function NoteSourceModal({
     setBusyLabel(null);
     setIsCancelling(false);
     setError(null);
-  }, [deleteCreatedLecture]);
+  }, [deleteCreatedLecture, t]);
 
   useEffect(() => {
     setRecordingSupported(typeof window !== "undefined" && "MediaRecorder" in window);
@@ -1112,7 +1112,7 @@ export function NoteSourceModal({
         t("capture.busy.preparing"),
         photoSources.length === 1
           ? t("capture.busy.uploadingPhoto")
-          : `Nalagam fotografije (${photoSources.length})...`,
+          : t("capture.busy.uploadingPhotos", { count: photoSources.length }),
         t("capture.busy.queueing"),
       ]);
       return;
@@ -2186,7 +2186,7 @@ export function NoteSourceModal({
                                 void startRecording();
                               }}
                             >
-                              Posnemi znova
+                              {t("capture.recordAgain")}
                             </button>
                           )}
                         </>

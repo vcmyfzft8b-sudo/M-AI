@@ -64,7 +64,7 @@ export async function POST(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canUseLectureFeatures(user.id, id, "study");
@@ -86,7 +86,7 @@ export async function POST(
     .maybeSingle();
 
   if (lastCardError) {
-    return NextResponse.json({ error: lastCardError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   const lastCardRow = lastCard as Pick<FlashcardRow, "idx"> | null;
@@ -114,7 +114,7 @@ export async function POST(
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   await service

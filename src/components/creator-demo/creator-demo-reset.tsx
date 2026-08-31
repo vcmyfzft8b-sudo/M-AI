@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 
 import { useAppHref } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
+import { useT } from "@/components/i18n-provider";
 import { resetCreatorDemo } from "@/lib/creator-demo/store";
 
 /** Puts the demo library back to its starting state between takes. */
 export function CreatorDemoReset() {
+  const t = useT();
   const router = useRouter();
   const homeHref = useAppHref("/app");
   const [isResetting, setIsResetting] = useState(false);
@@ -26,7 +28,7 @@ export function CreatorDemoReset() {
       }}
     >
       <EmojiIcon symbol="♻️" size="0.95rem" />
-      Ponastavi demo
+      {t("creatorDemo.reset")}
     </button>
   );
 }

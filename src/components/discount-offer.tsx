@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useT } from "@/components/i18n-provider";
+import { useTranslations } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
 import { sheetClass, useSheet } from "@/components/use-sheet";
@@ -15,6 +15,7 @@ import {
   BRAND_LOCKUP_WIDTH,
   SEO_BRAND_NAME,
 } from "@/lib/brand";
+import { formatCurrency } from "@/lib/utils";
 
 /**
  * The one-shot prize wheel and the offer sheet it hands off to.
@@ -68,6 +69,9 @@ type OfferPlan = {
   billingKey: MessageKey;
   /** Null on the plan the design leaves unbadged. */
   badgeKey: MessageKey | null;
+  headlineAmount: number;
+  discountedAmount: number;
+  renewalAmount: number;
 };
 
 /**
@@ -90,6 +94,9 @@ const OFFER_PLANS: OfferPlan[] = [
      */
     billingKey: "offer.plan.oneOffBilling",
     badgeKey: "offer.plan.saveBadge",
+    headlineAmount: 1.25,
+    discountedAmount: 65,
+    renewalAmount: 130,
   },
   {
     id: "monthly",
@@ -97,6 +104,9 @@ const OFFER_PLANS: OfferPlan[] = [
     priceKey: "offer.plan.monthlyPrice",
     billingKey: "offer.plan.monthlyBilling",
     badgeKey: null,
+    headlineAmount: 10,
+    discountedAmount: 10,
+    renewalAmount: 20,
   },
 ];
 
@@ -117,7 +127,7 @@ export function DiscountOffer({
   /** Fired once the prize is banked, so the home card can stop offering it. */
   onClaimed: () => void;
 }) {
-  const t = useT();
+  const { locale, t } = useTranslations();
   const spinTimerRef = useRef<number | null>(null);
   /** Set once checkout has been started, so leaving does not withdraw a prize
    *  the purchase is already carrying. */
@@ -588,9 +598,18 @@ export function DiscountOffer({
                       of the card, not the sliver beside the price. */}
                   <span className="memo-offer-plan-copy">
                     <span>{t(offerPlan.labelKey)}</span>
-                    <span className="memo-offer-billing">{t(offerPlan.billingKey)}</span>
+                    <span className="memo-offer-billing">
+                      {t(offerPlan.billingKey, {
+                        discounted: formatCurrency(offerPlan.discountedAmount, locale),
+                        renewal: formatCurrency(offerPlan.renewalAmount, locale),
+                      })}
+                    </span>
                   </span>
-                  <span className="memo-offer-price">{t(offerPlan.priceKey)}</span>
+                  <span className="memo-offer-price">
+                    {t(offerPlan.priceKey, {
+                      amount: formatCurrency(offerPlan.headlineAmount, locale),
+                    })}
+                  </span>
                 </button>
               ))}
 

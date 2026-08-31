@@ -167,7 +167,7 @@ export async function GET(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canAccessLectureContent(user.id, id);
@@ -186,7 +186,7 @@ export async function GET(
   });
 
   if (!detail) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const processingUpdatedAt =
@@ -299,7 +299,7 @@ export async function DELETE(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const service = createSupabaseServiceRoleClient();
@@ -310,7 +310,7 @@ export async function DELETE(
     .eq("user_id", user.id);
 
   if (noteMediaError) {
-    return NextResponse.json({ error: noteMediaError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   const { error } = await supabase
@@ -320,7 +320,7 @@ export async function DELETE(
     .eq("user_id", user.id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   const chunkPaths = parseAudioChunkManifest(
@@ -388,7 +388,7 @@ export async function PATCH(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const { error } = await supabase
@@ -398,7 +398,7 @@ export async function PATCH(
     .eq("user_id", user.id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, title: parsed.data.title });

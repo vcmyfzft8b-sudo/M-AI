@@ -2237,9 +2237,9 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
     return (
       <div>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "16px" }}>
-          <span style={{ fontSize: "22.4px", fontWeight: 800, letterSpacing: "-0.03em" }}>Kartica {s.cardPos + 1}</span>
+          <span style={{ fontSize: "22.4px", fontWeight: 800, letterSpacing: "-0.03em" }}>{this.props.t("study.cards.cardN", { index: s.cardPos + 1 })}</span>
           <span style={{ color: "var(--m-second)", fontSize: "20px", fontWeight: 700, letterSpacing: "-0.02em" }}>
-            {queue.length - s.cardPos - 1} ostalo
+            {this.props.t("study.cards.remaining", { count: queue.length - s.cardPos - 1 })}
           </span>
         </div>
         <div style={{ position: "relative", height: "16.8px", margin: "12.8px 0 0", borderRadius: "999px", background: "var(--m-field)" }}>
@@ -2394,11 +2394,11 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
           >
             <Msym name="arrow_back" size="22.4px" fill={false} weight={500} />
           </button>
-          <button type="button" aria-label="Še ponovim" onClick={() => this.swipeCard("again")} style={verdict(true)}>
+          <button type="button" aria-label={this.props.t("preview.cards.again")} onClick={() => this.swipeCard("again")} style={verdict(true)}>
             <Msym name="close" size="22.4px" />
             <span>{missed}</span>
           </button>
-          <button type="button" aria-label="Znam" onClick={() => this.swipeCard("easy")} style={verdict(false)}>
+          <button type="button" aria-label={this.props.t("preview.cards.know")} onClick={() => this.swipeCard("easy")} style={verdict(false)}>
             <span>{known}</span>
             <Msym name="check" size="22.4px" />
           </button>
@@ -2533,7 +2533,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
           <span style={{ fontSize: "19.2px", fontWeight: 800, letterSpacing: "-0.03em", color: "#ff3b30" }}>{this.props.t("quiz.wrongTitle")}</span>
         </div>
         <p style={{ margin: "16px 0 19.2px", fontSize: "17.28px", fontWeight: 600 }}>
-          Pravilen odgovor: {q.options[q.correct]}
+          {this.props.t("preview.correctAnswerValue", { answer: q.options[q.correct] })}
         </p>
         <div style={{ display: "grid", gap: "11.2px" }}>
           <button type="button" onClick={() => this.setState({ sheet: "chat" }, () => this.nextQuiz())} style={button(false)}>
@@ -2695,10 +2695,10 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
             }}
           >
             <span>12:48</span>
-            <span>1 h 12 min</span>
+            <span>{this.props.t("preview.durationHoursMinutes", { hours: 1, minutes: 12 })}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "21.6px", marginTop: "20px" }}>
-            <button type="button" aria-label="Nazaj 10 s" style={round(48)}>
+            <button type="button" aria-label={this.props.t("preview.back10")} style={round(48)}>
               <Msym name="replay_10" size="24px" fill={false} weight={500} />
             </button>
             <button
@@ -2708,7 +2708,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
             >
               <Msym name="play_arrow" size="32px" />
             </button>
-            <button type="button" aria-label="Naprej 10 s" style={round(48)}>
+            <button type="button" aria-label={this.props.t("preview.forward10")} style={round(48)}>
               <Msym name="forward_10" size="24px" fill={false} weight={500} />
             </button>
           </div>
@@ -2827,10 +2827,10 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
           {isTest ? this.props.t("preview.testSubmitted") : good ? this.props.t("preview.wellDone") : this.props.t("preview.tryAgain")}
         </span>
         <span style={{ ...line, marginTop: "11.2px" }}>
-          <span style={score}>{isTest ? "100 %" : `${pct} %`}</span> {isTest ? "oddano" : "pravilno"}
+          <span style={score}>{isTest ? "100 %" : `${pct} %`}</span> {this.props.t(isTest ? "preview.result.submitted" : "preview.result.correct")}
         </span>
         <span style={{ ...line, marginTop: "4px" }}>
-          opravljeno v <span style={score}>01:06</span>
+          {this.props.t("preview.result.completedIn")} <span style={score}>01:06</span>
         </span>
 
         <div style={{ display: "grid", gap: "11.2px", width: "100%", marginTop: "41.6px" }}>
@@ -3782,7 +3782,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
               <span style={{ fontSize: "16.32px", fontWeight: 700, letterSpacing: "-0.025em" }}>{scope}</span>
               {noteScoped ? null : (
                 <>
-                  <span style={{ color: "var(--m-second)", fontSize: "16.32px", letterSpacing: "-0.02em" }}>nedavni</span>
+                  <span style={{ color: "var(--m-second)", fontSize: "16.32px", letterSpacing: "-0.02em" }}>{this.props.t("preview.recent")}</span>
                   <Msym name="expand_more" size="18.4px" fill={false} weight={500} />
                 </>
               )}

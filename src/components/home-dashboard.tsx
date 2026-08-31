@@ -305,8 +305,8 @@ const NoteRow = memo(function NoteRow({
             <span className="memo-note-meta">{meta}</span>
           </span>
 
-          {isProcessing ? <span className="memo-note-badge">Ustvarjanje</span> : null}
-          {isFailed ? <span className="memo-note-badge failed">Napaka</span> : null}
+          {isProcessing ? <span className="memo-note-badge">{t("status.generatingNotes")}</span> : null}
+          {isFailed ? <span className="memo-note-badge failed">{t("status.failed")}</span> : null}
 
           <Msym name="chevron_right" size="1.55rem" fill={false} weight={400} />
         </InstantLink>

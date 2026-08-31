@@ -319,7 +319,9 @@ export function LibraryChat({
           <span className="memo-scope-option-copy">
             <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
               <span>{t("libraryChat.useTranscripts")}</span>
-              <span className="memo-pill-count">25 max</span>
+              <span className="memo-pill-count">
+                {t("libraryChat.transcriptLimit", { count: 25 })}
+              </span>
             </span>
             <span>{t("libraryChat.useTranscriptsDetail")}</span>
           </span>
@@ -739,7 +741,7 @@ export function LibraryChat({
                       onClick={() => setIsScopeMenuOpen((current) => !current)}
                     >
                       <span style={{ fontWeight: 700, letterSpacing: "-0.025em" }}>
-                        Klepet z:
+                        {t("libraryChat.chattingWith")}
                       </span>
                       <span style={{ color: "var(--muted)" }}>{scopeLabel}</span>
                       <Msym name="expand_more" size="1.15rem" fill={false} weight={500} />

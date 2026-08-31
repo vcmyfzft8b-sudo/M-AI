@@ -65,7 +65,7 @@ export async function PATCH(
   });
 
   if (!folder) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   return NextResponse.json({ folder });
@@ -104,7 +104,7 @@ export async function DELETE(
   });
 
   if (!deleted) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   return NextResponse.json({ ok: true });

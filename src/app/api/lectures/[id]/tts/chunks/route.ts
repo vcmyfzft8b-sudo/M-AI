@@ -212,7 +212,7 @@ export async function POST(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canUseLectureFeatures(user.id, id, "study");
@@ -232,7 +232,7 @@ export async function POST(
   });
 
   if (!detail) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const content = detail.artifact?.structured_notes_md
@@ -306,7 +306,7 @@ export async function POST(
     // the start — a 500 said the server had broken, and put a stack in the error stream for a
     // deletion that worked exactly as intended.
     if (error instanceof LectureRemovedDuringTtsError) {
-      return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+      return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
     }
 
     if (isProviderRateLimitError(error)) {

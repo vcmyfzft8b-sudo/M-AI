@@ -69,8 +69,10 @@ export function I18nProvider({
    * browser's own translation prompt.
    */
   useEffect(() => {
-    if (document.documentElement.lang !== locale) {
-      document.documentElement.lang = locale;
+    const languageTag = LOCALE_BCP47[locale];
+
+    if (document.documentElement.lang !== languageTag) {
+      document.documentElement.lang = languageTag;
     }
 
     if (readLocaleCookie() !== locale) {

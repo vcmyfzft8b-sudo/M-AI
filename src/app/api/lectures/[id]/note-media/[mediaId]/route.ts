@@ -53,7 +53,7 @@ export async function DELETE(
   });
 
   if (!lecture) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canAccessLectureContent(user.id, id);
@@ -75,11 +75,11 @@ export async function DELETE(
     .maybeSingle();
 
   if (mediaError) {
-    return NextResponse.json({ error: mediaError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   if (!media) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const artifact = await readLectureArtifactForNoteDoc(id);

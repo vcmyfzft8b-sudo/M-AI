@@ -61,13 +61,13 @@ export async function POST(
     .maybeSingle();
 
   if (flashcardError) {
-    return NextResponse.json({ error: flashcardError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   const flashcardRow = flashcard as { id: string; lecture_id: string } | null;
 
   if (!flashcardRow) {
-    return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
   const access = await canUseLectureFeatures(user.id, flashcardRow.lecture_id, "study");
@@ -87,7 +87,7 @@ export async function POST(
     .maybeSingle();
 
   if (existingError) {
-    return NextResponse.json({ error: existingError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   const existingProgress = (existing ?? null) as FlashcardProgressRow | null;
@@ -112,7 +112,7 @@ export async function POST(
     .single();
 
   if (progressError) {
-    return NextResponse.json({ error: progressError.message }, { status: 500 });
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
   return NextResponse.json({ progress });

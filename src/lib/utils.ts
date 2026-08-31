@@ -1,6 +1,8 @@
 import { clsx, type ClassValue } from "clsx";
 
-import { LOCALE_INTL_TAG, type Locale } from "@/lib/i18n/locales";
+// Relative filename keeps this small, pure formatter module directly testable
+// with Node's type-stripping test runner as well as through Next.js.
+import { LOCALE_INTL_TAG, type Locale } from "./i18n/locales.ts";
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
@@ -24,6 +26,7 @@ const APP_TIME_ZONE = "Europe/Ljubljana";
  */
 const calendarDateFormatters = new Map<Locale, Intl.DateTimeFormat>();
 const clockTimeFormatters = new Map<Locale, Intl.DateTimeFormat>();
+const currencyFormatters = new Map<string, Intl.NumberFormat>();
 
 function getFormatter(
   cache: Map<Locale, Intl.DateTimeFormat>,
@@ -93,6 +96,25 @@ export function formatClockTime(isoString: string, locale: Locale) {
     minute: "2-digit",
     hourCycle: "h23",
   }).format(new Date(isoString));
+}
+
+/** A euro amount with the reader's decimal separator and currency placement. */
+export function formatCurrency(amount: number, locale: Locale) {
+  const fractionDigits = Number.isInteger(amount) ? 0 : 2;
+  const cacheKey = `${locale}:${fractionDigits}`;
+  let formatter = currencyFormatters.get(cacheKey);
+
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(LOCALE_INTL_TAG[locale], {
+      style: "currency",
+      currency: "EUR",
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    });
+    currencyFormatters.set(cacheKey, formatter);
+  }
+
+  return formatter.format(amount);
 }
 
 export function stripCodeFences(value: string) {

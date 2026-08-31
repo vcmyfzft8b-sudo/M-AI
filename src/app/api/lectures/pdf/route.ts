@@ -159,7 +159,7 @@ export async function POST(request: Request) {
     }
 
     if (!lecture) {
-      return NextResponse.json({ error: "Ni najdeno." }, { status: 404 });
+      return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
     }
 
     const sourceType = isPdfDocument(inputFile)

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   canRetryLectureFailureCode,
@@ -26,6 +28,17 @@ test("the audio and scan failures get codes of their own", () => {
   assert.equal(toLectureFailureCode(new NoReadableScanTextError({})), "scan_not_enough_text");
   assert.equal(toLectureFailureCode(new NoClearSpeechDetectedError({})), "audio_no_clear_speech");
   assert.equal(toLectureFailureCode(new InvalidAudioFileError()), "audio_not_decodable");
+});
+
+test("a repeated notes-generation guard failure gets a stable learner-facing code", () => {
+  const pipeline = readFileSync(
+    fileURLToPath(new URL("../src/lib/pipeline.ts", import.meta.url)),
+    "utf8",
+  );
+
+  assert.match(pipeline, /isLectureGenerationBudgetExceededError\(params\.error\)/);
+  assert.match(pipeline, /\? "generation_budget_exceeded"/);
+  assert.equal(canRetryLectureFailureCode("generation_budget_exceeded"), false);
 });
 
 test("anything else is uncoded, which keeps retry on offer", () => {

@@ -84,6 +84,7 @@ export async function POST(request: Request) {
 
   return createChatEventStream({
     label: "[library-chat]",
+    errorMessage: await tr("libraryChat.error.answerFailed"),
     run: (send) =>
       answerLibraryChat({
         userId: user.id,

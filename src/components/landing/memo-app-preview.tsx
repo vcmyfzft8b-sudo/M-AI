@@ -777,10 +777,10 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
 
   /*
    * The collapsing home header, the way the app does it: `headP` runs 0 → 1
-   * over the first 80px of scroll, the title fades out and the search field
-   * folds up from its top edge, and its contents counter-scale so they cut out
-   * rather than being squashed. The range is fixed rather than derived from the
-   * scroll height, which would feed the collapse back into the scroll metrics.
+   * over the first 80px of scroll and the title fades out. The search field
+   * does not fold — it scrolls away at full size. The range is fixed rather
+   * than derived from the scroll height, which would feed the collapse back
+   * into the scroll metrics.
    */
   onHomeScroll = (event: { currentTarget: HTMLDivElement }) => {
     const el = event.currentTarget;
@@ -1272,8 +1272,6 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
     const s = this.state;
     const folderLabel = s.folders.find((f) => f.id === s.folderId)?.name ?? this.props.t("folders.allNotes");
     const headP = s.headP;
-    /* The field's own contents go before it does, rather than fading with it. */
-    const headSharp = headP > 0.02 ? 0 : 1;
 
     return (
       <div style={{ position: "absolute", inset: `${STATUS_H}px 0 0 0`, display: "flex", flexDirection: "column" }}>
@@ -1363,13 +1361,6 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
               overflow: "hidden",
               position: "relative",
               zIndex: 3,
-              // Scaled from its top edge, so it folds up into the bar rather
-              // than shrinking towards its own middle.
-              transformOrigin: "top center",
-              willChange: "transform",
-              transform: `scaleY(${Math.max(0.06, 1 - headP)})`,
-              opacity: clamp01(1 - (headP - 0.6) * 2.5),
-              transition: "opacity 0.1s linear",
             }}
           >
             <Msym
@@ -1377,7 +1368,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
               size="20.8px"
               fill={false}
               weight={600}
-              style={{ color: "var(--m-label)", opacity: headSharp, transition: "opacity 0.08s linear" }}
+              style={{ color: "var(--m-label)" }}
             />
             <input
               value={s.query}
@@ -1393,11 +1384,6 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
                 fontFamily: "inherit",
                 fontSize: "16.32px",
                 letterSpacing: "-0.02em",
-                // The contents counter-scale, so the placeholder and the glyph
-                // are never squashed on the way down — they cut out early.
-                transform: `scaleY(${1 / Math.max(0.06, 1 - headP)})`,
-                opacity: headSharp,
-                transition: "opacity 0.1s linear",
               }}
             />
           </div>

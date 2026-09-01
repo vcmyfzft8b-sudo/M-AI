@@ -1594,8 +1594,8 @@ export function HomeDashboard({
           </div>
 
           {/* The title and the search scroll away with the list; while they
-              go, the title fades and the field folds. The folder pill below is
-              opaque and sits above them, so they pass under it. */}
+              go, the title fades. The folder pill below is opaque and sits
+              above them, so they pass under it. */}
           <h1 className="memo-m-title memo-only-mobile">{t("library.myNotes")}</h1>
 
           <div className="memo-m-search memo-only-mobile flex">

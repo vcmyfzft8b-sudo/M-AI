@@ -14,18 +14,18 @@ const STABLE_FRAMES = 8;
 const SNAP_DURATION_MS = 260;
 
 /**
- * The phone library header, which folds as it scrolls away: the title fades
- * out and the search field collapses from its top edge.
+ * The phone library header, whose title fades out as it scrolls away. The
+ * search field below it does not fold; it scrolls off at its full size.
  *
  * Progress is published as `--memo-head-p` (0 → 1) on the screen element
  * rather than held in React state — the header moves every frame, and
  * re-rendering the whole note list alongside it would be the one thing that
  * makes this stutter. Everything the value drives is expressed in CSS.
  *
- * The collapse is transform-only for the same reason it is in the design:
- * animating heights would change the scroll metrics, which feeds back into
- * the scroll position and makes the header fight the scroller. Both elements
- * simply scroll away with the list; the fold is decoration on top of that.
+ * Nothing here resizes: animating heights would change the scroll metrics,
+ * which feeds back into the scroll position and makes the header fight the
+ * scroller. Both elements simply scroll away with the list; the fade is
+ * decoration on top of that.
  *
  * On release the header settles to whichever end is nearer, so a scroll that
  * stops mid-range does not leave it frozen half-folded. A finger back on the

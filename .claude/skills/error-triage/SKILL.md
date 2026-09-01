@@ -65,6 +65,14 @@ half of the window went unread, so triage the Vercel data but commit with
 
 ## Step 1 — Correlate and rank
 
+**Check the durable resolution ledger before opening a fix.** Read
+[`docs/error-triage-resolutions.md`](/docs/error-triage-resolutions.md) and compare the candidate's
+route, operation, message, event time, and release cutoff. An event at or before a listed production
+cutoff is historical and must be recorded as `fixed`, not assigned a second branch. If the ledger
+names an open resolution PR, update or wait for that PR instead of opening a duplicate. Only an
+occurrence strictly after the listed production cutoff is evidence of a regression, and it still
+needs fresh investigation rather than a replay of the old patch.
+
 **Correlate Vercel with Sentry.** Vercel says a route returned 500; Sentry usually
 says which line threw. Match a Vercel group to a Sentry issue by comparing the
 group's `path` to the issue's `culprit` and `request.url`, and the timing to

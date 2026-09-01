@@ -1,0 +1,39 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const SKILL = readFileSync(
+  new URL("../.claude/skills/error-triage/SKILL.md", import.meta.url),
+  "utf8",
+);
+const LEDGER = readFileSync(
+  new URL("../docs/error-triage-resolutions.md", import.meta.url),
+  "utf8",
+);
+
+test("automated triage consults the durable resolution ledger before branching", () => {
+  const ledgerInstruction = SKILL.indexOf("docs/error-triage-resolutions.md");
+  const correlationStep = SKILL.indexOf("**Correlate Vercel with Sentry.**");
+
+  assert.ok(ledgerInstruction > 0, "the triage skill must name the resolution ledger");
+  assert.ok(
+    ledgerInstruction < correlationStep,
+    "the ledger must be checked before a candidate is correlated and assigned a branch",
+  );
+  assert.match(SKILL, /update or wait for that PR instead of opening a duplicate/);
+});
+
+test("both 2026-09-01 resolutions have durable fingerprints and PRs", () => {
+  for (const required of [
+    "MEMOAI-WEB-37",
+    "POST /api/inngest",
+    "PR #304",
+    "dpl_DdXSoArqCz1HHtL3prHXqPRAwjoY",
+    "MEMOAI-WEB-33",
+    "POST /api/internal/lectures/document",
+    "document_image_description",
+    "PR #305",
+  ]) {
+    assert.ok(LEDGER.includes(required), `resolution ledger is missing ${required}`);
+  }
+});

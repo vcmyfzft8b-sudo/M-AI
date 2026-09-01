@@ -1,5 +1,9 @@
 # Automated Production Error Triage
 
+Resolved fingerprints and their production cutoffs are recorded in
+[`docs/error-triage-resolutions.md`](/docs/error-triage-resolutions.md). The triage agent must consult
+that ledger before opening a branch so historical Sentry events do not create duplicate fixes.
+
 Every three hours, a GitHub Actions workflow scans Vercel production logs and Sentry
 issues for actionable errors, fixes **every** one worth fixing, verifies each fix on
 its own Vercel preview deployment, and opens one pull request per fix.

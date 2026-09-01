@@ -35,6 +35,22 @@ function workAbortedError() {
   return error;
 }
 
+/**
+ * The second sentence `WorkAbortedError` is thrown with (src/lib/ai/gemini.ts, the attempt-timeout
+ * clamp): the budget has not fired yet, there is simply too little of it left to start another
+ * model call. Sentry MEMOAI-WEB-4T / issue 144291117, 2026-09-01T17:59:47Z — one learner, a text
+ * lecture, the note-writing stage. It crossed an Inngest step boundary, so the name was gone and
+ * only this sentence was left; the message test below did not match it, and the raw English string
+ * was written to the lecture as the learner's error message instead of being auto-retried.
+ */
+function budgetNearlySpentError() {
+  const error = new Error(
+    "The invocation budget is nearly spent; not starting another model call.",
+  );
+  error.name = "WorkAbortedError";
+  return error;
+}
+
 /** How the error arrives after Inngest rebuilds it: class gone, name flattened, message only. */
 function acrossStepBoundary(error) {
   const rebuilt = new Error(error.message);
@@ -45,6 +61,7 @@ function acrossStepBoundary(error) {
 test("a cancelled run is recognised by name", () => {
   assert.equal(isAbortedWorkError(nodeAbortError()), true);
   assert.equal(isAbortedWorkError(workAbortedError()), true);
+  assert.equal(isAbortedWorkError(budgetNearlySpentError()), true);
 });
 
 test("it is still recognised once Inngest has flattened it", () => {
@@ -52,6 +69,36 @@ test("it is still recognised once Inngest has flattened it", () => {
   // gone, so a name-only check would miss the very event this fixes.
   assert.equal(isAbortedWorkError(acrossStepBoundary(nodeAbortError())), true);
   assert.equal(isAbortedWorkError(acrossStepBoundary(workAbortedError())), true);
+  assert.equal(isAbortedWorkError(acrossStepBoundary(budgetNearlySpentError())), true);
+});
+
+/**
+ * The bug behind issue 144291117 was not this one sentence — it was that the message test knew
+ * only one of `WorkAbortedError`'s two sentences, and nothing failed when the second was added.
+ * So pin the class instead of the string: every sentence the code can actually throw has to
+ * survive the flattening, including any added later.
+ */
+test("every sentence WorkAbortedError is thrown with survives the step boundary", () => {
+  const sources = ["src/lib/abort-context.ts", "src/lib/ai/gemini.ts"]
+    .map((path) => readSource(path))
+    .join("\n");
+
+  const messages = [
+    // The class default, declared as a constructor parameter default.
+    ...readSource("src/lib/abort-context.ts").matchAll(/constructor\(message = "([^"]+)"/g),
+    // Every explicit message passed at a throw site.
+    ...sources.matchAll(/new WorkAbortedError\(\s*"([^"]+)"/g),
+  ].map((match) => match[1]);
+
+  assert.ok(messages.length >= 2, `expected the default and at least one explicit message, got ${messages.length}`);
+
+  for (const message of messages) {
+    const flattened = new Error(message);
+    flattened.name = "Error";
+
+    assert.equal(isAbortedWorkError(flattened), true, message);
+    assert.equal(toUserFacingAiErrorMessage(flattened), AI_PROCESSING_TOO_LONG_MESSAGE, message);
+  }
 });
 
 test("nothing else is mistaken for a cancelled run", () => {
@@ -78,6 +125,13 @@ test("the learner gets the budget's own sentence, not Node's abort text", () => 
     AI_PROCESSING_TOO_LONG_MESSAGE,
   );
   assert.equal(toUserFacingAiErrorMessage(workAbortedError()), AI_PROCESSING_TOO_LONG_MESSAGE);
+
+  // Issue 144291117: this returned the raw English "The invocation budget is nearly spent; not
+  // starting another model call." and stamped it on the learner's lecture.
+  assert.equal(
+    toUserFacingAiErrorMessage(acrossStepBoundary(budgetNearlySpentError())),
+    AI_PROCESSING_TOO_LONG_MESSAGE,
+  );
 });
 
 test("the mapping is idempotent and leaves other failures alone", () => {

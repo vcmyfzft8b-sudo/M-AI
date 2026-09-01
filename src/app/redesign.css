@@ -8554,41 +8554,18 @@
   }
 
   /*
-   * The collapse, on the design's curve. `--memo-head-p` runs 0 → 1 over the
-   * first 80px of scroll (published by `useCollapsingHeader`) and everything
-   * below is derived from it.
+   * The title fade, on the design's curve. `--memo-head-p` runs 0 → 1 over the
+   * first 80px of scroll (published by `useCollapsingHeader`).
    *
-   * Both elements scroll away with the list — nothing is pinned and nothing
-   * resizes, so the scroll metrics never change and the header cannot fight
-   * the scroller. The folder pill beneath is opaque and sits above them, so
-   * they pass under it rather than showing through.
+   * The search field itself no longer folds: it simply scrolls away with the
+   * list, at its full size, and the scroller's top mask takes it out. Nothing
+   * is pinned and nothing resizes, so the scroll metrics never change and the
+   * header cannot fight the scroller. The folder pill beneath is opaque and
+   * sits above both, so they pass under it rather than showing through.
    */
   .memo-m-title {
     opacity: clamp(0, calc(1 - var(--memo-head-p, 0) * 1.9), 1);
     transition: opacity 0.1s linear;
-  }
-
-  /* Scaled from its top edge, so it folds up into the bar rather than
-     shrinking towards its own middle. 0.06 rather than 0 keeps it paintable. */
-  .memo-m-search {
-    transform-origin: top center;
-    will-change: transform;
-    transform: scaleY(max(0.06, calc(1 - var(--memo-head-p, 0))));
-    opacity: clamp(0, calc(1 - (var(--memo-head-p, 0) - 0.6) * 2.5), 1);
-    transition: opacity 0.1s linear;
-  }
-
-  /* The contents counter-scale, so the placeholder and the glyph are never
-     squashed on the way down — they cut out early instead. */
-  .memo-m-search input {
-    transform: scaleY(calc(1 / max(0.06, calc(1 - var(--memo-head-p, 0)))));
-    opacity: clamp(0, calc((0.02 - var(--memo-head-p, 0)) * 1000), 1);
-    transition: opacity 0.1s linear;
-  }
-
-  .memo-m-search .msym {
-    opacity: clamp(0, calc((0.02 - var(--memo-head-p, 0)) * 1000), 1);
-    transition: opacity 0.08s linear;
   }
 
   .memo-m-search .msym {

@@ -24,9 +24,11 @@ const SUBSCRIPTION_STATUS_KEYS = {
 } as const satisfies Record<BillingSubscriptionRow["status"], MessageKey>;
 
 export default async function SettingsPage() {
-  const user = await requireUser();
-  const appState = await getViewerAppState();
-  const { locale, t } = await getTranslations();
+  const [user, appState, { locale, t }] = await Promise.all([
+    requireUser(),
+    getViewerAppState(),
+    getTranslations(),
+  ]);
   const email = user.email ?? user.user_metadata.email ?? t("settings.signedInUser");
   const subscription = appState?.subscription ?? null;
   // The badge on the "add to home screen" row comes from the profile rather

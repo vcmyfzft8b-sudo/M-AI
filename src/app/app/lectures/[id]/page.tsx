@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { LectureWorkspace } from "@/components/lecture-workspace";
 import { requireUser } from "@/lib/auth";
-import { canAccessLectureContent, getPaywallPath, getViewerAppState } from "@/lib/billing";
+import { getPaywallPath, getViewerAppState } from "@/lib/billing";
 import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
 import { routeIdParamSchema } from "@/lib/validation";
 
@@ -11,15 +11,18 @@ export default async function LecturePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await requireUser();
-  const parsedParams = routeIdParamSchema.safeParse(await params);
+  const [user, resolvedParams, appState] = await Promise.all([
+    requireUser(),
+    params,
+    getViewerAppState(),
+  ]);
+  const parsedParams = routeIdParamSchema.safeParse(resolvedParams);
 
   if (!parsedParams.success) {
     notFound();
   }
 
   const { id } = parsedParams.data;
-  const appState = await getViewerAppState();
   const lecture = await ensureUserOwnsLecture({
     lectureId: id,
     user,
@@ -29,9 +32,7 @@ export default async function LecturePage({
     notFound();
   }
 
-  const access = await canAccessLectureContent(user.id, id);
-
-  if (!access.allowed) {
+  if (!appState?.hasPaidAccess && appState?.trialLectureId !== id) {
     redirect(getPaywallPath());
   }
 

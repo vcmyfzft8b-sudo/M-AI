@@ -9,7 +9,6 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -1055,117 +1054,6 @@ export function HomeDashboard({
     return () => window.removeEventListener("keydown", handleEscape);
   }, [animateCloseDashboardDialog, deleteTarget, renameTarget]);
 
-  useLayoutEffect(() => {
-    if (!renameTarget || !useDashboardSwipeActions) {
-      return;
-    }
-
-    const scrollY = window.scrollY;
-    const root = document.documentElement;
-    const previousRootOverflow = root.style.overflow;
-    const previousRootOverscrollBehavior = root.style.overscrollBehavior;
-    const previousRootScrollBehavior = root.style.scrollBehavior;
-    const previousRootTouchAction = root.style.touchAction;
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousBodyPosition = document.body.style.position;
-    const previousBodyTop = document.body.style.top;
-    const previousBodyWidth = document.body.style.width;
-    const previousBodyHeight = document.body.style.height;
-    const previousBodyOverscrollBehavior = document.body.style.overscrollBehavior;
-    const previousBodyTouchAction = document.body.style.touchAction;
-    const renameInput = renameInputRef.current;
-
-    root.style.overflow = "hidden";
-    root.style.overscrollBehavior = "none";
-    root.style.scrollBehavior = "auto";
-    root.style.touchAction = "none";
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = "100%";
-    document.body.style.height = "100%";
-    document.body.style.overscrollBehavior = "none";
-    document.body.style.touchAction = "none";
-
-    const restoreScrollPosition = () => {
-      window.scrollTo({ left: 0, top: scrollY, behavior: "auto" });
-    };
-
-    const scheduleScrollRestore = () => {
-      window.requestAnimationFrame(restoreScrollPosition);
-      window.setTimeout(restoreScrollPosition, 0);
-    };
-
-    // The dialog itself rides `--memo-kb`, which `KeyboardInset` publishes.
-    // All this has left to do is hold the page behind it still.
-    const updateViewportMetrics = () => {
-      scheduleScrollRestore();
-    };
-
-    const focusRenameInput = () => {
-      if (renameInput && document.activeElement !== renameInput) {
-        renameInput.focus({ preventScroll: true });
-      }
-
-      scheduleScrollRestore();
-    };
-
-    function preventPageScroll(event: TouchEvent | WheelEvent) {
-      event.preventDefault();
-      scheduleScrollRestore();
-    }
-
-    function handleScroll() {
-      scheduleScrollRestore();
-    }
-
-    function handleFocusIn() {
-      updateViewportMetrics();
-      scheduleScrollRestore();
-    }
-
-    document.addEventListener("touchmove", preventPageScroll, {
-      capture: true,
-      passive: false,
-    });
-    document.addEventListener("wheel", preventPageScroll, {
-      capture: true,
-      passive: false,
-    });
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("resize", updateViewportMetrics, { passive: true });
-    window.visualViewport?.addEventListener("scroll", updateViewportMetrics, { passive: true });
-    window.visualViewport?.addEventListener("resize", updateViewportMetrics, { passive: true });
-    renameInput?.addEventListener("focus", handleFocusIn);
-    updateViewportMetrics();
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(focusRenameInput);
-    });
-    scheduleScrollRestore();
-
-    return () => {
-      document.removeEventListener("touchmove", preventPageScroll, true);
-      document.removeEventListener("wheel", preventPageScroll, true);
-      window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("resize", updateViewportMetrics);
-      window.visualViewport?.removeEventListener("scroll", updateViewportMetrics);
-      window.visualViewport?.removeEventListener("resize", updateViewportMetrics);
-      renameInput?.removeEventListener("focus", handleFocusIn);
-      root.style.overflow = previousRootOverflow;
-      root.style.overscrollBehavior = previousRootOverscrollBehavior;
-      root.style.scrollBehavior = previousRootScrollBehavior;
-      root.style.touchAction = previousRootTouchAction;
-      document.body.style.overflow = previousBodyOverflow;
-      document.body.style.position = previousBodyPosition;
-      document.body.style.top = previousBodyTop;
-      document.body.style.width = previousBodyWidth;
-      document.body.style.height = previousBodyHeight;
-      document.body.style.overscrollBehavior = previousBodyOverscrollBehavior;
-      document.body.style.touchAction = previousBodyTouchAction;
-      window.scrollTo(0, scrollY);
-    };
-  }, [renameTarget, useDashboardSwipeActions]);
-
   useEffect(() => {
     if (!isMobileCreateMenuOpen) {
       return;
@@ -1228,26 +1116,6 @@ export function HomeDashboard({
     } else {
       closeDashboardDialog();
     }
-  }
-
-  function handleRenameDialogPointerDownCapture(event: ReactPointerEvent<HTMLElement>) {
-    const target = event.target;
-
-    if (!(target instanceof Element)) {
-      return;
-    }
-
-    const inputTarget = target.closest(".dashboard-note-dialog-field");
-    if (inputTarget && target !== renameInputRef.current) {
-      renameInputRef.current?.focus({ preventScroll: true });
-      return;
-    }
-
-    if (target.closest("button, a, input, textarea, select, .mobile-sheet-drag-handle")) {
-      return;
-    }
-
-    renameInputRef.current?.blur();
   }
 
   async function handleDeleteLecture() {
@@ -1848,7 +1716,16 @@ export function HomeDashboard({
       ) : null}
 
       {/* Rename and delete are bottom sheets on the phone and centred dialogs
-          on desktop; one markup, two skins. */}
+          on desktop; one markup, two skins.
+
+          The rename sheet rides `--memo-kb` and needs nothing else. It used to
+          freeze the page behind it as well — `position: fixed` on the body,
+          scroll pinned, touch and wheel swallowed — and that lock was the whole
+          bug: with the document unable to scroll, WebKit pans the visual
+          viewport instead when the field is focused a second time, which
+          `KeyboardInset` reads back as no keyboard at all, leaving the sheet
+          sitting under the keys. The folder rename sheet never locked anything
+          and never had the problem, so this one no longer does either. */}
       {renameTarget ? (
         <MemoPortal>
           <button
@@ -1862,10 +1739,7 @@ export function HomeDashboard({
             role="dialog"
             aria-modal="true"
             aria-labelledby="rename-note-title"
-            onPointerDown={dialogSheet.dragProps.onPointerDown}
-            onPointerDownCapture={handleRenameDialogPointerDownCapture}
-            data-dragging={dialogSheet.dragProps["data-dragging"]}
-            style={dialogSheet.dragProps.style}
+            {...dialogSheet.dragProps}
           >
             <div className="memo-grab" data-drag-handle />
             <span id="rename-note-title" className="memo-sheet-heading">

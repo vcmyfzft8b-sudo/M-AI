@@ -73,6 +73,25 @@ test("every generation step runs inside the invocation budget", () => {
   }
 });
 
+test("checkpointed study generators retry budget-only failures", () => {
+  for (const stepName of [
+    "process-lecture-study",
+    "process-lecture-quiz",
+    "process-lecture-practice-test",
+  ]) {
+    const body = FUNCTIONS_SOURCE.split("step.run(")
+      .slice(1)
+      .find((candidate) => candidate.startsWith(`"${stepName}"`));
+
+    assert.ok(body, `no step.run("${stepName}") found`);
+    assert.match(
+      body,
+      /isBudgetOverrunFailure\(error\)[\s\S]*throw error/,
+      `${stepName} would still swallow a resumable budget failure`,
+    );
+  }
+});
+
 test("the step budget is measured against the route's own maxDuration", () => {
   const routeMaxDuration = ROUTE_SOURCE.match(/export const maxDuration = (\d+)/);
   const budgetMaxDuration = FUNCTIONS_SOURCE.match(

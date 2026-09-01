@@ -5,10 +5,10 @@ import {
   applyOutputHeadroom,
   GLM_TEXT_MODEL,
   resolveStageFallbackModel,
+  resolveStageFallbackReserveMs,
   resolveStageModelConfig,
   resolveStageTimeoutMs,
   resolveWireReasoningEffort,
-  shouldFallBackToDirectProvider,
   supportsThinkingLevel,
 } from "../src/lib/ai/model-config.ts";
 import { z } from "zod";
@@ -229,6 +229,13 @@ test("GLM gets a shorter leash than Gemini so its fallback fits the same invocat
   assert.equal(resolveStageTimeoutMs("note_write", "gemini-3.7-flash"), 240_000);
   assert.equal(resolveStageTimeoutMs("note_write"), 240_000);
   assert.equal(resolveStageTimeoutMs("source_condense", GLM_TEXT_MODEL), 60_000);
+});
+
+test("pooled GLM stages reserve a full structured fallback window", () => {
+  assert.equal(resolveStageFallbackReserveMs("study_items", GLM_TEXT_MODEL), 90_000);
+  assert.equal(resolveStageFallbackReserveMs("coverage_plan", GLM_TEXT_MODEL), 90_000);
+  assert.equal(resolveStageFallbackReserveMs("note_outline", GLM_TEXT_MODEL), 0);
+  assert.equal(resolveStageFallbackReserveMs("study_items", "gemini-3.7-flash"), 0);
 });
 
 test("a routed model keeps its reasoning level and headroom", () => {

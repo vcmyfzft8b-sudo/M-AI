@@ -102,6 +102,20 @@ than silently skipped.
 Backlog entries with status `open` or `needs-human` are revisited on every run
 regardless of age.
 
+Entries marked `open-pr`, `fixed`, or `wontfix` are suppressed until the same fingerprint has a
+`lastSeen` strictly later than the entry's `updatedAt`; that later event is a regression and wakes
+triage again. When a human resolves a `needs-human` entry, update `TRIAGE_BACKLOG` only after the
+fix's production deployment is Ready: set `status` to `fixed`, add the PR URL and deployed commit
+to `notes`, and use the deployment's Ready timestamp for `updatedAt`. Using the merge time can hide
+an event emitted by the old production release while the new deployment was still building.
+
+One root cause may own several fingerprints. Update every correlated entry together so an old
+secondary surface cannot open a duplicate fix. The 2026-08-31 pooled `study_items` timeout is the
+reference example: PR #300 resolved the practice-test 503 plus the study and quiz Inngest budget
+events, so all three entries were marked fixed at the production Ready timestamp. The full incident
+record and invariants are in
+[docs/lecture-pipeline-inngest.md](/docs/lecture-pipeline-inngest.md#resolved-incident-pooled-study-generation-consumed-its-fallback-window).
+
 ## Required Setup
 
 All nine required secrets were set on 2026-08-17. The sections below record how each

@@ -127,6 +127,39 @@ Inngest resume the same step from its saved batches. Do not turn that branch bac
 false }`; doing so leaves healthy partial work terminally failed and makes the learner press retry
 to perform work the platform can safely resume itself.
 
+### Resolved incident: pooled study generation consumed its fallback window
+
+On 2026-08-31 one defect appeared on three surfaces: two synchronous practice-test starts returned
+503 after `study_items` GLM calls used OpenRouter's full 180-second default, and checkpointed study
+and quiz Inngest steps exhausted their 280-second budgets without being retried. It is fixed by
+[PR #300](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/300), merged as
+`4181282bb2c2a7b251055c9194c57e6e1dd91dc8` and deployed as
+`dpl_ERBnuqidSEBU2E3auufo2QADoWZg` at `2026-09-01T08:53:29.272Z`.
+
+The fix has four invariants, covered by `tests/ai-attempt-budget.test.mjs`,
+`tests/ai-model-config.test.mjs`, and `tests/inngest-step-budget.test.mjs`:
+
+- every OpenRouter request is clamped to the live invocation deadline;
+- mandatory-reasoning `coverage_plan` and `study_items` primaries leave a 90-second structured
+  fallback window plus a 5-second hand-off margin;
+- a routed fallback gets an explicit 90-second timeout, and a primary that cannot fit is skipped
+  before a paid request starts;
+- flashcard, quiz and practice-test steps rethrow only the budget-overrun family so Inngest can
+  resume checkpointed batches. Ordinary generation and expected-input failures keep their existing
+  learner-visible handling.
+
+The error-triage backlog records all three fingerprints as `fixed` by PR #300:
+
+- `sentry:141573001:process-lecture-study`
+- `sentry:141573001:process-lecture-quiz`
+- the `server_error:POST /api/lectures/<id>/practice-test/attempt:OpenRouter call ... timeout`
+  fingerprint first seen at `2026-08-31T20:31:02.542Z`
+
+Automated triage must not open another fix for those historical events. An occurrence strictly
+after the production timestamp above is new evidence and must be investigated as a regression
+against its own release, route and operation tags; Sentry issue `141573001` also contains unrelated
+budget events, so the shared issue id alone is not proof that this defect returned.
+
 `withStepBudget` wraps a step so the work rejects shortly before Vercel would kill the
 invocation outright. A budget rejection is *not* an expected input failure — it wraps
 `runLectureStage` from the outside, so it propagates to the step and fails it, which is what we

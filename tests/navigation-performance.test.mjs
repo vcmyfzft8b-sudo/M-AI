@@ -94,8 +94,10 @@ test("dynamic app routes are fully prefetched into Next's client router cache", 
   const appShell = read("../src/components/app-shell.tsx");
   const instantLink = read("../src/components/instant-link.tsx");
   const dashboard = read("../src/components/home-dashboard.tsx");
+  const nextConfig = read("../next.config.ts");
 
   assert.match(safePrefetch, /kind: options\.full \? "full" : "auto"/);
+  assert.match(nextConfig, /staleTimes:\s*\{\s*dynamic: 60/);
   assert.match(
     appShell,
     /if \(!isCurrentRoute\) \{[\s\S]*?safeRouterPrefetch\(router, item\.href, \{ full: true \}\)/,

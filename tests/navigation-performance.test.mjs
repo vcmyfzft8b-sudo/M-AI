@@ -96,8 +96,11 @@ test("dynamic app routes are fully prefetched into Next's client router cache", 
   const dashboard = read("../src/components/home-dashboard.tsx");
 
   assert.match(safePrefetch, /kind: options\.full \? "full" : "auto"/);
-  assert.match(appShell, /safeRouterPrefetch\(router, href, \{[\s\S]*?full: true/);
-  assert.match(appShell, /onInvalidate:[\s\S]*?warmRoute\(href\)/);
+  assert.match(
+    appShell,
+    /if \(!isCurrentRoute\) \{[\s\S]*?safeRouterPrefetch\(router, item\.href, \{ full: true \}\)/,
+  );
+  assert.doesNotMatch(appShell, /onInvalidate:[\s\S]*?warmRoute/);
   assert.match(instantLink, /safeRouterPrefetch\(router, href, \{ full: true \}\)/);
   assert.match(dashboard, /lecture\.status === "ready"[\s\S]*?\.slice\(0, 2\)/);
   assert.match(

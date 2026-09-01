@@ -390,7 +390,7 @@ const NoteRow = memo(function NoteRow({
 
     const warm = () => {
       cancelPrefetchRef.current = null;
-      safeRouterPrefetch(router, href);
+      safeRouterPrefetch(router, href, { full: true });
     };
 
     if (typeof window.requestIdleCallback === "function") {
@@ -896,6 +896,19 @@ export function HomeDashboard({
       ) {
         void loadLectureWorkspace();
       }
+
+      // Keep the most likely note taps genuinely instant. Warming every row
+      // would download an entire library, so only the two newest ready notes
+      // this account can open are put in Next's in-memory route cache.
+      for (const lecture of lectures
+        .filter(
+          (lecture) =>
+            lecture.status === "ready" &&
+            (hasPaidAccess || lecture.id === trialLectureId),
+        )
+        .slice(0, 2)) {
+        safeRouterPrefetch(router, `/app/lectures/${lecture.id}`, { full: true });
+      }
     };
 
     if (typeof window.requestIdleCallback === "function") {
@@ -905,7 +918,7 @@ export function HomeDashboard({
 
     const handle = window.setTimeout(warm, 500);
     return () => window.clearTimeout(handle);
-  }, [canCreateNotes, hasPaidAccess, isCreatorDemo, lectures, trialLectureId]);
+  }, [canCreateNotes, hasPaidAccess, isCreatorDemo, lectures, router, trialLectureId]);
 
   useEffect(() => {
     if (typeof window === "undefined") {

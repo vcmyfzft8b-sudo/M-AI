@@ -56,9 +56,43 @@ export function AppShell({
   const isHome = pathname === "/app";
 
   useEffect(() => {
-    for (const item of RAIL_ITEMS) {
-      safeRouterPrefetch(router, item.href);
-    }
+    let cancelled = false;
+
+    const warmRoute = (href: string) => {
+      if (cancelled) {
+        return;
+      }
+
+      safeRouterPrefetch(router, href, {
+        full: true,
+        // A full prefetch is kept for Next's static cache lifetime. Refresh it
+        // when Next invalidates the entry, but never wake a backgrounded PWA to
+        // do network work. Returning to the app warms all three routes below.
+        onInvalidate: () => {
+          if (!cancelled && document.visibilityState === "visible") {
+            warmRoute(href);
+          }
+        },
+      });
+    };
+
+    const warmRailRoutes = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      for (const item of RAIL_ITEMS) {
+        warmRoute(item.href);
+      }
+    };
+
+    warmRailRoutes();
+    document.addEventListener("visibilitychange", warmRailRoutes);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", warmRailRoutes);
+    };
   }, [router]);
 
   const railItems = useMemo(

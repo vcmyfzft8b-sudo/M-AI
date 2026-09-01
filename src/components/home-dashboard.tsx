@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 import {
   memo,
@@ -26,9 +27,8 @@ import {
   INSTALL_GUIDE_SEEN_EVENT,
   shouldOfferInstallGuide,
 } from "@/lib/install-guide";
-import { DiscountOffer } from "@/components/discount-offer";
 import { LibraryChat } from "@/components/library-chat";
-import { NoteSourceModal, type NoteSourceMode } from "@/components/note-source-modal";
+import type { NoteSourceMode } from "@/components/note-source-modal";
 import { Emoji, Msym } from "@/components/msym";
 import { InstantLink } from "@/components/instant-link";
 import { LibraryFolderMenu } from "@/components/library-folder-menu";
@@ -60,6 +60,42 @@ import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 import { formatCalendarDate } from "@/lib/utils";
+
+const loadNoteSourceModal = () => import("@/components/note-source-modal");
+const loadDiscountOffer = () => import("@/components/discount-offer");
+const loadLectureWorkspace = () => import("@/components/lecture-workspace");
+
+function DeferredSurfaceLoading() {
+  return (
+    <div
+      className="navigation-progress memo-portal"
+      data-navigation-overlay=""
+      role="status"
+    >
+      <span className="navigation-progress-bar" />
+    </div>
+  );
+}
+
+const DeferredNoteSourceModal = dynamic(
+  () => loadNoteSourceModal().then((module) => module.NoteSourceModal),
+  { loading: DeferredSurfaceLoading },
+);
+
+const DeferredDiscountOffer = dynamic(
+  () => loadDiscountOffer().then((module) => module.DiscountOffer),
+  { loading: DeferredSurfaceLoading },
+);
+
+function connectionAllowsIdleWarmup() {
+  const connection = (
+    navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }
+  ).connection;
+
+  return !connection?.saveData && !connection?.effectiveType?.includes("2g");
+}
 
 /** Desktop home: four capture entry points, in the redesign's order. */
 const QUICK_ACTIONS = [
@@ -840,6 +876,38 @@ export function HomeDashboard({
   const activeModal = manualModal ?? searchModal;
 
   useEffect(() => {
+    if (isCreatorDemo || !connectionAllowsIdleWarmup()) {
+      return;
+    }
+
+    const warm = () => {
+      if (canCreateNotes) {
+        void loadNoteSourceModal();
+      }
+
+      if (!hasPaidAccess) {
+        void loadDiscountOffer();
+      }
+
+      if (
+        lectures.some(
+          (lecture) => hasPaidAccess || lecture.id === trialLectureId,
+        )
+      ) {
+        void loadLectureWorkspace();
+      }
+    };
+
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(warm, { timeout: 1_500 });
+      return () => window.cancelIdleCallback(handle);
+    }
+
+    const handle = window.setTimeout(warm, 500);
+    return () => window.clearTimeout(handle);
+  }, [canCreateNotes, hasPaidAccess, isCreatorDemo, lectures, trialLectureId]);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
@@ -1497,6 +1565,8 @@ export function HomeDashboard({
                   key={action.id}
                   type="button"
                   className="memo-quick-card"
+                  onPointerEnter={() => void loadNoteSourceModal()}
+                  onFocus={() => void loadNoteSourceModal()}
                   onClick={() => openQuickAction(action.id)}
                 >
                   <span className={`memo-quick-tile ${action.accent}`.trim()}>
@@ -1582,6 +1652,7 @@ export function HomeDashboard({
               <button
                 type="button"
                 className="memo-promo memo-only-mobile flex"
+                onPointerDown={() => void loadDiscountOffer()}
                 onClick={() => setIsWheelOpen(true)}
               >
                 <span className="memo-promo-copy">
@@ -1708,6 +1779,11 @@ export function HomeDashboard({
           <button
             type="button"
             className="memo-m-create"
+            onPointerDown={() => {
+              if (canCreateNotes) {
+                void loadNoteSourceModal();
+              }
+            }}
             onClick={() => {
               if (!canCreateNotes) {
                 navigateDashboardWithFeedback(startHref);
@@ -1732,15 +1808,17 @@ export function HomeDashboard({
         hasPaidAccess={hasPaidAccess}
       />
 
-      <NoteSourceModal
-        mode={activeModal}
-        open={Boolean(activeModal)}
-        onClose={closeModal}
-        canCreateNotes={canCreateNotes}
-      />
+      {activeModal ? (
+        <DeferredNoteSourceModal
+          mode={activeModal}
+          open
+          onClose={closeModal}
+          canCreateNotes={canCreateNotes}
+        />
+      ) : null}
 
-      {showDiscountPromo || isWheelOpen || isOfferOpen ? (
-        <DiscountOffer
+      {isWheelOpen || isOfferOpen ? (
+        <DeferredDiscountOffer
           wheelOpen={isWheelOpen}
           offerOpen={isOfferOpen}
           onWheelOpenChange={setIsWheelOpen}

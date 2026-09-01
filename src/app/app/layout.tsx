@@ -13,9 +13,11 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  await requireUser();
-  const appState = await getViewerAppState();
-  const headerStore = await headers();
+  const [, appState, headerStore] = await Promise.all([
+    requireUser(),
+    getViewerAppState(),
+    headers(),
+  ]);
   const pathname = headerStore.get("x-pathname") ?? "/app";
 
   if (appState && !appState.onboardingComplete && pathname !== "/app/start") {

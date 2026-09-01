@@ -1,4 +1,4 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import type { Database } from "@/lib/database.types";
@@ -10,6 +10,10 @@ import {
   parseLocale,
 } from "@/lib/i18n/locales";
 import { getPublicEnv } from "@/lib/public-env";
+import {
+  serializeVerifiedPageUser,
+  VERIFIED_PAGE_USER_HEADER,
+} from "@/lib/verified-page-user";
 
 /** Vercel's country-of-IP header. Absent everywhere else, which is fine. */
 const GEO_COUNTRY_HEADER = "x-vercel-ip-country";
@@ -43,6 +47,10 @@ export async function updateSession(request: NextRequest) {
   const env = getPublicEnv();
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-pathname", request.nextUrl.pathname);
+  // Never let the browser supply the private authentication handoff. Page
+  // requests get a fresh value below only after Supabase validates the cookie;
+  // API routes deliberately get none and authenticate inside their handler.
+  requestHeaders.delete(VERIFIED_PAGE_USER_HEADER);
 
   if (!env.supabaseUrl || !env.supabaseAnonKey) {
     return seedLocaleCookie(
@@ -55,15 +63,19 @@ export async function updateSession(request: NextRequest) {
     );
   }
 
-  let response = NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
-  });
-
   if (request.nextUrl.pathname.startsWith("/api/")) {
-    return response;
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
   }
+
+  let cookiesToSet: Array<{
+    name: string;
+    value: string;
+    options: CookieOptions;
+  }> = [];
 
   const supabase = createServerClient<Database>(
     env.supabaseUrl,
@@ -73,29 +85,35 @@ export async function updateSession(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => {
+        setAll(itemsToSet) {
+          itemsToSet.forEach(({ name, value }) => {
             request.cookies.set(name, value);
           });
-
-          response = NextResponse.next({
-            request: {
-              headers: requestHeaders,
-            },
-          });
-
-          cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options);
-          });
+          cookiesToSet = itemsToSet;
         },
       },
     },
   );
 
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  // Last, deliberately: `setAll` above replaces `response` wholesale when the
-  // session is refreshed, so a cookie written before that call would be
-  // dropped on exactly the requests that refresh a session.
+  if (user) {
+    requestHeaders.set(VERIFIED_PAGE_USER_HEADER, serializeVerifiedPageUser(user));
+  }
+
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+
+  cookiesToSet.forEach(({ name, value, options }) => {
+    response.cookies.set(name, value, options);
+  });
+
+  // Last, deliberately: locale and refreshed session cookies must share the
+  // same final response.
   return seedLocaleCookie(request, response);
 }

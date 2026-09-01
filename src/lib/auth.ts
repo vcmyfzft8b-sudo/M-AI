@@ -1,13 +1,26 @@
 import "server-only";
 
 import type { User } from "@supabase/supabase-js";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import { isPreviewAuthBypassEnabled } from "@/lib/preview-mode";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  parseVerifiedPageUser,
+  VERIFIED_PAGE_USER_HEADER,
+} from "@/lib/verified-page-user";
 
 export const getOptionalUser = cache(async function getOptionalUser() {
+  const verifiedPageUser = parseVerifiedPageUser(
+    (await headers()).get(VERIFIED_PAGE_USER_HEADER),
+  );
+
+  if (verifiedPageUser) {
+    return verifiedPageUser;
+  }
+
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },

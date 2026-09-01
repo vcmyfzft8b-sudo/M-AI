@@ -445,33 +445,21 @@ export const getUserEntitlementState = cache(async function getUserEntitlementSt
     profile,
     hasPaidAccess: billingState.hasPaidAccess,
   });
-  const canResumeTrialLecture = await getTrialLectureResumeState({
-    userId,
-    trialLectureId: recoveredProfile?.trial_lecture_id ?? null,
-    hasPaidAccess: billingState.hasPaidAccess,
-  });
-  const trialUsage = await getTrialChatMessageUsage(
-    userId,
-    recoveredProfile?.trial_lecture_id ?? null,
-  );
-  let subscriptionTrialEligible = !hasPriorSubscriptionHistory(
+  const [canResumeTrialLecture, trialUsage] = await Promise.all([
+    getTrialLectureResumeState({
+      userId,
+      trialLectureId: recoveredProfile?.trial_lecture_id ?? null,
+      hasPaidAccess: billingState.hasPaidAccess,
+    }),
+    getTrialChatMessageUsage(
+      userId,
+      recoveredProfile?.trial_lecture_id ?? null,
+    ),
+  ]);
+  const subscriptionTrialEligible = !hasPriorSubscriptionHistory(
     recoveredProfile,
     billingState.subscriptions,
   );
-
-  if (subscriptionTrialEligible) {
-    try {
-      subscriptionTrialEligible = !(await hasStripeSubscriptionHistory({
-        customerId: recoveredProfile?.stripe_customer_id ?? null,
-        email: recoveredProfile?.email ?? null,
-      }));
-    } catch (error) {
-      console.error("Stripe subscription history check failed", {
-        userId,
-        error,
-      });
-    }
-  }
 
   return buildEntitlementState({
     profile: recoveredProfile,
@@ -483,6 +471,38 @@ export const getUserEntitlementState = cache(async function getUserEntitlementSt
     ...trialUsage,
   });
 });
+
+/**
+ * The definitive free-trial answer is only needed on the paywall. Keeping the
+ * Stripe history lookup out of the base entitlement path means opening the
+ * library, a note, settings, or help never waits on Stripe just to render UI
+ * that does not use this field.
+ */
+export const getSubscriptionTrialEligibility = cache(
+  async function getSubscriptionTrialEligibility(userId: string) {
+    const entitlement = await getUserEntitlementState(userId);
+
+    if (!entitlement.subscriptionTrialEligible) {
+      return false;
+    }
+
+    try {
+      return !(await hasStripeSubscriptionHistory({
+        customerId: entitlement.profile?.stripe_customer_id ?? null,
+        email: entitlement.profile?.email ?? null,
+      }));
+    } catch (error) {
+      console.error("Stripe subscription history check failed", {
+        userId,
+        error,
+      });
+      // Preserve the existing fail-open behavior. The checkout endpoint checks
+      // Stripe again before it grants a trial, so a transient display-time
+      // failure can never award a duplicate one.
+      return true;
+    }
+  },
+);
 
 export const getViewerAppState = cache(async function getViewerAppState() {
   const user = await getOptionalUserOrPreviewBypass();
@@ -531,6 +551,20 @@ export const getViewerAppState = cache(async function getViewerAppState() {
   return {
     user,
     ...entitlement,
+  };
+});
+
+/** App state for the paywall, including the one Stripe-only answer it shows. */
+export const getViewerCheckoutState = cache(async function getViewerCheckoutState() {
+  const appState = await getViewerAppState();
+
+  if (!appState) {
+    return null;
+  }
+
+  return {
+    ...appState,
+    subscriptionTrialEligible: await getSubscriptionTrialEligibility(appState.user.id),
   };
 });
 

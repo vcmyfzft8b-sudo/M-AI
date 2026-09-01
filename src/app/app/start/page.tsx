@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 
 import { OnboardingPaywall } from "@/components/onboarding-paywall";
-import { PURCHASABLE_BILLING_PLANS, getViewerAppState } from "@/lib/billing";
+import { PURCHASABLE_BILLING_PLANS, getViewerCheckoutState } from "@/lib/billing";
 
 export default async function AppStartPage() {
-  const appState = await getViewerAppState();
+  const appState = await getViewerCheckoutState();
 
   if (!appState) {
     redirect("/");

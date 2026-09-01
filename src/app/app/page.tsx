@@ -45,7 +45,8 @@ export default async function AppHomePage({
   // profile the entitlement state already loaded — null means this account has
   // never opened the guide, on any device, which is exactly who the dot is for.
   const installGuideSeen = Boolean(appState?.profile?.install_guide_seen_at);
-  const host = (await headers()).get("host") ?? "";
+  const host =
+    process.env.NODE_ENV === "production" ? "" : (await headers()).get("host") ?? "";
   const showDevDashboard =
     process.env.NODE_ENV !== "production" &&
     (host.startsWith("localhost:") ||

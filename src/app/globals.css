@@ -10343,6 +10343,30 @@ select:disabled {
   -webkit-backdrop-filter: blur(18px);
 }
 
+/*
+ * The bar's tint used to stop dead at its own edge, and a policy scrolling
+ * underneath was sliced clean in half against that line. This carries the tint
+ * on past the edge and fades it out, so a line passing under the bar dissolves
+ * the way the app's own screens fade their content out at the top.
+ *
+ * It hangs over the document rather than taking flow, so nothing below moves,
+ * and it never takes a click away from the text it covers.
+ */
+.landing-public-nav::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 1.8rem;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--canvas) 88%, transparent),
+    transparent
+  );
+  pointer-events: none;
+}
+
 .landing-public-brand,
 .landing-public-links,
 .landing-public-actions {

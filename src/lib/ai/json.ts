@@ -5,6 +5,10 @@ import { z } from "zod";
 
 import { generateStructuredObjectWithGemini } from "@/lib/ai/gemini";
 import {
+  AiAttemptBudgetUnavailableError,
+  resolveOpenRouterTierTimeoutMs,
+} from "@/lib/ai/attempt-budget";
+import {
   directModelId,
   generateStructuredObjectWithOpenRouter,
   isOpenRouterModel,
@@ -14,6 +18,7 @@ import {
   AI_STAGE_MODEL_ENV_KEYS,
   applyOutputHeadroom,
   isGeminiModel,
+  resolveStageFallbackReserveMs,
   resolveStageFallbackModel,
   resolveStageModelConfig,
   resolveStageTimeoutMs,
@@ -84,7 +89,6 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
   });
 
   const maxOutputTokens = applyOutputHeadroom(params.maxOutputTokens, config);
-  const timeoutMs = resolveStageTimeoutMs(params.stage, config.model);
   const usageContext = {
     ...(params.usageContext ?? {}),
     stage: params.usageContext?.stage ?? params.stage,
@@ -124,7 +128,10 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
         const attemptThinkingLevel = supportsThinkingLevel(routedModel)
           ? config.thinkingLevel
           : null;
-        const attemptTimeoutMs = resolveStageTimeoutMs(params.stage, routedModel);
+        const attemptTimeoutMs = resolveOpenRouterTierTimeoutMs({
+          stageTimeoutMs: resolveStageTimeoutMs(params.stage, routedModel),
+          tierIndex,
+        });
         // The primary model gets a second try before the chain moves on: its characteristic
         // failure (truncation) is a stochastic tail event that a retry usually clears, it fails
         // fast enough to leave room in the invocation, and the fallback tier costs 1.3-7x more
@@ -143,10 +150,21 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
               apiKey,
               maxOutputTokens: attemptMaxOutputTokens,
               thinkingLevel: attemptThinkingLevel,
-              ...(attemptTimeoutMs ? { timeoutMs: attemptTimeoutMs } : {}),
+              timeoutMs: attemptTimeoutMs,
+              fallbackReserveMs: resolveStageFallbackReserveMs(params.stage, routedModel),
               usageContext,
             });
           } catch (error) {
+            // This tier was skipped before making a paid request because it would consume the
+            // time reserved for its fallback. Move down the ladder immediately; retrying the
+            // skipped tier cannot create more wall clock.
+            if (error instanceof AiAttemptBudgetUnavailableError) {
+              console.warn(
+                `Skipping OpenRouter call for ${routedModel}; the invocation budget is reserved for its fallback.`,
+              );
+              break;
+            }
+
             // A budget abort is not a gateway failure: falling back would start a fresh
             // full-price call on an invocation that has already been told to stop.
             if (!shouldFallBackToDirectProvider(error, isWorkAbortedError)) {
@@ -259,6 +277,7 @@ export async function streamStructuredObject<TSchema extends z.ZodTypeAny>(param
     maxOutputTokens: applyOutputHeadroom(params.maxOutputTokens, config),
     thinkingLevel: config.thinkingLevel,
     timeoutMs: resolveStageTimeoutMs(params.stage, config.model),
+    fallbackReserveMs: resolveStageFallbackReserveMs(params.stage, config.model),
     usageContext: {
       ...(params.usageContext ?? {}),
       stage: params.usageContext?.stage ?? params.stage,

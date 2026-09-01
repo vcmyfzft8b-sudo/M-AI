@@ -119,6 +119,14 @@ button that could not work.
 [src/app/api/inngest/route.ts](/src/app/api/inngest/route.ts) (both `300`).
 `tests/inngest-step-budget.test.mjs` fails if the two drift apart.
 
+The flashcard, quiz and practice-test functions normally keep a generation failure inside their
+step: the asset's failed status is the learner-facing result, and the error is reported from the
+throwing side while its type is intact. Invocation-budget failures are the exception. Their batch
+work is checkpointed, so each of those three functions rethrows only the budget family and lets
+Inngest resume the same step from its saved batches. Do not turn that branch back into `{ ok:
+false }`; doing so leaves healthy partial work terminally failed and makes the learner press retry
+to perform work the platform can safely resume itself.
+
 `withStepBudget` wraps a step so the work rejects shortly before Vercel would kill the
 invocation outright. A budget rejection is *not* an expected input failure — it wraps
 `runLectureStage` from the outside, so it propagates to the step and fails it, which is what we

@@ -1,6 +1,8 @@
 // Kept free of "server-only" so the stage/model/thinking contract stays unit-testable
 // (tests/ai-model-config.test.mjs) and reusable by scripts/note-eval.mjs outside Next.js.
 
+import { STRUCTURED_FALLBACK_RESERVE_MS } from "./attempt-budget.ts";
+
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
 
 export const AI_STAGES = [
@@ -286,12 +288,30 @@ const MANDATORY_REASONING_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
   note_write: 200_000,
 };
 
+/**
+ * Time a slow mandatory-reasoning primary must leave for the next, proven tier. Coverage and
+ * study-item generation run pools of calls inside one invocation; unlike a single note call,
+ * their first request can start after substantial preparation or an earlier pool wave. A fixed
+ * 180s primary timeout therefore cannot know whether its fallback still fits. The attempt is
+ * clamped against this reserve at call time instead (openrouter.ts).
+ */
+const MANDATORY_REASONING_FALLBACK_RESERVE_MS: Partial<Record<AiStage, number>> = {
+  coverage_plan: STRUCTURED_FALLBACK_RESERVE_MS,
+  study_items: STRUCTURED_FALLBACK_RESERVE_MS,
+};
+
 export function resolveStageTimeoutMs(stage: AiStage, model?: string) {
   if (model && isMandatoryReasoningModel(model)) {
     return MANDATORY_REASONING_TIMEOUT_MS[stage] ?? STAGE_TIMEOUT_MS[stage];
   }
 
   return STAGE_TIMEOUT_MS[stage];
+}
+
+export function resolveStageFallbackReserveMs(stage: AiStage, model?: string) {
+  return model && isMandatoryReasoningModel(model)
+    ? (MANDATORY_REASONING_FALLBACK_RESERVE_MS[stage] ?? 0)
+    : 0;
 }
 
 export const AI_STAGE_MODEL_ENV_KEYS = STAGE_MODEL_ENV_KEYS;

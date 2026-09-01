@@ -3,6 +3,7 @@ import {
   getInvocationBudgetMs,
   runWithinInvocationBudget,
 } from "@/lib/invocation-budget";
+import { isBudgetOverrunFailure } from "@/lib/ai/errors";
 import { isExpectedLectureInputFailure } from "@/lib/lecture-processing-errors";
 import { captureRouteError } from "@/lib/monitoring";
 import { isLectureGenerationBudgetExceededError } from "@/lib/notes/generation-guard";
@@ -218,6 +219,13 @@ export const processLectureStudyFunction = inngest.createFunction(
           }),
         );
       } catch (error) {
+        // Study generation checkpoints every completed batch. A budget-only failure should fail
+        // the step so Inngest resumes from those checkpoints on its normal retry, rather than
+        // turning a healthy but unfinished deck into a terminal learner-visible failure.
+        if (isBudgetOverrunFailure(error)) {
+          throw error;
+        }
+
         // The step swallows the failure on purpose (the deck status carries it to the learner),
         // but swallowed must not mean invisible: the team hears about it too. Expected input
         // failures stay out of Sentry — this catch is on the throwing side of the step, so the
@@ -253,6 +261,10 @@ export const processLectureQuizFunction = inngest.createFunction(
           }),
         );
       } catch (error) {
+        if (isBudgetOverrunFailure(error)) {
+          throw error;
+        }
+
         if (!isExpectedLectureInputFailure(error)) {
           captureRouteError(error, {
             route: "inngest:process-lecture-quiz",
@@ -285,6 +297,10 @@ export const processLecturePracticeTestFunction = inngest.createFunction(
           }),
         );
       } catch (error) {
+        if (isBudgetOverrunFailure(error)) {
+          throw error;
+        }
+
         if (!isExpectedLectureInputFailure(error)) {
           captureRouteError(error, {
             route: "inngest:process-lecture-practice-test",

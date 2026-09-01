@@ -2,7 +2,12 @@ import "server-only";
 
 import { z } from "zod";
 
-import { getCurrentAbortSignal } from "@/lib/abort-context";
+import { getCurrentAbortSignal, getRemainingBudgetMs } from "@/lib/abort-context";
+import {
+  AiAttemptBudgetUnavailableError,
+  OPENROUTER_DEFAULT_TIMEOUT_MS,
+  resolveAiAttemptTimeoutMs,
+} from "@/lib/ai/attempt-budget";
 import { isMandatoryReasoningModel, resolveWireReasoningEffort } from "@/lib/ai/model-config";
 import { GeminiTruncatedOutputError } from "@/lib/ai/structured-output";
 import { parseStructuredText } from "@/lib/ai/structured-output";
@@ -163,6 +168,7 @@ export async function generateStructuredObjectWithOpenRouter<TSchema extends z.Z
   maxOutputTokens?: number;
   thinkingLevel?: string | null;
   timeoutMs?: number;
+  fallbackReserveMs?: number;
   usageContext?: GeminiUsageContext;
 }): Promise<z.infer<TSchema>> {
   const routedModel = openRouterModelId(params.model);
@@ -172,7 +178,17 @@ export async function generateStructuredObjectWithOpenRouter<TSchema extends z.Z
   // The invocation budget's signal rides along with the request timeout, so a budget-killed
   // pipeline stops paying for this call instead of finishing it as a zombie.
   const budgetSignal = getCurrentAbortSignal();
-  const timeoutSignal = AbortSignal.timeout(params.timeoutMs ?? 180_000);
+  const attemptTimeoutMs = resolveAiAttemptTimeoutMs({
+    requestedTimeoutMs: params.timeoutMs ?? OPENROUTER_DEFAULT_TIMEOUT_MS,
+    remainingBudgetMs: getRemainingBudgetMs(),
+    fallbackReserveMs: params.fallbackReserveMs,
+  });
+
+  if (attemptTimeoutMs == null) {
+    throw new AiAttemptBudgetUnavailableError();
+  }
+
+  const timeoutSignal = AbortSignal.timeout(attemptTimeoutMs);
 
   try {
     const raw = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -279,13 +295,24 @@ export async function streamStructuredObjectWithOpenRouter<TSchema extends z.Zod
   maxOutputTokens?: number;
   thinkingLevel?: string | null;
   timeoutMs?: number;
+  fallbackReserveMs?: number;
   usageContext?: GeminiUsageContext;
 }): Promise<z.infer<TSchema>> {
   const routedModel = openRouterModelId(params.model);
   const responseSchema = z.toJSONSchema(params.schema);
   const maxOutputTokens = params.maxOutputTokens;
   const budgetSignal = getCurrentAbortSignal();
-  const timeoutSignal = AbortSignal.timeout(params.timeoutMs ?? 180_000);
+  const attemptTimeoutMs = resolveAiAttemptTimeoutMs({
+    requestedTimeoutMs: params.timeoutMs ?? OPENROUTER_DEFAULT_TIMEOUT_MS,
+    remainingBudgetMs: getRemainingBudgetMs(),
+    fallbackReserveMs: params.fallbackReserveMs,
+  });
+
+  if (attemptTimeoutMs == null) {
+    throw new AiAttemptBudgetUnavailableError();
+  }
+
+  const timeoutSignal = AbortSignal.timeout(attemptTimeoutMs);
   let usage: OpenRouterResponse["usage"];
 
   try {

@@ -53,7 +53,7 @@ export const InstantLink = forwardRef<HTMLAnchorElement, InstantLinkProps>(funct
       return;
     }
 
-    safeRouterPrefetch(router, href);
+    safeRouterPrefetch(router, href, { full: true });
   }, [href, router, shouldPrefetchOnMount]);
 
   const prefetchHrefOnIntent = useCallback(() => {
@@ -61,7 +61,7 @@ export const InstantLink = forwardRef<HTMLAnchorElement, InstantLinkProps>(funct
       return;
     }
 
-    safeRouterPrefetch(router, href);
+    safeRouterPrefetch(router, href, { full: true });
   }, [href, router, shouldPrefetchOnIntent]);
 
   useEffect(() => {

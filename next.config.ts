@@ -22,6 +22,18 @@ const nextConfig: NextConfig = {
   images: {
     qualities: [75, 92],
   },
+  experimental: {
+    /*
+     * Next's dynamic client-router cache defaults to zero seconds. That makes
+     * a completed full prefetch disposable: the next tap still waits for a new
+     * RSC request. Keep user-specific route payloads in this tab's memory for
+     * one minute so ahead-of-click warming is actually reusable. Mutations and
+     * router.refresh() still invalidate the entry immediately.
+     */
+    staleTimes: {
+      dynamic: 60,
+    },
+  },
 };
 
 export default withSentryConfig(nextConfig, {

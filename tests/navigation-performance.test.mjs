@@ -88,3 +88,25 @@ test("ordinary app state no longer waits on Stripe trial-history lookup", () => 
     /getSubscriptionTrialEligibility[\s\S]*hasStripeSubscriptionHistory\(/,
   );
 });
+
+test("dynamic app routes are fully prefetched into Next's client router cache", () => {
+  const safePrefetch = read("../src/lib/safe-router-prefetch.ts");
+  const appShell = read("../src/components/app-shell.tsx");
+  const instantLink = read("../src/components/instant-link.tsx");
+  const dashboard = read("../src/components/home-dashboard.tsx");
+  const nextConfig = read("../next.config.ts");
+
+  assert.match(safePrefetch, /kind: options\.full \? "full" : "auto"/);
+  assert.match(nextConfig, /staleTimes:\s*\{\s*dynamic: 60/);
+  assert.match(
+    appShell,
+    /if \(!isCurrentRoute\) \{[\s\S]*?safeRouterPrefetch\(router, item\.href, \{ full: true \}\)/,
+  );
+  assert.doesNotMatch(appShell, /onInvalidate:[\s\S]*?warmRoute/);
+  assert.match(instantLink, /safeRouterPrefetch\(router, href, \{ full: true \}\)/);
+  assert.match(dashboard, /lecture\.status === "ready"[\s\S]*?\.slice\(0, 2\)/);
+  assert.match(
+    dashboard,
+    /safeRouterPrefetch\(router, `\/app\/lectures\/\$\{lecture\.id\}`, \{ full: true \}\)/,
+  );
+});

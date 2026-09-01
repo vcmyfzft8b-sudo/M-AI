@@ -56,10 +56,36 @@ export function AppShell({
   const isHome = pathname === "/app";
 
   useEffect(() => {
-    for (const item of RAIL_ITEMS) {
-      safeRouterPrefetch(router, item.href);
-    }
-  }, [router]);
+    let cancelled = false;
+
+    const warmRailRoutes = () => {
+      if (cancelled || document.visibilityState !== "visible") {
+        return;
+      }
+
+      for (const item of RAIL_ITEMS) {
+        const isCurrentRoute =
+          item.href === "/app"
+            ? pathname === "/app"
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+        // The current page is already in the router tree. Fetching its full RSC
+        // payload again wastes bandwidth — Home can be close to a megabyte for
+        // a large library — and gives the user nothing they do not already see.
+        if (!isCurrentRoute) {
+          safeRouterPrefetch(router, item.href, { full: true });
+        }
+      }
+    };
+
+    warmRailRoutes();
+    document.addEventListener("visibilitychange", warmRailRoutes);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", warmRailRoutes);
+    };
+  }, [pathname, router]);
 
   const railItems = useMemo(
     () =>

@@ -392,11 +392,8 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
   private onResize: (() => void) | null = null;
   private onStopRequest: (() => void) | null = null;
   private closeTimer: number | null = null;
-  private homeScroll: HTMLDivElement | null = null;
   private tabsRow: HTMLDivElement | null = null;
   private centredTab: string | null = null;
-  private idleRaf: number | null = null;
-  private snapRaf: number | null = null;
 
   componentDidMount() {
     this.measure();
@@ -436,7 +433,6 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
     if (this.cardRaf) window.cancelAnimationFrame(this.cardRaf);
     if (this.closeTimer) window.clearTimeout(this.closeTimer);
     if (this.cardExitTimer) window.clearTimeout(this.cardExitTimer);
-    this.cancelHeaderSnap();
     if (this.onResize) window.removeEventListener("resize", this.onResize);
     if (this.onStopRequest) window.removeEventListener(PREVIEW_STOP_TOUR_EVENT, this.onStopRequest);
     this.resizeObserver?.disconnect();
@@ -781,69 +777,15 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
    * does not fold — it scrolls away at full size. The range is fixed rather
    * than derived from the scroll height, which would feed the collapse back
    * into the scroll metrics.
+   *
+   * The header does not snap to either end of the range either, for the same
+   * reason the app does not: writing `scrollTop` once the finger is gone reads
+   * as the list lurching on its own a beat after you let go.
    */
   onHomeScroll = (event: { currentTarget: HTMLDivElement }) => {
     const el = event.currentTarget;
     const p = Math.max(0, Math.min(1, el.scrollTop / 80));
     if (Math.abs(p - this.state.headP) > 0.01) this.setState({ headP: p });
-    this.queueHeaderSnap(el);
-  };
-
-  /* Releasing mid-range would leave the header frozen half-folded, so once the
-     scroller goes idle it settles to whichever end is nearer. */
-  queueHeaderSnap(el: HTMLDivElement) {
-    this.cancelHeaderSnap();
-    let last = el.scrollTop;
-    let stable = 0;
-    const tick = () => {
-      const top = el.scrollTop;
-      stable = top === last ? stable + 1 : 0;
-      last = top;
-      // ~8 stable frames (~130ms) means momentum and any animation finished.
-      if (stable < 8) {
-        this.idleRaf = window.requestAnimationFrame(tick);
-        return;
-      }
-      this.idleRaf = null;
-      if (top > 0 && top < 80) this.runHeaderSnap(el, top > 32 ? 80 : 0);
-    };
-    this.idleRaf = window.requestAnimationFrame(tick);
-  }
-
-  /* Its own tween with scroll-behavior forced to auto: the scroller's smooth
-     scrolling would otherwise animate every step and fight this. */
-  runHeaderSnap(el: HTMLDivElement, target: number) {
-    const from = el.scrollTop;
-    const dist = target - from;
-    if (!dist) return;
-    const prev = el.style.scrollBehavior;
-    el.style.scrollBehavior = "auto";
-    const start = performance.now();
-    const step = (now: number) => {
-      const t = Math.min(1, (now - start) / 260);
-      const e = 1 - Math.pow(1 - t, 3);
-      el.scrollTop = from + dist * e;
-      if (t < 1) {
-        this.snapRaf = window.requestAnimationFrame(step);
-        return;
-      }
-      el.scrollTop = target;
-      el.style.scrollBehavior = prev;
-      this.snapRaf = null;
-    };
-    this.snapRaf = window.requestAnimationFrame(step);
-  }
-
-  cancelHeaderSnap = () => {
-    if (this.idleRaf) {
-      window.cancelAnimationFrame(this.idleRaf);
-      this.idleRaf = null;
-    }
-    if (this.snapRaf) {
-      window.cancelAnimationFrame(this.snapRaf);
-      this.snapRaf = null;
-      if (this.homeScroll) this.homeScroll.style.scrollBehavior = "";
-    }
   };
 
   /* Every bottom sheet tracks the finger and dismisses past 110px. */
@@ -1311,11 +1253,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
 
         <div
           data-app-main
-          ref={(node) => {
-            this.homeScroll = node;
-          }}
           onScroll={this.onHomeScroll}
-          onPointerDown={this.cancelHeaderSnap}
           style={{
             flex: 1,
             minHeight: 0,
@@ -1325,10 +1263,10 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
             WebkitMaskImage: HOME_SCROLL_MASK,
           }}
         >
-          {/* Title and search fold away over the first 80px of scroll — see
-              `onHomeScroll`. Both scroll with the list rather than being
-              pinned, so the scroll metrics never change under the collapse,
-              and the opaque folder bar below passes over them. */}
+          {/* The title fades away over the first 80px of scroll — see
+              `onHomeScroll`. Both it and the search field scroll with the list
+              rather than being pinned, so the scroll metrics never change under
+              the fade, and the opaque folder bar below passes over them. */}
           <h1
             style={{
               position: "relative",

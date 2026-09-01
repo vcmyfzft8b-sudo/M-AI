@@ -52,6 +52,16 @@ test("every shape the budget family arrives in is recognised", () => {
   const workAborted = new Error("The invocation budget ran out; remaining work was cancelled.");
   workAborted.name = "WorkAbortedError";
   assert.equal(isBudgetOverrunFailure(workAborted), true);
+
+  // The attempt-timeout clamp refusing to start a call that cannot finish (gemini.ts), flattened
+  // by the step boundary. Issue 144291117: this classified as an ordinary failure, so the run was
+  // marked failed instead of being auto-retried — and a retry is exactly what it needed, since the
+  // stages it had already completed were checkpointed.
+  const nearlySpent = new Error(
+    "The invocation budget is nearly spent; not starting another model call.",
+  );
+  nearlySpent.name = "Error";
+  assert.equal(isBudgetOverrunFailure(nearlySpent), true);
 });
 
 test("nothing outside the budget family is auto-retried", () => {

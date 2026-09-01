@@ -55,9 +55,17 @@ export const AI_PROCESSING_TOO_LONG_MESSAGE =
  *
  * Recognised by `name` first. The message test is not a convenience: `markLecturePipelineFailed`
  * is called on the far side of an Inngest step boundary, which rebuilds the error as a plain
- * `Error` and leaves nothing but the message to go on. Both strings matched here are fixed — one
+ * `Error` and leaves nothing but the message to go on. Both patterns matched here are fixed — one
  * is Node's own default abort reason, the other is `WorkAbortedError`'s own wording — not a
  * provider's prose that could be reworded upstream.
+ *
+ * `WorkAbortedError` is thrown with more than one sentence, so the second pattern matches the
+ * phrase they share rather than any single one of them. Matching only "the invocation budget ran
+ * out" missed the attempt-timeout clamp in src/lib/ai/gemini.ts, which declines to start a call
+ * that cannot finish and says so in its own words ("...is nearly spent..."). On 2026-09-01 that
+ * sentence crossed a step boundary, failed every test here, and was written to a learner's lecture
+ * verbatim, in English — the same failure this function was written for (issue 144291117).
+ * tests/aborted-run-message.test.mjs scans both modules and fails if any sentence stops matching.
  */
 export function isAbortedWorkError(error: unknown) {
   const name =
@@ -75,7 +83,7 @@ export function isAbortedWorkError(error: unknown) {
 
   return (
     /^this operation was aborted\.?$/i.test(text) ||
-    text.toLowerCase().includes("the invocation budget ran out")
+    text.toLowerCase().includes("the invocation budget")
   );
 }
 

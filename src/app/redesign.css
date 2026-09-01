@@ -8760,41 +8760,44 @@
     -webkit-tap-highlight-color: transparent;
     text-align: left;
     border: 0;
-    /* The release only: while a finger is down the row is driven frame by frame
-       from JS, which removes the transition below. */
-    transition:
-      transform 240ms cubic-bezier(0.32, 0.72, 0, 1),
-      box-shadow 0.18s ease;
+    /* Transform is never transitioned: it belongs to the finger while one is
+       down, and to a velocity-matched spring animation the moment it lifts.
+       A transition here would only ever be something for those to fight. */
+    transition: box-shadow 0.18s ease;
   }
 
   .memo-swipe-surface.dragging {
-    transition: none;
     cursor: grabbing;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .memo-swipe-surface {
-      transition:
-        transform 0.01ms linear,
-        box-shadow 0.18s ease;
-    }
   }
 
   .memo-swipe-actions {
     position: absolute;
     inset: 0 0 0 auto;
     z-index: 0;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.35rem;
     width: 8.15rem;
-    padding-left: 0.35rem;
+    /* The buttons are revealed from this box's trailing edge and may never
+       be drawn past it: the row's own edge is what they line up against. */
+    overflow: hidden;
     pointer-events: none;
   }
 
   .memo-swipe-actions.on {
     pointer-events: auto;
+  }
+
+  .memo-swipe-actions-track {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    height: 100%;
+    padding-left: 0.35rem;
+    /* The closed state, so the first paint matches it before JS says anything.
+       Driven from there by the swipe; see `actionsStyle`. The origin is the
+       row's trailing edge, which is the edge the buttons are revealed from. */
+    transform: scale(0.92);
+    transform-origin: 100% 50%;
+    opacity: 0;
   }
 
   .memo-swipe-action {

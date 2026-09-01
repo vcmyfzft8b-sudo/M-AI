@@ -8,6 +8,7 @@ import { PartMediaResolutionLevel } from "@google/genai";
 import JSZip from "jszip";
 import sharp from "sharp";
 
+import { isRetryableAiError } from "@/lib/ai/errors";
 import { generateTextWithGeminiFile } from "@/lib/ai/gemini";
 import { resolveMinimalThinkingConfig } from "@/lib/ai/gemini-models";
 import { MAX_SCAN_IMAGE_BYTES, STORAGE_BUCKET } from "@/lib/constants";
@@ -32,6 +33,9 @@ const MAX_DOCUMENT_IMAGES = 12;
 const IMAGE_DESCRIPTION_BUDGET_MS = 60_000;
 const IMAGE_DESCRIPTION_CONCURRENCY = 3;
 const MAX_IMAGE_DESCRIPTION_COUNT = 8;
+// One fast retry absorbs Gemini's transient 429/5xx responses without letting an optional image
+// description consume the document pipeline's whole invocation window.
+const IMAGE_DESCRIPTION_MAX_ATTEMPTS = 2;
 const MAX_WEBPAGE_IMAGE_CANDIDATES = 24;
 const MIN_DOCUMENT_IMAGE_WIDTH = 96;
 const MIN_DOCUMENT_IMAGE_HEIGHT = 72;
@@ -307,7 +311,7 @@ Return plain text only. Keep the USEFUL and NOT_USEFUL markers in English exactl
       file,
       model: env.GEMINI_TEXT_MODEL,
       maxOutputTokens: 180,
-      maxAttempts: 1,
+      maxAttempts: IMAGE_DESCRIPTION_MAX_ATTEMPTS,
       mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM,
       // The only vision call that reads GEMINI_TEXT_MODEL rather than an OCR model, so it is the
       // one that silently starts thinking the day that default moves to a 3.x. Thinking is drawn
@@ -327,6 +331,19 @@ Return plain text only. Keep the USEFUL and NOT_USEFUL markers in English exactl
 
     return normalized.replace(/^useful\s*:\s*/i, "").slice(0, 360);
   } catch (error) {
+    // Google documents 429 and 5xx responses as transient capacity failures. The call above has
+    // already retried once with the shared backoff; if the provider is still unavailable, keep the
+    // image on its nearby text and let the document continue. Each failed attempt is already in
+    // ai_usage_events, so sending this handled degradation to Sentry only creates a false app
+    // regression. Unexpected code, parsing and file failures must remain visible there.
+    if (isRetryableAiError(error)) {
+      console.warn(
+        "Document image description provider was temporarily unavailable; keeping the image undescribed.",
+      );
+
+      return undefined;
+    }
+
     console.warn("Document image description failed.", error);
     captureBackgroundError(error, {
       operation: "document_image_description",

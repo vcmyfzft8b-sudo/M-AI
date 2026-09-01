@@ -40,7 +40,8 @@ check the deployment timestamp and the event's function and step tags before act
 - **Normalized message:** `503: The service is currently unavailable (UNAVAILABLE)`
 - **Historical event:** `2026-09-01T17:00:34.568Z`
 - **Resolution:** [PR #305](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/305)
-- **Production cutoff:** use PR #305's production deployment ready time after merge
+- **Production cutoff:** deployment `dpl_J6yR5NASC2GFsTHseuQifNAwTTvK` was ready and the production
+  alias was verified at `2026-09-01T19:32:09Z`
 - **Regression test:** `tests/document-image-description-retry.test.mjs`
 
 This was a transient Google capacity response from an optional call, not a failed document import.

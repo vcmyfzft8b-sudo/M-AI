@@ -33,6 +33,7 @@ test("both 2026-09-01 resolutions have durable fingerprints and PRs", () => {
     "POST /api/internal/lectures/document",
     "document_image_description",
     "PR #305",
+    "dpl_J6yR5NASC2GFsTHseuQifNAwTTvK",
   ]) {
     assert.ok(LEDGER.includes(required), `resolution ledger is missing ${required}`);
   }

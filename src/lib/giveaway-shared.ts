@@ -138,3 +138,19 @@ export function findGiveawayWinner(entries: GiveawayLeaderboardEntry[]) {
 
   return first && first.reachedGoalAt ? first : null;
 }
+
+/**
+ * One or two letters for the podium avatar, from the masked name: "Zala K."
+ * gives "ZK", "ma***" gives "M". Stars are the mask, not a name.
+ */
+export function giveawayInitials(name: string) {
+  const words = name
+    .replace(/[*.]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return words
+    .slice(0, 2)
+    .map((word) => word[0].toUpperCase())
+    .join("");
+}

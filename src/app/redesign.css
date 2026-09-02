@@ -12405,7 +12405,8 @@
 }
 
 .memo-giveaway-card ~ .memo-giveaway-card,
-.memo-giveaway-grid ~ .memo-giveaway-card {
+.memo-giveaway-grid ~ .memo-giveaway-card,
+.memo-giveaway-board ~ .memo-giveaway-grid {
   margin-top: 1rem;
 }
 
@@ -12634,6 +12635,242 @@
 
 .memo-giveaway-list li:first-child .memo-giveaway-friends {
   color: var(--text);
+}
+
+/* ---- The podium: second, first, third ---- */
+.memo,
+.memo-portal {
+  --podium-gold: rgba(245, 166, 35, 0.2);
+  --podium-gold-ink: #b26a00;
+  --podium-silver: rgba(142, 142, 149, 0.2);
+  --podium-silver-ink: #6c6c74;
+  --podium-bronze: rgba(205, 127, 50, 0.2);
+  --podium-bronze-ink: #9a5a1f;
+}
+
+:root[data-theme="dark"] .memo,
+:root[data-theme="dark"] .memo-portal {
+  --podium-gold-ink: #f5c04e;
+  --podium-silver-ink: #c4c4cc;
+  --podium-bronze-ink: #e0955a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .memo,
+  :root:not([data-theme="light"]) .memo-portal {
+    --podium-gold-ink: #f5c04e;
+    --podium-silver-ink: #c4c4cc;
+    --podium-bronze-ink: #e0955a;
+  }
+}
+
+.memo-giveaway-podium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.6rem;
+  margin: 0.4rem 0 0.2rem;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-giveaway-podium-place {
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  text-align: center;
+}
+
+.memo-giveaway-podium-medal {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.memo-giveaway-podium-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.memo-giveaway-podium-place.place-1 .memo-giveaway-podium-avatar {
+  width: 3.8rem;
+  height: 3.8rem;
+  background: var(--podium-gold);
+  color: var(--podium-gold-ink);
+  box-shadow: 0 0 0 3px var(--podium-gold);
+  font-size: 1.2rem;
+}
+
+.memo-giveaway-podium-place.place-2 .memo-giveaway-podium-avatar {
+  background: var(--podium-silver);
+  color: var(--podium-silver-ink);
+}
+
+.memo-giveaway-podium-place.place-3 .memo-giveaway-podium-avatar {
+  background: var(--podium-bronze);
+  color: var(--podium-bronze-ink);
+}
+
+.memo-giveaway-podium-place.is-empty .memo-giveaway-podium-avatar {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--line);
+  color: var(--muted-2);
+}
+
+.memo-giveaway-podium-place.is-empty .memo-giveaway-podium-medal {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+
+.memo-giveaway-podium-name {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-giveaway-podium-place.place-1 .memo-giveaway-podium-name {
+  font-size: 1.05rem;
+}
+
+.memo-giveaway-podium-place.is-empty .memo-giveaway-podium-name {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.memo-giveaway-podium-count {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The stand: its height is the rank, its fill the progress to the goal. */
+.memo-giveaway-podium-stand {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  height: 3.2rem;
+  margin-top: 0.3rem;
+  border-radius: 14px 14px 6px 6px;
+  background: var(--tile);
+  overflow: hidden;
+}
+
+.memo-giveaway-podium-place.place-1 .memo-giveaway-podium-stand {
+  height: 5.4rem;
+}
+
+.memo-giveaway-podium-place.place-2 .memo-giveaway-podium-stand {
+  height: 4.2rem;
+}
+
+.memo-giveaway-podium-fill {
+  position: absolute;
+  inset: auto 0 0 0;
+  opacity: 0.18;
+  transition: height 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.memo-giveaway-podium-place.place-1 .memo-giveaway-podium-fill {
+  background: var(--podium-gold-ink);
+}
+
+.memo-giveaway-podium-place.place-2 .memo-giveaway-podium-fill {
+  background: var(--podium-silver-ink);
+}
+
+.memo-giveaway-podium-place.place-3 .memo-giveaway-podium-fill {
+  background: var(--podium-bronze-ink);
+}
+
+
+.memo-giveaway-podium-rank {
+  position: relative;
+  padding-bottom: 0.45rem;
+  color: var(--muted);
+  font-size: 1.35rem;
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.memo-giveaway-podium-place.place-1 .memo-giveaway-podium-rank {
+  color: var(--text);
+  font-size: 1.8rem;
+}
+
+.memo-giveaway-podium-place.is-viewer .memo-giveaway-podium-stand {
+  box-shadow: inset 0 0 0 2px var(--giveaway-tint-line);
+}
+
+/* Rows below the podium start at fourth place. */
+.memo-giveaway-list {
+  margin-top: 0.4rem;
+  border-top: 1px solid var(--line);
+}
+
+.memo-giveaway-viewer-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 3.1rem;
+  margin-top: 0.4rem;
+  padding: 0.45rem 0.2rem;
+  border-top: 1px dashed var(--line);
+}
+
+.memo-giveaway-viewer-row .memo-giveaway-name {
+  white-space: normal;
+  font-weight: 600;
+}
+
+@media (max-width: 1099px) {
+  .memo-giveaway-podium {
+    gap: 0.4rem;
+  }
+
+  .memo-giveaway-podium-avatar {
+    width: 2.9rem;
+    height: 2.9rem;
+    font-size: 0.95rem;
+  }
+
+  .memo-giveaway-podium-place.place-1 .memo-giveaway-podium-avatar {
+    width: 3.5rem;
+    height: 3.5rem;
+    font-size: 1.1rem;
+  }
+
+  .memo-giveaway-podium-name {
+    font-size: 0.88rem;
+  }
+
+  .memo-giveaway-podium-place.place-1 .memo-giveaway-podium-name {
+    font-size: 0.98rem;
+  }
+
+  .memo-giveaway-podium-count {
+    font-size: 0.8rem;
+  }
 }
 
 /* ---- Buy, how it works, rules ---- */

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useAppHref } from "@/components/creator-demo/creator-demo-context";
+import { GiveawayPodium } from "@/components/giveaway-podium";
 import { useTranslations } from "@/components/i18n-provider";
 import { InstantLink } from "@/components/instant-link";
 import { MemoPortal } from "@/components/memo-portal";
@@ -38,8 +39,6 @@ export type GiveawayScreenProps = {
 };
 
 type GiveawayState = Pick<GiveawayScreenProps, "code" | "progress" | "leaderboard">;
-
-const MEDALS = ["🥇", "🥈", "🥉"];
 
 export function GiveawayScreen({
   code,
@@ -192,6 +191,44 @@ export function GiveawayScreen({
               </span>
             </header>
 
+            <section className="memo-card-row memo-giveaway-card memo-giveaway-board">
+              <span className="memo-giveaway-board-head">
+                <span className="memo-giveaway-board-title">
+                  <span className="memo-settings-tile" aria-hidden="true">
+                    <Emoji symbol="🏆" size="1.15rem" />
+                  </span>
+                  <span>{t("giveaway.leaderboard.title")}</span>
+                </span>
+                {!isDemo ? (
+                  <span className="memo-giveaway-live">
+                    <span aria-hidden="true" />
+                    {t("giveaway.leaderboard.live")}
+                  </span>
+                ) : null}
+              </span>
+
+              {winner ? (
+                <p className="memo-giveaway-winner">
+                  <Emoji symbol="🏆" size="1.2rem" />
+                  <span>
+                    <strong>{t("giveaway.leaderboard.winner", { name: winner.name })}</strong>{" "}
+                    {t("giveaway.leaderboard.concluded")}
+                  </span>
+                </p>
+              ) : null}
+
+              <GiveawayPodium
+                entries={state.leaderboard.entries}
+                prefix="memo-giveaway"
+                goal={goal}
+                viewer={{ qualifiedCount: qualified }}
+              />
+
+              {state.leaderboard.entries.length === 0 ? (
+                <p className="memo-giveaway-empty">{t("giveaway.leaderboard.empty")}</p>
+              ) : null}
+            </section>
+
             <div className="memo-giveaway-grid">
               <section className="memo-card-row memo-giveaway-card memo-giveaway-code-card">
                 <span className="memo-card-row-copy">
@@ -247,59 +284,6 @@ export function GiveawayScreen({
                 </span>
               </section>
             </div>
-
-            <section className="memo-card-row memo-giveaway-card memo-giveaway-board">
-              <span className="memo-giveaway-board-head">
-                <span className="memo-giveaway-board-title">
-                  <span className="memo-settings-tile" aria-hidden="true">
-                    <Emoji symbol="🏆" size="1.15rem" />
-                  </span>
-                  <span>{t("giveaway.leaderboard.title")}</span>
-                </span>
-                {!isDemo ? (
-                  <span className="memo-giveaway-live">
-                    <span aria-hidden="true" />
-                    {t("giveaway.leaderboard.live")}
-                  </span>
-                ) : null}
-              </span>
-
-              {winner ? (
-                <p className="memo-giveaway-winner">
-                  <Emoji symbol="🏆" size="1.2rem" />
-                  <span>
-                    <strong>{t("giveaway.leaderboard.winner", { name: winner.name })}</strong>{" "}
-                    {t("giveaway.leaderboard.concluded")}
-                  </span>
-                </p>
-              ) : null}
-
-              {state.leaderboard.entries.length === 0 ? (
-                <p className="memo-giveaway-empty">{t("giveaway.leaderboard.empty")}</p>
-              ) : (
-                <ol className="memo-giveaway-list">
-                  {state.leaderboard.entries.map((entry, index) => (
-                    <li
-                      key={`${entry.name}-${index}`}
-                      className={entry.isViewer ? "is-viewer" : undefined}
-                    >
-                      <span className="memo-giveaway-rank" aria-hidden="true">
-                        {MEDALS[index] ?? index + 1}
-                      </span>
-                      <span className="memo-giveaway-name">
-                        {entry.name}
-                        {entry.isViewer ? (
-                          <span className="memo-giveaway-you">{t("giveaway.leaderboard.you")}</span>
-                        ) : null}
-                      </span>
-                      <span className="memo-giveaway-friends">
-                        {t("giveaway.leaderboard.friends", { count: entry.qualifiedCount })}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </section>
 
             {!hasSubscription ? (
               <section className="memo-card-row memo-giveaway-card memo-giveaway-buy">

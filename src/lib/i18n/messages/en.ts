@@ -1665,6 +1665,9 @@ export const en: Messages = {
   "giveaway.leaderboard.title": "Leaderboard",
   "giveaway.leaderboard.live": "Live",
   "giveaway.leaderboard.empty": "The board is still empty. Be the first to bring a friend.",
+  "giveaway.podium.free": "Open spot",
+  "giveaway.leaderboard.notRanked": "You are not on the board yet – share your code to get on it.",
+  "giveaway.leaderboard.yourPlace": "Your place",
   "giveaway.leaderboard.you": "you",
   "giveaway.leaderboard.friends": {
     one: "{count} friend",

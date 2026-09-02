@@ -7,6 +7,7 @@ import {
   buildGiveawayShareUrl,
   findGiveawayWinner,
   formatGiveawayCode,
+  giveawayInitials,
   isGiveawayCodeFormat,
   maskGiveawayName,
   normalizeGiveawayCode,
@@ -62,4 +63,11 @@ test("the winner is the first row only when it has reached the goal", () => {
   assert.equal(findGiveawayWinner([leader, runnerUp]), leader);
   assert.equal(findGiveawayWinner([{ name: "Ana K.", qualifiedCount: 12, reachedGoalAt: null }]), null);
   assert.equal(findGiveawayWinner([]), null);
+});
+
+test("podium initials come from the masked name and never from the mask", () => {
+  assert.equal(giveawayInitials("Zala K."), "ZK");
+  assert.equal(giveawayInitials("ma***"), "M");
+  assert.equal(giveawayInitials("Nika"), "N");
+  assert.equal(giveawayInitials("Memo user"), "MU");
 });

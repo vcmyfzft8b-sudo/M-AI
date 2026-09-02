@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from "react";
 
+import { GiveawayPodium } from "@/components/giveaway-podium";
 import { useTranslations } from "@/components/i18n-provider";
 import { GIVEAWAY_POLL_MS, type GiveawayLeaderboard } from "@/lib/giveaway-shared";
-
-const MEDALS = ["🥇", "🥈", "🥉"];
 
 /* The standings on the landing page. Rendered from the server's copy so the
    first paint already has them, then refreshed while the tab is visible — a
@@ -60,7 +59,7 @@ export function LandingGiveawayBoard({ initial }: { initial: GiveawayLeaderboard
     };
   }, []);
 
-  const entries = board.entries.slice(0, 5);
+  const entries = board.entries.slice(0, 6);
 
   return (
     <div className="landing-v2-giveaway-board">
@@ -79,23 +78,11 @@ export function LandingGiveawayBoard({ initial }: { initial: GiveawayLeaderboard
         </p>
       ) : null}
 
+      <GiveawayPodium entries={entries} prefix="landing-v2-giveaway" goal={board.goal} />
+
       {entries.length === 0 ? (
         <p className="landing-v2-giveaway-empty">{t("landing.giveaway.leaderboardEmpty")}</p>
-      ) : (
-        <ol className="landing-v2-giveaway-list">
-          {entries.map((entry, index) => (
-            <li key={`${entry.name}-${index}`}>
-              <span className="landing-v2-giveaway-rank" aria-hidden="true">
-                {MEDALS[index] ?? index + 1}
-              </span>
-              <span className="landing-v2-giveaway-name">{entry.name}</span>
-              <span className="landing-v2-giveaway-count">
-                {t("giveaway.leaderboard.friends", { count: entry.qualifiedCount })}
-              </span>
-            </li>
-          ))}
-        </ol>
-      )}
+      ) : null}
 
       <p className="landing-v2-giveaway-goal">{t("landing.giveaway.step3Title", { goal: board.goal })}</p>
     </div>

@@ -182,12 +182,26 @@ export function GiveawayScreen({
 
         <div className="memo-screen-scroll">
           <div className="memo-page">
+            {/* The prize first, and big: the phone is what the screen is about. */}
             <header className="memo-giveaway-head">
-              <GiveawayPhone scale={0.2} className="memo-giveaway-head-art" />
               <span className="memo-giveaway-head-copy">
                 <span className="memo-eyebrow">{t("giveaway.eyebrow")}</span>
-                <h1>{t("giveaway.title")}</h1>
+                <h1>{t("giveaway.title", { prize: GIVEAWAY_PRIZE_NAME })}</h1>
                 <p>{t("giveaway.lead", { goal, prize: GIVEAWAY_PRIZE_NAME })}</p>
+              </span>
+              <span className="memo-giveaway-prize">
+                <GiveawayPhone
+                  scale={0.34}
+                  note={{
+                    title: t("giveaway.phone.noteTitle"),
+                    body: t("giveaway.phone.noteBody", { goal }),
+                  }}
+                />
+                <span className="memo-giveaway-prize-tag">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/giveaway/trophy.png" alt="" width={64} height={64} />
+                  {t("giveaway.prize.tag", { goal })}
+                </span>
               </span>
             </header>
 

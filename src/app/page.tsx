@@ -166,7 +166,7 @@ export default async function HomePage() {
           <div className="landing-v2-giveaway-copy">
             <p className="landing-v2-giveaway-eyebrow">{t("landing.giveaway.eyebrow")}</p>
             <h2 id="landing-giveaway-title" className="landing-v2-giveaway-title">
-              {t("landing.giveaway.title")}
+              {t("landing.giveaway.title", { prize: GIVEAWAY_PRIZE_NAME })}
             </h2>
             <p className="landing-v2-giveaway-lead">
               {t("landing.giveaway.lead", { goal: GIVEAWAY_GOAL, prize: GIVEAWAY_PRIZE_NAME })}
@@ -197,19 +197,27 @@ export default async function HomePage() {
             </LandingLoadingLink>
           </div>
 
-          <div className="landing-v2-giveaway-side">
-            <div className="landing-v2-giveaway-prize">
-              <GiveawayPhone
-                scale={0.46}
-                note={{
-                  title: t("giveaway.phone.noteTitle"),
-                  body: t("giveaway.phone.noteBody", { goal: GIVEAWAY_GOAL }),
-                }}
-              />
-            </div>
-            {leaderboard ? <LandingGiveawayBoard initial={leaderboard} /> : null}
+          <div className="landing-v2-giveaway-prize">
+            <GiveawayPhone
+              scale={0.62}
+              note={{
+                title: t("giveaway.phone.noteTitle"),
+                body: t("giveaway.phone.noteBody", { goal: GIVEAWAY_GOAL }),
+              }}
+            />
+            <span className="landing-v2-giveaway-prize-tag">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/giveaway/trophy.png" alt="" width={64} height={64} />
+              {t("giveaway.prize.tag", { goal: GIVEAWAY_GOAL })}
+            </span>
           </div>
         </div>
+
+        {leaderboard ? (
+          <div className="landing-v2-giveaway-boardwrap" data-scroll-reveal="">
+            <LandingGiveawayBoard initial={leaderboard} />
+          </div>
+        ) : null}
       </section>
 
       <section id="how-it-works" className="landing-v2-section" aria-labelledby="landing-workflow-title">

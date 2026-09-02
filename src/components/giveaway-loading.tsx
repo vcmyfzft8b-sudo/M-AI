@@ -12,11 +12,13 @@ export function GiveawayLoading() {
       <div className="memo-screen-scroll">
         <div className="memo-page">
           <div className="memo-giveaway-head">
-            <span className="memo-giveaway-head-art app-loading-pill" style={{ borderRadius: "999px" }} />
             <span className="memo-giveaway-head-copy">
               <span className="app-loading-pill" style={{ height: "0.78rem", width: "9rem" }} />
               <span className="app-loading-pill" style={{ height: "1.5rem", width: "11rem", marginTop: "0.3rem" }} />
               <span className="app-loading-pill" style={{ height: "0.95rem", width: "min(24rem, 90%)", marginTop: "0.3rem" }} />
+            </span>
+            <span className="memo-giveaway-prize">
+              <span className="app-loading-pill" style={{ width: "9rem", height: "18.4rem", borderRadius: "1.6rem" }} />
             </span>
           </div>
 

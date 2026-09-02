@@ -429,7 +429,9 @@ export function SettingsScreen({
                 <span className="memo-giveaway-promo-eyebrow">
                   {t("settings.giveaway.eyebrow")}
                 </span>
-                <span className="memo-giveaway-promo-title">{t("settings.giveaway.title")}</span>
+                <span className="memo-giveaway-promo-title">
+                  {t("settings.giveaway.title", { prize: GIVEAWAY_PRIZE_NAME })}
+                </span>
                 <span className="memo-giveaway-promo-detail">
                   {t("settings.giveaway.detail", { goal: GIVEAWAY_GOAL, prize: GIVEAWAY_PRIZE_NAME })}
                 </span>

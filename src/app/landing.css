@@ -1686,9 +1686,9 @@
 
 .landing-v2-giveaway-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   gap: clamp(2rem, 5vw, 4.5rem);
-  align-items: start;
+  align-items: center;
 }
 
 .landing-v2-giveaway-copy {
@@ -1773,16 +1773,60 @@
   font-weight: 800;
 }
 
-.landing-v2-giveaway-side {
+/* The prize: the phone under a pool of light, with what it is for beneath. */
+.landing-v2-giveaway-prize {
+  position: relative;
+  isolation: isolate;
   display: grid;
-  gap: 1rem;
+  justify-items: center;
+  gap: 1.4rem;
+  padding: 1.5rem 0 0.5rem;
+}
+
+.landing-v2-giveaway-prize::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 45%;
+  width: min(30rem, 120%);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(circle, rgba(244, 95, 90, 0.28) 0%, transparent 58%),
+    radial-gradient(circle at 60% 40%, rgba(124, 92, 255, 0.22) 0%, transparent 55%);
+  pointer-events: none;
+}
+
+.landing-v2-giveaway-prize-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem 0.5rem 0.7rem;
+  border-radius: 999px;
+  background: var(--l-surface);
+  box-shadow: var(--l-shadow), inset 0 0 0 1px var(--l-line);
+  color: var(--l-label);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.landing-v2-giveaway-prize-tag img {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.landing-v2-giveaway-boardwrap {
+  margin-top: clamp(2.5rem, 5vw, 4rem);
 }
 
 /* The board: the page's one surface card here, in the nav bar's white. */
 .landing-v2-giveaway-board {
   display: grid;
   gap: 0.6rem;
-  padding: 3.4rem 1.6rem 1.3rem;
+  width: min(100%, 44rem);
+  margin: 0 auto;
+  padding: 1.5rem 1.6rem 1.3rem;
   border-radius: 22px;
   background: var(--l-surface);
   color: var(--l-label);
@@ -1895,15 +1939,6 @@
 .landing-v2-giveaway-podium-place.place-1 .landing-v2-giveaway-podium-medal img {
   width: 2.7rem;
   height: 2.7rem;
-}
-
-/* The prize above the board, hanging over the card's top edge. */
-.landing-v2-giveaway-prize {
-  display: flex;
-  justify-content: center;
-  margin-bottom: -2.4rem;
-  position: relative;
-  z-index: 1;
 }
 
 .landing-v2-giveaway-board-head h3 {
@@ -2160,6 +2195,16 @@
 @media (max-width: 899px) {
   .landing-v2-giveaway-card {
     grid-template-columns: 1fr;
+  }
+
+  /* Stacked: the prize comes first, then the words about it. */
+  .landing-v2-giveaway-prize {
+    order: -1;
+    padding-top: 0.5rem;
+  }
+
+  .landing-v2-giveaway-prize .giveaway-phone {
+    --phone-scale: 0.5;
   }
 }
 

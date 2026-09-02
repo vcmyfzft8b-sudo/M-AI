@@ -20,26 +20,14 @@ export function GiveawayLoading() {
             </span>
           </div>
 
-          <div className="memo-giveaway-grid">
-            {[0, 1].map((card) => (
-              <div key={card} className="memo-card-row memo-giveaway-card">
-                <span className="memo-card-row-copy">
-                  <span className="app-loading-pill" style={{ height: "0.78rem", width: "4.5rem" }} />
-                  <span
-                    className="app-loading-pill"
-                    style={{ height: "2rem", width: "10rem", marginTop: "0.5rem" }}
-                  />
-                  <span
-                    className="app-loading-pill"
-                    style={{ height: "0.95rem", width: "min(18rem, 90%)", marginTop: "0.4rem" }}
-                  />
-                </span>
-                <span
-                  className="app-loading-pill"
-                  style={{ height: "3rem", width: "100%", borderRadius: "999px", marginTop: "0.4rem" }}
-                />
-              </div>
-            ))}
+          <div className="memo-card-row memo-giveaway-card">
+            <span className="memo-card-row-copy">
+              <span className="app-loading-pill" style={{ height: "0.78rem", width: "4.5rem" }} />
+              <span className="app-loading-pill" style={{ height: "2rem", width: "10rem", marginTop: "0.5rem" }} />
+              <span className="app-loading-pill" style={{ height: "0.95rem", width: "min(18rem, 90%)", marginTop: "0.4rem" }} />
+            </span>
+            <span className="app-loading-pill" style={{ height: "3rem", width: "100%", borderRadius: "999px" }} />
+            <span className="app-loading-pill" style={{ height: "0.7rem", width: "100%", borderRadius: "999px" }} />
           </div>
 
           <div className="memo-card-row memo-giveaway-card memo-giveaway-board">

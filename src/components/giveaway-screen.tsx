@@ -229,38 +229,40 @@ export function GiveawayScreen({
               ) : null}
             </section>
 
-            <div className="memo-giveaway-grid">
-              <section className="memo-card-row memo-giveaway-card memo-giveaway-code-card">
-                <span className="memo-card-row-copy">
-                  <span className="memo-eyebrow">{t("giveaway.code.label")}</span>
-                  <span className="memo-giveaway-code" aria-label={state.code}>
-                    {state.code}
-                  </span>
-                  <span className="memo-card-row-detail">{t("giveaway.code.hint")}</span>
+            <section className="memo-card-row memo-giveaway-card memo-giveaway-code-card">
+              <span className="memo-card-row-copy">
+                <span className="memo-eyebrow">{t("giveaway.code.label")}</span>
+                <span className="memo-giveaway-code" aria-label={state.code}>
+                  {state.code}
                 </span>
-                <div className="memo-giveaway-actions">
-                  <button
-                    type="button"
-                    className="memo-giveaway-secondary"
-                    onClick={() => copyText(state.code, t("giveaway.code.copied"))}
-                  >
-                    <Msym name="content_copy" size="1.2rem" fill={false} weight={500} />
-                    <span>{t("giveaway.code.copy")}</span>
-                  </button>
-                  <button type="button" className="memo-primary-pill memo-giveaway-share" onClick={share}>
-                    <Msym name="ios_share" size="1.2rem" fill={false} weight={500} />
-                    <span>{t("giveaway.share.button")}</span>
-                  </button>
-                </div>
-              </section>
+                <span className="memo-card-row-detail">{t("giveaway.code.hint")}</span>
+              </span>
+              <div className="memo-giveaway-actions">
+                <button
+                  type="button"
+                  className="memo-giveaway-secondary"
+                  onClick={() => copyText(state.code, t("giveaway.code.copied"))}
+                >
+                  <Msym name="content_copy" size="1.2rem" fill={false} weight={500} />
+                  <span>{t("giveaway.code.copy")}</span>
+                </button>
+                <button type="button" className="memo-primary-pill memo-giveaway-share" onClick={share}>
+                  <Msym name="ios_share" size="1.2rem" fill={false} weight={500} />
+                  <span>{t("giveaway.share.button")}</span>
+                </button>
+              </div>
 
-              <section className="memo-card-row memo-giveaway-card memo-giveaway-progress-card">
-                <span className="memo-card-row-copy">
-                  <span className="memo-eyebrow">{t("giveaway.progress.label")}</span>
+              {/* Progress lives with the code: the code is how the number moves. */}
+              <div className="memo-giveaway-progress">
+                <span className="memo-giveaway-progress-row">
                   <span className="memo-giveaway-count">
                     {t("giveaway.progress.count", { count: qualified, goal })}
                   </span>
-                  <span className="memo-card-row-detail">{t("giveaway.progress.detail")}</span>
+                  <span className="memo-giveaway-progress-note">
+                    {remaining === 0
+                      ? t("giveaway.progress.reached")
+                      : t("giveaway.progress.remaining", { count: remaining })}
+                  </span>
                 </span>
                 <div
                   className="memo-giveaway-bar"
@@ -268,26 +270,21 @@ export function GiveawayScreen({
                   aria-valuemin={0}
                   aria-valuemax={goal}
                   aria-valuenow={qualified}
+                  aria-label={t("giveaway.progress.label")}
                 >
                   <span style={{ width: `${percent}%` }} />
                 </div>
-                <span className="memo-giveaway-progress-note">
-                  {remaining === 0
-                    ? t("giveaway.progress.reached")
-                    : t("giveaway.progress.remaining", { count: remaining })}
-                  {state.progress.pendingCount > 0 ? (
-                    <>
-                      {" · "}
-                      {t("giveaway.progress.pending", { count: state.progress.pendingCount })}
-                    </>
-                  ) : null}
-                </span>
-              </section>
-            </div>
+                {state.progress.pendingCount > 0 ? (
+                  <span className="memo-giveaway-progress-note">
+                    {t("giveaway.progress.pending", { count: state.progress.pendingCount })}
+                  </span>
+                ) : null}
+              </div>
+            </section>
 
             {!hasSubscription ? (
-              <section className="memo-card-row memo-giveaway-card memo-giveaway-buy">
-                <span className="memo-card-row-copy">
+              <div className="memo-giveaway-buy">
+                <span className="memo-giveaway-buy-copy">
                   <span className="memo-card-row-title">{t("giveaway.buy.title")}</span>
                   <span className="memo-card-row-detail">
                     {referralCode
@@ -299,24 +296,8 @@ export function GiveawayScreen({
                   <Emoji symbol="✨" size="1rem" />
                   <span>{t("giveaway.buy.cta", { brand: BRAND_NAME })}</span>
                 </InstantLink>
-              </section>
+              </div>
             ) : null}
-
-            <section className="memo-giveaway-how">
-              <h2 className="memo-settings-heading">{t("giveaway.how.title")}</h2>
-              <ol>
-                {(["giveaway.how.step1", "giveaway.how.step2", "giveaway.how.step3"] as const).map(
-                  (key, index) => (
-                    <li key={key}>
-                      <span className="memo-giveaway-step" aria-hidden="true">
-                        {index + 1}
-                      </span>
-                      <span>{t(key, { goal })}</span>
-                    </li>
-                  ),
-                )}
-              </ol>
-            </section>
 
             <section className="memo-giveaway-rules">
               <h2 className="memo-settings-heading">{t("giveaway.rules.title")}</h2>

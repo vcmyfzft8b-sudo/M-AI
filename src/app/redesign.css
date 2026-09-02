@@ -12393,20 +12393,13 @@
   line-height: 1.4;
 }
 
-.memo-giveaway-grid {
-  display: grid;
-  gap: 1rem;
-}
-
 .memo-giveaway-card {
   align-items: stretch;
   flex-direction: column;
   gap: 0.9rem;
 }
 
-.memo-giveaway-card ~ .memo-giveaway-card,
-.memo-giveaway-grid ~ .memo-giveaway-card,
-.memo-giveaway-board ~ .memo-giveaway-grid {
+.memo-giveaway-card ~ .memo-giveaway-card {
   margin-top: 1rem;
 }
 
@@ -12425,7 +12418,15 @@
 .memo-giveaway-actions {
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
   gap: 0.6rem;
+}
+
+/* Two buttons always fit the desktop card, so the row never wraps there. */
+@media (min-width: 1100px) {
+  .memo-giveaway-actions {
+    flex-wrap: nowrap;
+  }
 }
 
 .memo-giveaway-actions > * {
@@ -12453,12 +12454,27 @@
   box-shadow: inset 0 0 0 1px var(--hover-ring);
 }
 
+.memo-giveaway-progress {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.3rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.memo-giveaway-progress-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 .memo-giveaway-count {
-  margin: 0.2rem 0 0.1rem;
-  font-size: 1.9rem;
+  font-size: 1.5rem;
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .memo-giveaway-bar {
@@ -12873,58 +12889,32 @@
   }
 }
 
-/* ---- Buy, how it works, rules ---- */
+/* ---- Buy and rules: rows on the page, not more cards ---- */
 .memo-giveaway-buy {
-  flex-direction: row;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.4rem;
+  padding: 0 0.2rem;
 }
 
-.memo-giveaway-how,
+.memo-giveaway-buy-copy {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
 .memo-giveaway-rules {
   margin-top: 1.6rem;
 }
 
-.memo-giveaway-how .memo-settings-heading,
 .memo-giveaway-rules .memo-settings-heading {
   display: block;
-  margin: 0 0 0.7rem;
-  font-size: 1.15rem;
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
   font-weight: 750;
-  letter-spacing: -0.03em;
-}
-
-.memo-giveaway-how ol {
-  display: grid;
-  gap: 0.55rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.memo-giveaway-how li {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 0.85rem 1.1rem;
-  border-radius: 18px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  font-size: 0.98rem;
-  line-height: 1.35;
-}
-
-.memo-giveaway-step {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 1.9rem;
-  height: 1.9rem;
-  border-radius: 999px;
-  background: var(--tile);
-  color: var(--text);
-  font-size: 0.85rem;
-  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .memo-giveaway-rules ul {
@@ -12935,12 +12925,6 @@
   color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.4;
-}
-
-@media (min-width: 1100px) {
-  .memo-giveaway-grid {
-    grid-template-columns: 1fr 1fr;
-  }
 }
 
 @media (max-width: 1099px) {
@@ -13029,10 +13013,18 @@
   .memo-giveaway-buy {
     flex-direction: column;
     align-items: stretch;
+    padding: 0;
   }
 
-  .memo-giveaway-how .memo-settings-heading,
+  .memo-giveaway-buy .memo-primary-pill {
+    justify-content: center;
+    height: 3.3rem;
+    background: var(--coral);
+    color: #fff;
+    box-shadow: 0 10px 22px rgba(244, 95, 90, 0.24);
+  }
+
   .memo-giveaway-rules .memo-settings-heading {
-    margin: 0 0 0.7rem;
+    margin: 0 0 0.5rem;
   }
 }

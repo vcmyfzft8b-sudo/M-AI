@@ -13,6 +13,7 @@ import {
   PURCHASABLE_BILLING_PLAN_IDS,
 } from "@/lib/billing";
 import { getDiscountWheelState } from "@/lib/discount-wheel";
+import { resolveGiveawayReferral } from "@/lib/giveaway";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { STRIPE_CHECKOUT_LOCALE } from "@/lib/i18n/locales";
@@ -72,6 +73,19 @@ export async function POST(request: Request) {
     // has their discount and does not need to type one.
     const wheel = await getDiscountWheelState(appState.user.id);
     const wheelCoupon = wheel.hasUnredeemedPrize ? wheel.coupon : null;
+    /*
+     * A friend's giveaway code, carried in from the share link. It is the
+     * same 50 % coupon as the wheel's prize, so the two never stack; the code
+     * wins because it is the one that credits somebody. The Stripe discount
+     * is created from the promotion code rather than the coupon so the
+     * webhook can see whose code it was.
+     */
+    const referral = await resolveGiveawayReferral(appState.user.id);
+    const discount: Stripe.Checkout.SessionCreateParams.Discount | null = referral
+      ? { promotion_code: referral.stripePromotionCodeId }
+      : wheelCoupon
+        ? { coupon: wheelCoupon }
+        : null;
 
     /*
      * A discounted purchase is not also a trial.
@@ -84,7 +98,7 @@ export async function POST(request: Request) {
      * straight away is what the offer actually says.
      */
     const subscriptionTrialEligible =
-      appState.subscriptionTrialEligible && !hasPriorStripeSubscription && !wheelCoupon;
+      appState.subscriptionTrialEligible && !hasPriorStripeSubscription && !discount;
     const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
       metadata: {
         userId: appState.user.id,
@@ -106,10 +120,8 @@ export async function POST(request: Request) {
         },
       ],
       success_url: getBillingSuccessUrl(request),
-      cancel_url: getBillingCancelUrl(request, Boolean(wheelCoupon)),
-      ...(wheelCoupon
-        ? { discounts: [{ coupon: wheelCoupon }] }
-        : { allow_promotion_codes: true }),
+      cancel_url: getBillingCancelUrl(request, Boolean(wheelCoupon) && !referral),
+      ...(discount ? { discounts: [discount] } : { allow_promotion_codes: true }),
       billing_address_collection: "auto",
       // The refund policy leans on the buyer expressly asking for the service to
       // start before the 14-day withdrawal period runs out; that request has to

@@ -643,3 +643,87 @@ test("a bulk upsert of mixed-shape rows would null a not-null column", options, 
   );
   assert.equal(row.classification, "unknown");
 });
+
+test("the giveaway leaderboard ranks by who reached the goal first, then by count", options, async () => {
+  const { query } = await migratedDatabase();
+
+  const users = await query(
+    `insert into auth.users (email) values
+       ('ana.kovac@memo.app'), ('jan@memo.app'), ('zala@memo.app')
+     returning id, email`,
+  );
+  const [ana, jan, zala] = users;
+  await query(`update public.profiles set full_name = 'Ana Kovač' where id = $1`, [ana.id]);
+
+  // Friends: one row per subscription. Only qualified rows count, and the
+  // time each referrer's third referral qualified decides the order once the
+  // goal (3, for the test) is reached.
+  const insert = async (referrer, index, status, at) =>
+    query(
+      `insert into public.giveaway_referrals
+         (campaign, referrer_user_id, stripe_subscription_id, stripe_promotion_code_id, status, qualified_at)
+       values ('test', $1, $2, 'promo_x', $3, $4)`,
+      [referrer, `sub_${referrer}_${index}`, status, at],
+    );
+
+  // Jan has more qualified friends, but Ana reached three of them first.
+  await insert(ana.id, 1, "qualified", "2026-09-01T10:00:00Z");
+  await insert(ana.id, 2, "qualified", "2026-09-02T10:00:00Z");
+  await insert(ana.id, 3, "qualified", "2026-09-03T10:00:00Z");
+  await insert(jan.id, 1, "qualified", "2026-09-01T09:00:00Z");
+  await insert(jan.id, 2, "qualified", "2026-09-02T09:00:00Z");
+  await insert(jan.id, 3, "qualified", "2026-09-04T09:00:00Z");
+  await insert(jan.id, 4, "qualified", "2026-09-05T09:00:00Z");
+  // A trial that has not converted, and a reversed purchase: neither counts.
+  await insert(zala.id, 1, "pending", null);
+  await insert(zala.id, 2, "reversed", "2026-09-01T08:00:00Z");
+  await insert(zala.id, 3, "qualified", "2026-09-06T08:00:00Z");
+
+  const rows = await query(`select * from public.giveaway_leaderboard('test', 3, 10)`);
+
+  assert.deepEqual(
+    rows.map((row) => [row.email, Number(row.qualified_count), row.reached_goal_at !== null]),
+    [
+      ["ana.kovac@memo.app", 3, true],
+      ["jan@memo.app", 4, true],
+      ["zala@memo.app", 1, false],
+    ],
+  );
+  assert.equal(rows[0].full_name, "Ana Kovač");
+  assert.equal(new Date(rows[0].reached_goal_at).toISOString(), "2026-09-03T10:00:00.000Z");
+
+  // Before anyone reaches the goal, the bigger count leads.
+  const early = await query(`select email from public.giveaway_leaderboard('test', 10, 10)`);
+  assert.deepEqual(
+    early.map((row) => row.email),
+    ["jan@memo.app", "ana.kovac@memo.app", "zala@memo.app"],
+  );
+
+  // A friend counts once per campaign, however many subscriptions they buy.
+  await query(
+    `insert into public.giveaway_referrals
+       (campaign, referrer_user_id, referred_user_id, stripe_subscription_id, stripe_promotion_code_id, status)
+     values ('test', $1, $2, 'sub_first', 'promo_x', 'qualified')`,
+    [ana.id, zala.id],
+  );
+  await assert.rejects(
+    query(
+      `insert into public.giveaway_referrals
+         (campaign, referrer_user_id, referred_user_id, stripe_subscription_id, stripe_promotion_code_id, status)
+       values ('test', $1, $2, 'sub_second', 'promo_x', 'qualified')`,
+      [jan.id, zala.id],
+    ),
+    /giveaway_referrals_referred_once_idx/,
+  );
+
+  // The leaderboard is the server's: neither web role may call it.
+  const grants = await query(
+    `select grantee from information_schema.routine_privileges
+      where routine_schema = 'public' and routine_name = 'giveaway_leaderboard'
+      order by grantee`,
+  );
+  assert.deepEqual(
+    grants.map((row) => row.grantee).filter((grantee) => ["anon", "authenticated"].includes(grantee)),
+    [],
+  );
+});

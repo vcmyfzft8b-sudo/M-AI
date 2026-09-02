@@ -12256,3 +12256,610 @@
     background: var(--tile);
   }
 }
+
+/* ===========================================================================
+   Back-to-school giveaway
+   ---------------------------------------------------------------------------
+   The card on Settings that leads to it, and the screen itself: a gradient
+   hero, the code and progress cards, the live board, and the small print.
+   The gradient is the one place in the app that is allowed to be loud — it
+   is a campaign, not a feature — and it uses the confetti's own coral and
+   periwinkle so it still reads as Memo.
+   ========================================================================= */
+
+.memo,
+.memo-portal {
+  --giveaway-gradient: linear-gradient(135deg, #ff6d68 0%, #f45f5a 42%, #7c5cff 100%);
+  --giveaway-ink: #ffffff;
+  --giveaway-glow: rgba(244, 95, 90, 0.28);
+}
+
+/* ---- The card on Settings ---- */
+.memo-giveaway-promo {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  margin: 0 0 1.25rem;
+  padding: 1.1rem 1.25rem;
+  border-radius: 22px;
+  background: var(--giveaway-gradient);
+  color: var(--giveaway-ink);
+  box-shadow:
+    0 12px 28px var(--giveaway-glow),
+    var(--shadow);
+  overflow: hidden;
+  text-decoration: none;
+  transition:
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.18s ease;
+}
+
+.memo :where(a.memo-giveaway-promo) {
+  color: var(--giveaway-ink);
+}
+
+/* A soft highlight in the corner, so the flat gradient has a little depth. */
+.memo-giveaway-promo::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -40%;
+  right: -10%;
+  width: 55%;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.memo-giveaway-promo:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 16px 34px var(--giveaway-glow),
+    var(--shadow);
+}
+
+.memo-giveaway-promo:active {
+  transform: scale(0.985);
+}
+
+.memo-giveaway-promo-art {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
+.memo-giveaway-promo-copy {
+  display: grid;
+  gap: 0.12rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.memo-giveaway-promo-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.memo-giveaway-promo-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.memo-giveaway-promo-detail {
+  font-size: 0.92rem;
+  line-height: 1.35;
+  opacity: 0.92;
+}
+
+.memo-giveaway-promo-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex: 0 0 auto;
+  height: 2.5rem;
+  padding: 0 0.7rem 0 1rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #2b1e5e;
+  font-size: 0.95rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+/* ---- The screen ---- */
+.memo-giveaway-hero {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: 0.45rem;
+  margin: 0 0 1.25rem;
+  padding: 1.7rem 1.7rem 1.6rem;
+  border-radius: 26px;
+  background: var(--giveaway-gradient);
+  color: var(--giveaway-ink);
+  box-shadow: 0 16px 36px var(--giveaway-glow);
+  overflow: hidden;
+}
+
+.memo-giveaway-hero::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -45%;
+  right: -8%;
+  width: 60%;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.memo-giveaway-hero .memo-eyebrow {
+  color: var(--giveaway-ink);
+  opacity: 0.85;
+}
+
+.memo-giveaway-hero h1 {
+  margin: 0;
+  max-width: 14ch;
+  font-size: 2.4rem;
+  font-weight: 850;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.memo-giveaway-hero p {
+  margin: 0.15rem 0 0;
+  max-width: 34rem;
+  font-size: 1.02rem;
+  line-height: 1.4;
+  opacity: 0.94;
+}
+
+.memo-giveaway-hero-art {
+  position: absolute;
+  top: 1.3rem;
+  right: 1.5rem;
+  display: inline-flex;
+  align-items: flex-end;
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.25));
+}
+
+.memo-giveaway-hero-gift {
+  margin-left: -0.6rem;
+  transform: rotate(12deg) translateY(0.3rem);
+}
+
+.memo-giveaway-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.memo-giveaway-card {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.memo-giveaway-card ~ .memo-giveaway-card,
+.memo-giveaway-grid ~ .memo-giveaway-card {
+  margin-top: 1rem;
+}
+
+.memo-giveaway-code {
+  display: inline-block;
+  margin: 0.2rem 0 0.35rem;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.memo-giveaway-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.memo-giveaway-actions > * {
+  flex: 1 1 10rem;
+  justify-content: center;
+}
+
+.memo-giveaway-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 3rem;
+  padding: 0 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.memo-giveaway-secondary:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-giveaway-count {
+  margin: 0.2rem 0 0.1rem;
+  font-size: 2rem;
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.memo-giveaway-bar {
+  position: relative;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: var(--tile);
+  overflow: hidden;
+}
+
+.memo-giveaway-bar > span {
+  display: block;
+  height: 100%;
+  min-width: 0.75rem;
+  border-radius: 999px;
+  background: var(--giveaway-gradient);
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.memo-giveaway-progress-note {
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* ---- The board ---- */
+.memo-giveaway-board-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.memo-giveaway-board-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.memo-giveaway-board-title .msym {
+  color: #f5a623;
+}
+
+.memo-giveaway-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(52, 199, 89, 0.14);
+  color: #1f9d48;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.memo-giveaway-live > span {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: #34c759;
+  animation: memo-giveaway-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes memo-giveaway-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(52, 199, 89, 0.5);
+  }
+  60% {
+    box-shadow: 0 0 0 0.4rem rgba(52, 199, 89, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-giveaway-live > span {
+    animation: none;
+  }
+}
+
+.memo-giveaway-winner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  background: rgba(245, 166, 35, 0.14);
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.memo-giveaway-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.98rem;
+}
+
+.memo-giveaway-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-giveaway-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 3rem;
+  padding: 0.4rem 0.8rem 0.4rem 0.6rem;
+  border-radius: 14px;
+}
+
+.memo-giveaway-list li.is-viewer {
+  background: var(--tile);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.memo-giveaway-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.memo-giveaway-list li:nth-child(-n + 3) .memo-giveaway-rank {
+  background: transparent;
+  font-size: 1.35rem;
+}
+
+.memo-giveaway-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-giveaway-you {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--giveaway-gradient);
+  color: var(--giveaway-ink);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.memo-giveaway-friends {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-giveaway-list li:first-child .memo-giveaway-friends {
+  color: var(--text);
+}
+
+/* ---- Buy, how it works, rules ---- */
+.memo-giveaway-buy {
+  flex-direction: row;
+  align-items: center;
+}
+
+.memo-giveaway-how,
+.memo-giveaway-rules {
+  margin-top: 1.6rem;
+}
+
+.memo-giveaway-how .memo-settings-heading,
+.memo-giveaway-rules .memo-settings-heading {
+  display: block;
+  margin: 0 0 0.7rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.memo-giveaway-how ol {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-giveaway-how li {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1.1rem;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.memo-giveaway-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 999px;
+  background: var(--giveaway-gradient);
+  color: var(--giveaway-ink);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.memo-giveaway-rules ul {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0 0 0 1.1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+@media (min-width: 1100px) {
+  .memo-giveaway-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .memo-giveaway-hero {
+    padding: 2.2rem 2.2rem 2rem;
+  }
+
+  .memo-giveaway-hero h1 {
+    font-size: 3rem;
+  }
+
+  .memo-giveaway-hero-art {
+    top: 1.8rem;
+    right: 2.2rem;
+  }
+
+  .memo-giveaway-hero-art .memo-emoji:first-child {
+    font-size: 4.4rem;
+  }
+}
+
+@media (max-width: 1099px) {
+  /* Back sits on the left, where the support screen's does. */
+  .memo-giveaway-topbar {
+    justify-content: flex-start;
+  }
+
+  /* Clears the floating back control, the way the support head does. */
+  .memo-giveaway-screen .memo-page {
+    padding-top: 3.6rem;
+  }
+
+  .memo-giveaway-hero {
+    padding: 1.4rem 1.3rem 1.35rem;
+    border-radius: 22px;
+  }
+
+  .memo-giveaway-hero h1 {
+    font-size: 2.1rem;
+  }
+
+  .memo-giveaway-hero p {
+    font-size: 0.98rem;
+  }
+
+  .memo-giveaway-hero-art {
+    top: 1rem;
+    right: 1rem;
+  }
+
+  .memo-giveaway-hero-art .memo-emoji:first-child {
+    font-size: 2.6rem;
+  }
+
+  .memo-giveaway-hero-gift {
+    font-size: 1.4rem;
+  }
+
+  .memo-giveaway-promo {
+    padding: 1rem 1.05rem;
+    border-radius: 20px;
+  }
+
+  .memo-giveaway-promo-title {
+    font-size: 1.15rem;
+  }
+
+  .memo-giveaway-promo-detail {
+    font-size: 0.88rem;
+  }
+
+  .memo-giveaway-promo-cta {
+    height: 2.3rem;
+    padding: 0 0.4rem 0 0.85rem;
+    font-size: 0.88rem;
+  }
+
+  .memo-giveaway-promo-cta > span:first-child,
+  .memo-giveaway-promo-cta > .msym {
+    display: inline-flex;
+  }
+
+  .memo-giveaway-card.memo-card-row {
+    gap: 0.8rem;
+  }
+
+  .memo-giveaway-code {
+    font-size: 1.7rem;
+  }
+
+  /* The phone paints the primary pill coral; the share button is the
+     primary action here and keeps it, the copy button stays on the tile. */
+  .memo-card-row .memo-giveaway-secondary {
+    width: 100%;
+    height: 3.3rem;
+  }
+
+  .memo-giveaway-buy {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .memo-giveaway-how .memo-settings-heading,
+  .memo-giveaway-rules .memo-settings-heading {
+    margin: 0 0 0.7rem;
+  }
+}

@@ -1576,9 +1576,79 @@ export type Database = {
           path?: string;
         };
       };
+      giveaway_codes: {
+        Row: {
+          user_id: string;
+          campaign: string;
+          code: string;
+          stripe_promotion_code_id: string;
+          stripe_coupon_id: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          campaign: string;
+          code: string;
+          stripe_promotion_code_id: string;
+          stripe_coupon_id: string;
+          created_at?: string;
+        };
+        Update: {
+          code?: string;
+          stripe_promotion_code_id?: string;
+          stripe_coupon_id?: string;
+        };
+      };
+      giveaway_referrals: {
+        Row: {
+          id: string;
+          campaign: string;
+          referrer_user_id: string;
+          referred_user_id: string | null;
+          stripe_subscription_id: string;
+          stripe_promotion_code_id: string;
+          status: "pending" | "qualified" | "reversed";
+          qualified_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          campaign: string;
+          referrer_user_id: string;
+          referred_user_id?: string | null;
+          stripe_subscription_id: string;
+          stripe_promotion_code_id: string;
+          status?: "pending" | "qualified" | "reversed";
+          qualified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          referred_user_id?: string | null;
+          status?: "pending" | "qualified" | "reversed";
+          qualified_at?: string | null;
+          updated_at?: string;
+        };
+      };
     };
     Views: Record<string, never>;
     Functions: {
+      giveaway_leaderboard: {
+        Args: {
+          p_campaign: string;
+          p_goal: number;
+          p_limit?: number;
+        };
+        Returns: {
+          user_id: string;
+          full_name: string | null;
+          email: string | null;
+          qualified_count: number;
+          latest_qualified_at: string | null;
+          reached_goal_at: string | null;
+        }[];
+      };
       record_site_visit: {
         Args: {
           p_session_key: string;
@@ -1683,6 +1753,8 @@ export type Database = {
 };
 
 export type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+export type GiveawayCodeRow = Database["public"]["Tables"]["giveaway_codes"]["Row"];
+export type GiveawayReferralRow = Database["public"]["Tables"]["giveaway_referrals"]["Row"];
 export type AiUsageEventRow =
   Database["public"]["Tables"]["ai_usage_events"]["Row"];
 export type BillingSubscriptionRow =

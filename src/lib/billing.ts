@@ -8,6 +8,7 @@ import { PREVIEW_AUTH_BYPASS_USER_ID, getOptionalUserOrPreviewBypass } from "@/l
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { isPreviewPremiumEnabled } from "@/lib/preview-mode";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
+import { recordGiveawayReferral } from "@/lib/giveaway";
 import { getServerEnv } from "@/lib/server-env";
 import { resolveSiteOrigin } from "@/lib/site-url";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -644,7 +645,12 @@ export async function ensureStripeCustomer(params: {
 
 export async function syncStripeSubscription(subscriptionId: string) {
   const stripe = getStripeClient();
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  // Discounts expanded up front: the giveaway attribution below reads the
+  // promotion code on them, and a checkout webhook is the one moment it is
+  // certain to need it.
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+    expand: ["discounts"],
+  });
 
   await syncStripeSubscriptionRecord(subscription);
 
@@ -710,6 +716,10 @@ export async function syncStripeSubscriptionRecord(subscription: Stripe.Subscrip
       } as never,
       { onConflict: "stripe_subscription_id" },
     );
+
+  // A purchase made with a friend's giveaway code is credited to the friend.
+  // Never throws: attribution failing must not fail the billing sync.
+  await recordGiveawayReferral(subscription, resolvedUserId);
 }
 
 type BillingRequestLike = {

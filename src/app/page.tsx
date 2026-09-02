@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { LandingFaq } from "@/components/landing/landing-faq";
 import { LandingFeatureShowcase } from "@/components/landing/landing-feature-showcase";
 import { LandingFlowDemo } from "@/components/landing/landing-flow-demo";
+import { LandingGiveawayBoard } from "@/components/landing/landing-giveaway";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { LandingTryCallout } from "@/components/landing/landing-try-callout";
 import { LandingUserCount } from "@/components/landing/landing-user-count";
@@ -14,6 +15,8 @@ import { MemoAppPreview } from "@/components/landing/memo-app-preview";
 import { LandingLoadingLink } from "@/components/landing-loading-link";
 import { LandingScrollReveal } from "@/components/landing-scroll-reveal";
 import { getOptionalUser } from "@/lib/auth";
+import { getGiveawayLeaderboard, readGiveawayReferralCookie } from "@/lib/giveaway";
+import { GIVEAWAY_GOAL } from "@/lib/giveaway-shared";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -88,6 +91,16 @@ export default async function HomePage() {
 
   const { locale, t } = await getTranslations();
 
+  /*
+   * The giveaway standings, server-rendered so the section is complete on
+   * the first paint; the board then polls on its own. A failure here is an
+   * empty board, not a broken landing page.
+   */
+  const [leaderboard, referralCode] = await Promise.all([
+    getGiveawayLeaderboard({ fallbackName: t("giveaway.anonymous") }).catch(() => null),
+    readGiveawayReferralCookie().catch(() => null),
+  ]);
+
   return (
     <main className={`landing-v2 ${interTight.variable}`}>
       <LandingScrollReveal />
@@ -127,6 +140,14 @@ export default async function HomePage() {
                 {t("landing.cta.signIn")}
               </LandingLoadingLink>
             </div>
+            {/* A friend's code arrived with this visitor: say so where they
+                are looking, and that there is nothing to type. */}
+            {referralCode ? (
+              <p className="landing-v2-hero-referral" role="status">
+                <span aria-hidden="true">🎁</span>
+                {t("landing.giveaway.referralBanner", { code: referralCode })}
+              </p>
+            ) : null}
           </div>
 
           <div
@@ -135,6 +156,55 @@ export default async function HomePage() {
           >
             <LandingTryCallout />
             <MemoAppPreview />
+          </div>
+        </div>
+      </section>
+
+      <section id="giveaway" className="landing-v2-section landing-v2-giveaway" aria-labelledby="landing-giveaway-title">
+        <div className="landing-v2-giveaway-card" data-scroll-reveal="">
+          <div className="landing-v2-giveaway-copy">
+            <p className="landing-v2-giveaway-eyebrow">
+              <span aria-hidden="true">🎒</span>
+              {t("landing.giveaway.eyebrow")}
+            </p>
+            <h2 id="landing-giveaway-title" className="landing-v2-giveaway-title">
+              {t("landing.giveaway.title")}
+            </h2>
+            <p className="landing-v2-giveaway-lead">
+              {t("landing.giveaway.lead", { goal: GIVEAWAY_GOAL })}
+            </p>
+
+            <ol className="landing-v2-giveaway-steps">
+              {(
+                [
+                  ["landing.giveaway.step1Title", "landing.giveaway.step1"],
+                  ["landing.giveaway.step2Title", "landing.giveaway.step2"],
+                  ["landing.giveaway.step3Title", "landing.giveaway.step3"],
+                ] as const
+              ).map(([titleKey, copyKey], index) => (
+                <li key={titleKey}>
+                  <span className="landing-v2-giveaway-step" aria-hidden="true">
+                    {index + 1}
+                  </span>
+                  <span>
+                    <strong>{t(titleKey, { goal: GIVEAWAY_GOAL })}</strong>
+                    <span>{t(copyKey, { goal: GIVEAWAY_GOAL })}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+
+            <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-light">
+              {t("landing.giveaway.cta")}
+            </LandingLoadingLink>
+          </div>
+
+          <div className="landing-v2-giveaway-side">
+            <div className="landing-v2-giveaway-phone" aria-hidden="true">
+              <span className="landing-v2-giveaway-phone-art">📱</span>
+              <span className="landing-v2-giveaway-phone-gift">🎁</span>
+            </div>
+            {leaderboard ? <LandingGiveawayBoard initial={leaderboard} /> : null}
           </div>
         </div>
       </section>

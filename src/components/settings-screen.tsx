@@ -14,6 +14,7 @@ import { MemoPortal } from "@/components/memo-portal";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { BRAND_NAME, BRAND_SUPPORT_EMAIL } from "@/lib/brand";
+import { GIVEAWAY_GOAL } from "@/lib/giveaway-shared";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { ThemePreference } from "@/lib/theme";
 import {
@@ -97,6 +98,7 @@ export function SettingsScreen({
   const { navigateWithFeedback, overlay: navigationOverlay, isNavigating } = useInstantNavigation();
   const homeHref = useAppHref("/app");
   const startHref = useAppHref("/app/start");
+  const giveawayHref = useAppHref("/app/giveaway");
   const [confirm, setConfirm] = useState<ConfirmKind | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   // A bottom sheet on the phone, a centred dialog on desktop — and on the
@@ -411,6 +413,32 @@ export function SettingsScreen({
                 <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
               </button>
             ) : null}
+
+            {/*
+              * The back-to-school giveaway. The one card on this screen that
+              * is allowed to be loud: it is a campaign, it is time-limited,
+              * and it wants to be found by somebody who came here for the
+              * theme switch. It sits below the install prompt because that
+              * one leaves once it has been seen and this one stays.
+              */}
+            <InstantLink href={giveawayHref} className="memo-giveaway-promo">
+              <span className="memo-giveaway-promo-art" aria-hidden="true">
+                <Emoji symbol="📱" size="1.9rem" />
+              </span>
+              <span className="memo-giveaway-promo-copy">
+                <span className="memo-giveaway-promo-eyebrow">
+                  {t("settings.giveaway.eyebrow")}
+                </span>
+                <span className="memo-giveaway-promo-title">{t("settings.giveaway.title")}</span>
+                <span className="memo-giveaway-promo-detail">
+                  {t("settings.giveaway.detail", { goal: GIVEAWAY_GOAL })}
+                </span>
+              </span>
+              <span className="memo-giveaway-promo-cta">
+                {t("settings.giveaway.cta")}
+                <Msym name="chevron_right" size="1.3rem" fill={false} weight={500} />
+              </span>
+            </InstantLink>
 
             {/*
               * The phone puts each group under its own heading and drops the

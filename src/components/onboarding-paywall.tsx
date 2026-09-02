@@ -277,8 +277,9 @@ export function OnboardingPaywall({
   subscription,
   onboardingComplete,
   hasPaidAccess,
-  subscriptionTrialEligible = true,
+  subscriptionTrialEligible: trialEligibleProp = true,
   plans,
+  referral = null,
 }: {
   profile: ProfileRow | null;
   subscription: BillingSubscriptionRow | null;
@@ -286,7 +287,13 @@ export function OnboardingPaywall({
   hasPaidAccess: boolean;
   subscriptionTrialEligible?: boolean;
   plans: BillingPlanCard[];
+  /**
+   * A friend's giveaway code that checkout will apply. It replaces the trial:
+   * the discount is on the first payment, so the first payment is today.
+   */
+  referral?: { code: string; referrerName: string } | null;
 }) {
+  const subscriptionTrialEligible = trialEligibleProp && !referral;
   const { locale, t } = useTranslations();
   const router = useRouter();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
@@ -1213,9 +1220,27 @@ export function OnboardingPaywall({
         })}
       </div>
 
-      <p className="memo-paywall-due">
+      <p className={`memo-paywall-due ${referral ? "memo-paywall-referral" : ""}`.trim()}>
         <CircleCheck className="h-5 w-5" />
-        {t(subscriptionTrialEligible ? "paywall.nothingToday" : "paywall.securePayment")}
+        {referral
+          ? (() => {
+              // The coupon halves the first period of whichever plan is
+              // selected; the line says the actual amount, not a percentage.
+              const selected = paywallPlans.find((plan) => plan.id === selectedPaywallPlan);
+              const full = selected?.annualizedAmount ?? 0;
+              const values = {
+                code: referral.code,
+                name: referral.referrerName,
+                amount: formatCurrency(full / 2, locale),
+                full: formatCurrency(full, locale),
+              };
+
+              return t(
+                referral.referrerName ? "paywall.referralAppliedNamed" : "paywall.referralApplied",
+                values,
+              );
+            })()
+          : t(subscriptionTrialEligible ? "paywall.nothingToday" : "paywall.securePayment")}
       </p>
 
       <button

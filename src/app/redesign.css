@@ -6942,7 +6942,11 @@
 @keyframes memo-confetti-fall {
   0% { opacity: 0; transform: translate3d(0, -30px, 0) rotate(0deg); }
   12% { opacity: 1; }
-  100% { opacity: 0; transform: translate3d(var(--dx, 0px), 320px, 0) rotate(720deg); }
+  80% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--dx, 0px), var(--dy, 320px), 0) rotate(var(--spin, 720deg));
+  }
 }
 
 @keyframes memo-wheel-glow {
@@ -7021,12 +7025,14 @@
   pointer-events: none;
 }
 
+/* Every piece is its own size, shape, drift and spin — see `scatter` in
+   src/components/discount-offer.tsx, which fills these in. */
 .memo-confetti span {
   position: absolute;
   top: 0;
-  width: 0.45rem;
-  height: 0.75rem;
-  border-radius: 2px;
+  width: var(--w, 0.45rem);
+  height: var(--h, 0.75rem);
+  border-radius: var(--r, 2px);
 }
 
 .memo-wheel-title {
@@ -7064,6 +7070,8 @@
   top: -0.55rem;
   left: 50%;
   transform: translateX(-50%);
+  /* It swings from its mount, like a flapper, not about its own middle. */
+  transform-origin: 50% 0;
   z-index: 3;
   width: 0;
   height: 0;
@@ -7071,6 +7079,10 @@
   border-right: 0.72rem solid transparent;
   border-top: 1.25rem solid #f45f5a;
   filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.28));
+}
+
+.memo-wheel.spinning .memo-wheel-pointer {
+  animation: memo-wheel-tick var(--memo-wheel-spin-duration, 9650ms) linear forwards;
 }
 
 .memo-wheel-disc {
@@ -7089,7 +7101,131 @@
     #d9f2df 240deg 300deg,
     #e5dcff 300deg 360deg
   );
-  transition: transform 6.2s cubic-bezier(0.16, 0.86, 0.09, 1);
+}
+
+.memo-wheel.spinning .memo-wheel-disc {
+  animation: memo-wheel-spin var(--memo-wheel-spin-duration, 9650ms) linear forwards;
+}
+
+/*
+ * The spin, as a wheel rather than as an easing curve.
+ *
+ * Sampled from a simulation of a disc losing speed to friction, with speed
+ * falling as the remaining angle to the power of 0.7 — a long tail, the way a
+ * heavy wheel on a good bearing behaves. Two things resist it: a broad, gentle
+ * drag over the last slice, and the stick between 5 % and 50 %, which very
+ * nearly holds it.
+ *
+ * The comments carry the speed at each sample, and the shape is the whole
+ * point. It sheds about a quarter of its speed every step from 1300°/s down,
+ * with no moment where it is braked rather than slowed, and is under 90°/s
+ * before it even reaches 5 %. Then the stick catches it: between 77 % and 86 %
+ * of the spin — the better part of a second — the disc covers three degrees,
+ * bottoming out at 3°/s, which is about five pixels a second at the rim. It is
+ * not stopped and nothing pauses it; it is just losing. At 87 % it slips over
+ * the end of the stick, and the twelve degrees that buys it are enough to
+ * carry the pointer onto 50 % and no further.
+ *
+ * The pointer is at the top and the disc turns clockwise, so a rotation of R
+ * shows whatever began at (−R mod 360): 3300 puts the pointer on the 30 %|5 %
+ * stick, 3360 on the 5 %|50 % one, and 3372 leaves it a nudge inside 50 %.
+ * Every multiple of 60 is a stick passing under the pointer, which is what the
+ * tick animation below is timed against.
+ *
+ * Samples are evenly spaced in time, not in angle, so the browser's linear
+ * interpolation between them never has to guess at the shape. Easing between
+ * them would smooth out the very deceleration they exist to describe.
+ */
+@keyframes memo-wheel-spin {
+  0% { transform: rotate(0deg); }   /* 1296°/s */
+  4% { transform: rotate(475.6deg); }   /* 1165 */
+  8% { transform: rotate(902.2deg); }   /* 1042 */
+  12% { transform: rotate(1282.7deg); }   /* 927 */
+  16% { transform: rotate(1620.2deg); }   /* 819 */
+  20% { transform: rotate(1917.5deg); }   /* 719 */
+  25% { transform: rotate(2237.1deg); }   /* 605 */
+  30% { transform: rotate(2504deg); }   /* 501 */
+  35% { transform: rotate(2723.5deg); }   /* 409 */
+  40% { transform: rotate(2900.9deg); }   /* 327 */
+  45% { transform: rotate(3041.1deg); }   /* 255 */
+  50% { transform: rotate(3149.2deg); }   /* 193 */
+  54% { transform: rotate(3215.6deg); }   /* 151 */
+  58% { transform: rotate(3266.8deg); }   /* 114 */
+  62% { transform: rotate(3304.9deg); }   /* 83 */
+  65% { transform: rotate(3325.8deg); }   /* 60 */
+  68% { transform: rotate(3339.4deg); }   /* 35 */
+  71% { transform: rotate(3347.7deg); }   /* 23 */
+  74% { transform: rotate(3353.4deg); }   /* 16 */
+  77% { transform: rotate(3356.2deg); }   /* 6 */
+  80% { transform: rotate(3357.5deg); }   /* 4 */
+  83% { transform: rotate(3358.4deg); }   /* 3 */
+  86% { transform: rotate(3359.4deg); }   /* 4 */
+  88% { transform: rotate(3360.8deg); }   /* 12 */
+  90% { transform: rotate(3363.3deg); }   /* 14 */
+  92% { transform: rotate(3366deg); }   /* 13 */
+  94% { transform: rotate(3368.3deg); }   /* 10 */
+  96% { transform: rotate(3370deg); }   /* 7 */
+  98% { transform: rotate(3371.1deg); }   /* 4 */
+  100% { transform: rotate(3372deg); }   /* 0 */
+}
+
+/*
+ * The pointer, riding over the sticks.
+ *
+ * This is what makes the disc look like it is losing momentum rather than
+ * being animated: each stick shoves the flapper aside and it drops back behind
+ * it, and the gaps between those knocks stretch out as the wheel dies — 0.4 %
+ * of the timeline apart at the first one drawn here, 1.3 % by the stick at the
+ * edge of 5 %. Earlier sticks are passed too fast to see, so they are not
+ * drawn.
+ *
+ * The last one is not a knock. The disc arrives at that stick with almost
+ * nothing left, so the flapper is pushed slowly further and further over —
+ * seven degrees, eleven, fifteen — across a second in which the wheel barely
+ * moves, and only then does the stick pass under the tip and let it snap back.
+ * The disc is stuck on it, and you can see which one.
+ */
+@keyframes memo-wheel-tick {
+  0%, 40.9% { transform: translateX(-50%) rotate(0deg); }
+  41.28% { transform: translateX(-50%) rotate(8deg); }
+  41.7% { transform: translateX(-50%) rotate(-2deg); }
+  42.1% { transform: translateX(-50%) rotate(0deg); }
+  43% { transform: translateX(-50%) rotate(0deg); }
+  43.4% { transform: translateX(-50%) rotate(8deg); }
+  43.85% { transform: translateX(-50%) rotate(-2deg); }
+  44.3% { transform: translateX(-50%) rotate(0deg); }
+  45.3% { transform: translateX(-50%) rotate(0deg); }
+  45.78% { transform: translateX(-50%) rotate(8deg); }
+  46.3% { transform: translateX(-50%) rotate(-2deg); }
+  46.8% { transform: translateX(-50%) rotate(0deg); }
+  47.95% { transform: translateX(-50%) rotate(0deg); }
+  48.51% { transform: translateX(-50%) rotate(8.5deg); }
+  49.1% { transform: translateX(-50%) rotate(-2deg); }
+  49.7% { transform: translateX(-50%) rotate(0deg); }
+  51.05% { transform: translateX(-50%) rotate(0deg); }
+  51.73% { transform: translateX(-50%) rotate(9deg); }
+  52.45% { transform: translateX(-50%) rotate(-2.5deg); }
+  53.15% { transform: translateX(-50%) rotate(0deg); }
+  54.9% { transform: translateX(-50%) rotate(0deg); }
+  55.77% { transform: translateX(-50%) rotate(9deg); }
+  56.7% { transform: translateX(-50%) rotate(-2.5deg); }
+  57.6% { transform: translateX(-50%) rotate(0deg); }
+  60.1% { transform: translateX(-50%) rotate(0deg); }
+  61.41% { transform: translateX(-50%) rotate(9.5deg); }
+  62.8% { transform: translateX(-50%) rotate(-3deg); }
+  64.2% { transform: translateX(-50%) rotate(0deg); }
+  /* And then the one it cannot get past. The disc reaches this stick at
+     7 deg/s, so the flapper is pressed over slowly and holds there. */
+  74% { transform: translateX(-50%) rotate(0deg); }
+  78% { transform: translateX(-50%) rotate(7deg); }
+  81% { transform: translateX(-50%) rotate(11deg); }
+  84% { transform: translateX(-50%) rotate(13.5deg); }
+  87.13% { transform: translateX(-50%) rotate(15deg); }
+  /* Off the end of it. */
+  88.4% { transform: translateX(-50%) rotate(-5deg); }
+  90.5% { transform: translateX(-50%) rotate(3deg); }
+  92.5% { transform: translateX(-50%) rotate(-1.5deg); }
+  95%, 100% { transform: translateX(-50%) rotate(0deg); }
 }
 
 .memo-wheel-slice {
@@ -7101,16 +7237,26 @@
   color: #17171a;
 }
 
+/*
+ * The sticks on the slice boundaries, which the pointer rides over.
+ *
+ * Posts, not dots. They are what the flapper knocks against on the way down
+ * and what it hangs on at the end, and a round dot gives the eye nothing to
+ * catch on — the wheel just slows for no visible reason. Laid along the radius
+ * (the peg's transform rotates its own vertical axis outward), so the outer
+ * tip lands at 6.83rem from the centre, which is where the pointer's tip is.
+ */
 .memo-wheel-peg {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 0.42rem;
-  height: 0.42rem;
-  margin: -0.21rem 0 0 -0.21rem;
+  width: 0.26rem;
+  height: 0.95rem;
+  margin: -0.475rem 0 0 -0.13rem;
   border-radius: 999px;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  /* Across the width, not along the length: a lit cylinder. */
+  background: linear-gradient(90deg, #c4c8ce 0%, #ffffff 40%, #fdfdfd 62%, #b0b5bc 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.38);
 }
 
 .memo-wheel-hub {

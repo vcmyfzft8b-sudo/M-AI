@@ -46,6 +46,7 @@ import { noteEmoji } from "@/lib/note-emoji";
 import type { EditableNoteDoc, NoteAnnotation, NoteAnnotationKind } from "@/lib/note-doc";
 import { NOTE_TTS_HIGHLIGHT_COLORS } from "@/lib/note-tts-settings";
 import { parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
+import { tabScrollTarget } from "@/lib/tab-scroll";
 import {
   POLL_INTERVAL_MS,
   STORAGE_BUCKET,
@@ -1376,6 +1377,7 @@ export function LectureWorkspace({
   const optimisticNoteMediaUrlsRef = useRef(new Map<string, string>());
   const studyManagerSheetRef = useRef<HTMLDivElement | null>(null);
   const noteScrollRef = useRef<HTMLDivElement | null>(null);
+  const tabRowRef = useRef<HTMLDivElement | null>(null);
   const studyManagerItemSuppressClickRef = useRef(false);
   const studyManagerItemDragRef = useRef<StudyManagerItemDragState | null>(null);
   const deletingStudyItemIdsRef = useRef(new Set<string>());
@@ -5742,6 +5744,35 @@ export function LectureWorkspace({
             ? "quiz"
             : "test";
 
+  /*
+   * The pill row follows the tab it is on. The pills overflow their scroller
+   * on the phone, so the one you reach for is regularly the half-cut one at
+   * the edge — and a tap that only changed the tab left it exactly as cut as
+   * it was. Keyed on the tab rather than hung off the tap, so the phone navbar
+   * moving between the study screens brings the row along too, and so a note
+   * opened straight onto a study tab opens with that pill already in view.
+   */
+  useEffect(() => {
+    const row = tabRowRef.current;
+    const pill = row?.querySelector<HTMLElement>(".memo-tab.active");
+    if (!row || !pill) return;
+
+    const target = tabScrollTarget({
+      scrollLeft: row.scrollLeft,
+      viewportWidth: row.clientWidth,
+      contentWidth: row.scrollWidth,
+      /* Against the row, which is not the pill's offset parent. */
+      pillLeft: pill.getBoundingClientRect().left - row.getBoundingClientRect().left + row.scrollLeft,
+      pillWidth: pill.getBoundingClientRect().width,
+    });
+    if (target === null) return;
+
+    row.scrollTo({
+      left: target,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+  }, [activeTabId]);
+
   /* The phone navbar names the study screen it is on. Flashcards names nothing. */
   const subScreenTitleKey = SUB_SCREEN_TITLE_KEYS[activeTabId] ?? null;
   const subScreenTitle = subScreenTitleKey ? t(subScreenTitleKey) : "";
@@ -6082,7 +6113,7 @@ export function LectureWorkspace({
   }
 
   const tabPills = (
-    <div className="memo-tabs memo-chiprow">
+    <div className="memo-tabs memo-chiprow" ref={tabRowRef}>
       {getNoteTabs({ showsTranscript }).map((tab) => (
         <button
           key={tab.id}

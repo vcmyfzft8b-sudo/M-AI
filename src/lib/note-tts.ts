@@ -116,7 +116,16 @@ const TTS_OUTPUT_BITRATE = 64_000;
 const TTS_WAIT_TIMEOUT_MS = 120_000;
 // The WebSocket synthesis runs a little faster than real time and a chunk is about a minute, so
 // this only trips when the stream has stalled. Soniox itself stops at three minutes of audio.
-const TTS_STREAM_TIMEOUT_MS = 170_000;
+const TTS_STREAM_TIMEOUT_MS = 120_000;
+// Everything one chunk's synthesis may take — the stream attempt and, after it fails, the REST
+// fallback with its transcription — shares this budget, sized under the 300s the chunk route
+// allows with room for the upload, row and quota work that follow. A stream that used its whole
+// timeout leaves the fallback the remainder; too little remainder and the failure is reported
+// instead, because an invocation Vercel kills runs no catch block and the quota reservation
+// would stay held for ten minutes.
+const TTS_GENERATION_BUDGET_MS = 250_000;
+const TTS_FALLBACK_MIN_BUDGET_MS = 70_000;
+const TTS_FALLBACK_SYNTHESIS_RESERVE_MS = 40_000;
 const TTS_WAIT_INTERVAL_MS = 2_000;
 const TTS_CACHE_WAIT_TIMEOUT_MS = 24_000;
 const TTS_GENERATION_RESERVATION_STALE_MS = 10 * 60 * 1000;
@@ -936,6 +945,7 @@ async function transcribeGeneratedAudio(params: {
   audio: Uint8Array;
   language: string;
   clientReferenceId: string;
+  timeoutMs?: number;
 }) {
   const env = getServerEnv();
   const transcription = await getSonioxClient().stt.transcribe({
@@ -947,7 +957,7 @@ async function transcribeGeneratedAudio(params: {
     wait: true,
     wait_options: {
       interval_ms: TTS_WAIT_INTERVAL_MS,
-      timeout_ms: TTS_WAIT_TIMEOUT_MS,
+      timeout_ms: Math.min(TTS_WAIT_TIMEOUT_MS, params.timeoutMs ?? TTS_WAIT_TIMEOUT_MS),
     },
     client_reference_id: params.clientReferenceId,
     cleanup: ["file", "transcription"],
@@ -979,6 +989,8 @@ async function synthesizeAlignedTtsChunk(params: {
 }) {
   const env = getServerEnv();
   const client = getSonioxClient();
+  const startedAt = Date.now();
+  const remainingBudgetMs = () => TTS_GENERATION_BUDGET_MS - (Date.now() - startedAt);
 
   try {
     const synthesized = await synthesizeTtsChunkWithTimestamps({
@@ -989,7 +1001,7 @@ async function synthesizeAlignedTtsChunk(params: {
       language: params.language,
       audioFormat: TTS_OUTPUT_FORMAT,
       bitrate: TTS_OUTPUT_BITRATE,
-      timeoutMs: TTS_STREAM_TIMEOUT_MS,
+      timeoutMs: Math.min(TTS_STREAM_TIMEOUT_MS, TTS_GENERATION_BUDGET_MS),
     });
 
     if (synthesized.pieces.length > 0) {
@@ -1009,7 +1021,11 @@ async function synthesizeAlignedTtsChunk(params: {
       clientReferenceId: params.clientReferenceId,
     });
   } catch (error) {
-    if (isTtsProviderRateLimitError(error) || error instanceof TtsAudioTruncatedError) {
+    if (
+      isTtsProviderRateLimitError(error) ||
+      error instanceof TtsAudioTruncatedError ||
+      remainingBudgetMs() < TTS_FALLBACK_MIN_BUDGET_MS
+    ) {
       throw error;
     }
 
@@ -1031,6 +1047,7 @@ async function synthesizeAlignedTtsChunk(params: {
     audio,
     language: params.language,
     clientReferenceId: params.clientReferenceId,
+    timeoutMs: Math.max(30_000, remainingBudgetMs() - TTS_FALLBACK_SYNTHESIS_RESERVE_MS),
   });
   // The SDK types a token's times as optional; a token without them cannot place a word, so it
   // is dropped rather than pinned to zero.
@@ -1400,36 +1417,5 @@ export async function hasInitialNoteTtsChunk(params: {
   languageHint: string | null;
   voice?: NoteTtsVoice;
 }) {
-  const content = stripLeadingRedundantHeading(params.content, params.title).trim();
-
-  if (!content) {
-    return false;
-  }
-
-  const document = parseNoteTtsDocument(content);
-  const firstChunk = buildNoteTtsChunks(document)[0];
-
-  if (!firstChunk) {
-    return false;
-  }
-
-  const env = getServerEnv();
-  const language = normalizeNoteLanguage(params.languageHint);
-  const voice = params.voice ?? DEFAULT_NOTE_TTS_VOICE;
-  const { data, error } = await createSupabaseServiceRoleClient()
-    .from("lecture_tts_chunks")
-    .select("id")
-    .eq("lecture_id", params.lectureId)
-    .eq("content_hash", hashNoteTtsContent(content))
-    .eq("chunk_index", firstChunk.chunkIndex)
-    .eq("language", language)
-    .eq("voice", voice)
-    .eq("model", env.SONIOX_TTS_MODEL)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return Boolean(data);
+  return (await getReadyLeadingTtsChunkCount({ ...params, limit: 1 })) > 0;
 }

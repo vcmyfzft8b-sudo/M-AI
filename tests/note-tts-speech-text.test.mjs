@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildNoteTtsChunks, parseNoteTtsDocument, speakableMath } from "../src/lib/note-tts-text.ts";
+import {
+  buildNoteTtsChunks,
+  parseNoteTtsDocument,
+  speakableMath,
+  stripLeadingRedundantHeading,
+} from "../src/lib/note-tts-text.ts";
 
 // The formula that took a chunk past Soniox's per-request audio cap: the model read the LaTeX
 // commands letter by letter. The spoken form must carry no backslashes or braces.
@@ -13,6 +18,11 @@ test("reads a rational-function definition as symbols and words", () => {
 
 test("resolves nested fractions and roots", () => {
   assert.equal(speakableMath("\\frac{1}{\\frac{a}{b}}"), "1 / a / b");
+  // A root inside a fraction and a fraction inside a root: neither may leave "frac" or "sqrt"
+  // behind to be read as a word.
+  assert.equal(speakableMath("\\frac{\\sqrt{x}}{2}"), "√(x) / 2");
+  assert.equal(speakableMath("\\sqrt{\\frac{a}{b}}"), "√( a / b )");
+  assert.equal(speakableMath("\\dfrac{\\partial^{2} u}{\\partial x^{2}}"), "∂^2 u / ∂ x^2");
   assert.equal(speakableMath("\\sqrt{x^{2} + y_{1}}"), "√(x^2 + y_1)");
   assert.equal(speakableMath("\\sqrt[3]{8}"), "3√(8)");
 });
@@ -29,7 +39,7 @@ test("leaves plain expressions alone", () => {
 });
 
 test("chunks ramp from a few seconds to a minute and never near the provider's audio cap", () => {
-  const words = Array.from({ length: 1000 }, (_, i) => `beseda${i}`).join(" ");
+  const words = Array.from({ length: 1000 }, (_, i) => `b${i}`).join(" ");
   const chunks = buildNoteTtsChunks(parseNoteTtsDocument(words));
   const sizes = chunks.map((chunk) => chunk.wordEndIndex - chunk.wordStartIndex);
 
@@ -71,6 +81,33 @@ test("boundaries land on sentence ends when one is within reach, and never on no
   assert.deepEqual(sizes.slice(0, 4), [28, 42, 49, 63]);
   // The speech text then does not need an invented full stop at the cut.
   assert.ok(chunks[0].text.endsWith("."), chunks[0].text.slice(-20));
+});
+
+// Formulas carry no words and are read at about a third of the speed of prose; the word ramp
+// alone let a 48-word chunk reach 1,200 characters of speech, past the provider's three-minute
+// cap. The speech-text cap pulls such chunks back until they fit.
+test("a formula-heavy chunk is capped by its speech text, not only by its words", () => {
+  const heavy = Array.from(
+    { length: 40 },
+    (_, i) =>
+      `Formula ${i}: $\\frac{\\partial^2 u}{\\partial x^2} + \\frac{\\partial^2 u}{\\partial y^2} = \\lambda_{${i}} \\cdot \\sum_{k=1}^{n} a_k x^k$ velja.`,
+  ).join(" ");
+  const chunks = buildNoteTtsChunks(parseNoteTtsDocument(heavy));
+
+  for (const chunk of chunks) {
+    assert.ok(chunk.text.length <= 700, `chunk ${chunk.chunkIndex} has ${chunk.text.length} chars`);
+    assert.ok(chunk.wordEndIndex - chunk.wordStartIndex >= 12);
+    // The estimate follows the speech, so the quota reservation is not a fraction of the truth.
+    assert.ok(chunk.estimatedSeconds >= Math.ceil(chunk.text.length / 12));
+  }
+  assert.equal(chunks.at(-1).wordEndIndex, parseNoteTtsDocument(heavy).words.length);
+});
+
+// Every route hashes this result into the chunk cache key, so a trailing newline must not make
+// the same note hash two ways depending on whether the heading was stripped.
+test("the heading strip always returns trimmed text", () => {
+  assert.equal(stripLeadingRedundantHeading("## Uvod\n\nBesedilo.\n", "Fotosinteza"), "## Uvod\n\nBesedilo.");
+  assert.equal(stripLeadingRedundantHeading("# Fotosinteza\n\nBesedilo.\n", "Fotosinteza"), "Besedilo.");
 });
 
 test("a boundary is not moved back further than the snap window allows", () => {

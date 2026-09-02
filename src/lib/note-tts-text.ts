@@ -93,6 +93,13 @@ const ESTIMATED_TTS_WORDS_PER_SECOND = 1.7;
 // guarantee, this only makes the cut natural.
 const CHUNK_SNAP_WINDOW = 0.4;
 const MIN_CHUNK_WORDS = 12;
+// The word count bounds prose, but formulas carry no words and are read at ~4 characters a
+// second against ~12 for prose — a chunk of forty-eight words with a formula in every sentence
+// came to 1,200 characters, well past the three minutes Soniox stops at. So a chunk is also capped
+// by the length of its speech text: 700 characters is under three minutes even if all of it were
+// formula, and ordinary prose of 90 words stays under it.
+const MAX_CHUNK_SPEECH_CHARS = 700;
+const ESTIMATED_TTS_CHARS_PER_SECOND = 12;
 
 // Folded into the cache key of every chunk. A chunk's audio is only valid for the exact word
 // range the planner gave it, so any change to how chunks are cut has to retire the cached audio;
@@ -105,6 +112,7 @@ export const NOTE_TTS_CHUNK_PLAN_VERSION = [
   LATER_CHUNK_GROWTH,
   CHUNK_SNAP_WINDOW,
   MIN_CHUNK_WORDS,
+  MAX_CHUNK_SPEECH_CHARS,
 ].join("-");
 
 export function getTargetWordsForChunk(previousChunkSizes: number[], targetWordsPerChunk: number) {
@@ -179,18 +187,21 @@ function normalizeHeadingText(value: string) {
     .trim();
 }
 
+// Always returns trimmed text: every caller hashes the result into the chunk cache key, and the
+// strip path trimmed while the pass-through path did not, so the same note hashed two ways
+// depending on which route asked and cached audio went unfound.
 export function stripLeadingRedundantHeading(markdown: string, title?: string | null) {
   const lines = markdown.split("\n");
   const firstContentIndex = lines.findIndex((line) => line.trim().length > 0);
 
   if (firstContentIndex === -1) {
-    return markdown;
+    return markdown.trim();
   }
 
   const match = lines[firstContentIndex].match(/^#{1,6}\s+(.+)$/);
 
   if (!match) {
-    return markdown;
+    return markdown.trim();
   }
 
   const heading = normalizeHeadingText(match[1] ?? "");
@@ -198,7 +209,7 @@ export function stripLeadingRedundantHeading(markdown: string, title?: string | 
   const genericHeadings = new Set(["notes", "lecture notes", "structured notes"]);
 
   if (!genericHeadings.has(heading) && heading !== normalizedTitle) {
-    return markdown;
+    return markdown.trim();
   }
 
   const remainingLines = lines.slice(firstContentIndex + 1);
@@ -764,17 +775,40 @@ export function buildNoteTtsChunks(
       }
     }
 
+    let text = buildChunkSpeechText(document.blocks, wordStartIndex, wordEndIndex);
+
+    // Too much speech for the words it holds (formulas): pull the end back, to a sentence end
+    // when one exists, else a few words at a time, until it fits or the chunk is at its minimum.
+    while (
+      text.length > MAX_CHUNK_SPEECH_CHARS &&
+      wordEndIndex - wordStartIndex > MIN_CHUNK_WORDS
+    ) {
+      const floor = wordStartIndex + MIN_CHUNK_WORDS;
+      let shorter = Math.max(floor, wordEndIndex - 5);
+
+      for (let candidate = wordEndIndex - 1; candidate > floor; candidate -= 1) {
+        if (sentenceEnds.has(document.words[candidate - 1].index)) {
+          shorter = candidate;
+          break;
+        }
+      }
+
+      wordEndIndex = shorter;
+      text = buildChunkSpeechText(document.blocks, wordStartIndex, wordEndIndex);
+    }
+
     const chunkWords = document.words.slice(wordStartIndex, wordEndIndex);
     const estimatedSeconds = Math.max(
       1,
       Math.ceil(chunkWords.length / ESTIMATED_TTS_WORDS_PER_SECOND),
+      Math.ceil(text.length / ESTIMATED_TTS_CHARS_PER_SECOND),
     );
 
     chunks.push({
       chunkIndex,
       wordStartIndex,
       wordEndIndex,
-      text: buildChunkSpeechText(document.blocks, wordStartIndex, wordEndIndex),
+      text,
       estimatedSeconds,
     });
     chunkSizes.push(wordEndIndex - wordStartIndex);
@@ -846,14 +880,21 @@ const SPEAKABLE_MATH_SYMBOLS: Record<string, string> = {
   Omega: "Ω",
 };
 
-// Rewrites a \\frac{a}{b}-style command with two brace groups, innermost first so nested fractions
-// resolve. Returns the input unchanged once nothing matches.
-function rewriteBraceCommand(value: string, command: string, render: (a: string, b: string) => string) {
-  const pattern = new RegExp(`\\\\${command}\\s*\\{([^{}]*)\\}\\s*\\{([^{}]*)\\}`, "g");
+const FRACTION_PATTERN = /\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g;
+const ROOT_WITH_INDEX_PATTERN = /\\sqrt\s*\[([^\]]*)\]\s*\{([^{}]*)\}/g;
+const ROOT_PATTERN = /\\sqrt\s*\{([^{}]*)\}/g;
+
+// Innermost first: a pass rewrites the fractions and roots whose arguments hold no braces, which
+// unwraps one level of nesting, and repeats until nothing changes — so a root inside a fraction
+// and a fraction inside a root both resolve rather than leaving "frac" to be read as a word.
+function rewriteFractionsAndRoots(value: string) {
   let current = value;
 
   for (let pass = 0; pass < 8; pass += 1) {
-    const next = current.replace(pattern, (_match, a: string, b: string) => render(a, b));
+    const next = current
+      .replace(FRACTION_PATTERN, (_match, a: string, b: string) => ` ${a} / ${b} `)
+      .replace(ROOT_WITH_INDEX_PATTERN, (_match, index: string, a: string) => ` ${index}√(${a}) `)
+      .replace(ROOT_PATTERN, (_match, a: string) => ` √(${a}) `);
 
     if (next === current) {
       break;
@@ -876,13 +917,7 @@ export function speakableMath(latex: string) {
   // Scripts first: "x^{2}" inside a root or a fraction would otherwise hide the group's braces
   // from the command rewrites below.
   value = value.replace(/\^\{([^{}]*)\}/g, "^$1").replace(/_\{([^{}]*)\}/g, "_$1");
-  value = rewriteBraceCommand(value, "frac", (a, b) => ` ${a} / ${b} `);
-  value = rewriteBraceCommand(value, "dfrac", (a, b) => ` ${a} / ${b} `);
-  value = rewriteBraceCommand(value, "tfrac", (a, b) => ` ${a} / ${b} `);
-
-  value = value
-    .replace(/\\sqrt\s*\[([^\]]*)\]\s*\{([^{}]*)\}/g, " $1√($2) ")
-    .replace(/\\sqrt\s*\{([^{}]*)\}/g, " √($1) ")
+  value = rewriteFractionsAndRoots(value)
     .replace(/\\([A-Za-z]+)/g, (_match, command: string) => {
       const symbol = SPEAKABLE_MATH_SYMBOLS[command];
 

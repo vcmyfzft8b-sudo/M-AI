@@ -108,7 +108,9 @@ type TtsStatusResponse = {
   hasUnlimitedUsage?: boolean;
   chunkCount: number;
   totalWords: number;
-  // Chunks from the start already synthesized for the requested voice; the page warms these.
+  // The voice the status was taken for, and how many opening chunks already exist for it. The
+  // page warms those, and only while the reader's voice still matches.
+  voice?: string;
   readyLeadingChunkCount?: number;
   error?: string;
 };
@@ -1423,7 +1425,6 @@ function ReadAlongMarkdown({
 export function NoteReadAloud({
   lectureId,
   content,
-  autoPrepareFirstChunk = false,
   annotationToolbar,
   toolbarAccessory,
   annotationActive = false,
@@ -1443,7 +1444,6 @@ export function NoteReadAloud({
 }: {
   lectureId: string;
   content: string;
-  autoPrepareFirstChunk?: boolean;
   annotationToolbar?: ReactNode;
   toolbarAccessory?: ReactNode;
   annotationActive?: boolean;
@@ -1508,7 +1508,13 @@ export function NoteReadAloud({
    */
   const prefetchWaitingRef = useRef<number[]>([]);
   const prefetchActiveRef = useRef(0);
-  const enqueuePrefetchRef = useRef<(chunkIndex: number) => void>(() => {});
+  // The pump reads these through refs so a lane that finishes after a voice change (the reset
+  // emptied the queue and freed the lanes; that request just runs out) drains the new queue with
+  // the new voice rather than the one its closure was made with.
+  const fetchChunkRef = useRef<
+    (chunkIndex: number, options?: { silent?: boolean }) => Promise<TtsChunkResponse | null>
+  >(async () => null);
+  const selectedVoiceRef = useRef<NoteTtsVoice>(DEFAULT_NOTE_TTS_VOICE);
   // The voice the chunk route last refused on a spent daily allowance, so the look-ahead buffer
   // stops asking for chunks it already knows will be refused. Cleared as soon as a request comes
   // back with allowance left.
@@ -1987,12 +1993,15 @@ export function NoteReadAloud({
   useEffect(() => {
     const audio = audioRef.current;
     const prefetchedAudioUrls = prefetchedAudioUrlsRef.current;
+    const pendingAudioPrefetches = pendingAudioPrefetchesRef.current;
 
     return () => {
       for (const objectUrl of prefetchedAudioUrls.values()) {
         URL.revokeObjectURL(objectUrl);
       }
       prefetchedAudioUrls.clear();
+      // A download still in flight sees its entry gone and revokes what it made.
+      pendingAudioPrefetches.clear();
 
       if (!audio) {
         return;
@@ -2146,6 +2155,8 @@ export function NoteReadAloud({
       prefetchedChunksRef.current.clear();
       pendingChunkRequestsRef.current.clear();
       prefetchWaitingRef.current = [];
+      // Lanes still running belong to the old voice; they release themselves when they finish.
+      prefetchActiveRef.current = 0;
       for (const objectUrl of prefetchedAudioUrlsRef.current.values()) {
         URL.revokeObjectURL(objectUrl);
       }
@@ -2241,19 +2252,12 @@ export function NoteReadAloud({
     return download;
   }, []);
 
-  /** The in-memory copy when it is ready or on its way, else the signed URL. */
+  // The in-memory copy when it is already there, else the signed URL, which the element streams
+  // from its first frames: waiting for a download still in flight would put the whole file's
+  // transfer in front of the first word on the one path that has already waited for synthesis.
   const resolveChunkAudioSource = useCallback(
-    async (cacheKey: string, payload: TtsChunkResponse) => {
-      const ready = prefetchedAudioUrlsRef.current.get(cacheKey);
-
-      if (ready) {
-        return ready;
-      }
-
-      const pending = pendingAudioPrefetchesRef.current.get(cacheKey);
-
-      return (pending ? await pending : null) ?? payload.audioUrl;
-    },
+    (cacheKey: string, payload: TtsChunkResponse) =>
+      prefetchedAudioUrlsRef.current.get(cacheKey) ?? payload.audioUrl,
     [],
   );
 
@@ -2430,6 +2434,54 @@ export function NoteReadAloud({
     ],
   );
 
+  useEffect(() => {
+    fetchChunkRef.current = fetchChunk;
+    selectedVoiceRef.current = selectedVoice;
+  }, [fetchChunk, selectedVoice]);
+
+  const pumpPrefetchRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    pumpPrefetchRef.current = () => {
+      while (
+        prefetchActiveRef.current < PREFETCH_LANES &&
+        prefetchWaitingRef.current.length > 0
+      ) {
+        const chunkIndex = prefetchWaitingRef.current.shift() as number;
+        const cacheKey = getChunkCacheKey(selectedVoiceRef.current, chunkIndex);
+
+        if (
+          prefetchedChunksRef.current.has(cacheKey) ||
+          pendingChunkRequestsRef.current.has(cacheKey)
+        ) {
+          continue;
+        }
+
+        prefetchActiveRef.current += 1;
+        void fetchChunkRef.current(chunkIndex, { silent: true }).finally(() => {
+          // A reset while this ran already freed the lanes; do not go below zero.
+          prefetchActiveRef.current = Math.max(0, prefetchActiveRef.current - 1);
+          pumpPrefetchRef.current();
+        });
+      }
+    };
+  }, []);
+
+  const prefetchChunk = useCallback((chunkIndex: number) => {
+    const cacheKey = getChunkCacheKey(selectedVoiceRef.current, chunkIndex);
+
+    if (
+      prefetchedChunksRef.current.has(cacheKey) ||
+      pendingChunkRequestsRef.current.has(cacheKey) ||
+      prefetchWaitingRef.current.includes(chunkIndex)
+    ) {
+      return;
+    }
+
+    prefetchWaitingRef.current.push(chunkIndex);
+    pumpPrefetchRef.current();
+  }, []);
+
   const loadChunk = useCallback(
     async (chunkIndex: number) => {
       const cacheKey = getChunkCacheKey(selectedVoice, chunkIndex);
@@ -2490,7 +2542,7 @@ export function NoteReadAloud({
 
       try {
         if (nextChunkIndex < chunks.length) {
-          enqueuePrefetchRef.current(nextChunkIndex);
+          prefetchChunk(nextChunkIndex);
         }
 
         payload = await fetchChunk(chunkIndex);
@@ -2517,54 +2569,12 @@ export function NoteReadAloud({
       cancelTtsGenerationProgress,
       chunks.length,
       fetchChunk,
+      prefetchChunk,
       selectedVoice,
       startTtsGenerationProgress,
     ],
   );
 
-  useEffect(() => {
-    const pump = () => {
-      while (
-        prefetchActiveRef.current < PREFETCH_LANES &&
-        prefetchWaitingRef.current.length > 0
-      ) {
-        const chunkIndex = prefetchWaitingRef.current.shift() as number;
-        const cacheKey = getChunkCacheKey(selectedVoice, chunkIndex);
-
-        if (
-          prefetchedChunksRef.current.has(cacheKey) ||
-          pendingChunkRequestsRef.current.has(cacheKey)
-        ) {
-          continue;
-        }
-
-        prefetchActiveRef.current += 1;
-        void fetchChunk(chunkIndex, { silent: true }).finally(() => {
-          prefetchActiveRef.current -= 1;
-          pump();
-        });
-      }
-    };
-
-    enqueuePrefetchRef.current = (chunkIndex: number) => {
-      const cacheKey = getChunkCacheKey(selectedVoice, chunkIndex);
-
-      if (
-        prefetchedChunksRef.current.has(cacheKey) ||
-        pendingChunkRequestsRef.current.has(cacheKey) ||
-        prefetchWaitingRef.current.includes(chunkIndex)
-      ) {
-        return;
-      }
-
-      prefetchWaitingRef.current.push(chunkIndex);
-      pump();
-    };
-  }, [fetchChunk, selectedVoice]);
-
-  const prefetchChunk = useCallback((chunkIndex: number) => {
-    enqueuePrefetchRef.current(chunkIndex);
-  }, []);
 
   const prefetchUpcomingChunks = useCallback(
     (chunkIndex: number) => {
@@ -2572,13 +2582,15 @@ export function NoteReadAloud({
         return;
       }
 
+      // Audio seconds, so at double speed the same horizon covers half the wall time; scale it.
+      const horizonSeconds = PREFETCH_HORIZON_SECONDS * Math.max(1, playbackRate);
       let aheadSeconds = 0;
 
       for (let offset = 1; ; offset += 1) {
         const nextChunkIndex = chunkIndex + offset;
 
         // Always the next two, and beyond that as far as the horizon reaches.
-        if (nextChunkIndex >= chunks.length || (offset > 2 && aheadSeconds >= PREFETCH_HORIZON_SECONDS)) {
+        if (nextChunkIndex >= chunks.length || (offset > 2 && aheadSeconds >= horizonSeconds)) {
           break;
         }
 
@@ -2591,8 +2603,10 @@ export function NoteReadAloud({
         // is served from cache and costs no allowance — those keep prefetching normally, and only
         // the first one that genuinely needs generating pays a wasted request.
         if (
-          creationLimitReachedVoiceRef.current === selectedVoice &&
-          !prefetchedChunksRef.current.has(getChunkCacheKey(selectedVoice, nextChunkIndex))
+          creationLimitReachedVoiceRef.current === selectedVoiceRef.current &&
+          !prefetchedChunksRef.current.has(
+            getChunkCacheKey(selectedVoiceRef.current, nextChunkIndex),
+          )
         ) {
           break;
         }
@@ -2603,16 +2617,18 @@ export function NoteReadAloud({
     // Only primitives off `status`, never the object: the effect that calls this is rebuilt on
     // every dependency change, so depending on the object's identity is what let a rejected
     // prefetch re-trigger itself.
-    [chunks, prefetchChunk, selectedVoice, status?.available],
+    // The voice is read through its ref on purpose: with it in the deps, a voice change re-ran
+    // the effect below in the same commit as the reset it triggers, with the old active chunk
+    // still in state, and queued two chunks of the new voice before the reader pressed play.
+    [chunks, playbackRate, prefetchChunk, status?.available],
   );
 
-  // Warms the opening chunks so the first click plays at once: both of them on a note whose audio
-  // was requested at creation, and otherwise only as many as the status says already exist for
-  // this voice — a warm-up must never generate audio, and so never spend the daily allowance, on
-  // a note nobody has asked to hear.
-  const warmupChunkCount = autoPrepareFirstChunk
-    ? 2
-    : Math.min(2, status?.readyLeadingChunkCount ?? 0);
+  // Warms the opening chunks so the first click plays at once — only as many as the status says
+  // already exist, and only while the status is for the voice the reader has now: a warm-up must
+  // never generate audio, and so never spend the daily allowance, on a note nobody has asked to
+  // hear. A voice change keeps the old status until the refetch lands, so the voice is checked.
+  const warmupChunkCount =
+    status?.voice === selectedVoice ? Math.min(2, status.readyLeadingChunkCount ?? 0) : 0;
 
   useEffect(() => {
     if (
@@ -2760,14 +2776,10 @@ export function NoteReadAloud({
         return;
       }
 
-      const source = await resolveChunkAudioSource(
+      const source = resolveChunkAudioSource(
         getChunkCacheKey(selectedVoice, payload.chunkIndex),
         payload,
       );
-
-      if (playbackRequestIdRef.current !== requestId) {
-        return;
-      }
 
       releaseChunkAudioBefore(payload.chunkIndex);
 

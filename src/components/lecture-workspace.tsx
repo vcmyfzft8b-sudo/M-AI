@@ -37,7 +37,6 @@ import {
   getLectureSourceLabel,
   isRecord,
   lectureShowsTranscript,
-  shouldCreateInitialNoteAudio,
 } from "@/lib/lecture-source-metadata";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
@@ -4258,9 +4257,6 @@ export function LectureWorkspace({
                 <NoteReadAloud
                   lectureId={detail.lecture.id}
                   content={cleanedStructuredNotes}
-                  autoPrepareFirstChunk={shouldCreateInitialNoteAudio(
-                    detail.lecture.processing_metadata,
-                  )}
                   annotationToolbar={dockToolbar}
                   toolbarAccessory={noteStatus}
                   annotationActive={Boolean(noteSelection)}

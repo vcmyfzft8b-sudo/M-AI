@@ -16,6 +16,7 @@ import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
+import { DEFAULT_NOTE_TTS_VOICE } from "@/lib/note-tts-settings";
 import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 
 export const dynamic = "force-dynamic";
@@ -101,6 +102,7 @@ export async function GET(
   const requestedVoice = noteTtsVoiceSchema.safeParse(
     new URL(request.url).searchParams.get("voice") ?? undefined,
   );
+  const voice = requestedVoice.success ? requestedVoice.data : DEFAULT_NOTE_TTS_VOICE;
   const readyLeadingChunkCount =
     available && detail.artifact?.structured_notes_md
       ? await getReadyLeadingTtsChunkCount({
@@ -108,7 +110,7 @@ export async function GET(
           content: detail.artifact.structured_notes_md,
           title: detail.lecture.title,
           languageHint: detail.lecture.language_hint,
-          voice: requestedVoice.success ? requestedVoice.data : undefined,
+          voice,
         })
       : 0;
 
@@ -128,6 +130,8 @@ export async function GET(
     hasUnlimitedUsage,
     chunkCount,
     totalWords: document?.words.length ?? 0,
+    // The voice the count was taken for: the page only warms when it still matches the reader's.
+    voice,
     readyLeadingChunkCount,
   });
 }

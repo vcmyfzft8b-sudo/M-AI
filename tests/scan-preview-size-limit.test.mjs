@@ -25,8 +25,14 @@ const read = (relative) =>
  * failure, on a photo that was going to work.
  */
 
-/** Vercel rejects a serverless function request body above this. Not ours to raise. */
-const VERCEL_FUNCTION_BODY_LIMIT_BYTES = 4.5 * 1024 * 1024;
+/**
+ * Vercel rejects a serverless function request body above this. Not ours to raise.
+ *
+ * It is 4.5 MB in decimal, not 4.5 MiB: measured on the preview for #313, a
+ * 4,480,000-byte body reaches the route and gets its 422, a 4,510,000-byte body
+ * gets the platform's 413 before the route runs.
+ */
+const VERCEL_FUNCTION_BODY_LIMIT_BYTES = 4_500_000;
 
 const MB = 1024 * 1024;
 

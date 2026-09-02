@@ -54,10 +54,10 @@ export type DiscountWheelState = {
   /** When the current prize lapses, for the countdown. Null when there is none. */
   prizeExpiresAt: string | null;
   /*
-   * Whether today's spin has been used, as a plain fact — unlike `canSpin`,
-   * which development deliberately relaxes so the flow can be replayed. The
-   * home screen decides which card to show from this, so the card is the one
-   * production would show even while the wheel is being re-spun locally.
+   * Whether today's spin has been used. The home screen decides which card to
+   * show from this — the gift or the plain upgrade — so it is relaxed in
+   * development alongside `canSpin`: a wheel that can be re-spun but whose
+   * card never comes back is a wheel nobody can look at twice.
    */
   spunToday: boolean;
 };
@@ -200,8 +200,17 @@ export async function getDiscountWheelState(userId: string): Promise<DiscountWhe
   const unused = Boolean(coupon) && !spentAt;
   const live = Number.isFinite(expiresMs) && expiresMs > now.getTime();
 
-  // The honest daily fact, before development's relaxation is applied to it.
-  const usedTodaysSpin = Boolean(spunAt) && isSameUtcDay(new Date(spunAt as string), now);
+  /*
+   * Relaxed in development, exactly as `canSpin` is.
+   *
+   * This is what the home screen's card is chosen from, so leaving it honest
+   * locally meant the gift card vanished after one spin and only the server
+   * restart that cleared the dev store brought it back — one look at the wheel
+   * per `npm run dev`. Both halves of the daily limit are lifted together, and
+   * `spinLimitEnforced()` is still the only place that decides it.
+   */
+  const usedTodaysSpin =
+    spinLimitEnforced() && Boolean(spunAt) && isSameUtcDay(new Date(spunAt as string), now);
 
   return {
     canSpin: !spentToday(spunAt, now),

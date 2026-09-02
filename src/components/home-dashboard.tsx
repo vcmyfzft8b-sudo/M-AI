@@ -1489,9 +1489,10 @@ export function HomeDashboard({
       .then((response) => (response.ok ? response.json() : null))
       .then((state: { canSpin?: boolean; spunToday?: boolean } | null) => {
         if (!cancelled) {
-          // `spunToday` rather than `canSpin`: the latter is relaxed in
-          // development so the wheel can be replayed, and the card should be
-          // the one production would show either way.
+          // `spunToday` as well as `canSpin`, because either one being false
+          // means there is nothing to offer. Both are relaxed in development
+          // so the wheel can be spun more than once an afternoon; production
+          // decides them the same way it always has.
           setCanSpinWheel(Boolean(state?.canSpin) && !state?.spunToday);
         }
       })

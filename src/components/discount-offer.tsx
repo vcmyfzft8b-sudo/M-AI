@@ -31,13 +31,39 @@ import { formatCurrency } from "@/lib/utils";
  * checkout call with no discount plumbing in the client.
  */
 
-/** Matches the design: 6 slices, and the pointer lands on the 50 % one. */
-const WHEEL_SLICES = ["10 %", "5 %", "20 %", "50 %", "15 %", "30 %"];
-const SPIN_DEGREES = 3390;
+/**
+ * Matches the design: 6 slices, and the pointer lands on the 50 % one.
+ *
+ * The order is not the design's. The disc turns clockwise, so the pointer
+ * travels *backwards* through this list, which makes the slice at index 4 the
+ * last one it crosses before 50 %. That is the slice the wheel pretends to
+ * stop on, so it is the worst prize on the board rather than a middling one.
+ */
+const WHEEL_SLICES = ["10 %", "15 %", "20 %", "50 %", "5 %", "30 %"];
 /** How long the offer stands, matching WHEEL_PRIZE_TTL_MS on the server. */
 const OFFER_SECONDS = 10 * 60;
 
-const SPIN_MS = 6250;
+/*
+ * The spin is a near miss, and it is driven by `memo-wheel-spin` in
+ * redesign.css rather than by a transition — the shape of the motion is the
+ * whole point, and a single easing curve cannot make a wheel hesitate in the
+ * middle and then carry on.
+ *
+ * The keyframes there are a sampled simulation of a disc losing speed to
+ * friction, and nothing about them is a brake: it sheds about a quarter of its
+ * speed every step of the way down, from three and a half turns a second to a
+ * standstill. It is already crawling by the time it reaches 5 %, takes 2.5
+ * seconds to cross that one slice, and then hangs on the stick at the far edge
+ * of it — three degrees in the better part of a second — before slipping over
+ * and rolling to a stop just inside 50 %.
+ *
+ * The angles are in the stylesheet because that is the only place that can
+ * interpolate them. What matters here is only how long it all takes.
+ */
+const SPIN_MS = 9650;
+
+/** The prize is announced as the disc settles, not a beat after it. */
+const REVEAL_MS = SPIN_MS + 120;
 
 /**
  * Where the countdown starts before the server has answered.
@@ -59,7 +85,33 @@ function remainingSeconds(restored: boolean) {
     : Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
 }
 
-const CONFETTI_COLORS = ["#ff6d68", "#ffb347", "#34c759", "#0066cc", "#b18bff", "#ff9a94"];
+const CONFETTI_COLORS = [
+  "#ff6d68",
+  "#ffb347",
+  "#34c759",
+  "#0066cc",
+  "#b18bff",
+  "#ff9a94",
+  "#ffd93d",
+  "#4fc3f7",
+];
+
+/** How many pieces fall when the prize lands. */
+const CONFETTI_COUNT = 56;
+
+/**
+ * A deterministic stand-in for randomness, so no two pieces match.
+ *
+ * Not `Math.random`: this list is rebuilt on every render of the sheet — the
+ * countdown alone re-renders it once a second — and random values would
+ * re-scatter the confetti in mid-air on each tick. Keyed off the index, every
+ * render lays out exactly the same fall.
+ */
+function scatter(index: number, salt: number) {
+  const n = Math.sin((index + 1) * 12.9898 + salt * 78.233) * 43758.5453;
+
+  return n - Math.floor(n);
+}
 
 type OfferPlan = {
   id: "yearly" | "monthly";
@@ -186,6 +238,9 @@ export function DiscountOffer({
       return;
     }
 
+    // The disc starts turning on the tap, not on the answer below.
+    const startedAt = Date.now();
+
     setIsSpinning(true);
     setError(null);
 
@@ -205,10 +260,19 @@ export function DiscountOffer({
       setError(t("offer.error.prizeSaveDetail"));
     }
 
-    spinTimerRef.current = window.setTimeout(() => {
-      spinTimerRef.current = null;
-      setHasWon(true);
-    }, SPIN_MS);
+    /*
+     * Counted from the tap, not from this line. The request above took however
+     * long it took and the disc has been turning for all of it, so timing the
+     * reveal from here would announce the prize after the wheel had already
+     * come to rest.
+     */
+    spinTimerRef.current = window.setTimeout(
+      () => {
+        spinTimerRef.current = null;
+        setHasWon(true);
+      },
+      Math.max(0, REVEAL_MS - (Date.now() - startedAt)),
+    );
   }
 
   async function startCheckout() {
@@ -444,21 +508,33 @@ export function DiscountOffer({
           <div className="memo-wheel-body">
             {hasWon ? (
               <div className="memo-confetti" aria-hidden="true">
-                {Array.from({ length: 18 }, (_, index) => (
-                  <span
-                    key={index}
-                    style={
-                      {
-                        left: `${4 + index * 5.4}%`,
-                        background: CONFETTI_COLORS[index % CONFETTI_COLORS.length],
-                        "--dx": `${((index % 5) - 2) * 26}px`,
-                        animation: `memo-confetti-fall ${
-                          1.5 + (index % 4) * 0.35
-                        }s cubic-bezier(0.3,0.7,0.4,1) ${(index % 6) * 0.09}s both`,
-                      } as React.CSSProperties
-                    }
-                  />
-                ))}
+                {Array.from({ length: CONFETTI_COUNT }, (_, index) => {
+                  const size = 0.34 + scatter(index, 3) * 0.42;
+                  const round = scatter(index, 6) > 0.72;
+
+                  return (
+                    <span
+                      key={index}
+                      style={
+                        {
+                          left: `${-2 + scatter(index, 1) * 104}%`,
+                          background: CONFETTI_COLORS[index % CONFETTI_COLORS.length],
+                          "--w": `${size}rem`,
+                          // Round pieces stay round; the rest are longer than
+                          // they are wide, so they read as tumbling paper.
+                          "--h": `${round ? size : size * (1.3 + scatter(index, 4) * 1.1)}rem`,
+                          "--r": round ? "999px" : "2px",
+                          "--dx": `${(scatter(index, 2) - 0.5) * 190}px`,
+                          "--dy": `${300 + scatter(index, 7) * 190}px`,
+                          "--spin": `${(scatter(index, 5) - 0.5) * 1600}deg`,
+                          animation: `memo-confetti-fall ${
+                            1.45 + scatter(index, 8) * 1.5
+                          }s cubic-bezier(0.3,0.7,0.4,1) ${scatter(index, 9) * 0.62}s both`,
+                        } as React.CSSProperties
+                      }
+                    />
+                  );
+                })}
               </div>
             ) : null}
 
@@ -476,13 +552,15 @@ export function DiscountOffer({
               )}
             </p>
 
-            <div className="memo-wheel">
+            {/* One class drives both the disc and the pointer that knocks
+                against its sticks, so the two cannot drift apart. */}
+            <div
+              className={`memo-wheel ${isSpinning || hasWon ? "spinning" : ""}`.trim()}
+              style={{ "--memo-wheel-spin-duration": `${SPIN_MS}ms` } as React.CSSProperties}
+            >
               <div className="memo-wheel-glow" aria-hidden="true" />
               <div className="memo-wheel-pointer" aria-hidden="true" />
-              <div
-                className="memo-wheel-disc"
-                style={{ transform: `rotate(${isSpinning || hasWon ? SPIN_DEGREES : 0}deg)` }}
-              >
+              <div className="memo-wheel-disc">
                 {WHEEL_SLICES.map((label, index) => (
                   <span
                     key={label}

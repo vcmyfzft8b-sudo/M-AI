@@ -12361,14 +12361,7 @@
 }
 
 .memo-giveaway-head-art {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 4.6rem;
-  height: 4.6rem;
-  border-radius: 999px;
-  background: var(--giveaway-tint);
+  margin: 0.2rem 0.4rem 0 0;
 }
 
 .memo-giveaway-head-copy {
@@ -12698,9 +12691,21 @@
   text-align: center;
 }
 
-.memo-giveaway-podium-medal {
-  font-size: 1.35rem;
-  line-height: 1;
+.memo-giveaway-podium-medal img {
+  width: 2.2rem;
+  height: 2.2rem;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.18));
+}
+
+.memo-giveaway-podium-place.place-1 .memo-giveaway-podium-medal img {
+  width: 2.7rem;
+  height: 2.7rem;
+}
+
+.memo-giveaway-trophy {
+  width: 2.3rem;
+  height: 2.3rem;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.18));
 }
 
 .memo-giveaway-podium-avatar {
@@ -12944,12 +12949,18 @@
   }
 
   .memo-giveaway-head-art {
-    width: 3.6rem;
-    height: 3.6rem;
+    --phone-scale: 0.16;
+    margin-right: 0.2rem;
   }
 
-  .memo-giveaway-head-art .memo-emoji {
-    font-size: 1.8rem;
+  .memo-giveaway-podium-medal img {
+    width: 1.9rem;
+    height: 1.9rem;
+  }
+
+  .memo-giveaway-podium-place.place-1 .memo-giveaway-podium-medal img {
+    width: 2.3rem;
+    height: 2.3rem;
   }
 
   .memo-giveaway-head p {

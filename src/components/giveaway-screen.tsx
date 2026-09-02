@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useAppHref } from "@/components/creator-demo/creator-demo-context";
+import { GiveawayPhone } from "@/components/giveaway-phone";
 import { GiveawayPodium } from "@/components/giveaway-podium";
 import { useTranslations } from "@/components/i18n-provider";
 import { InstantLink } from "@/components/instant-link";
@@ -13,6 +14,7 @@ import { BRAND_NAME } from "@/lib/brand";
 import {
   GIVEAWAY_GOAL,
   GIVEAWAY_POLL_MS,
+  GIVEAWAY_PRIZE_NAME,
   buildGiveawayShareUrl,
   type GiveawayLeaderboard,
 } from "@/lib/giveaway-shared";
@@ -181,22 +183,19 @@ export function GiveawayScreen({
         <div className="memo-screen-scroll">
           <div className="memo-page">
             <header className="memo-giveaway-head">
-              <span className="memo-giveaway-head-art" aria-hidden="true">
-                <Emoji symbol="📱" size="2.3rem" />
-              </span>
+              <GiveawayPhone scale={0.2} className="memo-giveaway-head-art" />
               <span className="memo-giveaway-head-copy">
                 <span className="memo-eyebrow">{t("giveaway.eyebrow")}</span>
                 <h1>{t("giveaway.title")}</h1>
-                <p>{t("giveaway.lead", { goal })}</p>
+                <p>{t("giveaway.lead", { goal, prize: GIVEAWAY_PRIZE_NAME })}</p>
               </span>
             </header>
 
             <section className="memo-card-row memo-giveaway-card memo-giveaway-board">
               <span className="memo-giveaway-board-head">
                 <span className="memo-giveaway-board-title">
-                  <span className="memo-settings-tile" aria-hidden="true">
-                    <Emoji symbol="🏆" size="1.15rem" />
-                  </span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img className="memo-giveaway-trophy" src="/giveaway/trophy.png" alt="" width={64} height={64} />
                   <span>{t("giveaway.leaderboard.title")}</span>
                 </span>
                 {!isDemo ? (

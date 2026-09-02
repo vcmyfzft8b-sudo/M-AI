@@ -15,7 +15,8 @@ import { giveawayInitials, type GiveawayLeaderboardEntry } from "@/lib/giveaway-
  * the board fills up.
  */
 
-const MEDALS = ["🥇", "🥈", "🥉"];
+/* Microsoft Fluent Emoji, 3D set (MIT), copied into /public/giveaway. */
+const MEDALS = ["/giveaway/medal-1.png", "/giveaway/medal-2.png", "/giveaway/medal-3.png"];
 /* Visual order left to right; `place` is the rank each column holds. */
 const PODIUM_ORDER = [1, 0, 2];
 
@@ -59,7 +60,8 @@ export function GiveawayPodium({
               style={{ order: PODIUM_ORDER.indexOf(place) }}
             >
               <span className={`${prefix}-podium-medal`} aria-hidden="true">
-                {MEDALS[place]}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={MEDALS[place]} alt="" width={64} height={64} />
               </span>
               <span className={`${prefix}-podium-avatar`} aria-hidden="true">
                 {entry ? giveawayInitials(entry.name) : "?"}

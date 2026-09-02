@@ -1782,7 +1782,7 @@
 .landing-v2-giveaway-board {
   display: grid;
   gap: 0.6rem;
-  padding: 1.5rem 1.6rem 1.3rem;
+  padding: 3.4rem 1.6rem 1.3rem;
   border-radius: 22px;
   background: var(--l-surface);
   color: var(--l-label);
@@ -1886,9 +1886,36 @@
   text-align: center;
 }
 
-.landing-v2-giveaway-podium-medal {
-  font-size: 1.35rem;
-  line-height: 1;
+.landing-v2-giveaway-podium-medal img {
+  width: 2.2rem;
+  height: 2.2rem;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.18));
+}
+
+.landing-v2-giveaway-podium-place.place-1 .landing-v2-giveaway-podium-medal img {
+  width: 2.7rem;
+  height: 2.7rem;
+}
+
+/* The prize above the board, hanging over the card's top edge. */
+.landing-v2-giveaway-prize {
+  display: flex;
+  justify-content: center;
+  margin-bottom: -2.4rem;
+  position: relative;
+  z-index: 1;
+}
+
+.landing-v2-giveaway-board-head h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.landing-v2-giveaway-board-head h3 img {
+  width: 2rem;
+  height: 2rem;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.18));
 }
 
 .landing-v2-giveaway-podium-avatar {

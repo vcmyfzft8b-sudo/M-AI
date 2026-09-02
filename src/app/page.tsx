@@ -8,6 +8,7 @@ import { LandingFaq } from "@/components/landing/landing-faq";
 import { LandingFeatureShowcase } from "@/components/landing/landing-feature-showcase";
 import { LandingFlowDemo } from "@/components/landing/landing-flow-demo";
 import { LandingGiveawayBoard } from "@/components/landing/landing-giveaway";
+import { GiveawayPhone } from "@/components/giveaway-phone";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { LandingTryCallout } from "@/components/landing/landing-try-callout";
 import { LandingUserCount } from "@/components/landing/landing-user-count";
@@ -16,7 +17,7 @@ import { LandingLoadingLink } from "@/components/landing-loading-link";
 import { LandingScrollReveal } from "@/components/landing-scroll-reveal";
 import { getOptionalUser } from "@/lib/auth";
 import { getGiveawayLeaderboard, readGiveawayReferralCookie } from "@/lib/giveaway";
-import { GIVEAWAY_GOAL } from "@/lib/giveaway-shared";
+import { GIVEAWAY_GOAL, GIVEAWAY_PRIZE_NAME } from "@/lib/giveaway-shared";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -168,7 +169,7 @@ export default async function HomePage() {
               {t("landing.giveaway.title")}
             </h2>
             <p className="landing-v2-giveaway-lead">
-              {t("landing.giveaway.lead", { goal: GIVEAWAY_GOAL })}
+              {t("landing.giveaway.lead", { goal: GIVEAWAY_GOAL, prize: GIVEAWAY_PRIZE_NAME })}
             </p>
 
             <ol className="landing-v2-giveaway-steps">
@@ -197,6 +198,15 @@ export default async function HomePage() {
           </div>
 
           <div className="landing-v2-giveaway-side">
+            <div className="landing-v2-giveaway-prize">
+              <GiveawayPhone
+                scale={0.46}
+                note={{
+                  title: t("giveaway.phone.noteTitle"),
+                  body: t("giveaway.phone.noteBody", { goal: GIVEAWAY_GOAL }),
+                }}
+              />
+            </div>
             {leaderboard ? <LandingGiveawayBoard initial={leaderboard} /> : null}
           </div>
         </div>

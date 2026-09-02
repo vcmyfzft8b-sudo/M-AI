@@ -11,6 +11,9 @@ export const GIVEAWAY_CAMPAIGN = "back_to_school_2026";
 /** How many paying friends win the prize. */
 export const GIVEAWAY_GOAL = 20;
 
+/** What the winner gets, as it is named on every screen. */
+export const GIVEAWAY_PRIZE_NAME = "iPhone 18 Pro";
+
 /** What a friend's code takes off their first billing period. */
 export const GIVEAWAY_DISCOUNT_PERCENT = 50;
 

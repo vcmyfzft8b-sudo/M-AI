@@ -64,7 +64,11 @@ export function LandingGiveawayBoard({ initial }: { initial: GiveawayLeaderboard
   return (
     <div className="landing-v2-giveaway-board">
       <div className="landing-v2-giveaway-board-head">
-        <h3>{t("landing.giveaway.leaderboardTitle")}</h3>
+        <h3>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/giveaway/trophy.png" alt="" width={64} height={64} />
+          {t("landing.giveaway.leaderboardTitle")}
+        </h3>
         <span className="landing-v2-giveaway-live">
           <span aria-hidden="true" />
           {t("giveaway.leaderboard.live")}

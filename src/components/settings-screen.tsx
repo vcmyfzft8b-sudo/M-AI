@@ -14,7 +14,7 @@ import { MemoPortal } from "@/components/memo-portal";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { BRAND_NAME, BRAND_SUPPORT_EMAIL } from "@/lib/brand";
-import { GIVEAWAY_GOAL } from "@/lib/giveaway-shared";
+import { GIVEAWAY_GOAL, GIVEAWAY_PRIZE_NAME } from "@/lib/giveaway-shared";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { ThemePreference } from "@/lib/theme";
 import {
@@ -431,7 +431,7 @@ export function SettingsScreen({
                 </span>
                 <span className="memo-giveaway-promo-title">{t("settings.giveaway.title")}</span>
                 <span className="memo-giveaway-promo-detail">
-                  {t("settings.giveaway.detail", { goal: GIVEAWAY_GOAL })}
+                  {t("settings.giveaway.detail", { goal: GIVEAWAY_GOAL, prize: GIVEAWAY_PRIZE_NAME })}
                 </span>
               </span>
               <span className="memo-giveaway-promo-cta">

@@ -16,6 +16,7 @@ import {
   synthesizeTtsChunkWithTimestamps,
 } from "@/lib/note-tts-synthesis";
 import {
+  NOTE_TTS_CHUNK_PLAN_VERSION,
   buildNoteTtsChunks,
   parseNoteTtsDocument,
   stripLeadingRedundantHeading,
@@ -62,7 +63,7 @@ export class TtsGenerationPendingError extends Error {
   }
 }
 
-// Synthesizing a chunk takes 90-119 seconds, and the reader can delete the note in that time. The
+// Synthesizing a chunk takes up to a minute, and the reader can delete the note in that time. The
 // row then has nothing to hang off and the write fails on the cascade's foreign key — an answer
 // ("the note is gone"), not a fault, and the only reason to tell the two apart at the route.
 export class LectureRemovedDuringTtsError extends Error {
@@ -106,7 +107,7 @@ const UNLIMITED_TTS_USAGE_EMAILS = new Set(["nace.valencic@gmail.com"]);
 const TTS_OUTPUT_FORMAT = "mp3";
 const TTS_OUTPUT_MIME_TYPE = "audio/mpeg";
 const TTS_OUTPUT_BITRATE = 64_000;
-// The alignment transcription is the long pole in generateTtsChunk, and it is not the only thing
+// On the REST fallback the alignment transcription is the long pole, and it is not the only thing
 // that has to fit inside the calling route's maxDuration: synthesis runs before it, and the
 // storage upload, row insert and quota finalization run after it. This must therefore stay
 // comfortably below the smallest maxDuration that reaches here — see the note on the read-aloud
@@ -239,7 +240,9 @@ export function getLjubljanaUsageDate(now = new Date()) {
 }
 
 export function hashNoteTtsContent(content: string) {
-  return createHash("sha256").update(`note-tts-v6-minute-chunks:${content}`).digest("hex");
+  return createHash("sha256")
+    .update(`note-tts-v8-speakable-math:${NOTE_TTS_CHUNK_PLAN_VERSION}:${content}`)
+    .digest("hex");
 }
 
 function safeStorageSegment(value: string) {
@@ -1344,6 +1347,50 @@ export async function prepareInitialNoteTtsChunksSafely(
       errorMessage: getInitialTtsErrorMessage(error),
     } as const;
   }
+}
+
+// How many chunks from the start of the note are already synthesized for this voice. The note
+// page warms that many (at most two) the moment it opens, so a note listened to before starts on
+// the click rather than after a round trip — without ever generating anything, and so without
+// spending any of the daily allowance, on a note nobody has asked to hear.
+export async function getReadyLeadingTtsChunkCount(params: {
+  lectureId: string;
+  content: string;
+  title?: string | null;
+  languageHint: string | null;
+  voice?: NoteTtsVoice;
+  limit?: number;
+}) {
+  const content = stripLeadingRedundantHeading(params.content, params.title).trim();
+
+  if (!content) {
+    return 0;
+  }
+
+  const env = getServerEnv();
+  const limit = Math.max(1, params.limit ?? 2);
+  const { data, error } = await createSupabaseServiceRoleClient()
+    .from("lecture_tts_chunks")
+    .select("chunk_index")
+    .eq("lecture_id", params.lectureId)
+    .eq("content_hash", hashNoteTtsContent(content))
+    .eq("language", normalizeNoteLanguage(params.languageHint))
+    .eq("voice", params.voice ?? DEFAULT_NOTE_TTS_VOICE)
+    .eq("model", env.SONIOX_TTS_MODEL)
+    .lt("chunk_index", limit);
+
+  if (error) {
+    throw error;
+  }
+
+  const ready = new Set((data as Array<{ chunk_index: number }>).map((row) => row.chunk_index));
+  let count = 0;
+
+  while (count < limit && ready.has(count)) {
+    count += 1;
+  }
+
+  return count;
 }
 
 export async function hasInitialNoteTtsChunk(params: {

@@ -30,8 +30,8 @@ import { routeIdParamSchema } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
-// Generating a chunk means synthesizing the audio, transcribing it back for word alignment,
-// uploading it and recording the row — measured at 90-119s in production. At the 120s this route
+// Generating a chunk means synthesizing the audio, aligning it, uploading it and recording the
+// row — measured at 90-119s in production when chunks were two minutes long. At the 120s this route
 // used to allow, that ran right up against the ceiling, and an invocation Vercel kills runs no
 // catch block: the quota reservation taken at the start was never released, so it stayed held for
 // TTS_GENERATION_RESERVATION_STALE_MS and every request for that chunk over the following ten

@@ -77,7 +77,94 @@ export type NoteTtsChunkPlan = {
 // notes — a formula-heavy one reached the cap a third of the way in. A minute also halves the
 // wait before an uncached note starts playing, since synthesis runs a little faster than real time.
 const DEFAULT_TARGET_WORDS_PER_CHUNK = 90;
+// The first chunks are short so an uncached note starts within seconds, and each next chunk is
+// sized so it is synthesized before the current one ends. Measured on tts-rt-v2: synthesis takes
+// about 0.88x the audio's length plus ~3s of upload, and the player runs two generations at once
+// from the first click. So the second chunk may be 1.6x the first (it runs alongside it, and has
+// the first chunk's synthesis plus its playback to finish in), and every later one 0.75x the two
+// before it (it starts when the earlier of those finishes and has both their playbacks to finish
+// in — or, when the first two were made at note creation, starts at the first click and has the
+// same two playbacks). The ratios apply to the sizes actually chosen, which snapping may shorten.
+const FIRST_CHUNK_TARGET_WORDS = 30;
+const SECOND_CHUNK_GROWTH = 1.6;
+const LATER_CHUNK_GROWTH = 0.75;
 const ESTIMATED_TTS_WORDS_PER_SECOND = 1.7;
+// A boundary may move back this far to land on a sentence end; the word cap stays the timing
+// guarantee, this only makes the cut natural.
+const CHUNK_SNAP_WINDOW = 0.4;
+const MIN_CHUNK_WORDS = 12;
+
+// Folded into the cache key of every chunk. A chunk's audio is only valid for the exact word
+// range the planner gave it, so any change to how chunks are cut has to retire the cached audio;
+// deriving the version from the parameters makes that automatic rather than a thing to remember.
+export const NOTE_TTS_CHUNK_PLAN_VERSION = [
+  "plan",
+  DEFAULT_TARGET_WORDS_PER_CHUNK,
+  FIRST_CHUNK_TARGET_WORDS,
+  SECOND_CHUNK_GROWTH,
+  LATER_CHUNK_GROWTH,
+  CHUNK_SNAP_WINDOW,
+  MIN_CHUNK_WORDS,
+].join("-");
+
+export function getTargetWordsForChunk(previousChunkSizes: number[], targetWordsPerChunk: number) {
+  const count = previousChunkSizes.length;
+
+  if (count === 0) {
+    return Math.min(FIRST_CHUNK_TARGET_WORDS, targetWordsPerChunk);
+  }
+
+  if (count === 1) {
+    return Math.min(targetWordsPerChunk, Math.floor(previousChunkSizes[0] * SECOND_CHUNK_GROWTH));
+  }
+
+  return Math.min(
+    targetWordsPerChunk,
+    Math.floor((previousChunkSizes[count - 1] + previousChunkSizes[count - 2]) * LATER_CHUNK_GROWTH),
+  );
+}
+
+const SENTENCE_END_PATTERN = /[.!?…;:]/u;
+
+// Word indexes after which the reader hears a pause anyway: the last word of a block, list item
+// or table cell (the speech text puts a full stop there), and any word followed by sentence
+// punctuation. A chunk boundary on one of these is inaudible; one in the middle of a sentence
+// ends the phrase with a falling tone and restarts it as a new sentence.
+function collectSentenceEndWordIndexes(blocks: NoteTtsBlock[]) {
+  const ends = new Set<number>();
+  const tokenLists: NoteTtsInlineToken[][] = [];
+
+  for (const block of blocks) {
+    if (block.kind === "list") {
+      tokenLists.push(...block.items.map((item) => item.tokens));
+    } else if (block.kind === "table") {
+      tokenLists.push(...block.rows.flatMap((row) => row.cells.map((cell) => cell.tokens)));
+    } else {
+      tokenLists.push(block.tokens);
+    }
+  }
+
+  for (const tokens of tokenLists) {
+    let lastWordIndex: number | null = null;
+
+    for (const token of tokens) {
+      if (token.type === "word") {
+        lastWordIndex = token.wordIndex;
+        continue;
+      }
+
+      if (token.type === "text" && lastWordIndex !== null && SENTENCE_END_PATTERN.test(token.text)) {
+        ends.add(lastWordIndex);
+      }
+    }
+
+    if (lastWordIndex !== null) {
+      ends.add(lastWordIndex);
+    }
+  }
+
+  return ends;
+}
 const WORD_PATTERN = /[\p{L}\p{N}]+(?:[.'’_-][\p{L}\p{N}]+)*/gu;
 const SPEECH_BLOCK_SEPARATOR = "\n\n";
 const SPEECH_LIST_ITEM_SEPARATOR = "\n";
@@ -654,12 +741,29 @@ export function buildNoteTtsChunks(
       ).length
     : 0;
 
+  const sentenceEnds = collectSentenceEndWordIndexes(document.blocks);
+  const chunkSizes: number[] = [];
+
   for (
     let wordStartIndex = wordStartOffset, chunkIndex = 0;
     wordStartIndex < document.words.length;
-    wordStartIndex += targetWordsPerChunk, chunkIndex += 1
+    chunkIndex += 1
   ) {
-    const wordEndIndex = Math.min(wordStartIndex + targetWordsPerChunk, document.words.length);
+    const targetWords = getTargetWordsForChunk(chunkSizes, targetWordsPerChunk);
+    let wordEndIndex = Math.min(wordStartIndex + targetWords, document.words.length);
+
+    if (wordEndIndex < document.words.length) {
+      const earliestEnd =
+        wordStartIndex + Math.max(MIN_CHUNK_WORDS, Math.ceil(targetWords * (1 - CHUNK_SNAP_WINDOW)));
+
+      for (let candidate = wordEndIndex; candidate >= earliestEnd; candidate -= 1) {
+        if (sentenceEnds.has(document.words[candidate - 1].index)) {
+          wordEndIndex = candidate;
+          break;
+        }
+      }
+    }
+
     const chunkWords = document.words.slice(wordStartIndex, wordEndIndex);
     const estimatedSeconds = Math.max(
       1,
@@ -673,6 +777,8 @@ export function buildNoteTtsChunks(
       text: buildChunkSpeechText(document.blocks, wordStartIndex, wordEndIndex),
       estimatedSeconds,
     });
+    chunkSizes.push(wordEndIndex - wordStartIndex);
+    wordStartIndex = wordEndIndex;
   }
 
   return chunks;

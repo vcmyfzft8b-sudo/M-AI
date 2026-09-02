@@ -59,7 +59,8 @@ test("keeps retrying a pending chunk until the budget runs out", () => {
   );
 });
 
-// Generation was measured at 90-119s in production, so a budget that did not outlast it would give
+// Generation was measured at 90-119s in production before chunks shrank to a minute; a budget that
+// did not outlast the worst case would give
 // up while the audio was still on its way — the exact failure this retry exists to prevent.
 test("budget outlasts a full generation", () => {
   assert.ok(TTS_CHUNK_PENDING_RETRY_BUDGET_MS > 120_000);

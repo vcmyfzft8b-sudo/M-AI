@@ -17,7 +17,8 @@ import {
   parseNoteTtsDocument,
   stripLeadingRedundantHeading,
 } from "@/lib/note-tts-text";
-import { DEFAULT_NOTE_TTS_VOICE, NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
+import { DEFAULT_NOTE_TTS_VOICE } from "@/lib/note-tts-settings";
+import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 import {
   TTS_CHUNK_LEGACY_PENDING_STATUS,
   TTS_CHUNK_PENDING_STATUS,
@@ -44,7 +45,7 @@ const TTS_PROVIDER_RETRY_DELAYS_MS = [1_500, 3_500];
 const ttsChunkRequestSchema = z.object({
   sessionId: z.string().trim().min(8).max(128),
   chunkIndex: z.number().int().nonnegative(),
-  voice: z.enum(NOTE_TTS_VOICES).default(DEFAULT_NOTE_TTS_VOICE),
+  voice: noteTtsVoiceSchema.default(DEFAULT_NOTE_TTS_VOICE),
   // Set by clients that understand a 202 "still generating" answer. Absent from bundles that
   // predate it, which still need the 503 — see TTS_CHUNK_PENDING_STATUS.
   acceptsPendingStatus: z.boolean().default(false),

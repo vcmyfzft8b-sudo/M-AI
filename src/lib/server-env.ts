@@ -21,7 +21,7 @@ const serverEnvSchema = z.object({
   OPENROUTER_API_KEY: optionalTrimmedString,
   SONIOX_API_KEY: optionalTrimmedString,
   SONIOX_MODEL: trimmedString.default("stt-async-v4"),
-  SONIOX_TTS_MODEL: trimmedString.default("tts-rt-v1-preview"),
+  SONIOX_TTS_MODEL: trimmedString.default("tts-rt-v2"),
   SONIOX_TTS_VOICE: trimmedString.default(DEFAULT_NOTE_TTS_VOICE),
   INNGEST_EVENT_KEY: optionalTrimmedString,
   INNGEST_SIGNING_KEY: optionalTrimmedString,

@@ -3,7 +3,7 @@ import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
 import {
   DEFAULT_NOTE_TTS_VOICE,
-  NOTE_TTS_VOICES,
+  normalizeNoteTtsVoice,
   type NoteTtsVoice,
 } from "@/lib/note-tts-settings";
 
@@ -65,9 +65,7 @@ export function getInitialNoteAudioVoice(metadata: unknown): NoteTtsVoice {
     return DEFAULT_NOTE_TTS_VOICE;
   }
 
-  const voice = metadata.initialAudioVoice;
-
-  return NOTE_TTS_VOICES.find((candidate) => candidate === voice) ?? DEFAULT_NOTE_TTS_VOICE;
+  return normalizeNoteTtsVoice(metadata.initialAudioVoice);
 }
 
 export function getEffectiveLectureSourceType(

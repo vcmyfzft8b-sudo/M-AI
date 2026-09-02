@@ -27,6 +27,7 @@ import {
   NOTE_TTS_PLAYBACK_RATES,
   NOTE_TTS_VOICE_STORAGE_KEY,
   NOTE_TTS_VOICES,
+  normalizeNoteTtsVoice,
   type NoteTtsHighlightColorId,
   type NoteTtsPlaybackRate,
   type NoteTtsVoice,
@@ -170,9 +171,7 @@ function getStoredVoice(): NoteTtsVoice {
     return DEFAULT_NOTE_TTS_VOICE;
   }
 
-  const storedVoice = window.localStorage.getItem(NOTE_TTS_VOICE_STORAGE_KEY);
-
-  return NOTE_TTS_VOICES.find((voice) => voice === storedVoice) ?? DEFAULT_NOTE_TTS_VOICE;
+  return normalizeNoteTtsVoice(window.localStorage.getItem(NOTE_TTS_VOICE_STORAGE_KEY));
 }
 
 function getStoredPlaybackRate(): NoteTtsPlaybackRate {

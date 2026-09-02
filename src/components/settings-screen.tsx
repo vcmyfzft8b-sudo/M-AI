@@ -423,7 +423,7 @@ export function SettingsScreen({
               */}
             <InstantLink href={giveawayHref} className="memo-giveaway-promo">
               <span className="memo-giveaway-promo-art" aria-hidden="true">
-                <Emoji symbol="📱" size="1.9rem" />
+                <Emoji symbol="📱" size="1.5rem" />
               </span>
               <span className="memo-giveaway-promo-copy">
                 <span className="memo-giveaway-promo-eyebrow">

@@ -15,7 +15,7 @@ server side — Stripe, the database, attribution, the leaderboard — is
   a live top-five board, and a CTA. It is in the nav menu. A visitor who came
   through a share link also sees a pill under the hero buttons saying their
   friend's code will be applied.
-- **Settings** (`/app/settings`): a gradient card at the top that opens the
+- **Settings** (`/app/settings`): a card at the top, drawn like a settings row, that opens the
   giveaway screen.
 - **Giveaway screen** (`/app/giveaway`): the account's code with copy and
   share, progress towards the goal, the live board, a buy card for accounts

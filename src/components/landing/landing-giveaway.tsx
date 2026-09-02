@@ -92,11 +92,6 @@ export function LandingGiveawayBoard({ initial }: { initial: GiveawayLeaderboard
               <span className="landing-v2-giveaway-count">
                 {t("giveaway.leaderboard.friends", { count: entry.qualifiedCount })}
               </span>
-              <span
-                className="landing-v2-giveaway-meter"
-                aria-hidden="true"
-                style={{ width: `${Math.min(100, (entry.qualifiedCount / board.goal) * 100)}%` }}
-              />
             </li>
           ))}
         </ol>

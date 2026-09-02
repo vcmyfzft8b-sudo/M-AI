@@ -52,7 +52,6 @@ const MATERIAL_SYMBOL_NAMES = [
   "drive_file_rename_outline",
   "edit",
   "edit_square",
-  "emoji_events",
   "expand_less",
   "expand_more",
   "folder",

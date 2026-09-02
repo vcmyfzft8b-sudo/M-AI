@@ -163,10 +163,7 @@ export default async function HomePage() {
       <section id="giveaway" className="landing-v2-section landing-v2-giveaway" aria-labelledby="landing-giveaway-title">
         <div className="landing-v2-giveaway-card" data-scroll-reveal="">
           <div className="landing-v2-giveaway-copy">
-            <p className="landing-v2-giveaway-eyebrow">
-              <span aria-hidden="true">🎒</span>
-              {t("landing.giveaway.eyebrow")}
-            </p>
+            <p className="landing-v2-giveaway-eyebrow">{t("landing.giveaway.eyebrow")}</p>
             <h2 id="landing-giveaway-title" className="landing-v2-giveaway-title">
               {t("landing.giveaway.title")}
             </h2>
@@ -200,10 +197,6 @@ export default async function HomePage() {
           </div>
 
           <div className="landing-v2-giveaway-side">
-            <div className="landing-v2-giveaway-phone" aria-hidden="true">
-              <span className="landing-v2-giveaway-phone-art">📱</span>
-              <span className="landing-v2-giveaway-phone-gift">🎁</span>
-            </div>
             {leaderboard ? <LandingGiveawayBoard initial={leaderboard} /> : null}
           </div>
         </div>

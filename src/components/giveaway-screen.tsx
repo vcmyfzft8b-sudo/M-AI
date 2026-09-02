@@ -181,15 +181,16 @@ export function GiveawayScreen({
 
         <div className="memo-screen-scroll">
           <div className="memo-page">
-            <section className="memo-giveaway-hero">
-              <span className="memo-giveaway-hero-art" aria-hidden="true">
-                <Emoji symbol="📱" size="3.4rem" />
-                <Emoji symbol="🎁" size="1.9rem" className="memo-giveaway-hero-gift" />
+            <header className="memo-giveaway-head">
+              <span className="memo-giveaway-head-art" aria-hidden="true">
+                <Emoji symbol="📱" size="2.3rem" />
               </span>
-              <span className="memo-eyebrow">{t("giveaway.eyebrow")}</span>
-              <h1>{t("giveaway.title")}</h1>
-              <p>{t("giveaway.lead", { goal })}</p>
-            </section>
+              <span className="memo-giveaway-head-copy">
+                <span className="memo-eyebrow">{t("giveaway.eyebrow")}</span>
+                <h1>{t("giveaway.title")}</h1>
+                <p>{t("giveaway.lead", { goal })}</p>
+              </span>
+            </header>
 
             <div className="memo-giveaway-grid">
               <section className="memo-card-row memo-giveaway-card memo-giveaway-code-card">
@@ -250,7 +251,9 @@ export function GiveawayScreen({
             <section className="memo-card-row memo-giveaway-card memo-giveaway-board">
               <span className="memo-giveaway-board-head">
                 <span className="memo-giveaway-board-title">
-                  <Msym name="emoji_events" size="1.35rem" fill weight={500} />
+                  <span className="memo-settings-tile" aria-hidden="true">
+                    <Emoji symbol="🏆" size="1.15rem" />
+                  </span>
                   <span>{t("giveaway.leaderboard.title")}</span>
                 </span>
                 {!isDemo ? (

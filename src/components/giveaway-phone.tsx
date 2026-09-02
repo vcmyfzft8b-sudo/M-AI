@@ -5,10 +5,9 @@ import "./giveaway-phone.css";
 import { GIVEAWAY_PRIZE_NAME } from "@/lib/giveaway-shared";
 
 /**
- * The prize as a picture: an iPhone frame from devices.css with a lock
- * screen of our own, so the landing page and the giveaway screen show the
- * same thing at different sizes. `scale` is a fraction of the library's
- * native 428×868 render.
+ * The prize as a picture: a rendered iPhone with a lock screen of our
+ * own, so the landing page and the giveaway screen show the same thing at
+ * different sizes. `scale` is a fraction of the native 430×880 render.
  */
 export function GiveawayPhone({
   scale = 0.4,
@@ -27,30 +26,32 @@ export function GiveawayPhone({
       role="img"
       aria-label={GIVEAWAY_PRIZE_NAME}
     >
-      <div className="device" aria-hidden="true">
-        <div className="device-frame">
-          <div className="device-screen">
-            <p className="lock-date">{GIVEAWAY_PRIZE_NAME}</p>
-            <p className="lock-time">9:41</p>
-            {note ? (
-              <div className="lock-note">
-                {/* Fluent Emoji 3D trophy (MIT), in /public/giveaway. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/giveaway/trophy.png" alt="" />
-                <div>
-                  <strong>{note.title}</strong>
-                  <span>{note.body}</span>
+      <div className="phone" aria-hidden="true">
+        <div className="frame">
+          <span className="btn action" />
+          <span className="btn vol-up" />
+          <span className="btn vol-down" />
+          <span className="btn power" />
+          <div className="bezel">
+            <div className="screen">
+              <span className="island" />
+              <p className="lock-date">{GIVEAWAY_PRIZE_NAME}</p>
+              <p className="lock-time">9:41</p>
+              {note ? (
+                <div className="lock-note">
+                  {/* Fluent Emoji 3D trophy (MIT), in /public/giveaway. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/giveaway/trophy.png" alt="" />
+                  <div>
+                    <strong>{note.title}</strong>
+                    <span>{note.body}</span>
+                  </div>
                 </div>
-              </div>
-            ) : null}
-            <span className="lock-bar" />
+              ) : null}
+              <span className="lock-bar" />
+            </div>
           </div>
         </div>
-        <div className="device-stripe" />
-        <div className="device-header" />
-        <div className="device-sensors" />
-        <div className="device-btns" />
-        <div className="device-power" />
       </div>
     </div>
   );

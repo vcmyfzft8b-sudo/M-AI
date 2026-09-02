@@ -1,56 +1,78 @@
 /*
- * The prize, drawn rather than photographed: Apple's own renders are not
- * ours to use, so the frame comes from devices.css (MIT, picturepan2) — its
- * iPhone 14 Pro geometry in the "black" finish, which reads as titanium — and
- * the screen is a lock screen we paint ourselves. Rendered at the library's
- * native 428×868 and scaled as a whole with `--phone-scale`, so every
- * bevel stays in proportion at any size.
+ * The prize, rendered rather than photographed — Apple's own renders are
+ * not ours to use. Drawn at a native 430×880 and scaled as a whole with
+ * `--phone-scale`, so every bevel stays in proportion at any size. The
+ * frame follows the landing hero's own phone (the same titanium gradient
+ * and button placement) with more depth: a bright outer edge, a shaded
+ * inner lip, a glass reflection over the screen, and a soft ground shadow.
  */
 .giveaway-phone {
   --phone-scale: 0.4;
+  --phone-w: 430px;
+  --phone-h: 880px;
   position: relative;
-  width: calc(428px * var(--phone-scale));
-  height: calc(868px * var(--phone-scale));
+  width: calc(var(--phone-w) * var(--phone-scale));
+  height: calc(var(--phone-h) * var(--phone-scale));
   flex: 0 0 auto;
 }
 
-.giveaway-phone .device {
+.giveaway-phone .phone {
   position: absolute;
   top: 0;
   left: 0;
+  width: var(--phone-w);
+  height: var(--phone-h);
   transform: scale(var(--phone-scale));
   transform-origin: top left;
-  height: 868px;
-  width: 428px;
-  filter: drop-shadow(0 30px 40px rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(0 40px 60px rgba(0, 0, 0, 0.45)) drop-shadow(0 8px 16px rgba(0, 0, 0, 0.3));
 }
 
-.giveaway-phone .device,
-.giveaway-phone .device *,
-.giveaway-phone .device *::before,
-.giveaway-phone .device *::after {
+.giveaway-phone .phone,
+.giveaway-phone .phone * {
   box-sizing: border-box;
-  display: block;
 }
 
-.giveaway-phone .device-frame {
+/* The titanium band: a metallic gradient with a hairline of light on its outer edge. */
+.giveaway-phone .frame {
   position: relative;
-  z-index: 1;
-  height: 868px;
-  width: 428px;
-  padding: 19px;
-  border: 1px solid #5c5956;
-  border-radius: 68px;
-  background: #010101;
-  box-shadow: inset 0 0 4px 2px #ffffff, inset 0 0 0 6px #76726f;
+  width: 100%;
+  height: 100%;
+  padding: 5px;
+  border-radius: 72px;
+  background: linear-gradient(
+    150deg,
+    #7d7d84 0%,
+    #2a2a2f 14%,
+    #8a8a92 30%,
+    #1e1e22 48%,
+    #6c6c74 66%,
+    #232327 84%,
+    #808088 100%
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.35),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.35);
 }
 
-.giveaway-phone .device-screen {
+/* The lip between the band and the glass: matte black with a faint inner shine. */
+.giveaway-phone .bezel {
   position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 13px;
+  border-radius: 67px;
+  background: #050506;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 2px 6px rgba(255, 255, 255, 0.05);
+}
+
+.giveaway-phone .screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
-  height: 830px;
-  width: 390px;
-  border-radius: 49px;
+  border-radius: 54px;
   background:
     radial-gradient(70% 50% at 20% 10%, rgba(255, 140, 120, 0.55) 0%, transparent 60%),
     radial-gradient(60% 45% at 85% 30%, rgba(124, 92, 255, 0.7) 0%, transparent 65%),
@@ -61,97 +83,86 @@
   text-align: center;
 }
 
-.giveaway-phone .device-stripe::after,
-.giveaway-phone .device-stripe::before {
+/* Glass: a soft diagonal sweep, the way a screen catches the room. */
+.giveaway-phone .screen::after {
   content: "";
   position: absolute;
-  left: 0;
-  z-index: 9;
-  height: 7px;
-  width: 100%;
-  border: solid rgba(1, 1, 1, 0.25);
-  border-width: 0 7px;
-}
-
-.giveaway-phone .device-stripe::after {
-  top: 85px;
-}
-
-.giveaway-phone .device-stripe::before {
-  bottom: 85px;
+  inset: 0;
+  z-index: 5;
+  background: linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.05) 28%,
+    rgba(255, 255, 255, 0) 44%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  pointer-events: none;
 }
 
 /* The Dynamic Island and the camera inside it. */
-.giveaway-phone .device-header {
+.giveaway-phone .island {
   position: absolute;
-  top: 29px;
+  top: 16px;
   left: 50%;
-  z-index: 3;
-  height: 35px;
-  width: 120px;
-  margin-left: -60px;
+  z-index: 6;
+  width: 124px;
+  height: 36px;
+  margin-left: -62px;
   border-radius: 20px;
-  background: #010101;
+  background: #050506;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
 }
 
-.giveaway-phone .device-sensors::before {
+.giveaway-phone .island::after {
   content: "";
   position: absolute;
-  top: 42px;
-  left: 50%;
-  z-index: 4;
-  height: 9px;
-  width: 9px;
-  margin-left: 36px;
+  top: 8px;
+  right: 10px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background:
-    radial-gradient(farthest-corner at 20% 20%, #6074bf 0, transparent 40%),
-    radial-gradient(farthest-corner at 80% 80%, #513785 0, #24555e 20%, transparent 50%);
-  box-shadow: 0 0 1px 1px rgba(255, 255, 255, 0.05);
+    radial-gradient(circle at 35% 35%, #4a6cc9 0%, #1b2544 35%, #0b0d16 70%);
+  box-shadow: inset 0 0 0 2px #121318, 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
-.giveaway-phone .device-btns {
+/* Buttons, cut from the same band. */
+.giveaway-phone .btn {
   position: absolute;
-  top: 115px;
-  left: -2px;
-  height: 32px;
-  width: 3px;
+  width: 4px;
   border-radius: 2px;
-  background: #5c5956;
+  background: linear-gradient(90deg, #17171a, #6b6b73 50%, #2a2a2f);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
 }
 
-.giveaway-phone .device-btns::after,
-.giveaway-phone .device-btns::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  height: 62px;
-  width: 3px;
-  border-radius: 2px;
-  background: #5c5956;
+.giveaway-phone .btn.action {
+  top: 148px;
+  left: -4px;
+  height: 34px;
 }
 
-.giveaway-phone .device-btns::after {
-  top: 60px;
+.giveaway-phone .btn.vol-up {
+  top: 210px;
+  left: -4px;
+  height: 66px;
 }
 
-.giveaway-phone .device-btns::before {
-  top: 140px;
+.giveaway-phone .btn.vol-down {
+  top: 290px;
+  left: -4px;
+  height: 66px;
 }
 
-.giveaway-phone .device-power {
-  position: absolute;
-  top: 200px;
-  right: -2px;
-  height: 100px;
-  width: 3px;
-  border-radius: 2px;
-  background: #5c5956;
+.giveaway-phone .btn.power {
+  top: 236px;
+  right: -4px;
+  height: 104px;
+  background: linear-gradient(270deg, #17171a, #6b6b73 50%, #2a2a2f);
 }
 
 /* The lock screen: the clock, the date, and a "slide up" bar. */
 .giveaway-phone .lock-date {
-  margin: 108px 0 0;
+  margin: 112px 0 0;
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -169,9 +180,9 @@
 
 .giveaway-phone .lock-note {
   position: absolute;
-  left: 24px;
-  right: 24px;
-  bottom: 120px;
+  left: 22px;
+  right: 22px;
+  bottom: 118px;
   display: flex;
   align-items: center;
   gap: 14px;

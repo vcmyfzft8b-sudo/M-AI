@@ -1082,7 +1082,19 @@ export function OnboardingPaywall({
                 disabled={Boolean("disabled" in currentStep && currentStep.disabled) || savingProfile}
               >
                 {savingProfile ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-                {currentStep.action}
+                {/*
+                 * The label is wrapped rather than written as bare text, the way the
+                 * paywall CTA below wraps its own. The spinner appears beside it the
+                 * moment this button is pressed, and React places it by inserting
+                 * before the host sibling it remembers — the label. Chrome's page
+                 * translation, which every learner outside our five locales gets
+                 * offered, rewrites a bare text node into a pair of <font> wrappers
+                 * and so takes it out of the button, and the insert then throws
+                 * NotFoundError and drops the whole flow onto the error screen.
+                 * Translation rewrites the inside of an element and never moves the
+                 * element itself, so a <span> stays where React left it.
+                 */}
+                <span>{currentStep.action}</span>
                 <ArrowRight className="h-7 w-7" />
               </button>
             </div>

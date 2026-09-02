@@ -6,6 +6,12 @@ export const MAX_PDF_BYTES = 4 * 1024 * 1024;
 export const MAX_DOCUMENT_BYTES = MAX_PDF_BYTES;
 export const MAX_SCAN_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_SCAN_IMAGE_COUNT = 10;
+// Scan photos reach storage through a signed upload URL, so they may be as large as
+// MAX_SCAN_IMAGE_BYTES. A HEIC preview is different: the raw photo is posted to a
+// Vercel function to be converted, and the platform rejects a request body over
+// 4.5 MB with a 413 before the route runs. Keep this under that ceiling, with room
+// for multipart overhead, the same way MAX_PDF_BYTES does.
+export const MAX_SCAN_PREVIEW_BYTES = 4 * 1024 * 1024;
 
 export const SUPPORTED_SCAN_IMAGE_MIME_TYPES = [
   "image/jpeg",

@@ -54,6 +54,7 @@ import {
   compressScanImageForUpload,
 } from "@/lib/file-compression-client";
 import { prepareAudioSourceForUpload } from "@/lib/audio-source-preparation";
+import { canConvertScanPreview } from "@/lib/scan-preview";
 import {
   getExtensionForMimeType,
   isSupportedScanImageMimeType,
@@ -1322,6 +1323,20 @@ export function NoteSourceModal({
   }
 
   async function prepareHeicPhotoPreview(photoSource: PhotoSource) {
+    // The photo itself still uploads straight to storage through a signed URL, so a
+    // photo too large to convert is only missing its thumbnail, not unusable. Sending
+    // it anyway just earns a platform 413, so show "no preview" without the round trip.
+    if (!canConvertScanPreview(photoSource.file.size)) {
+      setPhotoSources((current) =>
+        current.map((currentPhotoSource) =>
+          currentPhotoSource.id === photoSource.id
+            ? { ...currentPhotoSource, previewStatus: "failed" }
+            : currentPhotoSource,
+        ),
+      );
+      return;
+    }
+
     const formData = new FormData();
     formData.append("file", photoSource.file);
 

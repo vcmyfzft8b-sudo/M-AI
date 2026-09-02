@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import convert from "heic-convert";
 import sharp from "sharp";
 
-import { MAX_SCAN_IMAGE_BYTES } from "@/lib/constants";
+import { canConvertScanPreview } from "@/lib/scan-preview";
 import { normalizeMimeType } from "@/lib/storage";
 import { tr } from "@/lib/i18n/server";
 
@@ -25,7 +25,7 @@ async function createScanPreview(file: File) {
     throw new Error(await tr("api.noPreviewNeeded"));
   }
 
-  if (file.size <= 0 || file.size > MAX_SCAN_IMAGE_BYTES) {
+  if (!canConvertScanPreview(file.size)) {
     throw new Error(await tr("api.photoTooLargeForPreview"));
   }
 

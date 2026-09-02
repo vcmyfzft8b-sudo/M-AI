@@ -7138,7 +7138,7 @@
  */
 @keyframes memo-wheel-spin {
   0% { transform: rotate(0deg); }   /* 1296°/s */
-  4% { transform: rotate(475.6deg); }   /* 1165 */
+  4% { transform: rotate(475.6deg); }   /* 1165°/s */
   8% { transform: rotate(902.2deg); }   /* 1042 */
   12% { transform: rotate(1282.7deg); }   /* 927 */
   16% { transform: rotate(1620.2deg); }   /* 819 */
@@ -7166,7 +7166,7 @@
   94% { transform: rotate(3368.3deg); }   /* 10 */
   96% { transform: rotate(3370deg); }   /* 7 */
   98% { transform: rotate(3371.1deg); }   /* 4 */
-  100% { transform: rotate(3372deg); }   /* 0 */
+  100% { transform: rotate(3372deg); }   /* 0°/s */
 }
 
 /*

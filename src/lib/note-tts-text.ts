@@ -71,8 +71,13 @@ export type NoteTtsChunkPlan = {
   estimatedSeconds: number;
 };
 
-const DEFAULT_TARGET_WORDS_PER_CHUNK = 190;
-const ESTIMATED_TTS_WORDS_PER_SECOND = 2.35;
+// Production measured 1.6-1.9 spoken words per second across languages (p10-p90, tts-rt-v2), so
+// 90 words is about a minute of audio. Soniox truncates a request at three minutes of audio, and
+// the old 190-word chunks sat at two minutes with a tail that never got spoken on the slowest
+// notes — a formula-heavy one reached the cap a third of the way in. A minute also halves the
+// wait before an uncached note starts playing, since synthesis runs a little faster than real time.
+const DEFAULT_TARGET_WORDS_PER_CHUNK = 90;
+const ESTIMATED_TTS_WORDS_PER_SECOND = 1.7;
 const WORD_PATTERN = /[\p{L}\p{N}]+(?:[.'’_-][\p{L}\p{N}]+)*/gu;
 const SPEECH_BLOCK_SEPARATOR = "\n\n";
 const SPEECH_LIST_ITEM_SEPARATOR = "\n";
@@ -673,6 +678,119 @@ export function buildNoteTtsChunks(
   return chunks;
 }
 
+const SPEAKABLE_MATH_SYMBOLS: Record<string, string> = {
+  ne: "≠",
+  neq: "≠",
+  le: "≤",
+  leq: "≤",
+  ge: "≥",
+  geq: "≥",
+  pm: "±",
+  mp: "∓",
+  infty: "∞",
+  cdot: "·",
+  times: "×",
+  div: "÷",
+  approx: "≈",
+  to: "→",
+  rightarrow: "→",
+  leftarrow: "←",
+  leftrightarrow: "↔",
+  Rightarrow: "⇒",
+  Leftrightarrow: "⇔",
+  sum: "∑",
+  prod: "∏",
+  int: "∫",
+  partial: "∂",
+  nabla: "∇",
+  degree: "°",
+  circ: "°",
+  ldots: "…",
+  cdots: "…",
+  dots: "…",
+  alpha: "α",
+  beta: "β",
+  gamma: "γ",
+  delta: "δ",
+  epsilon: "ε",
+  varepsilon: "ε",
+  zeta: "ζ",
+  eta: "η",
+  theta: "θ",
+  lambda: "λ",
+  mu: "μ",
+  nu: "ν",
+  xi: "ξ",
+  pi: "π",
+  rho: "ρ",
+  sigma: "σ",
+  tau: "τ",
+  phi: "φ",
+  varphi: "φ",
+  chi: "χ",
+  psi: "ψ",
+  omega: "ω",
+  Gamma: "Γ",
+  Delta: "Δ",
+  Theta: "Θ",
+  Lambda: "Λ",
+  Pi: "Π",
+  Sigma: "Σ",
+  Phi: "Φ",
+  Omega: "Ω",
+};
+
+// Rewrites a \\frac{a}{b}-style command with two brace groups, innermost first so nested fractions
+// resolve. Returns the input unchanged once nothing matches.
+function rewriteBraceCommand(value: string, command: string, render: (a: string, b: string) => string) {
+  const pattern = new RegExp(`\\\\${command}\\s*\\{([^{}]*)\\}\\s*\\{([^{}]*)\\}`, "g");
+  let current = value;
+
+  for (let pass = 0; pass < 8; pass += 1) {
+    const next = current.replace(pattern, (_match, a: string, b: string) => render(a, b));
+
+    if (next === current) {
+      break;
+    }
+
+    current = next;
+  }
+
+  return current;
+}
+
+// What a formula sounds like. The note keeps its LaTeX for the page; the speech text gets symbols
+// and plain words instead, because the model read "\frac{x)}{Q}" and "\text{st}(P)" letter by
+// letter — a formula-heavy chunk took over three minutes and hit Soniox's per-request cap.
+export function speakableMath(latex: string) {
+  let value = latex
+    .replace(/\\(?:left|right|big|Big|bigg|Bigg|,|;|!|quad|qquad)\b/g, " ")
+    .replace(/\\(?:text|textrm|textit|textbf|mathrm|mathit|mathbf|operatorname|mathcal|mathbb)\s*\{([^{}]*)\}/g, " $1 ");
+
+  // Scripts first: "x^{2}" inside a root or a fraction would otherwise hide the group's braces
+  // from the command rewrites below.
+  value = value.replace(/\^\{([^{}]*)\}/g, "^$1").replace(/_\{([^{}]*)\}/g, "_$1");
+  value = rewriteBraceCommand(value, "frac", (a, b) => ` ${a} / ${b} `);
+  value = rewriteBraceCommand(value, "dfrac", (a, b) => ` ${a} / ${b} `);
+  value = rewriteBraceCommand(value, "tfrac", (a, b) => ` ${a} / ${b} `);
+
+  value = value
+    .replace(/\\sqrt\s*\[([^\]]*)\]\s*\{([^{}]*)\}/g, " $1√($2) ")
+    .replace(/\\sqrt\s*\{([^{}]*)\}/g, " √($1) ")
+    .replace(/\\([A-Za-z]+)/g, (_match, command: string) => {
+      const symbol = SPEAKABLE_MATH_SYMBOLS[command];
+
+      return symbol ? ` ${symbol} ` : ` ${command} `;
+    })
+    .replace(/\\([^A-Za-z])/g, "$1")
+    .replace(/[{}]/g, " ")
+    .replace(/\s+([_^])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return value;
+}
+
 function normalizeSpeechText(value: string) {
   return value
     .replace(/\s*(?:-{1,2}>|→|⇒|➜|➡)\s*/g, ". ")
@@ -712,10 +830,12 @@ function tokensToSpeechText(
     }
 
     if (token.type === "math") {
+      const spoken = speakableMath(token.text);
+
       if (hasIncludedWord) {
-        text += token.text;
+        text += spoken;
       } else {
-        pendingText += token.text;
+        pendingText += spoken;
       }
       continue;
     }

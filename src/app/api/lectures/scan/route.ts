@@ -7,7 +7,7 @@ import { enqueueLectureNotesGeneration, enqueueLectureScanProcessing } from "@/l
 import { LECTURE_FAILURE_MESSAGE_KEYS } from "@/lib/lecture-failure-codes";
 import { toLectureFailureCode } from "@/lib/lecture-processing-errors";
 import { extractTextFromImage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
-import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
+import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import {
   buildValidationErrorResponse,
@@ -48,7 +48,7 @@ const scanLectureFieldsSchema = z.object({
     .optional()
     .transform((value) => value === true || value === "true"),
   initialAudioVoice: z
-    .union([z.enum(NOTE_TTS_VOICES), z.null()])
+    .union([noteTtsVoiceSchema, z.null()])
     .optional()
     .transform((value) => value ?? undefined),
 });
@@ -69,7 +69,7 @@ const storedScanLectureSchema = z.object({
   // source the pipeline is now meant to detect for itself.
   languageHint: languageHintSchema.optional(),
   createInitialAudio: z.boolean().optional().default(false),
-  initialAudioVoice: z.enum(NOTE_TTS_VOICES).optional(),
+  initialAudioVoice: noteTtsVoiceSchema.optional(),
   text: z
     .string()
     .optional()

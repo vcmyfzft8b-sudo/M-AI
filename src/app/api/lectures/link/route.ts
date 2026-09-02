@@ -9,7 +9,7 @@ import {
 } from "@/lib/link-source-validation";
 import { ExpectedLectureInputError } from "@/lib/lecture-processing-errors";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
-import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
+import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -31,7 +31,7 @@ const createLinkLectureSchema = z.object({
   // source the pipeline is now meant to detect for itself.
   languageHint: languageHintSchema.optional(),
   createInitialAudio: z.boolean().optional().default(false),
-  initialAudioVoice: z.enum(NOTE_TTS_VOICES).optional(),
+  initialAudioVoice: noteTtsVoiceSchema.optional(),
 });
 
 export const maxDuration = 300;

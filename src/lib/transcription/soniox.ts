@@ -167,10 +167,12 @@ export class SonioxTranscriptionProvider implements TranscriptionProvider {
 
     const segments = transcript
       .segments({ group_by: ["speaker", "language"] })
+      // SDK 2.3 types a segment's times as optional; a segment without them still carries text,
+      // so it keeps its place at zero rather than being dropped.
       .map((segment, index) => ({
         idx: index,
-        startMs: segment.start_ms,
-        endMs: Math.max(segment.end_ms, segment.start_ms),
+        startMs: segment.start_ms ?? 0,
+        endMs: Math.max(segment.end_ms ?? 0, segment.start_ms ?? 0),
         speakerLabel: segment.speaker ?? null,
         text: segment.text.trim(),
       }))

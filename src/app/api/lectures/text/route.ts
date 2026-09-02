@@ -5,7 +5,7 @@ import { createBillingRequiredResponse, getUserEntitlementState } from "@/lib/bi
 import { enqueueLectureNotesGeneration } from "@/lib/jobs";
 import { prepareLectureFromTextSource } from "@/lib/manual-lectures";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
-import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
+import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -25,7 +25,7 @@ const createTextLectureSchema = z.object({
   // source the pipeline is now meant to detect for itself.
   languageHint: languageHintSchema.optional(),
   createInitialAudio: z.boolean().optional().default(false),
-  initialAudioVoice: z.enum(NOTE_TTS_VOICES).optional(),
+  initialAudioVoice: noteTtsVoiceSchema.optional(),
 });
 
 export const maxDuration = 300;

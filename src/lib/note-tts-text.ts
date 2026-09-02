@@ -71,8 +71,108 @@ export type NoteTtsChunkPlan = {
   estimatedSeconds: number;
 };
 
-const DEFAULT_TARGET_WORDS_PER_CHUNK = 190;
-const ESTIMATED_TTS_WORDS_PER_SECOND = 2.35;
+// Production measured 1.6-1.9 spoken words per second across languages (p10-p90, tts-rt-v2), so
+// 90 words is about a minute of audio. Soniox truncates a request at three minutes of audio, and
+// the old 190-word chunks sat at two minutes with a tail that never got spoken on the slowest
+// notes — a formula-heavy one reached the cap a third of the way in. A minute also halves the
+// wait before an uncached note starts playing, since synthesis runs a little faster than real time.
+const DEFAULT_TARGET_WORDS_PER_CHUNK = 90;
+// The first chunks are short so an uncached note starts within seconds, and each next chunk is
+// sized so it is synthesized before the current one ends. Measured on tts-rt-v2: synthesis takes
+// about 0.88x the audio's length plus ~3s of upload, and the player runs two generations at once
+// from the first click. So the second chunk may be 1.6x the first (it runs alongside it, and has
+// the first chunk's synthesis plus its playback to finish in), and every later one 0.75x the two
+// before it (it starts when the earlier of those finishes and has both their playbacks to finish
+// in — or, when the first two were made at note creation, starts at the first click and has the
+// same two playbacks). The ratios apply to the sizes actually chosen, which snapping may shorten.
+const FIRST_CHUNK_TARGET_WORDS = 30;
+const SECOND_CHUNK_GROWTH = 1.6;
+const LATER_CHUNK_GROWTH = 0.75;
+const ESTIMATED_TTS_WORDS_PER_SECOND = 1.7;
+// A boundary may move back this far to land on a sentence end; the word cap stays the timing
+// guarantee, this only makes the cut natural.
+const CHUNK_SNAP_WINDOW = 0.4;
+const MIN_CHUNK_WORDS = 12;
+// The word count bounds prose, but formulas carry no words and are read at ~4 characters a
+// second against ~12 for prose — a chunk of forty-eight words with a formula in every sentence
+// came to 1,200 characters, well past the three minutes Soniox stops at. So a chunk is also capped
+// by the length of its speech text: 700 characters is under three minutes even if all of it were
+// formula, and ordinary prose of 90 words stays under it.
+const MAX_CHUNK_SPEECH_CHARS = 700;
+const ESTIMATED_TTS_CHARS_PER_SECOND = 12;
+
+// Folded into the cache key of every chunk. A chunk's audio is only valid for the exact word
+// range the planner gave it, so any change to how chunks are cut has to retire the cached audio;
+// deriving the version from the parameters makes that automatic rather than a thing to remember.
+export const NOTE_TTS_CHUNK_PLAN_VERSION = [
+  "plan",
+  DEFAULT_TARGET_WORDS_PER_CHUNK,
+  FIRST_CHUNK_TARGET_WORDS,
+  SECOND_CHUNK_GROWTH,
+  LATER_CHUNK_GROWTH,
+  CHUNK_SNAP_WINDOW,
+  MIN_CHUNK_WORDS,
+  MAX_CHUNK_SPEECH_CHARS,
+].join("-");
+
+export function getTargetWordsForChunk(previousChunkSizes: number[], targetWordsPerChunk: number) {
+  const count = previousChunkSizes.length;
+
+  if (count === 0) {
+    return Math.min(FIRST_CHUNK_TARGET_WORDS, targetWordsPerChunk);
+  }
+
+  if (count === 1) {
+    return Math.min(targetWordsPerChunk, Math.floor(previousChunkSizes[0] * SECOND_CHUNK_GROWTH));
+  }
+
+  return Math.min(
+    targetWordsPerChunk,
+    Math.floor((previousChunkSizes[count - 1] + previousChunkSizes[count - 2]) * LATER_CHUNK_GROWTH),
+  );
+}
+
+const SENTENCE_END_PATTERN = /[.!?…;:]/u;
+
+// Word indexes after which the reader hears a pause anyway: the last word of a block, list item
+// or table cell (the speech text puts a full stop there), and any word followed by sentence
+// punctuation. A chunk boundary on one of these is inaudible; one in the middle of a sentence
+// ends the phrase with a falling tone and restarts it as a new sentence.
+function collectSentenceEndWordIndexes(blocks: NoteTtsBlock[]) {
+  const ends = new Set<number>();
+  const tokenLists: NoteTtsInlineToken[][] = [];
+
+  for (const block of blocks) {
+    if (block.kind === "list") {
+      tokenLists.push(...block.items.map((item) => item.tokens));
+    } else if (block.kind === "table") {
+      tokenLists.push(...block.rows.flatMap((row) => row.cells.map((cell) => cell.tokens)));
+    } else {
+      tokenLists.push(block.tokens);
+    }
+  }
+
+  for (const tokens of tokenLists) {
+    let lastWordIndex: number | null = null;
+
+    for (const token of tokens) {
+      if (token.type === "word") {
+        lastWordIndex = token.wordIndex;
+        continue;
+      }
+
+      if (token.type === "text" && lastWordIndex !== null && SENTENCE_END_PATTERN.test(token.text)) {
+        ends.add(lastWordIndex);
+      }
+    }
+
+    if (lastWordIndex !== null) {
+      ends.add(lastWordIndex);
+    }
+  }
+
+  return ends;
+}
 const WORD_PATTERN = /[\p{L}\p{N}]+(?:[.'’_-][\p{L}\p{N}]+)*/gu;
 const SPEECH_BLOCK_SEPARATOR = "\n\n";
 const SPEECH_LIST_ITEM_SEPARATOR = "\n";
@@ -87,18 +187,21 @@ function normalizeHeadingText(value: string) {
     .trim();
 }
 
+// Always returns trimmed text: every caller hashes the result into the chunk cache key, and the
+// strip path trimmed while the pass-through path did not, so the same note hashed two ways
+// depending on which route asked and cached audio went unfound.
 export function stripLeadingRedundantHeading(markdown: string, title?: string | null) {
   const lines = markdown.split("\n");
   const firstContentIndex = lines.findIndex((line) => line.trim().length > 0);
 
   if (firstContentIndex === -1) {
-    return markdown;
+    return markdown.trim();
   }
 
   const match = lines[firstContentIndex].match(/^#{1,6}\s+(.+)$/);
 
   if (!match) {
-    return markdown;
+    return markdown.trim();
   }
 
   const heading = normalizeHeadingText(match[1] ?? "");
@@ -106,7 +209,7 @@ export function stripLeadingRedundantHeading(markdown: string, title?: string | 
   const genericHeadings = new Set(["notes", "lecture notes", "structured notes"]);
 
   if (!genericHeadings.has(heading) && heading !== normalizedTitle) {
-    return markdown;
+    return markdown.trim();
   }
 
   const remainingLines = lines.slice(firstContentIndex + 1);
@@ -649,28 +752,184 @@ export function buildNoteTtsChunks(
       ).length
     : 0;
 
+  const sentenceEnds = collectSentenceEndWordIndexes(document.blocks);
+  const chunkSizes: number[] = [];
+
   for (
     let wordStartIndex = wordStartOffset, chunkIndex = 0;
     wordStartIndex < document.words.length;
-    wordStartIndex += targetWordsPerChunk, chunkIndex += 1
+    chunkIndex += 1
   ) {
-    const wordEndIndex = Math.min(wordStartIndex + targetWordsPerChunk, document.words.length);
+    const targetWords = getTargetWordsForChunk(chunkSizes, targetWordsPerChunk);
+    let wordEndIndex = Math.min(wordStartIndex + targetWords, document.words.length);
+
+    if (wordEndIndex < document.words.length) {
+      const earliestEnd =
+        wordStartIndex + Math.max(MIN_CHUNK_WORDS, Math.ceil(targetWords * (1 - CHUNK_SNAP_WINDOW)));
+
+      for (let candidate = wordEndIndex; candidate >= earliestEnd; candidate -= 1) {
+        if (sentenceEnds.has(document.words[candidate - 1].index)) {
+          wordEndIndex = candidate;
+          break;
+        }
+      }
+    }
+
+    let text = buildChunkSpeechText(document.blocks, wordStartIndex, wordEndIndex);
+
+    // Too much speech for the words it holds (formulas): pull the end back, to a sentence end
+    // when one exists, else a few words at a time, until it fits or the chunk is at its minimum.
+    while (
+      text.length > MAX_CHUNK_SPEECH_CHARS &&
+      wordEndIndex - wordStartIndex > MIN_CHUNK_WORDS
+    ) {
+      const floor = wordStartIndex + MIN_CHUNK_WORDS;
+      let shorter = Math.max(floor, wordEndIndex - 5);
+
+      for (let candidate = wordEndIndex - 1; candidate > floor; candidate -= 1) {
+        if (sentenceEnds.has(document.words[candidate - 1].index)) {
+          shorter = candidate;
+          break;
+        }
+      }
+
+      wordEndIndex = shorter;
+      text = buildChunkSpeechText(document.blocks, wordStartIndex, wordEndIndex);
+    }
+
     const chunkWords = document.words.slice(wordStartIndex, wordEndIndex);
     const estimatedSeconds = Math.max(
       1,
       Math.ceil(chunkWords.length / ESTIMATED_TTS_WORDS_PER_SECOND),
+      Math.ceil(text.length / ESTIMATED_TTS_CHARS_PER_SECOND),
     );
 
     chunks.push({
       chunkIndex,
       wordStartIndex,
       wordEndIndex,
-      text: buildChunkSpeechText(document.blocks, wordStartIndex, wordEndIndex),
+      text,
       estimatedSeconds,
     });
+    chunkSizes.push(wordEndIndex - wordStartIndex);
+    wordStartIndex = wordEndIndex;
   }
 
   return chunks;
+}
+
+const SPEAKABLE_MATH_SYMBOLS: Record<string, string> = {
+  ne: "≠",
+  neq: "≠",
+  le: "≤",
+  leq: "≤",
+  ge: "≥",
+  geq: "≥",
+  pm: "±",
+  mp: "∓",
+  infty: "∞",
+  cdot: "·",
+  times: "×",
+  div: "÷",
+  approx: "≈",
+  to: "→",
+  rightarrow: "→",
+  leftarrow: "←",
+  leftrightarrow: "↔",
+  Rightarrow: "⇒",
+  Leftrightarrow: "⇔",
+  sum: "∑",
+  prod: "∏",
+  int: "∫",
+  partial: "∂",
+  nabla: "∇",
+  degree: "°",
+  circ: "°",
+  ldots: "…",
+  cdots: "…",
+  dots: "…",
+  alpha: "α",
+  beta: "β",
+  gamma: "γ",
+  delta: "δ",
+  epsilon: "ε",
+  varepsilon: "ε",
+  zeta: "ζ",
+  eta: "η",
+  theta: "θ",
+  lambda: "λ",
+  mu: "μ",
+  nu: "ν",
+  xi: "ξ",
+  pi: "π",
+  rho: "ρ",
+  sigma: "σ",
+  tau: "τ",
+  phi: "φ",
+  varphi: "φ",
+  chi: "χ",
+  psi: "ψ",
+  omega: "ω",
+  Gamma: "Γ",
+  Delta: "Δ",
+  Theta: "Θ",
+  Lambda: "Λ",
+  Pi: "Π",
+  Sigma: "Σ",
+  Phi: "Φ",
+  Omega: "Ω",
+};
+
+const FRACTION_PATTERN = /\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g;
+const ROOT_WITH_INDEX_PATTERN = /\\sqrt\s*\[([^\]]*)\]\s*\{([^{}]*)\}/g;
+const ROOT_PATTERN = /\\sqrt\s*\{([^{}]*)\}/g;
+
+// Innermost first: a pass rewrites the fractions and roots whose arguments hold no braces, which
+// unwraps one level of nesting, and repeats until nothing changes — so a root inside a fraction
+// and a fraction inside a root both resolve rather than leaving "frac" to be read as a word.
+function rewriteFractionsAndRoots(value: string) {
+  let current = value;
+
+  for (let pass = 0; pass < 8; pass += 1) {
+    const next = current
+      .replace(FRACTION_PATTERN, (_match, a: string, b: string) => ` ${a} / ${b} `)
+      .replace(ROOT_WITH_INDEX_PATTERN, (_match, index: string, a: string) => ` ${index}√(${a}) `)
+      .replace(ROOT_PATTERN, (_match, a: string) => ` √(${a}) `);
+
+    if (next === current) {
+      break;
+    }
+
+    current = next;
+  }
+
+  return current;
+}
+
+// What a formula sounds like. The note keeps its LaTeX for the page; the speech text gets symbols
+// and plain words instead, because the model read "\frac{x)}{Q}" and "\text{st}(P)" letter by
+// letter — a formula-heavy chunk took over three minutes and hit Soniox's per-request cap.
+export function speakableMath(latex: string) {
+  let value = latex
+    .replace(/\\(?:left|right|big|Big|bigg|Bigg|,|;|!|quad|qquad)\b/g, " ")
+    .replace(/\\(?:text|textrm|textit|textbf|mathrm|mathit|mathbf|operatorname|mathcal|mathbb)\s*\{([^{}]*)\}/g, " $1 ");
+
+  // Scripts first: "x^{2}" inside a root or a fraction would otherwise hide the group's braces
+  // from the command rewrites below.
+  value = value.replace(/\^\{([^{}]*)\}/g, "^$1").replace(/_\{([^{}]*)\}/g, "_$1");
+  value = rewriteFractionsAndRoots(value)
+    .replace(/\\([A-Za-z]+)/g, (_match, command: string) => {
+      const symbol = SPEAKABLE_MATH_SYMBOLS[command];
+
+      return symbol ? ` ${symbol} ` : ` ${command} `;
+    })
+    .replace(/\\([^A-Za-z])/g, "$1")
+    .replace(/[{}]/g, " ")
+    .replace(/\s+([_^])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return value;
 }
 
 function normalizeSpeechText(value: string) {
@@ -712,10 +971,12 @@ function tokensToSpeechText(
     }
 
     if (token.type === "math") {
+      const spoken = speakableMath(token.text);
+
       if (hasIncludedWord) {
-        text += token.text;
+        text += spoken;
       } else {
-        pendingText += token.text;
+        pendingText += spoken;
       }
       continue;
     }

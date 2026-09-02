@@ -17,7 +17,8 @@ import {
   parseNoteTtsDocument,
   stripLeadingRedundantHeading,
 } from "@/lib/note-tts-text";
-import { DEFAULT_NOTE_TTS_VOICE, NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
+import { DEFAULT_NOTE_TTS_VOICE } from "@/lib/note-tts-settings";
+import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 import {
   TTS_CHUNK_LEGACY_PENDING_STATUS,
   TTS_CHUNK_PENDING_STATUS,
@@ -29,8 +30,8 @@ import { routeIdParamSchema } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
-// Generating a chunk means synthesizing the audio, transcribing it back for word alignment,
-// uploading it and recording the row — measured at 90-119s in production. At the 120s this route
+// Generating a chunk means synthesizing the audio, aligning it, uploading it and recording the
+// row — measured at 90-119s in production when chunks were two minutes long. At the 120s this route
 // used to allow, that ran right up against the ceiling, and an invocation Vercel kills runs no
 // catch block: the quota reservation taken at the start was never released, so it stayed held for
 // TTS_GENERATION_RESERVATION_STALE_MS and every request for that chunk over the following ten
@@ -44,7 +45,7 @@ const TTS_PROVIDER_RETRY_DELAYS_MS = [1_500, 3_500];
 const ttsChunkRequestSchema = z.object({
   sessionId: z.string().trim().min(8).max(128),
   chunkIndex: z.number().int().nonnegative(),
-  voice: z.enum(NOTE_TTS_VOICES).default(DEFAULT_NOTE_TTS_VOICE),
+  voice: noteTtsVoiceSchema.default(DEFAULT_NOTE_TTS_VOICE),
   // Set by clients that understand a 202 "still generating" answer. Absent from bundles that
   // predate it, which still need the 503 — see TTS_CHUNK_PENDING_STATUS.
   acceptsPendingStatus: z.boolean().default(false),

@@ -27,6 +27,7 @@ import {
   NOTE_TTS_PLAYBACK_RATES,
   NOTE_TTS_VOICE_STORAGE_KEY,
   NOTE_TTS_VOICES,
+  normalizeNoteTtsVoice,
   type NoteTtsHighlightColorId,
   type NoteTtsPlaybackRate,
   type NoteTtsVoice,
@@ -107,6 +108,10 @@ type TtsStatusResponse = {
   hasUnlimitedUsage?: boolean;
   chunkCount: number;
   totalWords: number;
+  // The voice the status was taken for, and how many opening chunks already exist for it. The
+  // page warms those, and only while the reader's voice still matches.
+  voice?: string;
+  readyLeadingChunkCount?: number;
   error?: string;
 };
 
@@ -170,9 +175,7 @@ function getStoredVoice(): NoteTtsVoice {
     return DEFAULT_NOTE_TTS_VOICE;
   }
 
-  const storedVoice = window.localStorage.getItem(NOTE_TTS_VOICE_STORAGE_KEY);
-
-  return NOTE_TTS_VOICES.find((voice) => voice === storedVoice) ?? DEFAULT_NOTE_TTS_VOICE;
+  return normalizeNoteTtsVoice(window.localStorage.getItem(NOTE_TTS_VOICE_STORAGE_KEY));
 }
 
 function getStoredPlaybackRate(): NoteTtsPlaybackRate {
@@ -200,6 +203,16 @@ function getStoredHighlightColorId(): NoteTtsHighlightColorId {
     DEFAULT_NOTE_TTS_HIGHLIGHT_COLOR_ID
   );
 }
+
+// Chunks generated at once per reader. Two is what the chunk ramp on the server is sized for, and
+// half of the organization's concurrent-stream allowance at Soniox.
+const PREFETCH_LANES = 2;
+// How much audio past the playhead the reader keeps ready. Counting chunks was not enough: the
+// early chunks are short, so "two ahead" could be under half a minute, and when those two were
+// already cached the lanes sat idle until the last moment. A minute-long chunk takes about a
+// minute to make, so the horizon has to cover one full chunk plus its synthesis. At double speed
+// the horizon covers half the wall time, which is the most two lanes can deliver anyway.
+const PREFETCH_HORIZON_SECONDS = 150;
 
 function getChunkCacheKey(voice: NoteTtsVoice, chunkIndex: number) {
   return `${voice}:${chunkIndex}`;
@@ -1412,7 +1425,6 @@ function ReadAlongMarkdown({
 export function NoteReadAloud({
   lectureId,
   content,
-  autoPrepareFirstChunk = false,
   annotationToolbar,
   toolbarAccessory,
   annotationActive = false,
@@ -1432,7 +1444,6 @@ export function NoteReadAloud({
 }: {
   lectureId: string;
   content: string;
-  autoPrepareFirstChunk?: boolean;
   annotationToolbar?: ReactNode;
   toolbarAccessory?: ReactNode;
   annotationActive?: boolean;
@@ -1481,7 +1492,29 @@ export function NoteReadAloud({
   const pendingArrowMoveSiblingRectsRef = useRef<Map<string, DOMRect> | null>(null);
   const prefetchedChunksRef = useRef(new Map<string, TtsChunkResponse>());
   const pendingChunkRequestsRef = useRef(new Map<string, Promise<TtsChunkResponse>>());
-  const prefetchQueueRef = useRef<Promise<void>>(Promise.resolve());
+  /**
+   * The audio of every chunk the route has answered for, downloaded into memory as an object URL.
+   * A chunk boundary used to hand the element a fresh signed URL, and the reader heard the
+   * download as a pause. It also outlives the 10-minute signature on a URL fetched long before
+   * its turn. Released as playback moves past a chunk, and on every reset.
+   */
+  const prefetchedAudioUrlsRef = useRef(new Map<string, string>());
+  const pendingAudioPrefetchesRef = useRef(new Map<string, Promise<string | null>>());
+  /**
+   * Chunks waiting to be generated, run PREFETCH_LANES at a time. Synthesis is barely faster than
+   * real time, so one chunk at a time could never build a lead: the second chunk has to be
+   * generated while the first plays, and the third while the second does — see the ramp in
+   * note-tts-text.ts, which is sized for exactly two lanes.
+   */
+  const prefetchWaitingRef = useRef<number[]>([]);
+  const prefetchActiveRef = useRef(0);
+  // The pump reads these through refs so a lane that finishes after a voice change (the reset
+  // emptied the queue and freed the lanes; that request just runs out) drains the new queue with
+  // the new voice rather than the one its closure was made with.
+  const fetchChunkRef = useRef<
+    (chunkIndex: number, options?: { silent?: boolean }) => Promise<TtsChunkResponse | null>
+  >(async () => null);
+  const selectedVoiceRef = useRef<NoteTtsVoice>(DEFAULT_NOTE_TTS_VOICE);
   // The voice the chunk route last refused on a spent daily allowance, so the look-ahead buffer
   // stops asking for chunks it already knows will be refused. Cleared as soon as a request comes
   // back with allowance left.
@@ -1892,15 +1925,23 @@ export function NoteReadAloud({
   } as CSSProperties;
 
   useEffect(() => {
+    // The voice decides which chunks count as ready, and it is read from storage on mount.
+    if (!hasHydratedSettings) {
+      return;
+    }
+
     let cancelled = false;
 
     async function loadStatus() {
       setIsLoadingStatus(true);
 
       try {
-        const response = await fetch(`/api/lectures/${lectureId}/tts/status`, {
-          cache: "no-store",
-        });
+        const response = await fetch(
+          `/api/lectures/${lectureId}/tts/status?voice=${encodeURIComponent(selectedVoice)}`,
+          {
+            cache: "no-store",
+          },
+        );
         const payload = await parseResponse<TtsStatusResponse>(response, t);
 
         if (!cancelled) {
@@ -1940,7 +1981,7 @@ export function NoteReadAloud({
     return () => {
       cancelled = true;
     };
-  }, [chunks.length, document.words.length, lectureId, t]);
+  }, [chunks.length, document.words.length, hasHydratedSettings, lectureId, selectedVoice, t]);
 
   useEffect(() => {
     setPlaybackRate(getStoredPlaybackRate());
@@ -1951,8 +1992,17 @@ export function NoteReadAloud({
 
   useEffect(() => {
     const audio = audioRef.current;
+    const prefetchedAudioUrls = prefetchedAudioUrlsRef.current;
+    const pendingAudioPrefetches = pendingAudioPrefetchesRef.current;
 
     return () => {
+      for (const objectUrl of prefetchedAudioUrls.values()) {
+        URL.revokeObjectURL(objectUrl);
+      }
+      prefetchedAudioUrls.clear();
+      // A download still in flight sees its entry gone and revokes what it made.
+      pendingAudioPrefetches.clear();
+
       if (!audio) {
         return;
       }
@@ -2104,7 +2154,14 @@ export function NoteReadAloud({
     if (!options?.preservePreparedChunks) {
       prefetchedChunksRef.current.clear();
       pendingChunkRequestsRef.current.clear();
-      prefetchQueueRef.current = Promise.resolve();
+      prefetchWaitingRef.current = [];
+      // Lanes still running belong to the old voice; they release themselves when they finish.
+      prefetchActiveRef.current = 0;
+      for (const objectUrl of prefetchedAudioUrlsRef.current.values()) {
+        URL.revokeObjectURL(objectUrl);
+      }
+      prefetchedAudioUrlsRef.current.clear();
+      pendingAudioPrefetchesRef.current.clear();
     }
 
     cancelTtsGenerationProgress();
@@ -2153,6 +2210,72 @@ export function NoteReadAloud({
     [chunks],
   );
 
+  const prefetchChunkAudio = useCallback((cacheKey: string, payload: TtsChunkResponse) => {
+    if (
+      prefetchedAudioUrlsRef.current.has(cacheKey) ||
+      pendingAudioPrefetchesRef.current.has(cacheKey)
+    ) {
+      return pendingAudioPrefetchesRef.current.get(cacheKey) ?? Promise.resolve(null);
+    }
+
+    let download: Promise<string | null> = Promise.resolve(null);
+
+    download = (async () => {
+      try {
+        const response = await fetch(payload.audioUrl);
+
+        if (!response.ok) {
+          return null;
+        }
+
+        const objectUrl = URL.createObjectURL(await response.blob());
+
+        // The reset that emptied the caches while this was downloading owns the element now.
+        if (pendingAudioPrefetchesRef.current.get(cacheKey) !== download) {
+          URL.revokeObjectURL(objectUrl);
+          return null;
+        }
+
+        prefetchedAudioUrlsRef.current.set(cacheKey, objectUrl);
+        return objectUrl;
+      } catch {
+        // The element falls back to the signed URL; a failed warm-up is not an error.
+        return null;
+      } finally {
+        if (pendingAudioPrefetchesRef.current.get(cacheKey) === download) {
+          pendingAudioPrefetchesRef.current.delete(cacheKey);
+        }
+      }
+    })();
+
+    pendingAudioPrefetchesRef.current.set(cacheKey, download);
+    return download;
+  }, []);
+
+  // The in-memory copy when it is already there, else the signed URL, which the element streams
+  // from its first frames: waiting for a download still in flight would put the whole file's
+  // transfer in front of the first word on the one path that has already waited for synthesis.
+  const resolveChunkAudioSource = useCallback(
+    (cacheKey: string, payload: TtsChunkResponse) =>
+      prefetchedAudioUrlsRef.current.get(cacheKey) ?? payload.audioUrl,
+    [],
+  );
+
+  const releaseChunkAudioBefore = useCallback(
+    (chunkIndex: number) => {
+      for (const [cacheKey, objectUrl] of prefetchedAudioUrlsRef.current) {
+        const [, index] = cacheKey.split(":");
+
+        // Keep the chunk that just finished: "press again" on an ended chunk replays it.
+        if (Number(index) < chunkIndex - 1) {
+          URL.revokeObjectURL(objectUrl);
+          prefetchedAudioUrlsRef.current.delete(cacheKey);
+        }
+      }
+    },
+    [],
+  );
+
   const fetchChunk = useCallback(
     async (
       chunkIndex: number,
@@ -2193,6 +2316,7 @@ export function NoteReadAloud({
               const payload = await parseResponse<TtsChunkResponse>(response, t);
               updateQuota(payload);
               prefetchedChunksRef.current.set(cacheKey, payload);
+              void prefetchChunkAudio(cacheKey, payload);
 
               return payload;
             } catch (error) {
@@ -2302,12 +2426,61 @@ export function NoteReadAloud({
       document.words.length,
       isCreationQuotaUnavailableForChunk,
       lectureId,
+      prefetchChunkAudio,
       resetPlaybackToStart,
       selectedVoice,
       t,
       updateQuota,
     ],
   );
+
+  useEffect(() => {
+    fetchChunkRef.current = fetchChunk;
+    selectedVoiceRef.current = selectedVoice;
+  }, [fetchChunk, selectedVoice]);
+
+  const pumpPrefetchRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    pumpPrefetchRef.current = () => {
+      while (
+        prefetchActiveRef.current < PREFETCH_LANES &&
+        prefetchWaitingRef.current.length > 0
+      ) {
+        const chunkIndex = prefetchWaitingRef.current.shift() as number;
+        const cacheKey = getChunkCacheKey(selectedVoiceRef.current, chunkIndex);
+
+        if (
+          prefetchedChunksRef.current.has(cacheKey) ||
+          pendingChunkRequestsRef.current.has(cacheKey)
+        ) {
+          continue;
+        }
+
+        prefetchActiveRef.current += 1;
+        void fetchChunkRef.current(chunkIndex, { silent: true }).finally(() => {
+          // A reset while this ran already freed the lanes; do not go below zero.
+          prefetchActiveRef.current = Math.max(0, prefetchActiveRef.current - 1);
+          pumpPrefetchRef.current();
+        });
+      }
+    };
+  }, []);
+
+  const prefetchChunk = useCallback((chunkIndex: number) => {
+    const cacheKey = getChunkCacheKey(selectedVoiceRef.current, chunkIndex);
+
+    if (
+      prefetchedChunksRef.current.has(cacheKey) ||
+      pendingChunkRequestsRef.current.has(cacheKey) ||
+      prefetchWaitingRef.current.includes(chunkIndex)
+    ) {
+      return;
+    }
+
+    prefetchWaitingRef.current.push(chunkIndex);
+    pumpPrefetchRef.current();
+  }, []);
 
   const loadChunk = useCallback(
     async (chunkIndex: number) => {
@@ -2349,29 +2522,29 @@ export function NoteReadAloud({
     ],
   );
 
+  // Playback used to wait for the second chunk as well, which doubled the time to the first word
+  // on an uncached note. The second chunk is now requested in the other lane at the same moment
+  // and, with the ramp in note-tts-text.ts, is ready before the first one ends.
   const loadPlaybackStartBuffer = useCallback(
     async (chunkIndex: number) => {
-      const targetChunkIndexes = [chunkIndex];
       const nextChunkIndex = chunkIndex + 1;
-
-      if (nextChunkIndex < chunks.length) {
-        targetChunkIndexes.push(nextChunkIndex);
-      }
-
-      const hasMissingChunk = targetChunkIndexes.some(
-        (targetChunkIndex) =>
-          !prefetchedChunksRef.current.has(getChunkCacheKey(selectedVoice, targetChunkIndex)),
+      const hasMissingChunk = !prefetchedChunksRef.current.has(
+        getChunkCacheKey(selectedVoice, chunkIndex),
       );
 
       if (hasMissingChunk) {
         setIsFetchingChunk(true);
-        startTtsGenerationProgress(targetChunkIndexes.length);
+        startTtsGenerationProgress(1);
       }
 
       setError(null);
       let payload: TtsChunkResponse | null = null;
 
       try {
+        if (nextChunkIndex < chunks.length) {
+          prefetchChunk(nextChunkIndex);
+        }
+
         payload = await fetchChunk(chunkIndex);
 
         if (!payload) {
@@ -2380,13 +2553,6 @@ export function NoteReadAloud({
 
         setActiveChunk(payload);
         setActiveChunkIndex(payload.chunkIndex);
-
-        if (nextChunkIndex < chunks.length) {
-          await fetchChunk(nextChunkIndex, {
-            silent: true,
-            resetToStartOnCreationLimit: false,
-          });
-        }
 
         return payload;
       } finally {
@@ -2403,37 +2569,12 @@ export function NoteReadAloud({
       cancelTtsGenerationProgress,
       chunks.length,
       fetchChunk,
+      prefetchChunk,
       selectedVoice,
       startTtsGenerationProgress,
     ],
   );
 
-  const prefetchChunk = useCallback(
-    (chunkIndex: number) => {
-      const cacheKey = getChunkCacheKey(selectedVoice, chunkIndex);
-
-      if (
-        prefetchedChunksRef.current.has(cacheKey) ||
-        pendingChunkRequestsRef.current.has(cacheKey)
-      ) {
-        return;
-      }
-
-      prefetchQueueRef.current = prefetchQueueRef.current
-        .catch(() => undefined)
-        .then(async () => {
-          if (
-            prefetchedChunksRef.current.has(cacheKey) ||
-            pendingChunkRequestsRef.current.has(cacheKey)
-          ) {
-            return;
-          }
-
-          await fetchChunk(chunkIndex, { silent: true });
-        });
-    },
-    [fetchChunk, selectedVoice],
-  );
 
   const prefetchUpcomingChunks = useCallback(
     (chunkIndex: number) => {
@@ -2441,14 +2582,19 @@ export function NoteReadAloud({
         return;
       }
 
-      const bufferSize = playbackRate >= 1.5 ? 3 : 2;
+      // Audio seconds, so at double speed the same horizon covers half the wall time; scale it.
+      const horizonSeconds = PREFETCH_HORIZON_SECONDS * Math.max(1, playbackRate);
+      let aheadSeconds = 0;
 
-      for (let offset = 1; offset <= bufferSize; offset += 1) {
+      for (let offset = 1; ; offset += 1) {
         const nextChunkIndex = chunkIndex + offset;
 
-        if (nextChunkIndex >= chunks.length) {
+        // Always the next two, and beyond that as far as the horizon reaches.
+        if (nextChunkIndex >= chunks.length || (offset > 2 && aheadSeconds >= horizonSeconds)) {
           break;
         }
+
+        aheadSeconds += chunks[nextChunkIndex]?.estimatedSeconds ?? 0;
 
         // Once the route has told us the allowance is spent, every chunk that still has to be
         // generated will answer the same way, so filling the buffer just runs the route once per
@@ -2457,8 +2603,10 @@ export function NoteReadAloud({
         // is served from cache and costs no allowance — those keep prefetching normally, and only
         // the first one that genuinely needs generating pays a wasted request.
         if (
-          creationLimitReachedVoiceRef.current === selectedVoice &&
-          !prefetchedChunksRef.current.has(getChunkCacheKey(selectedVoice, nextChunkIndex))
+          creationLimitReachedVoiceRef.current === selectedVoiceRef.current &&
+          !prefetchedChunksRef.current.has(
+            getChunkCacheKey(selectedVoiceRef.current, nextChunkIndex),
+          )
         ) {
           break;
         }
@@ -2469,12 +2617,22 @@ export function NoteReadAloud({
     // Only primitives off `status`, never the object: the effect that calls this is rebuilt on
     // every dependency change, so depending on the object's identity is what let a rejected
     // prefetch re-trigger itself.
-    [chunks.length, playbackRate, prefetchChunk, selectedVoice, status?.available],
+    // The voice is read through its ref on purpose: with it in the deps, a voice change re-ran
+    // the effect below in the same commit as the reset it triggers, with the old active chunk
+    // still in state, and queued two chunks of the new voice before the reader pressed play.
+    [chunks, playbackRate, prefetchChunk, status?.available],
   );
+
+  // Warms the opening chunks so the first click plays at once — only as many as the status says
+  // already exist, and only while the status is for the voice the reader has now: a warm-up must
+  // never generate audio, and so never spend the daily allowance, on a note nobody has asked to
+  // hear. A voice change keeps the old status until the refetch lands, so the voice is checked.
+  const warmupChunkCount =
+    status?.voice === selectedVoice ? Math.min(2, status.readyLeadingChunkCount ?? 0) : 0;
 
   useEffect(() => {
     if (
-      !autoPrepareFirstChunk ||
+      warmupChunkCount === 0 ||
       !hasHydratedSettings ||
       !status?.available ||
       chunks.length === 0
@@ -2482,7 +2640,7 @@ export function NoteReadAloud({
       return;
     }
 
-    const warmupChunks = chunks.slice(0, 2);
+    const warmupChunks = chunks.slice(0, warmupChunkCount);
     const warmupKey = `${lectureId}:${selectedVoice}:${warmupChunks
       .map((chunk) => `${chunk.chunkIndex}:${chunk.text}`)
       .join("|")}`;
@@ -2519,13 +2677,13 @@ export function NoteReadAloud({
       cancelled = true;
     };
   }, [
-    autoPrepareFirstChunk,
     chunks,
     fetchChunk,
     hasHydratedSettings,
     lectureId,
     selectedVoice,
     status?.available,
+    warmupChunkCount,
   ]);
 
   useEffect(() => {
@@ -2618,8 +2776,15 @@ export function NoteReadAloud({
         return;
       }
 
-      if (audio.src !== payload.audioUrl) {
-        audio.src = payload.audioUrl;
+      const source = resolveChunkAudioSource(
+        getChunkCacheKey(selectedVoice, payload.chunkIndex),
+        payload,
+      );
+
+      releaseChunkAudioBefore(payload.chunkIndex);
+
+      if (audio.src !== source) {
+        audio.src = source;
       }
       audio.currentTime = 0;
       audio.playbackRate = playbackRate;
@@ -2649,6 +2814,9 @@ export function NoteReadAloud({
       loadChunk,
       loadPlaybackStartBuffer,
       playbackRate,
+      releaseChunkAudioBefore,
+      resolveChunkAudioSource,
+      selectedVoice,
       setPlaybackWordState,
       t,
     ],
@@ -2700,9 +2868,12 @@ export function NoteReadAloud({
       setError(null);
 
       try {
-        const response = await fetch(`/api/lectures/${lectureId}/tts/status`, {
-          cache: "no-store",
-        });
+        const response = await fetch(
+          `/api/lectures/${lectureId}/tts/status?voice=${encodeURIComponent(selectedVoice)}`,
+          {
+            cache: "no-store",
+          },
+        );
         const payload = await parseResponse<TtsStatusResponse>(response, t);
         playbackStatus =
           payload.reason === "notes_not_ready" && chunks.length > 0
@@ -2741,6 +2912,7 @@ export function NoteReadAloud({
     isStartingPlayback,
     lectureId,
     playChunk,
+    selectedVoice,
     status,
     t,
   ]);

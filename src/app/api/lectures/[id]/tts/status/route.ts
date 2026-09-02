@@ -7,11 +7,17 @@ import {
   parseNoteTtsDocument,
   stripLeadingRedundantHeading,
 } from "@/lib/note-tts-text";
-import { getTtsUsageState, hasUnlimitedTtsUsage } from "@/lib/note-tts";
+import {
+  getReadyLeadingTtsChunkCount,
+  getTtsUsageState,
+  hasUnlimitedTtsUsage,
+} from "@/lib/note-tts";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
+import { DEFAULT_NOTE_TTS_VOICE } from "@/lib/note-tts-settings";
+import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +99,20 @@ export async function GET(
   const document = content ? parseNoteTtsDocument(content) : null;
   const chunkCount = document ? buildNoteTtsChunks(document).length : 0;
   const available = access.allowed && detail.lecture.status === "ready" && Boolean(content) && chunkCount > 0;
+  const requestedVoice = noteTtsVoiceSchema.safeParse(
+    new URL(request.url).searchParams.get("voice") ?? undefined,
+  );
+  const voice = requestedVoice.success ? requestedVoice.data : DEFAULT_NOTE_TTS_VOICE;
+  const readyLeadingChunkCount =
+    available && detail.artifact?.structured_notes_md
+      ? await getReadyLeadingTtsChunkCount({
+          lectureId: id,
+          content: detail.artifact.structured_notes_md,
+          title: detail.lecture.title,
+          languageHint: detail.lecture.language_hint,
+          voice,
+        })
+      : 0;
 
   return NextResponse.json({
     available,
@@ -110,5 +130,8 @@ export async function GET(
     hasUnlimitedUsage,
     chunkCount,
     totalWords: document?.words.length ?? 0,
+    // The voice the count was taken for: the page only warms when it still matches the reader's.
+    voice,
+    readyLeadingChunkCount,
   });
 }

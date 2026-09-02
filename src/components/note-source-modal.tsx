@@ -68,7 +68,7 @@ import {
 import {
   DEFAULT_NOTE_TTS_VOICE,
   NOTE_TTS_VOICE_STORAGE_KEY,
-  NOTE_TTS_VOICES,
+  normalizeNoteTtsVoice,
   type NoteTtsVoice,
 } from "@/lib/note-tts-settings";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -96,9 +96,7 @@ function getInitialAudioVoice(): NoteTtsVoice {
     return DEFAULT_NOTE_TTS_VOICE;
   }
 
-  const storedVoice = window.localStorage.getItem(NOTE_TTS_VOICE_STORAGE_KEY);
-
-  return NOTE_TTS_VOICES.find((voice) => voice === storedVoice) ?? DEFAULT_NOTE_TTS_VOICE;
+  return normalizeNoteTtsVoice(window.localStorage.getItem(NOTE_TTS_VOICE_STORAGE_KEY));
 }
 
 type PhotoSource = {

@@ -11,7 +11,7 @@ import { MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS } from "@/lib/constants";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { extractScanImageStoragePaths } from "@/lib/scan-image-uploads";
-import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
+import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 import {
   buildLectureStoragePath,
   isSupportedAudioMimeType,
@@ -35,7 +35,7 @@ const createLectureSchema = z.object({
   // source the pipeline is now meant to detect for itself.
   languageHint: languageHintSchema.optional(),
   createInitialAudio: z.boolean().optional().default(false),
-  initialAudioVoice: z.enum(NOTE_TTS_VOICES).optional(),
+  initialAudioVoice: noteTtsVoiceSchema.optional(),
 });
 
 const deleteLecturesSchema = z.object({

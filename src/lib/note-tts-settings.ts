@@ -1,17 +1,58 @@
+// The voices Soniox ships on tts-rt-v2. Five carried over from v1 unchanged; the other three were
+// dropped with v1, so the closest v2 voice stands in for each — see LEGACY_NOTE_TTS_VOICE_ALIASES.
+// The last three are new with v2 and picked for study notes: Bennett (the calm authority of an
+// experienced teacher), Evan (makes detailed information easy to follow), Iris (clear and patient).
 export const NOTE_TTS_VOICES = [
   "Grace",
-  "Maya",
+  "Mina",
   "Emma",
-  "Claire",
+  "Sloane",
   "Nina",
   "Daniel",
   "Adrian",
-  "Noah",
+  "Freddie",
+  "Bennett",
+  "Evan",
+  "Iris",
 ] as const;
 
 export type NoteTtsVoice = (typeof NOTE_TTS_VOICES)[number];
 
 export const DEFAULT_NOTE_TTS_VOICE: NoteTtsVoice = "Grace";
+
+// Voices tts-rt-v1 had and tts-rt-v2 does not. They survive in three places — a reader's saved
+// setting, a note's creation metadata, and the request body an older bundle still sends — so every
+// one of those reads goes through normalizeNoteTtsVoice rather than the list above.
+export const LEGACY_NOTE_TTS_VOICE_ALIASES = {
+  Maya: "Mina",
+  Claire: "Sloane",
+  Noah: "Freddie",
+} as const satisfies Record<string, NoteTtsVoice>;
+
+export type LegacyNoteTtsVoice = keyof typeof LEGACY_NOTE_TTS_VOICE_ALIASES;
+
+export const NOTE_TTS_VOICE_INPUTS = [
+  ...NOTE_TTS_VOICES,
+  ...(Object.keys(LEGACY_NOTE_TTS_VOICE_ALIASES) as LegacyNoteTtsVoice[]),
+] as const;
+
+function isLegacyNoteTtsVoice(value: string): value is LegacyNoteTtsVoice {
+  return Object.prototype.hasOwnProperty.call(LEGACY_NOTE_TTS_VOICE_ALIASES, value);
+}
+
+export function normalizeNoteTtsVoice(value: unknown): NoteTtsVoice {
+  if (typeof value !== "string") {
+    return DEFAULT_NOTE_TTS_VOICE;
+  }
+
+  const current = NOTE_TTS_VOICES.find((voice) => voice === value);
+
+  if (current) {
+    return current;
+  }
+
+  return isLegacyNoteTtsVoice(value) ? LEGACY_NOTE_TTS_VOICE_ALIASES[value] : DEFAULT_NOTE_TTS_VOICE;
+}
 
 export const NOTE_TTS_VOICE_STORAGE_KEY = "memo-note-tts-voice";
 

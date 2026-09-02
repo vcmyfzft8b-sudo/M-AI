@@ -10,7 +10,13 @@ import type { Json, LectureTtsChunkRow, TtsGenerationEventRow } from "@/lib/data
 import { normalizeNoteLanguage } from "@/lib/languages";
 import { INITIAL_NOTE_AUDIO_STAGE } from "@/lib/note-audio-stage";
 import { DEFAULT_NOTE_TTS_VOICE, type NoteTtsVoice } from "@/lib/note-tts-settings";
+import type { TtsAlignmentPiece } from "@/lib/note-tts-alignment";
 import {
+  TtsAudioTruncatedError,
+  synthesizeTtsChunkWithTimestamps,
+} from "@/lib/note-tts-synthesis";
+import {
+  NOTE_TTS_CHUNK_PLAN_VERSION,
   buildNoteTtsChunks,
   parseNoteTtsDocument,
   stripLeadingRedundantHeading,
@@ -57,7 +63,7 @@ export class TtsGenerationPendingError extends Error {
   }
 }
 
-// Synthesizing a chunk takes 90-119 seconds, and the reader can delete the note in that time. The
+// Synthesizing a chunk takes up to a minute, and the reader can delete the note in that time. The
 // row then has nothing to hang off and the write fails on the cascade's foreign key — an answer
 // ("the note is gone"), not a fault, and the only reason to tell the two apart at the route.
 export class LectureRemovedDuringTtsError extends Error {
@@ -101,13 +107,25 @@ const UNLIMITED_TTS_USAGE_EMAILS = new Set(["nace.valencic@gmail.com"]);
 const TTS_OUTPUT_FORMAT = "mp3";
 const TTS_OUTPUT_MIME_TYPE = "audio/mpeg";
 const TTS_OUTPUT_BITRATE = 64_000;
-// The alignment transcription is the long pole in generateTtsChunk, and it is not the only thing
+// On the REST fallback the alignment transcription is the long pole, and it is not the only thing
 // that has to fit inside the calling route's maxDuration: synthesis runs before it, and the
 // storage upload, row insert and quota finalization run after it. This must therefore stay
 // comfortably below the smallest maxDuration that reaches here — see the note on the read-aloud
 // chunk route, which was raised to 300s precisely so a slow transcription still lands inside its
 // invocation instead of being killed partway through.
 const TTS_WAIT_TIMEOUT_MS = 120_000;
+// The WebSocket synthesis runs a little faster than real time and a chunk is about a minute, so
+// this only trips when the stream has stalled. Soniox itself stops at three minutes of audio.
+const TTS_STREAM_TIMEOUT_MS = 120_000;
+// Everything one chunk's synthesis may take — the stream attempt and, after it fails, the REST
+// fallback with its transcription — shares this budget, sized under the 300s the chunk route
+// allows with room for the upload, row and quota work that follow. A stream that used its whole
+// timeout leaves the fallback the remainder; too little remainder and the failure is reported
+// instead, because an invocation Vercel kills runs no catch block and the quota reservation
+// would stay held for ten minutes.
+const TTS_GENERATION_BUDGET_MS = 250_000;
+const TTS_FALLBACK_MIN_BUDGET_MS = 70_000;
+const TTS_FALLBACK_SYNTHESIS_RESERVE_MS = 40_000;
 const TTS_WAIT_INTERVAL_MS = 2_000;
 const TTS_CACHE_WAIT_TIMEOUT_MS = 24_000;
 const TTS_GENERATION_RESERVATION_STALE_MS = 10 * 60 * 1000;
@@ -143,7 +161,15 @@ function isTtsProviderRateLimitError(error: unknown) {
       : undefined;
   const message = error instanceof Error ? error.message : "";
 
-  return statusCode === 429 || message.includes("HTTP 429") || message.includes("rate limit");
+  const code = "code" in error && typeof error.code === "string" ? error.code : undefined;
+
+  return (
+    statusCode === 429 ||
+    code === "quota_exceeded" ||
+    message.includes("HTTP 429") ||
+    message.includes("rate limit") ||
+    message.includes("Concurrent requests limit")
+  );
 }
 
 async function retryTtsProviderRateLimit<T>(operation: () => Promise<T>) {
@@ -223,7 +249,9 @@ export function getLjubljanaUsageDate(now = new Date()) {
 }
 
 export function hashNoteTtsContent(content: string) {
-  return createHash("sha256").update(`note-tts-v5-punctuation-pauses:${content}`).digest("hex");
+  return createHash("sha256")
+    .update(`note-tts-v8-speakable-math:${NOTE_TTS_CHUNK_PLAN_VERSION}:${content}`)
+    .digest("hex");
 }
 
 function safeStorageSegment(value: string) {
@@ -255,7 +283,9 @@ function normalizeAlignmentText(value: string) {
     .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
-function collectTranscriptPieces(tokens: TranscriptToken[]) {
+type TtsAlignmentToken = TtsAlignmentPiece & Partial<Pick<TranscriptToken, "is_audio_event">>;
+
+function collectTranscriptPieces(tokens: TtsAlignmentToken[]) {
   return tokens
     .map((token, index) => ({
       index,
@@ -318,7 +348,7 @@ function interpolateMissingTimings(params: {
 
 export function alignTtsTokensToWords(params: {
   words: NoteTtsWord[];
-  tokens: TranscriptToken[];
+  tokens: TtsAlignmentToken[];
   wordStartIndex: number;
   durationMs: number;
 }) {
@@ -915,6 +945,7 @@ async function transcribeGeneratedAudio(params: {
   audio: Uint8Array;
   language: string;
   clientReferenceId: string;
+  timeoutMs?: number;
 }) {
   const env = getServerEnv();
   const transcription = await getSonioxClient().stt.transcribe({
@@ -926,7 +957,7 @@ async function transcribeGeneratedAudio(params: {
     wait: true,
     wait_options: {
       interval_ms: TTS_WAIT_INTERVAL_MS,
-      timeout_ms: TTS_WAIT_TIMEOUT_MS,
+      timeout_ms: Math.min(TTS_WAIT_TIMEOUT_MS, params.timeoutMs ?? TTS_WAIT_TIMEOUT_MS),
     },
     client_reference_id: params.clientReferenceId,
     cleanup: ["file", "transcription"],
@@ -942,6 +973,113 @@ async function transcribeGeneratedAudio(params: {
   return transcription.transcript ?? (await transcription.getTranscript());
 }
 
+// The WebSocket returns the timing of every character it spoke, which is the alignment the
+// highlight wants: exact, and free of the transcription pass that used to add several seconds and
+// a second bill per chunk. The REST path stays as the fallback for a stream that fails for a
+// reason retrying will not fix — but not for the organization's concurrent-stream cap, which the
+// caller retries, and not for a truncation, which REST would repeat silently.
+async function synthesizeAlignedTtsChunk(params: {
+  text: string;
+  chunkWords: NoteTtsWord[];
+  wordStartIndex: number;
+  estimatedSeconds: number;
+  language: string;
+  voice: NoteTtsVoice;
+  clientReferenceId: string;
+}) {
+  const env = getServerEnv();
+  const client = getSonioxClient();
+  const startedAt = Date.now();
+  const remainingBudgetMs = () => TTS_GENERATION_BUDGET_MS - (Date.now() - startedAt);
+
+  try {
+    const synthesized = await synthesizeTtsChunkWithTimestamps({
+      client,
+      text: params.text,
+      model: env.SONIOX_TTS_MODEL,
+      voice: params.voice,
+      language: params.language,
+      audioFormat: TTS_OUTPUT_FORMAT,
+      bitrate: TTS_OUTPUT_BITRATE,
+      timeoutMs: Math.min(TTS_STREAM_TIMEOUT_MS, TTS_GENERATION_BUDGET_MS),
+    });
+
+    if (synthesized.pieces.length > 0) {
+      return {
+        audio: synthesized.audio,
+        durationMs: synthesized.durationMs,
+        alignment: alignTtsTokensToWords({
+          words: params.chunkWords,
+          tokens: synthesized.pieces,
+          wordStartIndex: params.wordStartIndex,
+          durationMs: synthesized.durationMs,
+        }),
+      };
+    }
+
+    console.warn("Soniox TTS stream returned no timestamps; aligning by transcription", {
+      clientReferenceId: params.clientReferenceId,
+    });
+  } catch (error) {
+    if (
+      isTtsProviderRateLimitError(error) ||
+      error instanceof TtsAudioTruncatedError ||
+      remainingBudgetMs() < TTS_FALLBACK_MIN_BUDGET_MS
+    ) {
+      throw error;
+    }
+
+    console.warn("Soniox TTS stream failed; falling back to REST synthesis", {
+      clientReferenceId: params.clientReferenceId,
+      error,
+    });
+  }
+
+  const audio = await client.tts.generate({
+    text: params.text,
+    model: env.SONIOX_TTS_MODEL,
+    voice: params.voice,
+    language: params.language,
+    audio_format: TTS_OUTPUT_FORMAT,
+    bitrate: TTS_OUTPUT_BITRATE,
+  });
+  const transcript = await transcribeGeneratedAudio({
+    audio,
+    language: params.language,
+    clientReferenceId: params.clientReferenceId,
+    timeoutMs: Math.max(30_000, remainingBudgetMs() - TTS_FALLBACK_SYNTHESIS_RESERVE_MS),
+  });
+  // The SDK types a token's times as optional; a token without them cannot place a word, so it
+  // is dropped rather than pinned to zero.
+  const tokens: TtsAlignmentToken[] = (transcript?.tokens ?? []).flatMap((token) =>
+    typeof token.start_ms === "number" && typeof token.end_ms === "number"
+      ? [
+          {
+            text: token.text,
+            start_ms: token.start_ms,
+            end_ms: token.end_ms,
+            is_audio_event: token.is_audio_event,
+          },
+        ]
+      : [],
+  );
+  const durationMs = Math.max(
+    tokens.reduce((max, token) => Math.max(max, token.end_ms), 0),
+    params.estimatedSeconds * 1000,
+  );
+
+  return {
+    audio,
+    durationMs,
+    alignment: alignTtsTokensToWords({
+      words: params.chunkWords,
+      tokens,
+      wordStartIndex: params.wordStartIndex,
+      durationMs,
+    }),
+  };
+}
+
 async function generateTtsChunk(params: {
   userId: string;
   lectureId: string;
@@ -952,29 +1090,14 @@ async function generateTtsChunk(params: {
   voice: NoteTtsVoice;
 }) {
   const env = getServerEnv();
-  const client = getSonioxClient();
-  const audio = await client.tts.generate({
+  const { audio, durationMs, alignment } = await synthesizeAlignedTtsChunk({
     text: params.chunk.text,
-    model: env.SONIOX_TTS_MODEL,
-    voice: params.voice,
-    language: params.language,
-    audio_format: TTS_OUTPUT_FORMAT,
-    bitrate: TTS_OUTPUT_BITRATE,
-  });
-  const transcript = await transcribeGeneratedAudio({
-    audio,
-    language: params.language,
-    clientReferenceId: `${params.lectureId}:${params.contentHash}:${params.chunk.chunkIndex}`,
-  });
-  const durationMs = Math.max(
-    transcript?.tokens.reduce((max, token) => Math.max(max, token.end_ms), 0) ?? 0,
-    params.chunk.estimatedSeconds * 1000,
-  );
-  const alignment = alignTtsTokensToWords({
-    words: params.chunkWords,
-    tokens: transcript?.tokens ?? [],
+    chunkWords: params.chunkWords,
     wordStartIndex: params.chunk.wordStartIndex,
-    durationMs,
+    estimatedSeconds: params.chunk.estimatedSeconds,
+    language: params.language,
+    voice: params.voice,
+    clientReferenceId: `${params.lectureId}:${params.contentHash}:${params.chunk.chunkIndex}`,
   });
   const audioStoragePath = buildTtsStoragePath({
     userId: params.userId,
@@ -1243,6 +1366,50 @@ export async function prepareInitialNoteTtsChunksSafely(
   }
 }
 
+// How many chunks from the start of the note are already synthesized for this voice. The note
+// page warms that many (at most two) the moment it opens, so a note listened to before starts on
+// the click rather than after a round trip — without ever generating anything, and so without
+// spending any of the daily allowance, on a note nobody has asked to hear.
+export async function getReadyLeadingTtsChunkCount(params: {
+  lectureId: string;
+  content: string;
+  title?: string | null;
+  languageHint: string | null;
+  voice?: NoteTtsVoice;
+  limit?: number;
+}) {
+  const content = stripLeadingRedundantHeading(params.content, params.title).trim();
+
+  if (!content) {
+    return 0;
+  }
+
+  const env = getServerEnv();
+  const limit = Math.max(1, params.limit ?? 2);
+  const { data, error } = await createSupabaseServiceRoleClient()
+    .from("lecture_tts_chunks")
+    .select("chunk_index")
+    .eq("lecture_id", params.lectureId)
+    .eq("content_hash", hashNoteTtsContent(content))
+    .eq("language", normalizeNoteLanguage(params.languageHint))
+    .eq("voice", params.voice ?? DEFAULT_NOTE_TTS_VOICE)
+    .eq("model", env.SONIOX_TTS_MODEL)
+    .lt("chunk_index", limit);
+
+  if (error) {
+    throw error;
+  }
+
+  const ready = new Set((data as Array<{ chunk_index: number }>).map((row) => row.chunk_index));
+  let count = 0;
+
+  while (count < limit && ready.has(count)) {
+    count += 1;
+  }
+
+  return count;
+}
+
 export async function hasInitialNoteTtsChunk(params: {
   lectureId: string;
   content: string;
@@ -1250,36 +1417,5 @@ export async function hasInitialNoteTtsChunk(params: {
   languageHint: string | null;
   voice?: NoteTtsVoice;
 }) {
-  const content = stripLeadingRedundantHeading(params.content, params.title).trim();
-
-  if (!content) {
-    return false;
-  }
-
-  const document = parseNoteTtsDocument(content);
-  const firstChunk = buildNoteTtsChunks(document)[0];
-
-  if (!firstChunk) {
-    return false;
-  }
-
-  const env = getServerEnv();
-  const language = normalizeNoteLanguage(params.languageHint);
-  const voice = params.voice ?? DEFAULT_NOTE_TTS_VOICE;
-  const { data, error } = await createSupabaseServiceRoleClient()
-    .from("lecture_tts_chunks")
-    .select("id")
-    .eq("lecture_id", params.lectureId)
-    .eq("content_hash", hashNoteTtsContent(content))
-    .eq("chunk_index", firstChunk.chunkIndex)
-    .eq("language", language)
-    .eq("voice", voice)
-    .eq("model", env.SONIOX_TTS_MODEL)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return Boolean(data);
+  return (await getReadyLeadingTtsChunkCount({ ...params, limit: 1 })) > 0;
 }

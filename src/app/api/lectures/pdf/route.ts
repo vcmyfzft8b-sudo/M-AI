@@ -12,7 +12,7 @@ import {
 import { validateDocumentFileSignature } from "@/lib/file-validation";
 import { enqueueLectureDocumentProcessing } from "@/lib/jobs";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
-import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
+import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 import {
   buildValidationErrorResponse,
   parseFormDataRequest,
@@ -41,7 +41,7 @@ const formBooleanSchema = z
   .optional()
   .transform((value) => value === true || value === "true");
 const formInitialAudioVoiceSchema = z
-  .union([z.enum(NOTE_TTS_VOICES), z.null()])
+  .union([noteTtsVoiceSchema, z.null()])
   .optional()
   .transform((value) => value ?? undefined);
 

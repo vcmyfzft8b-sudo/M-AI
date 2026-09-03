@@ -1,0 +1,76 @@
+{
+  "subject": "This material is about how neurons communicate across chemical synapses, from the arrival of an action potential to the receptor effects and the clearing of the transmitter.",
+  "topics": [
+    {
+      "title": "What a synapse is, and the two kinds",
+      "points": [
+        "A synapse is the junction where one neuron communicates with another cell, made up of the presynaptic neuron, the postsynaptic neuron and a synaptic cleft about twenty nanometres across.",
+        "Electrical synapses connect cells directly through gap junctions, are essentially instantaneous and bidirectional, but are fast and rare in the mammalian brain.",
+        "Chemical synapses use a neurotransmitter, have a delay of roughly half a millisecond, and go only one way from presynaptic to postsynaptic, and that unidirectionality is what allows circuits to compute anything."
+      ]
+    },
+    {
+      "title": "The sequence of transmission at a chemical synapse",
+      "points": [
+        "An action potential arrives at the axon terminal and opens voltage-gated calcium channels, so calcium rushes in from outside where its concentration is far higher.",
+        "The calcium influx is the trigger that converts an electrical signal into a chemical one, causing synaptic vesicles to fuse with the presynaptic membrane and release neurotransmitter into the cleft by exocytosis.",
+        "The neurotransmitter diffuses across the cleft and binds to receptors on the postsynaptic membrane, producing a postsynaptic potential."
+      ]
+    },
+    {
+      "title": "Why calcium is the trigger, not the messenger",
+      "points": [
+        "If you remove extracellular calcium, the action potential still arrives and the vesicles are still loaded, but nothing is released.",
+        "This shows that the calcium influx, not the action potential itself, is the step that actually triggers transmitter release."
+      ]
+    },
+    {
+      "title": "Ionotropic receptors",
+      "points": [
+        "Ionotropic receptors are ligand-gated ion channels where the receptor itself is the channel.",
+        "Neurotransmitter binding opens the pore directly, so ions flow within milliseconds and the effect is fast but short-lived.",
+        "The nicotinic acetylcholine receptor is the classic example."
+      ]
+    },
+    {
+      "title": "Metabotropic receptors and second messengers",
+      "points": [
+        "Metabotropic receptors are G-protein-coupled, not channels, and binding activates a G protein that starts a second messenger cascade.",
+        "The cascade can open channels elsewhere or change gene expression, so the effect is slower, hundreds of milliseconds to seconds, but longer-lasting.",
+        "The cascade amplifies the signal because one receptor activates many G proteins and each cascade produces many second messenger molecules."
+      ]
+    },
+    {
+      "title": "The transmitter is not what decides the effect",
+      "points": [
+        "The effect of a neurotransmitter is determined by its receptor, not by the transmitter itself.",
+        "Acetylcholine is excitatory at the nicotinic receptor on skeletal muscle but inhibitory at muscarinic receptors in the heart, the same molecule acting through different receptor families.",
+        "There is no such thing as an excitatory neurotransmitter, only excitatory receptors, and this is a distinction students get backwards constantly."
+      ]
+    },
+    {
+      "title": "Postsynaptic potentials and how they sum",
+      "points": [
+        "An excitatory postsynaptic potential is a depolarisation that brings the membrane closer to threshold, typically from sodium flowing in, while an inhibitory one is a hyperpolarisation moving it away, typically from chloride in or potassium out.",
+        "Neither potential alone fires an action potential; they are graded, decay with distance and time, and must summate.",
+        "Temporal summation is one input firing repeatedly in quick succession, spatial summation is several different inputs firing at once at different locations.",
+        "The decision point is the axon hillock, where the density of voltage-gated sodium channels is highest, and that is where an action potential fires or does not."
+      ]
+    },
+    {
+      "title": "Clearing the transmitter from the cleft",
+      "points": [
+        "Reuptake pulls the transmitter back into the presynaptic terminal or into glia through transporters, which is how serotonin is cleared and the mechanism SSRIs block.",
+        "Enzymatic degradation breaks the transmitter down in the cleft, as acetylcholinesterase does to acetylcholine, and that enzyme is the target of nerve agents and of drugs used in myasthenia gravis.",
+        "Simple diffusion away from the cleft happens for every transmitter but is the main route for only a few."
+      ]
+    },
+    {
+      "title": "Synaptic plasticity: long-term potentiation and depression",
+      "points": [
+        "Repeated strong stimulation can produce long-term potentiation, a lasting increase in synaptic strength, or long-term depression, a lasting decrease.",
+        "This plasticity is the cellular basis of learning and memory."
+      ]
+    }
+  ]
+}

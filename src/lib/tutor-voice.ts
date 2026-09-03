@@ -1,6 +1,9 @@
 import "server-only";
 
 import { generateStructuredObject, streamStructuredObject } from "@/lib/ai/json";
+import { repairPassage } from "@/lib/ai/language-check";
+import { createProofreadStream, shouldCheckLanguage } from "@/lib/ai/language-repair";
+import { isLanguageCheckEnabled } from "@/lib/ai/model-config";
 import {
   buildTutorLessonPlanInstructions,
   buildTutorVoiceInstructions,
@@ -13,6 +16,7 @@ import {
 } from "@/lib/ai/tutor-voice-prompt";
 import { detectSourceLanguage, normalizeNoteLanguage } from "@/lib/languages";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
+import { resolveSpokenLanguage } from "@/lib/tutor/spoken-language";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 /**
@@ -242,26 +246,68 @@ export async function speakTutorTurn(params: {
   };
 
   /*
+   * Everything the writer produces goes through the language repair on its way to the speech
+   * socket — see language-repair.ts for why it is done inside the stream rather than over the
+   * finished turn. The repair is allowed to fail: a unit whose correction is late or refused is
+   * spoken exactly as GLM wrote it, so the worst case here is the turn we would have had anyway.
+   */
+  const language = resolveSpokenLanguage(params.grounding.language, request);
+
+  /*
    * Chat can throw away a half-streamed answer and re-run the call, because
    * nothing has happened yet that the learner cannot un-see. Speech cannot: the
    * first half has already been said out loud, and following it with a second,
    * complete version of the same turn is worse than stopping short. So the
    * fallback is only available while the turn is still silent.
+   *
+   * `spoken` is what actually reached the learner, which after the repair is not the same string
+   * the model wrote. It is what goes back as the turn, so the conversation history the next turn
+   * reads matches what was said out loud.
    */
   let spoken = "";
-  const onDelta = (text: string) => {
+  const emit = (text: string) => {
     spoken += text;
     params.onDelta(text);
   };
 
+  /*
+   * Switched off — or speaking a language that does not need it — the writer's words go straight
+   * through as they always did, rather than through a repair that would return the original
+   * anyway. The difference is the buffering: the checker hands the client whole phrases where the
+   * raw stream hands it words, so skipping it has to mean skipping it, not a quiet imitation.
+   */
+  const proofreader = isLanguageCheckEnabled() && shouldCheckLanguage(language)
+    ? createProofreadStream({
+        onDelta: emit,
+        correct: ({ text, preceding, signal }) =>
+          repairPassage({ text, preceding, language, spoken: true, signal }),
+      })
+    : null;
+
   try {
-    const streamed = await streamStructuredObject({ ...call, streamField: "speech", onDelta });
+    const streamed = await streamStructuredObject({
+      ...call,
+      streamField: "speech",
+      onDelta: (text) => (proofreader ? proofreader.push(text) : emit(text)),
+    });
 
     if (streamed) {
-      return streamed;
+      await proofreader?.flush();
+
+      /*
+       * What was said, not what was written — the repair changed it, and the next turn reads this
+       * back as the conversation so far. `streamed.speech` is the floor rather than a preference:
+       * if nothing was ever emitted, something went wrong on the way out and the model's own text
+       * is a better answer than an empty turn.
+       */
+      return { ...streamed, speech: spoken.trim() ? spoken : streamed.speech };
     }
   } catch (error) {
     console.error("[tutor] streaming failed", error);
+
+    // Whatever the writer had already handed over is still worth saying, and some of it may be
+    // sitting in the repair queue rather than out of the door.
+    await proofreader?.flush();
 
     if (spoken.trim()) {
       // Half a turn was said out loud before the stream broke. Hand the floor back rather
@@ -270,5 +316,14 @@ export async function speakTutorTurn(params: {
     }
   }
 
-  return generateStructuredObject(call);
+  /*
+   * The unstreamed path, reached when the stage is not routed through the gateway or the stream
+   * died before saying a word. Nothing has been spoken, so the turn is repaired in one call
+   * instead of unit by unit — there is no audio to hide the wait behind and nothing to keep in
+   * order.
+   */
+  const generated = await generateStructuredObject(call);
+  const repaired = await repairPassage({ text: generated.speech, language, spoken: true });
+
+  return { ...generated, speech: repaired ?? generated.speech };
 }

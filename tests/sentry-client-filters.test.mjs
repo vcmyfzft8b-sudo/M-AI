@@ -489,3 +489,51 @@ test("pre-existing filters still drop their noise classes through the combined g
   assert.equal(shouldDropNoStackBrowserNetworkNoise(connectionClosed), true);
   assert.equal(shouldDropClientErrorEvent(connectionClosed), true);
 });
+
+test("a voice tutor failure survives the Load failed noise filter", () => {
+  /*
+   * The interrupted-navigation filter drops "Load failed" with no stack, which is exactly
+   * what the phrase looks like when a learner leaves a page mid-request. The tutor
+   * reports the same phrase deliberately, from a captureException with a stack — and if
+   * that were dropped too, the one failure the learner actually sat and watched would be
+   * the one nobody ever hears about.
+   */
+  const reportedByTheTutor = {
+    exception: {
+      values: [
+        {
+          type: "TypeError",
+          value: "Load failed",
+          /*
+           * The filenames a browser-side capture really carries at beforeSend time: our
+           * own bundle chunks, rewritten to app:///_next by the SDK and not yet
+           * symbolicated back to src/. Written out rather than guessed, because the
+           * injected-script filter decides exactly on that path — see
+           * OUR_SCRIPT_PATH — and a fixture using source paths would prove nothing.
+           */
+          stacktrace: {
+            frames: [
+              { filename: "app:///_next/static/chunks/4021-a1b2c3d4.js", function: "runTurn" },
+              {
+                filename: "app:///_next/static/chunks/app/lectures/page-9f8e.js",
+                function: "reportTutorFailure",
+              },
+            ],
+          },
+        },
+      ],
+    },
+    tags: { feature: "tutor", tutorStage: "turn" },
+    breadcrumbs: [
+      {
+        category: "fetch",
+        level: "error",
+        data: { method: "POST", url: "https://www.memoai.eu/api/lectures/1/tutor/turn" },
+      },
+    ],
+  };
+
+  assert.equal(shouldDropInterruptedLoadFailedEvent(reportedByTheTutor), false);
+  assert.equal(shouldDropNoStackBrowserNetworkNoise(reportedByTheTutor), false);
+  assert.equal(shouldDropClientErrorEvent(reportedByTheTutor), false);
+});

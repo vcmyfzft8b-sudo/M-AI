@@ -27,6 +27,7 @@ import {
   SpeechInputError,
   TutorSpeechInput,
 } from "@/lib/tutor/speech-input";
+import { reportTutorFailure, resetTutorFailureReports } from "@/lib/tutor/report";
 import { SpeechOutputError, TutorSpeechOutput } from "@/lib/tutor/speech-output";
 import { voiceHue } from "@/lib/tutor/voice-colors";
 import { voiceSampleText } from "@/lib/tutor/voice-sample";
@@ -66,6 +67,25 @@ import {
  */
 
 /**
+ * Whether a failure came from the wire rather than from us.
+ *
+ * A browser words a request that never landed in its own way and its own language —
+ * Safari says "Load failed", Chrome "Failed to fetch" — and putting that in front of a
+ * Slovenian student tells them nothing except that something broke, in English. A socket
+ * Soniox hung up on is the same kind of thing. Only a message our own server wrote is
+ * worth showing as it stands; everything here becomes the one about the connection,
+ * which is both true and something Continue can act on.
+ */
+function isTransportFailure(caught: unknown) {
+  return (
+    caught instanceof TypeError ||
+    caught instanceof DOMException ||
+    caught instanceof SpeechOutputError ||
+    caught instanceof SpeechInputError
+  );
+}
+
+/**
  * How long a ducked voice waits for the recognizer to justify the interruption.
  *
  * Only ever waited out in full while a sound is still going: once the room is
@@ -73,6 +93,21 @@ import {
  * waiting for this.
  */
 const INTERRUPTION_GRACE_MS = 1_400;
+
+/**
+ * How long before the Soniox keys expire the session quietly takes its next slice.
+ *
+ * The keys are minted for the slice of talking time the server reserved — half an hour —
+ * and they are the whole enforcement, so they really do stop working. Renewing on a
+ * margin rather than on the expiry itself keeps the swap out of the middle of a turn and
+ * leaves room for the round trip that fetches it. Without this the conversation ran into
+ * a wall at the half hour: Soniox answers an expired key with a 401, which reached the
+ * learner as "the connection to the voice service dropped" and paused the walkthrough.
+ */
+const CREDENTIAL_RENEWAL_MARGIN_MS = 120_000;
+
+/** A beat before a dropped turn request is asked for again. */
+const TURN_RETRY_DELAY_MS = 500;
 
 /** After the tutor asks a check question, how long it waits before carrying on regardless. */
 const FOLLOW_UP_SILENCE_MS = 7_000;
@@ -120,8 +155,8 @@ type TutorSessionResponse = {
   grantedSeconds: number;
   usage: TutorUsage;
   realtime: {
-    stt: { apiKey: string; url: string; model: string };
-    tts: { apiKey: string; url: string; model: string; voice: NoteTtsVoice };
+    stt: { apiKey: string; url: string; model: string; expiresAt: string };
+    tts: { apiKey: string; url: string; model: string; voice: NoteTtsVoice; expiresAt: string };
   };
 };
 
@@ -262,6 +297,13 @@ export function LectureTutor({
   const interruptionTimerRef = useRef<number | null>(null);
   /** Whether the recognizer has found any words since the voice last ducked. */
   const heardWhileDuckedRef = useRef(false);
+  /** When the keys in the browser's hands stop working, as milliseconds. */
+  const credentialsExpireAtRef = useRef<number | null>(null);
+  const renewalTimerRef = useRef<number | null>(null);
+  /* Declared here and filled in below, so a turn can pause the session it is running in. */
+  const pauseRef = useRef<() => void>(() => {});
+  /** The renewal in progress, so three callers cannot reserve three slices. */
+  const renewalInFlightRef = useRef<Promise<boolean> | null>(null);
   const followUpTimerRef = useRef<number | null>(null);
   const levelFrameRef = useRef<number | null>(null);
   const previewRef = useRef<TutorSpeechOutput | null>(null);
@@ -326,6 +368,8 @@ export function LectureTutor({
     turnAbortRef.current = null;
     clearTimer(interruptionTimerRef);
     clearTimer(followUpTimerRef);
+    clearTimer(renewalTimerRef);
+    credentialsExpireAtRef.current = null;
 
     if (levelFrameRef.current !== null) {
       window.cancelAnimationFrame(levelFrameRef.current);
@@ -344,6 +388,24 @@ export function LectureTutor({
     inputRef.current = null;
     setHeard(null);
   }, [stopPreview]);
+
+  const heardRef = useRef<HTMLParagraphElement | null>(null);
+
+  /*
+   * Keeps the transcript's two-line window on the words just spoken.
+   *
+   * The line is a fixed height and the text runs past it, so left alone it shows the
+   * opening of a long sentence and nothing after — which reads as the recognizer having
+   * given up. Scrolling to the bottom on every revision is what makes it a live caption
+   * rather than a stuck one.
+   */
+  useEffect(() => {
+    const element = heardRef.current;
+
+    if (element) {
+      element.scrollTop = element.scrollHeight;
+    }
+  }, [heard]);
 
   const voiceRowRef = useRef<HTMLDivElement | null>(null);
   const usageMenuRef = useRef<HTMLDetailsElement | null>(null);
@@ -440,6 +502,193 @@ export function LectureTutor({
         void refreshUsage();
       });
   }, [lectureId, refreshUsage]);
+
+  /**
+   * Takes the session's next slice of talking time before the current one's keys expire.
+   *
+   * The browser talks to Soniox directly, so the temporary keys are not a convenience —
+   * they are the enforcement, and they are minted for exactly the slice the server
+   * reserved. A conversation that outlasts its slice therefore has to reserve the next
+   * one, and until this existed none did: half an hour in, Soniox began answering every
+   * new turn with a 401, which the learner saw as "the connection to the voice service
+   * dropped" with the walkthrough paused. Nothing was wrong with the connection.
+   *
+   * Returns whether the walkthrough should carry on. A slice that cannot be reserved
+   * because their time is genuinely spent is a paywall, not a fault, and ends the
+   * session where it stands rather than reporting an error.
+   */
+  const reserveNextSlice = useCallback(async () => {
+    const runId = runIdRef.current;
+
+    try {
+      const response = await fetch(`/api/lectures/${lectureId}/tutor/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voice }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | (TutorSessionResponse & { error?: string; code?: TutorBlock })
+        | null;
+
+      if (runId !== runIdRef.current) {
+        return false;
+      }
+
+      if (response.status === 402) {
+        if (payload?.usage) {
+          setUsage(payload.usage);
+        }
+
+        setBlocked(payload?.code ?? "tutor_credits_needed");
+        settleGrant();
+        teardown();
+        planRef.current = null;
+        setPhaseNow("idle");
+
+        return false;
+      }
+
+      if (!response.ok || !payload?.realtime) {
+        throw new Error(payload?.error ?? t("tutor.error.startFailed"));
+      }
+
+      /* The slice being left behind is reported before the next one is adopted. */
+      settleGrant();
+      grantIdRef.current = payload.grantId;
+      spentSecondsRef.current = 0;
+      setUsage(payload.usage);
+      adoptCredentialsRef.current(payload);
+
+      outputRef.current?.useKey(payload.realtime.tts.apiKey);
+
+      const input = inputRef.current;
+
+      if (input) {
+        /*
+         * The recognizer is the half that has to be rebuilt, and at a busy moment there
+         * may be no stream left to rebuild it with. That costs cutting in by speaking and
+         * nothing else, so it is said plainly and the walkthrough carries on.
+         */
+        const listening = await input.useKey(payload.realtime.stt.apiKey);
+
+        setCanListen(listening && !input.isMuted);
+
+        if (!listening) {
+          setError(t("tutor.error.listeningBusy"));
+        }
+      }
+
+      return true;
+    } catch (caught) {
+      /*
+       * A renewal that fails is not the end of the session. The margin is two minutes of
+       * still-valid credentials, turns come round far more often than that, and the next
+       * one tries again — so carrying on is right, and giving up here would end a working
+       * conversation over one failed request. It is still worth knowing about: a renewal
+       * that keeps failing ends the session a couple of minutes later with a 401, and
+       * that is the failure nobody could see before.
+       */
+      reportTutorFailure(caught, { lectureId, stage: "renewal", phase: phaseRef.current });
+
+      return true;
+    }
+  }, [lectureId, setPhaseNow, settleGrant, t, teardown, voice]);
+
+  const renewCredentials = useCallback(async () => {
+    const expiresAt = credentialsExpireAtRef.current;
+
+    if (expiresAt === null || Date.now() < expiresAt - CREDENTIAL_RENEWAL_MARGIN_MS) {
+      return true;
+    }
+
+    /*
+     * One renewal at a time, whoever asked.
+     *
+     * Three things call this — the alarm, the start of every turn, and taking the
+     * microphone back after a pause — and pressing Continue sets the last two off
+     * together. Each reserves a slice of talking time on the server, so two at once would
+     * reserve two and charge the learner for both. The second caller waits on the first
+     * one's answer instead of asking again.
+     */
+    const inFlight = renewalInFlightRef.current;
+
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const attempt = reserveNextSlice();
+    renewalInFlightRef.current = attempt;
+
+    try {
+      return await attempt;
+    } finally {
+      renewalInFlightRef.current = null;
+    }
+  }, [reserveNextSlice]);
+
+  const renewCredentialsRef = useRef(renewCredentials);
+  renewCredentialsRef.current = renewCredentials;
+
+  /**
+   * Notes when the keys in hand expire and sets the alarm to replace them.
+   *
+   * The alarm matters on its own: a learner who sits quietly past the half hour takes no
+   * turns, and a renewal that only ever happened before a turn would never come round.
+   * The check before each turn stays as well, because a phone throttles the timers of a
+   * backgrounded tab and the alarm can be late.
+   */
+  /**
+   * Asks for a recognizer back after a pause, an unmute, or a spell in the background.
+   *
+   * Two things have to be true before it can work and both can have changed while the
+   * session was not listening: the keys may be near their expiry, and every realtime
+   * stream in the organisation may be taken. Neither stops the walkthrough — losing the
+   * microphone costs the ability to cut in by speaking and nothing else — so this reports
+   * what happened and leaves the tutor talking.
+   */
+  const restoreListening = useCallback(async () => {
+    const input = inputRef.current;
+
+    if (!input || input.isListening) {
+      return;
+    }
+
+    /* A stale key would simply be refused, so it is worth spending the round trip first. */
+    if (!(await renewCredentialsRef.current())) {
+      return;
+    }
+
+    const listening = await input.startListening();
+
+    setCanListen(listening && !input.isMuted);
+
+    if (!listening) {
+      setError(t("tutor.error.listeningBusy"));
+    }
+  }, [t]);
+
+  const adoptCredentials = useCallback((session: TutorSessionResponse) => {
+    const expiresAt = Date.parse(session.realtime.tts.expiresAt);
+
+    clearTimer(renewalTimerRef);
+    credentialsExpireAtRef.current = Number.isNaN(expiresAt) ? null : expiresAt;
+
+    if (credentialsExpireAtRef.current === null) {
+      return;
+    }
+
+    const delay = Math.max(
+      0,
+      credentialsExpireAtRef.current - CREDENTIAL_RENEWAL_MARGIN_MS - Date.now(),
+    );
+
+    renewalTimerRef.current = window.setTimeout(() => {
+      void renewCredentialsRef.current();
+    }, delay);
+  }, []);
+
+  const adoptCredentialsRef = useRef(adoptCredentials);
+  adoptCredentialsRef.current = adoptCredentials;
 
   /*
    * The row overflows, and the saved voice is regularly past its right edge — which
@@ -628,24 +877,56 @@ export function LectureTutor({
       const buffer = new SpeechTextBuffer();
 
       try {
-        const response = await fetch(`/api/lectures/${lectureId}/tutor/turn`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            kind,
-            topicIndex: index,
-            plan: currentPlan,
-            spokenSoFar: kind === "teach" || kind === "resume" ? spokenSoFarRef.current : "",
-            question: options.question ?? null,
-            history: historyRef.current.slice(-12),
-          }),
-        });
+        /*
+         * One retry, and only for the request itself.
+         *
+         * A phone that changes cell, comes out of a pocket or wakes from a locked screen
+         * drops exactly one request, and a walkthrough should not end for that — the
+         * learner gets a red box and has to press Continue for something that had already
+         * fixed itself. Retried only here, before a word has been spoken: asking again
+         * once the voice has started would say the same sentence twice.
+         */
+        let response: Response | null = null;
+
+        for (let attempt = 0; response === null; attempt += 1) {
+          try {
+            response = await fetch(`/api/lectures/${lectureId}/tutor/turn`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: controller.signal,
+              body: JSON.stringify({
+                kind,
+                topicIndex: index,
+                plan: currentPlan,
+                spokenSoFar: kind === "teach" || kind === "resume" ? spokenSoFarRef.current : "",
+                question: options.question ?? null,
+                history: historyRef.current.slice(-12),
+              }),
+            });
+          } catch (caught) {
+            if (attempt >= 1 || controller.signal.aborted) {
+              throw caught;
+            }
+
+            await new Promise((settle) => {
+              window.setTimeout(settle, TURN_RETRY_DELAY_MS);
+            });
+          }
+        }
 
         if (!response.ok || !response.headers.get("Content-Type")?.includes("text/event-stream")) {
           const payload = (await response.json().catch(() => null)) as { error?: string } | null;
 
           throw new Error(payload?.error ?? t("tutor.error.turnFailed"));
+        }
+
+        /*
+         * The keys are minted for a slice of time and this conversation may have outlived
+         * it. Renewing is a no-op until the expiry is close, and it happens between turns
+         * where a new recognizer socket costs a handshake nobody hears.
+         */
+        if (!(await renewCredentialsRef.current())) {
+          return;
         }
 
         /*
@@ -737,7 +1018,28 @@ export function LectureTutor({
         }
 
         turn?.end();
-        setError(caught instanceof Error ? caught.message : t("tutor.error.turnFailed"));
+
+        /*
+         * A backgrounded page loses its sockets and its in-flight requests, and iOS does
+         * that every time the screen locks. The learner did not see a failure — they saw
+         * their phone lock — so this is the pause it already is, rather than a red box
+         * waiting for them when they come back. It was the commonest way to be shown
+         * "Load failed" over a screen that already said Paused.
+         */
+        if (document.visibilityState === "hidden") {
+          pauseRef.current();
+
+          return;
+        }
+
+        reportTutorFailure(caught, { lectureId, stage: "turn", phase: kind });
+        setError(
+          isTransportFailure(caught)
+            ? t("tutor.error.connection")
+            : caught instanceof Error
+              ? caught.message
+              : t("tutor.error.turnFailed"),
+        );
         setPhaseNow("paused");
       } finally {
         if (turnAbortRef.current === controller) {
@@ -771,6 +1073,8 @@ export function LectureTutor({
       setPhaseNow("finished");
       /* The walkthrough is over; hand the rest of the slice back straight away. */
       settleGrant();
+      /* And the recognizer with it — there is nothing left to interrupt. */
+      inputRef.current?.stopListening();
 
       return;
     }
@@ -911,6 +1215,8 @@ export function LectureTutor({
      */
     stopPreview();
 
+    /* A new session gets a clean slate: last session's failures are not this one's. */
+    resetTutorFailureReports();
     setError(null);
     setCanListen(true);
     setHeard(null);
@@ -996,12 +1302,20 @@ export function LectureTutor({
       spentSecondsRef.current = 0;
       setBlocked(null);
       setUsage(payload.usage);
+      adoptCredentialsRef.current(payload);
     } catch (caught) {
       if (runId !== runIdRef.current) {
         return;
       }
 
-      setError(caught instanceof Error ? caught.message : t("tutor.error.startFailed"));
+      reportTutorFailure(caught, { lectureId, stage: "session" });
+      setError(
+        isTransportFailure(caught)
+          ? t("tutor.error.connection")
+          : caught instanceof Error
+            ? caught.message
+            : t("tutor.error.startFailed"),
+      );
       setPhaseNow("idle");
 
       return;
@@ -1021,6 +1335,12 @@ export function LectureTutor({
       },
       {
         onError: (speechError: SpeechOutputError) => {
+          reportTutorFailure(speechError, {
+            lectureId,
+            stage: "speech",
+            code: speechError.code,
+            phase: phaseRef.current,
+          });
           setError(
             /*
              * Soniox caps how many voices an account can have going at once, and
@@ -1144,7 +1464,32 @@ export function LectureTutor({
           void runTurnRef.current(kind, { question: text });
         },
         onError: (inputError: SpeechInputError) => {
-          if (inputError.reason === "connection") {
+          /*
+           * A page on its way into the background takes its sockets with it. The pause
+           * that follows closes the recognizer on purpose, but the order the browser
+           * chooses is its own — so a death that arrives first is still the screen lock,
+           * not a fault, and the learner must not come back to a red box about it.
+           */
+          if (document.visibilityState === "hidden") {
+            return;
+          }
+
+          reportTutorFailure(inputError, {
+            lectureId,
+            stage: "recognizer",
+            code: inputError.reason,
+            phase: phaseRef.current,
+          });
+
+          if (inputError.reason === "busy") {
+            /*
+             * Every realtime stream in the organisation is taken. The walkthrough still
+             * works — this costs only the ability to cut in by speaking — so it is said
+             * as a wait rather than as a breakage, and nothing is paused.
+             */
+            setCanListen(false);
+            setError(t("tutor.error.listeningBusy"));
+          } else if (inputError.reason === "connection") {
             setError(t("tutor.error.connection"));
           }
         },
@@ -1154,15 +1499,29 @@ export function LectureTutor({
     try {
       await output.connect();
       await output.resumeAudio();
-    } catch {
+    } catch (caught) {
       output.close();
       input.close();
+
+      /*
+       * The slice goes straight back. It was reserved before the keys were minted, so a
+       * session that never got a voice at all would otherwise cost the learner half an
+       * hour of their allowance for nothing — and the likeliest reason to be here is that
+       * every speech stream in the organisation was taken, which is not their doing.
+       */
+      settleGrant();
 
       if (runId !== runIdRef.current) {
         return;
       }
 
-      setError(t("tutor.error.connection"));
+      reportTutorFailure(caught, { lectureId, stage: "session", phase: "connect" });
+      setError(
+        caught instanceof SpeechOutputError &&
+          (caught.code === "429" || /concurren/i.test(caught.message))
+          ? t("tutor.error.busy")
+          : t("tutor.error.connection"),
+      );
       setPhaseNow("idle");
 
       return;
@@ -1203,7 +1562,7 @@ export function LectureTutor({
     setMuted(!listening);
 
     void runTurnRef.current("opening", { index: 0 });
-  }, [commitInterruption, lectureId, setPhaseNow, showHeard, stopPreview, t, voice]);
+  }, [commitInterruption, lectureId, setPhaseNow, settleGrant, showHeard, stopPreview, t, voice]);
 
   function pause() {
     floorTokenRef.current += 1;
@@ -1212,8 +1571,22 @@ export function LectureTutor({
     turnAbortRef.current?.abort();
     turnAbortRef.current = null;
     outputRef.current?.stop();
+    /*
+     * The recognizer goes back to the pool. A paused session cannot be interrupted, so
+     * holding one of the organisation's ten realtime streams through it is taking a slot
+     * somebody else could be talking on — and on a phone this runs every time the learner
+     * switches app or locks the screen, which is most of the pauses there are.
+     *
+     * It also removes a whole class of phantom error. iOS suspends a backgrounded page
+     * and kills its sockets, and a recognizer that died that way came back as "the
+     * connection to the voice service dropped" over a screen that said Paused. Closing it
+     * on purpose leaves nothing to be surprised by.
+     */
+    inputRef.current?.stopListening();
     setPhaseNow("paused");
   }
+
+  pauseRef.current = pause;
 
   function resume() {
     if (!planRef.current) {
@@ -1221,6 +1594,7 @@ export function LectureTutor({
     }
 
     setError(null);
+    void restoreListening();
     void runTurnRef.current(spokenSoFarRef.current ? "resume" : "teach");
   }
 
@@ -1447,6 +1821,17 @@ export function LectureTutor({
     const next = !muted;
     setMuted(next);
     inputRef.current?.setMuted(next);
+
+    /*
+     * Muted means "do not listen to me", so the stream goes back to the pool the same way
+     * it does on a pause. Unmuting asks for one again, which is a handshake rather than a
+     * permission prompt, because the microphone itself never went anywhere.
+     */
+    if (next) {
+      inputRef.current?.stopListening();
+    } else {
+      void restoreListening();
+    }
   }
 
   const isRunning = phase !== "idle";
@@ -1715,7 +2100,9 @@ export function LectureTutor({
 
       {/* One line, and only while there is something to show. */}
       {heard && isRunning ? (
-        <p className={`memo-tutor-heard ${heard.settled ? "" : "draft"}`.trim()}>{heard.text}</p>
+        <p ref={heardRef} className={`memo-tutor-heard ${heard.settled ? "" : "draft"}`.trim()}>
+          {heard.text}
+        </p>
       ) : null}
 
       {!isRunning ? (
@@ -1764,9 +2151,7 @@ export function LectureTutor({
         </div>
       ) : (
         <>
-          <p className="memo-tutor-hint">
-            {canListen && !muted ? t("tutor.hint.interrupt") : t("tutor.hint.muted")}
-          </p>
+          {canListen && muted ? <p className="memo-tutor-hint">{t("tutor.hint.muted")}</p> : null}
 
           <div className="memo-tutor-controls">
             <button

@@ -12747,11 +12747,14 @@
   font-size: 0.95rem;
   line-height: 1.5;
   color: var(--text);
-  text-wrap: balance;
-  /* Two lines is a question; more than that is a transcript. */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  /*
+   * Two lines is a question; more than that is a transcript. Held as a two-line window
+   * that the component keeps scrolled to the bottom rather than as a line clamp: a clamp
+   * keeps the FIRST two lines, so a learner talking for more than a breath watched their
+   * own words stop halfway through a sentence and never move again. What matters while
+   * you are still speaking is the words you have just said.
+   */
+  max-height: 3em;
   overflow: hidden;
   animation: memo-tutor-heard-in 220ms ease-out;
 }

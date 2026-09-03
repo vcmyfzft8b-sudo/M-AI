@@ -204,9 +204,11 @@ const TIMEOUT_PATTERN =
 // "[lecture-pipeline]" is the structured line markLecturePipelineFailed writes for every lecture
 // that ends up failed (src/lib/pipeline.ts). It also reaches Sentry, but the two scans are meant
 // to be independently sufficient: a failed lecture must wake the triage run even on a day Sentry
-// drops the event.
+// drops the event. `[tutor-client]` is the same idea for the voice tutor, whose failures happen
+// in the browser against Soniox and reach the server only because the client reports them —
+// see src/app/api/lectures/[id]/tutor/report/route.ts.
 const UNCAUGHT_PATTERN =
-  /Unhandled(?: Promise)? [Rr]ejection|uncaughtException|FUNCTION_INVOCATION_FAILED|\[lecture-pipeline\]|^\s*(?:[A-Z]\w*)?Error:|^\s*TypeError:|^\s*ReferenceError:/m
+  /Unhandled(?: Promise)? [Rr]ejection|uncaughtException|FUNCTION_INVOCATION_FAILED|\[lecture-pipeline\]|\[tutor-client\]|^\s*(?:[A-Z]\w*)?Error:|^\s*TypeError:|^\s*ReferenceError:/m
 
 // Returns null for anything that is not actionable, which is most of the stream.
 export function classify(record) {

@@ -55,3 +55,30 @@ While PR #305 is open, automated triage must update or wait for it rather than c
 After it is merged, events at or before its production deployment cutoff are historical. A strictly
 later recurrence is new evidence: confirm whether both bounded attempts failed and whether the
 fallback completed before deciding that code needs another change.
+
+## 2026-09-03 — Page translation moved the onboarding CTA's label out of the button
+
+- **Sentry:** `MEMOAI-WEB-3A`, issue `144571793`
+- **Route:** `/app/start` (client-side, no 5xx counterpart in Vercel)
+- **Operation:** pressing the CTA on the last onboarding step, which swaps the label for a spinner
+- **Normalized message:** `NotFoundError: Failed to execute 'insertBefore' on 'Node': The node
+  before which the new node is to be inserted is not a child of this node.`
+- **Historical events:** `2026-09-02T21:27:03.778Z` and `2026-09-03T09:28:04.039Z`, both tagged to
+  release `4a991db4a57096eef82f24e1c538c483d505090a`
+- **Resolution:** [PR #315](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/315), merge commit
+  `612b6c9bec4e9379e12e7537564c9be5ea825a88`
+- **Production cutoff:** deployment `dpl_BocbohUn2hiohDCs2Kf6xjtGZBpr` was ready and holds the
+  production alias as of `2026-09-03T09:31:37Z`
+- **Regression test:** `tests/translated-onboarding-cta.test.mjs`
+
+The CTA rendered its spinner next to a bare text label. React inserts the spinner before the host
+sibling it remembers, and that sibling was the label's text node — which Chrome's page translation
+had already re-parented into `<font>` wrappers, taking it out of the button. `insertBefore` then
+threw and Next's error boundary replaced the paywall with the error screen. PR #315 wraps the label
+in a span, so translation rewrites inside an anchor React still owns.
+
+Both recorded events predate the cutoff: the last one fired 47 seconds before PR #315 merged and
+about three and a half minutes before its deployment went live, so it is the old release failing,
+not a regression. Automated triage must not open a second fix for these. An event strictly after
+the cutoff, on a release at or after `612b6c9`, is new evidence — check whether the span survived
+in the rendered markup and which extension or translator re-parented it before changing code.

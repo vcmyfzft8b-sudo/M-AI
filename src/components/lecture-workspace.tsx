@@ -1265,8 +1265,6 @@ function ChatBubble({ message }: { message: ChatMessageWithCitations }) {
  * The phone artboard says "Tapni", the desktop one "Klikni". Both are rendered
  * and the stylesheet picks, so this needs no viewport state on the client.
  */
-/** What the phone navbar calls each study screen. Flashcards names nothing. */
-/* Flashcards names nothing — the design's own mapping — so it has no key. */
 /*
  * The phone navbar names the screen it is on. The design left flashcards unnamed while
  * every other study screen was labelled, which just read as a missing title.

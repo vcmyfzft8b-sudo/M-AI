@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveSpokenLanguage } from "../src/lib/tutor/spoken-language.ts";
+import {
+  resolvePassageLanguage,
+  resolveSpokenLanguage,
+} from "../src/lib/tutor/spoken-language.ts";
 
 // Long enough and marked enough for detectSourceLanguage to commit — a shorter interruption
 // answers null, which is the safe outcome: the material's language stands and nobody guesses.
@@ -62,4 +65,22 @@ test("nothing readable in any language leaves the material's own", () => {
     resolveSpokenLanguage("de", { question: "ok", history: [{ role: "learner", content: "hm" }] }),
     "de",
   );
+});
+
+/* --- the language of what the tutor actually said -------------------------- */
+
+test("a unit long enough to read decides its own language", () => {
+  // The case resolveSpokenLanguage cannot see: a short Slovenian interruption on an English
+  // lecture resolves to "en", and "en" is the one language the checker skips. The tutor's own
+  // words are long enough to tell, and they are the text being repaired.
+  assert.equal(resolvePassageLanguage("en", SLOVENIAN), "sl");
+});
+
+test("a unit too short to read keeps the turn's language", () => {
+  assert.equal(resolvePassageLanguage("sl", "Točno tako."), "sl");
+  assert.equal(resolvePassageLanguage("en", "Exactly right."), "en");
+});
+
+test("English prose is recognised as English and left alone", () => {
+  assert.equal(resolvePassageLanguage("sl", ENGLISH), "en");
 });

@@ -32,7 +32,9 @@ import {
   buildLanguageRepairInstructions,
   createProofreadStream,
   languageRepairSchema,
+  shouldCheckLanguage,
 } from "../src/lib/ai/language-repair.ts";
+import { resolvePassageLanguage } from "../src/lib/tutor/spoken-language.ts";
 import { JsonStringFieldScanner } from "../src/lib/ai/stream-json.ts";
 import { GLM_TEXT_MODEL, LANGUAGE_CHECK_MODEL } from "../src/lib/ai/model-config.ts";
 import { detectSourceLanguage } from "../src/lib/languages.ts";
@@ -391,10 +393,18 @@ async function runTurn(arm, kind) {
     ? createProofreadStream({
         onDelta: emit,
         correct: async ({ text, preceding, signal }) => {
+          // Mirrors speakTutorTurn: the language is decided per unit, from the unit itself, and
+          // a language that does not need checking costs no call at all.
+          const passageLanguage = resolvePassageLanguage(language, `${preceding} ${text}`);
+
+          if (!shouldCheckLanguage(passageLanguage)) {
+            return null;
+          }
+
           const result = await generate({
             model: config.proofread,
             schema: languageRepairSchema,
-            instructions: buildLanguageRepairInstructions(language, { spoken: true }),
+            instructions: buildLanguageRepairInstructions(passageLanguage, { spoken: true }),
             input: buildLanguageRepairInput({ text, preceding }),
             maxOutputTokens: 1_200,
             signal,

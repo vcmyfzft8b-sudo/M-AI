@@ -560,8 +560,13 @@ export function createProofreadStream(options: ProofreadStreamOptions) {
   const laterDeadlineMs = options.laterUnitDeadlineMs ?? DEFAULT_LATER_DEADLINE_MS;
 
   let buffer = "";
-  /** Everything already emitted, which is the context the next unit is judged in. */
-  let emitted = "";
+  /*
+   * Every unit sent for repair so far, as the writer wrote it, which is the context the next
+   * unit is judged in. Deliberately the written text rather than the repaired text: a unit is
+   * dispatched long before its own repair comes back, so the repaired version of what came
+   * before it does not exist yet when it is needed.
+   */
+  let dispatched = "";
   let unitCount = 0;
   let firstUnitWaitMs: number | null = null;
   const outcomes: Record<ProofreadUnitOutcome, number> = {
@@ -581,8 +586,8 @@ export function createProofreadStream(options: ProofreadStreamOptions) {
 
   const dispatch = (unit: string, first: boolean) => {
     unitCount += 1;
-    const preceding = emitted.slice(-PRECEDING_CONTEXT_CHARS);
-    emitted += unit;
+    const preceding = dispatched.slice(-PRECEDING_CONTEXT_CHARS);
+    dispatched += unit;
 
     const controller = new AbortController();
     const deadlineMs = first ? firstDeadlineMs : laterDeadlineMs;
@@ -604,8 +609,8 @@ export function createProofreadStream(options: ProofreadStreamOptions) {
       }, deadlineMs);
     });
 
-    const attempt = options
-      .correct({ text: unit, preceding, signal: controller.signal })
+    const attempt = (async () =>
+      options.correct({ text: unit, preceding, signal: controller.signal }))()
       .then((corrected) => {
         if (!acceptCorrection(unit, corrected)) {
           return { text: unit, outcome: "rejected" as const };

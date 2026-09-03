@@ -16,7 +16,7 @@ import {
 } from "@/lib/ai/tutor-voice-prompt";
 import { detectSourceLanguage, normalizeNoteLanguage } from "@/lib/languages";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
-import { resolveSpokenLanguage } from "@/lib/tutor/spoken-language";
+import { resolvePassageLanguage, resolveSpokenLanguage } from "@/lib/tutor/spoken-language";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 /**
@@ -271,16 +271,28 @@ export async function speakTutorTurn(params: {
   };
 
   /*
-   * Switched off — or speaking a language that does not need it — the writer's words go straight
-   * through as they always did, rather than through a repair that would return the original
-   * anyway. The difference is the buffering: the checker hands the client whole phrases where the
-   * raw stream hands it words, so skipping it has to mean skipping it, not a quiet imitation.
+   * Switched off, the writer's words go straight through as they always did, rather than through
+   * a pipeline that would hand them back unchanged. The difference is the buffering: the checker
+   * gives the client whole phrases where the raw stream gives it words, so off has to mean off
+   * rather than a quiet imitation of it.
+   *
+   * Which language a unit is in is decided per unit rather than once per turn, and the decision
+   * is made from the unit itself — see resolvePassageLanguage. Deciding it up front from the
+   * request looks equivalent and is not: a learner's spoken interruption is usually too short for
+   * the detector to commit on, so a Slovenian question about an English lecture resolves to
+   * English, and English is the one language this is skipped for. That turn would go out
+   * unchecked, and it is exactly the kind of turn the check exists for.
    */
-  const proofreader = isLanguageCheckEnabled() && shouldCheckLanguage(language)
+  const proofreader = isLanguageCheckEnabled()
     ? createProofreadStream({
         onDelta: emit,
-        correct: ({ text, preceding, signal }) =>
-          repairPassage({ text, preceding, language, spoken: true, signal }),
+        correct: ({ text, preceding, signal }) => {
+          const passageLanguage = resolvePassageLanguage(language, `${preceding} ${text}`);
+
+          return shouldCheckLanguage(passageLanguage)
+            ? repairPassage({ text, preceding, language: passageLanguage, spoken: true, signal })
+            : Promise.resolve(null);
+        },
       })
     : null;
 
@@ -323,7 +335,12 @@ export async function speakTutorTurn(params: {
    * order.
    */
   const generated = await generateStructuredObject(call);
-  const repaired = await repairPassage({ text: generated.speech, language, spoken: true });
+  const repaired = await repairPassage({
+    text: generated.speech,
+    // The whole turn is in hand here, which is the best evidence of its language there is.
+    language: resolvePassageLanguage(language, generated.speech),
+    spoken: true,
+  });
 
   return { ...generated, speech: repaired ?? generated.speech };
 }

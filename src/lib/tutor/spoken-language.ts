@@ -44,3 +44,24 @@ export function resolveSpokenLanguage(materialLanguage: string, turn: SpokenTurn
 
   return materialLanguage;
 }
+
+/**
+ * The language of a piece of the turn the tutor is actually saying.
+ *
+ * `resolveSpokenLanguage` reads the learner's intent from what they said; this reads the outcome
+ * from what the tutor wrote, and it exists because the first one has a blind spot that matters.
+ * `detectSourceLanguage` needs about a dozen words to commit, and a spoken interruption is
+ * usually shorter than that — "počakaj, razloži mi to bolj preprosto" is six. So a Slovenian
+ * learner interrupting an English lecture falls through to the material's language, and the
+ * answer they get in Slovenian would be checked as English, or — because English is skipped —
+ * not checked at all. That is precisely the case this pass is for.
+ *
+ * The tutor's own words do not have that problem: a unit of speech is long enough to read, and
+ * it is the text being repaired, so it is the most direct evidence there is of what language the
+ * repair is happening in. Detection still answers null when a unit is too short or sits between
+ * two close neighbours, and null falls back to the turn's language, which is where the learner's
+ * intent and the material still decide.
+ */
+export function resolvePassageLanguage(turnLanguage: string, passage: string) {
+  return detectSourceLanguage(passage) ?? turnLanguage;
+}

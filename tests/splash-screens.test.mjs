@@ -10,6 +10,10 @@ function readSource(relativePath) {
 import {
   SPLASH_BACKGROUNDS,
   SPLASH_DEVICES,
+  SPLASH_MARK_FILE,
+  SPLASH_MARK_HEIGHT,
+  SPLASH_MARK_SRC,
+  SPLASH_MARK_WIDTH,
   SPLASH_THEMES,
   splashScreens,
 } from "../src/lib/splash-screens.ts";
@@ -277,4 +281,118 @@ test("the service worker caches build output and nothing else", () => {
   );
 
   assert.match(sw, /request\.method !== "GET"/, "only GETs may be served from cache");
+});
+
+/**
+ * The launch screen the page draws for itself, which exists because the one
+ * above is not enough: iOS uses a baked-in image only where its pixels match
+ * the screen exactly, so a phone in Display Zoom, a home-screen icon carried
+ * over by a device transfer, and every Android device open into a bare canvas.
+ * See src/components/launch-screen.tsx.
+ *
+ * It has the same problem as the images: no runtime, no error path, and it
+ * looks broken only on a real phone.
+ */
+test("the mark the in-page launch screen draws exists at the size it claims", () => {
+  const file = publicFile(SPLASH_MARK_FILE);
+
+  assert.ok(
+    existsSync(file),
+    `${SPLASH_MARK_FILE} is missing — run node --experimental-strip-types scripts/generate-splash-screens.mjs`,
+  );
+
+  const { width, height } = pngSize(file);
+  assert.equal(width, SPLASH_MARK_WIDTH, `${SPLASH_MARK_FILE} is ${width}px wide`);
+  assert.equal(height, SPLASH_MARK_HEIGHT, `${SPLASH_MARK_FILE} is ${height}px tall`);
+  assert.equal(SPLASH_MARK_SRC, `/${SPLASH_MARK_FILE}`);
+});
+
+test("the layout renders the launch screen, and it draws the mark itself", () => {
+  const layout = readSource("src/app/layout.tsx");
+  const launch = readSource("src/components/launch-screen.tsx");
+
+  assert.match(layout, /<LaunchScreen \/>/, "nothing renders the launch screen");
+
+  /*
+   * next/image would route the one picture the launch screen needs through
+   * /_next/image, putting a server round trip in front of the frame that is
+   * supposed to arrive before everything else.
+   */
+  assert.ok(
+    !/^import .*"next\/image"/m.test(launch),
+    "the launch mark must be a plain <img>; /_next/image puts a round trip in front of it",
+  );
+  assert.match(launch, /SPLASH_MARK_SRC/, "the launch screen must draw the generated mark");
+});
+
+/**
+ * The two gates and the two ways out. Losing the gate would put a full-screen
+ * logo over the website; losing a way out would leave it over the app.
+ */
+test("the in-page launch screen shows only in an installed app, and always leaves", () => {
+  const css = readSource("src/app/redesign.css");
+  const dismiss = readSource("src/components/launch-screen-dismiss.tsx");
+  const layout = readSource("src/app/layout.tsx");
+
+  const hidden = css.match(/\.memo-launch \{[^}]*display: none;/s);
+  assert.ok(hidden, ".memo-launch must be hidden by default, so a browser tab never sees it");
+
+  assert.match(
+    css,
+    /@media \(display-mode: standalone\), \(display-mode: fullscreen\) \{\s*\.memo-launch \{\s*display: flex;/,
+    "the launch screen must be gated on the app being installed",
+  );
+  assert.match(
+    css,
+    /:root\[data-standalone\] \.memo-launch \{\s*display: flex;/,
+    "iOS's own standalone flag must show it too",
+  );
+  assert.match(
+    layout,
+    /window\.navigator\.standalone === true/,
+    "nothing sets data-standalone, so the iOS gate can never match",
+  );
+
+  // Way out one: the app says it has launched.
+  assert.match(
+    dismiss,
+    /document\.documentElement\.dataset\.launched/,
+    "the launch screen is never dismissed",
+  );
+  assert.match(
+    css,
+    /:root\[data-launched\] \.memo-launch \{/,
+    "nothing hides the launch screen once the app has launched",
+  );
+
+  // Way out two: the app's JavaScript never arrives at all. Without this the
+  // failure mode is an app that shows its logo and never opens.
+  assert.match(
+    css,
+    /animation: memo-launch-timeout [^;]+;/,
+    "the launch screen has no timeout; with no JavaScript it would never leave",
+  );
+  assert.match(css, /@keyframes memo-launch-timeout \{/, "the timeout animation is not defined");
+});
+
+test("the in-page launch screen is drawn on the same colours as the baked-in ones", () => {
+  const css = readSource("src/app/redesign.css");
+  const block = css.slice(css.indexOf(".memo-launch {"), css.indexOf("@keyframes memo-launch-timeout"));
+
+  assert.ok(block.includes(`background-color: ${SPLASH_BACKGROUNDS.light};`), "light seam");
+  assert.ok(block.includes(`background-color: ${SPLASH_BACKGROUNDS.dark};`), "dark seam");
+});
+
+/**
+ * public/ is served with `max-age=0, must-revalidate`, which puts a conditional
+ * request in front of the mark on every cold launch — the one moment the app
+ * cannot spend a round trip, and the one connection where it might not come
+ * back at all.
+ */
+test("the launch assets are cached rather than revalidated on every launch", () => {
+  const config = readSource("next.config.ts");
+  const rule = config.slice(config.indexOf("async headers()"));
+
+  assert.match(rule, /splash\|icons/, "the launch assets have no cache rule");
+  assert.match(rule, /max-age=\d{4,}/, "the cache rule is too short to survive to the next launch");
 });

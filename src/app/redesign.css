@@ -41,6 +41,100 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Launch screen
+   ---------------------------------------------------------------------------
+   The mark on the app's own canvas, drawn by the document, for the installed
+   app only. See src/components/launch-screen.tsx for why the baked-in
+   `apple-touch-startup-image` screens are not enough on their own — in short,
+   iOS draws those only when the image matches the screen exactly, and a phone
+   in Display Zoom, a home-screen icon carried over from an older phone, and
+   every Android device all fail that test and open into a bare canvas.
+
+   Gated to the installed app: in a browser tab the page has a browser around
+   it and never looked like it was launching. `display-mode` is the standard
+   test and covers Android too; `navigator.standalone`, which the layout's head
+   script mirrors onto the root element, is iOS's own and predates it.
+
+   Colours are literals for the same reason the canvas above uses them: the
+   tokens live on `.memo`, and this sits above it. Same two values as `--bg`
+   and as SPLASH_BACKGROUNDS.
+   ------------------------------------------------------------------------- */
+.memo-launch {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background-color: #f1f1f5;
+  /*
+   * The safety net. Everything else here assumes the app's JavaScript arrives
+   * to declare the launch over; if it never does, this hides the screen anyway
+   * at six seconds, on the same fade it would have had. A launch screen that
+   * outlives the launch would be a worse bug than the blank one this replaces
+   * — it would be an app that never opens.
+   */
+  animation: memo-launch-timeout 200ms ease-out 6s forwards;
+}
+
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  .memo-launch {
+    display: flex;
+  }
+}
+
+:root[data-standalone] .memo-launch {
+  display: flex;
+}
+
+:root[data-theme="dark"] .memo-launch {
+  background-color: #121214;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .memo-launch {
+    background-color: #121214;
+  }
+}
+
+/*
+ * 30vmin is SPLASH_LOGO_SCALE: the same fraction of the shorter edge the mark
+ * spans in the images iOS bakes in, so where both screens are shown the mark
+ * does not move or resize between them.
+ */
+.memo-launch-mark {
+  width: 30vmin;
+  height: auto;
+}
+
+/*
+ * Launched. `visibility` is held back until the fade is over so the mark can
+ * actually fade, but taps go through from the first frame — the app underneath
+ * is live by now, and 200ms of swallowed taps is how an app feels stuck.
+ */
+:root[data-launched] .memo-launch {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 200ms ease-out,
+    visibility 0s linear 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-launched] .memo-launch {
+    transition: none;
+  }
+}
+
+@keyframes memo-launch-timeout {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
 /*
  * The shell is a fixed-height, clipped box — right for the app's own screens,
  * which scroll inside their own panes. The paywall is not one of those: it is

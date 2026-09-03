@@ -183,11 +183,29 @@ test("no spinner in these files sits immediately before a bare label", () => {
         return;
       }
 
-      // Skip the comment the fix left behind; the label follows it.
+      // Skip the comment the fix left behind; the label follows it. Tracked as a
+      // block rather than matched line by line, because a comment's second line
+      // is ordinary prose — landing on one would step past the label and let the
+      // assertion below pass without having looked at anything.
       let next = index + 1;
+      let insideComment = false;
 
-      while (next < lines.length && /^\s*(\{?\s*\/\*|\*|\*\/\}?)/.test(lines[next])) {
-        next += 1;
+      while (next < lines.length) {
+        const closes = /\*\/\s*\}/.test(lines[next]);
+
+        if (insideComment) {
+          insideComment = !closes;
+          next += 1;
+          continue;
+        }
+
+        if (/^\s*\{\s*\/\*/.test(lines[next])) {
+          insideComment = !closes;
+          next += 1;
+          continue;
+        }
+
+        break;
       }
 
       const sibling = lines[next] ?? "";

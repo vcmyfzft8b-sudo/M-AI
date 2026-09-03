@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { getServerEnv } from "@/lib/server-env";
 import { syncStripeSubscription, syncStripeSubscriptionRecord } from "@/lib/billing";
+import { creditTutorPurchase } from "@/lib/tutor-credits";
 
 function extractSubscriptionId(event: Stripe.Event) {
   if (event.type === "checkout.session.completed") {
@@ -66,6 +67,21 @@ export async function POST(request: Request) {
   }
 
   try {
+    /*
+     * A tutor top-up is a one-off payment, not a subscription, so it never reaches the
+     * subscription sync below — it has no subscription id at all. The seconds are credited
+     * here, from the session's own metadata, and only once the payment has actually landed.
+     * Stripe redelivers webhooks, so this has to be safe to run twice: `creditedFor` keys the
+     * grant to the checkout session, and a repeat is dropped rather than paid twice.
+     */
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+
+      if (session.mode === "payment" && session.payment_status === "paid") {
+        await creditTutorPurchase(session);
+      }
+    }
+
     if (
       event.type === "customer.subscription.created" ||
       event.type === "customer.subscription.updated" ||

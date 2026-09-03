@@ -18,7 +18,13 @@ import type { Translate } from "@/lib/i18n/translate";
  */
 export async function readChatStream<TResult>(
   response: Response,
-  onDelta: (updater: (current: string) => string) => void,
+  /*
+   * The piece of prose that just arrived, not the text so far. Callers painting
+   * an answer into React state append it themselves; the voice tutor forwards it
+   * straight to the speech socket, and an accumulated string would make it say
+   * the whole turn again on every token.
+   */
+  onDelta: (text: string) => void,
   /*
    * The server writes the sentence in the reader's language and this only has
    * to cover the frame that arrives with none — but it runs outside React, so
@@ -62,7 +68,7 @@ export async function readChatStream<TResult>(
     if (event === "delta") {
       const text = (parsed as { text?: string }).text ?? "";
       if (text) {
-        onDelta((current) => current + text);
+        onDelta(text);
       }
       return;
     }

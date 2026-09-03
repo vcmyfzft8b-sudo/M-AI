@@ -120,6 +120,16 @@ export const rateLimitPresets = {
     { windowSeconds: 300, maxRequests: 40, scope: "user" },
     { windowSeconds: 3600, maxRequests: 200, scope: "user" },
   ] satisfies RateLimitRule[],
+  /*
+   * A spoken walkthrough is one call per topic — ten to twenty over a session —
+   * and every interruption adds two more. So the ceiling has to clear a long,
+   * inquisitive session comfortably while still stopping a client stuck in a
+   * loop from billing an account into the ground overnight.
+   */
+  tutorTurn: [
+    { windowSeconds: 300, maxRequests: 60, scope: "user" },
+    { windowSeconds: 3600, maxRequests: 240, scope: "user" },
+  ] satisfies RateLimitRule[],
   expensiveChat: [
     { windowSeconds: 300, maxRequests: 12, scope: "user" },
     { windowSeconds: 3600, maxRequests: 60, scope: "user" },

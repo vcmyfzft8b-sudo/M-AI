@@ -13,12 +13,26 @@ export const AI_STAGES = [
   "coverage_plan",
   "study_items",
   "chat",
+  "tutor_turn",
 ] as const;
 
 export type AiStage = (typeof AI_STAGES)[number];
 
+/**
+ * How OpenRouter should pick among the hosts serving a model.
+ *
+ * "throughput" is right for the note pipeline, where a call runs unwatched inside an Inngest
+ * step and finishing sooner is all that matters. "latency" is right for the tutor, where the
+ * learner is sitting in silence waiting for the first word and the tail of the distribution
+ * is what they feel. Measured on GLM 5.3 Flash, six trials each: throughput-sorted teach
+ * turns started at a p50 of 6900ms and a p90 of 11649ms; latency-sorted, 938ms and 2855ms.
+ */
+export type ProviderSort = "throughput" | "latency";
+
 type StageDefaults = {
   thinkingLevel: ThinkingLevel;
+  /** Omitted means "throughput", which is what every stage but the tutor wants. */
+  providerSort?: ProviderSort;
   /**
    * Thinking tokens are drawn from maxOutputTokens, not billed beside it: a 300-token cap with
    * thinking on returns 9 answer tokens and finishReason MAX_TOKENS. Every stage budget is
@@ -73,6 +87,68 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
   coverage_plan: { thinkingLevel: "low", outputHeadroom: 1.6, defaultModel: GLM_TEXT_MODEL },
   study_items: { thinkingLevel: "low", outputHeadroom: 1.6, defaultModel: GLM_TEXT_MODEL },
   chat: { thinkingLevel: "minimal", outputHeadroom: 1, defaultModel: GLM_TEXT_MODEL },
+  /*
+   * One spoken turn of the voice tutor. Two things pull against each other here, and the
+   * choice between them was the product owner's, made on the numbers below.
+   *
+   * Latency is felt more sharply here than anywhere else in the product. Everywhere else a
+   * model answers into a page somebody is reading; here it answers a person who has just
+   * interrupted out loud and is waiting in silence. Under about a second and a half to the
+   * first sound reads as a conversation; past three it reads as a machine thinking.
+   *
+   * Measured 2026-09-02 on the omrezja-sl fixture. Time to first token, and the Slovenian
+   * graded by having gemini-3.7-flash proofread every sample for grammar and word-form
+   * errors ("covered" is how many of the seven OSI layers the turn actually taught, since
+   * the topic's points name all of them):
+   *
+   *   model                   teach ttft   answer ttft   words     covered   errors/100w
+   *   glm-5.3-flash             see below    see below   150-231   7/7 all       1.33
+   *   gemini-2.5-flash              536ms        470ms    84-129   7/7 all       0.00
+   *   gemini-3.5-flash-lite         793ms        711ms   100-155   7,1,7         0.00
+   *   gemini-3.7-flash             3114ms       3047ms       140   —             —
+   *   gpt-5.6-luna                 3406ms       3899ms       137   —             —
+   *
+   * GLM teaches the best turns of anything measured and costs a quarter of the Gemini pair,
+   * and it is what the rest of the product already runs on. What it costs is spoken
+   * correctness: roughly one error every 75 words, and they are not case slips a listener
+   * forgives but invented words — "faxenco", "komban", "pošiljateljnico", "koca" four times
+   * in one answer where "kocka" was meant. A reader repairs those silently; the synthesizer
+   * pronounces them. Both fixes were tried and neither moved the rate: an explicit "write it
+   * correctly" instruction (1.31 vs 1.33), and pinning to Z.AI's own first-party endpoint
+   * (1.60) or Novita (1.28). So it is the model, not the prompt and not a bad host.
+   *
+   * That trade was accepted deliberately. Keep the two facts together if it is ever revisited:
+   * the notes pipeline shows no such problem because nobody hears a note, and the moment the
+   * same text is spoken the same error rate becomes audible.
+   *
+   * The lesson plan runs on this model too. It was briefly split onto gemini-2.5-flash for
+   * speed, which was a mistake: marked against the omrezja-sl fixture's own 23-fact answer
+   * key, GLM's plans covered 94% (22, 22, 21) to Gemini's 74% (19, 17, 19, 13), and the bad
+   * Gemini run dropped LAN, WAN and MAN entirely. Planning quality is not prose quality —
+   * the plan decides which topics exist, and one it omits is one the walkthrough never
+   * teaches. The speed that split bought had also stopped mattering, since the plan is
+   * fetched alongside the opening turn rather than ahead of it.
+   *
+   * Latency is handled rather than accepted. GLM's spread through the gateway is its real
+   * weakness — an order of magnitude between sessions — so this is the one stage that asks
+   * OpenRouter to sort hosts by latency instead of throughput. Six trials each, measured
+   * together:
+   *
+   *   sort: throughput (the default)   teach p50 6900ms p90 11649ms | answer p50 9576ms
+   *   sort: latency                    teach p50  938ms p90  2855ms | answer p50 4078ms
+   *
+   * A max_price cap on top of that was tried and made the tail worse (answer p90 17095ms),
+   * so it is not used. If interruption latency ever needs to come down further without
+   * giving up GLM's teaching, the split to reach for is per-turn-kind: teach turns on GLM,
+   * where a second between topics is invisible, and answer turns on gemini-2.5-flash, where
+   * the learner is waiting. Thinking stays off — reasoning tokens are pure latency here.
+   */
+  tutor_turn: {
+    thinkingLevel: "minimal",
+    outputHeadroom: 1,
+    defaultModel: GLM_TEXT_MODEL,
+    providerSort: "latency",
+  },
 };
 
 const STAGE_MODEL_ENV_KEYS: Record<AiStage, string> = {
@@ -83,6 +159,7 @@ const STAGE_MODEL_ENV_KEYS: Record<AiStage, string> = {
   coverage_plan: "GEMINI_COVERAGE_MODEL",
   study_items: "GEMINI_STUDY_ITEMS_MODEL",
   chat: "GEMINI_CHAT_MODEL",
+  tutor_turn: "GEMINI_TUTOR_TURN_MODEL",
 };
 
 const STAGE_THINKING_ENV_KEYS: Record<AiStage, string> = {
@@ -93,6 +170,7 @@ const STAGE_THINKING_ENV_KEYS: Record<AiStage, string> = {
   coverage_plan: "GEMINI_COVERAGE_THINKING",
   study_items: "GEMINI_STUDY_ITEMS_THINKING",
   chat: "GEMINI_CHAT_THINKING",
+  tutor_turn: "GEMINI_TUTOR_TURN_THINKING",
 };
 
 const THINKING_LEVELS = new Set<string>(["minimal", "low", "medium", "high"]);
@@ -217,6 +295,7 @@ export type StageModelConfig = {
   model: string;
   thinkingLevel: ThinkingLevel | null;
   outputHeadroom: number;
+  providerSort: ProviderSort;
 };
 
 export function resolveStageModelConfig(params: {
@@ -243,6 +322,7 @@ export function resolveStageModelConfig(params: {
     stage: params.stage,
     model,
     thinkingLevel,
+    providerSort: defaults.providerSort ?? "throughput",
     outputHeadroom:
       thinkingLevel && thinkingLevel !== "minimal"
         ? Math.max(defaults.outputHeadroom, minimalHeadroom)
@@ -273,6 +353,12 @@ const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
   // A short leash matters because condensation runs inline in intake routes: one stalled call
   // must not eat the invocation that six concurrent chunks share.
   source_condense: 60_000,
+  /*
+   * A spoken turn that has not started arriving in twenty seconds is not going to be a
+   * conversation whatever it eventually says. Failing fast lets the client apologise and
+   * hand the floor back, which is far better than a learner sitting in silence for a minute.
+   */
+  tutor_turn: 20_000,
 };
 
 /**

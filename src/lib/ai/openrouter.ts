@@ -8,7 +8,11 @@ import {
   OPENROUTER_DEFAULT_TIMEOUT_MS,
   resolveAiAttemptTimeoutMs,
 } from "@/lib/ai/attempt-budget";
-import { isMandatoryReasoningModel, resolveWireReasoningEffort } from "@/lib/ai/model-config";
+import {
+  isMandatoryReasoningModel,
+  resolveWireReasoningEffort,
+  type ProviderSort,
+} from "@/lib/ai/model-config";
 import { GeminiTruncatedOutputError } from "@/lib/ai/structured-output";
 import { parseStructuredText } from "@/lib/ai/structured-output";
 import { JsonStringFieldScanner } from "@/lib/ai/stream-json";
@@ -83,9 +87,9 @@ function buildReasoningBlock(routedModel: string, thinkingLevel: string | null |
  * request off any host that would silently drop response_format's strict JSON schema. Gemini
  * routed through the gateway is served by Google alone, so it needs neither.
  */
-function buildProviderBlock(routedModel: string) {
+function buildProviderBlock(routedModel: string, sort: ProviderSort = "throughput") {
   return isMandatoryReasoningModel(routedModel)
-    ? { provider: { sort: "throughput", require_parameters: true } }
+    ? { provider: { sort, require_parameters: true } }
     : {};
 }
 
@@ -160,6 +164,8 @@ function toUsageMetadata(usage: OpenRouterResponse["usage"]): GeminiUsageMetadat
 }
 
 export async function generateStructuredObjectWithOpenRouter<TSchema extends z.ZodTypeAny>(params: {
+  /** How to pick among the hosts serving this model. Defaults to throughput. */
+  providerSort?: ProviderSort;
   schema: TSchema;
   instructions: string;
   input: string;
@@ -219,7 +225,7 @@ export async function generateStructuredObjectWithOpenRouter<TSchema extends z.Z
           },
         },
         ...buildReasoningBlock(routedModel, params.thinkingLevel),
-        ...buildProviderBlock(routedModel),
+        ...buildProviderBlock(routedModel, params.providerSort),
       }),
     });
 
@@ -284,6 +290,8 @@ export async function generateStructuredObjectWithOpenRouter<TSchema extends z.Z
  * throws plainly instead of salvaging a partial answer.
  */
 export async function streamStructuredObjectWithOpenRouter<TSchema extends z.ZodTypeAny>(params: {
+  /** How to pick among the hosts serving this model. Defaults to throughput. */
+  providerSort?: ProviderSort;
   schema: TSchema;
   instructions: string;
   input: string;
@@ -348,7 +356,7 @@ export async function streamStructuredObjectWithOpenRouter<TSchema extends z.Zod
           },
         },
         ...buildReasoningBlock(routedModel, params.thinkingLevel),
-        ...buildProviderBlock(routedModel),
+        ...buildProviderBlock(routedModel, params.providerSort),
       }),
     });
 

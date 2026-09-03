@@ -73,3 +73,42 @@ export function tabScrollTarget(geometry: TabScrollGeometry): number | null {
   const target = Math.min(Math.max(wanted, 0), maxScroll);
   return Math.abs(target - scrollLeft) < 1 ? null : target;
 }
+
+/**
+ * Where a row should sit so the chosen pill and the pills either side of it are readable.
+ *
+ * Showing the chosen pill alone is not enough on a row people move along one step at a
+ * time: it lands flush against a fade with its neighbours half-cut behind it, so the
+ * things you are most likely to reach for next are the things you cannot read.
+ *
+ * The two sides are not equal, though, and pretending they were is what made the first
+ * attempt at this wrong. The pill after the chosen one is where the row is going, so it is
+ * required; the pill before it is where the row has been, so it is merely wanted. When
+ * everything fits, all three are shown. When it does not, the previous pill is given up
+ * first and the chosen pill is never given up at all.
+ */
+export function pillNeighbourhoodScrollTarget(params: {
+  row: { scrollLeft: number; clientWidth: number; scrollWidth: number; left: number };
+  pill: { left: number; width: number };
+  previous: { left: number; width: number } | null;
+  next: { left: number; width: number } | null;
+}): number | null {
+  const { row, pill, previous, next } = params;
+  const toContent = (clientLeft: number) => clientLeft - row.left + row.scrollLeft;
+
+  const pillLeft = toContent(pill.left);
+  const requiredEnd = next ? toContent(next.left) + next.width : pillLeft + pill.width;
+  const wantedStart = previous ? toContent(previous.left) : pillLeft;
+
+  // Take the previous pill along only when the whole neighbourhood still fits the row;
+  // otherwise it would push the chosen pill towards the far edge to make room.
+  const start = requiredEnd - wantedStart <= row.clientWidth ? wantedStart : pillLeft;
+
+  return tabScrollTarget({
+    scrollLeft: row.scrollLeft,
+    viewportWidth: row.clientWidth,
+    contentWidth: row.scrollWidth,
+    pillLeft: start,
+    pillWidth: Math.max(pill.width, requiredEnd - start),
+  });
+}

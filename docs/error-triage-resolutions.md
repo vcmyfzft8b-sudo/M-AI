@@ -117,15 +117,18 @@ a `2026-09-01` Edge/Windows event (replay `bf1def4c30a64c2381f0d98852278f77`) fi
 explains it. Triage a post-cutoff event on its own evidence — the event's own `url` tag, its
 release, and whether its replay shows the offer sheet at all — before touching this code again.
 
-**Do not reproduce this one against production.** The recipe is cheap and needs no credentials —
+**Reproducing this one feeds the scanner.** The recipe is cheap and needs no credentials —
 `/creator?plan=free` renders the same `HomeDashboard` publicly, so seeding
 `sessionStorage["memo-offer-resume"]` through a Playwright `addInitScript` and loading the page was
-enough to throw #418 — but every seeded load on `www.memoai.eu` files a real production event under
-this fingerprint and the next triage run reads it back as fresh evidence of a live bug. The three
-`2026-09-03T21:3x` events are exactly that: a hand-driven verification session (Chrome on macOS,
-`?r=1`, `?r=2`, `&t=1`, two of them sharing replay `0821abf78e22424e9fc67340d7351a2d`) run against
-production around the deploy, not learners hitting the bug. Run the recipe against a preview
-instead, where `NEXT_PUBLIC_VERCEL_ENV` tags the events `preview` and keeps them out of the
-production stream. That same session is also the cleanest evidence the fix works: it kept loading
-the seeded page across the deployment boundary, and the loads carrying release `f2103c68` filed
-nothing.
+enough to throw #418. But every seeded load against a deployment files a real event under this
+fingerprint, and the scan behind `scripts/sentry-error-scan.mjs` asks Sentry for `is:unresolved`
+with no environment filter, so a preview load bumps `lastSeen` exactly as a production one does and
+the next run reads it back as fresh evidence of a live bug. The three `2026-09-03T21:3x` events are
+that, not learners: a hand-driven verification session on `www.memoai.eu` around the deploy (Chrome
+on macOS, `?r=1`, `?r=2`, `&t=1`, two of them sharing replay `0821abf78e22424e9fc67340d7351a2d`).
+Reproduce against a local build with `NEXT_PUBLIC_SENTRY_DSN` unset, which reports nothing at all.
+If a deployed build is the only option, write the event ids and timestamps it produced into the
+backlog entry, so the run that meets them next can recognise them as its predecessor's noise.
+
+That verification session is also the cleanest evidence the fix works: it kept loading the seeded
+page across the deployment boundary, and the loads carrying release `f2103c68` filed nothing.

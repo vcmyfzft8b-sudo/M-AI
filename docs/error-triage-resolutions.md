@@ -82,3 +82,50 @@ about three and a half minutes before its deployment went live, so it is the old
 not a regression. Automated triage must not open a second fix for these. An event strictly after
 the cutoff, on a release at or after `612b6c9`, is new evidence — check whether the span survived
 in the rendered markup and which extension or translator re-parented it before changing code.
+
+## 2026-09-03 — The resumed discount offer was rendered on the hydrating pass
+
+- **Sentry:** `MEMOAI-WEB-7`, issue `113442418`
+- **Route:** `/app` and `/creator` (client-side, no 5xx counterpart in Vercel)
+- **Operation:** loading the home screen with a discount offer to resume — the note
+  `sessionStorage["memo-offer-resume"]` left behind on the way to Stripe, or `?offer=1` on the way
+  back from it
+- **Normalized message:** `Hydration Error` — React error #418, "Hydration failed because the
+  server rendered HTML didn't match the client"
+- **Historical events:** everything up to and including `2026-09-03T21:41:49.634Z`, the last three
+  tagged to release `47ed2b7d8e2904864402f4ce13a49b8371b99ecf`
+- **Resolution:** [PR #319](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/319), merge commit
+  `f2103c68b4eaf41078708d8ba43b70b0ddf7e957`
+- **Production cutoff:** deployment `dpl_AnnvzpCQJUh4d3j9eQFLYG7StoT7` was ready at
+  `2026-09-03T21:49:06.702Z`, and production has served that commit or a descendant of it since
+- **Regression test:** `tests/home-offer-hydration.test.mjs`
+
+`HomeDashboard` seeded the offer's open state by reading `sessionStorage` during render
+(`src/components/home-dashboard.tsx:981`). The server cannot read that note, so the first client
+pass wrote a surface the server had never sent into `<main>` — the lazily imported offer, its
+Suspense boundary, and the bar that stands in while the chunk downloads. React reported the
+mismatch and recovered the only way it can: by discarding the streamed-in home screen and drawing
+it again. PR #319 keeps the seed and gates only the render on `useIsHydrated`, which is false for
+exactly as long as the pass that must match the server lasts.
+
+**This fingerprint is a catch-all, so it will not go quiet.** Sentry files every hydration error on
+the site under this one issue, whatever page or component caused it. An event after the cutoff is
+therefore *not* evidence that the resumed offer regressed — it is far more likely to be a different
+hydration mismatch wearing the same id. At least one other cause is known and still unidentified:
+a `2026-09-01` Edge/Windows event (replay `bf1def4c30a64c2381f0d98852278f77`) fired on
+`/app/lectures/<id>` in a session that never reached `/app`, so no seed read by `HomeDashboard`
+explains it. Triage a post-cutoff event on its own evidence — the event's own `url` tag, its
+release, and whether its replay shows the offer sheet at all — before touching this code again.
+
+**Do not reproduce this one against production.** The recipe is cheap and needs no credentials —
+`/creator?plan=free` renders the same `HomeDashboard` publicly, so seeding
+`sessionStorage["memo-offer-resume"]` through a Playwright `addInitScript` and loading the page was
+enough to throw #418 — but every seeded load on `www.memoai.eu` files a real production event under
+this fingerprint and the next triage run reads it back as fresh evidence of a live bug. The three
+`2026-09-03T21:3x` events are exactly that: a hand-driven verification session (Chrome on macOS,
+`?r=1`, `?r=2`, `&t=1`, two of them sharing replay `0821abf78e22424e9fc67340d7351a2d`) run against
+production around the deploy, not learners hitting the bug. Run the recipe against a preview
+instead, where `NEXT_PUBLIC_VERCEL_ENV` tags the events `preview` and keeps them out of the
+production stream. That same session is also the cleanest evidence the fix works: it kept loading
+the seeded page across the deployment boundary, and the loads carrying release `f2103c68` filed
+nothing.

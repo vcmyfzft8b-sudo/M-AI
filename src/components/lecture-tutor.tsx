@@ -1249,6 +1249,16 @@ export function LectureTutor({
    */
   const openPreviewChannel = useCallback(
     async (forVoice: NoteTtsVoice, quiet: boolean) => {
+      /*
+       * Whose audition this is, read before anything is awaited. Credentials and a cold
+       * socket together take about a second and a half, and anything that takes the room
+       * over in the meantime — another voice tapped, or Start pressed — moves the token
+       * on. Without this the socket that lands afterwards is stored anyway, and a preview
+       * nobody can hear holds one of the three streams the account gets for the rest of
+       * the session.
+       */
+      const token = previewTokenRef.current;
+
       try {
         if (!previewCredentialsRef.current) {
           const response = await fetch(`/api/lectures/${lectureId}/tutor/session`, {
@@ -1293,16 +1303,28 @@ export function LectureTutor({
               onClose: () => {
                 /*
                  * Soniox closes an idle stream, so this fires whenever somebody stops
-                 * auditioning voices for a moment. Dropping the reference is not enough —
-                 * the audio context behind it would leak, and browsers only allow a handful.
+                 * auditioning voices for a moment. Closing *this* one rather than whatever
+                 * the ref happens to hold: dropping the reference is not enough, since the
+                 * audio context behind it would leak and browsers only allow a handful —
+                 * but closing the ref blindly would tear down a newer preview instead.
                  */
-                previewRef.current?.close();
-                previewRef.current = null;
+                output.close();
+
+                if (previewRef.current === output) {
+                  previewRef.current = null;
+                }
               },
             },
           );
 
           await output.connect();
+
+          if (token !== previewTokenRef.current) {
+            output.close();
+
+            return null;
+          }
+
           previewRef.current = output;
         }
 

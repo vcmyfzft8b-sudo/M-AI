@@ -105,7 +105,10 @@
  */
 .memo-launch-mark {
   width: 30vmin;
-  height: auto;
+  aspect-ratio: 384 / 345;
+  background-image: url("/splash/mark.png");
+  background-repeat: no-repeat;
+  background-size: contain;
 }
 
 /*

@@ -1,9 +1,3 @@
-import {
-  SPLASH_MARK_HEIGHT,
-  SPLASH_MARK_SRC,
-  SPLASH_MARK_WIDTH,
-} from "@/lib/splash-screens";
-
 import { LaunchScreenDismiss } from "./launch-screen-dismiss";
 
 /**
@@ -46,21 +40,15 @@ export function LaunchScreen() {
     <>
       <div className="memo-launch" aria-hidden="true">
         {/*
-          * A plain <img>: next/image would route this through /_next/image,
-          * making the one picture the launch screen needs wait on a server
-          * round trip. The file is 13 KB and already on the device in every
-          * case that matters.
+          * The mark is a CSS background, not an <img>, and that is the whole
+          * point of the empty element: a `display: none` box loads no
+          * background image, so the website — where this never shows — pays
+          * nothing for it, not a request and not a share of the priority its
+          * own hero image wants. In the installed app the stylesheet is
+          * render-blocking anyway, so the picture is asked for before the
+          * first paint it belongs to. See redesign.css.
           */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          className="memo-launch-mark"
-          src={SPLASH_MARK_SRC}
-          alt=""
-          width={SPLASH_MARK_WIDTH}
-          height={SPLASH_MARK_HEIGHT}
-          fetchPriority="high"
-          decoding="sync"
-        />
+        <div className="memo-launch-mark" />
       </div>
       <LaunchScreenDismiss />
     </>

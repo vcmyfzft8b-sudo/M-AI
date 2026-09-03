@@ -307,22 +307,31 @@ test("the mark the in-page launch screen draws exists at the size it claims", ()
   assert.equal(SPLASH_MARK_SRC, `/${SPLASH_MARK_FILE}`);
 });
 
-test("the layout renders the launch screen, and it draws the mark itself", () => {
+test("the layout renders the launch screen, and it draws the generated mark", () => {
   const layout = readSource("src/app/layout.tsx");
   const launch = readSource("src/components/launch-screen.tsx");
+  const css = readSource("src/app/redesign.css");
 
   assert.match(layout, /<LaunchScreen \/>/, "nothing renders the launch screen");
 
   /*
-   * next/image would route the one picture the launch screen needs through
-   * /_next/image, putting a server round trip in front of the frame that is
-   * supposed to arrive before everything else.
+   * A CSS background rather than an <img>, so that the website — where the
+   * launch screen is `display: none` — fetches nothing for it. An <img> is
+   * loaded whether or not its box is drawn, and asking for it early enough to
+   * be useful in the app means asking ahead of the landing page's own hero.
    */
   assert.ok(
-    !/^import .*"next\/image"/m.test(launch),
-    "the launch mark must be a plain <img>; /_next/image puts a round trip in front of it",
+    !/<img\b[^>]*src=/.test(launch),
+    "an <img> here is fetched on the website too, where the launch screen never shows",
   );
-  assert.match(launch, /SPLASH_MARK_SRC/, "the launch screen must draw the generated mark");
+  assert.ok(
+    css.includes(`background-image: url("${SPLASH_MARK_SRC}")`),
+    "the launch screen must draw the generated mark",
+  );
+  assert.ok(
+    css.includes(`aspect-ratio: ${SPLASH_MARK_WIDTH} / ${SPLASH_MARK_HEIGHT}`),
+    "the mark's box must keep the mark's own shape",
+  );
 });
 
 /**

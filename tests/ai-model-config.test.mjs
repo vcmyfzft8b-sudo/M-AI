@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   applyOutputHeadroom,
   GLM_TEXT_MODEL,
+  isLanguageCheckEnabled,
+  LANGUAGE_CHECK_MODEL,
   resolveStageFallbackModel,
   resolveStageFallbackReserveMs,
   resolveStageModelConfig,
@@ -356,4 +358,39 @@ test("callout labels match exactly what the renderer colours", () => {
   // Windowed parts get a per-part budget so joined parts cannot stack up a wall of boxes.
   assert.match(buildSourceNoteInstructions({ window: { index: 1, count: 3 } }), /at most 2 callouts in this part/);
   assert.match(en, /at most 4 callouts in the whole note/);
+});
+
+test("the language check does not run on the model whose language it is checking", () => {
+  // The whole point of the stage. A checker sharing GLM's weakness would be an expensive no-op,
+  // so this is the one stage that must never inherit the shared default.
+  const config = resolve("language_check", {});
+
+  assert.equal(config.model, LANGUAGE_CHECK_MODEL);
+  assert.notEqual(config.model, GLM_TEXT_MODEL);
+  // Latency-sorted for the same reason the tutor stage is: on the spoken path this call sits
+  // between the learner and the first sound.
+  assert.equal(config.providerSort, "latency");
+});
+
+test("an operator can move the language check to another model without a deploy", () => {
+  assert.equal(
+    resolve("language_check", { GEMINI_LANGUAGE_CHECK_MODEL: "gemini-2.5-flash" }).model,
+    "gemini-2.5-flash",
+  );
+});
+
+test("the language check reasons at no level, because reasoning here is pure latency", () => {
+  assert.equal(resolve("language_check", {}).thinkingLevel, "minimal");
+  assert.equal(applyOutputHeadroom(600, resolve("language_check", {})), 600);
+});
+
+test("the language check is on unless it is explicitly turned off", () => {
+  assert.equal(isLanguageCheckEnabled({}), true);
+  assert.equal(isLanguageCheckEnabled({ LANGUAGE_CHECK: "on" }), true);
+  assert.equal(isLanguageCheckEnabled({ LANGUAGE_CHECK: "" }), true);
+
+  // Spelled the obvious ways, because whoever reaches for this will be in a hurry.
+  for (const value of ["off", "OFF", " off ", "0", "false", "disabled"]) {
+    assert.equal(isLanguageCheckEnabled({ LANGUAGE_CHECK: value }), false, value);
+  }
 });

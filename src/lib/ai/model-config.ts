@@ -14,6 +14,7 @@ export const AI_STAGES = [
   "study_items",
   "chat",
   "tutor_turn",
+  "language_check",
 ] as const;
 
 export type AiStage = (typeof AI_STAGES)[number];
@@ -66,6 +67,37 @@ type StageDefaults = {
  * outline is gated by size (note-generation.ts) — each call must fit a 300s Vercel invocation.
  */
 export const GLM_TEXT_MODEL = "or/z-ai/glm-5.3-flash";
+
+/**
+ * The model that checks GLM's language, routed through the same gateway as everything else.
+ *
+ * It is never asked to decide anything — the material is already chosen and the topic already
+ * taught — so this is not a question of how capable a model is. It is a question of which one
+ * knows the language, and the answer was not the obvious one.
+ *
+ * Measured 2026-09-04 over 72 repair calls on real Slovenian tutor units, with every change the
+ * checker made put to a native-speaker judge (scripts/language-check-bench.mjs):
+ *
+ *   model                   first unit p50/p90   later p50/p90   repairs   damage
+ *   gemini-3.5-flash-lite        736 / 825ms      850 /  917ms        22        0
+ *   gemini-2.5-flash             729 / 781ms     1009 / 1155ms        24        0
+ *   gemini-2.5-flash-lite        710 / 1229ms    1107 / 1453ms        19        6
+ *
+ * The cheapest of them is the one that cannot be used. 2.5-flash-lite finds nearly as much as
+ * the others and breaks correct Slovenian while doing it: it "repaired" the reflexive "seboj"
+ * into "njo", turned the session layer "sejna" into "seja", replaced a mangled word with "papež"
+ * — the Pope — and, on a checker whose output is spoken aloud, wrote "postrg(n)alo", brackets and
+ * all. A checker that damages one edit in five is worse than no checker, because the writer's
+ * misspelling is still recognisably the right word and a confident wrong correction is not.
+ *
+ * 3.5-flash-lite makes the most repairs per millisecond of the three, damaged nothing, and has by
+ * far the tightest tail — which is what the spoken path actually buys, since a repair that misses
+ * its deadline is a repair that does not happen. Its 3.x thinking is off for the same reason it
+ * is off on the tutor stage: reasoning tokens here are pure latency.
+ *
+ * When OpenRouter cannot serve it, json.ts's chain buys the same weights directly from Google.
+ */
+export const LANGUAGE_CHECK_MODEL = "or/google/gemini-3.5-flash-lite";
 
 const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
   // Selection over one chunk at a time: reads a lot, writes unit numbers. Same profile as
@@ -149,6 +181,26 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
     defaultModel: GLM_TEXT_MODEL,
     providerSort: "latency",
   },
+  /*
+   * Repairing the language of text another model has already written — one passage of a note,
+   * or one unit of a spoken turn while the rest of it is still being written.
+   *
+   * Not on GLM, and it is the one stage that must not be: this is the pass that exists because
+   * GLM's Slovenian is wrong about once every hundred and thirty words, and a checker with the
+   * same weakness would be an expensive no-op. Which model it is instead was measured rather
+   * than assumed — see LANGUAGE_CHECK_MODEL, where the cheapest candidate turned out to be the
+   * one that breaks the language it is meant to be fixing.
+   *
+   * Latency-sorted for the same reason the tutor stage is: on the spoken path this call sits
+   * between the learner and the first sound. Thinking is off — reasoning tokens here are pure
+   * latency, and the task is recognition, not deliberation.
+   */
+  language_check: {
+    thinkingLevel: "minimal",
+    outputHeadroom: 1,
+    defaultModel: LANGUAGE_CHECK_MODEL,
+    providerSort: "latency",
+  },
 };
 
 const STAGE_MODEL_ENV_KEYS: Record<AiStage, string> = {
@@ -160,6 +212,7 @@ const STAGE_MODEL_ENV_KEYS: Record<AiStage, string> = {
   study_items: "GEMINI_STUDY_ITEMS_MODEL",
   chat: "GEMINI_CHAT_MODEL",
   tutor_turn: "GEMINI_TUTOR_TURN_MODEL",
+  language_check: "GEMINI_LANGUAGE_CHECK_MODEL",
 };
 
 const STAGE_THINKING_ENV_KEYS: Record<AiStage, string> = {
@@ -171,6 +224,7 @@ const STAGE_THINKING_ENV_KEYS: Record<AiStage, string> = {
   study_items: "GEMINI_STUDY_ITEMS_THINKING",
   chat: "GEMINI_CHAT_THINKING",
   tutor_turn: "GEMINI_TUTOR_TURN_THINKING",
+  language_check: "GEMINI_LANGUAGE_CHECK_THINKING",
 };
 
 const THINKING_LEVELS = new Set<string>(["minimal", "low", "medium", "high"]);
@@ -359,6 +413,13 @@ const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
    * hand the floor back, which is far better than a learner sitting in silence for a minute.
    */
   tutor_turn: 20_000,
+  /*
+   * The repair is optional by construction: on the spoken path a unit whose repair is late is
+   * spoken as it was written, and in a note a passage that fails to come back is kept as it was.
+   * So this leash is only here to stop a stalled call holding an invocation open — the caller's
+   * own deadline is what the learner actually feels.
+   */
+  language_check: 30_000,
 };
 
 /**
@@ -398,6 +459,25 @@ export function resolveStageFallbackReserveMs(stage: AiStage, model?: string) {
   return model && isMandatoryReasoningModel(model)
     ? (MANDATORY_REASONING_FALLBACK_RESERVE_MS[stage] ?? 0)
     : 0;
+}
+
+/**
+ * The switch that turns the language repair off without a deploy.
+ *
+ * Every other knob in this file changes which model runs a stage; this one decides whether a
+ * stage runs at all, and it exists because the language check is the only pass in the product
+ * that edits text another model has already approved. Everything about it is built to fail
+ * safe — a repair that is late, refused or impossible leaves the original standing — but "fail
+ * safe" is a claim about the failures that were anticipated. If it ever misbehaves in a way
+ * nobody predicted, an operator needs to be able to stop it in the time it takes to change an
+ * environment variable, not in the time it takes to ship.
+ *
+ * Off is spelled the obvious ways because whoever reaches for this will be in a hurry.
+ */
+export function isLanguageCheckEnabled(env: NodeJS.ProcessEnv = process.env) {
+  const value = env.LANGUAGE_CHECK?.trim().toLowerCase();
+
+  return !(value === "off" || value === "0" || value === "false" || value === "disabled");
 }
 
 export const AI_STAGE_MODEL_ENV_KEYS = STAGE_MODEL_ENV_KEYS;

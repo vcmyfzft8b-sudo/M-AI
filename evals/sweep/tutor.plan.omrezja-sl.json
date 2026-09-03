@@ -1,0 +1,52 @@
+{
+  "subject": "Ta snov pokriva osnove računalniških omrežij, plasti modela OSI, naslavljanje naprav in primerjavo protokolov TCP in UDP.",
+  "topics": [
+    {
+      "title": "Kaj je računalniško omrežje in vrste omrežij",
+      "points": [
+        "Računalniško omrežje je skupina povezanih naprav, ki si izmenjujejo podatke in delijo vire.",
+        "LAN pokriva majhno območje, na primer eno stavbo, WAN povezuje oddaljena območja, mesta ali države, MAN pa območje mesta."
+      ]
+    },
+    {
+      "title": "Model OSI in njegovih sedem plasti",
+      "points": [
+        "Model OSI razdeli komunikacijo na sedem plasti, od fizične do aplikacijske, vsaka opravlja svojo nalogo in nudi storitve plasti nad seboj.",
+        "Fizična plast prenaša surove bite po mediju, povezavna skrbi za okvirje med sosednjima napravama in zaznavanje napak, omrežna za usmerjanje paketov med omrežji.",
+        "Transportna plast zagotavlja prenos med končnima točkama, sejna upravlja seje, predstavitvena skrbi za zapis podatkov in šifriranje, aplikacijska pa nudi storitve aplikacijam."
+      ]
+    },
+    {
+      "title": "Naslov MAC in naslov IP",
+      "points": [
+        "Naslov MAC je 48-bitni fizični naslov omrežne kartice, ki ga zapiše proizvajalec in se ne spreminja glede na omrežje.",
+        "Naslov IP je logični naslov: IPv4 je 32-biten, IPv6 pa 128-biten, in se spremeni, ko napravo priključimo v drugo omrežje.",
+        "Ključna razlika: MAC identificira napravo znotraj lokalnega segmenta, IP pa v širšem omrežju in omogoča usmerjanje."
+      ]
+    },
+    {
+      "title": "Protokoli ARP, DHCP in DNS",
+      "points": [
+        "ARP prevede naslov IP v naslov MAC znotraj lokalnega omrežja.",
+        "DHCP samodejno dodeli napravi naslov IP, masko podomrežja in privzeti prehod.",
+        "DNS prevede domensko ime v naslov IP."
+      ]
+    },
+    {
+      "title": "Omrežne naprave: stikalo, usmerjevalnik in razdelilnik",
+      "points": [
+        "Stikalo deluje na povezavni plasti in posreduje okvirje po naslovih MAC, pri čemer si zapomni, na katerih vratih je katera naprava.",
+        "Usmerjevalnik deluje na omrežni plasti in posreduje pakete med različnimi omrežji po naslovih IP.",
+        "Razdelilnik je starejša naprava na fizični plasti, ki signal pošlje na vsa vrata brez presoje."
+      ]
+    },
+    {
+      "title": "Primerjava protokolov TCP in UDP",
+      "points": [
+        "TCP je povezavno usmerjen: vzpostavi povezavo s trosmernim rokovanjem, zagotavlja zanesljivost, pravilen vrstni red in ponovno pošiljanje izgubljenih paketov.",
+        "UDP je nepovezaven: ne vzpostavlja povezave, ne zagotavlja vrstnega reda in ne ponavlja izgubljenih paketov, a je hitrejši in ima manjšo režijo.",
+        "Kompromis: TCP daje zanesljivost na račun hitrosti, UDP pa hitrost na račun zanesljivosti; TCP uporabljamo pri brskanju in prenosu datotek, UDP pri pretakanju, telefoniji in igrah."
+      ]
+    }
+  ]
+}

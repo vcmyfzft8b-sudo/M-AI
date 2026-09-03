@@ -1,24 +1,20 @@
-import { SpeechBandAnalyser, VoiceActivityDetector } from "@/lib/tutor/turn-audio";
+import { frameLevel } from "@/lib/tutor/turn-audio";
 
 /**
- * The tutor's ears: the microphone, a local voice detector, and one Soniox
- * recognizer socket kept open for the whole session.
+ * The tutor's ears: the microphone, and one Soniox recognizer socket kept open
+ * for the whole session.
  *
  * The microphone stays open the entire time — that is what "just start talking"
  * means. There is no button to hold and no wake word; the learner speaks and the
- * tutor stops. Two separate signals come out of here and they are used for
- * different things:
+ * tutor stops.
  *
- *   - the *voice* detector, which fires locally within about a tenth of a second
- *     and is what makes the tutor go quiet the instant somebody opens their
- *     mouth — it looks at where in the spectrum a sound sits, not just at how
- *     loud it is, so a passing car and a turned page do not silence anything, and
- *   - the *recognizer*, which is a network round trip behind but knows what was
- *     actually said, and therefore decides whether that was a question or a
- *     cough.
- *
- * Splitting them is the difference between a voice agent that feels alive and
- * one that talks over people for half a second every time.
+ * Only one signal comes out of here that anything acts on: the recognizer's
+ * words. There used to be a second — a local detector that watched the shape of
+ * the microphone's spectrum and fired within a tenth of a second, so the voice
+ * could duck before anyone knew what had been said. It was fast and it was
+ * wrong: no measurement of a sound can tell you that a person is talking *to
+ * you*, so the lesson went quiet for doors, cars, dogs and siblings. What is
+ * left is a level for the ring around the sphere, and words for everything else.
  */
 
 /** How often the worklet hands a frame back. 20ms is one packet's worth. */
@@ -48,9 +44,9 @@ const ENDPOINT_DELAY_MS = 900;
  * away from working, with nothing to forget to deploy.
  *
  * All it does is batch the 128-sample blocks the audio thread runs at into
- * packets worth sending. What each packet *sounds* like is measured on the other
- * side, in SpeechBandAnalyser, where it can be unit-tested — the audio thread's
- * job is to lose no frames, and everything it does beyond that is a risk to it.
+ * packets worth sending. How loud each packet was is measured on the other side,
+ * in `frameLevel`, where it can be unit-tested — the audio thread's job is to
+ * lose no frames, and everything it does beyond that is a risk to it.
  */
 const RECORDER_WORKLET = `
 class TutorRecorder extends AudioWorkletProcessor {
@@ -106,10 +102,6 @@ export type SpeechInputConfig = {
 };
 
 export type SpeechInputHandlers = {
-  /** The local detector heard a voice. Fires within ~100ms, before anyone knows what it said. */
-  onVoiceStart?: () => void;
-  /** The local detector heard the room go quiet again. */
-  onVoiceEnd?: () => void;
   /** The recognizer's running best guess at the current utterance. */
   onPartial?: (text: string) => void;
   /** The recognizer decided the utterance is over. Carries everything it heard. */
@@ -135,9 +127,6 @@ export class TutorSpeechInput {
   private socket: WebSocket | null = null;
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
   private workletUrl: string | null = null;
-  private readonly detector = new VoiceActivityDetector();
-  /** Built in `start`, once the hardware has said what rate it runs at. */
-  private analyser: SpeechBandAnalyser | null = null;
 
   private muted = false;
   private closed = false;
@@ -169,9 +158,8 @@ export class TutorSpeechInput {
    * Adopts a freshly minted key, on a new socket.
    *
    * Called when the session takes its next slice of time, roughly half an hour in. Only
-   * the recognizer is rebuilt: the microphone, the worklet and the detector all stay
-   * exactly where they are, so the noise floor the detector has spent the session
-   * learning is not thrown away and the learner notices nothing.
+   * the recognizer is rebuilt: the microphone and the worklet stay exactly where they
+   * are, so the learner notices nothing.
    *
    * Anything half-heard is dropped rather than carried over — the new socket starts its
    * own utterance, and stitching the two halves together would put a sentence fragment
@@ -210,11 +198,10 @@ export class TutorSpeechInput {
    * The three constraints are not boilerplate. `echoCancellation` is what stops
    * the tutor from hearing itself through the phone's own speaker and
    * interrupting itself — it is the single most important flag in this file, and
-   * `isEchoOfTutor` in turn-audio.ts is the backstop for the leakage it does not
+   * `isTutorEcho` in turn-audio.ts is the backstop for the leakage it does not
    * catch. `noiseSuppression` takes the steady part of a room out before anything
    * else sees it, and `autoGainControl` keeps somebody sitting back from a laptop
-   * at the same level as somebody leaning in — the detector's own band test is
-   * what handles the transients those two leave behind.
+   * at the same level as somebody leaning in.
    */
   async start() {
     const AudioContextClass =
@@ -254,7 +241,6 @@ export class TutorSpeechInput {
     const context = new AudioContextClass();
     await context.resume();
     this.context = context;
-    this.analyser = new SpeechBandAnalyser(context.sampleRate);
 
     const blob = new Blob([RECORDER_WORKLET], { type: "application/javascript" });
     this.workletUrl = URL.createObjectURL(blob);
@@ -344,17 +330,15 @@ export class TutorSpeechInput {
   /**
    * Stops sending audio without closing anything.
    *
-   * The socket stays open and the detector is reset, so unmuting is instant and
-   * does not cost a reconnection. Soniox bills a realtime stream for the time it
-   * is open rather than for the audio sent, so muting is a privacy control, not
-   * a saving — which is exactly what a learner means by it.
+   * The socket stays open, so unmuting is instant and does not cost a reconnection.
+   * Soniox bills a realtime stream for the time it is open rather than for the audio
+   * sent, so muting is a privacy control, not a saving — which is exactly what a
+   * learner means by it.
    */
   setMuted(muted: boolean) {
     this.muted = muted;
 
     if (muted) {
-      this.detector.reset();
-      this.analyser?.reset();
       this.level = 0;
       this.finalText = "";
       this.draftText = "";
@@ -374,8 +358,8 @@ export class TutorSpeechInput {
    * finished session cannot be barged into by definition, and on a phone "paused" happens
    * every time the learner switches app, so this is most of the day.
    *
-   * The microphone, the worklet and the detector stay exactly where they are: it is the
-   * Soniox stream that is scarce, not the hardware, and keeping the audio graph means
+   * The microphone and the worklet stay exactly where they are: it is the Soniox
+   * stream that is scarce, not the hardware, and keeping the audio graph means
    * coming back costs one handshake rather than a permission prompt. The tracks are
    * disabled all the same, so the phone stops showing a recording indicator for a session
    * that is not listening.
@@ -390,8 +374,6 @@ export class TutorSpeechInput {
     this.socket = null;
     previous?.close();
 
-    this.detector.reset();
-    this.analyser?.reset();
     this.level = 0;
     this.resetUtterance();
 
@@ -475,33 +457,13 @@ export class TutorSpeechInput {
     }
 
     /*
-     * Measured here rather than on the audio thread. The samples are already
-     * captured by this point, so nothing can be dropped by taking a moment over
-     * them, and it costs a few microseconds a frame — while keeping the decision
-     * of what a sound *was* in a plain module with tests around it.
-     *
-     * `send` copies the buffer rather than taking it, so reading it first is free.
+     * Measured here rather than on the audio thread, which has one job — lose no
+     * frames — and should not be given a second. The samples are already captured
+     * by this point, and `send` copies the buffer rather than taking it, so
+     * reading it first is free.
      */
-    const levels = this.analyser?.measure(new Int16Array(frame.pcm));
+    this.level = frameLevel(new Int16Array(frame.pcm));
 
-    if (levels) {
-      this.level = levels.level;
-
-      const transition = this.detector.push(levels);
-
-      if (transition === "start") {
-        this.handlers.onVoiceStart?.();
-      } else if (transition === "end") {
-        this.handlers.onVoiceEnd?.();
-      }
-    }
-
-    /*
-     * Sent whatever the local half made of it. The recognizer is the half that
-     * cannot be skipped: a session with no analyser would lose the instant duck,
-     * but a session with no audio going out loses the ability to be interrupted
-     * at all.
-     */
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(frame.pcm);
     }

@@ -6,8 +6,10 @@ import { Fragment, useState } from "react";
 import { useT } from "@/components/i18n-provider";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 
+import { LandingTutorDemo } from "./landing-tutor-demo";
+
 /*
- * The six things the product does, each with a small animated illustration.
+ * The seven things the product does, each with a small animated illustration.
  *
  * The captions are product copy and are translated. What the illustrations
  * *contain* — a sample lecture on business information systems, its bullet
@@ -18,6 +20,9 @@ import type { MessageKey } from "@/lib/i18n/messages/keys";
 const FEATURES = [
   { titleKey: "showcase.captureTitle", descKey: "showcase.captureDesc" },
   { titleKey: "showcase.notesTitle", descKey: "showcase.notesDesc" },
+  /* Third, where the app puts it: once the note exists, the other way to take
+     it in is to have it explained rather than to practise it. */
+  { titleKey: "showcase.tutorTitle", descKey: "showcase.tutorDesc" },
   { titleKey: "showcase.cardsTitle", descKey: "showcase.cardsDesc" },
   { titleKey: "showcase.quizTitle", descKey: "showcase.quizDesc" },
   { titleKey: "showcase.testsTitle", descKey: "showcase.testsDesc" },
@@ -488,7 +493,44 @@ function ReadPanel() {
   );
 }
 
-const PANELS = [WavePanel, NotesPanel, FlashcardPanel, QuizPanel, TestPanel, ReadPanel];
+/* Only the tutor cares; the rest ignore it and animate on their own loop. */
+type PanelProps = { active?: boolean };
+
+/*
+ * The live tutor, drawn at its own size and shrunk as a whole — the sphere's
+ * proportions are the design's, and re-laying it out smaller would lose them.
+ * It only starts once the visitor is actually on this feature.
+ */
+function TutorPanel({ active }: PanelProps) {
+  return (
+    <div style={{ position: "relative", width: "100%", maxWidth: "17rem", height: "16rem" }}>
+      {/* Centred by the transform rather than by the box: the panel it is drawn
+          at is taller than the space it is drawn into, and a grid that has to
+          centre something bigger than its own track aligns it to the start. */}
+      <div
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          width: "330px",
+          transform: "translate(-50%, -50%) scale(0.62)",
+        }}
+      >
+        <LandingTutorDemo autoStart={active} />
+      </div>
+    </div>
+  );
+}
+
+const PANELS: Array<(props: PanelProps) => ReactNode> = [
+  WavePanel,
+  NotesPanel,
+  TutorPanel,
+  FlashcardPanel,
+  QuizPanel,
+  TestPanel,
+  ReadPanel,
+];
 
 export function LandingFeatureShowcase() {
   const t = useT();
@@ -560,7 +602,7 @@ export function LandingFeatureShowcase() {
                 side stage takes over from the two-column breakpoint up. */}
             <div className="landing-v2-fx-inline" data-open={on ? "true" : "false"} aria-hidden={!on}>
               <div className="landing-v2-fx-inline-panel" data-fx-still={on ? "false" : "true"}>
-                {on ? <Panel /> : null}
+                {on ? <Panel active={on} /> : null}
               </div>
             </div>
             </Fragment>
@@ -587,7 +629,7 @@ export function LandingFeatureShowcase() {
                 transition: "opacity 320ms ease, transform 320ms cubic-bezier(0.22,1,0.36,1)",
               }}
             >
-              <Panel />
+              <Panel active={on} />
             </div>
           );
         })}

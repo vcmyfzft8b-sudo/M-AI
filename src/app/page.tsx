@@ -9,6 +9,7 @@ import { LandingFeatureShowcase } from "@/components/landing/landing-feature-sho
 import { LandingFlowDemo } from "@/components/landing/landing-flow-demo";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { LandingTryCallout } from "@/components/landing/landing-try-callout";
+import { LandingTutorDemo } from "@/components/landing/landing-tutor-demo";
 import { LandingUserCount } from "@/components/landing/landing-user-count";
 import { MemoAppPreview } from "@/components/landing/memo-app-preview";
 import { LandingLoadingLink } from "@/components/landing-loading-link";
@@ -73,6 +74,7 @@ function buildHomepageJsonLd(locale: string, t: (key: MessageKey) => string) {
       t("landing.seo.featureSummaries"),
       t("landing.seo.featureFlashcards"),
       t("landing.seo.featureQuizzes"),
+      t("landing.seo.featureTutor"),
       t("landing.seo.featureChat"),
     ],
   };
@@ -136,6 +138,24 @@ export default async function HomePage() {
             <LandingTryCallout />
             <MemoAppPreview />
           </div>
+        </div>
+      </section>
+
+      {/*
+        * The spoken walkthrough, first of the sections under the hero. It is the
+        * one thing here that is hard to describe and easy to understand once you
+        * have heard it, so the page lets a visitor start it before it explains
+        * anything else.
+        */}
+      <section id="tutor" className="landing-v2-section" aria-labelledby="landing-tutor-title">
+        <div className="landing-v2-section-head landing-v2-section-head-center" data-scroll-reveal="">
+          <h2 id="landing-tutor-title" className="landing-v2-section-title">
+            {t("landing.tutor.title")}
+          </h2>
+          <p className="landing-v2-tutor-lead">{t("landing.tutor.lead")}</p>
+        </div>
+        <div className="landing-v2-tutor-stage" data-scroll-reveal="">
+          <LandingTutorDemo autoStart />
         </div>
       </section>
 

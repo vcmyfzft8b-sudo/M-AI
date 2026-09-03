@@ -221,6 +221,12 @@ export const DARK_TOKENS: Record<string, string> = {
 
 export const TABS = [
   { id: "notes", labelKey: "note.tab.notes", icon: "description", tint: "#f45f5a" },
+  /*
+   * The spoken walkthrough, second because it is the other way to take in the
+   * note itself rather than a fourth kind of study material — you read it, or
+   * you have it explained. The app's own row is ordered the same way.
+   */
+  { id: "tutor", labelKey: "note.tab.tutor", icon: "graphic_eq", tint: "oklch(0.66 0.15 50)" },
   { id: "flashcards", labelKey: "note.tab.flashcards", icon: "style", tint: "oklch(0.66 0.15 295)" },
   { id: "quiz", labelKey: "note.tab.quiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
   { id: "test", labelKey: "note.tab.test", icon: "assignment", tint: "oklch(0.66 0.15 150)" },
@@ -229,10 +235,11 @@ export const TABS = [
 
 export type NoteTab = (typeof TABS)[number]["id"];
 
-/** What the phone's nav bar names each study screen. Flashcards names nothing. */
+/** What the phone's nav bar names each screen behind the note. */
 export const SUB_SCREEN_TITLE_KEYS: Record<NoteTab, MessageKey | null> = {
   notes: null,
-  flashcards: null,
+  tutor: "tutor.subScreenTitle",
+  flashcards: "note.tab.flashcards",
   quiz: "note.tab.quiz",
   test: "preview.subScreen.test",
   transcript: "note.tab.transcript",

@@ -1734,7 +1734,9 @@ export function NoteSourceModal({
             onClick={() => void handleCancelBusyAction()}
           >
             {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {t("common.cancel")}
+            {/* Wrapped so Chrome's page translation cannot carry the label out from
+                under React — see the note on the recording buttons below. */}
+            <span>{t("common.cancel")}</span>
           </button>
         </div>
       );
@@ -1909,7 +1911,9 @@ export function NoteSourceModal({
           onClick={() => void handleCancelBusyAction()}
         >
           {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {t("common.cancel")}
+          {/* Wrapped so Chrome's page translation cannot carry the label out from
+              under React — see the note on the recording buttons below. */}
+          <span>{t("common.cancel")}</span>
         </button>
       </div>
     );
@@ -2176,7 +2180,20 @@ export function NoteSourceModal({
                             }}
                           >
                             {busyLabel ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                            {busyLabel ?? t("capture.stopAndCreate")}
+                            {/*
+                             * The label is wrapped rather than written as bare text. The
+                             * spinner appears beside it the moment recording stops, and
+                             * React places it by inserting before the host sibling it
+                             * remembers — the label. Chrome's page translation, which
+                             * every learner outside our five locales is offered, rewrites
+                             * a bare text node into a pair of <font> wrappers and so takes
+                             * it out of the button; the insert then throws NotFoundError
+                             * and drops the whole capture flow onto the error screen, the
+                             * way it did on onboarding (Sentry MEMOAI-WEB-3A). Translation
+                             * rewrites the inside of an element and never moves the
+                             * element itself, so a <span> stays where React left it.
+                             */}
+                            <span>{busyLabel ?? t("capture.stopAndCreate")}</span>
                           </button>
                         </div>
                       ) : null}
@@ -2221,7 +2238,8 @@ export function NoteSourceModal({
                             onClick={() => void startRecording()}
                           >
                             {busyLabel ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                            {busyLabel ?? t("capture.startRecording")}
+                            {/* Wrapped for the same reason as the stop button above. */}
+                            <span>{busyLabel ?? t("capture.startRecording")}</span>
                           </button>
                         </div>
                       ) : null}

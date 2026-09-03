@@ -131,3 +131,72 @@ test("the onboarding CTA and the paywall CTA both wrap their label", () => {
   assert.doesNotMatch(source, /^\s*\{currentStep\.action\}$/m);
   assert.match(source, /<span className="memo-paywall-cta-label">/);
 });
+
+/**
+ * Every other button that shows a spinner beside a label it already had is the
+ * same button as the onboarding CTA, and would throw the same way on the same
+ * translated page. Onboarding is behind a sign-up; these are not — the capture
+ * modal is the app's front door and is reachable unauthenticated on /creator —
+ * so they are wrapped before a learner finds them rather than after.
+ *
+ * The expression each label holds is written out here, so that rewording a
+ * label leaves these passing and unwrapping one does not. `t("common.cancel")`
+ * is wrapped twice and left bare elsewhere in the same file on purpose: the
+ * other cancel buttons never gain a sibling, and bare text beside no spinner is
+ * nothing to insert before. Hence the count, and hence the adjacency test below
+ * carrying the invariant that actually matters.
+ */
+const WRAPPED_LABELS = [
+  ["src/components/note-source-modal.tsx", 'busyLabel ?? t("capture.stopAndCreate")', 1],
+  ["src/components/note-source-modal.tsx", 'busyLabel ?? t("capture.startRecording")', 1],
+  ["src/components/note-source-modal.tsx", 't("common.cancel")', 2],
+  ["src/components/billing-portal-button.tsx", 't("billing.manageSubscription")', 1],
+  [
+    "src/components/impersonation-banner.tsx",
+    'pending ? t("impersonation.leaving") : t("impersonation.stop")',
+    1,
+  ],
+];
+
+for (const [file, label, count] of WRAPPED_LABELS) {
+  test(`${file} wraps {${label}}`, () => {
+    const source = readSource(file);
+    const expression = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const wrapped = source.match(new RegExp(`<span>\\{${expression}\\}</span>`, "g")) ?? [];
+
+    assert.equal(wrapped.length, count);
+  });
+}
+
+/**
+ * The spinner is what makes this crash reachable: a button whose label never
+ * gains a sibling has nothing to insert before. So the guard above is only
+ * worth as much as the pairing it assumes — assert that every Loader2 in these
+ * three files is followed by a wrapped label rather than a bare one.
+ */
+test("no spinner in these files sits immediately before a bare label", () => {
+  for (const file of new Set(WRAPPED_LABELS.map(([path]) => path))) {
+    const lines = readSource(file).split("\n");
+
+    lines.forEach((line, index) => {
+      if (!/<Loader2/.test(line)) {
+        return;
+      }
+
+      // Skip the comment the fix left behind; the label follows it.
+      let next = index + 1;
+
+      while (next < lines.length && /^\s*(\{?\s*\/\*|\*|\*\/\}?)/.test(lines[next])) {
+        next += 1;
+      }
+
+      const sibling = lines[next] ?? "";
+      const isBareExpression = /^\s*\{.*\}\s*$/.test(sibling) && !/<[A-Za-z/]/.test(sibling);
+
+      assert.ok(
+        !isBareExpression,
+        `${file}:${next + 1} is a bare text child next to a spinner — wrap it in a <span>:\n${sibling}`,
+      );
+    });
+  }
+});

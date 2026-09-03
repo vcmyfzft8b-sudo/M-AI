@@ -41,7 +41,17 @@ export function BillingPortalButton() {
     <div className="settings-action-stack">
       <button type="button" className="settings-inline-action" onClick={handleClick} disabled={loading}>
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <EmojiIcon symbol="💳" size="0.95rem" />}
-        {t("billing.manageSubscription")}
+        {/*
+         * The label is wrapped rather than written as bare text. Pressing this swaps
+         * the card icon for the spinner, and React places the new node by inserting
+         * before the host sibling it remembers — the label. Chrome's page
+         * translation rewrites a bare text node into a pair of <font> wrappers and
+         * so takes it out of the button; the insert then throws NotFoundError and
+         * drops settings onto the error screen, the way it did on onboarding
+         * (Sentry MEMOAI-WEB-3A). Translation rewrites the inside of an element and
+         * never moves the element itself, so a <span> stays where React left it.
+         */}
+        <span>{t("billing.manageSubscription")}</span>
       </button>
       {error ? (
         <p className="settings-action-error" role="status">

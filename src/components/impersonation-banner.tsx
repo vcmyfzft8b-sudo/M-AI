@@ -45,7 +45,17 @@ export function ImpersonationBanner({ targetEmail }: { targetEmail: string | nul
       >
         <button type="submit" className="impersonation-stop" data-pending={pending || undefined}>
           {pending ? <Loader2 size={12} className="impersonation-spin" aria-hidden="true" /> : null}
-          {pending ? t("impersonation.leaving") : t("impersonation.stop")}
+          {/*
+           * The label is wrapped rather than written as bare text. Submitting shows
+           * the spinner beside it, and React places that node by inserting before
+           * the host sibling it remembers — the label. Chrome's page translation
+           * rewrites a bare text node into a pair of <font> wrappers and so takes it
+           * out of the button; the insert then throws NotFoundError, the way it did
+           * on onboarding (Sentry MEMOAI-WEB-3A). Translation rewrites the inside of
+           * an element and never moves the element itself, so a <span> stays where
+           * React left it.
+           */}
+          <span>{pending ? t("impersonation.leaving") : t("impersonation.stop")}</span>
         </button>
       </form>
       <button

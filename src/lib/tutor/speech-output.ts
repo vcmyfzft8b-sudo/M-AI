@@ -26,11 +26,26 @@ const PLAYBACK_LEAD_SECONDS = 0.12;
 /** Soniox closes an idle speech socket; this is well inside its window. */
 const KEEPALIVE_INTERVAL_MS = 15_000;
 
-/** How far the voice drops when the learner starts talking, before we know if they meant it. */
-const DUCKED_GAIN = 0.12;
+/**
+ * How long the tutor's last words can still be in the room after its audio stops.
+ *
+ * The recognizer is behind the room by its own transit plus the pause it waits out
+ * before calling an utterance over — about a second all told. Until that has passed,
+ * text arriving from it may still be the tail of what the speaker was saying, and the
+ * echo test needs the words to recognize it by.
+ */
+const ROOM_TAIL_MS = 1_200;
 
-/** Ducking and un-ducking are ramps rather than steps: a hard cut clicks. */
-const DUCK_RAMP_SECONDS = 0.08;
+/**
+ * How much of that last turn is kept.
+ *
+ * Only its ending, because only its ending can still be in the air — a sentence from
+ * the middle of the turn was heard and gone long ago. Keeping the whole turn would be
+ * safe against echo and expensive everywhere else: the learner answers a question the
+ * moment it is asked, often starting with the very word the tutor ended on, and every
+ * word held here is a word of theirs that could be mistaken for it.
+ */
+const ROOM_TAIL_WORDS = 6;
 
 export type SpeechOutputConfig = {
   url: string;
@@ -87,6 +102,9 @@ export class TutorSpeechOutput {
   private sources = new Set<AudioBufferSourceNode>();
   private turn: ActiveTurn | null = null;
   private turnCounter = 0;
+  /** The last thing said out loud, and how long it can still be in the room. */
+  private roomTail = "";
+  private roomTailUntil = 0;
   private closed = false;
 
   /** The playback rate the socket is asked for, and the rate the graph is built at. */
@@ -137,6 +155,12 @@ export class TutorSpeechOutput {
     this.context = context;
     this.sampleRate = context.sampleRate;
 
+    /*
+     * A fixed junction rather than a control: every scheduled buffer connects here so
+     * that one node feeds the meter and the speakers. It used to be turned down when
+     * the microphone heard something voice-shaped, which is how the tutor came to
+     * whisper at passing traffic; nothing moves it now.
+     */
     const gain = context.createGain();
     const analyser = context.createAnalyser();
     /*
@@ -312,8 +336,6 @@ export class TutorSpeechOutput {
       settled: false,
     };
 
-    this.setGain(1);
-
     /*
      * The stream is opened by the first word, not by the intention to speak.
      *
@@ -391,34 +413,66 @@ export class TutorSpeechOutput {
   }
 
   /**
-   * Drops the voice to a whisper without ending the turn.
+   * What the tutor's own voice has put into the room, for the echo test to recognize.
    *
-   * This is the first half of barge-in. The energy detector fires within about
-   * seventy milliseconds of the learner opening their mouth, long before anyone
-   * knows whether it was a question or a cough — so the tutor gets quiet
-   * immediately, the way a person trails off, and the recognizer's words decide
-   * a moment later whether that becomes a real interruption or the voice simply
-   * comes back up.
+   * Not the text of the turn: the part of it that has already left the speaker, which
+   * during a turn is usually a sentence or two behind what has been generated. Words
+   * the learner has not heard yet cannot be echoing back at the microphone, and
+   * counting them would only make the tutor deaf to a learner who happened to use one.
+   *
+   * It narrows as the tutor stops: everything played while a turn is in progress, then
+   * only the few words it ended on for as long as those can still be in the air, then
+   * nothing at all. That last state is most of the session — during the learner's turn
+   * nothing they say is measured against the tutor — and it is what makes it safe for
+   * `isTutorEcho` to be as strict as it is.
    */
-  duck() {
-    this.setGain(DUCKED_GAIN);
-  }
-
-  unduck() {
-    this.setGain(1);
-  }
-
-  private setGain(value: number) {
+  spokenIntoRoom() {
+    /*
+     * The turn before this one counts too, while it can still be in the air. Turns
+     * follow each other closely enough that the recognizer does not always hear a
+     * pause between them, and an utterance that straddles the seam is echo of both.
+     */
+    const previous = Date.now() <= this.roomTailUntil ? this.roomTail : "";
+    const turn = this.turn;
     const context = this.context;
-    const gain = this.gain;
 
-    if (!context || !gain) {
+    if (!turn || !context) {
+      return previous;
+    }
+
+    const played = spokenTextBefore(turn.timings, this.playedSeconds(turn, context), turn.text);
+
+    return `${previous} ${played}`.trim();
+  }
+
+  /** How much of this turn has been heard, in seconds of its own audio. */
+  private playedSeconds(turn: ActiveTurn, context: AudioContext) {
+    return turn.audioStartedAt === null
+      ? 0
+      : Math.max(0, Math.min(context.currentTime, turn.scheduledUntil) - turn.audioStartedAt);
+  }
+
+  /**
+   * Keeps the last thing said around for as long as it can still be echoing.
+   *
+   * A turn that has ended is gone from `this.turn`, but its final sentence is still
+   * travelling: out of the speaker, around the room, into the microphone, and through
+   * a recognizer that waits out a pause before deciding the utterance is over. Without
+   * this the tutor's own last words came back as the learner's first ones.
+   */
+  private rememberRoomTail(turn: ActiveTurn) {
+    const context = this.context;
+    const spoken = context
+      ? spokenTextBefore(turn.timings, this.playedSeconds(turn, context), turn.text)
+      : "";
+
+    /* A turn that never reached the speaker leaves the room exactly as it found it. */
+    if (!spoken) {
       return;
     }
 
-    gain.gain.cancelScheduledValues(context.currentTime);
-    gain.gain.setValueAtTime(gain.gain.value, context.currentTime);
-    gain.gain.linearRampToValueAtTime(value, context.currentTime + DUCK_RAMP_SECONDS);
+    this.roomTail = spoken.split(/\s+/u).slice(-ROOM_TAIL_WORDS).join(" ");
+    this.roomTailUntil = Date.now() + ROOM_TAIL_MS;
   }
 
   /**
@@ -438,14 +492,7 @@ export class TutorSpeechOutput {
     }
 
     const wasSpeaking = turn.scheduledUntil > context.currentTime;
-    const playedSeconds =
-      turn.audioStartedAt === null
-        ? 0
-        : Math.max(
-            0,
-            Math.min(context.currentTime, turn.scheduledUntil) - turn.audioStartedAt,
-          );
-    const spokenText = spokenTextBefore(turn.timings, playedSeconds, turn.text);
+    const spokenText = spokenTextBefore(turn.timings, this.playedSeconds(turn, context), turn.text);
 
     if (turn.opened && this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify({ stream_id: turn.streamId, cancel: true }));
@@ -602,6 +649,7 @@ export class TutorSpeechOutput {
     }
 
     turn.settled = true;
+    this.rememberRoomTail(turn);
     turn.resolve();
   }
 
@@ -614,6 +662,7 @@ export class TutorSpeechOutput {
 
     turn.settled = true;
     this.turn = null;
+    this.rememberRoomTail(turn);
     turn.reject(error);
   }
 }

@@ -17,8 +17,7 @@ import {
   type NoteTtsVoice,
 } from "@/lib/note-tts-settings";
 import {
-  isEchoOfTutor,
-  isSubstantialInterruption,
+  judgeHeard,
   LevelEnvelope,
   SpeechTextBuffer,
   stripAudioTags,
@@ -54,22 +53,26 @@ import {
  * every turn: it finishes, or the learner cuts in.
  *
  * Cutting in is the part everything else is arranged around, so it is worth
- * saying plainly how it works. The microphone is open the whole session and is
- * watched locally, so the voice ducks within about a tenth of a second of
- * somebody speaking — before anyone knows what they said. What the detector
- * looks for is a sound shaped like a voice rather than merely a loud one, which
- * is what keeps a passing car, a turned page or a dog next door from quietly
- * stopping the lesson. The recognizer's words arrive a moment later and decide
- * what that was: an echo of the tutor's own voice off a phone speaker, a cough,
- * or a real question. Only the last of those actually takes the floor, and when
- * it does, what the tutor had already *said* is recorded — not what it had
- * generated, which by then is usually a sentence or two further on.
+ * saying plainly how it works: the microphone is open the whole session, and
+ * exactly one thing stops the tutor — the recognizer sending back a word.
  *
- * The two ways a duck ends without an interruption matter as much as the duck
- * itself. If the recognizer finds no words in whatever it was, the voice comes
- * straight back up the moment the room goes quiet again, rather than sitting out
- * the full grace period — a second of silence after a cough is exactly the thing
- * that makes the tutor feel broken.
+ * One word is enough, and nothing short of one will do. The room is not
+ * consulted at all. An earlier version was: the microphone was watched locally
+ * and the voice ducked within a tenth of a second of any sound shaped like a
+ * voice, on the theory that the words could confirm it a moment later. It was
+ * quicker and it was unusable, because no measurement of a sound can tell you
+ * that a person is talking *to you* — so the lesson dipped for a door, a car, a
+ * dog, a sibling in the next room, and the learner heard a tutor that flinched.
+ * Waiting for the words costs a few hundred milliseconds of the tutor still
+ * talking after somebody starts, which is what a person does anyway.
+ *
+ * Its own voice is not one of those words. What has actually left the speaker is
+ * known to the sentence, so anything the microphone brings back that is entirely
+ * made of it is dropped — and dropped from the recognizer's buffer, not merely
+ * ignored, or it would be waiting on the front of the learner's next question.
+ *
+ * When an interruption does land, what the tutor had already *said* is recorded —
+ * not what it had generated, which by then is usually a sentence or two further on.
  */
 
 /**
@@ -90,15 +93,6 @@ function isTransportFailure(caught: unknown) {
     caught instanceof SpeechInputError
   );
 }
-
-/**
- * How long a ducked voice waits for the recognizer to justify the interruption.
- *
- * Only ever waited out in full while a sound is still going: once the room is
- * quiet again and nothing was recognized in it, the voice comes back without
- * waiting for this.
- */
-const INTERRUPTION_GRACE_MS = 1_400;
 
 /**
  * How long before the Soniox keys expire the session quietly takes its next slice.
@@ -292,9 +286,6 @@ export function LectureTutor({
   /** What the tutor has said about the current topic, so a resume never repeats it. */
   const spokenSoFarRef = useRef("");
   const turnAbortRef = useRef<AbortController | null>(null);
-  const interruptionTimerRef = useRef<number | null>(null);
-  /** Whether the recognizer has found any words since the voice last ducked. */
-  const heardWhileDuckedRef = useRef(false);
   /** When the keys in the browser's hands stop working, as milliseconds. */
   const credentialsExpireAtRef = useRef<number | null>(null);
   const renewalTimerRef = useRef<number | null>(null);
@@ -369,7 +360,6 @@ export function LectureTutor({
     floorTokenRef.current += 1;
     turnAbortRef.current?.abort();
     turnAbortRef.current = null;
-    clearTimer(interruptionTimerRef);
     clearTimer(followUpTimerRef);
     clearTimer(renewalTimerRef);
     credentialsExpireAtRef.current = null;
@@ -1167,11 +1157,36 @@ export function LectureTutor({
   }
 
   /**
+   * Who the recognizer was listening to, and what to do about anyone who is not the
+   * learner.
+   *
+   * The tutor is deaf to itself, and deaf in two steps. The text is judged against what
+   * has actually left its own speaker — nothing at all while the room has been the
+   * learner's, so their turn is never second-guessed — and anything that is not a person
+   * asking something is then *dropped from the recognizer's buffer* rather than merely
+   * ignored here. That second step is the one that was missing: Soniox builds one
+   * utterance until it hears a pause and the tutor never pauses, so a session on a phone
+   * speaker accumulated the tutor's own paragraph and then glued the learner's question
+   * onto the end of it. The model was asked to answer both.
+   *
+   * Dropping is safe by definition: text that reaches here as anything but "learner"
+   * contains no word of theirs to lose.
+   */
+  const whoSpoke = useCallback((text: string) => {
+    const speaker = judgeHeard(text, outputRef.current?.spokenIntoRoom() ?? "");
+
+    if (speaker !== "learner") {
+      inputRef.current?.resetUtterance();
+    }
+
+    return speaker;
+  }, []);
+
+  /**
    * The learner has taken the floor. Stop, and record only what they heard.
    */
   const commitInterruption = useCallback(() => {
     floorTokenRef.current += 1;
-    clearTimer(interruptionTimerRef);
     clearTimer(followUpTimerRef);
     turnAbortRef.current?.abort();
     turnAbortRef.current = null;
@@ -1191,15 +1206,14 @@ export function LectureTutor({
       }
     }
 
-    outputRef.current?.unduck();
     setPhaseNow("listening");
 
     /*
      * Handing the floor over is not the same as being asked a question, and sometimes
-     * nothing follows: a cough clears the energy detector, the recognizer finds no words
-     * in it, and the session would otherwise sit in silence forever waiting for a
-     * question that was never coming. Picking the topic back up is the right recovery —
-     * the learner can always cut in again.
+     * nothing follows it: a word said to somebody else in the room, or a sentence
+     * abandoned halfway. The session would otherwise sit in silence forever waiting for
+     * a question that was never coming, so the topic is picked back up — and the learner
+     * can always cut in again.
      */
     clearTimer(followUpTimerRef);
     followUpTimerRef.current = window.setTimeout(() => {
@@ -1368,42 +1382,11 @@ export function LectureTutor({
         languages: [session.language],
       },
       {
-        onVoiceStart: () => {
-          if (phaseRef.current !== "speaking") {
-            return;
-          }
-
-          /*
-           * The first half of barge-in: quiet, immediately, on nothing but the
-           * shape of the sound. The recognizer has until the grace period is out
-           * to say this was a person; if it does not, the voice comes back up
-           * and the learner never knows it happened.
-           */
-          heardWhileDuckedRef.current = false;
-          outputRef.current?.duck();
-          clearTimer(interruptionTimerRef);
-          interruptionTimerRef.current = window.setTimeout(() => {
-            if (phaseRef.current === "speaking") {
-              outputRef.current?.unduck();
-            }
-          }, INTERRUPTION_GRACE_MS);
-        },
-        onVoiceEnd: () => {
-          /*
-           * Whatever that was, it is over and the recognizer found no words in
-           * it — so it was not a person, and there is nothing left to wait for.
-           * Coming back up here rather than at the end of the grace period is
-           * the difference between the tutor pausing for a beat and the tutor
-           * appearing to stop every time somebody shifts in their chair.
-           */
-          if (phaseRef.current !== "speaking" || heardWhileDuckedRef.current) {
-            return;
-          }
-
-          clearTimer(interruptionTimerRef);
-          outputRef.current?.unduck();
-        },
         onPartial: (text) => {
+          if (whoSpoke(text) !== "learner") {
+            return;
+          }
+
           if (phaseRef.current !== "speaking") {
             if (acceptsHeardLine(phaseRef.current)) {
               showHeard(text, false);
@@ -1412,29 +1395,13 @@ export function LectureTutor({
             return;
           }
 
-          const lastTurn = historyRef.current[historyRef.current.length - 1];
-          const tutorTail = lastTurn?.role === "tutor" ? lastTurn.content : spokenSoFarRef.current;
-
-          if (isEchoOfTutor(text, tutorTail)) {
-            /*
-             * The tutor's own voice, back through the room. Carry on talking,
-             * and come back up now: waiting out the grace period would mean the
-             * tutor whispering at its own reflection for over a second.
-             */
-            clearTimer(interruptionTimerRef);
-            outputRef.current?.unduck();
-
-            return;
-          }
-
-          // Somebody is saying words. The voice stays down until they are judged.
-          heardWhileDuckedRef.current = true;
-
-          if (isSubstantialInterruption(text)) {
-            /* Now they hold the floor, so their words go up with it. */
-            commitInterruption();
-            showHeard(text, false);
-          }
+          /*
+           * A word, from a person, while the tutor is talking. That is the whole
+           * test — no waiting to see whether it becomes a sentence, and nothing
+           * about how loud the room is. The floor is theirs.
+           */
+          commitInterruption();
+          showHeard(text, false);
         },
         onUtterance: (text) => {
 
@@ -1442,10 +1409,7 @@ export function LectureTutor({
             return;
           }
 
-          const lastTurn = historyRef.current[historyRef.current.length - 1];
-          const tutorTail = lastTurn?.role === "tutor" ? lastTurn.content : "";
-
-          if (isEchoOfTutor(text, tutorTail) || !isSubstantialInterruption(text)) {
+          if (whoSpoke(text) !== "learner") {
             return;
           }
 
@@ -1569,11 +1533,20 @@ export function LectureTutor({
     setMuted(!listening);
 
     void runTurnRef.current("opening", { index: 0 });
-  }, [commitInterruption, lectureId, setPhaseNow, settleGrant, showHeard, stopPreview, t, voice]);
+  }, [
+    commitInterruption,
+    lectureId,
+    setPhaseNow,
+    settleGrant,
+    showHeard,
+    stopPreview,
+    t,
+    voice,
+    whoSpoke,
+  ]);
 
   function pause() {
     floorTokenRef.current += 1;
-    clearTimer(interruptionTimerRef);
     clearTimer(followUpTimerRef);
     turnAbortRef.current?.abort();
     turnAbortRef.current = null;

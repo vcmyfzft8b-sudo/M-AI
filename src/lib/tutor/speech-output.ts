@@ -173,6 +173,32 @@ export class TutorSpeechOutput {
   }
 
   /**
+   * Reopens the socket if Soniox has hung up on it.
+   *
+   * `tts-rt-v2` closes a stream that has asked for no audio with `1001 Timeout` after about
+   * ten seconds, and the gap between connecting and the first word is exactly that long: the
+   * microphone has to be opened and a turn has to be written before there is anything to say.
+   * Measured on a deployed build, the socket was dead before the first sentence arrived every
+   * time. Keepalives do not save it, so the connection is treated as disposable and checked
+   * immediately before it is used instead.
+   */
+  async ensureOpen() {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      return;
+    }
+
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = null;
+    }
+
+    this.socket?.close();
+    this.socket = null;
+
+    await this.openSocket();
+  }
+
+  /**
    * Starts the audio clock. Must be called from inside a user gesture the first time —
    * a context created outside one stays suspended on iOS however often it is resumed.
    */

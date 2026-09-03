@@ -619,9 +619,16 @@ export function LectureTutor({
           throw new Error(payload?.error ?? t("tutor.error.turnFailed"));
         }
 
+        /*
+         * Checked here rather than at connect time: Soniox closes an idle stream, and the
+         * turn that has just been written is the first thing with anything to say.
+         */
+        await output.ensureOpen();
+
         turn = output.speak({ speed: speedRef.current });
         setPhaseNow("speaking");
 
+        let spokeAnything = false;
         const result = await readChatStream<{
           speech: string;
           handBack: boolean;
@@ -632,6 +639,7 @@ export function LectureTutor({
             const ready = buffer.push(text);
 
             if (ready) {
+              spokeAnything = true;
               turn?.push(ready);
             }
           },
@@ -645,7 +653,20 @@ export function LectureTutor({
         const tail = buffer.flush();
 
         if (tail) {
+          spokeAnything = true;
           turn.push(tail);
+        }
+
+        /*
+         * A turn that never streamed still has to be said.
+         *
+         * `speakTutorTurn` falls back to a plain, unstreamed call whenever the streaming
+         * attempt fails, and that answer arrives whole in the closing event rather than as
+         * deltas. Without this the sphere sat there in silence while the walkthrough
+         * advanced through every topic — which is exactly what a deployed build did.
+         */
+        if (!spokeAnything && result?.speech) {
+          turn.push(result.speech);
         }
 
         turn.end();
@@ -1232,6 +1253,12 @@ export function LectureTutor({
             {
               /* Dropped while idle: forget it, and the next tap opens a fresh one. */
               onClose: () => {
+                /*
+                 * Soniox closes an idle stream, so this fires whenever somebody stops
+                 * auditioning voices for a moment. Dropping the reference is not enough —
+                 * the audio context behind it would leak, and browsers only allow a handful.
+                 */
+                previewRef.current?.close();
                 previewRef.current = null;
               },
             },
@@ -1541,6 +1568,20 @@ export function LectureTutor({
    * means it does not move as the screen changes between idle, preparing and speaking, and
    * it is reachable with a thumb while the tutor is talking.
    */
+  /*
+   * The pill is part of the screen rather than something that arrives with the numbers, so it
+   * is drawn the moment the tutor is opened and fills in when the allowance lands. Waiting for
+   * the fetch made it pop into the dock a second late, which reads as a layout bug.
+   */
+  const usagePlaceholder = dockSlot ? (
+    <span className="memo-tutor-usage-menu">
+      <span className="memo-tutor-usage-trigger is-loading" aria-hidden="true">
+        <Msym name="schedule" size="1.05rem" fill={false} weight={500} />
+        <span className="memo-tutor-usage-pending" />
+      </span>
+    </span>
+  ) : null;
+
   const usageMeter =
     usage && dockSlot ? (
       <>
@@ -1585,7 +1626,7 @@ export function LectureTutor({
 
   return (
     <>
-      {dockSlot && usageMeter ? createPortal(usageMeter, dockSlot) : null}
+      {dockSlot ? createPortal(usageMeter ?? usagePlaceholder, dockSlot) : null}
       <div
         className={`memo-tutor phase-${phase}`}
       style={{ "--tutor-hue": voiceHue(previewVoice ?? voice) } as CSSProperties}

@@ -27,6 +27,12 @@ import {
   SpeechInputError,
   TutorSpeechInput,
 } from "@/lib/tutor/speech-input";
+import {
+  acceptsHeardLine,
+  clearsHeardLine,
+  showsHeardLine,
+  type TutorPhase,
+} from "@/lib/tutor/heard-line";
 import { reportTutorFailure, resetTutorFailureReports } from "@/lib/tutor/report";
 import { SpeechOutputError, TutorSpeechOutput } from "@/lib/tutor/speech-output";
 import { voiceHue } from "@/lib/tutor/voice-colors";
@@ -124,15 +130,6 @@ const HAND_BACK_GRACE_MS = 900;
  * would teach them that the question was rhetorical.
  */
 const EXPLAIN_BACK_SILENCE_MS = 16_000;
-
-type TutorPhase =
-  | "idle"
-  | "preparing"
-  | "thinking"
-  | "speaking"
-  | "listening"
-  | "paused"
-  | "finished";
 
 type TutorTopic = { title: string; points: string[] };
 type TutorPlan = { subject: string; topics: TutorTopic[] };
@@ -248,7 +245,8 @@ export function LectureTutor({
    * Not a chat log — the tutor's own words are already in the room, and printing
    * them competes with listening to them. All this has to do is prove the
    * microphone heard the learner, so it holds exactly one thing: what they are
-   * saying, or the last thing they said.
+   * saying, or the last thing they said, and only for as long as the floor is
+   * theirs. The tutor speaking clears it.
    */
   const [heard, setHeard] = useState<{ text: string; settled: boolean } | null>(null);
   const [voice, setVoice] = useState<NoteTtsVoice>(DEFAULT_NOTE_TTS_VOICE);
@@ -329,6 +327,11 @@ export function LectureTutor({
   const setPhaseNow = useCallback((next: TutorPhase) => {
     phaseRef.current = next;
     setPhase(next);
+
+    /* The line under the sphere is the learner's, so the tutor's voice takes it down. */
+    if (clearsHeardLine(next)) {
+      setHeard(null);
+    }
   }, []);
 
   const clearTimer = (ref: { current: number | null }) => {
@@ -1401,9 +1404,11 @@ export function LectureTutor({
           outputRef.current?.unduck();
         },
         onPartial: (text) => {
-          showHeard(text, false);
-
           if (phaseRef.current !== "speaking") {
+            if (acceptsHeardLine(phaseRef.current)) {
+              showHeard(text, false);
+            }
+
             return;
           }
 
@@ -1426,7 +1431,9 @@ export function LectureTutor({
           heardWhileDuckedRef.current = true;
 
           if (isSubstantialInterruption(text)) {
+            /* Now they hold the floor, so their words go up with it. */
             commitInterruption();
+            showHeard(text, false);
           }
         },
         onUtterance: (text) => {
@@ -2098,8 +2105,8 @@ export function LectureTutor({
 
       {error ? <p className="memo-inline-error memo-tutor-error">{error}</p> : null}
 
-      {/* One line, and only while there is something to show. */}
-      {heard && isRunning ? (
+      {/* One line, and only while the floor is theirs. */}
+      {heard && showsHeardLine(phase) ? (
         <p ref={heardRef} className={`memo-tutor-heard ${heard.settled ? "" : "draft"}`.trim()}>
           {heard.text}
         </p>

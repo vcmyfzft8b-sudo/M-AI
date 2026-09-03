@@ -35,7 +35,7 @@ agents built by the customer or through LiveKit/Pipecat.
 | `src/lib/ai/tutor-voice-prompt.ts` | How the tutor speaks, per turn kind, plus the wire schemas. Loadable outside Next (relative imports) so `scripts/tutor-eval.mjs` can run it. |
 | `src/lib/tutor-voice.ts` | Reads the note, plans the running order, streams one spoken turn. |
 | `src/lib/tutor-realtime.ts` | Mints the two temporary keys. |
-| `src/lib/tutor/turn-audio.ts` | The decisions: where an interrupted turn was cut, whether the mic heard the tutor's own echo, when loud frames count as speech. No browser globals — unit-tested in `tests/tutor-turn-audio.test.mjs`. |
+| `src/lib/tutor/turn-audio.ts` | The decisions: where an interrupted turn was cut, whether the mic heard the tutor's own echo, which band of the spectrum a frame sat in, and when that counts as somebody speaking. No browser globals — unit-tested in `tests/tutor-turn-audio.test.mjs`. |
 | `src/lib/tutor/speech-output.ts` | The TTS socket and the Web Audio graph that plays it. |
 | `src/lib/tutor/speech-input.ts` | The microphone, the worklet, and the recognizer socket. |
 | `src/lib/tutor/voice-colors.ts` | A hue per voice, so the sphere looks like the voice picked. |
@@ -139,19 +139,44 @@ One sphere, and as little else as the screen can get away with.
 - **A voice per colour.** Eleven voices, each with its own hue (`voice-colors.ts`), so the
   choice is visible for the whole session rather than being a label that scrolled away.
   Tapping one previews it. The credentials and socket are warmed when the screen opens, so
-  a tap costs only the synthesis — measured 605 ms, against ~1.6 s cold.
+  a tap costs only the synthesis — measured 605 ms, against ~1.6 s cold. A preview is a
+  second speech socket with its own audio context, so anything that takes the room over
+  has to end it: **Start stops an audition before it touches the network** (`stopPreview`),
+  or the sample keeps playing under the loading state and sounds like the tutor beginning
+  in the wrong voice.
 
 ## Barge-in## Barge-in
 
 Two signals, used for different things:
 
-1. The **local energy detector** (`VoiceActivityDetector`) fires within ~70 ms and
-   ducks the voice to 12%, the way a person trails off. Its threshold rides the
-   measured noise floor rather than a constant, so a café and a bedroom both work.
+1. The **local voice detector** (`VoiceActivityDetector`) fires within ~100 ms and
+   ducks the voice to 12%, the way a person trails off.
 2. The **recognizer's words** arrive a moment later and decide what that was. An echo
    of the tutor's own voice off a phone speaker (`isEchoOfTutor`) or a cough
    (`isSubstantialInterruption`) lets the voice come back up and the learner never
    knows. A real question takes the floor.
+
+The local half is deliberately not a level meter, because a level meter ducked the
+tutor every time somebody turned a page. `SpeechBandAnalyser` splits each 20 ms frame
+into three bands with four biquads — under 250 Hz, 300–3000 Hz, over 4 kHz — and a
+frame only counts when three things hold at once: it clears a threshold riding
+the measured noise floor (so a café and a bedroom both work), the energy is actually in
+the voice band rather than beneath it (traffic, a fan, a thump on the desk) or above it
+(paper, keyboards, cutlery), and it lasts ~100 ms rather than being a click. The last of
+those tolerates gaps, since the closure inside a /p/ is 50 ms of near-silence and an
+unbroken run of loud frames is not what a word looks like. The noise floor is the
+quietest the voice band has been over the last two to four seconds rather than a
+running average, so a fan switched on mid-lesson is learned in a few seconds and speech
+never raises the bar against itself. The biquads matter for the same reason the
+constants do: the context runs at whatever rate the hardware gives, and a one-pole
+highpass at 4 kHz stops being one at 16 kHz.
+
+Both tolerances lean towards ducking, because the mistakes do not cost the same: a
+rejected interruption makes the learner say it twice, a needless duck costs a moment of
+quiet. So the recovery matters as much. A duck ends the instant the room goes quiet
+again with nothing recognized in it (`onVoiceEnd`), and the instant the words turn out
+to be the tutor's own voice — the full 1.4 s grace period is only ever waited out while
+a sound is still going and might yet become a question.
 
 When it does, what the tutor had already **said** is recorded — not what it had
 generated. Synthesis runs faster than speech, so a turn is often complete in the buffer
@@ -306,6 +331,9 @@ Two things follow from the shape of that bill:
   rate limit (60 per 5 min, 240 per hour). A daily allowance needs a product decision.
 - **A refused microphone costs barge-in, not the walkthrough.** It still runs, with the
   pause and skip controls; the learner just cannot cut in by speaking.
-- The energy detector could be replaced with Silero VAD (what Soniox's reference app
-  uses) for better robustness in noise. The recognizer-confirmation step means a false
-  positive currently costs only a brief duck, never a wrong interruption.
+- The band test rejects everything that is not shaped like a voice, which is most of
+  what a room does — but not a dog next door, a television, or somebody else in the
+  room talking, all of which are genuinely voice-shaped. Those still cost a duck until
+  the recognizer's words come back. A real VAD model (Silero, what Soniox's reference
+  app uses) would judge those too; the recognizer-confirmation step means the cost
+  today is a moment of quiet, never a wrong interruption.

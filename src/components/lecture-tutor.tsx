@@ -47,17 +47,31 @@ import {
  * every turn: it finishes, or the learner cuts in.
  *
  * Cutting in is the part everything else is arranged around, so it is worth
- * saying plainly how it works. The microphone is open the whole session and its
- * level is watched locally, so the voice ducks within about seventy
- * milliseconds of somebody speaking — before anyone knows what they said. The
- * recognizer's words arrive a moment later and decide what that was: an echo of
- * the tutor's own voice off a phone speaker, a cough, or a real question. Only
- * the last of those actually takes the floor, and when it does, what the tutor
- * had already *said* is recorded — not what it had generated, which by then is
- * usually a sentence or two further on.
+ * saying plainly how it works. The microphone is open the whole session and is
+ * watched locally, so the voice ducks within about a tenth of a second of
+ * somebody speaking — before anyone knows what they said. What the detector
+ * looks for is a sound shaped like a voice rather than merely a loud one, which
+ * is what keeps a passing car, a turned page or a dog next door from quietly
+ * stopping the lesson. The recognizer's words arrive a moment later and decide
+ * what that was: an echo of the tutor's own voice off a phone speaker, a cough,
+ * or a real question. Only the last of those actually takes the floor, and when
+ * it does, what the tutor had already *said* is recorded — not what it had
+ * generated, which by then is usually a sentence or two further on.
+ *
+ * The two ways a duck ends without an interruption matter as much as the duck
+ * itself. If the recognizer finds no words in whatever it was, the voice comes
+ * straight back up the moment the room goes quiet again, rather than sitting out
+ * the full grace period — a second of silence after a cough is exactly the thing
+ * that makes the tutor feel broken.
  */
 
-/** How long a ducked voice waits for the recognizer to justify the interruption. */
+/**
+ * How long a ducked voice waits for the recognizer to justify the interruption.
+ *
+ * Only ever waited out in full while a sound is still going: once the room is
+ * quiet again and nothing was recognized in it, the voice comes back without
+ * waiting for this.
+ */
 const INTERRUPTION_GRACE_MS = 1_400;
 
 /** After the tutor asks a check question, how long it waits before carrying on regardless. */
@@ -246,6 +260,8 @@ export function LectureTutor({
   const spokenSoFarRef = useRef("");
   const turnAbortRef = useRef<AbortController | null>(null);
   const interruptionTimerRef = useRef<number | null>(null);
+  /** Whether the recognizer has found any words since the voice last ducked. */
+  const heardWhileDuckedRef = useRef(false);
   const followUpTimerRef = useRef<number | null>(null);
   const levelFrameRef = useRef<number | null>(null);
   const previewRef = useRef<TutorSpeechOutput | null>(null);
@@ -287,6 +303,22 @@ export function LectureTutor({
     setHeard(trimmed ? { text: trimmed, settled } : null);
   }, []);
 
+  /**
+   * Ends an audition.
+   *
+   * A previewed voice is a whole second speech socket with its own audio context, and
+   * nothing else in the screen knows about it — so anything that takes over the room has
+   * to say so here. The token goes up as well as the socket coming down, because the tap
+   * that started this may still be in flight: without it, a preview whose connection
+   * lands a moment later would start talking over whatever came next.
+   */
+  const stopPreview = useCallback(() => {
+    previewTokenRef.current += 1;
+    previewRef.current?.close();
+    previewRef.current = null;
+    setPreviewVoice(null);
+  }, []);
+
   const teardown = useCallback(() => {
     runIdRef.current += 1;
     floorTokenRef.current += 1;
@@ -304,16 +336,14 @@ export function LectureTutor({
     orbRef.current?.style.setProperty("--tutor-level", "0");
 
     planPromiseRef.current = null;
-    previewTokenRef.current += 1;
-    previewRef.current?.close();
-    previewRef.current = null;
+    stopPreview();
     previewCredentialsRef.current = null;
     outputRef.current?.close();
     outputRef.current = null;
     inputRef.current?.close();
     inputRef.current = null;
     setHeard(null);
-  }, []);
+  }, [stopPreview]);
 
   const voiceRowRef = useRef<HTMLDivElement | null>(null);
   const usageMenuRef = useRef<HTMLDetailsElement | null>(null);
@@ -873,6 +903,14 @@ export function LectureTutor({
   }, [setPhaseNow]);
 
   const startSession = useCallback(async () => {
+    /*
+     * First, before the network is touched: a voice being auditioned stops the moment
+     * Start is pressed. Starting takes a second or two, and a sample still playing
+     * underneath the loading state sounds like the tutor has already begun — in the
+     * wrong voice, saying something that has nothing to do with the note.
+     */
+    stopPreview();
+
     setError(null);
     setCanListen(true);
     setHeard(null);
@@ -1014,10 +1052,11 @@ export function LectureTutor({
 
           /*
            * The first half of barge-in: quiet, immediately, on nothing but the
-           * level of the room. The recognizer has until the grace period is out
+           * shape of the sound. The recognizer has until the grace period is out
            * to say this was a person; if it does not, the voice comes back up
            * and the learner never knows it happened.
            */
+          heardWhileDuckedRef.current = false;
           outputRef.current?.duck();
           clearTimer(interruptionTimerRef);
           interruptionTimerRef.current = window.setTimeout(() => {
@@ -1025,6 +1064,21 @@ export function LectureTutor({
               outputRef.current?.unduck();
             }
           }, INTERRUPTION_GRACE_MS);
+        },
+        onVoiceEnd: () => {
+          /*
+           * Whatever that was, it is over and the recognizer found no words in
+           * it — so it was not a person, and there is nothing left to wait for.
+           * Coming back up here rather than at the end of the grace period is
+           * the difference between the tutor pausing for a beat and the tutor
+           * appearing to stop every time somebody shifts in their chair.
+           */
+          if (phaseRef.current !== "speaking" || heardWhileDuckedRef.current) {
+            return;
+          }
+
+          clearTimer(interruptionTimerRef);
+          outputRef.current?.unduck();
         },
         onPartial: (text) => {
           showHeard(text, false);
@@ -1037,9 +1091,19 @@ export function LectureTutor({
           const tutorTail = lastTurn?.role === "tutor" ? lastTurn.content : spokenSoFarRef.current;
 
           if (isEchoOfTutor(text, tutorTail)) {
-            // The tutor's own voice, back through the room. Carry on talking.
+            /*
+             * The tutor's own voice, back through the room. Carry on talking,
+             * and come back up now: waiting out the grace period would mean the
+             * tutor whispering at its own reflection for over a second.
+             */
+            clearTimer(interruptionTimerRef);
+            outputRef.current?.unduck();
+
             return;
           }
+
+          // Somebody is saying words. The voice stays down until they are judged.
+          heardWhileDuckedRef.current = true;
 
           if (isSubstantialInterruption(text)) {
             commitInterruption();
@@ -1139,7 +1203,7 @@ export function LectureTutor({
     setMuted(!listening);
 
     void runTurnRef.current("opening", { index: 0 });
-  }, [commitInterruption, lectureId, setPhaseNow, showHeard, t, voice]);
+  }, [commitInterruption, lectureId, setPhaseNow, showHeard, stopPreview, t, voice]);
 
   function pause() {
     floorTokenRef.current += 1;
@@ -1185,6 +1249,16 @@ export function LectureTutor({
    */
   const openPreviewChannel = useCallback(
     async (forVoice: NoteTtsVoice, quiet: boolean) => {
+      /*
+       * Whose audition this is, read before anything is awaited. Credentials and a cold
+       * socket together take about a second and a half, and anything that takes the room
+       * over in the meantime — another voice tapped, or Start pressed — moves the token
+       * on. Without this the socket that lands afterwards is stored anyway, and a preview
+       * nobody can hear holds one of the three streams the account gets for the rest of
+       * the session.
+       */
+      const token = previewTokenRef.current;
+
       try {
         if (!previewCredentialsRef.current) {
           const response = await fetch(`/api/lectures/${lectureId}/tutor/session`, {
@@ -1229,16 +1303,28 @@ export function LectureTutor({
               onClose: () => {
                 /*
                  * Soniox closes an idle stream, so this fires whenever somebody stops
-                 * auditioning voices for a moment. Dropping the reference is not enough —
-                 * the audio context behind it would leak, and browsers only allow a handful.
+                 * auditioning voices for a moment. Closing *this* one rather than whatever
+                 * the ref happens to hold: dropping the reference is not enough, since the
+                 * audio context behind it would leak and browsers only allow a handful —
+                 * but closing the ref blindly would tear down a newer preview instead.
                  */
-                previewRef.current?.close();
-                previewRef.current = null;
+                output.close();
+
+                if (previewRef.current === output) {
+                  previewRef.current = null;
+                }
               },
             },
           );
 
           await output.connect();
+
+          if (token !== previewTokenRef.current) {
+            output.close();
+
+            return null;
+          }
+
           previewRef.current = output;
         }
 

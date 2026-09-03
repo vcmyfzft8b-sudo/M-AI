@@ -7,6 +7,7 @@ import {
   isEchoOfTutor,
   isSubstantialInterruption,
   LevelEnvelope,
+  SpeechBandAnalyser,
   SpeechTextBuffer,
   spokenTextBefore,
   stripAudioTags,
@@ -99,32 +100,46 @@ test("text is held back at a half word and released at the next space", () => {
   assert.equal(buffer.flush(), "elektrarna");
 });
 
+// A frame of somebody talking: most of its energy in the band a voice lives in.
+function voice(level) {
+  return { level, voice: level, rumble: level * 0.5, hiss: level * 0.3 };
+}
+
+// A frame of a room: loud, and nowhere near the voice band.
+function rumble(level) {
+  return { level, voice: level * 0.15, rumble: level, hiss: level * 0.05 };
+}
+
+function hiss(level) {
+  return { level, voice: level * 0.2, rumble: level * 0.05, hiss: level };
+}
+
 test("the detector waits for sustained sound before calling it speech", () => {
   const detector = new VoiceActivityDetector({ attackFrames: 3, releaseFrames: 4 });
 
   // One loud frame is a door, not a person.
-  assert.equal(detector.push(0.4), null);
-  assert.equal(detector.push(0.002), null);
+  assert.equal(detector.push(voice(0.4)), null);
+  assert.equal(detector.push(voice(0.002)), null);
   assert.equal(detector.isSpeaking, false);
 
-  assert.equal(detector.push(0.4), null);
-  assert.equal(detector.push(0.4), null);
-  assert.equal(detector.push(0.4), "start");
+  assert.equal(detector.push(voice(0.4)), null);
+  assert.equal(detector.push(voice(0.4)), null);
+  assert.equal(detector.push(voice(0.4)), "start");
   assert.equal(detector.isSpeaking, true);
 });
 
 test("the detector holds through the pauses inside a sentence", () => {
   const detector = new VoiceActivityDetector({ attackFrames: 2, releaseFrames: 6 });
 
-  detector.push(0.4);
-  assert.equal(detector.push(0.4), "start");
+  detector.push(voice(0.4));
+  assert.equal(detector.push(voice(0.4)), "start");
 
   // A short breath mid-question must not end the utterance.
   for (let i = 0; i < 5; i += 1) {
-    assert.equal(detector.push(0.001), null);
+    assert.equal(detector.push(voice(0.001)), null);
   }
 
-  assert.equal(detector.push(0.001), "end");
+  assert.equal(detector.push(voice(0.001)), "end");
 });
 
 test("the detector learns a noisy room rather than hearing it as speech", () => {
@@ -132,11 +147,172 @@ test("the detector learns a noisy room rather than hearing it as speech", () => 
 
   // A steady fan at a level that would clear the absolute floor on its own.
   for (let i = 0; i < 200; i += 1) {
-    detector.push(0.03);
+    detector.push(voice(0.03));
   }
 
   assert.equal(detector.isSpeaking, false);
   assert.ok(detector.threshold > 0.03, "the threshold should have risen above the room");
+});
+
+test("a closure inside a word does not restart the count towards speech", () => {
+  const detector = new VoiceActivityDetector({ attackFrames: 4 });
+
+  // The silent moment inside a /p/ is a frame or two long and must not undo the word.
+  assert.equal(detector.push(voice(0.4)), null);
+  assert.equal(detector.push(voice(0.4)), null);
+  assert.equal(detector.push(voice(0.0005)), null);
+  assert.equal(detector.push(voice(0.4)), null);
+  assert.equal(detector.push(voice(0.4)), null);
+  assert.equal(detector.push(voice(0.4)), "start");
+});
+
+test("traffic and a fan never reach the tutor however loud they get", () => {
+  const detector = new VoiceActivityDetector();
+
+  // A car going past outside: as loud as a shout, all of it under the voice.
+  for (let i = 0; i < 200; i += 1) {
+    assert.equal(detector.push(rumble(0.6)), null);
+  }
+
+  assert.equal(detector.isSpeaking, false);
+});
+
+test("a turned page and a keyboard never reach it either", () => {
+  const detector = new VoiceActivityDetector();
+
+  for (let i = 0; i < 200; i += 1) {
+    assert.equal(detector.push(hiss(0.5)), null);
+  }
+
+  assert.equal(detector.isSpeaking, false);
+});
+
+test("a question asked over that noise still takes the floor", () => {
+  const detector = new VoiceActivityDetector();
+
+  // Sitting in the car with the engine running: the rumble does not stop when
+  // the learner speaks, it is simply no longer the loudest thing.
+  for (let i = 0; i < 200; i += 1) {
+    detector.push(rumble(0.4));
+  }
+
+  let started = false;
+
+  for (let i = 0; i < 10; i += 1) {
+    started ||= detector.push({ level: 0.5, voice: 0.3, rumble: 0.4, hiss: 0.1 }) === "start";
+  }
+
+  assert.ok(started, "a voice over traffic must still be heard as a voice");
+});
+
+test("a long sound does not fire again the moment it stops", () => {
+  const detector = new VoiceActivityDetector({ attackFrames: 5, releaseFrames: 24 });
+
+  // Somebody reading a paragraph aloud holds the detector open for hundreds of frames,
+  // its dips too short to release it. When they finally stop, that must be the end of it —
+  // an attack count left standing by all those frames would start a fresh duck at once.
+  for (let i = 0; i < 400; i += 1) {
+    detector.push(voice(i % 6 === 5 ? 0.02 : 0.4));
+  }
+
+  assert.equal(detector.isSpeaking, true);
+
+  let ended = 0;
+  let restarted = 0;
+
+  for (let i = 0; i < 100; i += 1) {
+    const move = detector.push(voice(0.0005));
+    ended += move === "end" ? 1 : 0;
+    restarted += move === "start" ? 1 : 0;
+  }
+
+  assert.equal(ended, 1);
+  assert.equal(restarted, 0);
+});
+
+test("a fan switched on mid-lesson is learned instead of ducking forever", () => {
+  const detector = new VoiceActivityDetector();
+  let starts = 0;
+
+  // Two seconds of a quiet room, then a hum inside the voice band that never stops.
+  for (let i = 0; i < 100; i += 1) {
+    detector.push(voice(0.0005));
+  }
+
+  for (let i = 0; i < 600; i += 1) {
+    starts += detector.push(voice(0.05)) === "start" ? 1 : 0;
+  }
+
+  // One duck when it starts, which the recognizer finds no words in, and then silence.
+  assert.equal(starts, 1);
+  assert.equal(detector.isSpeaking, false);
+});
+
+// One frame of a pure tone, the way the recorder hands audio over: 20ms of Int16.
+function tone(hertz, sampleRate = 48_000, amplitude = 0.3) {
+  const samples = new Int16Array(Math.round((sampleRate * 20) / 1000));
+
+  for (let index = 0; index < samples.length; index += 1) {
+    samples[index] = Math.sin((2 * Math.PI * hertz * index) / sampleRate) * amplitude * 0x7fff;
+  }
+
+  return samples;
+}
+
+// The filters carry state across frames, so a few frames in is where a steady tone settles.
+function settled(analyser, samples) {
+  let levels;
+
+  for (let index = 0; index < 5; index += 1) {
+    levels = analyser.measure(samples);
+  }
+
+  return levels;
+}
+
+test("the analyser puts a voice, a lorry and a turned page in different bands", () => {
+  const speech = settled(new SpeechBandAnalyser(48_000), tone(1_000));
+  const traffic = settled(new SpeechBandAnalyser(48_000), tone(120));
+  const paper = settled(new SpeechBandAnalyser(48_000), tone(8_000));
+
+  assert.ok(speech.voice > speech.rumble, "1 kHz belongs to the voice, not the floor");
+  assert.ok(speech.voice > speech.hiss, "1 kHz belongs to the voice, not the hiss");
+  assert.ok(traffic.rumble > traffic.voice * 2, "120 Hz is the room, not a person");
+  assert.ok(paper.hiss > paper.voice * 2, "8 kHz is paper, not a person");
+});
+
+test("the bands land in the same place whatever rate the hardware runs at", () => {
+  // 48 kHz on a laptop, 16 kHz on a phone with a Bluetooth headset. The filters have to
+  // hold their cutoffs at both, or a turned page at 16 kHz reads as somebody talking.
+  for (const sampleRate of [16_000, 22_050, 44_100, 48_000]) {
+    const speech = settled(new SpeechBandAnalyser(sampleRate), tone(1_000, sampleRate));
+    const paper = settled(new SpeechBandAnalyser(sampleRate), tone(6_000, sampleRate));
+
+    assert.ok(speech.voice > speech.hiss * 4, `1 kHz is a voice at ${sampleRate} Hz`);
+    assert.ok(paper.hiss > paper.voice * 4, `6 kHz is not, at ${sampleRate} Hz`);
+  }
+});
+
+test("the analyser and the detector agree about what a voice is", () => {
+  // The two halves are only useful together: what one measures, the other judges.
+  const speak = new SpeechBandAnalyser(48_000);
+  const speaking = new VoiceActivityDetector();
+  let started = false;
+
+  for (let index = 0; index < 20; index += 1) {
+    started ||= speaking.push(speak.measure(tone(1_000))) === "start";
+  }
+
+  assert.ok(started, "a tone in the middle of the voice band should read as speech");
+
+  for (const hertz of [120, 8_000]) {
+    const analyser = new SpeechBandAnalyser(48_000);
+    const detector = new VoiceActivityDetector();
+
+    for (let index = 0; index < 20; index += 1) {
+      assert.equal(detector.push(analyser.measure(tone(hertz))), null, `${hertz} Hz is not speech`);
+    }
+  }
 });
 
 test("the level envelope rises fast and falls slowly", () => {

@@ -150,6 +150,7 @@ export async function generateStructuredObject<TSchema extends z.ZodTypeAny>(par
               apiKey,
               maxOutputTokens: attemptMaxOutputTokens,
               thinkingLevel: attemptThinkingLevel,
+              providerSort: config.providerSort,
               timeoutMs: attemptTimeoutMs,
               fallbackReserveMs: resolveStageFallbackReserveMs(params.stage, routedModel),
               usageContext,
@@ -276,6 +277,7 @@ export async function streamStructuredObject<TSchema extends z.ZodTypeAny>(param
     onDelta: params.onDelta,
     maxOutputTokens: applyOutputHeadroom(params.maxOutputTokens, config),
     thinkingLevel: config.thinkingLevel,
+    providerSort: config.providerSort,
     timeoutMs: resolveStageTimeoutMs(params.stage, config.model),
     fallbackReserveMs: resolveStageFallbackReserveMs(params.stage, config.model),
     usageContext: {

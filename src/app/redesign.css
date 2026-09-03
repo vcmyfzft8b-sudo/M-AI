@@ -1595,8 +1595,6 @@
   left: 1.35rem;
 }
 
-
-
 /* Localhost-only dev link and the upsell for viewers who cannot create notes:
    utility rows, deliberately quieter than anything in the redesign proper. */
 .memo-utility-link {
@@ -2068,6 +2066,24 @@
   margin-top: 1.2rem;
   padding-bottom: 0.4rem;
   overflow-x: auto;
+  /* The row overflows on desktop too — one pill short of fitting is the usual case —
+     and it was being cut off square at both edges. No bleed here, unlike the phone:
+     the desktop scroller carries no horizontal padding for one to sit in, and a
+     negative margin simply overflowed it and put a scrollbar under the card. */
+  mask-image: linear-gradient(
+      90deg,
+      transparent 0,
+      #000 2.2rem,
+      #000 calc(100% - 2.2rem),
+      transparent 100%
+    );
+  -webkit-mask-image: linear-gradient(
+      90deg,
+      transparent 0,
+      #000 2.2rem,
+      #000 calc(100% - 2.2rem),
+      transparent 100%
+    );
 }
 
 .memo-tab {
@@ -2109,7 +2125,9 @@
 .memo-note-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  /* Centred against the title, not hung off its first line: a title that wraps to two
+     lines left the emoji sitting up beside the top one, reading as misaligned. */
+  align-items: center;
   gap: 0.9rem 1rem;
   margin-top: 1.4rem;
 }
@@ -2130,7 +2148,8 @@
 }
 
 .memo-note-head h1 {
-  margin: 0.1rem 0 0;
+  /* No optical nudge needed now the row centres itself. */
+  margin: 0;
   flex: 1 1 16rem;
   min-width: 0;
   font-size: 1.85rem;
@@ -3014,8 +3033,6 @@
   font-size: 1.35rem;
 }
 
-
-
 .memo-notes-panel {
   min-width: 0;
 }
@@ -3130,6 +3147,12 @@
 
 .memo-note-scroll {
   min-width: 0;
+  /*
+   * Never sideways. Everything in here is a column; the only things that scroll
+   * horizontally are the pill rows, which own their own scrollers. A stray overflow
+   * from one of those used to hand the whole note a scrollbar along its bottom edge.
+   */
+  overflow-x: hidden;
 }
 
 .memo-note-head-menu {
@@ -4419,8 +4442,6 @@
   color: var(--bg);
 }
 
-
-
 /*
  * The folder editor's actions, in the redesign's palette. Production paints the
  * save button its brand blue and the danger row a filled red; the design has
@@ -5571,8 +5592,6 @@
   line-height: 1.65;
 }
 
-
-
 .memo-support-screen {
   animation: memo-fade-in 0.18s ease-out;
 }
@@ -6375,8 +6394,6 @@
 .memo-ghost-pill .msym {
   font-size: 1.2rem;
 }
-
-
 
 /* ===========================================================================
    Capture modal
@@ -7456,8 +7473,6 @@
   background: rgba(255, 59, 48, 0.12);
   color: #ff3b30;
 }
-
-
 
 /* ===========================================================================
    Study manager, capture guide, practice-test detail
@@ -9217,8 +9232,23 @@
     margin: 0.1rem -1.15rem 0.9rem;
     padding: 0.15rem 1.15rem 0.5rem;
     gap: 0.6rem;
-    mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 2.2rem), transparent 100%);
-    -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 2.2rem), transparent 100%);
+    /* Both ends, not just the trailing one: the row scrolls in both directions, and a
+       pill cut hard against the left edge reads as a clipped layout rather than as
+       more to scroll back to. */
+    mask-image: linear-gradient(
+      90deg,
+      transparent 0,
+      #000 2.2rem,
+      #000 calc(100% - 2.2rem),
+      transparent 100%
+    );
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      transparent 0,
+      #000 2.2rem,
+      #000 calc(100% - 2.2rem),
+      transparent 100%
+    );
   }
 
   .memo-tab {
@@ -10104,8 +10134,6 @@
     width: 100%;
   }
 
-
-
   /*
    * The floating Uredi pill, in the design's language: a raised surface chip
    * rather than production's green gradient. It rides above the note dock, so
@@ -10274,8 +10302,6 @@
     justify-content: center;
     margin-top: 1.4rem;
   }
-
-
 
   /*
    * The design's exit: the sheet drops out of frame and dims slightly, on a
@@ -12254,5 +12280,715 @@
   /* Nothing hovers on a phone; the press state is what reads there. */
   .memo-language-option:active {
     background: var(--tile);
+  }
+}
+
+/* --- the spoken walkthrough ---------------------------------------------- */
+
+/*
+ * A voice needs something to be. The sphere is that something: one shape that
+ * breathes with whatever is actually being said, so a learner can tell at a
+ * glance whether the tutor is talking, listening or thinking without reading a
+ * word.
+ *
+ * Everything moving here rides `--tutor-level`, the live RMS of the audio, set
+ * from the animation frame loop in lecture-tutor.tsx. Nothing is on a timer.
+ * That distinction is the whole design: a pulse that keeps going during silence
+ * is the thing that makes a voice interface read as a decoration rather than as
+ * a participant.
+ */
+/*
+ * The walkthrough keeps the dock but empties it of the chat.
+ *
+ * Offering a second place to ask a question — with a second microphone button — beside a
+ * tutor that is already listening is two answers to one question. But the dock itself is
+ * where this app puts the controls that belong to the screen you are on, so the usage pill
+ * goes in it rather than floating somewhere new.
+ */
+.memo-note-screen[data-note-tab="tutor"] .memo-m-chatbar,
+.memo-note-screen[data-note-tab="tutor"] .memo-m-chatbar-mic,
+.memo-note-screen[data-note-tab="tutor"] .memo-chat-fab {
+  display: none;
+}
+
+/* On its own in the dock, the pill sits where the listen pill does on the note. */
+.memo-note-screen[data-note-tab="tutor"] .memo-dock {
+  justify-content: center;
+}
+
+/*
+ * The walkthrough does not scroll.
+ *
+ * It is one screen with a fixed set of things on it, and there is nothing below the
+ * fold to reach — so a scrollbar and a bit of rubber-banding only make it feel like a
+ * document that has been cut off. The fade the note scroller wears goes with it, since
+ * there is no longer anything passing behind the header.
+ */
+.memo-note-screen[data-note-tab="tutor"] .memo-note-scroll {
+  overflow-y: hidden;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+.memo-tutor {
+  /* Overridden per voice from the component; see voice-colors.ts. */
+  --tutor-hue: 45;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  padding: 1.5rem 1.25rem 2rem;
+  text-align: center;
+  /* Fills whatever the note scroller leaves, so the sphere sits at the optical centre
+     rather than pinned under the pill row with a screen of nothing beneath it. */
+  min-height: min(34rem, 68vh);
+}
+
+.memo-tutor-orb {
+  position: relative;
+  width: 11.5rem;
+  height: 11.5rem;
+  display: grid;
+  place-items: center;
+  flex: none;
+  /* Clamped so a shout cannot fill the panel and a whisper still shows. */
+  --tutor-swell: clamp(0, calc(var(--tutor-level, 0) * 4.2), 1);
+}
+
+.memo-tutor-orb > * {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  border-radius: 50%;
+}
+
+/* The bloom. Sits behind everything and carries most of the "glowing" — a blur
+   this wide reads as light in the room rather than as a ring on a surface. */
+.memo-tutor-orb-glow {
+  width: 11.5rem;
+  height: 11.5rem;
+  background: radial-gradient(
+    circle at 50% 45%,
+    oklch(0.72 0.18 var(--tutor-hue) / 0.55),
+    oklch(0.62 0.2 calc(var(--tutor-hue) - 20) / 0.28) 45%,
+    transparent 70%
+  );
+  filter: blur(18px);
+  transform: scale(calc(0.86 + var(--tutor-swell) * 0.34));
+  opacity: calc(0.55 + var(--tutor-swell) * 0.45);
+  transition:
+    transform 90ms ease-out,
+    opacity 90ms ease-out;
+}
+
+/*
+ * The body. Two offset radial highlights rather than one, which is what stops a
+ * circle from reading as a flat disc: the small bright one is a specular
+ * highlight and the large dim one is the light wrapping round the far side.
+ */
+.memo-tutor-orb-body {
+  width: 7.5rem;
+  height: 7.5rem;
+  background:
+    radial-gradient(circle at 36% 30%, oklch(0.95 0.06 calc(var(--tutor-hue) + 25) / 0.95), transparent 42%),
+    radial-gradient(circle at 62% 74%, oklch(0.66 0.19 calc(var(--tutor-hue) - 15) / 0.9), transparent 60%),
+    linear-gradient(
+      160deg,
+      oklch(0.78 0.17 calc(var(--tutor-hue) + 10)),
+      oklch(0.58 0.19 calc(var(--tutor-hue) - 23))
+    );
+  box-shadow:
+    0 0 2.5rem oklch(0.7 0.18 calc(var(--tutor-hue) - 5) / 0.5),
+    inset 0 -0.75rem 1.5rem oklch(0.4 0.12 calc(var(--tutor-hue) - 25) / 0.45),
+    inset 0 0.5rem 1rem oklch(0.98 0.05 calc(var(--tutor-hue) + 35) / 0.35);
+  /* A voice change should feel like the same object changing colour, not a swap. */
+  transition:
+    transform 80ms ease-out,
+    background 320ms ease,
+    box-shadow 320ms ease;
+  transform: scale(calc(0.94 + var(--tutor-swell) * 0.16));
+  /* A slow drift under the audio-driven scale, so a held pause still looks alive. */
+  animation: memo-tutor-breathe 5.5s ease-in-out infinite;
+}
+
+/* The rings are the listening state: they only expand when the learner talks. */
+.memo-tutor-orb-ring {
+  width: 8.5rem;
+  height: 8.5rem;
+  border: 1px solid oklch(0.75 0.14 var(--tutor-hue) / 0.4);
+  opacity: 0;
+  transform: scale(1);
+}
+
+.memo-tutor.phase-listening .memo-tutor-orb-ring {
+  opacity: calc(0.25 + var(--tutor-swell) * 0.75);
+  transform: scale(calc(1 + var(--tutor-swell) * 0.28));
+  transition:
+    transform 110ms ease-out,
+    opacity 110ms ease-out;
+}
+
+.memo-tutor.phase-listening .memo-tutor-orb-ring.second {
+  transform: scale(calc(1.14 + var(--tutor-swell) * 0.4));
+  opacity: calc(0.12 + var(--tutor-swell) * 0.4);
+}
+
+/* Thinking has no audio to ride, so this is the one state that does animate on
+   a clock — there is genuinely nothing being said to follow. */
+.memo-tutor.phase-thinking .memo-tutor-orb-body {
+  animation: memo-tutor-think 1.6s ease-in-out infinite;
+}
+
+/*
+ * Starting up.
+ *
+ * This has to be unmistakably a loading state. The sphere at rest and the sphere
+ * mid-sentence look almost the same — both are a still, glowing ball — so a
+ * caption was the only thing saying which, and a caption is not what anybody
+ * reads. So while it prepares, the sphere dims and cools, and a bright arc runs
+ * around it: an unambiguous "working" signal, the same one every progress
+ * spinner has trained people to read, wrapped around the object it belongs to.
+ */
+/* Its own keyframes rather than `memo-tutor-think`, which animates `filter` and so
+   overrode the dimming that is half the signal. */
+.memo-tutor.phase-preparing .memo-tutor-orb-body {
+  animation: memo-tutor-preparing 2s ease-in-out infinite;
+  transform: scale(0.88);
+}
+
+@keyframes memo-tutor-preparing {
+  0%,
+  100% {
+    filter: saturate(0.45) brightness(0.6);
+  }
+  50% {
+    filter: saturate(0.6) brightness(0.8);
+  }
+}
+
+.memo-tutor.phase-preparing .memo-tutor-orb-glow {
+  opacity: 0.35;
+  transform: scale(0.9);
+}
+
+/* The arc itself: one lit quadrant of an otherwise invisible ring, spinning. */
+.memo-tutor.phase-preparing .memo-tutor-orb-ring {
+  width: 9.25rem;
+  height: 9.25rem;
+  opacity: 1;
+  border-color: transparent;
+  border-top-color: oklch(0.78 0.16 var(--tutor-hue));
+  border-right-color: oklch(0.78 0.16 var(--tutor-hue) / 0.35);
+  border-width: 2px;
+  animation: memo-tutor-spin 1.1s linear infinite;
+}
+
+/* A second, slower, fainter arc going the other way, so it reads as motion
+   rather than as a rotating picture. */
+.memo-tutor.phase-preparing .memo-tutor-orb-ring.second {
+  width: 10.5rem;
+  height: 10.5rem;
+  border-top-color: transparent;
+  border-left-color: oklch(0.7 0.13 calc(var(--tutor-hue) - 10) / 0.45);
+  opacity: 0.7;
+  animation: memo-tutor-spin 2.6s linear infinite reverse;
+}
+
+@keyframes memo-tutor-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.memo-tutor.phase-paused .memo-tutor-orb-body,
+.memo-tutor.phase-finished .memo-tutor-orb-body,
+.memo-tutor.phase-idle .memo-tutor-orb-body {
+  filter: saturate(0.55);
+}
+
+@keyframes memo-tutor-breathe {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.06);
+  }
+}
+
+@keyframes memo-tutor-think {
+  0%,
+  100% {
+    opacity: 0.6;
+    filter: saturate(0.8);
+  }
+  50% {
+    opacity: 1;
+    filter: saturate(1.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-tutor-orb-glow,
+  .memo-tutor-orb-body,
+  .memo-tutor-orb-ring {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Without the spin there is no motion to say "working", so the ring holds a
+     steady lit arc and the dimmed core carries the rest of the signal. */
+  .memo-tutor.phase-preparing .memo-tutor-orb-ring {
+    opacity: 1 !important;
+  }
+
+  .memo-tutor.phase-preparing .memo-tutor-orb-body {
+    filter: saturate(0.45) brightness(0.6) !important;
+  }
+}
+
+.memo-tutor-status {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.memo-tutor-topic {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 26rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.memo-tutor-progress {
+  flex: none;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--tile);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+}
+
+.memo-tutor-hint {
+  margin: 0;
+  max-width: 24rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.memo-tutor-error {
+  max-width: 26rem;
+}
+
+/*
+ * What the learner just said, and nothing else.
+ *
+ * This was a six-line scrollback of both sides of the conversation, and it was the
+ * worst thing on the screen: the tutor's words are already in the room, so printing
+ * them competes with listening to them, and a log nobody reads still has to be
+ * looked past. One line does the only job that was ever needed — proving the
+ * microphone heard them — and leaves the sphere as the thing being looked at.
+ */
+.memo-tutor-heard {
+  margin: 0;
+  max-width: 30rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text);
+  text-wrap: balance;
+  /* Two lines is a question; more than that is a transcript. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  animation: memo-tutor-heard-in 220ms ease-out;
+}
+
+/* Still being revised by the recognizer, so it is shown as provisional rather than
+   as something the tutor has committed to having heard. */
+.memo-tutor-heard.draft {
+  color: var(--muted);
+}
+
+@keyframes memo-tutor-heard-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.25rem);
+  }
+}
+
+/* --- picking a voice ------------------------------------------------------ */
+
+/*
+ * A scroller rather than a grid: there are eleven voices and the point is to try a
+ * few, not to survey them all at once. Tapping plays the voice, which is why each
+ * one wears a play icon rather than looking like a plain filter chip.
+ */
+.memo-tutor-voices {
+  display: flex;
+  gap: 0.4rem;
+  max-width: 100%;
+  padding: 0.15rem 1.25rem;
+  margin: 0 -1.25rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  /* The row runs off both edges, and a hard cut through a chip reads as a broken
+     layout rather than as more to scroll. Fading the ends says "there is more here"
+     with no arrows or shadows to draw. */
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 1.75rem,
+    #000 calc(100% - 1.75rem),
+    transparent
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 1.75rem,
+    #000 calc(100% - 1.75rem),
+    transparent
+  );
+}
+
+.memo-tutor-voices::-webkit-scrollbar {
+  display: none;
+}
+
+.memo-tutor-voice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: none;
+  scroll-snap-align: center;
+  min-height: 2.1rem;
+  padding: 0 0.7rem 0 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.memo-tutor-voice.active {
+  color: var(--text);
+  border-color: color-mix(in oklch, oklch(0.72 0.16 var(--tutor-hue)) 55%, transparent);
+  background: color-mix(in oklch, oklch(0.72 0.16 var(--tutor-hue)) 16%, transparent);
+}
+
+/* Playing right now — the icon has already swapped to a waveform, this lifts it. */
+.memo-tutor-voice.playing {
+  color: oklch(0.82 0.13 var(--tutor-hue));
+}
+
+/*
+ * The voice row runs the full width of the phone.
+ *
+ * It is a scroller, and a scroller that stops short of both edges reads as a boxed-in
+ * list rather than as something that keeps going. Measured against the viewport rather
+ * than by unwinding the padding of the three ancestors between here and the screen edge,
+ * which is what the old fixed negative margin was doing — and getting wrong by the note
+ * scroller's own inset.
+ */
+@media (max-width: 1099px) {
+  .memo-tutor-voices {
+    width: 100vw;
+    /* The base rule caps this at the parent's width, which silently undid the bleed. */
+    max-width: none;
+    margin-inline: calc(50% - 50vw);
+    padding-inline: 1.25rem;
+  }
+}
+
+.memo-tutor-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.25rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.memo-tutor-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.memo-tutor-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.6rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.memo-tutor-control:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.memo-tutor-control.primary {
+  background: var(--ink);
+  border-color: transparent;
+  color: var(--bg);
+}
+
+/* --- how much talking time is left ---------------------------------------- */
+
+/*
+ * The meter reuses read-aloud's own quota classes wholesale — `note-read-usage-*`, the
+ * popover on desktop and the dragged sheet on the phone. Only the trigger differs: this one
+ * shows the number itself rather than a settings icon, because the tutor screen has room for
+ * it and "28 min left today" is the whole question somebody is asking.
+ */
+/*
+ * Its own trigger, not read-aloud's: that one is a 1.75rem icon button pinned to the corner
+ * of the listen dock (`position: absolute`), and inheriting it dropped this pill out of the
+ * column. The panel classes are still theirs — the popover positions itself against this,
+ * which is why this has to be a positioning context.
+ */
+.memo-tutor-usage-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.memo-tutor-usage-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.1rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.memo-tutor-usage-trigger::-webkit-details-marker {
+  display: none;
+}
+
+/*
+ * On desktop the tutor column is short enough that its Start button lands inside the dock's
+ * band, and the dock centres its slot — so the pill sat directly under Start. Pushed to the
+ * dock's right corner, which is also where read-aloud keeps its own usage trigger. The phone
+ * layout has room to spare below Start, so it keeps the centred pill.
+ */
+@media (min-width: 1100px) {
+  .memo-dock .memo-tutor-usage-menu {
+    margin-right: 0;
+    margin-left: auto;
+  }
+}
+
+/* Out of time is worth seeing before the sheet is opened. */
+.memo-tutor-usage-menu.limit .memo-tutor-usage-trigger {
+  border-color: color-mix(in oklch, var(--promo) 45%, transparent);
+  background: color-mix(in oklch, var(--promo) 18%, transparent);
+  color: var(--promo);
+}
+
+/*
+ * The desktop panel opens upwards and centres on the pill. Read-aloud has the same rule, but
+ * scoped to `.memo-dock-player` — the tutor's pill sits in the dock's own slot instead, so it
+ * inherited the default drop-down and fell straight off the bottom of the card.
+ */
+.memo-tutor-usage-menu .note-read-usage-inline-popover {
+  top: auto;
+  bottom: calc(100% + 0.75rem);
+  left: auto;
+  /*
+   * Right-anchored, not centred on the pill: the pill sits in the middle of the dock, and a
+   * 20rem panel centred there runs past the note card and under the chat column beside it.
+   */
+  right: 0;
+  width: min(20rem, calc(100vw - 2rem));
+  padding: 1rem 1.1rem;
+  border: 0;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    0 18px 48px rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  animation: memo-pop-in 0.16s ease-out both;
+}
+
+/*
+ * Read-aloud's sheet carries speed, voice and a colour picker, so globals.css floors it at
+ * `min(46vh, 25rem)`. This one is a bar and one row of options, and inheriting that height
+ * left a screen of nothing beneath it. Matched with `:has()` rather than a class of its own
+ * because the sheet element itself is read-aloud's — only its contents are the tutor's.
+ */
+.note-read-usage-mobile-sheet:has(.memo-tutor-usage-heading) {
+  min-height: 0;
+}
+
+/*
+ * The number on a usage bar, drawn twice so it survives both backgrounds.
+ *
+ * Read-aloud's own label is a single burnt red, which works because its sheet is light and
+ * its fill is pale. Here the fill is bright and the track is dark (or, in light mode, pale),
+ * and the label spans the whole bar — so one colour is always wrong at one end. The copy
+ * underneath takes the theme's text colour; the copy on top is clipped to the filled width
+ * and is always dark, because the fill is bright in both themes.
+ */
+.memo-tutor-bar .memo-tutor-bar-label {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.memo-tutor-bar .memo-tutor-bar-label.on-track {
+  color: var(--text);
+}
+
+.memo-tutor-bar .memo-tutor-bar-label.on-fill {
+  color: #10100f;
+}
+
+.memo-tutor-usage-heading {
+  margin-bottom: 0.55rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.memo-tutor-usage-subheading {
+  margin-top: 0.85rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--muted);
+}
+
+/* A cooler fill than the daily bar's orange, so the two are never misread for each other. */
+.memo-tutor-credit-bar .note-read-usage-fill {
+  background: linear-gradient(90deg, oklch(0.6 0.14 265), oklch(0.75 0.11 265));
+}
+
+.memo-tutor-usage-credits {
+  margin-top: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+/*
+ * The offer, inside the same sheet as the number that explains it. Not a modal of its own:
+ * the thing being sold is the thing they were just using, and hiding it behind a takeover is
+ * how a paywall starts feeling like a trap rather than an offer.
+ */
+.memo-tutor-offer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  text-align: center;
+}
+
+.memo-tutor-offer h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.memo-tutor-offer p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--muted);
+  text-wrap: balance;
+}
+
+.memo-tutor-offer .memo-tutor-start {
+  margin-top: 0.4rem;
+  text-decoration: none;
+}
+
+/* Muted is a state worth seeing across the room: the tutor cannot hear you. */
+.memo-tutor-control.off {
+  background: color-mix(in oklch, var(--promo) 22%, transparent);
+  border-color: color-mix(in oklch, var(--promo) 45%, transparent);
+  color: var(--promo);
+}
+
+/*
+ * Desktop sits the whole thing higher.
+ *
+ * The phone gives this screen everything below the pill row, so centring puts the sphere
+ * where the eye already is. Desktop does not: the note's title and date sit above the
+ * panel, and centring inside what is left pushed the sphere towards the bottom of the
+ * card with the controls near the fold. Anchoring to the top instead, with enough room
+ * above to breathe, puts it back where it is being looked for.
+ */
+@media (min-width: 1100px) {
+  .memo-tutor {
+    justify-content: flex-start;
+    padding-top: 0.5rem;
+    min-height: 0;
+  }
+
+  /* Room the phone does not have, so use it: the sphere is the whole interface here. */
+  .memo-tutor-orb {
+    width: 13rem;
+    height: 13rem;
+  }
+
+  .memo-tutor-orb-glow {
+    width: 13rem;
+    height: 13rem;
+  }
+
+  .memo-tutor-orb-body {
+    width: 8.5rem;
+    height: 8.5rem;
   }
 }

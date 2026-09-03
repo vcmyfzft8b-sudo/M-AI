@@ -16,6 +16,7 @@ The canonical production domain is `https://memoai.eu`.
   - manual note input
 - Transcribe long audio with `Soniox` or `Gemini`
 - Generate summaries, structured notes, flashcards, quizzes, and practice tests with `Gemini`
+- Talk through a note with the voice tutor — spoken explanation over Soniox realtime STT/TTS, interruptible mid-sentence (`docs/voice-tutor.md`)
 - Chat against lecture-specific notes and transcript context
 - Export notes as PDF
 - Organize lectures into folders and manage retry / regeneration flows

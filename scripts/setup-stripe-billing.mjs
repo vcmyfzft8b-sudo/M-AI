@@ -3,6 +3,9 @@ import Stripe from "stripe";
 const FIRST_CYCLE_DISCOUNT_COUPON_ID = "memo50-first-cycle";
 const FIRST_CYCLE_DISCOUNT_PERCENT = 50;
 const FIRST_CYCLE_PROMOTION_CODES = ["MEMO50", "DAVID50"];
+/** €2.00, in cents. One hour of the voice tutor. */
+const TUTOR_HOUR_UNIT_AMOUNT = 200;
+
 const BILLING_WEBHOOK_DESCRIPTION = "Memo billing sync";
 const BILLING_WEBHOOK_EVENTS = [
   "checkout.session.completed",
@@ -86,6 +89,47 @@ async function findOrCreatePrice(stripe, params) {
       plan: params.plan,
     },
     nickname: params.nickname,
+  });
+}
+
+/**
+ * The one-off hour of voice tutor, sold as a top-up rather than a plan.
+ *
+ * A separate product from Memo Pro on purpose: it is not a subscription, it should not show
+ * up in the billing portal beside one, and a customer who buys ten of them should see ten
+ * payments rather than a mangled plan history. Matched on its own `billing_key` so re-running
+ * this script finds it instead of making another.
+ */
+async function findOrCreateTutorHourPrice(stripe) {
+  const products = await stripe.products.list({ active: true, limit: 100 });
+  const product =
+    products.data.find(
+      (item) => item.metadata?.app === "memo" && item.metadata?.billing_key === "tutor_hour",
+    ) ??
+    (await stripe.products.create({
+      name: "Memo — one hour with the tutor",
+      description: "One extra hour of the spoken tutor, on top of the daily allowance.",
+      metadata: { app: "memo", billing_key: "tutor_hour" },
+    }));
+
+  const prices = await stripe.prices.list({ product: product.id, active: true, limit: 100 });
+  const existing =
+    prices.data.find(
+      (price) =>
+        price.currency === "eur" && price.unit_amount === TUTOR_HOUR_UNIT_AMOUNT && !price.recurring,
+    ) ?? null;
+
+  if (existing) {
+    return existing;
+  }
+
+  return stripe.prices.create({
+    product: product.id,
+    currency: "eur",
+    unit_amount: TUTOR_HOUR_UNIT_AMOUNT,
+    // No `recurring`: this is a single payment, and the webhook credits the hour once it lands.
+    metadata: { app: "memo", billing_key: "tutor_hour" },
+    nickname: "Memo tutor — 1 hour",
   });
 }
 
@@ -407,6 +451,8 @@ async function main() {
     intervalCount: 1,
   });
 
+  const tutorHour = await findOrCreateTutorHourPrice(stripe);
+
   const firstCycleDiscountCoupon = await findOrCreateFirstCycleDiscountCoupon(stripe, product.id);
   const firstCyclePromotionCodes = await Promise.all(
     FIRST_CYCLE_PROMOTION_CODES.map((code) =>
@@ -434,6 +480,7 @@ async function main() {
   console.log(`STRIPE_PRICE_WEEKLY=${weekly.id}`);
   console.log(`STRIPE_PRICE_MONTHLY=${monthly.id}`);
   console.log(`STRIPE_PRICE_YEARLY=${yearly.id}`);
+  console.log(`STRIPE_PRICE_TUTOR_HOUR=${tutorHour.id}`);
   console.log(`STRIPE_WEBHOOK_URL=${webhookUrl}`);
 
   if (configuredWebhookUrl !== webhookUrl) {

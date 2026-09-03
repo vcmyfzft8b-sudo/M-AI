@@ -21,6 +21,9 @@ const serverEnvSchema = z.object({
   OPENROUTER_API_KEY: optionalTrimmedString,
   SONIOX_API_KEY: optionalTrimmedString,
   SONIOX_MODEL: trimmedString.default("stt-async-v4"),
+  // The realtime transcriber the voice tutor listens with. Separate from SONIOX_MODEL because
+  // that one is an async model: it takes a finished file, and cannot be spoken to over a socket.
+  SONIOX_STT_REALTIME_MODEL: trimmedString.default("stt-rt-v5"),
   SONIOX_TTS_MODEL: trimmedString.default("tts-rt-v2"),
   SONIOX_TTS_VOICE: trimmedString.default(DEFAULT_NOTE_TTS_VOICE),
   INNGEST_EVENT_KEY: optionalTrimmedString,
@@ -32,6 +35,8 @@ const serverEnvSchema = z.object({
   STRIPE_PRICE_WEEKLY: optionalTrimmedString,
   STRIPE_PRICE_MONTHLY: optionalTrimmedString,
   STRIPE_PRICE_YEARLY: optionalTrimmedString,
+  /* One hour of voice tutor, sold as a one-off top-up. */
+  STRIPE_PRICE_TUTOR_HOUR: optionalTrimmedString,
 });
 
 export function getServerEnv() {
@@ -48,6 +53,7 @@ export function getServerEnv() {
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     SONIOX_API_KEY: process.env.SONIOX_API_KEY,
     SONIOX_MODEL: process.env.SONIOX_MODEL,
+    SONIOX_STT_REALTIME_MODEL: process.env.SONIOX_STT_REALTIME_MODEL,
     SONIOX_TTS_MODEL: process.env.SONIOX_TTS_MODEL,
     SONIOX_TTS_VOICE: process.env.SONIOX_TTS_VOICE,
     INNGEST_EVENT_KEY: process.env.INNGEST_EVENT_KEY,
@@ -59,6 +65,7 @@ export function getServerEnv() {
     STRIPE_PRICE_WEEKLY: process.env.STRIPE_PRICE_WEEKLY,
     STRIPE_PRICE_MONTHLY: process.env.STRIPE_PRICE_MONTHLY,
     STRIPE_PRICE_YEARLY: process.env.STRIPE_PRICE_YEARLY,
+    STRIPE_PRICE_TUTOR_HOUR: process.env.STRIPE_PRICE_TUTOR_HOUR,
   });
 }
 

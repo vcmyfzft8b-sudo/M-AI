@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { tabScrollTarget, TAB_SCROLL_GUTTER_PX } from "../src/lib/tab-scroll.ts";
+import {
+  pillNeighbourhoodScrollTarget,
+  tabScrollTarget,
+  TAB_SCROLL_GUTTER_PX,
+} from "../src/lib/tab-scroll.ts";
 
 /**
  * Tapping a pill in the note screen's tab row.
@@ -117,4 +121,59 @@ test("every pill in the row ends up whole and inside it, from every offset", () 
       );
     }
   }
+});
+
+test("selecting a pill brings the next one fully into view", () => {
+  // A row 300 wide scrolled to 0. The chosen pill ends at 290 and the next runs 300..420,
+  // so showing only the chosen one leaves the obvious next choice unreadable.
+  const target = pillNeighbourhoodScrollTarget({
+    row: { scrollLeft: 0, clientWidth: 300, scrollWidth: 600, left: 0 },
+    pill: { left: 170, width: 120 },
+    previous: null,
+    next: { left: 300, width: 120 },
+  });
+
+  assert.ok(target !== null && target >= 120, `expected the next pill shown, got ${target}`);
+});
+
+test("the pill before comes along when the whole neighbourhood fits", () => {
+  /*
+   * The chosen pill is flush against the left edge with the previous one just off it.
+   * Pill rects are viewport coordinates, so a pill to the left of the row's own left
+   * edge has a negative `left`; the neighbourhood spans content 430..650, which fits a
+   * 400-wide row, so the row should scroll back far enough to uncover the previous pill.
+   */
+  const target = pillNeighbourhoodScrollTarget({
+    row: { scrollLeft: 500, clientWidth: 400, scrollWidth: 900, left: 0 },
+    previous: { left: -70, width: 60 },
+    pill: { left: 0, width: 80 },
+    next: { left: 90, width: 60 },
+  });
+
+  assert.ok(target !== null && target <= 430, `expected room made to the left, got ${target}`);
+});
+
+test("the pill before is given up rather than pushing the chosen one out of view", () => {
+  // The chosen pill and its next already fill the row; taking the previous one along
+  // would need 320 of a 200-wide row, so it is dropped.
+  const target = pillNeighbourhoodScrollTarget({
+    row: { scrollLeft: 0, clientWidth: 200, scrollWidth: 900, left: 0 },
+    previous: { left: 300, width: 120 },
+    pill: { left: 430, width: 120 },
+    next: { left: 560, width: 60 },
+  });
+
+  assert.ok(target !== null && target >= 420, `the chosen pill must stay visible, got ${target}`);
+});
+
+test("a row that does not overflow never moves", () => {
+  assert.equal(
+    pillNeighbourhoodScrollTarget({
+      row: { scrollLeft: 0, clientWidth: 600, scrollWidth: 600, left: 0 },
+      previous: null,
+      pill: { left: 0, width: 100 },
+      next: { left: 110, width: 100 },
+    }),
+    null,
+  );
 });

@@ -190,7 +190,11 @@ export function LibraryChat({
        * is read frame by frame, anything else is parsed as it always was.
        */
       const payload = response.headers.get("Content-Type")?.includes("text/event-stream")
-        ? await readChatStream<{ answer?: string }>(response, setStreamingAnswer, t)
+        ? await readChatStream<{ answer?: string }>(
+            response,
+            (text) => setStreamingAnswer((current) => current + text),
+            t,
+          )
         : ((await response.json().catch(() => null)) as { answer?: string; error?: string } | null);
 
       if (!response.ok || !payload?.answer) {

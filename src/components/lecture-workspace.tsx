@@ -45,7 +45,7 @@ import { noteEmoji } from "@/lib/note-emoji";
 import type { EditableNoteDoc, NoteAnnotation, NoteAnnotationKind } from "@/lib/note-doc";
 import { NOTE_TTS_HIGHLIGHT_COLORS } from "@/lib/note-tts-settings";
 import { parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
-import { tabScrollTarget } from "@/lib/tab-scroll";
+import { pillNeighbourhoodScrollTarget } from "@/lib/tab-scroll";
 import {
   POLL_INTERVAL_MS,
   STORAGE_BUCKET,
@@ -54,6 +54,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 
+import { LectureTutor } from "@/components/lecture-tutor";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { readChatStream } from "@/lib/chat-stream-client";
@@ -72,7 +73,7 @@ import {
   formatTimestamp,
 } from "@/lib/utils";
 
-type WorkspaceTab = "notes" | "study" | "chat" | "transcript" | "audio";
+type WorkspaceTab = "notes" | "study" | "tutor" | "chat" | "transcript" | "audio";
 type StudyMaterialView = "flashcards" | "quiz" | "practice_test";
 type FlashcardSessionResult = {
   attempts: number;
@@ -281,6 +282,18 @@ function getRequestErrorMessage(
  */
 const NOTE_TABS = [
   { id: "notes", view: null, labelKey: "note.tab.notes", icon: "description", tint: "#f45f5a" },
+  /*
+   * The spoken walkthrough, second because it is the other way to take in the note
+   * itself rather than a fourth kind of study material — you read it, or you have it
+   * explained. The three practice screens follow.
+   */
+  {
+    id: "tutor",
+    view: null,
+    labelKey: "note.tab.tutor",
+    icon: "graphic_eq",
+    tint: "oklch(0.66 0.15 50)",
+  },
   {
     id: "flashcards",
     view: "flashcards",
@@ -1254,10 +1267,15 @@ function ChatBubble({ message }: { message: ChatMessageWithCitations }) {
  */
 /** What the phone navbar calls each study screen. Flashcards names nothing. */
 /* Flashcards names nothing — the design's own mapping — so it has no key. */
+/*
+ * The phone navbar names the screen it is on. The design left flashcards unnamed while
+ * every other study screen was labelled, which just read as a missing title.
+ */
 const SUB_SCREEN_TITLE_KEYS: Record<string, MessageKey | null> = {
-  flashcards: null,
+  flashcards: "note.tab.flashcards",
   quiz: "note.tab.quiz",
   test: "note.subScreen.test",
+  tutor: "tutor.subScreenTitle",
   transcript: "note.tab.transcript",
 };
 
@@ -1400,6 +1418,8 @@ export function LectureWorkspace({
     () => new Set(),
   );
   const [isFlashcardFlipped, setIsFlashcardFlipped] = useState(false);
+  /** Set once the learner taps a study pill, after which nothing reroutes them. */
+  const hasChosenStudyViewRef = useRef(false);
   const [activeStudyView, setActiveStudyView] = useState<StudyMaterialView>(
     getInitialStudyView(initialDetail),
   );
@@ -1661,7 +1681,15 @@ export function LectureWorkspace({
   }, [activeTab, detail.audioUrl]);
 
   useEffect(() => {
-    if (activeTab === "study") {
+    /*
+     * Only ever picks the *opening* study screen. Once the learner has tapped one, their
+     * choice stands: this used to run on every entry to the study tab, so tapping Test on
+     * a note whose practice test had not been generated yet quietly landed on Flashcards
+     * with the Flashcards pill lit — the row saying one thing and the screen another.
+     * Each view has its own empty and generating state; showing that is the honest answer
+     * to "this is not ready", and it is what the pill promised.
+     */
+    if (activeTab === "study" && !hasChosenStudyViewRef.current) {
       setActiveStudyView((current) => {
         if (current === "practice_test" && detail.practiceTestQuestions.length > 0) {
           return current;
@@ -2963,7 +2991,11 @@ export function LectureWorkspace({
        * event stream is read frame by frame, anything else is parsed as before.
        */
       payload = response.headers.get("Content-Type")?.includes("text/event-stream")
-        ? await readChatStream<ChatResponse>(response, setStreamingAnswer, t)
+        ? await readChatStream<ChatResponse>(
+            response,
+            (text) => setStreamingAnswer((current) => current + text),
+            t,
+          )
         : ((await response.json().catch(() => null)) as ChatResponse | null);
     } catch (error) {
       setChatError(getRequestErrorMessage(error, t("chat.error.answerFailed"), t));
@@ -4126,6 +4158,17 @@ export function LectureWorkspace({
   }
 
   function renderPanel() {
+    if (activeTab === "tutor") {
+      return (
+        <LectureTutor
+          lectureId={detail.lecture.id}
+          isReady={detail.lecture.status === "ready"}
+          /* The usage pill belongs in the dock, where this app keeps a screen's controls. */
+          dockSlot={dockSlot}
+        />
+      );
+    }
+
     if (activeTab === "notes") {
       // The dock's annotate layer: brush, underline, colour, photo, and the
       // swatch row the colour button slides open.
@@ -5732,13 +5775,15 @@ export function LectureWorkspace({
   const activeTabId: NoteTabId =
     activeTab === "notes"
       ? "notes"
-      : activeTab === "transcript" || activeTab === "audio"
-        ? "transcript"
-        : activeStudyView === "flashcards"
-          ? "flashcards"
-          : activeStudyView === "quiz"
-            ? "quiz"
-            : "test";
+      : activeTab === "tutor"
+        ? "tutor"
+        : activeTab === "transcript" || activeTab === "audio"
+          ? "transcript"
+          : activeStudyView === "flashcards"
+            ? "flashcards"
+            : activeStudyView === "quiz"
+              ? "quiz"
+              : "test";
 
   /*
    * The pill row follows the tab it is on. The pills overflow their scroller
@@ -5753,13 +5798,24 @@ export function LectureWorkspace({
     const pill = row?.querySelector<HTMLElement>(".memo-tab.active");
     if (!row || !pill) return;
 
-    const target = tabScrollTarget({
-      scrollLeft: row.scrollLeft,
-      viewportWidth: row.clientWidth,
-      contentWidth: row.scrollWidth,
-      /* Against the row, which is not the pill's offset parent. */
-      pillLeft: pill.getBoundingClientRect().left - row.getBoundingClientRect().left + row.scrollLeft,
-      pillWidth: pill.getBoundingClientRect().width,
+    /* The next pill comes along too, so the obvious thing to reach for next is readable. */
+    const previous = pill.previousElementSibling;
+    const next = pill.nextElementSibling;
+    const target = pillNeighbourhoodScrollTarget({
+      /*
+       * Named explicitly, never spread: scrollLeft, clientWidth and scrollWidth are
+       * getters on the prototype, so `{ ...row }` silently yields none of them and the
+       * arithmetic quietly becomes NaN.
+       */
+      row: {
+        scrollLeft: row.scrollLeft,
+        clientWidth: row.clientWidth,
+        scrollWidth: row.scrollWidth,
+        left: row.getBoundingClientRect().left,
+      },
+      pill: pill.getBoundingClientRect(),
+      previous: previous instanceof HTMLElement ? previous.getBoundingClientRect() : null,
+      next: next instanceof HTMLElement ? next.getBoundingClientRect() : null,
     });
     if (target === null) return;
 
@@ -5769,7 +5825,7 @@ export function LectureWorkspace({
     });
   }, [activeTabId]);
 
-  /* The phone navbar names the study screen it is on. Flashcards names nothing. */
+  /* The phone navbar names the study screen it is on. */
   const subScreenTitleKey = SUB_SCREEN_TITLE_KEYS[activeTabId] ?? null;
   const subScreenTitle = subScreenTitleKey ? t(subScreenTitleKey) : "";
 
@@ -6101,9 +6157,15 @@ export function LectureWorkspace({
       return;
     }
 
+    if (tab.id === "tutor") {
+      setActiveTab("tutor");
+      return;
+    }
+
     setActiveTab("study");
 
     if (tab.view) {
+      hasChosenStudyViewRef.current = true;
       setActiveStudyView(tab.view);
     }
   }
@@ -6231,7 +6293,7 @@ export function LectureWorkspace({
           <div className="memo-dock">
             <div className="memo-dock-slot" ref={setDockSlot} />
 
-            {isChatDismissed && activeTabId !== "quiz" ? (
+            {isChatDismissed && activeTabId !== "quiz" && activeTabId !== "tutor" ? (
               <button
                 type="button"
                 aria-label={t("chat.open")}

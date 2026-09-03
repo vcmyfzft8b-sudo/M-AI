@@ -90,6 +90,19 @@ test('no token flag is emitted when there is no token to pass', () => {
   assert.ok(!buildLogsArgs({ ...WINDOW, token: undefined }).includes('--token'))
 })
 
+test('classify picks up a voice tutor failure reported from the browser', () => {
+  // The tutor's failures happen in the browser against Soniox, so nothing here ever
+  // returns a 5xx. The report route logs them at error level behind this marker, and if
+  // the scan stops recognising it the auto-triage run goes blind to the whole feature.
+  const line =
+    '[tutor-client] speech failed: SpeechOutputError: The speech connection closed.' +
+    ' (lecture 6f1c..., user 9a2e..., soniox 401, phase speaking)'
+
+  assert.equal(classify({ level: 'error', message: line }), 'uncaught')
+  // Reported at error level on purpose: the request itself succeeded.
+  assert.equal(classify({ level: 'info', message: line }), null)
+})
+
 test('classify treats 5xx responses as server errors', () => {
   assert.equal(classify({ responseStatusCode: 500, message: 'POST /api/notes' }), 'server_error')
   assert.equal(classify({ statusCode: 500, message: 'POST /api/notes' }), 'server_error')

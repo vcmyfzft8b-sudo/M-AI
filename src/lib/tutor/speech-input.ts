@@ -120,7 +120,7 @@ export type SpeechInputHandlers = {
 export class SpeechInputError extends Error {
   constructor(
     message: string,
-    readonly reason: "denied" | "unavailable" | "connection",
+    readonly reason: "denied" | "unavailable" | "connection" | "busy",
   ) {
     super(message);
     this.name = "SpeechInputError";
@@ -143,6 +143,16 @@ export class TutorSpeechInput {
   private closed = false;
   private level = 0;
 
+  /**
+   * The temporary key in force, and the rate the recognizer was told about.
+   *
+   * The key is the one part of the config with an expiry on it, and unlike the speech
+   * socket's it is sent once when the socket opens rather than per turn — so adopting a
+   * new one means opening a new socket. See `useKey`.
+   */
+  private apiKey: string;
+  private sampleRate = 0;
+
   /** Words the recognizer has settled on for the utterance in progress. */
   private finalText = "";
   /** Words it is still revising. Shown live, never trusted as the whole question. */
@@ -151,7 +161,56 @@ export class TutorSpeechInput {
   constructor(
     private readonly config: SpeechInputConfig,
     private readonly handlers: SpeechInputHandlers = {},
-  ) {}
+  ) {
+    this.apiKey = config.apiKey;
+  }
+
+  /**
+   * Adopts a freshly minted key, on a new socket.
+   *
+   * Called when the session takes its next slice of time, roughly half an hour in. Only
+   * the recognizer is rebuilt: the microphone, the worklet and the detector all stay
+   * exactly where they are, so the noise floor the detector has spent the session
+   * learning is not thrown away and the learner notices nothing.
+   *
+   * Anything half-heard is dropped rather than carried over — the new socket starts its
+   * own utterance, and stitching the two halves together would put a sentence fragment
+   * in front of the model as though it were a question.
+   */
+  async useKey(apiKey: string) {
+    if (this.closed || !this.context) {
+      return;
+    }
+
+    this.apiKey = apiKey;
+
+    const previous = this.socket;
+    this.socket = null;
+
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = null;
+    }
+
+    previous?.close();
+    this.resetUtterance();
+
+    try {
+      await this.openSocket(this.sampleRate);
+    } catch (error) {
+      /*
+       * The old socket is already gone, so a failure here leaves the tutor talking to
+       * somebody it cannot hear — the one failure mode a learner has no way to interpret.
+       * Reported through the normal channel so it reaches the screen as a connection
+       * problem, which "Continue" retries, and rethrown so the caller can log it.
+       */
+      this.handlers.onError?.(
+        new SpeechInputError("The recognizer could not be reopened.", "connection"),
+      );
+
+      throw error;
+    }
+  }
 
   /**
    * Opens the microphone and the recognizer.
@@ -209,6 +268,7 @@ export class TutorSpeechInput {
     this.workletUrl = URL.createObjectURL(blob);
     await context.audioWorklet.addModule(this.workletUrl);
 
+    this.sampleRate = context.sampleRate;
     await this.openSocket(context.sampleRate);
 
     const frameSize = Math.round((context.sampleRate * FRAME_MS) / 1000);
@@ -236,7 +296,7 @@ export class TutorSpeechInput {
         socket.removeEventListener("error", onError);
         socket.send(
           JSON.stringify({
-            api_key: this.config.apiKey,
+            api_key: this.apiKey,
             model: this.config.model,
             audio_format: "pcm_s16le",
             sample_rate: sampleRate,
@@ -254,11 +314,19 @@ export class TutorSpeechInput {
         }, KEEPALIVE_INTERVAL_MS);
         socket.addEventListener("message", (event) => this.handleMessage(event));
         socket.addEventListener("close", () => {
-          if (!this.closed) {
-            this.handlers.onError?.(
-              new SpeechInputError("The recognizer connection closed.", "connection"),
-            );
+          /*
+           * Only the socket in use gets to report a failure. `useKey` replaces this one
+           * when the session renews its credentials, and the old socket's close event
+           * lands afterwards — reporting that as a dropped connection would put an error
+           * on screen for a reconnection that went perfectly.
+           */
+          if (this.closed || this.socket !== socket) {
+            return;
           }
+
+          this.handlers.onError?.(
+            new SpeechInputError("The recognizer connection closed.", "connection"),
+          );
         });
         resolve();
       };
@@ -303,6 +371,71 @@ export class TutorSpeechInput {
     for (const track of this.stream?.getAudioTracks() ?? []) {
       track.enabled = !muted;
     }
+  }
+
+  /**
+   * Hands the recognizer back while nobody can be interrupted.
+   *
+   * Soniox allows the whole organisation ten realtime transcription streams at once, and
+   * a tutor session holds one from the moment it starts until it ends — so a slot given
+   * up here is a slot somebody else can start a conversation with. A paused, muted or
+   * finished session cannot be barged into by definition, and on a phone "paused" happens
+   * every time the learner switches app, so this is most of the day.
+   *
+   * The microphone, the worklet and the detector stay exactly where they are: it is the
+   * Soniox stream that is scarce, not the hardware, and keeping the audio graph means
+   * coming back costs one handshake rather than a permission prompt. The tracks are
+   * disabled all the same, so the phone stops showing a recording indicator for a session
+   * that is not listening.
+   */
+  stopListening() {
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = null;
+    }
+
+    const previous = this.socket;
+    this.socket = null;
+    previous?.close();
+
+    this.detector.reset();
+    this.analyser?.reset();
+    this.level = 0;
+    this.resetUtterance();
+
+    for (const track of this.stream?.getAudioTracks() ?? []) {
+      track.enabled = false;
+    }
+  }
+
+  /**
+   * Takes a recognizer back.
+   *
+   * Returns false when there was not one to be had — every slot in the organisation is in
+   * use — which is a thing the learner has to be told rather than a fault: the walkthrough
+   * still works, they just cannot cut in by speaking until one frees up.
+   */
+  async startListening() {
+    if (this.closed || !this.context || this.socket) {
+      return Boolean(this.socket);
+    }
+
+    for (const track of this.stream?.getAudioTracks() ?? []) {
+      track.enabled = !this.muted;
+    }
+
+    try {
+      await this.openSocket(this.sampleRate);
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Whether a recognizer is actually attached right now. */
+  get isListening() {
+    return this.socket !== null;
   }
 
   /** Drops whatever is half-heard, so a new turn does not inherit the last one's tail. */
@@ -396,8 +529,26 @@ export class TutorSpeechInput {
     }
 
     if (message.error_code !== undefined) {
+      /*
+       * 429 is the organisation's ten realtime streams all being in use, which is a queue
+       * rather than a fault and has to read as one. Everything else here is a refusal of
+       * this particular stream.
+       *
+       * The socket is dropped on our side first, so the close that follows does not
+       * report a second, wronger error over the top of this one.
+       */
+      const busy = String(message.error_code) === "429";
+      const socket = this.socket;
+      this.socket = null;
+      socket?.close();
+
       this.handlers.onError?.(
-        new SpeechInputError("The recognizer refused the stream.", "connection"),
+        new SpeechInputError(
+          busy
+            ? "Every realtime transcription stream is in use."
+            : "The recognizer refused the stream.",
+          busy ? "busy" : "connection",
+        ),
       );
 
       return;

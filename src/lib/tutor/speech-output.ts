@@ -92,13 +92,29 @@ export class TutorSpeechOutput {
   /** The playback rate the socket is asked for, and the rate the graph is built at. */
   private sampleRate = 24_000;
 
+  /**
+   * The temporary key in force.
+   *
+   * Held apart from the rest of the config because it is the one field with an expiry
+   * date on it. Soniox takes it per stream rather than per socket, so replacing it costs
+   * nothing and takes effect on the very next turn — see `useKey`.
+   */
+  private apiKey: string;
+
   constructor(
     private readonly config: SpeechOutputConfig,
     private readonly handlers: {
       onError?: (error: SpeechOutputError) => void;
       onClose?: () => void;
     } = {},
-  ) {}
+  ) {
+    this.apiKey = config.apiKey;
+  }
+
+  /** Adopts a freshly minted key. The next turn announces its stream with it. */
+  useKey(apiKey: string) {
+    this.apiKey = apiKey;
+  }
 
   /**
    * Opens the audio graph and the socket.
@@ -154,7 +170,26 @@ export class TutorSpeechOutput {
         }, KEEPALIVE_INTERVAL_MS);
         socket.addEventListener("message", (event) => this.handleMessage(event));
         socket.addEventListener("close", () => {
-          this.failTurn(new SpeechOutputError("The speech connection closed.", null));
+          /*
+           * Only the socket currently in use gets to fail anything. `ensureOpen` replaces
+           * a dead connection before every turn, and the old one's close event can land
+           * after the new one is already speaking — at which point failing "the turn"
+           * would kill a turn this socket has nothing to do with.
+           */
+          if (this.socket !== socket) {
+            return;
+          }
+
+          /*
+           * A turn whose audio is already complete is not harmed by this. Soniox hangs up
+           * about ten seconds after the last of the audio it generated, which for a long
+           * turn is while the learner is still listening to it — but every sample is
+           * already buffered and scheduled here, so it plays out and settles on its own.
+           * Failing it would stop a turn mid-sentence and blame the connection.
+           */
+          if (!this.turn?.audioComplete) {
+            this.failTurn(new SpeechOutputError("The speech connection closed.", null));
+          }
 
           if (!this.closed) {
             this.handlers.onClose?.();
@@ -298,7 +333,7 @@ export class TutorSpeechOutput {
       this.turn.opened = true;
       socket.send(
         JSON.stringify({
-          api_key: this.config.apiKey,
+          api_key: this.apiKey,
           model: this.config.model,
           language: this.config.language,
           voice: options.voice ?? this.config.voice,

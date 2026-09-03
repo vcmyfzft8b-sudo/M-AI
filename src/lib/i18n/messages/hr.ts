@@ -609,8 +609,6 @@ export const hr: Messages = {
   "capture.selectedDocument": "Odabrani dokument",
   "capture.removeSelectedFile": "Ukloni odabranu datoteku",
   "capture.removeSelectedDocument": "Ukloni odabrani dokument",
-  "capture.createAudio": "Izradi zvuk",
-  "capture.createAudioDetail": "Da bilješke možeš i slušati.",
   "capture.importAudioTitle": "Uvezi zvuk s telefona",
   "capture.recordOffscreenTitle": "Kako snimati dok je zaslon ugašen?",
   "capture.recordOffscreenDetail": "Spremi snimku i učitaj je ovdje kasnije.",

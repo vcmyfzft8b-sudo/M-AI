@@ -624,8 +624,6 @@ export const sl = {
   "capture.selectedDocument": "Izbran dokument",
   "capture.removeSelectedFile": "Odstrani izbrano datoteko",
   "capture.removeSelectedDocument": "Odstrani izbran dokument",
-  "capture.createAudio": "Ustvari zvok",
-  "capture.createAudioDetail": "Da lahko zapiske tudi poslušaš.",
   "capture.importAudioTitle": "Uvozi zvok iz telefona",
   "capture.recordOffscreenTitle": "Kako snemaš z ugasnjenim telefonom?",
   "capture.recordOffscreenDetail": "Shrani posnetek in ga tukaj naloži kasneje.",

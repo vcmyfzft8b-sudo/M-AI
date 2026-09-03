@@ -34,8 +34,6 @@ import {
 import { detectSourceLanguage } from "@/lib/languages";
 import {
   getEffectiveLectureSourceType,
-  getInitialNoteAudioVoice,
-  shouldCreateInitialNoteAudio,
 } from "@/lib/lecture-source-metadata";
 import { captureBackgroundError, captureRouteError } from "@/lib/monitoring";
 import {
@@ -44,7 +42,6 @@ import {
   type StructuredSourceBlock,
 } from "@/lib/text-source-processing";
 import type { ChatMessageWithCitations } from "@/lib/types";
-import { isPreparingInitialNoteAudio } from "@/lib/note-audio-stage";
 import { generateNotesFromTranscript, type NotesGenerationPhase } from "@/lib/note-generation";
 import { applyAiHighlightsToNote } from "@/lib/notes/ai-highlights";
 import { captureGenerationFailureInput } from "@/lib/notes/failure-capture";
@@ -60,8 +57,6 @@ import {
 } from "@/lib/notes/generation-guard";
 import { withNoteEnrichmentStage } from "@/lib/note-enrichment-status";
 import {
-  markInitialNoteAudioPreparing,
-  prepareInitialNoteTtsChunksSafely,
 } from "@/lib/note-tts";
 import { NoReadableScanTextError } from "@/lib/scan-ocr-errors";
 import {
@@ -792,27 +787,6 @@ export async function generateLectureNotesFromStoredTranscript(params: {
     throw enrichmentCompleteError;
   }
 
-  if (shouldCreateInitialNoteAudio(lecture.processing_metadata)) {
-    await markInitialNoteAudioPreparing({
-      lectureId: lecture.id,
-      processingMetadata: lecture.processing_metadata,
-    });
-    await prepareInitialNoteTtsChunksSafely({
-      userId: lecture.user_id,
-      lectureId: lecture.id,
-      content: notes.structuredNotesMd,
-      title: notes.title,
-      /*
-       * The language just detected, not the one this row was loaded with: the
-       * row in hand predates the update a few lines above, and it is null on
-       * every note made since the language picker went. Reading it here would
-       * have read a Slovenian note aloud in an English voice.
-       */
-      languageHint: detectedLanguage ?? lecture.language_hint,
-      voice: getInitialNoteAudioVoice(lecture.processing_metadata),
-    });
-  }
-
   await updateLectureProcessingState({
     lectureId: lecture.id,
     processingMetadata: lecture.processing_metadata,
@@ -898,29 +872,6 @@ export async function markLecturePipelineFailed(params: {
     } catch {
       sourceHost = undefined;
     }
-  }
-
-  // The notes are already written and the artifact already marked complete before the optional
-  // initial audio starts, which is why `prepareInitialNoteTtsChunksSafely` swallows its own
-  // failures. The invocation budget is the one thing that still escapes it: it rejects the caller's
-  // `Promise.race`, not the pipeline, so a deadline reached during that optional step arrives here
-  // and buries a finished lecture under "processing failed" — where `reconcileLectureWithArtifact`
-  // will never rescue it, because it refuses to touch a failed row. Nothing the learner is waiting
-  // for is outstanding at this stage, so keep the lecture ready and let the note player prepare its
-  // first audio chunk on demand.
-  if (isPreparingInitialNoteAudio(metadata)) {
-    console.warn("Lecture pipeline failed after the notes were finished", {
-      lectureId: params.lectureId,
-      error: params.error,
-    });
-
-    await updateLectureProcessingState({
-      lectureId: params.lectureId,
-      processingMetadata: nextMetadata,
-      stage: "ready",
-    });
-
-    return { recorded: false };
   }
 
   // Every lecture that ends up failed leaves one structured, searchable line in the platform log

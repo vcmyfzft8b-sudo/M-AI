@@ -12,11 +12,7 @@ import {
 } from "@/lib/document-image-extraction";
 import { LectureNoLongerExistsError } from "@/lib/lecture-processing-errors";
 import { validateDocumentFileSignature } from "@/lib/file-validation";
-import {
-  getInitialNoteAudioVoice,
-  isRecord,
-  shouldCreateInitialNoteAudio,
-} from "@/lib/lecture-source-metadata";
+import { isRecord } from "@/lib/lecture-source-metadata";
 import {
   extractTextFromDocument,
   prepareLectureFromTextSource,
@@ -285,8 +281,6 @@ export async function processStoredDocumentLecture(params: {
     blocks: sourceBlocks,
     titleHint,
     languageHint: lectureRow.language_hint ?? "sl",
-    createInitialAudio: shouldCreateInitialNoteAudio(metadata),
-    initialAudioVoice: getInitialNoteAudioVoice(metadata),
     modelMetadata: {
       importMode:
         sourceType === "pdf"

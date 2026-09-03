@@ -16,7 +16,6 @@ import { getPublicEnv } from "@/lib/public-env";
 import { normalizeUploadAudioMimeType } from "@/lib/storage";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type { CreateLectureResponse } from "@/lib/types";
-import type { NoteTtsVoice } from "@/lib/note-tts-settings";
 
 type UploadStage =
   | "creating"
@@ -42,8 +41,6 @@ function assertNotAborted(signal?: AbortSignal) {
 export async function createAudioLectureWithProcessingChunks(params: {
   file: File;
   durationSeconds: number;
-  createInitialAudio?: boolean;
-  initialAudioVoice?: NoteTtsVoice;
   normalizeBeforeUpload?: boolean;
   onStageChange?: (stage: UploadStage, message: string) => void;
   onLectureCreated?: (lectureId: string) => void;
@@ -88,8 +85,6 @@ export async function createAudioLectureWithProcessingChunks(params: {
       fileName: uploadFile.name,
       size: uploadFile.size,
       durationSeconds: Math.max(params.durationSeconds, 1),
-      createInitialAudio: params.createInitialAudio === true,
-      initialAudioVoice: params.initialAudioVoice,
     }),
   });
 

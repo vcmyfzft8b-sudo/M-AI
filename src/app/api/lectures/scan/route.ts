@@ -7,7 +7,6 @@ import { enqueueLectureNotesGeneration, enqueueLectureScanProcessing } from "@/l
 import { LECTURE_FAILURE_MESSAGE_KEYS } from "@/lib/lecture-failure-codes";
 import { toLectureFailureCode } from "@/lib/lecture-processing-errors";
 import { extractTextFromImage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
-import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import {
   buildValidationErrorResponse,
@@ -43,14 +42,6 @@ const scanLectureFieldsSchema = z.object({
     .refine((value) => value.length <= 4_000_000, {
       message: "Text is too long.",
     }),
-  createInitialAudio: z
-    .union([z.boolean(), z.literal("true"), z.literal("false"), z.null()])
-    .optional()
-    .transform((value) => value === true || value === "true"),
-  initialAudioVoice: z
-    .union([noteTtsVoiceSchema, z.null()])
-    .optional()
-    .transform((value) => value ?? undefined),
 });
 
 const storedScanImageSchema = z.object({
@@ -68,8 +59,6 @@ const storedScanLectureSchema = z.object({
   // one any more, and a default here would assert Slovenian over every
   // source the pipeline is now meant to detect for itself.
   languageHint: languageHintSchema.optional(),
-  createInitialAudio: z.boolean().optional().default(false),
-  initialAudioVoice: noteTtsVoiceSchema.optional(),
   text: z
     .string()
     .optional()
@@ -123,8 +112,7 @@ export async function POST(request: Request) {
         return parsed.response;
       }
 
-      const { lectureId, languageHint, text, images, createInitialAudio, initialAudioVoice } =
-        parsed.data;
+      const { lectureId, languageHint, text, images } = parsed.data;
 
       if (!entitlement.hasPaidAccess && lectureId !== entitlement.trialLectureId) {
         return createBillingRequiredResponse(
@@ -180,8 +168,6 @@ export async function POST(request: Request) {
             title: titleHint,
             language_hint: languageHint ?? null,
             processing_metadata: {
-              createInitialAudio,
-              initialAudioVoice: initialAudioVoice ?? null,
               pendingScanImages: images,
               pendingScanText: text,
               processing: {
@@ -215,8 +201,6 @@ export async function POST(request: Request) {
       lectureId: formData.get("lectureId"),
       languageHint: formData.get("languageHint"),
       text: formData.get("text"),
-      createInitialAudio: formData.get("createInitialAudio"),
-      initialAudioVoice: formData.get("initialAudioVoice"),
     });
 
     if (!parsedFields.success) {
@@ -294,8 +278,6 @@ export async function POST(request: Request) {
       const filesForProcessing = files;
       const languageHint = parsedFields.data.languageHint;
       const pastedText = parsedFields.data.text.trim();
-      const createInitialAudio = parsedFields.data.createInitialAudio;
-      const initialAudioVoice = parsedFields.data.initialAudioVoice;
 
       after(async () => {
         try {
@@ -352,8 +334,6 @@ export async function POST(request: Request) {
             blocks,
             titleHint,
             ...(languageHint ? { languageHint } : {}),
-            createInitialAudio,
-            initialAudioVoice,
             modelMetadata: {
               importMode: "scan",
               sourceFileNames,

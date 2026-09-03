@@ -42,11 +42,6 @@ import {
 import { getServerEnv } from "@/lib/server-env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import {
-  markInitialNoteAudioPreparing,
-  prepareInitialNoteTtsChunksSafely,
-} from "@/lib/note-tts";
-import { type NoteTtsVoice } from "@/lib/note-tts-settings";
-import {
   buildSyntheticTranscriptFromTextSource,
   estimateTextSourceDurationSeconds,
   type StructuredSourceBlock,
@@ -1726,8 +1721,6 @@ export async function createLectureFromTextSource(params: {
   titleHint?: string;
   modelMetadata?: Record<string, unknown>;
   lectureId?: string;
-  createInitialAudio?: boolean;
-  initialAudioVoice?: NoteTtsVoice;
 }) {
   const supabase = createSupabaseServiceRoleClient();
   const cleanedText = normalizeWhitespace(params.text);
@@ -1779,8 +1772,6 @@ export async function createLectureFromTextSource(params: {
             error_message: null,
             title: params.titleHint ?? null,
             processing_metadata: {
-              createInitialAudio: params.createInitialAudio === true,
-              initialAudioVoice: params.initialAudioVoice ?? null,
               manualImport: {
                 sourceType: params.sourceType,
                 titleHint: params.titleHint ?? null,
@@ -1810,8 +1801,6 @@ export async function createLectureFromTextSource(params: {
             duration_seconds: durationSeconds,
             title: params.titleHint ?? null,
             processing_metadata: {
-              createInitialAudio: params.createInitialAudio === true,
-              initialAudioVoice: params.initialAudioVoice ?? null,
               manualImport: {
                 sourceType: params.sourceType,
                 titleHint: params.titleHint ?? null,
@@ -1952,31 +1941,6 @@ export async function createLectureFromTextSource(params: {
       throw new Error(enrichmentCompleteError.message);
     }
 
-    if (params.createInitialAudio === true) {
-      await markInitialNoteAudioPreparing({
-        lectureId,
-        processingMetadata: {
-          createInitialAudio: params.createInitialAudio === true,
-          initialAudioVoice: params.initialAudioVoice ?? null,
-          manualImport: {
-            sourceType: params.sourceType,
-            titleHint: params.titleHint ?? null,
-            modelMetadata: params.modelMetadata ?? {},
-            text: cleanedText,
-            blocks: params.blocks ?? null,
-          },
-        },
-      });
-      await prepareInitialNoteTtsChunksSafely({
-        userId: params.userId,
-        lectureId,
-        content: notes.structuredNotesMd,
-        title: notes.title,
-        languageHint: params.languageHint ?? null,
-        voice: params.initialAudioVoice,
-      });
-    }
-
     const { data: updatedLecture, error: updateError } = await supabase
       .from("lectures")
       .update(
@@ -2034,8 +1998,6 @@ export async function prepareLectureFromTextSource(params: {
   titleHint?: string;
   modelMetadata?: Record<string, unknown>;
   lectureId?: string;
-  createInitialAudio?: boolean;
-  initialAudioVoice?: NoteTtsVoice;
 }) {
   const supabase = createSupabaseServiceRoleClient();
   const cleanedText = normalizeWhitespace(params.text);
@@ -2056,8 +2018,6 @@ export async function prepareLectureFromTextSource(params: {
   // Blocks, the title hint and model metadata reach us straight from the extractor, so clean
   // the whole payload here rather than trusting every producer to have done it.
   const processingMetadata = sanitizeJsonForDatabase({
-    createInitialAudio: params.createInitialAudio === true,
-    initialAudioVoice: params.initialAudioVoice ?? null,
     manualImport: {
       sourceType: params.sourceType,
       titleHint,

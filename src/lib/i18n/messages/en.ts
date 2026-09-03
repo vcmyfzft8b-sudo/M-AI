@@ -603,8 +603,6 @@ export const en: Messages = {
   "capture.selectedDocument": "Selected document",
   "capture.removeSelectedFile": "Remove the selected file",
   "capture.removeSelectedDocument": "Remove the selected document",
-  "capture.createAudio": "Create audio",
-  "capture.createAudioDetail": "So you can listen to the notes as well.",
   "capture.importAudioTitle": "Import audio from your phone",
   "capture.recordOffscreenTitle": "How do you record with the screen off?",
   "capture.recordOffscreenDetail": "Save the recording and upload it here later.",

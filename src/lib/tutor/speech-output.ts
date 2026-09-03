@@ -34,7 +34,18 @@ const KEEPALIVE_INTERVAL_MS = 15_000;
  * text arriving from it may still be the tail of what the speaker was saying, and the
  * echo test needs the words to recognize it by.
  */
-const ROOM_TAIL_MS = 1_500;
+const ROOM_TAIL_MS = 1_200;
+
+/**
+ * How much of that last turn is kept.
+ *
+ * Only its ending, because only its ending can still be in the air — a sentence from
+ * the middle of the turn was heard and gone long ago. Keeping the whole turn would be
+ * safe against echo and expensive everywhere else: the learner answers a question the
+ * moment it is asked, often starting with the very word the tutor ended on, and every
+ * word held here is a word of theirs that could be mistaken for it.
+ */
+const ROOM_TAIL_WORDS = 6;
 
 export type SpeechOutputConfig = {
   url: string;
@@ -409,9 +420,11 @@ export class TutorSpeechOutput {
    * the learner has not heard yet cannot be echoing back at the microphone, and
    * counting them would only make the tutor deaf to a learner who happened to use one.
    *
-   * Empty once the room has been quiet for longer than the recognizer's own lag, so
-   * that during the learner's turn nothing they say is measured against the tutor at
-   * all — see `isTutorEcho`, which is strict precisely because this is narrow.
+   * It narrows as the tutor stops: everything played while a turn is in progress, then
+   * only the few words it ended on for as long as those can still be in the air, then
+   * nothing at all. That last state is most of the session — during the learner's turn
+   * nothing they say is measured against the tutor — and it is what makes it safe for
+   * `isTutorEcho` to be as strict as it is.
    */
   spokenIntoRoom() {
     /*
@@ -458,7 +471,7 @@ export class TutorSpeechOutput {
       return;
     }
 
-    this.roomTail = spoken;
+    this.roomTail = spoken.split(/\s+/u).slice(-ROOM_TAIL_WORDS).join(" ");
     this.roomTailUntil = Date.now() + ROOM_TAIL_MS;
   }
 

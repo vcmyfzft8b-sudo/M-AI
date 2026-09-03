@@ -75,6 +75,18 @@ test("the tutor's voice never ends up on the front of the learner's question", (
   assert.deepEqual(asked, ["kaj pa kloroplast"]);
 });
 
+test("an answer that opens on the tutor's last word is still the learner's", () => {
+  /*
+   * The tutor has stopped and asked them to say the idea back, so what is left in the
+   * room is the few words it ended on — and a learner starting an explanation with the
+   * term they were just asked about is the most ordinary thing in the session.
+   */
+  const justAsked = "kaj je torej mitohondrij";
+
+  assert.equal(judgeHeard("mitohondrij", justAsked), "tutor");
+  assert.equal(judgeHeard("mitohondrij je elektrarna", justAsked), "learner");
+});
+
 test("a learner talking through the echo is still heard", () => {
   // Both voices in one transcript — the speaker's leak and the person over the top of it.
   assert.equal(judgeHeard("mitohondrij je počakaj malo", TUTOR_SAID), "learner");

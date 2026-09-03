@@ -32,9 +32,7 @@ import {
   toLectureFailureCode,
 } from "@/lib/lecture-processing-errors";
 import { detectSourceLanguage } from "@/lib/languages";
-import {
-  getEffectiveLectureSourceType,
-} from "@/lib/lecture-source-metadata";
+import { getEffectiveLectureSourceType } from "@/lib/lecture-source-metadata";
 import { captureBackgroundError, captureRouteError } from "@/lib/monitoring";
 import {
   buildSyntheticTranscriptFromTextSource,
@@ -56,8 +54,6 @@ import {
   isLectureGenerationBudgetExceededError,
 } from "@/lib/notes/generation-guard";
 import { withNoteEnrichmentStage } from "@/lib/note-enrichment-status";
-import {
-} from "@/lib/note-tts";
 import { NoReadableScanTextError } from "@/lib/scan-ocr-errors";
 import {
   condenseTranscriptForNotes,

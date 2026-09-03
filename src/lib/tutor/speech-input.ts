@@ -1,7 +1,7 @@
-import { VoiceActivityDetector } from "@/lib/tutor/turn-audio";
+import { SpeechBandAnalyser, VoiceActivityDetector } from "@/lib/tutor/turn-audio";
 
 /**
- * The tutor's ears: the microphone, a local energy detector, and one Soniox
+ * The tutor's ears: the microphone, a local voice detector, and one Soniox
  * recognizer socket kept open for the whole session.
  *
  * The microphone stays open the entire time — that is what "just start talking"
@@ -9,9 +9,10 @@ import { VoiceActivityDetector } from "@/lib/tutor/turn-audio";
  * tutor stops. Two separate signals come out of here and they are used for
  * different things:
  *
- *   - the *energy* detector, which fires locally within about seventy
- *     milliseconds and is what makes the tutor go quiet the instant somebody
- *     opens their mouth, and
+ *   - the *voice* detector, which fires locally within about a tenth of a second
+ *     and is what makes the tutor go quiet the instant somebody opens their
+ *     mouth — it looks at where in the spectrum a sound sits, not just at how
+ *     loud it is, so a passing car and a turned page do not silence anything, and
  *   - the *recognizer*, which is a network round trip behind but knows what was
  *     actually said, and therefore decides whether that was a question or a
  *     cough.
@@ -46,8 +47,10 @@ const ENDPOINT_DELAY_MS = 900;
  * a blob rather than a file in /public so the whole feature stays one import
  * away from working, with nothing to forget to deploy.
  *
- * It does two things: batch the 128-sample blocks the audio thread runs at into
- * packets worth sending, and measure each packet's level for the detector.
+ * All it does is batch the 128-sample blocks the audio thread runs at into
+ * packets worth sending. What each packet *sounds* like is measured on the other
+ * side, in SpeechBandAnalyser, where it can be unit-tested — the audio thread's
+ * job is to lose no frames, and everything it does beyond that is a risk to it.
  */
 const RECORDER_WORKLET = `
 class TutorRecorder extends AudioWorkletProcessor {
@@ -72,18 +75,13 @@ class TutorRecorder extends AudioWorkletProcessor {
 
       if (this.filled === this.frameSize) {
         const pcm = new Int16Array(this.frameSize);
-        let sum = 0;
 
         for (let sample = 0; sample < this.frameSize; sample += 1) {
           const value = Math.max(-1, Math.min(1, this.buffer[sample]));
-          sum += value * value;
           pcm[sample] = value < 0 ? value * 0x8000 : value * 0x7fff;
         }
 
-        this.port.postMessage(
-          { pcm: pcm.buffer, level: Math.sqrt(sum / this.frameSize) },
-          [pcm.buffer],
-        );
+        this.port.postMessage({ pcm: pcm.buffer }, [pcm.buffer]);
         this.filled = 0;
       }
     }
@@ -108,7 +106,7 @@ export type SpeechInputConfig = {
 };
 
 export type SpeechInputHandlers = {
-  /** The local detector heard something. Fires within ~70ms, before anyone knows what it was. */
+  /** The local detector heard a voice. Fires within ~100ms, before anyone knows what it said. */
   onVoiceStart?: () => void;
   /** The local detector heard the room go quiet again. */
   onVoiceEnd?: () => void;
@@ -138,6 +136,8 @@ export class TutorSpeechInput {
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
   private workletUrl: string | null = null;
   private readonly detector = new VoiceActivityDetector();
+  /** Built in `start`, once the hardware has said what rate it runs at. */
+  private analyser: SpeechBandAnalyser | null = null;
 
   private muted = false;
   private closed = false;
@@ -160,9 +160,10 @@ export class TutorSpeechInput {
    * the tutor from hearing itself through the phone's own speaker and
    * interrupting itself — it is the single most important flag in this file, and
    * `isEchoOfTutor` in turn-audio.ts is the backstop for the leakage it does not
-   * catch. `noiseSuppression` keeps a fan from reading as speech to the energy
-   * detector, and `autoGainControl` keeps somebody sitting back from a laptop at
-   * the same level as somebody leaning in.
+   * catch. `noiseSuppression` takes the steady part of a room out before anything
+   * else sees it, and `autoGainControl` keeps somebody sitting back from a laptop
+   * at the same level as somebody leaning in — the detector's own band test is
+   * what handles the transients those two leave behind.
    */
   async start() {
     const AudioContextClass =
@@ -202,6 +203,7 @@ export class TutorSpeechInput {
     const context = new AudioContextClass();
     await context.resume();
     this.context = context;
+    this.analyser = new SpeechBandAnalyser(context.sampleRate);
 
     const blob = new Blob([RECORDER_WORKLET], { type: "application/javascript" });
     this.workletUrl = URL.createObjectURL(blob);
@@ -216,7 +218,7 @@ export class TutorSpeechInput {
       processorOptions: { frameSize },
     });
 
-    node.port.onmessage = (event: MessageEvent<{ pcm: ArrayBuffer; level: number }>) => {
+    node.port.onmessage = (event: MessageEvent<{ pcm: ArrayBuffer }>) => {
       this.handleFrame(event.data);
     };
 
@@ -292,6 +294,7 @@ export class TutorSpeechInput {
 
     if (muted) {
       this.detector.reset();
+      this.analyser?.reset();
       this.level = 0;
       this.finalText = "";
       this.draftText = "";
@@ -341,21 +344,39 @@ export class TutorSpeechInput {
     }
   }
 
-  private handleFrame(frame: { pcm: ArrayBuffer; level: number }) {
+  private handleFrame(frame: { pcm: ArrayBuffer }) {
     if (this.muted) {
       return;
     }
 
-    this.level = frame.level;
+    /*
+     * Measured here rather than on the audio thread. The samples are already
+     * captured by this point, so nothing can be dropped by taking a moment over
+     * them, and it costs a few microseconds a frame — while keeping the decision
+     * of what a sound *was* in a plain module with tests around it.
+     *
+     * `send` copies the buffer rather than taking it, so reading it first is free.
+     */
+    const levels = this.analyser?.measure(new Int16Array(frame.pcm));
 
-    const transition = this.detector.push(frame.level);
+    if (levels) {
+      this.level = levels.level;
 
-    if (transition === "start") {
-      this.handlers.onVoiceStart?.();
-    } else if (transition === "end") {
-      this.handlers.onVoiceEnd?.();
+      const transition = this.detector.push(levels);
+
+      if (transition === "start") {
+        this.handlers.onVoiceStart?.();
+      } else if (transition === "end") {
+        this.handlers.onVoiceEnd?.();
+      }
     }
 
+    /*
+     * Sent whatever the local half made of it. The recognizer is the half that
+     * cannot be skipped: a session with no analyser would lose the instant duck,
+     * but a session with no audio going out loses the ability to be interrupted
+     * at all.
+     */
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(frame.pcm);
     }

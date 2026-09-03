@@ -179,7 +179,7 @@ export class TutorSpeechInput {
    */
   async useKey(apiKey: string) {
     if (this.closed || !this.context) {
-      return;
+      return false;
     }
 
     this.apiKey = apiKey;
@@ -195,21 +195,13 @@ export class TutorSpeechInput {
     previous?.close();
     this.resetUtterance();
 
-    try {
-      await this.openSocket(this.sampleRate);
-    } catch (error) {
-      /*
-       * The old socket is already gone, so a failure here leaves the tutor talking to
-       * somebody it cannot hear — the one failure mode a learner has no way to interpret.
-       * Reported through the normal channel so it reaches the screen as a connection
-       * problem, which "Continue" retries, and rethrown so the caller can log it.
-       */
-      this.handlers.onError?.(
-        new SpeechInputError("The recognizer could not be reopened.", "connection"),
-      );
-
-      throw error;
-    }
+    /*
+     * Reported rather than thrown. The old socket is already gone, so a failure here
+     * leaves the tutor talking to somebody it cannot hear — which the learner has no way
+     * to interpret unless they are told, and which must not take the rest of the renewal
+     * down with it. The caller turns a false into the microphone going quiet on screen.
+     */
+    return this.startListening();
   }
 
   /**

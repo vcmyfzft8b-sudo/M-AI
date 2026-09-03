@@ -560,7 +560,23 @@ export function LectureTutor({
       adoptCredentialsRef.current(payload);
 
       outputRef.current?.useKey(payload.realtime.tts.apiKey);
-      await inputRef.current?.useKey(payload.realtime.stt.apiKey);
+
+      const input = inputRef.current;
+
+      if (input) {
+        /*
+         * The recognizer is the half that has to be rebuilt, and at a busy moment there
+         * may be no stream left to rebuild it with. That costs cutting in by speaking and
+         * nothing else, so it is said plainly and the walkthrough carries on.
+         */
+        const listening = await input.useKey(payload.realtime.stt.apiKey);
+
+        setCanListen(listening && !input.isMuted);
+
+        if (!listening) {
+          setError(t("tutor.error.listeningBusy"));
+        }
+      }
 
       return true;
     } catch (caught) {
@@ -1448,6 +1464,16 @@ export function LectureTutor({
           void runTurnRef.current(kind, { question: text });
         },
         onError: (inputError: SpeechInputError) => {
+          /*
+           * A page on its way into the background takes its sockets with it. The pause
+           * that follows closes the recognizer on purpose, but the order the browser
+           * chooses is its own — so a death that arrives first is still the screen lock,
+           * not a fault, and the learner must not come back to a red box about it.
+           */
+          if (document.visibilityState === "hidden") {
+            return;
+          }
+
           reportTutorFailure(inputError, {
             lectureId,
             stage: "recognizer",

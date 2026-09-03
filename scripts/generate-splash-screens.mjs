@@ -21,6 +21,8 @@ import sharp from "sharp";
 import {
   SPLASH_BACKGROUNDS,
   SPLASH_LOGO_SCALE,
+  SPLASH_MARK_FILE,
+  SPLASH_MARK_WIDTH,
   splashScreens,
 } from "../src/lib/splash-screens.ts";
 
@@ -64,6 +66,20 @@ async function renderSplash({ pixelWidth, pixelHeight, theme }) {
 }
 
 /**
+ * The mark alone, transparent, for the launch screen the page draws itself.
+ *
+ * Same picture as the one baked into the screens above, on no canvas: the
+ * document supplies the colour, so one file serves both themes. See
+ * `LaunchScreen`.
+ */
+async function renderMark() {
+  return sharp(MARK)
+    .resize({ width: SPLASH_MARK_WIDTH })
+    .png({ compressionLevel: 9, palette: true, colours: 128, dither: 0, effort: 10 })
+    .toBuffer();
+}
+
+/**
  * A home-screen icon. `maskable` icons are cropped to whatever shape the
  * launcher likes, so the mark is inset into the safe circle and the canvas is
  * filled edge to edge; the plain icon keeps its transparent sticker edge.
@@ -101,6 +117,10 @@ async function main() {
     bytes += png.length;
   }
 
+  const mark = await renderMark();
+  await writeFile(path.join(publicDir, SPLASH_MARK_FILE), mark);
+  bytes += mark.length;
+
   const icons = [
     { file: "icons/icon-192.png", size: 192, maskable: false },
     { file: "icons/icon-512.png", size: 512, maskable: false },
@@ -114,7 +134,7 @@ async function main() {
   }
 
   console.log(
-    `Wrote ${screens.size} launch screens and ${icons.length} icons (${(bytes / 1024 / 1024).toFixed(2)} MB).`,
+    `Wrote ${screens.size} launch screens, the in-page mark and ${icons.length} icons (${(bytes / 1024 / 1024).toFixed(2)} MB).`,
   );
 }
 

@@ -22,6 +22,31 @@ const nextConfig: NextConfig = {
   images: {
     qualities: [75, 92],
   },
+  /*
+   * Launch assets are served from public/, which Vercel sends with
+   * `max-age=0, must-revalidate` — a conditional request before the browser
+   * may draw any of them. That is the wrong trade for the one picture the app
+   * shows while it is still opening, and worst on the connection where it
+   * matters: the mark cannot appear until a round trip finishes, and offline
+   * it does not appear at all.
+   *
+   * A day, not a year: these filenames carry no content hash, so a regenerated
+   * mark has to be able to reach people. `stale-while-revalidate` keeps the
+   * launch itself off the network for a week either way.
+   */
+  async headers() {
+    return [
+      {
+        source: "/:dir(splash|icons)/:file*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, stale-while-revalidate=604800",
+          },
+        ],
+      },
+    ];
+  },
   experimental: {
     /*
      * Next's dynamic client-router cache defaults to zero seconds. That makes

@@ -11,7 +11,6 @@ import { MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS } from "@/lib/constants";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { extractScanImageStoragePaths } from "@/lib/scan-image-uploads";
-import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 import {
   buildLectureStoragePath,
   isSupportedAudioMimeType,
@@ -34,8 +33,6 @@ const createLectureSchema = z.object({
   // one any more, and a default here would assert Slovenian over every
   // source the pipeline is now meant to detect for itself.
   languageHint: languageHintSchema.optional(),
-  createInitialAudio: z.boolean().optional().default(false),
-  initialAudioVoice: noteTtsVoiceSchema.optional(),
 });
 
 const deleteLecturesSchema = z.object({
@@ -102,10 +99,7 @@ export async function POST(request: Request) {
         status: "uploading",
         language_hint: parsed.data.languageHint ?? null,
         duration_seconds: Math.round(parsed.data.durationSeconds),
-        processing_metadata: {
-          createInitialAudio: parsed.data.createInitialAudio,
-          initialAudioVoice: parsed.data.initialAudioVoice ?? null,
-        },
+        processing_metadata: {},
       } as never,
     )
     .select("id")

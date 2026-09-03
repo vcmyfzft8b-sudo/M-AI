@@ -65,12 +65,6 @@ import {
   getUnsupportedVideoUrlMessageKey,
   isYoutubeCaptionImportEnabled,
 } from "@/lib/link-source-validation";
-import {
-  DEFAULT_NOTE_TTS_VOICE,
-  NOTE_TTS_VOICE_STORAGE_KEY,
-  normalizeNoteTtsVoice,
-  type NoteTtsVoice,
-} from "@/lib/note-tts-settings";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { cn, formatTimestamp } from "@/lib/utils";
 
@@ -90,14 +84,6 @@ type ScanUploadResponse = {
     token: string;
   }>;
 };
-
-function getInitialAudioVoice(): NoteTtsVoice {
-  if (typeof window === "undefined") {
-    return DEFAULT_NOTE_TTS_VOICE;
-  }
-
-  return normalizeNoteTtsVoice(window.localStorage.getItem(NOTE_TTS_VOICE_STORAGE_KEY));
-}
 
 type PhotoSource = {
   id: string;
@@ -359,7 +345,6 @@ export function NoteSourceModal({
   const [photoSources, setPhotoSources] = useState<PhotoSource[]>([]);
   const [activePhotoPreviewId, setActivePhotoPreviewId] = useState<string | null>(null);
   const [linkValue, setLinkValue] = useState("");
-  const [createInitialAudio, setCreateInitialAudio] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [recordingSupported, setRecordingSupported] = useState<boolean | null>(null);
@@ -564,7 +549,6 @@ export function NoteSourceModal({
     });
     setActivePhotoPreviewId(null);
     setLinkValue("");
-    setCreateInitialAudio(false);
     setIsRecording(false);
     setIsPaused(false);
     setElapsedSeconds(0);
@@ -1061,8 +1045,6 @@ export function NoteSourceModal({
         t,
         file: audioSource.file,
         durationSeconds: Math.max(audioSource.durationSeconds, 1),
-        createInitialAudio,
-        initialAudioVoice: getInitialAudioVoice(),
         normalizeBeforeUpload: audioSource.origin === "recording",
         signal: createController.signal,
         onLectureCreated: (lectureId) => {
@@ -1203,8 +1185,6 @@ export function NoteSourceModal({
           t("capture.error.photoQueueTooLong"),
         body: JSON.stringify({
           lectureId,
-          createInitialAudio,
-          initialAudioVoice: getInitialAudioVoice(),
           // The photos are the whole source now — the sheet no longer takes pasted text.
           text: "",
           images: filesForUpload.map(({ file, index, mimeType }) => {
@@ -1290,8 +1270,6 @@ export function NoteSourceModal({
         body: JSON.stringify({
           lectureId,
           url: trimmedLinkValue,
-          createInitialAudio,
-          initialAudioVoice: getInitialAudioVoice(),
         }),
       });
 
@@ -1679,8 +1657,6 @@ export function NoteSourceModal({
       formData.append("lectureId", lectureId);
       formData.append("file", uploadFile);
       formData.append("originalFileName", pdfSource.name);
-        formData.append("createInitialAudio", String(createInitialAudio));
-      formData.append("initialAudioVoice", getInitialAudioVoice());
 
       const controller = new AbortController();
       activeRequestControllerRef.current = controller;
@@ -1848,35 +1824,6 @@ export function NoteSourceModal({
     }
 
     return null;
-  }
-
-  /**
-   * Opting into the read-aloud audio up front. Kept from production — the note
-   * screen's listen dock has nothing to play without it — and dressed as the
-   * redesign's switch row.
-   */
-  function renderInitialAudioOption() {
-    return (
-      <div className="memo-capture-row static">
-        <span className="memo-capture-row-tile">
-          <Emoji symbol="🎧" size="1.15rem" />
-        </span>
-        <span className="memo-capture-row-copy">
-          <span>{t("capture.createAudio")}</span>
-          <span>{t("capture.createAudioDetail")}</span>
-        </span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={createInitialAudio}
-          aria-label={t("capture.createAudio")}
-          className={`memo-switch ${createInitialAudio ? "on" : ""}`.trim()}
-          onClick={() => setCreateInitialAudio(!createInitialAudio)}
-        >
-          <span />
-        </button>
-      </div>
-    );
   }
 
   function renderLoadingState() {
@@ -2091,8 +2038,6 @@ export function NoteSourceModal({
                       <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
                     </button>
                   ) : null}
-
-                  {!isRecording ? renderInitialAudioOption() : null}
 
                   {selectedMode === "record" ? (
                     <>

@@ -12,7 +12,6 @@ import {
 import { validateDocumentFileSignature } from "@/lib/file-validation";
 import { enqueueLectureDocumentProcessing } from "@/lib/jobs";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
-import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 import {
   buildValidationErrorResponse,
   parseFormDataRequest,
@@ -35,15 +34,6 @@ import { tr } from "@/lib/i18n/server";
 
 export const maxDuration = 300;
 const PDF_UPLOAD_MAX_BYTES = MAX_DOCUMENT_BYTES + 256 * 1024;
-
-const formBooleanSchema = z
-  .union([z.boolean(), z.literal("true"), z.literal("false"), z.null()])
-  .optional()
-  .transform((value) => value === true || value === "true");
-const formInitialAudioVoiceSchema = z
-  .union([noteTtsVoiceSchema, z.null()])
-  .optional()
-  .transform((value) => value ?? undefined);
 
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
@@ -86,15 +76,11 @@ export async function POST(request: Request) {
         .union([z.string(), z.null()])
         .transform((value) => (typeof value === "string" && value.trim() ? value : null))
         .pipe(languageHintSchema.nullable()),
-      createInitialAudio: formBooleanSchema,
-      initialAudioVoice: formInitialAudioVoiceSchema,
     })
     .safeParse({
       lectureId: formData.get("lectureId"),
       originalFileName: formData.get("originalFileName"),
       languageHint: formData.get("languageHint"),
-      createInitialAudio: formData.get("createInitialAudio"),
-      initialAudioVoice: formData.get("initialAudioVoice"),
     });
   const inputFile = formData.get("file");
 
@@ -102,8 +88,7 @@ export async function POST(request: Request) {
     return await buildValidationErrorResponse(parsedFields.error);
   }
 
-  const { lectureId, originalFileName, languageHint, createInitialAudio, initialAudioVoice } =
-    parsedFields.data;
+  const { lectureId, originalFileName, languageHint } = parsedFields.data;
 
   if (!entitlement.hasPaidAccess && lectureId !== entitlement.trialLectureId) {
     return createBillingRequiredResponse(
@@ -199,8 +184,6 @@ export async function POST(request: Request) {
           title: sourceFileName.replace(/\.[^.]+$/i, ""),
           language_hint: languageHint ?? null,
           processing_metadata: {
-            createInitialAudio,
-            initialAudioVoice: initialAudioVoice ?? null,
             pendingDocument: {
               path: documentPath,
               mimeType,

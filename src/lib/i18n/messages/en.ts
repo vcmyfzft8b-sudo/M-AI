@@ -1643,7 +1643,6 @@ export const en: Messages = {
   "tutor.end": "End",
   "tutor.pause": "Pause",
   "tutor.resume": "Continue",
-  "tutor.skip": "Next topic",
   "tutor.mute": "Mute the microphone",
   "tutor.unmute": "Unmute the microphone",
   "tutor.hint.interrupt": "Cut in whenever you like — just start talking.",

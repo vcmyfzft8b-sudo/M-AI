@@ -193,7 +193,6 @@ export function LectureTutor({
   const [muted, setMuted] = useState(false);
   /** False when the microphone was refused or is absent: the walkthrough runs, barge-in does not. */
   const [canListen, setCanListen] = useState(true);
-  const [plan, setPlan] = useState<TutorPlan | null>(null);
   /**
    * The one line under the sphere.
    *
@@ -886,7 +885,6 @@ export function LectureTutor({
     runIdRef.current += 1;
     const runId = runIdRef.current;
     planRef.current = null;
-    setPlan(null);
 
     /*
      * The running order is fetched here and never awaited here. It is the slowest
@@ -912,7 +910,6 @@ export function LectureTutor({
 
         if (runId === runIdRef.current) {
           planRef.current = payload.plan;
-          setPlan(payload.plan);
         }
 
         return payload.plan;
@@ -1163,33 +1160,10 @@ export function LectureTutor({
     void runTurnRef.current(spokenSoFarRef.current ? "resume" : "teach");
   }
 
-  function skip() {
-    floorTokenRef.current += 1;
-    clearTimer(followUpTimerRef);
-    turnAbortRef.current?.abort();
-    turnAbortRef.current = null;
-    outputRef.current?.stop();
-
-    const total = planRef.current?.topics.length ?? 0;
-    const nextIndex = topicIndexRef.current + 1;
-
-    spokenSoFarRef.current = "";
-    topicIndexRef.current = nextIndex;
-
-    if (nextIndex >= total) {
-      void runTurnRef.current("closing", { index: Math.max(0, total - 1) });
-
-      return;
-    }
-
-    void runTurnRef.current("teach", { index: nextIndex });
-  }
-
   function end() {
     settleGrant();
     teardown();
     planRef.current = null;
-    setPlan(null);
     setPhaseNow("idle");
   }
 
@@ -1397,7 +1371,6 @@ export function LectureTutor({
    * exactly as it does when the tutor is talking reads as a tutor who has stopped.
    */
   const isPreparing = phase === "preparing";
-  const topics = plan?.topics ?? [];
   /* Idle has no status of its own — the start screen's own line says what this is. */
   const statusKey =
     phase === "preparing"
@@ -1741,16 +1714,6 @@ export function LectureTutor({
                 <span>{t("tutor.pause")}</span>
               </button>
             )}
-
-            <button
-              type="button"
-              className="memo-tutor-control"
-              onClick={skip}
-              disabled={phase === "finished" || topics.length === 0}
-              aria-label={t("tutor.skip")}
-            >
-              <Msym name="skip_next" size="1.3rem" fill={false} weight={500} />
-            </button>
 
             <button
               type="button"

@@ -1652,7 +1652,6 @@ export const bs: Messages = {
   "tutor.end": "Završi",
   "tutor.pause": "Pauza",
   "tutor.resume": "Nastavi",
-  "tutor.skip": "Sljedeća tema",
   "tutor.mute": "Isključi mikrofon",
   "tutor.unmute": "Uključi mikrofon",
   "tutor.hint.interrupt": "Slobodno me prekini — samo počni govoriti.",

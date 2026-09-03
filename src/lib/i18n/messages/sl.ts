@@ -1670,7 +1670,6 @@ export const sl = {
   "tutor.end": "Končaj",
   "tutor.pause": "Premor",
   "tutor.resume": "Nadaljuj",
-  "tutor.skip": "Naslednja tema",
   "tutor.mute": "Izklopi mikrofon",
   "tutor.unmute": "Vklopi mikrofon",
   "tutor.hint.interrupt": "Kar prekini me — samo spregovori.",

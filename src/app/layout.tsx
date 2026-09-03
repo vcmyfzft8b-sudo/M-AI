@@ -87,7 +87,6 @@ const MATERIAL_SYMBOL_NAMES = [
   "search",
   "settings",
   "signal_cellular_alt",
-  "skip_next",
   "skip_previous",
   "speed",
   "stop",

@@ -36,6 +36,7 @@ import {
   useInstantNavigation,
 } from "@/components/navigation-loading";
 import { MemoPortal } from "@/components/memo-portal";
+import { useIsHydrated } from "@/components/viewport-portal";
 import { useCollapsingHeader } from "@/components/use-collapsing-header";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import {
@@ -966,9 +967,14 @@ export function HomeDashboard({
    * Two sources, because Stripe's cancel URL is only one of the ways back.
    * `offer=1` arrives when the buyer uses Stripe's own back link; the note in
    * `sessionStorage` is there however they return, including the browser's
-   * back gesture and a reload of the web view. Reading storage during render
-   * is safe here: the sheet lives in a portal that draws nothing until after
-   * hydration, so the server and the first client pass agree either way.
+   * back gesture and a reload of the web view.
+   *
+   * The state may be seeded from storage, but nothing may be *rendered* from
+   * it until `isHydrated` below — the server cannot read the note, so a first
+   * client pass that acts on it renders a surface the server never sent, and
+   * React answers that by discarding the whole streamed-in home screen and
+   * drawing it again. Waiting costs nothing on screen: the sheet is portalled,
+   * and a portal draws nothing before hydration either way.
    */
   const isOfferResumed =
     searchParams.get("offer") === "1" || isOfferResumePending();
@@ -980,6 +986,7 @@ export function HomeDashboard({
    * away and come back.
    */
   const [isOfferRestored, setIsOfferRestored] = useState(() => isOfferResumed);
+  const isHydrated = useIsHydrated();
   const [hasClaimedDiscount, setHasClaimedDiscount] = useState(false);
   /*
    * Whether the wheel has a spin left, as the server sees it. Null until the
@@ -1863,7 +1870,10 @@ export function HomeDashboard({
         />
       ) : null}
 
-      {isWheelOpen || isOfferOpen ? (
+      {/* `isHydrated` guards the resumed offer, whose open state is read from
+          `sessionStorage` during render: see the seed above. The wheel is
+          always closed on the first pass, so it loses nothing by waiting. */}
+      {isHydrated && (isWheelOpen || isOfferOpen) ? (
         <DeferredDiscountOffer
           wheelOpen={isWheelOpen}
           offerOpen={isOfferOpen}

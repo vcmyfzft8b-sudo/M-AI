@@ -445,6 +445,7 @@ export const en: Messages = {
   /* ---- API and route errors ---- */
   "api.unauthorized": "Not authorised.",
   "api.invalidLectureId": "Invalid note ID.",
+  "api.invalidVoiceRequest": "That voice or language is not one we can preview.",
   "api.invalidFlashcardId": "Invalid card ID.",
   "api.invalidQuestionId": "Invalid question ID.",
   "api.invalidFolderId": "Invalid folder ID.",

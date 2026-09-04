@@ -468,6 +468,7 @@ export const sl = {
   /* ---- API and route errors ---- */
   "api.unauthorized": "Nedovoljen dostop.",
   "api.invalidLectureId": "Neveljaven ID zapiska.",
+  "api.invalidVoiceRequest": "Tega glasu ali jezika ne moremo predvajati.",
   "api.invalidFlashcardId": "Neveljaven ID kartice.",
   "api.invalidQuestionId": "Neveljaven ID vprašanja.",
   "api.invalidFolderId": "Neveljaven ID mape.",

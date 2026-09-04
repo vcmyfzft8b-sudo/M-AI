@@ -17,6 +17,24 @@ export function normalizeNoteLanguage(value?: string | null) {
   return normalized && NOTE_LANGUAGE_LABELS.has(normalized) ? normalized : "en";
 }
 
+/**
+ * Any language a voice can be asked to speak, not just the seven this app has furniture for.
+ *
+ * `normalizeNoteLanguage` answers "en" for everything it does not recognise, which is right for
+ * note furniture — headings and labels only exist in the languages they were written in. It is
+ * wrong for the tutor. Soniox will speak far more than seven (fr, es, pl and hu were checked
+ * against the live synthesizer on 2026-09-04), so a learner studying a Polish lecture was being
+ * taught in English for no reason except that this file had not heard of Polish.
+ *
+ * Returns null rather than a default: "we do not know" and "it is English" are different
+ * answers, and only the caller knows which fallback its own case deserves.
+ */
+export function normalizeSpokenLanguageCode(value?: string | null) {
+  const code = value?.trim().toLowerCase().split(/[-_]/u)[0];
+
+  return code && /^[a-z]{2,3}$/u.test(code) ? code : null;
+}
+
 export function resolveNoteLanguageLabel(value?: string | null) {
   return NOTE_LANGUAGE_LABELS.get(normalizeNoteLanguage(value)) ?? "English";
 }

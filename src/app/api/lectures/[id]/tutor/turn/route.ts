@@ -38,6 +38,12 @@ const turnSchema = z.object({
    */
   plan: z
     .object({
+      /*
+       * Optional, and defaulted rather than required, because a session that was already running
+       * when this deployed holds a plan from before the field existed. Its turns should carry on
+       * in the material's language, not fail validation halfway through a lesson.
+       */
+      language: z.string().trim().min(2).max(8).nullable().default(null),
       subject: z.string().min(1).max(600),
       topics: z.array(topicSchema).min(1).max(32),
     })

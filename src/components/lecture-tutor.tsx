@@ -37,7 +37,7 @@ import { reportTutorFailure, resetTutorFailureReports } from "@/lib/tutor/report
 import { SpeechOutputError, TutorSpeechOutput } from "@/lib/tutor/speech-output";
 import { appendSpokenSoFar } from "@/lib/tutor/spoken-so-far";
 import { voiceHue } from "@/lib/tutor/voice-colors";
-import { voiceSampleClip } from "@/lib/tutor/voice-clips";
+import { hasStaticVoiceSamples, voiceSampleClip } from "@/lib/tutor/voice-clips";
 import {
   DEFAULT_TUTOR_SPEED,
   normalizeTutorSpeed,
@@ -415,7 +415,18 @@ export function LectureTutor({
       return;
     }
 
-    const held = NOTE_TTS_VOICES.map((option) => {
+    /*
+     * All eleven where the clips are files; only the chosen one where they are not.
+     *
+     * A language nothing was pre-rendered for has its samples synthesized on demand, and pulling
+     * all eleven ahead of a tap nobody has made would spend eleven paid syntheses on a picker the
+     * learner may never open. Warming the one voice that is already selected costs a single call,
+     * makes the tap most people actually make instant, and leaves the other ten to pay for
+     * themselves if anybody wants to hear them.
+     */
+    const wanted = hasStaticVoiceSamples(language) ? NOTE_TTS_VOICES : [voice];
+
+    const held = wanted.map((option) => {
       const clip = new Audio();
       clip.preload = "auto";
       clip.src = voiceSampleClip(option, language);
@@ -429,7 +440,7 @@ export function LectureTutor({
         clip.src = "";
       }
     };
-  }, [language]);
+  }, [language, voice]);
 
   const heardRef = useRef<HTMLParagraphElement | null>(null);
 

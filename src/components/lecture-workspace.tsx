@@ -57,6 +57,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 
+import { LectureMindmap } from "@/components/lecture-mindmap";
 import { LectureTutor } from "@/components/lecture-tutor";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
@@ -76,7 +77,15 @@ import {
   formatTimestamp,
 } from "@/lib/utils";
 
-type WorkspaceTab = "notes" | "study" | "tutor" | "speed" | "chat" | "transcript" | "audio";
+type WorkspaceTab =
+  | "notes"
+  | "study"
+  | "tutor"
+  | "mindmap"
+  | "speed"
+  | "chat"
+  | "transcript"
+  | "audio";
 type StudyMaterialView = "flashcards" | "quiz" | "practice_test";
 type FlashcardSessionResult = {
   attempts: number;
@@ -305,6 +314,18 @@ const NOTE_TABS = [
     tint: "oklch(0.66 0.15 295)",
   },
   { id: "quiz", view: "quiz", labelKey: "note.tab.quiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
+  /*
+   * Last of the revision pills and immediately before the test, because that is the order the
+   * work is done in: cards, then questions, then the map you check the whole shape against —
+   * and then you sit the test.
+   */
+  {
+    id: "mindmap",
+    view: null,
+    labelKey: "note.tab.mindmap",
+    icon: "account_tree",
+    tint: "oklch(0.66 0.15 200)",
+  },
   {
     id: "test",
     view: "practice_test",
@@ -1290,6 +1311,7 @@ const SUB_SCREEN_TITLE_KEYS: Record<string, MessageKey | null> = {
   quiz: "note.tab.quiz",
   test: "note.subScreen.test",
   tutor: "tutor.subScreenTitle",
+  mindmap: "note.tab.mindmap",
   speed: "note.tab.speed",
   transcript: "note.tab.transcript",
 };
@@ -4195,6 +4217,16 @@ export function LectureWorkspace({
       );
     }
 
+    if (activeTab === "mindmap") {
+      return (
+        <LectureMindmap
+          lectureId={detail.lecture.id}
+          lectureTitle={lectureTitle}
+          lectureReady={detail.lecture.status === "ready"}
+        />
+      );
+    }
+
     if (activeTab === "speed") {
       return (
         <NoteSpeedReader
@@ -5854,15 +5886,17 @@ export function LectureWorkspace({
       ? "notes"
       : activeTab === "tutor"
         ? "tutor"
-        : activeTab === "speed"
-          ? "speed"
-          : activeTab === "transcript" || activeTab === "audio"
-            ? "transcript"
-            : activeStudyView === "flashcards"
-              ? "flashcards"
-              : activeStudyView === "quiz"
-                ? "quiz"
-                : "test";
+        : activeTab === "mindmap"
+          ? "mindmap"
+          : activeTab === "speed"
+            ? "speed"
+            : activeTab === "transcript" || activeTab === "audio"
+              ? "transcript"
+              : activeStudyView === "flashcards"
+                ? "flashcards"
+                : activeStudyView === "quiz"
+                  ? "quiz"
+                  : "test";
 
   /*
    * The pill row follows the tab it is on. The pills overflow their scroller
@@ -5926,7 +5960,14 @@ export function LectureWorkspace({
   // overlay covers, so leaving the note with it open left the note's chat
   // standing beside the library's skeleton until the route committed.
   const isLeavingNote = navigatingTo != null && navigatingTo !== notePathname;
-  const showChatPanel = !isChatDismissed && !isLeavingNote;
+  /*
+   * The map takes the chat's column while it is on screen, and this is the one screen worth
+   * doing that for. A mind map is the only thing here whose usefulness is a function of how wide
+   * it is drawn: with the conversation beside it the canvas is barely three hundred pixels, and
+   * a map framed into three hundred pixels is the unreadable single column this feature exists
+   * to be better than. Chat is a tab away, and on the phone the bar at the foot is untouched.
+   */
+  const showChatPanel = !isChatDismissed && !isLeavingNote && activeTabId !== "mindmap";
 
   useEffect(() => {
     setChatOpen(showChatPanel);
@@ -6241,6 +6282,11 @@ export function LectureWorkspace({
       return;
     }
 
+    if (tab.id === "mindmap") {
+      setActiveTab("mindmap");
+      return;
+    }
+
     if (tab.id === "speed") {
       setActiveTab("speed");
       return;
@@ -6377,7 +6423,10 @@ export function LectureWorkspace({
           <div className="memo-dock">
             <div className="memo-dock-slot" ref={setDockSlot} />
 
-            {isChatDismissed && activeTabId !== "quiz" && activeTabId !== "tutor" ? (
+            {isChatDismissed &&
+            activeTabId !== "quiz" &&
+            activeTabId !== "tutor" &&
+            activeTabId !== "mindmap" ? (
               <button
                 type="button"
                 aria-label={t("chat.open")}

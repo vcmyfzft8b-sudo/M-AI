@@ -13993,52 +13993,15 @@
 }
 
 .memo-speedread-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
   padding-bottom: 1.1rem;
   border-bottom: 1px solid var(--speedread-hairline);
 }
 
 .memo-speedread-title {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
   margin: 0;
   font-size: 1.3rem;
   font-weight: 600;
   letter-spacing: -0.01em;
-}
-
-/* The way out, with the key that does the same thing written under it. */
-.memo-speedread-exit {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.memo-speedread-exit span {
-  font-size: 0.7rem;
-  color: var(--speedread-faint);
-}
-
-.memo-speedread-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  border: 0;
-  border-radius: 999px;
-  background: var(--tile);
-  color: var(--speedread-accent);
-  cursor: pointer;
-}
-
-.memo-speedread-close:hover {
-  background: var(--field);
 }
 
 /*
@@ -14417,67 +14380,59 @@
   gap: 0.6rem;
 }
 
-[data-density="compact"] .memo-speedread-head,
-[data-density="tight"] .memo-speedread-head {
+.memo-speedread[data-density="compact"] .memo-speedread-head,
+.memo-speedread[data-density="tight"] .memo-speedread-head {
   padding-bottom: 0.5rem;
 }
 
-[data-density="compact"] .memo-speedread-title,
-[data-density="tight"] .memo-speedread-title {
+.memo-speedread[data-density="compact"] .memo-speedread-title,
+.memo-speedread[data-density="tight"] .memo-speedread-title {
   font-size: 1.05rem;
 }
 
-[data-density="compact"] .memo-speedread-close,
-[data-density="tight"] .memo-speedread-close {
-  width: 2rem;
-  height: 2rem;
-}
-
-[data-density="compact"] .memo-speedread-exit span,
-[data-density="tight"] .memo-speedread-exit span,
-[data-density="compact"] .memo-speedread-hint,
-[data-density="tight"] .memo-speedread-hint {
+.memo-speedread[data-density="compact"] .memo-speedread-hint,
+.memo-speedread[data-density="tight"] .memo-speedread-hint {
   display: none;
 }
 
-[data-density="compact"] .memo-speedread-play,
-[data-density="tight"] .memo-speedread-play {
+.memo-speedread[data-density="compact"] .memo-speedread-play,
+.memo-speedread[data-density="tight"] .memo-speedread-play {
   width: 2.3rem;
   height: 2.3rem;
 }
 
 /* Still a full touch target where there is room for one. */
 @media (pointer: coarse) {
-  [data-density="compact"] .memo-speedread-play {
+  .memo-speedread[data-density="compact"] .memo-speedread-play {
     width: 2.5rem;
     height: 2.5rem;
   }
 }
 
-[data-density="compact"] .memo-speedread-rate,
-[data-density="tight"] .memo-speedread-rate {
+.memo-speedread[data-density="compact"] .memo-speedread-rate,
+.memo-speedread[data-density="tight"] .memo-speedread-rate {
   font-size: 0.85rem;
 }
 
-[data-density="compact"] .memo-speedread-gradual,
-[data-density="tight"] .memo-speedread-gradual {
+.memo-speedread[data-density="compact"] .memo-speedread-gradual,
+.memo-speedread[data-density="tight"] .memo-speedread-gradual {
   margin-top: 0.2rem;
   font-size: 0.85rem;
 }
 
-[data-density="compact"] .memo-speedread-scale {
+.memo-speedread[data-density="compact"] .memo-speedread-scale {
   font-size: 0.68rem;
 }
 
-[data-density="tight"] .memo-speedread-scale {
+.memo-speedread[data-density="tight"] .memo-speedread-scale {
   display: none;
 }
 
-[data-density="tight"] .memo-speedread-head {
+.memo-speedread[data-density="tight"] .memo-speedread-head {
   padding-bottom: 0.35rem;
 }
 
-[data-density="tight"] .memo-speedread-gradual {
+.memo-speedread[data-density="tight"] .memo-speedread-gradual {
   margin-top: 0;
 }
 
@@ -14486,21 +14441,21 @@
  * thing to shrink and they never shrink far — a little under the usual minimum
  * beats a control that has been pushed off a 390px-tall screen entirely.
  */
-[data-density="tight"] .memo-speedread-stage {
+.memo-speedread[data-density="tight"] .memo-speedread-stage {
   min-height: 2.5rem;
 }
 
 @media (pointer: coarse) {
-  [data-density="tight"] .memo-speedread-seek,
-  [data-density="tight"] .memo-speedread-slider {
+  .memo-speedread[data-density="tight"] .memo-speedread-seek,
+  .memo-speedread[data-density="tight"] .memo-speedread-slider {
     height: 2.1rem;
   }
 
-  [data-density="tight"] .memo-speedread-gradual {
+  .memo-speedread[data-density="tight"] .memo-speedread-gradual {
     min-height: 2.4rem;
   }
 
-  [data-density="tight"] .memo-speedread-play {
+  .memo-speedread[data-density="tight"] .memo-speedread-play {
     width: 2.1rem;
     height: 2.1rem;
   }
@@ -14562,5 +14517,3 @@
   flex: 1 1 auto;
   min-height: 0;
 }
-
-

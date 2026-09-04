@@ -1717,6 +1717,8 @@ export const sl = {
   "palace.progressLabel": "Pobrane kartice",
   "palace.progressCount": "{done} od {total} pobranih",
   "palace.reveal": "Pokaži odgovor",
+  "palace.checking": "Preverjam odgovor …",
+  "palace.scoreOf": "{score} od {total} točk",
   "palace.correctTitle": "Točno!",
   "palace.explanation": "Zakaj:",
   "palace.checkAnswer": "Preveri odgovor",

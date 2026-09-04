@@ -13741,20 +13741,29 @@
 }
 
 .memo-palace-panel .lecture-practice-textarea {
-  min-height: 6rem;
+  min-height: 5.5rem;
+}
+
+/* Once it is marked the box is a record of what was written, not a field. */
+.memo-palace-panel .lecture-practice-textarea:disabled {
+  opacity: 1;
+}
+
+.memo-palace-panel .memo-test-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.memo-palace-panel .memo-test-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
 }
 
 /* The answer a practice question is marked against, shown for self-marking:
    there is no room in a walk for a round trip to the grader. */
-.memo-palace-model {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  padding: 0.8rem 0.9rem;
-  border-radius: 16px;
-  background: color-mix(in oklch, var(--text) 6%, transparent);
-}
-
+/* The little caps label above a line of feedback. */
 .memo-palace-model-label {
   font-size: 0.75rem;
   font-weight: 800;
@@ -13763,16 +13772,72 @@
   color: var(--muted);
 }
 
-.memo-palace-model p {
-  margin: 0;
-  font-size: 0.98rem;
-  line-height: 1.45;
+/*
+ * A marked practice answer. The score leads, because that is the thing being
+ * asked; what was right, what was missing and the answer it was marked against
+ * follow as plain labelled lines rather than as three separate cards, which is
+ * what made this panel read as a form rather than as a result.
+ */
+.memo-palace-mark {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 18px;
+  background: color-mix(in oklch, var(--text) 5%, transparent);
+  border: 1px solid color-mix(in oklch, var(--text) 8%, transparent);
 }
 
-/* The learner's own words, above the answer they are marking against. */
-.memo-palace-model.yours {
-  background: color-mix(in oklch, var(--text) 3%, transparent);
-  border: 1px solid color-mix(in oklch, var(--text) 8%, transparent);
+.memo-palace-mark.pass {
+  background: color-mix(in oklch, #16a34a 12%, transparent);
+  border-color: color-mix(in oklch, #16a34a 30%, transparent);
+}
+
+.memo-palace-mark.fail {
+  background: color-mix(in oklch, #dc2626 10%, transparent);
+  border-color: color-mix(in oklch, #dc2626 26%, transparent);
+}
+
+.memo-palace-mark-score {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.memo-palace-mark.pass .memo-palace-mark-score {
+  color: #15803d;
+}
+
+.memo-palace-mark.fail .memo-palace-mark-score {
+  color: #dc2626;
+}
+
+.memo-palace-mark-score.unmarked {
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+:root[data-theme="dark"] .memo-palace-mark.pass .memo-palace-mark-score {
+  color: #4ade80;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .memo-palace-mark.pass .memo-palace-mark-score {
+    color: #4ade80;
+  }
+}
+
+.memo-palace-mark-line {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
 }
 
 /* A right answer says so, and says why, in the same row a wrong one uses. */

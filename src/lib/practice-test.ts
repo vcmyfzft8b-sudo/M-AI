@@ -1094,7 +1094,7 @@ async function markAnswer(params: {
  * left out of the total (`summariseAttemptScores`), which is honest about what happened and
  * costs the learner nothing.
  */
-async function markAnswerWithRetry(params: {
+export async function markAnswerWithRetry(params: {
   prompt: string;
   answerGuide: string;
   typedAnswer: string;

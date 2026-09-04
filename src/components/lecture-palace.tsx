@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, X } from "lucide-react";
+import { Check, Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useT } from "@/components/i18n-provider";
@@ -51,6 +51,21 @@ const COLLECTED_STORAGE_PREFIX = "memo.palace.collected.";
 const MASCOT_SRC = "/memo-mascot.png";
 /** How far the minimap sees, in metres — about two blocks in every direction. */
 const MAP_RANGE = 95;
+/**
+ * Out of five, the mark at which a practice answer counts as known and its
+ * house is collected. The same three-out-of-five a teacher would call a pass.
+ */
+const PRACTICE_PASS_SCORE = 3;
+
+/** What the marker sends back for one answer. */
+type PracticeMark = {
+  marked: boolean;
+  score?: number;
+  maxScore: number;
+  expectedAnswer: string;
+  strengths?: string;
+  missingPoints?: string;
+};
 /** The stick is dead in the middle, so a resting thumb is not a slow walk. */
 const STICK_DEADZONE = 6;
 const STICK_RADIUS = 46;
@@ -116,7 +131,8 @@ export function LecturePalace({
   const [quizOrder, setQuizOrder] = useState<number[]>([]);
   const [testAnswer, setTestAnswer] = useState("");
   const [isTestUnknown, setIsTestUnknown] = useState(false);
-  const [isAnswerShown, setIsAnswerShown] = useState(false);
+  const [isMarking, setIsMarking] = useState(false);
+  const [mark, setMark] = useState<PracticeMark | null>(null);
   const [cardExit, setCardExit] = useState<StudyFlashcardExit | null>(null);
   /* How each stop went this session, for the label the deck screen shows too. */
   const [results, setResults] = useState<Record<string, "again" | "easy">>({});
@@ -425,8 +441,11 @@ export function LecturePalace({
     setNearStationId(stationId);
     setIsFlipped(false);
     setQuizChoice(null);
+    setQuizOrder([]);
     setTestAnswer("");
-    setIsAnswerShown(false);
+    setIsTestUnknown(false);
+    setIsMarking(false);
+    setMark(null);
   }, []);
 
   const startGame = useCallback(async () => {
@@ -645,6 +664,47 @@ export function LecturePalace({
        */
     },
     [collect],
+  );
+
+  /**
+   * Marked by the same grader the practice test uses, against the same marking
+   * points, for the same five points — one answer at a time and without opening
+   * an attempt, so a walk never shows up in the test's own history.
+   */
+  const checkAnswer = useCallback(
+    async (questionId: string) => {
+      setIsMarking(true);
+
+      try {
+        const response = await fetch(`/api/lectures/${lectureId}/practice-test/check`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            questionId,
+            typedAnswer: isTestUnknown ? "" : testAnswer,
+            declaredUnknown: isTestUnknown,
+          }),
+        });
+
+        if (!response.ok) throw new Error("unmarked");
+
+        setMark((await response.json()) as PracticeMark);
+      } catch {
+        /*
+         * Offline, rate-limited, or the grader would not answer: the learner
+         * still gets the answer to mark themselves against, which is what the
+         * screen did before there was a grader at all.
+         */
+        setMark({
+          marked: false,
+          maxScore: 5,
+          expectedAnswer: testById.get(questionId)?.answer_guide ?? "",
+        });
+      } finally {
+        setIsMarking(false);
+      }
+    },
+    [isTestUnknown, lectureId, testAnswer, testById],
   );
 
   const restart = useCallback(() => {
@@ -884,75 +944,95 @@ export function LecturePalace({
 
     if (!question) return null;
 
+    const passed = mark?.marked === true && (mark.score ?? 0) >= PRACTICE_PASS_SCORE;
+
     return (
       <div className="lecture-practice-stage">
         <p className="lecture-practice-prompt">{question.prompt}</p>
+
         <textarea
           value={testAnswer}
           onChange={(event) => setTestAnswer(event.target.value)}
-          disabled={isTestUnknown}
+          disabled={isTestUnknown || isMarking || mark !== null}
           className="ios-textarea lecture-practice-textarea"
           placeholder={t("test.answerPlaceholder")}
         />
 
-        <div className="lecture-practice-controls">
-          <label className="lecture-practice-unknown">
-            <input
-              type="checkbox"
-              checked={isTestUnknown}
-              onChange={(event) => setIsTestUnknown(event.target.checked)}
-            />
-            {t("test.dontKnow")}
-          </label>
-        </div>
+        {mark ? null : (
+          <div className="lecture-practice-controls">
+            <label className="lecture-practice-unknown">
+              <input
+                type="checkbox"
+                checked={isTestUnknown}
+                disabled={isMarking}
+                onChange={(event) => setIsTestUnknown(event.target.checked)}
+              />
+              {t("test.dontKnow")}
+            </label>
+          </div>
+        )}
 
-        {isAnswerShown ? (
-          <>
-            {testAnswer.trim() && !isTestUnknown ? (
-              <div className="memo-palace-model yours">
-                <span className="memo-palace-model-label">{t("test.yourAnswer")}</span>
-                <p>{testAnswer}</p>
-              </div>
+        {mark ? (
+          <div className={`memo-palace-mark ${passed ? "pass" : "fail"}`}>
+            {mark.marked ? (
+              <p className="memo-palace-mark-score">
+                <Msym name={passed ? "check_circle" : "cancel"} size="1.3rem" />
+                {t("palace.scoreOf", { score: mark.score ?? 0, total: mark.maxScore })}
+              </p>
+            ) : (
+              <p className="memo-palace-mark-score unmarked">{t("test.notMarked")}</p>
+            )}
+
+            {mark.strengths ? (
+              <p className="memo-palace-mark-line">
+                <span className="memo-palace-model-label">{t("test.strengths")}</span>
+                {mark.strengths}
+              </p>
             ) : null}
-            <div className="memo-palace-model">
+
+            {mark.missingPoints ? (
+              <p className="memo-palace-mark-line">
+                <span className="memo-palace-model-label">{t("test.missing")}</span>
+                {mark.missingPoints}
+              </p>
+            ) : null}
+
+            <p className="memo-palace-mark-line">
               <span className="memo-palace-model-label">{t("test.expectedAnswer")}</span>
-              <p>{question.answer_guide}</p>
-            </div>
-          </>
+              {mark.expectedAnswer}
+            </p>
+          </div>
         ) : null}
 
         <div className="memo-test-actions">
-          {isAnswerShown ? (
-            <>
-              <button
-                type="button"
-                className="memo-test-prev"
-                onClick={() => {
-                  setResults((current) => ({ ...current, [question.id]: "again" }));
-                  leaveStation();
-                }}
-              >
-                {t("palace.notYet")}
-              </button>
-              <button
-                type="button"
-                className="memo-test-next"
-                onClick={() => {
-                  setResults((current) => ({ ...current, [question.id]: "easy" }));
+          {mark ? (
+            <button
+              type="button"
+              className="memo-test-next"
+              onClick={() => {
+                setResults((current) => ({
+                  ...current,
+                  [question.id]: passed ? "easy" : "again",
+                }));
+
+                if (passed) {
                   collect(question.id);
-                  leaveStation();
-                }}
-              >
-                {t("palace.gotIt")}
-              </button>
-            </>
+                }
+
+                leaveStation();
+              }}
+            >
+              {t("quiz.understood")}
+            </button>
           ) : (
             <button
               type="button"
               className="memo-test-next"
-              onClick={() => setIsAnswerShown(true)}
+              disabled={isMarking || (!isTestUnknown && testAnswer.trim().length === 0)}
+              onClick={() => void checkAnswer(question.id)}
             >
-              {t("palace.checkAnswer")}
+              {isMarking ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {isMarking ? t("palace.checking") : t("palace.checkAnswer")}
             </button>
           )}
         </div>

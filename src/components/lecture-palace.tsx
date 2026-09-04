@@ -11,6 +11,7 @@ import { MemoPortal } from "@/components/memo-portal";
 import { Emoji, Msym } from "@/components/msym";
 import { StudyCompletionCard } from "@/components/study-completion-card";
 import { StudyFlashcard, type StudyFlashcardExit } from "@/components/study-flashcard";
+import { sheetClass, useSheet } from "@/components/use-sheet";
 import {
   FLASHCARD_EXIT_ANIMATION_MS,
   type FlashcardBucket,
@@ -701,10 +702,18 @@ export function LecturePalace({
     };
     /* A backgrounded tab should not keep a render loop alive on a phone battery. */
     const onVisibility = () => gameRef.current?.setPaused(document.hidden);
+    /*
+     * Escape takes one layer at a time, the way it does everywhere else in the
+     * app: the map if it is up, then the station, and only an Escape with
+     * neither of them open leaves the town. It used to close the whole thing
+     * from under an open card.
+     */
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        leaveGame();
-      }
+      if (event.key !== "Escape") return;
+
+      if (escapeRef.current()) return;
+
+      leaveGame();
     };
 
     window.addEventListener("resize", onResize);
@@ -807,6 +816,31 @@ export function LecturePalace({
     context.restore();
   }, [collected, isMapOpen, layout]);
 
+  const closeMap = useCallback(() => setIsMapOpen(false), []);
+  const mapSheet = useSheet(closeMap, { scrollable: true });
+
+  /*
+   * Held in a ref so the key handler below can be armed once for the whole
+   * visit rather than re-armed on every frame the town reports.
+   */
+  const escapeRef = useRef<() => boolean>(() => false);
+
+  escapeRef.current = () => {
+    if (isMapOpen) {
+      mapSheet.dismiss();
+
+      return true;
+    }
+
+    if (nearStationId) {
+      leaveStation();
+
+      return true;
+    }
+
+    return false;
+  };
+
   /* The map sheet stops the world; the loop keeps rendering. */
   useEffect(() => {
     gameRef.current?.setPaused(isMapOpen);
@@ -816,12 +850,28 @@ export function LecturePalace({
     }
   }, [isMapOpen]);
 
-  const leaveStation = useCallback(() => {
+  /* What actually tears the station down, once the sheet has finished leaving. */
+  const closeStation = useCallback(() => {
     clearDismiss();
     gameRef.current?.releaseStation();
     openStation(null);
   }, [clearDismiss, openStation]);
 
+  /*
+   * The station panel is a bottom sheet on the phone, so it is one of the app's
+   * bottom sheets: it comes up from the edge, tracks a thumb dragged down it,
+   * and drops out of frame on the way out rather than vanishing. It owns a
+   * scrolling answer, so only the grabber and the head start a drag.
+   */
+  const stationSheet = useSheet(closeStation, { scrollable: true });
+  const dismissStation = stationSheet.dismiss;
+
+  const leaveStation = useCallback(() => {
+    clearDismiss();
+    dismissStation();
+  }, [clearDismiss, dismissStation]);
+
+  /** Been to. The Memo goes out and the ring dims, whatever the answer was. */
   const collect = useCallback(
     (stationId: string) => {
       setCollected((current) => {
@@ -849,10 +899,7 @@ export function LecturePalace({
       exitStart?: { xPercent: number; yPercent: number; rotationDeg: number },
     ) => {
       setResults((current) => ({ ...current, [cardId]: confidenceBucket }));
-
-      if (confidenceBucket === "easy") {
-        collect(cardId);
-      }
+      collect(cardId);
 
       /*
        * The card flies off the way it does on the deck screen — same animation,
@@ -906,10 +953,7 @@ export function LecturePalace({
 
       setQuizChoice(optionIndex);
       setResults((current) => ({ ...current, [questionId]: right ? "easy" : "again" }));
-
-      if (right) {
-        collect(questionId);
-      }
+      collect(questionId);
 
       /*
        * Both answers stop and say what happened: right or wrong, which option
@@ -1059,11 +1103,16 @@ export function LecturePalace({
   }
 
   const total = layout.stations.length;
-  const done = layout.stations.filter((entry) => collected.has(entry.id)).length;
   /*
-   * Recalled without having to come back for it. A card you missed and returned
-   * to is collected, but it is not a card you knew.
+   * Answered, not answered correctly. A stop you got wrong is a stop you have
+   * been to: leaving its Memo floating over the pavement told you nothing you
+   * could act on — the answer was already on the screen — and it meant the
+   * counter never moved and the walk could not end unless you were right sixty
+   * times running.
    */
+  const done = layout.stations.filter((entry) => collected.has(entry.id)).length;
+  /* What was recalled first time, which is the number the score is made of: a
+     stop you got wrong is walked, but it is not a stop you knew. */
   const firstTimeKnown = layout.stations.filter(
     (entry) => collected.has(entry.id) && results[entry.id] !== "again",
   ).length;
@@ -1286,10 +1335,7 @@ export function LecturePalace({
                   ...current,
                   [question.id]: passed ? "easy" : "again",
                 }));
-
-                if (passed) {
-                  collect(question.id);
-                }
+                collect(question.id);
 
                 leaveStation();
               }}
@@ -1442,8 +1488,29 @@ export function LecturePalace({
             ) : null}
 
             {station ? (
-              <div className={`memo-palace-panel ${station.kind}`}>
-                <div className="memo-palace-panel-head">
+              <div
+                className={sheetClass("memo-palace-panel-scrim", stationSheet.closing)}
+                role="presentation"
+                onClick={() => stationSheet.dismiss()}
+              >
+              <div
+                className={sheetClass(
+                  `memo-palace-panel mobile-draggable-sheet ${station.kind}`,
+                  stationSheet.closing,
+                )}
+                onClick={(event) => event.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-label={kindPill[station.kind].label}
+                {...stationSheet.dragProps}
+              >
+                <button
+                  type="button"
+                  className="mobile-sheet-drag-handle"
+                  aria-label={t("folders.dragToClose")}
+                  data-drag-handle
+                />
+                <div className="memo-palace-panel-head" data-drag-zone>
                   <span
                     className="memo-tab active memo-palace-panel-kind"
                     style={{ "--tab-tint": kindPill[station.kind].tint } as CSSProperties}
@@ -1463,18 +1530,39 @@ export function LecturePalace({
                 </div>
                 {renderStation()}
               </div>
+              </div>
             ) : null}
 
             {isMapOpen ? (
-              <div className="memo-palace-sheet">
-                <div className="memo-palace-sheet-inner">
-                  <div className="memo-palace-sheet-head">
+              <div
+                className={sheetClass("memo-palace-sheet", mapSheet.closing)}
+                role="presentation"
+                onClick={() => mapSheet.dismiss()}
+              >
+                <div
+                  className={sheetClass(
+                    "memo-palace-sheet-inner mobile-draggable-sheet",
+                    mapSheet.closing,
+                  )}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={t("palace.map")}
+                  onClick={(event) => event.stopPropagation()}
+                  {...mapSheet.dragProps}
+                >
+                  <button
+                    type="button"
+                    className="mobile-sheet-drag-handle"
+                    aria-label={t("folders.dragToClose")}
+                    data-drag-handle
+                  />
+                  <div className="memo-palace-sheet-head" data-drag-zone>
                     <h3>{t("palace.map")}</h3>
                     <button
                       type="button"
                       className="memo-close-button"
                       aria-label={t("common.close")}
-                      onClick={() => setIsMapOpen(false)}
+                      onClick={() => mapSheet.dismiss()}
                     >
                       <Msym name="close" size="1.1rem" />
                     </button>
@@ -1504,8 +1592,9 @@ export function LecturePalace({
                             type="button"
                             className="memo-button-outline small"
                             onClick={() => {
-                              gameRef.current?.travelTo(entry.index);
-                              setIsMapOpen(false);
+                              const index = entry.index;
+
+                              mapSheet.dismiss(() => gameRef.current?.travelTo(index));
                             }}
                           >
                             {t("palace.travel")}

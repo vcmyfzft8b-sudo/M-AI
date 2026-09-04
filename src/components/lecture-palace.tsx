@@ -1,11 +1,13 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+/* Aliased: `Image` on its own is the DOM constructor the minimap loads with. */
+import NextImage from "next/image";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { useT } from "@/components/i18n-provider";
 import { MemoPortal } from "@/components/memo-portal";
-import { Msym } from "@/components/msym";
+import { Emoji, Msym } from "@/components/msym";
 import { StudyCompletionCard } from "@/components/study-completion-card";
 import { StudyFlashcard, type StudyFlashcardExit } from "@/components/study-flashcard";
 import {
@@ -762,10 +764,14 @@ export function LecturePalace({
 
   if (!isReady || !layout) {
     return (
-      <div className="memo-palace-intro">
-        <div className="memo-palace-cover placeholder" aria-hidden="true" />
-        <h2 className="memo-palace-heading">{t("palace.title")}</h2>
-        <p className="memo-palace-copy">{isReady ? t("palace.empty") : t("palace.notReady")}</p>
+      <div className="memo-study-empty">
+        <div className="memo-study-empty-orb">
+          <Emoji symbol="🏙️" size="4.4rem" />
+        </div>
+        <p className="memo-study-empty-title">{t("palace.title")}</p>
+        <p className="memo-study-empty-copy">
+          {isReady ? t("palace.empty") : t("palace.notReady")}
+        </p>
       </div>
     );
   }
@@ -779,15 +785,24 @@ export function LecturePalace({
   const firstTimeKnown = layout.stations.filter(
     (entry) => collected.has(entry.id) && results[entry.id] !== "again",
   ).length;
-  const counts = items.reduce(
-    (current, item) => ({ ...current, [item.kind]: current[item.kind] + 1 }),
-    { card: 0, quiz: 0, test: 0 } as Record<StudyKind, number>,
-  );
   const district = layout.districts[districtIndex] ?? layout.districts[0];
-  const kindLabel: Record<StudyKind, string> = {
-    card: t("note.tab.flashcards"),
-    quiz: t("note.tab.quiz"),
-    test: t("note.subScreen.test"),
+  /*
+   * The chip on the panel is the note's own tab pill — same shape, same icon,
+   * same tint — because it is answering the same question: which of the three
+   * you are looking at.
+   */
+  const kindPill: Record<StudyKind, { label: string; icon: string; tint: string }> = {
+    card: {
+      label: t("note.tab.flashcards"),
+      icon: "style",
+      tint: "oklch(0.66 0.15 295)",
+    },
+    quiz: { label: t("note.tab.quiz"), icon: "quiz", tint: "oklch(0.66 0.15 340)" },
+    test: {
+      label: t("note.subScreen.test"),
+      icon: "assignment",
+      tint: "oklch(0.66 0.15 150)",
+    },
   };
   /*
    * "Click to flip" on a mouse, "Tap to flip" on a phone — both rendered, the
@@ -1017,75 +1032,35 @@ export function LecturePalace({
 
   return (
     <>
-      <div className="memo-palace-intro">
-        <div className="memo-palace-cover" aria-hidden="true">
-          <span className="memo-palace-cover-sky" />
-          <span className="memo-palace-cover-tower tall" />
-          <span className="memo-palace-cover-tower" />
-          <span className="memo-palace-cover-tower short" />
-          <span className="memo-palace-cover-token" />
+      <div className="memo-study-empty memo-palace-intro">
+        <div className="memo-study-empty-orb">
+          {/* Memo's own face, the thing you will be collecting. */}
+          <NextImage src={MASCOT_SRC} alt="" width={110} height={99} />
         </div>
-        <h2 className="memo-palace-heading">{t("palace.title")}</h2>
-        <p className="memo-palace-copy">{t("palace.intro")}</p>
+        <p className="memo-study-empty-title">{t("palace.title")}</p>
+        <p className="memo-study-empty-copy">{t("palace.intro")}</p>
 
-        <div className="memo-palace-progress" role="group" aria-label={t("palace.progressLabel")}>
-          <div className="memo-palace-bar">
-            <span style={{ width: `${total === 0 ? 0 : (done / total) * 100}%` }} />
+        <button type="button" className="memo-study-empty-cta" onClick={() => setIsOpen(true)}>
+          <Msym name="explore" size="1.2rem" fill={false} weight={500} />
+          {done > 0 ? t("palace.resume") : t("palace.start")}
+        </button>
+
+        {/* Everything below is the walk's own state, in the app's list idiom. */}
+        <div className="memo-palace-summary">
+          <div className="memo-palace-progress">
+            <div className="memo-palace-bar">
+              <span style={{ width: `${total === 0 ? 0 : (done / total) * 100}%` }} />
+            </div>
+            <p className="memo-palace-count">{t("palace.progressCount", { done, total })}</p>
           </div>
-          <p className="memo-palace-count">{t("palace.progressCount", { done, total })}</p>
-        </div>
 
-        {/* What the town is made of, so the walk's coverage of the note is a
-            number the learner can see rather than something to take on trust. */}
-        <div className="memo-palace-covers">
-          <span className="memo-palace-covers-label">{t("palace.covers")}</span>
-          <span className="memo-palace-covers-row">
-            <span>
-              {t("note.tab.flashcards")} <b>{counts.card}/{cards.length}</b>
-            </span>
-            {quizQuestions.length > 0 ? (
-              <span>
-                {t("note.tab.quiz")} <b>{counts.quiz}/{quizQuestions.length}</b>
-              </span>
-            ) : null}
-            {practiceQuestions.length > 0 ? (
-              <span>
-                {t("note.subScreen.test")} <b>{counts.test}/{practiceQuestions.length}</b>
-              </span>
-            ) : null}
-          </span>
-        </div>
-
-        <div className="memo-palace-actions">
-          <button type="button" className="memo-palace-cta" onClick={() => setIsOpen(true)}>
-            <Msym name="explore" size="1.15rem" />
-            {done > 0 ? t("palace.resume") : t("palace.start")}
-          </button>
           {done > 0 ? (
             <button type="button" className="memo-button-outline small" onClick={restart}>
+              <Msym name="replay" size="1.1rem" fill={false} weight={500} />
               {t("palace.restart")}
             </button>
           ) : null}
         </div>
-
-        <ul className="memo-palace-districts">
-          {layout.districts.map((entry) => {
-            const entryDone = entry.stationIds.filter((id) => collected.has(id)).length;
-
-            return (
-              <li key={entry.index}>
-                <span
-                  className="memo-palace-dot"
-                  style={{ background: `hsl(${entry.hue} 70% 58%)` }}
-                />
-                <span className="memo-palace-district-title">{entry.title}</span>
-                <span className="memo-palace-district-count">
-                  {entryDone}/{entry.stationIds.length}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
       </div>
 
       {isOpen ? (
@@ -1114,6 +1089,9 @@ export function LecturePalace({
                 onPointerUp={endStick}
                 onPointerCancel={endStick}
               >
+                {/* A base at rest, so the stick is somewhere you can see rather
+                    than somewhere you have to know about. */}
+                <span className="memo-palace-stick-base" aria-hidden="true" />
                 {stickKnob ? (
                   <span
                     className="memo-palace-knob"
@@ -1140,23 +1118,17 @@ export function LecturePalace({
               <span className="memo-palace-district-pill">{district?.title}</span>
             </div>
 
-            <button type="button" className="memo-palace-exit" onClick={() => setIsOpen(false)}>
+            <button
+              type="button"
+              className="memo-palace-exit"
+              onClick={() => setIsOpen(false)}
+              aria-label={t("palace.exit")}
+            >
               <Msym name="arrow_back" size="1.1rem" />
-              {t("palace.exit")}
+              <span className="memo-palace-exit-label">{t("palace.exit")}</span>
             </button>
 
-            {isTouch ? (
-              <button
-                type="button"
-                className="memo-palace-jump"
-                onPointerDown={() => gameRef.current?.jump()}
-                aria-label={t("palace.jump")}
-              >
-                <Msym name="keyboard_double_arrow_up" size="1.5rem" />
-              </button>
-            ) : (
-              <p className="memo-palace-hint">{t("palace.hintDesktop")}</p>
-            )}
+            {isTouch ? null : <p className="memo-palace-hint">{t("palace.hintDesktop")}</p>}
 
             {isLoading ? (
               <div className="memo-palace-loading">
@@ -1181,7 +1153,13 @@ export function LecturePalace({
             {station ? (
               <div className={`memo-palace-panel ${station.kind}`}>
                 <div className="memo-palace-panel-head">
-                  <span className="memo-palace-panel-kind">{kindLabel[station.kind]}</span>
+                  <span
+                    className="memo-tab active memo-palace-panel-kind"
+                    style={{ "--tab-tint": kindPill[station.kind].tint } as CSSProperties}
+                  >
+                    <Msym name={kindPill[station.kind].icon} size="1.2rem" fill={false} weight={500} />
+                    <span>{kindPill[station.kind].label}</span>
+                  </span>
                   <span className="memo-palace-panel-where">{district?.title}</span>
                   <button
                     type="button"

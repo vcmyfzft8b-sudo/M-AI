@@ -13254,81 +13254,37 @@
    middle of a blue sky.
    --------------------------------------------------------------------------- */
 
+/*
+ * The tab's own front page, built on the study screens' empty state — the same
+ * orb, the same headline, the same one call to action — so the palace opens the
+ * way the deck, the quiz and the test open rather than looking like a screen
+ * from another app.
+ */
 .memo-palace-intro {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 1.5rem 1.25rem 2.5rem;
-  text-align: center;
+  padding-bottom: 2.5rem;
 }
 
-/* A postcard of the place, drawn in CSS: three towers, a token, a sky. */
-.memo-palace-cover {
-  position: relative;
-  width: min(28rem, 100%);
-  height: 11rem;
-  border-radius: 24px;
+.memo-palace-intro .memo-study-empty-orb {
   overflow: hidden;
-  background: linear-gradient(#9fd8ff 0%, #cfeeff 62%, #7cc25b 62%, #62a447 100%);
 }
 
-.memo-palace-cover.placeholder {
-  filter: grayscale(1);
-  opacity: 0.45;
+.memo-palace-intro .memo-study-empty-orb img {
+  width: 6.9rem;
+  height: auto;
 }
 
-.memo-palace-cover-tower {
-  position: absolute;
-  bottom: 28%;
-  left: 32%;
-  width: 3.2rem;
-  height: 4.6rem;
-  border-radius: 6px 6px 0 0;
-  background: repeating-linear-gradient(#e9e9ef 0 0.55rem, #b9c6d8 0.55rem 0.85rem);
-}
-
-.memo-palace-cover-tower.tall {
-  left: 17%;
-  height: 7rem;
-  background: repeating-linear-gradient(#dcdce6 0 0.6rem, #9fb2cb 0.6rem 0.95rem);
-}
-
-.memo-palace-cover-tower.short {
-  left: 52%;
-  width: 4.4rem;
-  height: 3.2rem;
-  background: repeating-linear-gradient(#f2ded6 0 0.5rem, #d9b3a5 0.5rem 0.8rem);
-}
-
-.memo-palace-cover-token {
-  position: absolute;
-  right: 22%;
-  bottom: 34%;
-  width: 1.6rem;
-  height: 1.6rem;
-  rotate: 45deg;
-  border-radius: 4px;
-  background: linear-gradient(135deg, #ffd166, #f4934f);
-  box-shadow: 0 0 0 6px rgba(255, 209, 102, 0.25);
-}
-
-.memo-palace-heading {
-  margin: 0.4rem 0 0;
-  font-size: 1.35rem;
-  font-weight: 800;
-}
-
-.memo-palace-copy {
-  margin: 0;
-  max-width: 30rem;
-  color: var(--muted);
-  font-size: 1rem;
-  line-height: 1.45;
+/* The state of the walk, under the fold: progress, the neighbourhoods, and
+   what it covers. */
+.memo-palace-summary {
+  display: grid;
+  justify-items: center;
+  gap: 1.1rem;
+  width: 100%;
+  margin-top: 2.2rem;
 }
 
 .memo-palace-progress {
-  width: min(28rem, 100%);
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -13385,40 +13341,9 @@
   font-size: 0.95rem;
 }
 
-/* What the walk covers, in three counts, under the progress bar. */
-.memo-palace-covers {
-  width: min(28rem, 100%);
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  align-items: center;
-}
-
-.memo-palace-covers-label {
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.memo-palace-covers-row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.35rem 0.9rem;
-  font-size: 0.92rem;
-  color: var(--muted);
-}
-
-.memo-palace-covers-row b {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-
 .memo-palace-districts {
-  width: min(28rem, 100%);
-  margin: 0.4rem 0 0;
+  width: 100%;
+  margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
@@ -13495,6 +13420,24 @@
   inset: 0 auto 0 0;
   width: 45%;
   touch-action: none;
+}
+
+/*
+ * The stick's resting place. Faint, because it is scenery until a thumb lands
+ * on it, but present — a control you have to know about is a control nobody
+ * uses.
+ */
+.memo-palace-stick-base {
+  position: absolute;
+  left: 4.6rem;
+  bottom: calc(5.4rem + var(--memo-safe-bottom, 0px));
+  width: 5.6rem;
+  height: 5.6rem;
+  margin: -2.8rem 0 0 -2.8rem;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
 }
 
 .memo-palace-knob {
@@ -13601,21 +13544,6 @@
   font-weight: 700;
 }
 
-.memo-palace-jump {
-  position: absolute;
-  right: 1.2rem;
-  bottom: calc(2.2rem + var(--memo-safe-bottom, 0px));
-  width: 4.4rem;
-  height: 4.4rem;
-  display: grid;
-  place-items: center;
-  border: 2px solid rgba(255, 255, 255, 0.6);
-  border-radius: 999px;
-  background: rgba(18, 16, 26, 0.45);
-  color: #fff;
-  cursor: pointer;
-}
-
 .memo-palace-hint {
   position: absolute;
   left: 50%;
@@ -13683,7 +13611,11 @@
   bottom: calc(4.6rem + var(--memo-safe-bottom, 0px));
   width: min(34rem, calc(100% - 2rem));
   max-height: calc(100% - 9rem);
-  overflow-y: auto;
+  /*
+   * A thrown card has to be able to leave the panel — clipping it at the edge
+   * is what made a swipe look like the card hitting a wall — so only the two
+   * screens that can outgrow the panel scroll inside it.
+   */
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
@@ -13707,14 +13639,18 @@
   gap: 0.6rem;
 }
 
+.memo-palace-panel.quiz,
+.memo-palace-panel.test {
+  overflow-y: auto;
+}
+
+/* The note's own tab pill, at the size a panel header wants. */
 .memo-palace-panel-kind {
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  background: color-mix(in oklch, var(--text) 10%, transparent);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  height: 2.3rem;
+  padding: 0 0.8rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  flex: none;
 }
 
 .memo-palace-panel-where {
@@ -14035,17 +13971,46 @@
 
 @media (max-width: 1099px) {
   .memo-palace-intro {
-    padding: 1rem 1.15rem 2.5rem;
+    padding-bottom: 2.5rem;
   }
 
-  .memo-palace-cover {
-    height: 9rem;
-  }
-
-  /* The panel sits above the thumb, not under it. */
+  /*
+   * On the phone the study screen is a sheet, the way every other panel in this
+   * app is a sheet: full width, off the bottom edge, rounded at the top, and
+   * sitting on `--memo-kb` so the keyboard pushes it up rather than covering it.
+   */
   .memo-palace-panel {
-    bottom: calc(6.5rem + var(--memo-safe-bottom, 0px));
-    width: calc(100% - 1.4rem);
-    max-height: calc(100% - 11rem);
+    position: fixed;
+    inset: auto 0 var(--memo-kb) 0;
+    translate: none;
+    width: 100%;
+    max-height: calc(100% - 7rem);
+    padding: 1.1rem 1.15rem calc(1.5rem + var(--memo-safe-bottom));
+    border-radius: 30px 30px 0 0;
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* The way out moves to the top corner: the bottom left is where the thumb
+     that steers lives, and a back button under it is a back button pressed. */
+  .memo-palace-exit {
+    top: calc(0.9rem + var(--memo-safe-top, 0px));
+    left: auto;
+    right: 0.9rem;
+    bottom: auto;
+    width: 2.8rem;
+    height: 2.8rem;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .memo-palace-exit-label {
+    display: none;
+  }
+
+  .memo-palace-hud-top {
+    top: calc(0.9rem + var(--memo-safe-top, 0px));
+    right: 4.2rem;
   }
 }

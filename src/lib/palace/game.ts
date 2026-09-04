@@ -37,7 +37,6 @@ export type PalaceGame = {
   setSprint: (sprinting: boolean) => void;
   /** Drag or mouse look, in pixels. */
   look: (deltaX: number, deltaY: number) => void;
-  jump: () => void;
   markCollected: (stationId: string) => void;
   /**
    * Done with the card that is open: the player can walk again, and this
@@ -61,6 +60,8 @@ export const STATION_REACH = 4.4;
 const LOOK_SENSITIVITY = 0.0042;
 /** How far behind the character the camera rides when nothing is in the way. */
 const CAMERA_DISTANCE = 8.4;
+/** Closer on a phone, where the same distance leaves the character tiny. */
+const CAMERA_DISTANCE_PORTRAIT = 7;
 
 export function createPalaceGame({
   canvas,
@@ -86,7 +87,15 @@ export function createPalaceGame({
     powerPreference: "high-performance",
   });
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  /*
+   * A phone renders this at its own pixel ratio and then draws a shadow pass on
+   * top of it. Two-times on a 3x screen is a lot of fragments for a town made
+   * of flat colours, and the difference is invisible at that pixel density —
+   * so phones get 1.5 and desktops keep 2.
+   */
+  const onAPhone = window.innerWidth < 900;
+
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, onAPhone ? 1.5 : 2));
   /*
    * Shadows are most of what makes the town read as solid rather than as
    * coloured paper, so they are on everywhere — but the map is sized to the
@@ -98,7 +107,7 @@ export function createPalaceGame({
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(58, 1, 0.5, 420);
-  const lighting = createLighting(scene, window.innerWidth < 900 ? 1024 : 2048);
+  const lighting = createLighting(scene, onAPhone ? 1024 : 2048);
   const city = buildCity(layout);
   const avatar = createAvatar();
 
@@ -134,7 +143,6 @@ export function createPalaceGame({
   let cameraPitch = 0.42;
   const move = { forward: 0, right: 0 };
   let sprinting = false;
-  let jumpQueued = false;
   let paused = false;
   let nearStationId: string | null = null;
   /*
@@ -149,6 +157,7 @@ export function createPalaceGame({
   let frame = 0;
   let lastTime = 0;
   let districtRefreshAt = 0;
+  let portrait = false;
 
   const resize = () => {
     const width = canvas.clientWidth || window.innerWidth;
@@ -159,11 +168,13 @@ export function createPalaceGame({
     renderer.setSize(width, height, false);
     camera.aspect = width / Math.max(height, 1);
     /*
-     * A phone held upright sees a tall, narrow slice of the world, and at the
-     * desktop field of view that slice is mostly the back of the character's
-     * head. Widening the lens in portrait puts the plaza back on screen.
+     * A phone held upright sees a tall, narrow slice of the world. Widening the
+     * lens puts the street back on screen, but only so far: past about seventy
+     * degrees the near half of the frame is all road, so the camera comes in
+     * closer instead (see `cameraDistance`).
      */
-    camera.fov = camera.aspect < 1 ? 74 : 58;
+    portrait = camera.aspect < 1;
+    camera.fov = portrait ? 66 : 58;
     camera.updateProjectionMatrix();
     /*
      * Draw immediately rather than waiting for the loop: a canvas that was
@@ -238,12 +249,6 @@ export function createPalaceGame({
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.repeat) return;
 
-    /* Never swallow the keys the surrounding page needs. */
-    if (event.code === "Space") {
-      jumpQueued = true;
-      event.preventDefault();
-    }
-
     if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
       sprinting = true;
     }
@@ -296,11 +301,16 @@ export function createPalaceGame({
       : {
           forward: Math.max(-1, Math.min(1, move.forward + keyboard.forward)),
           right: Math.max(-1, Math.min(1, move.right + keyboard.right)),
-          jump: jumpQueued,
+          /*
+           * There is nothing in a town to jump onto, and a jump control is one
+           * more thing to explain — so the walk is a walk. The controller still
+           * integrates the fall, which is what keeps the character on the
+           * ground over the kerbs.
+           */
+          jump: false,
           sprint: sprinting,
         };
 
-    jumpQueued = false;
     character = stepCharacter({
       state: character,
       input,
@@ -320,7 +330,7 @@ export function createPalaceGame({
       target: eye,
       yaw: cameraYaw,
       pitch: cameraPitch,
-      maxDistance: CAMERA_DISTANCE,
+      maxDistance: portrait ? CAMERA_DISTANCE_PORTRAIT : CAMERA_DISTANCE,
       colliders: city.colliders,
     });
     const desired = cameraPosition({ target: eye, yaw: cameraYaw, pitch: cameraPitch, distance });
@@ -410,9 +420,6 @@ export function createPalaceGame({
     look: (deltaX, deltaY) => {
       cameraYaw -= deltaX * LOOK_SENSITIVITY;
       cameraPitch = clampPitch(cameraPitch + deltaY * LOOK_SENSITIVITY);
-    },
-    jump: () => {
-      jumpQueued = true;
     },
     markCollected: (stationId) => {
       const visual = findVisual(stationId);

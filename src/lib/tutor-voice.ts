@@ -14,7 +14,7 @@ import {
   type TutorLessonPlan,
   type TutorTurnKind,
 } from "@/lib/ai/tutor-voice-prompt";
-import { detectSourceLanguage, normalizeNoteLanguage } from "@/lib/languages";
+import { resolveMaterialLanguage } from "@/lib/languages";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import { resolvePassageLanguage, resolveSpokenLanguage } from "@/lib/tutor/spoken-language";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -101,14 +101,11 @@ export async function loadTutorGrounding(lectureId: string): Promise<TutorGround
     lectureRow?.title ?? null,
   ).slice(0, TUTOR_NOTE_CHAR_CAP);
 
-  /*
-   * What the note is written in. Detection over the note beats the lecture's
-   * `language_hint`, which is what the transcriber was told — for an uploaded PDF that is
-   * whatever the default was rather than what is on the page. Detection answers null when
-   * it cannot tell, and only then does the hint decide.
-   */
-  const detected = detectSourceLanguage(`${artifactRow.summary ?? ""}\n${notes}`);
-  const materialLanguage = normalizeNoteLanguage(detected ?? lectureRow?.language_hint ?? null);
+  /* The note screen works this out the same way, from the same helper. */
+  const materialLanguage = resolveMaterialLanguage(
+    `${artifactRow.summary ?? ""}\n${notes}`,
+    lectureRow?.language_hint,
+  );
 
   return {
     title: lectureRow?.title ?? null,

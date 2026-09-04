@@ -9,6 +9,7 @@ import { LandingFeatureShowcase } from "@/components/landing/landing-feature-sho
 import { LandingFlowDemo } from "@/components/landing/landing-flow-demo";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { LandingTryCallout } from "@/components/landing/landing-try-callout";
+import { LandingTutorDemo } from "@/components/landing/landing-tutor-demo";
 import { LandingUserCount } from "@/components/landing/landing-user-count";
 import { MemoAppPreview } from "@/components/landing/memo-app-preview";
 import { LandingLoadingLink } from "@/components/landing-loading-link";
@@ -73,6 +74,7 @@ function buildHomepageJsonLd(locale: string, t: (key: MessageKey) => string) {
       t("landing.seo.featureSummaries"),
       t("landing.seo.featureFlashcards"),
       t("landing.seo.featureQuizzes"),
+      t("landing.seo.featureTutor"),
       t("landing.seo.featureChat"),
     ],
   };
@@ -146,6 +148,22 @@ export default async function HomePage() {
           </h2>
         </div>
         <LandingFlowDemo />
+      </section>
+
+      {/*
+        * The spoken walkthrough, straight after the three steps that produce the
+        * note it reads out — it is the first thing you can do with a note, and it
+        * is hard to describe and easy to understand once you have heard it.
+        */}
+      <section id="tutor" className="landing-v2-section" aria-labelledby="landing-tutor-title">
+        <div className="landing-v2-section-head landing-v2-section-head-center" data-scroll-reveal="">
+          <h2 id="landing-tutor-title" className="landing-v2-section-title">
+            {t("landing.tutor.title")}
+          </h2>
+        </div>
+        <div className="landing-v2-tutor-stage" data-scroll-reveal="">
+          <LandingTutorDemo />
+        </div>
       </section>
 
       <section id="features" className="landing-v2-section" aria-labelledby="landing-feature-title">

@@ -8,6 +8,9 @@ import { Msym } from "@/components/msym";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
 
+import { LandingStudyResult } from "./landing-study-result";
+import { LandingTutorDemo } from "./landing-tutor-demo";
+
 /*
  * The interface around the demo is translated; the material inside it is not.
  * File names, note titles, the note itself and the flashcards, quiz and test
@@ -23,11 +26,14 @@ import type { Translate } from "@/lib/i18n/translate";
  * scale is the marketing page's.
  */
 const STUDY_TABS = [
+  /* The spoken walkthrough leads, as it does in the app's own pill row: it is
+     the other way to take in the note, ahead of the three practice screens. */
+  { id: "tutor", labelKey: "note.tab.tutor", icon: "graphic_eq", tint: "oklch(0.66 0.15 50)" },
   { id: "cards", labelKey: "flowDemo.tabCards", icon: "style", tint: "oklch(0.66 0.15 295)" },
   { id: "quiz", labelKey: "flowDemo.tabQuiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
   { id: "test", labelKey: "flowDemo.tabTest", icon: "assignment", tint: "oklch(0.66 0.15 150)" },
 ] as const satisfies ReadonlyArray<{
-  id: "cards" | "quiz" | "test";
+  id: "tutor" | "cards" | "quiz" | "test";
   labelKey: MessageKey;
   icon: string;
   tint: string;
@@ -110,6 +116,13 @@ const STUDY_QUIZ = [
   optionKeys: readonly MessageKey[];
   correct: number;
 }>;
+
+/*
+ * The attempts the demo learner already has behind them. The app reports a
+ * submitted test against its own history, and a demo with none would show that
+ * panel empty.
+ */
+const FLOW_TEST_HISTORY = [64, 82];
 
 /*
  * `keysKey` holds the word stems an answer is matched against, comma separated
@@ -259,16 +272,24 @@ type FlowDemoState = {
   flowSource: FlowSource | null;
   flowGhost: FlowGhost | null;
   flowDrag: string | null;
-  sTab: "cards" | "quiz" | "test";
+  sTab: "tutor" | "cards" | "quiz" | "test";
   sIdx: number;
   sFlip: boolean;
   sDx: number;
   sOut: boolean;
   sEnter: boolean;
   sKnown: number;
+  /* Which items were missed this round, so "repeat the ones you missed" can
+     start a second round over exactly those — the app's own rule. */
+  sMissed: number[];
+  sCycle: number;
+  sQueue: number[] | null;
   sQIdx: number;
   sQPick: number | null;
   sQScore: number;
+  sQMissed: number[];
+  sQCycle: number;
+  sQQueue: number[] | null;
   sTIdx: number;
   sTVal: string;
   sTShown: boolean;
@@ -293,9 +314,15 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
     sOut: false,
     sEnter: false,
     sKnown: 0,
+    sMissed: [],
+    sCycle: 1,
+    sQueue: null,
     sQIdx: 0,
     sQPick: null,
     sQScore: 0,
+    sQMissed: [],
+    sQCycle: 1,
+    sQQueue: null,
     sTIdx: 0,
     sTVal: "",
     sTShown: false,
@@ -663,9 +690,15 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
       sOut: false,
       sEnter: false,
       sKnown: 0,
+      sMissed: [],
+      sCycle: 1,
+      sQueue: null,
       sQIdx: 0,
       sQPick: null,
       sQScore: 0,
+      sQMissed: [],
+      sQCycle: 1,
+      sQQueue: null,
       sTIdx: 0,
       sTVal: "",
       sTShown: false,
@@ -792,12 +825,14 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
 
   gradeCard(known: boolean) {
     if (this.state.sOut) return;
+    const cardId = this.cardQueue()[this.state.sIdx];
     this.setState({ sOut: true, sDx: known ? 300 : -300 });
     window.clearTimeout(this.studyTimer);
     this.studyTimer = window.setTimeout(() => {
       this.setState((p) => ({
         sIdx: p.sIdx + 1,
         sKnown: p.sKnown + (known ? 1 : 0),
+        sMissed: known ? p.sMissed : [...p.sMissed, cardId],
         sFlip: false,
         sDx: 0,
         sOut: false,
@@ -905,17 +940,55 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
     this.runFlow(src, true);
   };
 
+  /* The cards this round asks about: the whole deck, or just the missed ones. */
+  cardQueue(): number[] {
+    return this.state.sQueue ?? STUDY_CARDS.map((_, i) => i);
+  }
+
+  quizQueue(): number[] {
+    return this.state.sQQueue ?? STUDY_QUIZ.map((_, i) => i);
+  }
+
+  /* Back to the whole set, first round. */
   restartStudy = () => {
     this.studyTouch();
     const tab = this.state.sTab;
     if (tab === "cards") {
-      this.setState({ sIdx: 0, sKnown: 0, sFlip: false, sDx: 0, sOut: false, sEnter: true });
+      this.setState({ sIdx: 0, sKnown: 0, sMissed: [], sCycle: 1, sQueue: null, sFlip: false, sDx: 0, sOut: false, sEnter: true });
       window.setTimeout(() => this.setState({ sEnter: false }), 40);
     } else if (tab === "quiz") {
-      this.setState({ sQIdx: 0, sQScore: 0, sQPick: null });
+      this.setState({ sQIdx: 0, sQScore: 0, sQPick: null, sQMissed: [], sQCycle: 1, sQQueue: null });
     } else {
       this.setState({ sTIdx: 0, sTScore: 0, sTVal: "", sTShown: false, sTOk: false });
     }
+  };
+
+  /* A second round over just the ones that were missed, as the app runs it. */
+  repeatMissed = () => {
+    this.studyTouch();
+    if (this.state.sTab === "cards") {
+      this.setState((p) => ({
+        sQueue: p.sMissed,
+        sCycle: p.sCycle + 1,
+        sIdx: 0,
+        sKnown: 0,
+        sMissed: [],
+        sFlip: false,
+        sDx: 0,
+        sOut: false,
+        sEnter: true,
+      }));
+      window.setTimeout(() => this.setState({ sEnter: false }), 40);
+      return;
+    }
+    this.setState((p) => ({
+      sQQueue: p.sQMissed,
+      sQCycle: p.sQCycle + 1,
+      sQIdx: 0,
+      sQScore: 0,
+      sQMissed: [],
+      sQPick: null,
+    }));
   };
 
   submitTest = () => {
@@ -1390,190 +1463,152 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
     );
   }
 
-  renderStudyDone() {
-    const s = this.state;
-    const cards = STUDY_CARDS;
-    const quiz = STUDY_QUIZ;
-    const test = STUDY_TEST;
-    const pct =
-      s.sTab === "cards"
-        ? Math.round((s.sKnown / cards.length) * 100)
-        : s.sTab === "quiz"
-          ? Math.round((s.sQScore / quiz.length) * 100)
-          : Math.round((s.sTScore / test.length) * 100);
-    const metric =
-      s.sTab === "cards"
-        ? `${s.sKnown}/${cards.length}`
-        : s.sTab === "quiz"
-          ? `${s.sQScore}/${quiz.length}`
-          : `${s.sTScore}/${test.length}`;
-
+  /*
+   * The spoken walkthrough, scaled into the story card. Drawn at its own size
+   * and shrunk as a whole rather than re-laid-out smaller, so the sphere keeps
+   * the proportions the app gives it.
+   */
+  renderStudyTutor() {
     return (
-      <div
-        style={{
-          display: "grid",
-          alignContent: "center",
-          justifyItems: "center",
-          gap: "11px",
-          height: "100%",
-          minHeight: "196px",
-          padding: "14px 12px",
-          boxSizing: "border-box",
-          border: "1px solid var(--l-line)",
-          borderRadius: "16px",
-          background: "radial-gradient(circle at top, rgba(10,132,255,0.18), transparent 55%), var(--l-surface-62)",
-        }}
-      >
-        <div style={{ display: "grid", gap: "7px", justifyItems: "center", textAlign: "center" }}>
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              minHeight: "19.2px",
-              padding: "0 7.2px",
-              borderRadius: "999px",
-              background: "color-mix(in srgb, var(--l-tint) 16%, var(--l-surface))",
-              color: "var(--l-tint)",
-              fontSize: "9.3px",
-              fontWeight: 700,
-              letterSpacing: "0.05em",
-              textTransform: "uppercase",
-            }}
-          >
-            {s.sTab === "cards"
-              ? this.props.t("flowDemo.doneCards")
-              : s.sTab === "quiz"
-                ? this.props.t("flowDemo.doneQuiz")
-                : this.props.t("flowDemo.doneTest")}
-          </span>
-          <h3
-            style={{
-              margin: 0,
-              fontSize: "13px",
-              fontWeight: 720,
-              letterSpacing: "-0.04em",
-              lineHeight: 1.25,
-              color: "var(--l-label)",
-              overflowWrap: "anywhere",
-            }}
-          >
-            {s.sTab === "cards"
-              ? s.sKnown === cards.length
-                ? this.props.t("flowDemo.allCardsDone")
-                : this.props.t("flowDemo.repeatMissedCards")
-              : s.sTab === "quiz"
-                ? s.sQScore === quiz.length
-                  ? this.props.t("flowDemo.allQuestionsDone")
-                  : this.props.t("flowDemo.repeatMissedQuestions")
-                : this.props.t("flowDemo.testGraded")}
-          </h3>
-        </div>
-        <div style={{ display: "grid", justifyItems: "center", gap: "7px" }}>
-          <div
-            style={{
-              position: "relative",
-              display: "grid",
-              placeItems: "center",
-              width: "76px",
-              height: "76px",
-              padding: "5.4px",
-              borderRadius: "50%",
-              background: `conic-gradient(var(--l-tint) ${pct}%, color-mix(in srgb, var(--l-line) 86%, transparent) ${pct}% 100%)`,
-              boxShadow: "inset 0 0 0 1px var(--l-line), 0 0 36px rgba(10,132,255,0.10)",
-              transition: "background 700ms cubic-bezier(0.4,0,0.2,1)",
-            }}
-          >
-            <div
-              style={{
-                position: "absolute",
-                inset: "5.4px",
-                borderRadius: "50%",
-                background: "var(--l-surface)",
-                boxShadow: "inset 0 0 0 1px var(--l-line), 0 10px 24px rgba(0,0,0,0.08)",
-              }}
-            />
-            <div style={{ position: "relative", zIndex: 1, display: "grid", gap: "2px", justifyItems: "center", textAlign: "center" }}>
-              <strong style={{ fontSize: "17.3px", lineHeight: 1, letterSpacing: "-0.05em", color: "var(--l-label)" }}>{pct}%</strong>
-              <span
-                style={{
-                  maxWidth: "9ch",
-                  fontSize: "7.7px",
-                  fontWeight: 700,
-                  letterSpacing: "0.05em",
-                  lineHeight: 1.2,
-                  textTransform: "uppercase",
-                  color: "var(--l-second)",
-                }}
-              >
-                {s.sTab === "cards"
-                  ? this.props.t("flowDemo.metricKnown")
-                  : s.sTab === "quiz"
-                    ? this.props.t("flowDemo.metricCorrect")
-                    : this.props.t("flowDemo.metricPoints")}
-              </span>
-            </div>
-          </div>
-          <div style={{ display: "grid", gap: "4px", justifyItems: "center", textAlign: "center" }}>
-            <span style={{ fontSize: "8px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--l-second)" }}>
-              {s.sTab === "cards"
-                ? this.props.t("flowDemo.knownCards")
-                : s.sTab === "quiz"
-                  ? this.props.t("flowDemo.correctAnswers")
-                  : this.props.t("flowDemo.pointsScored")}
-            </span>
-            <strong style={{ fontSize: "18.6px", lineHeight: 1, letterSpacing: "-0.06em", color: "var(--l-label)", whiteSpace: "nowrap" }}>
-              {metric}
-            </strong>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={this.restartStudy}
+      <div style={{ position: "relative", height: "100%", minHeight: "196px", overflow: "hidden" }}>
+        {/* Centred by the transform rather than by the box: the panel is drawn
+            at its own size, which is taller than the card it goes into, and a
+            box that has to centre something bigger than itself aligns it to the
+            start instead. */}
+        <div
           style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "6px",
-            width: "100%",
-            minHeight: "34px",
-            padding: "0 12px",
-            border: "1px solid var(--l-line)",
-            borderRadius: "999px",
-            background: "var(--l-surface)",
-            color: "var(--l-label)",
-            fontFamily: "inherit",
-            fontSize: "11.6px",
-            fontWeight: 600,
-            cursor: "pointer",
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            width: "330px",
+            transform: "translate(-50%, -50%) scale(0.62)",
           }}
         >
-          <span style={{ fontSize: "12px" }}>🔄</span>
-          {s.sTab === "cards"
-            ? this.props.t("flowDemo.restartCards")
-            : s.sTab === "quiz"
-              ? this.props.t("flowDemo.restartQuiz")
-              : this.props.t("flowDemo.restartTest")}
-        </button>
+          <LandingTutorDemo />
+        </div>
       </div>
+    );
+  }
+
+  /*
+   * The results screen the app draws when a round ends — same card, same rules,
+   * scaled to the story card. A clean round says the set is finished; anything
+   * missed turns into a second round over just those.
+   */
+  renderStudyDone() {
+    const s = this.state;
+    const t = this.props.t;
+    const scale = { "--lr-s": 0.62 } as CSSProperties;
+
+    if (s.sTab === "cards") {
+      const total = this.cardQueue().length;
+      const missed = s.sMissed.length;
+      return (
+        <LandingStudyResult
+          style={scale}
+          eyebrow={missed === 0 ? t("study.completed") : t("study.roundCompleted", { cycle: s.sCycle })}
+          title={t(missed === 0 ? "study.cards.allDone" : "study.cards.repeatMissed")}
+          percentage={missed === 0 ? 100 : Math.round((s.sKnown / total) * 100)}
+          percentageLabel={t(missed === 0 ? "study.setCompleted" : "study.roundScore")}
+          primaryMetric={{ label: t("study.correctThisRound"), value: `${s.sKnown}/${total}` }}
+          actions={
+            missed === 0 ? (
+              <button type="button" onClick={this.restartStudy}>
+                <Msym name="replay" size="1.2rem" fill={false} weight={500} />
+                <span>{t("study.restartSet")}</span>
+              </button>
+            ) : (
+              <button type="button" onClick={this.repeatMissed}>
+                <Msym name="replay" size="1.2rem" fill={false} weight={500} />
+                <span>{t("study.repeatMissedCards", { count: missed })}</span>
+              </button>
+            )
+          }
+        />
+      );
+    }
+
+    if (s.sTab === "quiz") {
+      const total = this.quizQueue().length;
+      const missed = s.sQMissed.length;
+      return (
+        <LandingStudyResult
+          style={scale}
+          eyebrow={missed === 0 ? t("study.completed") : t("study.roundCompleted", { cycle: s.sQCycle })}
+          title={t(missed === 0 ? "quiz.allDone" : "quiz.repeatMissed")}
+          percentage={missed === 0 ? 100 : Math.round((s.sQScore / total) * 100)}
+          percentageLabel={t(missed === 0 ? "study.setCompleted" : "study.roundScore")}
+          primaryMetric={{
+            label: t(missed === 0 ? "quiz.questionsDone" : "study.correctThisRound"),
+            value:
+              missed === 0
+                ? `${STUDY_QUIZ.length}/${STUDY_QUIZ.length}`
+                : `${s.sQScore}/${total}`,
+          }}
+          actions={
+            missed === 0 ? (
+              <button type="button" onClick={this.restartStudy}>
+                <Msym name="replay" size="1.2rem" fill={false} weight={500} />
+                <span>{t("quiz.restart")}</span>
+              </button>
+            ) : (
+              <button type="button" onClick={this.repeatMissed}>
+                <Msym name="replay" size="1.2rem" fill={false} weight={500} />
+                <span>{t("quiz.repeatMissedQuestions", { count: missed })}</span>
+              </button>
+            )
+          }
+        />
+      );
+    }
+
+    /* A submitted test, reported against the attempts before it. */
+    const percentage = Math.round((s.sTScore / STUDY_TEST.length) * 100);
+    const history = [...FLOW_TEST_HISTORY, percentage];
+    const average = Math.round(history.reduce((sum, value) => sum + value, 0) / history.length);
+
+    return (
+      <LandingStudyResult
+        style={scale}
+        eyebrow=""
+        title=""
+        subtitle={t("test.attemptN", { count: history.length })}
+        percentage={percentage}
+        percentageLabel={t("study.score")}
+        primaryMetric={{ label: t("test.pointsScored"), value: `${s.sTScore}/${STUDY_TEST.length}` }}
+        secondaryMetrics={[
+          { label: t("test.average"), value: `${average}%` },
+          { label: t("test.best"), value: `${Math.max(...history)}%` },
+          { label: t("test.lowest"), value: `${Math.min(...history)}%` },
+          { label: t("test.attempts"), value: String(history.length) },
+        ]}
+        actions={
+          <button type="button" onClick={this.restartStudy}>
+            <Msym name="replay" size="1.2rem" fill={false} weight={500} />
+            <span>{t("study.test.startNew")}</span>
+          </button>
+        }
+      />
     );
   }
 
   renderStep3() {
     const s = this.state;
     const stage = s.flowStage;
-    const cards = STUDY_CARDS;
-    const quiz = STUDY_QUIZ;
     const test = STUDY_TEST;
-    const card = cards[Math.min(s.sIdx, cards.length - 1)];
-    const q = quiz[Math.min(s.sQIdx, quiz.length - 1)];
+    const cardIds = this.cardQueue();
+    const quizIds = this.quizQueue();
+    const card = STUDY_CARDS[cardIds[Math.min(s.sIdx, cardIds.length - 1)]];
+    const questionId = quizIds[Math.min(s.sQIdx, quizIds.length - 1)];
+    const q = STUDY_QUIZ[questionId];
     const t = test[Math.min(s.sTIdx, test.length - 1)];
-    const cardsDone = s.sIdx >= cards.length;
-    const quizDone = s.sQIdx >= quiz.length;
+    const cardsDone = s.sIdx >= cardIds.length;
+    const quizDone = s.sQIdx >= quizIds.length;
     const testDone = s.sTIdx >= test.length;
     const cardHint =
       !this.studyTouched && s.sTab === "cards" && s.sIdx === 0 && !s.sFlip && s.sDx === 0 && !s.sOut && !s.sEnter;
-    const doneNow = s.sTab === "cards" ? cardsDone : s.sTab === "quiz" ? quizDone : testDone;
+    const doneNow =
+      s.sTab === "cards" ? cardsDone : s.sTab === "quiz" ? quizDone : s.sTab === "test" ? testDone : false;
     const done3 = stage >= 3;
 
     const studyCardStyle: CSSProperties = {
@@ -1650,7 +1685,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
       WebkitBackfaceVisibility: "hidden",
     };
 
-    const cardCounter = `${Math.min(s.sIdx + 1, cards.length)} / ${cards.length}`;
+    const cardCounter = `${Math.min(s.sIdx + 1, cardIds.length)} / ${cardIds.length}`;
 
     return (
       <article
@@ -1685,6 +1720,8 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
                 </button>
               ))}
             </div>
+
+            {s.sTab === "tutor" ? this.renderStudyTutor() : null}
 
             {s.sTab === "cards" && !cardsDone ? (
               <div style={{ position: "relative", height: "100%", minHeight: "196px", touchAction: "pan-y" }}>
@@ -1760,7 +1797,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
               >
                 <div style={{ display: "grid", gap: "7px" }}>
                   <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--l-second)", textAlign: "left" }}>
-                    {Math.min(s.sQIdx + 1, quiz.length)} / {quiz.length}
+                    {Math.min(s.sQIdx + 1, quizIds.length)} / {quizIds.length}
                   </span>
                   <span style={{ fontSize: "14px", fontWeight: 650, lineHeight: 1.32, color: "var(--l-label)", textAlign: "left" }}>
                     {this.props.t(q.qKey)}
@@ -1786,6 +1823,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
                               this.setState((p) => ({
                                 sQIdx: p.sQIdx + 1,
                                 sQScore: p.sQScore + (right ? 1 : 0),
+                                sQMissed: right ? p.sQMissed : [...p.sQMissed, questionId],
                                 sQPick: null,
                               })),
                             950,

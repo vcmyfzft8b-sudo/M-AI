@@ -29,6 +29,8 @@ import { Component } from "react";
 import { Emoji, Msym } from "@/components/msym";
 import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, SEO_BRAND_NAME } from "@/lib/brand";
 
+import { LandingStudyResult } from "./landing-study-result";
+import { LandingTutorDemo } from "./landing-tutor-demo";
 import { PREVIEW_STOP_TOUR_EVENT, PREVIEW_TOUR_STOPPED_EVENT } from "./memo-app-preview-events";
 
 import {
@@ -68,6 +70,13 @@ const STATUS_H = 54;
 /* The screen plus the bezel and the case around it — what actually has to fit. */
 const FRAME_W = PHONE_W + 24 + 7;
 const FRAME_H = PHONE_H + 24 + 7;
+
+/*
+ * The attempts the demo learner already has behind them. The app's results
+ * screen reports a submitted test against its own history — an average, a best
+ * and a worst — and a demo with no history would show that panel empty.
+ */
+const PREVIEW_TEST_HISTORY = [64, 82];
 
 /* The flashcard's own box, and the throw distance the design tunes against. */
 const CARD_W = 353;
@@ -111,9 +120,19 @@ type PreviewState = {
   cardFlipped: boolean;
   cardAnswers: Record<number, "easy" | "again">;
   cardsDone: boolean;
+  /*
+   * A round of study is a queue and a cycle number, exactly as the app runs it:
+   * the first round is every card and every question, and "repeat the ones you
+   * missed" starts a second round over just those. Null is the full set, which
+   * keeps the queue out of the way until somebody actually misses something.
+   */
+  reviewQueue: number[] | null;
+  cardCycle: number;
   quizNo: number;
   quizPick: number | null;
-  quizCorrect: number;
+  quizQueue: number[] | null;
+  quizCycle: number;
+  quizMissed: number[];
   quizDone: boolean;
   testNo: number;
   testAnswers: Record<number, string>;
@@ -333,9 +352,13 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
       cardFlipped: false,
       cardAnswers: {},
       cardsDone: false,
+      reviewQueue: null,
+      cardCycle: 1,
       quizNo: 1,
       quizPick: null,
-      quizCorrect: 0,
+      quizQueue: null,
+      quizCycle: 1,
+      quizMissed: [],
       quizDone: false,
       testNo: 1,
       testAnswers: {},
@@ -651,8 +674,22 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
       this.setState({ reading: false, readPaused: false, readWord: 0 });
     });
 
+    /*
+     * The tutor: open it, start the walkthrough, let it get through a turn and
+     * the question the learner cuts in with, then leave. The replica keeps its
+     * own state, so the tour presses its button rather than driving it — a
+     * synthetic click, which the tour's own pointerdown listeners ignore.
+     */
+    doAt(1200, () => this.tapThen('[data-tap="tab"]', 1, () => this.selectTab("tutor")));
+    doAt(1800, () =>
+      this.tapThen('[data-tap="tutor-start"]', 0, () =>
+        this.stage?.querySelector<HTMLButtonElement>('[data-tap="tutor-start"]')?.click(),
+      ),
+    );
+    doAt(15500, () => {});
+
     /* Flashcards: flip, then swipe the card away — twice known, once not. */
-    doAt(900, () => this.tapThen('[data-tap="tab"]', 1, () => this.selectTab("flashcards")));
+    doAt(900, () => this.tapThen('[data-tap="tab"]', 2, () => this.selectTab("flashcards")));
     for (let c = 0; c < 3; c += 1) {
       const easy = c !== 1;
       doAt(1800, () => this.tapThen('[data-tap="card"]', 0, () => this.flipCard()));
@@ -661,18 +698,17 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
     }
 
     /* Kviz: answer each question correctly, so it advances on its own. */
-    doAt(2200, () => this.tapThen('[data-tap="tab"]', 2, () => this.selectTab("quiz")));
+    doAt(2200, () => this.tapThen('[data-tap="tab"]', 3, () => this.selectTab("quiz")));
     for (let q = 0; q < 2; q += 1) {
       doAt(2000, () => {
-        const list = this.studyData().quiz;
-        const idx = (this.state.quizNo - 1) % list.length;
-        this.tapThen('[data-tap="quiz-opt"]', list[idx].correct, () => this.pickQuiz(list[idx].correct));
+        const { correct } = this.quizQuestion();
+        this.tapThen('[data-tap="quiz-opt"]', correct, () => this.pickQuiz(correct));
       });
       doAt(1400, () => {});
     }
 
     /* Test: type an answer, then move on. */
-    doAt(2200, () => this.tapThen('[data-tap="tab"]', 3, () => this.selectTab("test")));
+    doAt(2200, () => this.tapThen('[data-tap="tab"]', 4, () => this.selectTab("test")));
     const answer = this.props.t("pv.tourAnswer");
     /*
      * Tap into the answer box, and only start writing once the press has
@@ -700,18 +736,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
         noteId: null,
         notes: initialNotes(this.props.t),
         tab: "notes",
-        cardPos: 0,
-        cardFlipped: false,
-        cardAnswers: {},
-        cardsDone: false,
-        quizNo: 1,
-        quizPick: null,
-        quizCorrect: 0,
-        quizDone: false,
-        testNo: 1,
-        testAnswers: {},
-        testDone: false,
-        testFocused: false,
+        ...this.studyReset(),
         readWord: 0,
         reading: false,
         readPaused: false,
@@ -910,29 +935,36 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
     return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
   }
 
-  /* The tab pills. Zapiski is the note screen; the rest are their own. */
-  selectTab(tab: NoteTab) {
-    if (tab === "notes") {
-      this.setState({ tab: "notes", screen: "note" });
-      return;
-    }
-    this.setState({
-      tab,
-      screen: "sub",
+  /* Every study screen back at its first round, first item, nothing answered. */
+  studyReset() {
+    return {
       quizNo: 1,
       quizPick: null,
-      quizCorrect: 0,
+      quizQueue: null,
+      quizCycle: 1,
+      quizMissed: [],
       quizDone: false,
       cardPos: 0,
       cardFlipped: false,
       cardAnswers: {},
       cardsDone: false,
       cardExit: null,
+      reviewQueue: null,
+      cardCycle: 1,
       testNo: 1,
       testDone: false,
       testAnswers: {},
       testFocused: false,
-    });
+    } satisfies Partial<PreviewState>;
+  }
+
+  /* The tab pills. Zapiski is the note screen; the rest are their own. */
+  selectTab(tab: NoteTab) {
+    if (tab === "notes") {
+      this.setState({ tab: "notes", screen: "note" });
+      return;
+    }
+    this.setState({ tab, screen: "sub", ...this.studyReset() });
   }
 
   toggleRead() {
@@ -971,8 +1003,20 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
 
   /* ── Flashcards ───────────────────────────────────────────── */
 
+  /* The cards this round asks about: everything, or just the ones missed last. */
   cardQueue(): number[] {
-    return this.studyData().cards.map((_, i) => i);
+    return this.state.reviewQueue ?? this.studyData().cards.map((_, i) => i);
+  }
+
+  /* The same, for the quiz. `quizNo` is a position in here, not in the set. */
+  quizQueue(): number[] {
+    return this.state.quizQueue ?? this.studyData().quiz.map((_, i) => i);
+  }
+
+  /* The question the quiz is on. */
+  quizQuestion() {
+    const queue = this.quizQueue();
+    return this.studyData().quiz[queue[Math.min(this.state.quizNo, queue.length) - 1]];
   }
 
   flipCard() {
@@ -1104,17 +1148,20 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
   /* ── Kviz and test ────────────────────────────────────────── */
 
   pickQuiz(index: number) {
-    const list = this.studyData().quiz;
-    const q = list[(this.state.quizNo - 1) % list.length];
     if (this.state.quizPick !== null) return;
-    const correct = index === q.correct;
-    this.setState((c) => ({ quizPick: index, quizCorrect: c.quizCorrect + (correct ? 1 : 0) }));
+    const queue = this.quizQueue();
+    const questionId = queue[this.state.quizNo - 1];
+    const correct = index === this.quizQuestion().correct;
+    this.setState((c) => ({
+      quizPick: index,
+      quizMissed: correct ? c.quizMissed : [...c.quizMissed, questionId],
+    }));
     // Correct answers move on by themselves; a miss stops at the sheet.
     if (correct) this.later(() => this.nextQuiz(), 780);
   }
 
   nextQuiz() {
-    const total = this.studyData().quiz.length;
+    const total = this.quizQueue().length;
     this.setState((c) =>
       c.quizNo >= total ? { quizDone: true, quizNo: c.quizNo, quizPick: null } : { quizDone: false, quizNo: c.quizNo + 1, quizPick: null },
     );
@@ -1982,7 +2029,6 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
      chrome, its own title, and a chat bar along the bottom. */
   renderSub() {
     const s = this.state;
-    const study = this.studyData();
     const subScreenTitleKey = SUB_SCREEN_TITLE_KEYS[s.tab];
     const done =
       (s.tab === "flashcards" && s.cardsDone) ||
@@ -2017,6 +2063,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
         {this.renderTabs("0 0 9.6px", "2.4px 18.4px 6.4px")}
 
         <div data-app-main style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 18.4px 128px" }}>
+          {s.tab === "tutor" ? this.renderTutor() : null}
           {done ? this.renderResults() : null}
           {!done && s.tab === "flashcards" ? this.renderCards() : null}
           {!done && s.tab === "quiz" ? this.renderQuiz() : null}
@@ -2024,7 +2071,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
           {s.tab === "transcript" ? this.renderTranscript() : null}
         </div>
 
-        {s.tab === "quiz" && s.quizPick !== null && s.quizPick !== study.quiz[(s.quizNo - 1) % study.quiz.length].correct
+        {s.tab === "quiz" && s.quizPick !== null && s.quizPick !== this.quizQuestion().correct
           ? this.renderQuizMiss()
           : null}
 
@@ -2341,8 +2388,8 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
 
   renderQuiz() {
     const s = this.state;
-    const list = this.studyData().quiz;
-    const q = list[(s.quizNo - 1) % list.length];
+    const total = this.quizQueue().length;
+    const q = this.quizQuestion();
     const revealed = s.quizPick !== null;
 
     return (
@@ -2350,13 +2397,13 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "16px" }}>
           <span style={{ fontSize: "20px", fontWeight: 800, letterSpacing: "-0.03em" }}>{this.props.t("quiz.questionN", { index: s.quizNo })}</span>
           <span style={{ color: "var(--m-second)", fontSize: "15.68px", fontWeight: 650 }}>
-            {s.quizNo} / {list.length}
+            {s.quizNo} / {total}
           </span>
         </div>
         <div style={{ height: "12px", margin: "11.2px 0 22.4px", borderRadius: "999px", background: "var(--m-field)" }}>
           <div
             style={{
-              width: `${Math.round((s.quizNo / list.length) * 100)}%`,
+              width: `${Math.round((s.quizNo / total) * 100)}%`,
               height: "100%",
               borderRadius: "999px",
               background: "var(--m-label)",
@@ -2413,8 +2460,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
 
   /* A miss stops the quiz at the design's sheet rather than moving on. */
   renderQuizMiss() {
-    const list = this.studyData().quiz;
-    const q = list[(this.state.quizNo - 1) % list.length];
+    const q = this.quizQuestion();
     const button = (primary: boolean): CSSProperties => ({
       height: "54.4px",
       border: 0,
@@ -2673,103 +2719,170 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
   }
 
   /*
-   * The results screen. Its wording, its thresholds and which buttons appear
-   * are the design's: a pass is 70%, a test always reports 100% and offers no
-   * repeat, and only a miss offers one.
+   * The spoken walkthrough. The same replica the rest of the page uses, handed
+   * the mockup's own tokens so it is painted in the phone's palette rather than
+   * the page's, and with its voice row bled out to the phone's gutter the way
+   * the app bleeds it to the viewport.
+   */
+  renderTutor() {
+    return (
+      <LandingTutorDemo
+        inset="phone"
+        style={
+          {
+            "--lt-text": "var(--m-label)",
+            "--lt-muted": "var(--m-second)",
+            "--lt-tile": "var(--m-tile)",
+            "--lt-line": "var(--m-line)",
+            "--lt-surface": "var(--m-surface)",
+            "--lt-ink": "var(--m-label)",
+            "--lt-on-ink": "var(--m-bg)",
+            /* The scroller already carries the screen's gutter. */
+            padding: "0.5rem 0 1.5rem",
+            /* What the note scroller leaves on the phone, which is what the app
+               fills here — as a number, because the app measures it in `vh` and
+               the mockup's screen is not the viewport. */
+            minHeight: "34rem",
+          } as CSSProperties
+        }
+      />
+    );
+  }
+
+  /* The results screen's own buttons, which `.landing-result-actions` paints:
+     the first is the filled one, anything after it the quiet tile. */
+  resultAction(label: string, onClick: () => void) {
+    return (
+      <button type="button" onClick={onClick}>
+        <Msym name="replay" size="1.2rem" fill={false} weight={500} />
+        <span>{label}</span>
+      </button>
+    );
+  }
+
+  /*
+   * The results screen, which is the app's own — `StudyCompletionCard`, ported
+   * for the page's palette in `landing-study-result.tsx`. Which round it reports,
+   * what it calls the score and where the button leads are the app's rules too: a
+   * clean round says the set is finished, anything missed turns into a second
+   * round over just those, and a submitted test is reported against the attempts
+   * before it.
    */
   renderResults() {
     const s = this.state;
+    const t = this.props.t;
     const study = this.studyData();
-    const cardsTotal = this.cardQueue().length;
-    const cardsKnown = cardsTotal - Object.values(s.cardAnswers).filter((a) => a === "again").length;
+    const tokens = {
+      "--lr-text": "var(--m-label)",
+      "--lr-muted": "var(--m-second)",
+      "--lr-tile": "var(--m-tile)",
+      "--lr-sunken": "var(--m-field)",
+      "--lr-surface": "var(--m-surface)",
+      "--lr-ink": "var(--m-label)",
+      "--lr-on-ink": "var(--m-bg)",
+    } as CSSProperties;
 
-    const pct =
-      s.tab === "quiz"
-        ? completionPct(s.quizCorrect, study.quiz.length)
-        : s.tab === "flashcards"
-          ? completionPct(cardsKnown, cardsTotal)
-          : 100;
-    const good = pct >= 70;
-    const tint = good ? "#2aa34a" : "#f45f5a";
-    const isTest = s.tab === "test";
+    if (s.tab === "flashcards") {
+      const queue = this.cardQueue();
+      const missed = queue.filter((id) => s.cardAnswers[id] === "again");
+      const known = queue.length - missed.length;
 
-    const restartCards = () => this.setState({ cardPos: 0, cardFlipped: false, cardAnswers: {}, cardsDone: false });
-    const restartQuiz = () => this.setState({ quizNo: 1, quizPick: null, quizCorrect: 0, quizDone: false });
-    const restartTest = () => this.setState({ testNo: 1, testAnswers: {}, testDone: false });
+      return (
+        <LandingStudyResult
+          style={tokens}
+          eyebrow={missed.length === 0 ? t("study.completed") : t("study.roundCompleted", { cycle: s.cardCycle })}
+          title={t(missed.length === 0 ? "study.cards.allDone" : "study.cards.repeatMissed")}
+          percentage={missed.length === 0 ? 100 : completionPct(known, queue.length)}
+          percentageLabel={t(missed.length === 0 ? "study.setCompleted" : "study.roundScore")}
+          primaryMetric={{ label: t("study.correctThisRound"), value: `${known}/${queue.length}` }}
+          actions={
+            missed.length === 0
+              ? this.resultAction(t("study.restartSet"), () =>
+                  this.setState({ ...this.studyReset(), tab: "flashcards" }),
+                )
+              : this.resultAction(t("study.repeatMissedCards", { count: missed.length }), () =>
+                  this.setState((c) => ({
+                    reviewQueue: missed,
+                    cardCycle: c.cardCycle + 1,
+                    cardPos: 0,
+                    cardFlipped: false,
+                    cardAnswers: {},
+                    cardsDone: false,
+                    cardExit: null,
+                  })),
+                )
+          }
+        />
+      );
+    }
 
-    const hasPrimary = !isTest && !good;
-    const primaryLabel = s.tab === "quiz" ? this.props.t("preview.repeatMissedQuestions") : this.props.t("preview.repeatMissedCards");
-    const secondaryLabel = s.tab === "quiz" ? this.props.t("preview.newQuiz") : isTest ? this.props.t("preview.startNewTest") : this.props.t("study.restartSet");
-    const onRestart = s.tab === "quiz" ? restartQuiz : isTest ? restartTest : restartCards;
+    if (s.tab === "quiz") {
+      const queue = this.quizQueue();
+      const missed = s.quizMissed;
+      const correct = queue.length - missed.length;
 
-    const action = (primary: boolean): CSSProperties => ({
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: "8px",
-      height: "57.6px",
-      padding: "0 22.4px",
-      border: 0,
-      borderRadius: "999px",
-      background: primary ? "var(--m-label)" : "var(--m-tile)",
-      color: primary ? "var(--m-bg)" : "var(--m-label)",
-      cursor: "pointer",
-      fontFamily: "inherit",
-      fontSize: primary ? "17.28px" : "16.8px",
-      fontWeight: primary ? 750 : 700,
-    });
-    const line: CSSProperties = { color: "var(--m-second)", fontSize: "17.6px", fontWeight: 650 };
-    const score: CSSProperties = { color: tint, fontWeight: 800 };
+      return (
+        <LandingStudyResult
+          style={tokens}
+          eyebrow={missed.length === 0 ? t("study.completed") : t("study.roundCompleted", { cycle: s.quizCycle })}
+          title={t(missed.length === 0 ? "quiz.allDone" : "quiz.repeatMissed")}
+          percentage={missed.length === 0 ? 100 : completionPct(correct, queue.length)}
+          percentageLabel={t(missed.length === 0 ? "study.setCompleted" : "study.roundScore")}
+          primaryMetric={{
+            label: t(missed.length === 0 ? "quiz.questionsDone" : "study.correctThisRound"),
+            value:
+              missed.length === 0
+                ? `${study.quiz.length}/${study.quiz.length}`
+                : `${correct}/${queue.length}`,
+          }}
+          actions={
+            missed.length === 0
+              ? this.resultAction(t("quiz.restart"), () => this.setState({ ...this.studyReset(), tab: "quiz" }))
+              : this.resultAction(t("quiz.repeatMissedQuestions", { count: missed.length }), () =>
+                  this.setState((c) => ({
+                    quizQueue: missed,
+                    quizCycle: c.quizCycle + 1,
+                    quizNo: 1,
+                    quizPick: null,
+                    quizMissed: [],
+                    quizDone: false,
+                  })),
+                )
+          }
+        />
+      );
+    }
+
+    /*
+     * A submitted test. There is nobody grading this one, so a question that was
+     * written on scores its point and a skipped one does not — which is enough
+     * for the screen to report a real number that follows what the visitor did.
+     */
+    const total = study.practice.length;
+    const scored = Object.values(s.testAnswers).filter((answer) => answer.trim().length > 0).length;
+    const percentage = completionPct(scored, total);
+    const history = [...PREVIEW_TEST_HISTORY, percentage];
+    const average = Math.round(history.reduce((sum, value) => sum + value, 0) / history.length);
 
     return (
-      <div style={{ display: "grid", justifyItems: "center", padding: "35.2px 0 0", animation: "memo-pop-in 0.32s cubic-bezier(0.22,1,0.36,1) both" }}>
-        <div style={{ position: "relative", display: "grid", placeItems: "center", width: "192px", height: "192px" }}>
-          <div style={{ display: "grid", placeItems: "center", width: "150.4px", height: "150.4px", borderRadius: "999px", background: "var(--m-tile)" }}>
-            <Emoji symbol={isTest ? "📨" : good ? "🎉" : "💪"} size="70.4px" />
-          </div>
-          <span
-            style={{
-              position: "absolute",
-              top: "3.2px",
-              right: 0,
-              padding: "7.2px 12.8px",
-              borderRadius: "14px",
-              transform: "rotate(-8deg)",
-              fontSize: "24px",
-              fontWeight: 850,
-              letterSpacing: "-0.03em",
-              background: `color-mix(in srgb, ${tint} 16%, var(--m-surface))`,
-              color: tint,
-              animation: "memo-prize-pop 0.5s cubic-bezier(0.22,1,0.36,1) both 0.12s",
-            }}
-          >
-            {isTest ? "100 %" : `${pct} %`}
-          </span>
-        </div>
-
-        <span style={{ marginTop: "22.4px", fontSize: "28px", fontWeight: 800, letterSpacing: "-0.04em", textAlign: "center" }}>
-          {isTest ? this.props.t("preview.testSubmitted") : good ? this.props.t("preview.wellDone") : this.props.t("preview.tryAgain")}
-        </span>
-        <span style={{ ...line, marginTop: "11.2px" }}>
-          <span style={score}>{isTest ? "100 %" : `${pct} %`}</span> {this.props.t(isTest ? "preview.result.submitted" : "preview.result.correct")}
-        </span>
-        <span style={{ ...line, marginTop: "4px" }}>
-          {this.props.t("preview.result.completedIn")} <span style={score}>01:06</span>
-        </span>
-
-        <div style={{ display: "grid", gap: "11.2px", width: "100%", marginTop: "41.6px" }}>
-          {hasPrimary ? (
-            <button type="button" onClick={onRestart} style={action(true)}>
-              <Msym name="replay" size="19.2px" fill={false} weight={500} />
-              <span style={{ letterSpacing: "-0.025em" }}>{primaryLabel}</span>
-            </button>
-          ) : null}
-          <button type="button" onClick={onRestart} style={action(false)}>
-            <Msym name="refresh" size="19.2px" fill={false} weight={500} />
-            <span style={{ letterSpacing: "-0.025em" }}>{secondaryLabel}</span>
-          </button>
-        </div>
-      </div>
+      <LandingStudyResult
+        style={tokens}
+        eyebrow=""
+        title=""
+        subtitle={t("test.attemptN", { count: history.length })}
+        percentage={percentage}
+        percentageLabel={t("study.score")}
+        primaryMetric={{ label: t("test.pointsScored"), value: `${scored}/${total}` }}
+        secondaryMetrics={[
+          { label: t("test.average"), value: `${average}%` },
+          { label: t("test.best"), value: `${Math.max(...history)}%` },
+          { label: t("test.lowest"), value: `${Math.min(...history)}%` },
+          { label: t("test.attempts"), value: String(history.length) },
+        ]}
+        actions={this.resultAction(t("study.test.startNew"), () =>
+          this.setState({ ...this.studyReset(), tab: "test" }),
+        )}
+      />
     );
   }
 

@@ -56,6 +56,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 
+import { LecturePodcast } from "@/components/lecture-podcast";
 import { LectureTutor } from "@/components/lecture-tutor";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
@@ -75,7 +76,7 @@ import {
   formatTimestamp,
 } from "@/lib/utils";
 
-type WorkspaceTab = "notes" | "study" | "tutor" | "chat" | "transcript" | "audio";
+type WorkspaceTab = "notes" | "study" | "tutor" | "podcast" | "chat" | "transcript" | "audio";
 type StudyMaterialView = "flashcards" | "quiz" | "practice_test";
 type FlashcardSessionResult = {
   attempts: number;
@@ -295,6 +296,18 @@ const NOTE_TABS = [
     labelKey: "note.tab.tutor",
     icon: "graphic_eq",
     tint: "oklch(0.66 0.15 50)",
+  },
+  /*
+   * The episode, third: it is the third way of taking in the note itself — read it, have it
+   * explained, or listen to it argued — and it belongs beside the walkthrough rather than among
+   * the practice screens, which are about testing yourself rather than about taking it in.
+   */
+  {
+    id: "podcast",
+    view: null,
+    labelKey: "note.tab.podcast",
+    icon: "podcasts",
+    tint: "oklch(0.66 0.15 20)",
   },
   {
     id: "flashcards",
@@ -1275,6 +1288,7 @@ const SUB_SCREEN_TITLE_KEYS: Record<string, MessageKey | null> = {
   quiz: "note.tab.quiz",
   test: "note.subScreen.test",
   tutor: "tutor.subScreenTitle",
+  podcast: "note.tab.podcast",
   transcript: "note.tab.transcript",
 };
 
@@ -4159,6 +4173,20 @@ export function LectureWorkspace({
   }
 
   function renderPanel() {
+    if (activeTab === "podcast") {
+      return (
+        <LecturePodcast
+          lectureId={detail.lecture.id}
+          isReady={detail.lecture.status === "ready"}
+          /* The same language the tutor auditions in, worked out the same way. */
+          language={resolveMaterialLanguage(
+            `${detail.artifact?.summary ?? ""}\n${detail.artifact?.structured_notes_md ?? ""}`,
+            detail.lecture.language_hint,
+          )}
+        />
+      );
+    }
+
     if (activeTab === "tutor") {
       return (
         <LectureTutor
@@ -5824,7 +5852,9 @@ export function LectureWorkspace({
       ? "notes"
       : activeTab === "tutor"
         ? "tutor"
-        : activeTab === "transcript" || activeTab === "audio"
+        : activeTab === "podcast"
+          ? "podcast"
+          : activeTab === "transcript" || activeTab === "audio"
           ? "transcript"
           : activeStudyView === "flashcards"
             ? "flashcards"
@@ -6206,6 +6236,11 @@ export function LectureWorkspace({
 
     if (tab.id === "tutor") {
       setActiveTab("tutor");
+      return;
+    }
+
+    if (tab.id === "podcast") {
+      setActiveTab("podcast");
       return;
     }
 

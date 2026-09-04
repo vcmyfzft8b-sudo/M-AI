@@ -15,6 +15,7 @@ export const AI_STAGES = [
   "chat",
   "tutor_plan",
   "tutor_turn",
+  "podcast_script",
   "language_check",
 ] as const;
 
@@ -239,6 +240,21 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
     providerSort: "latency",
   },
   /*
+   * One podcast episode, written in full before a word of it is heard.
+   *
+   * Nothing about this call is latency-sensitive: the listener is watching a progress bar and
+   * expects to wait, the way they wait for every other product that does this. What it is
+   * sensitive to is the failure the note pipeline already measured models on — dropping the
+   * material. An episode that comes back charming and empty is a worse outcome here than in a
+   * note, because there is no page to fall back to and the emptiness only becomes obvious ten
+   * minutes in. So this stage takes the shared writer, which is the one that held its recall.
+   *
+   * Thinking is on at medium and its headroom with it. A script is a single call that has to
+   * decide the running order of the whole episode and then write it — the same kind of work as
+   * the outline, where thinking is the one place in this pipeline it measurably paid.
+   */
+  podcast_script: { thinkingLevel: "medium", outputHeadroom: 2.5, defaultModel: GLM_TEXT_MODEL },
+  /*
    * Repairing the language of text another model has already written — one passage of a note,
    * or one unit of a spoken turn while the rest of it is still being written.
    *
@@ -270,6 +286,7 @@ const STAGE_MODEL_ENV_KEYS: Record<AiStage, string> = {
   chat: "GEMINI_CHAT_MODEL",
   tutor_plan: "GEMINI_TUTOR_PLAN_MODEL",
   tutor_turn: "GEMINI_TUTOR_TURN_MODEL",
+  podcast_script: "GEMINI_PODCAST_SCRIPT_MODEL",
   language_check: "GEMINI_LANGUAGE_CHECK_MODEL",
 };
 
@@ -283,6 +300,7 @@ const STAGE_THINKING_ENV_KEYS: Record<AiStage, string> = {
   chat: "GEMINI_CHAT_THINKING",
   tutor_plan: "GEMINI_TUTOR_PLAN_THINKING",
   tutor_turn: "GEMINI_TUTOR_TURN_THINKING",
+  podcast_script: "GEMINI_PODCAST_SCRIPT_THINKING",
   language_check: "GEMINI_LANGUAGE_CHECK_THINKING",
 };
 
@@ -480,6 +498,13 @@ const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
    */
   tutor_plan: 90_000,
   /*
+   * A whole episode in one call, and nobody is listening yet — the screen is showing a progress
+   * bar and the wait is the wait every product that does this has. So this is sized by what the
+   * work costs rather than by what a listener will sit through: the writer produces a couple of
+   * thousand words at 20-60 tokens a second, which the shared 90s default cannot hold.
+   */
+  podcast_script: 240_000,
+  /*
    * The repair is optional by construction: on the spoken path a unit whose repair is late is
    * spoken as it was written, and in a note a passage that fails to come back is kept as it was.
    * So this leash is only here to stop a stalled call holding an invocation open — the caller's
@@ -499,6 +524,7 @@ const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
 const MANDATORY_REASONING_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
   note_outline: 200_000,
   note_write: 200_000,
+  podcast_script: 200_000,
 };
 
 /**

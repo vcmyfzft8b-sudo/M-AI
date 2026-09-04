@@ -313,6 +313,38 @@ export async function DELETE(
     return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
+  /*
+   * Read before the delete, not after: the episode's segments hang off the note through their
+   * podcast row and go with it on the cascade, so once the note is gone there is nothing left
+   * that knows where their audio lives.
+   *
+   * Two plain queries rather than one embedded join. A note holds at most a dozen episodes, so
+   * the second lookup costs nothing, and both run on an index — whereas an embedded filter is a
+   * shape whose failure here would be silent, and silence is how the read-aloud audio came to be
+   * orphaned in the first place.
+   */
+  const { data: podcastRows, error: podcastRowsError } = await service
+    .from("lecture_podcasts")
+    .select("id")
+    .eq("lecture_id", id);
+
+  if (podcastRowsError) {
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
+  }
+
+  const podcastIds = ((podcastRows ?? []) as Array<{ id: string }>).map((row) => row.id);
+  const { data: podcastSegmentRows, error: podcastSegmentsError } =
+    podcastIds.length > 0
+      ? await service
+          .from("lecture_podcast_segments")
+          .select("audio_storage_path")
+          .in("podcast_id", podcastIds)
+      : { data: [], error: null };
+
+  if (podcastSegmentsError) {
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
+  }
+
   const { error } = await supabase
     .from("lectures")
     .delete()
@@ -332,9 +364,13 @@ export async function DELETE(
   const noteMediaPaths = ((noteMediaRows ?? []) as Array<{ storage_path: string | null }>)
     .map((row) => row.storage_path)
     .filter((path): path is string => Boolean(path));
+  const podcastPaths = ((podcastSegmentRows ?? []) as Array<{ audio_storage_path: string | null }>)
+    .map((row) => row.audio_storage_path)
+    .filter((path): path is string => Boolean(path));
+  const derivedPaths = [...chunkPaths, ...scanImagePaths, ...noteMediaPaths, ...podcastPaths];
   const storagePaths = lecture.storage_path
-    ? [lecture.storage_path, ...chunkPaths, ...scanImagePaths, ...noteMediaPaths]
-    : [...chunkPaths, ...scanImagePaths, ...noteMediaPaths];
+    ? [lecture.storage_path, ...derivedPaths]
+    : derivedPaths;
 
   if (storagePaths.length > 0) {
     await service.storage.from("lecture-audio").remove(storagePaths);

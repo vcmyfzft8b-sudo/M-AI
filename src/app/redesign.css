@@ -13243,3 +13243,503 @@
     height: 8.5rem;
   }
 }
+
+
+/* --- the generated podcast ----------------------------------------------- */
+
+/*
+ * The episode screen borrows the walkthrough's language rather than inventing one: the same
+ * spheres, the same voice hues, the same pill row. They are the two spoken screens in the app and
+ * a listener should recognise the second from the first.
+ *
+ * What is different is that this one has something to read. A podcast has a transcript, and the
+ * transcript is the seek bar people actually use — so it is the tallest thing here, and the
+ * controls sit above it rather than under it, where a phone's thumb would cover the line being
+ * spoken.
+ */
+
+/* Same reasoning as the walkthrough: the dock's chat bar competes with a screen that is talking. */
+.memo-note-screen[data-note-tab="podcast"] .memo-m-chatbar,
+.memo-note-screen[data-note-tab="podcast"] .memo-m-chatbar-mic,
+.memo-note-screen[data-note-tab="podcast"] .memo-chat-fab {
+  display: none;
+}
+
+.memo-podcast {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1.25rem 1.25rem 2rem;
+  text-align: center;
+}
+
+/*
+ * The cover.
+ *
+ * Two spheres for two voices, overlapped the way a record sleeve overlaps two faces — which is
+ * the one image that says "a conversation" before a word has played. A solo episode draws one,
+ * centred, rather than one sphere and an empty space where the other was.
+ */
+.memo-podcast-cover {
+  position: relative;
+  width: 11rem;
+  height: 7.5rem;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+.memo-podcast-orb {
+  position: absolute;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 36% 30%, oklch(0.95 0.06 calc(var(--podcast-hue) + 25) / 0.95), transparent 42%),
+    radial-gradient(circle at 62% 74%, oklch(0.66 0.19 calc(var(--podcast-hue) - 15) / 0.9), transparent 60%),
+    linear-gradient(
+      160deg,
+      oklch(0.78 0.17 calc(var(--podcast-hue) + 10)),
+      oklch(0.58 0.19 calc(var(--podcast-hue) - 23))
+    );
+  box-shadow: 0 10px 30px oklch(0.62 0.2 var(--podcast-hue) / 0.35);
+}
+
+.memo-podcast-orb.primary {
+  width: 5.6rem;
+  height: 5.6rem;
+  left: 1.6rem;
+  z-index: 1;
+}
+
+.memo-podcast-orb.secondary {
+  width: 4.6rem;
+  height: 4.6rem;
+  right: 1.6rem;
+  top: 1.6rem;
+}
+
+/* A solo episode has one sphere and it belongs in the middle, not off to the left. */
+.memo-podcast-cover:not(:has(.secondary)) .memo-podcast-orb.primary {
+  left: auto;
+}
+
+.memo-podcast-title {
+  margin: 0;
+  max-width: 26rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.memo-podcast-subtitle,
+.memo-podcast-hint {
+  margin: 0;
+  max-width: 26rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* --- choosing a show ----------------------------------------------------- */
+
+.memo-podcast-formats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 30rem;
+}
+
+.memo-podcast-format {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--tile);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.memo-podcast-format.active {
+  border-color: color-mix(in oklch, oklch(0.7 0.16 20) 55%, transparent);
+  background: color-mix(in oklch, oklch(0.7 0.16 20) 14%, transparent);
+}
+
+.memo-podcast-format-label {
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.memo-podcast-format-description {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.memo-podcast-format-voices {
+  margin-top: 0.15rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.memo-podcast-lengths {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.memo-podcast-length {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  min-height: 2.6rem;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.memo-podcast-length.active {
+  color: var(--text);
+  border-color: color-mix(in oklch, oklch(0.7 0.16 20) 55%, transparent);
+  background: color-mix(in oklch, oklch(0.7 0.16 20) 14%, transparent);
+}
+
+.memo-podcast-length-minutes {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--muted-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- choosing the voices ------------------------------------------------- */
+
+.memo-podcast-voice-picker,
+.memo-podcast-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 30rem;
+}
+
+.memo-podcast-voice-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.memo-podcast-voice-current {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.7rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--tile);
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* The colour of the voice, so the choice is visible without reading the name. */
+.memo-podcast-voice-dot {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+  border-radius: 50%;
+  background: linear-gradient(
+    160deg,
+    oklch(0.78 0.17 calc(var(--podcast-hue) + 10)),
+    oklch(0.58 0.19 calc(var(--podcast-hue) - 23))
+  );
+}
+
+.memo-podcast-voice-role {
+  color: var(--muted);
+}
+
+.memo-podcast-voice-name {
+  margin-left: auto;
+  font-weight: 650;
+}
+
+.memo-podcast-voice-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: center;
+}
+
+.memo-podcast-voice-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2rem;
+  padding: 0 0.65rem 0 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.memo-podcast-voice-option.active {
+  color: var(--text);
+  border-color: color-mix(in oklch, oklch(0.72 0.16 var(--podcast-hue)) 55%, transparent);
+  background: color-mix(in oklch, oklch(0.72 0.16 var(--podcast-hue)) 16%, transparent);
+}
+
+.memo-podcast-voice-option.playing {
+  color: oklch(0.82 0.13 var(--podcast-hue));
+}
+
+.memo-podcast-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.25rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.memo-podcast-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding: 0 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* --- while it is being written ------------------------------------------- */
+
+.memo-podcast-progress {
+  width: min(22rem, 100%);
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.memo-podcast-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, oklch(0.72 0.16 20), oklch(0.68 0.17 300));
+  transition: width 380ms ease-out;
+}
+
+/* --- playing ------------------------------------------------------------- */
+
+.memo-podcast-scrubber {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  max-width: 30rem;
+}
+
+.memo-podcast-clock {
+  flex: none;
+  min-width: 2.6rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-podcast-scrubber input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: oklch(0.7 0.16 20);
+  cursor: pointer;
+}
+
+.memo-podcast-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.memo-podcast-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.memo-podcast-control.primary {
+  width: 3.3rem;
+  height: 3.3rem;
+  border: none;
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.memo-podcast-control:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* The spinner the play button wears while the next turn is still being synthesized. */
+.memo-podcast-control:disabled .msym {
+  animation: memo-podcast-spin 1.1s linear infinite;
+}
+
+@keyframes memo-podcast-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-podcast-control:disabled .msym {
+    animation: none;
+  }
+}
+
+.memo-podcast-rates {
+  display: inline-flex;
+  gap: 0.2rem;
+  padding: 0.15rem;
+  border-radius: 999px;
+  background: var(--tile);
+}
+
+.memo-podcast-rate {
+  min-height: 1.9rem;
+  padding: 0 0.55rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.memo-podcast-rate.active {
+  background: var(--surface);
+  color: var(--text);
+}
+
+/*
+ * The transcript, and the reason it is a list of buttons.
+ *
+ * Every line is a place in the episode, so tapping one is how you actually navigate a podcast —
+ * far more usefully than dragging a bar, because the thing you are looking for is a sentence, not
+ * a timestamp. The line being spoken is tinted with its own speaker's colour, which is what makes
+ * a two-hander readable at a glance: the conversation visibly alternates.
+ */
+.memo-podcast-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
+  max-width: 34rem;
+  max-height: min(24rem, 44vh);
+  overflow-y: auto;
+  padding: 0.25rem;
+  text-align: left;
+  /* The ends fade rather than cut, so a half-line reads as more to scroll. */
+  mask-image: linear-gradient(to bottom, transparent, #000 1.25rem, #000 calc(100% - 1.25rem), transparent);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    #000 1.25rem,
+    #000 calc(100% - 1.25rem),
+    transparent
+  );
+}
+
+.memo-podcast-line {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 0.8rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background 140ms ease;
+}
+
+.memo-podcast-line.spoken {
+  color: var(--muted-2);
+}
+
+.memo-podcast-line.active {
+  color: var(--text);
+  border-color: color-mix(in oklch, oklch(0.72 0.16 var(--podcast-hue)) 45%, transparent);
+  background: color-mix(in oklch, oklch(0.72 0.16 var(--podcast-hue)) 12%, transparent);
+}
+
+.memo-podcast-line-speaker {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: oklch(0.62 0.16 var(--podcast-hue));
+  padding-top: 0.15rem;
+}
+
+.memo-podcast-line-text {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .memo-podcast-formats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .memo-podcast-line {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.1rem;
+  }
+}

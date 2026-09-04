@@ -618,15 +618,25 @@ export function LectureMindmap({
 
   const detailCard = selected ? (
     <div className="memo-mm-detail" role="status">
-      <span
-        className="memo-mm-detail-rail"
-        style={{ background: mindmapBranchColor(selectedBranchIndex) }}
-      />
-      <div className="memo-mm-detail-body">
+      <div className="memo-mm-detail-head">
+        {/* The limb this node belongs to, as a dot on its title. */}
+        <span
+          className="memo-mm-detail-dot"
+          style={{ background: mindmapBranchColor(selectedBranchIndex) }}
+        />
         <p className="memo-mm-detail-label">{selected.label}</p>
-        {selected.detail ? <p className="memo-mm-detail-copy">{selected.detail}</p> : null}
-        {selected.children.length > 0 ? (
-          <div className="memo-mm-detail-actions">
+        <button
+          type="button"
+          className="memo-mm-detail-close"
+          aria-label={t("common.close")}
+          onClick={() => setSelectedId(null)}
+        >
+          <Msym name="close" size="1rem" fill={false} weight={500} />
+        </button>
+      </div>
+      {selected.detail ? <p className="memo-mm-detail-copy">{selected.detail}</p> : null}
+      {selected.children.length > 0 ? (
+        <div className="memo-mm-detail-actions">
           <button
             type="button"
             className="memo-mm-detail-action"
@@ -636,7 +646,7 @@ export function LectureMindmap({
               setSearch("");
             }}
           >
-            <Msym name="center_focus_strong" size="1.05rem" fill={false} weight={500} />
+            <Msym name="center_focus_strong" size="0.95rem" fill={false} weight={500} />
             <span>{t("mindmap.focusNode")}</span>
           </button>
           <button
@@ -646,7 +656,7 @@ export function LectureMindmap({
           >
             <Msym
               name={collapsedIds.has(selected.id) ? "unfold_more" : "unfold_less"}
-              size="1.05rem"
+              size="0.95rem"
               fill={false}
               weight={500}
             />
@@ -656,17 +666,8 @@ export function LectureMindmap({
               })}
             </span>
           </button>
-          </div>
-        ) : null}
-      </div>
-      <button
-        type="button"
-        className="memo-mm-detail-close"
-        aria-label={t("common.close")}
-        onClick={() => setSelectedId(null)}
-      >
-        <Msym name="close" size="1.1rem" fill={false} weight={500} />
-      </button>
+        </div>
+      ) : null}
     </div>
   ) : null;
 

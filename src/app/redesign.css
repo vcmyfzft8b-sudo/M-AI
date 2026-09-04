@@ -2449,6 +2449,15 @@
   gap: 0.7rem;
   height: 3.4rem;
   margin-top: 1.8rem;
+  /* The bar itself is a place for pills to sit in, not a surface: it is sticky, it is 3.4rem
+     tall, and it floats over the bottom of whichever tab is open — so while it is empty, or
+     between its pills, it was quietly eating every click on what is underneath. On the mindmap
+     that is the toolbar: zoom and "save as image" sat under it and did nothing. */
+  pointer-events: none;
+}
+
+.memo-dock > * {
+  pointer-events: auto;
 }
 
 .memo-dock-pill {
@@ -14330,6 +14339,12 @@
   opacity: 0.16;
 }
 
+/* The branches between the selection and the middle, drawn at full strength. Selecting lights
+   this path rather than fading everything off it: a tap on a node never takes the rest away. */
+.memo-mm-link.lit {
+  opacity: 1;
+}
+
 .memo-mm-node {
   cursor: pointer;
   transition: opacity 0.18s ease;
@@ -14637,6 +14652,7 @@
   white-space: nowrap;
 }
 
+/* The trail sits where the card sits, so the card steps down when there is one. */
 .memo-mm-stage:has(.memo-mm-trail) .memo-mm-detail {
   top: 3.5rem;
 }
@@ -14646,10 +14662,11 @@
   top: 0.85rem;
   left: 0.85rem;
   display: flex;
-  align-items: flex-start;
-  gap: 0.7rem;
+  flex-direction: column;
+  gap: 0.45rem;
+  /* Wide enough that the two actions sit on one row rather than stacking. */
   max-width: min(23rem, calc(100% - 1.7rem));
-  padding: 0.85rem 0.85rem 0.85rem 0;
+  padding: 0.75rem 0.8rem 0.8rem;
   border: 1px solid var(--line);
   border-radius: 1.1rem;
   background: var(--surface);
@@ -14657,29 +14674,43 @@
   animation: memo-pop-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.memo-mm-detail-rail {
-  flex: none;
-  align-self: stretch;
-  width: 4px;
-  margin: -0.85rem 0;
-  border-radius: 1.1rem 0 0 1.1rem;
+.memo-mm-detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
 }
 
-.memo-mm-detail-body {
-  min-width: 0;
+/*
+ * The branch's colour, as a dot beside the title rather than a bar down the edge.
+ *
+ * The bar was a slab of accent as tall as the whole card, on the one corner it could not follow
+ * round — so it read as a piece of another component that had been left behind. A dot says the
+ * same thing (this node belongs to the purple limb) at a tenth of the weight, and it sits on the
+ * title, which is what it is actually about.
+ */
+.memo-mm-detail-dot {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: 0.42rem;
+  border-radius: 999px;
 }
 
 .memo-mm-detail-label {
-  font-size: 1rem;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.95rem;
   font-weight: 700;
+  line-height: 1.32;
   letter-spacing: -0.01em;
   text-wrap: pretty;
 }
 
+/* Indented past the dot, so the copy and the controls hang off the title rather than the card. */
 .memo-mm-detail-copy {
-  margin-top: 0.3rem;
+  margin-left: 1rem;
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   line-height: 1.45;
   text-wrap: pretty;
 }
@@ -14688,35 +14719,57 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+  margin-left: 1rem;
 }
 
+/*
+ * Outlined rather than filled: these are two peers, and two filled slabs in a card this small
+ * were louder than the label they belong to.
+ */
 .memo-mm-detail-action {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  margin-top: 0.6rem;
-  padding: 0.3rem 0.6rem;
-  border: 0;
+  height: 1.95rem;
+  padding: 0 0.65rem;
+  border: 1px solid var(--line);
   border-radius: 999px;
-  background: var(--tile);
+  background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.memo-mm-detail-action:hover {
+  background: var(--tile);
 }
 
 .memo-mm-detail-close {
   flex: none;
   display: grid;
   place-items: center;
-  width: 1.8rem;
-  height: 1.8rem;
+  width: 1.7rem;
+  height: 1.7rem;
+  margin: -0.15rem -0.15rem 0 0;
   border: 0;
   border-radius: 999px;
-  background: var(--tile);
-  color: var(--muted);
+  background: transparent;
+  color: var(--muted-2);
   cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.memo-mm-detail-close:hover {
+  background: var(--tile);
+  color: var(--text);
 }
 
 /* One badge, two jobs: "your note has moved on" and "the redraw did not work".
@@ -14847,6 +14900,8 @@
     top: auto;
     right: 0.85rem;
     bottom: 4.4rem;
+    /* Wide enough for a paragraph of detail, no wider than what it is holding. */
+    width: fit-content;
     max-width: none;
   }
 }

@@ -96,6 +96,11 @@ each wrote to production's migration history from an unmerged branch and cost an
 - Layout lives in `src/lib/mindmap-layout.ts` and `src/lib/mindmap-tidy.ts` (van der Ploeg's
   non-layered tidy tree), is pure, and is shared by the canvas, the PNG export and its tests. Put
   new layout rules there, never in the component.
+- **Nothing about the layout may depend on what is currently folded except which nodes exist.**
+  Which side a branch sits on is weighed over the whole branch, folded parts included, so that
+  opening one topic cannot fling another across the middle.
+- Opening is a tap on the node; folding is the badge or the detail card, never a tap. Nothing on
+  the map is ever dimmed by a selection — only a search dims, and only what it did not match.
 - Details are in [docs/mindmap.md](/docs/mindmap.md).
 
 ## Admin Dashboard

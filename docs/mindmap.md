@@ -94,6 +94,15 @@ The two reference frames in `MINDMAP_REFERENCE_FRAMES` are **measured**, not gue
 screen's chrome changes, re-measure them: `.memo-mm-stage`'s own `getBoundingClientRect()` on a
 1440x900 laptop and a 375x812 phone is the whole method.
 
+### A branch's side is not a function of the fold
+
+Which side of the title a branch hangs off is decided by `splitBranches`, weighing the branches so
+the two sides come out the same height rather than the same count. That weight is taken over the
+**whole** branch, folded parts and all. Weighing what was currently drawn instead is a bug that
+looks like data loss: opening one topic re-balanced the split, two other topics swapped sides, and
+the branch the reader had been reading was suddenly off the other edge of the screen. The
+regression test is "a branch keeps its side whatever else the reader opens or folds".
+
 ## Focusing
 
 Folding takes things away; **focus** takes the reader in. `focusMindmapOn` re-roots the map on any
@@ -130,15 +139,39 @@ a change to `mindmap-canvas.tsx` in two places. The geometry they share lives in
   wants while their hands are already on the map, and the phone has no zoom cluster for a button
   to live beside. Folding everything at once and redrawing on demand were both removed as
   buttons; the fold badges and the stale/failed notices cover what they were for.
+- `.memo-dock` — the sticky bar at the bottom of the note card that carries the read-aloud
+  player, the annotate pill and the phone's chat bar — is `pointer-events: none`, with its pills
+  opting back in. It floats over whichever tab is open, so while it was empty (which it is on this
+  one) it silently swallowed every click on the strip it covers: the map's zoom cluster and "save
+  as image" were dead on a 900px-tall laptop.
 - The chat column stands down while this tab is on screen (`showChatPanel` in
   `lecture-workspace.tsx`). It is the only screen whose usefulness is a function of its width.
 - The note's title and date are hidden on this tab: the map draws the title in its own middle.
 
-Two implementation notes that are not obvious:
+### Tapping
 
-- **Pointer capture is released inside `pointerup`.** While a pointer is captured the `click` that
-  follows is dispatched to the capture target rather than to what is under the finger, so holding
-  it one moment longer sends every node tap to the background.
+A tap on a node **only ever opens it**: it selects the node, and unfolds it if it was folded.
+Folding is the count badge and the detail card, the two controls somebody presses on purpose —
+tapping used to toggle, which meant exploring a map by tapping through it shut branches as often
+as it opened them. A selection lights the path back to the middle rather than dimming everything
+off it; dimming two thirds of a map on a tap reads as the map hiding itself.
+
+Opening a node while the reader is zoomed in also brings what opened into view: the id is parked
+in a ref and an effect finishes the job on the render that has the new positions, panning the
+least that works, or zooming out only if the node and its new children cannot fit as they are.
+While the view is still the frame's own — before the reader has panned or pinched — nothing is
+done, because re-fitting has already shown everything.
+
+Three implementation notes that are not obvious:
+
+- **The pointer is captured when the gesture becomes a pan, not when it goes down.** A captured
+  pointer retargets the `pointerup` and its `mouseup` to the capture element, and the browser aims
+  the `click` at the common ancestor of the mousedown and the mouseup — so capturing on the way
+  down sent every *mouse* tap on a node to the frame, where it deselected instead of opening. It
+  worked under a finger the whole time, which is why it survived: touch dispatches its
+  compatibility mouse events after the capture is already gone.
+- **Zoom steps compose through the state updater.** Three quick presses of "+" that land before
+  React commits the first would otherwise all step from the same view and count as one.
 - **The PNG is drawn, not rasterised from the SVG.** Serialising the live SVG into an `<img>` is
   less code and is what most implementations do, but it loses the fonts — a `foreignObject`-free
   SVG loaded through an image renders text in whatever *that document* resolves the family to,

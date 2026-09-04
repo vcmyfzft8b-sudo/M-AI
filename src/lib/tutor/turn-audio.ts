@@ -381,6 +381,28 @@ export function frameLevel(samples: Int16Array | Float32Array) {
 }
 
 /**
+ * Whether cancelling this turn's stream would still mean anything to Soniox.
+ *
+ * A stream id is only a name on the connection it was announced on, and only for as
+ * long as that connection is still generating it. Two things end it early. Soniox
+ * terminates a stream once it has made the last of its audio, which is well before the
+ * learner has heard it — a long turn is still coming out of the speaker for seconds
+ * afterwards. And Soniox hangs up on an idle socket, after which the next turn opens a
+ * fresh one that has never heard of anything said on the old.
+ *
+ * In both cases the turn is deliberately still here, holding scheduled audio that has
+ * to play out or be stopped locally. Sending its id anyway asks a connection about a
+ * stream it does not have, and the 400 that comes back arrives long after the turn it
+ * names has gone — landing on whichever turn is current by then.
+ */
+export function canCancelStream<TSocket>(
+  turn: { opened: boolean; audioComplete: boolean; socket: TSocket },
+  socket: TSocket | null,
+) {
+  return turn.opened && !turn.audioComplete && socket !== null && socket === turn.socket;
+}
+
+/**
  * Splits a stream of model deltas into pieces that are safe to synthesize.
  *
  * The speech socket takes text incrementally, which is what lets the tutor start

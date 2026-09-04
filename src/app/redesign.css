@@ -597,8 +597,22 @@
   font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
 }
 
+/*
+ * The shared pill scroller: the note's tab row and the two chat suggestion rows.
+ *
+ * `pan-x` is the whole point. Without it a swipe that starts on the row and drifts even slightly
+ * off horizontal takes the page with it, so the row appears to slide up and down while you are
+ * trying to reach the pill at the end of it. Naming the one axis the row owns hands the gesture
+ * to the scroller and nothing else.
+ *
+ * `overscroll-behavior-x` is the other half: scrolled to its last pill, the leftover momentum
+ * chains outward and iOS reads it as the back-swipe, so reaching for the final tab navigated
+ * away from the note.
+ */
 .memo-chiprow {
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
 }
 
 

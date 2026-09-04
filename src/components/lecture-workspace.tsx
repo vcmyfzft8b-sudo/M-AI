@@ -17,7 +17,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useAppLayout } from "@/components/app-layout-context";
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
-import { useT, useTranslations } from "@/components/i18n-provider";
+import { useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { NoteReadAloud } from "@/components/note-read-aloud";
@@ -57,6 +57,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 
+import { StudyGenerationNotice } from "@/components/generation-notice";
 import { LectureMindmap } from "@/components/lecture-mindmap";
 import { LectureTutor } from "@/components/lecture-tutor";
 import { TypingDots } from "@/components/typing-dots";
@@ -854,122 +855,6 @@ function lectureProcessingStageLabel(
     LECTURE_STATUS_STAGE_KEYS[status];
 
   return t(key ?? "stage.lecture.default");
-}
-
-type GenerationPreview = "notes" | "cards" | "quiz" | "test";
-
-/** The note body a generating note is on its way to becoming. */
-const GENERATION_NOTE_PARAGRAPHS = [
-  ["full", "full", "short"],
-  ["full", "full", "full", "short"],
-  ["full", "short"],
-] as const;
-
-const GENERATION_QUIZ_OPTIONS = [0, 1, 2, 3];
-
-/**
- * The ghost of the thing being generated, in the shape that will replace it.
- *
- * Built the way the two route skeletons are — out of the real screen's own
- * measurements rather than out of a spinner that says nothing about what is
- * coming. A wait that ends in a stack of flashcards should look like a stack of
- * flashcards filling in.
- */
-function GenerationSkeleton({ kind }: { kind: GenerationPreview }) {
-  if (kind === "notes") {
-    return (
-      <div className="memo-gen-preview" aria-hidden="true">
-        {GENERATION_NOTE_PARAGRAPHS.map((paragraph, index) => (
-          <div key={index} className="memo-gen-para">
-            <span className="app-loading-pill memo-gen-heading" />
-            {paragraph.map((line, lineIndex) => (
-              <span
-                key={lineIndex}
-                className={`app-loading-pill memo-gen-line ${line === "short" ? "short" : ""}`.trim()}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (kind === "cards") {
-    return (
-      <div className="memo-gen-preview" aria-hidden="true">
-        <div className="memo-gen-deckhead">
-          <div className="memo-gen-cardhead">
-            <span className="app-loading-pill" />
-            <span className="app-loading-pill" />
-          </div>
-          <span className="app-loading-pill memo-gen-bar cards" />
-        </div>
-        <div className="memo-gen-face">
-          <span className="app-loading-pill" />
-          <span className="app-loading-pill" />
-        </div>
-      </div>
-    );
-  }
-
-  if (kind === "quiz") {
-    return (
-      <div className="memo-gen-preview" aria-hidden="true">
-        <span className="app-loading-pill memo-gen-bar quiz" />
-        <div className="memo-gen-quizcard">
-          <span className="app-loading-pill memo-gen-prompt" />
-          {GENERATION_QUIZ_OPTIONS.map((option) => (
-            <span key={option} className="app-loading-pill memo-gen-option" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="memo-gen-preview" aria-hidden="true">
-      <span className="app-loading-pill memo-gen-bar test" />
-      <div className="memo-gen-testblock">
-        <span className="app-loading-pill memo-gen-prompt" />
-        <span className="app-loading-pill memo-gen-testinput" />
-      </div>
-    </div>
-  );
-}
-
-/**
- * A stage caption over the ghost of what is being made.
- *
- * The caption carries the one thing a skeleton cannot: these waits run for
- * minutes and move through named stages, and "Ustvarjam kartice" is the
- * difference between a screen that is working and a screen that is stuck. It
- * sits on the panel itself — the panel is already the surface, and the card
- * this used to draw around itself landed as a second card inside the first.
- */
-function StudyGenerationNotice({
-  stageCopy,
-  bodyCopy,
-  preview,
-}: {
-  stageCopy: string;
-  /** Defaults to the generic "this runs in the background" line. */
-  bodyCopy?: string;
-  preview: GenerationPreview;
-}) {
-  const t = useT();
-  const body = bodyCopy ?? t("study.generatingBody");
-  return (
-    <div className="memo-gen" role="status" aria-live="polite" aria-busy="true">
-      <div className="memo-gen-head">
-        <p className="memo-gen-stage">{stageCopy}</p>
-        <p className="memo-gen-copy">{body}</p>
-        <span className="memo-gen-track" aria-hidden="true">
-          <span />
-        </span>
-      </div>
-      <GenerationSkeleton kind={preview} />
-    </div>
-  );
 }
 
 function isLegacySectionId(value: string) {

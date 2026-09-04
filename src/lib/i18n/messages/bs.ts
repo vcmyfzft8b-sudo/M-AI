@@ -1686,7 +1686,7 @@ export const bs: Messages = {
   /* Palača pamćenja: grad u kojem su raspoređene kartice bilješke. */
   "note.tab.palace": "Palača",
   "palace.title": "Palača pamćenja",
-  "palace.intro": "Prošetaj kroz svoje bilješke. Svaka kartica je ekran u gradu — pronađi ga, sjeti se odgovora i pokupi žeton.",
+  "palace.intro": "Prošetaj kroz svoje bilješke. U svakoj te kući čeka kartica, pitanje iz kviza ili s testa — pronađi je, odgovori i pokupi Memo.",
   "palace.start": "Uđi u grad",
   "palace.resume": "Nastavi šetnju",
   "palace.restart": "Počni ispočetka",
@@ -1698,6 +1698,7 @@ export const bs: Messages = {
   "palace.progressLabel": "Pokupljene kartice",
   "palace.progressCount": "{done} od {total} pokupljeno",
   "palace.reveal": "Prikaži odgovor",
+  "palace.checkAnswer": "Provjeri odgovor",
   "palace.gotIt": "Znam",
   "palace.notYet": "Još ne",
   "palace.hintDesktop": "WASD za kretanje · razmaknica za skok · povuci za pogled",

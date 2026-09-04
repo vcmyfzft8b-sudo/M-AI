@@ -4178,6 +4178,8 @@ export function LectureWorkspace({
         <LecturePalace
           lectureId={detail.lecture.id}
           cards={detail.flashcards}
+          quizQuestions={detail.quizQuestions}
+          practiceQuestions={detail.practiceTestQuestions}
           sections={detail.studySections}
           isReady={detail.lecture.status === "ready"}
         />

@@ -1676,7 +1676,7 @@ export const en: Messages = {
   /* The memory palace: the city a note's cards are laid out in. */
   "note.tab.palace": "Palace",
   "palace.title": "Memory palace",
-  "palace.intro": "Walk through your notes. Every card is a screen in the city — find it, recall the answer, collect the token.",
+  "palace.intro": "Walk through your notes. Every house in town holds a flashcard, a quiz question or a test question — find it, answer it, collect the Memo.",
   "palace.start": "Enter the city",
   "palace.resume": "Continue the walk",
   "palace.restart": "Start over",
@@ -1688,6 +1688,7 @@ export const en: Messages = {
   "palace.progressLabel": "Cards collected",
   "palace.progressCount": "{done} of {total} collected",
   "palace.reveal": "Show answer",
+  "palace.checkAnswer": "Check the answer",
   "palace.gotIt": "Got it",
   "palace.notYet": "Not yet",
   "palace.hintDesktop": "WASD to move · Space to jump · drag to look",

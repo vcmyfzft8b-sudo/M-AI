@@ -1705,7 +1705,7 @@ export const sl = {
   /* Palača spomina: mesto, po katerem se sprehodiš skozi kartice zapiska. */
   "note.tab.palace": "Palača",
   "palace.title": "Palača spomina",
-  "palace.intro": "Sprehodi se skozi svoje zapiske. Vsaka kartica je zaslon v mestu — najdi ga, obnovi snov in poberi žeton.",
+  "palace.intro": "Sprehodi se skozi svoje zapiske. V vsaki hiši v mestu te čaka kartica, kvizno vprašanje ali vprašanje s testa — najdi jo, odgovori in poberi Memota.",
   "palace.start": "Vstopi v mesto",
   "palace.resume": "Nadaljuj sprehod",
   "palace.restart": "Začni znova",
@@ -1717,6 +1717,7 @@ export const sl = {
   "palace.progressLabel": "Pobrane kartice",
   "palace.progressCount": "{done} od {total} pobranih",
   "palace.reveal": "Pokaži odgovor",
+  "palace.checkAnswer": "Preveri odgovor",
   "palace.gotIt": "Znam",
   "palace.notYet": "Še ne",
   "palace.hintDesktop": "WASD za hojo · preslednica za skok · povleci za pogled",

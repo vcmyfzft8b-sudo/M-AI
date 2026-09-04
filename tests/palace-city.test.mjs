@@ -3,128 +3,271 @@ import test from "node:test";
 
 import {
   buildPalaceLayout,
-  groupCardsIntoDistricts,
+  groupItemsIntoDistricts,
   mapArrowAngle,
   mapExtent,
+  MAX_STATIONS,
+  selectPalaceItems,
 } from "../src/lib/palace/layout.ts";
 import {
   CHARACTER_RADIUS,
+  clampCameraDistance,
   createCharacter,
   nearestStation,
   resolveCollision,
   stepCharacter,
   turnTowards,
 } from "../src/lib/palace/movement.ts";
-import { clampLines, wrapText } from "../src/lib/palace/text-texture.ts";
 
-const card = (id, sectionId = null) => ({ id, sectionId });
 const sections = [
   { id: "s1", title: "Prvi del" },
   { id: "s2", title: "Drugi del" },
 ];
 const cards = [
-  card("a", "s1"),
-  card("b", "s1"),
-  card("c", "s2"),
-  card("d", "s2"),
-  card("e", "s2"),
+  { id: "a", sectionId: "s1" },
+  { id: "b", sectionId: "s1" },
+  { id: "c", sectionId: "s2" },
+  { id: "d", sectionId: "s2" },
+  { id: "e", sectionId: "s2" },
 ];
+const items = cards.map((card) => ({ id: card.id, kind: "card", sectionId: card.sectionId }));
 
-test("the same note builds the same city every time", () => {
-  const first = buildPalaceLayout({ seedSource: "lecture-1", cards, sections });
-  const second = buildPalaceLayout({ seedSource: "lecture-1", cards, sections });
+/** The footprint of a house in world axes: `width` runs along its front. */
+function footprint(house) {
+  const sideways = Math.abs(Math.sin(house.facing)) > 0.5;
+
+  return {
+    x: house.x,
+    z: house.z,
+    width: sideways ? house.depth : house.width,
+    depth: sideways ? house.width : house.depth,
+  };
+}
+
+test("the same note builds the same town every time", () => {
+  const first = buildPalaceLayout({ seedSource: "lecture-1", items, sections });
+  const second = buildPalaceLayout({ seedSource: "lecture-1", items, sections });
 
   assert.deepEqual(second, first);
 });
 
-test("a different note gets a different city", () => {
-  const first = buildPalaceLayout({ seedSource: "lecture-1", cards, sections });
-  const other = buildPalaceLayout({ seedSource: "lecture-2", cards, sections });
+test("a different note gets a different town", () => {
+  const first = buildPalaceLayout({ seedSource: "lecture-1", items, sections });
+  const other = buildPalaceLayout({ seedSource: "lecture-2", items, sections });
 
-  assert.notDeepEqual(other.buildings, first.buildings);
+  assert.notDeepEqual(other.houses, first.houses);
 });
 
-test("every card gets exactly one station, in deck order", () => {
-  const layout = buildPalaceLayout({ seedSource: "lecture-1", cards, sections });
+test("every item gets exactly one station outside a house of its own", () => {
+  const layout = buildPalaceLayout({ seedSource: "lecture-1", items, sections });
 
   assert.deepEqual(
-    layout.stations.map((station) => station.id),
+    [...layout.stations].map((station) => station.id).sort(),
     ["a", "b", "c", "d", "e"],
   );
-  assert.equal(new Set(layout.stations.map((station) => station.id)).size, cards.length);
+  assert.equal(new Set(layout.stations.map((station) => station.houseIndex)).size, items.length);
+
+  layout.stations.forEach((station) => {
+    assert.ok(layout.houses[station.houseIndex].landmark, "a station's house is not a landmark");
+  });
 });
 
-test("a section becomes a district, and its cards stay inside it", () => {
-  const layout = buildPalaceLayout({ seedSource: "lecture-1", cards, sections });
+test("a section becomes a neighbourhood, and its items stay inside it", () => {
+  const layout = buildPalaceLayout({ seedSource: "lecture-1", items, sections });
 
   assert.deepEqual(
     layout.districts.map((district) => district.title),
     ["Prvi del", "Drugi del"],
   );
   assert.deepEqual(layout.districts[0].stationIds, ["a", "b"]);
-  assert.deepEqual(layout.districts[1].stationIds, ["c", "d", "e"]);
 
   layout.districts.forEach((district) => {
     district.stationIds.forEach((id) => {
       const station = layout.stations.find((entry) => entry.id === id);
       const distance = Math.hypot(station.x - district.center.x, station.z - district.center.z);
 
-      assert.ok(distance < district.radius, `${id} is outside its own plaza`);
+      assert.ok(distance <= district.radius, `${id} is outside its own neighbourhood`);
     });
   });
 });
 
-test("stations never overlap each other", () => {
+test("no two houses are built on the same plot", () => {
   const layout = buildPalaceLayout({
     seedSource: "crowded",
-    cards: Array.from({ length: 24 }, (_, index) => card(`card-${index}`, "s1")),
+    items: Array.from({ length: 24 }, (_, index) => ({
+      id: `card-${index}`,
+      kind: "card",
+      sectionId: "s1",
+    })),
     sections: [sections[0]],
   });
 
-  layout.stations.forEach((station, index) => {
-    layout.stations.slice(index + 1).forEach((other) => {
+  layout.houses.forEach((house, index) => {
+    const a = footprint(house);
+
+    layout.houses.slice(index + 1).forEach((other) => {
+      const b = footprint(other);
+
       assert.ok(
-        Math.hypot(station.x - other.x, station.z - other.z) > 2,
-        "two cards landed on the same spot",
+        Math.abs(a.x - b.x) >= (a.width + b.width) / 2 - 0.01 ||
+          Math.abs(a.z - b.z) >= (a.depth + b.depth) / 2 - 0.01,
+        "two houses overlap",
       );
     });
   });
 });
 
-test("cards with no section still land somewhere", () => {
-  const groups = groupCardsIntoDistricts(
-    [card("a", "s1"), card("loose"), card("also-loose")],
+test("nothing is built in the middle of a street", () => {
+  const layout = buildPalaceLayout({ seedSource: "town", items, sections });
+  const roadHalf = 11 / 2;
+
+  layout.houses.forEach((house) => {
+    const plot = footprint(house);
+
+    layout.roads.forEach((road) => {
+      const alongX = road.width > road.depth;
+      const overlaps = alongX
+        ? Math.abs(house.z - road.z) < roadHalf + plot.depth / 2
+        : Math.abs(house.x - road.x) < roadHalf + plot.width / 2;
+
+      assert.ok(!overlaps, `a house at ${house.x.toFixed(1)}, ${house.z.toFixed(1)} is in the road`);
+    });
+  });
+});
+
+test("houses differ from one another, which is the whole point", () => {
+  const layout = buildPalaceLayout({
+    seedSource: "variety",
+    items: Array.from({ length: 12 }, (_, index) => ({
+      id: `card-${index}`,
+      kind: "card",
+      sectionId: "s1",
+    })),
+    sections: [sections[0]],
+  });
+  const roofs = new Set(layout.houses.map((house) => house.roofKind));
+  const shapes = new Set(
+    layout.houses.map((house) => `${house.storeys}:${house.features.join(",")}`),
+  );
+
+  assert.ok(roofs.size >= 4, `only ${roofs.size} roof shapes in the whole town`);
+  assert.ok(
+    shapes.size > layout.houses.length * 0.6,
+    `only ${shapes.size} distinct houses out of ${layout.houses.length}`,
+  );
+});
+
+test("the landmark houses stand out from the street they are on", () => {
+  const layout = buildPalaceLayout({ seedSource: "landmarks", items, sections });
+  const landmarks = layout.houses.filter((house) => house.landmark);
+
+  assert.equal(landmarks.length, items.length);
+
+  landmarks.forEach((house) => {
+    assert.ok(house.features.includes("flag"), "a landmark has no flag");
+    assert.ok(house.storeys >= 2, "a landmark is no taller than its neighbours");
+    assert.ok(house.saturation >= 0.5, "a landmark is as pale as its neighbours");
+  });
+});
+
+test("the walk mixes cards with quiz and test questions", () => {
+  const chosen = selectPalaceItems({
+    cards: Array.from({ length: 60 }, (_, index) => ({ id: `c${index}`, sectionId: "s1" })),
+    quiz: Array.from({ length: 20 }, (_, index) => ({ id: `q${index}` })),
+    test: Array.from({ length: 12 }, (_, index) => ({ id: `t${index}` })),
+  });
+  const counts = chosen.reduce(
+    (total, item) => ({ ...total, [item.kind]: (total[item.kind] ?? 0) + 1 }),
+    {},
+  );
+
+  assert.equal(chosen.length, MAX_STATIONS);
+  assert.ok(counts.card > counts.quiz, "the deck should still be mostly flashcards");
+  assert.ok(counts.quiz > 0 && counts.test > 0, "a walk with no questions in it");
+  assert.equal(new Set(chosen.map((item) => item.id)).size, chosen.length);
+});
+
+test("a short deck is laid out whole, without padding or repeats", () => {
+  const chosen = selectPalaceItems({
+    cards: [{ id: "c0", sectionId: null }, { id: "c1", sectionId: null }],
+    quiz: [{ id: "q0" }],
+    test: [],
+  });
+
+  assert.deepEqual(
+    chosen.map((item) => item.id),
+    ["c0", "c1", "q0"],
+  );
+});
+
+test("questions with no section of their own are spread over the neighbourhoods", () => {
+  const groups = groupItemsIntoDistricts(
+    [
+      { id: "a", kind: "card", sectionId: "s1" },
+      { id: "b", kind: "card", sectionId: "s2" },
+      { id: "q1", kind: "quiz", sectionId: null },
+      { id: "q2", kind: "quiz", sectionId: null },
+    ],
     sections,
     "Zapiski",
   );
 
-  assert.deepEqual(groups.map((group) => group.cards.map((entry) => entry.id)).flat().sort(), [
-    "a",
-    "also-loose",
-    "loose",
-  ]);
+  assert.deepEqual(
+    groups.map((group) => group.items.map((item) => item.id)),
+    [
+      ["a", "q1"],
+      ["b", "q2"],
+    ],
+  );
 });
 
-test("a note with no sections is still cut into walkable districts", () => {
-  const groups = groupCardsIntoDistricts(
-    Array.from({ length: 20 }, (_, index) => card(`c${index}`)),
+test("a note with no sections is still cut into walkable neighbourhoods", () => {
+  const groups = groupItemsIntoDistricts(
+    Array.from({ length: 20 }, (_, index) => ({ id: `c${index}`, kind: "card", sectionId: null })),
     [],
     "Zapiski",
   );
 
   assert.equal(groups.length, 3);
-  assert.deepEqual(groups.map((group) => group.title), ["Zapiski 1", "Zapiski 2", "Zapiski 3"]);
+  assert.deepEqual(
+    groups.map((group) => group.title),
+    ["Zapiski 1", "Zapiski 2", "Zapiski 3"],
+  );
 });
 
-test("you spawn on the street, not inside a building", () => {
-  const layout = buildPalaceLayout({ seedSource: "lecture-1", cards, sections });
+test("you spawn in the street, not inside a house", () => {
+  const layout = buildPalaceLayout({ seedSource: "lecture-1", items, sections });
 
-  layout.buildings.forEach((building) => {
-    const insideX = Math.abs(layout.spawn.x - building.x) < building.width / 2 + CHARACTER_RADIUS;
-    const insideZ = Math.abs(layout.spawn.z - building.z) < building.depth / 2 + CHARACTER_RADIUS;
+  layout.houses.forEach((house) => {
+    const plot = footprint(house);
+    const insideX = Math.abs(layout.spawn.x - house.x) < plot.width / 2 + CHARACTER_RADIUS;
+    const insideZ = Math.abs(layout.spawn.z - house.z) < plot.depth / 2 + CHARACTER_RADIUS;
 
-    assert.ok(!(insideX && insideZ), "the spawn point is inside a building");
+    assert.ok(!(insideX && insideZ), "the spawn point is inside a house");
   });
+});
+
+test("the streets are painted, kerbed and paved on both sides", () => {
+  const layout = buildPalaceLayout({ seedSource: "town", items, sections });
+
+  assert.equal(layout.kerbs.length, layout.roads.length * 2);
+  assert.equal(layout.pavements.length, layout.roads.length * 2);
+  assert.ok(layout.roadMarks.length > 50, "the roads carry no markings");
+});
+
+test("a town stays within a size a phone can draw", () => {
+  const layout = buildPalaceLayout({
+    seedSource: "big",
+    items: Array.from({ length: MAX_STATIONS }, (_, index) => ({
+      id: `card-${index}`,
+      kind: "card",
+      sectionId: `s${index % 6}`,
+    })),
+    sections: Array.from({ length: 6 }, (_, index) => ({ id: `s${index}`, title: `Del ${index}` })),
+  });
+
+  assert.ok(layout.houses.length < 400, `${layout.houses.length} houses is too many`);
+  assert.ok(layout.props.length < 800, `${layout.props.length} props is too many`);
 });
 
 test("a wall is slid along, not walked through", () => {
@@ -135,7 +278,7 @@ test("a wall is slid along, not walked through", () => {
   assert.ok(pushed.z < 10 - 4 / 2, "the walker ends up outside the wall");
 });
 
-test("walking into a building stops at its face", () => {
+test("walking into a house stops at its face", () => {
   const colliders = [{ x: 0, z: -10, width: 12, depth: 12 }];
   let state = createCharacter(0, 0, Math.PI);
 
@@ -143,7 +286,7 @@ test("walking into a building stops at its face", () => {
     state = stepCharacter({
       state,
       input: { forward: 1, right: 0, jump: false, sprint: true },
-      /* Facing -Z, straight at the building. */
+      /* Facing -Z, straight at the house. */
       cameraYaw: Math.PI,
       colliders,
       bounds: 200,
@@ -151,7 +294,7 @@ test("walking into a building stops at its face", () => {
     });
   }
 
-  /* The building's near face is at z = -4; the walker stops one radius short of it. */
+  /* The near face is at z = -4; the walker stops one radius short of it. */
   const stopLine = -4 + CHARACTER_RADIUS;
 
   assert.ok(state.z <= stopLine + 0.001, "the walker never reached the wall");
@@ -218,12 +361,27 @@ test("a jump comes back down, and only one jump is allowed in the air", () => {
   assert.equal(falling.grounded, true);
 });
 
+test("the camera is pulled in rather than left inside a wall", () => {
+  const target = { x: 0, y: 1.5, z: 0 };
+  const behind = [{ x: 0, z: 6, width: 10, depth: 6 }];
+
+  assert.equal(
+    clampCameraDistance({ target, yaw: 0, pitch: 0.3, maxDistance: 8.4, colliders: [] }),
+    8.4,
+  );
+  assert.ok(
+    clampCameraDistance({ target, yaw: Math.PI, pitch: 0.3, maxDistance: 8.4, colliders: behind }) <
+      8.4,
+    "the camera stayed inside the building behind the player",
+  );
+});
+
 test("the body turns the short way round", () => {
   assert.ok(turnTowards(0.1, -0.1, 1) < 0.1, "turning right went the long way round");
   assert.ok(turnTowards(3.0, -3.0, 1) > 3.0, "the turn crossed the seam the long way");
 });
 
-test("the card you are standing at is the nearest one within reach", () => {
+test("the station you are standing at is the nearest one within reach", () => {
   const stations = [
     { id: "far", x: 20, z: 0 },
     { id: "near", x: 1.5, z: 0 },
@@ -234,32 +392,7 @@ test("the card you are standing at is the nearest one within reach", () => {
   assert.equal(nearestStation({ x: 40, z: 40 }, stations, 3.4), null);
 });
 
-test("board text wraps on words and never overflows the board", () => {
-  /* A fake measurer: one unit per character, which is all wrapping needs. */
-  const measure = (text) => text.length;
-  const lines = wrapText("Kaj je fotosinteza in zakaj je pomembna", 12, measure);
-
-  lines.forEach((line) => assert.ok(line.length <= 12, `"${line}" is wider than the board`));
-  assert.equal(lines.join(" "), "Kaj je fotosinteza in zakaj je pomembna");
-});
-
-test("a word wider than the board is broken rather than clipped", () => {
-  const measure = (text) => text.length;
-  const lines = wrapText("elektroencefalografija", 8, measure);
-
-  lines.forEach((line) => assert.ok(line.length <= 8));
-  assert.equal(lines.join(""), "elektroencefalografija");
-});
-
-test("more text than fits ends in an ellipsis", () => {
-  const clamped = clampLines(["one", "two", "three", "four"], 2);
-
-  assert.deepEqual(clamped, ["one", "two…"]);
-});
-
 test("the map arrow points where the player is walking", () => {
-  /* Rotate the north-pointing arrow the way a canvas would, then compare with
-     the direction the character actually moves in: x = sin(facing), z = cos(facing). */
   const rotated = (facing) => {
     const angle = mapArrowAngle(facing);
 
@@ -276,71 +409,16 @@ test("the map arrow points where the player is walking", () => {
   }
 });
 
-test("the map is framed on the districts, not on the empty outskirts", () => {
-  const layout = buildPalaceLayout({ seedSource: "lecture-1", cards, sections });
+test("the map is framed on the town, not on the empty outskirts", () => {
+  const layout = buildPalaceLayout({ seedSource: "lecture-1", items, sections });
   const extent = mapExtent(layout);
 
-  assert.ok(extent < layout.bounds, "the map would draw the city as a dot");
+  assert.ok(extent < layout.bounds, "the map would draw the town as a dot");
 
   layout.stations.forEach((station) => {
-    assert.ok(Math.abs(station.x) <= extent && Math.abs(station.z) <= extent, "a card is off the map");
+    assert.ok(
+      Math.abs(station.x) <= extent && Math.abs(station.z) <= extent,
+      "a station is off the map",
+    );
   });
-});
-
-test("the town is built around the plazas, not on top of them", () => {
-  const layout = buildPalaceLayout({ seedSource: "town", cards, sections });
-
-  assert.ok(layout.buildings.length > 40, "the streets were left empty");
-
-  layout.buildings.forEach((building) => {
-    layout.districts.forEach((district) => {
-      const distance = Math.hypot(district.center.x - building.x, district.center.z - building.z);
-
-      assert.ok(
-        distance > district.radius - 1,
-        "a building was dropped inside a plaza the cards stand in",
-      );
-    });
-  });
-});
-
-test("nothing is built in the middle of a street", () => {
-  const layout = buildPalaceLayout({ seedSource: "town", cards, sections });
-  const roadHalf = 11 / 2;
-
-  layout.buildings.forEach((building) => {
-    layout.roads.forEach((road) => {
-      const alongX = road.width > road.depth;
-      const overlapsRoad = alongX
-        ? Math.abs(building.z - road.z) < roadHalf + building.depth / 2
-        : Math.abs(building.x - road.x) < roadHalf + building.width / 2;
-      const withinRoadLength = alongX
-        ? Math.abs(building.x - road.x) < road.width / 2
-        : Math.abs(building.z - road.z) < road.depth / 2;
-
-      assert.ok(
-        !(overlapsRoad && withinRoadLength),
-        `a building at ${building.x.toFixed(1)}, ${building.z.toFixed(1)} is in the road`,
-      );
-    });
-  });
-});
-
-test("the streets are painted and kerbed", () => {
-  const layout = buildPalaceLayout({ seedSource: "town", cards, sections });
-
-  assert.equal(layout.kerbs.length, layout.roads.length * 2, "every road has two kerbs");
-  assert.ok(layout.roadMarks.length > 50, "the roads carry no markings");
-});
-
-test("a city stays within a size a phone can draw", () => {
-  /* Forty cards is the biggest deck the pipeline produces for one note. */
-  const layout = buildPalaceLayout({
-    seedSource: "big",
-    cards: Array.from({ length: 40 }, (_, index) => card(`card-${index}`, `s${index % 6}`)),
-    sections: Array.from({ length: 6 }, (_, index) => ({ id: `s${index}`, title: `Del ${index}` })),
-  });
-
-  assert.ok(layout.buildings.length < 400, `${layout.buildings.length} buildings is too many`);
-  assert.ok(layout.props.length < 700, `${layout.props.length} props is too many`);
 });

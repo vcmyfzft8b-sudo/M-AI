@@ -52,11 +52,12 @@ export type PalaceGame = {
   dispose: () => void;
 };
 
-/** How close you have to stand for a card to open. */
-export const STATION_REACH = 3.4;
-/** Beyond this, boards show their number instead of their words. */
-const READABLE_RANGE = 26;
-const MAX_READABLE = 8;
+/**
+ * How close you have to stand for a station to open its study screen. Wide
+ * enough that walking up to the front door counts as arriving, since that is
+ * what a player aims at rather than the token on the path.
+ */
+export const STATION_REACH = 4.4;
 const LOOK_SENSITIVITY = 0.0042;
 /** How far behind the character the camera rides when nothing is in the way. */
 const CAMERA_DISTANCE = 8.4;
@@ -64,7 +65,6 @@ const CAMERA_DISTANCE = 8.4;
 export function createPalaceGame({
   canvas,
   layout,
-  cardText,
   collectedIds,
   onNearStation,
   onFrame,
@@ -72,7 +72,6 @@ export function createPalaceGame({
 }: {
   canvas: HTMLCanvasElement;
   layout: PalaceLayout;
-  cardText: Map<string, { title: string; body: string }>;
   collectedIds: readonly string[];
   /** Fires when the card under the player's nose changes, id or null. */
   onNearStation: (stationId: string | null) => void;
@@ -88,21 +87,30 @@ export function createPalaceGame({
   });
 
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  /*
+   * Shadows are most of what makes the town read as solid rather than as
+   * coloured paper, so they are on everywhere — but the map is sized to the
+   * device, because a phone drawing 2048² of shadow every frame is a phone
+   * getting warm for no visible gain at that screen size.
+   */
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(58, 1, 0.5, 420);
-  const disposeLighting = createLighting(scene);
-  const city = buildCity(layout, cardText);
+  const lighting = createLighting(scene, window.innerWidth < 900 ? 1024 : 2048);
+  const city = buildCity(layout);
   const avatar = createAvatar();
 
   scene.add(city.group, avatar.root);
+  lighting.follow(layout.spawn.x, layout.spawn.z);
 
   const collected = new Set(collectedIds);
 
   /*
-   * A collected card keeps its ring, faded: the marks on the ground are the
-   * route through the district, and rubbing them out as you go would take the
-   * walk with them.
+   * A collected station keeps its ring, faded: the marks on the ground are the
+   * route through the neighbourhood, and rubbing them out as you go would take
+   * the walk with them.
    */
   const markVisualCollected = (visual: StationVisual) => {
     visual.collected = true;
@@ -116,13 +124,14 @@ export function createPalaceGame({
   city.stations.forEach((visual) => {
     if (collected.has(visual.station.id)) {
       markVisualCollected(visual);
-      city.applyScreen(visual, false);
     }
   });
 
   let character: CharacterState = createCharacter(layout.spawn.x, layout.spawn.z, layout.spawn.yaw);
   let cameraYaw = layout.spawn.yaw;
-  let cameraPitch = 0.32;
+  /* A little above the eaves: low enough to feel like a street, high enough
+     that the camera does not spend its life inside somebody's roof. */
+  let cameraPitch = 0.42;
   const move = { forward: 0, right: 0 };
   let sprinting = false;
   let jumpQueued = false;
@@ -139,7 +148,7 @@ export function createPalaceGame({
   let districtIndex = 0;
   let frame = 0;
   let lastTime = 0;
-  let readableRefreshAt = 0;
+  let districtRefreshAt = 0;
 
   const resize = () => {
     const width = canvas.clientWidth || window.innerWidth;
@@ -173,30 +182,6 @@ export function createPalaceGame({
   const resizeObserver = new ResizeObserver(() => resize());
 
   resizeObserver.observe(canvas);
-
-  /*
-   * Only the handful of boards you could actually read carry their text: a
-   * canvas per card, live, is megabytes of texture on a phone, and the ones
-   * across the city are a number anyway.
-   */
-  const refreshReadableScreens = () => {
-    const ranked = city.stations
-      .map((visual) => ({
-        visual,
-        distance: Math.hypot(visual.station.x - character.x, visual.station.z - character.z),
-      }))
-      .sort((left, right) => left.distance - right.distance);
-
-    ranked.forEach(({ visual, distance }, index) => {
-      const readable = index < MAX_READABLE && distance < READABLE_RANGE;
-
-      if (readable !== visual.readable) {
-        city.applyScreen(visual, readable);
-      }
-    });
-  };
-
-  refreshReadableScreens();
 
   /*
    * One frame straight away, before the loop starts: the city should be on
@@ -328,6 +313,7 @@ export function createPalaceGame({
     avatar.root.position.set(character.x, character.y, character.z);
     avatar.root.rotation.y = character.facing;
     avatar.update(character.speed, !character.grounded, delta);
+    lighting.follow(character.x, character.z);
 
     const eye = { x: character.x, y: character.y + 0.9, z: character.z };
     const distance = clampCameraDistance({
@@ -356,9 +342,8 @@ export function createPalaceGame({
       visual.token.position.y = 2.45 + Math.sin(seconds * 2 + visual.station.index) * 0.18;
     });
 
-    if (time > readableRefreshAt) {
-      readableRefreshAt = time + 260;
-      refreshReadableScreens();
+    if (time > districtRefreshAt) {
+      districtRefreshAt = time + 260;
       districtIndex = currentDistrict();
     }
 
@@ -427,7 +412,6 @@ export function createPalaceGame({
       if (!visual || visual.collected) return;
 
       markVisualCollected(visual);
-      city.applyScreen(visual, visual.readable);
 
       if (nearStationId === stationId) {
         nearStationId = null;
@@ -445,12 +429,52 @@ export function createPalaceGame({
 
       if (!district) return;
 
-      character = createCharacter(district.center.x, district.center.z, Math.PI);
+      /*
+       * The map drops you outside the next house that still has something
+       * waiting at it, facing its door — not at the middle of the
+       * neighbourhood, which in a town of blocks is somebody's back garden.
+       */
+      const target =
+        city.stations.find(
+          (visual) => visual.station.districtIndex === index && !visual.collected,
+        ) ??
+        city.stations.find((visual) => visual.station.districtIndex === index);
+
+      if (!target) return;
+
+      const house = layout.houses[target.station.houseIndex];
+      const away = {
+        x: target.station.x - house.x,
+        z: target.station.z - house.z,
+      };
+      const length = Math.hypot(away.x, away.z) || 1;
+      const step = 4.2;
+
+      character = createCharacter(
+        target.station.x + (away.x / length) * step,
+        target.station.z + (away.z / length) * step,
+        Math.atan2(-away.x / length, -away.z / length),
+      );
+      cameraYaw = character.facing;
       interacting = false;
       suppressedStationId = null;
-      cameraYaw = Math.PI;
-      camera.position.set(district.center.x, 12, district.center.z + district.radius + 8);
-      refreshReadableScreens();
+      lighting.follow(character.x, character.z);
+
+      const eye = { x: character.x, y: 0.9, z: character.z };
+      const spot = cameraPosition({
+        target: eye,
+        yaw: cameraYaw,
+        pitch: cameraPitch,
+        distance: clampCameraDistance({
+          target: eye,
+          yaw: cameraYaw,
+          pitch: cameraPitch,
+          maxDistance: CAMERA_DISTANCE,
+          colliders: city.colliders,
+        }),
+      });
+
+      camera.position.set(spot.x, Math.max(spot.y, 1.2), spot.z);
     },
     setPaused: (value) => {
       paused = value;
@@ -473,7 +497,7 @@ export function createPalaceGame({
       canvas.removeEventListener("webglcontextlost", onWebglContextLost);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
-      disposeLighting();
+      lighting.dispose();
       avatar.dispose();
       city.dispose();
       scene.clear();

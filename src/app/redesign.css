@@ -13629,21 +13629,31 @@
   100% { translate: 250% 0; }
 }
 
-/* The card you are standing in front of. */
-.memo-palace-card {
+/*
+ * The study screen you are standing in front of.
+ *
+ * Whatever the town is, this is the app: the flashcard that flips, the quiz
+ * that marks you, the practice question with its model answer, all the same
+ * components the deck screens use. So this is a frame around them and nothing
+ * more — it sets the panel, and lets `globals.css` draw what is inside it.
+ */
+.memo-palace-panel {
   position: absolute;
   left: 50%;
   translate: -50% 0;
   bottom: calc(4.6rem + var(--memo-safe-bottom, 0px));
-  width: min(30rem, calc(100% - 2rem));
+  width: min(34rem, calc(100% - 2rem));
+  max-height: calc(100% - 9rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  padding: 1.1rem 1.2rem 1.2rem;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.96);
-  color: #14121a;
-  box-shadow: 0 18px 44px rgba(10, 8, 20, 0.32);
+  gap: 0.75rem;
+  padding: 1rem 1.15rem 1.2rem;
+  border-radius: 24px;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 18px 44px rgba(10, 8, 20, 0.34);
   animation: memo-palace-rise 180ms ease-out;
 }
 
@@ -13652,65 +13662,109 @@
   to { opacity: 1; translate: -50% 0; }
 }
 
-.memo-palace-card-head {
+.memo-palace-panel-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
-/* Walking away is not an option while a card is open, so there is a way out of it. */
-.memo-palace-card-close {
+.memo-palace-panel-kind {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--text) 10%, transparent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.memo-palace-panel-where {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+/* Walking away is not an option while a station is open, so there is a way out. */
+.memo-palace-panel-close {
   display: grid;
   place-items: center;
   width: 2rem;
   height: 2rem;
-  margin: -0.3rem -0.3rem 0 0;
+  flex: none;
   border: 0;
   border-radius: 999px;
-  background: rgba(20, 18, 26, 0.07);
-  color: #14121a;
+  background: color-mix(in oklch, var(--text) 8%, transparent);
+  color: var(--text);
   cursor: pointer;
 }
 
-.memo-palace-card-eyebrow {
+/* A card in a panel this size does not need the deck screen's full height. */
+.memo-palace-panel .lecture-flashcard {
+  min-height: 13rem;
+}
+
+.memo-palace-panel .lecture-flashcard-content {
+  font-size: 1.05rem;
+}
+
+.memo-palace-panel .lecture-flashcard-toolbar {
   margin: 0;
-  font-size: 0.78rem;
+}
+
+.memo-palace-panel .lecture-flashcard-review {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.memo-palace-panel .lecture-flashcard-review-button {
+  flex: 1;
+  gap: 0.4rem;
+}
+
+.memo-palace-panel .lecture-quiz-card {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.memo-palace-panel .lecture-practice-textarea {
+  min-height: 6rem;
+}
+
+/* The answer a practice question is marked against, shown for self-marking:
+   there is no room in a walk for a round trip to the grader. */
+.memo-palace-model {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 16px;
+  background: color-mix(in oklch, var(--text) 6%, transparent);
+}
+
+.memo-palace-model-label {
+  font-size: 0.75rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #6f6b80;
+  color: var(--muted);
 }
 
-.memo-palace-card-front {
+.memo-palace-model p {
   margin: 0;
-  font-size: 1.1rem;
-  font-weight: 750;
-  line-height: 1.35;
-}
-
-.memo-palace-card-back {
-  margin: 0;
-  font-size: 1rem;
+  font-size: 0.98rem;
   line-height: 1.45;
-  color: #34313f;
 }
 
 .memo-palace-card-actions {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
-}
-
-.memo-palace-card .memo-button-outline.small {
-  background: transparent;
-  color: #14121a;
-  border-color: rgba(20, 18, 26, 0.2);
-}
-
-.memo-palace-card .memo-palace-cta {
-  background: #14121a;
-  color: #fff;
 }
 
 .memo-palace-sheet {
@@ -13798,8 +13852,10 @@
     height: 9rem;
   }
 
-  /* The card sits above the thumb, not under it. */
-  .memo-palace-card {
-    bottom: calc(7.5rem + var(--memo-safe-bottom, 0px));
+  /* The panel sits above the thumb, not under it. */
+  .memo-palace-panel {
+    bottom: calc(6.5rem + var(--memo-safe-bottom, 0px));
+    width: calc(100% - 1.4rem);
+    max-height: calc(100% - 11rem);
   }
 }

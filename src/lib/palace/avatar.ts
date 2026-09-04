@@ -108,6 +108,13 @@ export function createAvatar(): Avatar {
   shadow.position.y = 0.05;
 
   root.add(torso, head, cap, brim, backpack, shadow);
+  /* The character casts a real shadow now; the painted blob under it stays as
+     the contact patch a shadow map at this distance cannot resolve. */
+  root.traverse((part) => {
+    if (part instanceof THREE.Mesh && part !== shadow) {
+      part.castShadow = true;
+    }
+  });
 
   let phase = 0;
 

@@ -88,9 +88,15 @@ above the line is one more thing to read on a screen you are trying not to read.
 
 The timings are free. The synthesizer already reports when it said every character
 (`buildTtsPiecesFromCharacterTimestamps`), which read-aloud uses to highlight words and the
-podcast was discarding. `buildPodcastCues` groups them into broadcast-sized lines — about 42
-characters, broken at a sentence end first, a clause second, and only on width as a last
-resort — and holds any line that would otherwise flash.
+podcast was discarding. `buildPodcastCues` groups them into bursts of a few words — at most
+four, at most twenty-six characters — closing on a sentence end where one falls.
+
+Two rules pull against each other there, and it is worth knowing which wins. A burst should be
+small enough for the eye to take whole; it should also never be on screen too briefly to read,
+which with bursts this small is a real risk rather than a theoretical one ("In?" is a whole
+caption and a fifth of a second of audio). When they disagree the burst simply takes more words.
+Holding a short burst instead cannot work: the next one starts the instant this one stops being
+spoken, so there is no gap to borrow and holding would put two captions on screen at once.
 
 **The report is used for *when*, the script for *what*.** That distinction is not cosmetic: a
 turn opening "Danes gre za osnove…" produced a first subtitle reading "es gre za osnove…",

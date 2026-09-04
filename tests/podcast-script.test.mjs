@@ -5,6 +5,7 @@ import {
   alignPodcastWords,
   buildPodcastCues,
   cueAt,
+  groupWordsIntoCues,
   normalizePodcastTurns,
   parseStoredCues,
   parseStoredTurns,
@@ -287,61 +288,90 @@ function pieces(sentence, msPerWord = 400) {
 /** The ordinary case: the synthesizer reported every word of the turn it was given. */
 const cuesFor = (sentence) => buildPodcastCues(sentence, pieces(sentence));
 
-test("a subtitle line breaks at a sentence end rather than on width", () => {
-  const cues = cuesFor("Prva poved se konca tukaj. Druga se zacne zdaj.");
+test("a caption is a few words, not a line of a sentence", () => {
+  const cues = cuesFor("Danes gremo skozi osnove omrezij in naslavljanja v praksi zdaj");
 
-  assert.equal(cues.length, 2);
-  assert.equal(cues[0].text, "Prva poved se konca tukaj.");
-  assert.equal(cues[1].text, "Druga se zacne zdaj.");
-});
-
-test("no subtitle line is wider than the eye takes in one glance", () => {
-  const cues = cuesFor(Array.from({ length: 40 }, () => "beseda").join(" "));
-
-  assert.ok(cues.length > 1, "forty words cannot be one line");
+  assert.ok(cues.length >= 3, "a dozen words cannot be one caption");
 
   for (const cue of cues) {
-    assert.ok(cue.text.length <= 46, `"${cue.text}" is ${cue.text.length} characters`);
+    const words = cue.text.split(" ").length;
+
+    assert.ok(words <= 6, `"${cue.text}" is ${words} words`);
+    assert.ok(cue.text.length <= 34, `"${cue.text}" is ${cue.text.length} characters`);
   }
 });
 
-test("cues run forward, never overlap, and carry the synthesizer's own timings", () => {
+test("a caption closes on a sentence end rather than running across it", () => {
+  const cues = cuesFor("Prva se konca tukaj. Druga se zacne zdaj.");
+  const straddles = cues.filter((cue) => /\.\s/.test(cue.text));
+
+  assert.deepEqual(straddles, [], "no caption may contain a full stop mid-text");
+});
+
+/*
+ * The failure this guards is specific to captions rather than to subtitles: a burst can be two
+ * syllables long, and at a fifth of a second nobody reads it. It cannot be fixed by holding the
+ * burst — the next one starts the moment this stops being spoken — so it has to be fixed by
+ * making the burst bigger.
+ */
+test("no caption is on screen too briefly to read", () => {
+  const fast = "Ja. Ne. Tocno. In? Seveda.".split(" ").map((text, index) => ({
+    text,
+    start_ms: index * 220,
+    end_ms: index * 220 + 200,
+  }));
+  const cues = buildPodcastCues("Ja. Ne. Tocno. In? Seveda.", fast);
+
+  for (const cue of cues) {
+    assert.ok(
+      cue.endMs - cue.startMs >= 700,
+      `"${cue.text}" is up for only ${cue.endMs - cue.startMs}ms`,
+    );
+  }
+});
+
+test("captions run forward and never share the screen", () => {
   const cues = cuesFor("Ena dve tri stiri. Pet sest sedem osem. Devet deset enajst dvanajst.");
 
-  assert.equal(cues[0].startMs, 0, "the first line starts when the first word does");
-
-  for (let i = 0; i < cues.length; i += 1) {
-    assert.ok(cues[i].endMs > cues[i].startMs, "a line must last");
-
-    if (cues[i + 1]) {
-      assert.ok(
-        cues[i + 1].startMs >= cues[i].startMs,
-        "lines must run forward",
-      );
-      assert.ok(
-        cues[i].endMs <= cues[i + 1].startMs,
-        "a line must be gone before the next one arrives, or two are on screen at once",
-      );
-    }
+  for (let i = 0; i < cues.length - 1; i += 1) {
+    assert.ok(cues[i].endMs > cues[i].startMs, "a caption must last");
+    assert.ok(
+      cues[i].endMs <= cues[i + 1].startMs,
+      `"${cues[i].text}" is still up when "${cues[i + 1].text}" arrives`,
+    );
   }
 });
 
-/* A line that appears and vanishes inside a few frames is unreadable however correct its timing. */
-test("a very short phrase is held long enough to read", () => {
-  const [cue] = buildPodcastCues("Tocno.", [{ text: "Tocno.", start_ms: 0, end_ms: 180 }]);
+test("a caption never runs on past the point of glancing up", () => {
+  const slow = "ena dve tri".split(" ").map((text, index) => ({
+    text,
+    start_ms: index * 3_000,
+    end_ms: index * 3_000 + 2_900,
+  }));
 
-  assert.ok(cue.endMs - cue.startMs >= 900, `held for only ${cue.endMs - cue.startMs}ms`);
+  for (const cue of buildPodcastCues("ena dve tri", slow)) {
+    assert.ok(cue.endMs - cue.startMs <= 6_000, `"${cue.text}" holds for too long`);
+  }
 });
 
-test("the line on screen is the one being spoken, and the last one holds to the end", () => {
+test("the caption on screen is the one being spoken, and the last one holds to the end", () => {
   const cues = cuesFor("Prva poved se konca tukaj. Druga se zacne zdaj.");
+  const last = cues[cues.length - 1];
 
   assert.equal(cueAt(cues, 0)?.text, cues[0].text);
-  assert.equal(cueAt(cues, cues[1].startMs + 50)?.text, cues[1].text);
+
+  for (const cue of cues) {
+    assert.equal(
+      cueAt(cues, cue.startMs + 10)?.text,
+      cue.text,
+      `at ${cue.startMs}ms the caption should be "${cue.text}"`,
+    );
+  }
+
   assert.equal(
-    cueAt(cues, cues[1].endMs + 10_000)?.text,
-    cues[1].text,
-    "past the end the last line stays rather than blanking",
+    cueAt(cues, last.endMs + 10_000)?.text,
+    last.text,
+    "past the end the last caption stays rather than blanking",
   );
 });
 
@@ -399,4 +429,26 @@ test("audio tags never reach the subtitle, because they are never spoken", () =>
   const cues = buildPodcastCues(text, pieces(spoken));
 
   assert.equal(cues.map((cue) => cue.text).join(" "), spoken);
+});
+
+/*
+ * The word timings are what gets stored and the captions are a view over them. That is the whole
+ * point of splitting the two: regrouping must be free, so that changing how captions are cut does
+ * not leave every episode already in the cache showing the old cuts for ever.
+ */
+test("captions are a view over the stored timings, not the stored thing", () => {
+  const text = "Danes gremo skozi osnove omrezij in naslavljanja";
+  const stored = alignPodcastWords(text, pieces(text));
+
+  assert.deepEqual(
+    groupWordsIntoCues(stored),
+    buildPodcastCues(text, pieces(text)),
+    "regrouping the stored words must reproduce the captions exactly",
+  );
+
+  assert.equal(
+    stored.map((word) => word.text).join(" "),
+    text,
+    "the stored artifact is the words themselves, so no wording is lost to the grouping",
+  );
 });

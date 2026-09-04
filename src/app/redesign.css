@@ -13688,9 +13688,10 @@
   justify-content: center;
   width: 100%;
   max-width: 34rem;
-  /* Two lines' worth, reserved. A box that grows and shrinks with each cue makes the whole
-     screen twitch, which is exactly what a subtitle must not do. */
-  min-height: 5.75rem;
+  /* Reserved rather than fitted. A burst is normally one line and occasionally two, and a box
+     that resized with each of them would make the whole screen twitch several times a sentence
+     — which is exactly what a caption must not do. */
+  min-height: 4.25rem;
   padding: 0.5rem 0.75rem;
   text-align: center;
 }
@@ -13726,7 +13727,7 @@
   }
 
   .memo-podcast-caption {
-    min-height: 6.75rem;
+    min-height: 5rem;
   }
 
   .memo-podcast-caption-text {

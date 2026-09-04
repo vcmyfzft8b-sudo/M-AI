@@ -694,7 +694,7 @@ export type Database = {
           audio_storage_path: string;
           audio_mime_type: string;
           duration_ms: number;
-          cues: Json;
+          word_timings: Json;
           generated_at: string;
           updated_at: string;
         };
@@ -710,7 +710,7 @@ export type Database = {
           audio_storage_path: string;
           audio_mime_type?: string;
           duration_ms: number;
-          cues?: Json;
+          word_timings?: Json;
           generated_at?: string;
           updated_at?: string;
         };
@@ -723,7 +723,7 @@ export type Database = {
           audio_storage_path?: string;
           audio_mime_type?: string;
           duration_ms?: number;
-          cues?: Json;
+          word_timings?: Json;
           generated_at?: string;
           updated_at?: string;
         };

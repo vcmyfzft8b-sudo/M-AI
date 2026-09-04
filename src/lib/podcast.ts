@@ -30,7 +30,8 @@ import { synthesizeTtsChunkWithTimestamps } from "@/lib/note-tts-synthesis";
 import type { NoteTtsVoice } from "@/lib/note-tts-settings";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import {
-  buildPodcastCues,
+  alignPodcastWords,
+  groupWordsIntoCues,
   normalizePodcastTurns,
   parseStoredCues,
   parseStoredTurns,
@@ -557,7 +558,7 @@ export async function getOrCreatePodcastSegment(params: {
     return {
       row: cached,
       audioUrl: await signSegment(cached),
-      cues: parseStoredCues(cached.cues),
+      cues: groupWordsIntoCues(parseStoredCues(cached.word_timings)),
       quota: null,
     };
   }
@@ -590,7 +591,7 @@ export async function getOrCreatePodcastSegment(params: {
   let shouldRelease = Boolean(claim.reservation);
 
   try {
-    const { audio, durationMs, cues } = await synthesizePodcastTurn({
+    const { audio, durationMs, wordTimings } = await synthesizePodcastTurn({
       text: turn.text,
       language: params.podcast.language,
       voice,
@@ -630,7 +631,7 @@ export async function getOrCreatePodcastSegment(params: {
           audio_storage_path: audioStoragePath,
           audio_mime_type: TTS_OUTPUT_MIME_TYPE,
           duration_ms: Math.ceil(durationMs),
-          cues: cues as unknown as Json,
+          word_timings: wordTimings as unknown as Json,
         } as never,
         { onConflict: "podcast_id,segment_index,voice,model" },
       )
@@ -657,7 +658,12 @@ export async function getOrCreatePodcastSegment(params: {
       actualSeconds: Math.max(1, Math.ceil(row.duration_ms / 1000)),
     });
 
-    return { row, audioUrl: await signSegment(row), cues: parseStoredCues(row.cues), quota };
+    return {
+      row,
+      audioUrl: await signSegment(row),
+      cues: groupWordsIntoCues(parseStoredCues(row.word_timings)),
+      quota,
+    };
   } catch (error) {
     if (shouldRelease) {
       await abandonTtsGeneration(claim.reservation);
@@ -699,7 +705,7 @@ async function synthesizePodcastTurn(params: {
     return {
       audio: synthesized.audio,
       durationMs: synthesized.durationMs,
-      cues: buildPodcastCues(params.text, synthesized.pieces),
+      wordTimings: alignPodcastWords(params.text, synthesized.pieces),
     };
   } catch (error) {
     /*
@@ -732,10 +738,10 @@ async function synthesizePodcastTurn(params: {
     /* Constant-bitrate MP3: the byte count is the length, which is what the listener is charged. */
     durationMs: Math.round((audio.length * 8 * 1000) / TTS_OUTPUT_BITRATE),
     /*
-     * The REST fallback reports no timings, so this turn has no subtitles rather than wrong ones.
+     * The REST fallback reports no timings, so this turn has no captions rather than wrong ones.
      * The player shows the whole turn instead — worse than a synced line, far better than nothing,
      * and it only happens on the path taken when the stream has already failed.
      */
-    cues: [],
+    wordTimings: [],
   };
 }

@@ -1080,6 +1080,7 @@ export const sl = {
   "failure.youtube_request_blocked": "YouTube trenutno zavrača naše zahteve za podnapise tega videa. To ni napaka tvojega videa — poskusi znova pozneje ali uporabi drug vir.",
   "failure.pdf_no_text": "V tem PDF-ju ni bilo mogoče najti berljivega besedila. Če gre za skeniran dokument, strani naloži kot fotografije, da jih lahko preberemo.",
   "failure.scan_not_enough_text": "Na fotografiji ni bilo mogoče najti dovolj berljivega besedila.",
+  "failure.scan_text_too_short": "Za zapiske potrebujemo malo več gradiva. Dodaj še nekaj fotografij in poskusi znova.",
   "failure.audio_no_clear_speech": "V zvoku ni bilo mogoče zaznati dovolj jasnega govora. Preveri posnetek in poskusi znova.",
   "failure.audio_not_decodable": "Zvočne datoteke ni bilo mogoče obdelati. Posnetek je morda poškodovan ali v nepodprtem formatu.",
   "failure.source_too_large": "To gradivo je preveliko za obdelavo naenkrat. Razdeli ga na nekaj delov in poskusi znova.",

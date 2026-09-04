@@ -74,7 +74,8 @@ export function toLectureFailureCode(error: unknown) {
   }
 
   if (error instanceof NoReadableScanTextError) {
-    return "scan_not_enough_text";
+    // Sparse text and an unreadable photo need opposite advice, so they carry separate codes.
+    return error.reason === "too_short" ? "scan_text_too_short" : "scan_not_enough_text";
   }
 
   if (error instanceof NoClearSpeechDetectedError) {

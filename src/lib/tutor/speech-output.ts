@@ -1,5 +1,6 @@
 import {
   appendCharacterTimings,
+  canCancelStream,
   createEmptyCharacterTimings,
   spokenTextBefore,
   type SpeechCharacterTimings,
@@ -68,6 +69,8 @@ export type SpeechTurnHandle = {
 
 type ActiveTurn = {
   streamId: string;
+  /** The connection the id was announced on. It names nothing on any other — see `stop`. */
+  socket: WebSocket;
   /** The socket is not told about a turn until there is a word to say — see `speak`. */
   opened: boolean;
   timings: SpeechCharacterTimings;
@@ -324,6 +327,7 @@ export class TutorSpeechOutput {
 
     this.turn = {
       streamId,
+      socket,
       opened: false,
       timings: createEmptyCharacterTimings(),
       text: "",
@@ -494,7 +498,7 @@ export class TutorSpeechOutput {
     const wasSpeaking = turn.scheduledUntil > context.currentTime;
     const spokenText = spokenTextBefore(turn.timings, this.playedSeconds(turn, context), turn.text);
 
-    if (turn.opened && this.socket?.readyState === WebSocket.OPEN) {
+    if (canCancelStream(turn, this.socket) && this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify({ stream_id: turn.streamId, cancel: true }));
     }
 

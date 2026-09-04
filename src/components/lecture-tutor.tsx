@@ -396,6 +396,41 @@ export function LectureTutor({
     setHeard(null);
   }, [stopPreview]);
 
+  /*
+   * The voice clips, fetched before anybody asks for one.
+   *
+   * Auditioning a voice plays a pre-rendered file rather than synthesizing anything, so the wait
+   * on a first tap is not the tutor thinking — it is one HTTP request for about sixty kilobytes,
+   * which on a phone is the difference between a button that responds and one that seems not to
+   * have registered the tap. The picker sits on the idle screen, which is exactly where somebody
+   * is about to try three voices in a row, so the whole set for this language is pulled while
+   * they are reading the page.
+   *
+   * The elements are held for the life of the screen rather than discarded, because an element
+   * that is garbage collected takes its buffered audio with it and the next tap pays again. They
+   * cost nothing else: nothing is ever played through them, and they are released on unmount.
+   */
+  useEffect(() => {
+    if (typeof Audio === "undefined") {
+      return;
+    }
+
+    const held = NOTE_TTS_VOICES.map((option) => {
+      const clip = new Audio();
+      clip.preload = "auto";
+      clip.src = voiceSampleClip(option, language);
+
+      return clip;
+    });
+
+    return () => {
+      for (const clip of held) {
+        // Cancels anything still in flight, so leaving the screen does not keep downloading.
+        clip.src = "";
+      }
+    };
+  }, [language]);
+
   const heardRef = useRef<HTMLParagraphElement | null>(null);
 
   /*

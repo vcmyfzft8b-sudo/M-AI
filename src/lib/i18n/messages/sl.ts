@@ -1718,8 +1718,6 @@ export const sl = {
   "mindmap.search": "Išči v vzorcu",
   "mindmap.matches": "Zadetki: {count}",
   "mindmap.noMatches": "Ni zadetkov",
-  "mindmap.collapseAll": "Skrči na glavne teme",
-  "mindmap.expandAll": "Razširi vse",
   "mindmap.fullscreen": "Čez cel zaslon",
   "mindmap.exitFullscreen": "Zapri cel zaslon",
   "mindmap.redraw": "Nariši znova",

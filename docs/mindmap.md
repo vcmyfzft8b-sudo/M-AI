@@ -125,6 +125,11 @@ a change to `mindmap-canvas.tsx` in two places. The geometry they share lives in
   and full screen. It fetches from its own endpoint rather than riding `getLectureDetailForUser`,
   which already fans out to a dozen queries on every open of a note.
 - `src/components/mindmap-canvas.tsx` owns pixels: the SVG, pan, pinch, folding and the export.
+- The toolbar is deliberately four controls: search, full screen, zoom, and save. Framing the map
+  again is a **double-tap on empty canvas** rather than a button — it is the one action a reader
+  wants while their hands are already on the map, and the phone has no zoom cluster for a button
+  to live beside. Folding everything at once and redrawing on demand were both removed as
+  buttons; the fold badges and the stale/failed notices cover what they were for.
 - The chat column stands down while this tab is on screen (`showChatPanel` in
   `lecture-workspace.tsx`). It is the only screen whose usefulness is a function of its width.
 - The note's title and date are hidden on this tab: the map draws the title in its own middle.

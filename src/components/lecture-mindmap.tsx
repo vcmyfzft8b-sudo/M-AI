@@ -340,23 +340,6 @@ export function LectureMindmap({
     [suggestedFold],
   );
 
-  const collapseToTopics = useCallback(() => {
-    if (!doc) {
-      return;
-    }
-
-    /*
-     * "Collapse" folds every branch to its own name rather than folding everything everywhere:
-     * a map folded to nothing is a title, and the reader wanted the overview, not the void.
-     */
-    setUserCollapsedIds(new Set(doc.branches.map((branch) => branch.id)));
-    setSelectedId(null);
-  }, [doc]);
-
-  const expandAll = useCallback(() => {
-    setUserCollapsedIds(new Set<string>());
-  }, []);
-
   const handleViewChange = useCallback((view: MindmapView) => {
     setZoomPercent((previous) => {
       const next = Math.round(view.k * 100);
@@ -554,33 +537,6 @@ export function LectureMindmap({
         <button
           type="button"
           className="memo-mm-tool"
-          onClick={collapsedIds.size > 0 ? expandAll : collapseToTopics}
-          aria-label={t(collapsedIds.size > 0 ? "mindmap.expandAll" : "mindmap.collapseAll")}
-          title={t(collapsedIds.size > 0 ? "mindmap.expandAll" : "mindmap.collapseAll")}
-        >
-          <Msym
-            name={collapsedIds.size > 0 ? "unfold_more" : "unfold_less"}
-            size="1.15rem"
-            fill={false}
-            weight={500}
-          />
-        </button>
-
-        {/* The phone has no room for a zoom cluster, and no need of one: it pinches. What it
-            cannot do by hand is frame the map again afterwards, so that one control stays. */}
-        <button
-          type="button"
-          className="memo-mm-tool memo-only-mobile"
-          onClick={() => canvasRef.current?.fit()}
-          aria-label={t("mindmap.fit")}
-          title={t("mindmap.fit")}
-        >
-          <Msym name="fit_screen" size="1.15rem" fill={false} weight={500} />
-        </button>
-
-        <button
-          type="button"
-          className="memo-mm-tool"
           onClick={() => setIsFullscreen((open) => !open)}
           aria-label={t(isFullscreen ? "mindmap.exitFullscreen" : "mindmap.fullscreen")}
           title={t(isFullscreen ? "mindmap.exitFullscreen" : "mindmap.fullscreen")}
@@ -593,22 +549,6 @@ export function LectureMindmap({
           />
         </button>
 
-        <button
-          type="button"
-          className="memo-mm-tool"
-          onClick={() => void start({ regenerate: true })}
-          disabled={isStarting || isRunning(status)}
-          aria-label={t("mindmap.redraw")}
-          title={t("mindmap.redraw")}
-        >
-          <Msym
-            name="refresh"
-            size="1.15rem"
-            fill={false}
-            weight={500}
-            className={isStarting ? "memo-spin" : undefined}
-          />
-        </button>
       </div>
 
       <div className="memo-mm-zoom memo-only-desktop">

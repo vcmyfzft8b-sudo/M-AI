@@ -1699,8 +1699,6 @@ export const bs: Messages = {
   "mindmap.search": "Pretraži mapu",
   "mindmap.matches": "Rezultati: {count}",
   "mindmap.noMatches": "Nema rezultata",
-  "mindmap.collapseAll": "Skupi na glavne teme",
-  "mindmap.expandAll": "Proširi sve",
   "mindmap.fullscreen": "Preko cijelog ekrana",
   "mindmap.exitFullscreen": "Zatvori cijeli ekran",
   "mindmap.redraw": "Nacrtaj ponovo",

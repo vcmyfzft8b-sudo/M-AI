@@ -1689,8 +1689,6 @@ export const en: Messages = {
   "mindmap.search": "Search the map",
   "mindmap.matches": "Matches: {count}",
   "mindmap.noMatches": "No matches",
-  "mindmap.collapseAll": "Collapse to topics",
-  "mindmap.expandAll": "Expand everything",
   "mindmap.fullscreen": "Full screen",
   "mindmap.exitFullscreen": "Leave full screen",
   "mindmap.redraw": "Draw again",

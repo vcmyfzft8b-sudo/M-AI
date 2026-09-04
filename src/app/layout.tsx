@@ -56,7 +56,6 @@ const MATERIAL_SYMBOL_NAMES = [
   "edit_square",
   "expand_less",
   "expand_more",
-  "fit_screen",
   "folder",
   "folder_delete",
   "forum",

@@ -79,6 +79,12 @@ type PracticeMark = {
   missingPoints?: string;
 };
 /** The stick is dead in the middle, so a resting thumb is not a slow walk. */
+/*
+ * How long an answered quiz stays up before the walk resumes. A tick needs long
+ * enough to register; a wrong answer, or one the note explains, needs reading.
+ */
+const QUIZ_RESULT_PAUSE = 1600;
+const QUIZ_RESULT_READ_PAUSE = 6000;
 const STICK_DEADZONE = 6;
 const STICK_RADIUS = 46;
 
@@ -181,6 +187,17 @@ export function LecturePalace({
    * and displayed at 122 shimmers on every line the moment anything moves.
    */
   const minimapSizeRef = useRef({ css: 0, dpr: 1 });
+  /* The pending auto-dismiss of an answered quiz, so nothing closes a station
+     the player has already walked on from. */
+  const dismissRef = useRef<number | null>(null);
+  const clearDismiss = useCallback(() => {
+    if (dismissRef.current === null) return;
+
+    window.clearTimeout(dismissRef.current);
+    dismissRef.current = null;
+  }, []);
+
+  useEffect(() => clearDismiss, [clearDismiss]);
 
   useEffect(() => {
     const image = new Image();
@@ -518,6 +535,7 @@ export function LecturePalace({
   }, [collected]);
 
   const openStation = useCallback((stationId: string | null) => {
+    clearDismiss();
     setNearStationId(stationId);
     setIsFlipped(false);
     setQuizChoice(null);
@@ -526,7 +544,7 @@ export function LecturePalace({
     setIsTestUnknown(false);
     setIsMarking(false);
     setMark(null);
-  }, []);
+  }, [clearDismiss]);
 
   useEffect(() => {
     if (!station || stationItem) return;
@@ -799,9 +817,10 @@ export function LecturePalace({
   }, [isMapOpen]);
 
   const leaveStation = useCallback(() => {
+    clearDismiss();
     gameRef.current?.releaseStation();
     openStation(null);
-  }, [openStation]);
+  }, [clearDismiss, openStation]);
 
   const collect = useCallback(
     (stationId: string) => {
@@ -894,13 +913,24 @@ export function LecturePalace({
 
       /*
        * Both answers stop and say what happened: right or wrong, which option
-       * was the right one, and the note's own explanation of why. On the deck
-       * screen a right answer moves on by itself, but here there is nothing
-       * queued up behind it to move on to — you are standing in a street — so
-       * the walk resumes when the learner says so.
+       * was the right one, and the note's own explanation of why — and then the
+       * walk resumes on its own. Answering used to leave you holding a card you
+       * had already finished with until you pressed a second button, which on a
+       * sixty-stop walk is sixty presses that say nothing.
+       *
+       * How long it stays depends on whether there is anything to read: a right
+       * answer with no explanation behind it is a tick, and a tick does not need
+       * six seconds. The button stays for anyone who would rather not wait.
        */
+      const explained = Boolean(quizById.get(questionId)?.explanation);
+
+      clearDismiss();
+      dismissRef.current = window.setTimeout(
+        leaveStation,
+        right && !explained ? QUIZ_RESULT_PAUSE : QUIZ_RESULT_READ_PAUSE,
+      );
     },
-    [collect],
+    [clearDismiss, collect, leaveStation, quizById],
   );
 
   /**
@@ -1424,7 +1454,7 @@ export function LecturePalace({
                   <span className="memo-palace-panel-where">{district?.title}</span>
                   <button
                     type="button"
-                    className="memo-palace-panel-close"
+                    className="memo-close-button"
                     aria-label={t("common.close")}
                     onClick={leaveStation}
                   >
@@ -1438,12 +1468,25 @@ export function LecturePalace({
             {isMapOpen ? (
               <div className="memo-palace-sheet">
                 <div className="memo-palace-sheet-inner">
-                  <h3>{t("palace.map")}</h3>
-                  {/* The whole town, so the corner map's two blocks are a view
-                      of something rather than all there is. */}
-                  <canvas ref={townMapRef} className="memo-palace-townmap" />
-                  <h3>{t("palace.districts")}</h3>
-                  <ul>
+                  <div className="memo-palace-sheet-head">
+                    <h3>{t("palace.map")}</h3>
+                    <button
+                      type="button"
+                      className="memo-close-button"
+                      aria-label={t("common.close")}
+                      onClick={() => setIsMapOpen(false)}
+                    >
+                      <Msym name="close" size="1.1rem" />
+                    </button>
+                  </div>
+                  {/* Everything under the head scrolls, so the title and its
+                      close stay where the thumb left them. */}
+                  <div className="memo-palace-sheet-body">
+                    {/* The whole town, so the corner map's two blocks are a view
+                        of something rather than all there is. */}
+                    <canvas ref={townMapRef} className="memo-palace-townmap" />
+                    <h3>{t("palace.districts")}</h3>
+                    <ul>
                     {layout.districts.map((entry) => {
                       const entryDone = entry.stationIds.filter((id) => collected.has(id)).length;
 
@@ -1469,15 +1512,9 @@ export function LecturePalace({
                           </button>
                         </li>
                       );
-                    })}
-                  </ul>
-                  <button
-                    type="button"
-                    className="memo-palace-cta small"
-                    onClick={() => setIsMapOpen(false)}
-                  >
-                    {t("common.close")}
-                  </button>
+                      })}
+                    </ul>
+                  </div>
                 </div>
               </div>
             ) : null}

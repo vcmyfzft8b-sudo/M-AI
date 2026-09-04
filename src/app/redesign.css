@@ -4286,14 +4286,14 @@
   margin-top: 1.6rem;
 }
 
-.memo-panel .lecture-flashcard-review {
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.6rem;
 }
 
-.memo-panel .lecture-flashcard-nav-button {
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-nav-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4308,17 +4308,17 @@
   cursor: pointer;
 }
 
-.memo-panel .lecture-flashcard-nav-button:disabled {
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-nav-button:disabled {
   cursor: default;
   opacity: 0.4;
 }
 
-.memo-panel .lecture-flashcard-nav-button svg {
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-nav-button svg {
   width: 1.4rem;
   height: 1.4rem;
 }
 
-.memo-panel .lecture-flashcard-review-button {
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4335,22 +4335,22 @@
   font-weight: 750;
 }
 
-.memo-panel .lecture-flashcard-review-button svg {
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-button svg {
   width: 1.4rem;
   height: 1.4rem;
 }
 
-.memo-panel .lecture-flashcard-review-button.again {
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-button.again {
   background: rgba(244, 95, 90, 0.14);
   color: #f45f5a;
 }
 
-.memo-panel .lecture-flashcard-review-button.easy {
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-button.easy {
   background: rgba(22, 163, 74, 0.12);
   color: #16a34a;
 }
 
-.memo-panel .lecture-flashcard-review-button.selected {
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-button.selected {
   box-shadow: inset 0 0 0 2px currentColor;
 }
 
@@ -4390,12 +4390,12 @@
   text-wrap: pretty;
 }
 
-.memo-panel .lecture-quiz-options {
+:is(.memo-panel, .memo-palace-panel) .lecture-quiz-options {
   display: grid;
   gap: 0.7rem;
 }
 
-.memo-panel .lecture-quiz-option {
+:is(.memo-panel, .memo-palace-panel) .lecture-quiz-option {
   display: flex;
   align-items: center;
   gap: 0.9rem;
@@ -4424,12 +4424,12 @@
  * and layers shadows on it, from theme-scoped rules that need matching
  * specificity to unseat.
  */
-.memo-panel .lecture-quiz-option:hover:not(:disabled) {
+:is(.memo-panel, .memo-palace-panel) .lecture-quiz-option:hover:not(:disabled) {
   transform: none;
   box-shadow: inset 0 0 0 1px var(--hover-ring);
 }
 
-.memo-panel .lecture-quiz-option-label {
+:is(.memo-panel, .memo-palace-panel) .lecture-quiz-option-label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4443,30 +4443,30 @@
   font-weight: 750;
 }
 
-.memo-panel .lecture-quiz-option-copy {
+:is(.memo-panel, .memo-palace-panel) .lecture-quiz-option-copy {
   flex: 1;
   min-width: 0;
 }
 
-.memo-panel .lecture-quiz-option.correct {
+:is(.memo-panel, .memo-palace-panel) .lecture-quiz-option.correct {
   border-color: transparent;
   background: var(--sunken);
   color: var(--text);
 }
 
-.memo-panel .lecture-quiz-option.incorrect {
+:is(.memo-panel, .memo-palace-panel) .lecture-quiz-option.incorrect {
   border-color: #ff3b30;
   background: rgba(255, 59, 48, 0.08);
   color: #ff3b30;
 }
 
-.memo-panel .lecture-quiz-option.incorrect .lecture-quiz-option-label {
+:is(.memo-panel, .memo-palace-panel) .lecture-quiz-option.incorrect .lecture-quiz-option-label {
   background: #ff3b30;
   color: #fff;
 }
 
 /* The tick or cross the design puts at the end of a revealed option. */
-.memo-panel .lecture-quiz-option-mark {
+:is(.memo-panel, .memo-palace-panel) .lecture-quiz-option-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4478,11 +4478,11 @@
   color: #fff;
 }
 
-.memo-panel .lecture-quiz-option.correct .lecture-quiz-option-mark {
+:is(.memo-panel, .memo-palace-panel) .lecture-quiz-option.correct .lecture-quiz-option-mark {
   background: #22c55e;
 }
 
-.memo-panel .memo-quiz-eyebrow {
+:is(.memo-panel, .memo-palace-panel) .memo-quiz-eyebrow {
   display: block;
   color: var(--muted);
   font-size: 0.98rem;
@@ -4490,7 +4490,7 @@
   letter-spacing: -0.015em;
 }
 
-.memo-panel .memo-quiz-eyebrow + .lecture-quiz-prompt {
+:is(.memo-panel, .memo-palace-panel) .memo-quiz-eyebrow + .lecture-quiz-prompt {
   margin-top: 0.5rem;
 }
 
@@ -4498,7 +4498,7 @@
  * A miss opens this row: the design names what went wrong, says which option
  * was right, and offers the way into chat beside a plain acknowledgement.
  */
-.memo-panel .memo-quiz-result {
+:is(.memo-panel, .memo-palace-panel) .memo-quiz-result {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -4509,7 +4509,7 @@
   animation: memo-pop-in 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.memo-panel .memo-quiz-result-badge {
+:is(.memo-panel, .memo-palace-panel) .memo-quiz-result-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4521,7 +4521,7 @@
   color: #ff3b30;
 }
 
-.memo-panel .memo-quiz-result-copy {
+:is(.memo-panel, .memo-palace-panel) .memo-quiz-result-copy {
   display: grid;
   gap: 0.1rem;
   min-width: 0;
@@ -4529,21 +4529,21 @@
   font-size: 1rem;
 }
 
-.memo-panel .memo-quiz-result-title {
+:is(.memo-panel, .memo-palace-panel) .memo-quiz-result-title {
   color: #ff3b30;
   font-size: 1.2rem;
   font-weight: 800;
   letter-spacing: -0.03em;
 }
 
-.memo-panel .memo-quiz-result-actions {
+:is(.memo-panel, .memo-palace-panel) .memo-quiz-result-actions {
   display: flex;
   gap: 0.7rem;
   margin-left: auto;
 }
 
-.memo-panel .memo-quiz-result-ghost,
-.memo-panel .memo-quiz-result-primary {
+:is(.memo-panel, .memo-palace-panel) .memo-quiz-result-ghost,
+:is(.memo-panel, .memo-palace-panel) .memo-quiz-result-primary {
   height: 3.2rem;
   padding: 0 1.3rem;
   border-radius: 999px;
@@ -4554,13 +4554,13 @@
   white-space: nowrap;
 }
 
-.memo-panel .memo-quiz-result-ghost {
+:is(.memo-panel, .memo-palace-panel) .memo-quiz-result-ghost {
   border: var(--btn-border-width) solid var(--btn-border);
   background: var(--surface);
   color: var(--text);
 }
 
-.memo-panel .memo-quiz-result-primary {
+:is(.memo-panel, .memo-palace-panel) .memo-quiz-result-primary {
   padding: 0 1.5rem;
   border: 0;
   background: var(--text);
@@ -4695,7 +4695,7 @@
 .library-folder-mobile-sheet-close.library-folder-mobile-sheet-close,
 .library-folder-secondary-button.library-folder-secondary-button,
 .memo-panel .lecture-study-manage-button.lecture-study-manage-button,
-.memo-panel .lecture-flashcard-nav-button.lecture-flashcard-nav-button,
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-nav-button.lecture-flashcard-nav-button,
 .memo-close-button.memo-close-button,
 .memo-sheet-close.memo-sheet-close,
 .memo-chat-close.memo-chat-close,
@@ -4716,7 +4716,7 @@
    tint that says which tab or which answer you are on. */
 .memo-primary-pill.memo-primary-pill,
 .memo-tab.memo-tab,
-.memo-panel .lecture-flashcard-review-button.lecture-flashcard-review-button {
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-button.lecture-flashcard-review-button {
   border: var(--btn-border-width) solid var(--btn-border);
 }
 
@@ -5021,14 +5021,14 @@
   resize: none;
 }
 
-.memo-panel .memo-test-actions {
+:is(.memo-panel, .memo-palace-panel) .memo-test-actions {
   display: flex;
   gap: 0.7rem;
   margin-top: 1rem;
 }
 
-.memo-panel .memo-test-prev,
-.memo-panel .memo-test-next {
+:is(.memo-panel, .memo-palace-panel) .memo-test-prev,
+:is(.memo-panel, .memo-palace-panel) .memo-test-next {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5042,26 +5042,26 @@
   font-weight: 750;
 }
 
-.memo-panel .memo-test-prev {
+:is(.memo-panel, .memo-palace-panel) .memo-test-prev {
   background: var(--tile);
   color: var(--text);
   font-size: 1.05rem;
   font-weight: 700;
 }
 
-.memo-panel .memo-test-prev:disabled {
+:is(.memo-panel, .memo-palace-panel) .memo-test-prev:disabled {
   color: var(--muted);
   cursor: default;
   opacity: 0.5;
 }
 
-.memo-panel .memo-test-next {
+:is(.memo-panel, .memo-palace-panel) .memo-test-next {
   background: var(--text);
   color: var(--bg);
   font-size: 1.08rem;
 }
 
-.memo-panel .memo-test-next:disabled {
+:is(.memo-panel, .memo-palace-panel) .memo-test-next:disabled {
   cursor: default;
   opacity: 0.5;
 }
@@ -6736,7 +6736,9 @@
   padding: 1.8rem 1.9rem 1.7rem;
   border: 0;
   border-radius: 28px;
-  background: var(--surface);
+  /* Named once, so the sticky footer below can be painted to match it. */
+  --panel-paint: var(--surface);
+  background: var(--panel-paint);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
   animation: memo-pop-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -7201,7 +7203,7 @@
   display: flex;
   gap: 0.7rem;
   margin-top: 1.5rem;
-  background: var(--surface);
+  background: var(--panel-paint);
 }
 
 .note-source-modal .memo-modal-actions::before {
@@ -7209,7 +7211,7 @@
   position: absolute;
   inset: auto 0 100% 0;
   height: 1.2rem;
-  background: linear-gradient(to top, var(--surface), transparent);
+  background: linear-gradient(to top, var(--panel-paint), transparent);
   pointer-events: none;
 }
 
@@ -9559,8 +9561,8 @@
     box-shadow: none;
   }
 
-  .memo-panel .memo-quiz-eyebrow,
-  .memo-panel .lecture-quiz-option-label {
+  :is(.memo-panel, .memo-palace-panel) .memo-quiz-eyebrow,
+  :is(.memo-panel, .memo-palace-panel) .lecture-quiz-option-label {
     display: none;
   }
 
@@ -9571,11 +9573,11 @@
     line-height: 1.3;
   }
 
-  .memo-panel .lecture-quiz-options {
+  :is(.memo-panel, .memo-palace-panel) .lecture-quiz-options {
     gap: 0.75rem;
   }
 
-  .memo-panel .lecture-quiz-option {
+  :is(.memo-panel, .memo-palace-panel) .lecture-quiz-option {
     min-height: 4.2rem;
     padding: 0 1.2rem;
     border-radius: 18px;
@@ -10545,7 +10547,8 @@
     max-height: calc(100dvh - 54px - var(--memo-kb));
     padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
     border-radius: 34px 34px 0 0;
-    background: var(--bg);
+    --panel-paint: var(--bg);
+    background: var(--panel-paint);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
   }
@@ -12073,7 +12076,8 @@
       calc(env(safe-area-inset-bottom) + 1.25rem);
     border: 0;
     border-radius: 0;
-    background: var(--bg);
+    --panel-paint: var(--bg);
+    background: var(--panel-paint);
     box-shadow: none;
   }
 
@@ -13529,35 +13533,6 @@
   font-weight: 650;
 }
 
-.memo-palace-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.memo-palace-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  height: 3.2rem;
-  padding: 0 1.5rem;
-  border: 0;
-  border-radius: 999px;
-  background: var(--text);
-  color: var(--surface);
-  cursor: pointer;
-  font-size: 1.02rem;
-  font-weight: 750;
-}
-
-.memo-palace-cta.small {
-  height: 2.7rem;
-  padding: 0 1.1rem;
-  font-size: 0.95rem;
-}
-
 .memo-palace-districts {
   width: 100%;
   margin: 0;
@@ -13821,7 +13796,9 @@
   gap: 0.75rem;
   padding: 1rem 1.15rem 1.2rem;
   border-radius: 24px;
-  background: var(--bg);
+  /* Named once, so anything painted to match the panel can say what it means. */
+  --panel-paint: var(--bg);
+  background: var(--panel-paint);
   color: var(--text);
   box-shadow: 0 18px 44px rgba(10, 8, 20, 0.34);
   animation: memo-palace-rise 180ms ease-out;
@@ -13838,9 +13815,46 @@
   gap: 0.6rem;
 }
 
+/*
+ * The head stays put and the station scrolls under it, rather than the panel
+ * scrolling as one piece. A marked practice answer runs to several paragraphs —
+ * what you got right, what you missed, the answer it wanted — and when the whole
+ * panel scrolled, the close button went up with it and the "understood" button
+ * never came into view at all: a card you had finished with that had no way out.
+ *
+ * Pinning the two ends with `position: sticky` is the other way to do this, and
+ * it is the wrong one here: a sticky child sticks to the scrollport, which is
+ * inside the panel's own padding, so the text kept showing in the finger's width
+ * of padding above the head and below the button.
+ */
 .memo-palace-panel.quiz,
 .memo-palace-panel.test {
+  overflow: hidden;
+}
+
+/* The station itself — everything under the head — is what scrolls. */
+.memo-palace-panel.quiz > :not(.memo-palace-panel-head),
+.memo-palace-panel.test > :not(.memo-palace-panel-head) {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/*
+ * And the way on stays at the bottom of that, over the text rather than after
+ * it. `--panel-paint` because the panel is `--bg` on the desktop and a
+ * `--surface` sheet on the phone, and a strip painted either one by name is a
+ * black bar across the other.
+ */
+.memo-palace-panel .memo-test-actions,
+.memo-palace-panel .memo-quiz-result-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-top: auto;
+  padding-top: 0.6rem;
+  background: var(--panel-paint);
 }
 
 /* The note's own tab pill, at the size a panel header wants. */
@@ -13862,19 +13876,6 @@
   font-weight: 650;
 }
 
-/* Walking away is not an option while a station is open, so there is a way out. */
-.memo-palace-panel-close {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  flex: none;
-  border: 0;
-  border-radius: 999px;
-  background: color-mix(in oklch, var(--text) 8%, transparent);
-  color: var(--text);
-  cursor: pointer;
-}
 
 /* A card in a panel this size does not need the deck screen's full height. */
 .memo-palace-panel .lecture-flashcard {
@@ -13913,18 +13914,6 @@
 /* Once it is marked the box is a record of what was written, not a field. */
 .memo-palace-panel .lecture-practice-textarea:disabled {
   opacity: 1;
-}
-
-.memo-palace-panel .memo-test-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-
-.memo-palace-panel .memo-test-next {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
 }
 
 /* The answer a practice question is marked against, shown for self-marking:
@@ -14025,6 +14014,12 @@
   justify-content: flex-end;
 }
 
+/*
+ * The map sheet, on the app's own surface rather than a hard-coded white card:
+ * it was `#fff` on `#14121a` whatever the theme, so opening the map in the dark
+ * app handed you a white page. This whole block was also pasted in twice, and
+ * the second copy is what was winning.
+ */
 .memo-palace-sheet {
   position: absolute;
   inset: 0;
@@ -14037,11 +14032,34 @@
 .memo-palace-sheet-inner {
   width: min(28rem, 100%);
   max-height: 80%;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 1.2rem;
   border-radius: 22px;
-  background: #fff;
-  color: #14121a;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* The title sits against its close, the way every sheet in the app is headed —
+   and stays there, because the list under it is what scrolls. */
+.memo-palace-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-bottom: 0.6rem;
+}
+
+.memo-palace-sheet-head h3 {
+  flex: 1;
+  margin: 0;
+}
+
+.memo-palace-sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* The whole town, square, as wide as the sheet lets it be. */
@@ -14059,19 +14077,13 @@
 }
 
 .memo-palace-sheet-inner ul {
-  margin: 0 0 0.9rem;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .memo-palace-sheet-inner li {
-  border-bottom-color: rgba(20, 18, 26, 0.08);
-}
-
-.memo-palace-sheet-inner .memo-button-outline.small {
-  background: transparent;
-  color: #14121a;
-  border-color: rgba(20, 18, 26, 0.2);
+  border-bottom-color: var(--line);
 }
 
 /* The results screen, on the town's own backdrop. */
@@ -14100,54 +14112,6 @@
   box-shadow: 0 22px 60px rgba(10, 8, 20, 0.35);
 }
 
-.memo-palace-sheet {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-  background: rgba(10, 8, 20, 0.55);
-}
-
-.memo-palace-sheet-inner {
-  width: min(28rem, 100%);
-  max-height: 80%;
-  overflow: auto;
-  padding: 1.2rem;
-  border-radius: 22px;
-  background: #fff;
-  color: #14121a;
-}
-
-/* The whole town, square, as wide as the sheet lets it be. */
-.memo-palace-townmap {
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: 18px;
-  margin-bottom: 1rem;
-}
-
-.memo-palace-sheet-inner h3 {
-  margin: 0 0 0.6rem;
-  font-size: 1.1rem;
-  font-weight: 800;
-}
-
-.memo-palace-sheet-inner ul {
-  margin: 0 0 0.9rem;
-  padding: 0;
-  list-style: none;
-}
-
-.memo-palace-sheet-inner li {
-  border-bottom-color: rgba(20, 18, 26, 0.08);
-}
-
-.memo-palace-sheet-inner .memo-button-outline.small {
-  background: transparent;
-  color: #14121a;
-  border-color: rgba(20, 18, 26, 0.2);
-}
 
 .memo-palace-done {
   position: absolute;
@@ -14202,7 +14166,8 @@
     max-height: calc(100% - 7rem);
     padding: 1.1rem 1.15rem calc(1.5rem + var(--memo-safe-bottom));
     border-radius: 30px 30px 0 0;
-    background: var(--surface);
+    --panel-paint: var(--surface);
+    background: var(--panel-paint);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
   }

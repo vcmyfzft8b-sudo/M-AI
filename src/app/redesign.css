@@ -607,20 +607,25 @@
 /* Desktop and phone differ structurally in places (the home header, the note
    chrome), so both trees render and the breakpoint picks one. */
 /*
- * The class is doubled to buy specificity, the same trick the shared button
- * rules in this file use.
+ * Hidden by a breakpoint rather than by a base rule.
  *
- * One class loses to any component rule defined later on source order alone —
- * `.memo-card-row { display: flex }` was doing precisely that, which is how the
- * phone's account card came to be drawn on desktop, with a sign-out button that
- * has no desktop styling. `!important` would fix that too, but it would also
- * beat the screen-level rules that hide a phone control on a particular tab
- * (the walkthrough and the speed reader both take the chat bar away), so those
- * would have to shout back. Doubling stops at exactly the right level: it wins
- * against a bare component class and still loses to a screen rule.
+ * As a base rule this was one class, so it lost on source order to any
+ * component rule that sets `display` — `.memo-card-row { display: flex }` among
+ * them, which is how the phone's account card came to be drawn on desktop, with
+ * a sign-out button whose styling lives in a phone-only media query.
+ *
+ * Buying specificity instead (doubling the class, or `!important`) fixes that
+ * and breaks something else: the rule then has to be undone again below the
+ * breakpoint, and whatever undoes it outranks the component rules too — so
+ * every element carrying this class alongside one that sets `display: flex`
+ * quietly became a block on the phone. Scoping to desktop means there is
+ * nothing to undo, and nothing to outrank: below 1100px this rule does not
+ * exist and each component keeps its own display.
  */
-.memo-only-mobile.memo-only-mobile {
-  display: none;
+@media (min-width: 1100px) {
+  .memo-only-mobile {
+    display: none !important;
+  }
 }
 
 /* The home skeleton's stand-in for the promo card. Phone-only like the real
@@ -8690,15 +8695,11 @@
     display: none !important;
   }
 
-  .memo-only-mobile.memo-only-mobile {
-    display: revert;
-  }
-
-  .memo-only-mobile.memo-only-mobile.flex {
+  .memo-only-mobile.flex {
     display: flex;
   }
 
-  .memo-only-mobile.memo-only-mobile.grid {
+  .memo-only-mobile.grid {
     display: grid;
   }
 

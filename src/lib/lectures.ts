@@ -894,8 +894,8 @@ export async function getLectureDetailForUser(params: {
   verifiedLecture?: LectureRow | null;
 }): Promise<LectureDetail | null> {
   /*
-   * Before the uuid check: the demo ids are readable slugs, not uuids, so the
-   * guard below would reject the very note this account was lent.
+   * Ahead of the uuid check so this branch reads the same in all three entry
+   * points; the lent id is a uuid, so it would pass that check either way.
    */
   if (isPreviewBypassUser(params.userId)) {
     return previewBypassLectureDetail(params.lectureId);

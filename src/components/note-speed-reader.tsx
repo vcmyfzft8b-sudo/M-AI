@@ -147,22 +147,35 @@ export function NoteSpeedReader({
    * you finished should start it over, not park you on its last word.
    */
   const indexRef = useRef(index);
-  const savedIndexRef = useRef(0);
+  const saveRef = useRef({ index: 0, hasWords: false });
 
   useEffect(() => {
     indexRef.current = index;
-    savedIndexRef.current = isFinished ? 0 : index;
-  }, [index, isFinished]);
+    saveRef.current = { index: isFinished ? 0 : index, hasWords: wordCount > 0 };
+  }, [index, isFinished, wordCount]);
 
+  /*
+   * Nothing to read is not the same as nowhere to resume. A note whose artifact
+   * has not arrived yet — still generating, or a refresh that briefly answered
+   * without one — parses to no words, and writing that state out would erase a
+   * place saved from an earlier sitting.
+   */
   useEffect(() => {
-    if (isPlaying) {
+    if (isPlaying || wordCount === 0) {
       return;
     }
 
     writePosition(lectureId, isFinished ? 0 : index);
-  }, [index, isFinished, isPlaying, lectureId]);
+  }, [index, isFinished, isPlaying, lectureId, wordCount]);
 
-  useEffect(() => () => writePosition(lectureId, savedIndexRef.current), [lectureId]);
+  useEffect(
+    () => () => {
+      if (saveRef.current.hasWords) {
+        writePosition(lectureId, saveRef.current.index);
+      }
+    },
+    [lectureId],
+  );
 
   /*
    * Each word schedules the one after it, so the rate is read fresh every time

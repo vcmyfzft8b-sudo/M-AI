@@ -297,19 +297,6 @@ const NOTE_TABS = [
     icon: "graphic_eq",
     tint: "oklch(0.66 0.15 50)",
   },
-  /*
-   * The third way through the note itself: one word at a time, held still, for
-   * a reader who wants the whole thing at pace rather than explained. It sits
-   * with the other two rather than with the practice screens, which test what
-   * has been read instead of delivering it.
-   */
-  {
-    id: "speed",
-    view: null,
-    labelKey: "note.tab.speed",
-    icon: "bolt",
-    tint: "oklch(0.66 0.15 275)",
-  },
   {
     id: "flashcards",
     view: "flashcards",
@@ -324,6 +311,20 @@ const NOTE_TABS = [
     labelKey: "note.tab.test",
     icon: "assignment",
     tint: "oklch(0.66 0.15 150)",
+  },
+  /*
+   * Another way through the note itself — one word at a time, held still, for a
+   * reader who wants the whole thing at pace rather than explained. It sits at
+   * the end of the row rather than beside the walkthrough: the three practice
+   * screens are what the row is mostly reached for, and a fourth pill between
+   * them and the note pushed them along by one.
+   */
+  {
+    id: "speed",
+    view: null,
+    labelKey: "note.tab.speed",
+    icon: "bolt",
+    tint: "oklch(0.66 0.15 275)",
   },
   {
     id: "transcript",

@@ -1702,4 +1702,20 @@ export const sl = {
   "tutor.speed": "Hitrost",
   "tutor.usage.creditsTitle": "Dokupljeni čas",
   "tutor.usage.creditsNote": "Porabi se, ko zmanjka dnevnega.",
+
+  /* ---- Hitro branje — zapisek po eno besedo, brez premikanja oči ---- */
+  "note.tab.speed": "Hitro branje",
+  "speedRead.title": "Hitro branje",
+  "speedRead.tapHint": "tapni za predvajanje/premor",
+  "speedRead.finished": "Konec zapiska. Tapni za začetek znova.",
+  "speedRead.play": "Začni brati",
+  "speedRead.pause": "Premor",
+  "speedRead.close": "Zapri hitro branje",
+  "speedRead.speed": "Hitrost branja",
+  "speedRead.wpm": "{wpm} besed/min",
+  "speedRead.remaining": "še {minutes} min",
+  "speedRead.gradual": "Postopno pospeševanje",
+  "speedRead.position": "Mesto v zapisku",
+  "speedRead.positionValue": "Beseda {current} od {total}",
+  "speedRead.empty": "Ta zapisek še nima besedila za branje.",
 };

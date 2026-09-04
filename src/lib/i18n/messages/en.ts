@@ -1673,4 +1673,20 @@ export const en: Messages = {
   "tutor.speed": "Speed",
   "tutor.usage.creditsTitle": "Topped-up time",
   "tutor.usage.creditsNote": "Used once the daily allowance runs out.",
+
+  /* ---- Speed reading — the note one word at a time, without moving your eyes ---- */
+  "note.tab.speed": "Speed read",
+  "speedRead.title": "Speed Reader",
+  "speedRead.tapHint": "tap to play/pause",
+  "speedRead.finished": "End of the note. Tap to start again.",
+  "speedRead.play": "Start reading",
+  "speedRead.pause": "Pause",
+  "speedRead.close": "Close the speed reader",
+  "speedRead.speed": "Reading speed",
+  "speedRead.wpm": "{wpm} WPM",
+  "speedRead.remaining": "{minutes} min left",
+  "speedRead.gradual": "Gradual speed up",
+  "speedRead.position": "Position in the note",
+  "speedRead.positionValue": "Word {current} of {total}",
+  "speedRead.empty": "This note has no text to read yet.",
 };

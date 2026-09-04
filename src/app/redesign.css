@@ -2449,6 +2449,15 @@
   gap: 0.7rem;
   height: 3.4rem;
   margin-top: 1.8rem;
+  /* The bar itself is a place for pills to sit in, not a surface: it is sticky, it is 3.4rem
+     tall, and it floats over the bottom of whichever tab is open — so while it is empty, or
+     between its pills, it was quietly eating every click on what is underneath. On the mindmap
+     that is the toolbar: zoom and "save as image" sat under it and did nothing. */
+  pointer-events: none;
+}
+
+.memo-dock > * {
+  pointer-events: auto;
 }
 
 .memo-dock-pill {
@@ -14328,6 +14337,12 @@
 
 .memo-mm-link.dim {
   opacity: 0.16;
+}
+
+/* The branches between the selection and the middle, drawn at full strength. Selecting lights
+   this path rather than fading everything off it: a tap on a node never takes the rest away. */
+.memo-mm-link.lit {
+  opacity: 1;
 }
 
 .memo-mm-node {

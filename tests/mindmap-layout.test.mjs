@@ -98,6 +98,44 @@ test("branches are split down both sides of the title, balanced by height not by
   assert.equal(branches.filter((entry) => entry.side === "left").length, 3);
 });
 
+test("a branch keeps its side whatever else the reader opens or folds", () => {
+  /*
+   * The bug this pins down: the split weighed what was *drawn*, so opening one topic changed the
+   * balance and threw other topics across the middle. A reader on a phone opened two branches and
+   * the one they had been reading was suddenly off the other edge of the screen — it read as the
+   * map deleting it.
+   */
+  const doc = buildDoc([
+    node("Ena", [node("a"), node("b"), node("c"), node("d")]),
+    node("Dve", [node("e"), node("f"), node("g")]),
+    node("Tri", [node("h"), node("i"), node("j"), node("k"), node("l")]),
+    node("Stiri", [node("m")]),
+    node("Pet", [node("n"), node("o")]),
+    node("Sest", [node("p"), node("q"), node("r"), node("s")]),
+  ]);
+
+  const sidesWith = (collapsedIds) => {
+    const { nodes } = layoutMindmap({ doc, measure, collapsedIds: new Set(collapsedIds) });
+
+    return doc.branches
+      .map((branch) => nodes.find((entry) => entry.id === branch.id).side)
+      .join(" ");
+  };
+
+  const everything = doc.branches.map((branch) => branch.id);
+  const opened = sidesWith([]);
+
+  assert.equal(sidesWith(everything), opened, "folding every branch moved some of them");
+
+  for (const id of everything) {
+    assert.equal(
+      sidesWith(everything.filter((other) => other !== id)),
+      opened,
+      `opening one branch moved the others`,
+    );
+  }
+});
+
 test("a left-side subtree grows away from the title, not across it", () => {
   const doc = buildDoc([node("Prva"), node("Druga", [node("Otrok", [node("Vnuk")])])]);
   const { nodes } = layoutMindmap({ doc, measure });

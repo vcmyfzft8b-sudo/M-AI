@@ -454,7 +454,7 @@ function splitBranches(branches: readonly SizedNode[]) {
   let leftWeight = 0;
 
   for (const branch of branches) {
-    const weight = branchWeight(branch);
+    const weight = branchWeight(branch.source);
 
     if (rightWeight <= leftWeight) {
       right.push(branch);
@@ -474,10 +474,15 @@ function splitBranches(branches: readonly SizedNode[]) {
  * An estimate, and it only has to be one: this decides which side a branch goes on, and the tidy
  * placer decides where. Counting the leaves is the right estimate because that is what a subtree's
  * height comes down to once contours have packed everything above them together.
+ *
+ * Measured on the *whole* branch, folded parts included, which is what keeps a side an attribute
+ * of the map rather than of the moment. Weighing what is currently drawn instead made opening one
+ * topic re-balance the split and fling two others across the middle — the reader opened a branch
+ * on the left and the one they had been reading vanished off the right of the screen.
  */
-function branchWeight(node: SizedNode): number {
+function branchWeight(node: MindmapNode): number {
   if (node.children.length === 0) {
-    return node.height + SIBLING_GAP;
+    return 1;
   }
 
   return node.children.reduce((total, child) => total + branchWeight(child), 0);

@@ -57,6 +57,11 @@ different script would throw away an episode for no reason. The **cast key** is 
 and it is folded into `content_hash` rather than added as a column — the note's hash stays its
 prefix, so the library still finds every episode of a note by matching that prefix alone.
 
+Episodes written before the cast joined that key have the note's hash and nothing else, and both
+the library and the variant lookup accept that older shape as well. Matching only the compound
+one made every earlier episode disappear — and a note whose only episode had vanished opened on
+the screen for making one, which is how the omission was found.
+
 `scripts/podcast-eval.mjs` checks agreement on every run, reporting rather than asserting: an
 expository episode can run five minutes without one gendered form, and that is not a failure.
 What it must never contain is one that disagrees. Measured on the omrezja-sl fixture:

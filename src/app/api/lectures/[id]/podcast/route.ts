@@ -160,6 +160,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         voices,
         speakerCount: getPodcastFormat(format).speakerCount,
       })}`,
+      /* Episodes written before the cast joined the key are still found, and still open. */
+      legacyContentHash: source.contentHash,
       format,
       length,
       language: source.language,

@@ -200,27 +200,41 @@ export async function loadPodcastSource(lectureId: string): Promise<PodcastSourc
 type PodcastVariant = {
   lectureId: string;
   contentHash: string;
+  /**
+   * The same variant as it was keyed before the cast joined the hash: the note's hash alone.
+   *
+   * Kept so an episode written then is still found, and still opens. Its script was written
+   * without knowing the hosts' genders, which is exactly the defect the cast key exists to stop —
+   * but an episode somebody already has is better listened to than orphaned, and the next one
+   * they make is keyed properly.
+   */
+  legacyContentHash?: string;
   format: PodcastFormat;
   length: PodcastLength;
   language: string;
 };
 
 export async function getPodcastRow(variant: PodcastVariant) {
+  const hashes = variant.legacyContentHash
+    ? [variant.contentHash, variant.legacyContentHash]
+    : [variant.contentHash];
   const { data, error } = await createSupabaseServiceRoleClient()
     .from("lecture_podcasts")
     .select("*")
     .eq("lecture_id", variant.lectureId)
-    .eq("content_hash", variant.contentHash)
+    .in("content_hash", hashes)
     .eq("format", variant.format)
     .eq("length_id", variant.length)
-    .eq("language", variant.language)
-    .maybeSingle();
+    .eq("language", variant.language);
 
   if (error) {
     throw error;
   }
 
-  return (data ?? null) as LecturePodcastRow | null;
+  const rows = (data ?? []) as LecturePodcastRow[];
+
+  /* Both shapes can exist side by side; the one keyed on the cast is the current answer. */
+  return rows.find((row) => row.content_hash === variant.contentHash) ?? rows[0] ?? null;
 }
 
 /**
@@ -235,8 +249,13 @@ export async function listPodcastEpisodes(params: { lectureId: string; contentHa
     .from("lecture_podcasts")
     .select("id, format, length_id, language, title, turns, created_at")
     .eq("lecture_id", params.lectureId)
-    /* Every cast of this note's text — see PodcastVariant for why the hash is compound. */
-    .like("content_hash", `${params.contentHash}:%`)
+    /*
+     * Every cast of this note's text — see PodcastVariant for why the hash is compound — and the
+     * episodes written before the cast was part of it, whose hash is the note's alone. Matching
+     * only the compound shape made those disappear from the library, which is how a note with an
+     * episode came to open on the screen for making one.
+     */
+    .or(`content_hash.eq.${params.contentHash},content_hash.like.${params.contentHash}:*`)
     .eq("status", "ready")
     .order("created_at", { ascending: false });
 
@@ -464,6 +483,7 @@ export async function getOrCreatePodcastScript(params: {
       voices: params.voices,
       speakerCount: format.speakerCount,
     })}`,
+    legacyContentHash: source.contentHash,
     format: params.format,
     length: params.length,
     language: source.language,

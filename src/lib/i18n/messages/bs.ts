@@ -1063,6 +1063,7 @@ export const bs: Messages = {
   "failure.youtube_request_blocked": "YouTube trenutno odbija naše zahtjeve za titlove ovog videa. To nije greška tvog videa — pokušaj ponovo kasnije ili upotrijebi drugi izvor.",
   "failure.pdf_no_text": "U ovom PDF-u nije bilo moguće pronaći čitljiv tekst. Ako je riječ o skeniranom dokumentu, stranice učitaj kao fotografije da ih možemo pročitati.",
   "failure.scan_not_enough_text": "Na fotografiji nije bilo moguće pronaći dovoljno čitljivog teksta.",
+  "failure.scan_text_too_short": "Za bilješke nam treba malo više gradiva. Dodaj još nekoliko fotografija i pokušaj ponovo.",
   "failure.audio_no_clear_speech": "U zvuku nije bilo moguće otkriti dovoljno jasnog govora. Provjeri snimak i pokušaj ponovo.",
   "failure.audio_not_decodable": "Zvučnu datoteku nije bilo moguće obraditi. Snimak je možda oštećen ili u nepodržanom formatu.",
   "failure.source_too_large": "Ovo je gradivo preveliko za obradu odjednom. Podijeli ga na nekoliko dijelova i pokušaj ponovo.",

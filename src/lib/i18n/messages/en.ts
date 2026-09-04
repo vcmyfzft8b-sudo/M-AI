@@ -1055,6 +1055,7 @@ export const en: Messages = {
   "failure.youtube_request_blocked": "YouTube is currently refusing our requests for this video's subtitles. That is not a fault in your video — try again later, or use another source.",
   "failure.pdf_no_text": "No readable text could be found in this PDF. If it is a scanned document, upload the pages as photos so we can read them.",
   "failure.scan_not_enough_text": "Not enough readable text could be found in the photo.",
+  "failure.scan_text_too_short": "We need a little more material to make notes from. Add a few more photos and try again.",
   "failure.audio_no_clear_speech": "Not enough clear speech could be detected in the audio. Check the recording and try again.",
   "failure.audio_not_decodable": "The audio file could not be processed. The recording may be damaged, or in an unsupported format.",
   "failure.source_too_large": "This material is too large to process in one go. Split it into a few parts and try again.",

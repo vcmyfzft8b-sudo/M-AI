@@ -96,10 +96,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
    * Null means there is none left — which is a paywall rather than an error, so it answers
    * 402 with what the client needs to show the right one.
    */
-  const grant = await openTutorGrant({ userId: user.id, lectureId: id });
+  const grant = await openTutorGrant({ userId: user.id, lectureId: id, feature: "tutor" });
 
   if (!grant) {
-    const allowance = await getTutorAllowance(user.id);
+    const allowance = await getTutorAllowance(user.id, "tutor");
 
     return NextResponse.json(
       {

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 
 import { Msym } from "@/components/msym";
 import { useT } from "@/components/i18n-provider";
-import { VoiceUsageSheet } from "@/components/voice-usage-sheet";
+import { VoiceUsageSheet, type VoiceUsage } from "@/components/voice-usage-sheet";
 import { readChatStream } from "@/lib/chat-stream-client";
 import { pillNeighbourhoodScrollTarget } from "@/lib/tab-scroll";
 import {
@@ -121,14 +121,12 @@ const EXPLAIN_BACK_SILENCE_MS = 16_000;
 type TutorTopic = { title: string; points: string[] };
 type TutorPlan = { subject: string; topics: TutorTopic[] };
 
-type TutorUsage = {
-  remainingSeconds: number;
-  limitSeconds: number;
-  usedSeconds: number;
-  creditSeconds: number;
-  hasPaidAccess: boolean;
-  hasUnlimitedUsage: boolean;
-};
+/*
+ * One shape, defined where the meter that reads it lives. Kept as an alias rather than a
+ * second declaration because the two drifted the moment the allowance gained a field: a
+ * structural copy typechecks until it does not.
+ */
+type TutorUsage = VoiceUsage;
 
 /** Why the session was refused: no trial left, or no time left today. */
 type TutorBlock = "tutor_trial_used" | "tutor_credits_needed";

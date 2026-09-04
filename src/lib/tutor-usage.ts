@@ -6,10 +6,12 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import {
   chargeableSeconds,
   computeTutorAllowance,
+  dailySecondsFor,
   FREE_TUTOR_LIFETIME_SECONDS,
   PAID_TUTOR_DAILY_SECONDS,
   TUTOR_CREDIT_PACK_SECONDS,
   type TutorAllowance,
+  type VoiceFeature,
 } from "@/lib/tutor-allowance";
 
 /**
@@ -27,23 +29,12 @@ import {
  * slice it had already been granted.
  */
 
-/**
- * The largest slice handed out at once — a whole day's allowance.
- *
- * Granting in smaller pieces would mean renewing mid-session, and renewing means new Soniox
- * keys and new sockets, which is a hole in the middle of a sentence. A single slice avoids
- * that entirely. What it costs is that an abandoned session reserves the lot until it is
- * settled, which is why `sweepStaleGrants` exists: a grant that outlives its own window with
- * nobody reporting is closed at what it was granted, and the reservation stops being
- * indefinite.
- */
-export const TUTOR_GRANT_SLICE_SECONDS = PAID_TUTOR_DAILY_SECONDS;
-
 export {
   FREE_TUTOR_LIFETIME_SECONDS,
   PAID_TUTOR_DAILY_SECONDS,
   TUTOR_CREDIT_PACK_SECONDS,
   type TutorAllowance,
+  type VoiceFeature,
 };
 
 /**
@@ -80,7 +71,7 @@ async function sweepStaleGrants(userId: string) {
   const supabase = service();
   const { data } = await supabase
     .from("tutor_usage_grants")
-    .select("id, usage_date, granted_seconds, source, created_at")
+    .select("id, usage_date, granted_seconds, source, feature, created_at")
     .eq("user_id", userId)
     .eq("status", "open");
 
@@ -89,6 +80,7 @@ async function sweepStaleGrants(userId: string) {
     usage_date: string;
     granted_seconds: number;
     source: "free" | "daily" | "credit";
+    feature: VoiceFeature;
     created_at: string;
   }>).filter((grant) => {
     const expiresAt =
@@ -114,6 +106,7 @@ async function sweepStaleGrants(userId: string) {
       usage_day: grant.usage_date,
       seconds: grant.granted_seconds,
       from_credits: grant.source === "credit" ? grant.granted_seconds : 0,
+      feature_key: grant.feature,
     } as never);
   }
 }
@@ -125,13 +118,17 @@ async function sweepStaleGrants(userId: string) {
  * against whatever they have bought. Credits are deliberately spent last: somebody who pays
  * monthly should get their included half hour before the thing they topped up with.
  */
-export async function getTutorAllowance(userId: string): Promise<TutorAllowance> {
+export async function getTutorAllowance(
+  userId: string,
+  feature: VoiceFeature,
+): Promise<TutorAllowance> {
   const entitlement = await getUserEntitlementState(userId);
   const hasPaidAccess = entitlement.hasPaidAccess;
   const hasUnlimitedUsage = hasUnlimitedTtsUsage(entitlement.profile?.email);
 
   if (hasUnlimitedUsage) {
     return computeTutorAllowance({
+      feature,
       hasPaidAccess: true,
       hasUnlimitedUsage: true,
       lifetimeSeconds: 0,
@@ -148,12 +145,18 @@ export async function getTutorAllowance(userId: string): Promise<TutorAllowance>
   await sweepStaleGrants(userId);
 
   const [{ data: total }, { data: daily }, { data: credits }, { data: open }] = await Promise.all([
-    supabase.from("tutor_usage_totals").select("lifetime_seconds").eq("user_id", userId).maybeSingle(),
+    supabase
+      .from("tutor_usage_totals")
+      .select("lifetime_seconds")
+      .eq("user_id", userId)
+      .eq("feature", feature)
+      .maybeSingle(),
     supabase
       .from("tutor_daily_usage")
       .select("seconds_used")
       .eq("user_id", userId)
       .eq("usage_date", usageDate)
+      .eq("feature", feature)
       .maybeSingle(),
     supabase.from("tutor_credit_balances").select("seconds_remaining").eq("user_id", userId).maybeSingle(),
     /*
@@ -165,10 +168,12 @@ export async function getTutorAllowance(userId: string): Promise<TutorAllowance>
       .from("tutor_usage_grants")
       .select("granted_seconds")
       .eq("user_id", userId)
+      .eq("feature", feature)
       .eq("status", "open"),
   ]);
 
   return computeTutorAllowance({
+    feature,
     hasPaidAccess,
     hasUnlimitedUsage: false,
     lifetimeSeconds: (total as { lifetime_seconds: number } | null)?.lifetime_seconds ?? 0,
@@ -190,14 +195,25 @@ export async function getTutorAllowance(userId: string): Promise<TutorAllowance>
 export async function openTutorGrant(params: {
   userId: string;
   lectureId: string;
+  feature: VoiceFeature;
 }): Promise<TutorGrant | null> {
-  const allowance = await getTutorAllowance(params.userId);
+  const allowance = await getTutorAllowance(params.userId, params.feature);
+  /*
+   * The largest slice handed out at once is that feature's whole day.
+   *
+   * Granting in smaller pieces would mean renewing mid-session, and renewing means new Soniox
+   * keys and new sockets, which is a hole in the middle of a sentence. What it costs is that an
+   * abandoned session reserves the lot until it is settled, which is why `sweepStaleGrants`
+   * exists: a grant that outlives its own window with nobody reporting is closed at what it was
+   * granted, and the reservation stops being indefinite.
+   */
+  const sliceSeconds = dailySecondsFor(params.feature);
 
   if (allowance.hasUnlimitedUsage) {
     return {
       grantId: null,
-      grantedSeconds: TUTOR_GRANT_SLICE_SECONDS,
-      keyTtlSeconds: TUTOR_GRANT_SLICE_SECONDS + TUTOR_GRANT_KEY_GRACE_SECONDS,
+      grantedSeconds: sliceSeconds,
+      keyTtlSeconds: sliceSeconds + TUTOR_GRANT_KEY_GRACE_SECONDS,
       allowance,
     };
   }
@@ -206,7 +222,7 @@ export async function openTutorGrant(params: {
     return null;
   }
 
-  const grantedSeconds = Math.min(allowance.remainingSeconds, TUTOR_GRANT_SLICE_SECONDS);
+  const grantedSeconds = Math.min(allowance.remainingSeconds, sliceSeconds);
   const { data, error } = await service()
     .from("tutor_usage_grants")
     .insert({
@@ -215,6 +231,7 @@ export async function openTutorGrant(params: {
       usage_date: getLjubljanaUsageDate(),
       granted_seconds: grantedSeconds,
       source: allowance.source,
+      feature: params.feature,
     } as never)
     .select("id")
     .single();
@@ -242,11 +259,12 @@ export async function settleTutorGrant(params: {
   userId: string;
   grantId: string;
   secondsUsed: number;
+  feature: VoiceFeature;
 }): Promise<TutorAllowance> {
   const supabase = service();
   const { data } = await supabase
     .from("tutor_usage_grants")
-    .select("id, user_id, usage_date, granted_seconds, source, status")
+    .select("id, user_id, usage_date, granted_seconds, source, feature, status")
     .eq("id", params.grantId)
     .eq("user_id", params.userId)
     .maybeSingle();
@@ -256,11 +274,17 @@ export async function settleTutorGrant(params: {
     usage_date: string;
     granted_seconds: number;
     source: "free" | "daily" | "credit";
+    feature: VoiceFeature;
     status: string;
   } | null;
 
+  /*
+   * The feature is read off the grant rather than passed in. A slice belongs to the ledger it
+   * was taken from, and a caller that settled a podcast grant against the tutor's day would
+   * hand the listener their time back and quietly charge somebody else's.
+   */
   if (!grant || grant.status === "settled") {
-    return getTutorAllowance(params.userId);
+    return getTutorAllowance(params.userId, params.feature);
   }
 
   const charged = chargeableSeconds(params.secondsUsed, grant.granted_seconds);
@@ -281,6 +305,7 @@ export async function settleTutorGrant(params: {
       usage_day: grant.usage_date,
       seconds: charged,
       from_credits: grant.source === "credit" ? charged : 0,
+      feature_key: grant.feature,
     } as never);
 
     if (error) {
@@ -288,7 +313,7 @@ export async function settleTutorGrant(params: {
     }
   }
 
-  return getTutorAllowance(params.userId);
+  return getTutorAllowance(params.userId, params.feature);
 }
 
 /** Adds a purchased hour. Called from the Stripe webhook once payment has actually landed. */
@@ -304,6 +329,7 @@ export async function creditTutorSeconds(params: { userId: string; seconds: numb
 }
 
 export type TutorUsageForClient = {
+  feature: VoiceFeature;
   remainingSeconds: number;
   limitSeconds: number;
   usedSeconds: number;
@@ -319,6 +345,7 @@ export type TutorUsageForClient = {
 export function toClientUsage(allowance: TutorAllowance): TutorUsageForClient {
   if (allowance.hasUnlimitedUsage) {
     return {
+      feature: allowance.feature,
       remainingSeconds: 0,
       limitSeconds: 0,
       usedSeconds: 0,
@@ -329,6 +356,7 @@ export function toClientUsage(allowance: TutorAllowance): TutorUsageForClient {
   }
 
   return {
+    feature: allowance.feature,
     remainingSeconds: allowance.remainingSeconds,
     limitSeconds: allowance.limitSeconds,
     usedSeconds: allowance.usedSeconds,

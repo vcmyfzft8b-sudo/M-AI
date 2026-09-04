@@ -17,6 +17,12 @@ import { sheetClass, useSheet } from "@/components/use-sheet";
  * to the screen you are on: a popover on the desktop, a dragged sheet on the phone.
  */
 export type VoiceUsage = {
+  /*
+   * Which of the two allowances this is. The tutor and the podcast have had separate days
+   * and separate free minutes since migration 0047, so the meter has to be told which one it
+   * is showing — a bar headed "tutor" over the podcast's seconds is worse than no bar.
+   */
+  feature: "tutor" | "podcast";
   remainingSeconds: number;
   limitSeconds: number;
   usedSeconds: number;
@@ -131,6 +137,31 @@ export function VoiceUsageSheet({
     : 0;
   const creditLabel = usage ? `${Math.floor(usage.creditSeconds / 60)} min` : "";
   const triggerLabel = !usage ? "" : usage.hasUnlimitedUsage ? t("tutor.usage.unlimited") : `${remainingPercent}%`;
+  /*
+   * Only the lines that name the feature are switched. The reset note, the credit bar and the
+   * button are the same sentence either way — one day, one bought hour, one price — and
+   * duplicating them per feature would be five more strings to keep in step in five languages.
+   */
+  const isPodcast = usage?.feature === "podcast";
+  const usageTitle = t(isPodcast ? "podcast.usage.title" : "tutor.usage.title");
+  const offerTitle = t(
+    usage?.hasPaidAccess
+      ? isPodcast
+        ? "podcast.paywall.creditsTitle"
+        : "tutor.paywall.creditsTitle"
+      : isPodcast
+        ? "podcast.paywall.trialTitle"
+        : "tutor.paywall.trialTitle",
+  );
+  const offerBody = t(
+    usage?.hasPaidAccess
+      ? isPodcast
+        ? "podcast.paywall.creditsBody"
+        : "tutor.paywall.creditsBody"
+      : isPodcast
+        ? "podcast.paywall.trialBody"
+        : "tutor.paywall.trialBody",
+  );
 
   const content = usage ? (
     <>
@@ -142,8 +173,8 @@ export function VoiceUsageSheet({
         className="mobile-sheet-drag-handle note-read-usage-drag-handle"
         aria-label={t("folders.dragToClose")}
       />
-      <div className="memo-tutor-usage-heading">{t("tutor.usage.title")}</div>
-      <UsageBar percent={remainingPercent} label={barLabel} ariaLabel={t("tutor.usage.title")} />
+      <div className="memo-tutor-usage-heading">{usageTitle}</div>
+      <UsageBar percent={remainingPercent} label={barLabel} ariaLabel={usageTitle} />
       <div className="note-read-usage-reset">
         {usage.hasUnlimitedUsage
           ? t("tutor.usage.unlimited")
@@ -186,8 +217,8 @@ export function VoiceUsageSheet({
         <>
           <div className="note-read-settings-divider" />
           <div className="memo-tutor-offer">
-            <h2>{t(usage.hasPaidAccess ? "tutor.paywall.creditsTitle" : "tutor.paywall.trialTitle")}</h2>
-            <p>{t(usage.hasPaidAccess ? "tutor.paywall.creditsBody" : "tutor.paywall.trialBody")}</p>
+            <h2>{offerTitle}</h2>
+            <p>{offerBody}</p>
             {usage.hasPaidAccess ? (
               <button
                 type="button"
@@ -239,7 +270,7 @@ export function VoiceUsageSheet({
             className={sheetClass("note-read-usage-popover note-read-usage-mobile-sheet", sheet.closing)}
             role="dialog"
             aria-modal="true"
-            aria-label={t("tutor.usage.title")}
+            aria-label={usageTitle}
             {...sheet.dragProps}
           >
             {content}

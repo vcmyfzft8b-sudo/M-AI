@@ -15,10 +15,46 @@ export const FREE_TUTOR_LIFETIME_SECONDS = 60;
 /** What a subscription includes each day, before anything has to be bought. */
 export const PAID_TUTOR_DAILY_SECONDS = 30 * 60;
 
+/**
+ * The two things that spend spoken time, and the fact that they no longer spend the same
+ * allowance.
+ *
+ * They shared one for as long as the podcast was new, and it was the wrong shape: an evening
+ * of episodes silently took the tutor away, and the meter could not say which had gone. Each
+ * now has its own day and its own free minute. What is NOT split is the hour somebody buys —
+ * that is bought as voice time and spends on either, because a top-up you can spend in the
+ * wrong place is a support ticket rather than a feature.
+ */
+export type VoiceFeature = "tutor" | "podcast";
+
+/**
+ * The podcast's day, deliberately the same size as the tutor's.
+ *
+ * Not because the two cost the same to run — they cost exactly the same, a minute of Soniox
+ * either way — but because a smaller number here would have to be explained, and there is
+ * nothing to explain. The exposure is worth naming: a subscriber who empties both every day
+ * costs about $21 a month in synthesis against €10.83 on the yearly plan. Nobody uses a cap
+ * daily; the cap is what the plan promises, so it is what the promise is worth.
+ */
+export const PAID_PODCAST_DAILY_SECONDS = 30 * 60;
+
+/** A minute of the podcast, once, for the same reason the tutor gets one. */
+export const FREE_PODCAST_LIFETIME_SECONDS = 60;
+
+export function dailySecondsFor(feature: VoiceFeature) {
+  return feature === "podcast" ? PAID_PODCAST_DAILY_SECONDS : PAID_TUTOR_DAILY_SECONDS;
+}
+
+export function freeLifetimeSecondsFor(feature: VoiceFeature) {
+  return feature === "podcast" ? FREE_PODCAST_LIFETIME_SECONDS : FREE_TUTOR_LIFETIME_SECONDS;
+}
+
 /** One purchase, in seconds. Priced per hour, so an hour is what a purchase is. */
 export const TUTOR_CREDIT_PACK_SECONDS = 60 * 60;
 
 export type TutorAllowanceInput = {
+  /** Which of the two allowances this is. They are counted, and run out, separately. */
+  feature: VoiceFeature;
   hasPaidAccess: boolean;
   hasUnlimitedUsage: boolean;
   /** Every second ever spent, for the free lifetime cap. */
@@ -32,6 +68,7 @@ export type TutorAllowanceInput = {
 };
 
 export type TutorAllowance = {
+  feature: VoiceFeature;
   remainingSeconds: number;
   limitSeconds: number;
   usedSeconds: number;
@@ -55,6 +92,7 @@ export type TutorAllowance = {
 export function computeTutorAllowance(input: TutorAllowanceInput): TutorAllowance {
   if (input.hasUnlimitedUsage) {
     return {
+      feature: input.feature,
       remainingSeconds: Number.MAX_SAFE_INTEGER,
       limitSeconds: Number.MAX_SAFE_INTEGER,
       usedSeconds: 0,
@@ -69,11 +107,13 @@ export function computeTutorAllowance(input: TutorAllowanceInput): TutorAllowanc
     // Credits are not offered to a free account: the thing to buy first is the plan, not an
     // hour of one feature inside it. Any it somehow holds are kept, not spent.
     const spent = input.lifetimeSeconds + input.reservedSeconds;
+    const freeLimit = freeLifetimeSecondsFor(input.feature);
 
     return {
-      remainingSeconds: Math.max(FREE_TUTOR_LIFETIME_SECONDS - spent, 0),
-      limitSeconds: FREE_TUTOR_LIFETIME_SECONDS,
-      usedSeconds: Math.min(spent, FREE_TUTOR_LIFETIME_SECONDS),
+      feature: input.feature,
+      remainingSeconds: Math.max(freeLimit - spent, 0),
+      limitSeconds: freeLimit,
+      usedSeconds: Math.min(spent, freeLimit),
       creditSeconds: 0,
       hasPaidAccess: false,
       hasUnlimitedUsage: false,
@@ -81,13 +121,15 @@ export function computeTutorAllowance(input: TutorAllowanceInput): TutorAllowanc
     };
   }
 
+  const dailyLimit = dailySecondsFor(input.feature);
   const dailySpent = input.dailySeconds + input.reservedSeconds;
-  const dailyRemaining = Math.max(PAID_TUTOR_DAILY_SECONDS - dailySpent, 0);
+  const dailyRemaining = Math.max(dailyLimit - dailySpent, 0);
 
   return {
+    feature: input.feature,
     remainingSeconds: dailyRemaining + input.creditSeconds,
-    limitSeconds: PAID_TUTOR_DAILY_SECONDS,
-    usedSeconds: Math.min(dailySpent, PAID_TUTOR_DAILY_SECONDS),
+    limitSeconds: dailyLimit,
+    usedSeconds: Math.min(dailySpent, dailyLimit),
     creditSeconds: input.creditSeconds,
     hasPaidAccess: true,
     hasUnlimitedUsage: false,

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 
 import { useT } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
-import { VoiceUsageSheet } from "@/components/voice-usage-sheet";
+import { VoiceUsageSheet, type VoiceUsage } from "@/components/voice-usage-sheet";
 import { NOTE_TTS_VOICES, type NoteTtsVoice } from "@/lib/note-tts-settings";
 import {
   DEFAULT_PODCAST_FORMAT,
@@ -96,14 +96,12 @@ type PodcastEpisode = {
   createdAt: string;
 };
 
-type PodcastUsage = {
-  remainingSeconds: number;
-  limitSeconds: number;
-  usedSeconds: number;
-  creditSeconds: number;
-  hasPaidAccess: boolean;
-  hasUnlimitedUsage: boolean;
-};
+/*
+ * One shape, defined where the meter that reads it lives. Kept as an alias rather than a
+ * second declaration because the two drifted the moment the allowance gained a field: a
+ * structural copy typechecks until it does not.
+ */
+type PodcastUsage = VoiceUsage;
 
 type PodcastStatus = {
   available: boolean;

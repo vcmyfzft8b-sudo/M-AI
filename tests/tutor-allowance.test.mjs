@@ -4,16 +4,20 @@ import test from "node:test";
 import {
   chargeableSeconds,
   computeTutorAllowance,
+  dailySecondsFor,
+  freeLifetimeSecondsFor,
+  FREE_PODCAST_LIFETIME_SECONDS,
   FREE_TUTOR_LIFETIME_SECONDS,
+  PAID_PODCAST_DAILY_SECONDS,
   PAID_TUTOR_DAILY_SECONDS,
 } from "../src/lib/tutor-allowance.ts";
 
 const free = (over = {}) => computeTutorAllowance({
-  hasPaidAccess: false, hasUnlimitedUsage: false,
+  feature: "tutor", hasPaidAccess: false, hasUnlimitedUsage: false,
   lifetimeSeconds: 0, dailySeconds: 0, creditSeconds: 0, reservedSeconds: 0, ...over,
 });
 const paid = (over = {}) => computeTutorAllowance({
-  hasPaidAccess: true, hasUnlimitedUsage: false,
+  feature: "tutor", hasPaidAccess: true, hasUnlimitedUsage: false,
   lifetimeSeconds: 0, dailySeconds: 0, creditSeconds: 0, reservedSeconds: 0, ...over,
 });
 
@@ -92,4 +96,77 @@ test("a slice is charged at what was used, never more than was granted", () => {
 test("a slice with no usable report is charged in full", () => {
   // The reservation model: we gave you the time and you never said otherwise.
   assert.equal(chargeableSeconds(Number.NaN, 300), 300);
+});
+
+/*
+ * The split. These are the properties that make two allowances two allowances rather than one
+ * with a label on it: the numbers are read per feature, the sums do not see each other, and the
+ * one thing that IS shared — bought time — is shared on purpose.
+ */
+
+test("each feature has its own day and its own free minute", () => {
+  assert.equal(dailySecondsFor("tutor"), PAID_TUTOR_DAILY_SECONDS);
+  assert.equal(dailySecondsFor("podcast"), PAID_PODCAST_DAILY_SECONDS);
+  assert.equal(freeLifetimeSecondsFor("tutor"), FREE_TUTOR_LIFETIME_SECONDS);
+  assert.equal(freeLifetimeSecondsFor("podcast"), FREE_PODCAST_LIFETIME_SECONDS);
+});
+
+test("a day spent on one feature leaves the other untouched", () => {
+  // The rows are keyed by feature, so the podcast's reader sees zero seconds spent whatever
+  // the tutor did. This asserts the arithmetic honours that rather than the storage.
+  const tutorSpent = paid({ dailySeconds: PAID_TUTOR_DAILY_SECONDS });
+  const podcastFresh = computeTutorAllowance({
+    feature: "podcast", hasPaidAccess: true, hasUnlimitedUsage: false,
+    lifetimeSeconds: 0, dailySeconds: 0, creditSeconds: 0, reservedSeconds: 0,
+  });
+
+  assert.equal(tutorSpent.remainingSeconds, 0);
+  assert.equal(podcastFresh.remainingSeconds, PAID_PODCAST_DAILY_SECONDS);
+});
+
+test("the allowance says which one it is, so the meter cannot mislabel itself", () => {
+  assert.equal(paid().feature, "tutor");
+  assert.equal(computeTutorAllowance({
+    feature: "podcast", hasPaidAccess: true, hasUnlimitedUsage: false,
+    lifetimeSeconds: 0, dailySeconds: 0, creditSeconds: 0, reservedSeconds: 0,
+  }).feature, "podcast");
+});
+
+test("a bought hour is offered to both, because it is one hour of voice time", () => {
+  const spentDay = { dailySeconds: PAID_TUTOR_DAILY_SECONDS, creditSeconds: 3600 };
+  const tutor = paid(spentDay);
+  const podcast = computeTutorAllowance({
+    feature: "podcast", hasPaidAccess: true, hasUnlimitedUsage: false,
+    lifetimeSeconds: 0, dailySeconds: PAID_PODCAST_DAILY_SECONDS,
+    creditSeconds: 3600, reservedSeconds: 0,
+  });
+
+  // Same hour, visible from both — spending it in either place is what draws it down, and
+  // that happens in the ledger rather than here.
+  assert.equal(tutor.remainingSeconds, 3600);
+  assert.equal(podcast.remainingSeconds, 3600);
+  assert.equal(tutor.source, "credit");
+  assert.equal(podcast.source, "credit");
+});
+
+test("a free account's podcast minute is separate from its tutor minute", () => {
+  const podcast = computeTutorAllowance({
+    feature: "podcast", hasPaidAccess: false, hasUnlimitedUsage: false,
+    lifetimeSeconds: 0, dailySeconds: 0, creditSeconds: 0, reservedSeconds: 0,
+  });
+
+  assert.equal(free({ lifetimeSeconds: FREE_TUTOR_LIFETIME_SECONDS }).remainingSeconds, 0);
+  assert.equal(podcast.remainingSeconds, FREE_PODCAST_LIFETIME_SECONDS);
+});
+
+test("an unlimited account is unlimited on both", () => {
+  for (const feature of ["tutor", "podcast"]) {
+    const allowance = computeTutorAllowance({
+      feature, hasPaidAccess: true, hasUnlimitedUsage: true,
+      lifetimeSeconds: 0, dailySeconds: 0, creditSeconds: 0, reservedSeconds: 0,
+    });
+
+    assert.equal(allowance.hasUnlimitedUsage, true);
+    assert.equal(allowance.feature, feature);
+  }
 });

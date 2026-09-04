@@ -1699,7 +1699,12 @@ export const sl = {
   "tutor.paywall.creditsPending": "Odpiram plačilo …",
   "tutor.error.creditsFailed": "Nakupa ni bilo mogoče začeti.",
   "tutor.usage.creditsTitle": "Dokupljeni čas",
-  "tutor.usage.creditsNote": "Porabi se, ko zmanjka dnevnega.",
+  "tutor.usage.creditsNote": "Porabi se, ko zmanjka dnevnega — za instruktorja ali podkast.",
+  "podcast.usage.title": "Poraba podkasta",
+  "podcast.paywall.trialTitle": "Preizkus je porabljen",
+  "podcast.paywall.trialBody": "Z naročnino dobiš podkaste vsak dan, iz vseh svojih zapiskov.",
+  "podcast.paywall.creditsTitle": "Za danes je poslušanja konec",
+  "podcast.paywall.creditsBody": "Jutri se ponastavi. Če želiš nadaljevati zdaj, dokupi uro za 2 €.",
 
   /* ---- Podcast ---- */
   "note.tab.podcast": "Podkast",

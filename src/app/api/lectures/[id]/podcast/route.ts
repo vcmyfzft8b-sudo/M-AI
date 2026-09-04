@@ -93,7 +93,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
    * account can hear a minute of an episode, and what stops anybody is running out of time
    * rather than a plan check in front of the screen.
    */
-  const usage = toClientUsage(await getTutorAllowance(user.id));
+  const usage = toClientUsage(await getTutorAllowance(user.id, "podcast"));
 
   const url = new URL(request.url);
   const format = normalizePodcastFormat(url.searchParams.get("format"));
@@ -218,7 +218,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
    * same way the tutor's lesson plan is not. But somebody with no listening time left cannot hear
    * what it would write, so they are told before it is written rather than after.
    */
-  const allowance = await getTutorAllowance(user.id);
+  const allowance = await getTutorAllowance(user.id, "podcast");
 
   if (allowance.remainingSeconds <= 0) {
     return NextResponse.json(

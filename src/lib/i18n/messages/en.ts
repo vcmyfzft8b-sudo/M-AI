@@ -1670,7 +1670,12 @@ export const en: Messages = {
   "tutor.paywall.creditsPending": "Opening checkout…",
   "tutor.error.creditsFailed": "The purchase could not be started.",
   "tutor.usage.creditsTitle": "Topped-up time",
-  "tutor.usage.creditsNote": "Used once the daily allowance runs out.",
+  "tutor.usage.creditsNote": "Used once the daily allowance runs out — for the tutor or the podcast.",
+  "podcast.usage.title": "Podcast usage",
+  "podcast.paywall.trialTitle": "Your trial is used up",
+  "podcast.paywall.trialBody": "A subscription gives you podcasts every day, from any of your notes.",
+  "podcast.paywall.creditsTitle": "That's your listening for today",
+  "podcast.paywall.creditsBody": "It resets tomorrow. To carry on now, top up an hour for €2.",
 
   /* ---- Podcast ---- */
   "note.tab.podcast": "Podcast",

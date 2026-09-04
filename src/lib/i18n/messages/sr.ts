@@ -1680,7 +1680,12 @@ export const sr: Messages = {
   "tutor.paywall.creditsPending": "Otvaram plaćanje…",
   "tutor.error.creditsFailed": "Kupovinu nije bilo moguće započeti.",
   "tutor.usage.creditsTitle": "Dokupljeno vreme",
-  "tutor.usage.creditsNote": "Troši se kad ponestane dnevnog.",
+  "tutor.usage.creditsNote": "Troši se kad ponestane dnevnog — za objašnjenje ili podkast.",
+  "podcast.usage.title": "Potrošnja podkasta",
+  "podcast.paywall.trialTitle": "Proba je potrošena",
+  "podcast.paywall.trialBody": "Pretplata ti daje podkaste svaki dan, iz svih tvojih beleški.",
+  "podcast.paywall.creditsTitle": "To je tvoje slušanje za danas",
+  "podcast.paywall.creditsBody": "Sutra se resetuje. Za nastavak sada dokupi sat za 2 €.",
 
   /* ---- Podcast ---- */
   "note.tab.podcast": "Podkast",

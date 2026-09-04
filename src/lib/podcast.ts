@@ -661,7 +661,7 @@ export async function getOrCreatePodcastSegment(params: {
     return {
       row: cached,
       audioUrl: await signSegment(cached),
-      allowance: await getTutorAllowance(params.userId),
+      allowance: await getTutorAllowance(params.userId, "podcast"),
     };
   }
 
@@ -673,10 +673,10 @@ export async function getOrCreatePodcastSegment(params: {
    * rather than two allowances that have to be explained to each other. A null grant means there
    * is nothing left, which is a paywall and not a fault.
    */
-  const grant = await openTutorGrant({ userId: params.userId, lectureId: params.lectureId });
+  const grant = await openTutorGrant({ userId: params.userId, lectureId: params.lectureId, feature: "podcast" });
 
   if (!grant) {
-    throw new PodcastAllowanceError(await getTutorAllowance(params.userId));
+    throw new PodcastAllowanceError(await getTutorAllowance(params.userId, "podcast"));
   }
 
   let settled = false;
@@ -748,6 +748,7 @@ export async function getOrCreatePodcastSegment(params: {
           userId: params.userId,
           grantId: grant.grantId,
           secondsUsed: Math.max(1, Math.ceil(row.duration_ms / 1000)),
+          feature: "podcast",
         })
       : grant.allowance;
 
@@ -758,7 +759,12 @@ export async function getOrCreatePodcastSegment(params: {
      * it counts as reserved against the listener until the sweeper eventually clears it.
      */
     if (!settled && grant.grantId) {
-      await settleTutorGrant({ userId: params.userId, grantId: grant.grantId, secondsUsed: 0 });
+      await settleTutorGrant({
+        userId: params.userId,
+        grantId: grant.grantId,
+        secondsUsed: 0,
+        feature: "podcast",
+      });
     }
 
     throw error;

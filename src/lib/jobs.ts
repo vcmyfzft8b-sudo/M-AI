@@ -8,7 +8,6 @@ import {
   markLecturePipelineFailed,
   runLecturePipeline,
 } from "@/lib/pipeline";
-import { generateLectureMindmap } from "@/lib/mindmap";
 import { generateLecturePracticeTest } from "@/lib/practice-test";
 import { generateLectureQuiz } from "@/lib/quiz";
 import { processStoredScanLecture } from "@/lib/scan-processing";
@@ -22,7 +21,6 @@ const INTERNAL_LECTURE_PROCESSING_PATH = "/api/internal/lectures/process";
 const INTERNAL_LECTURE_SCAN_PATH = "/api/internal/lectures/scan";
 const INTERNAL_LECTURE_DOCUMENT_PATH = "/api/internal/lectures/document";
 const INTERNAL_LECTURE_LINK_PATH = "/api/internal/lectures/link";
-const INTERNAL_LECTURE_MINDMAP_PATH = "/api/internal/lectures/mindmap";
 const INTERNAL_LECTURE_PRACTICE_TEST_PATH = "/api/internal/lectures/practice-test";
 const INTERNAL_LECTURE_STUDY_PATH = "/api/internal/lectures/study";
 const INTERNAL_LECTURE_QUIZ_PATH = "/api/internal/lectures/quiz";
@@ -355,32 +353,6 @@ export async function enqueueLectureQuizGeneration(lectureId: string) {
 
   await generateLectureQuiz({ lectureId }).catch((error) => {
     console.error("Lecture quiz generation failed", { lectureId, error });
-  });
-}
-
-export async function enqueueLectureMindmapGeneration(lectureId: string, regenerate = false) {
-  const env = getServerEnv();
-
-  if (shouldUseHostedInngestJobs(env)) {
-    await inngest.send({
-      name: "lecture/mindmap.requested",
-      data: { lectureId, regenerate },
-    });
-    return;
-  }
-
-  if (
-    await tryEnqueueInternalLectureJob({
-      lectureId,
-      path: INTERNAL_LECTURE_MINDMAP_PATH,
-      regenerate,
-    })
-  ) {
-    return;
-  }
-
-  await generateLectureMindmap({ lectureId, regenerate }).catch((error) => {
-    console.error("Lecture mindmap generation failed", { lectureId, regenerate, error });
   });
 }
 

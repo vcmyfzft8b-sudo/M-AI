@@ -812,37 +812,6 @@ export type Database = {
           updated_at?: string;
         };
       };
-      lecture_mindmap_assets: {
-        Row: {
-          lecture_id: string;
-          status: StudyAssetStatus;
-          error_message: string | null;
-          map_json: Json;
-          notes_hash: string | null;
-          model_metadata: Json;
-          generated_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          lecture_id: string;
-          status?: StudyAssetStatus;
-          error_message?: string | null;
-          map_json?: Json;
-          notes_hash?: string | null;
-          model_metadata?: Json;
-          generated_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          status?: StudyAssetStatus;
-          error_message?: string | null;
-          map_json?: Json;
-          notes_hash?: string | null;
-          model_metadata?: Json;
-          generated_at?: string;
-          updated_at?: string;
-        };
-      };
       lecture_practice_test_assets: {
         Row: {
           lecture_id: string;
@@ -1754,8 +1723,6 @@ export type LectureStudyAssetRow =
   Database["public"]["Tables"]["lecture_study_assets"]["Row"];
 export type LectureQuizAssetRow =
   Database["public"]["Tables"]["lecture_quiz_assets"]["Row"];
-export type LectureMindmapAssetRow =
-  Database["public"]["Tables"]["lecture_mindmap_assets"]["Row"];
 export type LecturePracticeTestAssetRow =
   Database["public"]["Tables"]["lecture_practice_test_assets"]["Row"];
 export type LectureStudySectionRow =

@@ -13,7 +13,6 @@ export const AI_STAGES = [
   "coverage_plan",
   "study_items",
   "chat",
-  "mindmap",
   "tutor_plan",
   "tutor_turn",
   "language_check",
@@ -153,16 +152,6 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
   study_items: { thinkingLevel: "low", outputHeadroom: 1.6, defaultModel: GLM_TEXT_MODEL },
   chat: { thinkingLevel: "minimal", outputHeadroom: 1, defaultModel: GLM_TEXT_MODEL },
   /*
-   * The mind map: one call that reads the finished note and re-shapes it as a tree.
-   *
-   * It thinks for the same reason the outline does. Both are the one place in their pipeline
-   * where *global* judgment happens — what the whole material is about, which topics are peers
-   * and which are details of another — and neither can be done a chunk at a time. Unlike the
-   * outline it writes a few thousand tokens rather than tens of thousands, so `medium` buys the
-   * judgment without the outline's cost.
-   */
-  mindmap: { thinkingLevel: "medium", outputHeadroom: 2.5, defaultModel: GLM_TEXT_MODEL },
-  /*
    * The running order for a session: which topics exist, in which order, and what each has to
    * land. It is never spoken and nobody reads it, so none of the prose considerations that
    * decide the `tutor_turn` model apply here. It is judged on one thing, and it is the thing
@@ -279,7 +268,6 @@ const STAGE_MODEL_ENV_KEYS: Record<AiStage, string> = {
   coverage_plan: "GEMINI_COVERAGE_MODEL",
   study_items: "GEMINI_STUDY_ITEMS_MODEL",
   chat: "GEMINI_CHAT_MODEL",
-  mindmap: "GEMINI_MINDMAP_MODEL",
   tutor_plan: "GEMINI_TUTOR_PLAN_MODEL",
   tutor_turn: "GEMINI_TUTOR_TURN_MODEL",
   language_check: "GEMINI_LANGUAGE_CHECK_MODEL",
@@ -293,7 +281,6 @@ const STAGE_THINKING_ENV_KEYS: Record<AiStage, string> = {
   coverage_plan: "GEMINI_COVERAGE_THINKING",
   study_items: "GEMINI_STUDY_ITEMS_THINKING",
   chat: "GEMINI_CHAT_THINKING",
-  mindmap: "GEMINI_MINDMAP_THINKING",
   tutor_plan: "GEMINI_TUTOR_PLAN_THINKING",
   tutor_turn: "GEMINI_TUTOR_TURN_THINKING",
   language_check: "GEMINI_LANGUAGE_CHECK_THINKING",
@@ -492,14 +479,6 @@ const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
    * day, and it is time the opening turn is already speaking through.
    */
   tutor_plan: 90_000,
-  /*
-   * One thinking call over the whole note, with a reader watching a spinner for it. The default
-   * ninety seconds is the wrong shape for both halves of that: too tight for a long note on a
-   * thinking model, and long enough that a stalled call leaves nothing but a spinner. Three
-   * minutes clears the work and still leaves the 300s route budget room for the direct-provider
-   * fallback underneath it.
-   */
-  mindmap: 180_000,
   /*
    * The repair is optional by construction: on the spoken path a unit whose repair is late is
    * spoken as it was written, and in a note a passage that fails to come back is kept as it was.

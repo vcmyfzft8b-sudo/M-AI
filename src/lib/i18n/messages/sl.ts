@@ -130,7 +130,6 @@ export const sl = {
   "landing.tutor.title": "Predavanje, ki ti ga nekdo razloži",
   "landing.tutor.lead": "Razlaga prebere tvoj zapisek in ti ga pove na glas. Kadar koli jo prekineš z vprašanjem in nadaljuje tam, kjer sta ostala. Poskusi kar tukaj.",
   "tutorDemo.heard1": "Počakaj, lahko še enkrat razložiš razliko med funkcijskimi in integriranimi sistemi?",
-  "tutorDemo.heard2": "In zakaj je prenova procesov pogoj za uvedbo ERP?",
   "landing.faq.title": "Pogosta vprašanja",
   "landing.finalCta.title": "Naloži prvo predavanje.",
   "landing.finalCta.lead": "Uro dolgo predavanje je obdelano v nekaj minutah – prepis, zapiski, flashcarde in kviz nastanejo skupaj.",

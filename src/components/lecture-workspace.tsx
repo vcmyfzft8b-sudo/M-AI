@@ -40,6 +40,7 @@ import {
 } from "@/lib/lecture-source-metadata";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
+import { resolveMaterialLanguage } from "@/lib/languages";
 import { isNoteEnrichmentPending } from "@/lib/note-enrichment-status";
 import { noteEmoji } from "@/lib/note-emoji";
 import type { EditableNoteDoc, NoteAnnotation, NoteAnnotationKind } from "@/lib/note-doc";
@@ -4161,6 +4162,15 @@ export function LectureWorkspace({
         <LectureTutor
           lectureId={detail.lecture.id}
           isReady={detail.lecture.status === "ready"}
+          /*
+           * What the tutor will speak, so the voices audition in it. The same
+           * helper the session route runs, over the same summary and notes, so
+           * the audition and the session cannot disagree about the language.
+           */
+          language={resolveMaterialLanguage(
+            `${detail.artifact?.summary ?? ""}\n${detail.artifact?.structured_notes_md ?? ""}`,
+            detail.lecture.language_hint,
+          )}
           /* The usage pill belongs in the dock, where this app keeps a screen's controls. */
           dockSlot={dockSlot}
         />

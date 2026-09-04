@@ -19,47 +19,51 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 
-import { useT } from "@/components/i18n-provider";
+import { useTranslations } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { NOTE_TTS_VOICES, type NoteTtsVoice } from "@/lib/note-tts-settings";
+import { TutorClipPlayer } from "@/lib/tutor/clip-player";
 import { showsHeardLine, type TutorPhase } from "@/lib/tutor/heard-line";
 import { voiceHue } from "@/lib/tutor/voice-colors";
+import { tutorDemoClip, voiceSampleClip } from "@/lib/tutor/voice-clips";
 
 /*
  * The walkthrough, as a script. The two questions are the learner's; the tutor's
  * own words are never printed in the app either — they are in the room — so
  * there is nothing else here to write.
  */
-type ScriptStep = { phase: TutorPhase; ms: number; heardKey?: MessageKey };
+type ScriptStep = {
+  phase: TutorPhase;
+  ms: number;
+  heardKey?: MessageKey;
+  /*
+   * The last thing the tutor says runs until the recording runs out rather than
+   * for a fixed time, so the demo ends on a finished sentence whatever the voice
+   * and whatever the language. `ms` is what it falls back to when there is no
+   * sound — a walkthrough nobody started with a tap, or a browser that refused.
+   */
+  untilClipEnds?: boolean;
+};
 
 const SCRIPT: ScriptStep[] = [
-  { phase: "preparing", ms: 2400 },
-  { phase: "speaking", ms: 7600 },
+  { phase: "preparing", ms: 2000 },
+  { phase: "speaking", ms: 8000 },
   { phase: "listening", ms: 3600, heardKey: "tutorDemo.heard1" },
   { phase: "thinking", ms: 1500 },
-  { phase: "speaking", ms: 8600 },
-  { phase: "listening", ms: 3200, heardKey: "tutorDemo.heard2" },
-  { phase: "thinking", ms: 1400 },
-  { phase: "speaking", ms: 7000 },
+  { phase: "speaking", ms: 7000, untilClipEnds: true },
   { phase: "finished", ms: 0 },
 ];
 
 /* How fast the recognizer appears to arrive at the words. */
 const HEARD_WORD_MS = 190;
 
-/* How long a tapped voice chip plays for before the row goes quiet again. */
-const VOICE_SAMPLE_MS = 1800;
+/* The longest a tapped voice chip stays lit if its clip never reports ending. */
+const VOICE_SAMPLE_MS = 8000;
 
 export type LandingTutorDemoProps = {
-  /**
-   * Start on its own once it is on screen. The page's own sections do; inside
-   * the phone mockup the guided tour presses the button instead, the same way
-   * it presses every other one.
-   */
-  autoStart?: boolean;
   /** Pulls the voice row's bleed back to the phone's own gutter. */
   inset?: "page" | "phone";
   /** Token overrides — the phone mockup hands it `--m-*`. */
@@ -67,13 +71,8 @@ export type LandingTutorDemoProps = {
   className?: string;
 };
 
-export function LandingTutorDemo({
-  autoStart = false,
-  inset = "page",
-  style,
-  className,
-}: LandingTutorDemoProps) {
-  const t = useT();
+export function LandingTutorDemo({ inset = "page", style, className }: LandingTutorDemoProps) {
+  const { t, locale } = useTranslations();
 
   const [step, setStep] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
@@ -86,13 +85,32 @@ export function LandingTutorDemo({
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const heardRef = useRef<HTMLParagraphElement | null>(null);
+
+  /*
+   * The voice. One player for the walkthrough's bed and for the chips, since only
+   * one of them is ever meant to be heard.
+   *
+   * Whether it is *allowed* to make a sound is not ours to decide: a browser only
+   * lets audio start from something the visitor did. So `audible` is set from the
+   * click that started the walkthrough — `isTrusted` separates a real press from
+   * the phone mockup's scripted tour, which drives the same button and must stay
+   * silent. Everything works either way; without sound the sphere just mimes, as
+   * it did before there were any recordings.
+   */
+  const playerRef = useRef<TutorClipPlayer | null>(null);
+  const [audible, setAudible] = useState(false);
+  const levelRaf = useRef<number | undefined>(undefined);
+
+  const player = () => {
+    if (!playerRef.current) {
+      playerRef.current = new TutorClipPlayer();
+    }
+
+    return playerRef.current;
+  };
   const stepTimer = useRef<number | undefined>(undefined);
   const heardTimer = useRef<number | undefined>(undefined);
   const sampleTimer = useRef<number | undefined>(undefined);
-  /* Latched by the first start of any kind — the observer's, or the visitor's.
-     Scrolling back past it does not start the walkthrough over, and neither
-     does the observer once somebody has taken the panel over themselves. */
-  const autoStarted = useRef(false);
 
   const clearTimers = useCallback(() => {
     window.clearTimeout(stepTimer.current);
@@ -106,6 +124,8 @@ export function LandingTutorDemo({
       window.clearTimeout(stepTimer.current);
       window.clearInterval(heardTimer.current);
       window.clearTimeout(sampleTimer.current);
+      if (levelRaf.current !== undefined) window.cancelAnimationFrame(levelRaf.current);
+      playerRef.current?.destroy();
     },
     [],
   );
@@ -122,6 +142,11 @@ export function LandingTutorDemo({
   const mutedRef = useRef(muted);
   useEffect(() => {
     mutedRef.current = muted;
+
+    /* The button says "microphone", and in the app that is all it is. Here there
+       is no microphone to close, so it does the thing the icon promises on the
+       only channel this demo has: it stops the voice being heard. */
+    if (playerRef.current) playerRef.current.muted = muted;
   }, [muted]);
 
   /*
@@ -141,12 +166,82 @@ export function LandingTutorDemo({
     return Math.min(next, SCRIPT.length - 1);
   }, []);
 
+  /* Whether the recording has been started this run, so a resumed turn carries on
+     from where the learner cut in rather than from the top. */
+  const clipStarted = useRef(false);
+
+  /*
+   * The sphere on the real voice.
+   *
+   * While the level is readable it is written straight onto the element and the
+   * keyframe envelope is switched off, so the sphere is moving on what is being
+   * said rather than on a loop that only looks like it. Where there is no
+   * analyser — no sound, or a browser that would not give one — the attribute
+   * never goes on and the keyframes carry it, which is what they are for.
+   */
+  const followClipLevel = useCallback(() => {
+    const root = rootRef.current;
+    const active = playerRef.current;
+
+    if (!root || !active?.hasLevel) return;
+
+    const tick = () => {
+      if (!rootRef.current || !playerRef.current?.playing) {
+        rootRef.current?.style.removeProperty("--lt-level");
+        delete rootRef.current?.dataset.audio;
+        levelRaf.current = undefined;
+        return;
+      }
+
+      rootRef.current.style.setProperty("--lt-level", playerRef.current.getLevel().toFixed(3));
+      /*
+       * Switched on from inside the loop, not before it. The attribute turns the
+       * envelope off, so setting it up front and then never getting a frame — a
+       * backgrounded tab is the ordinary way that happens — would leave a sphere
+       * with neither a measured level nor an animated one, frozen mid-sentence.
+       */
+      rootRef.current.dataset.audio = "on";
+      levelRaf.current = window.requestAnimationFrame(tick);
+    };
+
+    if (levelRaf.current === undefined) levelRaf.current = window.requestAnimationFrame(tick);
+  }, []);
+
   /* Runs the step the walkthrough is on, and books the one after it. */
   useEffect(() => {
     clearTimers();
-    if (step === null || paused) return;
+
+    if (step === null) return;
 
     const spec = SCRIPT[step];
+
+    /*
+     * The voice follows the phase, which is the whole point of the thing: it
+     * speaks while the tutor speaks, and stops the moment the learner takes the
+     * floor — a duck, held through the beat where the answer is put together,
+     * and picked up again exactly where it left off.
+     */
+    if (audible) {
+      const active = player();
+
+      if (paused || spec.phase === "listening" || spec.phase === "thinking") {
+        active.pause();
+      } else if (spec.phase === "speaking") {
+        if (clipStarted.current) {
+          void active.resume().then(followClipLevel);
+        } else {
+          clipStarted.current = true;
+          void active
+            .play(tutorDemoClip(voice, locale), { muted: mutedRef.current })
+            .then(followClipLevel)
+            .catch(() => setAudible(false));
+        }
+      } else if (spec.phase === "finished") {
+        active.stop();
+      }
+    }
+
+    if (paused) return;
 
     if (spec.heardKey) {
       const total = t(spec.heardKey).split(" ").length;
@@ -158,57 +253,144 @@ export function LandingTutorDemo({
       }, HEARD_WORD_MS);
     }
 
-    if (spec.ms > 0) {
+    /*
+     * A turn that ends with the recording books no timer — the clip's own end
+     * moves it on — except a long stop, so a recording that never reports ending
+     * cannot leave the sphere talking forever.
+     */
+    const waiting = spec.untilClipEnds && audible;
+    const wait = waiting ? spec.ms * 4 : spec.ms;
+
+    if (wait > 0) {
       stepTimer.current = window.setTimeout(
         () => setStep((at) => (at === null ? at : nextStep(at))),
-        spec.ms,
+        wait,
       );
     }
 
     return clearTimers;
-  }, [clearTimers, nextStep, paused, step, t]);
+  }, [audible, clearTimers, followClipLevel, locale, nextStep, paused, step, t, voice]);
 
-  const startSession = useCallback(() => {
-    autoStarted.current = true;
+  const startSession = useCallback((withSound: boolean) => {
+    clipStarted.current = false;
+
+    if (withSound) {
+      /* The clip's own end is what finishes the last turn. */
+      player().onEnded = () =>
+        setStep((at) => (at !== null && SCRIPT[at].untilClipEnds ? SCRIPT.length - 1 : at));
+    } else {
+      playerRef.current?.stop();
+    }
+
+    setAudible(withSound);
     setPaused(false);
     setHeard({ step: -1, words: 0 });
     setStep(0);
   }, []);
 
-  /* On screen and asked to play by itself: start once, and only once. */
-  useEffect(() => {
-    if (!autoStart || autoStarted.current) return;
-    const node = rootRef.current;
-    if (!node || typeof IntersectionObserver === "undefined") return;
+  /*
+   * Tapping a voice plays it, in the language the page is being read in — which is
+   * the only way the choice means anything. The tap is a gesture, so this is
+   * allowed to make a sound even when the walkthrough behind it was not.
+   */
+  const previewVoiceSample = useCallback(
+    (option: NoteTtsVoice) => {
+      setVoice(option);
+      setPreviewVoice(option);
+      window.clearTimeout(sampleTimer.current);
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting || autoStarted.current) return;
-          startSession();
+      const active = player();
+      active.onEnded = () => setPreviewVoice(null);
+      void active
+        .play(voiceSampleClip(option, locale))
+        .then(followClipLevel)
+        .catch(() => {
+          /* Refused or missing: the chip still selects the voice, just silently. */
         });
-      },
-      { threshold: 0.4 },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [autoStart, startSession]);
 
-  const previewVoiceSample = useCallback((option: NoteTtsVoice) => {
-    autoStarted.current = true;
-    setVoice(option);
-    setPreviewVoice(option);
-    window.clearTimeout(sampleTimer.current);
-    sampleTimer.current = window.setTimeout(() => setPreviewVoice(null), VOICE_SAMPLE_MS);
-  }, []);
+      /* A clip that never reports ending must not leave the chip lit for ever. */
+      sampleTimer.current = window.setTimeout(() => setPreviewVoice(null), VOICE_SAMPLE_MS);
+    },
+    [followClipLevel, locale],
+  );
 
   const end = useCallback(() => {
-    autoStarted.current = true;
     clearTimers();
+    playerRef.current?.stop();
     setStep(null);
     setPaused(false);
+    setAudible(false);
     setHeard({ step: -1, words: 0 });
   }, [clearTimers]);
+
+  /*
+   * Driving the voice row with a mouse.
+   *
+   * In the app this row is under a thumb, so it needs nothing: you swipe it. Out
+   * here it is as often under a cursor, and then it is a scroller with no
+   * scrollbar — the design hides it — that a wheel does not reach, which leaves
+   * eleven voices behind a chip cut off at the edge and no way to get at them.
+   *
+   * So a wheel over the row moves it sideways, and it can be dragged. The wheel
+   * is only taken while the row still has somewhere to go in that direction: at
+   * either end the page gets its scroll back, rather than the row swallowing it
+   * and trapping the reader halfway down the page.
+   */
+  const voiceRowRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const row = voiceRowRef.current;
+    if (!row) return;
+
+    const onWheel = (event: WheelEvent) => {
+      /* A pinch-zoom arrives as a wheel too, and is not ours to take. */
+      if (event.ctrlKey) return;
+      const delta =
+        Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      const room =
+        delta < 0 ? row.scrollLeft : row.scrollWidth - row.clientWidth - row.scrollLeft;
+      if (!delta || room < 1) return;
+      event.preventDefault();
+      row.scrollLeft += delta;
+    };
+
+    /* Non-passive, and native: React's own wheel listener cannot preventDefault. */
+    row.addEventListener("wheel", onWheel, { passive: false });
+    return () => row.removeEventListener("wheel", onWheel);
+  }, [isRunning]);
+
+  /*
+   * The drag. Mouse only — a finger already has the platform's own scroller,
+   * with its momentum, and taking the pointer from it would replace that with a
+   * worse one.
+   */
+  const voiceDrag = useRef<{ x: number; from: number; moved: boolean } | null>(null);
+  /* A drag that ends on a chip must not also play it. */
+  const voiceDragged = useRef(false);
+
+  const onVoiceRowPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    voiceDragged.current = false;
+    const row = voiceRowRef.current;
+    if (!row || event.pointerType !== "mouse" || event.button !== 0) return;
+    if (row.scrollWidth <= row.clientWidth) return;
+    voiceDrag.current = { x: event.clientX, from: row.scrollLeft, moved: false };
+  };
+
+  const onVoiceRowPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = voiceDrag.current;
+    const row = voiceRowRef.current;
+    if (!drag || !row) return;
+    const dx = event.clientX - drag.x;
+    /* A few pixels of slop, so a click that wobbles is still a click. */
+    if (!drag.moved && Math.abs(dx) < 4) return;
+    drag.moved = true;
+    voiceDragged.current = true;
+    row.scrollLeft = drag.from - dx;
+  };
+
+  const endVoiceRowDrag = () => {
+    voiceDrag.current = null;
+  };
 
   /* Idle has no status of its own — the start screen's own line says what this is. */
   const statusKey: MessageKey | null =
@@ -287,7 +469,16 @@ export function LandingTutorDemo({
       {!isRunning ? (
         <>
           {/* Pick a voice, hear it, then start. Tapping one plays it. */}
-          <div className="landing-tutor-voices" role="radiogroup" aria-label={t("tutor.voice.label")}>
+          <div
+            ref={voiceRowRef}
+            className="landing-tutor-voices"
+            role="radiogroup"
+            aria-label={t("tutor.voice.label")}
+            onPointerDown={onVoiceRowPointerDown}
+            onPointerMove={onVoiceRowPointerMove}
+            onPointerUp={endVoiceRowDrag}
+            onPointerCancel={endVoiceRowDrag}
+          >
             {NOTE_TTS_VOICES.map((option) => (
               <button
                 key={option}
@@ -297,7 +488,10 @@ export function LandingTutorDemo({
                 className={`landing-tutor-voice ${voice === option ? "active" : ""} ${
                   previewVoice === option ? "playing" : ""
                 }`.trim()}
-                onClick={() => previewVoiceSample(option)}
+                onClick={() => {
+                  if (voiceDragged.current) return;
+                  previewVoiceSample(option);
+                }}
               >
                 <Msym
                   name={previewVoice === option ? "graphic_eq" : "play_arrow"}
@@ -310,7 +504,15 @@ export function LandingTutorDemo({
             ))}
           </div>
 
-          <button type="button" data-tap="tutor-start" className="landing-tutor-start" onClick={startSession}>
+          <button
+            type="button"
+            data-tap="tutor-start"
+            className="landing-tutor-start"
+            /* `isTrusted` is the difference between a visitor pressing this and
+               the phone mockup's tour driving it: the first gets a voice, the
+               second stays quiet behind the page's own copy. */
+            onClick={(event) => startSession(event.isTrusted)}
+          >
             <Msym name="graphic_eq" size="1.2rem" fill={false} weight={500} />
             <span>{t("tutor.start")}</span>
           </button>
@@ -342,10 +544,17 @@ export function LandingTutorDemo({
               <button
                 type="button"
                 className="landing-tutor-control primary"
-                onClick={phase === "finished" ? startSession : () => setPaused(false)}
+                onClick={
+                  phase === "finished"
+                    ? (event) => startSession(event.isTrusted)
+                    : () => setPaused(false)
+                }
               >
+                {/* `replay`, not `restart_alt`: that glyph draws its arrowhead
+                    detached from the ring, which at this size reads as a broken
+                    icon rather than as a circular arrow. */}
                 <Msym
-                  name={phase === "finished" ? "restart_alt" : "play_arrow"}
+                  name={phase === "finished" ? "replay" : "play_arrow"}
                   size="1.35rem"
                   fill={false}
                   weight={500}

@@ -120,7 +120,6 @@ export const sr: Messages = {
   "landing.tutor.title": "Predavanje koje ti neko objasni",
   "landing.tutor.lead": "Objašnjenje pročita tvoje beleške i ispriča ti ih naglas. Prekini ga pitanjem kad god želiš i nastavlja tamo gde ste stali. Isprobaj odmah ovde.",
   "tutorDemo.heard1": "Čekaj, možeš li još jednom da objasniš razliku između funkcijskih i integrisanih sistema?",
-  "tutorDemo.heard2": "I zašto redizajn procesa mora da prethodi uvođenju ERP-a?",
   "landing.faq.title": "Česta pitanja",
   "landing.finalCta.title": "Učitaj prvo predavanje.",
   "landing.finalCta.lead": "Predavanje od sat vremena obrađeno je za nekoliko minuta – transkript, beleške, kartice i kviz nastaju zajedno.",

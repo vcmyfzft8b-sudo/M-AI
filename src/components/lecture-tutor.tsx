@@ -33,10 +33,11 @@ import {
   showsHeardLine,
   type TutorPhase,
 } from "@/lib/tutor/heard-line";
+import { TutorClipPlayer } from "@/lib/tutor/clip-player";
 import { reportTutorFailure, resetTutorFailureReports } from "@/lib/tutor/report";
 import { SpeechOutputError, TutorSpeechOutput } from "@/lib/tutor/speech-output";
 import { voiceHue } from "@/lib/tutor/voice-colors";
-import { voiceSampleText } from "@/lib/tutor/voice-sample";
+import { voiceSampleClip } from "@/lib/tutor/voice-clips";
 import {
   DEFAULT_TUTOR_SPEED,
   normalizeTutorSpeed,
@@ -225,10 +226,17 @@ function UsageBar({
 export function LectureTutor({
   lectureId,
   isReady,
+  language,
   dockSlot,
 }: {
   lectureId: string;
   isReady: boolean;
+  /**
+   * The language the material is written in, and so the one the tutor will speak.
+   * Worked out the same way the server works it out, so that auditioning a voice
+   * plays the language it is being auditioned for — see the call site.
+   */
+  language: string;
   /** The note screen's floating dock, which the usage pill is portalled into. */
   dockSlot: HTMLElement | null;
 }) {
@@ -304,10 +312,17 @@ export function LectureTutor({
   const renewalInFlightRef = useRef<Promise<boolean> | null>(null);
   const followUpTimerRef = useRef<number | null>(null);
   const levelFrameRef = useRef<number | null>(null);
-  const previewRef = useRef<TutorSpeechOutput | null>(null);
-  /* Only the newest tap owns the preview; an earlier one that is still connecting bows out. */
+  /*
+   * Auditioning a voice used to be a session: credentials, a socket, and the model
+   * synthesizing a line it had synthesized a thousand times before — about a second
+   * and a half after the tap, on a screen where nothing else had happened yet, and
+   * holding one of the account's few concurrent streams while it did. The line never
+   * varies, so it is rendered once by scripts/generate-tutor-voice-clips.mjs and
+   * shipped; the tap is now a file starting to play.
+   */
+  const previewRef = useRef<TutorClipPlayer | null>(null);
+  /* Only the newest tap owns the preview; an earlier one still loading bows out. */
   const previewTokenRef = useRef(0);
-  const previewCredentialsRef = useRef<TutorSessionResponse | null>(null);
   /** Guards every async continuation: a session that has been ended must not speak again. */
   const runIdRef = useRef(0);
   /** Set while the tutor has asked the learner to say an idea back in their own words. */
@@ -359,8 +374,7 @@ export function LectureTutor({
    */
   const stopPreview = useCallback(() => {
     previewTokenRef.current += 1;
-    previewRef.current?.close();
-    previewRef.current = null;
+    previewRef.current?.stop();
     setPreviewVoice(null);
   }, []);
 
@@ -384,7 +398,6 @@ export function LectureTutor({
 
     planPromiseRef.current = null;
     stopPreview();
-    previewCredentialsRef.current = null;
     outputRef.current?.close();
     outputRef.current = null;
     inputRef.current?.close();
@@ -1612,140 +1625,33 @@ export function LectureTutor({
     setPhaseNow("idle");
   }
 
-  /**
-   * Plays a sentence in one voice so the learner can hear it before committing to
-   * twenty minutes of it.
-   *
-   * The credentials are fetched once and kept: a `tts_rt` key is not tied to a voice,
-   * so one key previews all of them, and one socket stays open across taps. Picking a
-   * voice is a browsing activity — people try four or five — and a round trip per tap
-   * would make it feel broken.
-   */
-  /**
-   * Credentials and an open speech socket, ready before anybody asks for them.
-   *
-   * Resolves to null rather than throwing when it is called speculatively — a warm-up
-   * that fails must not surface an error on a screen where nothing has happened yet.
-   * The tap path calls the same function and reports failures itself.
-   */
-  const openPreviewChannel = useCallback(
-    async (forVoice: NoteTtsVoice, quiet: boolean) => {
-      /*
-       * Whose audition this is, read before anything is awaited. Credentials and a cold
-       * socket together take about a second and a half, and anything that takes the room
-       * over in the meantime — another voice tapped, or Start pressed — moves the token
-       * on. Without this the socket that lands afterwards is stored anyway, and a preview
-       * nobody can hear holds one of the three streams the account gets for the rest of
-       * the session.
-       */
-      const token = previewTokenRef.current;
-
-      try {
-        if (!previewCredentialsRef.current) {
-          const response = await fetch(`/api/lectures/${lectureId}/tutor/session`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ voice: forVoice }),
-          });
-          const payload = (await response.json().catch(() => null)) as
-            | (TutorSessionResponse & { error?: string })
-            | null;
-
-          if (!response.ok || !payload?.realtime) {
-            throw new Error(payload?.error ?? t("tutor.error.startFailed"));
-          }
-
-          previewCredentialsRef.current = payload;
-        }
-
-        /*
-         * A warmed socket has usually been sitting idle since the screen opened, and an
-         * idle socket can be closed from the other end. Reopening on demand is the whole
-         * repair: the previous symptom was a voice tap that answered "the connection to
-         * the voice service dropped" for a connection nobody had noticed dying.
-         */
-        if (previewRef.current && !previewRef.current.isOpen) {
-          previewRef.current.close();
-          previewRef.current = null;
-        }
-
-        if (!previewRef.current) {
-          const credentials = previewCredentialsRef.current;
-          const output = new TutorSpeechOutput(
-            {
-              url: credentials.realtime.tts.url,
-              apiKey: credentials.realtime.tts.apiKey,
-              model: credentials.realtime.tts.model,
-              voice: forVoice,
-              language: credentials.language,
-            },
-            {
-              /* Dropped while idle: forget it, and the next tap opens a fresh one. */
-              onClose: () => {
-                /*
-                 * Soniox closes an idle stream, so this fires whenever somebody stops
-                 * auditioning voices for a moment. Closing *this* one rather than whatever
-                 * the ref happens to hold: dropping the reference is not enough, since the
-                 * audio context behind it would leak and browsers only allow a handful —
-                 * but closing the ref blindly would tear down a newer preview instead.
-                 */
-                output.close();
-
-                if (previewRef.current === output) {
-                  previewRef.current = null;
-                }
-              },
-            },
-          );
-
-          await output.connect();
-
-          if (token !== previewTokenRef.current) {
-            output.close();
-
-            return null;
-          }
-
-          previewRef.current = output;
-        }
-
-        return previewRef.current;
-      } catch (caught) {
-        if (!quiet) {
-          throw caught;
-        }
-
-        return null;
-      }
-    },
-    [lectureId, t],
-  );
-
   /*
-   * Warm the preview channel as soon as the screen is opened.
+   * Auditioning a voice.
    *
-   * A first tap used to pay for the credentials, the socket handshake and the synthesis
-   * all at once — around a second and a half before anything was heard, which reads as a
-   * button that did not work. Doing the first two up front leaves the tap costing only
-   * the voice, about half a second. It is one short-lived key and one idle socket.
+   * The line is the same every time, so it is a file: `public/tutor-demo`, rendered
+   * per voice per language by `scripts/generate-tutor-voice-clips.mjs`. The tap
+   * plays it, which is instant and costs the account nothing — where this used to
+   * fetch credentials, open a socket and wait on the model, about a second and a
+   * half of a screen that looked broken, while holding one of the few concurrent
+   * streams the whole organization shares.
    */
-  useEffect(() => {
-    if (!isReady) {
-      return;
+  const previewPlayer = useCallback(() => {
+    if (!previewRef.current) {
+      previewRef.current = new TutorClipPlayer();
     }
 
-    void openPreviewChannel(readStoredVoice(), true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- warmed once, for the life of the screen
-  }, [isReady]);
+    return previewRef.current;
+  }, []);
+
+  useEffect(() => () => previewRef.current?.destroy(), []);
 
   async function previewVoiceSample(next: NoteTtsVoice) {
     setVoice(next);
 
     /*
-     * Two voices must never talk over each other. Stopping the socket handles the one
-     * that is already playing; the token handles the subtler case — a tap whose
-     * credentials or connection are still in flight, which would otherwise start
-     * speaking after the voice tapped later had already begun.
+     * Two voices must never talk over each other. Stopping handles the one already
+     * playing; the token handles the subtler case — a tap whose file is still
+     * loading, which would otherwise start after the voice tapped later had begun.
      */
     previewTokenRef.current += 1;
     const token = previewTokenRef.current;
@@ -1764,44 +1670,23 @@ export function LectureTutor({
     setError(null);
     setPreviewVoice(next);
 
-    try {
-      const output = await openPreviewChannel(next, false);
-
-      if (!output || token !== previewTokenRef.current) {
-        return;
-      }
-
-      /* The tap is the gesture that is allowed to start the audio clock. */
-      await output.resumeAudio();
-
-      if (token !== previewTokenRef.current) {
-        return;
-      }
-
-      const turn = output.speak({ voice: next, speed: speedRef.current });
-      /* In the note's language — a voice previewed in the wrong one tells you nothing. */
-      turn.push(voiceSampleText(previewCredentialsRef.current?.language ?? "en"));
-      turn.end();
-      await turn.finished;
-    } catch (caught) {
+    const player = previewPlayer();
+    player.onEnded = () => {
       if (token === previewTokenRef.current) {
-        /*
-         * Soniox caps how many voices the account can have going at once, and the one
-         * over the line gets a 429 rather than a wait. "Try again in a moment" is the
-         * truth there; "the connection dropped" is not, and it reads like a fault.
-         */
-        const busy =
-          caught instanceof SpeechOutputError &&
-          (caught.code === "429" || /concurren/i.test(caught.message));
-
-        setError(t(busy ? "tutor.error.busy" : "tutor.error.connection"));
+        setPreviewVoice(null);
       }
-    } finally {
+    };
+
+    try {
+      /* In the note's language — a voice previewed in the wrong one tells you nothing. */
+      await player.play(voiceSampleClip(next, language));
+    } catch {
       if (token === previewTokenRef.current) {
         setPreviewVoice(null);
       }
     }
   }
+
 
   /** Opens Stripe for an hour of tutor time. The seconds are credited by the webhook. */
   async function buyCredits() {
@@ -2178,8 +2063,11 @@ export function LectureTutor({
                 className="memo-tutor-control primary"
                 onClick={phase === "finished" ? () => void startSession() : resume}
               >
+                {/* `replay`, not `restart_alt`: that glyph draws its arrowhead
+                    detached from the ring, which at this size reads as a broken
+                    icon rather than as a circular arrow. */}
                 <Msym
-                  name={phase === "finished" ? "restart_alt" : "play_arrow"}
+                  name={phase === "finished" ? "replay" : "play_arrow"}
                   size="1.35rem"
                   fill={false}
                   weight={500}

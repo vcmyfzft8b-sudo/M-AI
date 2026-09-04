@@ -141,11 +141,19 @@ export default async function HomePage() {
         </div>
       </section>
 
+      <section id="how-it-works" className="landing-v2-section" aria-labelledby="landing-workflow-title">
+        <div className="landing-v2-section-head landing-v2-section-head-center" data-scroll-reveal="">
+          <h2 id="landing-workflow-title" className="landing-v2-section-title">
+            {t("landing.workflow.title")}
+          </h2>
+        </div>
+        <LandingFlowDemo />
+      </section>
+
       {/*
-        * The spoken walkthrough, first of the sections under the hero. It is the
-        * one thing here that is hard to describe and easy to understand once you
-        * have heard it, so the page lets a visitor start it before it explains
-        * anything else.
+        * The spoken walkthrough, straight after the three steps that produce the
+        * note it reads out — it is the first thing you can do with a note, and it
+        * is hard to describe and easy to understand once you have heard it.
         */}
       <section id="tutor" className="landing-v2-section" aria-labelledby="landing-tutor-title">
         <div className="landing-v2-section-head landing-v2-section-head-center" data-scroll-reveal="">
@@ -155,17 +163,8 @@ export default async function HomePage() {
           <p className="landing-v2-tutor-lead">{t("landing.tutor.lead")}</p>
         </div>
         <div className="landing-v2-tutor-stage" data-scroll-reveal="">
-          <LandingTutorDemo autoStart />
+          <LandingTutorDemo />
         </div>
-      </section>
-
-      <section id="how-it-works" className="landing-v2-section" aria-labelledby="landing-workflow-title">
-        <div className="landing-v2-section-head landing-v2-section-head-center" data-scroll-reveal="">
-          <h2 id="landing-workflow-title" className="landing-v2-section-title">
-            {t("landing.workflow.title")}
-          </h2>
-        </div>
-        <LandingFlowDemo />
       </section>
 
       <section id="features" className="landing-v2-section" aria-labelledby="landing-feature-title">

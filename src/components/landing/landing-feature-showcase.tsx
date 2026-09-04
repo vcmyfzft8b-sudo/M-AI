@@ -493,15 +493,18 @@ function ReadPanel() {
   );
 }
 
-/* Only the tutor cares; the rest ignore it and animate on their own loop. */
+/* Passed to every panel; only the ones that animate on selection read it. */
 type PanelProps = { active?: boolean };
 
 /*
  * The live tutor, drawn at its own size and shrunk as a whole — the sphere's
  * proportions are the design's, and re-laying it out smaller would lose them.
- * It only starts once the visitor is actually on this feature.
+ *
+ * Alone among these panels it does not start by itself: it has a voice now, and a
+ * voice may only be started by the visitor. So it waits on its own button, which
+ * is also the affordance that says there is something here to press.
  */
-function TutorPanel({ active }: PanelProps) {
+function TutorPanel() {
   return (
     <div style={{ position: "relative", width: "100%", maxWidth: "17rem", height: "16rem" }}>
       {/* Centred by the transform rather than by the box: the panel it is drawn
@@ -516,7 +519,7 @@ function TutorPanel({ active }: PanelProps) {
           transform: "translate(-50%, -50%) scale(0.62)",
         }}
       >
-        <LandingTutorDemo autoStart={active} />
+        <LandingTutorDemo />
       </div>
     </div>
   );

@@ -119,7 +119,6 @@ export const en: Messages = {
   "landing.tutor.title": "A lecture someone talks you through",
   "landing.tutor.lead": "The tutor reads your note and explains it out loud. Cut in with a question whenever you like and it carries on from where you left off. Try it right here.",
   "tutorDemo.heard1": "Hold on, can you go over the difference between functional and integrated systems again?",
-  "tutorDemo.heard2": "And why does redesigning the processes have to come before ERP?",
   "landing.faq.title": "Frequently asked questions",
   "landing.finalCta.title": "Upload your first lecture.",
   "landing.finalCta.lead": "An hour-long lecture is processed in a few minutes — transcript, notes, flashcards and quiz all come out together.",

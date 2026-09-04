@@ -22,6 +22,24 @@ export function resolveNoteLanguageLabel(value?: string | null) {
 }
 
 /**
+ * The language a note's material is written in, and so the one the tutor speaks
+ * and previews its voices in.
+ *
+ * Detection over the note beats the lecture's `language_hint`, which is only what
+ * the transcriber was told — for an uploaded PDF that is whatever the default was
+ * rather than what is on the page. Detection answers null when it cannot tell, and
+ * only then does the hint decide.
+ *
+ * Stated here, once, because two sides have to agree about it: the server picks the
+ * voice's language for a session, and the note screen picks it for the audition the
+ * learner hears before there is a session. A disagreement means auditioning a voice
+ * in a language it will not be used in, which is the one thing the audition is for.
+ */
+export function resolveMaterialLanguage(text: string, hint?: string | null) {
+  return normalizeNoteLanguage(detectSourceLanguage(text) ?? hint ?? null);
+}
+
+/**
  * Nobody picks a language any more: study material is written in whatever
  * language the source is in.
  *

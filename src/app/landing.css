@@ -1435,6 +1435,16 @@
   animation: landing-tutor-listen 2.6s linear infinite;
 }
 
+/*
+ * A real voice beats a shape of one. Once the clip is audible and readable the
+ * component writes the measured level onto the element itself, and the envelope
+ * above has to get out of its way — an animation outranks an inline style on the
+ * property it animates, so it is switched off rather than overridden.
+ */
+.landing-tutor[data-audio="on"] {
+  animation: none;
+}
+
 .landing-tutor-orb {
   position: relative;
   width: 11.5rem;
@@ -1657,6 +1667,10 @@
   overflow-x: auto;
   scrollbar-width: none;
   scroll-snap-type: x proximity;
+  /* The row can be dragged with a mouse out here, and a drag across the chips
+     would otherwise select their labels instead of moving the row. */
+  user-select: none;
+  -webkit-user-select: none;
   mask-image: linear-gradient(to right, transparent, #000 1.75rem, #000 calc(100% - 1.75rem), transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, #000 1.75rem, #000 calc(100% - 1.75rem), transparent);
 }
@@ -1763,25 +1777,21 @@
 }
 
 /*
- * The section the page gives it. The sphere is the whole interface, so it sits
- * on the page's own surface rather than in a card — a border round a glowing
- * ball reads as a screenshot of one.
+ * The section the page gives it. No card: the sphere is a glowing object and a
+ * panel drawn round it reads as a screenshot of one rather than as the thing
+ * itself. It sits straight on the page, the way it sits on the note screen.
  */
 .landing-v2-tutor-stage {
   display: grid;
   /* Not `auto`: an auto track sizes to the voice row's full eleven chips, which
-     drags the panel out past the card it is drawn in. */
+     drags the panel out past the column it is drawn in. */
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   gap: 1.5rem;
   width: min(100%, 34rem);
   margin: 0 auto;
-  padding: 1.5rem 1.25rem 2rem;
+  padding: 0 1.25rem;
   box-sizing: border-box;
-  border-radius: 28px;
-  border: 1px solid var(--l-line);
-  background: var(--l-surface-62);
-  box-shadow: var(--l-shadow);
 }
 
 .landing-v2-tutor-lead {

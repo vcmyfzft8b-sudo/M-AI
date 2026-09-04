@@ -249,6 +249,17 @@ export function LecturePodcast({
    * library to watch it appear rather than hearing it.
    */
   const isWritingRef = useRef(false);
+  /*
+   * Which status request is the current one.
+   *
+   * Every change of show, length or voice fires a fresh request, and they do not come back in the
+   * order they were sent. A reply for the variant the listener has just moved away from used to
+   * be applied anyway — and if that variant had no episode it set the podcast to null, closing a
+   * player that had just opened and dropping the listener back to the library while the audio it
+   * had already started carried on playing underneath. Intermittent by nature: it only bites when
+   * the stale reply happens to land after the fresh one.
+   */
+  const statusRequestRef = useRef(0);
 
   voicesRef.current = voices;
   podcastRef.current = podcast;
@@ -416,6 +427,9 @@ export function LecturePodcast({
         voiceB: voicesRef.current.b,
       });
 
+      const requestId = statusRequestRef.current + 1;
+      statusRequestRef.current = requestId;
+
       try {
         const response = await fetch(`/api/lectures/${lectureId}/podcast?${query.toString()}`, {
           cache: "no-store",
@@ -426,6 +440,11 @@ export function LecturePodcast({
         }
 
         const payload = (await response.json()) as PodcastStatus;
+
+        /* Something newer has been asked for since; this answer is about the past. */
+        if (requestId !== statusRequestRef.current) {
+          return null;
+        }
 
         setStatus(payload);
         setPodcast(payload.podcast);
@@ -527,6 +546,12 @@ export function LecturePodcast({
         return;
       }
 
+      /*
+       * The freshly written episode is the newest truth about this variant, so any status request
+       * already in flight is stale — including the polls that were watching this very generation,
+       * which would otherwise land a moment later and put "still generating" back on screen.
+       */
+      statusRequestRef.current += 1;
       setPodcast(payload.podcast);
       setOpenedEpisodeId(payload.podcast.id);
       setIsWriting(false);

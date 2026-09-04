@@ -318,8 +318,14 @@ console.log(
 console.log(
   `           ${alternationBreaks} same-speaker runs after normalising; host A holds ${Math.round(speakerShare * 100)}% of turns`,
 );
+const openingWords = countWords(turns[0]?.text ?? "");
+
 console.log(
-  `           estimated ${Math.round(totalWords / 1.7 / 60)} min of audio at the measured rate\n`,
+  `           estimated ${Math.round(totalWords / 1.7 / 60)} min of audio at the measured rate`,
+);
+/* The opening turn is the whole wait before the episode starts — see lengthRules. */
+console.log(
+  `           opening turn ${openingWords} words ≈ ${(openingWords / 2.1).toFixed(0)}s of audio, so ~${((openingWords / 2.1) * 0.81).toFixed(0)}s to first sound\n`,
 );
 
 /* --- does it teach the material? ----------------------------------------- */

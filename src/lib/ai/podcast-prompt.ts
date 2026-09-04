@@ -151,6 +151,16 @@ function lengthRules(targetWords: number, speakerCount: 1 | 2) {
   const rules = [
     `The whole episode is about ${targetWords} words, across about ${turnTarget} turns of roughly ${PODCAST_TARGET_TURN_WORDS} words each. Hold to BOTH numbers — coming in short is the commonest way this goes wrong, and it is not a shorter episode, it is one that stopped explaining.`,
     `No single turn is under ${PODCAST_MIN_TURN_WORDS} words or over ${PODCAST_MAX_TURN_WORDS}.`,
+    /*
+     * The first turn is the only one anybody waits for.
+     *
+     * Each turn is synthesized when the player is about to reach it, at roughly 0.8x the length
+     * of the audio — so the opening turn IS the wait before the episode starts, and nothing can
+     * be prefetched ahead of it. Measured on a solo episode whose opening ran long: twelve
+     * seconds to write the script, then thirty-two more of silence before the first word. A short
+     * opening is also better radio; this is one of the rare places where the two agree.
+     */
+    `Keep the FIRST turn short — around ${PODCAST_MIN_TURN_WORDS} to 25 words. It is the hook, not the first instalment: name what this is about and hand over. Every later turn is the normal length.`,
   ];
 
   if (speakerCount === 2) {

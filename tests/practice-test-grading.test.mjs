@@ -279,3 +279,17 @@ test("a question tells the learner how much is wanted and is marked point by poi
   assert.match(instructions, /Ask one thing/);
   assert.match(instructions, /Two to four points/);
 });
+
+test("a blank box is still a missing answer, not a silent skip", () => {
+  // Folding "?" into "I don't know" must not fold an empty box into it too: an empty box is what
+  // the submit guard exists to reject, and scoring it 0 would replace an error with a mark.
+  assert.match(SOURCE, /typedAnswer\.length > 0 && isSurrenderAnswer\(typedAnswer\)/);
+  assert.match(SOURCE, /!input\.declaredUnknown && input\.typedAnswer\.length === 0/);
+});
+
+test("an answer with nothing to mark against is left unmarked, not scored zero", () => {
+  // A question can only reach a test with an empty scheme from a bank a learner is midway
+  // through; marking against no points would score every point missed.
+  assert.match(SOURCE, /if \(parseMarkingPoints\(params\.answerGuide\)\.length === 0\) \{\s*\n\s*return null;/);
+  assert.equal(scoreFromRubric({ marks: [] }).score, 0);
+});

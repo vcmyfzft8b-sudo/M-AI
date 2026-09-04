@@ -1099,6 +1099,14 @@ async function markAnswerWithRetry(params: {
   answerGuide: string;
   typedAnswer: string;
 }): Promise<MarkedAnswer | null> {
+  // Nothing to mark against. A question this happens to cannot reach a test from a bank the
+  // current pipeline built, but it can from one a learner is midway through — and marking an
+  // answer against an empty scheme would score every point missed, which is a zero the learner
+  // did not earn. Left unmarked instead, and out of the total.
+  if (parseMarkingPoints(params.answerGuide).length === 0) {
+    return null;
+  }
+
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       return await markAnswer(params);
@@ -1205,14 +1213,21 @@ export async function submitPracticeTestAttempt(params: {
    * meant.
    */
   const inputByAnswerId = new Map(
-    params.answers.map((answer) => [
-      answer.answerId,
-      {
-        ...answer,
-        typedAnswer: answer.typedAnswer.trim(),
-        declaredUnknown: answer.declaredUnknown || isSurrenderAnswer(answer.typedAnswer),
-      },
-    ]),
+    params.answers.map((answer) => {
+      const typedAnswer = answer.typedAnswer.trim();
+
+      return [
+        answer.answerId,
+        {
+          ...answer,
+          typedAnswer,
+          // Only something that was actually written. A blank box is still a missing answer and
+          // still fails the check below, the way it did before.
+          declaredUnknown:
+            answer.declaredUnknown || (typedAnswer.length > 0 && isSurrenderAnswer(typedAnswer)),
+        },
+      ] as const;
+    }),
   );
 
   for (const answer of answerRows) {

@@ -19,6 +19,25 @@ function parseModelJson(text) {
   return JSON.parse(text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim());
 }
 
+/**
+ * A dropped connection is not a result. Production retries at this level (the stage's retry ladder
+ * plus a fallback provider); the harness did not, so a single "fetch failed" partway through a
+ * long bake-off threw the whole run away along with everything already paid for.
+ */
+async function fetchWithRetry(url, init, attempts = 3) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await fetch(url, init);
+    } catch (error) {
+      if (attempt >= attempts - 1) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+    }
+  }
+}
+
 
 /**
  * OpenRouter fronts every provider behind one OpenAI-shaped API, which is how a Gemini model on a
@@ -160,7 +179,7 @@ export async function generateOpenRouter({
   let prompt = input;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
       signal: AbortSignal.timeout(timeoutMs),
       method: "POST",
       headers: {
@@ -252,7 +271,7 @@ export async function generateOpenAi({
   let prompt = input;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const response = await fetch("https://api.openai.com/v1/responses", {
+    const response = await fetchWithRetry("https://api.openai.com/v1/responses", {
       signal: AbortSignal.timeout(timeoutMs),
       method: "POST",
       headers: {

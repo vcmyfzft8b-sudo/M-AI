@@ -2196,6 +2196,8 @@ export function LectureWorkspace({
       ? practiceAttemptsById.get(latestViewedPracticeAttemptId) ?? null
       : null) ?? latestGradedPracticeAttempt;
   const visiblePracticeAttemptPercentage = Math.round(visiblePracticeAttempt?.percentage ?? 0);
+  const visiblePracticeAttemptUnmarkedCount =
+    visiblePracticeAttempt?.answers.filter((answer) => answer.score == null).length ?? 0;
   const practiceAttemptAnswers = currentPracticeAttempt?.answers ?? [];
   const hasCompletedPracticeTest = detail.practiceTestHistorySummary.attemptCount > 0;
   const practiceQuestionsAnsweredCount = practiceAttemptAnswers.filter((answer) => {
@@ -5189,6 +5191,17 @@ export function LectureWorkspace({
                         ) : null
                       }
                     />
+
+                    {visiblePracticeAttemptUnmarkedCount > 0 ? (
+                      /*
+                       * The score is out of the questions that could be marked, not out of the
+                       * whole test — so a "24/40" on a ten-question test needs a sentence, or it
+                       * reads as arithmetic that does not add up.
+                       */
+                      <p className="lecture-practice-feedback-copy">
+                        {t("test.unmarkedNotice", { count: visiblePracticeAttemptUnmarkedCount })}
+                      </p>
+                    ) : null}
 
                     <details className="lecture-practice-breakdown">
                       <summary>

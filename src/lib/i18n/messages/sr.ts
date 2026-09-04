@@ -405,7 +405,11 @@ export const sr: Messages = {
   "test.expectedAnswer": "Očekivani odgovor:",
   "test.skipped": "Označio si „Ne znam”, pa je pitanje ocenjeno sa 0.",
   "test.notMarked": "Ovaj odgovor nije bilo moguće oceniti, pa se ne računa u rezultat.",
-  "test.unmarkedNotice": "Jedan odgovor nije bilo moguće oceniti, pa se ne računa u rezultat.",
+  "test.unmarkedNotice": {
+    one: "{count} odgovor nije bilo moguće oceniti, pa se ne računa u rezultat.",
+    few: "{count} odgovora nije bilo moguće oceniti, pa se ne računaju u rezultat.",
+    other: "{count} odgovora nije bilo moguće oceniti, pa se ne računaju u rezultat.",
+  },
   "test.intro": "Otvorena pitanja iz ovog predavanja. Odgovore pišeš svojim rečima, a Memo ih ocenjuje i objašnjava.",
 
   /* ---- Study manager, transcript and note errors ---- */

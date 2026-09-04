@@ -420,7 +420,12 @@ export const sl = {
   "test.expectedAnswer": "Pričakovan odgovor:",
   "test.skipped": "Označil si »Ne vem«, zato je vprašanje ocenjeno z 0.",
   "test.notMarked": "Tega odgovora ni bilo mogoče oceniti, zato ne šteje v rezultat.",
-  "test.unmarkedNotice": "Enega odgovora ni bilo mogoče oceniti, zato ni vštet v rezultat.",
+  "test.unmarkedNotice": {
+    one: "{count} odgovora ni bilo mogoče oceniti, zato ni vštet v rezultat.",
+    two: "{count} odgovorov ni bilo mogoče oceniti, zato nista všteta v rezultat.",
+    few: "{count} odgovorov ni bilo mogoče oceniti, zato niso všteti v rezultat.",
+    other: "{count} odgovorov ni bilo mogoče oceniti, zato niso všteti v rezultat.",
+  },
   "test.intro": "Odprta vprašanja iz tega predavanja. Odgovore napišeš s svojimi besedami, Memo pa jih oceni in pojasni.",
 
   /* ---- Study manager, transcript and note errors ---- */

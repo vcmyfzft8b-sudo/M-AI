@@ -399,7 +399,10 @@ export const en: Messages = {
   "test.expectedAnswer": "Expected answer:",
   "test.skipped": "You marked this as “I don’t know”, so it scores 0.",
   "test.notMarked": "This answer could not be marked, so it is left out of the score.",
-  "test.unmarkedNotice": "One answer could not be marked, so it is left out of the score.",
+  "test.unmarkedNotice": {
+    one: "{count} answer could not be marked, so it is left out of the score.",
+    other: "{count} answers could not be marked, so they are left out of the score.",
+  },
   "test.intro": "Open-ended questions from this lecture. You answer them in your own words and Memo grades them and explains why.",
 
   /* ---- Study manager, transcript and note errors ---- */

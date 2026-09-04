@@ -87,6 +87,13 @@ sizes in the file, and it did nothing at all on the phones it was written for.
 
 Two tables (`supabase/migrations/0043_lecture_podcasts.sql`).
 
+That file is also on `main` already, restored there after this branch pushed it to production
+before merging — which left production holding a version `main` had no file for, and that aborts
+`supabase db push` for every branch, not just this one. Migrations reach production from `main`
+through `.github/workflows/supabase-migrations.yml` after merge, and never from a branch. The two
+follow-ups this branch briefly added and removed again are gone rather than kept as a net-zero
+pair, so the only schema it carries is the one already live.
+
 `lecture_podcasts` is unique on **(lecture, note content hash, format, length,
 language)**. Editing the note retires its episodes the same way it retires read-aloud
 audio; changing the show or the length is a different episode, not a regeneration of

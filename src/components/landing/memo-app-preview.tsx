@@ -14,6 +14,12 @@
  *
  * It runs a guided tour on its own; any user interaction stops the tour and
  * hands the phone over.
+ *
+ * The artboard's screen titles are transcribed as plain `div`s, not the `h1`s
+ * they are in the real app. This is a picture of the app sitting inside the
+ * landing page's own document: four more `h1`s here left the page with five,
+ * and the hero's actual headline — the one line stating what Memo is — was
+ * just one of them.
  */
 
 import Image from "next/image";
@@ -1314,7 +1320,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
               `onHomeScroll`. Both it and the search field scroll with the list
               rather than being pinned, so the scroll metrics never change under
               the fade, and the opaque folder bar below passes over them. */}
-          <h1
+          <div
             style={{
               position: "relative",
               zIndex: 3,
@@ -1331,7 +1337,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
             }}
           >
             {this.props.t("library.myNotes")}
-          </h1>
+          </div>
 
           <div
             style={{
@@ -1773,9 +1779,9 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
         <div data-app-main style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "3.2px 18.4px 112px" }}>
           {this.renderTabs("1.6px -18.4px 14.4px", "2.4px 18.4px 8px")}
 
-          <h1 style={{ margin: "0 0 12px", fontSize: "26.4px", fontWeight: 800, letterSpacing: "-0.04em", lineHeight: 1.18 }}>
+          <div style={{ margin: "0 0 12px", fontSize: "26.4px", fontWeight: 800, letterSpacing: "-0.04em", lineHeight: 1.18 }}>
             {note?.title ?? ""}
-          </h1>
+          </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "13.6px", marginBottom: "17.6px" }}>
             <span
@@ -3486,7 +3492,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
             <Msym name="close" size="23.2px" fill={false} weight={500} />
           </button>
         </div>
-        <h1 style={{ margin: "5.6px 18.4px 0", fontSize: "28px", fontWeight: 800, letterSpacing: "-0.04em" }}>{this.props.t("nav.settings")}</h1>
+        <div style={{ margin: "5.6px 18.4px 0", fontSize: "28px", fontWeight: 800, letterSpacing: "-0.04em" }}>{this.props.t("nav.settings")}</div>
 
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 18.4px 40px" }}>
           <h2 style={{ ...heading, marginTop: 0 }}>{this.props.t("settings.theme.heading")}</h2>
@@ -3635,7 +3641,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
       <div onPointerDown={sheet.onPointerDown} style={{ ...sheet.style, zIndex: 8 }}>
         {GRAB_WIDE}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 18.4px 0" }}>
-          <h1 style={{ margin: 0, fontSize: "25.6px", fontWeight: 800, letterSpacing: "-0.04em" }}>{this.props.t("nav.help")}</h1>
+          <div style={{ margin: 0, fontSize: "25.6px", fontWeight: 800, letterSpacing: "-0.04em" }}>{this.props.t("nav.help")}</div>
           <button type="button" aria-label={this.props.t("common.back")} onClick={() => this.swapSheet("settings")} style={roundBtn(46.4)}>
             <Msym name="arrow_back" size="24px" fill={false} weight={500} />
           </button>

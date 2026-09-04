@@ -6,6 +6,7 @@ import { AuthBackLink } from "@/components/auth-back-link";
 import { BrandLogo } from "@/components/brand-logo";
 import { EmailAuthForm } from "@/components/email-auth-form";
 import { BRAND_NAME } from "@/lib/brand";
+import { localizedPath } from "@/lib/i18n/routing";
 import { getTranslations } from "@/lib/i18n/server";
 
 type AuthMode = "login" | "signup";
@@ -63,7 +64,7 @@ export async function AuthPageShell(props: {
   prefilledEmail?: string;
 }) {
   const providers = await getAuthProviderAvailability();
-  const { t } = await getTranslations();
+  const { locale, t } = await getTranslations();
   const loginMode = props.mode === "login";
   const title = t(loginMode ? "auth.welcomeBack" : "auth.createAccountTitle");
   const copy = t(loginMode ? "auth.loginCopy" : "auth.signupCopy");
@@ -78,8 +79,15 @@ export async function AuthPageShell(props: {
     <main className="landing-shell auth-shell">
       <header className="ios-nav landing-nav">
         <div className="ios-nav-inner landing-nav-inner">
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-          <a href="/" className="landing-brand-link" aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}>
+          {/* A plain anchor, not `Link`: leaving auth should drop whatever
+              half-finished sign-in state the client is holding. The lint rule
+              that objects to a literal href="/" no longer sees one now that
+              the address carries the reader's language. */}
+          <a
+            href={localizedPath("/", locale)}
+            className="landing-brand-link"
+            aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}
+          >
             <BrandLogo compact />
           </a>
 
@@ -136,9 +144,9 @@ export async function AuthPageShell(props: {
 
             <p className="auth-legal-copy">
               {t("auth.legalBefore", { brand: BRAND_NAME })}
-              <Link href="/legal/terms-of-use">{t("legal.termsInline")}</Link>
+              <Link href={localizedPath("/legal/terms-of-use", locale)}>{t("legal.termsInline")}</Link>
               {t("auth.legalAnd")}
-              <Link href="/legal/privacy-policy">{t("legal.privacyInline")}</Link>
+              <Link href={localizedPath("/legal/privacy-policy", locale)}>{t("legal.privacyInline")}</Link>
               {t("auth.legalAfterShell")}
             </p>
 

@@ -8,11 +8,43 @@ import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { LOCALES, LOCALE_LABELS, type Locale } from "@/lib/i18n/locales";
+import { isLocalizedPath, localizedPath, stripLocalePrefix } from "@/lib/i18n/routing";
+
+/**
+ * Where the picker should leave the reader after they choose `locale`.
+ *
+ * On a page that has an address per language, that is the same page at the new
+ * language's address — `/sl/legal/privacy-policy` picking English becomes
+ * `/legal/privacy-policy`. Writing the cookie alone would do nothing visible
+ * there: the URL outranks it in `getLocale`, so the refresh would come back in
+ * the language the address still names and the picker would look broken.
+ *
+ * Everywhere else — the app, settings, auth — there is one address per page and
+ * the cookie is the whole of the choice, so the path is returned unchanged and
+ * the caller refreshes in place.
+ */
+function pathForLocale(locale: Locale): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const { pathname, search, hash } = window.location;
+  const stripped = stripLocalePrefix(pathname);
+
+  if (!isLocalizedPath(stripped.pathname)) {
+    return null;
+  }
+
+  const next = `${localizedPath(stripped.pathname, locale)}${search}${hash}`;
+
+  return next === `${pathname}${search}${hash}` ? null : next;
+}
 
 /**
  * Changing the language is a server-side fact — every screen in this app is
- * rendered from the cookie — so the picker writes the cookie, tells the server
- * to remember it against the account, and refreshes.
+ * rendered from the cookie, or from the language in the URL — so the picker
+ * writes the cookie, tells the server to remember it against the account, and
+ * then either moves to the new language's address or refreshes in place.
  *
  * The cookie is written on the client *as well* as by the route's `Set-Cookie`.
  * `router.refresh()` is allowed to start before the response's cookie has been
@@ -39,8 +71,32 @@ function useLocaleChange() {
           });
         } catch {
           // The cookie is already written, so this browser has the language
-          // either way; only the account-wide copy is lost. Refreshing below
-          // still shows the new language.
+          // either way; only the account-wide copy is lost. Moving or
+          // refreshing below still shows the new language.
+        }
+
+        const target = pathForLocale(locale);
+
+        if (target) {
+          /*
+           * A full document load, not `router.replace`.
+           *
+           * src/proxy.ts serves `/sl` by rewriting it to `/`, and Next's client
+           * router keys its cache by the rewritten address — so a soft
+           * navigation from `/sl` to `/` finds the entry the `/sl` load left
+           * behind and re-renders the Slovenian payload under the English URL.
+           * Measured: the address bar and the cookie both changed, the page did
+           * not. `experimental.staleTimes.dynamic` keeps that entry for a
+           * minute, which is the right trade for the app and the wrong one
+           * here.
+           *
+           * Nothing is lost by reloading. Changing language is a once-a-visit
+           * act, it is already waiting on a round trip to /api/locale, and a
+           * fresh document is the one way to be certain every server component
+           * on the page agrees about which language it is in.
+           */
+          window.location.assign(target);
+          return;
         }
 
         router.refresh();

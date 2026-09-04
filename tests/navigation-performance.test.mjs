@@ -51,7 +51,12 @@ test("a browser cannot forge the proxy authentication handoff", () => {
   const deleteIndex = middleware.indexOf(
     "requestHeaders.delete(VERIFIED_PAGE_USER_HEADER)",
   );
-  const apiReturnIndex = middleware.indexOf('request.nextUrl.pathname.startsWith("/api/")');
+  // Matched on the call, not on what it is called on: the locale routing gave
+  // `updateSession` a `pathname` local (the path with any language prefix
+  // already stripped) and this line reads from that now. The property under
+  // test is unchanged — the private header is deleted before the API branch
+  // can return with it.
+  const apiReturnIndex = middleware.indexOf('pathname.startsWith("/api/")');
   const validationIndex = middleware.indexOf("await supabase.auth.getUser()");
   const setIndex = middleware.indexOf("serializeVerifiedPageUser(user)");
 

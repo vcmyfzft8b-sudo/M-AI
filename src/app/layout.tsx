@@ -9,7 +9,9 @@ import { ServiceWorkerRegistration } from "@/components/service-worker";
 import { ThemeController } from "@/components/theme-controller";
 import { VisitTracker } from "@/components/visit-tracker";
 import { SEO_BRAND_NAME, SEO_SITE_URL } from "@/lib/brand";
-import { LOCALE_BCP47, LOCALE_OG_TAG } from "@/lib/i18n/locales";
+import { LOCALE_BCP47, LOCALE_OG_TAG, LOCALES } from "@/lib/i18n/locales";
+import { localizedPath } from "@/lib/i18n/routing";
+import { openGraphImage } from "@/lib/seo";
 import { getMessages } from "@/lib/i18n/messages";
 import { getLocale, getTranslations } from "@/lib/i18n/server";
 import { splashScreens } from "@/lib/splash-screens";
@@ -151,15 +153,27 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       title: siteTitle,
       description,
-      url: "/",
+      // The root of this visitor's language, not the bare root: a page that
+      // does not override this is one that exists once per language, and
+      // pointing every one of them at `/` would tell a scraper they are all
+      // the same page.
+      url: localizedPath("/", locale),
       siteName: SEO_BRAND_NAME,
       locale: LOCALE_OG_TAG[locale],
+      alternateLocale: LOCALES.filter((other) => other !== locale).map(
+        (other) => LOCALE_OG_TAG[other],
+      ),
       type: "website",
+      images: [openGraphImage(locale)],
     },
     twitter: {
-      card: "summary",
+      // `summary_large_image`, now that there is an image to be large. The
+      // small card this used to declare is the one a link with no picture
+      // gets anyway.
+      card: "summary_large_image",
       title: siteTitle,
       description,
+      images: [openGraphImage(locale)],
     },
     appleWebApp: {
       capable: true,

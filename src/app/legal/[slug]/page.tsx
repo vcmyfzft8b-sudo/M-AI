@@ -7,7 +7,9 @@ import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { BRAND_NAME, SEO_BRAND_NAME } from "@/lib/brand";
 import { getHelpArticle, splitArticleFinePrint } from "@/lib/help-center";
 import { SOURCE_LOCALE, type Locale } from "@/lib/i18n/locales";
+import { localizedPath } from "@/lib/i18n/routing";
 import { getLocale, getTranslations } from "@/lib/i18n/server";
+import { localizedPageMetadata } from "@/lib/seo";
 
 /**
  * Public home for the legal documents. They also exist under /app/support, but
@@ -36,17 +38,21 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const article = getPublicLegalArticle(slug, await getLocale());
+  const locale = await getLocale();
+  const article = getPublicLegalArticle(slug, locale);
 
   if (!article) {
     return {};
   }
 
-  return {
+  // These documents are translated, so each has an address per language and
+  // the same `hreflang` set as the landing page.
+  return localizedPageMetadata({
+    pathname: `/legal/${article.slug}`,
+    locale,
     title: article.title,
     description: `${article.title} — ${SEO_BRAND_NAME}`,
-    alternates: { canonical: `/legal/${article.slug}` },
-  };
+  });
 }
 
 export default async function LegalPage({
@@ -68,11 +74,15 @@ export default async function LegalPage({
   return (
     <main className="landing-shell landing-public-page">
       <header className="landing-public-nav">
-        <Link href="/" className="landing-public-brand" aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}>
+        <Link
+          href={localizedPath("/", locale)}
+          className="landing-public-brand"
+          aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}
+        >
           <BrandLogo subtitle="" priority />
         </Link>
         <nav className="landing-public-links" aria-label={t("nav.main")}>
-          <Link href="/" className="landing-public-nav-cta">
+          <Link href={localizedPath("/", locale)} className="landing-public-nav-cta">
             {t("error.backHome")}
           </Link>
         </nav>
@@ -92,7 +102,7 @@ export default async function LegalPage({
           </p>
           <p className="landing-public-footer-legal-links">
             {otherLegalArticles(article.slug, locale).map((other) => (
-              <Link key={other.slug} href={`/legal/${other.slug}`}>
+              <Link key={other.slug} href={localizedPath(`/legal/${other.slug}`, locale)}>
                 {other.title}
               </Link>
             ))}

@@ -4,11 +4,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { useT } from "@/components/i18n-provider";
+import { useTranslations } from "@/components/i18n-provider";
 import { LandingLoadingLink } from "@/components/landing-loading-link";
 import { LandingLanguagePicker } from "@/components/language-picker";
 import { Msym } from "@/components/msym";
 import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, BRAND_SUPPORT_EMAIL, SEO_BRAND_NAME } from "@/lib/brand";
+import { localizedPath } from "@/lib/i18n/routing";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 
 /* The page's own sections, in the order a visitor meets them. */
@@ -24,7 +25,7 @@ const MENU_LEGAL: Array<{ href: string; labelKey: MessageKey }> = [
 ];
 
 export function LandingNav() {
-  const t = useT();
+  const { locale, t } = useTranslations();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -168,8 +169,11 @@ export function LandingNav() {
               foot of the panel, not in the middle of it. */}
           <nav className="landing-v2-menu-fine" aria-label={t("landing.footer.support")}>
             <a href={`mailto:${BRAND_SUPPORT_EMAIL}`}>{BRAND_SUPPORT_EMAIL}</a>
+            {/* In this reader's language, like every other link out of the
+                landing page: an unprefixed one is redirected there anyway, and
+                the redirect is a round trip the panel does not need. */}
             {MENU_LEGAL.map((item) => (
-              <Link key={item.href} href={item.href}>
+              <Link key={item.href} href={localizedPath(item.href, locale)}>
                 {t(item.labelKey)}
               </Link>
             ))}

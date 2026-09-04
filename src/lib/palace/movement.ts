@@ -14,7 +14,12 @@ export type CharacterState = {
   z: number;
   /* Horizontal velocity is derived from input each frame; only the fall is integrated. */
   velocityY: number;
-  /** Which way the body faces, radians, 0 = towards -Z. */
+  /**
+   * Which way the body faces, radians. The heading it walks along is
+   * `(sin facing, cos facing)`, so 0 is towards +Z — and anything drawn for the
+   * character has to be built facing +Z to match, which is the bug that had the
+   * avatar walking the whole town backwards.
+   */
   facing: number;
   /** How fast it is actually moving on the ground, for the walk cycle. */
   speed: number;

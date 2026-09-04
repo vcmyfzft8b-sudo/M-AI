@@ -538,6 +538,52 @@ test("the stops are scattered, and differently for every note", () => {
   });
 });
 
+test("the stops stand a street apart, all over the town", () => {
+  /* They used to bunch: every candidate on a pavement was generated inside the
+     road and thrown away, leaving only the four spots on each block's green —
+     four stops in a circle eight paces wide. */
+  const items = Array.from({ length: 40 }, (_, index) => ({
+    id: `card-${index}`,
+    kind: "card",
+    sectionId: `s${index % 6}`,
+  }));
+  const layout = buildPalaceLayout({
+    seedSource: "spread",
+    items,
+    sections: Array.from({ length: 6 }, (_, index) => ({ id: `s${index}`, title: `Del ${index}` })),
+  });
+
+  const nearest = layout.stations.map((station) =>
+    Math.min(
+      ...layout.stations
+        .filter((other) => other.id !== station.id)
+        .map((other) => Math.hypot(station.x - other.x, station.z - other.z)),
+    ),
+  );
+
+  assert.ok(Math.min(...nearest) > 25, `two stops are only ${Math.min(...nearest).toFixed(1)} apart`);
+
+  /* And at much the same spacing throughout, rather than a cramped corner and
+     an empty one: the roomiest stop is not twice as roomy as the tightest. */
+  assert.ok(
+    Math.max(...nearest) < Math.min(...nearest) * 2.6,
+    `spacing runs from ${Math.min(...nearest).toFixed(1)} to ${Math.max(...nearest).toFixed(1)}`,
+  );
+
+  /* Spread over the whole map: no quarter of the town is left without a stop. */
+  const extent = mapExtent(layout);
+  const quarters = new Set(
+    layout.stations.map((station) => {
+      const column = Math.min(3, Math.floor(((station.x + extent) / (extent * 2)) * 4));
+      const row = Math.min(3, Math.floor(((station.z + extent) / (extent * 2)) * 4));
+
+      return `${column},${row}`;
+    }),
+  );
+
+  assert.equal(quarters.size, 16, "part of the town has no stops in it at all");
+});
+
 test("the woods stay out of the town", () => {
   const layout = buildPalaceLayout({ seedSource: "woods", items, sections });
   const streets = layout.roads.map((road) =>
@@ -578,6 +624,33 @@ test("the walk covers every concept the deck teaches before repeating one", () =
   assert.equal(chosen.length, 40);
   assert.equal(concepts.size, 30, "the walk repeats a concept while another has no stop at all");
   assert.equal(new Set(chosen.map((item) => item.sectionId)).size, 4, "a section was left out");
+});
+
+test("the body walks the way it faces, not backwards", () => {
+  /*
+   * The avatar is a box figure built facing local +Z — cap brim forward,
+   * backpack behind — and drawn with `rotation.y = facing`, which in three.js
+   * sends local +Z to `(sin facing, cos facing)`. That only reads right while
+   * the controller walks along the same vector. It did not: the figure was
+   * built facing -Z, so it went through the whole town in reverse.
+   */
+  const facing = 0.7;
+  const state = createCharacter(0, 0, facing);
+  const walked = stepCharacter({
+    state,
+    input: { forward: 1, right: 0, jump: false, sprint: false },
+    cameraYaw: facing,
+    colliders: [],
+    bounds: 200,
+    delta: 1 / 60,
+  });
+
+  const travelled = { x: walked.x - state.x, z: walked.z - state.z };
+  const length = Math.hypot(travelled.x, travelled.z);
+  const alignment =
+    (travelled.x * Math.sin(walked.facing) + travelled.z * Math.cos(walked.facing)) / length;
+
+  assert.ok(alignment > 0.999, `the body is ${Math.acos(alignment).toFixed(2)} rad off its walk`);
 });
 
 test("the walker strafes the way the player asked", () => {

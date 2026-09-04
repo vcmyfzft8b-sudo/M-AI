@@ -1286,8 +1286,13 @@ export function LecturePalace({
     <>
       <div className="memo-study-empty memo-palace-intro">
         <div className="memo-study-empty-orb">
-          {/* Memo's own face, the thing you will be collecting. */}
-          <NextImage src={MASCOT_SRC} alt="" width={110} height={99} />
+          {/*
+           * Memo's own face, the thing you will be collecting. Eager and at the
+           * front of the queue: it is the first thing on the screen, and left to
+           * lazy-load it arrived a beat after the title and the button, so the
+           * palace opened on an empty grey circle.
+           */}
+          <NextImage src={MASCOT_SRC} alt="" width={110} height={99} priority />
         </div>
         <p className="memo-study-empty-title">{t("palace.title")}</p>
         <p className="memo-study-empty-copy">{t("palace.intro")}</p>

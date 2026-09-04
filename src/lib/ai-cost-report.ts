@@ -122,6 +122,13 @@ const FAILURE_RULES: Array<{ match: RegExp; plain: string; category: FailureCate
     category: "upload",
   },
   {
+    // The photo was read and simply held little; distinct from the unreadable-photo rule below,
+    // and distinct advice to the learner, so it must not be folded into it.
+    match: /premalo besedila za zapiske/i,
+    plain: "The photo was read, but held too little text to make notes from.",
+    category: "upload",
+  },
+  {
     // Must precede the page rule: both mention "berljivega besedila", only this one is a photo.
     match: /Na fotografiji ni bilo mogo|readable text.*photo|photo.*readable text/i,
     plain: "The photo had too little readable text.",

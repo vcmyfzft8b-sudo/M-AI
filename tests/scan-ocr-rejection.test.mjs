@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { explainFailure } from "../src/lib/ai-cost-report.ts";
 import { bs } from "../src/lib/i18n/messages/bs.ts";
 import { en } from "../src/lib/i18n/messages/en.ts";
 import { hr } from "../src/lib/i18n/messages/hr.ts";
@@ -198,4 +199,22 @@ test("the sparse-reading message asks for more material rather than blaming the 
   assert.match(en["failure.scan_text_too_short"], /add a few more photos/i);
   assert.doesNotMatch(en["failure.scan_text_too_short"], /unreadable|could not be read/i);
   assert.match(sl["failure.scan_text_too_short"], /Dodaj še nekaj fotografij/i);
+});
+
+test("the daily report recognises the new failure instead of filing it as unknown", () => {
+  // The message the lecture row records for a sparse reading. The cost report classifies
+  // failures by that sentence, so a new one it has never seen lands in `unknown` and is read out
+  // verbatim in the morning report -- which is how this bug was found in the first place.
+  const sparse = new NoReadableScanTextError(diagnosticsWithRejections(["too_short"]));
+  const explained = explainFailure(sparse.message);
+
+  assert.equal(explained.category, "upload");
+  assert.notEqual(explained.category, "unknown");
+  assert.match(explained.plain, /too little text/i);
+
+  // And the unreadable case keeps the reading it already had.
+  const unreadable = new NoReadableScanTextError(diagnosticsWithRejections(["unreadable"]));
+
+  assert.equal(explainFailure(unreadable.message).category, "upload");
+  assert.match(explainFailure(unreadable.message).plain, /too little readable text/i);
 });

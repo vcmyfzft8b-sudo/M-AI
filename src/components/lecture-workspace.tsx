@@ -1341,12 +1341,6 @@ export function LectureWorkspace({
    * it, each of which swaps to its own sheet the way the library rows do.
    */
   const [noteActionsOpen, setNoteActionsOpen] = useState(false);
-  /*
-   * A block the note screen should open on, set by the speed reader when it
-   * hands over to listening. Held as state rather than acted on directly
-   * because the note is not on screen yet at the moment the reader leaves.
-   */
-  const [pendingNoteBlockScroll, setPendingNoteBlockScroll] = useState<string | null>(null);
   const [noteRenameOpen, setNoteRenameOpen] = useState(false);
   const [noteDeleteOpen, setNoteDeleteOpen] = useState(false);
   const [noteRenameValue, setNoteRenameValue] = useState("");
@@ -4210,15 +4204,6 @@ export function LectureWorkspace({
            */
           content={detail.lecture.status === "ready" ? cleanedStructuredNotes : null}
           onClose={() => setActiveTab("notes")}
-          /*
-           * The other way to take the note in lives on the note screen's dock,
-           * so this hands over to it — at the block the reader had reached, so
-           * the note opens on the same words rather than back at the top.
-           */
-          onListen={(blockId) => {
-            setActiveTab("notes");
-            setPendingNoteBlockScroll(blockId);
-          }}
         />
       );
     }
@@ -5862,23 +5847,6 @@ export function LectureWorkspace({
   useEffect(() => {
     noteScrollRef.current?.scrollTo({ top: 0 });
   }, [activeTab, activeStudyView]);
-
-  /*
-   * ...except when the speed reader sent us here, which asks for a particular
-   * block instead. Declared after the effect above so it wins the same commit:
-   * the note itself has already been rendered by then, so the block is in the
-   * document and there is nothing to wait a frame for.
-   */
-  useEffect(() => {
-    if (!pendingNoteBlockScroll || activeTab !== "notes") {
-      return;
-    }
-
-    document
-      .querySelector(`[data-note-block-id="${CSS.escape(pendingNoteBlockScroll)}"]`)
-      ?.scrollIntoView({ block: "center" });
-    setPendingNoteBlockScroll(null);
-  }, [activeTab, pendingNoteBlockScroll]);
 
   const activeTabId: NoteTabId =
     activeTab === "notes"

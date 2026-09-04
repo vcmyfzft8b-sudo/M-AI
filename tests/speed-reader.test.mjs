@@ -100,26 +100,6 @@ test("the reader covers the same words the read-aloud player speaks", () => {
   );
 });
 
-test("each word names the note block it came from", () => {
-  const markdown = "# Fotosinteza\n\nRastline rastejo.\n\n- voda\n- zrak\n";
-  const document = parseNoteTtsDocument(markdown);
-  const blockIds = new Set(document.blocks.map((block) => block.id));
-
-  /*
-   * These are the ids the note itself renders as `data-note-block-id`, which is
-   * how leaving the reader for the listening dock lands on the right paragraph.
-   * A word carrying an id the note does not use would scroll nowhere.
-   */
-  for (const word of buildSpeedReadWords(document)) {
-    assert.ok(blockIds.has(word.blockId), `${word.text} points at ${word.blockId}`);
-  }
-
-  // Both list items belong to the one list block the note draws.
-  const words = buildSpeedReadWords(document);
-  assert.equal(words.at(-1).blockId, words.at(-2).blockId);
-  assert.notEqual(words[0].blockId, words.at(-1).blockId);
-});
-
 test("a longer word and a heavier pause both buy more time", () => {
   const base = wordDurationMs({ text: "voda", pause: "none" }, 300);
 

@@ -1681,7 +1681,6 @@ export const en: Messages = {
   "speedRead.play": "Start reading",
   "speedRead.pause": "Pause",
   "speedRead.close": "Close the speed reader",
-  "speedRead.listenInstead": "Listen to the note instead",
   "speedRead.speed": "Reading speed",
   "speedRead.wpm": "{wpm} WPM",
   "speedRead.remaining": "{minutes} min left",

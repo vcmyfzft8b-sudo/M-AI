@@ -20,21 +20,11 @@ import type { NoteTtsBlock, NoteTtsDocument, NoteTtsInlineToken } from "./note-t
 /** What follows a word, which is what earns it extra time on screen. */
 export type SpeedReadPause = "none" | "clause" | "sentence" | "block";
 
-/** Everything the clock needs to time a word, and nothing else. */
-export type SpeedReadTiming = {
+export type SpeedReadWord = {
   text: string;
   pause: SpeedReadPause;
   /** A formula, shown as its source. It needs longer than its length suggests. */
   math?: true;
-};
-
-export type SpeedReadWord = SpeedReadTiming & {
-  /**
-   * The note block this word came from, so leaving the reader can put the note
-   * itself back on screen at the place the reader had reached — the block ids
-   * are on the rendered note as `data-note-block-id`.
-   */
-  blockId: string;
 };
 
 export const SPEED_READER_MIN_WPM = 200;
@@ -120,7 +110,7 @@ export function wpmAtProgress(targetWpm: number, progress: number, gradual: bool
 }
 
 /** How long one word stays on the stage, in milliseconds. */
-export function wordDurationMs(word: SpeedReadTiming, wpm: number) {
+export function wordDurationMs(word: SpeedReadWord, wpm: number) {
   const base = 60000 / clampWpm(wpm);
   const lengthFactor = Math.min(
     MAX_LENGTH_FACTOR,
@@ -131,7 +121,7 @@ export function wordDurationMs(word: SpeedReadTiming, wpm: number) {
 }
 
 /** How long the whole note takes at a setting, so the screen can say so up front. */
-export function totalDurationMs(words: SpeedReadTiming[], wpm: number, gradual: boolean) {
+export function totalDurationMs(words: SpeedReadWord[], wpm: number, gradual: boolean) {
   const lastIndex = Math.max(1, words.length - 1);
 
   return words.reduce(
@@ -168,19 +158,15 @@ function pauseForGap(text: string): SpeedReadPause {
   return CLAUSE_MARKS.test(text) ? "clause" : "none";
 }
 
-function appendTokens(
-  words: SpeedReadWord[],
-  tokens: readonly NoteTtsInlineToken[],
-  blockId: string,
-) {
+function appendTokens(words: SpeedReadWord[], tokens: readonly NoteTtsInlineToken[]) {
   for (const token of tokens) {
     if (token.type === "word") {
-      words.push({ text: token.text, pause: "none", blockId });
+      words.push({ text: token.text, pause: "none" });
       continue;
     }
 
     if (token.type === "math") {
-      words.push({ text: token.text.trim(), pause: "none", math: true, blockId });
+      words.push({ text: token.text.trim(), pause: "none", math: true });
       continue;
     }
 
@@ -202,7 +188,7 @@ function endRun(words: SpeedReadWord[]) {
 function appendBlock(words: SpeedReadWord[], block: NoteTtsBlock) {
   if (block.kind === "list") {
     for (const item of block.items) {
-      appendTokens(words, item.tokens, block.id);
+      appendTokens(words, item.tokens);
       endRun(words);
     }
 
@@ -212,7 +198,7 @@ function appendBlock(words: SpeedReadWord[], block: NoteTtsBlock) {
   if (block.kind === "table") {
     for (const row of block.rows) {
       for (const cell of row.cells) {
-        appendTokens(words, cell.tokens, block.id);
+        appendTokens(words, cell.tokens);
         endRun(words);
       }
     }
@@ -220,7 +206,7 @@ function appendBlock(words: SpeedReadWord[], block: NoteTtsBlock) {
     return;
   }
 
-  appendTokens(words, block.tokens, block.id);
+  appendTokens(words, block.tokens);
   endRun(words);
 }
 
@@ -240,7 +226,7 @@ export function buildSpeedReadWords(document: NoteTtsDocument) {
 }
 
 /** The first word of the sentence at or before `index`, for stepping backwards. */
-export function sentenceStart(words: SpeedReadTiming[], index: number) {
+export function sentenceStart(words: SpeedReadWord[], index: number) {
   const from = Math.min(Math.max(0, index), Math.max(0, words.length - 1));
 
   for (let cursor = from - 1; cursor > 0; cursor -= 1) {
@@ -253,7 +239,7 @@ export function sentenceStart(words: SpeedReadTiming[], index: number) {
 }
 
 /** The first word of the next sentence after `index`, for stepping forwards. */
-export function nextSentenceStart(words: SpeedReadTiming[], index: number) {
+export function nextSentenceStart(words: SpeedReadWord[], index: number) {
   for (let cursor = Math.max(0, index); cursor < words.length - 1; cursor += 1) {
     if (words[cursor].pause === "sentence" || words[cursor].pause === "block") {
       return cursor + 1;

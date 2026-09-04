@@ -115,18 +115,12 @@ export function NoteSpeedReader({
   lectureId,
   content,
   onClose,
-  onListen,
 }: {
   lectureId: string;
   /** The note's markdown, or null while it is still being written. */
   content: string | null;
   /** Back to the note. */
   onClose: () => void;
-  /**
-   * Across to the other way of taking the note in, at the block the reader had
-   * reached — the note screen is where the listening dock lives.
-   */
-  onListen: (blockId: string | null) => void;
 }) {
   const t = useT();
   const words = useMemo(
@@ -320,11 +314,7 @@ export function NoteSpeedReader({
   if (wordCount === 0) {
     return (
       <section className="memo-speedread" aria-label={t("speedRead.title")}>
-        <SpeedReaderHead
-          onClose={onClose}
-          onListen={() => onListen(null)}
-          title={t("speedRead.title")}
-        />
+        <SpeedReaderHead onClose={onClose} title={t("speedRead.title")} />
         <p className="memo-speedread-empty">{t("speedRead.empty")}</p>
       </section>
     );
@@ -342,11 +332,7 @@ export function NoteSpeedReader({
 
   return (
     <section className="memo-speedread" aria-label={t("speedRead.title")}>
-      <SpeedReaderHead
-        onClose={onClose}
-        onListen={() => onListen(word.blockId)}
-        title={t("speedRead.title")}
-      />
+      <SpeedReaderHead onClose={onClose} title={t("speedRead.title")} />
 
       <button
         type="button"
@@ -378,6 +364,24 @@ export function NoteSpeedReader({
       </p>
 
       <div className="memo-speedread-progress">
+        {/*
+         * The transport control. The stage stays tappable — at 600 words a
+         * minute someone who wants to stop wants to stop now, and the whole
+         * screen is the easiest target there is — but a reader arriving at this
+         * tab should not have to be told in words that the words are a button.
+         */}
+        <button
+          type="button"
+          className="memo-speedread-play"
+          onClick={togglePlay}
+          aria-label={t(isPlaying ? "speedRead.pause" : "speedRead.play")}
+        >
+          <Msym
+            name={isFinished ? "replay" : isPlaying ? "pause" : "play_arrow"}
+            size="1.5rem"
+            fill
+          />
+        </button>
         <input
           type="range"
           className="memo-speedread-seek"
@@ -439,31 +443,12 @@ export function NoteSpeedReader({
   );
 }
 
-function SpeedReaderHead({
-  title,
-  onClose,
-  onListen,
-}: {
-  title: string;
-  onClose: () => void;
-  onListen: () => void;
-}) {
+function SpeedReaderHead({ title, onClose }: { title: string; onClose: () => void }) {
   const t = useT();
 
   return (
     <header className="memo-speedread-head">
-      <h2 className="memo-speedread-title">
-        {title}
-        <button
-          type="button"
-          className="memo-speedread-listen"
-          onClick={onListen}
-          aria-label={t("speedRead.listenInstead")}
-          title={t("speedRead.listenInstead")}
-        >
-          <Msym name="volume_up" size="1.05rem" fill weight={500} />
-        </button>
-      </h2>
+      <h2 className="memo-speedread-title">{title}</h2>
 
       <div className="memo-speedread-exit">
         <button

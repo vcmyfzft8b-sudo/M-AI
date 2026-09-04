@@ -1710,7 +1710,6 @@ export const sl = {
   "speedRead.play": "Začni brati",
   "speedRead.pause": "Premor",
   "speedRead.close": "Zapri hitro branje",
-  "speedRead.listenInstead": "Raje poslušaj zapisek",
   "speedRead.speed": "Hitrost branja",
   "speedRead.wpm": "{wpm} besed/min",
   "speedRead.remaining": "še {minutes} min",

@@ -6,6 +6,7 @@ import NextImage from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { useT } from "@/components/i18n-provider";
+import { StudyGenerationNotice } from "@/components/generation-notice";
 import { MemoPortal } from "@/components/memo-portal";
 import { Emoji, Msym } from "@/components/msym";
 import { StudyCompletionCard } from "@/components/study-completion-card";
@@ -128,7 +129,12 @@ export function LecturePalace({
   const exitTokenRef = useRef(0);
 
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  /*
+   * True from the moment the door opens until the town is on screen. Driving it
+   * off "is the loader running" left one frame where the overlay was up, the
+   * engine had not started, and the reader saw an empty stage.
+   */
+  const [isBuilt, setIsBuilt] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [collected, setCollected] = useState<Set<string>>(() => new Set());
   const [nearStationId, setNearStationId] = useState<string | null>(null);
@@ -460,7 +466,6 @@ export function LecturePalace({
   const startGame = useCallback(async () => {
     if (!layout || gameRef.current) return;
 
-    setIsLoading(true);
     setLoadError(null);
 
     try {
@@ -494,11 +499,10 @@ export function LecturePalace({
           );
         },
       });
+      setIsBuilt(true);
     } catch (error) {
       /* A device without WebGL, or a chunk that never arrived. */
       setLoadError(error instanceof Error ? error.message : t("palace.unsupported"));
-    } finally {
-      setIsLoading(false);
     }
   }, [drawMinimap, layout, openStation, sizeMinimap, t]);
 
@@ -543,6 +547,18 @@ export function LecturePalace({
   const leaveGame = useCallback(() => {
     setIsOpen(false);
     onLeaveRef.current?.();
+  }, []);
+
+  /*
+   * Opening clears the built flag in the same update that opens the overlay,
+   * not in the effect that follows it: an effect runs after the frame is drawn,
+   * so on a second visit the reader saw one frame of the last town's stage
+   * before the wait appeared.
+   */
+  const enterGame = useCallback(() => {
+    setIsBuilt(false);
+    setLoadError(null);
+    setIsOpen(true);
   }, []);
 
   /*
@@ -1115,7 +1131,7 @@ export function LecturePalace({
         <p className="memo-study-empty-title">{t("palace.title")}</p>
         <p className="memo-study-empty-copy">{t("palace.intro")}</p>
 
-        <button type="button" className="memo-study-empty-cta" onClick={() => setIsOpen(true)}>
+        <button type="button" className="memo-study-empty-cta" onClick={enterGame}>
           <Msym name="explore" size="1.2rem" fill={false} weight={500} />
           {done > 0 ? t("palace.resume") : t("palace.start")}
         </button>
@@ -1205,10 +1221,14 @@ export function LecturePalace({
 
             {isTouch ? null : <p className="memo-palace-hint">{t("palace.hintDesktop")}</p>}
 
-            {isLoading ? (
+            {!isBuilt && !loadError ? (
+              /* The app's own wait, in the shape of the thing being built. */
               <div className="memo-palace-loading">
-                <p>{t("palace.loading")}</p>
-                <span className="memo-palace-loading-bar" />
+                <StudyGenerationNotice
+                  preview="palace"
+                  stageCopy={t("palace.loading")}
+                  bodyCopy=""
+                />
               </div>
             ) : null}
 

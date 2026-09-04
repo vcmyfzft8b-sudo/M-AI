@@ -198,8 +198,6 @@ const ORNAMENTS = ["obelisk", "orb", "pyramid", "arch", "fountain"] as const;
  * tellable-apart colours rather than five families of six.
  */
 const LANDMARK_HUE_STEP = 137.508;
-/** No two stops closer than this, so a scatter is still a walk. */
-const MIN_STATION_GAP = 34;
 /**
  * Terracotta, slate, charcoal, moss, teal, plum. A roof drawn from the whole
  * colour wheel gives you bright green domes that read as hills; these read as
@@ -553,6 +551,15 @@ export function buildPalaceLayout({
     ...blockCenter(index % gridSize, Math.floor(index / gridSize)),
   }));
 
+  /* Streets: one down the middle of every gap between blocks, and one around
+     the outside — which is the same rule, half a pitch off each block centre.
+     Known before anything is placed, because nothing may be placed in one. */
+  const lines = Array.from(
+    { length: gridSize + 1 },
+    (_, index) => index * pitch - half - pitch / 2,
+  );
+  const bounds = Math.max(...lines.map(Math.abs)) + 34;
+
   const districts: PalaceDistrict[] = [];
   const houses: PalaceHouse[] = [];
   const props: PalaceProp[] = [];
@@ -623,45 +630,127 @@ export function buildPalaceLayout({
     });
 
     /*
-     * Which houses get an item is drawn from the seed, not counted off every
-     * nth door: two notes with the same shape should not lay their stops out in
-     * the same places. They are drawn one at a time and kept only if they are
-     * a street's length from every stop already placed, so a random scatter is
-     * still a walk round the neighbourhood rather than four stops on one corner
-     * — and if the neighbourhood runs out of room, the rule relaxes rather than
-     * dropping the item.
+     * Where the Memos wait is drawn from the seed, and it is a place in the
+     * town rather than a doorstep: the pavement outside a row, a corner, the
+     * green in the middle of a block. One per house was a rule you could see
+     * after two streets, and a town you can predict is a town you stop looking
+     * at.
+     *
+     * The nearest house to each spot is still rebuilt as a landmark, because
+     * "the one by the house with the green dome" is the thing that makes the
+     * walk a memory rather than a scavenger hunt.
      */
-    const candidates = [...placed];
+    const spots: Vec2[] = [];
 
-    for (let index = candidates.length - 1; index > 0; index -= 1) {
-      const swap = random.int(0, index);
+    mine.forEach((block) => {
+      /* Along the pavements on all four sides of the block. */
+      for (let side = 0; side < 4; side += 1) {
+        for (let step = 0; step < 3; step += 1) {
+          const along = random.range(-BLOCK_SIZE / 2 + 6, BLOCK_SIZE / 2 - 6);
+          const out = BLOCK_SIZE / 2 + ROAD_WIDTH / 2 - PAVEMENT_WIDTH / 2;
 
-      [candidates[index], candidates[swap]] = [candidates[swap], candidates[index]];
-    }
+          spots.push(
+            side === 0
+              ? { x: block.x + along, z: block.z - out }
+              : side === 1
+                ? { x: block.x + along, z: block.z + out }
+                : side === 2
+                  ? { x: block.x - out, z: block.z + along }
+                  : { x: block.x + out, z: block.z + along },
+          );
+        }
+      }
 
-    const takenHouses: number[] = [];
-    const farEnough = (houseIndex: number, gap: number) =>
-      takenHouses.every((taken) => {
-        const a = houses[houseIndex];
-        const b = houses[taken];
-
-        return Math.hypot(a.x - b.x, a.z - b.z) > gap;
-      });
-
-    group.items.forEach(() => {
-      const pick =
-        candidates.find((houseIndex) => farEnough(houseIndex, MIN_STATION_GAP)) ??
-        candidates.find((houseIndex) => farEnough(houseIndex, MIN_STATION_GAP / 2)) ??
-        candidates[0];
-
-      takenHouses.push(pick);
-      candidates.splice(candidates.indexOf(pick), 1);
+      /* And on the green in the middle, which the houses ring but do not fill. */
+      for (let step = 0; step < 4; step += 1) {
+        spots.push({
+          x: block.x + random.range(-8, 8),
+          z: block.z + random.range(-8, 8),
+        });
+      }
     });
 
-    group.items.forEach((item, index) => {
-      const houseIndex = takenHouses[index];
+    /* Nothing standing inside a wall, or in the road where the traffic is. */
+    const walkable = spots.filter((spot) => {
+      const clear = houses.every((house) => {
+        const sideways = Math.abs(Math.sin(house.facing)) > 0.5;
+        const width = sideways ? house.depth : house.width;
+        const depth = sideways ? house.width : house.depth;
+
+        return (
+          Math.abs(house.x - spot.x) > width / 2 + 1.8 ||
+          Math.abs(house.z - spot.z) > depth / 2 + 1.8
+        );
+      });
+
+      if (!clear) return false;
+
+      return !lines.some(
+        (line) =>
+          Math.abs(line - spot.x) < ROAD_WIDTH / 2 + 0.5 ||
+          Math.abs(line - spot.z) < ROAD_WIDTH / 2 + 0.5,
+      );
+    });
+
+    for (let index = walkable.length - 1; index > 0; index -= 1) {
+      const swap = random.int(0, index);
+
+      [walkable[index], walkable[swap]] = [walkable[swap], walkable[index]];
+    }
+
+    /*
+     * Farthest-point sampling over the shuffled candidates: each stop goes
+     * wherever is furthest from every stop already placed. The shuffle is what
+     * makes it a different town per note; taking the farthest is what stops a
+     * greedy walk painting itself into a corner and dropping the last two stops
+     * on the same pavement.
+     */
+    const taken: Vec2[] = [];
+
+    group.items.forEach((item) => {
+      let spot = walkable[0] ?? { x: 0, z: 0 };
+      let best = -1;
+
+      walkable.forEach((candidate) => {
+        const nearest = taken.reduce(
+          (closest, other) =>
+            Math.min(closest, Math.hypot(candidate.x - other.x, candidate.z - other.z)),
+          Number.POSITIVE_INFINITY,
+        );
+
+        if (nearest > best) {
+          best = nearest;
+          spot = candidate;
+        }
+      });
+
+      taken.push(spot);
+
+      const found = walkable.indexOf(spot);
+
+      if (found >= 0) walkable.splice(found, 1);
+
+      /* The house this stop is remembered by: the closest one that is not
+         already somebody else's landmark. */
+      let houseIndex = placed[0] ?? 0;
+      let closest = Number.POSITIVE_INFINITY;
+
+      placed.forEach((candidate) => {
+        const house = houses[candidate];
+
+        if (house.landmark) return;
+
+        const distance = Math.hypot(house.x - spot.x, house.z - spot.z);
+
+        if (distance < closest) {
+          closest = distance;
+          houseIndex = candidate;
+        }
+      });
+
       const plain = houses[houseIndex];
-      const landmark = makeHouse({
+
+      houses[houseIndex] = makeHouse({
         random,
         x: plain.x,
         z: plain.z,
@@ -671,18 +760,13 @@ export function buildPalaceLayout({
         landmarkIndex: stations.length,
       });
 
-      houses[houseIndex] = landmark;
-
-      const outX = Math.sin(landmark.facing);
-      const outZ = Math.cos(landmark.facing);
-
       stations.push({
         id: item.id,
         kind: item.kind,
         index: stations.length,
         districtIndex,
-        x: landmark.x + outX * (landmark.depth / 2 + 2.8),
-        z: landmark.z + outZ * (landmark.depth / 2 + 2.8),
+        x: spot.x,
+        z: spot.z,
         hue,
         houseIndex,
       });
@@ -707,13 +791,6 @@ export function buildPalaceLayout({
     });
   });
 
-  /* Streets: one down the middle of every gap between blocks, and one around
-     the outside — which is the same rule, half a pitch off each block centre. */
-  const lines = Array.from(
-    { length: gridSize + 1 },
-    (_, index) => index * pitch - half - pitch / 2,
-  );
-  const bounds = Math.max(...lines.map(Math.abs)) + 34;
 
   const roads: Box[] = [];
   const pavements: Box[] = [];
@@ -950,18 +1027,21 @@ export function buildPalaceLayout({
   });
 
   /*
-   * You start in the street outside the first house that has something waiting
-   * at it, facing it — the same corner every time, which is what makes the walk
-   * repeatable.
+   * You start a few paces from the first stop, looking at it — the same corner
+   * every time, which is what makes the walk repeatable. The direction comes
+   * from the house the stop is remembered by, so you arrive facing both.
    */
   const first = stations[0];
   const firstHouse = first ? houses[first.houseIndex] : null;
-  const spawn = firstHouse
+  const away = firstHouse
+    ? { x: first.x - firstHouse.x, z: first.z - firstHouse.z }
+    : { x: 0, z: 1 };
+  const length = Math.hypot(away.x, away.z) || 1;
+  const spawn = first
     ? {
-        x: first.x + Math.sin(firstHouse.facing) * 7,
-        z: first.z + Math.cos(firstHouse.facing) * 7,
-        /* Looking back at the house: the walk starts pointed at card one. */
-        yaw: firstHouse.facing + Math.PI,
+        x: first.x + (away.x / length) * 7,
+        z: first.z + (away.z / length) * 7,
+        yaw: Math.atan2(-away.x / length, -away.z / length),
       }
     : { x: 0, z: 0, yaw: 0 };
 

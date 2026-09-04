@@ -59,7 +59,7 @@ test("a different note gets a different town", () => {
   assert.notDeepEqual(other.houses, first.houses);
 });
 
-test("every item gets exactly one station outside a house of its own", () => {
+test("every item gets exactly one station, remembered by a house of its own", () => {
   const layout = buildPalaceLayout({ seedSource: "lecture-1", items, sections });
 
   assert.deepEqual(
@@ -532,7 +532,7 @@ test("the stops are scattered, and differently for every note", () => {
     one.stations.slice(index + 1).forEach((other) => {
       assert.ok(
         Math.hypot(station.x - other.x, station.z - other.z) > 12,
-        "two stops are on top of each other",
+        "two stops are within a few paces of each other",
       );
     });
   });
@@ -660,4 +660,47 @@ test("no item is asked twice, whatever the mix", () => {
   chosen.forEach((item) => {
     assert.equal(item.id.startsWith("c") ? "card" : item.id.startsWith("q") ? "quiz" : "test", item.kind);
   });
+});
+
+test("the stops stand in the town, not in the road or inside a wall", () => {
+  const layout = buildPalaceLayout({
+    seedSource: "scatter",
+    items: Array.from({ length: 16 }, (_, index) => ({
+      id: `card-${index}`,
+      kind: "card",
+      sectionId: index % 2 === 0 ? "s1" : "s2",
+    })),
+    sections,
+  });
+
+  layout.stations.forEach((station) => {
+    layout.roads.forEach((road) => {
+      const horizontal = road.width > road.depth;
+      const distance = horizontal
+        ? Math.abs(station.z - road.z)
+        : Math.abs(station.x - road.x);
+
+      assert.ok(distance > 11 / 2, `a stop at ${station.x}, ${station.z} is in the road`);
+    });
+
+    layout.houses.forEach((house) => {
+      const plot = footprint(house);
+
+      assert.ok(
+        Math.abs(house.x - station.x) > plot.width / 2 ||
+          Math.abs(house.z - station.z) > plot.depth / 2,
+        "a stop is inside a house",
+      );
+    });
+  });
+
+  /* Scattered through the town rather than one per doorstep: the stops should
+     not all sit the same distance from the house they are remembered by. */
+  const offsets = layout.stations.map((station) => {
+    const house = layout.houses[station.houseIndex];
+
+    return Math.round(Math.hypot(house.x - station.x, house.z - station.z));
+  });
+
+  assert.ok(new Set(offsets).size > 3, "every stop is the same step from its house");
 });

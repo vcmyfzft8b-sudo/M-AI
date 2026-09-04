@@ -10,7 +10,7 @@ import { useT } from "@/components/i18n-provider";
  * done exactly that, waiting on an emoji while every tab beside it waited on this.
  */
 
-export type GenerationPreview = "notes" | "cards" | "quiz" | "test" | "mindmap";
+export type GenerationPreview = "notes" | "cards" | "quiz" | "test" | "mindmap" | "palace";
 
 /** The note body a generating note is on its way to becoming. */
 const GENERATION_NOTE_PARAGRAPHS = [
@@ -23,6 +23,9 @@ const GENERATION_QUIZ_OPTIONS = [0, 1, 2, 3];
 
 /** Branch widths down one side of the map, uneven the way a real one's topics are. */
 const GENERATION_MAP_BRANCHES = ["72%", "100%", "58%", "86%"];
+
+/** A street's worth of roofline, uneven the way the generated one is. */
+const GENERATION_TOWN_HOUSES = ["58%", "100%", "74%", "88%", "62%", "96%"];
 
 /**
  * The ghost of the thing being generated, in the shape that will replace it.
@@ -82,6 +85,34 @@ export function GenerationSkeleton({ kind }: { kind: GenerationPreview }) {
         <div className="memo-gen-map-side">
           {GENERATION_MAP_BRANCHES.map((width, index) => (
             <span key={index} className="app-loading-pill memo-gen-branch" style={{ width }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (kind === "palace") {
+    /*
+     * The town's own chrome, in the places it will be in: the map in one corner,
+     * the score and the neighbourhood in the other, and a street of houses that
+     * fills in behind them.
+     */
+    return (
+      <div className="memo-gen-preview memo-gen-town" aria-hidden="true">
+        <div className="memo-gen-town-hud">
+          <span className="app-loading-pill memo-gen-town-map" />
+          <div className="memo-gen-town-pills">
+            <span className="app-loading-pill memo-gen-town-score" />
+            <span className="app-loading-pill memo-gen-town-where" />
+          </div>
+        </div>
+        <div className="memo-gen-town-street">
+          {GENERATION_TOWN_HOUSES.map((height, index) => (
+            <span
+              key={index}
+              className="app-loading-pill memo-gen-town-house"
+              style={{ height }}
+            />
           ))}
         </div>
       </div>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 
+import { StudyGenerationNotice } from "@/components/generation-notice";
 import { useT } from "@/components/i18n-provider";
 import { MemoPortal } from "@/components/memo-portal";
 import { Emoji, Msym } from "@/components/msym";
@@ -751,47 +752,50 @@ export function LectureMindmap({
     );
   }
 
+  /*
+   * Being drawn, and being about to be drawn, are the same wait to a reader — the request is
+   * already in flight while the status is still `null`. Both show the app's own generation
+   * screen rather than a spinner of this tab's invention: the ghost of a map, over the stage
+   * caption that says which minute of the wait this is.
+   */
+  if (isRunning(status) || isStarting || state === null) {
+    return (
+      <StudyGenerationNotice
+        preview="mindmap"
+        stageCopy={t(state === null ? "mindmap.loading" : "mindmap.generating")}
+        bodyCopy={state === null ? "" : t("mindmap.generatingBody")}
+      />
+    );
+  }
+
   /* Everything below is the map's absence, in its several flavours. */
   return (
     <div className="memo-study-empty">
       <div className="memo-study-empty-orb">
-        <Emoji symbol={isRunning(status) || state === null ? "🌱" : "🧠"} size="4.4rem" />
+        <Emoji symbol="🧠" size="4.4rem" />
       </div>
       <p className="memo-study-empty-title">
-        {state === null
-          ? t("mindmap.loading")
-          : !lectureReady
-            ? t("mindmap.locked")
-            : isRunning(status)
-              ? t("mindmap.generating")
-              : status === "failed"
-                ? t("mindmap.failed")
-                : t("mindmap.emptyTitle")}
+        {!lectureReady
+          ? t("mindmap.locked")
+          : status === "failed"
+            ? t("mindmap.failed")
+            : t("mindmap.emptyTitle")}
       </p>
       <p className="memo-study-empty-copy">
-        {state === null
-          ? ""
-          : !lectureReady
-            ? t("mindmap.lockedBody")
-            : isRunning(status)
-              ? t("mindmap.generatingBody")
-              : status === "failed"
-                ? state?.errorMessage || t("mindmap.failedBody")
-                : t("mindmap.emptyBody")}
+        {!lectureReady
+          ? t("mindmap.lockedBody")
+          : status === "failed"
+            ? state?.errorMessage || t("mindmap.failedBody")
+            : t("mindmap.emptyBody")}
       </p>
       {actionError ? <p className="danger-panel lecture-inline-note">{actionError}</p> : null}
-      {lectureReady && !isRunning(status) ? (
+      {lectureReady ? (
         <button
           type="button"
           className="memo-study-empty-cta"
           onClick={() => void start({ regenerate: status === "failed" })}
-          disabled={isStarting}
         >
-          {isStarting ? (
-            <Msym name="progress_activity" className="memo-spin" size="1.2rem" />
-          ) : (
-            <Msym name="account_tree" size="1.2rem" fill={false} weight={500} />
-          )}
+          <Msym name="account_tree" size="1.2rem" fill={false} weight={500} />
           {t(status === "failed" ? "common.retry" : "mindmap.create")}
         </button>
       ) : null}

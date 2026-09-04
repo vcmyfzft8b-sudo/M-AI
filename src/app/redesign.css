@@ -5354,6 +5354,51 @@
   width: 52%;
 }
 
+/* The map's ghost: a centre with branches fanning off both sides, which is the shape the wait
+   ends in. Laid out as three columns rather than as a tree — a skeleton only has to rhyme with
+   what replaces it, and a real layout here would be the layout engine drawing nothing. */
+.memo-gen-map {
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+.memo-gen-map-side {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: end;
+}
+
+.memo-gen-map-side:last-child {
+  justify-items: start;
+}
+
+.memo-gen-branch {
+  height: 1.5rem;
+  border-radius: 999px;
+}
+
+.memo-gen-map-root {
+  width: 7.5rem;
+  height: 3.4rem;
+  border-radius: 1.1rem;
+}
+
+@media (max-width: 1099px) {
+  .memo-gen-map {
+    gap: 0.6rem;
+  }
+
+  .memo-gen-map-root {
+    width: 5.4rem;
+    height: 3rem;
+  }
+
+  .memo-gen-branch {
+    height: 1.3rem;
+  }
+}
+
 .memo-gen-quizcard {
   display: grid;
   gap: 0.7rem;

@@ -153,7 +153,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       speaker: segment.row.speaker,
       audioUrl: segment.audioUrl,
       durationMs: segment.row.duration_ms,
-      cues: segment.cues,
       limitSeconds: quota.limitSeconds,
       secondsUsed: quota.secondsUsed,
       remainingSeconds: quota.remainingSeconds,

@@ -34,9 +34,7 @@ import {
   type PodcastSpeaker,
   type PodcastTurn,
 } from "@/lib/podcast-settings";
-import { cueAt, type PodcastCue } from "@/lib/podcast-script";
 import { TutorClipPlayer } from "@/lib/tutor/clip-player";
-import { stripAudioTags } from "@/lib/tutor/turn-audio";
 import { voiceHue } from "@/lib/tutor/voice-colors";
 import { voiceSampleClip } from "@/lib/tutor/voice-clips";
 
@@ -108,8 +106,6 @@ type LoadedSegment = {
   durationMs: number;
   /** The audio itself, held as an object URL: a signed link expires, a blob does not. */
   objectUrl: string;
-  /** Subtitle lines, timed against this turn's own audio. Empty on the REST fallback path. */
-  cues: PodcastCue[];
 };
 
 function readStored<T extends string>(key: string, normalize: (value: unknown) => T): T {
@@ -222,19 +218,6 @@ export function LecturePodcast({
 
   /* Memoized so the derived durations and the prefetch effect do not rebuild on every render. */
   const turns = useMemo(() => podcast?.turns ?? [], [podcast]);
-  const activeSpeaker: PodcastSpeaker = turns[currentIndex]?.speaker ?? "a";
-  /*
-   * What to put on screen right now.
-   *
-   * The cues come from the synthesizer's own per-character timings, so they need no clock of
-   * their own — the audio element's position is the only source of truth. A turn synthesized on
-   * the REST fallback has no timings at all, and then the whole turn is shown rather than
-   * nothing: worse than a synced line, far better than a blank box.
-   */
-  const activeCues = segmentsRef.current.get(currentIndex)?.cues ?? [];
-  const subtitle =
-    (activeCues.length > 0 ? cueAt(activeCues, positionMs)?.text : null) ??
-    stripAudioTags(turns[currentIndex]?.text ?? "");
   const speakerCount = getPodcastFormat(format).speakerCount;
   /*
    * Being written — by this screen, or by a request that started before it was opened.
@@ -560,7 +543,7 @@ export function LecturePodcast({
         }
 
         const payload = (await response.json().catch(() => null)) as
-          | { audioUrl?: string; durationMs?: number; cues?: PodcastCue[]; code?: string; error?: string }
+          | { audioUrl?: string; durationMs?: number; code?: string; error?: string }
           | null;
 
         if (!response.ok) {
@@ -590,7 +573,6 @@ export function LecturePodcast({
         return {
           durationMs: payload.durationMs ?? 0,
           objectUrl: URL.createObjectURL(await audio.blob()),
-          cues: Array.isArray(payload.cues) ? payload.cues : [],
         };
       }
 
@@ -1018,28 +1000,6 @@ export function LecturePodcast({
           {limitReached ? <p className="memo-inline-error">{t("podcast.limitReached")}</p> : null}
           {error ? <p className="memo-inline-error">{error}</p> : null}
 
-          {/*
-            * The subtitle.
-            *
-            * This replaced a scrolling transcript of the whole episode, which was the wrong
-            * object: a wall of text under a player is something to read INSTEAD of listening,
-            * and it made the screen about the script rather than about the audio. One line at a
-            * time, timed to the word being spoken, is what a subtitle is for — following on a
-            * loud bus, or with the sound off entirely.
-            *
-            * Who is speaking is the colour of the text, not a name above it — which is what
-            * broadcast subtitling does with two speakers, and it is the one thing the transcript
-            * did that was worth keeping. A name would be another line to read on a screen the
-            * listener is trying not to read.
-            */}
-          <div
-            className="memo-podcast-caption"
-            style={{ "--podcast-hue": voiceHue(voices[activeSpeaker]) } as CSSProperties}
-            aria-live="polite"
-          >
-            <p className="memo-podcast-caption-text">{subtitle}</p>
-          </div>
-
           <div className="memo-podcast-footer">
             {voiceRow("a")}
             {speakerCount === 2 ? voiceRow("b") : null}
@@ -1079,55 +1039,56 @@ export function LecturePodcast({
           <h2 className="memo-podcast-title">{t("podcast.title")}</h2>
           <p className="memo-podcast-subtitle">{t("podcast.intro")}</p>
 
-          <div className="memo-podcast-formats" role="radiogroup" aria-label={t("podcast.format.label")}>
-            {PODCAST_FORMATS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                role="radio"
-                aria-checked={format === option.id}
-                className={`memo-podcast-format ${format === option.id ? "active" : ""}`.trim()}
-                onClick={() => chooseFormat(option.id)}
-              >
-                <Msym name={option.icon} size="1.3rem" fill={false} weight={500} />
-                <span className="memo-podcast-format-label">{t(option.labelKey)}</span>
-                <span className="memo-podcast-format-description">{t(option.descriptionKey)}</span>
-                <span className="memo-podcast-format-voices">
-                  {t(option.speakerCount === 1 ? "podcast.oneVoice" : "podcast.twoVoices")}
-                </span>
-              </button>
-            ))}
+          <div className="memo-podcast-setup">
+            <div className="memo-podcast-formats" role="radiogroup" aria-label={t("podcast.format.label")}>
+              {PODCAST_FORMATS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={format === option.id}
+                  className={`memo-podcast-format ${format === option.id ? "active" : ""}`.trim()}
+                  onClick={() => chooseFormat(option.id)}
+                >
+                  <span className="memo-podcast-format-head">
+                    <Msym name={option.icon} size="1.15rem" fill={false} weight={500} />
+                    <span className="memo-podcast-format-label">{t(option.labelKey)}</span>
+                  </span>
+                  <span className="memo-podcast-format-description">{t(option.descriptionKey)}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="memo-podcast-lengths" role="radiogroup" aria-label={t("podcast.length.label")}>
+              {PODCAST_LENGTHS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={length === option.id}
+                  className={`memo-podcast-length ${length === option.id ? "active" : ""}`.trim()}
+                  onClick={() => chooseLength(option.id)}
+                >
+                  <span>{t(option.labelKey)}</span>
+                  <span className="memo-podcast-length-minutes">
+                    {t("podcast.minutes", { count: estimatedPodcastMinutes(option.id) })}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="memo-podcast-voice-picker">
+              {voiceRow("a")}
+              {speakerCount === 2 ? voiceRow("b") : null}
+            </div>
+
+            {error ? <p className="memo-inline-error">{error}</p> : null}
+
+            <button type="button" className="memo-podcast-start" onClick={() => void requestScript()}>
+              <Msym name="graphic_eq" size="1.2rem" fill={false} weight={500} />
+              <span>{t("podcast.generate")}</span>
+            </button>
           </div>
-
-          <div className="memo-podcast-lengths" role="radiogroup" aria-label={t("podcast.length.label")}>
-            {PODCAST_LENGTHS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                role="radio"
-                aria-checked={length === option.id}
-                className={`memo-podcast-length ${length === option.id ? "active" : ""}`.trim()}
-                onClick={() => chooseLength(option.id)}
-              >
-                <span>{t(option.labelKey)}</span>
-                <span className="memo-podcast-length-minutes">
-                  {t("podcast.minutes", { count: estimatedPodcastMinutes(option.id) })}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <div className="memo-podcast-voice-picker">
-            {voiceRow("a")}
-            {speakerCount === 2 ? voiceRow("b") : null}
-          </div>
-
-          {error ? <p className="memo-inline-error">{error}</p> : null}
-
-          <button type="button" className="memo-podcast-start" onClick={() => void requestScript()}>
-            <Msym name="graphic_eq" size="1.2rem" fill={false} weight={500} />
-            <span>{t("podcast.generate")}</span>
-          </button>
 
           {status && !status.hasUnlimitedUsage ? (
             <p className="memo-podcast-hint">{t("podcast.usage.note")}</p>

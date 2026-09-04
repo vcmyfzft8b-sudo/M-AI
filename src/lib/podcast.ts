@@ -29,13 +29,7 @@ import {
 import { synthesizeTtsChunkWithTimestamps } from "@/lib/note-tts-synthesis";
 import type { NoteTtsVoice } from "@/lib/note-tts-settings";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
-import {
-  alignPodcastWords,
-  groupWordsIntoCues,
-  normalizePodcastTurns,
-  parseStoredCues,
-  parseStoredTurns,
-} from "@/lib/podcast-script";
+import { normalizePodcastTurns, parseStoredTurns } from "@/lib/podcast-script";
 import {
   getPodcastFormat,
   getPodcastLength,
@@ -558,7 +552,6 @@ export async function getOrCreatePodcastSegment(params: {
     return {
       row: cached,
       audioUrl: await signSegment(cached),
-      cues: groupWordsIntoCues(parseStoredCues(cached.word_timings)),
       quota: null,
     };
   }
@@ -591,7 +584,7 @@ export async function getOrCreatePodcastSegment(params: {
   let shouldRelease = Boolean(claim.reservation);
 
   try {
-    const { audio, durationMs, wordTimings } = await synthesizePodcastTurn({
+    const { audio, durationMs } = await synthesizePodcastTurn({
       text: turn.text,
       language: params.podcast.language,
       voice,
@@ -631,7 +624,6 @@ export async function getOrCreatePodcastSegment(params: {
           audio_storage_path: audioStoragePath,
           audio_mime_type: TTS_OUTPUT_MIME_TYPE,
           duration_ms: Math.ceil(durationMs),
-          word_timings: wordTimings as unknown as Json,
         } as never,
         { onConflict: "podcast_id,segment_index,voice,model" },
       )
@@ -658,12 +650,7 @@ export async function getOrCreatePodcastSegment(params: {
       actualSeconds: Math.max(1, Math.ceil(row.duration_ms / 1000)),
     });
 
-    return {
-      row,
-      audioUrl: await signSegment(row),
-      cues: groupWordsIntoCues(parseStoredCues(row.word_timings)),
-      quota,
-    };
+    return { row, audioUrl: await signSegment(row), quota };
   } catch (error) {
     if (shouldRelease) {
       await abandonTtsGeneration(claim.reservation);
@@ -702,11 +689,7 @@ async function synthesizePodcastTurn(params: {
       timeoutMs: PODCAST_STREAM_TIMEOUT_MS,
     });
 
-    return {
-      audio: synthesized.audio,
-      durationMs: synthesized.durationMs,
-      wordTimings: alignPodcastWords(params.text, synthesized.pieces),
-    };
+    return { audio: synthesized.audio, durationMs: synthesized.durationMs };
   } catch (error) {
     /*
      * A truncation and the organization's concurrent-stream cap are both things REST would either
@@ -737,11 +720,5 @@ async function synthesizePodcastTurn(params: {
     audio,
     /* Constant-bitrate MP3: the byte count is the length, which is what the listener is charged. */
     durationMs: Math.round((audio.length * 8 * 1000) / TTS_OUTPUT_BITRATE),
-    /*
-     * The REST fallback reports no timings, so this turn has no captions rather than wrong ones.
-     * The player shows the whole turn instead — worse than a synced line, far better than nothing,
-     * and it only happens on the path taken when the stream has already failed.
-     */
-    wordTimings: [],
   };
 }

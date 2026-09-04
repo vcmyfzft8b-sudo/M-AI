@@ -73,40 +73,6 @@ names a piece of audio by `(user, lecture, contentHash, chunkIndex, language, vo
 model)`; read-aloud puts a note's hash and chunk there, and the podcast puts
 `podcast:<id>` and the turn index.
 
-## Subtitles
-
-The player shows one line at a time, timed to the word being spoken — so an episode can be
-followed on a loud bus, or with the sound off. It replaced a scrolling transcript of the
-whole script, which was the wrong object: a wall of text under a player is something to
-read *instead* of listening.
-
-It is built the way film subtitles are, which means it is deliberately **not a component** —
-no card, no border, no panel. A subtitle belongs to the picture rather than to a box sitting
-on it. Who is speaking is carried by the **colour of the text**, the way broadcast subtitling
-has always handled two speakers: the eye catches a change of hue in a glance, where a name
-above the line is one more thing to read on a screen you are trying not to read.
-
-The timings are free. The synthesizer already reports when it said every character
-(`buildTtsPiecesFromCharacterTimestamps`), which read-aloud uses to highlight words and the
-podcast was discarding. `buildPodcastCues` groups them into bursts of a few words — at most
-four, at most twenty-six characters — closing on a sentence end where one falls.
-
-Two rules pull against each other there, and it is worth knowing which wins. A burst should be
-small enough for the eye to take whole; it should also never be on screen too briefly to read,
-which with bursts this small is a real risk rather than a theoretical one ("In?" is a whole
-caption and a fifth of a second of audio). When they disagree the burst simply takes more words.
-Holding a short burst instead cannot work: the next one starts the instant this one stops being
-spoken, so there is no gap to borrow and holding would put two captions on screen at once.
-
-**The report is used for *when*, the script for *what*.** That distinction is not cosmetic: a
-turn opening "Danes gre za osnove…" produced a first subtitle reading "es gre za osnove…",
-because the stream omits a few leading characters from its timing report. The audio was
-complete; only the report had the hole. So `alignPodcastWords` puts the reported timings onto
-the script's own words and interpolates any word the report skipped.
-
-A turn synthesized on the REST fallback has no timings at all. It shows the whole turn rather
-than nothing — worse than a synced line, far better than a blank box.
-
 ## What the synthesizer actually performs
 
 Measured on tts-rt-v2 with the podcast voices, because the difference between a device that is

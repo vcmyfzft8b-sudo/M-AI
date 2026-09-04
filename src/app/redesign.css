@@ -13342,23 +13342,40 @@
 
 /* --- choosing a show ----------------------------------------------------- */
 
+/*
+ * One column, one width.
+ *
+ * The shows, the lengths, the voices and the button are four decisions in a row, and they read as
+ * a form only if they share an edge — so everything below the title is the same width and the
+ * spacing between them is the only thing that groups them. The screen was previously a grid, a
+ * centred pill row, a full-width pair and a centred button, which gave the eye four different
+ * left edges to track down a single column.
+ */
+.memo-podcast-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  width: 100%;
+  max-width: 30rem;
+}
+
 .memo-podcast-formats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
-  width: 100%;
-  max-width: 30rem;
 }
 
 .memo-podcast-format {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.2rem;
-  padding: 0.75rem 0.85rem;
+  gap: 0.3rem;
+  /* Even heights whatever the description runs to, so the grid is a grid and not a staircase. */
+  height: 100%;
+  padding: 0.85rem 0.9rem;
   border: 1px solid var(--line);
   border-radius: 1rem;
-  background: var(--tile);
+  background: transparent;
   color: var(--text);
   text-align: left;
   cursor: pointer;
@@ -13367,9 +13384,21 @@
     background 140ms ease;
 }
 
+/*
+ * The icon sits beside the name rather than above it. Stacked, it cost a whole row in a card
+ * whose job is to be scanned, and it pushed the description far enough from the title that the
+ * two stopped reading as one thing.
+ */
+.memo-podcast-format-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text);
+}
+
 .memo-podcast-format.active {
-  border-color: color-mix(in oklch, oklch(0.7 0.16 20) 55%, transparent);
-  background: color-mix(in oklch, oklch(0.7 0.16 20) 14%, transparent);
+  border-color: color-mix(in oklch, oklch(0.7 0.16 20) 60%, transparent);
+  background: color-mix(in oklch, oklch(0.7 0.16 20) 12%, transparent);
 }
 
 .memo-podcast-format-label {
@@ -13380,50 +13409,50 @@
 
 .memo-podcast-format-description {
   font-size: 0.78rem;
-  line-height: 1.35;
+  line-height: 1.4;
   color: var(--muted);
 }
 
-.memo-podcast-format-voices {
-  margin-top: 0.15rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--muted-2);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
+/*
+ * Three lengths, one row, equal shares. As centred pills they were three different widths in the
+ * middle of a column of full-width things, which is the sort of detail nobody names and everybody
+ * sees.
+ */
 .memo-podcast-lengths {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.4rem;
-  flex-wrap: wrap;
-  justify-content: center;
 }
 
 .memo-podcast-length {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 0.05rem;
-  min-height: 2.6rem;
-  padding: 0.35rem 0.9rem;
+  min-height: 3rem;
+  padding: 0.35rem 0.5rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--tile);
+  border-radius: 0.9rem;
+  background: transparent;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease;
 }
 
 .memo-podcast-length.active {
   color: var(--text);
-  border-color: color-mix(in oklch, oklch(0.7 0.16 20) 55%, transparent);
-  background: color-mix(in oklch, oklch(0.7 0.16 20) 14%, transparent);
+  border-color: color-mix(in oklch, oklch(0.7 0.16 20) 60%, transparent);
+  background: color-mix(in oklch, oklch(0.7 0.16 20) 12%, transparent);
 }
 
 .memo-podcast-length-minutes {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 500;
   color: var(--muted-2);
   font-variant-numeric: tabular-nums;
@@ -13439,6 +13468,11 @@
   gap: 0.4rem;
   width: 100%;
   max-width: 30rem;
+}
+
+/* Inside the setup column it is already the right width; it only needs the rhythm. */
+.memo-podcast-setup .memo-podcast-voice-picker {
+  max-width: none;
 }
 
 .memo-podcast-voice-slot {
@@ -13518,8 +13552,10 @@
 .memo-podcast-start {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
-  padding: 0.7rem 1.25rem;
+  width: 100%;
+  padding: 0.85rem 1.25rem;
   border: none;
   border-radius: 999px;
   background: var(--ink);
@@ -13664,73 +13700,15 @@
   color: var(--text);
 }
 
-/*
- * The subtitle.
- *
- * What used to be here was a scrolling transcript of the whole episode, and it was the wrong
- * object: a wall of text under a player is something to read INSTEAD of listening, and it made
- * the screen about the script rather than about the audio.
- *
- * So this is built the way film subtitles are built, and that means it is NOT a component. No
- * card, no border, no panel — a subtitle belongs to the picture, not to a box sitting on it.
- * Large, centred, high contrast, and nothing around it to look at.
- *
- * Who is speaking is carried by the colour of the text rather than by a name above it, which is
- * what broadcast subtitling has always done with two speakers: the eye picks up the change of
- * hue in a glance, where a name is another line to read on a screen you are trying not to read.
- */
-.memo-podcast-caption {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  /* Centred in the height it reserves, so a one-line cue and a two-line one sit in the same
-     place rather than the text jumping as the lines change. */
-  justify-content: center;
-  width: 100%;
-  max-width: 34rem;
-  /* Reserved rather than fitted. A burst is normally one line and occasionally two, and a box
-     that resized with each of them would make the whole screen twitch several times a sentence
-     — which is exactly what a caption must not do. */
-  min-height: 4.25rem;
-  padding: 0.5rem 0.75rem;
-  text-align: center;
-}
-
-.memo-podcast-caption-text {
-  margin: 0;
-  font-size: 1.45rem;
-  line-height: 1.32;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  /*
-   * The speaker's own hue, held near the top of the lightness range so it stays a subtitle
-   * rather than becoming decoration. Light mode takes the same hue much darker, because a
-   * subtitle's one job is to be readable against whatever is behind it.
-   */
-  color: oklch(0.38 0.09 var(--podcast-hue));
-  text-wrap: balance;
-}
-
-:root[data-theme="dark"] .memo-podcast-caption-text {
-  color: oklch(0.93 0.06 var(--podcast-hue));
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .memo-podcast-caption-text {
-    color: oklch(0.93 0.06 var(--podcast-hue));
-  }
-}
-
 @media (max-width: 640px) {
+  /* One card per row: two of these side by side on a phone leaves the description
+     three words wide, which is not a description. */
   .memo-podcast-formats {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .memo-podcast-caption {
-    min-height: 5rem;
+  .memo-podcast-format {
+    padding: 0.8rem 0.85rem;
   }
 
-  .memo-podcast-caption-text {
-    font-size: 1.3rem;
-  }
 }

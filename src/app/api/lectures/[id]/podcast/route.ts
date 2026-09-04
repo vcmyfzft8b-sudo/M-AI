@@ -9,6 +9,7 @@ import { getTtsUsageState, hasUnlimitedTtsUsage } from "@/lib/note-tts";
 import {
   getOrCreatePodcastScript,
   getPodcastRow,
+  listPodcastEpisodes,
   listReadyPodcastSegments,
   loadPodcastSource,
   PodcastGenerationPendingError,
@@ -117,6 +118,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       available: false,
       reason: "subscription_required",
       podcast: null,
+      episodes: [],
       ...usagePayload,
     });
   }
@@ -131,17 +133,21 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       available: false,
       reason: "notes_not_ready",
       podcast: null,
+      episodes: [],
       ...usagePayload,
     });
   }
 
-  const row = await getPodcastRow({
-    lectureId: id,
-    contentHash: source.contentHash,
-    format,
-    length,
-    language: source.language,
-  });
+  const [row, episodes] = await Promise.all([
+    getPodcastRow({
+      lectureId: id,
+      contentHash: source.contentHash,
+      format,
+      length,
+      language: source.language,
+    }),
+    listPodcastEpisodes({ lectureId: id, contentHash: source.contentHash }),
+  ]);
 
   if (!row) {
     return NextResponse.json({
@@ -149,6 +155,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       reason: null,
       language: source.language,
       podcast: null,
+      episodes,
       ...usagePayload,
     });
   }
@@ -180,6 +187,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       turns,
       readySegments,
     },
+    episodes,
     ...usagePayload,
   });
 }

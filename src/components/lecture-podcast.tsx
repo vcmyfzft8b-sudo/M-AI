@@ -90,11 +90,23 @@ type PodcastPayload = {
   readySegments: Array<{ segmentIndex: number; durationMs: number }>;
 };
 
+type PodcastEpisode = {
+  id: string;
+  format: PodcastFormat;
+  length: PodcastLength;
+  language: string;
+  title: string | null;
+  turnCount: number;
+  estimatedSeconds: number;
+  createdAt: string;
+};
+
 type PodcastStatus = {
   available: boolean;
   reason: string | null;
   language?: string;
   podcast: PodcastPayload | null;
+  episodes: PodcastEpisode[];
   tier: "paid" | "free";
   limitSeconds: number;
   secondsUsed: number;
@@ -173,6 +185,26 @@ export function LecturePodcast({
   const [writingStartedAt, setWritingStartedAt] = useState<number | null>(null);
   const [writingPercent, setWritingPercent] = useState(0);
   const [scriptAttempts, setScriptAttempts] = useState(0);
+  const [episodes, setEpisodes] = useState<PodcastEpisode[]>([]);
+  /*
+   * The player is never arrived at, only opened.
+   *
+   * It used to appear on its own whenever a finished episode happened to match the saved show and
+   * length — so somebody opening the tab to make a NEW episode was dropped into an old one they
+   * had not asked for, with the chooser hidden behind a button. Landing is always the setup
+   * screen now; this is set by pressing Create, or by picking an episode from the library.
+   */
+  const [openedEpisodeId, setOpenedEpisodeId] = useState<string | null>(null);
+  /*
+   * An episode picked from the library, waiting for its script to arrive before it can open.
+   *
+   * A ref rather than state, and that is the whole point: the request is fired in the same tick
+   * the choice is made, so a `loadStatus` closed over the previous render would read the previous
+   * value — null — and quietly decline to open the episode the listener just tapped.
+   */
+  const pendingEpisodeIdRef = useRef<string | null>(null);
+  /* Whether the chooser is showing instead of the library. Always true when there is no library. */
+  const [isChoosing, setIsChoosing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [limitReached, setLimitReached] = useState(false);
 
@@ -365,9 +397,24 @@ export function LecturePodcast({
 
         setStatus(payload);
         setPodcast(payload.podcast);
+        setEpisodes(payload.episodes ?? []);
 
-        if (payload.podcast?.status === "ready") {
+        /*
+         * The episode picked from the library has arrived with its script. Matching on the id
+         * rather than simply "a podcast came back" is what stops a stale response from an earlier
+         * variant opening the wrong one.
+         */
+        if (payload.podcast && payload.podcast.id === pendingEpisodeIdRef.current) {
+          setOpenedEpisodeId(payload.podcast.id);
+          pendingEpisodeIdRef.current = null;
+          setCurrentIndex(0);
+          setPositionMs(0);
+        }
+
+        if (payload.podcast?.status === "ready" && isWriting) {
+          /* This screen asked for it and has been watching the bar; it opens on arrival. */
           setIsWriting(false);
+          setOpenedEpisodeId(payload.podcast.id);
         }
 
         /*
@@ -389,7 +436,7 @@ export function LecturePodcast({
         return null;
       }
     },
-    [format, length, lectureId, t],
+    [format, length, lectureId, isWriting, t],
   );
 
   /*
@@ -410,6 +457,7 @@ export function LecturePodcast({
     setError(null);
     setLimitReached(false);
     setScriptAttempts(0);
+    setOpenedEpisodeId(null);
     void loadStatus({ silent: true });
   }, [settingsRestored, isReady, format, length, loadStatus, releaseSegments, stopPlayback]);
 
@@ -441,6 +489,7 @@ export function LecturePodcast({
       }
 
       setPodcast(payload.podcast);
+      setOpenedEpisodeId(payload.podcast.id);
       setIsWriting(false);
       setCurrentIndex(0);
       setPositionMs(0);
@@ -705,6 +754,29 @@ export function LecturePodcast({
     }
   }, [rate]);
 
+  /**
+   * Opens an episode the listener already has.
+   *
+   * The row carries only what a list needs, so the script is fetched by pointing the variant at
+   * it — the same request the screen makes anyway. `pendingEpisodeId` is what turns that arrival
+   * into an open player, and it is matched by id so a response for the previous variant, still in
+   * flight, cannot open the wrong episode.
+   */
+  function openEpisode(episode: PodcastEpisode) {
+    setError(null);
+    pendingEpisodeIdRef.current = episode.id;
+    setIsChoosing(false);
+
+    if (episode.format === format && episode.length === length) {
+      /* Already the variant on screen: nothing will change, so ask for it directly. */
+      void loadStatus({ silent: true });
+      return;
+    }
+
+    chooseFormat(episode.format);
+    chooseLength(episode.length);
+  }
+
   function chooseFormat(next: PodcastFormat) {
     setFormat(next);
     writeStored(PODCAST_FORMAT_STORAGE_KEY, next);
@@ -827,7 +899,9 @@ export function LecturePodcast({
     );
   }
 
-  const hasEpisode = Boolean(podcast && podcast.status === "ready" && turns.length > 0);
+  const hasEpisode = Boolean(
+    podcast && podcast.status === "ready" && turns.length > 0 && podcast.id === openedEpisodeId,
+  );
   const activeFormat = getPodcastFormat(format);
 
   const cover = (
@@ -1010,7 +1084,8 @@ export function LecturePodcast({
               onClick={() => {
                 stopPlayback();
                 releaseSegments();
-                setPodcast(null);
+                setOpenedEpisodeId(null);
+                setIsChoosing(true);
                 setCurrentIndex(0);
                 setPositionMs(0);
               }}
@@ -1037,8 +1112,60 @@ export function LecturePodcast({
       ) : (
         <>
           <h2 className="memo-podcast-title">{t("podcast.title")}</h2>
-          <p className="memo-podcast-subtitle">{t("podcast.intro")}</p>
+          <p className="memo-podcast-subtitle memo-podcast-intro">{t("podcast.intro")}</p>
 
+          {episodes.length > 0 && !isChoosing ? (
+            <div className="memo-podcast-setup">
+              {/*
+                * What this note already has. Shown instead of the chooser rather than above it,
+                * because both together cannot fit one screen on a phone — and because somebody
+                * who has made an episode is far more often coming back to it than making another.
+                */}
+              <div className="memo-podcast-library" role="list">
+                {episodes.map((episode) => {
+                  const shown = getPodcastFormat(episode.format);
+
+                  return (
+                    <button
+                      key={episode.id}
+                      type="button"
+                      role="listitem"
+                      className="memo-podcast-episode"
+                      onClick={() => openEpisode(episode)}
+                    >
+                      <span className="memo-podcast-episode-voices" aria-hidden="true">
+                        <span style={{ "--podcast-hue": voiceHue(voices.a) } as CSSProperties} />
+                        {shown.speakerCount === 2 ? (
+                          <span style={{ "--podcast-hue": voiceHue(voices.b) } as CSSProperties} />
+                        ) : null}
+                      </span>
+                      <span className="memo-podcast-episode-text">
+                        <span className="memo-podcast-episode-title">
+                          {episode.title ?? t("podcast.title")}
+                        </span>
+                        <span className="memo-podcast-episode-meta">
+                          {t(shown.labelKey)} ·{" "}
+                          {t("podcast.minutes", {
+                            count: Math.max(1, Math.round(episode.estimatedSeconds / 60)),
+                          })}
+                        </span>
+                      </span>
+                      <Msym name="play_arrow" size="1.3rem" fill weight={500} />
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                className="memo-podcast-secondary"
+                onClick={() => setIsChoosing(true)}
+              >
+                <Msym name="add" size="1.1rem" fill={false} weight={500} />
+                <span>{t("podcast.newEpisode")}</span>
+              </button>
+            </div>
+          ) : (
           <div className="memo-podcast-setup">
             <div className="memo-podcast-formats" role="radiogroup" aria-label={t("podcast.format.label")}>
               {PODCAST_FORMATS.map((option) => (
@@ -1088,7 +1215,19 @@ export function LecturePodcast({
               <Msym name="graphic_eq" size="1.2rem" fill={false} weight={500} />
               <span>{t("podcast.generate")}</span>
             </button>
+
+            {episodes.length > 0 ? (
+              <button
+                type="button"
+                className="memo-podcast-secondary"
+                onClick={() => setIsChoosing(false)}
+              >
+                <Msym name="arrow_back" size="1.1rem" fill={false} weight={500} />
+                <span>{t("podcast.library.back")}</span>
+              </button>
+            ) : null}
           </div>
+          )}
 
           {status && !status.hasUnlimitedUsage ? (
             <p className="memo-podcast-hint">{t("podcast.usage.note")}</p>

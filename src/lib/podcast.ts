@@ -31,6 +31,7 @@ import type { NoteTtsVoice } from "@/lib/note-tts-settings";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import { normalizePodcastTurns, parseStoredTurns } from "@/lib/podcast-script";
 import {
+  estimatedSpokenSeconds,
   getPodcastFormat,
   getPodcastLength,
   reservedSpokenSeconds,
@@ -208,6 +209,52 @@ export async function getPodcastRow(variant: PodcastVariant) {
   }
 
   return (data ?? null) as LecturePodcastRow | null;
+}
+
+/**
+ * Every finished episode this note already has.
+ *
+ * Only for the note as it stands now: the content hash is part of a variant's identity, so an
+ * episode written from an earlier draft is not an episode of this note and listing it would offer
+ * somebody a recording of text they have since changed.
+ */
+export async function listPodcastEpisodes(params: { lectureId: string; contentHash: string }) {
+  const { data, error } = await createSupabaseServiceRoleClient()
+    .from("lecture_podcasts")
+    .select("id, format, length_id, language, title, turns, created_at")
+    .eq("lecture_id", params.lectureId)
+    .eq("content_hash", params.contentHash)
+    .eq("status", "ready")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as Array<{
+    id: string;
+    format: string;
+    length_id: string;
+    language: string;
+    title: string | null;
+    turns: unknown;
+    created_at: string;
+  }>).map((row) => {
+    const turns = parseStoredTurns(row.turns);
+
+    return {
+      id: row.id,
+      format: row.format,
+      length: row.length_id,
+      language: row.language,
+      title: row.title,
+      turnCount: turns.length,
+      /* What the row knows, rather than what the length was asked for: an episode is as long as
+         it came out, and the listener is choosing between things that already exist. */
+      estimatedSeconds: turns.reduce((sum, turn) => sum + estimatedSpokenSeconds(turn.text), 0),
+      createdAt: row.created_at,
+    };
+  });
 }
 
 function isStalePodcastGeneration(row: LecturePodcastRow) {

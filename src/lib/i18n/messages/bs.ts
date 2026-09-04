@@ -1724,5 +1724,7 @@ export const bs: Messages = {
   "podcast.error.audio": "Taj dio nije bilo moguće pustiti.",
   "podcast.error.status": "Podcast nije bilo moguće učitati.",
   "podcast.limitReached": "Za danas je slušanja gotovo.",
+  "podcast.newEpisode": "Nova epizoda",
+  "podcast.library.back": "Nazad na epizode",
   "podcast.usage.note": "Slušanje se računa u dnevnu kvotu zvuka.",
 };

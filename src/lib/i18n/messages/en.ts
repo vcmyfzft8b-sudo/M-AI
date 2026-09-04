@@ -1714,5 +1714,7 @@ export const en: Messages = {
   "podcast.error.audio": "That part could not be played.",
   "podcast.error.status": "The podcast could not be loaded.",
   "podcast.limitReached": "That's your listening for today.",
+  "podcast.newEpisode": "New episode",
+  "podcast.library.back": "Back to episodes",
   "podcast.usage.note": "Listening counts towards your daily audio allowance.",
 };

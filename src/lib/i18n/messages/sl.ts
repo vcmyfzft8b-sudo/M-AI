@@ -1743,5 +1743,7 @@ export const sl = {
   "podcast.error.audio": "Tega dela ni bilo mogoče predvajati.",
   "podcast.error.status": "Podkasta ni bilo mogoče naložiti.",
   "podcast.limitReached": "Za danes je poslušanja konec.",
+  "podcast.newEpisode": "Nova epizoda",
+  "podcast.library.back": "Nazaj na epizode",
   "podcast.usage.note": "Poslušanje se šteje v dnevno kvoto zvoka.",
 };

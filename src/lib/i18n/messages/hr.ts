@@ -1724,5 +1724,7 @@ export const hr: Messages = {
   "podcast.error.audio": "Taj dio nije bilo moguće reproducirati.",
   "podcast.error.status": "Podcast nije bilo moguće učitati.",
   "podcast.limitReached": "Za danas je slušanja gotovo.",
+  "podcast.newEpisode": "Nova epizoda",
+  "podcast.library.back": "Natrag na epizode",
   "podcast.usage.note": "Slušanje se broji u dnevnu kvotu zvuka.",
 };

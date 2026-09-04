@@ -44,6 +44,45 @@ host's voice cost only that host's turns rather than a fresh generation — one
 | `src/app/api/lectures/[id]/podcast/route.ts` | `GET` what exists, `POST` to write it. |
 | `src/app/api/lectures/[id]/podcast/segments/route.ts` | `POST` one turn's audio. |
 
+## Three screens, and how you get between them
+
+The tab lands on one of two, never the third:
+
+- **Library** — the episodes this note already has, when it has any.
+- **Chooser** — the shows, lengths and voices, reached by "New episode".
+- **Player** — reached only by pressing Create or tapping an episode.
+
+The player used to appear on its own whenever a finished episode happened to match the saved
+show and length, which meant somebody opening the tab to make a new one was dropped into an
+old one with the chooser hidden behind a button. `openedEpisodeId` is what makes opening the
+player an act rather than a coincidence.
+
+Picking an episode points the variant at it and waits for the script to arrive, matching on
+id — `pendingEpisodeIdRef`. A **ref**, not state, and that is load-bearing: the request is
+fired in the same tick as the tap, so a `loadStatus` closed over the previous render would
+read the previous value (null) and quietly decline to open the episode just tapped.
+
+The library lists only episodes written from the note **as it stands now**: the content hash
+is part of a variant's identity, so an episode made from an earlier draft is not an episode of
+this note, and offering it would hand somebody a recording of text they have since changed.
+
+## It has to fit the screen
+
+Choosing a show is one decision, and a decision you have to scroll to finish is one you make
+badly. Measured with the panel and the note screen's own chrome together, across seven sizes
+from a 375x667 phone to a desktop: everything fits, bar 9px on the very smallest phone — where
+the sibling tabs on the same screen overflow by 126 to 176px.
+
+The compaction is keyed to **width**, not height. Phones are narrow whatever their length, and
+keying it to height left a tall phone with the roomy desktop sizing and an overflowing screen.
+What gives ground is only what carries no information: the artwork while a choice is being made
+(kept in the player, where it is the subject), the standfirst, a sentence of description under
+names that already say what they are, and the air between rows.
+
+One trap worth naming, since it cost an hour: **a media query adds no specificity**. The first
+version of this compaction was written next to the rules it shrinks, which put it above the base
+sizes in the file, and it did nothing at all on the phones it was written for.
+
 ## What is cached against what
 
 Two tables (`supabase/migrations/0043_lecture_podcasts.sql`).

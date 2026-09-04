@@ -170,6 +170,89 @@ test("the landmark houses stand out from the street they are on", () => {
   });
 });
 
+test("no two houses you have to remember look the same", () => {
+  const layout = buildPalaceLayout({
+    seedSource: "memorable",
+    items: Array.from({ length: 30 }, (_, index) => ({
+      id: `card-${index}`,
+      kind: "card",
+      sectionId: `s${index % 2}`,
+    })),
+    sections,
+  });
+  const landmarks = layout.houses.filter((house) => house.landmark);
+
+  assert.equal(landmarks.length, 30);
+
+  /* Colour, roof and ornament together are the description you hold on to. */
+  const descriptions = landmarks.map(
+    (house) => `${Math.round(house.hue)}:${house.roofKind}:${house.ornament}`,
+  );
+
+  assert.equal(new Set(descriptions).size, landmarks.length, "two landmarks are described alike");
+
+  /* And no two are close enough in colour to be argued about. */
+  const hues = landmarks.map((house) => house.hue).sort((left, right) => left - right);
+
+  hues.forEach((hue, index) => {
+    if (index === 0) return;
+
+    assert.ok(hue - hues[index - 1] > 4, `two landmark colours are ${hue.toFixed(1)}° apart`);
+  });
+
+  /* Consecutive stops never share a roof, so a route reads as a sequence. */
+  landmarks.forEach((house, index) => {
+    if (index === 0) return;
+
+    assert.notEqual(
+      house.roofKind,
+      landmarks[index - 1].roofKind,
+      "two landmarks in a row have the same roof",
+    );
+  });
+});
+
+test("the walk covers every section, most important cards first", () => {
+  /* Three sections of very different sizes: the big one must not crowd out the
+     others, and each section's best cards must be the ones that get in. */
+  const deck = [
+    ...Array.from({ length: 40 }, (_, index) => ({
+      id: `big-${index}`,
+      sectionId: "s1",
+      weight: index,
+    })),
+    ...Array.from({ length: 6 }, (_, index) => ({
+      id: `small-${index}`,
+      sectionId: "s2",
+      weight: index,
+    })),
+    ...Array.from({ length: 4 }, (_, index) => ({
+      id: `tiny-${index}`,
+      sectionId: "s3",
+      weight: index,
+    })),
+  ];
+  const chosen = selectPalaceItems({ cards: deck, quiz: [], test: [], limit: 12 });
+  const ids = chosen.map((item) => item.id);
+
+  assert.equal(ids.length, 12);
+  assert.ok(ids.some((id) => id.startsWith("small-")), "a whole section was left out");
+  assert.ok(ids.some((id) => id.startsWith("tiny-")), "a whole section was left out");
+
+  /* Within a section, the highest weights are the ones taken. */
+  const bigTaken = ids.filter((id) => id.startsWith("big-")).map((id) => Number(id.slice(4)));
+
+  assert.ok(
+    Math.min(...bigTaken) > 40 - bigTaken.length - 1,
+    "an unimportant card was taken over an important one",
+  );
+
+  /* And they are walked in the note's own order, not in importance order. */
+  const order = ids.map((id) => deck.findIndex((card) => card.id === id));
+
+  assert.deepEqual([...order].sort((left, right) => left - right), order);
+});
+
 test("the walk mixes cards with quiz and test questions", () => {
   const chosen = selectPalaceItems({
     cards: Array.from({ length: 60 }, (_, index) => ({ id: `c${index}`, sectionId: "s1" })),

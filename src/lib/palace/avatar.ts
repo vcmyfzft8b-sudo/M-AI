@@ -108,6 +108,12 @@ export function createAvatar(): Avatar {
   shadow.position.y = 0.05;
 
   root.add(torso, head, cap, brim, backpack, shadow);
+  /*
+   * The figure is built at about two metres and then taken down to human
+   * height: everything else in the town — a car, a door, a bench — is at its
+   * real size, and the character was quietly making all of it look like toys.
+   */
+  root.scale.setScalar(0.86);
   /* The character casts a real shadow now; the painted blob under it stays as
      the contact patch a shadow map at this distance cannot resolve. */
   root.traverse((part) => {

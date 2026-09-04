@@ -401,6 +401,28 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       });
     }
 
+    /*
+     * The path from the door to the pavement. It is what makes a front garden
+     * read as a garden rather than a lawn a house happens to sit on, and it is
+     * also the line the token on the path stands on.
+     */
+    /* Front face to pavement, near enough: the plots are laid out to leave this. */
+    const pathLength = 5.5 + body / 2;
+    const pathAt = at(body / 2 + pathLength / 2, 0);
+
+    boxes.push({
+      matrix: boxMatrix({
+        x: pathAt.x,
+        y: 0.03,
+        z: pathAt.z,
+        width: 1.9,
+        height: 0.06,
+        depth: pathLength,
+        rotation: house.facing,
+      }),
+      color: hsl(0, 0, 0.84),
+    });
+
     /* Door, its frame and a step, and a window either side on every floor. */
     const doorAt = at(body / 2 + 0.05, 0);
 
@@ -481,10 +503,39 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       }
     }
 
+    /*
+     * Windows down the sides too. You spend most of a walk seeing houses from
+     * an angle, and a blank flank is the thing that gives away a false front.
+     */
+    for (let storey = 0; storey < house.storeys; storey += 1) {
+      const y = 1.7 + storey * 3.1;
+
+      for (const side of [-1, 1]) {
+        for (const depthOffset of [-house.depth * 0.22, house.depth * 0.22]) {
+          const sideAt = at(depthOffset, (side * (house.width + 0.1)) / 2);
+
+          boxes.push({
+            matrix: boxMatrix({
+              x: sideAt.x,
+              y,
+              z: sideAt.z,
+              width: 0.1,
+              height: 1.3,
+              depth: 1.2,
+              rotation: house.facing,
+            }),
+            color: new THREE.Color(WINDOW_COLOR),
+          });
+        }
+      }
+    }
+
     const has = (feature: PalaceHouse["features"][number]) => house.features.includes(feature);
 
     if (has("chimney")) {
-      const chimney = at(-body * 0.2, house.width * 0.28);
+      /* On the ridge line, off to one side: a chimney halfway down a slope
+         reads as a mistake even at this level of detail. */
+      const chimney = at(0, house.width * 0.3);
 
       boxes.push({
         matrix: boxMatrix({
@@ -530,6 +581,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
           }),
           color: trim,
         });
+        colliders.push({ x: post.x, z: post.z, width: 0.4, depth: 0.4 });
       }
     }
 
@@ -576,6 +628,16 @@ export function buildCity(layout: PalaceLayout): CityBuild {
           rotation: house.facing,
         }),
         color: hsl(house.hue, house.saturation * 0.8, house.lightness * 0.95),
+      });
+
+      /* The garage is a building too: you go round it, not through it. */
+      const garageSideways = Math.abs(out.x) > 0.5;
+
+      colliders.push({
+        x: garage.x,
+        z: garage.z,
+        width: garageSideways ? house.depth * 0.7 : 4.4,
+        depth: garageSideways ? 4.4 : house.depth * 0.7,
       });
 
       const shutter = at(house.depth * 0.35 - 1.5, (house.width / 2 + 2.4) * (house.width > 11 ? 1 : -1));
@@ -683,6 +745,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         }),
         color: roofColor,
       });
+      colliders.push({ x: tower.x, z: tower.z, width: 3.2, depth: 3.2 });
     }
 
     if (has("flag")) {
@@ -711,41 +774,199 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       });
     }
 
-    /* Front garden: what you actually see from the pavement. */
+    /*
+     * Front garden: what you actually see from the pavement. The hedge runs
+     * along the boundary in two lengths with a gap for the gate, because it is
+     * solid — one unbroken run would wall the house's own token off from the
+     * street.
+     */
     if (has("hedge")) {
-      const hedge = at(body / 2 + 5.4, 0);
+      const gate = 3;
+      const run = Math.max(1.4, (house.width * 0.95 - gate) / 2);
+      const sideways = Math.abs(out.x) > 0.5;
+
+      for (const side of [-1, 1]) {
+        const hedge = at(body / 2 + 5, side * (gate / 2 + run / 2));
+
+        boxes.push({
+          matrix: boxMatrix({
+            x: hedge.x,
+            y: 0.6,
+            z: hedge.z,
+            width: run,
+            height: 1.2,
+            depth: 0.9,
+            rotation: house.facing,
+          }),
+          color: hsl(118, 0.4, 0.32),
+        });
+        colliders.push({
+          x: hedge.x,
+          z: hedge.z,
+          width: sideways ? 0.9 : run,
+          depth: sideways ? run : 0.9,
+        });
+      }
+    }
+
+    /*
+     * A landmark's garden ornament: the second half of its description. Between
+     * the colour, the roof and this, every house you have to remember has a
+     * sentence of its own — "the blue one with the dome and the fountain".
+     */
+    if (house.ornament) {
+      const ornamentAt = at(body / 2 + 3.4, -house.width * 0.34);
+      const stone = hsl(house.hue, 0.25, 0.78);
+      const accent = hsl(house.hue, 0.7, 0.5);
 
       boxes.push({
         matrix: boxMatrix({
-          x: hedge.x,
-          y: 0.6,
-          z: hedge.z,
-          width: house.width * 0.9,
-          height: 1.2,
-          depth: 0.9,
+          x: ornamentAt.x,
+          y: 0.28,
+          z: ornamentAt.z,
+          width: 1.9,
+          height: 0.56,
+          depth: 1.9,
           rotation: house.facing,
         }),
-        color: hsl(118, 0.4, 0.32),
+        color: stone,
       });
+      colliders.push({ x: ornamentAt.x, z: ornamentAt.z, width: 1.9, depth: 1.9 });
+
+      if (house.ornament === "obelisk") {
+        boxes.push({
+          matrix: boxMatrix({
+            x: ornamentAt.x,
+            y: 2.3,
+            z: ornamentAt.z,
+            width: 0.7,
+            height: 3.4,
+            depth: 0.7,
+            rotation: house.facing + Math.PI / 4,
+          }),
+          color: accent,
+        });
+      } else if (house.ornament === "orb") {
+        spheres.push({
+          matrix: boxMatrix({
+            x: ornamentAt.x,
+            y: 1.7,
+            z: ornamentAt.z,
+            width: 1.9,
+            height: 1.9,
+            depth: 1.9,
+          }),
+          color: accent,
+        });
+      } else if (house.ornament === "pyramid") {
+        pyramids.push({
+          matrix: boxMatrix({
+            x: ornamentAt.x,
+            y: 0.56,
+            z: ornamentAt.z,
+            width: 2,
+            height: 2.4,
+            depth: 2,
+            rotation: house.facing + Math.PI / 4,
+          }),
+          color: accent,
+        });
+      } else if (house.ornament === "arch") {
+        for (const side of [-1, 1]) {
+          const leg = at(body / 2 + 3.4, -house.width * 0.34 + side * 0.85);
+
+          boxes.push({
+            matrix: boxMatrix({
+              x: leg.x,
+              y: 1.5,
+              z: leg.z,
+              width: 0.34,
+              height: 2.4,
+              depth: 0.34,
+              rotation: house.facing,
+            }),
+            color: accent,
+          });
+        }
+
+        boxes.push({
+          matrix: boxMatrix({
+            x: ornamentAt.x,
+            y: 2.85,
+            z: ornamentAt.z,
+            width: 2.1,
+            height: 0.34,
+            depth: 0.34,
+            rotation: house.facing,
+          }),
+          color: accent,
+        });
+      } else {
+        /* A fountain: a basin with a jet standing in it. */
+        cylinders.push({
+          matrix: boxMatrix({
+            x: ornamentAt.x,
+            y: 0.75,
+            z: ornamentAt.z,
+            width: 1.5,
+            height: 0.9,
+            depth: 1.5,
+          }),
+          color: stone,
+        });
+        cylinders.push({
+          matrix: boxMatrix({
+            x: ornamentAt.x,
+            y: 1.7,
+            z: ornamentAt.z,
+            width: 0.3,
+            height: 1.4,
+            depth: 0.3,
+          }),
+          color: accent,
+        });
+      }
     }
 
     if (has("gardenTree")) {
-      const tree = at(body / 2 + 3, house.width * 0.42);
+      /* Well inside the boundary: a tree on the kerb line reads as a street
+         tree that wandered, and the garden stops looking like a garden. */
+      const tree = at(body / 2 + 2.2, house.width * 0.42);
+      const leaf = hsl(112 + (house.hue % 24), 0.45, 0.38);
 
       cylinders.push({
-        matrix: boxMatrix({ x: tree.x, y: 1.1, z: tree.z, width: 0.45, height: 2.2, depth: 0.45 }),
+        matrix: boxMatrix({ x: tree.x, y: 1, z: tree.z, width: 0.42, height: 2, depth: 0.42 }),
         color: hsl(28, 0.4, 0.32),
       });
-      cones.push({
-        matrix: boxMatrix({ x: tree.x, y: 3.6, z: tree.z, width: 3, height: 3.8, depth: 3 }),
-        color: hsl(115, 0.45, 0.38),
-      });
+
+      /* Half the gardens get a round tree rather than another conifer. */
+      if (house.storeys % 2 === 0) {
+        spheres.push({
+          matrix: boxMatrix({ x: tree.x, y: 3.4, z: tree.z, width: 3.4, height: 3.1, depth: 3.4 }),
+          color: leaf,
+        });
+      } else {
+        cones.push({
+          matrix: boxMatrix({ x: tree.x, y: 3.2, z: tree.z, width: 2.9, height: 3.6, depth: 2.9 }),
+          color: leaf,
+        });
+      }
+
+      colliders.push({ x: tree.x, z: tree.z, width: 1, depth: 1 });
     }
   };
 
   layout.houses.forEach(addHouse);
 
-  /* Street furniture and scenery. */
+  /*
+   * Street furniture and scenery. Anything with a trunk or a body gets a
+   * collider: walking through a parked car is the sort of thing that tells you
+   * a town is a backdrop rather than a place.
+   */
+  const solidProp = (x: number, z: number, width: number, depth: number) => {
+    colliders.push({ x, z, width, depth });
+  };
+
   const addProp = (prop: PalaceProp) => {
     if (prop.kind === "tree") {
       const trunk = hsl(28, 0.4, 0.32);
@@ -762,6 +983,8 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         }),
         color: trunk,
       });
+
+      solidProp(prop.x, prop.z, 1.1 * prop.scale, 1.1 * prop.scale);
 
       /* Conifers are two cones stacked; the round ones are a lumpy ball. The
          rotation the layout drew is reused as the coin toss between them. */
@@ -836,6 +1059,10 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         color: hsl(prop.hue, 0.35, 0.72),
       });
 
+      const acrossX = Math.abs(Math.cos(prop.rotation)) > 0.5;
+
+      solidProp(prop.x, prop.z, acrossX ? 4.4 : 1.9, acrossX ? 1.9 : 4.4);
+
       return;
     }
 
@@ -848,6 +1075,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         matrix: boxMatrix({ x: prop.x, y: 4.9, z: prop.z, width: 0.9, height: 0.3, depth: 0.9 }),
         color: hsl(50, 0.6, 0.72),
       });
+      solidProp(prop.x, prop.z, 0.7, 0.7);
 
       return;
     }
@@ -857,6 +1085,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         matrix: boxMatrix({ x: prop.x, y: 0.55, z: prop.z, width: 0.75, height: 1.1, depth: 0.75 }),
         color: hsl(210, 0.12, 0.36),
       });
+      solidProp(prop.x, prop.z, 0.8, 0.8);
 
       return;
     }
@@ -884,6 +1113,15 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         color: hsl(prop.hue, 0.45, 0.34),
       });
 
+      const lengthwise = Math.abs(Math.cos(prop.rotation)) > 0.5;
+
+      solidProp(
+        prop.x,
+        prop.z,
+        lengthwise ? 4.6 * prop.scale : 1.1 * prop.scale,
+        lengthwise ? 1.1 * prop.scale : 4.6 * prop.scale,
+      );
+
       return;
     }
 
@@ -907,6 +1145,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         }),
         color: wood,
       });
+      solidProp(prop.x, prop.z, length, 1);
 
       return;
     }

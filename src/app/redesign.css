@@ -13490,10 +13490,18 @@
 }
 
 .memo-palace-map canvas {
-  width: 6.2rem;
-  height: 6.2rem;
+  width: 7.6rem;
+  height: 7.6rem;
   border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 8px 20px rgba(10, 8, 20, 0.35);
+}
+
+@media (max-width: 1099px) {
+  .memo-palace-map canvas {
+    width: 6.4rem;
+    height: 6.4rem;
+  }
 }
 
 .memo-palace-hud-top {

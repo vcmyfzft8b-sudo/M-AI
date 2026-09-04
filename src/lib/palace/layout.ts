@@ -84,6 +84,15 @@ export type PalaceHouse = {
   features: HouseFeature[];
   /** True for the houses a study item waits outside. */
   landmark: boolean;
+  /**
+   * Which landmark this is, counted across the whole town. Its colour, roof and
+   * garden ornament are all derived from it, so no two houses you have to
+   * remember are alike anywhere in the town — which is the only reason "the one
+   * with the green dome" works as a memory.
+   */
+  landmarkIndex: number;
+  /** The ornament in a landmark's garden: another thing to remember it by. */
+  ornament: "obelisk" | "orb" | "pyramid" | "arch" | "fountain" | null;
   districtIndex: number;
 };
 
@@ -150,18 +159,33 @@ export type PalaceLayout = {
 const ROAD_WIDTH = 11;
 const PAVEMENT_WIDTH = 5;
 /** A city block, edge to edge, not counting the roads around it. */
-const BLOCK_SIZE = 48;
+const BLOCK_SIZE = 62;
 /** Houses per side of a block. */
 const HOUSES_PER_SIDE = 3;
-/** How far the front of a house stands back from the pavement. */
-const FRONT_GARDEN = 10;
 /**
- * More than this and a session stops being a walk and becomes a commute, so a
- * long deck is sampled rather than laid out in full.
+ * How far a house's centre sits inside the block edge. The pavement eats the
+ * outer five metres of every block, so this has to leave room for that *and* a
+ * front garden — otherwise the hedges and trees meant to be in the garden end
+ * up standing in the street, which is what makes a town look like scattered
+ * scenery rather than a place.
  */
-export const MAX_STATIONS = 40;
+const FRONT_GARDEN = 15;
+/**
+ * The most stations a town is laid out with. Enough to cover a long note
+ * properly; past it a session stops being a walk and becomes a commute.
+ */
+export const MAX_STATIONS = 60;
 
 const ROOF_KINDS: RoofKind[] = ["gable", "gable", "hip", "hip", "flat", "spire", "dome"];
+/** Cycled rather than drawn, so consecutive landmarks never share a roof. */
+const LANDMARK_ROOFS: RoofKind[] = ["spire", "dome", "hip", "gable", "flat"];
+const ORNAMENTS = ["obelisk", "orb", "pyramid", "arch", "fountain"] as const;
+/**
+ * Roughly the golden angle: successive landmarks land as far apart on the
+ * colour wheel as they can, so a town of thirty of them still has thirty
+ * tellable-apart colours rather than five families of six.
+ */
+const LANDMARK_HUE_STEP = 137.508;
 /**
  * Terracotta, slate, charcoal, moss, teal, plum. A roof drawn from the whole
  * colour wheel gives you bright green domes that read as hills; these read as
@@ -177,20 +201,32 @@ const ROOF_COLOURS: { hue: number; saturation: number; lightness: number }[] = [
 ];
 
 /**
- * The mix that goes into the town: every flashcard first, because they are what
- * a deck is mostly made of, then the quiz and the practice questions, so a walk
- * covers all three ways of being asked. Deterministic, and always the same
- * items for the same note.
+ * More than this and a session stops being a walk and becomes a commute, so a
+ * long deck is sampled rather than laid out in full.
+ */
+const SELECTION_LIMIT = MAX_STATIONS;
+
+/**
+ * What goes into the town.
+ *
+ * The point of the walk is that it covers the note, so the selection is not the
+ * first forty cards: it is every section's most important cards first, taken in
+ * turn so no section is left out, and then the quiz and practice questions, so
+ * a walk covers all three ways of being asked. A deck that fits under the limit
+ * goes in whole.
+ *
+ * "Important" is the coverage rank the study pipeline already assigns — higher
+ * is more important — so the town agrees with the deck about what matters.
  */
 export function selectPalaceItems({
   cards,
   quiz,
   test,
-  limit = MAX_STATIONS,
+  limit = SELECTION_LIMIT,
 }: {
-  cards: readonly { id: string; sectionId: string | null }[];
+  cards: readonly { id: string; sectionId: string | null; weight?: number }[];
   quiz: readonly { id: string }[];
-  test: readonly { id: string }[];
+  test: readonly { id: string; weight?: number }[];
   limit?: number;
 }): PalaceItem[] {
   /* Roughly three cards to one question, and never more questions than exist. */
@@ -198,28 +234,73 @@ export function selectPalaceItems({
   const testWanted = Math.min(test.length, Math.round(limit * 0.1));
   const cardsWanted = Math.min(cards.length, limit - quizWanted - testWanted);
 
-  const every = <Item,>(items: readonly Item[], wanted: number) => {
+  /*
+   * One queue per section, each in importance order, drained a card at a time
+   * round the sections. A note whose third section is short still gets its
+   * best cards in, and a long first section cannot crowd the others out.
+   */
+  const bySection = new Map<string, typeof cards[number][]>();
+
+  cards.forEach((card) => {
+    const key = card.sectionId ?? "";
+    const queue = bySection.get(key);
+
+    if (queue) {
+      queue.push(card);
+    } else {
+      bySection.set(key, [card]);
+    }
+  });
+
+  const queues = [...bySection.values()].map((queue) =>
+    [...queue].sort((left, right) => (right.weight ?? 0) - (left.weight ?? 0)),
+  );
+  const chosenCards: typeof cards[number][] = [];
+
+  for (let round = 0; chosenCards.length < cardsWanted; round += 1) {
+    const before = chosenCards.length;
+
+    for (const queue of queues) {
+      if (chosenCards.length >= cardsWanted) break;
+      if (round < queue.length) chosenCards.push(queue[round]);
+    }
+
+    /* Every queue is exhausted, so there is nothing left to take. */
+    if (chosenCards.length === before) break;
+  }
+
+  /* The order they are walked in follows the note, not their importance. */
+  const cardOrder = new Map(cards.map((card, index) => [card.id, index]));
+
+  chosenCards.sort(
+    (left, right) => (cardOrder.get(left.id) ?? 0) - (cardOrder.get(right.id) ?? 0),
+  );
+
+  /* Questions are spread across their set rather than taken from the front. */
+  const spread = <Item,>(items: readonly Item[], wanted: number) => {
     if (wanted >= items.length) return [...items];
 
-    /* Spread across the deck rather than taking the first N: the end of a note
-       is as worth walking as the beginning. */
     const step = items.length / wanted;
 
     return Array.from({ length: wanted }, (_, index) => items[Math.floor(index * step)]);
   };
 
+  const chosenTest = [...test]
+    .sort((left, right) => (right.weight ?? 0) - (left.weight ?? 0))
+    .slice(0, testWanted);
+
   return [
-    ...every(cards, cardsWanted).map((card) => ({
+    ...chosenCards.map((card) => ({
       id: card.id,
       kind: "card" as const,
       sectionId: card.sectionId,
     })),
-    ...every(quiz, quizWanted).map((question) => ({
+    ...spread(quiz, quizWanted).map((question) => ({
       id: question.id,
       kind: "quiz" as const,
       sectionId: null,
     })),
-    ...every(test, testWanted).map((question) => ({
+    ...chosenTest.map((question) => ({
       id: question.id,
       kind: "test" as const,
       sectionId: null,
@@ -301,7 +382,7 @@ function makeHouse({
   facing,
   hue,
   districtIndex,
-  landmark,
+  landmarkIndex = -1,
 }: {
   random: Random;
   x: number;
@@ -309,11 +390,13 @@ function makeHouse({
   facing: number;
   hue: number;
   districtIndex: number;
-  landmark: boolean;
+  /** -1 for an ordinary house; otherwise its number across the town. */
+  landmarkIndex?: number;
 }): PalaceHouse {
-  const storeys = landmark ? random.int(2, 4) : random.int(1, 3);
+  const landmark = landmarkIndex >= 0;
+  const storeys = landmark ? 2 + (landmarkIndex % 3) : random.int(1, 3);
   const roofKind = landmark
-    ? random.pick<RoofKind>(["spire", "dome", "hip", "gable"])
+    ? LANDMARK_ROOFS[landmarkIndex % LANDMARK_ROOFS.length]
     : random.pick(ROOF_KINDS);
   const features: HouseFeature[] = [];
   const maybe = (feature: HouseFeature, chance: number) => {
@@ -326,13 +409,24 @@ function makeHouse({
   maybe("garage", 0.3);
   maybe("dormer", roofKind === "gable" || roofKind === "hip" ? 0.35 : 0);
   maybe("shopfront", storeys > 1 ? 0.25 : 0.12);
-  maybe("hedge", 0.5);
-  maybe("gardenTree", 0.45);
+  maybe("hedge", 0.45);
+  maybe("gardenTree", 0.22);
 
   if (landmark) {
-    /* A landmark is meant to be describable from the far end of the street. */
+    /*
+     * A landmark is meant to be describable from the far end of the street, and
+     * describable *differently* from the last one: the features are cycled, not
+     * rolled, so the fifth house you have to remember cannot be the second one
+     * again.
+     */
     features.push("flag");
-    maybe("sideTower", 0.5);
+
+    const signature = landmarkIndex % 4;
+
+    if (signature === 0) features.push("sideTower");
+    if (signature === 1) features.push("balcony", "shopfront");
+    if (signature === 2) features.push("garage", "dormer");
+    if (signature === 3) features.push("porch", "chimney");
   }
 
   const roof = random.pick(ROOF_COLOURS);
@@ -349,7 +443,11 @@ function makeHouse({
      * in six ignores it completely, which is what stops a street reading as
      * wallpaper and gives you something to steer by.
      */
-    hue: random.chance(0.16) ? random.range(0, 360) : (hue + random.range(-55, 55) + 360) % 360,
+    hue: landmark
+      ? (landmarkIndex * LANDMARK_HUE_STEP) % 360
+      : random.chance(0.16)
+        ? random.range(0, 360)
+        : (hue + random.range(-55, 55) + 360) % 360,
     saturation: landmark ? random.range(0.5, 0.72) : random.range(0.22, 0.5),
     lightness: landmark ? random.range(0.52, 0.62) : random.range(0.58, 0.76),
     roofKind,
@@ -359,6 +457,8 @@ function makeHouse({
     storeys,
     features,
     landmark,
+    landmarkIndex,
+    ornament: landmark ? ORNAMENTS[landmarkIndex % ORNAMENTS.length] : null,
     districtIndex,
   };
 }
@@ -384,7 +484,7 @@ export function buildPalaceLayout({
    * than nine blocks, so even a five-card note is a town with corners to turn
    * rather than a single street.
    */
-  const blocksNeeded = Math.max(9, Math.ceil(stationCount / 2));
+  const blocksNeeded = Math.max(9, Math.ceil(stationCount / 3));
   const gridSize = Math.ceil(Math.sqrt(blocksNeeded));
   const pitch = BLOCK_SIZE + ROAD_WIDTH;
   const half = ((gridSize - 1) * pitch) / 2;
@@ -445,7 +545,6 @@ export function buildPalaceLayout({
             facing,
             hue,
             districtIndex,
-            landmark: false,
           });
           /* Along the facade is `width`; into the plot is `depth`. */
           const sideways = side > 1;
@@ -489,7 +588,7 @@ export function buildPalaceLayout({
         facing: plain.facing,
         hue,
         districtIndex,
-        landmark: true,
+        landmarkIndex: stations.length,
       });
 
       houses[houseIndex] = landmark;
@@ -611,7 +710,22 @@ export function buildPalaceLayout({
     });
   });
 
-  /* Street furniture along the kerbs. */
+  /*
+   * Street furniture along the kerbs, but never across somebody's front path.
+   * A lamp post growing out of a garden gate is the single thing that most
+   * gives away a town assembled by a loop rather than laid out.
+   */
+  const blocksAPath = (x: number, z: number) =>
+    houses.some((house) => {
+      const outX = Math.sin(house.facing);
+      const outZ = Math.cos(house.facing);
+      const toProp = { x: x - house.x, z: z - house.z };
+      const forward = toProp.x * outX + toProp.z * outZ;
+      const sideways = toProp.x * outZ - toProp.z * outX;
+
+      return forward > 0 && forward < house.depth / 2 + 9 && Math.abs(sideways) < 3.2;
+    });
+
   lines.forEach((line) => {
     for (let along = -bounds + 12; along < bounds - 12; along += 19) {
       if (nearJunction(along)) continue;
@@ -619,8 +733,13 @@ export function buildPalaceLayout({
       const side = random.chance(0.5) ? -1 : 1;
       const kerb = line + side * (ROAD_WIDTH / 2 + 1.8);
 
-      props.push({ kind: "lamp", x: along, z: kerb, y: 0, rotation: 0, scale: 1, hue: 0 });
-      props.push({ kind: "lamp", x: kerb, z: along, y: 0, rotation: 0, scale: 1, hue: 0 });
+      if (!blocksAPath(along, kerb)) {
+        props.push({ kind: "lamp", x: along, z: kerb, y: 0, rotation: 0, scale: 1, hue: 0 });
+      }
+
+      if (!blocksAPath(kerb, along)) {
+        props.push({ kind: "lamp", x: kerb, z: along, y: 0, rotation: 0, scale: 1, hue: 0 });
+      }
 
       if (random.chance(0.45)) {
         props.push({
@@ -646,11 +765,11 @@ export function buildPalaceLayout({
         });
       }
 
-      if (random.chance(0.3)) {
+      if (random.chance(0.3) && !blocksAPath(along + 3, kerb)) {
         props.push({ kind: "bin", x: along + 3, z: kerb, y: 0, rotation: 0, scale: 1, hue: 0 });
       }
 
-      if (random.chance(0.25)) {
+      if (random.chance(0.25) && !blocksAPath(kerb, along + 3)) {
         props.push({ kind: "bench", x: kerb, z: along + 3, y: 0, rotation: 0, scale: 1, hue: 0 });
       }
     }
@@ -658,13 +777,13 @@ export function buildPalaceLayout({
 
   /* Back gardens: the middle of every block, which no house stands on. */
   blocks.forEach((block) => {
-    const trees = random.int(2, 5);
+    const trees = random.int(1, 3);
 
     for (let index = 0; index < trees; index += 1) {
       props.push({
         kind: "tree",
-        x: block.x + random.range(-9, 9),
-        z: block.z + random.range(-9, 9),
+        x: block.x + random.range(-8, 8),
+        z: block.z + random.range(-8, 8),
         y: 0,
         rotation: random.range(0, Math.PI * 2),
         scale: random.range(0.7, 1.05),
@@ -688,9 +807,9 @@ export function buildPalaceLayout({
   /* A wood around the outside, so the edge of the world is a tree line. */
   const townEdge = Math.max(...lines.map(Math.abs));
 
-  for (let index = 0; index < 140; index += 1) {
+  for (let index = 0; index < 110; index += 1) {
     const angle = random.range(0, Math.PI * 2);
-    const distance = random.range(townEdge + 8, bounds - 2);
+    const distance = random.range(townEdge + 10, bounds - 2);
 
     props.push({
       kind: "tree",

@@ -6,11 +6,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "@/components/i18n-provider";
 import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
+import { StudyFlashcard, type StudyFlashcardExit } from "@/components/study-flashcard";
+import {
+  FLASHCARD_EXIT_ANIMATION_MS,
+  type FlashcardBucket,
+} from "@/lib/study/flashcard-drag";
+import { QUIZ_CORRECT_PAUSE_MS, quizOptionLetter, shuffleIndices } from "@/lib/study/quiz";
 import type { PalaceGame, PalaceSnapshot } from "@/lib/palace/game";
 import {
   buildPalaceLayout,
   mapArrowAngle,
-  mapExtent,
   selectPalaceItems,
   type StudyKind,
 } from "@/lib/palace/layout";
@@ -42,11 +47,13 @@ import type {
  */
 
 const COLLECTED_STORAGE_PREFIX = "memo.palace.collected.";
+/** Memo's mascot, the same file the town hangs outside its houses. */
+const MASCOT_SRC = "/memo-mascot.png";
+/** How far the minimap sees, in metres — about two blocks in every direction. */
+const MAP_RANGE = 95;
 /** The stick is dead in the middle, so a resting thumb is not a slow walk. */
 const STICK_DEADZONE = 6;
 const STICK_RADIUS = 46;
-/** How long a correct quiz answer stays on screen before the walk resumes. */
-const CORRECT_ANSWER_PAUSE = 900;
 
 function readCollected(lectureId: string) {
   try {
@@ -96,6 +103,8 @@ export function LecturePalace({
   const stickRef = useRef<{ pointerId: number; originX: number; originY: number } | null>(null);
   const lookRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const releaseTimerRef = useRef<number | null>(null);
+  const exitTimerRef = useRef<number | null>(null);
+  const exitTokenRef = useRef(0);
 
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -104,8 +113,12 @@ export function LecturePalace({
   const [nearStationId, setNearStationId] = useState<string | null>(null);
   const [isFlipped, setIsFlipped] = useState(false);
   const [quizChoice, setQuizChoice] = useState<number | null>(null);
+  /* Shuffled once when the station opens, exactly as the quiz screen does it. */
+  const [quizOrder, setQuizOrder] = useState<number[]>([]);
   const [testAnswer, setTestAnswer] = useState("");
+  const [isTestUnknown, setIsTestUnknown] = useState(false);
   const [isAnswerShown, setIsAnswerShown] = useState(false);
+  const [cardExit, setCardExit] = useState<StudyFlashcardExit | null>(null);
   const [districtIndex, setDistrictIndex] = useState(0);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [stickKnob, setStickKnob] = useState<{ x: number; y: number } | null>(null);
@@ -115,13 +128,31 @@ export function LecturePalace({
    * has to be replaced, because a lost context cannot be reopened on it.
    */
   const [canvasEpoch, setCanvasEpoch] = useState(0);
+  /* The mascot, loaded once so the map can draw the real thing on every stop. */
+  const mascotRef = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    const image = new Image();
+
+    image.src = MASCOT_SRC;
+    image.decoding = "async";
+    mascotRef.current = image;
+  }, []);
 
   const items = useMemo(
     () =>
       selectPalaceItems({
-        cards: cards.map((card) => ({ id: card.id, sectionId: card.section_id })),
+        cards: cards.map((card) => ({
+          id: card.id,
+          sectionId: card.section_id,
+          /* Higher is more important; the walk takes the important ones first. */
+          weight: card.coverage_rank,
+        })),
         quiz: quizQuestions,
-        test: practiceQuestions,
+        test: practiceQuestions.map((question) => ({
+          id: question.id,
+          weight: question.importance ?? 0,
+        })),
       }),
     [cards, practiceQuestions, quizQuestions],
   );
@@ -163,6 +194,30 @@ export function LecturePalace({
     [layout, nearStationId],
   );
 
+  /*
+   * The options are shuffled when the station opens, the way the quiz screen
+   * shuffles them when a round starts: the same question should not always have
+   * its answer at B.
+   */
+  useEffect(() => {
+    if (!station || station.kind !== "quiz") return;
+
+    const question = quizById.get(station.id);
+
+    setQuizOrder(question ? shuffleIndices(question.options.length) : []);
+  }, [quizById, station]);
+
+  /**
+   * The map, which is how you find the next one.
+   *
+   * Centred on the player and zoomed to the few streets around them, because a
+   * whole town squeezed into a circle this size is a smudge. Memo's own face
+   * marks every house that still has something waiting — the same mascot that
+   * is standing on the path outside it — so "where next" is answered by
+   * looking. Stops beyond the edge of the map are pinned to the rim in the
+   * direction they lie, so the map always has a next move in it, and the ones
+   * already done fade to a tick.
+   */
   const drawMinimap = useCallback(
     (snapshot: PalaceSnapshot, collectedIds: Set<string>) => {
       const canvas = minimapRef.current;
@@ -174,70 +229,134 @@ export function LecturePalace({
       if (!context) return;
 
       const size = canvas.width;
-      const scale = size / (mapExtent(layout) * 2);
+      const radius = size / 2;
+      const scale = radius / MAP_RANGE;
       const toCanvas = (x: number, z: number) => ({
-        x: size / 2 + x * scale,
-        y: size / 2 + z * scale,
+        x: radius + (x - snapshot.x) * scale,
+        y: radius + (z - snapshot.z) * scale,
       });
 
       context.clearRect(0, 0, size, size);
-      context.fillStyle = "rgba(18, 16, 26, 0.72)";
-      context.beginPath();
-      context.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-      context.fill();
       context.save();
+      context.beginPath();
+      context.arc(radius, radius, radius, 0, Math.PI * 2);
       context.clip();
+      context.fillStyle = "rgba(14, 12, 20, 0.82)";
+      context.fillRect(0, 0, size, size);
 
-      layout.districts.forEach((district) => {
-        const center = toCanvas(district.center.x, district.center.z);
-
-        context.fillStyle = `hsl(${district.hue} 55% 60% / 0.2)`;
-        context.beginPath();
-        context.arc(center.x, center.y, district.radius * scale, 0, Math.PI * 2);
-        context.fill();
-      });
-
-      /* The streets, so the map reads as a town rather than a constellation. */
-      context.strokeStyle = "rgba(255, 255, 255, 0.16)";
-      context.lineWidth = 1.4;
+      /* The streets, at their real width: the grid is what you navigate by. */
+      context.strokeStyle = "rgba(255, 255, 255, 0.2)";
+      context.lineWidth = Math.max(2, 11 * scale);
       layout.roads.forEach((road) => {
-        const from = toCanvas(road.x - road.width / 2, road.z - road.depth / 2);
-        const to = toCanvas(road.x + road.width / 2, road.z + road.depth / 2);
+        const horizontal = road.width > road.depth;
+        const line = toCanvas(road.x, road.z);
+
+        if (horizontal ? line.y < -20 || line.y > size + 20 : line.x < -20 || line.x > size + 20) {
+          return;
+        }
 
         context.beginPath();
-        context.moveTo((from.x + to.x) / 2, from.y);
-        context.lineTo((from.x + to.x) / 2, to.y);
-        context.moveTo(from.x, (from.y + to.y) / 2);
-        context.lineTo(to.x, (from.y + to.y) / 2);
+
+        if (horizontal) {
+          context.moveTo(0, line.y);
+          context.lineTo(size, line.y);
+        } else {
+          context.moveTo(line.x, 0);
+          context.lineTo(line.x, size);
+        }
+
         context.stroke();
       });
 
-      layout.stations.forEach((entry) => {
-        const point = toCanvas(entry.x, entry.z);
-        const isCollected = collectedIds.has(entry.id);
+      const mascot = mascotRef.current;
+      const icon = 20;
+      let nearest: { distance: number; point: { x: number; y: number } } | null = null;
 
-        context.fillStyle = isCollected
-          ? "rgba(255, 255, 255, 0.28)"
-          : `hsl(${entry.hue} 85% 62%)`;
+      layout.stations.forEach((entry) => {
+        const distance = Math.hypot(entry.x - snapshot.x, entry.z - snapshot.z);
+        const done = collectedIds.has(entry.id);
+        const point = toCanvas(entry.x, entry.z);
+
+        if (!done && (!nearest || distance < nearest.distance)) {
+          nearest = { distance, point };
+        }
+
+        if (distance > MAP_RANGE) {
+          if (done) return;
+
+          /* Off the edge: pinned to the rim, pointing the way to walk. */
+          const angle = Math.atan2(entry.z - snapshot.z, entry.x - snapshot.x);
+          const pinned = {
+            x: radius + Math.cos(angle) * (radius - 9),
+            y: radius + Math.sin(angle) * (radius - 9),
+          };
+
+          context.save();
+          context.translate(pinned.x, pinned.y);
+          context.rotate(angle);
+          context.fillStyle = `hsl(${entry.hue} 85% 65%)`;
+          context.beginPath();
+          context.moveTo(6, 0);
+          context.lineTo(-4, 4.5);
+          context.lineTo(-4, -4.5);
+          context.closePath();
+          context.fill();
+          context.restore();
+
+          return;
+        }
+
+        if (done) {
+          context.strokeStyle = `hsl(${entry.hue} 55% 72% / 0.7)`;
+          context.lineWidth = 2;
+          context.beginPath();
+          context.moveTo(point.x - 3.4, point.y);
+          context.lineTo(point.x - 0.6, point.y + 3);
+          context.lineTo(point.x + 3.6, point.y - 3.2);
+          context.stroke();
+
+          return;
+        }
+
+        /* A disc in the neighbourhood's colour behind the face, so a pale
+           mascot still reads against a dark map at this size. */
+        context.fillStyle = `hsl(${entry.hue} 80% 62%)`;
         context.beginPath();
-        context.arc(point.x, point.y, isCollected ? 2 : 3.1, 0, Math.PI * 2);
+        context.arc(point.x, point.y, icon / 2, 0, Math.PI * 2);
         context.fill();
+
+        if (mascot?.complete && mascot.naturalWidth > 0) {
+          context.drawImage(mascot, point.x - icon / 2, point.y - icon / 2, icon, icon);
+        }
       });
 
-      /* The player is an arrow, because a dot cannot tell you which way you face. */
-      const player = toCanvas(snapshot.x, snapshot.z);
+      if (nearest) {
+        const target = nearest as { distance: number; point: { x: number; y: number } };
 
+        if (target.distance <= MAP_RANGE) {
+          context.strokeStyle = "rgba(255, 255, 255, 0.8)";
+          context.lineWidth = 1.8;
+          context.beginPath();
+          context.arc(target.point.x, target.point.y, icon / 2 + 4, 0, Math.PI * 2);
+          context.stroke();
+        }
+      }
+
+      /* The player sits at the middle of their own map, facing up the screen. */
       context.save();
-      context.translate(player.x, player.y);
+      context.translate(radius, radius);
       context.rotate(mapArrowAngle(snapshot.facing));
       context.fillStyle = "#ffffff";
+      context.strokeStyle = "rgba(14, 12, 20, 0.9)";
+      context.lineWidth = 1.6;
       context.beginPath();
-      context.moveTo(0, -6);
-      context.lineTo(4.6, 5);
-      context.lineTo(0, 2.4);
-      context.lineTo(-4.6, 5);
+      context.moveTo(0, -8);
+      context.lineTo(6, 6.4);
+      context.lineTo(0, 3);
+      context.lineTo(-6, 6.4);
       context.closePath();
       context.fill();
+      context.stroke();
       context.restore();
       context.restore();
     },
@@ -320,6 +439,7 @@ export function LecturePalace({
   useEffect(
     () => () => {
       if (releaseTimerRef.current) window.clearTimeout(releaseTimerRef.current);
+      if (exitTimerRef.current) window.clearTimeout(exitTimerRef.current);
     },
     [],
   );
@@ -395,13 +515,48 @@ export function LecturePalace({
    * request must not stop the walk, and the next grade carries the card again.
    */
   const gradeCard = useCallback(
-    async (cardId: string, confidenceBucket: "again" | "good") => {
-      if (confidenceBucket === "good") {
+    async (
+      cardId: string,
+      confidenceBucket: FlashcardBucket,
+      exitStart?: { xPercent: number; yPercent: number; rotationDeg: number },
+    ) => {
+      if (confidenceBucket === "easy") {
         collect(cardId);
       }
 
+      /*
+       * The card flies off the way it does on the deck screen — same animation,
+       * same length — and the walk resumes as it goes rather than after it.
+       */
+      exitTokenRef.current += 1;
+
+      const token = exitTokenRef.current;
+
+      setCardExit({
+        bucket: confidenceBucket,
+        flipped: isFlipped,
+        token,
+        startXPercent: exitStart?.xPercent ?? 0,
+        startYPercent: exitStart?.yPercent ?? 0,
+        startRotationDeg: exitStart?.rotationDeg ?? 0,
+      });
+
+      if (exitTimerRef.current) {
+        window.clearTimeout(exitTimerRef.current);
+      }
+
+      exitTimerRef.current = window.setTimeout(() => {
+        setCardExit((current) => (current?.token === token ? null : current));
+        exitTimerRef.current = null;
+      }, FLASHCARD_EXIT_ANIMATION_MS);
+
       leaveStation();
 
+      /*
+       * The same record the deck screen writes, with the same buckets. Fire and
+       * forget on purpose: a dropped request must not stop the walk, and the
+       * next grade carries the card again.
+       */
       try {
         await fetch(`/api/flashcards/${cardId}/progress`, {
           method: "POST",
@@ -412,7 +567,7 @@ export function LecturePalace({
         /* Offline in a lecture hall is the normal case, not an error to raise. */
       }
     },
-    [collect, leaveStation],
+    [collect, isFlipped, leaveStation],
   );
 
   const answerQuiz = useCallback(
@@ -421,9 +576,9 @@ export function LecturePalace({
 
       if (optionIndex !== correctIndex) return;
 
-      /* Right: let the green land before the walk starts again. */
+      /* Right: let the green land for the same beat the quiz screen gives it. */
       collect(questionId);
-      releaseTimerRef.current = window.setTimeout(leaveStation, CORRECT_ANSWER_PAUSE);
+      releaseTimerRef.current = window.setTimeout(leaveStation, QUIZ_CORRECT_PAUSE_MS);
     },
     [collect, leaveStation],
   );
@@ -536,34 +691,23 @@ export function LecturePalace({
 
       return (
         <>
-          <div className="lecture-flashcard-stage">
-            <div className="lecture-flashcard-stage-card">
-              <button
-                type="button"
-                className={`lecture-flashcard ${isFlipped ? "flipped" : ""}`}
-                onClick={() => setIsFlipped((current) => !current)}
-              >
-                <div className="lecture-flashcard-rotator">
-                  <div className="lecture-flashcard-face lecture-flashcard-face-front">
-                    <div className="lecture-flashcard-face-header" />
-                    <p className="lecture-flashcard-content">{card.front}</p>
-                    <span className="lecture-flashcard-side-label">{flipHint}</span>
-                  </div>
-                  <div className="lecture-flashcard-face lecture-flashcard-face-answer">
-                    <div className="lecture-flashcard-face-header" />
-                    <p className="lecture-flashcard-content">{card.back}</p>
-                    <span className="lecture-flashcard-side-label">{flipHint}</span>
-                  </div>
-                </div>
-              </button>
-            </div>
-          </div>
+          <StudyFlashcard
+            key={card.id}
+            front={card.front}
+            back={card.back}
+            flipped={isFlipped}
+            onFlip={() => setIsFlipped((current) => !current)}
+            onGrade={(bucket, exitStart) => void gradeCard(card.id, bucket, exitStart)}
+            flipHint={flipHint}
+            exit={cardExit}
+          />
 
           <div className="lecture-flashcard-toolbar">
             <div className="lecture-flashcard-review">
               <button
                 type="button"
                 className="lecture-flashcard-review-button again"
+                aria-label={t("palace.notYet")}
                 onClick={() => void gradeCard(card.id, "again")}
               >
                 <X aria-hidden="true" />
@@ -572,7 +716,8 @@ export function LecturePalace({
               <button
                 type="button"
                 className="lecture-flashcard-review-button easy"
-                onClick={() => void gradeCard(card.id, "good")}
+                aria-label={t("palace.gotIt")}
+                onClick={() => void gradeCard(card.id, "easy")}
               >
                 <span>{t("palace.gotIt")}</span>
                 <Check aria-hidden="true" />
@@ -589,6 +734,10 @@ export function LecturePalace({
       if (!question) return null;
 
       const wrong = quizChoice !== null && quizChoice !== question.correct_option_idx;
+      const order =
+        quizOrder.length === question.options.length
+          ? quizOrder
+          : question.options.map((_, index) => index);
 
       return (
         <div className="lecture-quiz-card">
@@ -596,7 +745,8 @@ export function LecturePalace({
           <p className="lecture-quiz-prompt">{question.prompt}</p>
 
           <div className="lecture-quiz-options">
-            {question.options.map((option, optionIndex) => {
+            {order.map((optionIndex, displayIndex) => {
+              const option = question.options[optionIndex] ?? "";
               const isSelected = quizChoice === optionIndex;
               const isCorrect = quizChoice !== null && optionIndex === question.correct_option_idx;
               const isIncorrect = quizChoice !== null && isSelected && !isCorrect;
@@ -612,7 +762,7 @@ export function LecturePalace({
                   } ${isIncorrect ? "incorrect" : ""}`}
                 >
                   <span className="lecture-quiz-option-label">
-                    {String.fromCharCode(65 + optionIndex)}
+                    {String.fromCharCode(65 + displayIndex)}
                   </span>
                   <span className="lecture-quiz-option-copy">{option}</span>
                   {isCorrect || isIncorrect ? (
@@ -634,7 +784,7 @@ export function LecturePalace({
                 <span className="memo-quiz-result-title">{t("quiz.wrongTitle")}</span>
                 <span>
                   {t("quiz.correctAnswerIs", {
-                    letter: String.fromCharCode(65 + question.correct_option_idx),
+                    letter: quizOptionLetter(order, question.correct_option_idx),
                   })}
                 </span>
               </span>
@@ -659,9 +809,21 @@ export function LecturePalace({
         <textarea
           value={testAnswer}
           onChange={(event) => setTestAnswer(event.target.value)}
+          disabled={isTestUnknown}
           className="ios-textarea lecture-practice-textarea"
           placeholder={t("test.answerPlaceholder")}
         />
+
+        <div className="lecture-practice-controls">
+          <label className="lecture-practice-unknown">
+            <input
+              type="checkbox"
+              checked={isTestUnknown}
+              onChange={(event) => setIsTestUnknown(event.target.checked)}
+            />
+            {t("test.dontKnow")}
+          </label>
+        </div>
 
         {isAnswerShown ? (
           <div className="memo-palace-model">
@@ -794,7 +956,7 @@ export function LecturePalace({
               onClick={() => setIsMapOpen(true)}
               aria-label={t("palace.map")}
             >
-              <canvas ref={minimapRef} width={170} height={170} />
+              <canvas ref={minimapRef} width={220} height={220} />
             </button>
 
             <div className="memo-palace-hud-top">

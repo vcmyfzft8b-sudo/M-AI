@@ -5,6 +5,13 @@ import { createHash } from "node:crypto";
 import { SonioxNodeClient } from "@soniox/node";
 
 import { generateStructuredObject } from "@/lib/ai/json";
+import { repairPassage } from "@/lib/ai/language-check";
+import { shouldCheckLanguage } from "@/lib/ai/language-repair";
+import {
+  isLanguageCheckEnabled,
+  resolveStageModelConfig,
+  writerNeedsLanguageCheck,
+} from "@/lib/ai/model-config";
 import {
   buildPodcastScriptInstructions,
   podcastScriptSchema,
@@ -29,7 +36,7 @@ import {
 import { synthesizeTtsChunkWithTimestamps } from "@/lib/note-tts-synthesis";
 import type { NoteTtsVoice } from "@/lib/note-tts-settings";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
-import { normalizePodcastTurns, parseStoredTurns } from "@/lib/podcast-script";
+import { keepsSourceTerms, normalizePodcastTurns, parseStoredTurns } from "@/lib/podcast-script";
 import {
   estimatedSpokenSeconds,
   getPodcastFormat,
@@ -39,6 +46,7 @@ import {
   type PodcastFormat,
   type PodcastLength,
   type PodcastSpeaker,
+  type PodcastTurn,
 } from "@/lib/podcast-settings";
 import { isMissingLectureReferenceError } from "@/lib/postgres-errors";
 import { getServerEnv, requireSonioxEnv } from "@/lib/server-env";
@@ -386,6 +394,89 @@ async function claimPodcastRow(variant: PodcastVariant) {
     : { row: existing, claimed: false };
 }
 
+/*
+ * How many turns are proofread at once.
+ *
+ * The tutor repairs unit by unit as it speaks, because it has no choice — the learner is
+ * waiting and the next sentence has not been written yet. An episode is written in full before
+ * a word of it is played, so the whole script can go through at once, and the only reason not
+ * to send all twenty turns together is the gateway: a burst that size gets rate-limited, and a
+ * repair that fails is a repair that silently does not happen.
+ */
+const PODCAST_REPAIR_CONCURRENCY = 5;
+
+/**
+ * The proofreading pass, armed by the writer rather than by a flag — the tutor's own rule.
+ *
+ * The check exists for one measured defect: GLM writes 0.55-1.06 errors per 100 words of spoken
+ * Slovenian, including words that do not exist, which the synthesizer then pronounces. The tutor
+ * does NOT run this in production, and that is not an oversight — its writer was switched to a
+ * Gemini on 2026-09-04 precisely because it sits at 0.26-0.39 unaided, and the checker's ~950ms
+ * in front of every turn was most of what the switch was for. `writerNeedsLanguageCheck` is what
+ * turns the net back on if GLM ever writes turns again.
+ *
+ * The podcast is the one place GLM still writes spoken words, so here the same gate resolves the
+ * other way and the check runs. Unlike the tutor it costs nothing a listener can feel: that call
+ * sits between a learner and the first sound, whereas this one runs once while the progress bar
+ * is already up, and the corrected text is what gets stored. Every later listen, and every
+ * re-voicing, reads the repaired script.
+ *
+ * `repairPassage` decides for itself whether a passage is worth checking (English is skipped,
+ * and so is anything too short to judge) and returns null for every way it can fail, which means
+ * "keep what you had". The sound-effect tags survive by construction: a correction whose bracket
+ * set differs from the original's is refused outright, so the laugh the writer put in cannot be
+ * proofread away.
+ */
+async function proofreadTurns(params: {
+  turns: PodcastTurn[];
+  language: string;
+  lectureId: string;
+  /** The lecture's own words, which outrank the checker's opinion of them. */
+  material: string;
+  /** Who wrote the script. A Gemini needs no checking; GLM does. */
+  writer: string;
+}): Promise<PodcastTurn[]> {
+  if (
+    !isLanguageCheckEnabled() ||
+    !writerNeedsLanguageCheck(params.writer) ||
+    !shouldCheckLanguage(params.language)
+  ) {
+    return params.turns;
+  }
+
+  const repaired = [...params.turns];
+
+  for (let start = 0; start < repaired.length; start += PODCAST_REPAIR_CONCURRENCY) {
+    const slice = repaired.slice(start, start + PODCAST_REPAIR_CONCURRENCY);
+
+    await Promise.all(
+      slice.map(async (turn, offset) => {
+        const index = start + offset;
+
+        /*
+         * What came before, as context only. The original rather than the repaired text: the
+         * batch above may still be running, and a checker is given the least it can do the job
+         * with — see buildLanguageRepairInput, where handing it more made three edits worse.
+         */
+        const preceding = index > 0 ? params.turns[index - 1].text : "";
+        const corrected = await repairPassage({
+          text: turn.text,
+          preceding,
+          language: params.language,
+          spoken: true,
+          usageContext: { lectureId: params.lectureId },
+        });
+
+        if (corrected && keepsSourceTerms(turn.text, corrected, params.material)) {
+          repaired[index] = { ...turn, text: corrected };
+        }
+      }),
+    );
+  }
+
+  return repaired;
+}
+
 async function writePodcastScript(params: {
   row: LecturePodcastRow;
   source: PodcastSource;
@@ -436,9 +527,16 @@ async function writePodcastScript(params: {
     throw error;
   }
 
-  const turns = normalizePodcastTurns({
-    turns: script.turns,
-    speakerCount: format.speakerCount,
+  const turns = await proofreadTurns({
+    turns: normalizePodcastTurns({ turns: script.turns, speakerCount: format.speakerCount }),
+    language: params.source.language,
+    lectureId: params.row.lecture_id,
+    material: `${params.source.title}\n${params.source.summary ?? ""}\n${params.source.notes}`,
+    writer: resolveStageModelConfig({
+      stage: "podcast_script",
+      env: process.env,
+      fallbackModel: getServerEnv().GEMINI_TEXT_MODEL,
+    }).model,
   });
 
   if (turns.length === 0) {

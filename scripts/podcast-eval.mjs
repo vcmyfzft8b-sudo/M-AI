@@ -32,6 +32,14 @@ import {
 } from "../src/lib/ai/podcast-prompt.ts";
 import { normalizePodcastTurns } from "../src/lib/podcast-script.ts";
 import {
+  acceptCorrection,
+  buildLanguageRepairInput,
+  buildLanguageRepairInstructions,
+  languageRepairSchema,
+  reattachPadding,
+  shouldCheckLanguage,
+} from "../src/lib/ai/language-repair.ts";
+import {
   DEFAULT_PODCAST_VOICES,
   getPodcastFormat,
   voiceGender,
@@ -39,7 +47,11 @@ import {
   PODCAST_MAX_TURN_WORDS,
   PODCAST_MIN_TURN_WORDS,
 } from "../src/lib/podcast-settings.ts";
-import { resolveStageModelConfig } from "../src/lib/ai/model-config.ts";
+import {
+  LANGUAGE_CHECK_MODEL,
+  resolveStageModelConfig,
+  writerNeedsLanguageCheck,
+} from "../src/lib/ai/model-config.ts";
 
 const { default: WebSocket } = await import("ws");
 
@@ -280,17 +292,137 @@ const { parsed: script, usage, totalMs } = await generate({
   maxOutputTokens: Math.round(length.targetWords * 3 * 2.5),
 });
 
-const turns = normalizePodcastTurns({ turns: script.turns, speakerCount: format.speakerCount });
-const transcript = turns.map((turn) => turn.text).join("\n");
-const totalWords = countWords(transcript);
+const written = normalizePodcastTurns({ turns: script.turns, speakerCount: format.speakerCount });
 
 console.log(`SCRIPT  ${(totalMs / 1000).toFixed(1)}s — "${script.title}"`);
 console.log(
-  `   ${script.turns.length} turns written, ${turns.length} after normalising; ${totalWords} words (asked for ~${length.targetWords})`,
+  `   ${script.turns.length} turns written, ${written.length} after normalising; ${countWords(
+    written.map((turn) => turn.text).join("\n"),
+  )} words (asked for ~${length.targetWords})`,
 );
 console.log(
   `   tokens: ${usage?.prompt_tokens ?? "?"} in, ${usage?.completion_tokens ?? "?"} out\n`,
 );
+
+/* --- the proofreading pass, which is what the route actually stores ------- */
+
+/**
+ * The same second-model check `proofreadTurns` runs in src/lib/podcast.ts, on the same model,
+ * with the same prompt and the same acceptance guard.
+ *
+ * It is here because grading the writer's raw output stopped being the right measurement the
+ * moment the route stopped storing it. The writer's Slovenian is wrong about once every hundred
+ * and thirty words; what a listener hears is whatever survives this.
+ */
+async function proofread(turnList) {
+  if (!shouldCheckLanguage(fixture.language)) {
+    console.log(`PROOFREAD  skipped — ${fixture.language} is not checked\n`);
+    return { turns: turnList, repairs: [] };
+  }
+
+  const started = Date.now();
+  const repaired = [...turnList];
+  const repairs = [];
+
+  for (let start = 0; start < repaired.length; start += 5) {
+    await Promise.all(
+      repaired.slice(start, start + 5).map(async (turn, offset) => {
+        const index = start + offset;
+
+        try {
+          const { parsed } = await generate({
+            schema: languageRepairSchema,
+            instructions: buildLanguageRepairInstructions(fixture.language, { spoken: true }),
+            input: buildLanguageRepairInput({
+              text: turn.text,
+              preceding: index > 0 ? turnList[index - 1].text : "",
+            }),
+            model: LANGUAGE_CHECK_MODEL,
+            maxOutputTokens: Math.min(8_000, Math.max(512, Math.ceil(turn.text.length / 2) + 256)),
+          });
+
+          if (acceptCorrection(turn.text, parsed.corrected, { markdown: false })) {
+            const corrected = reattachPadding(turn.text, parsed.corrected);
+
+            if (corrected !== turn.text) {
+              repaired[index] = { ...turn, text: corrected };
+              repairs.push({ index, before: turn.text, after: corrected });
+            }
+          }
+        } catch (error) {
+          // A repair is optional by construction: the written text stands.
+          repairs.push({ index, failed: error instanceof Error ? error.message : String(error) });
+        }
+      }),
+    );
+  }
+
+  const changed = repairs.filter((repair) => !repair.failed);
+  /*
+   * The check is ALWAYS run here and only sometimes applied, which is the difference between a
+   * harness and a route. Production arms it by the writer — a Gemini needs no checking, GLM does
+   * — but the number of things it finds is the cleanest error-rate proxy there is for comparing
+   * one writer against another, and that comparison is the reason this stage's model is chosen.
+   */
+  const applied = writerNeedsLanguageCheck(config.model);
+
+  console.log(
+    `PROOFREAD  ${((Date.now() - started) / 1000).toFixed(1)}s on ${LANGUAGE_CHECK_MODEL} — ${
+      changed.length
+    } of ${turnList.length} turns repaired${applied ? "" : " (found, NOT applied: a Gemini writes this stage)"}`,
+  );
+
+  for (const repair of changed) {
+    console.log(`   [${repair.index}] ${diffWords(repair.before, repair.after)}`);
+  }
+
+  const failed = repairs.filter((repair) => repair.failed).length;
+
+  if (failed) {
+    console.log(`   ${failed} check(s) failed and left the written text standing`);
+  }
+
+  console.log("");
+
+  return { turns: applied ? repaired : turnList, repairs: changed };
+}
+
+/**
+ * The span that actually changed, so a repair can be judged rather than counted.
+ *
+ * Trimmed from both ends rather than compared word by word: a repair that splits one welded
+ * word into two shifts every word after it, and a positional diff then reports the whole rest
+ * of the turn as changed. That version printed "kotstopnje → kot; od → stopnje" and made a
+ * correct fix look like four wrong ones.
+ */
+function diffWords(before, after) {
+  const a = before.split(/\s+/);
+  const b = after.split(/\s+/);
+  let head = 0;
+
+  while (head < a.length && head < b.length && a[head] === b[head]) {
+    head += 1;
+  }
+
+  let tail = 0;
+
+  while (
+    tail < a.length - head &&
+    tail < b.length - head &&
+    a[a.length - 1 - tail] === b[b.length - 1 - tail]
+  ) {
+    tail += 1;
+  }
+
+  const from = a.slice(head, a.length - tail).join(" ");
+  const to = b.slice(head, b.length - tail).join(" ");
+
+  return from || to ? `${from || "—"} → ${to || "—"}` : "(whitespace only)";
+}
+
+const { turns } = await proofread(written);
+const transcript = turns.map((turn) => turn.text).join("\n");
+const totalWords = countWords(transcript);
 
 /* --- is it speakable? ---------------------------------------------------- */
 

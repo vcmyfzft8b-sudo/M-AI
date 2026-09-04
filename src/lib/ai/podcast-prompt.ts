@@ -76,6 +76,7 @@ const SPOKEN_FORM = [
  *   … (ellipsis)       +0.77s   nothing — a real pause, no words
  *   — (em dash)        +0.70s   nothing — a real pause, no words
  *   [laughs]           +1.46s   "Hehe," — an actual laugh
+ *   [coughs]              —     an actual cough (measured on the tutor's voices, not these)
  *   [clears throat]    +1.37s   "Hm," — an actual sound
  *   [sighs]            +0.70s   nothing audible as words; an audible breath
  *   [breathes]         +0.53s   nothing audible as words
@@ -97,9 +98,17 @@ const CONVERSATION = [
 ].join(" ");
 
 const AUDIO_TAGS = [
-  "You may write these square-bracket tags. Every one is performed as a real sound or a real change of delivery, and NONE of the bracket text is ever spoken aloud: [laughs], [sighs], [clears throat], [breathes], [whispers], [pause].",
-  "Use them freely — this is a conversation between two people enjoying themselves, and a script with one tag in ten minutes sounds like a machine reading. Several per turn is fine where several are earned.",
-  "What each is for: [laughs] where something is genuinely funny, or at your own expense, or at how badly a thing is usually explained. [sighs] before admitting something is genuinely fiddly. [clears throat] on a change of direction. [breathes] before a hard question. [whispers] for the aside that is really the exam question. [pause] where the silence itself is the point.",
+  "You may write these square-bracket tags. Every one is performed as a real sound or a real change of delivery, and NONE of the bracket text is ever spoken aloud: [laughs], [sighs], [coughs], [clears throat], [breathes], [whispers], [pause].",
+  /*
+   * A count, not an encouragement.
+   *
+   * "Use them freely" was the rule for four measured runs and produced one tag in twenty-three
+   * turns — six minutes of two people who never once breathed. This prompt has shown over and
+   * over that it obeys a number and ignores an adjective, so the number is given, with the
+   * thing it is protecting against attached to it.
+   */
+  "Roughly every other turn carries one, and no stretch of four turns goes by without any. Two in a turn is fine where two are earned. A ten-minute episode with a handful of tags in it is not restraint, it is a machine reading a page — the sounds are most of what makes this sound like two people rather than two files.",
+  "What each is for: [laughs] where something is genuinely funny, or at your own expense, or at how badly a thing is usually explained. [sighs] before admitting something is genuinely fiddly. [coughs] sparingly — a person clears their throat far more often than they cough. [clears throat] on a change of direction. [breathes] before a hard question, or before the answer to one. [whispers] for the aside that is really the exam question. [pause] where the silence itself is the point.",
   "The one rule is that each has to be earned by something that just happened. Never two of the same in a row, never one where nothing has changed, and never one mid-sentence where it breaks the thread — they belong at the seams, between one thought and the next.",
   "Write nothing else in square brackets.",
 ].join(" ");
@@ -312,6 +321,21 @@ export function buildPodcastScriptInstructions(params: {
      * fresh generation.
      */
     "The hosts have no names and never address each other by name, and neither of them names the show, the channel or the app.",
+    /*
+     * Read last, because these are the rules that quietly stop happening once a script gets
+     * long. The spoken tutor has the same block for the same reason and it was measured to
+     * work there; this prompt now carries as many rules as that one, and the failure showed up
+     * in the shape the tutor's did — a run where a host said "kot si rekel" to a woman twice,
+     * with the cast rules sitting perfectly correct nine sections earlier.
+     */
+    [
+      "## Before you answer, check",
+      "- Is the whole episode in the `language` given, with no drift into English or Slovenian?",
+      "- Does every gendered verb, participle and adjective agree with the host it is about — their own with their own gender, and the other's with the other's?",
+      "- Would every line sound right said out loud, with no markdown, no symbols and no formulas in it?",
+      "- Does every turn carry something real from the material, and does none of it claim more than the material says?",
+      "- Do the sound tags appear about every other turn, and has each one been earned?",
+    ].join("\n"),
   ].join("\n\n");
 }
 
@@ -325,7 +349,10 @@ const podcastTurnSchema = z.object({
     .describe(
       "Exactly what this host says out loud, in the material's language. Plain spoken words " +
         "only — no speaker label, no markdown, no symbols, no formulas. Carry something real " +
-        "from the material in every turn.",
+        "from the material in every turn. Where this turn has earned one, include a " +
+        "square-bracket sound — [laughs], [sighs], [coughs], [clears throat], [breathes], " +
+        "[whispers], [pause] — which is performed rather than read; about every other turn has " +
+        "one.",
     ),
 });
 

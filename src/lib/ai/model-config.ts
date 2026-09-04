@@ -253,6 +253,27 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
    * decide the running order of the whole episode and then write it — the same kind of work as
    * the outline, where thinking is the one place in this pipeline it measurably paid.
    */
+  /*
+   * Why this stage did NOT follow the tutor onto a Gemini.
+   *
+   * The tutor's answer to GLM's Slovenian was to change the writer, not to check it — see
+   * writerNeedsLanguageCheck. Tried here on 2026-09-04 with gemini-3.5-flash-lite writing the
+   * script, twice, against GLM's four runs on the same fixture:
+   *
+   *   writer                  recall        words (asked 920)
+   *   glm-5.3-flash           23/23 x4      670-790
+   *   gemini-3.5-flash-lite   20/23, 18/23  441, 504
+   *
+   * It is not close, and the reason is structural rather than a matter of quality. The tutor's
+   * writer is handed a plan, a topic and its points, so the hard part — carrying the lecture —
+   * has already been done by GLM upstream. This one is handed sixty thousand characters and has
+   * to hold the whole thing in a single call, which is the exact job GLM was picked for. Half an
+   * episode in better Slovenian is a worse episode.
+   *
+   * So the writer stays, and the defect it comes with is caught by the proofreading pass in
+   * podcast.ts instead — which the tutor cannot afford, because there the check sits between a
+   * learner and the first sound, and here it runs once behind a progress bar.
+   */
   podcast_script: { thinkingLevel: "medium", outputHeadroom: 2.5, defaultModel: GLM_TEXT_MODEL },
   /*
    * Repairing the language of text another model has already written — one passage of a note,

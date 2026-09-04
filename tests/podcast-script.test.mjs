@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  keepsSourceTerms,
   normalizePodcastTurns,
   parseStoredTurns,
   toSpokenTurnText,
@@ -302,4 +303,54 @@ test("a script is keyed on the cast's genders, not on which voices they are", ()
     podcastCastKey({ voices: { a: "Grace", b: "Evan" }, speakerCount: 1 }),
     "a solo episode has no second host, so the second voice cannot change its script",
   );
+});
+
+/*
+ * The guard that stops the proofreader improving the exam away.
+ *
+ * The language checker sees one turn and no material, so it cannot tell a subject term from a
+ * misspelling — measured on the omrezja-sl fixture, it rewrote "povezavni" to "povezovalni" in
+ * one turn and to "podatkovni" in another, and "povezavna plast" is what the lecture calls it.
+ */
+test("a repair that drops a word the material uses is refused", () => {
+  const material = "Povezavna plast skrbi za prenos okvirjev med sosednjima napravama.";
+
+  assert.equal(
+    keepsSourceTerms(
+      "Povezavni plasti pripada naslov MAC.",
+      "Povezovalni plasti pripada naslov MAC.",
+      material,
+    ),
+    false,
+  );
+});
+
+test("an ordinary repair is untouched by the guard", () => {
+  const material = "Fizična plast prenaša surove bite po fizičnem mediju.";
+
+  // "pače" is not a word and is not in the material, so nothing protects it.
+  assert.equal(
+    keepsSourceTerms("Signal pače na vsa vrata.", "Signal pade na vsa vrata.", material),
+    true,
+  );
+});
+
+test("short words are the checker's to fix, however the material spells them", () => {
+  const material = "Naprave so bile povezane s kablom, vseh štiri.";
+
+  assert.equal(
+    keepsSourceTerms("Naprave so bile povezane.", "Naprave so bili povezane.", material),
+    true,
+  );
+});
+
+test("a term the material does not use is not protected", () => {
+  assert.equal(
+    keepsSourceTerms("Uporabljamo protokool.", "Uporabljamo protokol.", "Omrežja in naslovi."),
+    true,
+  );
+});
+
+test("with no material to compare against, every repair stands", () => {
+  assert.equal(keepsSourceTerms("Povezavni sloj.", "Povezovalni sloj.", ""), true);
 });

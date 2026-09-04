@@ -153,3 +153,62 @@ export function parseStoredTurns(value: unknown): PodcastTurn[] {
       : [];
   });
 }
+
+/**
+ * Words long enough to be a term somebody will be examined on.
+ *
+ * Six characters, which is a threshold rather than a rule: it keeps "povezavni", "protokol" and
+ * "naslavljanje" and lets go of "kabel", "bile" and "štiri", where the checker's inflection
+ * fixes are usually right and the material's spelling carries no authority anyway.
+ */
+const TERM_MIN_LENGTH = 6;
+
+/**
+ * A term reduced to its first six characters, because these languages inflect.
+ *
+ * The lecture says "povezavna plast" and the turn says "povezavni plasti", and comparing whole
+ * words would call those two different terms and protect neither. Six characters is enough to
+ * keep the ones that matter apart — "poveza" against the checker's "povezo" and "podatk" — and
+ * a collision only ever means an edit is allowed through, which is the failure that costs less.
+ */
+function terms(text: string) {
+  return new Set(
+    (text.toLowerCase().match(/\p{L}[\p{L}\p{N}-]*/gu) ?? [])
+      .filter((word) => word.length >= TERM_MIN_LENGTH)
+      .map((word) => word.slice(0, TERM_MIN_LENGTH)),
+  );
+}
+
+/**
+ * Whether a proofread turn still uses the words the material used.
+ *
+ * The language checker is a second model that sees one turn and the one before it, and nothing
+ * else — deliberately, because handing it the topic made its edits worse (see
+ * buildLanguageRepairInput). The cost of that blindness is that it cannot tell a subject term
+ * from a misspelling. Measured on the omrezja-sl fixture: it changed "povezavni" to
+ * "povezovalni" in one turn and to "podatkovni" in another, both times confidently, and
+ * "povezavna plast" is what the lecture calls it and what the exam will call it.
+ *
+ * So the material decides. A correction that drops a long word the source itself uses is
+ * refused whole — not patched, because the checker's other edits in that turn were made in the
+ * belief that this one was going in too, and half a repair is not a repair. Every other kind of
+ * fix is untouched: the guard only fires when a word the lecture actually contains has gone
+ * missing from the sentence that had it.
+ */
+export function keepsSourceTerms(original: string, corrected: string, source: string) {
+  const sourceTerms = terms(source);
+
+  if (sourceTerms.size === 0) {
+    return true;
+  }
+
+  const kept = terms(corrected);
+
+  for (const word of terms(original)) {
+    if (sourceTerms.has(word) && !kept.has(word)) {
+      return false;
+    }
+  }
+
+  return true;
+}

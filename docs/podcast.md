@@ -240,6 +240,40 @@ exists; under-reserving lets a run of slow turns settle past the daily cap after
 | Audio size | 64 kbps mono MP3 — about 480 KB per minute |
 | Invocations | one per turn, so a seven-minute episode is ~23 of them |
 
+### Which models, and why these
+
+| step | model | why |
+| --- | --- | --- |
+| Script | `or/z-ai/glm-5.3-flash`, thinking medium | The shared writer, chosen for recall. 60,000 characters of note in one call |
+| Proofread | `or/google/gemini-3.5-flash-lite` | A different model, per turn, once — see below |
+| Speech | Soniox `tts-rt-v2` | Per turn, on demand, character timestamps |
+
+The proofreading pass is armed by the writer, not by a flag, which is the tutor's own rule
+(`writerNeedsLanguageCheck`). The tutor does **not** run it in production: its writer was
+switched to a Gemini on 2026-09-04 precisely because that model needs no checking, and the
+checker's ~950ms in front of every turn was most of what the switch bought. The podcast is the
+one place GLM still writes spoken words, so the same gate resolves the other way here.
+
+Changing the podcast's writer the same way was tried on 2026-09-04 and is not an option:
+
+| writer | recall | words (asked 920) |
+| --- | --- | --- |
+| glm-5.3-flash | 23/23 on four runs | 670-790 |
+| gemini-3.5-flash-lite | 20/23, 18/23 | 441, 504 |
+
+The tutor's writer is handed a plan, a topic and its points — GLM has already done the carrying
+upstream. This one is handed the whole lecture and one call. Half an episode in better Slovenian
+is a worse episode, so the writer stays and the defect is caught after the fact instead. The
+check costs 3-12s once, behind a progress bar nobody is watching for latency, and about $0.009.
+
+Two guards make it safe to run at all. The acceptance guard already refuses a correction whose
+square-bracket tags differ, so a performed laugh cannot be proofread away. The second is this
+feature's own: a correction that drops a long word the material itself uses is refused whole
+(`keepsSourceTerms`). Measured on the omrezja-sl fixture, the checker rewrote "povezavni" to
+"povezovalni" in one turn and to "podatkovni" in another, confidently — and "povezavna plast" is
+what the lecture calls it and what the exam will call it. Matching is on a six-character stem
+because these languages inflect: the note says "povezavna" and the turn says "povezavni".
+
 ### In money
 
 Two suppliers, and one of them is the whole bill. The script is written by the shared

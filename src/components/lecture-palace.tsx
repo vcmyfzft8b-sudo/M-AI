@@ -20,6 +20,7 @@ import type { PalaceGame, PalaceSnapshot } from "@/lib/palace/game";
 import {
   buildPalaceLayout,
   mapArrowAngle,
+  mapExtent,
   selectPalaceItems,
   STATION_HUE,
   type StudyKind,
@@ -56,6 +57,12 @@ const COLLECTED_STORAGE_PREFIX = "memo.palace.collected.";
 const MASCOT_SRC = "/memo-mascot.png";
 /** How far the minimap sees, in metres — about two blocks in every direction. */
 const MAP_RANGE = 95;
+/**
+ * The most faces the map will draw at once. Past this it stops being a map and
+ * starts being a pile of stickers, and the nearest few are the ones being
+ * walked to anyway.
+ */
+const MAX_MAP_MARKERS = 5;
 /**
  * Out of five, the mark at which a practice answer counts as known and its
  * house is collected. The same three-out-of-five a teacher would call a pass.
@@ -121,6 +128,8 @@ export function LecturePalace({
   const t = useT();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const minimapRef = useRef<HTMLCanvasElement | null>(null);
+  /* The same map again, whole and still, for when the corner one is not enough. */
+  const townMapRef = useRef<HTMLCanvasElement | null>(null);
   const gameRef = useRef<PalaceGame | null>(null);
   const snapshotRef = useRef<PalaceSnapshot | null>(null);
   const stickRef = useRef<{ pointerId: number; originX: number; originY: number } | null>(null);
@@ -184,12 +193,29 @@ export function LecturePalace({
     mascotRef.current = image;
   }, []);
 
+  /* Defined below; the callback ref runs before it exists. */
+  const sizeMinimapRef = useRef<() => void>(() => {});
+
+  /*
+   * The map is measured from a callback ref rather than an effect: the overlay
+   * is portalled, and the portal renders nothing on the pass that opens it, so
+   * an effect that reached for the canvas then would find null.
+   */
+  const attachMinimap = useCallback((node: HTMLCanvasElement | null) => {
+    minimapRef.current = node;
+
+    if (node) {
+      sizeMinimapRef.current();
+    }
+  }, []);
+
   const sizeMinimap = useCallback(() => {
     const canvas = minimapRef.current;
 
     if (!canvas) return;
 
-    const css = Math.round(canvas.getBoundingClientRect().width);
+    /* The content box, not the border box: the border is not drawn into. */
+    const css = canvas.clientWidth;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
     if (css === 0) return;
@@ -201,6 +227,8 @@ export function LecturePalace({
     /* The tile is cut for one resolution; a new one needs a new tile. */
     mascotTileRef.current = null;
   }, []);
+
+  sizeMinimapRef.current = sizeMinimap;
 
   const items = useMemo(
     () =>
@@ -307,6 +335,16 @@ export function LecturePalace({
 
       if (!context) return;
 
+      /*
+       * The map's box changes for reasons no event reliably reports in time — a
+       * breakpoint crossing, a rotation, the panel around it reflowing — and a
+       * backing store cut for the old size is drawn at the wrong resolution
+       * until something else moves. One integer compare a frame settles it.
+       */
+      if (canvas.clientWidth !== minimapSizeRef.current.css) {
+        sizeMinimap();
+      }
+
       const { css: size, dpr } = minimapSizeRef.current;
 
       if (size === 0) return;
@@ -329,9 +367,16 @@ export function LecturePalace({
       context.fillStyle = "rgba(14, 12, 20, 0.82)";
       context.fillRect(0, 0, size, size);
 
+      /*
+       * Every size below is derived from the map's own width. The map is 7.6rem
+       * on a desktop and 6.4rem on a phone, and a marker measured in pixels for
+       * one of those is either lost or enormous on the other.
+       */
+      const unit = size / 122;
+
       /* The streets, at their real width: the grid is what you navigate by. */
       context.strokeStyle = "rgba(255, 255, 255, 0.2)";
-      context.lineWidth = Math.max(2, 11 * scale);
+      context.lineWidth = Math.max(2 * unit, 11 * scale);
       layout.roads.forEach((road) => {
         const horizontal = road.width > road.depth;
         const line = toCanvas(road.x, road.z);
@@ -353,10 +398,14 @@ export function LecturePalace({
         context.stroke();
       });
 
-      const icon = 20;
+      const icon = Math.round(Math.min(20, Math.max(13, size * 0.15)));
       const mascot = mascotRef.current;
 
-      if (!mascotTileRef.current && mascot?.complete && mascot.naturalWidth > 0) {
+      if (
+        mascotTileRef.current?.width !== Math.round(icon * dpr) &&
+        mascot?.complete &&
+        mascot.naturalWidth > 0
+      ) {
         const tile = document.createElement("canvas");
 
         tile.width = Math.round(icon * dpr);
@@ -366,55 +415,78 @@ export function LecturePalace({
       }
 
       const mascotTile = mascotTileRef.current;
-      let nearest: { distance: number; point: { x: number; y: number } } | null = null;
+      /* Nearest first, so what is drawn when the map runs out of room is what
+         the walker is closest to. */
+      const inRange = layout.stations
+        .map((entry) => ({
+          entry,
+          distance: Math.hypot(entry.x - snapshot.x, entry.z - snapshot.z),
+        }))
+        .filter((candidate) => candidate.distance <= MAP_RANGE)
+        .sort((left, right) => left.distance - right.distance);
 
-      layout.stations.forEach((entry) => {
-        const distance = Math.hypot(entry.x - snapshot.x, entry.z - snapshot.z);
-        const done = collectedIds.has(entry.id);
-        const point = toCanvas(entry.x, entry.z);
+      /* The ticks go down first, behind everything: they are history, not the route. */
+      inRange
+        .filter(({ entry }) => collectedIds.has(entry.id))
+        .forEach(({ entry }) => {
+          const point = toCanvas(entry.x, entry.z);
 
-        if (!done && (!nearest || distance < nearest.distance)) {
-          nearest = { distance, point };
-        }
-
-        /* Off the edge of the map: not drawn. A rim full of arrows was more
-           clutter than direction on a map this size. */
-        if (distance > MAP_RANGE) return;
-
-        if (done) {
           context.strokeStyle = `hsl(${STATION_HUE[entry.kind]} 55% 72% / 0.7)`;
-          context.lineWidth = 2;
+          context.lineWidth = 2 * unit;
           context.beginPath();
-          context.moveTo(point.x - 3.4, point.y);
-          context.lineTo(point.x - 0.6, point.y + 3);
-          context.lineTo(point.x + 3.6, point.y - 3.2);
+          context.moveTo(point.x - 3.4 * unit, point.y);
+          context.lineTo(point.x - 0.6 * unit, point.y + 3 * unit);
+          context.lineTo(point.x + 3.6 * unit, point.y - 3.2 * unit);
           context.stroke();
+        });
 
-          return;
-        }
+      /*
+       * And the faces on top — but only as many as the map can hold apart. A
+       * neighbourhood's worth of Memos at this size is a pile, and a pile says
+       * less than the four nearest do.
+       */
+      const drawn: { x: number; y: number }[] = [];
+      let nearest: { x: number; y: number } | null = null;
 
-        /* A disc behind the face in the colour of what is waiting there — the
-           note's own three — so a map full of Memos still says which is which. */
-        context.fillStyle = `hsl(${STATION_HUE[entry.kind]} 80% 62%)`;
-        context.beginPath();
-        context.arc(point.x, point.y, icon / 2, 0, Math.PI * 2);
-        context.fill();
+      inRange
+        .filter(({ entry }) => !collectedIds.has(entry.id))
+        .forEach(({ entry }) => {
+          const point = toCanvas(entry.x, entry.z);
 
-        if (mascotTile) {
-          context.drawImage(mascotTile, point.x - icon / 2, point.y - icon / 2, icon, icon);
-        }
-      });
+          if (!nearest) {
+            nearest = point;
+          }
+
+          if (drawn.length >= MAX_MAP_MARKERS) return;
+
+          const crowded = drawn.some(
+            (other) => Math.hypot(other.x - point.x, other.y - point.y) < icon * 0.85,
+          );
+
+          if (crowded) return;
+
+          drawn.push(point);
+
+          /* A disc behind the face in the colour of what is waiting there — the
+             note's own three — so a map full of Memos still says which is which. */
+          context.fillStyle = `hsl(${STATION_HUE[entry.kind]} 80% 62%)`;
+          context.beginPath();
+          context.arc(point.x, point.y, icon / 2, 0, Math.PI * 2);
+          context.fill();
+
+          if (mascotTile) {
+            context.drawImage(mascotTile, point.x - icon / 2, point.y - icon / 2, icon, icon);
+          }
+        });
 
       if (nearest) {
-        const target = nearest as { distance: number; point: { x: number; y: number } };
+        const target = nearest as { x: number; y: number };
 
-        if (target.distance <= MAP_RANGE) {
-          context.strokeStyle = "rgba(255, 255, 255, 0.8)";
-          context.lineWidth = 1.8;
-          context.beginPath();
-          context.arc(target.point.x, target.point.y, icon / 2 + 4, 0, Math.PI * 2);
-          context.stroke();
-        }
+        context.strokeStyle = "rgba(255, 255, 255, 0.85)";
+        context.lineWidth = 1.8 * unit;
+        context.beginPath();
+        context.arc(target.x, target.y, icon / 2 + 4 * unit, 0, Math.PI * 2);
+        context.stroke();
       }
 
       /* The player sits at the middle of their own map, facing up the screen. */
@@ -423,19 +495,19 @@ export function LecturePalace({
       context.rotate(mapArrowAngle(snapshot.facing));
       context.fillStyle = "#ffffff";
       context.strokeStyle = "rgba(14, 12, 20, 0.9)";
-      context.lineWidth = 1.6;
+      context.lineWidth = 1.6 * unit;
       context.beginPath();
-      context.moveTo(0, -8);
-      context.lineTo(6, 6.4);
-      context.lineTo(0, 3);
-      context.lineTo(-6, 6.4);
+      context.moveTo(0, -8 * unit);
+      context.lineTo(6 * unit, 6.4 * unit);
+      context.lineTo(0, 3 * unit);
+      context.lineTo(-6 * unit, 6.4 * unit);
       context.closePath();
       context.fill();
       context.stroke();
       context.restore();
       context.restore();
     },
-    [layout],
+    [layout, sizeMinimap],
   );
 
   /* The frame callback must not re-render: it fires sixty times a second. */
@@ -627,6 +699,95 @@ export function LecturePalace({
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [isOpen, leaveGame, sizeMinimap]);
+
+  /*
+   * The whole town, painted once when the sheet opens: every street, every stop
+   * still waiting, and where the walker is standing. Nothing here moves, so it
+   * is drawn on demand rather than every frame.
+   */
+  useEffect(() => {
+    if (!isMapOpen || !layout) return;
+
+    const canvas = townMapRef.current;
+
+    if (!canvas) return;
+
+    const width = Math.round(canvas.getBoundingClientRect().width);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    if (width === 0) return;
+
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(width * dpr);
+
+    const context = canvas.getContext("2d");
+
+    if (!context) return;
+
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const extent = mapExtent(layout);
+    const scale = width / (extent * 2);
+    const toCanvas = (x: number, z: number) => ({
+      x: width / 2 + x * scale,
+      y: width / 2 + z * scale,
+    });
+
+    context.clearRect(0, 0, width, width);
+    context.fillStyle = "rgba(14, 12, 20, 0.9)";
+    context.beginPath();
+    context.roundRect(0, 0, width, width, 18);
+    context.fill();
+
+    context.strokeStyle = "rgba(255, 255, 255, 0.16)";
+    context.lineWidth = Math.max(1.5, 11 * scale);
+    layout.roads.forEach((road) => {
+      const horizontal = road.width > road.depth;
+      const line = toCanvas(road.x, road.z);
+
+      context.beginPath();
+
+      if (horizontal) {
+        context.moveTo(0, line.y);
+        context.lineTo(width, line.y);
+      } else {
+        context.moveTo(line.x, 0);
+        context.lineTo(line.x, width);
+      }
+
+      context.stroke();
+    });
+
+    layout.stations.forEach((entry) => {
+      const point = toCanvas(entry.x, entry.z);
+      const done = collected.has(entry.id);
+
+      context.fillStyle = done
+        ? "rgba(255, 255, 255, 0.22)"
+        : `hsl(${STATION_HUE[entry.kind]} 80% 62%)`;
+      context.beginPath();
+      context.arc(point.x, point.y, done ? 2.6 : 4.2, 0, Math.PI * 2);
+      context.fill();
+    });
+
+    const player = toCanvas(snapshotRef.current?.x ?? 0, snapshotRef.current?.z ?? 0);
+
+    context.save();
+    context.translate(player.x, player.y);
+    context.rotate(mapArrowAngle(snapshotRef.current?.facing ?? 0));
+    context.fillStyle = "#ffffff";
+    context.strokeStyle = "rgba(14, 12, 20, 0.9)";
+    context.lineWidth = 1.4;
+    context.beginPath();
+    context.moveTo(0, -7);
+    context.lineTo(5.4, 5.8);
+    context.lineTo(0, 2.6);
+    context.lineTo(-5.4, 5.8);
+    context.closePath();
+    context.fill();
+    context.stroke();
+    context.restore();
+  }, [collected, isMapOpen, layout]);
 
   /* The map sheet stops the world; the loop keeps rendering. */
   useEffect(() => {
@@ -1198,7 +1359,7 @@ export function LecturePalace({
               onClick={() => setIsMapOpen(true)}
               aria-label={t("palace.map")}
             >
-              <canvas ref={minimapRef} />
+              <canvas ref={attachMinimap} />
             </button>
 
             <div className="memo-palace-hud-top">
@@ -1272,6 +1433,10 @@ export function LecturePalace({
             {isMapOpen ? (
               <div className="memo-palace-sheet">
                 <div className="memo-palace-sheet-inner">
+                  <h3>{t("palace.map")}</h3>
+                  {/* The whole town, so the corner map's two blocks are a view
+                      of something rather than all there is. */}
+                  <canvas ref={townMapRef} className="memo-palace-townmap" />
                   <h3>{t("palace.districts")}</h3>
                   <ul>
                     {layout.districts.map((entry) => {

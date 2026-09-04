@@ -13243,3 +13243,539 @@
     height: 8.5rem;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Mindmap
+   ---------------------------------------------------------------------------
+   The note read as a shape. Everything inside the stage is drawn by
+   mindmap-canvas.tsx as SVG in map coordinates, so the only sizes here are the
+   frame's and the chrome that floats over it — the nodes' own metrics live in
+   mindmap-layout.ts, where the PNG export can read the same numbers.
+   --------------------------------------------------------------------------- */
+
+/*
+ * The map draws the note's title in its own middle, so the heading and date above it are the
+ * same words a second time — and on this one screen those hundred-odd pixels are canvas. The
+ * breadcrumb stays: that says where you are, which the map does not.
+ */
+.memo-note-screen[data-note-tab="mindmap"] .memo-note-head,
+.memo-note-screen[data-note-tab="mindmap"] .memo-note-date {
+  display: none;
+}
+
+.memo-mm-stage {
+  position: relative;
+  /*
+   * Tall enough to be a map, short enough that its own controls are on screen when it opens.
+   *
+   * The note card grows with its content and lets the page scroll, which is right for a note and
+   * wrong for this: the toolbar is pinned to the foot of the stage, so a stage sized by the
+   * viewport alone put "Save as image" a scroll below the fold on a 900px laptop. The subtraction
+   * is the chrome above it — rail, breadcrumb, pill row, title, date — plus the dock beneath the
+   * card. It is a measured constant rather than a computed one because nothing here has a
+   * definite height to compute from; the clamp is what keeps it sane when that estimate is off.
+   */
+  height: clamp(20rem, calc(100dvh - 21rem), 46rem);
+  margin-top: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 1.5rem;
+  background:
+    radial-gradient(circle at 1px 1px, var(--muted-2) 1px, transparent 0) 0 0 / 26px 26px,
+    var(--sunken);
+  overflow: hidden;
+  outline: none;
+  animation: memo-fade-in 0.24s ease-out;
+}
+
+.memo-mm-stage:focus-visible {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 3px var(--hover-ring);
+}
+
+/* The dotted ground is a texture, not information; it must never compete with
+   the map drawn over it.
+
+   The bare `:root:not([data-theme="light"])` half of this pair belongs inside the
+   media query below and nowhere else: outside it, it matches a light page whose
+   theme attribute is simply absent, which is most of them. */
+:root[data-theme="dark"] .memo-mm-stage {
+  background:
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.08) 1px, transparent 0) 0 0 / 26px 26px,
+    var(--sunken);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .memo-mm-stage {
+    background:
+      radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.08) 1px, transparent 0) 0 0 / 26px 26px,
+      var(--sunken);
+  }
+}
+
+.memo-mm-frame {
+  position: absolute;
+  inset: 0;
+  /* The gestures are ours: without this the browser scrolls the note behind the
+     map the moment a drag has any vertical component. */
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.memo-mm-frame:active {
+  cursor: grabbing;
+}
+
+.memo-mm-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.memo-mm-link {
+  fill: none;
+  stroke-linecap: round;
+  opacity: 0.78;
+  transition: opacity 0.18s ease;
+}
+
+.memo-mm-link.dim {
+  opacity: 0.16;
+}
+
+.memo-mm-node {
+  cursor: pointer;
+  transition: opacity 0.18s ease;
+}
+
+.memo-mm-node.dim {
+  opacity: 0.28;
+}
+
+.memo-mm-box {
+  transition:
+    filter 0.16s ease,
+    stroke-width 0.16s ease;
+}
+
+.memo-mm-text {
+  pointer-events: none;
+  paint-order: stroke;
+}
+
+/* The centre: the note's own title, drawn as ink rather than as a colour, so it
+   reads as the thing the coloured branches belong to. */
+.memo-mm-node.d0 .memo-mm-box {
+  fill: var(--text);
+}
+
+.memo-mm-node.d0 .memo-mm-text {
+  fill: var(--surface);
+  letter-spacing: -0.02em;
+}
+
+.memo-mm-node.d1 .memo-mm-box {
+  fill: var(--mm-accent);
+}
+
+.memo-mm-node.d1 .memo-mm-text {
+  fill: var(--surface);
+  letter-spacing: -0.01em;
+}
+
+.memo-mm-node.d2 .memo-mm-box,
+.memo-mm-node.d3 .memo-mm-box {
+  fill: var(--surface);
+  stroke: var(--mm-accent);
+}
+
+.memo-mm-node.d2 .memo-mm-box {
+  stroke-width: 1.6;
+  stroke-opacity: 0.85;
+}
+
+.memo-mm-node.d3 .memo-mm-box {
+  stroke-width: 1.2;
+  stroke-opacity: 0.5;
+}
+
+.memo-mm-node.d2 .memo-mm-text,
+.memo-mm-node.d3 .memo-mm-text {
+  fill: var(--text);
+}
+
+.memo-mm-node:hover .memo-mm-box {
+  filter: brightness(1.04);
+}
+
+.memo-mm-node.selected .memo-mm-box,
+.memo-mm-node.matched .memo-mm-box {
+  stroke: var(--mm-accent, var(--text));
+  stroke-width: 3;
+  stroke-opacity: 1;
+}
+
+.memo-mm-node.d0.selected .memo-mm-box {
+  stroke: var(--text);
+}
+
+.memo-mm-badge {
+  cursor: pointer;
+}
+
+.memo-mm-badge circle {
+  fill: var(--surface);
+  stroke: var(--mm-accent);
+  stroke-width: 1.6;
+}
+
+.memo-mm-badge-count {
+  fill: var(--mm-accent, var(--text));
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.memo-mm-badge-glyph {
+  stroke: var(--mm-accent);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+/* --- the chrome over the canvas ---------------------------------------- */
+
+.memo-mm-toolbar {
+  position: absolute;
+  right: 0.85rem;
+  bottom: 0.85rem;
+  left: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  pointer-events: none;
+}
+
+.memo-mm-toolbar > * {
+  pointer-events: auto;
+}
+
+.memo-mm-tools,
+.memo-mm-zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-mm-tool {
+  display: grid;
+  place-items: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.memo-mm-tool:hover:not(:disabled) {
+  background: var(--tile);
+}
+
+.memo-mm-tool:disabled {
+  color: var(--muted-2);
+  cursor: default;
+}
+
+.memo-mm-search {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.memo-mm-search-input {
+  width: 9rem;
+  height: 2.1rem;
+  padding: 0 0.6rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.memo-mm-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+.memo-mm-search-count {
+  padding-right: 0.35rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.memo-mm-zoom-level {
+  min-width: 3.4rem;
+  height: 2.3rem;
+  padding: 0 0.3rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.memo-mm-zoom-level:hover {
+  background: var(--tile);
+  color: var(--text);
+}
+
+/* The reference's own headline control, kept: a map is something people want
+   out of the app and into their notes. */
+.memo-mm-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 2.8rem;
+  padding: 0 1.15rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.memo-mm-save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+:root[data-theme="dark"] .memo-mm-save {
+  color: #121214;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .memo-mm-save {
+    color: #121214;
+  }
+}
+
+.memo-mm-detail {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.85rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  max-width: min(23rem, calc(100% - 1.7rem));
+  padding: 0.85rem 0.85rem 0.85rem 0;
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: memo-pop-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.memo-mm-detail-rail {
+  flex: none;
+  align-self: stretch;
+  width: 4px;
+  margin: -0.85rem 0;
+  border-radius: 1.1rem 0 0 1.1rem;
+}
+
+.memo-mm-detail-body {
+  min-width: 0;
+}
+
+.memo-mm-detail-label {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-wrap: pretty;
+}
+
+.memo-mm-detail-copy {
+  margin-top: 0.3rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.memo-mm-detail-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+  padding: 0.3rem 0.6rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.memo-mm-detail-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* One badge, two jobs: "your note has moved on" and "the redraw did not work".
+   The second carries a message the model wrote, so it wraps and is bounded. */
+.memo-mm-stale,
+.memo-mm-redrawing {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: min(20rem, calc(100% - 1.7rem));
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-wrap: pretty;
+  box-shadow: var(--shadow);
+}
+
+.memo-mm-stale > span {
+  min-width: 0;
+}
+
+.memo-mm-stale button {
+  border: 0;
+  background: transparent;
+  color: var(--blue);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Full screen: the map gets the whole viewport, which on a phone is the
+   difference between reading it and squinting at it. */
+.memo-mm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  padding: calc(0.6rem + var(--memo-safe-top, 0px)) 0.6rem
+    calc(0.6rem + var(--memo-safe-bottom, 0px));
+  background: var(--bg);
+}
+
+.memo-mm-overlay .memo-mm-stage {
+  height: 100%;
+  margin: 0;
+}
+
+/* Holds the note screen's scroll height while the map is elsewhere, so leaving
+   full screen does not drop the page back to a different scroll position. */
+.memo-mm-placeholder {
+  height: clamp(20rem, calc(100dvh - 21rem), 46rem);
+  margin-top: 0.4rem;
+  border: 1px dashed var(--line);
+  border-radius: 1.5rem;
+}
+
+@media (max-width: 1099px) {
+  /* The phone's note screen has far less chrome above the panel, and a dock below it. */
+  .memo-mm-stage {
+    height: clamp(18rem, calc(100dvh - 16rem), 38rem);
+    border-radius: 1.25rem;
+  }
+
+  .memo-mm-placeholder {
+    height: clamp(18rem, calc(100dvh - 16rem), 38rem);
+  }
+
+  /*
+   * On the phone the chrome splits rather than wraps. Wrapped, the three groups stacked into a
+   * 151px band across the foot of a 583px stage — a quarter of the map spent on its own buttons.
+   * The tools go to the head of the stage, the save pill keeps the foot to itself, and the zoom
+   * cluster goes altogether: a phone pinches, and the one thing pinching cannot do is frame the
+   * map again, which is the button that replaces it.
+   */
+  .memo-mm-toolbar {
+    inset: 0.7rem;
+    display: block;
+  }
+
+  .memo-mm-tools {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  .memo-mm-save {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2.6rem;
+  }
+
+  .memo-mm-search-input {
+    width: 6.5rem;
+  }
+
+  /* Below the tools row, which now owns the head of the stage. */
+  .memo-mm-stale,
+  .memo-mm-redrawing {
+    top: 4.2rem;
+    right: 0.7rem;
+  }
+
+  /* Clear of the tools above and the save pill below, and never over the middle of the map. */
+  .memo-mm-detail {
+    top: auto;
+    right: 0.85rem;
+    bottom: 4.4rem;
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-mm-stage,
+  .memo-mm-detail {
+    animation: none;
+  }
+
+  .memo-mm-link,
+  .memo-mm-node,
+  .memo-mm-box {
+    transition: none;
+  }
+}

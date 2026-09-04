@@ -54,6 +54,21 @@
 - Classify a failure that is the user's file rather than our bug on the throwing side of the step, via `runLectureStage`. Inngest flattens a failed step's error to `{ name: "Error", message, stack }`, so `isExpectedLectureInputFailure` cannot recognise anything once the function body's `catch` has it, and an expected failure ends up in Sentry and fails the run.
 - Details, the production check-list and the two incidents behind these rules are in [docs/lecture-pipeline-inngest.md](/docs/lecture-pipeline-inngest.md).
 
+## Mindmap
+
+- The mindmap is one model call over the finished note, generated the first time somebody opens
+  its tab and stored whole as one `jsonb` document. It is not part of the coverage pipeline and
+  must not be split into per-chunk calls — a map is a shape, and only something that has read the
+  whole note can judge it.
+- Nothing is warmed ahead of time. Opening the tab is free when the note has not changed (the
+  stored `notes_hash` decides); "draw again" is the only control that always spends.
+- The opening fold, not the fit, is what makes a map readable. `suggestMindmapFold` measures
+  against `MINDMAP_REFERENCE_FRAMES`, which are measured stage sizes — re-measure them if the
+  note screen's chrome changes rather than adjusting them by eye.
+- Layout lives in `src/lib/mindmap-layout.ts`, is pure, and is shared by the canvas, the PNG
+  export and its tests. Put new layout rules there, never in the component.
+- Details are in [docs/mindmap.md](/docs/mindmap.md).
+
 ## Admin Dashboard
 
 - The admin dashboard is at `/admin`, gated by the `public.admin_users` email allowlist rather than a role on the user account. `PREVIEW_AUTH_BYPASS` deliberately does not open it.

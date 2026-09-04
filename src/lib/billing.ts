@@ -18,7 +18,7 @@ export type BillingRequiredCode =
   | "subscription_required"
   | "trial_exhausted"
   | "trial_chat_limit_reached";
-export type EntitlementFeature = "study" | "quiz" | "practice_test" | "chat";
+export type EntitlementFeature = "study" | "quiz" | "practice_test" | "mindmap" | "chat";
 
 type ClaimTrialLectureResult =
   | { allowed: true; mode: "paid" | "trial" }

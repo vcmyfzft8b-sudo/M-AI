@@ -332,7 +332,6 @@ export const sl = {
 
   /* ---- Study tools — flashcards ---- */
   "study.edit": "Uredi",
-  "study.demoBadge": "Demo",
   "study.locked": "Učna orodja se odklenejo, ko je obdelava zapiska končana.",
   "study.cards.lockedBody": "Najprej nastanejo zapiski. Nato lahko kartice ustvariš ročno.",
   "study.cards.failed": "Ustvarjanje kartic ni uspelo.",
@@ -416,6 +415,12 @@ export const sl = {
   "test.yourAnswer": "Tvoj odgovor:",
   "test.explanation": "Razlaga:",
   "test.noFeedback": "Brez povratne informacije.",
+  "test.strengths": "Kaj si znal:",
+  "test.missing": "Kaj je manjkalo:",
+  "test.expectedAnswer": "Pričakovan odgovor:",
+  "test.skipped": "Označil si »Ne vem«, zato je vprašanje ocenjeno z 0.",
+  "test.notMarked": "Tega odgovora ni bilo mogoče oceniti, zato ne šteje v rezultat.",
+  "test.unmarkedNotice": "Enega odgovora ni bilo mogoče oceniti, zato ni vštet v rezultat.",
   "test.intro": "Odprta vprašanja iz tega predavanja. Odgovore napišeš s svojimi besedami, Memo pa jih oceni in pojasni.",
 
   /* ---- Study manager, transcript and note errors ---- */
@@ -1320,6 +1325,7 @@ export const sl = {
   "api.paidRequired.tts": "Pred ustvarjanjem zvoka za ta zapisek izberi paket.",
   "api.dictationFailed": "Narekovanje trenutno ne deluje. Poskusi znova.",
   "api.testStartTimedOut": "Priprava preizkusa je trajala predolgo in se je ustavila. Poskusi znova.",
+  "api.testSubmitTimedOut": "Ocenjevanje preizkusa je trajalo predolgo in se je ustavilo. Poskusi znova.",
   "api.scanImageTooLarge": "Slika za skeniranje je prevelika. Omejitev je 10 MB.",
   "api.photoTooLargeForPreview": "Fotografija je prevelika za predogled.",
   "api.formInvalidOrTooLarge": "Obrazec je neveljaven ali prevelik.",

@@ -221,6 +221,7 @@ export function buildDemoLectureDetail(params: {
     source_locator: null,
     source_unit_idx: index,
     concept_key: `${pack.key}-pt-${index}`,
+    importance: 4,
     created_at: createdAt,
   }));
 

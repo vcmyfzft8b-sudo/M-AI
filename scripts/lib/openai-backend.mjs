@@ -11,6 +11,16 @@ import { z } from "zod";
 export const isOpenAiModel = (model) => model.startsWith("gpt-");
 
 /**
+ * Production strips these before parsing (`stripCodeFences` in src/lib/ai/structured-output.ts).
+ * The harness did not, so a model that wrapped its JSON in a fence was recorded here as a failure
+ * the product would have handled — which reads as a model or prompt problem that is neither.
+ */
+function parseModelJson(text) {
+  return JSON.parse(text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim());
+}
+
+
+/**
  * OpenRouter fronts every provider behind one OpenAI-shaped API, which is how a Gemini model on a
  * promotional rate gets compared against the same model bought direct. Models are named with an
  * "or/" prefix here so the harness can tell the route apart from the model.
@@ -207,7 +217,7 @@ export async function generateOpenRouter({
       continue;
     }
 
-    const parsed = schema.safeParse(clampToSchema(JSON.parse(text), responseSchema, ledger));
+    const parsed = schema.safeParse(clampToSchema(parseModelJson(text), responseSchema, ledger));
 
     if (!parsed.success) {
       if (attempt === 2) {
@@ -299,7 +309,7 @@ export async function generateOpenAi({
       continue;
     }
 
-    const parsed = schema.safeParse(clampToSchema(JSON.parse(text), responseSchema, ledger));
+    const parsed = schema.safeParse(clampToSchema(parseModelJson(text), responseSchema, ledger));
 
     if (!parsed.success) {
       if (attempt === 2) {

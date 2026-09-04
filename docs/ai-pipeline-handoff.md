@@ -43,6 +43,7 @@ up in [ai-model-selection.md](./ai-model-selection.md). Read that before changin
 npm test                                    # 289 unit tests
 node --experimental-strip-types scripts/note-eval.mjs --repeat=2      # note recall vs answer keys
 node --experimental-strip-types scripts/study-eval.mjs                # deck coverage + distractors
+node --experimental-strip-types scripts/grading-eval.mjs --repeats=3   # practice-test marking bands
 node scripts/ocr-eval.mjs --images=handwritten-ugly,slide-annotated-ugly
 node --experimental-strip-types scripts/pedagogy-audit.mjs <cookieFile> <lectureId>  # judge audit
 ./scripts/model-sweep.sh                    # before changing any stage model

@@ -34,11 +34,19 @@ export const SPEED_READER_DEFAULT_WPM = 300;
 export const SPEED_READER_WPM_STEP = 25;
 
 /**
- * Gradual speed-up: start below the set rate and finish above it, so the note
- * itself is the warm-up. The set rate stays the honest headline because it is
- * the midpoint — the ramp is symmetric around it.
+ * Gradual speed-up: start at the rate that was chosen and climb from there.
+ *
+ * It used to open below it — the note was the warm-up, and the set rate was the
+ * midpoint of the ramp rather than its start. That reads as the setting being
+ * ignored: someone who has moved the slider to 500 has said what they can read
+ * at, and starting them at 350 is slower than the speed they asked for, on the
+ * screen where they asked for it. So the number on the slider is where the
+ * reader begins, and the ramp is what it does afterwards.
+ *
+ * A note read with this on therefore finishes sooner than the same note read
+ * flat, which is the point of it.
  */
-const GRADUAL_START_FACTOR = 0.7;
+const GRADUAL_START_FACTOR = 1;
 const GRADUAL_END_FACTOR = 1.3;
 
 /**
@@ -120,14 +128,27 @@ export function wordDurationMs(word: SpeedReadWord, wpm: number) {
   return base * lengthFactor * PAUSE_FACTORS[word.pause] * (word.math ? MATH_FACTOR : 1);
 }
 
-/** How long the whole note takes at a setting, so the screen can say so up front. */
-export function totalDurationMs(words: SpeedReadWord[], wpm: number, gradual: boolean) {
+/**
+ * How long the rest of the note takes from `fromIndex`, so the screen can say
+ * so. The ramp is measured against the whole note rather than against what is
+ * left of it: a reader four fifths of the way through is four fifths of the way
+ * up the ramp, and timing the remainder as if it started over would quote them
+ * the opening rate for the fastest part of the note.
+ */
+export function totalDurationMs(
+  words: SpeedReadWord[],
+  wpm: number,
+  gradual: boolean,
+  fromIndex = 0,
+) {
   const lastIndex = Math.max(1, words.length - 1);
+  let total = 0;
 
-  return words.reduce(
-    (total, word, index) => total + wordDurationMs(word, wpmAtProgress(wpm, index / lastIndex, gradual)),
-    0,
-  );
+  for (let index = Math.max(0, fromIndex); index < words.length; index += 1) {
+    total += wordDurationMs(words[index], wpmAtProgress(wpm, index / lastIndex, gradual));
+  }
+
+  return total;
 }
 
 /*

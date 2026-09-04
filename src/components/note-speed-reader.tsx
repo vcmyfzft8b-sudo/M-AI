@@ -458,7 +458,7 @@ export function NoteSpeedReader({
   const { before, focus, after } = splitAtFocus(word.text);
   const progress = wordCount > 1 ? index / (wordCount - 1) : 1;
   const liveWpm = wpmAtProgress(settings.wpm, progress, settings.gradual);
-  const remaining = formatMinutes(totalDurationMs(words.slice(index), settings.wpm, settings.gradual));
+  const remaining = formatMinutes(totalDurationMs(words, settings.wpm, settings.gradual, index));
   const scale = Math.max(
     MIN_WORD_SCALE,
     Math.min(1, COMFORTABLE_WORD_LENGTH / Math.max(1, word.text.length)),

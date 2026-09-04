@@ -68,7 +68,7 @@ export class TutorClipPlayer {
     return element;
   }
 
-  private ensureAnalyser(element: HTMLAudioElement) {
+  private async ensureAnalyser(element: HTMLAudioElement) {
     if (this.analyserSettled) {
       return;
     }
@@ -87,11 +87,15 @@ export class TutorClipPlayer {
       const context = new Context();
 
       /*
-       * Resuming is fire-and-forget, but the check below is not: taking the
-       * element's output into a context that is still suspended is exactly the
-       * silent failure this is guarding against.
+       * Awaited, not fired and forgotten. Chrome hands back a context already
+       * running and would not notice the difference; Safari hands back a suspended
+       * one and resumes it asynchronously, so checking the state on the next line
+       * reads "suspended", closes the context and leaves the sphere with no level
+       * to ride for the whole of WebKit. The check below is the real guard —
+       * routing the element into a context that never starts would play it in
+       * silence — and it is only meaningful once the resume has settled.
        */
-      void context.resume();
+      await context.resume().catch(() => {});
 
       if (context.state !== "running") {
         void context.close();
@@ -132,7 +136,7 @@ export class TutorClipPlayer {
     element.currentTime = 0;
 
     await element.play();
-    this.ensureAnalyser(element);
+    await this.ensureAnalyser(element);
   }
 
   /** Holds position — the tutor ducking for a learner who cut in. */

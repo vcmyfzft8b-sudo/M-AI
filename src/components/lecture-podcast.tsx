@@ -30,7 +30,7 @@ import {
   type PodcastTurn,
 } from "@/lib/podcast-settings";
 import { TutorClipPlayer } from "@/lib/tutor/clip-player";
-import { voiceHue } from "@/lib/tutor/voice-colors";
+import { podcastVoiceHue } from "@/lib/tutor/voice-colors";
 import { podcastVoiceSampleClip } from "@/lib/tutor/voice-clips";
 
 /**
@@ -1198,12 +1198,12 @@ export function LecturePodcast({
     <div className="memo-podcast-cover" aria-hidden="true">
       <span
         className="memo-podcast-orb primary"
-        style={{ "--podcast-hue": voiceHue(voices.a) } as CSSProperties}
+        style={{ "--podcast-hue": podcastVoiceHue(voices.a) } as CSSProperties}
       />
       {speakerCount === 2 ? (
         <span
           className="memo-podcast-orb secondary"
-          style={{ "--podcast-hue": voiceHue(voices.b) } as CSSProperties}
+          style={{ "--podcast-hue": podcastVoiceHue(voices.b) } as CSSProperties}
         />
       ) : null}
     </div>
@@ -1214,7 +1214,7 @@ export function LecturePodcast({
       <button
         type="button"
         className="memo-podcast-voice-current"
-        style={{ "--podcast-hue": voiceHue(voices[speaker]) } as CSSProperties}
+        style={{ "--podcast-hue": podcastVoiceHue(voices[speaker]) } as CSSProperties}
         aria-expanded={openVoiceSlot === speaker}
         onClick={() => setOpenVoiceSlot(openVoiceSlot === speaker ? null : speaker)}
       >
@@ -1248,7 +1248,7 @@ export function LecturePodcast({
               className={`memo-podcast-voice-option ${voices[speaker] === option ? "active" : ""} ${
                 previewVoice === option ? "playing" : ""
               }`.trim()}
-              style={{ "--podcast-hue": voiceHue(option) } as CSSProperties}
+              style={{ "--podcast-hue": podcastVoiceHue(option) } as CSSProperties}
               onClick={() => void chooseVoice(speaker, option)}
             >
               <Msym
@@ -1375,10 +1375,14 @@ export function LecturePodcast({
 
           {error ? <p className="memo-inline-error">{error}</p> : null}
 
+          {/*
+            * No voices here. They are picked on the way in, and a listener who is already
+            * listening has answered that question — leaving the pickers under the transport
+            * turned the player into a settings screen with a play button on it. Changing a
+            * host is still one tap away: the way back to the episodes is below, and the
+            * chooser is one more from there.
+            */}
           <div className="memo-podcast-footer">
-            {voiceRow("a")}
-            {speakerCount === 2 ? voiceRow("b") : null}
-
             {/*
               * Out of the player, and back to the episodes rather than past them to the chooser.
               *
@@ -1453,9 +1457,9 @@ export function LecturePodcast({
                       onClick={() => openEpisode(episode)}
                     >
                       <span className="memo-podcast-episode-voices" aria-hidden="true">
-                        <span style={{ "--podcast-hue": voiceHue(voices.a) } as CSSProperties} />
+                        <span style={{ "--podcast-hue": podcastVoiceHue(voices.a) } as CSSProperties} />
                         {shown.speakerCount === 2 ? (
-                          <span style={{ "--podcast-hue": voiceHue(voices.b) } as CSSProperties} />
+                          <span style={{ "--podcast-hue": podcastVoiceHue(voices.b) } as CSSProperties} />
                         ) : null}
                       </span>
                       <span className="memo-podcast-episode-text">
@@ -1501,14 +1505,21 @@ export function LecturePodcast({
                   className={`memo-podcast-format ${format === option.id ? "active" : ""}`.trim()}
                   onClick={() => chooseFormat(option.id)}
                 >
-                  <span className="memo-podcast-format-head">
-                    <Msym name={option.icon} size="1.15rem" fill={false} weight={500} />
-                    <span className="memo-podcast-format-label">{t(option.labelKey)}</span>
-                  </span>
-                  <span className="memo-podcast-format-description">{t(option.descriptionKey)}</span>
+                  <Msym name={option.icon} size="1.15rem" fill={false} weight={500} />
+                  <span className="memo-podcast-format-label">{t(option.labelKey)}</span>
                 </button>
               ))}
             </div>
+
+            {/*
+              * One description, for the show that is actually selected.
+              *
+              * All four at once was four paragraphs of prose above the thing being chosen, and
+              * on a phone it was most of the screen — a wall of text to make a choice between
+              * four short names. The names and the icons carry the choice; this line carries
+              * what the name does not, for the one card the eye is on.
+              */}
+            <p className="memo-podcast-format-hint">{t(getPodcastFormat(format).descriptionKey)}</p>
 
             <div className="memo-podcast-lengths" role="radiogroup" aria-label={t("podcast.length.label")}>
               {PODCAST_LENGTHS.map((option) => (

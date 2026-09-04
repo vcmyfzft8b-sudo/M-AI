@@ -82,6 +82,19 @@ const SPOKEN_FORM = [
   "Short sentences. One idea each. A listener cannot go back a line, so a sentence that needs re-reading is a sentence that is lost.",
   "When you list things, say them as speech does — \"there are three of these; the first is…, then…, and last…\" — never as a printed list.",
   "Sound like a person talking, not like a document being read: contractions, the odd short aside, a natural rhythm. Warm and unhurried, the way a good tutor sounds at a desk beside somebody.",
+  /*
+   * The register, named as constructions rather than described as a manner.
+   *
+   * Asking for it in the abstract — "use the spoken form, the difference is rhythm" — was
+   * measured on 2026-09-04 over 24 runs and did nothing: written-register phrasing went from
+   * 0.27 per 100 words to 0.34, and warmth and teaching both slipped. This prompt has now shown
+   * three times that it obeys a named thing and ignores a described one. So the two
+   * constructions the judge actually kept quoting are named, and the general rule sits behind
+   * them rather than in front.
+   */
+  "Two constructions belong to written language and are never said out loud. Do not use them, in any language. First, a clause hung on the end of a sentence to carry a second thought — \"pri čemer\" in Slovenian, \"whereby\" in English, whatever it is in theirs. Say two sentences instead. Second, counting through a list by relative pronoun — \"od katerih vsaka\", \"each of which\". Start a new sentence and use a plain verb.",
+  "Behind those two, the same rule: where the written form of the language would reach for a participle, a passive, or a stack of nouns, use a plain verb and a full stop. Their material is written; you are not.",
+  "This is not dialect and not slang — how an educated person talks out loud, not how they write, and nothing regional. Technical terms, names and anything they will be examined on stay exactly as their material has them.",
   "Never narrate what you are doing. Do not say \"in this segment\", \"let me explain\", \"as mentioned above\", \"in conclusion\", or announce a heading before speaking it.",
 ];
 
@@ -315,6 +328,7 @@ export function buildTutorLessonPlanInstructions() {
       "A point is a claim, not a heading: \"the mitochondrion makes ATP, which is what every other process spends\" — not \"mitochondria\".",
       "Between six and ten topics for an ordinary note; fewer only when the material genuinely is smaller.",
       "Also write one sentence naming what this material is about, which the tutor says at the start.",
+      "And name the language the material is written in, as a short code. This is the language everything you write here must be in, and the one the tutor will speak — read it off the material, never off these instructions, which are in English whatever the learner is studying.",
       "Everything you write here is spoken aloud later: plain words, no markdown, no symbols, no formulas.",
     ].join("\n"),
   ].join("\n\n");
@@ -334,6 +348,26 @@ export const TUTOR_TOPIC_SCHEMA = z.object({
 });
 
 export const tutorLessonPlanSchema = z.object({
+  /*
+   * The language the material is actually written in, decided by the one model that reads the
+   * whole note before anybody is waiting — the plan is worked out when the note is, and stored
+   * with it, so this costs no call and no wait.
+   *
+   * It exists because the app's own list of languages is not the world's. `detectSourceLanguage`
+   * knows seven and answers null for everything else, and `normalizeNoteLanguage` turns that null
+   * into "en" — so a Polish lecture was taught in English by a tutor that had just read it in
+   * Polish. Soniox will speak far more than seven (fr, es, pl and hu were checked directly), so
+   * the only thing standing between a learner and their own language was us naming it.
+   */
+  language: z
+    .string()
+    .min(2)
+    .max(8)
+    .describe(
+      "The language this material is written in, as a short code like \"sl\", \"en\", \"de\", " +
+        "\"fr\" or \"pl\". Read it off the material itself. Never guess from the instructions, " +
+        "which are always in English.",
+    ),
   subject: z
     .string()
     .min(10)

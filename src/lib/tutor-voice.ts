@@ -18,7 +18,8 @@ import {
   type TutorLessonPlan,
   type TutorTurnKind,
 } from "@/lib/ai/tutor-voice-prompt";
-import { resolveMaterialLanguage } from "@/lib/languages";
+import { normalizeSpokenLanguageCode, resolveMaterialLanguage } from "@/lib/languages";
+import { selectUsableTutorPlan } from "@/lib/tutor/plan-cache";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import { resolvePassageLanguage, resolveSpokenLanguage } from "@/lib/tutor/spoken-language";
 import { getServerEnv } from "@/lib/server-env";
@@ -81,7 +82,7 @@ export async function loadTutorGrounding(lectureId: string): Promise<TutorGround
   const [{ data: artifact }, { data: lecture }] = await Promise.all([
     supabase
       .from("lecture_artifacts")
-      .select("summary, key_topics, structured_notes_md")
+      .select("summary, key_topics, structured_notes_md, tutor_plan, tutor_plan_notes_hash")
       .eq("lecture_id", lectureId)
       .maybeSingle(),
     supabase.from("lectures").select("title, language_hint").eq("id", lectureId).maybeSingle(),
@@ -91,6 +92,8 @@ export async function loadTutorGrounding(lectureId: string): Promise<TutorGround
     summary: string;
     key_topics: string[];
     structured_notes_md: string;
+    tutor_plan: unknown;
+    tutor_plan_notes_hash: string | null;
   } | null;
   const lectureRow = (lecture ?? null) as {
     title: string | null;
@@ -106,11 +109,30 @@ export async function loadTutorGrounding(lectureId: string): Promise<TutorGround
     lectureRow?.title ?? null,
   ).slice(0, TUTOR_NOTE_CHAR_CAP);
 
-  /* The note screen works this out the same way, from the same helper. */
-  const materialLanguage = resolveMaterialLanguage(
-    `${artifactRow.summary ?? ""}\n${notes}`,
-    lectureRow?.language_hint,
+  /*
+   * What language to teach in, best evidence first.
+   *
+   * The lesson plan knows, because a model read the whole note to write it and was asked to name
+   * the language it was reading. That beats everything else here: detection recognises seven
+   * languages and answers null for the rest, and the hint is only ever what somebody typed at
+   * upload. Without the plan a Polish lecture came out as "en" — not because anything failed, but
+   * because "en" is what this app says when it has not heard of a language.
+   *
+   * The plan is read from the same row, so it costs nothing, and it is only trusted while its
+   * hash still matches the note it was planned from.
+   */
+  const planned = normalizeSpokenLanguageCode(
+    selectUsableTutorPlan({
+      plan: artifactRow.tutor_plan,
+      notesHash: artifactRow.tutor_plan_notes_hash,
+      notes: artifactRow.structured_notes_md ?? "",
+    })?.language,
   );
+
+  /* The note screen works the fallback out the same way, from the same helper. */
+  const materialLanguage =
+    planned ??
+    resolveMaterialLanguage(`${artifactRow.summary ?? ""}\n${notes}`, lectureRow?.language_hint);
 
   return {
     title: lectureRow?.title ?? null,
@@ -215,7 +237,7 @@ export async function speakTutorTurn(params: {
    * exists. The greeting needs the note, not the plan, and firing the two at once
    * is what takes time-to-first-word from about ten seconds down to three.
    */
-  plan: TutorLessonPlan | null;
+  plan: (Omit<TutorLessonPlan, "language"> & { language: string | null }) | null;
   request: TutorTurnRequest;
   onDelta: (text: string) => void;
 }) {
@@ -257,7 +279,10 @@ export async function speakTutorTurn(params: {
    * finished turn. The repair is allowed to fail: a unit whose correction is late or refused is
    * spoken exactly as GLM wrote it, so the worst case here is the turn we would have had anyway.
    */
-  const language = resolveSpokenLanguage(params.grounding.language, request);
+  const language = resolveSpokenLanguage(
+    normalizeSpokenLanguageCode(plan?.language) ?? params.grounding.language,
+    request,
+  );
 
   /*
    * Chat can throw away a half-streamed answer and re-run the call, because

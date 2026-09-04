@@ -116,6 +116,16 @@ const markSchema = z.object({
   soundsLikeAPerson: z
     .boolean()
     .describe("Contractions, everyday words, natural rhythm — not a textbook read aloud."),
+  writtenMarkers: z
+    .array(z.string())
+    .describe(
+      "Every phrase in the passage that belongs to the WRITTEN form of the language rather than " +
+        "the spoken one, quoted exactly. Look for: participial and relative constructions a " +
+        "speaker would split into two sentences (in Slovenian, 'pri čemer', 'kateri', '-oč'/'-ši' " +
+        "forms), passives, stacked noun phrases where a verb would do, and literary word order. " +
+        "Technical terms are NOT markers — keeping those is correct. Empty when the passage reads " +
+        "the way somebody would actually say it.",
+    ),
   onTheirSide: z
     .boolean()
     .describe("Something in it is for them: reassurance, an acknowledgement, a shared aside, an 'everybody gets this wrong'."),
@@ -144,6 +154,7 @@ const judgeInstructions = [
   "Warmth is: talking to them like a person, sounding relaxed, being on their side, admitting when something is fiddly, and being pleased in a way that is earned.",
   "",
   "Mark `teaches` separately and honestly. A turn can be delightful and teach nothing.",
+  "`writtenMarkers` is about written-versus-spoken form, which is a real split in most languages and a wide one in Slovenian. A passage can be warm, correct and still built out of sentences nobody says out loud — those are what to quote. Do not quote technical terms, and do not quote something merely because you would have phrased it differently.",
   "Judge `teaches` against what THIS kind of turn is for, not against the topic's points in general: an opening greets and teaches one thing, an answer answers what was asked, only a teaching turn owes the points. Topic points are given for context and are only the standard for a teaching turn.",
 ].join("\n");
 
@@ -164,12 +175,14 @@ async function markTurn({ kind, speech }) {
 const KINDS = ["opening", "teach", "answer"];
 
 console.log(`writer ${writer} · judge ${JUDGE} · ${trials} trials per kind\n`);
-console.log(`${"turn".padEnd(9)}${"warmth".padEnd(9)}${"teaches".padEnd(10)}${"to them".padEnd(9)}${"human".padEnd(8)}${"on side".padEnd(9)}${"reacts".padEnd(8)}${"gushing".padEnd(9)}patronising`);
+console.log(`${"turn".padEnd(9)}${"warmth".padEnd(9)}${"written/100w".padEnd(14)}${"teaches".padEnd(10)}${"to them".padEnd(9)}${"human".padEnd(8)}${"on side".padEnd(9)}${"reacts".padEnd(8)}${"gushing".padEnd(9)}patronising`);
 
 const all = [];
 
 for (const kind of KINDS) {
   const marks = [];
+  const wordCounts = [];
+  const wordsOf = (_kind, index) => wordCounts[index] ?? 0;
 
   for (let trial = 0; trial < trials; trial += 1) {
     try {
@@ -183,7 +196,8 @@ for (const kind of KINDS) {
       const mark = await markTurn({ kind, speech: turn.speech });
 
       marks.push(mark);
-      all.push({ kind, speech: turn.speech, ...mark });
+      wordCounts.push(turn.speech.trim().split(/\s+/u).length);
+      all.push({ kind, speech: turn.speech, words: wordCounts.at(-1), ...mark });
     } catch (error) {
       console.log(`${kind} trial ${trial + 1} FAILED — ${error.message}`);
     }
@@ -199,6 +213,7 @@ for (const kind of KINDS) {
   console.log(
     kind.padEnd(9) +
       mean((m) => m.warmth).padEnd(9) +
+      `${((marks.reduce((sum, m) => sum + m.writtenMarkers.length, 0) / marks.reduce((sum, m, i) => sum + wordsOf(kind, i), 0)) * 100).toFixed(2)}`.padEnd(14) +
       mean((m) => m.teaches).padEnd(10) +
       share((m) => m.speaksToThem).padEnd(9) +
       share((m) => m.soundsLikeAPerson).padEnd(8) +
@@ -210,6 +225,10 @@ for (const kind of KINDS) {
 }
 
 const mean = (pick) => (all.reduce((sum, row) => sum + pick(row), 0) / all.length).toFixed(2);
+const totalWords = all.reduce((sum, r) => sum + r.words, 0);
+const totalMarkers = all.reduce((sum, r) => sum + r.writtenMarkers.length, 0);
+console.log(`\nwritten-register phrases: ${totalMarkers} in ${totalWords} words (${((totalMarkers / totalWords) * 100).toFixed(2)} per 100)`);
+all.flatMap((r) => r.writtenMarkers).slice(0, 12).forEach((m) => console.log(`  ${m}`));
 console.log(`\noverall  warmth ${mean((r) => r.warmth)}/5 · teaches ${mean((r) => r.teaches)}/5 · gushing ${all.filter((r) => r.gushing).length}/${all.length} · patronising ${all.filter((r) => r.patronising).length}/${all.length}`);
 
 console.log("\nsamples:");

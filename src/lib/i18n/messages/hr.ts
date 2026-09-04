@@ -452,6 +452,7 @@ export const hr: Messages = {
   /* ---- API and route errors ---- */
   "api.unauthorized": "Nedopušten pristup.",
   "api.invalidLectureId": "Neispravan ID bilješke.",
+  "api.invalidVoiceRequest": "Taj glas ili jezik ne možemo pustiti.",
   "api.invalidFlashcardId": "Neispravan ID kartice.",
   "api.invalidQuestionId": "Neispravan ID pitanja.",
   "api.invalidFolderId": "Neispravan ID mape.",

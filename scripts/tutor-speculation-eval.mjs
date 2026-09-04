@@ -16,8 +16,20 @@
  * with a usable gap between them — they are one event, and there is nothing correct to answer
  * early.
  *
- * The trigger fails independently, which is worth knowing separately in case Soniox ever changes
- * how it streams tokens:
+ * Re-measured 2026-09-04 with the trigger that was actually asked for — start the answer when the
+ * AUDIO goes quiet, not when the transcript stops changing — because the first attempt fired
+ * mid-sentence and proved only that its trigger was wrong. It changes nothing:
+ *
+ *   started this long after the audio went quiet — was the transcript already right?
+ *     0ms 0/15 · 150ms 0/15 · 300ms 0/15 · 450ms 0/6 · 600ms 0/1
+ *
+ * Never, at any wait. Soniox withholds the last words of an utterance until it endpoints, so
+ * there is no moment before `<end>` at which the question is fully written down. The only way to
+ * have the transcript sooner is to make Soniox endpoint sooner — which is the endpoint delay
+ * again, and a product judgement.
+ *
+ * The stillness trigger fails on its own account too, worth knowing separately in case Soniox
+ * ever changes how it streams tokens:
  *
  *   transcript sat still WHILE the speaker was still talking
  *     p50 146ms · p90 294ms · p99 522ms · max 1044ms
@@ -303,6 +315,14 @@ console.log(`${"question".padEnd(46)}${"fired".padEnd(8)}${"accepted".padEnd(10)
 const results = [];
 const gapsDuringSpeech = [];
 /*
+ * The question the transcript-stillness trigger could not answer: if the answer is started when
+ * the AUDIO goes quiet rather than when the transcript stops changing, is the transcript complete
+ * by then? And if not immediately, how long after silence does it become complete — while there
+ * is still some of the 900ms left to save?
+ */
+const WAITS_AFTER_SILENCE = [0, 150, 300, 450, 600, 750];
+const byWait = new Map(WAITS_AFTER_SILENCE.map((wait) => [wait, { correct: 0, total: 0 }]));
+/*
  * How long before the recogniser calls the utterance over the transcript already says what it
  * will finally say. This is the ceiling on any speculation, whatever triggers it: guess earlier
  * than this and you are guessing at a sentence that is not finished arriving.
@@ -339,6 +359,20 @@ for (const question of QUESTIONS) {
 
       if (settledAt && timeline.utteranceAt) {
         settledAheadOfEnd.push(timeline.utteranceAt - settledAt);
+      }
+
+      for (const wait of WAITS_AFTER_SILENCE) {
+        const at = timeline.speechEndedAt + wait;
+
+        if (timeline.utteranceAt && at >= timeline.utteranceAt) {
+          // Waiting this long is not speculation any more; the recogniser has already answered.
+          continue;
+        }
+
+        const visible = timeline.partials.filter((entry) => entry.at <= at).at(-1)?.text ?? "";
+        const bucket = byWait.get(wait);
+        bucket.total += 1;
+        bucket.correct += normalizeSpokenQuestion(visible) === finalText ? 1 : 0;
       }
 
       results.push({ question, ...outcome, heard: timeline.utterance });
@@ -382,6 +416,27 @@ console.log(
     `(${sortedSettled.length}/${results.length} runs):\n` +
     `  p10 ${settledAt(0.1)}ms · p50 ${settledAt(0.5)}ms · p90 ${settledAt(0.9)}ms`,
 );
+
+console.log(
+  `\nstarting the answer this long after the AUDIO goes quiet — was the transcript already right?\n` +
+    `${"wait".padEnd(9)}${"correct".padEnd(12)}${"head start left".padEnd(18)}verdict`,
+);
+
+for (const wait of WAITS_AFTER_SILENCE) {
+  const bucket = byWait.get(wait);
+
+  if (!bucket.total) {
+    continue;
+  }
+
+  const share = bucket.correct / bucket.total;
+  console.log(
+    `${wait}ms`.padEnd(9) +
+      `${bucket.correct}/${bucket.total}`.padEnd(12) +
+      `~${Math.max(0, ENDPOINT_DELAY_MS - wait)}ms`.padEnd(18) +
+      (share >= 0.5 ? "worth it" : share > 0 ? "sometimes" : "never"),
+  );
+}
 
 const rejected = results.filter((row) => row.fired && !row.accepted);
 

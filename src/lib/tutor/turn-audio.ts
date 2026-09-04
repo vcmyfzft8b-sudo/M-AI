@@ -213,6 +213,38 @@ export function hasSpokenWord(heard: string) {
  */
 const ECHO_STEM_LENGTH = 4;
 
+/** Below this an utterance is short enough to be an interruption, and gets no benefit of doubt. */
+const ECHO_SLACK_MIN_WORDS = 8;
+
+/** How many of a long utterance's words may be strangers and it still be the room. */
+const ECHO_STRANGER_SHARE = 0.15;
+
+/**
+ * How much of a word's tail the recognizer may hear differently and still be quoting the tutor.
+ *
+ * The containment rule below catches a word the recognizer split or clipped, because the shorter
+ * piece then sits inside the longer one. It cannot catch a word whose *ending* came back
+ * different — "elektrarna" heard as "elektrarno" — because neither contains the other, and in a
+ * language where every noun carries its case on the end that is the common way to mishear one.
+ * A single word like that used to be enough to rule the whole utterance a learner's and stop the
+ * lesson, which is the failure this was reported for.
+ *
+ * Two characters, and measured against the whole word rather than a fixed stem, so it only ever
+ * forgives an ending: "razloži" and "razlika" share four letters and stay different words, where
+ * "elektrarna" and "elektrarno" share nine of ten and are the same one.
+ */
+const ECHO_ENDING_SLACK = 2;
+
+function sharedPrefixLength(a: string, b: string) {
+  let index = 0;
+
+  while (index < a.length && index < b.length && a[index] === b[index]) {
+    index += 1;
+  }
+
+  return index;
+}
+
 function isSameWord(heard: string, spoken: string) {
   if (heard === spoken) {
     return true;
@@ -220,7 +252,17 @@ function isSameWord(heard: string, spoken: string) {
 
   const shorter = Math.min(heard.length, spoken.length);
 
-  return shorter >= ECHO_STEM_LENGTH && (heard.includes(spoken) || spoken.includes(heard));
+  if (shorter < ECHO_STEM_LENGTH) {
+    return false;
+  }
+
+  if (heard.includes(spoken) || spoken.includes(heard)) {
+    return true;
+  }
+
+  const longer = Math.max(heard.length, spoken.length);
+
+  return sharedPrefixLength(heard, spoken) >= longer - ECHO_ENDING_SLACK;
 }
 
 /**
@@ -262,7 +304,29 @@ export function isTutorEcho(heard: string, tutorSpokenTail: string) {
     return true;
   }
 
-  return words.every((word) => spoken.some((said) => isSameWord(word, said)));
+  const strangers = words.filter((word) => !spoken.some((said) => isSameWord(word, said)));
+
+  if (strangers.length === 0) {
+    return true;
+  }
+
+  /*
+   * A long utterance gets a little slack; a short one gets none.
+   *
+   * The tutor takes the floor from one word, so "mitohondrij je počakaj" has to stay the
+   * learner's — three words, one of them theirs, and swallowing it would ignore somebody who
+   * spoke. But a whole leaked paragraph is a different thing: the recognizer sprinkles a
+   * stray word through several seconds of speaker audio, and ruling the paragraph an
+   * interruption over one of them is what stops the lesson for no reason.
+   *
+   * So the allowance is proportional and only exists once an utterance is longer than any
+   * interruption plausibly is. At eight words it forgives one stranger, at twenty it forgives
+   * three, and below eight it forgives none at all.
+   */
+  return (
+    words.length >= ECHO_SLACK_MIN_WORDS &&
+    strangers.length <= Math.floor(words.length * ECHO_STRANGER_SHARE)
+  );
 }
 
 /** Who the microphone was listening to. */

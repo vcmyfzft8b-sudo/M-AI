@@ -560,6 +560,12 @@ export function buildPalaceLayout({
   );
   const bounds = Math.max(...lines.map(Math.abs)) + 34;
 
+  /*
+   * Every stop already placed, across the whole town rather than per
+   * neighbourhood: two neighbourhoods sampling independently put their stops
+   * within a few paces of each other wherever they meet.
+   */
+  const taken: Vec2[] = [];
   const districts: PalaceDistrict[] = [];
   const houses: PalaceHouse[] = [];
   const props: PalaceProp[] = [];
@@ -705,8 +711,6 @@ export function buildPalaceLayout({
      * greedy walk painting itself into a corner and dropping the last two stops
      * on the same pavement.
      */
-    const taken: Vec2[] = [];
-
     group.items.forEach((item) => {
       let spot = walkable[0] ?? { x: 0, z: 0 };
       let best = -1;

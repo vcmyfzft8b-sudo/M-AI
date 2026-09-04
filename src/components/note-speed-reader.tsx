@@ -167,8 +167,8 @@ export function NoteSpeedReader({
        * Let go of the height first, so what follows measures the page as it
        * would be without this screen holding it to a size. Measuring while the
        * previous answer is still applied would feed the next answer its own
-       * output, and the two would chase each other down to nothing. React puts
-       * the property back on the next render.
+       * output, and the two would chase each other down to nothing. It is put
+       * back at the end of this function, not by the render.
        */
       section.style.removeProperty("--speedread-available");
 
@@ -448,7 +448,9 @@ export function NoteSpeedReader({
         data-density={density}
         aria-label={t("speedRead.title")}
       >
-        <SpeedReaderHead onClose={onClose} title={t("speedRead.title")} />
+      <header className="memo-speedread-head">
+        <h2 className="memo-speedread-title">{t("speedRead.title")}</h2>
+      </header>
         <p className="memo-speedread-empty">{t("speedRead.empty")}</p>
       </section>
     );
@@ -458,7 +460,7 @@ export function NoteSpeedReader({
   const { before, focus, after } = splitAtFocus(word.text);
   const progress = wordCount > 1 ? index / (wordCount - 1) : 1;
   const liveWpm = wpmAtProgress(settings.wpm, progress, settings.gradual);
-  const remaining = formatMinutes(totalDurationMs(words.slice(index), settings.wpm, settings.gradual));
+  const remaining = formatMinutes(totalDurationMs(words, settings.wpm, settings.gradual, index));
   const scale = Math.max(
     MIN_WORD_SCALE,
     Math.min(1, COMFORTABLE_WORD_LENGTH / Math.max(1, word.text.length)),
@@ -471,7 +473,9 @@ export function NoteSpeedReader({
       data-density={density}
       aria-label={t("speedRead.title")}
     >
-      <SpeedReaderHead onClose={onClose} title={t("speedRead.title")} />
+      <header className="memo-speedread-head">
+        <h2 className="memo-speedread-title">{t("speedRead.title")}</h2>
+      </header>
 
       <button
         type="button"
@@ -579,27 +583,5 @@ export function NoteSpeedReader({
         </label>
       </div>
     </section>
-  );
-}
-
-function SpeedReaderHead({ title, onClose }: { title: string; onClose: () => void }) {
-  const t = useT();
-
-  return (
-    <header className="memo-speedread-head">
-      <h2 className="memo-speedread-title">{title}</h2>
-
-      <div className="memo-speedread-exit">
-        <button
-          type="button"
-          className="memo-speedread-close"
-          onClick={onClose}
-          aria-label={t("speedRead.close")}
-        >
-          <Msym name="expand_more" size="1.5rem" fill={false} weight={500} />
-        </button>
-        <span aria-hidden="true">esc</span>
-      </div>
-    </header>
   );
 }

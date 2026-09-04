@@ -1725,7 +1725,6 @@ export const sr: Messages = {
   "speedRead.finished": "Kraj beleške. Dodirni za novi početak.",
   "speedRead.play": "Počni da čitaš",
   "speedRead.pause": "Pauza",
-  "speedRead.close": "Zatvori brzo čitanje",
   "speedRead.speed": "Brzina čitanja",
   "speedRead.wpm": "{wpm} reči/min",
   "speedRead.remaining": "još {minutes} min",

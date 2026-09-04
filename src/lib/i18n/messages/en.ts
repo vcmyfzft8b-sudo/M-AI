@@ -1715,7 +1715,6 @@ export const en: Messages = {
   "speedRead.finished": "End of the note. Tap to start again.",
   "speedRead.play": "Start reading",
   "speedRead.pause": "Pause",
-  "speedRead.close": "Close the speed reader",
   "speedRead.speed": "Reading speed",
   "speedRead.wpm": "{wpm} WPM",
   "speedRead.remaining": "{minutes} min left",

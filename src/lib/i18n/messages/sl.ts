@@ -1744,7 +1744,6 @@ export const sl = {
   "speedRead.finished": "Konec zapiska. Tapni za začetek znova.",
   "speedRead.play": "Začni brati",
   "speedRead.pause": "Premor",
-  "speedRead.close": "Zapri hitro branje",
   "speedRead.speed": "Hitrost branja",
   "speedRead.wpm": "{wpm} besed/min",
   "speedRead.remaining": "še {minutes} min",

@@ -132,28 +132,58 @@ test("a faster setting is a shorter word", () => {
   );
 });
 
-test("gradual speed-up starts below the set rate and ends above it", () => {
+test("gradual speed-up starts at the set rate and climbs from there", () => {
   assert.equal(wpmAtProgress(300, 0, false), 300);
   assert.equal(wpmAtProgress(300, 1, false), 300);
 
-  assert.equal(wpmAtProgress(300, 0, true), 210);
-  assert.equal(wpmAtProgress(300, 0.5, true), 300);
+  /*
+   * The first word is read at exactly the rate the slider was moved to. Anything
+   * slower would be the screen quietly overriding the setting on the very screen
+   * the setting lives on.
+   */
+  assert.equal(wpmAtProgress(300, 0, true), 300);
+  assert.equal(wpmAtProgress(300, 0.5, true), 345);
   assert.equal(wpmAtProgress(300, 1, true), 390);
+
+  // True wherever the slider is, not just at its default.
+  assert.equal(wpmAtProgress(500, 0, true), 500);
+  assert.equal(wpmAtProgress(200, 0, true), 200);
 });
 
 test("the ramp stays inside the slider's own range", () => {
+  // Already at the top, so there is nowhere to climb to and it simply holds.
+  assert.equal(wpmAtProgress(SPEED_READER_MAX_WPM, 0, true), SPEED_READER_MAX_WPM);
   assert.equal(wpmAtProgress(SPEED_READER_MAX_WPM, 1, true), SPEED_READER_MAX_WPM);
   assert.equal(wpmAtProgress(SPEED_READER_MIN_WPM, 0, true), SPEED_READER_MIN_WPM);
 });
 
-test("the set rate stays the honest headline for the whole note", () => {
+test("the ramp only ever makes the note quicker, never slower", () => {
   const words = Array.from({ length: 400 }, () => ({ text: "voda", pause: "none" }));
-  const flat = totalDurationMs(words, 300, false);
-  const ramped = totalDurationMs(words, 300, true);
 
-  // The ramp is symmetric around the set rate, so the note takes about as long
-  // either way — within the few per cent that 1/wpm being a curve costs.
-  assert.ok(Math.abs(ramped - flat) / flat < 0.06, `${ramped} vs ${flat}`);
+  for (const wpm of [200, 300, 525, 800]) {
+    const flat = totalDurationMs(words, wpm, false);
+    const ramped = totalDurationMs(words, wpm, true);
+
+    assert.ok(ramped <= flat, `${wpm} WPM: ramped ${ramped} should not exceed flat ${flat}`);
+  }
+});
+
+test("what is left of the note is timed from where the reader is on the ramp", () => {
+  const words = Array.from({ length: 400 }, () => ({ text: "voda", pause: "none" }));
+
+  /*
+   * The last quarter is read at the top of the ramp, so it has to be quoted as
+   * quicker than the same quarter timed as if the note started there.
+   */
+  const tail = totalDurationMs(words, 300, true, 300);
+  const asIfRestarted = totalDurationMs(words.slice(300), 300, true);
+
+  assert.ok(tail < asIfRestarted, `${tail} should be under ${asIfRestarted}`);
+  // And the whole note is the sum of its parts.
+  assert.equal(
+    Math.round(totalDurationMs(words, 300, true)),
+    Math.round(totalDurationMs(words, 300, true, 0)),
+  );
 });
 
 test("stepping by sentence lands on the first word of a sentence", () => {

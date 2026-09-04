@@ -15,6 +15,12 @@ const ROUTE_SOURCE = readFileSync(
   fileURLToPath(new URL(`../${ROUTE_PATH}`, import.meta.url)),
   "utf8",
 );
+const SUBMIT_ROUTE_PATH =
+  "src/app/api/lectures/[id]/practice-test/attempt/[attemptId]/submit/route.ts";
+const SUBMIT_ROUTE_SOURCE = readFileSync(
+  fileURLToPath(new URL(`../${SUBMIT_ROUTE_PATH}`, import.meta.url)),
+  "utf8",
+);
 
 // The production failure: POST /api/lectures/<id>/practice-test/attempt builds the question bank
 // inline when there is none, ran the full 300 seconds, and was killed. The kill left the reader
@@ -64,4 +70,20 @@ test("starting an attempt runs inside the budget and records a stalled generatio
     ROUTE_SOURCE,
     /InvocationBudgetExceededError[\s\S]*markStalledPracticeTestGenerationFailed/,
   );
+});
+
+// Submitting a test grades every answer on it — a dozen model calls in waves, the same order of
+// work every other practice-test route declares 300 seconds for. This route declared nothing and
+// took the platform default, and an invocation killed there takes submitPracticeTestAttempt's own
+// catch with it: the attempt stays "submitted", which the workspace shows as neither a test to
+// sit nor a result to read.
+test("submitting a test is given the same invocation budget as starting one", () => {
+  assert.match(SUBMIT_ROUTE_SOURCE, /export const maxDuration = 300/);
+  assert.match(SUBMIT_ROUTE_SOURCE, /maxDurationSeconds: maxDuration/);
+});
+
+test("a submission that outlives the invocation frees the attempt instead of stranding it", () => {
+  assert.match(SUBMIT_ROUTE_SOURCE, /markStalledPracticeTestAttemptFailed/);
+  assert.match(SUBMIT_ROUTE_SOURCE, /InvocationBudgetExceededError/);
+  assert.match(SUBMIT_ROUTE_SOURCE, /status: 503/);
 });

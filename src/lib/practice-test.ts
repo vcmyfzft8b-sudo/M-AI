@@ -26,8 +26,33 @@ import {
   resolveStudyPipelineMode,
   STUDY_BATCH_CACHE_STAGES,
 } from "@/lib/study-items";
+import { isWorkAbortedError } from "@/lib/abort-context";
 import { clearGenerationCache } from "@/lib/notes/generation-cache";
-import { dependsOnMissingStudyContext, isHighQualityStudyPrompt } from "@/lib/study-quality";
+import {
+  buildPracticeGradingInstructions,
+  practiceGradingSchema,
+  reportStudyCoverage,
+} from "@/lib/notes/study-prompts";
+import { isHighQualityStudyPrompt } from "@/lib/study-quality";
+import {
+  clampQuestionScore,
+  isGradableAnswerGuide,
+  isSurrenderAnswer,
+  parseMarkingPoints,
+  PRACTICE_QUESTION_MAX_SCORE,
+  reconcilePointMarks,
+  scoreFromRubric,
+  summariseAttemptScores,
+  truncateAnswerForGrading,
+  type PointMark,
+} from "@/lib/practice-test-scoring";
+import {
+  bankCoverageRatio,
+  selectAttemptQuestions,
+  shouldRebuildQuestionBank,
+  shuffle,
+  usableBankQuestions,
+} from "@/lib/practice-test-selection";
 import type { CoverageConcept, CoverageUnitPlan, SourceUnit } from "@/lib/study-models";
 import { buildSourceUnits } from "@/lib/study-source-units";
 import type {
@@ -40,8 +65,12 @@ import { getAiProvider, getServerEnv } from "@/lib/server-env";
 
 // Raised 3 -> 6 with the 2026-08-28 GLM switch (~3x slower per call; batches independent).
 const PRACTICE_TEST_CONCURRENCY = 6;
-const RECENT_ATTEMPT_MEMORY = 3;
-const PRACTICE_TEST_GENERATION_VERSION = "practice-test-v2";
+/**
+ * v3 rebuilds a stored bank the first time a learner starts a test on it. v2 banks predate the
+ * quality gate on the marking scheme and carry no importance rating, so a test drawn from one
+ * cannot prefer the material that matters or promise that every question in it is markable.
+ */
+const PRACTICE_TEST_GENERATION_VERSION = "practice-test-v3";
 const PRACTICE_TEST_GENERATION_ATTEMPTS = 3;
 const RAW_GENERATED_PROMPT_MAX_LENGTH = 1200;
 const RAW_GENERATED_ANSWER_GUIDE_MAX_LENGTH = 6000;
@@ -55,6 +84,8 @@ type PracticeTestQuestionDraft = {
   conceptKey: string;
   sourceUnitIdx: number;
   sourceLocator: string | null;
+  /** 1-5, how central the material behind this question is. */
+  importance: number;
 };
 
 type AttemptQuestionMetadata = {
@@ -75,13 +106,17 @@ const practiceQuestionBatchSchema = z.object({
   questions: z.array(practiceQuestionSchema).min(0).max(16),
 });
 
-const gradingSchema = z.object({
+/**
+ * The photo grader still asks for a number: a photographed answer is read by the OCR model in one
+ * call, and splitting that into a marking pass would mean reading the handwriting twice.
+ */
+const photoGradingSchema = z.object({
   score: z.number().int().min(0).max(5),
-  expectedAnswer: z.string().min(1).max(1400),
-  rationale: z.string().min(1).max(1000),
-  strengths: z.string().min(1).max(1000),
-  missingPoints: z.string().min(1).max(1000),
-  confidence: z.string().min(2).max(40),
+  expectedAnswer: z.string().min(1),
+  rationale: z.string().min(1),
+  strengths: z.string(),
+  missingPoints: z.string(),
+  confidence: z.string(),
 });
 
 function toErrorMessage(error: unknown) {
@@ -133,8 +168,27 @@ function normalizeDifficulty(value: string): FlashcardDifficulty {
   return "medium";
 }
 
+function importanceFromQualityScore(qualityScore: number) {
+  return Math.max(1, Math.min(5, Math.round(qualityScore / 2)));
+}
+
 function normalizeText(value: string, maxLength: number) {
   const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length <= maxLength ? normalized : normalized.slice(0, maxLength).trim();
+}
+
+/**
+ * The same, except that the line breaks survive: an answer guide is a list of marking points, one
+ * per line, and collapsing it to a single line collapses the marking scheme with it — every
+ * question in a legacy bank would be marked all-or-nothing off one point.
+ */
+function normalizeGuideText(value: string, maxLength: number) {
+  const normalized = value
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length > 0)
+    .join("\n");
+
   return normalized.length <= maxLength ? normalized : normalized.slice(0, maxLength).trim();
 }
 
@@ -223,6 +277,45 @@ export async function markStalledPracticeTestGenerationFailed(params: {
   }
 }
 
+/**
+ * The same trap the attempt route hit, one route along: grading a full test is a dozen model
+ * calls, and an invocation the platform kills takes `submitPracticeTestAttempt`'s own catch with
+ * it — leaving the attempt on "submitted", a state the workspace shows as neither a test to sit
+ * nor a result to read. The caller that saw the deadline records the failure while there is still
+ * an invocation alive to do it, so the learner gets a sentence and a way forward.
+ */
+export async function markStalledPracticeTestAttemptFailed(params: {
+  attemptId: string;
+  errorMessage: string;
+}) {
+  const supabase = createSupabaseServiceRoleClient();
+  const { data: attempt } = (await supabase
+    .from("practice_test_attempts")
+    .select("model_metadata")
+    .eq("id", params.attemptId)
+    .maybeSingle()) as { data: Pick<PracticeTestAttemptRow, "model_metadata"> | null };
+
+  const { error } = await supabase
+    .from("practice_test_attempts")
+    .update({
+      status: "failed",
+      // Merged, not replaced: the question ids and attempt number in here are what the history
+      // and the next test's sampler read.
+      model_metadata: {
+        ...toMetadataRecord(attempt?.model_metadata),
+        gradingError: params.errorMessage,
+      },
+    } as never)
+    .eq("id", params.attemptId)
+    // Scoped to an attempt still in flight, so a grading run that finished in the meantime keeps
+    // its result.
+    .in("status", ["in_progress", "submitted"]);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function queueLecturePracticeTestGeneration(lectureId: string) {
   await setPracticeTestAssetStatus({
     lectureId,
@@ -230,22 +323,6 @@ export async function queueLecturePracticeTestGeneration(lectureId: string) {
     errorMessage: null,
     modelMetadata: {},
   });
-}
-
-function targetQuestionCount(bankSize: number) {
-  if (bankSize <= 8) {
-    return 5;
-  }
-  if (bankSize <= 15) {
-    return 8;
-  }
-  if (bankSize <= 24) {
-    return 10;
-  }
-  if (bankSize <= 34) {
-    return 12;
-  }
-  return 15;
 }
 
 function parseAttemptQuestionMetadata(value: unknown): AttemptQuestionMetadata | null {
@@ -275,19 +352,6 @@ function parseAttemptQuestionMetadata(value: unknown): AttemptQuestionMetadata |
   };
 }
 
-function shuffle<T>(values: T[]) {
-  const output = [...values];
-
-  for (let index = output.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    const currentValue = output[index];
-    output[index] = output[swapIndex] as T;
-    output[swapIndex] = currentValue as T;
-  }
-
-  return output;
-}
-
 async function generateQuestionsForUnit(params: {
   title: string | null;
   summary: string;
@@ -310,6 +374,7 @@ async function generateQuestionsForUnit(params: {
   );
   const languageInstruction = buildGeneratedContentLanguageInstruction();
   const requestedConceptKeys = new Set(params.concepts.map((concept) => concept.conceptKey));
+  const conceptByKey = new Map(params.concepts.map((concept) => [concept.conceptKey, concept]));
   let generatedQuestions: PracticeTestQuestionDraft[] = [];
 
   for (
@@ -341,7 +406,7 @@ Do not refer to "the lecture", "the notes", "the table above", "the example show
 If a question depends on source-specific data, definitions, categories, scenarios, or examples, include that context directly in the prompt.
 Do not mention the source, material, lecture, notes, illustration, figure, table, graph, diagram, or example in the wording of the question.
 Write prompts as direct knowledge questions that can be answered from memory after studying the topic.${retryInstruction}
-Provide a concise but complete answerGuide that a grader can use for partial credit. Include the exact expected answer and 2-4 key points when the answer has multiple parts. Keep each answerGuide under 900 characters.
+answerGuide is the marking scheme, and it is marked point by point: write one marking point per line, each line starting with "- ", each stating a specific claim, value or step an answer must contain. Two to four points for most questions; one only when the answer really is a single value or name. Never a point that repeats another, and never a point your question does not ask for. Keep the whole answerGuide under 900 characters.
 Skip a requested concept if the only possible prompt would be vague, source-dependent, visual-only, caption-like, or created only to fill the count.
 Use the provided conceptKey exactly.
 Do not invent facts beyond the source.
@@ -380,7 +445,7 @@ Return fewer than ${targetCount} questions, or zero questions, when fewer high-q
         .filter((question) => requestedConceptKeys.has(question.conceptKey))
         .map((question) => ({
           prompt: normalizeText(question.prompt, PRACTICE_PROMPT_MAX_LENGTH),
-          answerGuide: normalizeText(
+          answerGuide: normalizeGuideText(
             question.answerGuide,
             PRACTICE_ANSWER_GUIDE_MAX_LENGTH,
           ),
@@ -388,8 +453,17 @@ Return fewer than ${targetCount} questions, or zero questions, when fewer high-q
           conceptKey: question.conceptKey,
           sourceUnitIdx: params.unit.unitIndex,
           sourceLocator: params.unit.locatorLabel,
+          // The legacy planner rates a concept 0-10; the bank stores the same 1-5 scale the item
+          // pipeline uses, so selection reads one number whichever path built the question.
+          importance: importanceFromQualityScore(
+            conceptByKey.get(question.conceptKey)?.qualityScore ?? 6,
+          ),
         }))
-        .filter((question) => isHighQualityStudyPrompt(question.prompt)),
+        .filter(
+          (question) =>
+            isHighQualityStudyPrompt(question.prompt) &&
+            isGradableAnswerGuide(question.answerGuide),
+        ),
     ]);
   }
 
@@ -442,11 +516,23 @@ async function generatePracticeQuestionBank(params: {
       usageContext: { lectureId: params.lecture.id, userId: params.lecture.user_id },
       artifactModelMetadata: params.artifact.model_metadata,
     });
-    const { drafts } = await generateItemPracticeDrafts({
+    const { drafts, uncoveredItemIds } = await generateItemPracticeDrafts({
       items,
       units,
       outputLanguage: params.lecture.language_hint,
       usageContext: { lectureId: params.lecture.id, userId: params.lecture.user_id },
+    });
+    /*
+     * Whether the bank covers the material is the whole promise of the feature, and it was
+     * measured nowhere: `uncoveredItemIds` was returned and dropped on the floor. Recorded on the
+     * asset, a bank with a hole in it is something that can be found by looking rather than by a
+     * learner noticing a topic never came up.
+     */
+    const coverage = reportStudyCoverage({
+      items,
+      coveredItemIds: items
+        .filter((item) => !uncoveredItemIds.includes(item.id))
+        .map((item) => item.id),
     });
     // The whole bank is kept: attempts sample from it, and the item list is already the
     // "what must be examinable" boundary, so a 40-question cap would reintroduce the hard
@@ -463,6 +549,13 @@ async function generatePracticeQuestionBank(params: {
       units,
       plannedCoverage: buildItemPlans(items, units),
       questions,
+      coverage: {
+        itemCount: items.length,
+        requiredItemCount: coverage.requiredItemCount,
+        coveredItemCount: coverage.coveredItemCount,
+        ratio: Number(coverage.coverage.toFixed(3)),
+        uncoveredImportantCount: coverage.uncoveredImportantItems.length,
+      },
     };
   }
 
@@ -534,7 +627,7 @@ async function generatePracticeQuestionBank(params: {
     ),
   );
 
-  const sortedQuestions = shuffle(generatedQuestions).sort((left, right) => {
+  const sortedQuestions = shuffle([...generatedQuestions]).sort((left, right) => {
     if (left.sourceUnitIdx !== right.sourceUnitIdx) {
       return left.sourceUnitIdx - right.sourceUnitIdx;
     }
@@ -542,10 +635,30 @@ async function generatePracticeQuestionBank(params: {
     return left.prompt.localeCompare(right.prompt);
   });
 
+  const questions = sortedQuestions.slice(
+    0,
+    Math.max(5, Math.min(targetBankSize, sortedQuestions.length)),
+  );
+  const plannedConceptKeys = new Set(
+    plannedCoverage.flatMap((plan) => plan.concepts.map((concept) => concept.conceptKey)),
+  );
+  const coveredConceptKeys = new Set(questions.map((question) => question.conceptKey));
+
   return {
     units,
     plannedCoverage,
-    questions: sortedQuestions.slice(0, Math.max(5, Math.min(targetBankSize, sortedQuestions.length))),
+    questions,
+    coverage: {
+      itemCount: plannedConceptKeys.size,
+      requiredItemCount: plannedConceptKeys.size,
+      coveredItemCount: coveredConceptKeys.size,
+      ratio:
+        plannedConceptKeys.size === 0
+          ? 1
+          : Number((coveredConceptKeys.size / plannedConceptKeys.size).toFixed(3)),
+      uncoveredImportantCount: [...plannedConceptKeys].filter((key) => !coveredConceptKeys.has(key))
+        .length,
+    },
   };
 }
 
@@ -629,6 +742,7 @@ export async function generateLecturePracticeTest(params: {
       source_locator: question.sourceLocator,
       source_unit_idx: question.sourceUnitIdx,
       concept_key: question.conceptKey,
+      importance: question.importance,
       created_at: new Date().toISOString(),
     }));
 
@@ -658,6 +772,7 @@ export async function generateLecturePracticeTest(params: {
           (total, plan) => total + plan.concepts.length,
           0,
         ),
+        materialCoverage: coverage.coverage,
         bankVersion,
       },
     });
@@ -706,136 +821,6 @@ function getAttemptsForBank(params: {
   return params.attempts.filter(
     (attempt) => parseAttemptQuestionMetadata(attempt.model_metadata)?.bankVersion === params.bankVersion,
   );
-}
-
-function shouldRefreshPracticeTestBank(params: {
-  questions: PracticeTestQuestionRow[];
-  attempts: PracticeTestAttemptRow[];
-  bankVersion: string;
-}) {
-  if (params.questions.length === 0) {
-    return true;
-  }
-
-  const desiredCount = Math.min(targetQuestionCount(params.questions.length), params.questions.length);
-  const usedQuestionIds = new Set(
-    getAttemptsForBank({
-      attempts: params.attempts,
-      bankVersion: params.bankVersion,
-    }).flatMap((attempt) => getQuestionIdsFromAttempt(attempt)),
-  );
-
-  const unusedQuestionCount = params.questions.filter((question) => !usedQuestionIds.has(question.id)).length;
-  return unusedQuestionCount < desiredCount;
-}
-
-function scoreQuestionForSelection(params: {
-  question: PracticeTestQuestionRow;
-  recentQuestionCounts: Map<string, number>;
-  lifetimeQuestionCounts: Map<string, number>;
-  usedSourceUnitCounts: Map<number, number>;
-}) {
-  const recentCount = params.recentQuestionCounts.get(params.question.id) ?? 0;
-  const lifetimeCount = params.lifetimeQuestionCounts.get(params.question.id) ?? 0;
-  const sourceCount =
-    params.question.source_unit_idx == null
-      ? 0
-      : (params.usedSourceUnitCounts.get(params.question.source_unit_idx) ?? 0);
-
-  return lifetimeCount * 1000 + recentCount * 100 + sourceCount * 10 + Math.random();
-}
-
-function setsMatch(left: string[], right: string[]) {
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  const leftSorted = [...left].sort();
-  const rightSorted = [...right].sort();
-
-  return leftSorted.every((value, index) => value === rightSorted[index]);
-}
-
-function selectAttemptQuestions(params: {
-  questions: PracticeTestQuestionRow[];
-  previousAttempts: PracticeTestAttemptRow[];
-}) {
-  const desiredCount = Math.min(targetQuestionCount(params.questions.length), params.questions.length);
-  const recentAttempts = params.previousAttempts.slice(-RECENT_ATTEMPT_MEMORY);
-  const previousQuestionIds = params.previousAttempts.length
-    ? getQuestionIdsFromAttempt(params.previousAttempts[params.previousAttempts.length - 1] as PracticeTestAttemptRow)
-    : [];
-  const recentQuestionCounts = new Map<string, number>();
-  const lifetimeQuestionCounts = new Map<string, number>();
-
-  for (const attempt of recentAttempts) {
-    for (const questionId of getQuestionIdsFromAttempt(attempt)) {
-      recentQuestionCounts.set(questionId, (recentQuestionCounts.get(questionId) ?? 0) + 1);
-    }
-  }
-
-  for (const attempt of params.previousAttempts) {
-    for (const questionId of getQuestionIdsFromAttempt(attempt)) {
-      lifetimeQuestionCounts.set(questionId, (lifetimeQuestionCounts.get(questionId) ?? 0) + 1);
-    }
-  }
-
-  const selected: PracticeTestQuestionRow[] = [];
-  const selectedIds = new Set<string>();
-  const usedSourceUnitCounts = new Map<number, number>();
-
-  const ordered = [...params.questions].sort((left, right) => {
-    const leftScore = scoreQuestionForSelection({
-      question: left,
-      recentQuestionCounts,
-      lifetimeQuestionCounts,
-      usedSourceUnitCounts,
-    });
-    const rightScore = scoreQuestionForSelection({
-      question: right,
-      recentQuestionCounts,
-      lifetimeQuestionCounts,
-      usedSourceUnitCounts,
-    });
-
-    return leftScore - rightScore;
-  });
-
-  for (const question of shuffle(ordered)) {
-    if (selected.length >= desiredCount) {
-      break;
-    }
-
-    if (selectedIds.has(question.id)) {
-      continue;
-    }
-
-    selected.push(question);
-    selectedIds.add(question.id);
-    if (question.source_unit_idx != null) {
-      usedSourceUnitCounts.set(
-        question.source_unit_idx,
-        (usedSourceUnitCounts.get(question.source_unit_idx) ?? 0) + 1,
-      );
-    }
-  }
-
-  if (
-    previousQuestionIds.length > 0 &&
-    setsMatch(
-      selected.map((question) => question.id),
-      previousQuestionIds,
-    ) &&
-    params.questions.length > desiredCount
-  ) {
-    const replacement = params.questions.find((question) => !selectedIds.has(question.id));
-
-    if (replacement) {
-      selected[selected.length - 1] = replacement;
-    }
-  }
-
-  return selected.slice(0, desiredCount);
 }
 
 export async function createPracticeTestAttempt(params: {
@@ -889,19 +874,22 @@ export async function createPracticeTestAttempt(params: {
   let { asset: assetRow, questions: questionRows, attempts: previousAttempts } =
     await loadAttemptInputs();
 
-  const hasInvalidStoredQuestions = questionRows.some((question) =>
-    dependsOnMissingStudyContext(question.prompt) || !isHighQualityStudyPrompt(question.prompt),
-  );
   const assetMetadata = toMetadataRecord(assetRow?.model_metadata);
-  const needsInitialBank =
+  /*
+   * One rebuild decision, taken once. The old code took two: a "does the stored bank look wrong"
+   * check and, right after it, a "has the learner already seen enough of it" check that rebuilt
+   * the entire bank as soon as the unused questions no longer filled one test. That second rule
+   * put a full generation run in front of roughly every third attempt, and — because a single
+   * prompt failing the quality gate satisfied the first rule — a bank containing one bad question
+   * was rebuilt on every single start, forever, however good the other thirty-nine were.
+   */
+  const builtByCurrentPipeline = assetMetadata.pipeline === PRACTICE_TEST_GENERATION_VERSION;
+  const needsBankBuild =
     !assetRow ||
     assetRow.status !== "ready" ||
-    questionRows.length === 0 ||
-    hasInvalidStoredQuestions ||
-    (typeof assetMetadata.pipeline === "string"
-      ? assetMetadata.pipeline !== PRACTICE_TEST_GENERATION_VERSION
-      : true);
-  if (needsInitialBank) {
+    shouldRebuildQuestionBank({ questions: questionRows, builtByCurrentPipeline });
+
+  if (needsBankBuild) {
     await generateLecturePracticeTest({
       lectureId: params.lectureId,
       regenerate: Boolean(assetRow),
@@ -914,26 +902,7 @@ export async function createPracticeTestAttempt(params: {
     throw new Error("A practice test could not be prepared right now.");
   }
 
-  let bankVersion = getBankVersionFromAsset(assetRow);
-
-  if (
-    shouldRefreshPracticeTestBank({
-      questions: questionRows,
-      attempts: previousAttempts,
-      bankVersion,
-    })
-  ) {
-    await generateLecturePracticeTest({
-      lectureId: params.lectureId,
-      regenerate: true,
-    });
-    ({ asset: assetRow, questions: questionRows, attempts: previousAttempts } =
-      await loadAttemptInputs());
-    if (!assetRow || assetRow.status !== "ready" || questionRows.length === 0) {
-      throw new Error("A new practice test could not be prepared right now.");
-    }
-    bankVersion = getBankVersionFromAsset(assetRow);
-  }
+  const bankVersion = getBankVersionFromAsset(assetRow);
   const activeAttemptIds = previousAttempts
     .filter((attempt) => attempt.status === "in_progress" || attempt.status === "submitted")
     .map((attempt) => attempt.id);
@@ -949,14 +918,22 @@ export async function createPracticeTestAttempt(params: {
     }
   }
 
-  const attemptsOnCurrentBank = getAttemptsForBank({
+  // Only the attempts sat on this bank say anything about what the learner has already seen:
+  // after a rebuild the ids point at questions that no longer exist.
+  const previousAttemptQuestionIds = getAttemptsForBank({
     attempts: previousAttempts,
     bankVersion,
-  });
-  const selectedQuestions = selectAttemptQuestions({
+  }).map((attempt) => getQuestionIdsFromAttempt(attempt));
+  const usableQuestionCount = usableBankQuestions(questionRows).length;
+  const selection = selectAttemptQuestions({
     questions: questionRows,
-    previousAttempts: attemptsOnCurrentBank,
+    previousAttemptQuestionIds,
   });
+  const selectedQuestions = selection.questions;
+
+  if (selectedQuestions.length === 0) {
+    throw new Error("A practice test could not be prepared right now.");
+  }
 
   const attemptId = crypto.randomUUID();
   const attemptNumber = previousAttempts.length + 1;
@@ -966,6 +943,14 @@ export async function createPracticeTestAttempt(params: {
     attemptNumber,
     bankVersion,
     generationVersion: PRACTICE_TEST_GENERATION_VERSION,
+    // Recorded so a bank that keeps re-asking the same questions, or one a learner never gets
+    // through, shows up in the data rather than only as an impression.
+    bankSize: questionRows.length,
+    usableBankSize: usableQuestionCount,
+    bankCoverage: Number(
+      bankCoverageRatio({ questions: questionRows, previousAttemptQuestionIds }).toFixed(3),
+    ),
+    previousOverlapRatio: Number(selection.previousOverlapRatio.toFixed(3)),
   };
 
   const { error: insertAttemptError } = await supabase.from("practice_test_attempts").insert(
@@ -1008,39 +993,135 @@ export async function createPracticeTestAttempt(params: {
   };
 }
 
-async function gradeAnswer(params: {
+export type MarkedAnswer = {
+  score: number;
+  expectedAnswer: string;
+  rationale: string;
+  strengths: string;
+  missingPoints: string;
+  confidence: string;
+  markingPoints: string[];
+  pointMarks: PointMark[];
+  criticalError: boolean;
+};
+
+/** Free text from a model is clamped here rather than by the wire schema. */
+function clampFeedback(value: string, maxLength: number, fallback: string) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+
+  if (normalized.length === 0) {
+    return fallback;
+  }
+
+  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength).trim()}…`;
+}
+
+/**
+ * How confident the mark is, from the marking itself rather than from asking the model how sure
+ * it feels — a self-reported confidence is the least reliable field a grader returns. A scheme
+ * marked cleanly one way or the other is a confident mark; one that came out half-partial is the
+ * borderline answer a learner is most likely to want to argue about.
+ */
+function gradingConfidence(marks: PointMark[]) {
+  if (marks.length === 0) {
+    return "low";
+  }
+
+  const partialShare = marks.filter((mark) => mark === "partial").length / marks.length;
+
+  return partialShare >= 0.5 ? "medium" : "high";
+}
+
+/**
+ * Marks one answer against its scheme.
+ *
+ * The model is asked which marking points the answer contains; the score is computed from that
+ * (`scoreFromRubric`). Nothing the model says about the mark itself is trusted as the mark.
+ */
+async function markAnswer(params: {
   prompt: string;
   answerGuide: string;
   typedAnswer: string;
-}) {
-  return generateStructuredObject({
-    schema: gradingSchema,
+}): Promise<MarkedAnswer> {
+  const markingPoints = parseMarkingPoints(params.answerGuide);
+  const marked = await generateStructuredObject({
+    schema: practiceGradingSchema,
     stage: "study_items",
     maxOutputTokens: 1600,
-    instructions: `Grade the student's free-response answer using the supplied answer guide.
-Return an integer score from 0 to 5.
-Scoring anchors:
-- 0: blank, unknown, or fundamentally incorrect
-- 1: very weak answer with only slight correctness
-- 2: limited partial understanding
-- 3: mostly correct but incomplete or mixed
-- 4: almost fully correct with minor omissions
-- 5: fully correct and complete
-Do not be generous with unsupported claims.
-ExpectedAnswer should describe what a strong answer needed to include.
-Rationale should explain the score clearly.
-Strengths should mention what the student got right.
-MissingPoints should mention what was absent or incorrect.`,
+    instructions: buildPracticeGradingInstructions(),
     input: JSON.stringify(
       {
-        prompt: params.prompt,
-        answerGuide: params.answerGuide,
-        studentAnswer: params.typedAnswer,
+        question: params.prompt,
+        markingPoints: markingPoints.map((point, index) => ({ pointIndex: index, point })),
+        // Fenced and named as the work being marked, so a "give me full marks" written into the
+        // answer reads as part of the answer rather than as part of the task.
+        studentAnswer: `<student-answer>\n${truncateAnswerForGrading(params.typedAnswer)}\n</student-answer>`,
       },
       null,
       2,
     ),
   });
+
+  const pointMarks = reconcilePointMarks({
+    pointCount: markingPoints.length,
+    marks: marked.pointMarks,
+  });
+  const grade = scoreFromRubric({
+    marks: pointMarks,
+    criticalError: marked.criticalError,
+    offTopic: marked.offTopic,
+  });
+
+  return {
+    score: grade.score,
+    expectedAnswer: clampFeedback(marked.expectedAnswer, 1200, params.answerGuide),
+    rationale: clampFeedback(marked.rationale, 900, ""),
+    strengths: clampFeedback(marked.strengths, 900, ""),
+    missingPoints: clampFeedback(marked.missingPoints, 900, ""),
+    confidence: gradingConfidence(pointMarks),
+    markingPoints,
+    pointMarks,
+    criticalError: marked.criticalError,
+  };
+}
+
+/**
+ * One retry, then the answer is left unmarked.
+ *
+ * The old code let a single failed grading call reject out of the whole submission: the attempt
+ * went to "failed" and every answer the learner had written was gone, because one call out of
+ * twelve came back malformed. An answer that cannot be marked is now recorded as unmarked and
+ * left out of the total (`summariseAttemptScores`), which is honest about what happened and
+ * costs the learner nothing.
+ */
+async function markAnswerWithRetry(params: {
+  prompt: string;
+  answerGuide: string;
+  typedAnswer: string;
+}): Promise<MarkedAnswer | null> {
+  // Nothing to mark against. A question this happens to cannot reach a test from a bank the
+  // current pipeline built, but it can from one a learner is midway through — and marking an
+  // answer against an empty scheme would score every point missed, which is a zero the learner
+  // did not earn. Left unmarked instead, and out of the total.
+  if (parseMarkingPoints(params.answerGuide).length === 0) {
+    return null;
+  }
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await markAnswer(params);
+    } catch (error) {
+      if (isWorkAbortedError(error)) {
+        throw error;
+      }
+
+      if (attempt === 1) {
+        return null;
+      }
+    }
+  }
+
+  return null;
 }
 
 function resolveAttemptQuestion(
@@ -1074,6 +1155,7 @@ function resolveAttemptQuestion(
     source_locator: answer.source_locator_snapshot,
     source_unit_idx: null,
     concept_key: null,
+    importance: null,
     created_at: answer.created_at,
   };
 }
@@ -1123,15 +1205,35 @@ export async function submitPracticeTestAttempt(params: {
     );
   }
 
-  const inputByAnswerId = new Map(params.answers.map((answer) => [answer.answerId, answer]));
+  /*
+   * "?" is not an answer, and neither is "ne vem" typed into the box instead of ticking the
+   * checkbox. Both were being sent to the grader, which cost a call to reach the zero the string
+   * already announced — and occasionally found a marking point inside a question mark. They are
+   * folded into the same "I don't know" the checkbox produces, which is also what the learner
+   * meant.
+   */
+  const inputByAnswerId = new Map(
+    params.answers.map((answer) => {
+      const typedAnswer = answer.typedAnswer.trim();
+
+      return [
+        answer.answerId,
+        {
+          ...answer,
+          typedAnswer,
+          // Only something that was actually written. A blank box is still a missing answer and
+          // still fails the check below, the way it did before.
+          declaredUnknown:
+            answer.declaredUnknown || (typedAnswer.length > 0 && isSurrenderAnswer(typedAnswer)),
+        },
+      ] as const;
+    }),
+  );
 
   for (const answer of answerRows) {
     const input = inputByAnswerId.get(answer.id);
-    const hasResponse =
-      Boolean(input?.declaredUnknown) ||
-      Boolean(input?.typedAnswer.trim().length);
 
-    if (!input || !hasResponse) {
+    if (!input || (!input.declaredUnknown && input.typedAnswer.length === 0)) {
       throw new Error("Every practice-test question needs an answer or 'I don't know'.");
     }
   }
@@ -1146,7 +1248,7 @@ export async function submitPracticeTestAttempt(params: {
           attempt_id: answer.attempt_id,
           practice_test_question_id: answer.practice_test_question_id,
           idx: answer.idx,
-          typed_answer: input.typedAnswer.trim() || null,
+          typed_answer: input.typedAnswer || null,
           photo_path: null,
           photo_mime_type: null,
           declared_unknown: input.declaredUnknown,
@@ -1176,32 +1278,7 @@ export async function submitPracticeTestAttempt(params: {
           throw new Error("Practice-test question not found.");
         }
 
-        if (input.declaredUnknown) {
-          return {
-            id: answer.id,
-            attempt_id: answer.attempt_id,
-            practice_test_question_id: answer.practice_test_question_id,
-            idx: answer.idx,
-            question_prompt: answer.question_prompt,
-            answer_guide_snapshot: answer.answer_guide_snapshot,
-            difficulty_snapshot: answer.difficulty_snapshot,
-            source_locator_snapshot: answer.source_locator_snapshot,
-            score: 0,
-            expected_answer: question.answer_guide,
-            grading_rationale: "Marked as 'I don't know'.",
-            strengths: "No submitted answer.",
-            missing_points: "A complete answer was not provided.",
-            grading_confidence: "high",
-          };
-        }
-
-        const graded = await gradeAnswer({
-          prompt: question.prompt,
-          answerGuide: question.answer_guide,
-          typedAnswer: input.typedAnswer.trim(),
-        });
-
-        return {
+        const base = {
           id: answer.id,
           attempt_id: answer.attempt_id,
           practice_test_question_id: answer.practice_test_question_id,
@@ -1210,19 +1287,64 @@ export async function submitPracticeTestAttempt(params: {
           answer_guide_snapshot: answer.answer_guide_snapshot,
           difficulty_snapshot: answer.difficulty_snapshot,
           source_locator_snapshot: answer.source_locator_snapshot,
-          score: graded.score,
-          expected_answer: graded.expectedAnswer,
-          grading_rationale: graded.rationale,
-          strengths: graded.strengths,
-          missing_points: graded.missingPoints,
-          grading_confidence: graded.confidence,
+          // What a full answer needed to say, for the learner to read afterwards. It is the
+          // generated marking scheme, so it is already in the language of the material.
+          expected_answer: question.answer_guide,
+        };
+
+        if (input.declaredUnknown) {
+          /*
+           * No feedback text is stored for a skipped question. The three sentences that used to
+           * live here were written in English and rendered straight into a Slovene, Croatian,
+           * Bosnian or Serbian interface; the screen now writes them itself from
+           * `declared_unknown`, in the reader's own language.
+           */
+          return {
+            ...base,
+            score: 0,
+            grading_rationale: null,
+            strengths: null,
+            missing_points: null,
+            grading_confidence: "high",
+          };
+        }
+
+        const marked = await markAnswerWithRetry({
+          prompt: question.prompt,
+          answerGuide: question.answer_guide,
+          typedAnswer: input.typedAnswer,
+        });
+
+        if (!marked) {
+          return {
+            ...base,
+            score: null,
+            grading_rationale: null,
+            strengths: null,
+            missing_points: null,
+            grading_confidence: "unmarked",
+          };
+        }
+
+        return {
+          ...base,
+          score: clampQuestionScore(marked.score),
+          expected_answer: marked.expectedAnswer,
+          grading_rationale: marked.rationale || null,
+          strengths: marked.strengths || null,
+          missing_points: marked.missingPoints || null,
+          grading_confidence: marked.confidence,
         };
       },
     );
 
-    const totalScore = gradedAnswers.reduce((total, answer) => total + answer.score, 0);
-    const maxScore = gradedAnswers.length * 5;
-    const percentage = maxScore > 0 ? Number(((totalScore / maxScore) * 100).toFixed(2)) : 0;
+    const summary = summariseAttemptScores(gradedAnswers.map((answer) => answer.score));
+
+    // Every answer failing to mark is an outage, not a result. Recording a zero-question test as
+    // "graded" would show the learner a 0% they never earned.
+    if (summary.gradedCount === 0) {
+      throw new Error("The test could not be graded right now.");
+    }
 
     const { error: updateGradesError } = await supabase
       .from("practice_test_attempt_answers")
@@ -1239,13 +1361,15 @@ export async function submitPracticeTestAttempt(params: {
       .update(
         {
           status: "graded",
-          total_score: totalScore,
-          max_score: maxScore,
-          percentage,
+          total_score: summary.totalScore,
+          max_score: summary.maxScore,
+          percentage: summary.percentage,
           graded_at: new Date().toISOString(),
           model_metadata: {
             ...toMetadataRecord(attemptRow.model_metadata),
-            gradedAnswerCount: gradedAnswers.length,
+            gradedAnswerCount: summary.gradedCount,
+            unmarkedAnswerCount: summary.ungradedCount,
+            questionMaxScore: PRACTICE_QUESTION_MAX_SCORE,
           },
         } as never,
       )
@@ -1256,9 +1380,10 @@ export async function submitPracticeTestAttempt(params: {
     }
 
     return {
-      totalScore,
-      maxScore,
-      percentage,
+      totalScore: summary.totalScore,
+      maxScore: summary.maxScore,
+      percentage: summary.percentage,
+      unmarkedAnswerCount: summary.ungradedCount,
     };
   } catch (error) {
     await supabase
@@ -1389,7 +1514,7 @@ export async function gradePracticeTestPhotoWithGemini(params: {
   // Reading a photographed handwritten answer is OCR work: the text model scored 73-81% on
   // handwriting in the OCR benchmark, which is not a model to grade a student with.
   return generateStructuredObjectWithGeminiFile({
-    schema: gradingSchema,
+    schema: photoGradingSchema,
     instructions: `Grade the student's handwritten or photographed answer to the prompt.
 Question: ${params.prompt}
 Answer guide: ${params.answerGuide}

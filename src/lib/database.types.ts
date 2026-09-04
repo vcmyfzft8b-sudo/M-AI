@@ -1022,6 +1022,7 @@ export type Database = {
           source_locator: string | null;
           source_unit_idx: number | null;
           concept_key: string | null;
+          importance: number | null;
           created_at: string;
         };
         Insert: {
@@ -1034,6 +1035,7 @@ export type Database = {
           source_locator?: string | null;
           source_unit_idx?: number | null;
           concept_key?: string | null;
+          importance?: number | null;
           created_at?: string;
         };
         Update: {
@@ -1044,6 +1046,7 @@ export type Database = {
           source_locator?: string | null;
           source_unit_idx?: number | null;
           concept_key?: string | null;
+          importance?: number | null;
         };
       };
       practice_test_attempts: {

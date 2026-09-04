@@ -315,7 +315,6 @@ export const en: Messages = {
 
   /* ---- Study tools — flashcards ---- */
   "study.edit": "Edit",
-  "study.demoBadge": "Demo",
   "study.locked": "The study tools unlock once the note has finished processing.",
   "study.cards.lockedBody": "The notes come first. After that you can create the flashcards yourself.",
   "study.cards.failed": "The flashcards could not be created.",
@@ -395,6 +394,15 @@ export const en: Messages = {
   "test.yourAnswer": "Your answer:",
   "test.explanation": "Explanation:",
   "test.noFeedback": "No feedback.",
+  "test.strengths": "What you got right:",
+  "test.missing": "What was missing:",
+  "test.expectedAnswer": "Expected answer:",
+  "test.skipped": "You marked this as “I don’t know”, so it scores 0.",
+  "test.notMarked": "This answer could not be marked, so it is left out of the score.",
+  "test.unmarkedNotice": {
+    one: "{count} answer could not be marked, so it is left out of the score.",
+    other: "{count} answers could not be marked, so they are left out of the score.",
+  },
   "test.intro": "Open-ended questions from this lecture. You answer them in your own words and Memo grades them and explains why.",
 
   /* ---- Study manager, transcript and note errors ---- */
@@ -1293,6 +1301,7 @@ export const en: Messages = {
   "api.paidRequired.tts": "Choose a plan before making audio for this note.",
   "api.dictationFailed": "Dictation is not working right now. Try again.",
   "api.testStartTimedOut": "Preparing the test took too long and stopped. Try again.",
+  "api.testSubmitTimedOut": "Marking the test took too long and stopped. Try again.",
   "api.scanImageTooLarge": "That scan image is too large. The limit is 10 MB.",
   "api.photoTooLargeForPreview": "That photo is too large to preview.",
   "api.formInvalidOrTooLarge": "The form is invalid or too large.",

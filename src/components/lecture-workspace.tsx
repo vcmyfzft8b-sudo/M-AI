@@ -42,6 +42,7 @@ import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
 import { isNoteEnrichmentPending } from "@/lib/note-enrichment-status";
 import { noteEmoji } from "@/lib/note-emoji";
+import { PRACTICE_QUESTION_MAX_SCORE } from "@/lib/practice-test-scoring";
 import type { EditableNoteDoc, NoteAnnotation, NoteAnnotationKind } from "@/lib/note-doc";
 import { NOTE_TTS_HIGHLIGHT_COLORS } from "@/lib/note-tts-settings";
 import { parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
@@ -2195,6 +2196,8 @@ export function LectureWorkspace({
       ? practiceAttemptsById.get(latestViewedPracticeAttemptId) ?? null
       : null) ?? latestGradedPracticeAttempt;
   const visiblePracticeAttemptPercentage = Math.round(visiblePracticeAttempt?.percentage ?? 0);
+  const visiblePracticeAttemptUnmarkedCount =
+    visiblePracticeAttempt?.answers.filter((answer) => answer.score == null).length ?? 0;
   const practiceAttemptAnswers = currentPracticeAttempt?.answers ?? [];
   const hasCompletedPracticeTest = detail.practiceTestHistorySummary.attemptCount > 0;
   const practiceQuestionsAnsweredCount = practiceAttemptAnswers.filter((answer) => {
@@ -4482,9 +4485,6 @@ export function LectureWorkspace({
                       <span>{t("study.edit")}</span>
                     </button>
                   ) : null}
-                  {activeStudyView === "practice_test" ? (
-                    <span className="lecture-study-status demo">{t("study.demoBadge")}</span>
-                  ) : null}
                 </div>
               </div>
 
@@ -5192,6 +5192,17 @@ export function LectureWorkspace({
                       }
                     />
 
+                    {visiblePracticeAttemptUnmarkedCount > 0 ? (
+                      /*
+                       * The score is out of the questions that could be marked, not out of the
+                       * whole test — so a "24/40" on a ten-question test needs a sentence, or it
+                       * reads as arithmetic that does not add up.
+                       */
+                      <p className="lecture-practice-feedback-copy">
+                        {t("test.unmarkedNotice", { count: visiblePracticeAttemptUnmarkedCount })}
+                      </p>
+                    ) : null}
+
                     <details className="lecture-practice-breakdown">
                       <summary>
                         <span className="lecture-practice-breakdown-icon" aria-hidden="true">
@@ -5205,36 +5216,65 @@ export function LectureWorkspace({
                         </span>
                       </summary>
                       <div className="lecture-practice-feedback-list">
-                        {visiblePracticeAttempt.answers.map((answer, index) => (
-                          <details key={answer.id} className="lecture-practice-feedback-card">
-                            <summary className="lecture-practice-feedback-summary">
-                              <span className="lecture-practice-feedback-label">
-                                {t("quiz.questionN", { index: index + 1 })}
-                              </span>
-                              <span className="lecture-practice-feedback-meta">
-                                <span>{answer.score ?? 0}/5</span>
-                                <span
-                                  className="lecture-practice-feedback-chevron"
-                                  aria-hidden="true"
-                                >
-                                  ▾
+                        {visiblePracticeAttempt.answers.map((answer, index) => {
+                          /*
+                           * A question the grader could not mark carries no score, and is left
+                           * out of the total rather than counted as a zero — so it must not read
+                           * as one here either.
+                           */
+                          const isUnmarked = answer.score == null;
+                          const explanation = answer.declared_unknown
+                            ? t("test.skipped")
+                            : isUnmarked
+                              ? t("test.notMarked")
+                              : (answer.grading_rationale ?? t("test.noFeedback"));
+
+                          return (
+                            <details key={answer.id} className="lecture-practice-feedback-card">
+                              <summary className="lecture-practice-feedback-summary">
+                                <span className="lecture-practice-feedback-label">
+                                  {t("quiz.questionN", { index: index + 1 })}
                                 </span>
-                              </span>
-                            </summary>
-                            <div className="lecture-practice-feedback-body">
-                              <p className="lecture-practice-prompt">{answer.question?.prompt}</p>
-                              {answer.typed_answer ? (
+                                <span className="lecture-practice-feedback-meta">
+                                  <span>{isUnmarked ? `–/${PRACTICE_QUESTION_MAX_SCORE}` : `${answer.score}/${PRACTICE_QUESTION_MAX_SCORE}`}</span>
+                                  <span
+                                    className="lecture-practice-feedback-chevron"
+                                    aria-hidden="true"
+                                  >
+                                    ▾
+                                  </span>
+                                </span>
+                              </summary>
+                              <div className="lecture-practice-feedback-body">
+                                <p className="lecture-practice-prompt">{answer.question?.prompt}</p>
+                                {answer.typed_answer ? (
+                                  <p className="lecture-practice-feedback-copy">
+                                    <strong>{t("test.yourAnswer")}</strong> {answer.typed_answer}
+                                  </p>
+                                ) : null}
                                 <p className="lecture-practice-feedback-copy">
-                                  <strong>{t("test.yourAnswer")}</strong> {answer.typed_answer}
+                                  <strong>{t("test.explanation")}</strong> {explanation}
                                 </p>
-                              ) : null}
-                              <p className="lecture-practice-feedback-copy">
-                                <strong>{t("test.explanation")}</strong>{" "}
-                                {answer.grading_rationale ?? t("test.noFeedback")}
-                              </p>
-                            </div>
-                          </details>
-                        ))}
+                                {answer.strengths ? (
+                                  <p className="lecture-practice-feedback-copy">
+                                    <strong>{t("test.strengths")}</strong> {answer.strengths}
+                                  </p>
+                                ) : null}
+                                {answer.missing_points ? (
+                                  <p className="lecture-practice-feedback-copy">
+                                    <strong>{t("test.missing")}</strong> {answer.missing_points}
+                                  </p>
+                                ) : null}
+                                {answer.expected_answer ? (
+                                  <p className="lecture-practice-feedback-copy">
+                                    <strong>{t("test.expectedAnswer")}</strong>{" "}
+                                    {answer.expected_answer}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </details>
+                          );
+                        })}
                       </div>
                     </details>
                   </div>

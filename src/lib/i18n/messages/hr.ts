@@ -319,7 +319,6 @@ export const hr: Messages = {
 
   /* ---- Study tools — flashcards ---- */
   "study.edit": "Uredi",
-  "study.demoBadge": "Demo",
   "study.locked": "Alati za učenje otključavaju se kada obrada bilješke završi.",
   "study.cards.lockedBody": "Prvo nastaju bilješke. Nakon toga kartice možeš izraditi ručno.",
   "study.cards.failed": "Izrada kartica nije uspjela.",
@@ -401,6 +400,16 @@ export const hr: Messages = {
   "test.yourAnswer": "Tvoj odgovor:",
   "test.explanation": "Objašnjenje:",
   "test.noFeedback": "Bez povratne informacije.",
+  "test.strengths": "Što si znao:",
+  "test.missing": "Što je nedostajalo:",
+  "test.expectedAnswer": "Očekivani odgovor:",
+  "test.skipped": "Označio si „Ne znam”, pa je pitanje ocijenjeno s 0.",
+  "test.notMarked": "Ovaj odgovor nije bilo moguće ocijeniti, pa se ne računa u rezultat.",
+  "test.unmarkedNotice": {
+    one: "{count} odgovor nije bilo moguće ocijeniti, pa se ne računa u rezultat.",
+    few: "{count} odgovora nije bilo moguće ocijeniti, pa se ne računaju u rezultat.",
+    other: "{count} odgovora nije bilo moguće ocijeniti, pa se ne računaju u rezultat.",
+  },
   "test.intro": "Otvorena pitanja iz ovog predavanja. Odgovore pišeš svojim riječima, a Memo ih ocjenjuje i objašnjava.",
 
   /* ---- Study manager, transcript and note errors ---- */
@@ -1302,6 +1311,7 @@ export const hr: Messages = {
   "api.paidRequired.tts": "Odaberi paket prije stvaranja zvuka za ovu bilješku.",
   "api.dictationFailed": "Diktiranje trenutačno ne radi. Pokušaj ponovno.",
   "api.testStartTimedOut": "Priprema testa je predugo trajala i zaustavila se. Pokušaj ponovno.",
+  "api.testSubmitTimedOut": "Ocjenjivanje testa je predugo trajalo i zaustavilo se. Pokušaj ponovno.",
   "api.scanImageTooLarge": "Slika za skeniranje je prevelika. Ograničenje je 10 MB.",
   "api.photoTooLargeForPreview": "Fotografija je prevelika za pregled.",
   "api.formInvalidOrTooLarge": "Obrazac je neispravan ili prevelik.",

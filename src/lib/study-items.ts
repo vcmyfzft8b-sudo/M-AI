@@ -51,6 +51,8 @@ import {
   practiceBatchSchema,
   quizBatchSchema,
 } from "@/lib/notes/study-prompts";
+import { isGradableAnswerGuide } from "@/lib/practice-test-scoring";
+import { isHighQualityStudyPrompt } from "@/lib/study-quality";
 import type { CoverageCardDraft, CoverageUnitPlan, SourceUnit } from "@/lib/study-models";
 import type { FlashcardDifficulty } from "@/lib/database.types";
 
@@ -663,6 +665,11 @@ export type ItemPracticeQuestionDraft = {
   conceptKey: string;
   sourceUnitIdx: number;
   sourceLocator: string | null;
+  /**
+   * The knowledge item's own 1-5 rating, carried through to the bank so a test drawn from it can
+   * put the material a learner is most likely to be examined on in front of them first.
+   */
+  importance: number;
 };
 
 function practiceDifficultyForItem(item: UnitKnowledgeItem): FlashcardDifficulty {
@@ -701,27 +708,49 @@ export async function generateItemPracticeDrafts(params: {
       });
       const requested = new Set(batch.map((item) => item.id));
       const questions = result.questions.filter((question) => requested.has(question.itemId));
-
-      return {
-        drafts: questions.flatMap<ItemPracticeQuestionDraft>((question) => {
+      /*
+       * A question that cannot stand on its own, or whose marking scheme cannot be marked
+       * against, is dropped here rather than stored. Its item is left out of coveredItemIds too,
+       * so the skip-retry round asks for it again instead of the bank quietly losing it — and so
+       * the alternative to a bad question is another attempt at a good one, not a hole.
+       */
+      const kept = questions.flatMap<{ itemId: number; draft: ItemPracticeQuestionDraft }>(
+        (question) => {
           const item = itemById.get(question.itemId);
 
           if (!item) {
             return [];
           }
 
+          const prompt = question.question.replace(/\s+/g, " ").trim();
+          const answerGuide = question.expectedPoints
+            .map((point) => `- ${point.replace(/\s+/g, " ").trim()}`)
+            .join("\n");
+
+          if (!isHighQualityStudyPrompt(prompt) || !isGradableAnswerGuide(answerGuide)) {
+            return [];
+          }
+
           return [
             {
-              prompt: question.question,
-              answerGuide: question.expectedPoints.map((point) => `- ${point}`).join("\n"),
-              difficulty: practiceDifficultyForItem(item),
-              conceptKey: itemConceptKey(item),
-              sourceUnitIdx: item.primaryUnitIdx,
-              sourceLocator: unitByIndex.get(item.primaryUnitIdx)?.locatorLabel ?? null,
+              itemId: question.itemId,
+              draft: {
+                prompt,
+                answerGuide,
+                difficulty: practiceDifficultyForItem(item),
+                conceptKey: itemConceptKey(item),
+                sourceUnitIdx: item.primaryUnitIdx,
+                sourceLocator: unitByIndex.get(item.primaryUnitIdx)?.locatorLabel ?? null,
+                importance: item.importance,
+              },
             },
           ];
-        }),
-        coveredItemIds: questions.map((question) => question.itemId),
+        },
+      );
+
+      return {
+        drafts: kept.map((entry) => entry.draft),
+        coveredItemIds: kept.map((entry) => entry.itemId),
       };
     },
   });

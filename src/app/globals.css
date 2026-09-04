@@ -7844,12 +7844,6 @@ select:disabled {
   color: var(--green);
 }
 
-.lecture-study-status.demo {
-  border-color: color-mix(in srgb, var(--orange) 28%, transparent);
-  background: color-mix(in srgb, var(--orange) 12%, white);
-  color: var(--orange);
-}
-
 .lecture-study-status.failed {
   border-color: color-mix(in srgb, var(--red) 28%, transparent);
   background: var(--red-soft);

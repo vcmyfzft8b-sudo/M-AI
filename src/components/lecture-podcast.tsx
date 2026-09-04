@@ -181,6 +181,21 @@ export function LecturePodcast({
   const [scriptAttempts, setScriptAttempts] = useState(0);
   const [episodes, setEpisodes] = useState<PodcastEpisode[]>([]);
   /*
+   * Whether the first status load has landed.
+   *
+   * Until it has, this screen does not know whether the note has episodes — and rendering the
+   * chooser meanwhile meant the tab opened on "make a new one" and flicked to the library a
+   * moment later. Which screen you are on is not a thing to guess at and correct; it is worth
+   * the fraction of a second of holding still.
+   */
+  const [hasLoadedStatus, setHasLoadedStatus] = useState(false);
+  /*
+   * The episode being opened. Its script is a round trip away, and a row that looks untouched
+   * while it loads reads as a tap that missed — so it says what it is doing, and cannot be
+   * tapped twice on the way.
+   */
+  const [openingEpisodeId, setOpeningEpisodeId] = useState<string | null>(null);
+  /*
    * The player is never arrived at, only opened.
    *
    * It used to appear on its own whenever a finished episode happened to match the saved show and
@@ -304,13 +319,15 @@ export function LecturePodcast({
    * the standfirst all used to work it out separately from the same three flags, which is how a
    * screen ends up carrying decoration that belongs to a different one.
    */
-  const view: "player" | "writing" | "library" | "chooser" = hasEpisode
+  const view: "player" | "writing" | "library" | "chooser" | "loading" = hasEpisode
     ? "player"
     : isProducing
       ? "writing"
-      : episodes.length > 0 && !isChoosing
-        ? "library"
-        : "chooser";
+      : !hasLoadedStatus
+        ? "loading"
+        : episodes.length > 0 && !isChoosing
+          ? "library"
+          : "chooser";
 
   /* Restored once, on the client: reading storage during render would differ from the server. */
   useEffect(() => {
@@ -451,6 +468,8 @@ export function LecturePodcast({
         });
 
         if (!response.ok) {
+          /* Still an answer: it settles the screen onto the chooser rather than a spinner. */
+          setHasLoadedStatus(true);
           return null;
         }
 
@@ -460,6 +479,8 @@ export function LecturePodcast({
         if (requestId !== statusRequestRef.current) {
           return null;
         }
+
+        setHasLoadedStatus(true);
 
         setStatus(payload);
         setPodcast(payload.podcast);
@@ -473,6 +494,7 @@ export function LecturePodcast({
         if (payload.podcast && payload.podcast.id === pendingEpisodeIdRef.current) {
           setOpenedEpisodeId(payload.podcast.id);
           pendingEpisodeIdRef.current = null;
+          setOpeningEpisodeId(null);
           setCurrentIndex(0);
           setPositionMs(0);
           /* Tapping an episode in the library is a request to hear it, not to look at it. */
@@ -497,6 +519,8 @@ export function LecturePodcast({
 
         return payload;
       } catch {
+        setHasLoadedStatus(true);
+
         if (!options?.silent) {
           setError(t("podcast.error.status"));
         }
@@ -946,6 +970,7 @@ export function LecturePodcast({
   function openEpisode(episode: PodcastEpisode) {
     setError(null);
     pendingEpisodeIdRef.current = episode.id;
+    setOpeningEpisodeId(episode.id);
     setIsChoosing(false);
 
     if (episode.format === format && episode.length === length) {
@@ -965,6 +990,8 @@ export function LecturePodcast({
    * it while the audio carried on would mean sound with nothing to pause it.
    */
   function leavePlayer() {
+    pendingEpisodeIdRef.current = null;
+    setOpeningEpisodeId(null);
     stopPlayback();
     releaseSegments();
     setOpenedEpisodeId(null);
@@ -1300,6 +1327,14 @@ export function LecturePodcast({
             </button>
           </div>
         </>
+      ) : view === "loading" ? (
+        /*
+         * Held still until the first status load says which screen this is. Rendering the chooser
+         * meanwhile is what made the tab open on "make a new one" and flick to the library.
+         */
+        <div className="memo-podcast-loading" role="status" aria-label={t("common.loading")}>
+          <Msym name="progress_activity" size="1.5rem" fill={false} weight={500} />
+        </div>
       ) : isProducing ? (
         <>
           <h2 className="memo-podcast-title">{t("podcast.status.writing")}</h2>
@@ -1345,7 +1380,10 @@ export function LecturePodcast({
                       key={episode.id}
                       type="button"
                       role="listitem"
-                      className="memo-podcast-episode"
+                      className={`memo-podcast-episode ${
+                        openingEpisodeId === episode.id ? "opening" : ""
+                      }`.trim()}
+                      disabled={openingEpisodeId !== null}
                       onClick={() => openEpisode(episode)}
                     >
                       <span className="memo-podcast-episode-voices" aria-hidden="true">
@@ -1365,7 +1403,12 @@ export function LecturePodcast({
                           })}
                         </span>
                       </span>
-                      <Msym name="play_arrow" size="1.3rem" fill weight={500} />
+                      <Msym
+                        name={openingEpisodeId === episode.id ? "progress_activity" : "play_arrow"}
+                        size="1.3rem"
+                        fill={openingEpisodeId !== episode.id}
+                        weight={500}
+                      />
                     </button>
                   );
                 })}
@@ -1431,7 +1474,15 @@ export function LecturePodcast({
               <span>{t("podcast.generate")}</span>
             </button>
 
-            {episodes.length > 0 ? (
+            {/*
+              * Shown when there is a screen behind this one — which is what `isChoosing` means:
+              * the listener pressed "New episode" to get here. Gating it on whether the note has
+              * episodes was wrong twice over: it is a fact about data rather than about where you
+              * came from, and it can change underneath you, so the way back could vanish while
+              * you were looking at it. When the chooser IS the landing screen, there is genuinely
+              * nothing behind it and no button pretends otherwise.
+              */}
+            {isChoosing ? (
               <button
                 type="button"
                 className="memo-podcast-secondary"

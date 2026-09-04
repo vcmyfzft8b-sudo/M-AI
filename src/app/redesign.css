@@ -13360,6 +13360,29 @@
   color: var(--muted);
 }
 
+/*
+ * The half-second before the screen knows which screen it is.
+ *
+ * Sized to roughly what replaces it, so the panel does not jump when the answer arrives.
+ */
+.memo-podcast-loading {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 12rem;
+  color: var(--muted-2);
+}
+
+.memo-podcast-loading .msym {
+  animation: memo-podcast-spin 1.1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-podcast-loading .msym {
+    animation: none;
+  }
+}
+
 /* --- what this note already has ------------------------------------------ */
 
 /*
@@ -13395,6 +13418,25 @@
 }
 
 /* The voices it was made in, as the two dots the cover already uses. */
+/* The row being opened: it spins where the play arrow was, and the rest wait their turn. */
+.memo-podcast-episode.opening .msym {
+  animation: memo-podcast-spin 1.1s linear infinite;
+}
+
+.memo-podcast-episode:disabled {
+  cursor: default;
+}
+
+.memo-podcast-episode:disabled:not(.opening) {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-podcast-episode.opening .msym {
+    animation: none;
+  }
+}
+
 .memo-podcast-episode-voices {
   display: inline-flex;
   flex: none;

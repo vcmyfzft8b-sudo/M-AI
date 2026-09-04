@@ -68,12 +68,18 @@ What it must never contain is one that disagrees. Measured on the omrezja-sl fix
 
 ## Three screens, and how you get between them
 
-The tab lands on one of two, never the third, and **the library is the hub** — every screen
+The tab holds still until it knows which screen it is. Rendering the chooser while the first
+status load was in flight meant the tab opened on "make a new one" and flicked to the library a
+moment later; which screen you are on is not a thing to guess at and correct.
+
+The tab then lands on one of two, never the third, and **the library is the hub** — every screen
 reaches every other through it, in at most two taps:
 
 - **Library** — the episodes this note already has, when it has any. Tap one to play it, or
   "New episode" for the chooser.
-- **Chooser** — the shows, lengths and voices, with a way back to the episodes.
+- **Chooser** — the shows, lengths and voices. Its way back appears when there is a screen
+  behind it, which is a fact about how you arrived rather than about how many episodes exist —
+  gating it on the latter meant the way back could vanish while you were looking at it.
 - **Player** — reached only by pressing Create or tapping an episode, and it starts playing
   by itself when it was opened by either of those: waiting through a generation is asking for
   the episode, and landing in a paused player is being asked twice. Its one way out goes back

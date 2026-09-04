@@ -13578,6 +13578,64 @@
   }
 }
 
+/* The way back out of a focused map. It sits where the detail card sits, so the card steps down
+   when a trail is present — `:has()` is already load-bearing on this screen's dock. */
+.memo-mm-trail {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  max-width: calc(100% - 1.7rem);
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.memo-mm-trail::-webkit-scrollbar {
+  display: none;
+}
+
+.memo-mm-trail button {
+  border: 0;
+  padding: 0.1rem 0.25rem;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.memo-mm-trail button:hover {
+  background: var(--tile);
+  color: var(--text);
+}
+
+.memo-mm-trail-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.memo-mm-trail-current {
+  padding: 0.1rem 0.25rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.memo-mm-stage:has(.memo-mm-trail) .memo-mm-detail {
+  top: 3.5rem;
+}
+
 .memo-mm-detail {
   position: absolute;
   top: 0.85rem;
@@ -13619,6 +13677,12 @@
   font-size: 0.88rem;
   line-height: 1.45;
   text-wrap: pretty;
+}
+
+.memo-mm-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
 .memo-mm-detail-action {
@@ -13751,11 +13815,26 @@
     width: 6.5rem;
   }
 
+  .memo-mm-trail {
+    top: 4.2rem;
+    left: 0.7rem;
+    max-width: calc(100% - 1.4rem);
+  }
+
+  .memo-mm-stage:has(.memo-mm-trail) .memo-mm-detail {
+    top: auto;
+  }
+
   /* Below the tools row, which now owns the head of the stage. */
   .memo-mm-stale,
   .memo-mm-redrawing {
     top: 4.2rem;
     right: 0.7rem;
+  }
+
+  .memo-mm-stage:has(.memo-mm-trail) .memo-mm-stale,
+  .memo-mm-stage:has(.memo-mm-trail) .memo-mm-redrawing {
+    top: 7.4rem;
   }
 
   /* Clear of the tools above and the save pill below, and never over the middle of the map. */

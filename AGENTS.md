@@ -56,17 +56,20 @@
 
 ## Mindmap
 
-- The mindmap is one model call over the finished note, generated the first time somebody opens
-  its tab and stored whole as one `jsonb` document. It is not part of the coverage pipeline and
-  must not be split into per-chunk calls — a map is a shape, and only something that has read the
-  whole note can judge it.
+- The mindmap is generated the first time somebody opens its tab and stored whole as one `jsonb`
+  document. A note that fits one call gets one call; a longer one has its **topics** planned once
+  over a skeleton of the whole note and only its **filling** windowed. Never split the topics per
+  chunk — chunks that each choose their own merge into several maps sharing a title.
+- Coverage is the point. There is no length cap on what gets mapped any more; if you add one back,
+  you have re-introduced the bug the windowing was written to fix.
 - Nothing is warmed ahead of time. Opening the tab is free when the note has not changed (the
   stored `notes_hash` decides); "draw again" is the only control that always spends.
 - The opening fold, not the fit, is what makes a map readable. `suggestMindmapFold` measures
   against `MINDMAP_REFERENCE_FRAMES`, which are measured stage sizes — re-measure them if the
   note screen's chrome changes rather than adjusting them by eye.
-- Layout lives in `src/lib/mindmap-layout.ts`, is pure, and is shared by the canvas, the PNG
-  export and its tests. Put new layout rules there, never in the component.
+- Layout lives in `src/lib/mindmap-layout.ts` and `src/lib/mindmap-tidy.ts` (van der Ploeg's
+  non-layered tidy tree), is pure, and is shared by the canvas, the PNG export and its tests. Put
+  new layout rules there, never in the component.
 - Details are in [docs/mindmap.md](/docs/mindmap.md).
 
 ## Admin Dashboard

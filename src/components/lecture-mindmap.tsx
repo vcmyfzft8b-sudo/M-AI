@@ -15,8 +15,9 @@ import { parseApiResponse, redirectToBillingIfNeeded } from "@/lib/billing-clien
 import type { StudyAssetStatus } from "@/lib/database.types";
 import {
   flattenMindmap,
-  mindmapBranchIndexOf,
+  focusMindmapOn,
   mindmapPathTo,
+  mindmapTrail,
   parseMindmapDoc,
   type MindmapDoc,
   type MindmapNode,
@@ -109,10 +110,26 @@ export function LectureMindmap({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [matchCursor, setMatchCursor] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  /*
+   * Which node the map is currently re-rooted on. Folding takes things away; this takes the
+   * reader in — it is what makes a four-hundred-node map of a long note navigable rather than
+   * merely foldable, and it is the only control here that changes what the centre means.
+   */
+  const [focusId, setFocusId] = useState<string | null>(null);
   const [zoomPercent, setZoomPercent] = useState(100);
 
-  const doc = state?.doc ?? null;
+  const wholeDoc = state?.doc ?? null;
   const status = state?.status ?? null;
+
+  /* Everything below — layout, search, keyboard, export — works on whatever is on screen. */
+  const doc = useMemo(
+    () => (wholeDoc && focusId ? focusMindmapOn(wholeDoc, focusId) ?? wholeDoc : wholeDoc),
+    [wholeDoc, focusId],
+  );
+  const trail = useMemo(
+    () => (wholeDoc && focusId ? mindmapTrail(wholeDoc, focusId) : []),
+    [wholeDoc, focusId],
+  );
 
   /* What the map opens folded to, so that what it opens on is readable rather than merely whole. */
   const suggestedFold = useMemo(() => {
@@ -161,6 +178,7 @@ export function LectureMindmap({
           : `/api/lectures/${lectureId}/mindmap`;
         const response = await fetch(path, { method: "POST" });
         await parseApiResponse<{ ok: true }>(response, t);
+        setFocusId(null);
         setState((previous) => ({
           status: "queued",
           doc: previous?.doc ?? null,
@@ -293,6 +311,19 @@ export function LectureMindmap({
   }, [matches, doc, suggestedFold]);
 
   const selected = selectedId ? nodesById.get(selectedId) ?? null : null;
+  /*
+   * Read off the map being drawn rather than off the id, so a focused map recolours with the
+   * canvas instead of keeping the colours of the branches it came out of.
+   */
+  const selectedBranchIndex = useMemo(() => {
+    if (!doc || !selectedId) {
+      return 0;
+    }
+
+    const branchId = mindmapPathTo(doc, selectedId)[0];
+
+    return Math.max(0, doc.branches.findIndex((branch) => branch.id === branchId));
+  }, [doc, selectedId]);
 
   const toggleCollapse = useCallback(
     (nodeId: string) => {
@@ -390,7 +421,12 @@ export function LectureMindmap({
     }
 
     if (event.key === "Escape") {
-      setSelectedId(null);
+      if (selectedId) {
+        setSelectedId(null);
+      } else if (focusId) {
+        setFocusId(null);
+      }
+
       return;
     }
 
@@ -622,12 +658,25 @@ export function LectureMindmap({
     <div className="memo-mm-detail" role="status">
       <span
         className="memo-mm-detail-rail"
-        style={{ background: mindmapBranchColor(mindmapBranchIndexOf(selected.id)) }}
+        style={{ background: mindmapBranchColor(selectedBranchIndex) }}
       />
       <div className="memo-mm-detail-body">
         <p className="memo-mm-detail-label">{selected.label}</p>
         {selected.detail ? <p className="memo-mm-detail-copy">{selected.detail}</p> : null}
         {selected.children.length > 0 ? (
+          <div className="memo-mm-detail-actions">
+          <button
+            type="button"
+            className="memo-mm-detail-action"
+            onClick={() => {
+              setFocusId(selected.id);
+              setSelectedId(null);
+              setSearch("");
+            }}
+          >
+            <Msym name="center_focus_strong" size="1.05rem" fill={false} weight={500} />
+            <span>{t("mindmap.focusNode")}</span>
+          </button>
           <button
             type="button"
             className="memo-mm-detail-action"
@@ -645,6 +694,7 @@ export function LectureMindmap({
               })}
             </span>
           </button>
+          </div>
         ) : null}
       </div>
       <button
@@ -667,6 +717,25 @@ export function LectureMindmap({
       onKeyDown={handleKeyDown}
     >
       {canvas}
+      {trail.length > 0 ? (
+        <nav className="memo-mm-trail" aria-label={t("mindmap.trail")}>
+          <button type="button" onClick={() => setFocusId(null)}>
+            {t("mindmap.wholeMap")}
+          </button>
+          {trail.map((step, index) => (
+            <span key={step.id} className="memo-mm-trail-step">
+              <Msym name="chevron_right" size="1rem" fill={false} weight={500} />
+              {index === trail.length - 1 ? (
+                <span className="memo-mm-trail-current">{step.label}</span>
+              ) : (
+                <button type="button" onClick={() => setFocusId(step.id)}>
+                  {step.label}
+                </button>
+              )}
+            </span>
+          ))}
+        </nav>
+      ) : null}
       {toolbar}
       {detailCard}
       {/*

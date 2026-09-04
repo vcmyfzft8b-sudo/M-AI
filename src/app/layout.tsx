@@ -39,6 +39,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "battery_full",
   "bolt",
   "cancel",
+  "center_focus_strong",
   "chat_bubble",
   "check",
   "check_circle",

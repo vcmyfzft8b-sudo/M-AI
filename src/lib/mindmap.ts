@@ -4,7 +4,14 @@ import { z } from "zod";
 
 import type { Json, LectureMindmapAssetRow, StudyAssetStatus } from "@/lib/database.types";
 import { generateStructuredObject } from "@/lib/ai/json";
-import { buildMindmapInstructions, mindmapWireSchema } from "@/lib/ai/mindmap-prompt";
+import {
+  buildMindmapFillInstructions,
+  buildMindmapInstructions,
+  buildMindmapTopicPlanInstructions,
+  mindmapFillSchema,
+  mindmapTopicPlanSchema,
+  mindmapWireSchema,
+} from "@/lib/ai/mindmap-prompt";
 import { isWorkAbortedError } from "@/lib/abort-context";
 import { resolveMaterialLanguage } from "@/lib/languages";
 import {
@@ -15,37 +22,47 @@ import {
   MINDMAP_TITLE_MAX_LENGTH,
   type MindmapDoc,
 } from "@/lib/mindmap-doc";
+import { buildNoteSkeleton, mergeWindowedBranches } from "@/lib/mindmap-merge";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
+import { planSourceWriteWindows } from "@/lib/notes/note-prompts";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { hashNotesContent } from "@/lib/tutor/plan-cache";
 
 /**
  * The mind map of a note: generated once, stored whole, redrawn from the stored tree every time.
  *
- * The whole feature is one model call, which is unusual in this codebase — flashcards, quizzes
- * and practice tests all go through the coverage pipeline that reads the source unit by unit.
- * A map is different in kind: it is a shape rather than a set of items, and a shape can only be
- * judged by something that has read the material end to end. Splitting it into per-chunk calls
- * would produce ten little maps stapled together, which is precisely the failure the competing
- * implementation shows — a single unreadable column with no top-level structure at all.
+ * A map is a shape rather than a set of items, so unlike flashcards, quizzes and practice tests it
+ * cannot be built a chunk at a time: chunks that each choose their own topics merge into several
+ * maps sharing a title, which is exactly the structureless column the competing implementation
+ * draws. So a note that fits one call gets one call.
+ *
+ * A note that does not gets two phases instead, and the split is along the seam that matters. The
+ * *topics* are decided once, over a skeleton of the whole note — every heading and its opening
+ * line, which stays small however long the note runs — so the shape is still judged by something
+ * that has seen all of it. Only the *filling* is windowed, and every window is sorted into that
+ * one agreed list. The alternative, which this replaced, was to read the first 60,000 characters
+ * and quietly drop the rest.
  */
 
 /**
- * How much of the note the map is drawn from.
+ * How much of the note one call is asked to map.
  *
- * Notes reach ~120k characters at the top end. The whole of one costs real money on every
- * regeneration and buys little: past this point a map is already at its node ceiling and the
- * tail of a long note is the material a learner is least likely to be mapping. The cut is at a
- * paragraph boundary so the model never reads a sentence that stops mid-clause.
+ * Notes reach ~120k characters at the top end, and a single call over one of those does not come
+ * back with a map of it — it comes back with a map of the beginning. This used to be a hard cut
+ * at 60k with the tail simply dropped, which is a quiet way of not covering the material. Now it
+ * is a *window* size: a note longer than this is mapped in parts and merged, so the last page of
+ * a long note reaches the map on the same terms as the first.
  */
-const MINDMAP_NOTE_CHAR_CAP = 60_000;
-const MINDMAP_MAX_TOKENS = 12_000;
+const MINDMAP_WINDOW_MAX_WORDS = 7_000;
+const MINDMAP_MAX_TOKENS = 14_000;
+/** Windows are independent calls over one note; the same pool size the study batches use. */
+const MINDMAP_WINDOW_CONCURRENCY = 4;
 /**
  * Bumped whenever the prompt or the stored shape changes in a way that makes an existing map
  * worse than a fresh one. A stored map from an older version is still shown — it is a map, not a
  * bug — and is only replaced when something asks for a regeneration.
  */
-export const MINDMAP_GENERATION_VERSION = "mindmap-v1";
+export const MINDMAP_GENERATION_VERSION = "mindmap-v2";
 
 export type LectureMindmap = {
   status: StudyAssetStatus | null;
@@ -56,24 +73,11 @@ export type LectureMindmap = {
   stale: boolean;
 };
 
-function truncateAtParagraph(text: string, cap: number) {
-  if (text.length <= cap) {
-    return text;
-  }
-
-  const hard = text.slice(0, cap);
-  const lastBreak = hard.lastIndexOf("\n\n");
-
-  return lastBreak > cap * 0.6 ? hard.slice(0, lastBreak) : hard;
-}
-
 type MindmapGrounding = {
   title: string | null;
   summary: string | null;
   keyTopics: string[];
   notes: string;
-  /** The exact string the stored hash is taken over, so a cache check asks the right question. */
-  hashedNotes: string;
   languageHint: string;
 };
 
@@ -102,11 +106,10 @@ async function loadMindmapGrounding(lectureId: string): Promise<MindmapGrounding
     return null;
   }
 
-  const fullNotes = stripLeadingRedundantHeading(
+  const notes = stripLeadingRedundantHeading(
     artifactRow.structured_notes_md ?? "",
     lectureRow?.title ?? null,
   );
-  const notes = truncateAtParagraph(fullNotes, MINDMAP_NOTE_CHAR_CAP);
 
   if (notes.trim().length === 0) {
     return null;
@@ -117,12 +120,6 @@ async function loadMindmapGrounding(lectureId: string): Promise<MindmapGrounding
     summary: artifactRow.summary ?? null,
     keyTopics: artifactRow.key_topics ?? [],
     notes,
-    /*
-     * The whole note, not the truncated one. A learner editing a passage the map was never
-     * drawn from has still edited the note, and the honest answer to "is this map current?" is
-     * no — a hash over the cap would answer yes and quietly show a map of the old text.
-     */
-    hashedNotes: fullNotes,
     languageHint: lectureRow?.language_hint ?? "",
   };
 }
@@ -154,6 +151,126 @@ async function readNotesHash(lectureId: string) {
   return hashNotesContent(
     stripLeadingRedundantHeading(notes, (lecture as { title: string | null } | null)?.title ?? null),
   );
+}
+
+/** Runs `work` over `items` a few at a time, keeping the results in order and never throwing. */
+async function pool<TIn, TOut>(
+  items: readonly TIn[],
+  limit: number,
+  work: (item: TIn, index: number) => Promise<TOut>,
+): Promise<(TOut | null)[]> {
+  const results: (TOut | null)[] = new Array(items.length).fill(null);
+  let next = 0;
+
+  const runner = async () => {
+    for (;;) {
+      const index = next;
+      next += 1;
+
+      if (index >= items.length) {
+        return;
+      }
+
+      try {
+        results[index] = await work(items[index], index);
+      } catch (error) {
+        if (isWorkAbortedError(error)) {
+          throw error;
+        }
+
+        /*
+         * One window that will not come back is a gap in the map, not a reason to have no map.
+         * The rest still cover the rest of the note, and the reader can ask for a redraw.
+         */
+        console.warn("[mindmap] window failed", { index, error });
+      }
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, () => runner()),
+  );
+
+  return results;
+}
+
+/** One call, for a note that fits in one. */
+async function generateWholeNoteMindmap(params: {
+  lectureId: string;
+  grounding: MindmapGrounding;
+}) {
+  return generateStructuredObject({
+    schema: mindmapWireSchema,
+    stage: "mindmap",
+    instructions: buildMindmapInstructions(),
+    input: JSON.stringify(
+      {
+        noteTitle: params.grounding.title,
+        summary: params.grounding.summary,
+        keyTopics: params.grounding.keyTopics,
+        notes: params.grounding.notes,
+      },
+      null,
+      2,
+    ),
+    maxOutputTokens: MINDMAP_MAX_TOKENS,
+    usageContext: { stage: "mindmap", lectureId: params.lectureId },
+  });
+}
+
+/** Topics once over the whole note, then the filling window by window. */
+async function generateWindowedMindmap(params: {
+  lectureId: string;
+  grounding: MindmapGrounding;
+  windows: string[];
+}) {
+  const plan = await generateStructuredObject({
+    schema: mindmapTopicPlanSchema,
+    stage: "mindmap",
+    instructions: buildMindmapTopicPlanInstructions(),
+    input: JSON.stringify(
+      {
+        noteTitle: params.grounding.title,
+        summary: params.grounding.summary,
+        keyTopics: params.grounding.keyTopics,
+        outline: buildNoteSkeleton(params.grounding.notes),
+      },
+      null,
+      2,
+    ),
+    maxOutputTokens: 4_000,
+    usageContext: { stage: "mindmap", lectureId: params.lectureId, metadata: { phase: "plan" } },
+  });
+
+  const filled = await pool(params.windows, MINDMAP_WINDOW_CONCURRENCY, (window, index) =>
+    generateStructuredObject({
+      schema: mindmapFillSchema,
+      stage: "mindmap",
+      instructions: buildMindmapFillInstructions(),
+      input: JSON.stringify(
+        {
+          topics: plan.topics,
+          partNumber: index + 1,
+          partCount: params.windows.length,
+          material: window,
+        },
+        null,
+        2,
+      ),
+      maxOutputTokens: MINDMAP_MAX_TOKENS,
+      usageContext: {
+        stage: "mindmap",
+        lectureId: params.lectureId,
+        metadata: { phase: "fill", window: index },
+      },
+    }),
+  );
+
+  return {
+    title: plan.title,
+    language: plan.language,
+    branches: mergeWindowedBranches({ topics: plan.topics, windows: filled }),
+  };
 }
 
 /** Nothing about a map is worth failing a note over, so every error here is a message, not a throw. */
@@ -285,7 +402,7 @@ export async function generateLectureMindmap(params: {
     return;
   }
 
-  const notesHash = hashNotesContent(grounding.hashedNotes);
+  const notesHash = hashNotesContent(grounding.notes);
 
   if (!params.regenerate) {
     const existing = await readMindmapRow(params.lectureId);
@@ -302,24 +419,13 @@ export async function generateLectureMindmap(params: {
 
   await setMindmapStatus({ lectureId: params.lectureId, status: "generating", errorMessage: null });
 
+  const windows = planSourceWriteWindows(grounding.notes, MINDMAP_WINDOW_MAX_WORDS);
+
   try {
-    const generated = await generateStructuredObject({
-      schema: mindmapWireSchema,
-      stage: "mindmap",
-      instructions: buildMindmapInstructions(),
-      input: JSON.stringify(
-        {
-          noteTitle: grounding.title,
-          summary: grounding.summary,
-          keyTopics: grounding.keyTopics,
-          notes: grounding.notes,
-        },
-        null,
-        2,
-      ),
-      maxOutputTokens: MINDMAP_MAX_TOKENS,
-      usageContext: { stage: "mindmap", lectureId: params.lectureId },
-    });
+    const generated =
+      windows.length <= 1
+        ? await generateWholeNoteMindmap({ lectureId: params.lectureId, grounding })
+        : await generateWindowedMindmap({ lectureId: params.lectureId, grounding, windows });
 
     const doc = parseMindmapDoc(generated);
 
@@ -356,6 +462,9 @@ export async function generateLectureMindmap(params: {
         nodeCount: countMindmapNodes(finished),
         depth: mindmapDepth(finished),
         branchCount: finished.branches.length,
+        /* How the note was read, so a thin map can be told from a thin note in the logs. */
+        windowCount: windows.length,
+        noteChars: grounding.notes.length,
       },
     });
   } catch (error) {

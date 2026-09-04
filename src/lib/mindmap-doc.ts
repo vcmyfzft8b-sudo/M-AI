@@ -20,8 +20,19 @@ export const MINDMAP_MAX_DEPTH = 3;
 export const MINDMAP_LABEL_MAX_LENGTH = 90;
 export const MINDMAP_DETAIL_MAX_LENGTH = 320;
 export const MINDMAP_TITLE_MAX_LENGTH = 120;
-/** Beyond this a map stops being a map and becomes the note again, drawn sideways. */
-export const MINDMAP_MAX_NODES = 260;
+/**
+ * Beyond this a map stops being a map and becomes the note again, drawn sideways.
+ *
+ * Raised from 260 with windowed generation: a long note now reaches the map whole, and the old
+ * ceiling would have thrown away the last of it after all the work of reading it. The screen
+ * copes because a big map opens folded, not because it is small.
+ */
+export const MINDMAP_MAX_NODES = 420;
+/**
+ * A label is a handle, not a sentence. Past this the words that will not fit are not dropped —
+ * they become the node's detail, where the reader can still get at them.
+ */
+export const MINDMAP_LABEL_MAX_WORDS = 8;
 
 export type MindmapNode = {
   id: string;
@@ -66,6 +77,27 @@ export function tidyMindmapText(value: unknown, maxLength: number): string {
 }
 
 /**
+ * Cuts a label back to a handful of words, on a natural break where there is one.
+ *
+ * The prompt asks for phrases and mostly gets them; this is for the run that comes back with a
+ * sentence. Cutting here rather than in the layout matters because the layout's own cut is by
+ * pixels — it would clip a label to fit a box, where this keeps whole words and hands the rest
+ * to the detail card.
+ */
+function shortenLabel(label: string) {
+  const words = label.split(" ");
+
+  if (words.length <= MINDMAP_LABEL_MAX_WORDS) {
+    return label;
+  }
+
+  const kept = words.slice(0, MINDMAP_LABEL_MAX_WORDS).join(" ");
+  const clause = kept.search(/[,;:–—]/);
+
+  return (clause > 8 ? kept.slice(0, clause) : kept).replace(/[\s,;:.–—-]+$/, "");
+}
+
+/**
  * Node ids are positional (`b2.1.3`) rather than random.
  *
  * Which matters more than it looks: the canvas remembers which branches the reader collapsed and
@@ -90,7 +122,12 @@ function parseNode(value: unknown, path: number[], budget: { remaining: number }
 
   budget.remaining -= 1;
 
-  const detail = tidyMindmapText(record.detail, MINDMAP_DETAIL_MAX_LENGTH);
+  const shortened = shortenLabel(label);
+  const detail = tidyMindmapText(
+    /* An over-long label keeps its full text as the detail rather than losing its tail. */
+    shortened === label ? record.detail : record.detail || label,
+    MINDMAP_DETAIL_MAX_LENGTH,
+  );
   const rawChildren = path.length >= MINDMAP_MAX_DEPTH || !Array.isArray(record.children)
     ? []
     : record.children;
@@ -106,7 +143,7 @@ function parseNode(value: unknown, path: number[], budget: { remaining: number }
 
   return {
     id: buildNodeId(path),
-    label,
+    label: shortened,
     detail: detail || null,
     children,
   };
@@ -214,4 +251,40 @@ export function mindmapPathTo(doc: MindmapDoc, nodeId: string): string[] {
   };
 
   return walk(doc.branches, []) ?? [];
+}
+
+/**
+ * The map re-rooted on one node: that node becomes the centre and its children the branches.
+ *
+ * What makes a big map navigable rather than merely foldable. Folding takes things away; this
+ * takes you *in*, and the ids are untouched by it — a node keeps the same positional id whether
+ * it is being drawn as a leaf of the whole map or as a branch of a focused one, so a fold, a
+ * selection and a search survive the trip in and back out.
+ *
+ * Null for a node with nothing under it: there is no map to be had of a leaf.
+ */
+export function focusMindmapOn(doc: MindmapDoc, nodeId: string): MindmapDoc | null {
+  const node = flattenMindmap(doc).find((entry) => entry.id === nodeId);
+
+  if (!node || node.children.length === 0) {
+    return null;
+  }
+
+  return {
+    version: MINDMAP_DOC_VERSION,
+    title: node.label,
+    language: doc.language,
+    branches: node.children,
+  };
+}
+
+/** The labels from the whole map's centre down to `nodeId`, for the trail above a focused map. */
+export function mindmapTrail(doc: MindmapDoc, nodeId: string): { id: string; label: string }[] {
+  const byId = new Map(flattenMindmap(doc).map((entry) => [entry.id, entry]));
+
+  return mindmapPathTo(doc, nodeId).flatMap((id) => {
+    const node = byId.get(id);
+
+    return node ? [{ id, label: node.label }] : [];
+  });
 }

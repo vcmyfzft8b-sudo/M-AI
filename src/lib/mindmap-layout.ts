@@ -14,6 +14,9 @@
  */
 
 import type { MindmapDoc, MindmapNode } from "@/lib/mindmap-doc";
+// Relative and extensioned, like model-config.ts's own imports: this module is loaded directly
+// by the Node test runner, which cannot resolve the "@/" alias for a value import.
+import { tidyLayout, type TidyNode } from "./mindmap-tidy.ts";
 
 export type MindmapSide = "left" | "right";
 
@@ -88,34 +91,41 @@ export const MINDMAP_DEPTH_STYLES: readonly DepthStyle[] = [
   {
     fontSize: 15.5,
     fontWeight: 700,
-    lineHeight: 21,
-    maxTextWidth: 208,
+    lineHeight: 20,
+    maxTextWidth: 176,
     minWidth: 84,
     paddingX: 16,
     paddingY: 11,
     radius: 15,
     maxLines: 3,
   },
+  /*
+   * The two inner levels are narrower than they look like they should be, and that is the trade
+   * the contour packing paid for. A map's width is the sum of its column widths and nothing else
+   * — no amount of vertical packing touches it — while its height is now packed by outline. So
+   * these levels wrap to two or three short lines rather than running to a wide single one, which
+   * spends the height that was just freed on the axis that was actually binding.
+   */
   {
     fontSize: 13.5,
     fontWeight: 600,
-    lineHeight: 19,
-    maxTextWidth: 196,
+    lineHeight: 18,
+    maxTextWidth: 152,
     minWidth: 72,
-    paddingX: 13,
-    paddingY: 9,
+    paddingX: 11,
+    paddingY: 8,
     radius: 12,
     maxLines: 4,
   },
   {
     fontSize: 12.5,
     fontWeight: 500,
-    lineHeight: 18,
-    maxTextWidth: 186,
+    lineHeight: 17,
+    maxTextWidth: 142,
     minWidth: 64,
-    paddingX: 12,
-    paddingY: 8,
-    radius: 11,
+    paddingX: 10,
+    paddingY: 7,
+    radius: 10,
     maxLines: 4,
   },
 ];
@@ -262,8 +272,6 @@ type SizedNode = {
   lines: string[];
   children: SizedNode[];
   collapsed: boolean;
-  /** How tall this node and everything under it needs to be. */
-  extent: number;
   x: number;
   y: number;
 };
@@ -304,11 +312,6 @@ function sizeNode(params: {
    */
   const width = Math.round(Math.max(style.minWidth, textWidth + style.paddingX * 2));
 
-  const childExtent = children.reduce(
-    (total, child, index) => total + child.extent + (index > 0 ? SIBLING_GAP : 0),
-    0,
-  );
-
   return {
     source: params.node,
     depth: params.depth,
@@ -319,54 +322,63 @@ function sizeNode(params: {
     lines,
     children,
     collapsed,
-    extent: Math.max(height, childExtent),
     x: 0,
     y: 0,
   };
 }
 
-/** Places a subtree in right-facing coordinates: `x` is its left edge, `top` its first pixel. */
-function placeNode(node: SizedNode, x: number, top: number) {
-  node.x = x;
+/**
+ * Turns a sized subtree into the shape the tidy placer wants.
+ *
+ * The sibling gap is folded into each node's `size` rather than added between them afterwards,
+ * because the contour algorithm packs by size and knows nothing about gaps. Branches carry the
+ * wider gap and everything below them the narrower one, which is what keeps two topics visibly
+ * apart while their own ideas sit close together.
+ */
+function toTidyNode(node: SizedNode): TidyNode<SizedNode> {
+  return {
+    value: node,
+    size: node.height + (node.depth === 1 ? SUBTREE_GAP : SIBLING_GAP),
+    thickness: node.width,
+    children: node.children.map(toTidyNode),
+  };
+}
 
-  if (node.children.length === 0) {
-    node.y = top + (node.extent - node.height) / 2;
+/**
+ * Places one side of the map, left-to-right, centred on y = 0.
+ *
+ * The side's branches are hung off a zero-height virtual root so the whole side is packed as one
+ * tree — pack them one branch at a time and each is only ever separated from its immediate
+ * neighbour, which is how a stack of bounding boxes behaves and exactly what this replaced.
+ */
+function placeSide(side: readonly SizedNode[], rootWidth: number, mirrored: boolean) {
+  if (side.length === 0) {
     return;
   }
 
-  const childExtent = node.children.reduce(
-    (total, child, index) => total + child.extent + (index > 0 ? SIBLING_GAP : 0),
-    0,
-  );
-  const childX = x + node.width + COLUMN_GAP;
-  let childTop = top + (node.extent - childExtent) / 2;
+  const virtualRoot: TidyNode<SizedNode | null> = {
+    value: null,
+    size: 0,
+    /* Children start at `thickness + COLUMN_GAP`, and this side wants ROOT_GAP there instead. */
+    thickness: rootWidth / 2 + ROOT_GAP - COLUMN_GAP,
+    children: side.map(toTidyNode),
+  };
 
-  for (const child of node.children) {
-    placeNode(child, childX, childTop);
-    childTop += child.extent + SIBLING_GAP;
-  }
+  const placements = tidyLayout(virtualRoot, COLUMN_GAP);
+  const rootPlacement = placements.find((entry) => entry.value === null);
+  /* The virtual root is the middle of this side, and the middle of the map is y = 0. */
+  const offset = rootPlacement ? -rootPlacement.position : 0;
 
-  /*
-   * Centred between the first and last child rather than on the middle of their block. With
-   * uneven subtrees the two differ, and the eye follows the outermost lines: a parent level with
-   * the middle of a lopsided block looks attached to the wrong child.
-   */
-  const first = node.children[0];
-  const last = node.children[node.children.length - 1];
-  const centre = (first.y + first.height / 2 + (last.y + last.height / 2)) / 2;
+  for (const placement of placements) {
+    const node = placement.value;
 
-  node.y = Math.min(
-    Math.max(centre - node.height / 2, top),
-    top + node.extent - node.height,
-  );
-}
+    if (!node) {
+      continue;
+    }
 
-/** Mirrors a placed subtree about x = 0, turning a right-facing side into a left-facing one. */
-function mirrorNode(node: SizedNode) {
-  node.x = -(node.x + node.width);
-
-  for (const child of node.children) {
-    mirrorNode(child);
+    /* `size` carries the node's gap, so the node itself sits centred in the slot it was given. */
+    node.y = placement.position + offset + (placement.size - node.height) / 2;
+    node.x = mirrored ? -(placement.depth + node.width) : placement.depth;
   }
 }
 
@@ -402,20 +414,37 @@ function round(value: number) {
 function splitBranches(branches: readonly SizedNode[]) {
   const right: SizedNode[] = [];
   const left: SizedNode[] = [];
-  let rightExtent = 0;
-  let leftExtent = 0;
+  let rightWeight = 0;
+  let leftWeight = 0;
 
   for (const branch of branches) {
-    if (rightExtent <= leftExtent) {
+    const weight = branchWeight(branch);
+
+    if (rightWeight <= leftWeight) {
       right.push(branch);
-      rightExtent += branch.extent + SUBTREE_GAP;
+      rightWeight += weight;
     } else {
       left.push(branch);
-      leftExtent += branch.extent + SUBTREE_GAP;
+      leftWeight += weight;
     }
   }
 
   return { left, right };
+}
+
+/**
+ * How much vertical room a branch is about to want.
+ *
+ * An estimate, and it only has to be one: this decides which side a branch goes on, and the tidy
+ * placer decides where. Counting the leaves is the right estimate because that is what a subtree's
+ * height comes down to once contours have packed everything above them together.
+ */
+function branchWeight(node: SizedNode): number {
+  if (node.children.length === 0) {
+    return node.height + SIBLING_GAP;
+  }
+
+  return node.children.reduce((total, child) => total + branchWeight(child), 0);
 }
 
 function collectNodes(
@@ -499,27 +528,8 @@ export function layoutMindmap(params: {
 
   const { left, right } = splitBranches(branches);
 
-  const placeSide = (side: readonly SizedNode[], mirrored: boolean) => {
-    const extent = side.reduce(
-      (total, branch, index) => total + branch.extent + (index > 0 ? SUBTREE_GAP : 0),
-      0,
-    );
-    let top = -extent / 2;
-
-    for (const branch of side) {
-      placeNode(branch, rootWidth / 2 + ROOT_GAP, top);
-      top += branch.extent + SUBTREE_GAP;
-    }
-
-    if (mirrored) {
-      for (const branch of side) {
-        mirrorNode(branch);
-      }
-    }
-  };
-
-  placeSide(right, false);
-  placeSide(left, true);
+  placeSide(right, rootWidth, false);
+  placeSide(left, rootWidth, true);
 
   /*
    * Neither side is re-centred against the other on purpose. Both are already centred on y = 0,

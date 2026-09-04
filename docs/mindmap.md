@@ -5,10 +5,26 @@ fold, search and save as an image.
 
 ## How it is built
 
-One model call, not a pipeline. Flashcards, quizzes and practice tests go through the coverage
-pipeline that reads the source unit by unit; a map cannot, because it is a *shape* rather than a
-set of items and only something that has read the whole note can judge which topics are peers and
-which are details of another. Per-chunk calls would produce ten little maps stapled together.
+A map is a *shape* rather than a set of items, so it cannot be built a chunk at a time the way
+flashcards and practice tests are: chunks that each choose their own topics merge into several
+maps sharing a title, which is the structureless column the competing implementation draws. A
+note that fits one call therefore gets exactly one call.
+
+A note that does not gets two phases, split along the seam that matters:
+
+1. **Topics**, decided once over a *skeleton* of the whole note — every heading and the first line
+   of prose under it. That stays a couple of thousand characters however long the note runs, so
+   the shape is still judged by something that has seen all of the material.
+2. **Filling**, one call per window (`planSourceWriteWindows`, the same helper note writing uses),
+   each sorting its part of the note into that one agreed topic list, four at a time.
+
+`mergeWindowedBranches` folds the answers back together: ordered by the plan so the map reads in
+the note's own order, matched on a normalised label so a window that wrote "povprasevanje" is not
+silently dropped, and deduplicated because two windows describing the same idea either side of a
+page break is the normal case. A window that never comes back costs its own share and not the map.
+
+This replaced a hard 60,000-character cut with the rest of the note thrown away — a quiet way of
+not covering the material, and the reason the windowing exists at all.
 
 - Stage: `mindmap` in `src/lib/ai/model-config.ts` — GLM, `medium` thinking, 180s timeout.
 - Prompt and wire schema: `src/lib/ai/mindmap-prompt.ts`. The tree is written at a **fixed depth**
@@ -16,9 +32,10 @@ which are details of another. Per-chunk calls would produce ten little maps stap
   because a map deeper than four levels is not glanceable anyway. Free-text fields carry no
   `.max()` — Gemini rejects a schema whose string bounds multiply out across nested arrays — so
   the caps live in `src/lib/mindmap-doc.ts` and are applied to what comes back.
-- Generation: `src/lib/mindmap.ts`. Reads up to 60k characters of `structured_notes_md`, cut at a
-  paragraph boundary, and stores the whole tree as one `jsonb` document in
-  `lecture_mindmap_assets` alongside a hash of the note it was drawn from.
+- Generation: `src/lib/mindmap.ts` drives it; the decisions that are not calls — the skeleton and
+  the merge — live in `src/lib/mindmap-merge.ts`, free of `server-only` so
+  `tests/mindmap-coverage.test.mjs` can assert on them. The finished tree is stored whole as one
+  `jsonb` document alongside a hash of the note it was drawn from.
 
 ## Cost and when it runs
 
@@ -38,10 +55,26 @@ did not ask for — so it is drawn, labelled "your note has changed", and a redr
 ## Layout
 
 `src/lib/mindmap-layout.ts` is pure and takes its text measurement as a parameter, so the canvas,
-the PNG export and `tests/mindmap-layout.test.mjs` all lay out identically. It is a two-sided tidy
-tree: the title in the middle, branches split left and right **by subtree height rather than by
-count**, each side a tidy tree in which a parent sits centred between its own children. That is
-what makes overlaps impossible rather than unlikely.
+the PNG export and `tests/mindmap-layout.test.mjs` all lay out identically. It is a two-sided
+tree: the title in the middle, branches split left and right **by weight rather than by count**,
+each side placed by `src/lib/mindmap-tidy.ts`.
+
+That module is A.J. van der Ploeg's 2013 *Drawing Non-layered Tidy Trees in Linear Time* — the
+algorithm the good tree-layout libraries implement. `d3-flextree` is a port of the author's own
+Java and `entitree-flex` is another; neither was worth taking as a dependency (flextree pins
+`d3-hierarchy@1` and has not been touched since 2022, entitree-flex carries no licence, and both
+would still need wrapping for the two-sided root split, the mirroring and the fold state). So the
+algorithm is in the repo and the dependency is not.
+
+What it buys over the bounding-box stacking it replaced is **contours**: a deep, narrow subtree no
+longer reserves its whole bounding box against its neighbour, so a tall thin branch nests into the
+gap beside a short wide one. Measured on an irregular 32-node fixture, 596px tall became 477px —
+and the map went from opening folded to opening whole.
+
+The inner levels are deliberately narrower than they look like they should be. A map's width is
+the sum of its column widths and nothing else, so no amount of vertical packing touches it; those
+levels wrap to two or three short lines instead of running to one wide one, spending the height
+the contours just freed on the axis that was actually binding.
 
 ### The opening fold is the whole feature
 
@@ -54,6 +87,13 @@ count badge, so nothing is hidden without saying so.
 The two reference frames in `MINDMAP_REFERENCE_FRAMES` are **measured**, not guessed. If the note
 screen's chrome changes, re-measure them: `.memo-mm-stage`'s own `getBoundingClientRect()` on a
 1440x900 laptop and a 375x812 phone is the whole method.
+
+## Focusing
+
+Folding takes things away; **focus** takes the reader in. `focusMindmapOn` re-roots the map on any
+node — that node becomes the centre and its children the branches — which is what makes a map of a
+long note navigable rather than merely foldable. Node ids are positional, so a fold, a selection
+and a search all survive the trip in and back out, and the trail above the canvas is the way back.
 
 ## The screen
 

@@ -13907,14 +13907,15 @@
 /* --- speed reading -------------------------------------------------------- */
 
 /*
- * The reader is drawn dark in both themes, on purpose.
- *
  * Everything here exists to hold one letter still under the eye for minutes at
- * a time, and the surrounding page is what the eye keeps escaping to. A dark
- * stage is what stops that: the note behind it recedes, the word is the only
- * lit thing, and the two hairlines give the fixation point something to sit
- * between. It is the one screen in the app that does not follow the theme,
- * which is why its colours are literals rather than tokens.
+ * a time, so the screen is built to need nothing of the reader: it fills the
+ * space it is given and never scrolls. A word pinned to a fixed point inside a
+ * view that can be dragged is the one thing that would undo the whole design —
+ * and a control below the fold is a control that is not there.
+ *
+ * So the reader is a column of fixed parts with one elastic one. The header,
+ * the hint, the transport and the settings take what they need; the stage takes
+ * whatever is left, down to nothing. Every height below is a cap, not a floor.
  */
 .memo-speedread {
   --speedread-ink: var(--text);
@@ -13924,9 +13925,20 @@
   --speedread-accent: #8b5cf6;
   display: flex;
   flex-direction: column;
+  /*
+   * The height the component measured for it (see `--speedread-available`),
+   * which is what makes "one screen, no scrolling" true on a device nobody
+   * tested rather than only on the ones that were. Without the variable — the
+   * first paint, or JavaScript that never arrived — it falls back to filling
+   * whatever the panel gives it.
+   */
+  height: var(--speedread-available, auto);
+  flex: 1 1 auto;
+  min-height: 0;
   /* Wide enough that the header's rule and the top guide rail read as two
-     different things rather than as one line drawn twice. */
-  gap: 1.5rem;
+     different things rather than as one line drawn twice; it is the first
+     thing to give when the screen is short. */
+  gap: clamp(0.6rem, 2.2vh, 1.5rem);
   /* No ground, no radius, no shadow: the reader is the screen it is on, not a
      panel sitting on one. A card would draw a second edge inside the note card
      it already lives in, and the whole design is about having nothing on screen
@@ -13995,7 +14007,13 @@
   flex-direction: column;
   justify-content: space-between;
   width: 100%;
-  min-height: min(20rem, 38vh);
+  /*
+   * Takes what the fixed parts leave. The floor is the point past which there
+   * is no reader left to fit: a stage of nothing still fits on the screen, and
+   * is a screen with no word on it.
+   */
+  flex: 1 1 auto;
+  min-height: 2.9rem;
   padding: 0;
   border: 0;
   background: transparent;
@@ -14046,7 +14064,10 @@
   flex: 1 1 auto;
   min-width: 0;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  font-size: calc(clamp(2.4rem, 11vw, 3.9rem) * var(--speedread-word-scale, 1));
+  /* Capped against the viewport's height as well as its width: a phone in
+     landscape has plenty of the second and almost none of the first, and a
+     word sized only by width would not fit between the rails. */
+  font-size: calc(min(clamp(1.7rem, 10vw, 3.9rem), 12vh) * var(--speedread-word-scale, 1));
   font-weight: 500;
   letter-spacing: -0.02em;
   line-height: 1.1;
@@ -14133,8 +14154,75 @@
   margin: 0;
   background: transparent;
   cursor: pointer;
+  /*
+   * The drag belongs to the slider, not to the page. Without this a horizontal
+   * swipe that starts on the track can be claimed as a scroll gesture and the
+   * thumb never moves — which on a phone reads as the control being broken
+   * rather than as the browser having taken the gesture.
+   */
+  touch-action: none;
   -webkit-appearance: none;
   appearance: none;
+}
+
+/*
+ * Finger-sized on a touch screen.
+ *
+ * Both of these were drawn to the artboard's proportions — a 10px dot on a 3px
+ * line — which is a mouse's target, not a thumb's. The element grows to a real
+ * touch target while the line stays as thin as it was: the padding a finger
+ * needs is invisible, so the control looks the same and stops being a game of
+ * accuracy. The thumbs grow too, because a thumb you cannot see is a thumb you
+ * cannot aim at.
+ */
+@media (pointer: coarse) {
+  .memo-speedread-seek,
+  .memo-speedread-slider {
+    height: 2.5rem;
+  }
+
+  .memo-speedread-seek::-webkit-slider-thumb {
+    width: 1.15rem;
+    height: 1.15rem;
+    margin-top: -0.46rem;
+  }
+
+  .memo-speedread-seek::-moz-range-thumb {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+
+  .memo-speedread-slider::-webkit-slider-thumb {
+    width: 1.6rem;
+    height: 1.6rem;
+    margin-top: -0.6rem;
+  }
+
+  .memo-speedread-slider::-moz-range-thumb {
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+
+  .memo-speedread-seek::-webkit-slider-runnable-track,
+  .memo-speedread-seek::-moz-range-track {
+    height: 4px;
+  }
+
+  .memo-speedread-slider::-webkit-slider-runnable-track,
+  .memo-speedread-slider::-moz-range-track {
+    height: 6px;
+  }
+
+  /* The switch and its label are one target, and it is a thumb-sized one. */
+  .memo-speedread-gradual {
+    min-height: 2.75rem;
+    gap: 0.7rem;
+  }
+
+  .memo-speedread-gradual input {
+    width: 1.35rem;
+    height: 1.35rem;
+  }
 }
 
 .memo-speedread-seek::-webkit-slider-runnable-track {
@@ -14269,6 +14357,111 @@
 }
 
 /*
+ * When the reader is short of room it gives things up in order of what the
+ * screen can say without: first the key hint beside the close button and the
+ * line telling you the stage is tappable (there is a play button under it
+ * now), then the slider's end labels, since the number above it already says
+ * the rate. The stage is the last thing to be given up, never the first.
+ *
+ * Keyed off how much room the reader measured for itself rather than off a
+ * viewport height: a desktop window can be tall and still leave it very little
+ * once the header, the card and the pill row have taken theirs.
+ */
+.memo-speedread[data-density="compact"],
+.memo-speedread[data-density="tight"] {
+  gap: 0.6rem;
+}
+
+[data-density="compact"] .memo-speedread-head,
+[data-density="tight"] .memo-speedread-head {
+  padding-bottom: 0.5rem;
+}
+
+[data-density="compact"] .memo-speedread-title,
+[data-density="tight"] .memo-speedread-title {
+  font-size: 1.05rem;
+}
+
+[data-density="compact"] .memo-speedread-close,
+[data-density="tight"] .memo-speedread-close {
+  width: 2rem;
+  height: 2rem;
+}
+
+[data-density="compact"] .memo-speedread-exit span,
+[data-density="tight"] .memo-speedread-exit span,
+[data-density="compact"] .memo-speedread-hint,
+[data-density="tight"] .memo-speedread-hint {
+  display: none;
+}
+
+[data-density="compact"] .memo-speedread-play,
+[data-density="tight"] .memo-speedread-play {
+  width: 2.3rem;
+  height: 2.3rem;
+}
+
+/* Still a full touch target where there is room for one. */
+@media (pointer: coarse) {
+  [data-density="compact"] .memo-speedread-play {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+}
+
+[data-density="compact"] .memo-speedread-rate,
+[data-density="tight"] .memo-speedread-rate {
+  font-size: 0.85rem;
+}
+
+[data-density="compact"] .memo-speedread-gradual,
+[data-density="tight"] .memo-speedread-gradual {
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+}
+
+[data-density="compact"] .memo-speedread-scale {
+  font-size: 0.68rem;
+}
+
+[data-density="tight"] .memo-speedread-scale {
+  display: none;
+}
+
+[data-density="tight"] .memo-speedread-head {
+  padding-bottom: 0.35rem;
+}
+
+[data-density="tight"] .memo-speedread-gradual {
+  margin-top: 0;
+}
+
+/*
+ * A finger still needs somewhere to land, so the touch targets are the last
+ * thing to shrink and they never shrink far — a little under the usual minimum
+ * beats a control that has been pushed off a 390px-tall screen entirely.
+ */
+[data-density="tight"] .memo-speedread-stage {
+  min-height: 2.5rem;
+}
+
+@media (pointer: coarse) {
+  [data-density="tight"] .memo-speedread-seek,
+  [data-density="tight"] .memo-speedread-slider {
+    height: 2.1rem;
+  }
+
+  [data-density="tight"] .memo-speedread-gradual {
+    min-height: 2.4rem;
+  }
+
+  [data-density="tight"] .memo-speedread-play {
+    width: 2.1rem;
+    height: 2.1rem;
+  }
+}
+
+/*
  * The reader owns the screen: there is nothing to ask a question with while a
  * word is being held still under the eye.
  *
@@ -14299,19 +14492,30 @@
 }
 
 .memo-note-screen[data-note-tab="speed"] .memo-panel.study {
-  margin-top: 1.4rem;
+  margin-top: clamp(0.6rem, 2vh, 1.4rem);
   min-height: 0;
 }
 
-@media (min-width: 1100px) {
-  /*
-   * Sized so the speed slider and the ramp switch land above the fold on a
-   * 900px-tall window — the shortest laptop screen this is used on. The desktop
-   * note card is taller than the viewport, so anything the stage takes past
-   * this is a scroll away from the controls it belongs to. Measured: 32vh puts
-   * the last control at ~885px.
-   */
-  .memo-speedread-stage {
-    min-height: min(17rem, 29vh);
-  }
+/*
+ * The chain that makes "never scrolls" true rather than merely intended. The
+ * note scroller becomes a column whose one flexible child is the panel, the
+ * panel's child is the reader, and each link passes a definite height down by
+ * refusing to grow past it (`min-height: 0`, without which a flex child floors
+ * at its content size and pushes the controls off the bottom instead).
+ */
+.memo-note-screen[data-note-tab="speed"] .memo-note-scroll {
+  display: flex;
+  flex-direction: column;
+  overflow-y: hidden;
+  mask-image: none;
+  -webkit-mask-image: none;
 }
+
+.memo-note-screen[data-note-tab="speed"] .memo-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+

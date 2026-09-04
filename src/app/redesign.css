@@ -613,6 +613,15 @@
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x;
   overscroll-behavior: contain;
+  /*
+   * Never up or down, whatever the row's height turns out to be.
+   *
+   * `overflow-x: auto` alone makes the *other* axis `auto` too, so the row is a vertical scroll
+   * container as well — harmless while it has room, and not harmless when a flex column squeezes
+   * it: on the speed reader the row was 49px tall around 52px of pills and could be dragged three
+   * and a half pixels up and down. Small, and enough to feel like the whole row was sliding.
+   */
+  overflow-y: hidden;
 }
 
 
@@ -2176,6 +2185,9 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  /* Never the flex item that gives way. Squeezed, it clips its own pills — which is what made
+     it scrollable vertically in the first place, on the one screen with a fixed height. */
+  flex: 0 0 auto;
   margin-top: 1.2rem;
   padding-bottom: 0.4rem;
   overflow-x: auto;

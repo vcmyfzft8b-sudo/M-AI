@@ -13931,6 +13931,73 @@
   border-color: rgba(20, 18, 26, 0.2);
 }
 
+/* The results screen, on the town's own backdrop. */
+.memo-palace-finish {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+  background: color-mix(in oklch, var(--bg) 78%, transparent);
+  backdrop-filter: blur(6px);
+  overflow-y: auto;
+}
+
+/* Both actions fill the width the results screen gives them. */
+.memo-palace-finish .memo-result-actions > * {
+  width: 100%;
+  justify-content: center;
+}
+
+.memo-palace-finish .memo-result {
+  width: min(28rem, 100%);
+  background: var(--bg);
+  border-radius: 26px;
+  padding: 1.6rem 1.4rem 1.4rem;
+  box-shadow: 0 22px 60px rgba(10, 8, 20, 0.35);
+}
+
+.memo-palace-sheet {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(10, 8, 20, 0.55);
+}
+
+.memo-palace-sheet-inner {
+  width: min(28rem, 100%);
+  max-height: 80%;
+  overflow: auto;
+  padding: 1.2rem;
+  border-radius: 22px;
+  background: #fff;
+  color: #14121a;
+}
+
+.memo-palace-sheet-inner h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.memo-palace-sheet-inner ul {
+  margin: 0 0 0.9rem;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-palace-sheet-inner li {
+  border-bottom-color: rgba(20, 18, 26, 0.08);
+}
+
+.memo-palace-sheet-inner .memo-button-outline.small {
+  background: transparent;
+  color: #14121a;
+  border-color: rgba(20, 18, 26, 0.2);
+}
+
 .memo-palace-done {
   position: absolute;
   left: 50%;

@@ -33,6 +33,18 @@ export type Box = {
 /** Which study screen a station opens. */
 export type StudyKind = "card" | "quiz" | "test";
 
+/**
+ * The colour a stop is marked with, on the ground and on the map: the same
+ * three the note's own tabs use, so a purple ring is a flashcard here for the
+ * same reason the Flashcards tab is purple there. The neighbourhood is told by
+ * the houses and by the pill in the corner; the ring tells you what is waiting.
+ */
+export const STATION_HUE: Record<StudyKind, number> = {
+  card: 272,
+  quiz: 330,
+  test: 150,
+};
+
 export type PalaceItem = {
   id: string;
   kind: StudyKind;
@@ -237,9 +249,13 @@ export function selectPalaceItems({
   test: readonly { id: string; weight?: number }[];
   limit?: number;
 }): PalaceItem[] {
-  /* Roughly three cards to one question, and never more questions than exist. */
-  const quizWanted = Math.min(quiz.length, Math.round(limit * 0.2));
-  const testWanted = Math.min(test.length, Math.round(limit * 0.1));
+  /*
+   * Two cards to a question, near enough: a walk that is nine-tenths flashcards
+   * does not feel like it has a quiz in it at all, and being asked in three
+   * different ways is most of what makes the walk worth taking over the deck.
+   */
+  const quizWanted = Math.min(quiz.length, Math.round(limit * 0.25));
+  const testWanted = Math.min(test.length, Math.round(limit * 0.15));
   const cardsWanted = Math.min(cards.length, limit - quizWanted - testWanted);
 
   /*

@@ -1,6 +1,12 @@
 import * as THREE from "three";
 
-import type { PalaceHouse, PalaceLayout, PalaceProp, PalaceStation } from "@/lib/palace/layout";
+import {
+  STATION_HUE,
+  type PalaceHouse,
+  type PalaceLayout,
+  type PalaceProp,
+  type PalaceStation,
+} from "@/lib/palace/layout";
 import type { Collider } from "@/lib/palace/movement";
 
 /**
@@ -1283,7 +1289,8 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       ringGeometry,
       track(
         new THREE.MeshBasicMaterial({
-          color: hsl(station.hue, 0.7, 0.55),
+          /* The ring says which of the three is waiting here. */
+          color: hsl(STATION_HUE[station.kind], 0.7, 0.55),
           transparent: true,
           opacity: 0.55,
           side: THREE.DoubleSide,

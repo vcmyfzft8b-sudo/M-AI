@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "@/components/i18n-provider";
 import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
+import { StudyCompletionCard } from "@/components/study-completion-card";
 import { StudyFlashcard, type StudyFlashcardExit } from "@/components/study-flashcard";
 import {
   FLASHCARD_EXIT_ANIMATION_MS,
@@ -17,6 +18,7 @@ import {
   buildPalaceLayout,
   mapArrowAngle,
   selectPalaceItems,
+  STATION_HUE,
   type StudyKind,
 } from "@/lib/palace/layout";
 import type {
@@ -355,7 +357,7 @@ export function LecturePalace({
         if (distance > MAP_RANGE) return;
 
         if (done) {
-          context.strokeStyle = `hsl(${entry.hue} 55% 72% / 0.7)`;
+          context.strokeStyle = `hsl(${STATION_HUE[entry.kind]} 55% 72% / 0.7)`;
           context.lineWidth = 2;
           context.beginPath();
           context.moveTo(point.x - 3.4, point.y);
@@ -366,9 +368,9 @@ export function LecturePalace({
           return;
         }
 
-        /* A disc in the neighbourhood's colour behind the face, so a pale
-           mascot still reads against a dark map at this size. */
-        context.fillStyle = `hsl(${entry.hue} 80% 62%)`;
+        /* A disc behind the face in the colour of what is waiting there — the
+           note's own three — so a map full of Memos still says which is which. */
+        context.fillStyle = `hsl(${STATION_HUE[entry.kind]} 80% 62%)`;
         context.beginPath();
         context.arc(point.x, point.y, icon / 2, 0, Math.PI * 2);
         context.fill();
@@ -770,6 +772,13 @@ export function LecturePalace({
 
   const total = layout.stations.length;
   const done = layout.stations.filter((entry) => collected.has(entry.id)).length;
+  /*
+   * Recalled without having to come back for it. A card you missed and returned
+   * to is collected, but it is not a card you knew.
+   */
+  const firstTimeKnown = layout.stations.filter(
+    (entry) => collected.has(entry.id) && results[entry.id] !== "again",
+  ).length;
   const counts = items.reduce(
     (current, item) => ({ ...current, [item.kind]: current[item.kind] + 1 }),
     { card: 0, quiz: 0, test: 0 } as Record<StudyKind, number>,
@@ -1231,23 +1240,50 @@ export function LecturePalace({
             ) : null}
 
             {done === total ? (
-              <div className="memo-palace-done">
-                <p className="memo-palace-done-title">{t("palace.done.title")}</p>
-                <p className="memo-palace-done-copy">{t("palace.done.copy")}</p>
-                <div className="memo-palace-card-actions">
-                  <button type="button" className="memo-button-outline small" onClick={restart}>
-                    {t("palace.restart")}
-                  </button>
-                  <button
-                    type="button"
-                    className="memo-palace-cta small"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    {t("palace.exit")}
-                  </button>
-                </div>
+              /*
+               * The same results screen a finished deck, quiz or test gets —
+               * the walk is one of them, so it ends the way they do rather than
+               * with a panel of its own. The score is what was recalled first
+               * time: a card you had to come back to is not a card you knew.
+               */
+              <div className="memo-palace-finish">
+                <StudyCompletionCard
+                  eyebrow={t("study.completed")}
+                  title={t("palace.done.title")}
+                  subtitle={t("palace.done.copy")}
+                  percentage={total === 0 ? 0 : (firstTimeKnown / total) * 100}
+                  percentageLabel={t("study.score")}
+                  primaryMetric={{
+                    label: t("study.correctAnswers"),
+                    value: `${firstTimeKnown}/${total}`,
+                  }}
+                  actions={
+                    <>
+                      <button
+                        type="button"
+                        onClick={restart}
+                        className="lecture-study-refresh lecture-study-restart"
+                        aria-label={t("palace.restart")}
+                      >
+                        <Msym name="replay" size="1.2rem" fill={false} weight={500} />
+                        {t("palace.restart")}
+                      </button>
+                      {/* The design gives a results screen's second action its
+                          own surface-and-border treatment; this only has to
+                          bring the text colour and the pill shape. */}
+                      <button
+                        type="button"
+                        className="memo-button-outline small"
+                        onClick={() => setIsOpen(false)}
+                      >
+                        {t("palace.exit")}
+                      </button>
+                    </>
+                  }
+                />
               </div>
             ) : null}
+
           </div>
         </MemoPortal>
       ) : null}

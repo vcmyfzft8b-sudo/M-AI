@@ -114,8 +114,13 @@ export function stepCharacter({
      * Camera-relative: pushing up walks away from the camera whichever way it
      * has been swung round, which is the only scheme that survives a player
      * spinning the camera mid-run.
+     *
+     * The sideways axis is negated on the way in. Headings here run clockwise
+     * — `direction = (sin h, cos h)` — while the walker's right hand, with the
+     * camera looking along `(sin yaw, cos yaw)`, is `(-cos yaw, sin yaw)`. Feed
+     * the stick in unnegated and "right" walks left.
      */
-    const inputAngle = Math.atan2(input.right, input.forward);
+    const inputAngle = Math.atan2(-input.right, input.forward);
     const heading = cameraYaw + inputAngle;
 
     speed = (input.sprint ? SPRINT_SPEED : WALK_SPEED) * magnitude;

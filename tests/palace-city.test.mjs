@@ -270,6 +270,11 @@ test("the walk mixes cards with quiz and test questions", () => {
   assert.equal(chosen.length, MAX_STATIONS);
   assert.ok(counts.card > counts.quiz, "the deck should still be mostly flashcards");
   assert.ok(counts.quiz > 0 && counts.test > 0, "a walk with no questions in it");
+  /* And enough of them that a walk actually runs into one. */
+  assert.ok(
+    counts.quiz + counts.test >= chosen.length * 0.3,
+    `only ${counts.quiz + counts.test} questions in ${chosen.length} stops`,
+  );
   assert.equal(new Set(chosen.map((item) => item.id)).size, chosen.length);
 });
 
@@ -572,4 +577,45 @@ test("the walk covers every concept the deck teaches before repeating one", () =
   assert.equal(chosen.length, 40);
   assert.equal(concepts.size, 30, "the walk repeats a concept while another has no stop at all");
   assert.equal(new Set(chosen.map((item) => item.sectionId)).size, 4, "a section was left out");
+});
+
+test("the walker strafes the way the player asked", () => {
+  /* Facing -Z (the way the town spawns you), right is +X and left is -X. */
+  const step = (right) =>
+    stepCharacter({
+      state: createCharacter(0, 0, Math.PI),
+      input: { forward: 0, right, jump: false, sprint: false },
+      cameraYaw: Math.PI,
+      colliders: [],
+      bounds: 200,
+      delta: 1 / 60,
+    });
+
+  assert.ok(step(1).x > 0.01, "pressing right walked left");
+  assert.ok(step(-1).x < -0.01, "pressing left walked right");
+  assert.ok(Math.abs(step(1).z) < 0.001, "strafing wandered forwards");
+
+  /* And forward is still away from the camera. */
+  const ahead = stepCharacter({
+    state: createCharacter(0, 0, Math.PI),
+    input: { forward: 1, right: 0, jump: false, sprint: false },
+    cameraYaw: Math.PI,
+    colliders: [],
+    bounds: 200,
+    delta: 1 / 60,
+  });
+
+  assert.ok(ahead.z < -0.01, "pressing forward walked backwards");
+
+  /* Turn the camera a quarter and the axes turn with it. */
+  const turned = stepCharacter({
+    state: createCharacter(0, 0, 0),
+    input: { forward: 0, right: 1, jump: false, sprint: false },
+    cameraYaw: Math.PI / 2,
+    colliders: [],
+    bounds: 200,
+    delta: 1 / 60,
+  });
+
+  assert.ok(turned.z > 0.01, "the strafe did not follow the camera round");
 });

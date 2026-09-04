@@ -5,6 +5,7 @@
 // silent: nothing here throws, it just plays wrong.
 
 import { speakableMath } from "./note-tts-text.ts";
+import { stripAudioTags } from "./tutor/turn-audio.ts";
 import {
   PODCAST_MAX_TURN_WORDS,
   type PodcastSpeaker,
@@ -150,6 +151,241 @@ export function parseStoredTurns(value: unknown): PodcastTurn[] {
 
     return typeof text === "string" && text.length > 0
       ? [{ speaker: speaker === "b" ? ("b" as const) : ("a" as const), text }]
+      : [];
+  });
+}
+
+/**
+ * One line of subtitle: what is being said, and when.
+ *
+ * Timed against the turn's own audio, so the player only has to compare the element's
+ * currentTime against these — no second clock, and nothing to drift.
+ */
+export type PodcastCue = {
+  text: string;
+  startMs: number;
+  endMs: number;
+};
+
+/**
+ * How wide a subtitle line is allowed to be.
+ *
+ * Broadcast subtitling settles around 37-42 characters a line because that is about what the eye
+ * takes in one movement; past it a reader is scanning rather than glancing, which is the opposite
+ * of what a subtitle is for. This app's line wraps on a phone at roughly the same width.
+ */
+const CUE_MAX_CHARS = 42;
+
+/**
+ * The shortest a line may stay up, and the longest.
+ *
+ * A cue that flashes is unreadable however correct its timing, so a very short phrase is held on
+ * until the next one needs the space. The ceiling is the other failure — a listener who looked
+ * away and came back should not be reading a line whose audio finished four seconds ago.
+ */
+const CUE_MIN_MS = 900;
+const CUE_MAX_MS = 6_000;
+
+/** Ends a line: the reader gets a complete thought rather than a fragment. */
+const SENTENCE_END = /[.!?…]$/u;
+const CLAUSE_END = /[,;:—-]$/u;
+
+/** Compared to decide whether a spoken piece is the same word as one in the script. */
+function normalizeWord(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/\p{Mark}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+/**
+ * Puts the synthesizer's timings onto the words the script actually says.
+ *
+ * The timings cannot simply be used as the subtitle text, which is what this originally did, and
+ * it was wrong in a way that only showed up on a real episode: the first cue of a turn beginning
+ * "Danes gre za osnove…" came back reading "es gre za osnove…". The stream drops a few leading
+ * characters from its timestamps — the audio is complete, the timing report is not — and anything
+ * built from the report inherits the hole.
+ *
+ * So the report is used for WHEN, and the script for WHAT. A word the report never mentioned
+ * still gets a place: its timing is interpolated from the neighbours that were reported, which is
+ * how read-aloud has always handled the same gap.
+ */
+export function alignPodcastWords(
+  text: string,
+  pieces: ReadonlyArray<{ text: string; start_ms: number; end_ms: number }>,
+): PodcastCue[] {
+  const words = stripAudioTags(text).split(/\s+/u).filter(Boolean);
+
+  if (words.length === 0) {
+    return [];
+  }
+
+  const spoken = pieces.filter((piece) => normalizeWord(piece.text).length > 0);
+  const timed: Array<{ text: string; startMs: number | null; endMs: number | null }> = words.map(
+    (word) => ({ text: word, startMs: null, endMs: null }),
+  );
+
+  let pieceIndex = 0;
+
+  for (let wordIndex = 0; wordIndex < words.length && pieceIndex < spoken.length; wordIndex += 1) {
+    const word = normalizeWord(words[wordIndex]);
+
+    if (!word) {
+      continue;
+    }
+
+    /*
+     * A short lookahead rather than a strict match. The report can drop a word as well as the
+     * head of one, and a single miss must not throw the rest of the turn out of step.
+     */
+    for (let ahead = 0; ahead < 3 && pieceIndex + ahead < spoken.length; ahead += 1) {
+      const candidate = normalizeWord(spoken[pieceIndex + ahead].text);
+
+      if (candidate === word || candidate.endsWith(word) || word.endsWith(candidate)) {
+        timed[wordIndex].startMs = spoken[pieceIndex + ahead].start_ms;
+        timed[wordIndex].endMs = spoken[pieceIndex + ahead].end_ms;
+        pieceIndex += ahead + 1;
+        break;
+      }
+    }
+  }
+
+  /* Every word that was never matched sits between two that were, and is placed between them. */
+  const known = timed.filter((word) => word.startMs !== null);
+
+  if (known.length === 0) {
+    return [];
+  }
+
+  const firstStart = known[0].startMs ?? 0;
+  const lastEnd = known[known.length - 1].endMs ?? firstStart;
+
+  for (let index = 0; index < timed.length; index += 1) {
+    if (timed[index].startMs !== null) {
+      continue;
+    }
+
+    let before = index - 1;
+    while (before >= 0 && timed[before].endMs === null) before -= 1;
+    let after = index + 1;
+    while (after < timed.length && timed[after].startMs === null) after += 1;
+
+    const from = before >= 0 ? (timed[before].endMs as number) : firstStart;
+    const to = after < timed.length ? (timed[after].startMs as number) : lastEnd;
+    const gap = Math.max(0, to - from);
+    const share = gap / Math.max(1, after - before);
+
+    timed[index].startMs = Math.round(from + share * (index - before - 1));
+    timed[index].endMs = Math.round(from + share * (index - before));
+  }
+
+  return timed.map((word) => ({
+    text: word.text,
+    startMs: word.startMs as number,
+    endMs: Math.max(word.endMs as number, word.startMs as number),
+  }));
+}
+
+/**
+ * Turns the synthesizer's per-word timings into subtitle lines.
+ *
+ * The break is chosen the way a subtitler chooses it, best first: at a sentence end, then at a
+ * clause boundary, and only failing both at the word that would have overflowed. Breaking purely
+ * on width is what produces the subtitle that ends mid-preposition and reads as a fault.
+ */
+export function buildPodcastCues(
+  text: string,
+  pieces: ReadonlyArray<{ text: string; start_ms: number; end_ms: number }>,
+): PodcastCue[] {
+  const timedWords = alignPodcastWords(text, pieces);
+  const cues: PodcastCue[] = [];
+  let words: PodcastCue[] = [];
+
+  const flush = () => {
+    if (words.length === 0) {
+      return;
+    }
+
+    cues.push({
+      text: words.map((word) => word.text).join(" "),
+      startMs: words[0].startMs,
+      endMs: Math.max(words[words.length - 1].endMs, words[0].startMs + 1),
+    });
+    words = [];
+  };
+
+  for (const piece of timedWords) {
+    if (!piece.text.trim()) {
+      continue;
+    }
+
+    const width = words.reduce((sum, word) => sum + word.text.length + 1, 0) + piece.text.length;
+    const span = words.length > 0 ? piece.endMs - words[0].startMs : 0;
+
+    if (words.length > 0 && (width > CUE_MAX_CHARS || span > CUE_MAX_MS)) {
+      flush();
+    }
+
+    words.push(piece);
+
+    const last = words[words.length - 1].text;
+    const wideEnough = words.reduce((sum, word) => sum + word.text.length + 1, 0) > CUE_MAX_CHARS * 0.5;
+
+    /* A sentence always ends a line; a clause only once the line is worth ending. */
+    if (SENTENCE_END.test(last) || (wideEnough && CLAUSE_END.test(last))) {
+      flush();
+    }
+  }
+
+  flush();
+
+  /*
+   * Nothing may flash. A line shorter than the floor borrows from the gap before the next one,
+   * and the last line simply holds until the audio stops.
+   */
+  return cues.map((cue, index) => {
+    const next = cues[index + 1];
+    const wanted = cue.startMs + CUE_MIN_MS;
+
+    return {
+      ...cue,
+      endMs: Math.max(cue.endMs, next ? Math.min(wanted, next.startMs) : wanted),
+    };
+  });
+}
+
+/** The line to show at this point in a turn, or null before the first word is spoken. */
+export function cueAt(cues: ReadonlyArray<PodcastCue>, positionMs: number): PodcastCue | null {
+  let current: PodcastCue | null = null;
+
+  for (const cue of cues) {
+    if (cue.startMs > positionMs) {
+      break;
+    }
+
+    current = cue;
+  }
+
+  /* Past the end of a line with no successor yet, the last one stays rather than blanking. */
+  return current;
+}
+
+export function parseStoredCues(value: unknown): PodcastCue[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return [];
+    }
+
+    const { text, startMs, endMs } = entry as Record<string, unknown>;
+
+    return typeof text === "string" && typeof startMs === "number" && typeof endMs === "number"
+      ? [{ text, startMs, endMs }]
       : [];
   });
 }

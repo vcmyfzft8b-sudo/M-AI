@@ -38,19 +38,53 @@ const SPOKEN_FORM = [
   "No formulas in symbols. Say them the way a person says them out loud: \"E equals m c squared\", \"the square root of two\", \"a over b\". Never LaTeX, never a bare equation.",
   "Spell out anything that is not a word — units, symbols, abbreviations a listener would not hear correctly.",
   "Never write a speaker label, a name in front of a line, or anything that looks like a script direction. The turn is only the words that are said.",
+  /*
+   * The failure this rule exists for, seen in production: a host said "… odločanje, ki ima
+   * elemente: objekt odločanja, problem, cilj, odločitev in upravljalno dejanje." That is a
+   * bulleted list with the bullets removed — five nouns after a colon, at speed, with nothing
+   * holding them together. A reader skims it; a listener has lost it by the third item.
+   */
+  "Never read a list aloud. No colon followed by a run of items, and no sentence that is really five nouns in a row. When the material lists things, a person says how many there are, then gives them one at a time with a breath and a reason between — \"teh je pet. Prvi je … in ta je pomemben, ker …\" — or picks the two that matter and says why the rest are detail.",
+  "One idea per sentence. A listener cannot go back a line, so a sentence that would need re-reading is a sentence that is lost.",
 ].join(" ");
 
 /*
- * The tags the synthesizer performs rather than reads, and the reason this format uses them more
- * carefully than the tutor does. On a podcast a laugh is the single strongest signal that two
- * people are actually in a room together — and the single fastest way to make them sound like
- * machines imitating people, if it lands where nothing funny happened. So: real reactions only,
- * and never as punctuation.
+ * How to sound like two people rather than two documents.
+ *
+ * Everything here was measured against tts-rt-v2 on the podcast voices, because the difference
+ * between a device the synthesizer performs and one it reads out loud is the difference between
+ * warmth and gibberish, and it is not guessable. Each candidate was spoken with and without, and
+ * the result transcribed to see what a listener actually hears (Grace, Slovenian):
+ *
+ *   device              adds    transcribed back as
+ *   … (ellipsis)       +0.77s   nothing — a real pause, no words
+ *   — (em dash)        +0.70s   nothing — a real pause, no words
+ *   [laughs]           +1.46s   "Hehe," — an actual laugh
+ *   [clears throat]    +1.37s   "Hm," — an actual sound
+ *   [sighs]            +0.70s   nothing audible as words; an audible breath
+ *   [breathes]         +0.53s   nothing audible as words
+ *   [whispers]         +0.60s   nothing — the delivery changes, no sound is added
+ *   [pause]            +0.53s   nothing — performed, not read
+ *
+ * So the pause is punctuation, not a tag: an ellipsis buys the longest one and is the ordinary
+ * way to write a beat. None of the bracket text is ever spoken, so the risk of using them is not
+ * that they leak — it is that they become a tic.
  */
+const CONVERSATION = [
+  "Two people talking, not two essays alternating. The single thing that makes this sound real is that each of them is REACTING to what the other just said before adding anything of their own.",
+  "React first, then contribute. \"Aha — to je pa točno tisto, kar me je zmedlo…\" and then the point. A turn that begins with a fresh heading is a turn that was not listening.",
+  "Think out loud. Start a sentence and repair it, reach for the right word, say the wrong thing and correct it — \"to je … no, ne čisto tako. Bolje rečeno …\". People do not speak in finished sentences and a script made of them sounds like a recording of a book.",
+  "Interrupt. Cut in on the other with the question that cannot wait — \"Počakaj —\" — or finish the thought they were reaching for. Not every turn, but an episode with none of it is a press conference.",
+  "Be surprised, be sceptical, admit when something is genuinely hard, and say when you had it wrong. \"Iskreno, to me je vedno metalo\" teaches more than another clean definition, because the listener has made the same mistake.",
+  "Use pauses. A beat before the answer that matters is written as \"…\", and a shorter one as \" — \". Both are performed as real silence: about seven tenths of a second, and nothing is read aloud. Use them where a person would actually stop to think, not as decoration between clauses.",
+  "Talk to each other, not to a microphone. No \"our listeners\", no \"in today\'s episode\", no \"let\'s dive in\".",
+].join(" ");
+
 const AUDIO_TAGS = [
-  "You may write square-bracket tags, which are performed as real sounds and never read aloud: [laughs], [sighs], [coughs], [clears throat], [whispers].",
-  "Use them where a person genuinely would, not to decorate. A laugh needs something funny; a sigh needs something genuinely awkward or hard. Roughly one every few turns is right.",
-  "Never two of the same in a row, and never one in a turn where nothing has happened to earn it. Most turns have none, and that is correct.",
+  "You may write these square-bracket tags. Every one is performed as a real sound or a real change of delivery, and NONE of the bracket text is ever spoken aloud: [laughs], [sighs], [clears throat], [breathes], [whispers], [pause].",
+  "Use them freely — this is a conversation between two people enjoying themselves, and a script with one tag in ten minutes sounds like a machine reading. Several per turn is fine where several are earned.",
+  "What each is for: [laughs] where something is genuinely funny, or at your own expense, or at how badly a thing is usually explained. [sighs] before admitting something is genuinely fiddly. [clears throat] on a change of direction. [breathes] before a hard question. [whispers] for the aside that is really the exam question. [pause] where the silence itself is the point.",
+  "The one rule is that each has to be earned by something that just happened. Never two of the same in a row, never one where nothing has changed, and never one mid-sentence where it breaks the thread — they belong at the seams, between one thought and the next.",
   "Write nothing else in square brackets.",
 ].join(" ");
 
@@ -181,6 +215,7 @@ export function buildPodcastScriptInstructions(params: {
     `## Language\n${LANGUAGE}`,
     `## Length and shape\n${lengthRules(params.targetWords, params.speakerCount)}`,
     `## How to write for the ear\n${SPOKEN_FORM}`,
+    `## How two people actually talk\n${CONVERSATION}`,
     `## Sounds a person makes\n${AUDIO_TAGS}`,
     params.speakerCount === 1
       ? "Every turn has speaker \"a\". There is no speaker \"b\" in this episode."

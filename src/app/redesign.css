@@ -13665,72 +13665,53 @@
 }
 
 /*
- * The transcript, and the reason it is a list of buttons.
+ * The subtitle.
  *
- * Every line is a place in the episode, so tapping one is how you actually navigate a podcast —
- * far more usefully than dragging a bar, because the thing you are looking for is a sentence, not
- * a timestamp. The line being spoken is tinted with its own speaker's colour, which is what makes
- * a two-hander readable at a glance: the conversation visibly alternates.
+ * What used to be here was a scrolling transcript of the whole episode, and it was the wrong
+ * object: a wall of text under a player is something to read INSTEAD of listening, and it made
+ * the screen about the script rather than about the audio.
+ *
+ * One line at a time, timed to the word being spoken, is a different thing entirely — it is what
+ * lets somebody follow an episode on a loud bus, or with the sound off, without ever becoming the
+ * thing they are looking at. Sized and held like a broadcast subtitle: about forty characters a
+ * line, and never so brief it flashes.
  */
-.memo-podcast-transcript {
+.memo-podcast-caption {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  /* Centred in the height it reserves, so a one-line cue and a two-line one both sit in the
+     same place rather than the text jumping up the box as the lines change. */
+  justify-content: center;
   gap: 0.3rem;
   width: 100%;
-  max-width: 34rem;
-  max-height: min(24rem, 44vh);
-  overflow-y: auto;
-  padding: 0.25rem;
-  text-align: left;
-  /* The ends fade rather than cut, so a half-line reads as more to scroll. */
-  mask-image: linear-gradient(to bottom, transparent, #000 1.25rem, #000 calc(100% - 1.25rem), transparent);
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent,
-    #000 1.25rem,
-    #000 calc(100% - 1.25rem),
-    transparent
-  );
-}
-
-.memo-podcast-line {
-  display: grid;
-  grid-template-columns: 4.5rem minmax(0, 1fr);
-  gap: 0.6rem;
-  padding: 0.5rem 0.6rem;
+  max-width: 32rem;
+  /* Two lines' worth, reserved. A box that grows and shrinks with each cue makes the whole
+     screen twitch, which is exactly what a subtitle must not do. */
+  min-height: 5.5rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  background: var(--tile);
   border: 1px solid transparent;
-  border-radius: 0.8rem;
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.85rem;
-  line-height: 1.5;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    color 140ms ease,
-    background 140ms ease;
+  text-align: center;
 }
 
-.memo-podcast-line.spoken {
-  color: var(--muted-2);
-}
-
-.memo-podcast-line.active {
-  color: var(--text);
-  border-color: color-mix(in oklch, oklch(0.72 0.16 var(--podcast-hue)) 45%, transparent);
-  background: color-mix(in oklch, oklch(0.72 0.16 var(--podcast-hue)) 12%, transparent);
-}
-
-.memo-podcast-line-speaker {
+.memo-podcast-caption-speaker {
   font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.01em;
-  color: oklch(0.62 0.16 var(--podcast-hue));
-  padding-top: 0.15rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: oklch(0.66 0.16 var(--podcast-hue));
 }
 
-.memo-podcast-line-text {
-  min-width: 0;
+.memo-podcast-caption-text {
+  margin: 0;
+  font-size: 1.02rem;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--text);
+  /* Wraps like a subtitle rather than justifying to the box. */
+  text-wrap: balance;
 }
 
 @media (max-width: 640px) {
@@ -13738,8 +13719,11 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .memo-podcast-line {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0.1rem;
+  .memo-podcast-caption {
+    min-height: 6.5rem;
+  }
+
+  .memo-podcast-caption-text {
+    font-size: 1.05rem;
   }
 }

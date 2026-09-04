@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  alignPodcastWords,
+  buildPodcastCues,
+  cueAt,
   normalizePodcastTurns,
+  parseStoredCues,
   parseStoredTurns,
   toSpokenTurnText,
 } from "../src/lib/podcast-script.ts";
@@ -267,4 +271,132 @@ test("the shortest episode is the one a listener waits through, and the ladder i
     PODCAST_LENGTHS.map((length) => estimatedPodcastMinutes(length.id)),
     [4, 7, 12],
   );
+});
+
+/* --- subtitles ----------------------------------------------------------- */
+
+/** Word-sized pieces the way the synthesizer reports them: text with exact start and end. */
+function pieces(sentence, msPerWord = 400) {
+  return sentence.split(" ").map((text, index) => ({
+    text,
+    start_ms: index * msPerWord,
+    end_ms: (index + 1) * msPerWord - 20,
+  }));
+}
+
+/** The ordinary case: the synthesizer reported every word of the turn it was given. */
+const cuesFor = (sentence) => buildPodcastCues(sentence, pieces(sentence));
+
+test("a subtitle line breaks at a sentence end rather than on width", () => {
+  const cues = cuesFor("Prva poved se konca tukaj. Druga se zacne zdaj.");
+
+  assert.equal(cues.length, 2);
+  assert.equal(cues[0].text, "Prva poved se konca tukaj.");
+  assert.equal(cues[1].text, "Druga se zacne zdaj.");
+});
+
+test("no subtitle line is wider than the eye takes in one glance", () => {
+  const cues = cuesFor(Array.from({ length: 40 }, () => "beseda").join(" "));
+
+  assert.ok(cues.length > 1, "forty words cannot be one line");
+
+  for (const cue of cues) {
+    assert.ok(cue.text.length <= 46, `"${cue.text}" is ${cue.text.length} characters`);
+  }
+});
+
+test("cues run forward, never overlap, and carry the synthesizer's own timings", () => {
+  const cues = cuesFor("Ena dve tri stiri. Pet sest sedem osem. Devet deset enajst dvanajst.");
+
+  assert.equal(cues[0].startMs, 0, "the first line starts when the first word does");
+
+  for (let i = 0; i < cues.length; i += 1) {
+    assert.ok(cues[i].endMs > cues[i].startMs, "a line must last");
+
+    if (cues[i + 1]) {
+      assert.ok(
+        cues[i + 1].startMs >= cues[i].startMs,
+        "lines must run forward",
+      );
+      assert.ok(
+        cues[i].endMs <= cues[i + 1].startMs,
+        "a line must be gone before the next one arrives, or two are on screen at once",
+      );
+    }
+  }
+});
+
+/* A line that appears and vanishes inside a few frames is unreadable however correct its timing. */
+test("a very short phrase is held long enough to read", () => {
+  const [cue] = buildPodcastCues("Tocno.", [{ text: "Tocno.", start_ms: 0, end_ms: 180 }]);
+
+  assert.ok(cue.endMs - cue.startMs >= 900, `held for only ${cue.endMs - cue.startMs}ms`);
+});
+
+test("the line on screen is the one being spoken, and the last one holds to the end", () => {
+  const cues = cuesFor("Prva poved se konca tukaj. Druga se zacne zdaj.");
+
+  assert.equal(cueAt(cues, 0)?.text, cues[0].text);
+  assert.equal(cueAt(cues, cues[1].startMs + 50)?.text, cues[1].text);
+  assert.equal(
+    cueAt(cues, cues[1].endMs + 10_000)?.text,
+    cues[1].text,
+    "past the end the last line stays rather than blanking",
+  );
+});
+
+test("a turn with no timings yields no cues rather than wrong ones", () => {
+  assert.deepEqual(buildPodcastCues("Nekaj besed.", []), []);
+  assert.equal(cueAt([], 1_000), null);
+});
+
+test("stored cues are read back defensively, because the column is json", () => {
+  assert.deepEqual(parseStoredCues(null), []);
+  assert.deepEqual(parseStoredCues("nope"), []);
+  assert.deepEqual(
+    parseStoredCues([
+      { text: "Velja.", startMs: 0, endMs: 900 },
+      { text: "brez casov" },
+      { startMs: 1, endMs: 2 },
+      42,
+    ]),
+    [{ text: "Velja.", startMs: 0, endMs: 900 }],
+  );
+});
+
+/*
+ * The defect this alignment exists for, caught on a real episode: a turn opening "Danes gre za
+ * osnove…" produced a first subtitle reading "es gre za osnove…". The audio was complete; the
+ * synthesizer's timing report simply omitted the first few characters. Anything that takes its
+ * text from the report inherits the hole, so the report is used for WHEN and the script for WHAT.
+ */
+test("a turn whose opening the synthesizer failed to report still reads correctly", () => {
+  const text = "Danes gre za osnove omrezij.";
+  const reported = pieces(text).slice(1);
+  reported[0] = { ...reported[0], text: "re" };
+
+  const cues = buildPodcastCues(text, reported);
+  const shown = cues.map((cue) => cue.text).join(" ");
+
+  assert.equal(shown, text, "every word of the script must reach the screen");
+});
+
+test("a word the report skipped is placed between the words around it", () => {
+  const text = "ena dve tri stiri";
+  const reported = pieces(text).filter((piece) => piece.text !== "tri");
+  const timed = alignPodcastWords(text, reported);
+
+  assert.deepEqual(timed.map((word) => word.text), ["ena", "dve", "tri", "stiri"]);
+
+  const missing = timed[2];
+  assert.ok(missing.startMs >= timed[1].endMs, "the gap-filled word cannot start before the last");
+  assert.ok(missing.endMs <= timed[3].startMs, "nor end after the next one begins");
+});
+
+test("audio tags never reach the subtitle, because they are never spoken", () => {
+  const text = "[laughs] Tocno tako se zgodi.";
+  const spoken = "Tocno tako se zgodi.";
+  const cues = buildPodcastCues(text, pieces(spoken));
+
+  assert.equal(cues.map((cue) => cue.text).join(" "), spoken);
 });

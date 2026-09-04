@@ -73,6 +73,49 @@ names a piece of audio by `(user, lecture, contentHash, chunkIndex, language, vo
 model)`; read-aloud puts a note's hash and chunk there, and the podcast puts
 `podcast:<id>` and the turn index.
 
+## Subtitles
+
+The player shows one line at a time, timed to the word being spoken — so an episode can be
+followed on a loud bus, or with the sound off. It replaced a scrolling transcript of the
+whole script, which was the wrong object: a wall of text under a player is something to
+read *instead* of listening.
+
+The timings are free. The synthesizer already reports when it said every character
+(`buildTtsPiecesFromCharacterTimestamps`), which read-aloud uses to highlight words and the
+podcast was discarding. `buildPodcastCues` groups them into broadcast-sized lines — about 42
+characters, broken at a sentence end first, a clause second, and only on width as a last
+resort — and holds any line that would otherwise flash.
+
+**The report is used for *when*, the script for *what*.** That distinction is not cosmetic: a
+turn opening "Danes gre za osnove…" produced a first subtitle reading "es gre za osnove…",
+because the stream omits a few leading characters from its timing report. The audio was
+complete; only the report had the hole. So `alignPodcastWords` puts the reported timings onto
+the script's own words and interpolates any word the report skipped.
+
+A turn synthesized on the REST fallback has no timings at all. It shows the whole turn rather
+than nothing — worse than a synced line, far better than a blank box.
+
+## What the synthesizer actually performs
+
+Measured on tts-rt-v2 with the podcast voices, because the difference between a device that is
+performed and one that is read out loud is not guessable. Each was spoken with and without, and
+the audio transcribed back to see what a listener hears:
+
+| device | adds | heard back as |
+| --- | --- | --- |
+| `…` | +0.77s | nothing — a real pause |
+| `—` | +0.70s | nothing — a real pause |
+| `[laughs]` | +1.46s | "Hehe," — an actual laugh |
+| `[clears throat]` | +1.37s | "Hm," — an actual sound |
+| `[sighs]` | +0.70s | an audible breath, no words |
+| `[breathes]` | +0.53s | no words |
+| `[whispers]` | +0.60s | nothing — the delivery changes |
+| `[pause]` | +0.53s | nothing — performed, not read |
+
+None of the bracket text is ever spoken, so the risk in using them is not that they leak — it
+is that they become a tic. The pause is punctuation rather than a tag: an ellipsis buys the
+longest one and is the ordinary way to write a beat.
+
 ## Three rules the prompt states and the code enforces
 
 Each of these fails silently if it is only asked for, which is why

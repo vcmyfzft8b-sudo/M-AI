@@ -141,7 +141,10 @@ export function buildMindmapFillInstructions() {
     "- Carry the specifics: formulas, numbers, dates, names, the exact conditions under which " +
       "something holds. This is the level the reader came back to the map for.",
     "- Labels are phrases of two to seven words, never sentences. No trailing full stops.",
-    "- Do not repeat an idea you have already written under another topic.",
+    "- Do not repeat an idea you have already written under another topic, and never write an " +
+      "idea whose name is one of the topics — that topic is already on the map.",
+    "- An idea you cannot name a single fact under is not an idea, it is a fact. Put it under " +
+      "whichever idea it belongs to rather than leaving a level with nothing beneath it.",
     "- Never write a placeholder. \"Other\", \"Miscellaneous\" and \"Further details\" are not " +
       "ideas; if something does not fit an idea, name what it actually is.",
   ].join("\n");

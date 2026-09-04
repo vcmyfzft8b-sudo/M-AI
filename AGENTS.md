@@ -36,6 +36,32 @@
 - After a migration PR is merged, `.github/workflows/supabase-migrations.yml` applies the migration files from `main` to production. Do not run a production migration from an unmerged PR or a Preview deployment.
 - Follow [docs/preview-staging.md](/docs/preview-staging.md) for safe verification, staging synchronization, migration testing, and production release rules.
 
+## Migrations: never push one from an unmerged branch
+
+Read this before adding a file to `supabase/migrations`. On 2026-09-04 three feature branches
+each wrote to production's migration history from an unmerged branch and cost an afternoon.
+
+- **Never run `supabase db push` against production from a branch.** Production migrations are
+  applied by `.github/workflows/supabase-migrations.yml` from `main`, after merge, and by nothing
+  else. A push from a branch records a version `main` does not have, and **a single remote version
+  with no local file aborts every later push from every branch** — one branch's shortcut blocks
+  the whole team.
+- **Never `supabase migration repair --status applied`.** It marks a version as done without
+  running its SQL, so that migration is skipped for good and its table is never created. This is
+  what happened to `0044`, `0045` and `0046`; each looked applied and none of them was. Repair is
+  only ever right in the other direction — `--status reverted`, for a record whose SQL provably
+  never ran, so the migration can apply properly on merge.
+- **Claim your number before you write the file**, because Supabase keys history by the number
+  alone and two branches taking `0043` means the second can never apply:
+  `ls supabase/migrations | sed 's/_.*//' | sort | uniq -d` and check the open PRs. Renumber the
+  file no database has recorded; never renumber one that is already live.
+- **To check whether a migration really applied**, read the live schema rather than the history:
+  `GET /rest/v1/<table>?select=*&limit=0` with the service-role key is 200 if the table exists and
+  404 if not, and `GET /rest/v1/` returns every table and column production actually has. Verify a
+  known-applied migration's table first — a wrong guess at a table's *name* also returns 404.
+- Background and the full incident: [docs/mindmap.md](/docs/mindmap.md) and the two collisions it
+  cites.
+
 ## Automated Production Error Triage
 
 - One automation covers production errors: the `Error triage` GitHub Actions workflow, scheduled every three hours. It runs in GitHub's cloud and does not depend on the Mac being on. The earlier local two-hourly Sentry job is retired; do not recreate it.

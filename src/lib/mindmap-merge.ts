@@ -65,6 +65,31 @@ export function buildNoteSkeleton(notes: string) {
   return output.join("\n");
 }
 
+/**
+ * Drops the facts under an idea that only repeat something already on the map: the idea itself,
+ * or a topic that has its own limb. A map earns its space by saying each thing once.
+ */
+function pruneEchoes(
+  child: MindmapWireChild,
+  topicKey: string,
+  topics: ReadonlyMap<string, unknown>,
+): MindmapWireChild["children"] {
+  const own = normaliseLabelKey(child.label ?? "");
+  const seen = new Set<string>();
+
+  return (child.children ?? []).filter((leaf) => {
+    const key = normaliseLabelKey(leaf?.label ?? "");
+
+    if (!key || key === own || key === topicKey || topics.has(key) || seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+
+    return true;
+  });
+}
+
 function normaliseLabelKey(label: string) {
   return label
     .toLocaleLowerCase()
@@ -118,14 +143,25 @@ export function mergeWindowedBranches(params: {
       }
 
       for (const child of branch.children ?? []) {
-        const key = `${topicKey}::${normaliseLabelKey(child?.label ?? "")}`;
+        const childKey = normaliseLabelKey(child?.label ?? "");
+        const key = `${topicKey}::${childKey}`;
 
         if (!child?.label || seen.has(key) || bucket.length >= MINDMAP_MAX_CHILDREN_PER_TOPIC) {
           continue;
         }
 
+        /*
+         * An idea that restates a topic is that topic, written twice. A real map came back with
+         * "Informacija" and "Znanje" both as their own limbs *and* as leaves under a third
+         * topic's "overview of concepts" — which tells a reader nothing they cannot see by
+         * looking at the middle of the map, and costs two nodes to say it.
+         */
+        if (byTopic.has(childKey)) {
+          continue;
+        }
+
         seen.add(key);
-        bucket.push(child);
+        bucket.push({ ...child, children: pruneEchoes(child, topicKey, byTopic) });
       }
     }
   }

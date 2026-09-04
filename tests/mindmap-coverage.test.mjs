@@ -342,3 +342,94 @@ test("a database failure says what went wrong instead of \"unknown\"", () => {
   assert.equal(describeMindmapFailure(null), "Unknown mindmap generation error.");
   assert.equal(describeMindmapFailure({}), "Unknown mindmap generation error.");
 });
+
+test("an idea that only restates a topic is dropped, not drawn twice", () => {
+  /*
+   * A real map came back with "Informacija" and "Znanje" as their own limbs *and* as leaves under
+   * a third topic's overview. That says nothing a reader cannot see by looking at the middle of
+   * the map, and costs two nodes to say it.
+   */
+  const branches = mergeWindowedBranches({
+    topics: TOPICS,
+    windows: [
+      {
+        branches: [
+          {
+            topic: "Ravnovesje",
+            children: [
+              child("Pregled pojmov", [
+                { label: "Ponudba", detail: "" },
+                { label: "povprasevanje", detail: "" },
+                { label: "Presežek ponudbe", detail: "" },
+              ]),
+              child("Povpraševanje"),
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    branches[0].children.map((entry) => entry.label),
+    ["Pregled pojmov"],
+    "an idea named after a topic is that topic, written twice",
+  );
+  assert.deepEqual(
+    branches[0].children[0].children.map((entry) => entry.label),
+    ["Presežek ponudbe"],
+    "and so is a fact named after one",
+  );
+});
+
+test("a fact that echoes its own idea, or another fact, is dropped", () => {
+  const branches = mergeWindowedBranches({
+    topics: TOPICS,
+    windows: [
+      {
+        branches: [
+          {
+            topic: "Ponudba",
+            children: [
+              child("Zakon ponudbe", [
+                { label: "zakon  ponudbe", detail: "" },
+                { label: "Ob višji ceni ponudijo več", detail: "" },
+                { label: "OB VIŠJI CENI PONUDIJO VEČ", detail: "" },
+              ]),
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    branches[0].children[0].children.map((entry) => entry.label),
+    ["Ob višji ceni ponudijo več"],
+  );
+});
+
+test("pruning an idea's echoes leaves the idea itself alone", () => {
+  const branches = mergeWindowedBranches({
+    topics: TOPICS,
+    windows: [
+      {
+        branches: [
+          {
+            topic: "Ponudba",
+            children: [child("Zakon ponudbe", [{ label: "Cena gor, količina gor", detail: "x" }])],
+          },
+        ],
+      },
+    ],
+  });
+
+  const idea = branches[0].children[0];
+
+  assert.equal(idea.label, "Zakon ponudbe");
+  assert.deepEqual(
+    idea.children.map((entry) => entry.label),
+    ["Cena gor, količina gor"],
+  );
+  assert.equal(idea.children[0].detail, "x", "a kept fact keeps everything it came with");
+});

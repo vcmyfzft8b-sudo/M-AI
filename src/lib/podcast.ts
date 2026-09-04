@@ -48,6 +48,7 @@ import {
   type PodcastSpeaker,
   type PodcastTurn,
 } from "@/lib/podcast-settings";
+import { getRemainingBudgetMs } from "@/lib/abort-context";
 import { isMissingLectureReferenceError } from "@/lib/postgres-errors";
 import { getServerEnv, requireSonioxEnv } from "@/lib/server-env";
 import { retryTransientStorageOperation } from "@/lib/storage-download-errors";
@@ -406,6 +407,24 @@ async function claimPodcastRow(variant: PodcastVariant) {
 const PODCAST_REPAIR_CONCURRENCY = 5;
 
 /**
+ * The most wall clock the whole pass may spend, and the least it needs to be worth starting.
+ *
+ * The route runs under Vercel's 300s and the script has already taken most of it: GLM is leashed
+ * at 200s with room for a Gemini fallback behind it, which is a worst case of about 290 before
+ * this pass begins. Every repair is optional by construction — a turn whose check is late is
+ * spoken as it was written — but a pass that runs past the invocation kills it AFTER the
+ * expensive call and stores nothing at all, which is the one outcome worse than unproofread
+ * Slovenian.
+ *
+ * So it is bounded twice. It does not start unless the remaining budget could hold it, and once
+ * started it stops opening new batches when its own budget is gone. Measured over six runs on
+ * the omrezja-sl fixture the whole pass takes 2.8-12.3s for twenty to thirty turns, so the cap
+ * is roughly four times the worst case seen rather than a number the normal path can feel.
+ */
+const PODCAST_REPAIR_BUDGET_MS = 45_000;
+const PODCAST_REPAIR_MIN_BUDGET_MS = 20_000;
+
+/**
  * The proofreading pass, armed by the writer rather than by a flag — the tutor's own rule.
  *
  * The check exists for one measured defect: GLM writes 0.55-1.06 errors per 100 words of spoken
@@ -444,9 +463,28 @@ async function proofreadTurns(params: {
     return params.turns;
   }
 
+  const invocationBudget = getRemainingBudgetMs();
+
+  if (invocationBudget !== undefined && invocationBudget < PODCAST_REPAIR_MIN_BUDGET_MS) {
+    return params.turns;
+  }
+
+  const budgetMs = Math.min(
+    PODCAST_REPAIR_BUDGET_MS,
+    invocationBudget === undefined
+      ? PODCAST_REPAIR_BUDGET_MS
+      : Math.max(0, invocationBudget - PODCAST_REPAIR_MIN_BUDGET_MS / 2),
+  );
+  const deadline = Date.now() + budgetMs;
+  const timeout = AbortSignal.timeout(budgetMs);
   const repaired = [...params.turns];
 
   for (let start = 0; start < repaired.length; start += PODCAST_REPAIR_CONCURRENCY) {
+    /* Whatever has been repaired so far stands; the rest is spoken as it was written. */
+    if (Date.now() >= deadline) {
+      break;
+    }
+
     const slice = repaired.slice(start, start + PODCAST_REPAIR_CONCURRENCY);
 
     await Promise.all(
@@ -464,6 +502,7 @@ async function proofreadTurns(params: {
           preceding,
           language: params.language,
           spoken: true,
+          signal: timeout,
           usageContext: { lectureId: params.lectureId },
         });
 

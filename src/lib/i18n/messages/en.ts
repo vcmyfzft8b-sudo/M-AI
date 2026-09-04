@@ -1688,6 +1688,7 @@ export const en: Messages = {
   "palace.progressLabel": "Cards collected",
   "palace.progressCount": "{done} of {total} collected",
   "palace.reveal": "Show answer",
+  "palace.covers": "The walk covers",
   "palace.checking": "Marking your answer…",
   "palace.scoreOf": "{score} of {total} points",
   "palace.correctTitle": "Correct!",

@@ -197,6 +197,8 @@ export function LecturePalace({
           sectionId: card.section_id,
           /* Higher is more important; the walk takes the important ones first. */
           weight: card.coverage_rank,
+          /* And covers every concept once before asking about any of them twice. */
+          conceptKey: card.concept_key,
         })),
         quiz: quizQuestions,
         test: practiceQuestions.map((question) => ({
@@ -789,6 +791,10 @@ export function LecturePalace({
 
   const total = layout.stations.length;
   const done = layout.stations.filter((entry) => collected.has(entry.id)).length;
+  const counts = items.reduce(
+    (current, item) => ({ ...current, [item.kind]: current[item.kind] + 1 }),
+    { card: 0, quiz: 0, test: 0 } as Record<StudyKind, number>,
+  );
   const district = layout.districts[districtIndex] ?? layout.districts[0];
   const kindLabel: Record<StudyKind, string> = {
     card: t("note.tab.flashcards"),
@@ -1058,6 +1064,27 @@ export function LecturePalace({
             <span style={{ width: `${total === 0 ? 0 : (done / total) * 100}%` }} />
           </div>
           <p className="memo-palace-count">{t("palace.progressCount", { done, total })}</p>
+        </div>
+
+        {/* What the town is made of, so the walk's coverage of the note is a
+            number the learner can see rather than something to take on trust. */}
+        <div className="memo-palace-covers">
+          <span className="memo-palace-covers-label">{t("palace.covers")}</span>
+          <span className="memo-palace-covers-row">
+            <span>
+              {t("note.tab.flashcards")} <b>{counts.card}/{cards.length}</b>
+            </span>
+            {quizQuestions.length > 0 ? (
+              <span>
+                {t("note.tab.quiz")} <b>{counts.quiz}/{quizQuestions.length}</b>
+              </span>
+            ) : null}
+            {practiceQuestions.length > 0 ? (
+              <span>
+                {t("note.subScreen.test")} <b>{counts.test}/{practiceQuestions.length}</b>
+              </span>
+            ) : null}
+          </span>
         </div>
 
         <div className="memo-palace-actions">

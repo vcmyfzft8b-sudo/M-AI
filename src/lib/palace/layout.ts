@@ -186,6 +186,8 @@ const ORNAMENTS = ["obelisk", "orb", "pyramid", "arch", "fountain"] as const;
  * tellable-apart colours rather than five families of six.
  */
 const LANDMARK_HUE_STEP = 137.508;
+/** No two stops closer than this, so a scatter is still a walk. */
+const MIN_STATION_GAP = 34;
 /**
  * Terracotta, slate, charcoal, moss, teal, plum. A roof drawn from the whole
  * colour wheel gives you bright green domes that read as hills; these read as
@@ -224,7 +226,13 @@ export function selectPalaceItems({
   test,
   limit = SELECTION_LIMIT,
 }: {
-  cards: readonly { id: string; sectionId: string | null; weight?: number }[];
+  cards: readonly {
+    id: string;
+    sectionId: string | null;
+    weight?: number;
+    /** The concept the card teaches, so the walk does not take it twice. */
+    conceptKey?: string | null;
+  }[];
   quiz: readonly { id: string }[];
   test: readonly { id: string; weight?: number }[];
   limit?: number;
@@ -252,22 +260,50 @@ export function selectPalaceItems({
     }
   });
 
+  /*
+   * The queues are drained a card at a time round the sections, so a long first
+   * section cannot crowd the others out — and on the first pass a card is only
+   * taken if its concept has not been covered yet, anywhere in the note. A walk
+   * that asks about photosynthesis three times and never about respiration has
+   * not covered the note, however important those three cards were. Only once
+   * every concept the deck teaches has a stop does the walk start doubling up,
+   * and then it doubles up on the most important ones first.
+   */
   const queues = [...bySection.values()].map((queue) =>
     [...queue].sort((left, right) => (right.weight ?? 0) - (left.weight ?? 0)),
   );
-  const chosenCards: typeof cards[number][] = [];
+  const chosenCards: (typeof cards)[number][] = [];
+  const takenIds = new Set<string>();
+  const takenConcepts = new Set<string>();
+  const conceptOf = (card: (typeof cards)[number]) => card.conceptKey ?? card.id;
 
-  for (let round = 0; chosenCards.length < cardsWanted; round += 1) {
-    const before = chosenCards.length;
+  const drain = (freshConceptsOnly: boolean) => {
+    for (;;) {
+      let progressed = false;
 
-    for (const queue of queues) {
-      if (chosenCards.length >= cardsWanted) break;
-      if (round < queue.length) chosenCards.push(queue[round]);
+      for (const queue of queues) {
+        if (chosenCards.length >= cardsWanted) return;
+
+        const card = queue.find(
+          (candidate) =>
+            !takenIds.has(candidate.id) &&
+            (!freshConceptsOnly || !takenConcepts.has(conceptOf(candidate))),
+        );
+
+        if (!card) continue;
+
+        takenIds.add(card.id);
+        takenConcepts.add(conceptOf(card));
+        chosenCards.push(card);
+        progressed = true;
+      }
+
+      if (!progressed) return;
     }
+  };
 
-    /* Every queue is exhausted, so there is nothing left to take. */
-    if (chosenCards.length === before) break;
-  }
+  drain(true);
+  drain(false);
 
   /* The order they are walked in follows the note, not their importance. */
   const cardOrder = new Map(cards.map((card, index) => [card.id, index]));
@@ -571,15 +607,43 @@ export function buildPalaceLayout({
     });
 
     /*
-     * The item houses, spread across the neighbourhood so the walk covers it
-     * rather than clustering in one street. Being chosen rebuilds the house as
-     * a landmark: taller, a spire or a dome, a flag, and a colour you can name
-     * from the end of the road.
+     * Which houses get an item is drawn from the seed, not counted off every
+     * nth door: two notes with the same shape should not lay their stops out in
+     * the same places. They are drawn one at a time and kept only if they are
+     * a street's length from every stop already placed, so a random scatter is
+     * still a walk round the neighbourhood rather than four stops on one corner
+     * — and if the neighbourhood runs out of room, the rule relaxes rather than
+     * dropping the item.
      */
-    const step = placed.length / Math.max(group.items.length, 1);
+    const candidates = [...placed];
+
+    for (let index = candidates.length - 1; index > 0; index -= 1) {
+      const swap = random.int(0, index);
+
+      [candidates[index], candidates[swap]] = [candidates[swap], candidates[index]];
+    }
+
+    const takenHouses: number[] = [];
+    const farEnough = (houseIndex: number, gap: number) =>
+      takenHouses.every((taken) => {
+        const a = houses[houseIndex];
+        const b = houses[taken];
+
+        return Math.hypot(a.x - b.x, a.z - b.z) > gap;
+      });
+
+    group.items.forEach(() => {
+      const pick =
+        candidates.find((houseIndex) => farEnough(houseIndex, MIN_STATION_GAP)) ??
+        candidates.find((houseIndex) => farEnough(houseIndex, MIN_STATION_GAP / 2)) ??
+        candidates[0];
+
+      takenHouses.push(pick);
+      candidates.splice(candidates.indexOf(pick), 1);
+    });
 
     group.items.forEach((item, index) => {
-      const houseIndex = placed[Math.min(placed.length - 1, Math.floor(index * step))];
+      const houseIndex = takenHouses[index];
       const plain = houses[houseIndex];
       const landmark = makeHouse({
         random,
@@ -808,13 +872,20 @@ export function buildPalaceLayout({
   const townEdge = Math.max(...lines.map(Math.abs));
 
   for (let index = 0; index < 110; index += 1) {
-    const angle = random.range(0, Math.PI * 2);
-    const distance = random.range(townEdge + 10, bounds - 2);
+    /*
+     * Outside the town *square*, not outside a circle drawn round it: a circle
+     * of radius `townEdge` cuts the corners off the grid, and every tree meant
+     * for the woods on a diagonal landed on somebody's street instead.
+     */
+    const x = random.range(-bounds + 2, bounds - 2);
+    const z = random.range(-bounds + 2, bounds - 2);
+
+    if (Math.max(Math.abs(x), Math.abs(z)) < townEdge + 10) continue;
 
     props.push({
       kind: "tree",
-      x: Math.cos(angle) * distance,
-      z: Math.sin(angle) * distance,
+      x,
+      z,
       y: 0,
       rotation: random.range(0, Math.PI * 2),
       scale: random.range(0.9, 1.6),

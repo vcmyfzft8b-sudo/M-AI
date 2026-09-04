@@ -180,7 +180,10 @@ test("no two houses you have to remember look the same", () => {
     })),
     sections,
   });
-  const landmarks = layout.houses.filter((house) => house.landmark);
+  /* In route order: the houses themselves are scattered through the town now. */
+  const landmarks = layout.houses
+    .filter((house) => house.landmark)
+    .sort((left, right) => left.landmarkIndex - right.landmarkIndex);
 
   assert.equal(landmarks.length, 30);
 
@@ -200,7 +203,7 @@ test("no two houses you have to remember look the same", () => {
     assert.ok(hue - hues[index - 1] > 4, `two landmark colours are ${hue.toFixed(1)}° apart`);
   });
 
-  /* Consecutive stops never share a roof, so a route reads as a sequence. */
+  /* Consecutive stops on the route never share a roof, so it reads as a sequence. */
   landmarks.forEach((house, index) => {
     if (index === 0) return;
 
@@ -504,4 +507,69 @@ test("the map is framed on the town, not on the empty outskirts", () => {
       "a station is off the map",
     );
   });
+});
+
+test("the stops are scattered, and differently for every note", () => {
+  const walk = Array.from({ length: 10 }, (_, index) => ({
+    id: `card-${index}`,
+    kind: "card",
+    sectionId: "s1",
+  }));
+  const one = buildPalaceLayout({ seedSource: "note-one", items: walk, sections: [sections[0]] });
+  const two = buildPalaceLayout({ seedSource: "note-two", items: walk, sections: [sections[0]] });
+  const places = (layout) => layout.stations.map((station) => `${station.x.toFixed(1)}`).join();
+
+  assert.notEqual(places(one), places(two), "two notes put their stops in the same doorways");
+
+  /* Scattered, but never two on the same corner. */
+  one.stations.forEach((station, index) => {
+    one.stations.slice(index + 1).forEach((other) => {
+      assert.ok(
+        Math.hypot(station.x - other.x, station.z - other.z) > 12,
+        "two stops are on top of each other",
+      );
+    });
+  });
+});
+
+test("the woods stay out of the town", () => {
+  const layout = buildPalaceLayout({ seedSource: "woods", items, sections });
+  const streets = layout.roads.map((road) =>
+    road.width > road.depth ? Math.abs(road.z) : Math.abs(road.x),
+  );
+  const townEdge = Math.max(...streets);
+
+  layout.props
+    .filter((prop) => prop.kind === "tree")
+    .forEach((tree) => {
+      const outside = Math.max(Math.abs(tree.x), Math.abs(tree.z)) > townEdge + 6;
+
+      if (outside) return;
+
+      /* Anything inside the town has to be in a garden, never on tarmac. */
+      layout.roads.forEach((road) => {
+        const horizontal = road.width > road.depth;
+        const distance = horizontal ? Math.abs(tree.z - road.z) : Math.abs(tree.x - road.x);
+
+        assert.ok(distance > 11 / 2 + 5, `a tree is growing on the street at ${tree.x}, ${tree.z}`);
+      });
+    });
+});
+
+test("the walk covers every concept the deck teaches before repeating one", () => {
+  /* Two cards per concept, and the concepts spread across sections — the shape
+     the study pipeline actually produces. */
+  const deck = Array.from({ length: 60 }, (_, index) => ({
+    id: `c${index}`,
+    sectionId: `s${index % 4}`,
+    weight: 60 - index,
+    conceptKey: `k${Math.floor(index / 2)}`,
+  }));
+  const chosen = selectPalaceItems({ cards: deck, quiz: [], test: [], limit: 40 });
+  const byId = new Map(deck.map((card) => [card.id, card]));
+  const concepts = new Set(chosen.map((item) => byId.get(item.id).conceptKey));
+
+  assert.equal(chosen.length, 40);
+  assert.equal(concepts.size, 30, "the walk repeats a concept while another has no stop at all");
+  assert.equal(new Set(chosen.map((item) => item.sectionId)).size, 4, "a section was left out");
 });

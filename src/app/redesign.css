@@ -13385,6 +13385,37 @@
   font-size: 0.95rem;
 }
 
+/* What the walk covers, in three counts, under the progress bar. */
+.memo-palace-covers {
+  width: min(28rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.memo-palace-covers-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.memo-palace-covers-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem 0.9rem;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.memo-palace-covers-row b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
 .memo-palace-districts {
   width: min(28rem, 100%);
   margin: 0.4rem 0 0;

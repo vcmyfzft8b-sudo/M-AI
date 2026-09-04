@@ -1698,6 +1698,7 @@ export const sr: Messages = {
   "palace.progressLabel": "Pokupljene kartice",
   "palace.progressCount": "{done} od {total} pokupljeno",
   "palace.reveal": "Prikaži odgovor",
+  "palace.covers": "Šetnja pokriva",
   "palace.checking": "Proveravam odgovor …",
   "palace.scoreOf": "{score} od {total} poena",
   "palace.correctTitle": "Tačno!",

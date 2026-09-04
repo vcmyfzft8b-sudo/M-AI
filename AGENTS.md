@@ -36,6 +36,32 @@
 - After a migration PR is merged, `.github/workflows/supabase-migrations.yml` applies the migration files from `main` to production. Do not run a production migration from an unmerged PR or a Preview deployment.
 - Follow [docs/preview-staging.md](/docs/preview-staging.md) for safe verification, staging synchronization, migration testing, and production release rules.
 
+## Migrations: never push one from an unmerged branch
+
+Read this before adding a file to `supabase/migrations`. On 2026-09-04 three feature branches
+each wrote to production's migration history from an unmerged branch and cost an afternoon.
+
+- **Never run `supabase db push` against production from a branch.** Production migrations are
+  applied by `.github/workflows/supabase-migrations.yml` from `main`, after merge, and by nothing
+  else. A push from a branch records a version `main` does not have, and **a single remote version
+  with no local file aborts every later push from every branch** — one branch's shortcut blocks
+  the whole team.
+- **Never `supabase migration repair --status applied`.** It marks a version as done without
+  running its SQL, so that migration is skipped for good and its table is never created. This is
+  what happened to `0044`, `0045` and `0046`; each looked applied and none of them was. Repair is
+  only ever right in the other direction — `--status reverted`, for a record whose SQL provably
+  never ran, so the migration can apply properly on merge.
+- **Claim your number before you write the file**, because Supabase keys history by the number
+  alone and two branches taking `0043` means the second can never apply:
+  `ls supabase/migrations | sed 's/_.*//' | sort | uniq -d` and check the open PRs. Renumber the
+  file no database has recorded; never renumber one that is already live.
+- **To check whether a migration really applied**, read the live schema rather than the history:
+  `GET /rest/v1/<table>?select=*&limit=0` with the service-role key is 200 if the table exists and
+  404 if not, and `GET /rest/v1/` returns every table and column production actually has. Verify a
+  known-applied migration's table first — a wrong guess at a table's *name* also returns 404.
+- Background and the full incident: [docs/mindmap.md](/docs/mindmap.md) and the two collisions it
+  cites.
+
 ## Automated Production Error Triage
 
 - One automation covers production errors: the `Error triage` GitHub Actions workflow, scheduled every three hours. It runs in GitHub's cloud and does not depend on the Mac being on. The earlier local two-hourly Sentry job is retired; do not recreate it.
@@ -53,6 +79,24 @@
 - Inngest hashes a step's id from its name alone, so a deploy that lands mid-run replays completed steps from state written by the previous code. Giving an existing step a return value therefore breaks runs already in flight: a step that returned nothing replays as `null`, not `undefined`. Make the consumer tolerate the old shape. Renaming a step is the same trap in reverse — it re-runs, and for `transcribe-lecture` that means paying to transcribe twice.
 - Classify a failure that is the user's file rather than our bug on the throwing side of the step, via `runLectureStage`. Inngest flattens a failed step's error to `{ name: "Error", message, stack }`, so `isExpectedLectureInputFailure` cannot recognise anything once the function body's `catch` has it, and an expected failure ends up in Sentry and fails the run.
 - Details, the production check-list and the two incidents behind these rules are in [docs/lecture-pipeline-inngest.md](/docs/lecture-pipeline-inngest.md).
+
+## Mindmap
+
+- The mindmap is generated the first time somebody opens its tab and stored whole as one `jsonb`
+  document. A note that fits one call gets one call; a longer one has its **topics** planned once
+  over a skeleton of the whole note and only its **filling** windowed. Never split the topics per
+  chunk — chunks that each choose their own merge into several maps sharing a title.
+- Coverage is the point. There is no length cap on what gets mapped any more; if you add one back,
+  you have re-introduced the bug the windowing was written to fix.
+- Nothing is warmed ahead of time. Opening the tab is free when the note has not changed (the
+  stored `notes_hash` decides); "draw again" is the only control that always spends.
+- The opening fold, not the fit, is what makes a map readable. `suggestMindmapFold` measures
+  against `MINDMAP_REFERENCE_FRAMES`, which are measured stage sizes — re-measure them if the
+  note screen's chrome changes rather than adjusting them by eye.
+- Layout lives in `src/lib/mindmap-layout.ts` and `src/lib/mindmap-tidy.ts` (van der Ploeg's
+  non-layered tidy tree), is pure, and is shared by the canvas, the PNG export and its tests. Put
+  new layout rules there, never in the component.
+- Details are in [docs/mindmap.md](/docs/mindmap.md).
 
 ## Admin Dashboard
 

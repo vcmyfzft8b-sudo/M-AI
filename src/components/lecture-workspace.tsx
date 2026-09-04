@@ -11,10 +11,11 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useAppLayout } from "@/components/app-layout-context";
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
-import { useT, useTranslations } from "@/components/i18n-provider";
+import { useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { NoteReadAloud } from "@/components/note-read-aloud";
+import { NoteSpeedReader } from "@/components/note-speed-reader";
 import { StudyCompletionCard } from "@/components/study-completion-card";
 import { MemoPortal } from "@/components/memo-portal";
 import { RecordingPlayer } from "@/components/recording-player";
@@ -55,6 +56,8 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 
+import { StudyGenerationNotice } from "@/components/generation-notice";
+import { LectureMindmap } from "@/components/lecture-mindmap";
 import { LecturePalace } from "@/components/lecture-palace";
 import { StudyFlashcard } from "@/components/study-flashcard";
 import { LectureTutor } from "@/components/lecture-tutor";
@@ -76,7 +79,16 @@ import {
   formatTimestamp,
 } from "@/lib/utils";
 
-type WorkspaceTab = "notes" | "study" | "tutor" | "palace" | "chat" | "transcript" | "audio";
+type WorkspaceTab =
+  | "notes"
+  | "study"
+  | "tutor"
+  | "mindmap"
+  | "palace"
+  | "speed"
+  | "chat"
+  | "transcript"
+  | "audio";
 type StudyMaterialView = "flashcards" | "quiz" | "practice_test";
 type FlashcardSessionResult = {
   attempts: number;
@@ -285,6 +297,30 @@ const NOTE_TABS = [
     tint: "oklch(0.66 0.15 295)",
   },
   { id: "quiz", view: "quiz", labelKey: "note.tab.quiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
+  /*
+   * Last of the revision pills and immediately before the test, because that is the order the
+   * work is done in: cards, then questions, then the map you check the whole shape against —
+   * and then you sit the test.
+   */
+  {
+    id: "mindmap",
+    view: null,
+    labelKey: "note.tab.mindmap",
+    icon: "account_tree",
+    tint: "oklch(0.66 0.15 200)",
+  },
+  /*
+   * The same material again, walked through rather than read: it sits with the
+   * revision pills, after the map you check the shape against and before the
+   * test you sit at the end.
+   */
+  {
+    id: "palace",
+    view: null,
+    labelKey: "note.tab.palace",
+    icon: "explore",
+    tint: "oklch(0.66 0.15 100)",
+  },
   {
     id: "test",
     view: "practice_test",
@@ -293,16 +329,18 @@ const NOTE_TABS = [
     tint: "oklch(0.66 0.15 150)",
   },
   /*
-   * The memory palace: the same cards, walked through rather than flipped. It
-   * follows the three practice screens because it is a way of practising them,
-   * not a sixth kind of material.
+   * Another way through the note itself — one word at a time, held still, for a
+   * reader who wants the whole thing at pace rather than explained. It sits at
+   * the end of the row rather than beside the walkthrough: the three practice
+   * screens are what the row is mostly reached for, and a fourth pill between
+   * them and the note pushed them along by one.
    */
   {
-    id: "palace",
+    id: "speed",
     view: null,
-    labelKey: "note.tab.palace",
-    icon: "explore",
-    tint: "oklch(0.66 0.15 200)",
+    labelKey: "note.tab.speed",
+    icon: "bolt",
+    tint: "oklch(0.66 0.15 275)",
   },
   {
     id: "transcript",
@@ -803,122 +841,6 @@ function lectureProcessingStageLabel(
   return t(key ?? "stage.lecture.default");
 }
 
-type GenerationPreview = "notes" | "cards" | "quiz" | "test";
-
-/** The note body a generating note is on its way to becoming. */
-const GENERATION_NOTE_PARAGRAPHS = [
-  ["full", "full", "short"],
-  ["full", "full", "full", "short"],
-  ["full", "short"],
-] as const;
-
-const GENERATION_QUIZ_OPTIONS = [0, 1, 2, 3];
-
-/**
- * The ghost of the thing being generated, in the shape that will replace it.
- *
- * Built the way the two route skeletons are — out of the real screen's own
- * measurements rather than out of a spinner that says nothing about what is
- * coming. A wait that ends in a stack of flashcards should look like a stack of
- * flashcards filling in.
- */
-function GenerationSkeleton({ kind }: { kind: GenerationPreview }) {
-  if (kind === "notes") {
-    return (
-      <div className="memo-gen-preview" aria-hidden="true">
-        {GENERATION_NOTE_PARAGRAPHS.map((paragraph, index) => (
-          <div key={index} className="memo-gen-para">
-            <span className="app-loading-pill memo-gen-heading" />
-            {paragraph.map((line, lineIndex) => (
-              <span
-                key={lineIndex}
-                className={`app-loading-pill memo-gen-line ${line === "short" ? "short" : ""}`.trim()}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (kind === "cards") {
-    return (
-      <div className="memo-gen-preview" aria-hidden="true">
-        <div className="memo-gen-deckhead">
-          <div className="memo-gen-cardhead">
-            <span className="app-loading-pill" />
-            <span className="app-loading-pill" />
-          </div>
-          <span className="app-loading-pill memo-gen-bar cards" />
-        </div>
-        <div className="memo-gen-face">
-          <span className="app-loading-pill" />
-          <span className="app-loading-pill" />
-        </div>
-      </div>
-    );
-  }
-
-  if (kind === "quiz") {
-    return (
-      <div className="memo-gen-preview" aria-hidden="true">
-        <span className="app-loading-pill memo-gen-bar quiz" />
-        <div className="memo-gen-quizcard">
-          <span className="app-loading-pill memo-gen-prompt" />
-          {GENERATION_QUIZ_OPTIONS.map((option) => (
-            <span key={option} className="app-loading-pill memo-gen-option" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="memo-gen-preview" aria-hidden="true">
-      <span className="app-loading-pill memo-gen-bar test" />
-      <div className="memo-gen-testblock">
-        <span className="app-loading-pill memo-gen-prompt" />
-        <span className="app-loading-pill memo-gen-testinput" />
-      </div>
-    </div>
-  );
-}
-
-/**
- * A stage caption over the ghost of what is being made.
- *
- * The caption carries the one thing a skeleton cannot: these waits run for
- * minutes and move through named stages, and "Ustvarjam kartice" is the
- * difference between a screen that is working and a screen that is stuck. It
- * sits on the panel itself — the panel is already the surface, and the card
- * this used to draw around itself landed as a second card inside the first.
- */
-function StudyGenerationNotice({
-  stageCopy,
-  bodyCopy,
-  preview,
-}: {
-  stageCopy: string;
-  /** Defaults to the generic "this runs in the background" line. */
-  bodyCopy?: string;
-  preview: GenerationPreview;
-}) {
-  const t = useT();
-  const body = bodyCopy ?? t("study.generatingBody");
-  return (
-    <div className="memo-gen" role="status" aria-live="polite" aria-busy="true">
-      <div className="memo-gen-head">
-        <p className="memo-gen-stage">{stageCopy}</p>
-        <p className="memo-gen-copy">{body}</p>
-        <span className="memo-gen-track" aria-hidden="true">
-          <span />
-        </span>
-      </div>
-      <GenerationSkeleton kind={preview} />
-    </div>
-  );
-}
-
 function isLegacySectionId(value: string) {
   return value.startsWith("legacy-");
 }
@@ -1223,7 +1145,9 @@ const SUB_SCREEN_TITLE_KEYS: Record<string, MessageKey | null> = {
   quiz: "note.tab.quiz",
   test: "note.subScreen.test",
   tutor: "tutor.subScreenTitle",
+  mindmap: "note.tab.mindmap",
   palace: "palace.title",
+  speed: "note.tab.speed",
   transcript: "note.tab.transcript",
 };
 
@@ -3979,6 +3903,30 @@ export function LectureWorkspace({
       );
     }
 
+    if (activeTab === "mindmap") {
+      return (
+        <LectureMindmap
+          lectureId={detail.lecture.id}
+          lectureTitle={lectureTitle}
+          lectureReady={detail.lecture.status === "ready"}
+        />
+      );
+    }
+
+    if (activeTab === "speed") {
+      return (
+        <NoteSpeedReader
+          lectureId={detail.lecture.id}
+          /*
+           * The same markdown the note screen renders, so the two are never
+           * reading different versions of the note.
+           */
+          content={detail.lecture.status === "ready" ? cleanedStructuredNotes : null}
+          onClose={() => setActiveTab("notes")}
+        />
+      );
+    }
+
     if (activeTab === "notes") {
       // The dock's annotate layer: brush, underline, colour, photo, and the
       // swatch row the colour button slides open.
@@ -5512,15 +5460,19 @@ export function LectureWorkspace({
       ? "notes"
       : activeTab === "tutor"
         ? "tutor"
-        : activeTab === "palace"
-          ? "palace"
-          : activeTab === "transcript" || activeTab === "audio"
-          ? "transcript"
-          : activeStudyView === "flashcards"
-            ? "flashcards"
-            : activeStudyView === "quiz"
-              ? "quiz"
-              : "test";
+        : activeTab === "mindmap"
+          ? "mindmap"
+          : activeTab === "palace"
+            ? "palace"
+            : activeTab === "speed"
+              ? "speed"
+              : activeTab === "transcript" || activeTab === "audio"
+                ? "transcript"
+                : activeStudyView === "flashcards"
+                  ? "flashcards"
+                  : activeStudyView === "quiz"
+                    ? "quiz"
+                    : "test";
 
   /*
    * The pill row follows the tab it is on. The pills overflow their scroller
@@ -5584,7 +5536,14 @@ export function LectureWorkspace({
   // overlay covers, so leaving the note with it open left the note's chat
   // standing beside the library's skeleton until the route committed.
   const isLeavingNote = navigatingTo != null && navigatingTo !== notePathname;
-  const showChatPanel = !isChatDismissed && !isLeavingNote;
+  /*
+   * The map takes the chat's column while it is on screen, and this is the one screen worth
+   * doing that for. A mind map is the only thing here whose usefulness is a function of how wide
+   * it is drawn: with the conversation beside it the canvas is barely three hundred pixels, and
+   * a map framed into three hundred pixels is the unreadable single column this feature exists
+   * to be better than. Chat is a tab away, and on the phone the bar at the foot is untouched.
+   */
+  const showChatPanel = !isChatDismissed && !isLeavingNote && activeTabId !== "mindmap";
 
   useEffect(() => {
     setChatOpen(showChatPanel);
@@ -5899,8 +5858,18 @@ export function LectureWorkspace({
       return;
     }
 
+    if (tab.id === "mindmap") {
+      setActiveTab("mindmap");
+      return;
+    }
+
     if (tab.id === "palace") {
       setActiveTab("palace");
+      return;
+    }
+
+    if (tab.id === "speed") {
+      setActiveTab("speed");
       return;
     }
 
@@ -6035,7 +6004,10 @@ export function LectureWorkspace({
           <div className="memo-dock">
             <div className="memo-dock-slot" ref={setDockSlot} />
 
-            {isChatDismissed && activeTabId !== "quiz" && activeTabId !== "tutor" ? (
+            {isChatDismissed &&
+            activeTabId !== "quiz" &&
+            activeTabId !== "tutor" &&
+            activeTabId !== "mindmap" ? (
               <button
                 type="button"
                 aria-label={t("chat.open")}

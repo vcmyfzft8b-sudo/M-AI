@@ -597,8 +597,22 @@
   font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
 }
 
+/*
+ * The shared pill scroller: the note's tab row and the two chat suggestion rows.
+ *
+ * `pan-x` is the whole point. Without it a swipe that starts on the row and drifts even slightly
+ * off horizontal takes the page with it, so the row appears to slide up and down while you are
+ * trying to reach the pill at the end of it. Naming the one axis the row owns hands the gesture
+ * to the scroller and nothing else.
+ *
+ * `overscroll-behavior-x` is the other half: scrolled to its last pill, the leftover momentum
+ * chains outward and iOS reads it as the back-swipe, so reaching for the final tab navigated
+ * away from the note.
+ */
 .memo-chiprow {
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
 }
 
 
@@ -606,8 +620,26 @@
 
 /* Desktop and phone differ structurally in places (the home header, the note
    chrome), so both trees render and the breakpoint picks one. */
-.memo-only-mobile {
-  display: none;
+/*
+ * Hidden by a breakpoint rather than by a base rule.
+ *
+ * As a base rule this was one class, so it lost on source order to any
+ * component rule that sets `display` — `.memo-card-row { display: flex }` among
+ * them, which is how the phone's account card came to be drawn on desktop, with
+ * a sign-out button whose styling lives in a phone-only media query.
+ *
+ * Buying specificity instead (doubling the class, or `!important`) fixes that
+ * and breaks something else: the rule then has to be undone again below the
+ * breakpoint, and whatever undoes it outranks the component rules too — so
+ * every element carrying this class alongside one that sets `display: flex`
+ * quietly became a block on the phone. Scoping to desktop means there is
+ * nothing to undo, and nothing to outrank: below 1100px this rule does not
+ * exist and each component keeps its own display.
+ */
+@media (min-width: 1100px) {
+  .memo-only-mobile {
+    display: none !important;
+  }
 }
 
 /* The home skeleton's stand-in for the promo card. Phone-only like the real
@@ -5336,6 +5368,51 @@
   width: 52%;
 }
 
+/* The map's ghost: a centre with branches fanning off both sides, which is the shape the wait
+   ends in. Laid out as three columns rather than as a tree — a skeleton only has to rhyme with
+   what replaces it, and a real layout here would be the layout engine drawing nothing. */
+.memo-gen-map {
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+.memo-gen-map-side {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: end;
+}
+
+.memo-gen-map-side:last-child {
+  justify-items: start;
+}
+
+.memo-gen-branch {
+  height: 1.5rem;
+  border-radius: 999px;
+}
+
+.memo-gen-map-root {
+  width: 7.5rem;
+  height: 3.4rem;
+  border-radius: 1.1rem;
+}
+
+@media (max-width: 1099px) {
+  .memo-gen-map {
+    gap: 0.6rem;
+  }
+
+  .memo-gen-map-root {
+    width: 5.4rem;
+    height: 3rem;
+  }
+
+  .memo-gen-branch {
+    height: 1.3rem;
+  }
+}
+
 .memo-gen-quizcard {
   display: grid;
   gap: 0.7rem;
@@ -5587,6 +5664,35 @@
   cursor: pointer;
   font-size: 1.02rem;
   font-weight: 750;
+}
+
+/*
+ * The account card's own button. Declared here rather than inside the narrowest
+ * media query it used to live in: the card is drawn at every width below the
+ * desktop breakpoint, so between 480px and 1099px this was a bare bordered box
+ * with square corners — the browser's own button, wearing only the neutral
+ * border every control in this file shares.
+ */
+.memo-settings-signout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 3rem;
+  padding: 0 1.2rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1.02rem;
+  font-weight: 650;
+}
+
+.memo-settings-signout:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .memo-help-intro {
@@ -8648,10 +8754,6 @@
     display: none !important;
   }
 
-  .memo-only-mobile {
-    display: revert;
-  }
-
   .memo-only-mobile.flex {
     display: flex;
   }
@@ -10142,6 +10244,10 @@
     padding: 1.1rem 1.2rem;
   }
 
+  .memo-settings-signout {
+    width: 100%;
+  }
+
   .memo-settings-account .memo-card-row-title {
     margin: 0.3rem 0 0.9rem;
     overflow: hidden;
@@ -10149,28 +10255,6 @@
     font-weight: 650;
     letter-spacing: -0.02em;
     text-overflow: ellipsis;
-  }
-
-  .memo-settings-signout {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.45rem;
-    width: 100%;
-    height: 3rem;
-    border: 0;
-    border-radius: 999px;
-    background: var(--tile);
-    color: var(--text);
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 1.02rem;
-    font-weight: 650;
-  }
-
-  .memo-settings-signout:disabled {
-    opacity: 0.6;
-    cursor: default;
   }
 
   .memo-settings-list {
@@ -14013,4 +14097,1207 @@
     top: calc(0.9rem + var(--memo-safe-top, 0px));
     right: 4.2rem;
   }
+}
+/* ---------------------------------------------------------------------------
+   Mindmap
+   ---------------------------------------------------------------------------
+   The note read as a shape. Everything inside the stage is drawn by
+   mindmap-canvas.tsx as SVG in map coordinates, so the only sizes here are the
+   frame's and the chrome that floats over it — the nodes' own metrics live in
+   mindmap-layout.ts, where the PNG export can read the same numbers.
+   --------------------------------------------------------------------------- */
+
+/*
+ * The map draws the note's title in its own middle, so the heading and date above it are the
+ * same words a second time — and on this one screen those hundred-odd pixels are canvas. The
+ * breadcrumb stays: that says where you are, which the map does not.
+ */
+.memo-note-screen[data-note-tab="mindmap"] .memo-note-head,
+.memo-note-screen[data-note-tab="mindmap"] .memo-note-date {
+  display: none;
+}
+
+.memo-mm-stage {
+  position: relative;
+  /*
+   * Tall enough to be a map, short enough that its own controls are on screen when it opens.
+   *
+   * The note card grows with its content and lets the page scroll, which is right for a note and
+   * wrong for this: the toolbar is pinned to the foot of the stage, so a stage sized by the
+   * viewport alone put "Save as image" a scroll below the fold on a 900px laptop. The subtraction
+   * is the chrome above it — rail, breadcrumb, pill row, title, date — plus the dock beneath the
+   * card. It is a measured constant rather than a computed one because nothing here has a
+   * definite height to compute from; the clamp is what keeps it sane when that estimate is off.
+   */
+  height: clamp(20rem, calc(100dvh - 21rem), 46rem);
+  margin-top: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 1.5rem;
+  background:
+    radial-gradient(circle at 1px 1px, var(--muted-2) 1px, transparent 0) 0 0 / 26px 26px,
+    var(--sunken);
+  overflow: hidden;
+  outline: none;
+  animation: memo-fade-in 0.24s ease-out;
+}
+
+.memo-mm-stage:focus-visible {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 3px var(--hover-ring);
+}
+
+/* The dotted ground is a texture, not information; it must never compete with
+   the map drawn over it.
+
+   The bare `:root:not([data-theme="light"])` half of this pair belongs inside the
+   media query below and nowhere else: outside it, it matches a light page whose
+   theme attribute is simply absent, which is most of them. */
+:root[data-theme="dark"] .memo-mm-stage {
+  background:
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.08) 1px, transparent 0) 0 0 / 26px 26px,
+    var(--sunken);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .memo-mm-stage {
+    background:
+      radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.08) 1px, transparent 0) 0 0 / 26px 26px,
+      var(--sunken);
+  }
+}
+
+.memo-mm-frame {
+  position: absolute;
+  inset: 0;
+  /* The gestures are ours: without this the browser scrolls the note behind the
+     map the moment a drag has any vertical component. */
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.memo-mm-frame:active {
+  cursor: grabbing;
+}
+
+.memo-mm-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Filled rather than stroked: a branch tapers from its parent to its child, and a stroke has
+   one width for its whole length. The outline comes from `linkRibbon` in mindmap-layout.ts. */
+.memo-mm-link {
+  stroke: none;
+  opacity: 0.85;
+  transition: opacity 0.18s ease;
+}
+
+.memo-mm-link.dim {
+  opacity: 0.16;
+}
+
+.memo-mm-node {
+  cursor: pointer;
+  transition: opacity 0.18s ease;
+}
+
+.memo-mm-node.dim {
+  opacity: 0.28;
+}
+
+.memo-mm-box {
+  transition:
+    filter 0.16s ease,
+    stroke-width 0.16s ease;
+}
+
+.memo-mm-text {
+  pointer-events: none;
+  paint-order: stroke;
+}
+
+/* The centre: the note's own title, drawn as ink rather than as a colour, so it
+   reads as the thing the coloured branches belong to. */
+.memo-mm-node.d0 .memo-mm-box {
+  fill: var(--text);
+  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.18));
+}
+
+.memo-mm-node.d0 .memo-mm-text {
+  fill: var(--surface);
+  letter-spacing: -0.02em;
+}
+
+.memo-mm-node.d1 .memo-mm-box {
+  fill: var(--mm-accent);
+}
+
+.memo-mm-node.d1 .memo-mm-text {
+  fill: var(--surface);
+  letter-spacing: -0.01em;
+}
+
+/* Tinted rather than white: at this level the colour is what tells a reader which limb they are
+   reading without tracing the line back, and a page of white cards reads as a table. */
+.memo-mm-node.d2 .memo-mm-box {
+  fill: color-mix(in srgb, var(--mm-accent) 12%, var(--surface));
+  stroke: var(--mm-accent);
+  stroke-width: 1.4;
+  stroke-opacity: 0.7;
+}
+
+/* The leaves carry no box at all — text on a rule, the way a mind map draws its outermost twigs. */
+.memo-mm-hit {
+  fill: transparent;
+}
+
+.memo-mm-rule {
+  stroke: var(--mm-accent);
+  stroke-width: 1.5;
+  stroke-opacity: 0.7;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.memo-mm-node.d2 .memo-mm-text,
+.memo-mm-node.d3 .memo-mm-text {
+  fill: var(--text);
+}
+
+.memo-mm-node:hover .memo-mm-box {
+  filter: brightness(1.04);
+}
+
+.memo-mm-node.selected .memo-mm-box,
+.memo-mm-node.matched .memo-mm-box {
+  stroke: var(--mm-accent, var(--text));
+  stroke-width: 3;
+  stroke-opacity: 1;
+}
+
+/* A boxless leaf says it is selected by thickening its rule, since it has no border to thicken. */
+.memo-mm-node.selected .memo-mm-rule,
+.memo-mm-node.matched .memo-mm-rule {
+  stroke-width: 3;
+  stroke-opacity: 1;
+}
+
+.memo-mm-node.selected .memo-mm-text,
+.memo-mm-node.matched .memo-mm-text {
+  font-weight: 700;
+}
+
+.memo-mm-node.d0.selected .memo-mm-box {
+  stroke: var(--text);
+}
+
+.memo-mm-badge {
+  cursor: pointer;
+}
+
+.memo-mm-badge circle {
+  fill: var(--surface);
+  stroke: var(--mm-accent);
+  stroke-width: 1.6;
+}
+
+.memo-mm-badge-count {
+  fill: var(--mm-accent, var(--text));
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.memo-mm-badge-glyph {
+  stroke: var(--mm-accent);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+/* --- the chrome over the canvas ---------------------------------------- */
+
+.memo-mm-toolbar {
+  position: absolute;
+  right: 0.85rem;
+  bottom: 0.85rem;
+  left: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  pointer-events: none;
+}
+
+.memo-mm-toolbar > * {
+  pointer-events: auto;
+}
+
+.memo-mm-tools,
+.memo-mm-zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-mm-tool {
+  display: grid;
+  place-items: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.memo-mm-tool:hover:not(:disabled) {
+  background: var(--tile);
+}
+
+.memo-mm-tool:disabled {
+  color: var(--muted-2);
+  cursor: default;
+}
+
+.memo-mm-search {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.memo-mm-search-input {
+  width: 9rem;
+  height: 2.1rem;
+  padding: 0 0.6rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.memo-mm-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+.memo-mm-search-count {
+  padding-right: 0.35rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.memo-mm-zoom-level {
+  min-width: 3.4rem;
+  height: 2.3rem;
+  padding: 0 0.3rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.memo-mm-zoom-level:hover {
+  background: var(--tile);
+  color: var(--text);
+}
+
+/* The reference's own headline control, kept: a map is something people want
+   out of the app and into their notes. */
+.memo-mm-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 2.8rem;
+  padding: 0 1.15rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.memo-mm-save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+:root[data-theme="dark"] .memo-mm-save {
+  color: #121214;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .memo-mm-save {
+    color: #121214;
+  }
+}
+
+/* The way back out of a focused map. It sits where the detail card sits, so the card steps down
+   when a trail is present — `:has()` is already load-bearing on this screen's dock. */
+.memo-mm-trail {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  max-width: calc(100% - 1.7rem);
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.memo-mm-trail::-webkit-scrollbar {
+  display: none;
+}
+
+.memo-mm-trail button {
+  border: 0;
+  padding: 0.1rem 0.25rem;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.memo-mm-trail button:hover {
+  background: var(--tile);
+  color: var(--text);
+}
+
+.memo-mm-trail-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.memo-mm-trail-current {
+  padding: 0.1rem 0.25rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.memo-mm-stage:has(.memo-mm-trail) .memo-mm-detail {
+  top: 3.5rem;
+}
+
+.memo-mm-detail {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.85rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  max-width: min(23rem, calc(100% - 1.7rem));
+  padding: 0.85rem 0.85rem 0.85rem 0;
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: memo-pop-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.memo-mm-detail-rail {
+  flex: none;
+  align-self: stretch;
+  width: 4px;
+  margin: -0.85rem 0;
+  border-radius: 1.1rem 0 0 1.1rem;
+}
+
+.memo-mm-detail-body {
+  min-width: 0;
+}
+
+.memo-mm-detail-label {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-wrap: pretty;
+}
+
+.memo-mm-detail-copy {
+  margin-top: 0.3rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.memo-mm-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.memo-mm-detail-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+  padding: 0.3rem 0.6rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.memo-mm-detail-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* One badge, two jobs: "your note has moved on" and "the redraw did not work".
+   The second carries a message the model wrote, so it wraps and is bounded. */
+.memo-mm-stale,
+.memo-mm-redrawing {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: min(20rem, calc(100% - 1.7rem));
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-wrap: pretty;
+  box-shadow: var(--shadow);
+}
+
+.memo-mm-stale > span {
+  min-width: 0;
+}
+
+.memo-mm-stale button {
+  border: 0;
+  background: transparent;
+  color: var(--blue);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Full screen: the map gets the whole viewport, which on a phone is the
+   difference between reading it and squinting at it. */
+.memo-mm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  padding: calc(0.6rem + var(--memo-safe-top, 0px)) 0.6rem
+    calc(0.6rem + var(--memo-safe-bottom, 0px));
+  background: var(--bg);
+}
+
+.memo-mm-overlay .memo-mm-stage {
+  height: 100%;
+  margin: 0;
+}
+
+/* Holds the note screen's scroll height while the map is elsewhere, so leaving
+   full screen does not drop the page back to a different scroll position. */
+.memo-mm-placeholder {
+  height: clamp(20rem, calc(100dvh - 21rem), 46rem);
+  margin-top: 0.4rem;
+  border: 1px dashed var(--line);
+  border-radius: 1.5rem;
+}
+
+@media (max-width: 1099px) {
+  /* The phone's note screen has far less chrome above the panel, and a dock below it. */
+  .memo-mm-stage {
+    height: clamp(18rem, calc(100dvh - 16rem), 38rem);
+    border-radius: 1.25rem;
+  }
+
+  .memo-mm-placeholder {
+    height: clamp(18rem, calc(100dvh - 16rem), 38rem);
+  }
+
+  /*
+   * On the phone the chrome splits rather than wraps. Wrapped, the three groups stacked into a
+   * 151px band across the foot of a 583px stage — a quarter of the map spent on its own buttons.
+   * The tools go to the head of the stage, the save pill keeps the foot to itself, and the zoom
+   * cluster goes altogether: a phone pinches, and the one thing pinching cannot do is frame the
+   * map again, which is the button that replaces it.
+   */
+  .memo-mm-toolbar {
+    inset: 0.7rem;
+    display: block;
+  }
+
+  .memo-mm-tools {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  .memo-mm-save {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2.6rem;
+  }
+
+  .memo-mm-search-input {
+    width: 6.5rem;
+  }
+
+  .memo-mm-trail {
+    top: 4.2rem;
+    left: 0.7rem;
+    max-width: calc(100% - 1.4rem);
+  }
+
+  .memo-mm-stage:has(.memo-mm-trail) .memo-mm-detail {
+    top: auto;
+  }
+
+  /* Below the tools row, which now owns the head of the stage. */
+  .memo-mm-stale,
+  .memo-mm-redrawing {
+    top: 4.2rem;
+    right: 0.7rem;
+  }
+
+  .memo-mm-stage:has(.memo-mm-trail) .memo-mm-stale,
+  .memo-mm-stage:has(.memo-mm-trail) .memo-mm-redrawing {
+    top: 7.4rem;
+  }
+
+  /* Clear of the tools above and the save pill below, and never over the middle of the map. */
+  .memo-mm-detail {
+    top: auto;
+    right: 0.85rem;
+    bottom: 4.4rem;
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-mm-stage,
+  .memo-mm-detail {
+    animation: none;
+  }
+
+  .memo-mm-link,
+  .memo-mm-node,
+  .memo-mm-box {
+    transition: none;
+  }
+}
+
+/* --- speed reading -------------------------------------------------------- */
+
+/*
+ * Everything here exists to hold one letter still under the eye for minutes at
+ * a time, so the screen is built to need nothing of the reader: it fills the
+ * space it is given and never scrolls. A word pinned to a fixed point inside a
+ * view that can be dragged is the one thing that would undo the whole design —
+ * and a control below the fold is a control that is not there.
+ *
+ * So the reader is a column of fixed parts with one elastic one. The header,
+ * the hint, the transport and the settings take what they need; the stage takes
+ * whatever is left, down to nothing. Every height below is a cap, not a floor.
+ */
+.memo-speedread {
+  --speedread-ink: var(--text);
+  --speedread-faint: var(--muted);
+  --speedread-hairline: var(--line);
+  --speedread-pivot: #f43f4e;
+  --speedread-accent: #8b5cf6;
+  display: flex;
+  flex-direction: column;
+  /*
+   * The height the component measured for it (see `--speedread-available`),
+   * which is what makes "one screen, no scrolling" true on a device nobody
+   * tested rather than only on the ones that were. Without the variable — the
+   * first paint, or JavaScript that never arrived — it falls back to filling
+   * whatever the panel gives it.
+   */
+  height: var(--speedread-available, auto);
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Wide enough that the header's rule and the top guide rail read as two
+     different things rather than as one line drawn twice; it is the first
+     thing to give when the screen is short. */
+  gap: clamp(0.6rem, 2.2vh, 1.5rem);
+  /* No ground, no radius, no shadow: the reader is the screen it is on, not a
+     panel sitting on one. A card would draw a second edge inside the note card
+     it already lives in, and the whole design is about having nothing on screen
+     for the eye to leave the word for. */
+  padding: 0;
+  color: var(--speedread-ink);
+}
+
+.memo-speedread-head {
+  padding-bottom: 1.1rem;
+  border-bottom: 1px solid var(--speedread-hairline);
+}
+
+.memo-speedread-title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/*
+ * The stage. The whole thing is the play/pause target, because at 600 words a
+ * minute a reader who wants to stop wants to stop now, not after finding a
+ * button — the same reason the hint below says so in as many words.
+ */
+.memo-speedread-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+  /*
+   * Takes what the fixed parts leave. The floor is the point past which there
+   * is no reader left to fit: a stage of nothing still fits on the screen, and
+   * is a screen with no word on it.
+   */
+  flex: 1 1 auto;
+  min-height: 2.9rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+/*
+ * The guide rails: a hairline above and below the word, each with a short tick
+ * at the centre pointing at the letter the eye should land on. They are what
+ * make the fixation point a place rather than an idea — without them the reader
+ * hunts for the middle of every word.
+ */
+.memo-speedread-rail {
+  position: relative;
+  display: block;
+  height: 1px;
+  background: var(--speedread-hairline);
+}
+
+.memo-speedread-rail::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 1px;
+  height: 0.85rem;
+  background: var(--speedread-hairline);
+}
+
+.memo-speedread-rail.top::after {
+  top: 0;
+}
+
+.memo-speedread-rail.bottom::after {
+  bottom: 0;
+}
+
+/*
+ * Three columns, the outer two equal, so the middle one — the focus letter —
+ * sits exactly over the rails' ticks whatever the word around it is. The outer
+ * columns are allowed to shrink to nothing rather than push the pivot off
+ * centre, which is the one thing this layout may never do.
+ */
+.memo-speedread-word {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  /* Capped against the viewport's height as well as its width: a phone in
+     landscape has plenty of the second and almost none of the first, and a
+     word sized only by width would not fit between the rails. */
+  font-size: calc(min(clamp(1.7rem, 10vw, 3.9rem), 12vh) * var(--speedread-word-scale, 1));
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.memo-speedread-lead,
+.memo-speedread-tail {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.memo-speedread-lead {
+  text-align: right;
+}
+
+.memo-speedread-tail {
+  text-align: left;
+}
+
+.memo-speedread-pivot {
+  color: var(--speedread-pivot);
+}
+
+.memo-speedread-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--speedread-faint);
+}
+
+.memo-speedread-empty {
+  margin: 0;
+  padding: 3rem 0;
+  text-align: center;
+  color: var(--speedread-faint);
+}
+
+/*
+ * Progress and scrubbing are the same control: the bar you watch is the bar you
+ * drag back to the paragraph you missed. A range input rather than a div, so
+ * the keyboard and a screen reader get the same seek the thumb does.
+ */
+/* The transport: the button that starts it, and the bar that says how far in
+   you are — which is also how you get back to the paragraph you missed. */
+.memo-speedread-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.memo-speedread-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.9rem;
+  height: 2.9rem;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 999px;
+  background: var(--speedread-accent);
+  color: #ffffff;
+  cursor: pointer;
+  transition: transform 0.14s ease-out;
+}
+
+.memo-speedread-play:hover {
+  transform: scale(1.06);
+}
+
+.memo-speedread-play:active {
+  transform: scale(0.96);
+}
+
+/* Optical centring: a triangle's mass sits left of its bounding box. */
+.memo-speedread-play .msym {
+  margin-left: 0.06em;
+}
+
+.memo-speedread-seek,
+.memo-speedread-slider {
+  width: 100%;
+  height: 1.1rem;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  /*
+   * The drag belongs to the slider, not to the page. Without this a horizontal
+   * swipe that starts on the track can be claimed as a scroll gesture and the
+   * thumb never moves — which on a phone reads as the control being broken
+   * rather than as the browser having taken the gesture.
+   */
+  touch-action: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/*
+ * Finger-sized on a touch screen.
+ *
+ * Both of these were drawn to the artboard's proportions — a 10px dot on a 3px
+ * line — which is a mouse's target, not a thumb's. The element grows to a real
+ * touch target while the line stays as thin as it was: the padding a finger
+ * needs is invisible, so the control looks the same and stops being a game of
+ * accuracy. The thumbs grow too, because a thumb you cannot see is a thumb you
+ * cannot aim at.
+ */
+@media (pointer: coarse) {
+  .memo-speedread-seek,
+  .memo-speedread-slider {
+    height: 2.5rem;
+  }
+
+  .memo-speedread-seek::-webkit-slider-thumb {
+    width: 1.15rem;
+    height: 1.15rem;
+    margin-top: -0.46rem;
+  }
+
+  .memo-speedread-seek::-moz-range-thumb {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+
+  .memo-speedread-slider::-webkit-slider-thumb {
+    width: 1.6rem;
+    height: 1.6rem;
+    margin-top: -0.6rem;
+  }
+
+  .memo-speedread-slider::-moz-range-thumb {
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+
+  .memo-speedread-seek::-webkit-slider-runnable-track,
+  .memo-speedread-seek::-moz-range-track {
+    height: 4px;
+  }
+
+  .memo-speedread-slider::-webkit-slider-runnable-track,
+  .memo-speedread-slider::-moz-range-track {
+    height: 6px;
+  }
+
+  /* The switch and its label are one target, and it is a thumb-sized one. */
+  .memo-speedread-gradual {
+    min-height: 2.75rem;
+    gap: 0.7rem;
+  }
+
+  .memo-speedread-gradual input {
+    width: 1.35rem;
+    height: 1.35rem;
+  }
+}
+
+.memo-speedread-seek::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--speedread-accent) var(--speedread-progress, 0%),
+    var(--track) var(--speedread-progress, 0%)
+  );
+}
+
+.memo-speedread-seek::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--speedread-accent) var(--speedread-progress, 0%),
+    var(--track) var(--speedread-progress, 0%)
+  );
+}
+
+.memo-speedread-seek::-webkit-slider-thumb {
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-top: -0.15rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--speedread-accent);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.memo-speedread-seek::-moz-range-thumb {
+  width: 0.6rem;
+  height: 0.6rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--speedread-accent);
+}
+
+.memo-speedread-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.memo-speedread-rate {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.memo-speedread-rate span {
+  font-size: 0.8rem;
+  color: var(--speedread-faint);
+}
+
+.memo-speedread-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--muted) var(--speedread-slider-fill, 0%),
+    var(--track) var(--speedread-slider-fill, 0%)
+  );
+}
+
+.memo-speedread-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--muted) var(--speedread-slider-fill, 0%),
+    var(--track) var(--speedread-slider-fill, 0%)
+  );
+}
+
+.memo-speedread-slider::-webkit-slider-thumb {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: -0.35rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--speedread-accent);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.memo-speedread-slider::-moz-range-thumb {
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--speedread-accent);
+}
+
+/* The rate the slider is set to, written under the ends and the middle of it. */
+.memo-speedread-scale {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 0.2rem;
+  font-size: 0.78rem;
+  color: var(--speedread-faint);
+}
+
+.memo-speedread-gradual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  margin-top: 0.7rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.memo-speedread-gradual input {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  accent-color: var(--speedread-accent);
+  cursor: pointer;
+}
+
+/* The rate the ramp has actually reached, while it is climbing. */
+.memo-speedread-gradual em {
+  font-style: normal;
+  font-size: 0.8rem;
+  color: var(--speedread-faint);
+}
+
+/*
+ * When the reader is short of room it gives things up in order of what the
+ * screen can say without: first the key hint beside the close button and the
+ * line telling you the stage is tappable (there is a play button under it
+ * now), then the slider's end labels, since the number above it already says
+ * the rate. The stage is the last thing to be given up, never the first.
+ *
+ * Keyed off how much room the reader measured for itself rather than off a
+ * viewport height: a desktop window can be tall and still leave it very little
+ * once the header, the card and the pill row have taken theirs.
+ */
+.memo-speedread[data-density="compact"],
+.memo-speedread[data-density="tight"] {
+  gap: 0.6rem;
+}
+
+.memo-speedread[data-density="compact"] .memo-speedread-head,
+.memo-speedread[data-density="tight"] .memo-speedread-head {
+  padding-bottom: 0.5rem;
+}
+
+.memo-speedread[data-density="compact"] .memo-speedread-title,
+.memo-speedread[data-density="tight"] .memo-speedread-title {
+  font-size: 1.05rem;
+}
+
+.memo-speedread[data-density="compact"] .memo-speedread-hint,
+.memo-speedread[data-density="tight"] .memo-speedread-hint {
+  display: none;
+}
+
+.memo-speedread[data-density="compact"] .memo-speedread-play,
+.memo-speedread[data-density="tight"] .memo-speedread-play {
+  width: 2.3rem;
+  height: 2.3rem;
+}
+
+/* Still a full touch target where there is room for one. */
+@media (pointer: coarse) {
+  .memo-speedread[data-density="compact"] .memo-speedread-play {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+}
+
+.memo-speedread[data-density="compact"] .memo-speedread-rate,
+.memo-speedread[data-density="tight"] .memo-speedread-rate {
+  font-size: 0.85rem;
+}
+
+.memo-speedread[data-density="compact"] .memo-speedread-gradual,
+.memo-speedread[data-density="tight"] .memo-speedread-gradual {
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+}
+
+.memo-speedread[data-density="compact"] .memo-speedread-scale {
+  font-size: 0.68rem;
+}
+
+.memo-speedread[data-density="tight"] .memo-speedread-scale {
+  display: none;
+}
+
+.memo-speedread[data-density="tight"] .memo-speedread-head {
+  padding-bottom: 0.35rem;
+}
+
+.memo-speedread[data-density="tight"] .memo-speedread-gradual {
+  margin-top: 0;
+}
+
+/*
+ * A finger still needs somewhere to land, so the touch targets are the last
+ * thing to shrink and they never shrink far — a little under the usual minimum
+ * beats a control that has been pushed off a 390px-tall screen entirely.
+ */
+.memo-speedread[data-density="tight"] .memo-speedread-stage {
+  min-height: 2.5rem;
+}
+
+@media (pointer: coarse) {
+  .memo-speedread[data-density="tight"] .memo-speedread-seek,
+  .memo-speedread[data-density="tight"] .memo-speedread-slider {
+    height: 2.1rem;
+  }
+
+  .memo-speedread[data-density="tight"] .memo-speedread-gradual {
+    min-height: 2.4rem;
+  }
+
+  .memo-speedread[data-density="tight"] .memo-speedread-play {
+    width: 2.1rem;
+    height: 2.1rem;
+  }
+}
+
+/*
+ * The reader owns the screen: there is nothing to ask a question with while a
+ * word is being held still under the eye.
+ *
+ * The scroller is left alone, though — unlike the walkthrough, this screen has
+ * controls under its stage, and a short phone in landscape would put the speed
+ * slider below a fold that could not be reached. The stage gives way instead,
+ * being capped in viewport units, so on any ordinary screen there is nothing
+ * to scroll anyway.
+ */
+.memo-note-screen[data-note-tab="speed"] .memo-m-chatbar,
+.memo-note-screen[data-note-tab="speed"] .memo-m-chatbar-mic,
+.memo-note-screen[data-note-tab="speed"] .memo-chat-fab {
+  display: none;
+}
+
+/*
+ * The note's own heading goes too. A title, a date and a breadcrumb above a
+ * word being held still are three more things to look at, and they push the
+ * fixation point down the screen — on a phone far enough that the controls
+ * under it need scrolling to reach.
+ */
+.memo-note-screen[data-note-tab="speed"] .memo-breadcrumb,
+.memo-note-screen[data-note-tab="speed"] .memo-note-head,
+.memo-note-screen[data-note-tab="speed"] .memo-note-date,
+.memo-note-screen[data-note-tab="speed"] .memo-m-note-title,
+.memo-note-screen[data-note-tab="speed"] .memo-m-note-meta {
+  display: none;
+}
+
+.memo-note-screen[data-note-tab="speed"] .memo-panel.study {
+  margin-top: clamp(0.6rem, 2vh, 1.4rem);
+  min-height: 0;
+}
+
+/*
+ * The chain that makes "never scrolls" true rather than merely intended. The
+ * note scroller becomes a column whose one flexible child is the panel, the
+ * panel's child is the reader, and each link passes a definite height down by
+ * refusing to grow past it (`min-height: 0`, without which a flex child floors
+ * at its content size and pushes the controls off the bottom instead).
+ */
+.memo-note-screen[data-note-tab="speed"] .memo-note-scroll {
+  display: flex;
+  flex-direction: column;
+  overflow-y: hidden;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+.memo-note-screen[data-note-tab="speed"] .memo-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }

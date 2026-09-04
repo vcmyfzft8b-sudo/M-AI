@@ -28,6 +28,7 @@ import "./redesign.css";
  * Add any new icon to this list, or `.msym` will render its name as text.
  */
 const MATERIAL_SYMBOL_NAMES = [
+  "account_tree",
   "add",
   "add_photo_alternate",
   "arrow_back",
@@ -38,6 +39,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "battery_full",
   "bolt",
   "cancel",
+  "center_focus_strong",
   "chat_bubble",
   "check",
   "check_circle",
@@ -83,6 +85,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "quiz",
   "radio_button_checked",
   "refresh",
+  "remove",
   "replay",
   "replay_10",
   "restart_alt",
@@ -97,6 +100,8 @@ const MATERIAL_SYMBOL_NAMES = [
   "text_fields",
   "text_snippet",
   "tune",
+  "unfold_less",
+  "unfold_more",
   "warning",
   "wifi",
 ].join(",");

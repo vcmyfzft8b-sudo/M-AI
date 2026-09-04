@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { inngest } from "@/inngest/client";
 import {
   processLectureFunction,
+  processLectureMindmapFunction,
   processLectureNotesFunction,
   processLecturePracticeTestFunction,
   processLectureQuizFunction,
@@ -28,6 +29,7 @@ const handlers = serve({
     processLectureStudyFunction,
     processLectureQuizFunction,
     processLecturePracticeTestFunction,
+    processLectureMindmapFunction,
     processLectureTutorPlanFunction,
   ],
 });

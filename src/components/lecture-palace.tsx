@@ -249,6 +249,20 @@ export function LecturePalace({
     () => layout?.stations.find((entry) => entry.id === nearStationId) ?? null,
     [layout, nearStationId],
   );
+  /*
+   * The material behind the open station. A note whose deck is regenerated
+   * mid-walk can leave a stop pointing at a card that no longer exists, and
+   * since arriving freezes the walker, an empty panel would be a dead end —
+   * so a stop with nothing behind it is simply not a stop.
+   */
+  const stationItem = useMemo(() => {
+    if (!station) return null;
+
+    if (station.kind === "card") return cardsById.get(station.id) ?? null;
+    if (station.kind === "quiz") return quizById.get(station.id) ?? null;
+
+    return testById.get(station.id) ?? null;
+  }, [cardsById, quizById, station, testById]);
 
   /*
    * The options are shuffled when the station opens, the way the quiz screen
@@ -432,6 +446,13 @@ export function LecturePalace({
     setIsMarking(false);
     setMark(null);
   }, []);
+
+  useEffect(() => {
+    if (!station || stationItem) return;
+
+    gameRef.current?.releaseStation();
+    openStation(null);
+  }, [openStation, station, stationItem]);
 
   const startGame = useCallback(async () => {
     if (!layout || gameRef.current) return;

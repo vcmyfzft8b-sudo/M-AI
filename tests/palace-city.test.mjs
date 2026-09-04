@@ -8,6 +8,7 @@ import {
   mapExtent,
   MAX_STATIONS,
   selectPalaceItems,
+  STATION_HUE,
 } from "../src/lib/palace/layout.ts";
 import {
   CHARACTER_RADIUS,
@@ -618,4 +619,45 @@ test("the walker strafes the way the player asked", () => {
   });
 
   assert.ok(turned.z > 0.01, "the strafe did not follow the camera round");
+});
+
+test("a stop keeps the kind of the thing waiting at it", () => {
+  /* The screen a stop opens is chosen by `kind`, and the item is then looked up
+     in that kind's own map — so a stop that lost its kind opens the wrong one. */
+  const mixed = [
+    { id: "card-a", kind: "card", sectionId: "s1" },
+    { id: "quiz-a", kind: "quiz", sectionId: null },
+    { id: "test-a", kind: "test", sectionId: null },
+    { id: "card-b", kind: "card", sectionId: "s2" },
+  ];
+  const layout = buildPalaceLayout({ seedSource: "kinds", items: mixed, sections });
+  const byId = new Map(layout.stations.map((station) => [station.id, station]));
+
+  mixed.forEach((item) => {
+    assert.equal(byId.get(item.id)?.kind, item.kind, `${item.id} lost its kind`);
+  });
+  assert.equal(byId.size, mixed.length, "an item was dropped or duplicated");
+});
+
+test("the three kinds are marked apart on the ground and on the map", () => {
+  /* The ring under a stop and its disc on the map are drawn from this, so the
+     three cannot end up sharing a colour without the test noticing. */
+  const hues = new Set(Object.values(STATION_HUE));
+
+  assert.equal(hues.size, 3, "two kinds share a colour");
+  assert.equal(Object.keys(STATION_HUE).sort().join(), "card,quiz,test");
+});
+
+test("no item is asked twice, whatever the mix", () => {
+  const chosen = selectPalaceItems({
+    cards: Array.from({ length: 30 }, (_, index) => ({ id: `c${index}`, sectionId: "s1" })),
+    quiz: Array.from({ length: 12 }, (_, index) => ({ id: `q${index}` })),
+    test: Array.from({ length: 9 }, (_, index) => ({ id: `t${index}` })),
+  });
+
+  assert.equal(new Set(chosen.map((item) => item.id)).size, chosen.length);
+  /* And each id keeps the kind it came in as. */
+  chosen.forEach((item) => {
+    assert.equal(item.id.startsWith("c") ? "card" : item.id.startsWith("q") ? "quiz" : "test", item.kind);
+  });
 });

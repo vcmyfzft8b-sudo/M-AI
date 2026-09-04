@@ -5383,6 +5383,57 @@
 /* The map's ghost: a centre with branches fanning off both sides, which is the shape the wait
    ends in. Laid out as three columns rather than as a tree — a skeleton only has to rhyme with
    what replaces it, and a real layout here would be the layout engine drawing nothing. */
+/* The town's wait: its chrome where its chrome goes, and a roofline under it. */
+.memo-gen-town {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.memo-gen-town-hud {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.memo-gen-town-map {
+  width: 4.6rem;
+  height: 4.6rem;
+  border-radius: 999px;
+}
+
+.memo-gen-town-pills {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+
+.memo-gen-town-score {
+  width: 5.2rem;
+  height: 1.9rem;
+  border-radius: 999px;
+}
+
+.memo-gen-town-where {
+  width: 7rem;
+  height: 1.5rem;
+  border-radius: 999px;
+}
+
+.memo-gen-town-street {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  height: 6.5rem;
+}
+
+.memo-gen-town-house {
+  flex: 1;
+  border-radius: 10px 10px 4px 4px;
+}
+
 .memo-gen-map {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
@@ -5411,7 +5462,58 @@
 }
 
 @media (max-width: 1099px) {
-  .memo-gen-map {
+  /* The town's wait: its chrome where its chrome goes, and a roofline under it. */
+.memo-gen-town {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.memo-gen-town-hud {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.memo-gen-town-map {
+  width: 4.6rem;
+  height: 4.6rem;
+  border-radius: 999px;
+}
+
+.memo-gen-town-pills {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+
+.memo-gen-town-score {
+  width: 5.2rem;
+  height: 1.9rem;
+  border-radius: 999px;
+}
+
+.memo-gen-town-where {
+  width: 7rem;
+  height: 1.5rem;
+  border-radius: 999px;
+}
+
+.memo-gen-town-street {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  height: 6.5rem;
+}
+
+.memo-gen-town-house {
+  flex: 1;
+  border-radius: 10px 10px 4px 4px;
+}
+
+.memo-gen-map {
     gap: 0.6rem;
   }
 
@@ -13359,6 +13461,774 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+   The memory palace.
+
+   Two surfaces: the panel on the note tab, which is ordinary app furniture, and
+   the full-screen stage, which is a game HUD laid over a canvas. The stage sets
+   its own colours rather than reading the theme's — it sits over a daylit city
+   in both light and dark mode, so a dark-mode card would be a black hole in the
+   middle of a blue sky.
+   --------------------------------------------------------------------------- */
+
+/*
+ * The tab's own front page, built on the study screens' empty state — the same
+ * orb, the same headline, the same one call to action — so the palace opens the
+ * way the deck, the quiz and the test open rather than looking like a screen
+ * from another app.
+ */
+.memo-palace-intro {
+  padding-bottom: 2.5rem;
+}
+
+.memo-palace-intro .memo-study-empty-orb {
+  overflow: hidden;
+}
+
+.memo-palace-intro .memo-study-empty-orb img {
+  width: 6.9rem;
+  height: auto;
+}
+
+/* The state of the walk, under the fold: progress, the neighbourhoods, and
+   what it covers. */
+.memo-palace-summary {
+  display: grid;
+  justify-items: center;
+  gap: 1.1rem;
+  width: 100%;
+  margin-top: 2.2rem;
+}
+
+.memo-palace-progress {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.memo-palace-bar {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--text) 12%, transparent);
+  overflow: hidden;
+}
+
+.memo-palace-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #6c5ce7, #00b894);
+  transition: width 260ms ease;
+}
+
+.memo-palace-count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.memo-palace-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.memo-palace-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 3.2rem;
+  padding: 0 1.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--surface);
+  cursor: pointer;
+  font-size: 1.02rem;
+  font-weight: 750;
+}
+
+.memo-palace-cta.small {
+  height: 2.7rem;
+  padding: 0 1.1rem;
+  font-size: 0.95rem;
+}
+
+.memo-palace-districts {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: left;
+}
+
+.memo-palace-districts li,
+.memo-palace-sheet li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.25rem;
+  border-bottom: 1px solid color-mix(in oklch, var(--text) 8%, transparent);
+  font-size: 0.95rem;
+}
+
+.memo-palace-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  flex: none;
+}
+
+.memo-palace-district-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
+
+.memo-palace-district-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* --- the stage ----------------------------------------------------------- */
+
+.memo-palace-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #9fd8ff;
+  overscroll-behavior: none;
+  /* The canvas must never scroll the page under a drag, on any platform. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  color: #fff;
+  font-family: inherit;
+}
+
+.memo-palace-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* The look layer sits under every control, so a drag that starts on a button
+   moves the button, not the camera. */
+.memo-palace-look {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.memo-palace-stick {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 45%;
+  touch-action: none;
+}
+
+/*
+ * The stick's resting place. Faint, because it is scenery until a thumb lands
+ * on it, but present — a control you have to know about is a control nobody
+ * uses.
+ */
+.memo-palace-stick-base {
+  position: absolute;
+  left: 4.6rem;
+  bottom: calc(5.4rem + var(--memo-safe-bottom, 0px));
+  width: 5.6rem;
+  height: 5.6rem;
+  margin: -2.8rem 0 0 -2.8rem;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
+.memo-palace-knob {
+  position: fixed;
+  width: 3.4rem;
+  height: 3.4rem;
+  margin: -1.7rem 0 0 -1.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  pointer-events: none;
+}
+
+.memo-palace-map {
+  position: absolute;
+  top: calc(0.9rem + var(--memo-safe-top, 0px));
+  left: 0.9rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  line-height: 0;
+  cursor: pointer;
+}
+
+.memo-palace-map canvas {
+  width: 7.6rem;
+  height: 7.6rem;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 8px 20px rgba(10, 8, 20, 0.35);
+}
+
+@media (max-width: 1099px) {
+  .memo-palace-map canvas {
+    width: 6.4rem;
+    height: 6.4rem;
+  }
+}
+
+.memo-palace-hud-top {
+  position: absolute;
+  top: calc(0.9rem + var(--memo-safe-top, 0px));
+  right: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+
+.memo-palace-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(18, 16, 26, 0.72);
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-palace-score-slash {
+  opacity: 0.55;
+  font-weight: 600;
+}
+
+.memo-palace-score-token {
+  width: 1rem;
+  height: 1rem;
+  rotate: 45deg;
+  border-radius: 3px;
+  background: linear-gradient(135deg, #ffd166, #f4934f);
+}
+
+.memo-palace-district-pill {
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(18, 16, 26, 0.55);
+  font-size: 0.85rem;
+  font-weight: 700;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-palace-exit {
+  position: absolute;
+  left: 0.9rem;
+  bottom: calc(1rem + var(--memo-safe-bottom, 0px));
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.7rem;
+  padding: 0 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(18, 16, 26, 0.72);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.memo-palace-hint {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  bottom: calc(1.4rem + var(--memo-safe-bottom, 0px));
+  margin: 0;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(18, 16, 26, 0.45);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+
+/*
+ * The wait, on the app's own terms: the same notice every other screen shows
+ * while something is being made, laid over the stage on the app's surface
+ * rather than on the purple screen this feature had invented for itself.
+ */
+.memo-palace-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.4rem;
+  background: var(--bg);
+  overflow-y: auto;
+}
+
+.memo-palace-loading .memo-gen {
+  width: min(30rem, 100%);
+}
+
+/*
+ * The study screen you are standing in front of.
+ *
+ * Whatever the town is, this is the app: the flashcard that flips, the quiz
+ * that marks you, the practice question with its model answer, all the same
+ * components the deck screens use. So this is a frame around them and nothing
+ * more — it sets the panel, and lets `globals.css` draw what is inside it.
+ */
+.memo-palace-panel {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  bottom: calc(4.6rem + var(--memo-safe-bottom, 0px));
+  width: min(34rem, calc(100% - 2rem));
+  max-height: calc(100% - 9rem);
+  /*
+   * A thrown card has to be able to leave the panel — clipping it at the edge
+   * is what made a swipe look like the card hitting a wall — so only the two
+   * screens that can outgrow the panel scroll inside it.
+   */
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 1.15rem 1.2rem;
+  border-radius: 24px;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 18px 44px rgba(10, 8, 20, 0.34);
+  animation: memo-palace-rise 180ms ease-out;
+}
+
+@keyframes memo-palace-rise {
+  from { opacity: 0; translate: -50% 12px; }
+  to { opacity: 1; translate: -50% 0; }
+}
+
+.memo-palace-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.memo-palace-panel.quiz,
+.memo-palace-panel.test {
+  overflow-y: auto;
+}
+
+/* The note's own tab pill, at the size a panel header wants. */
+.memo-palace-panel-kind {
+  height: 2.3rem;
+  padding: 0 0.8rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  flex: none;
+}
+
+.memo-palace-panel-where {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+/* Walking away is not an option while a station is open, so there is a way out. */
+.memo-palace-panel-close {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--text) 8%, transparent);
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* A card in a panel this size does not need the deck screen's full height. */
+.memo-palace-panel .lecture-flashcard {
+  min-height: 13rem;
+}
+
+.memo-palace-panel .lecture-flashcard-content {
+  font-size: 1.05rem;
+}
+
+.memo-palace-panel .lecture-flashcard-toolbar {
+  margin: 0;
+}
+
+.memo-palace-panel .lecture-flashcard-review {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.memo-palace-panel .lecture-flashcard-review-button {
+  flex: 1;
+  gap: 0.4rem;
+}
+
+.memo-palace-panel .lecture-quiz-card {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.memo-palace-panel .lecture-practice-textarea {
+  min-height: 5.5rem;
+}
+
+/* Once it is marked the box is a record of what was written, not a field. */
+.memo-palace-panel .lecture-practice-textarea:disabled {
+  opacity: 1;
+}
+
+.memo-palace-panel .memo-test-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.memo-palace-panel .memo-test-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* The answer a practice question is marked against, shown for self-marking:
+   there is no room in a walk for a round trip to the grader. */
+/* The little caps label above a line of feedback. */
+.memo-palace-model-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/*
+ * A marked practice answer. The score leads, because that is the thing being
+ * asked; what was right, what was missing and the answer it was marked against
+ * follow as plain labelled lines rather than as three separate cards, which is
+ * what made this panel read as a form rather than as a result.
+ */
+.memo-palace-mark {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 18px;
+  background: color-mix(in oklch, var(--text) 5%, transparent);
+  border: 1px solid color-mix(in oklch, var(--text) 8%, transparent);
+}
+
+.memo-palace-mark.pass {
+  background: color-mix(in oklch, #16a34a 12%, transparent);
+  border-color: color-mix(in oklch, #16a34a 30%, transparent);
+}
+
+.memo-palace-mark.fail {
+  background: color-mix(in oklch, #dc2626 10%, transparent);
+  border-color: color-mix(in oklch, #dc2626 26%, transparent);
+}
+
+.memo-palace-mark-score {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.memo-palace-mark.pass .memo-palace-mark-score {
+  color: #15803d;
+}
+
+.memo-palace-mark.fail .memo-palace-mark-score {
+  color: #dc2626;
+}
+
+.memo-palace-mark-score.unmarked {
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+:root[data-theme="dark"] .memo-palace-mark.pass .memo-palace-mark-score {
+  color: #4ade80;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .memo-palace-mark.pass .memo-palace-mark-score {
+    color: #4ade80;
+  }
+}
+
+.memo-palace-mark-line {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+/* A right answer says so, and says why, in the same row a wrong one uses. */
+.memo-palace-panel .memo-quiz-result.correct .memo-quiz-result-badge {
+  color: #16a34a;
+  background: color-mix(in oklch, #16a34a 16%, transparent);
+}
+
+.memo-palace-why {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 0.35rem;
+}
+
+.memo-palace-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.memo-palace-sheet {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(10, 8, 20, 0.55);
+}
+
+.memo-palace-sheet-inner {
+  width: min(28rem, 100%);
+  max-height: 80%;
+  overflow: auto;
+  padding: 1.2rem;
+  border-radius: 22px;
+  background: #fff;
+  color: #14121a;
+}
+
+/* The whole town, square, as wide as the sheet lets it be. */
+.memo-palace-townmap {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 18px;
+  margin-bottom: 1rem;
+}
+
+.memo-palace-sheet-inner h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.memo-palace-sheet-inner ul {
+  margin: 0 0 0.9rem;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-palace-sheet-inner li {
+  border-bottom-color: rgba(20, 18, 26, 0.08);
+}
+
+.memo-palace-sheet-inner .memo-button-outline.small {
+  background: transparent;
+  color: #14121a;
+  border-color: rgba(20, 18, 26, 0.2);
+}
+
+/* The results screen, on the town's own backdrop. */
+.memo-palace-finish {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+  background: color-mix(in oklch, var(--bg) 78%, transparent);
+  backdrop-filter: blur(6px);
+  overflow-y: auto;
+}
+
+/* Both actions fill the width the results screen gives them. */
+.memo-palace-finish .memo-result-actions > * {
+  width: 100%;
+  justify-content: center;
+}
+
+.memo-palace-finish .memo-result {
+  width: min(28rem, 100%);
+  background: var(--bg);
+  border-radius: 26px;
+  padding: 1.6rem 1.4rem 1.4rem;
+  box-shadow: 0 22px 60px rgba(10, 8, 20, 0.35);
+}
+
+.memo-palace-sheet {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(10, 8, 20, 0.55);
+}
+
+.memo-palace-sheet-inner {
+  width: min(28rem, 100%);
+  max-height: 80%;
+  overflow: auto;
+  padding: 1.2rem;
+  border-radius: 22px;
+  background: #fff;
+  color: #14121a;
+}
+
+/* The whole town, square, as wide as the sheet lets it be. */
+.memo-palace-townmap {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 18px;
+  margin-bottom: 1rem;
+}
+
+.memo-palace-sheet-inner h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.memo-palace-sheet-inner ul {
+  margin: 0 0 0.9rem;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-palace-sheet-inner li {
+  border-bottom-color: rgba(20, 18, 26, 0.08);
+}
+
+.memo-palace-sheet-inner .memo-button-outline.small {
+  background: transparent;
+  color: #14121a;
+  border-color: rgba(20, 18, 26, 0.2);
+}
+
+.memo-palace-done {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: min(26rem, calc(100% - 2.4rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #14121a;
+  text-align: center;
+  box-shadow: 0 22px 60px rgba(10, 8, 20, 0.35);
+}
+
+.memo-palace-done-title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 850;
+}
+
+.memo-palace-done-copy {
+  margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.45;
+  color: #4a4657;
+}
+
+.memo-palace-done .memo-palace-card-actions {
+  justify-content: center;
+  margin-top: 0.4rem;
+}
+
+@media (max-width: 1099px) {
+  .memo-palace-intro {
+    padding-bottom: 2.5rem;
+  }
+
+  /*
+   * On the phone the study screen is a sheet, the way every other panel in this
+   * app is a sheet: full width, off the bottom edge, rounded at the top, and
+   * sitting on `--memo-kb` so the keyboard pushes it up rather than covering it.
+   */
+  .memo-palace-panel {
+    position: fixed;
+    inset: auto 0 var(--memo-kb) 0;
+    translate: none;
+    width: 100%;
+    max-height: calc(100% - 7rem);
+    padding: 1.1rem 1.15rem calc(1.5rem + var(--memo-safe-bottom));
+    border-radius: 30px 30px 0 0;
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* The way out moves to the top corner: the bottom left is where the thumb
+     that steers lives, and a back button under it is a back button pressed. */
+  .memo-palace-exit {
+    top: calc(0.9rem + var(--memo-safe-top, 0px));
+    left: auto;
+    right: 0.9rem;
+    bottom: auto;
+    width: 2.8rem;
+    height: 2.8rem;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .memo-palace-exit-label {
+    display: none;
+  }
+
+  .memo-palace-hud-top {
+    top: calc(0.9rem + var(--memo-safe-top, 0px));
+    right: 4.2rem;
+  }
+}
 /* ---------------------------------------------------------------------------
    Mindmap
    ---------------------------------------------------------------------------

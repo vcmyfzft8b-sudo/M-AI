@@ -612,7 +612,7 @@
 .memo-chiprow {
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x;
-  overscroll-behavior-x: contain;
+  overscroll-behavior: contain;
 }
 
 
@@ -9894,12 +9894,31 @@
   }
 
 
+  /*
+   * The note screen is fixed to the viewport, so nothing outside it scrolls — and on a touch
+   * device a drag with nothing to scroll is not nothing, it is the rubber band. The whole screen
+   * bounces as one, which reads as the pill row sliding up and down.
+   *
+   * It shows up worst on the speed reader, where the inner scroller is `overflow-y: hidden` and
+   * so absorbs no vertical drag at all: every one of them goes to the viewport. `touch-action`
+   * on the row cannot help, because the bounce is the viewport's rather than the row's.
+   *
+   * Refusing it here rather than on `html, body` outright: the landing page shares this
+   * stylesheet and has a real page to scroll.
+   */
+  html:has(.memo-note-screen),
+  body:has(.memo-note-screen) {
+    overscroll-behavior-y: none;
+  }
+
   .memo-note-screen {
     position: fixed;
     inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     background: var(--bg);
+    /* The screen itself is the end of the chain: nothing inside it may bounce the viewport. */
+    overscroll-behavior: none;
   }
 
   .memo-note-screen .memo-note-card {

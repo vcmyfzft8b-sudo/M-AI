@@ -36,13 +36,6 @@ import { SpeechOutputError, TutorSpeechOutput } from "@/lib/tutor/speech-output"
 import { appendSpokenSoFar } from "@/lib/tutor/spoken-so-far";
 import { voiceHue } from "@/lib/tutor/voice-colors";
 import { hasStaticVoiceSamples, voiceSampleClip } from "@/lib/tutor/voice-clips";
-import {
-  DEFAULT_TUTOR_SPEED,
-  normalizeTutorSpeed,
-  TUTOR_SPEEDS,
-  TUTOR_SPEED_STORAGE_KEY,
-  type TutorSpeed,
-} from "@/lib/tutor/voice-speed";
 
 /**
  * The spoken walkthrough.
@@ -206,8 +199,6 @@ export function LectureTutor({
   const [usage, setUsage] = useState<TutorUsage | null>(null);
   const [blocked, setBlocked] = useState<TutorBlock | null>(null);
   const [buyingCredits, setBuyingCredits] = useState(false);
-  const [speed, setSpeed] = useState<TutorSpeed>(DEFAULT_TUTOR_SPEED);
-  const speedRef = useRef<TutorSpeed>(DEFAULT_TUTOR_SPEED);
   /*
    * The slice this session is spending, and how much of it has gone. Counted in the browser
    * because the audio is made there; the server reserved the whole slice up front, so this
@@ -412,26 +403,7 @@ export function LectureTutor({
 
   useEffect(() => {
     setVoice(readStoredVoice());
-
-    try {
-      const stored = normalizeTutorSpeed(window.localStorage.getItem(TUTOR_SPEED_STORAGE_KEY));
-      setSpeed(stored);
-      speedRef.current = stored;
-    } catch {
-      // Private browsing refuses storage; the default speed is a fine answer.
-    }
   }, []);
-
-  function chooseSpeed(next: TutorSpeed) {
-    setSpeed(next);
-    speedRef.current = next;
-
-    try {
-      window.localStorage.setItem(TUTOR_SPEED_STORAGE_KEY, String(next));
-    } catch {
-      // As above.
-    }
-  }
 
   /** What is left, read before anything is granted, so the meter is right on arrival. */
   const refreshUsage = useCallback(async () => {
@@ -742,12 +714,7 @@ export function LectureTutor({
     }
 
     spendTimerRef.current = window.setInterval(() => {
-      /*
-       * Weighted by the speed, not by the clock. A minute at 1.15x plays fifteen per cent
-       * more material and costs fifteen per cent more to synthesize, so charging it as a
-       * flat minute would make the fast setting a discount on the thing being metered.
-       */
-      spentSecondsRef.current += speedRef.current;
+      spentSecondsRef.current += 1;
     }, 1000);
 
     return () => {
@@ -921,7 +888,7 @@ export function LectureTutor({
          */
         await output.ensureOpen();
 
-        turn = output.speak({ speed: speedRef.current });
+        turn = output.speak();
         setPhaseNow("speaking");
 
         let spokeAnything = false;
@@ -1715,29 +1682,6 @@ export function LectureTutor({
     return <p className="ios-info lecture-empty-message">{t("api.tutorNotReady")}</p>;
   }
 
-  /*
-   * The speed control belongs to the tutor rather than to the meter, so it is handed to the
-   * shared sheet as its own settings rather than built into it — the podcast's copy of the same
-   * sheet carries different ones in the same place.
-   */
-  const speedSetting = (
-    <div className="note-read-setting-group">
-      <span className="note-read-setting-label">{t("tutor.speed")}</span>
-      <div className="note-read-rate-options" role="group" aria-label={t("tutor.speed")}>
-        {TUTOR_SPEEDS.map((option) => (
-          <button
-            key={option}
-            type="button"
-            className={`note-read-rate-option ${speed === option ? "active" : ""}`.trim()}
-            onClick={() => chooseSpeed(option)}
-          >
-            {option}x
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
   return (
     <>
       {/*
@@ -1750,7 +1694,6 @@ export function LectureTutor({
         blocked={Boolean(blocked)}
         buyingCredits={buyingCredits}
         onBuyCredits={() => void buyCredits()}
-        extra={speedSetting}
       />
       <div
         className={`memo-tutor phase-${phase}`}

@@ -240,6 +240,33 @@ exists; under-reserving lets a run of slow turns settle past the daily cap after
 | Audio size | 64 kbps mono MP3 — about 480 KB per minute |
 | Invocations | one per turn, so a seven-minute episode is ~23 of them |
 
+### In money
+
+Two suppliers, and one of them is the whole bill. The script is written by the shared
+writer on GLM 5.3 Flash at $0.075/$0.25 per million tokens in/out, so a standard episode's
+4,600 in and 2,600 out costs **a tenth of a cent**. The audio is Soniox TTS at **$0.70 an
+hour of generated speech** (their published rate, September 2026), and every second of it
+is generated fresh.
+
+| length | audio | script | synthesis | total, fully played |
+| --- | --- | --- | --- | --- |
+| Short | ~4 min | $0.001 | $0.047 | **~$0.05** |
+| Standard | ~7 min | $0.001 | $0.082 | **~$0.08** |
+| Long | ~12 min | $0.001 | $0.140 | **~$0.14** |
+
+Only what is reached is synthesized, so an abandoned episode costs a fraction of its
+length, and a second listen costs nothing — every turn is cached per voice.
+
+Against that: the €2 top-up buys an hour, which costs $0.70 to serve — about two thirds
+margin. The daily allowance is the exposure, not the episode. Thirty paid minutes a day
+taken in full every day is 15 hours a month, or **$10.50**, against €10.83 a month on the
+yearly plan. Nobody listens to their cap daily, but the cap is what the plan promises, so
+the headroom on the cheapest plan is roughly nil for a listener who uses all of it.
+
+Storage is the third cost and the smallest: 480 KB a minute, so a thousand standard
+episodes is about 3.4 GB, a few cents a month — but it is never reclaimed, which is the
+retention problem named below rather than a pricing one.
+
 **The binding constraint is Soniox's concurrent-stream cap, which is org-wide, and this
 feature shares it with read-aloud and with the voice tutor.** The tutor is speaking to
 somebody in real time and cannot queue, so a listener's share of that cap is a product

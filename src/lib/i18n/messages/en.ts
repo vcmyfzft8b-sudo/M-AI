@@ -1669,7 +1669,6 @@ export const en: Messages = {
   "tutor.paywall.creditsCta": "Top up an hour for €2",
   "tutor.paywall.creditsPending": "Opening checkout…",
   "tutor.error.creditsFailed": "The purchase could not be started.",
-  "tutor.speed": "Speed",
   "tutor.usage.creditsTitle": "Topped-up time",
   "tutor.usage.creditsNote": "Used once the daily allowance runs out.",
 

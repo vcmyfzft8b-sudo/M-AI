@@ -1698,7 +1698,6 @@ export const sl = {
   "tutor.paywall.creditsCta": "Dokupi uro za 2 €",
   "tutor.paywall.creditsPending": "Odpiram plačilo …",
   "tutor.error.creditsFailed": "Nakupa ni bilo mogoče začeti.",
-  "tutor.speed": "Hitrost",
   "tutor.usage.creditsTitle": "Dokupljeni čas",
   "tutor.usage.creditsNote": "Porabi se, ko zmanjka dnevnega.",
 

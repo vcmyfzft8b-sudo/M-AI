@@ -1679,7 +1679,6 @@ export const bs: Messages = {
   "tutor.paywall.creditsCta": "Dokupi sat za 2 €",
   "tutor.paywall.creditsPending": "Otvaram plaćanje…",
   "tutor.error.creditsFailed": "Kupovinu nije bilo moguće započeti.",
-  "tutor.speed": "Brzina",
   "tutor.usage.creditsTitle": "Dokupljeno vrijeme",
   "tutor.usage.creditsNote": "Troši se kad ponestane dnevnog.",
 

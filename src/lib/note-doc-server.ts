@@ -1,7 +1,8 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
 import { z } from "zod";
+
+import { hashNotesContent } from "@/lib/tutor/plan-cache";
 
 import type { Json, LectureArtifactRow } from "@/lib/database.types";
 import {
@@ -43,9 +44,12 @@ export const editableNoteDocSchema = z.object({
   mediaBlocks: z.array(noteMediaBlockSchema).max(MAX_NOTE_MEDIA_BLOCKS),
 });
 
-export function hashNotesContent(content: string) {
-  return createHash("sha256").update(content).digest("hex");
-}
+/*
+ * Lives in tutor/plan-cache.ts, which is free of "server-only" so the cache rules that depend on
+ * it stay testable. Re-exported here because this is where every caller already looks for it, and
+ * because two hashes of the same note would be two caches expiring at different moments.
+ */
+export { hashNotesContent };
 
 export async function readLectureArtifactForNoteDoc(lectureId: string) {
   const service = createSupabaseServiceRoleClient();

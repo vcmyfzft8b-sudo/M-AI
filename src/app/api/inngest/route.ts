@@ -8,6 +8,7 @@ import {
   processLecturePracticeTestFunction,
   processLectureQuizFunction,
   processLectureStudyFunction,
+  processLectureTutorPlanFunction,
 } from "@/inngest/functions";
 import {
   applyCorsHeaders,
@@ -27,6 +28,7 @@ const handlers = serve({
     processLectureStudyFunction,
     processLectureQuizFunction,
     processLecturePracticeTestFunction,
+    processLectureTutorPlanFunction,
   ],
 });
 

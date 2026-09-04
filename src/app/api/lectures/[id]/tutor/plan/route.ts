@@ -4,7 +4,7 @@ import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/bill
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { loadTutorGrounding, planTutorLesson } from "@/lib/tutor-voice";
+import { ensureTutorPlan } from "@/lib/tutor-plan";
 import { routeIdParamSchema } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
 
@@ -13,12 +13,15 @@ export const maxDuration = 300;
 /**
  * The running order the walkthrough is taught from.
  *
- * On its own route, and fetched by the client at the same time as the opening
- * turn rather than before it. The plan is around a thousand output tokens and
- * takes several seconds; the greeting needs none of it, so making the learner
- * wait for it was several seconds of silence bought for nothing. By the time
- * the opening has been spoken — the better part of a minute of audio — this has
- * long since arrived.
+ * On its own route, and fetched by the client at the same time as the opening turn rather than
+ * before it, because the greeting needs none of it.
+ *
+ * Since 2026-09-04 it is normally not generated here at all. The pipeline works it out when the
+ * note is written, so this reads it back in milliseconds. That was worth doing because the plan
+ * is the one part of the tutor that cannot be made fast — 19 to 51 seconds on the model that
+ * covers the material properly — and generated at session start it only just fits behind the
+ * greeting: a measured 40-second run landed six seconds before the speech ended, and the slow
+ * tail did not fit at all.
  */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const supabase = await createSupabaseServerClient();
@@ -60,14 +63,20 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return createBillingRequiredResponse(await tr("api.trialOnly.tutor"), access.code);
   }
 
-  const grounding = await loadTutorGrounding(id);
-
-  if (!grounding || grounding.notes.trim().length === 0) {
-    return NextResponse.json({ error: await tr("api.tutorNotReady") }, { status: 409 });
-  }
-
   try {
-    return NextResponse.json({ plan: await planTutorLesson(grounding) });
+    /*
+     * Normally already worked out: the pipeline warms this when the note is written, so this
+     * answers from storage in milliseconds. A miss — a lecture written before the warm-up
+     * existed, one whose warm-up failed, or a note edited since — generates on the spot, which
+     * is exactly what every session used to do.
+     */
+    const plan = await ensureTutorPlan(id);
+
+    if (!plan) {
+      return NextResponse.json({ error: await tr("api.tutorNotReady") }, { status: 409 });
+    }
+
+    return NextResponse.json({ plan });
   } catch (error) {
     console.error("[tutor] plan failed", error);
 

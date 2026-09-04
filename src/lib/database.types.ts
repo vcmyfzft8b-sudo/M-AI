@@ -435,6 +435,9 @@ export type Database = {
           editable_notes_updated_at: string | null;
           model_metadata: Json;
           generated_at: string;
+          tutor_plan: Json | null;
+          tutor_plan_notes_hash: string | null;
+          tutor_plan_generated_at: string | null;
         };
         Insert: {
           lecture_id: string;
@@ -448,6 +451,9 @@ export type Database = {
           editable_notes_updated_at?: string | null;
           model_metadata?: Json;
           generated_at?: string;
+          tutor_plan?: Json | null;
+          tutor_plan_notes_hash?: string | null;
+          tutor_plan_generated_at?: string | null;
         };
         Update: {
           summary?: string;
@@ -460,6 +466,9 @@ export type Database = {
           editable_notes_updated_at?: string | null;
           model_metadata?: Json;
           generated_at?: string;
+          tutor_plan?: Json | null;
+          tutor_plan_notes_hash?: string | null;
+          tutor_plan_generated_at?: string | null;
         };
       };
       note_generation_cache: {

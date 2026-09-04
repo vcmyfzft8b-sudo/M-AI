@@ -13,6 +13,7 @@ import { generateLectureQuiz } from "@/lib/quiz";
 import { processStoredScanLecture } from "@/lib/scan-processing";
 import { getServerEnv } from "@/lib/server-env";
 import { generateLectureFlashcards } from "@/lib/study";
+import { warmTutorPlan } from "@/lib/tutor-plan";
 
 export type LectureProcessingStage = "transcribe" | "generate_notes";
 
@@ -23,6 +24,7 @@ const INTERNAL_LECTURE_LINK_PATH = "/api/internal/lectures/link";
 const INTERNAL_LECTURE_PRACTICE_TEST_PATH = "/api/internal/lectures/practice-test";
 const INTERNAL_LECTURE_STUDY_PATH = "/api/internal/lectures/study";
 const INTERNAL_LECTURE_QUIZ_PATH = "/api/internal/lectures/quiz";
+const INTERNAL_LECTURE_TUTOR_PLAN_PATH = "/api/internal/lectures/tutor-plan";
 
 function hasInngestJobCredentials(env: ReturnType<typeof getServerEnv>) {
   return Boolean(env.INNGEST_EVENT_KEY && env.INNGEST_SIGNING_KEY);
@@ -291,6 +293,41 @@ export async function enqueueLectureStudyGeneration(lectureId: string) {
 
   await generateLectureFlashcards({ lectureId }).catch((error) => {
     console.error("Lecture study generation failed", { lectureId, error });
+  });
+}
+
+/**
+ * Works out the voice tutor's running order once the note exists, so a learner who starts a
+ * session never waits for it.
+ *
+ * Unlike study items and quizzes, which are generated the first time somebody opens their
+ * screen, this cannot be lazy: the plan takes 19 to 51 seconds on the model that plans it well,
+ * and the moment it is wanted is the moment the learner has already pressed start. Every failure
+ * path here is silent on purpose — the plan regenerates on demand exactly as it did before, so
+ * the worst case is the wait this exists to remove rather than a session that will not start.
+ */
+export async function enqueueLectureTutorPlanGeneration(lectureId: string) {
+  const env = getServerEnv();
+
+  if (shouldUseHostedInngestJobs(env)) {
+    await inngest.send({
+      name: "lecture/tutor-plan.requested",
+      data: { lectureId },
+    });
+    return;
+  }
+
+  if (
+    await tryEnqueueInternalLectureJob({
+      lectureId,
+      path: INTERNAL_LECTURE_TUTOR_PLAN_PATH,
+    })
+  ) {
+    return;
+  }
+
+  await warmTutorPlan(lectureId).catch((error) => {
+    console.error("Tutor plan warm-up failed", { lectureId, error });
   });
 }
 

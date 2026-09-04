@@ -1682,4 +1682,21 @@ export const sr: Messages = {
   "tutor.speed": "Brzina",
   "tutor.usage.creditsTitle": "Dokupljeno vreme",
   "tutor.usage.creditsNote": "Troši se kad ponestane dnevnog.",
+
+  /* ---- Brzo čitanje — beleška reč po reč, bez pomeranja očiju ---- */
+  "note.tab.speed": "Brzo čitanje",
+  "speedRead.title": "Brzo čitanje",
+  "speedRead.tapHint": "dodirni za pokretanje/pauzu",
+  "speedRead.finished": "Kraj beleške. Dodirni za novi početak.",
+  "speedRead.play": "Počni da čitaš",
+  "speedRead.pause": "Pauza",
+  "speedRead.close": "Zatvori brzo čitanje",
+  "speedRead.listenInstead": "Radije poslušaj belešku",
+  "speedRead.speed": "Brzina čitanja",
+  "speedRead.wpm": "{wpm} reči/min",
+  "speedRead.remaining": "još {minutes} min",
+  "speedRead.gradual": "Postepeno ubrzavanje",
+  "speedRead.position": "Mesto u belešci",
+  "speedRead.positionValue": "Reč {current} od {total}",
+  "speedRead.empty": "Ova beleška još nema teksta za čitanje.",
 };

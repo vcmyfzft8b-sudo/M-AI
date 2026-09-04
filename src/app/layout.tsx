@@ -95,6 +95,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "text_fields",
   "text_snippet",
   "tune",
+  "volume_up",
   "warning",
   "wifi",
 ].join(",");

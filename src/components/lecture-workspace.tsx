@@ -21,6 +21,7 @@ import { useT, useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { NoteReadAloud } from "@/components/note-read-aloud";
+import { NoteSpeedReader } from "@/components/note-speed-reader";
 import { StudyCompletionCard } from "@/components/study-completion-card";
 import { MemoPortal } from "@/components/memo-portal";
 import { RecordingPlayer } from "@/components/recording-player";
@@ -75,7 +76,7 @@ import {
   formatTimestamp,
 } from "@/lib/utils";
 
-type WorkspaceTab = "notes" | "study" | "tutor" | "chat" | "transcript" | "audio";
+type WorkspaceTab = "notes" | "study" | "tutor" | "speed" | "chat" | "transcript" | "audio";
 type StudyMaterialView = "flashcards" | "quiz" | "practice_test";
 type FlashcardSessionResult = {
   attempts: number;
@@ -295,6 +296,19 @@ const NOTE_TABS = [
     labelKey: "note.tab.tutor",
     icon: "graphic_eq",
     tint: "oklch(0.66 0.15 50)",
+  },
+  /*
+   * The third way through the note itself: one word at a time, held still, for
+   * a reader who wants the whole thing at pace rather than explained. It sits
+   * with the other two rather than with the practice screens, which test what
+   * has been read instead of delivering it.
+   */
+  {
+    id: "speed",
+    view: null,
+    labelKey: "note.tab.speed",
+    icon: "bolt",
+    tint: "oklch(0.66 0.15 275)",
   },
   {
     id: "flashcards",
@@ -1275,6 +1289,7 @@ const SUB_SCREEN_TITLE_KEYS: Record<string, MessageKey | null> = {
   quiz: "note.tab.quiz",
   test: "note.subScreen.test",
   tutor: "tutor.subScreenTitle",
+  speed: "note.tab.speed",
   transcript: "note.tab.transcript",
 };
 
@@ -1326,6 +1341,12 @@ export function LectureWorkspace({
    * it, each of which swaps to its own sheet the way the library rows do.
    */
   const [noteActionsOpen, setNoteActionsOpen] = useState(false);
+  /*
+   * A block the note screen should open on, set by the speed reader when it
+   * hands over to listening. Held as state rather than acted on directly
+   * because the note is not on screen yet at the moment the reader leaves.
+   */
+  const [pendingNoteBlockScroll, setPendingNoteBlockScroll] = useState<string | null>(null);
   const [noteRenameOpen, setNoteRenameOpen] = useState(false);
   const [noteDeleteOpen, setNoteDeleteOpen] = useState(false);
   const [noteRenameValue, setNoteRenameValue] = useState("");
@@ -4179,6 +4200,29 @@ export function LectureWorkspace({
       );
     }
 
+    if (activeTab === "speed") {
+      return (
+        <NoteSpeedReader
+          lectureId={detail.lecture.id}
+          /*
+           * The same markdown the note screen renders, so the two are never
+           * reading different versions of the note.
+           */
+          content={detail.lecture.status === "ready" ? cleanedStructuredNotes : null}
+          onClose={() => setActiveTab("notes")}
+          /*
+           * The other way to take the note in lives on the note screen's dock,
+           * so this hands over to it — at the block the reader had reached, so
+           * the note opens on the same words rather than back at the top.
+           */
+          onListen={(blockId) => {
+            setActiveTab("notes");
+            setPendingNoteBlockScroll(blockId);
+          }}
+        />
+      );
+    }
+
     if (activeTab === "notes") {
       // The dock's annotate layer: brush, underline, colour, photo, and the
       // swatch row the colour button slides open.
@@ -5819,18 +5863,37 @@ export function LectureWorkspace({
     noteScrollRef.current?.scrollTo({ top: 0 });
   }, [activeTab, activeStudyView]);
 
+  /*
+   * ...except when the speed reader sent us here, which asks for a particular
+   * block instead. Declared after the effect above so it wins the same commit:
+   * the note itself has already been rendered by then, so the block is in the
+   * document and there is nothing to wait a frame for.
+   */
+  useEffect(() => {
+    if (!pendingNoteBlockScroll || activeTab !== "notes") {
+      return;
+    }
+
+    document
+      .querySelector(`[data-note-block-id="${CSS.escape(pendingNoteBlockScroll)}"]`)
+      ?.scrollIntoView({ block: "center" });
+    setPendingNoteBlockScroll(null);
+  }, [activeTab, pendingNoteBlockScroll]);
+
   const activeTabId: NoteTabId =
     activeTab === "notes"
       ? "notes"
       : activeTab === "tutor"
         ? "tutor"
-        : activeTab === "transcript" || activeTab === "audio"
-          ? "transcript"
-          : activeStudyView === "flashcards"
-            ? "flashcards"
-            : activeStudyView === "quiz"
-              ? "quiz"
-              : "test";
+        : activeTab === "speed"
+          ? "speed"
+          : activeTab === "transcript" || activeTab === "audio"
+            ? "transcript"
+            : activeStudyView === "flashcards"
+              ? "flashcards"
+              : activeStudyView === "quiz"
+                ? "quiz"
+                : "test";
 
   /*
    * The pill row follows the tab it is on. The pills overflow their scroller
@@ -6206,6 +6269,11 @@ export function LectureWorkspace({
 
     if (tab.id === "tutor") {
       setActiveTab("tutor");
+      return;
+    }
+
+    if (tab.id === "speed") {
+      setActiveTab("speed");
       return;
     }
 

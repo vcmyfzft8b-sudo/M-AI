@@ -1682,4 +1682,21 @@ export const bs: Messages = {
   "tutor.speed": "Brzina",
   "tutor.usage.creditsTitle": "Dokupljeno vrijeme",
   "tutor.usage.creditsNote": "Troši se kad ponestane dnevnog.",
+
+  /* ---- Brzo čitanje — bilješka riječ po riječ, bez pomjeranja očiju ---- */
+  "note.tab.speed": "Brzo čitanje",
+  "speedRead.title": "Brzo čitanje",
+  "speedRead.tapHint": "dodirni za pokretanje/pauzu",
+  "speedRead.finished": "Kraj bilješke. Dodirni za novi početak.",
+  "speedRead.play": "Počni čitati",
+  "speedRead.pause": "Pauza",
+  "speedRead.close": "Zatvori brzo čitanje",
+  "speedRead.listenInstead": "Radije poslušaj bilješku",
+  "speedRead.speed": "Brzina čitanja",
+  "speedRead.wpm": "{wpm} riječi/min",
+  "speedRead.remaining": "još {minutes} min",
+  "speedRead.gradual": "Postepeno ubrzavanje",
+  "speedRead.position": "Mjesto u bilješci",
+  "speedRead.positionValue": "Riječ {current} od {total}",
+  "speedRead.empty": "Ova bilješka još nema teksta za čitanje.",
 };

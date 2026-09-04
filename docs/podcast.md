@@ -80,6 +80,12 @@ followed on a loud bus, or with the sound off. It replaced a scrolling transcrip
 whole script, which was the wrong object: a wall of text under a player is something to
 read *instead* of listening.
 
+It is built the way film subtitles are, which means it is deliberately **not a component** —
+no card, no border, no panel. A subtitle belongs to the picture rather than to a box sitting
+on it. Who is speaking is carried by the **colour of the text**, the way broadcast subtitling
+has always handled two speakers: the eye catches a change of hue in a glance, where a name
+above the line is one more thing to read on a screen you are trying not to read.
+
 The timings are free. The synthesizer already reports when it said every character
 (`buildTtsPiecesFromCharacterTimestamps`), which read-aloud uses to highlight words and the
 podcast was discarding. `buildPodcastCues` groups them into broadcast-sized lines — about 42

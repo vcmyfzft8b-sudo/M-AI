@@ -1027,15 +1027,16 @@ export function LecturePodcast({
             * time, timed to the word being spoken, is what a subtitle is for — following on a
             * loud bus, or with the sound off entirely.
             *
-            * Tinted with the speaker's own colour, which is the one thing the transcript did
-            * that was worth keeping: you can see the conversation change hands.
+            * Who is speaking is the colour of the text, not a name above it — which is what
+            * broadcast subtitling does with two speakers, and it is the one thing the transcript
+            * did that was worth keeping. A name would be another line to read on a screen the
+            * listener is trying not to read.
             */}
           <div
             className="memo-podcast-caption"
             style={{ "--podcast-hue": voiceHue(voices[activeSpeaker]) } as CSSProperties}
             aria-live="polite"
           >
-            <span className="memo-podcast-caption-speaker">{voices[activeSpeaker]}</span>
             <p className="memo-podcast-caption-text">{subtitle}</p>
           </div>
 

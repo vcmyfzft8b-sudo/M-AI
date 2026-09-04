@@ -13671,47 +13671,53 @@
  * object: a wall of text under a player is something to read INSTEAD of listening, and it made
  * the screen about the script rather than about the audio.
  *
- * One line at a time, timed to the word being spoken, is a different thing entirely — it is what
- * lets somebody follow an episode on a loud bus, or with the sound off, without ever becoming the
- * thing they are looking at. Sized and held like a broadcast subtitle: about forty characters a
- * line, and never so brief it flashes.
+ * So this is built the way film subtitles are built, and that means it is NOT a component. No
+ * card, no border, no panel — a subtitle belongs to the picture, not to a box sitting on it.
+ * Large, centred, high contrast, and nothing around it to look at.
+ *
+ * Who is speaking is carried by the colour of the text rather than by a name above it, which is
+ * what broadcast subtitling has always done with two speakers: the eye picks up the change of
+ * hue in a glance, where a name is another line to read on a screen you are trying not to read.
  */
 .memo-podcast-caption {
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* Centred in the height it reserves, so a one-line cue and a two-line one both sit in the
-     same place rather than the text jumping up the box as the lines change. */
+  /* Centred in the height it reserves, so a one-line cue and a two-line one sit in the same
+     place rather than the text jumping as the lines change. */
   justify-content: center;
-  gap: 0.3rem;
   width: 100%;
-  max-width: 32rem;
+  max-width: 34rem;
   /* Two lines' worth, reserved. A box that grows and shrinks with each cue makes the whole
      screen twitch, which is exactly what a subtitle must not do. */
-  min-height: 5.5rem;
-  padding: 0.9rem 1rem;
-  border-radius: 1rem;
-  background: var(--tile);
-  border: 1px solid transparent;
+  min-height: 5.75rem;
+  padding: 0.5rem 0.75rem;
   text-align: center;
-}
-
-.memo-podcast-caption-speaker {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: oklch(0.66 0.16 var(--podcast-hue));
 }
 
 .memo-podcast-caption-text {
   margin: 0;
-  font-size: 1.02rem;
-  line-height: 1.45;
-  font-weight: 500;
-  color: var(--text);
-  /* Wraps like a subtitle rather than justifying to the box. */
+  font-size: 1.45rem;
+  line-height: 1.32;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  /*
+   * The speaker's own hue, held near the top of the lightness range so it stays a subtitle
+   * rather than becoming decoration. Light mode takes the same hue much darker, because a
+   * subtitle's one job is to be readable against whatever is behind it.
+   */
+  color: oklch(0.38 0.09 var(--podcast-hue));
   text-wrap: balance;
+}
+
+:root[data-theme="dark"] .memo-podcast-caption-text {
+  color: oklch(0.93 0.06 var(--podcast-hue));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .memo-podcast-caption-text {
+    color: oklch(0.93 0.06 var(--podcast-hue));
+  }
 }
 
 @media (max-width: 640px) {
@@ -13720,10 +13726,10 @@
   }
 
   .memo-podcast-caption {
-    min-height: 6.5rem;
+    min-height: 6.75rem;
   }
 
   .memo-podcast-caption-text {
-    font-size: 1.05rem;
+    font-size: 1.3rem;
   }
 }

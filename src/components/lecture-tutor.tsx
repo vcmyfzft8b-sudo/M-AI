@@ -1139,12 +1139,20 @@ export function LectureTutor({
     }
 
     /*
-     * The opening opened the first topic rather than finishing it — it was written
-     * without the running order — so it hands over to a teach turn on the same
-     * topic, which continues from what it already said. Everything else moves on.
+     * Two turns open a topic without finishing it, and both hand over to a teach turn on the
+     * same topic, which continues from what has already been said rather than starting again.
+     *
+     * The opening, because it was written before the running order existed.
+     *
+     * And the resume, because one turn cannot both bridge out of an interruption and finish the
+     * topic it interrupted. Measured 2026-09-04 on the omrezja-sl fixture: asked to do both, a
+     * resume taught one of the topic's three remaining points and the walkthrough then moved on,
+     * leaving the other two untaught on every topic the learner had asked a question about.
+     * Bridging and handing over covers two of three — the same as the slower model that used to
+     * write these managed on its own, without giving up the speed that replaced it.
      */
-    if (kind === "opening") {
-      void runTurnRef.current("teach", { index: 0 });
+    if (kind === "opening" || kind === "resume") {
+      void runTurnRef.current("teach", { index: kind === "opening" ? 0 : index });
 
       return;
     }

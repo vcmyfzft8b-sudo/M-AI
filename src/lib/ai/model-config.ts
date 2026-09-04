@@ -13,6 +13,7 @@ export const AI_STAGES = [
   "coverage_plan",
   "study_items",
   "chat",
+  "tutor_plan",
   "tutor_turn",
   "language_check",
 ] as const;
@@ -99,6 +100,37 @@ export const GLM_TEXT_MODEL = "or/z-ai/glm-5.3-flash";
  */
 export const LANGUAGE_CHECK_MODEL = "or/google/gemini-3.5-flash-lite";
 
+/**
+ * The model that writes what the tutor says out loud.
+ *
+ * Not GLM, which writes the running order — see the `tutor_plan` stage. The two halves of the
+ * tutor want opposite things and were measured separately on 2026-09-04
+ * (scripts/tutor-language-sweep.mjs, omrezja-sl, 10 pooled trials on the seven-layer OSI topic):
+ *
+ *   writer                  1st word p50/p90   names all 7 layers   words   err/100w   $/session
+ *   gemini-3.5-flash-lite       771 /  808ms          10/10          154    0.26-0.39     $0.030
+ *   glm-5.3-flash + check      2817 / 4225ms            5/5          182    0.11-0.19     $0.047
+ *   gemini-2.5-flash-lite       578 /  636ms           6/10          102    0.00-0.58     $0.008
+ *   gemini-2.5-flash            697 / 1159ms            3/10          105    0.20-0.38     $0.028
+ *
+ * The top two teach the same material — every layer, every run — and one of them does it three
+ * times faster for a third less money. Measured end to end through the synthesizer, that is 1.15s
+ * to the first sound against 3.5s, which is the difference between the two things the spoken
+ * prompt is written around: under about a second and a half reads as a conversation, past three
+ * as a machine thinking.
+ *
+ * What it costs is the cleanest Slovenian: GLM's output run through the language checker is about
+ * twice as correct as this. That trade was made deliberately and it is the smaller number — both
+ * sit far below GLM's own unchecked 0.55-1.06, and neither is what a learner notices next to a
+ * two-second silence.
+ *
+ * The two cheap Geminis are not options however tempting the price. Both write good Slovenian and
+ * both are fast, and both drop the material: they come in around 100 words against the prompt's
+ * explicit 120-word floor, and 2.5-flash named all seven layers three times in ten — once it
+ * named two. A turn that does not teach the topic is not cheaper, it is wasted.
+ */
+export const TUTOR_VOICE_MODEL = "or/google/gemini-3.5-flash-lite";
+
 const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
   // Selection over one chunk at a time: reads a lot, writes unit numbers. Same profile as
   // extraction — high volume, local judgment, and thinking measurably hurts this kind of call.
@@ -119,6 +151,31 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
   coverage_plan: { thinkingLevel: "low", outputHeadroom: 1.6, defaultModel: GLM_TEXT_MODEL },
   study_items: { thinkingLevel: "low", outputHeadroom: 1.6, defaultModel: GLM_TEXT_MODEL },
   chat: { thinkingLevel: "minimal", outputHeadroom: 1, defaultModel: GLM_TEXT_MODEL },
+  /*
+   * The running order for a session: which topics exist, in which order, and what each has to
+   * land. It is never spoken and nobody reads it, so none of the prose considerations that
+   * decide the `tutor_turn` model apply here. It is judged on one thing, and it is the thing
+   * that decides what the session teaches at all — a fact the plan leaves out is a fact the
+   * walkthrough never reaches, however well the turns are written.
+   *
+   * Marked against the omrezja-sl fixture's own 23-fact answer key on 2026-09-04, GLM covered
+   * 23 of 23 on every run. gemini-3.5-flash-lite, which writes the spoken turns better than GLM
+   * does, covered 9. That is the whole reason the tutor runs on two models instead of one.
+   *
+   * It is slow, and it is allowed to be. Six runs at production's own budget took 19, 25, 45,
+   * 49, 50 and 51 seconds — GLM writes about 1,100 tokens here at 20-60 tokens a second, and no
+   * setting changes that. What it must not do is share the spoken turn's twenty-second leash,
+   * which it did until 2026-09-04: five runs in six blew it, and each one aborted a paid call
+   * and handed the session a fallback plan covering half the material. The plan is fetched
+   * beside the opening turn and covered by roughly a minute of greeting, so the seconds here are
+   * ones nobody is sitting through.
+   */
+  tutor_plan: {
+    thinkingLevel: "minimal",
+    outputHeadroom: 1,
+    defaultModel: GLM_TEXT_MODEL,
+    providerSort: "latency",
+  },
   /*
    * One spoken turn of the voice tutor. Two things pull against each other here, and the
    * choice between them was the product owner's, made on the numbers below.
@@ -178,7 +235,7 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
   tutor_turn: {
     thinkingLevel: "minimal",
     outputHeadroom: 1,
-    defaultModel: GLM_TEXT_MODEL,
+    defaultModel: TUTOR_VOICE_MODEL,
     providerSort: "latency",
   },
   /*
@@ -211,6 +268,7 @@ const STAGE_MODEL_ENV_KEYS: Record<AiStage, string> = {
   coverage_plan: "GEMINI_COVERAGE_MODEL",
   study_items: "GEMINI_STUDY_ITEMS_MODEL",
   chat: "GEMINI_CHAT_MODEL",
+  tutor_plan: "GEMINI_TUTOR_PLAN_MODEL",
   tutor_turn: "GEMINI_TUTOR_TURN_MODEL",
   language_check: "GEMINI_LANGUAGE_CHECK_MODEL",
 };
@@ -223,6 +281,7 @@ const STAGE_THINKING_ENV_KEYS: Record<AiStage, string> = {
   coverage_plan: "GEMINI_COVERAGE_THINKING",
   study_items: "GEMINI_STUDY_ITEMS_THINKING",
   chat: "GEMINI_CHAT_THINKING",
+  tutor_plan: "GEMINI_TUTOR_PLAN_THINKING",
   tutor_turn: "GEMINI_TUTOR_TURN_THINKING",
   language_check: "GEMINI_LANGUAGE_CHECK_THINKING",
 };
@@ -414,6 +473,13 @@ const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
    */
   tutor_turn: 20_000,
   /*
+   * The plan's own leash, and the reason it has one. Sharing the spoken turn's twenty seconds
+   * meant aborting GLM on five runs in six and teaching from a fallback plan that covered half
+   * the material; ninety seconds clears the measured distribution (19-51s) with room for a bad
+   * day, and it is time the opening turn is already speaking through.
+   */
+  tutor_plan: 90_000,
+  /*
    * The repair is optional by construction: on the spoken path a unit whose repair is late is
    * spoken as it was written, and in a note a passage that fails to come back is kept as it was.
    * So this leash is only here to stop a stalled call holding an invocation open — the caller's
@@ -474,6 +540,24 @@ export function resolveStageFallbackReserveMs(stage: AiStage, model?: string) {
  *
  * Off is spelled the obvious ways because whoever reaches for this will be in a hurry.
  */
+/**
+ * Whether text from this writer is worth checking.
+ *
+ * The language check exists for one measured defect: GLM writes 0.55-1.06 errors per 100 words
+ * of spoken Slovenian, including words that do not exist, which the synthesizer then pronounces.
+ * The Gemini that replaced it as the tutor's writer on 2026-09-04 sits at 0.26-0.39 without any
+ * help, and buying the rest of that gap costs about 950ms in front of every turn — which is most
+ * of what the switch was for.
+ *
+ * So the check follows the writer rather than a flag. It is off while a Gemini writes the turns,
+ * and setting GEMINI_TUTOR_TURN_MODEL back to GLM turns it on again in the same breath, with no
+ * second setting to remember and no way to roll back to the fast model and the slow safety net
+ * at once.
+ */
+export function writerNeedsLanguageCheck(model: string) {
+  return !isGeminiModel(model);
+}
+
 export function isLanguageCheckEnabled(env: NodeJS.ProcessEnv = process.env) {
   const value = env.LANGUAGE_CHECK?.trim().toLowerCase();
 

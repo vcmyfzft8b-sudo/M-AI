@@ -36,7 +36,12 @@ import {
 } from "../src/lib/ai/language-repair.ts";
 import { resolvePassageLanguage } from "../src/lib/tutor/spoken-language.ts";
 import { JsonStringFieldScanner } from "../src/lib/ai/stream-json.ts";
-import { GLM_TEXT_MODEL, LANGUAGE_CHECK_MODEL } from "../src/lib/ai/model-config.ts";
+import {
+  applyOutputHeadroom,
+  GLM_TEXT_MODEL,
+  LANGUAGE_CHECK_MODEL,
+  resolveStageModelConfig,
+} from "../src/lib/ai/model-config.ts";
 import { detectSourceLanguage } from "../src/lib/languages.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -366,6 +371,125 @@ async function grade({ passage, points, before, language }) {
   });
 }
 
+const percentile = (values, p) => {
+  if (!values.length) {
+    return null;
+  }
+
+  const sorted = [...values].sort((a, b) => a - b);
+
+  return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p))];
+};
+
+/* --- who should write the running order ----------------------------------- */
+
+/*
+ * The plan is not prose and is never heard, so none of the language marking above applies to it.
+ * What it is judged on is coverage: it decides which topics exist, and a fact it leaves out is
+ * one the walkthrough never teaches. So it is marked against the fixture's own answer key, which
+ * is what `--plans` does — and it is a separate question from who writes the turns, because the
+ * two can be different models and in production they are.
+ */
+const planCoverageSchema = z.object({
+  covered: z
+    .array(z.number())
+    .describe("1-based indexes of the key facts this running order would actually get taught."),
+});
+
+async function markPlan(candidate) {
+  const { covered } = await generate({
+    model: JUDGE_MODEL,
+    schema: planCoverageSchema,
+    instructions: [
+      "You are marking a lesson plan for a spoken walkthrough of one lecture.",
+      "The plan is a running order: topics, each with the points that topic has to land.",
+      "For each numbered key fact, say whether a tutor working through this plan would teach it.",
+      "Count a fact as covered when a topic's points name it or plainly contain it. Do not count a fact merely because a topic title is vaguely adjacent to it.",
+    ].join("\n"),
+    input: JSON.stringify(
+      {
+        keyFacts: (fixture.keyFacts ?? []).map((fact, index) => `${index + 1}. ${fact}`),
+        plan: candidate.topics.map((topic) => ({ title: topic.title, points: topic.points })),
+      },
+      null,
+      2,
+    ),
+    maxOutputTokens: 2_000,
+  });
+
+  return covered.length;
+}
+
+if (args.includes("--plans")) {
+  const models = flag("plan-models", `${GLM_TEXT_MODEL},or/google/gemini-3.5-flash-lite,or/google/gemini-2.5-flash-lite`).split(",");
+  const facts = (fixture.keyFacts ?? []).length;
+
+  console.log(`marking lesson plans against ${facts} key facts, ${trials} trials each\n`);
+  console.log(`${"model".padEnd(32)}${"ms p50".padEnd(10)}${"ms max".padEnd(10)}${"topics".padEnd(10)}${"covered".padEnd(16)}mean`);
+
+  for (const model of models) {
+    const runs = [];
+
+    for (let trial = 0; trial < trials; trial += 1) {
+      const startedAt = Date.now();
+
+      try {
+        const candidate = await generate({
+          model,
+          schema: tutorLessonPlanSchema,
+          instructions: buildTutorLessonPlanInstructions(),
+          input: JSON.stringify(
+            {
+              language: fixture.language,
+              noteTitle: fixture.title,
+              summary: fixture.notes,
+              keyTopics: [],
+              notes: fixture.source,
+            },
+            null,
+            2,
+          ),
+          /*
+           * The budget production actually sends, not the one the caller asks for: a
+           * mandatory-reasoning model draws its reasoning from max_tokens, so model-config gives
+           * it double. Marking GLM at the bare 1,600 truncates half its plans and measures the
+           * harness rather than the model.
+           */
+          maxOutputTokens: applyOutputHeadroom(
+            1_600,
+            resolveStageModelConfig({
+              stage: "tutor_plan",
+              env: { ...process.env, GEMINI_TUTOR_PLAN_MODEL: model },
+              fallbackModel: process.env.GEMINI_TEXT_MODEL ?? "gemini-2.5-flash-lite",
+            }),
+          ),
+        });
+
+        runs.push({ ms: Date.now() - startedAt, topics: candidate.topics.length, covered: await markPlan(candidate) });
+      } catch (error) {
+        console.log(`  ${model} trial ${trial + 1} FAILED — ${error.message}`);
+      }
+    }
+
+    if (!runs.length) {
+      continue;
+    }
+
+    const mean = (pick) => runs.reduce((sum, row) => sum + pick(row), 0) / runs.length;
+
+    console.log(
+      model.padEnd(32) +
+        `${percentile(runs.map((r) => r.ms), 0.5)}`.padEnd(10) +
+        `${Math.max(...runs.map((r) => r.ms))}`.padEnd(10) +
+        runs.map((r) => r.topics).join(",").padEnd(10) +
+        runs.map((r) => r.covered).join(",").padEnd(16) +
+        `${((mean((r) => r.covered) / facts) * 100).toFixed(0)}%`,
+    );
+  }
+
+  process.exit(0);
+}
+
 /* --- a run ---------------------------------------------------------------- */
 
 const plan = await loadPlan();
@@ -532,16 +656,6 @@ for (const arm of armNames) {
 }
 
 /* --- the report ----------------------------------------------------------- */
-
-const percentile = (values, p) => {
-  if (!values.length) {
-    return null;
-  }
-
-  const sorted = [...values].sort((a, b) => a - b);
-
-  return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p))];
-};
 
 console.log(
   `\n${"arm".padEnd(12)}${"turn".padEnd(7)}${"n".padEnd(4)}${"words".padEnd(7)}` +

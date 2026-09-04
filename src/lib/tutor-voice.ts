@@ -3,7 +3,11 @@ import "server-only";
 import { generateStructuredObject, streamStructuredObject } from "@/lib/ai/json";
 import { repairPassage } from "@/lib/ai/language-check";
 import { createProofreadStream, shouldCheckLanguage } from "@/lib/ai/language-repair";
-import { isLanguageCheckEnabled } from "@/lib/ai/model-config";
+import {
+  isLanguageCheckEnabled,
+  resolveStageModelConfig,
+  writerNeedsLanguageCheck,
+} from "@/lib/ai/model-config";
 import {
   buildTutorLessonPlanInstructions,
   buildTutorVoiceInstructions,
@@ -17,6 +21,7 @@ import {
 import { resolveMaterialLanguage } from "@/lib/languages";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import { resolvePassageLanguage, resolveSpokenLanguage } from "@/lib/tutor/spoken-language";
+import { getServerEnv } from "@/lib/server-env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 /**
@@ -123,23 +128,27 @@ export async function loadTutorGrounding(lectureId: string): Promise<TutorGround
  * that is not persisted cannot go stale against a note the learner has since
  * edited.
  *
- * Runs on the stage's own model, like everything else the tutor does.
+ * Runs on GLM, on its own `tutor_plan` stage, and both halves of that matter.
  *
- * It was briefly split onto a faster one, on the reasoning that nobody hears the plan so
- * its quality does not matter. That was wrong twice over. Planning quality is not prose
- * quality: the plan decides which topics exist, and a topic the plan omits is one the
- * walkthrough never teaches. Marked against the omrezja-sl fixture's own 23-fact answer
- * key, GLM's plans covered 94% (22, 22, 21) against gemini-2.5-flash's 74% (19, 17, 19,
- * 13) — and the bad Gemini run dropped LAN, WAN and MAN entirely.
+ * GLM, because planning quality is not prose quality. The plan decides which topics exist,
+ * and a topic it omits is one the walkthrough never teaches however well the turns are
+ * written. Marked against the omrezja-sl fixture's own 23-fact answer key on 2026-09-04, GLM
+ * covered 23 of 23 on every run; gemini-3.5-flash-lite, which writes the spoken turns better
+ * than GLM does, covered 9. So the tutor deliberately runs on two models.
  *
- * The speed argument that justified the split had also stopped being true: the plan is
- * fetched alongside the opening turn rather than before it, so its seven seconds sit
- * behind a greeting that is the better part of a minute of speech. Nobody waits for it.
+ * Its own stage, because it used to share the spoken turn's twenty-second leash and could not
+ * live inside it. GLM writes about 1,100 tokens here and takes 19 to 51 seconds doing it — five
+ * runs in six blew the limit, and every one of those aborted a paid call and handed the session
+ * the fallback tier's plan, which covers about half the material. The session was quietly being
+ * taught from the wrong plan almost every time.
+ *
+ * The seconds are affordable because nobody waits through them: the plan is fetched beside the
+ * opening turn rather than ahead of it, and the opening is the better part of a minute of speech.
  */
 export async function planTutorLesson(grounding: TutorGrounding) {
   return generateStructuredObject({
     schema: tutorLessonPlanSchema,
-    stage: "tutor_turn",
+    stage: "tutor_plan",
     instructions: buildTutorLessonPlanInstructions(),
     input: JSON.stringify(
       {
@@ -155,7 +164,7 @@ export async function planTutorLesson(grounding: TutorGrounding) {
       2,
     ),
     maxOutputTokens: TUTOR_PLAN_MAX_TOKENS,
-    usageContext: { stage: "tutor_turn" },
+    usageContext: { stage: "tutor_plan" },
   });
 }
 
@@ -268,10 +277,10 @@ export async function speakTutorTurn(params: {
   };
 
   /*
-   * Switched off, the writer's words go straight through as they always did, rather than through
-   * a pipeline that would hand them back unchanged. The difference is the buffering: the checker
-   * gives the client whole phrases where the raw stream gives it words, so off has to mean off
-   * rather than a quiet imitation of it.
+   * Switched off — or writing in a model that does not need checking — the words go straight
+   * through as they always did, rather than through a pipeline that would hand them back
+   * unchanged. The difference is the buffering: the checker gives the client whole phrases where
+   * the raw stream gives it words, so off has to mean off rather than a quiet imitation of it.
    *
    * Which language a unit is in is decided per unit rather than once per turn, and the decision
    * is made from the unit itself — see resolvePassageLanguage. Deciding it up front from the
@@ -280,7 +289,13 @@ export async function speakTutorTurn(params: {
    * English, and English is the one language this is skipped for. That turn would go out
    * unchecked, and it is exactly the kind of turn the check exists for.
    */
-  const proofreader = isLanguageCheckEnabled()
+  const writer = resolveStageModelConfig({
+    stage: "tutor_turn",
+    env: process.env,
+    fallbackModel: getServerEnv().GEMINI_TEXT_MODEL,
+  }).model;
+
+  const proofreader = isLanguageCheckEnabled() && writerNeedsLanguageCheck(writer)
     ? createProofreadStream({
         onDelta: emit,
         correct: ({ text, preceding, signal }) => {
@@ -332,12 +347,14 @@ export async function speakTutorTurn(params: {
    * order.
    */
   const generated = await generateStructuredObject(call);
-  const repaired = await repairPassage({
-    text: generated.speech,
-    // The whole turn is in hand here, which is the best evidence of its language there is.
-    language: resolvePassageLanguage(language, generated.speech),
-    spoken: true,
-  });
+  const repaired = writerNeedsLanguageCheck(writer)
+    ? await repairPassage({
+        text: generated.speech,
+        // The whole turn is in hand here, which is the best evidence of its language there is.
+        language: resolvePassageLanguage(language, generated.speech),
+        spoken: true,
+      })
+    : null;
 
   return { ...generated, speech: repaired ?? generated.speech };
 }

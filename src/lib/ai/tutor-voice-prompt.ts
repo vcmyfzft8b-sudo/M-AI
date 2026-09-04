@@ -167,7 +167,15 @@ const TURN_RULES: Record<TutorTurnKind, string> = {
     "This is the first thing the learner hears. Greet them in one short sentence, say in one more what this material is about and that they can interrupt you at any time just by speaking, then start teaching.",
     "You have no running order for this turn — it is still being written, and you will get it for the next one. So open on whatever their material says has to be understood before anything else: the definition everything rests on, or the idea the rest is built from. `keyTopics` and the notes are what you have; use them.",
     "Teach that one thing properly rather than previewing the rest. Do not list what is coming, do not say what you will cover, and do not promise a structure you have not been given.",
-    "Around eighty to a hundred and twenty words in total.",
+    /*
+     * A floor with a reason attached, not a range. Measured 2026-09-04 across the four turn
+     * kinds: the `teach` rule is the only one that spelled its lower bound out as a consequence,
+     * and it is the only one gemini-3.5-flash-lite hit on every trial — it came in at 71 words
+     * here and 54 on `resume` against bands it was merely told the shape of. A model reads
+     * "around eighty to a hundred and twenty" as permission to be brief; it reads "under eighty
+     * and you have done nothing" as a rule.
+     */
+    "Between eighty and a hundred and twenty words. This is a floor as much as a ceiling: under eighty you have greeted them and taught nothing, and an opening that teaches nothing is a worse first impression than a slow one.",
   ].join(" "),
   teach: [
     "Explain the current topic — the one named in `topic` — and only that one. The topics after it have their own turns.",
@@ -200,8 +208,23 @@ const TURN_RULES: Record<TutorTurnKind, string> = {
     "You were interrupted while explaining the current topic and you have just finished dealing with it. Now pick the explanation back up.",
     "Start with a half-sentence bridge in their own language — the spoken equivalent of \"right, where we were\" — and then carry straight on.",
     "`spokenSoFar` is everything you had already said about this topic before the interruption. Continue from the end of it. Do not restate it, do not recap it, and do not start the topic again.",
+    /*
+     * The concrete job, added 2026-09-04 because a word count alone did not land. Told only to
+     * "carry on" in "around a hundred to a hundred and sixty words", the writer produced 54-word
+     * resumes on every trial: it can see it has said something about the topic and has no way to
+     * judge how much of the topic that was. Naming the unfinished points turns a vague length
+     * into a countable task, which is the form of instruction this prompt gets obeyed on.
+     */
+    "Work out which of the topic's `points` are not in `spokenSoFar` yet. Those are what this turn is for, and there are usually two or three of them left. Teach each one properly, the way the topic's own turn would have — with the example and the reason it matters — rather than naming them on the way past.",
     "If `spokenSoFar` already covers the whole topic, say one closing line about it and stop; the next topic has its own turn.",
-    "Around a hundred to a hundred and sixty words.",
+    /*
+     * A bridge, not a finish. This turn used to be asked to do both, and one turn cannot: it
+     * taught one of a topic's three remaining points and the walkthrough moved on, losing the
+     * other two on every topic the learner had interrupted. A teach turn now follows this one on
+     * the same topic (see onTurnFinished in lecture-tutor.tsx), so the job here is to get back
+     * into the explanation, and the teaching happens in the turn after it.
+     */
+    "Around sixty to a hundred words. You are getting back into the topic, not finishing it — another turn follows this one and carries on where you leave off, so pick the thread back up, make the next point, and stop there.",
   ].join(" "),
   closing: [
     "The walkthrough is finished. Close it.",

@@ -345,9 +345,10 @@ function checkSpeakable(label, text) {
 }
 
 const fixture = loadFixture(fixtureName);
-// The plan runs on the same stage model as the turns, exactly as planTutorLesson does.
+// The plan has run on its own stage since 2026-09-04: it is marked on coverage rather than prose
+// and is the one half of the tutor GLM is kept for, so it resolves separately from the turns.
 const planConfig = resolveStageModelConfig({
-  stage: "tutor_turn",
+  stage: "tutor_plan",
   env: process.env,
   fallbackModel: process.env.GEMINI_TEXT_MODEL ?? "gemini-2.5-flash-lite",
 });

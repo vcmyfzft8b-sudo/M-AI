@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useT } from "@/components/i18n-provider";
@@ -350,30 +350,9 @@ export function LecturePalace({
           nearest = { distance, point };
         }
 
-        if (distance > MAP_RANGE) {
-          if (done) return;
-
-          /* Off the edge: pinned to the rim, pointing the way to walk. */
-          const angle = Math.atan2(entry.z - snapshot.z, entry.x - snapshot.x);
-          const pinned = {
-            x: radius + Math.cos(angle) * (radius - 9),
-            y: radius + Math.sin(angle) * (radius - 9),
-          };
-
-          context.save();
-          context.translate(pinned.x, pinned.y);
-          context.rotate(angle);
-          context.fillStyle = `hsl(${entry.hue} 85% 65%)`;
-          context.beginPath();
-          context.moveTo(6, 0);
-          context.lineTo(-4, 4.5);
-          context.lineTo(-4, -4.5);
-          context.closePath();
-          context.fill();
-          context.restore();
-
-          return;
-        }
+        /* Off the edge of the map: not drawn. A rim full of arrows was more
+           clutter than direction on a map this size. */
+        if (distance > MAP_RANGE) return;
 
         if (done) {
           context.strokeStyle = `hsl(${entry.hue} 55% 72% / 0.7)`;
@@ -820,48 +799,29 @@ export function LecturePalace({
 
       if (!card) return null;
 
-      return (
-        <>
-          <StudyFlashcard
-            key={card.id}
-            front={card.front}
-            back={card.back}
-            flipped={isFlipped}
-            onFlip={() => setIsFlipped((current) => !current)}
-            onGrade={(bucket, exitStart) => void gradeCard(card.id, bucket, exitStart)}
-            flipHint={flipHint}
-            answerLabel={
-              results[card.id]
-                ? t(results[card.id] === "again" ? "study.cards.didntKnow" : "study.cards.knew")
-                : null
-            }
-            answerClass={results[card.id] === "again" ? "again" : "easy"}
-            exit={cardExit}
-          />
+      const missed = Object.values(results).filter((value) => value === "again").length;
+      const known = Object.values(results).filter((value) => value === "easy").length;
 
-          <div className="lecture-flashcard-toolbar">
-            <div className="lecture-flashcard-review">
-              <button
-                type="button"
-                className="lecture-flashcard-review-button again"
-                aria-label={t("palace.notYet")}
-                onClick={() => void gradeCard(card.id, "again")}
-              >
-                <X aria-hidden="true" />
-                <span>{t("palace.notYet")}</span>
-              </button>
-              <button
-                type="button"
-                className="lecture-flashcard-review-button easy"
-                aria-label={t("palace.gotIt")}
-                onClick={() => void gradeCard(card.id, "easy")}
-              >
-                <span>{t("palace.gotIt")}</span>
-                <Check aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-        </>
+      return (
+        <StudyFlashcard
+          key={card.id}
+          front={card.front}
+          back={card.back}
+          flipped={isFlipped}
+          onFlip={() => setIsFlipped((current) => !current)}
+          onGrade={(bucket, exitStart) => void gradeCard(card.id, bucket, exitStart)}
+          flipHint={flipHint}
+          answerLabel={
+            results[card.id]
+              ? t(results[card.id] === "again" ? "study.cards.didntKnow" : "study.cards.knew")
+              : null
+          }
+          answerClass={results[card.id] === "again" ? "again" : "easy"}
+          answer={results[card.id] ?? null}
+          missedCount={missed}
+          knownCount={known}
+          exit={cardExit}
+        />
       );
     }
 

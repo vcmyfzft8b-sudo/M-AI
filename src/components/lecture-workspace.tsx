@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Loader2,
-  X,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import type {
   CSSProperties,
   MouseEvent as ReactMouseEvent,
@@ -620,11 +614,6 @@ function mergeLectureDetailForRefresh(current: LectureDetail, next: LectureDetai
 
   return merged;
 }
-
-function confidenceLabel(value: FlashcardConfidenceBucket, t: Translate<MessageKey>) {
-  return t(value === "again" ? "study.cards.didntKnow" : "study.cards.knew");
-}
-
 
 function isScanImport(detail: LectureDetail) {
   const sourceType = getEffectiveLectureSourceType(detail.lecture);
@@ -4439,6 +4428,15 @@ export function LectureWorkspace({
                     flipHint={flipHint}
                     answerLabel={currentFlashcardAnswerLabel}
                     answerClass={currentFlashcardAnswerClass}
+                    answer={currentFlashcardAnswer}
+                    missedCount={flashcardMissedCount}
+                    knownCount={flashcardKnownCount}
+                    navigation={{
+                      onPrevious: () => handleFlashcardNavigate("previous"),
+                      onNext: () => handleFlashcardNavigate("next"),
+                      canPrevious: canNavigatePreviousFlashcard,
+                      canNext: canNavigateNextFlashcard,
+                    }}
                     exit={
                       flashcardExitAnimation
                         ? {
@@ -4454,54 +4452,6 @@ export function LectureWorkspace({
                     disabled={Boolean(flashcardExitAnimation)}
                   />
 
-                  <div className="lecture-flashcard-toolbar">
-                    <div className="lecture-flashcard-review">
-                      <button
-                        type="button"
-                        onClick={() => handleFlashcardNavigate("previous")}
-                        disabled={!canNavigatePreviousFlashcard}
-                        className="lecture-flashcard-nav-button previous"
-                        aria-label={t("study.cards.previous")}
-                        title={t("study.cards.previous")}
-                      >
-                        <ArrowLeft aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleFlashcardProgress("again")}
-                        className={`lecture-flashcard-review-button again ${
-                          currentFlashcardAnswer === "again" ? "selected" : ""
-                        }`}
-                        aria-label={confidenceLabel("again", t)}
-                        title={confidenceLabel("again", t)}
-                      >
-                        <X aria-hidden="true" />
-                        <span>{flashcardMissedCount}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleFlashcardProgress("easy")}
-                        className={`lecture-flashcard-review-button easy ${
-                          currentFlashcardAnswer && currentFlashcardAnswer !== "again" ? "selected" : ""
-                        }`}
-                        aria-label={confidenceLabel("easy", t)}
-                        title={confidenceLabel("easy", t)}
-                      >
-                        <span>{flashcardKnownCount}</span>
-                        <Check aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleFlashcardNavigate("next")}
-                        disabled={!canNavigateNextFlashcard}
-                        className="lecture-flashcard-nav-button next"
-                        aria-label={t("study.cards.next")}
-                        title={t("study.cards.next")}
-                      >
-                        <ArrowRight aria-hidden="true" />
-                      </button>
-                    </div>
-                  </div>
                 </>
               ) : (
                 <StudyCompletionCard

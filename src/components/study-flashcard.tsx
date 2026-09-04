@@ -10,7 +10,10 @@ import {
   type ReactNode,
 } from "react";
 
+import { ArrowLeft, ArrowRight, Check, X } from "lucide-react";
+
 import { EmojiIcon } from "@/components/emoji-icon";
+import { useT } from "@/components/i18n-provider";
 import {
   clampFlashcardDrag,
   DRAG_CLICK_SUPPRESSION_PX,
@@ -56,6 +59,10 @@ export function StudyFlashcard({
   flipHint,
   answerLabel = null,
   answerClass = "unanswered",
+  answer = null,
+  missedCount,
+  knownCount,
+  navigation = null,
   exit = null,
   disabled = false,
 }: {
@@ -68,9 +75,22 @@ export function StudyFlashcard({
   flipHint: ReactNode;
   answerLabel?: string | null;
   answerClass?: string;
+  /** How this card was last graded, for the pressed state on the buttons. */
+  answer?: "again" | "good" | "easy" | null;
+  missedCount: number;
+  knownCount: number;
+  /** The arrows either side of the review buttons, where there is a deck to
+      move through. The palace has one card at a time, so it passes none. */
+  navigation?: {
+    onPrevious: () => void;
+    onNext: () => void;
+    canPrevious: boolean;
+    canNext: boolean;
+  } | null;
   exit?: StudyFlashcardExit | null;
   disabled?: boolean;
 }) {
+  const t = useT();
   const sessionRef = useRef<{
     pointerId: number;
     startX: number;
@@ -227,7 +247,11 @@ export function StudyFlashcard({
     </div>
   );
 
+  const againLabel = t("study.cards.didntKnow");
+  const knewLabel = t("study.cards.knew");
+
   return (
+    <>
     <div className="lecture-flashcard-stage">
       <div className="lecture-flashcard-stage-card">
         <button
@@ -279,5 +303,59 @@ export function StudyFlashcard({
         ) : null}
       </div>
     </div>
+
+    {/* The review row, which is the same row on both screens: a miss and its
+        running count on the left, the count and a tick on the right. */}
+    <div className="lecture-flashcard-toolbar">
+      <div className="lecture-flashcard-review">
+        {navigation ? (
+          <button
+            type="button"
+            onClick={navigation.onPrevious}
+            disabled={!navigation.canPrevious}
+            className="lecture-flashcard-nav-button previous"
+            aria-label={t("study.cards.previous")}
+            title={t("study.cards.previous")}
+          >
+            <ArrowLeft aria-hidden="true" />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => onGrade("again", { xPercent: 0, yPercent: 0, rotationDeg: 0 })}
+          className={`lecture-flashcard-review-button again ${answer === "again" ? "selected" : ""}`}
+          aria-label={againLabel}
+          title={againLabel}
+        >
+          <X aria-hidden="true" />
+          <span>{missedCount}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onGrade("easy", { xPercent: 0, yPercent: 0, rotationDeg: 0 })}
+          className={`lecture-flashcard-review-button easy ${
+            answer && answer !== "again" ? "selected" : ""
+          }`}
+          aria-label={knewLabel}
+          title={knewLabel}
+        >
+          <span>{knownCount}</span>
+          <Check aria-hidden="true" />
+        </button>
+        {navigation ? (
+          <button
+            type="button"
+            onClick={navigation.onNext}
+            disabled={!navigation.canNext}
+            className="lecture-flashcard-nav-button next"
+            aria-label={t("study.cards.next")}
+            title={t("study.cards.next")}
+          >
+            <ArrowRight aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+    </div>
+    </>
   );
 }

@@ -14,18 +14,18 @@ import { STORAGE_BUCKET } from "@/lib/constants";
 import type { Json, LecturePodcastRow, LecturePodcastSegmentRow } from "@/lib/database.types";
 import { normalizeSpokenLanguageCode, resolveMaterialLanguage } from "@/lib/languages";
 import {
-  abandonTtsGeneration,
-  claimTtsGeneration,
   isTtsProviderRateLimitError,
   safeStorageSegment,
-  settleTtsGeneration,
   TTS_OUTPUT_BITRATE,
   TTS_OUTPUT_FORMAT,
   TTS_OUTPUT_MIME_TYPE,
-  TtsGenerationPendingError,
-  type TtsGenerationIdentity,
-  type TtsQuotaContext,
 } from "@/lib/note-tts";
+import {
+  getTutorAllowance,
+  openTutorGrant,
+  settleTutorGrant,
+  type TutorAllowance,
+} from "@/lib/tutor-usage";
 import { synthesizeTtsChunkWithTimestamps } from "@/lib/note-tts-synthesis";
 import type { NoteTtsVoice } from "@/lib/note-tts-settings";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
@@ -35,7 +35,6 @@ import {
   getPodcastFormat,
   getPodcastLength,
   podcastCastKey,
-  reservedSpokenSeconds,
   voiceGender,
   type PodcastFormat,
   type PodcastLength,
@@ -84,6 +83,21 @@ export class PodcastSourceNotReadyError extends Error {
   constructor() {
     super("The note has no finished content to make an episode from.");
     this.name = "PodcastSourceNotReadyError";
+  }
+}
+
+/**
+ * There is no listening time left.
+ *
+ * Carries the allowance because the answer depends on it: a free account is being shown what a
+ * subscription is for, and a paid one has spent today and can buy an hour. The tutor answers the
+ * same two sentences from the same two states — this feature spends the same minutes, so it
+ * refuses in the same words.
+ */
+export class PodcastAllowanceError extends Error {
+  constructor(public readonly allowance: TutorAllowance) {
+    super("No spoken-audio allowance left.");
+    this.name = "PodcastAllowanceError";
   }
 }
 
@@ -620,7 +634,6 @@ export async function getOrCreatePodcastSegment(params: {
   podcast: LecturePodcastRow;
   segmentIndex: number;
   voices: Record<PodcastSpeaker, NoteTtsVoice>;
-  quotaContext: TtsQuotaContext;
 }) {
   const env = getServerEnv();
   const turns = parseStoredTurns(params.podcast.turns);
@@ -640,39 +653,33 @@ export async function getOrCreatePodcastSegment(params: {
   });
 
   if (cached) {
+    /*
+     * Already made, so nothing is spent — but the meter is still reported, because a listener
+     * playing a cached episode wants to see what they have left just as much as one who is
+     * spending it.
+     */
     return {
       row: cached,
       audioUrl: await signSegment(cached),
-      quota: null,
+      allowance: await getTutorAllowance(params.userId),
     };
   }
 
-  const identity: TtsGenerationIdentity = {
-    userId: params.userId,
-    lectureId: params.lectureId,
-    /*
-     * The ledger's `contentHash` only has to name a piece of audio uniquely, and for an episode
-     * the episode's own id does that — the note's hash is already folded into the variant this
-     * row belongs to.
-     */
-    contentHash: `podcast:${params.podcast.id}`,
-    chunkIndex: params.segmentIndex,
-    language: params.podcast.language,
-    voice,
-    model,
-  };
-  const claim = await claimTtsGeneration({
-    identity,
-    estimatedSeconds: reservedSpokenSeconds(turn.text),
-    quotaContext: params.quotaContext,
-  });
+  /*
+   * The same minutes the spoken tutor spends, out of the same pot.
+   *
+   * Both features are a voice reading this app's material aloud, they cost the same per second,
+   * and the hour a listener can buy is the same hour — so one meter, one refusal, one top-up,
+   * rather than two allowances that have to be explained to each other. A null grant means there
+   * is nothing left, which is a paywall and not a fault.
+   */
+  const grant = await openTutorGrant({ userId: params.userId, lectureId: params.lectureId });
 
-  if (!claim.claimed) {
-    /* Somebody else is synthesizing this exact turn; the caller asks again in a moment. */
-    throw new TtsGenerationPendingError();
+  if (!grant) {
+    throw new PodcastAllowanceError(await getTutorAllowance(params.userId));
   }
 
-  let shouldRelease = Boolean(claim.reservation);
+  let settled = false;
 
   try {
     const { audio, durationMs } = await synthesizePodcastTurn({
@@ -732,19 +739,26 @@ export async function getOrCreatePodcastSegment(params: {
       throw error;
     }
 
-    shouldRelease = false;
-
     const row = data as LecturePodcastSegmentRow;
-    const quota = await settleTtsGeneration({
-      reservation: claim.reservation,
-      fallbackQuota: claim.quota,
-      actualSeconds: Math.max(1, Math.ceil(row.duration_ms / 1000)),
-    });
 
-    return { row, audioUrl: await signSegment(row), quota };
+    settled = true;
+
+    const allowance = grant.grantId
+      ? await settleTutorGrant({
+          userId: params.userId,
+          grantId: grant.grantId,
+          secondsUsed: Math.max(1, Math.ceil(row.duration_ms / 1000)),
+        })
+      : grant.allowance;
+
+    return { row, audioUrl: await signSegment(row), allowance };
   } catch (error) {
-    if (shouldRelease) {
-      await abandonTtsGeneration(claim.reservation);
+    /*
+     * Nothing was spoken, so nothing is charged — but the slice must be closed all the same, or
+     * it counts as reserved against the listener until the sweeper eventually clears it.
+     */
+    if (!settled && grant.grantId) {
+      await settleTutorGrant({ userId: params.userId, grantId: grant.grantId, secondsUsed: 0 });
     }
 
     throw error;

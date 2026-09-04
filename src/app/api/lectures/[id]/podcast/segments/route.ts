@@ -1,22 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import { tr } from "@/lib/i18n/server";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { captureRouteError } from "@/lib/monitoring";
-import {
-  getTtsUsageState,
-  hasUnlimitedTtsUsage,
-  isTtsProviderRateLimitError,
-  TtsGenerationPendingError,
-  TtsQuotaLimitError,
-} from "@/lib/note-tts";
+import { isTtsProviderRateLimitError } from "@/lib/note-tts";
 import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 import {
   getOrCreatePodcastSegment,
   LectureRemovedDuringPodcastError,
+  PodcastAllowanceError,
 } from "@/lib/podcast";
+import { toClientUsage } from "@/lib/tutor-usage";
 import { normalizePodcastVoice } from "@/lib/podcast-settings";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -85,13 +80,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
-  const access = await canUseLectureFeatures(user.id, id, "study");
-
-  if (!access.allowed) {
-    return createBillingRequiredResponse(await tr("api.paidRequired.tts"), access.code);
-  }
-
-  const hasUnlimitedUsage = hasUnlimitedTtsUsage(user.email);
   /*
    * The episode is read back by its id and then checked against this lecture, rather than trusted
    * from the body: the id travels through the client, and ownership of the note is the only thing
@@ -130,53 +118,40 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         a: normalizePodcastVoice(parsedBody.data.voiceA, "a"),
         b: normalizePodcastVoice(parsedBody.data.voiceB, "b"),
       },
-      quotaContext: {
-        hasPaidAccess: access.entitlement.hasPaidAccess,
-        hasUnlimitedUsage,
-      },
     });
 
     if (!segment) {
       return NextResponse.json({ error: await tr("api.invalidListenPart") }, { status: 400 });
     }
 
-    const quota =
-      segment.quota ??
-      (await getTtsUsageState({
-        userId: user.id,
-        hasPaidAccess: access.entitlement.hasPaidAccess,
-        hasUnlimitedUsage,
-      }));
-
     return NextResponse.json({
       segmentIndex: segment.row.segment_index,
       speaker: segment.row.speaker,
       audioUrl: segment.audioUrl,
       durationMs: segment.row.duration_ms,
-      limitSeconds: quota.limitSeconds,
-      secondsUsed: quota.secondsUsed,
-      remainingSeconds: quota.remainingSeconds,
-      hasUnlimitedUsage,
+      usage: toClientUsage(segment.allowance),
     });
   } catch (error) {
-    if (error instanceof TtsQuotaLimitError) {
+    /*
+     * Out of listening time. The same 402 the tutor answers, in the same two sentences, because
+     * it is the same allowance — a free account is being shown what a subscription is for, and a
+     * paid one has spent today and can buy an hour.
+     */
+    if (error instanceof PodcastAllowanceError) {
       return NextResponse.json(
         {
           error: await tr(
-            access.entitlement.hasPaidAccess ? "api.ttsDailyLimitPaid" : "api.ttsDailyLimitFree",
+            error.allowance.hasPaidAccess ? "api.tutorCreditsNeeded" : "api.tutorTrialUsed",
           ),
-          code: "tts_daily_limit_reached",
-          tier: access.entitlement.hasPaidAccess ? "paid" : "free",
-          secondsUsed: error.quota.secondsUsed,
-          remainingSeconds: error.quota.remainingSeconds,
-          limitSeconds: error.quota.limitSeconds,
+          code: error.allowance.hasPaidAccess ? "tutor_credits_needed" : "tutor_trial_used",
+          usage: toClientUsage(error.allowance),
         },
-        { status: 403 },
+        { status: 402 },
       );
     }
 
-    /* Being made, or waiting for a stream slot: both mean "ask again shortly", not "this broke". */
-    if (error instanceof TtsGenerationPendingError || isTtsProviderRateLimitError(error)) {
+    /* Waiting for a stream slot means "ask again shortly", not "this broke". */
+    if (isTtsProviderRateLimitError(error)) {
       return NextResponse.json(
         { error: await tr("api.audioStillPreparing"), code: "podcast_segment_pending" },
         { status: 202, headers: { "Cache-Control": "no-store" } },

@@ -1725,5 +1725,6 @@ export const sr: Messages = {
   "podcast.limitReached": "Za danas je slušanje gotovo.",
   "podcast.newEpisode": "Nova epizoda",
   "podcast.library.back": "Nazad na epizode",
+  "podcast.usage.remaining": "Ostalo ti je još {minutes} min slušanja.",
   "podcast.usage.note": "Slušanje se računa u dnevnu kvotu zvuka.",
 };

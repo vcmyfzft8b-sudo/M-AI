@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import { tr } from "@/lib/i18n/server";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { captureRouteError } from "@/lib/monitoring";
-import { getTtsUsageState, hasUnlimitedTtsUsage } from "@/lib/note-tts";
 import {
   getOrCreatePodcastScript,
   getPodcastRow,
@@ -27,6 +25,7 @@ import {
   PODCAST_LENGTH_IDS,
 } from "@/lib/podcast-settings";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
+import { getTutorAllowance, toClientUsage } from "@/lib/tutor-usage";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
@@ -48,32 +47,6 @@ const podcastRequestSchema = z.object({
   voiceA: z.string().trim().min(1).max(32),
   voiceB: z.string().trim().min(1).max(32),
 });
-
-async function resolveAccess(userId: string, lectureId: string, email?: string | null) {
-  const access = await canUseLectureFeatures(userId, lectureId, "study");
-  const hasUnlimitedUsage = hasUnlimitedTtsUsage(email);
-  const usage = await getTtsUsageState({
-    userId,
-    hasPaidAccess: access.entitlement.hasPaidAccess,
-    hasUnlimitedUsage,
-  });
-
-  return { access, hasUnlimitedUsage, usage };
-}
-
-function describeUsage(
-  usage: Awaited<ReturnType<typeof getTtsUsageState>>,
-  hasPaidAccess: boolean,
-  hasUnlimitedUsage: boolean,
-) {
-  return {
-    tier: hasPaidAccess ? ("paid" as const) : ("free" as const),
-    limitSeconds: usage.limitSeconds,
-    secondsUsed: usage.secondsUsed,
-    remainingSeconds: usage.remainingSeconds,
-    hasUnlimitedUsage,
-  };
-}
 
 /**
  * What the podcast screen knows before anybody presses anything: whether this note can have an
@@ -115,18 +88,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
-  const { access, hasUnlimitedUsage, usage } = await resolveAccess(user.id, id, user.email);
-  const usagePayload = describeUsage(usage, access.entitlement.hasPaidAccess, hasUnlimitedUsage);
-
-  if (!access.allowed) {
-    return NextResponse.json({
-      available: false,
-      reason: "subscription_required",
-      podcast: null,
-      episodes: [],
-      ...usagePayload,
-    });
-  }
+  /*
+   * No paid gate. The allowance is the gate, exactly as it is for the spoken tutor: a free
+   * account can hear a minute of an episode, and what stops anybody is running out of time
+   * rather than a plan check in front of the screen.
+   */
+  const usage = toClientUsage(await getTutorAllowance(user.id));
 
   const url = new URL(request.url);
   const format = normalizePodcastFormat(url.searchParams.get("format"));
@@ -149,7 +116,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       reason: "notes_not_ready",
       podcast: null,
       episodes: [],
-      ...usagePayload,
+      usage,
     });
   }
 
@@ -176,7 +143,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       language: source.language,
       podcast: null,
       episodes,
-      ...usagePayload,
+      usage,
     });
   }
 
@@ -199,7 +166,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       readySegments,
     },
     episodes,
-    ...usagePayload,
+    usage,
   });
 }
 
@@ -246,10 +213,24 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
-  const { access, hasUnlimitedUsage, usage } = await resolveAccess(user.id, id, user.email);
+  /*
+   * Writing a script costs a model call rather than seconds of audio, so it is not charged — the
+   * same way the tutor's lesson plan is not. But somebody with no listening time left cannot hear
+   * what it would write, so they are told before it is written rather than after.
+   */
+  const allowance = await getTutorAllowance(user.id);
 
-  if (!access.allowed) {
-    return createBillingRequiredResponse(await tr("api.paidRequired.tts"), access.code);
+  if (allowance.remainingSeconds <= 0) {
+    return NextResponse.json(
+      {
+        error: await tr(
+          allowance.hasPaidAccess ? "api.tutorCreditsNeeded" : "api.tutorTrialUsed",
+        ),
+        code: allowance.hasPaidAccess ? "tutor_credits_needed" : "tutor_trial_used",
+        usage: toClientUsage(allowance),
+      },
+      { status: 402 },
+    );
   }
 
   try {
@@ -274,7 +255,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         turns: parseStoredTurns(row.turns),
         readySegments: [],
       },
-      ...describeUsage(usage, access.entitlement.hasPaidAccess, hasUnlimitedUsage),
+      usage: toClientUsage(allowance),
     });
   } catch (error) {
     /*

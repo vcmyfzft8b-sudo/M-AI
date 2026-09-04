@@ -12531,7 +12531,8 @@
 }
 
 /* On its own in the dock, the pill sits where the listen pill does on the note. */
-.memo-note-screen[data-note-tab="tutor"] .memo-dock {
+.memo-note-screen[data-note-tab="tutor"] .memo-dock,
+.memo-note-screen[data-note-tab="podcast"] .memo-dock {
   justify-content: center;
 }
 
@@ -13914,6 +13915,44 @@
 
   .memo-podcast-length {
     min-height: 2.4rem;
+  }
+
+  /*
+   * The player, which the block above was never measured against — it was written for the
+   * chooser, and the two screens are not the same height. Measured on a 375x667 screen with an
+   * episode open: 700 points of content in a 667-point view, 33 over, and the artwork is the
+   * only thing on that screen carrying no information. Shrinking it and closing the last of the
+   * gaps brings the player inside the view on the smallest phone the site supports.
+   */
+  .memo-podcast-cover {
+    width: 7.8rem;
+    height: 4.7rem;
+  }
+
+  /*
+   * The spheres are absolutely positioned, so the box shrinking does not shrink them — left
+   * alone they spilled straight over the episode title. They come down in the same proportion,
+   * offsets included, so the pair still overlap the way the full-size artwork does.
+   */
+  .memo-podcast-orb.primary {
+    width: 3.5rem;
+    height: 3.5rem;
+    left: 1rem;
+  }
+
+  .memo-podcast-orb.secondary {
+    width: 2.9rem;
+    height: 2.9rem;
+    right: 1rem;
+    top: 0.9rem;
+  }
+
+  .memo-podcast-footer {
+    gap: 0.3rem;
+  }
+
+  .memo-podcast-secondary {
+    min-height: 2.25rem;
   }
 }
 

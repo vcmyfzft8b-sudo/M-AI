@@ -146,7 +146,7 @@ export const sl = {
   "landing.seo.featureSummaries": "Povzetki iz PDF-jev in dokumentov",
   "landing.seo.featureFlashcards": "Flashcardi iz zapiskov",
   "landing.seo.featureQuizzes": "Kvizi in testi za učenje",
-  "landing.seo.featureTutor": "Razlaga zapiskov na glas",
+  "landing.seo.featureTutor": "Instruktor, ki zapiske razloži na glas",
   "landing.seo.featureChat": "AI klepet z gradivom",
 
   /* ---- Landing FAQ ---- */
@@ -1220,7 +1220,7 @@ export const sl = {
   "showcase.captureDesc": "Predavanja, PDF-je, dokumente, fotografije zapiskov in povezave.",
   "showcase.notesTitle": "Dobi clean zapiske",
   "showcase.notesDesc": "Urejeni zapiski in prepisi brez ročnega prepisovanja.",
-  "showcase.tutorTitle": "Razlaga na glas",
+  "showcase.tutorTitle": "Instruktor na glas",
   "showcase.tutorDesc": "Zapisek ti razloži sproti in odgovori, ko ga prekineš z vprašanjem.",
   "showcase.cardsTitle": "Flashcardi",
   "showcase.cardsDesc": "Ključni pojmi se spremenijo v kartice za hitro ponavljanje.",
@@ -1649,9 +1649,9 @@ export const sl = {
   "nav.language": "Jezik",
 
 
-  /* ---- Glasovna razlaga — tutor, ki snov razloži na glas ---- */
-  "note.tab.tutor": "Razlaga",
-  "tutor.subScreenTitle": "Razlaga",
+  /* ---- Instruktor — glas, ki snov razloži na glas ---- */
+  "note.tab.tutor": "Instruktor",
+  "tutor.subScreenTitle": "Instruktor",
   "tutor.voice.label": "Glas",
   "tutor.start": "Začni",
   "tutor.restart": "Začni znova",
@@ -1676,24 +1676,24 @@ export const sl = {
   "tutor.error.connection": "Povezava z glasovno storitvijo je prekinjena.",
   "tutor.error.busy": "Glasovna storitev je trenutno zasedena. Poskusi čez minuto.",
   "tutor.error.listeningBusy": "Vse glasovne linije so zasedene. Poslušaš lahko naprej — prekinjanje z govorom bo spet delovalo čez nekaj časa.",
-  "tutor.error.startFailed": "Razlage ni bilo mogoče začeti.",
+  "tutor.error.startFailed": "Instruktorja ni bilo mogoče začeti.",
   "tutor.error.turnFailed": "Razlage ni bilo mogoče ustvariti.",
-  "api.trialOnly.tutor": "Brez plačljivega paketa je razlaga na voljo samo za tvoje poskusno gradivo.",
-  "api.tutorNotReady": "Razlaga je na voljo, ko je obdelava zapiska končana.",
-  "api.tutorStartFailed": "Razlage ni bilo mogoče začeti.",
+  "api.trialOnly.tutor": "Brez plačljivega paketa je instruktor na voljo samo za tvoje poskusno gradivo.",
+  "api.tutorNotReady": "Instruktor je na voljo, ko je obdelava zapiska končana.",
+  "api.tutorStartFailed": "Instruktorja ni bilo mogoče začeti.",
 
   /* ---- Tutor usage, limits and top-ups ---- */
-  "api.tutorTrialUsed": "Brezplačni preizkus razlage je porabljen. Naroči se za dnevno razlago.",
-  "api.tutorCreditsNeeded": "Današnja razlaga je porabljena. Dokupi uro, če želiš nadaljevati.",
-  "tutor.usage.title": "Poraba razlage",
+  "api.tutorTrialUsed": "Brezplačni preizkus instruktorja je porabljen. Naroči se za dnevno uporabo.",
+  "api.tutorCreditsNeeded": "Današnji čas z instruktorjem je porabljen. Dokupi uro, če želiš nadaljevati.",
+  "tutor.usage.title": "Poraba instruktorja",
   "tutor.usage.credits": "Dokupljeno: {minutes} min",
   "tutor.usage.unlimited": "Brez omejitve",
   "tutor.usage.resetsAt": "Dnevna omejitev se ponastavi opolnoči.",
   "tutor.usage.freeHint": "Preizkusi, kako deluje.",
   "tutor.paywall.trialTitle": "Preizkus je porabljen",
-  "tutor.paywall.trialBody": "Z naročnino dobiš razlago vsak dan, na vseh svojih zapiskih.",
+  "tutor.paywall.trialBody": "Z naročnino dobiš instruktorja vsak dan, na vseh svojih zapiskih.",
   "tutor.paywall.trialCta": "Poglej naročnine",
-  "tutor.paywall.creditsTitle": "Za danes je razlage konec",
+  "tutor.paywall.creditsTitle": "Za danes je instruktorja konec",
   "tutor.paywall.creditsBody": "Jutri se ponastavi. Če želiš nadaljevati zdaj, dokupi uro za 2 €.",
   "tutor.paywall.creditsCta": "Dokupi uro za 2 €",
   "tutor.paywall.creditsPending": "Odpiram plačilo …",
@@ -1744,5 +1744,6 @@ export const sl = {
   "podcast.limitReached": "Za danes je poslušanja konec.",
   "podcast.newEpisode": "Nova epizoda",
   "podcast.library.back": "Nazaj na epizode",
+  "podcast.usage.remaining": "Na voljo imaš še {minutes} min poslušanja.",
   "podcast.usage.note": "Poslušanje se šteje v dnevno kvoto zvoka.",
 };

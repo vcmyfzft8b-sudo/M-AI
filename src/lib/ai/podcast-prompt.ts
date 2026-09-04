@@ -18,6 +18,7 @@
 // outside Next, where "@/" does not resolve — the same reason the tutor's prompt does it.
 import { z } from "zod";
 
+import { SPOKEN_REGISTER, SPOKEN_TEACHING, SPOKEN_WARMTH } from "./spoken-style.ts";
 import {
   PODCAST_MAX_TURN_WORDS,
   PODCAST_MIN_TURN_WORDS,
@@ -47,6 +48,20 @@ const SPOKEN_FORM = [
    */
   "Never read a list aloud. No colon followed by a run of items, and no sentence that is really five nouns in a row. When the material lists things, a person says how many there are, then gives them one at a time with a breath and a reason between — \"teh je pet. Prvi je … in ta je pomemben, ker …\" — or picks the two that matter and says why the rest are detail.",
   "One idea per sentence. A listener cannot go back a line, so a sentence that would need re-reading is a sentence that is lost.",
+  /*
+   * A guard the tutor does not need, because the tutor writes a hundred and fifty words at a
+   * time and this writes a thousand. Measured on the omrezja-sl fixture once the conversational
+   * rules below were in: the writer reached for spoken phrasing it could not finish and produced
+   * sentences that are not Slovenian — "kaj si moram tisto, na kar trenuti?" — which the
+   * synthesizer then says out loud, perfectly clearly, meaning nothing.
+   */
+  "Every sentence has to be grammatical and finished, in the material's language. Talking out loud is not the same as talking badly: a false start is fine only when the repair after it lands, and a half-sentence that never resolves is not conversational, it is something the listener has to decode. When you are not sure a colloquial turn of phrase is right, say the plain one.",
+  /*
+   * The register itself, imported rather than restated: this is how Memo AI talks out loud, and
+   * the tutor reads the same three rules from the same place. A learner who likes the way the
+   * tutor explains things should not meet a different voice one tab over.
+   */
+  ...SPOKEN_REGISTER,
 ].join(" ");
 
 /*
@@ -112,6 +127,27 @@ const GROUNDING = [
    */
   "Do not strengthen what the material says. No \"the only\", \"always\", \"never\", \"the most important\" or \"all\" unless the material itself says so, and no widening an example into a bigger claim than it makes. Emphasis is not knowledge, and the listener will repeat what you said.",
   "Keep the technical terms exactly as the material has them. Those are the words the listener will be examined on, and a friendlier synonym is not a kindness.",
+].join(" ");
+
+/*
+ * How an idea is built, which is the part of the tutor's manner that is not about sentences.
+ *
+ * A podcast can be conversational and still teach nothing — two people reacting warmly to
+ * material neither of them has explained. These are the tutor's own teaching rules, shared from
+ * spoken-style.ts, plus the one thing that changes when there is no learner to answer: nobody
+ * can be asked to say it back, so the anchor and the reason have to be carried by the script
+ * itself. The warmth rules come with them, because warmth without teaching is chat and teaching
+ * without warmth is the note read aloud — and the whole point of this feature is neither.
+ */
+const TEACHING = [
+  ...SPOKEN_TEACHING,
+  /*
+   * The one rule with no tutor equivalent. A spoken tutor closes a gap by asking the learner to
+   * explain it back; an episode is played to somebody who cannot answer, so the check has to
+   * happen inside the script — which in a two-hander is exactly what the second host is for.
+   */
+  "Nobody can be asked to explain it back here, so the understanding has to be checked inside the episode itself: the confusion is voiced, the plainer version is said out loud, and the thing everybody gets wrong is named rather than avoided.",
+  ...SPOKEN_WARMTH,
 ].join(" ");
 
 /*
@@ -259,6 +295,7 @@ export function buildPodcastScriptInstructions(params: {
     `## The show\n${FORMAT_RULES[params.format]}`,
     `## Who is speaking\n${castRules(params.genders)}`,
     `## What it is about\n${GROUNDING}`,
+    `## How it teaches, and how it sounds\n${TEACHING}`,
     `## Language\n${LANGUAGE}`,
     `## Length and shape\n${lengthRules(params.targetWords, params.speakerCount)}`,
     `## How to write for the ear\n${SPOKEN_FORM}`,

@@ -297,8 +297,15 @@ const NOTE_TABS = [
     icon: "graphic_eq",
     tint: "oklch(0.66 0.15 50)",
   },
+  {
+    id: "flashcards",
+    view: "flashcards",
+    labelKey: "note.tab.flashcards",
+    icon: "style",
+    tint: "oklch(0.66 0.15 295)",
+  },
   /*
-   * The episode, third: it is the third way of taking in the note itself — read it, have it
+   * The episode, after the cards: it is the third way of taking in the note itself — read it, have it
    * explained, or listen to it argued — and it belongs beside the walkthrough rather than among
    * the practice screens, which are about testing yourself rather than about taking it in.
    */
@@ -308,13 +315,6 @@ const NOTE_TABS = [
     labelKey: "note.tab.podcast",
     icon: "podcasts",
     tint: "oklch(0.66 0.15 20)",
-  },
-  {
-    id: "flashcards",
-    view: "flashcards",
-    labelKey: "note.tab.flashcards",
-    icon: "style",
-    tint: "oklch(0.66 0.15 295)",
   },
   { id: "quiz", view: "quiz", labelKey: "note.tab.quiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
   {
@@ -4183,6 +4183,8 @@ export function LectureWorkspace({
             `${detail.artifact?.summary ?? ""}\n${detail.artifact?.structured_notes_md ?? ""}`,
             detail.lecture.language_hint,
           )}
+          /* The usage meter belongs in the dock, beside the tutor's — it is the same meter. */
+          dockSlot={dockSlot}
         />
       );
     }

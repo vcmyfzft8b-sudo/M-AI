@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 
 import { useT } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
+import { VoiceUsageSheet } from "@/components/voice-usage-sheet";
 import { NOTE_TTS_VOICES, type NoteTtsVoice } from "@/lib/note-tts-settings";
 import {
   DEFAULT_PODCAST_FORMAT,
@@ -95,17 +96,23 @@ type PodcastEpisode = {
   createdAt: string;
 };
 
+type PodcastUsage = {
+  remainingSeconds: number;
+  limitSeconds: number;
+  usedSeconds: number;
+  creditSeconds: number;
+  hasPaidAccess: boolean;
+  hasUnlimitedUsage: boolean;
+};
+
 type PodcastStatus = {
   available: boolean;
   reason: string | null;
   language?: string;
   podcast: PodcastPayload | null;
   episodes: PodcastEpisode[];
-  tier: "paid" | "free";
-  limitSeconds: number;
-  secondsUsed: number;
-  remainingSeconds: number;
-  hasUnlimitedUsage: boolean;
+  /* The spoken tutor's allowance: one pot of minutes for every voice this app has. */
+  usage: PodcastUsage;
 };
 
 type LoadedSegment = {
@@ -160,9 +167,12 @@ export function LecturePodcast({
   lectureId,
   isReady,
   language,
+  dockSlot,
 }: {
   lectureId: string;
   isReady: boolean;
+  /* The note screen's dock, where this app keeps the controls of the screen you are on. */
+  dockSlot: HTMLElement | null;
   /** The note's own language, so voices audition in the one the episode will be in. */
   language: string;
 }) {
@@ -217,7 +227,9 @@ export function LecturePodcast({
   /* Whether the chooser is showing instead of the library. Always true when there is no library. */
   const [isChoosing, setIsChoosing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Set when a 402 says the shared listening allowance is spent. */
   const [limitReached, setLimitReached] = useState(false);
+  const [buyingCredits, setBuyingCredits] = useState(false);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [positionMs, setPositionMs] = useState(0);
@@ -535,10 +547,28 @@ export function LecturePodcast({
    * Changing the show or its length changes which episode this is, so everything about the last
    * one goes: its audio, its position, and the request that was about to fetch its next turn.
    */
+  /*
+   * The variant this screen last reset for.
+   *
+   * The effect below depends on several callbacks, and a callback that is rebuilt for any reason
+   * re-runs it — which threw away an episode that had just opened, seconds after it opened,
+   * leaving the audio playing under the library. Whether the episode changed is a question about
+   * the show and the length, not about identities, so it is asked directly.
+   */
+  const lastVariantRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!settingsRestored || !isReady) {
       return;
     }
+
+    const variant = `${format}:${length}`;
+
+    if (lastVariantRef.current === variant) {
+      return;
+    }
+
+    lastVariantRef.current = variant;
 
     stopPlayback();
     releaseSegments();
@@ -578,6 +608,13 @@ export function LecturePodcast({
       const payload = (await response.json().catch(() => null)) as
         | { podcast?: PodcastPayload; error?: string }
         | null;
+
+      if (response.status === 402) {
+        setIsWriting(false);
+        setLimitReached(true);
+        setError(payload?.error ?? t("podcast.limitReached"));
+        return;
+      }
 
       if (!response.ok || !payload?.podcast) {
         setIsWriting(false);
@@ -728,9 +765,7 @@ export function LecturePodcast({
           | null;
 
         if (!response.ok) {
-          if (payload?.code === "tts_daily_limit_reached") {
-            setLimitReached(true);
-          }
+  
 
           throw new Error(payload?.error ?? t("podcast.error.audio"));
         }
@@ -1000,6 +1035,33 @@ export function LecturePodcast({
     setPositionMs(0);
   }
 
+  /**
+   * Buys an hour of listening time.
+   *
+   * The tutor's endpoint, deliberately: the hour is one hour of spoken audio, spendable on either
+   * feature, and offering two purchases for one pot of minutes would be charging for a
+   * distinction that does not exist.
+   */
+  async function buyCredits() {
+    setBuyingCredits(true);
+
+    try {
+      const response = await fetch("/api/billing/tutor-credits", { method: "POST" });
+      const payload = (await response.json().catch(() => null)) as
+        | { url?: string; error?: string }
+        | null;
+
+      if (!response.ok || !payload?.url) {
+        throw new Error(payload?.error ?? t("tutor.error.creditsFailed"));
+      }
+
+      window.location.href = payload.url;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("tutor.error.creditsFailed"));
+      setBuyingCredits(false);
+    }
+  }
+
   function chooseFormat(next: PodcastFormat) {
     setFormat(next);
     writeStored(PODCAST_FORMAT_STORAGE_KEY, next);
@@ -1207,6 +1269,13 @@ export function LecturePodcast({
 
   return (
     <div className="memo-podcast">
+      <VoiceUsageSheet
+        usage={status?.usage ?? null}
+        dockSlot={dockSlot}
+        blocked={limitReached}
+        buyingCredits={buyingCredits}
+        onBuyCredits={() => void buyCredits()}
+      />
       {/* One element for the whole episode: turns are swapped into it as they are reached. */}
       {(["a", "b"] as const).map((slot) => (
         <audio
@@ -1306,7 +1375,6 @@ export function LecturePodcast({
             </p>
           ) : null}
 
-          {limitReached ? <p className="memo-inline-error">{t("podcast.limitReached")}</p> : null}
           {error ? <p className="memo-inline-error">{error}</p> : null}
 
           <div className="memo-podcast-footer">
@@ -1467,7 +1535,7 @@ export function LecturePodcast({
               {speakerCount === 2 ? voiceRow("b") : null}
             </div>
 
-            {error ? <p className="memo-inline-error">{error}</p> : null}
+              {error ? <p className="memo-inline-error">{error}</p> : null}
 
             <button type="button" className="memo-podcast-start" onClick={() => void requestScript()}>
               <Msym name="graphic_eq" size="1.2rem" fill={false} weight={500} />
@@ -1495,8 +1563,12 @@ export function LecturePodcast({
           </div>
           )}
 
-          {status && !status.hasUnlimitedUsage ? (
-            <p className="memo-podcast-hint">{t("podcast.usage.note")}</p>
+          {status?.usage && !status.usage.hasUnlimitedUsage ? (
+            <p className="memo-podcast-hint">
+              {t("podcast.usage.remaining", {
+                minutes: Math.max(0, Math.floor(status.usage.remainingSeconds / 60)),
+              })}
+            </p>
           ) : null}
         </>
       )}

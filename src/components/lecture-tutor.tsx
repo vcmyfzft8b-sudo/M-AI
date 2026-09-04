@@ -1,12 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { createPortal } from "react-dom";
 
-import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
-import { sheetClass, useSheet } from "@/components/use-sheet";
 import { useT } from "@/components/i18n-provider";
+import { VoiceUsageSheet } from "@/components/voice-usage-sheet";
 import { readChatStream } from "@/lib/chat-stream-client";
 import { pillNeighbourhoodScrollTarget } from "@/lib/tab-scroll";
 import {
@@ -168,55 +166,6 @@ function readStoredVoice(): NoteTtsVoice {
   }
 }
 
-/**
- * A usage bar whose number stays readable wherever the fill happens to end.
- *
- * The label sits across the whole bar, so at 40% it straddles two very different
- * backgrounds — a bright fill on one side, the bare track on the other — and any single
- * colour is wrong on one of them. So it is drawn twice: once in the theme's own text
- * colour, and once in near-black clipped to exactly the filled width and laid over the
- * top. The seam falls on the fill's own edge, so it reads as one number that changes
- * colour where the bar does.
- *
- * The clipped copy is always dark because the fill is bright in both themes. The copy
- * underneath is `var(--text)`, and that is what makes this work in light mode: there the
- * track is pale and wants dark text, and the token already says so.
- */
-function UsageBar({
-  percent,
-  label,
-  ariaLabel,
-  className,
-}: {
-  percent: number;
-  label: string;
-  ariaLabel: string;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`note-read-usage-bar memo-tutor-bar ${className ?? ""}`.trim()}
-      role="progressbar"
-      aria-label={ariaLabel}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={percent}
-      aria-valuetext={label}
-    >
-      <span className="note-read-usage-fill" style={{ width: `${percent}%` }} />
-      <span className="memo-tutor-bar-label on-track" aria-hidden="true">
-        {label}
-      </span>
-      <span
-        className="memo-tutor-bar-label on-fill"
-        aria-hidden="true"
-        style={{ clipPath: `inset(0 ${100 - percent}% 0 0)` }}
-      >
-        {label}
-      </span>
-    </div>
-  );
-}
 
 export function LectureTutor({
   lectureId,
@@ -257,7 +206,6 @@ export function LectureTutor({
   const [usage, setUsage] = useState<TutorUsage | null>(null);
   const [blocked, setBlocked] = useState<TutorBlock | null>(null);
   const [buyingCredits, setBuyingCredits] = useState(false);
-  const [isUsageOpen, setUsageOpen] = useState(false);
   const [speed, setSpeed] = useState<TutorSpeed>(DEFAULT_TUTOR_SPEED);
   const speedRef = useRef<TutorSpeed>(DEFAULT_TUTOR_SPEED);
   /*
@@ -461,21 +409,6 @@ export function LectureTutor({
   }, [heard]);
 
   const voiceRowRef = useRef<HTMLDivElement | null>(null);
-  const usageMenuRef = useRef<HTMLDetailsElement | null>(null);
-
-  /*
-   * The same sheet read-aloud's quota uses — a popover on desktop, a dragged sheet on the
-   * phone — because it answers the same question in the same place, and a second kind of
-   * meter for a second metered feature is just a thing to learn twice.
-   */
-  const closeUsageMenu = useCallback(() => {
-    setUsageOpen(false);
-
-    if (usageMenuRef.current) {
-      usageMenuRef.current.open = false;
-    }
-  }, []);
-  const usageSheet = useSheet(closeUsageMenu);
 
   useEffect(() => {
     setVoice(readStoredVoice());
@@ -1783,214 +1716,42 @@ export function LectureTutor({
   }
 
   /*
-   * The bar shows what is *left* rather than what is gone, because that is the question
-   * somebody glancing at it is asking. Read-aloud's classes, so the two meters are the
-   * same object in two places rather than two things that look nearly alike.
+   * The speed control belongs to the tutor rather than to the meter, so it is handed to the
+   * shared sheet as its own settings rather than built into it — the podcast's copy of the same
+   * sheet carries different ones in the same place.
    */
-  /*
-   * The daily bar measures the *daily* allowance, which is not what `remainingSeconds`
-   * counts — that includes topped-up time, so a day nearly spent with an hour in the bank
-   * showed a full bar. Credits have their own bar precisely because they are not this.
-   */
-  const dailyRemainingSeconds = usage ? Math.max(usage.limitSeconds - usage.usedSeconds, 0) : 0;
-  const remainingPercent = usage
-    ? usage.hasUnlimitedUsage
-      ? 100
-      : usage.limitSeconds > 0
-        ? Math.min(100, Math.max(0, Math.round((dailyRemainingSeconds / usage.limitSeconds) * 100)))
-        : 0
-    : 100;
-  /* Red only when nothing is left anywhere — a spent day with credits in hand is fine. */
-  const isOutOfTime = Boolean(usage && !usage.hasUnlimitedUsage && usage.remainingSeconds <= 0);
-  /*
-   * A share, never a number of minutes.
-   *
-   * How long somebody has left is a fact about the plan, and putting it on the bar invites
-   * the arithmetic — is half an hour a lot? is a minute mean? — instead of the glance it is
-   * there for. Read-aloud shows a percentage for the same reason, and this is the same meter.
-   */
-  const barLabel = !usage ? "" : usage.hasUnlimitedUsage ? "∞" : `${remainingPercent}%`;
-  /*
-   * Bought time, measured against the hours it was bought in. `remaining` alone has no
-   * scale — 20 minutes could be a lot or nothing — so the denominator is the whole hours
-   * being held, which is exactly what was paid for.
-   */
-  const creditHours = usage ? Math.max(1, Math.ceil(usage.creditSeconds / 3600)) : 1;
-  const creditPercent = usage
-    ? Math.min(100, Math.max(0, Math.round((usage.creditSeconds / (creditHours * 3600)) * 100)))
-    : 0;
-  const creditLabel = usage ? `${Math.floor(usage.creditSeconds / 60)} min` : "";
-
-  const triggerLabel = !usage
-    ? ""
-    : usage.hasUnlimitedUsage
-      ? t("tutor.usage.unlimited")
-      : `${remainingPercent}%`;
-
-  const usageContent = usage ? (
-    <>
-      {/* `data-drag-handle` is what lets a drag start here: useSheet ignores pointers that
-          land on a button unless the button is the grabber. */}
-      <button
-        type="button"
-        data-drag-handle="true"
-        className="mobile-sheet-drag-handle note-read-usage-drag-handle"
-        aria-label={t("folders.dragToClose")}
-      />
-      <div className="memo-tutor-usage-heading">{t("tutor.usage.title")}</div>
-      <UsageBar percent={remainingPercent} label={barLabel} ariaLabel={t("tutor.usage.title")} />
-      <div className="note-read-usage-reset">
-        {usage.hasUnlimitedUsage
-          ? t("tutor.usage.unlimited")
-          : usage.hasPaidAccess
-            ? t("tutor.usage.resetsAt")
-            : t("tutor.usage.freeHint")}
+  const speedSetting = (
+    <div className="note-read-setting-group">
+      <span className="note-read-setting-label">{t("tutor.speed")}</span>
+      <div className="note-read-rate-options" role="group" aria-label={t("tutor.speed")}>
+        {TUTOR_SPEEDS.map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={`note-read-rate-option ${speed === option ? "active" : ""}`.trim()}
+            onClick={() => chooseSpeed(option)}
+          >
+            {option}x
+          </button>
+        ))}
       </div>
-
-      {/*
-        * Topped-up time gets its own bar, stacked straight under the daily one so the two
-        * read as a pair. They are different things — the daily allowance refills at midnight
-        * whatever you do, and this only ever goes down — so folding them into one bar would
-        * give it two unrelated reasons to move. Different colour for the same reason, and
-        * scaled to the whole hours held, because an hour is what a purchase is.
-        */}
-      {usage.creditSeconds > 0 ? (
-        <>
-          <div className="memo-tutor-usage-subheading">{t("tutor.usage.creditsTitle")}</div>
-          <UsageBar
-            percent={creditPercent}
-            label={creditLabel}
-            ariaLabel={t("tutor.usage.creditsTitle")}
-            className="memo-tutor-credit-bar"
-          />
-          <div className="note-read-usage-reset">{t("tutor.usage.creditsNote")}</div>
-        </>
-      ) : null}
-
-      <div className="note-read-settings-divider" />
-      <div className="note-read-setting-group">
-        <span className="note-read-setting-label">{t("tutor.speed")}</span>
-        <div className="note-read-rate-options" role="group" aria-label={t("tutor.speed")}>
-          {TUTOR_SPEEDS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              className={`note-read-rate-option ${speed === option ? "active" : ""}`.trim()}
-              onClick={() => chooseSpeed(option)}
-            >
-              {option}x
-            </button>
-          ))}
-        </div>
-      </div>
-
-
-      {/*
-        * The offer lives in the same sheet as the number that explains why it is being
-        * made. Shown once there is nothing left, whether they came here by running out
-        * mid-session or by opening the meter to see how much was gone.
-        */}
-      {isOutOfTime || blocked ? (
-        <>
-          <div className="note-read-settings-divider" />
-          <div className="memo-tutor-offer">
-            <h2>
-              {t(
-                usage.hasPaidAccess
-                  ? "tutor.paywall.creditsTitle"
-                  : "tutor.paywall.trialTitle",
-              )}
-            </h2>
-            <p>
-              {t(
-                usage.hasPaidAccess ? "tutor.paywall.creditsBody" : "tutor.paywall.trialBody",
-              )}
-            </p>
-            {usage.hasPaidAccess ? (
-              <button
-                type="button"
-                className="memo-tutor-start"
-                disabled={buyingCredits}
-                onClick={() => void buyCredits()}
-              >
-                {buyingCredits ? t("tutor.paywall.creditsPending") : t("tutor.paywall.creditsCta")}
-              </button>
-            ) : (
-              <a className="memo-tutor-start" href="/app/settings">
-                {t("tutor.paywall.trialCta")}
-              </a>
-            )}
-          </div>
-        </>
-      ) : null}
-    </>
-  ) : null;
-
-  /*
-   * The pill that opens it, portalled into the note screen's dock — the same floating bar
-   * the listen pill uses on the note itself. Keeping it there rather than in the column
-   * means it does not move as the screen changes between idle, preparing and speaking, and
-   * it is reachable with a thumb while the tutor is talking.
-   */
-  /*
-   * The pill is part of the screen rather than something that arrives with the numbers, so it
-   * is drawn the moment the tutor is opened and fills in when the allowance lands. Waiting for
-   * the fetch made it pop into the dock a second late, which reads as a layout bug.
-   */
-  const usagePlaceholder = dockSlot ? (
-    <span className="memo-tutor-usage-menu">
-      <span className="memo-tutor-usage-trigger is-loading" aria-hidden="true">
-        <Msym name="schedule" size="1.05rem" fill={false} weight={500} />
-        <span className="memo-tutor-usage-pending" />
-      </span>
-    </span>
-  ) : null;
-
-  const usageMeter =
-    usage && dockSlot ? (
-      <>
-        <details
-          ref={usageMenuRef}
-          className={`memo-tutor-usage-menu ${isOutOfTime ? "limit" : ""}`.trim()}
-          onToggle={(event) => setUsageOpen(event.currentTarget.open)}
-        >
-          <summary className="memo-tutor-usage-trigger">
-            <Msym name="schedule" size="1.05rem" fill={false} weight={500} />
-            <span>{triggerLabel}</span>
-          </summary>
-          <div className="note-read-usage-popover note-read-usage-inline-popover">
-            {usageContent}
-          </div>
-        </details>
-
-        {isUsageOpen ? (
-          <MemoPortal>
-            <button
-              type="button"
-              className={sheetClass("note-read-usage-mobile-backdrop", usageSheet.closing)}
-              onClick={() => usageSheet.dismiss()}
-              aria-label={t("common.close")}
-            />
-            <div
-              className={sheetClass(
-                "note-read-usage-popover note-read-usage-mobile-sheet",
-                usageSheet.closing,
-              )}
-              role="dialog"
-              aria-modal="true"
-              aria-label={t("tutor.usage.title")}
-              {...usageSheet.dragProps}
-            >
-              {usageContent}
-            </div>
-          </MemoPortal>
-        ) : null}
-      </>
-    ) : null;
+    </div>
+  );
 
   return (
     <>
-      {dockSlot ? createPortal(usageMeter ?? usagePlaceholder, dockSlot) : null}
+      {/*
+        * One meter for both spoken features. The tutor and the podcast spend the same minutes,
+        * so they show them with the same object rather than two that drift apart.
+        */}
+      <VoiceUsageSheet
+        usage={usage}
+        dockSlot={dockSlot}
+        blocked={Boolean(blocked)}
+        buyingCredits={buyingCredits}
+        onBuyCredits={() => void buyCredits()}
+        extra={speedSetting}
+      />
       <div
         className={`memo-tutor phase-${phase}`}
       style={{ "--tutor-hue": voiceHue(previewVoice ?? voice) } as CSSProperties}

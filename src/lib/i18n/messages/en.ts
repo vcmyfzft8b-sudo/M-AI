@@ -1715,5 +1715,6 @@ export const en: Messages = {
   "podcast.limitReached": "That's your listening for today.",
   "podcast.newEpisode": "New episode",
   "podcast.library.back": "Back to episodes",
+  "podcast.usage.remaining": "You have {minutes} min of listening left.",
   "podcast.usage.note": "Listening counts towards your daily audio allowance.",
 };

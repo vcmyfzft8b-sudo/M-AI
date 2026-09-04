@@ -18,6 +18,7 @@
 // where "@/" does not resolve.
 import { z } from "zod";
 
+import { SPOKEN_REGISTER } from "./spoken-style.ts";
 import { TUTOR_IDENTITY } from "./tutor-prompt.ts";
 
 /*
@@ -92,9 +93,7 @@ const SPOKEN_FORM = [
    * constructions the judge actually kept quoting are named, and the general rule sits behind
    * them rather than in front.
    */
-  "Two constructions belong to written language and are never said out loud. Do not use them, in any language. First, a clause hung on the end of a sentence to carry a second thought — \"pri čemer\" in Slovenian, \"whereby\" in English, whatever it is in theirs. Say two sentences instead. Second, counting through a list by relative pronoun — \"od katerih vsaka\", \"each of which\". Start a new sentence and use a plain verb.",
-  "Behind those two, the same rule: where the written form of the language would reach for a participle, a passive, or a stack of nouns, use a plain verb and a full stop. Their material is written; you are not.",
-  "This is not dialect and not slang — how an educated person talks out loud, not how they write, and nothing regional. Technical terms, names and anything they will be examined on stay exactly as their material has them.",
+  ...SPOKEN_REGISTER,
   "Never narrate what you are doing. Do not say \"in this segment\", \"let me explain\", \"as mentioned above\", \"in conclusion\", or announce a heading before speaking it.",
 ];
 

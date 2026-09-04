@@ -90,6 +90,60 @@ test("one word of the learner's own is enough to break an echo", () => {
   assert.equal(isTutorEcho("mitohondrij je počakaj", TUTOR_SAID), false);
 });
 
+test("an ending the recognizer heard differently is still the tutor's word", () => {
+  /*
+   * The reported failure. A speaker's voice comes back with its case endings mangled — Slovenian
+   * carries them on the last letter or two — and containment cannot see past that, because
+   * neither "elektrarno" nor "elektrarna" sits inside the other. One word like that used to rule
+   * the whole utterance a learner's and stop the lesson mid-sentence.
+   */
+  assert.equal(isTutorEcho("mitohondrij je elektrarno celice", TUTOR_SAID), true);
+  assert.equal(isTutorEcho("mitohondriju je elektrarni celici", TUTOR_SAID), true);
+});
+
+test("words that merely start alike are still different words", () => {
+  // The slack forgives an ending, not a stem: a learner asking about something else that happens
+  // to begin the same way must still be heard.
+  assert.equal(isTutorEcho("razlika", TUTOR_SAID), false);
+  assert.equal(isTutorEcho("energijo porabi kdo", TUTOR_SAID), false);
+});
+
+const TUTOR_SAID_AT_LENGTH =
+  "Mitohondrij je elektrarna celice, ker v njem nastaja energija, ki jo potem porabi vse " +
+  "drugo v telesu, od mišic do možganov, in prav zato ga imenujemo elektrarna";
+
+test("a stray word in a whole leaked paragraph does not stop the lesson", () => {
+  /*
+   * Several seconds of speaker audio come back with the odd word invented. Ruling that an
+   * interruption is what stopped a real session — so a long utterance forgives a small share of
+   * strangers, where a short one forgives none.
+   */
+  assert.equal(
+    isTutorEcho(
+      "mitohondrij je elektrarna celice ker v njem nastaja energija ki jo potem porabi vse drugo v telesu televizor",
+      TUTOR_SAID_AT_LENGTH,
+    ),
+    true,
+  );
+});
+
+test("a long utterance that is mostly the learner's own words is theirs", () => {
+  // The slack is a small share, not a licence: this is somebody talking, and it must get through.
+  assert.equal(
+    isTutorEcho(
+      "mitohondrij je elektrarna ampak počakaj nisem razumel zakaj se to sploh dogaja v celici",
+      TUTOR_SAID_AT_LENGTH,
+    ),
+    false,
+  );
+});
+
+test("a short interruption never gets the benefit of the doubt", () => {
+  // Below eight words the tutor still yields on one word of the learner's — unchanged.
+  assert.equal(isTutorEcho("mitohondrij je počakaj", TUTOR_SAID), false);
+  assert.equal(isTutorEcho("elektrarna počakaj", TUTOR_SAID), false);
+});
+
 test("nothing is echo while the tutor's voice is not in the room", () => {
   // What the learner says in their own turn is never measured against the tutor.
   assert.equal(isTutorEcho("mitohondrij je elektrarna celice", ""), false);

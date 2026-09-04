@@ -250,6 +250,21 @@
   box-sizing: border-box;
 }
 
+/* No scrollbar is ever drawn, anywhere. Every surface here scrolls — the page,
+   the sheets, the chip rows — and a native bar sliding in over the edge of a
+   card is the one piece of chrome the design never accounts for. Scrolling
+   itself is untouched: wheel, trackpad, touch, keyboard and programmatic
+   scrolling all still work. Both properties are needed — `scrollbar-width`
+   covers Firefox and Chrome 121+, the pseudo-element covers Safari and older
+   Chrome. Anything that wants a visible bar back has to out-specify this. */
+* {
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+}
+
 html {
   overscroll-behavior-y: none;
   scroll-behavior: smooth;
@@ -1339,11 +1354,6 @@ a:visited {
   min-height: 0;
   padding: clamp(2.5rem, 6vh, 5rem) 0 0.75rem;
   overflow: hidden;
-  scrollbar-width: none;
-}
-
-.memo-onboarding-content::-webkit-scrollbar {
-  display: none;
 }
 
 .memo-onboarding-kicker {
@@ -1900,11 +1910,6 @@ a:visited {
   -webkit-overflow-scrolling: touch;
   cursor: grab;
   user-select: none;
-  scrollbar-width: none;
-}
-
-.memo-onboarding-home-screen::-webkit-scrollbar {
-  display: none;
 }
 
 .memo-onboarding-home-screen.dragging {
@@ -3863,7 +3868,6 @@ select:disabled {
   min-height: 0;
   padding-inline: 0.35rem;
   overflow-y: auto;
-  scrollbar-width: thin;
   display: grid;
   align-content: start;
 }
@@ -3998,19 +4002,13 @@ select:disabled {
   scroll-padding-inline: 0.05rem;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
-}
-
-.note-source-photo-grid::-webkit-scrollbar {
-  height: 0.4rem;
-}
-
-.note-source-photo-grid::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--secondary-label) 38%, transparent);
-}
-
-.note-source-photo-grid::-webkit-scrollbar-track {
-  background: transparent;
+  /* With no scrollbar drawn, a photo cut in half by the right edge reads as a
+     cropped layout rather than as more to scroll. Fading that edge says "there
+     is more here" with no chrome to draw — the same device the chip and voice
+     rows use. The row is left-aligned, so with only a photo or two nothing
+     reaches the fade and it stays invisible until the row actually overflows. */
+  mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
 }
 
 .note-source-photo-preview {
@@ -4759,7 +4757,6 @@ select:disabled {
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
 }
 
 .library-folder-menu-secondary {
@@ -5061,7 +5058,6 @@ select:disabled {
   min-height: 0;
   padding-right: 0.35rem;
   overflow-y: auto;
-  scrollbar-width: thin;
 }
 
 .library-folder-modal-actions {
@@ -5086,7 +5082,6 @@ select:disabled {
   max-height: 11rem;
   padding-right: 0.2rem;
   overflow-y: auto;
-  scrollbar-width: thin;
 }
 
 .library-folder-modal-folder-option {
@@ -9563,7 +9558,6 @@ select:disabled {
   min-height: 0;
   overflow-y: auto;
   padding: 1.3rem 1.35rem 1rem;
-  scrollbar-width: thin;
 }
 
 .lecture-chat-thread {
@@ -15123,12 +15117,6 @@ select:disabled {
 .college-live-note-scroll .lecture-notes-card {
   min-height: 0;
   overflow-y: auto;
-  /* No scrollbar: it would sit in frame for the whole recording. */
-  scrollbar-width: none;
-}
-
-.college-live-note-scroll .lecture-notes-card::-webkit-scrollbar {
-  display: none;
 }
 
 /* Key phrases the write-up marks as it finishes them. Green comes from the

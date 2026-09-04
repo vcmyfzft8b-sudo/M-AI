@@ -1,0 +1,346 @@
+[
+  {
+    "arm": "glm-proof",
+    "kind": "teach",
+    "language": "sl",
+    "written": "Predstavljaj si pošiljanje paketa kot pošiljanje pisma. Zanje ni dovolj, da ga vržeš v poštni predal — moraš vedeti, kako ga zapišeš, naslavljaš, prevažaš. Prav takšno delo razbije model OSI na sedem plasti. Vsaka plast opravi svojo nalogo in nudi storitve plasti nad seboj. Od spodaj navzgor: fizična plast prenaša surove bite po kablu — napetostne nivoje, hitrost, konektor. Povezavna skrbi za okvirje med sosednjima napravama in za zaznavanje napak, tu se uporablja naslov MAC. Omrežna usmerja pakete med različnimi omrežji — tu deluje IP. Transportna zagotavlja prenos med končnima točkama, tam sta TCP in UDP. Sejna vzpostavlja in zaključuje seje med aplikacijama. Predstavitvena skrbi za obliko zapisa podatkov in šifriranje. In aplikacijska je najbližje uporabniku — to so HTTP, FTP, SMTP. Ta model je temelj vsega nadaljnjega, zato ga je vredno znati na pamet. Zdaj pa ti poskusim zaupati: povej mi svojimi besedami, kaj počneta povezavna in omrežna plast in zakaj ju ni mogoče zamenjati.",
+    "spoken": "Predstavljaj si pošiljanje paketa kot pošiljanje pisma. Zanje ni dovolj, da ga vržeš v poštni predal — moraš vedeti, kako ga zapišeš, naslavljaš, prevažaš. Prav takšno delo razbije model OSI na sedem plasti. Vsaka plast opravi svojo nalogo in nudi storitve plasti nad seboj. Od spodaj navzgor: fizična plast prenaša surove bite po kablu — napetostne nivoje, hitrost, konektor. Povezavna plast skrbi za okvirje med sosednjima napravama in za zaznavanje napak, tu se uporablja naslov MAC. Omrežna plast usmerja pakete med različnimi omrežji — tu deluje IP. Transportna zagotavlja prenos med končnima točkama, tam sta TCP in UDP. Sejna vzpostavlja in zaključuje seje med aplikacijama. Predstavitvena skrbi za obliko zapisa podatkov in šifriranje. In aplikacijska je najbližje uporabniku — to so HTTP, FTP, SMTP. Ta model je temelj vsega nadaljnjega, zato ga je vredno znati na pamet. Zdaj pa ti poskusim zaupati: povej mi svojimi besedami, kaj počneta povezavna in omrežna plast in zakaj ju ni mogoče zamenjati.",
+    "words": 158,
+    "firstTokenMs": 1757,
+    "firstSpokenMs": 2684,
+    "writtenMs": 6512,
+    "totalMs": 6603,
+    "stats": {
+      "units": 9,
+      "outcomes": {
+        "corrected": 2,
+        "unchanged": 7,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 734
+    },
+    "grade": {
+      "errors": [
+        {
+          "text": "Zanje",
+          "kind": "agreement",
+          "correction": "Zanj"
+        }
+      ],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "teach",
+    "language": "sl",
+    "written": "Predstavljaj si pošto. Tvoje pismo gre skozi več stopenj: napišeš ga, ovije v kuverk, na njega napišeš naslov, poštar ga pelje, kamion ga prevaža, in na koncu prejemnik odpre kuvert. Računalniška komunikacija dela enako, samo uradno se ta razdelitev imenuje model OSI. To je referenčni model, ki komunikacijo razdeli na sedem plasti. Vsaka plast opravlja svojo nalogo in nudi storitve plasti nad seboj. Od spodaj navzgor: fizična plast prenaša surove bite po kabelskem ali brezžičnem mediju. Povezavna plast skrbi za okvirje med sosednjima napravama in za zaznavanje napak, tu se uporablja naslov MAC. Omrežna plast usmerja pakete med različnimi omrežji, tu deluje naslov IP. Transportna plast zagotavlja prenos med končnima točkama, torej med programa in programom. Sejna plast vzpostavlja in zaključuje seje. Predstavitvena plast skrbi za zapis podatkov in šifriranje. Aplikacijska plast pa je najbližje uporabniku in nudi storitve, kot so HTTP ali FTP. Zakaj je to pomembno? Ker se bomo v vseh naslednjih temah vedno vračali k tem plasti, na primer usmerjevalnik deluje na omrežni plasti, stikalo na povezavni. Preden gremo naprej — lahko mi te sedem plasti povedaš v svojih besedah, od spodaj navzgor?",
+    "spoken": "Predstavljaj si pošto. Tvoje pismo gre skozi več stopenj: napišeš ga, oviješ v kuverto, nanj napišeš naslov, poštar ga pelje, kamion ga prevaža, in na koncu prejemnik odpre kuverto. Računalniška komunikacija dela enako, samo uradno se ta razdelitev imenuje model OSI. To je referenčni model, ki komunikacijo razdeli na sedem plasti. Vsaka plast opravlja svojo nalogo in nudi storitve plasti nad seboj. Od spodaj navzgor: fizična plast prenaša surove bite po kabelskem ali brezžičnem mediju. Povezovalna plast skrbi za okvirje med sosednjima napravama in za zaznavanje napak, tu se uporablja naslov MAC. Omrežna plast usmerja pakete med različnimi omrežji, tu deluje naslov IP. Transportna plast zagotavlja prenos med končnima točkama, torej med programom in programom. Sejna plast vzpostavlja in zaključuje seje. Predstavitvena plast skrbi za zapis podatkov in šifriranje. Aplikacijska plast pa je najbližje uporabniku in nudi storitve, kot sta HTTP ali FTP. Zakaj je to pomembno? Ker se bomo v vseh naslednjih temah vedno vračali k tem plasti, na primer usmerjevalnik deluje na omrežni plasti, stikalo na povezavni. Preden gremo naprej — lahko mi teh sedem plasti poveš v svojih besedah, od spodaj navzgor?",
+    "words": 185,
+    "firstTokenMs": 836,
+    "firstSpokenMs": 2340,
+    "writtenMs": 5428,
+    "totalMs": 5917,
+    "stats": {
+      "units": 11,
+      "outcomes": {
+        "corrected": 5,
+        "unchanged": 6,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 674
+    },
+    "grade": {
+      "errors": [
+        {
+          "text": "k tem plasti",
+          "kind": "wrong-form",
+          "correction": "k tem plastem"
+        }
+      ],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "teach",
+    "language": "sl",
+    "written": "Predstavljaj si, da pošiljaš pismo po pošti. Ni pomembno samo, kam ga prilepiš — nekdo mora listino prepeljati, nekdo drug poskrbeti za naslov, nekdo še za jezik, ki ga prejemnik razume. Ravno tako deluje model OSI. To je referenčni model, ki komunikacijo v omrežju razdeli na sedem plasti, od spodaj navzgor: fizična, povezavna, omrežna, transportna, sejna, predstavitvena in aplikacijska. Vsaka plast opravlja svojo nalogo in nudi storitve plasti nad seboj — torej spodnja dela ",
+    "spoken": "Predstavljaj si, da pošiljaš pismo po pošti. Ni pomembno samo, kam ga prilepiš — nekdo mora listino prepeljati, nekdo drug poskrbeti za naslov, nekdo še za jezik, ki ga prejemnik razume. Ravno tako deluje model OSI. To je referenčni model, ki komunikacijo v omrežju razdeli na sedem plasti, od spodaj navzgor: fizična, povezavna, omrežna, transportna, sejna, predstavitvena in aplikacijska. Vsaka plast opravlja svojo nalogo in nudi storitve plasti nad seboj — torej spodnja dela ",
+    "words": 74,
+    "firstTokenMs": 917,
+    "firstSpokenMs": 1595,
+    "writtenMs": 2585,
+    "totalMs": 3291,
+    "stats": {
+      "units": 4,
+      "outcomes": {
+        "corrected": 0,
+        "unchanged": 4,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 602
+    },
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "teach",
+    "language": "sl",
+    "written": "Predstavljaj si pošiljanje pisma. Ti napišeš vsebino, nekdo ga zapakira, nekdo ga prevozi, nekdo ga na koncu odpre. Model OSI dela natanko to isto, samo z podatki v omrežju. Razdeli komunikacijo na sedem plasti, od spodaj navzgor: fizična, povezavna, omrežna, transportna, sejna, predstavitvena in aplikacijska. Vsaka plast opravlja svojo nalogo in nudi storitve plasti nad seboj, tako da se plasti med sabo ne mešajo. Fizična plast pošilja surove bite po kblu, torej žico ali valove. Povezavna skrbi za okvirje med sosednjima napravama in zaznava napake. Omrežna usmerja pakete med različnimi omrežji. Transportna zagotavlja prenos med končnima točkama, sejna upravlja seje, predstavitvena skrbi za zapis podatkov in šifriranje, aplikacijska pa je najbližje uporabniku in nudi storitve, kot sta HTTP in FTP. To je temelj, na katerem stoji ves preostanek te snovi. Preden gremo naprej: kako bi ti to v svojih besedah povedal nazaj?",
+    "spoken": "Predstavljaj si pošiljanje pisma. Ti napišeš vsebino, nekdo ga zapakira, nekdo ga prevozi, nekdo ga na koncu odpre. Model OSI dela natanko to isto, samo s podatki v omrežju. Razdeli komunikacijo na sedem plasti, od spodaj navzgor: fizična, povezavna, omrežna, transportna, sejna, predstavitvena in aplikacijska. Vsaka plast opravlja svojo nalogo in nudi storitve plasti nad seboj, tako da se plasti med sabo ne mešajo. Fizična plast pošilja surove bite po kablu, torej žico ali valove. Povezavna skrbi za okvirje med sosednjima napravama in zaznava napake. Omrežna usmerja pakete med različnimi omrežji. Transportna zagotavlja prenos med končnima točkama, sejna upravlja seje, predstavitvena skrbi za zapis podatkov in šifriranje, aplikacijska pa je najbližje uporabniku in nudi storitve, kot sta HTTP in FTP. To je temelj, na katerem stoji ves preostanek te snovi. Preden gremo naprej: kako bi ti to v svojih besedah povedal nazaj?",
+    "words": 142,
+    "firstTokenMs": 1104,
+    "firstSpokenMs": 2128,
+    "writtenMs": 14296,
+    "totalMs": 15031,
+    "stats": {
+      "units": 7,
+      "outcomes": {
+        "corrected": 2,
+        "unchanged": 5,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 884
+    },
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "teach",
+    "language": "sl",
+    "written": "Predstavljaj si poštno pošiljko. Da pride pismo do naslovnika, se mora prebiti skozi več stopenj: nekdo ga napiše, nekdo ga zapakira, pošta ga usmerja, dostavljalec ga pelje po ulici. Model OSI deluje natanko tako — komunikacijo v omrežju razdeli na sedem plasti, vsaka opravlja svojo nalogo in nudi storitve plasti nad seboj. Gremo od spodaj. Fizična plast pošilja surove bite po kabelski ali brezžični povezavi — napetosti, hitrost, konektor. Povezavna plast skrbi za okvirje med sosednjima napravama in zaznava napake; tu se uporablja naslov MAC. Omrežna plast usmerja pakete med različnimi omrežji, tu deluje IP. Transportna plast zagotavlja prenos med končnima točkama — to sta TCP in UDP. Sejna plast vzpostavlja in zaključuje seje med aplikacijama, predstavitvena skrbi za zapis podatkov in šifriranje, aplikacijska pa nudi storitve aplikacijam, na primer HTTP. Ta model je temelj vsega, kar sledi — usmerjevalnik recimo deluje na omrežni plasti, stikalo na povezavni. Prej smo ga poskusili: povej mi svojimi besedami, kaj počneta fizična in povezavna plast?",
+    "spoken": "Predstavljaj si poštno pošiljko. Da pride pismo do naslovnika, se mora prebiti skozi več stopenj: nekdo ga napiše, nekdo ga zapakira, pošta ga usmerja, dostavljalec ga pelje po ulici. Model OSI deluje natanko tako — komunikacijo v omrežju razdeli na sedem plasti, vsaka opravlja svojo nalogo in nudi storitve plasti nad seboj. Gremo od spodaj. Fizična plast pošilja surove bite po kabelski ali brezžični povezavi — napetosti, hitrost, konektor. Povezavna plast skrbi za okvirje med sosednjima napravama in zaznava napake; tu se uporablja naslov MAC. Omrežna plast usmerja pakete med različnimi omrežji, tu deluje IP. Transportna plast zagotavlja prenos med končnima točkama — to sta TCP in UDP. Sejna plast vzpostavlja in zaključuje seje med aplikacijama, predstavitvena skrbi za zapis podatkov in šifriranje, aplikacijska pa nudi storitve aplikacijam, na primer HTTP. Ta model je temelj vsega, kar sledi — usmerjevalnik recimo deluje na omrežni plasti, stikalo na povezavni. Prej smo ga poskusili: povej mi svojimi besedami, kaj počneta fizična in povezavna plast?",
+    "words": 162,
+    "firstTokenMs": 733,
+    "firstSpokenMs": 2055,
+    "writtenMs": 4341,
+    "totalMs": 4786,
+    "stats": {
+      "units": 9,
+      "outcomes": {
+        "corrected": 0,
+        "unchanged": 9,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 1169
+    },
+    "grade": {
+      "errors": [
+        {
+          "text": "svojimi besedami",
+          "kind": "other",
+          "correction": "s svojimi besedami"
+        }
+      ],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "answer",
+    "language": "sl",
+    "written": "V redu, najpreprosteje, kot bi ti razložil, kako pošiljamo pismo. Predstavljaj si, da ti napišeš pismo prijatelju. To je aplikacijska plast, torej tisto, kar napišeš. Predstavitvena plast je jezik, v katerem je pismo napisano, da ga bralec razume. Sejna plast poskrbi, da se klepet med vama ustrezno začne in konča. Transportna plast je poštar, ki poskrbi, da pismo pride do prave osebe. Omrežna plast ve, v katero mesto in ulico pismo gre. Povezavna plast je naslednja poštna postaja na poti. Fizična plast pa je samo avtomobil in cesta, po katerih se pismo dejansko pelje. Vsaka se posveza svojemu delu, vse skupaj pa poskrbi, da pismo pride do prijatelja. Razumeš, zakaj je plasti točno sedem — vsaka naredi en kos dela?",
+    "spoken": "V redu, najpreprosteje, kot bi ti razložil, kako pošiljamo pismo. Predstavljaj si, da ti napišeš pismo prijatelju. To je aplikacijska plast, torej tisto, kar napišeš. Predstavitvena plast je jezik, v katerem je pismo napisano, da ga bralec razume. Sejna plast poskrbi, da se klepet med vama ustrezno začne in konča. Transportna plast je poštar, ki poskrbi, da pismo pride do prave osebe. Omrežna plast ve, v katero mesto in ulico pismo gre. Povezovalna plast je naslednja poštna postaja na poti. Fizična plast pa je samo avtomobil in cesta, po katerih se pismo dejansko pelje. Vsaka se posveča svojemu delu, vse skupaj pa poskrbijo, da pismo pride do prijatelja. Razumeš, zakaj je plasti točno sedem — vsaka naredi en kos dela?",
+    "words": 120,
+    "firstTokenMs": 728,
+    "firstSpokenMs": 1845,
+    "writtenMs": 3460,
+    "totalMs": 4661,
+    "stats": {
+      "units": 8,
+      "outcomes": {
+        "corrected": 2,
+        "unchanged": 6,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 906
+    },
+    "grade": {
+      "errors": [
+        {
+          "text": "poskrbijo",
+          "kind": "agreement",
+          "correction": "poskrbi"
+        }
+      ],
+      "coveredPoints": [
+        1
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "answer",
+    "language": "sl",
+    "written": "V redu, najlažje, kot znava pošiljati paket. Predstavi si, da pošiljaš igračo prijatelju. Najprej jo daš v škatlico, škatlico oviješ, na zunanjo škatlo napišeš naslov, potem jo nekdo odnese po pošti, kamion jo pelje čez mesta, na koncu jo prijatelj odpakira ravno obratno. Vsak korak je ena plast. Model OSI pravi natanko to: ko dve napredi govorita, se podatki spustijo skozi sedem takih korakov, od najvišje, kjer je sporočilo za ljudi, do najnižje, kjer grejo po žici kot bite, in pri drugi napravi spet gor. Nič čarobnega, samo dobro razdeljeno delo. Reci mi zdaj s svojimi besedami, zakaj je pametno, da je vsak korak svoja plast?",
+    "spoken": "V redu, najlažje, kot znamo pošiljati paket. Predstavi si, da pošiljaš igračo prijatelju. Najprej jo daš v škatlico, škatlico oviješ, na zunanjo škatlo napišeš naslov, potem jo nekdo odnese po pošti, kamion jo pelje čez mesta, na koncu jo prijatelj odpakira ravno obratno. Vsak korak je ena plast. Model OSI pravi natanko to: ko dve napravi govorita, se podatki spustijo skozi sedem takih korakov, od najvišje, kjer je sporočilo za ljudi, do najnižje, kjer grejo po žici kot biti, in pri drugi napravi spet gor. Nič čarobnega, samo dobro razdeljeno delo. Reci mi zdaj s svojimi besedami, zakaj je pametno, da je vsak korak svoja plast?",
+    "words": 106,
+    "firstTokenMs": 1081,
+    "firstSpokenMs": 2228,
+    "writtenMs": 4083,
+    "totalMs": 5512,
+    "stats": {
+      "units": 4,
+      "outcomes": {
+        "corrected": 2,
+        "unchanged": 2,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 846
+    },
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "answer",
+    "language": "sl",
+    "written": "V redu, sprejmemo. Predstavljaj si, da pišeš prijatelju pismo. Najprej potrebuješ papir in svinčnik, da sploh lahko pišeš — to je fizična plast. Nato vsako stran zapakiraš v kuvero, da se ne poškoduje — to je povezavna plast. Poštar se odloči, po katerih ulicah bo pismo potovalo — to je omrežna plast. Nato pismo preverijo, da je prispelo celo — to je transportna plast. Med potjo se lahko pogovarjata v več pogovorih hkrati — to je sejna plast. Pismo mora biti pisano v jeziku, ki ga oba znava — to je predstavitvena plast. Nazadnje pa prijatelj pismo dejansko prebere — to je aplikacijska plast. Sedem plasti, vsaka naredi svoj del, da sporočilo pride od tebe do prijatelja.",
+    "spoken": "V redu, sprejmemo. Predstavljaj si, da pišeš prijatelju pismo. Najprej potrebuješ papir in svinčnik, da sploh lahko pišeš — to je fizična plast. Nato vsako stran zapakiraš v kuverto, da se ne poškoduje — to je povezovalna plast. Poštar se odloči, po katerih ulicah bo pismo potovalo — to je omrežna plast. Nato pismo preverijo, da je prispelo v celoti — to je transportna plast. Med potjo se lahko pogovarjata v več pogovorih hkrati — to je sejna plast. Pismo mora biti pisano v jeziku, ki ga oba znava — to je predstavitvena plast. Nazadnje pa prijatelj pismo dejansko prebere — to je aplikacijska plast. Sedem plasti, vsaka naredi svoj del, da sporočilo pride od tebe do prijatelja.",
+    "words": 118,
+    "firstTokenMs": 734,
+    "firstSpokenMs": 2006,
+    "writtenMs": 2487,
+    "totalMs": 3159,
+    "stats": {
+      "units": 6,
+      "outcomes": {
+        "corrected": 2,
+        "unchanged": 4,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 1212
+    },
+    "grade": {
+      "errors": [
+        {
+          "text": "znava",
+          "kind": "agreement",
+          "correction": "znata"
+        }
+      ],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "answer",
+    "language": "sl",
+    "written": "V redu, počasi in preprosto. Predstavljaj si, da pošiljaš pismo prijatelju v drugo mesto. Celotno pot pisma razdelimo na sedem korakov, enega za drugim. Najprej napišeš pismo — to je aplikacijska plast. Nato ga zapakuješ v pravo obliko in morda zaključiš s skritim jezikom, da ga ne more brati vsak — predstavitvena plast. Nato se dogovoriš, kdaj pošiljaš in kdaj končaš dopisovanje — sejna plast. Nato poskrbiš, da pismo res prispe in da ni česa manjkalo — transportna plast. Nato ga daš v ovojnico z naslovom in izbereš cesto čez mesta — omrežna plast. Nato pismo poneseta poštar iz tvoje hiše do sosednje pošte — povezavna plast. In nazadnje se pismo resnično premika po cesti kot voz, črka za črko — fizična plast. Vsak korak naredi svoje delo in nato pismo preda naslednjemu. Ko pismo pride prijatelju, so vse plasti obrnjene narobno in ga razpakirajo, korak za korakom.",
+    "spoken": "V redu, počasi in preprosto. Predstavljaj si, da pošiljaš pismo prijatelju v drugo mesto. Celotno pot pisma razdelimo na sedem korakov, enega za drugim. Najprej napišeš pismo — to je aplikacijska plast. Nato ga zapakiraš v pravo obliko in morda zaključiš s skritim jezikom, da ga ne more brati vsak — predstavitvena plast. Nato se dogovoriš, kdaj pošiljaš in kdaj končaš dopisovanje — sejna plast. Nato poskrbiš, da pismo res prispe in da ni česa manjkalo — transportna plast. Nato ga daš v ovojnico z naslovom in izbereš cesto čez mesta — omrežna plast. Nato pismo ponese poštar iz tvoje hiše do sosednje pošte — povezavna plast. In nazadnje se pismo resnično premika po cesti kot voz, črka za črko — fizična plast. Vsak korak naredi svoje delo in nato pismo preda naslednjemu. Ko pismo pride prijatelju, so vse plasti obrnjene narobe in ga razpakirajo, korak za korakom.",
+    "words": 148,
+    "firstTokenMs": 576,
+    "firstSpokenMs": 1530,
+    "writtenMs": 2973,
+    "totalMs": 3692,
+    "stats": {
+      "units": 7,
+      "outcomes": {
+        "corrected": 3,
+        "unchanged": 4,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 868
+    },
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "answer",
+    "language": "sl",
+    "written": "V redu, najdem ti preprosto sliko. Predstavljaj si, da pošiljaš pismo prijatelju na drugem koncu mesta. Ti napišeš pismo — to je aplikacijska plast, tista, ki sestavi vsebino. Potem ga zapakiraš in preveriš, ali bo prebrljivo — to je predstavitvena plast. Naslednja odloči, kdaj in s kom se pogovarjata — to je sejna plast. Potem pismo daš v kuverto in napišeš, od koga in komu — to je transportna plast. Poštar ugotovi, skozi katera mesta mora pisko iti — to je omrežna plast. Naslednja plast poskrbi, da pismo prispe od poštne razdelilnice do prave ulice — to je povezavna plast. Zadnja pa je le dostava: pismo fizično gre s kamionom po cesti — to je fizična plast. Vsaka plast dela svoj del in ne skrbi za ostale. Prav to počne model OSI: komunikacijo razdeli na sedem takih korakov, od spodaj navzgor. A mi lahko v svojih besedah poveš, zakaj je dobro, da komunikacijo razdelimo na plasti?",
+    "spoken": "V redu, najdem ti preprosto sliko. Predstavljaj si, da pošiljaš pismo prijatelju na drugem koncu mesta. Ti napišeš pismo — to je aplikacijska plast, tista, ki sestavi vsebino. Potem ga zapakiraš in preveriš, ali bo berljivo — to je predstavitvena plast. Naslednja odloči, kdaj in s kom se pogovarjata — to je sejna plast. Potem pismo daš v kuverto in napišeš, od koga in komu — to je transportna plast. Poštar ugotovi, skozi katera mesta mora pismo iti — to je omrežna plast. Naslednja plast poskrbi, da pismo prispe od poštne razdelilnice do prave ulice — to je povezavna plast. Zadnja pa je le dostava: pismo fizično gre s kamionom po cesti — to je fizična plast. Vsaka plast dela svoj del in ne skrbi za ostale. Prav to počne model OSI: komunikacijo razdeli na sedem takih korakov, od spodaj navzgor. A mi lahko s svojimi besedami poveš, zakaj je dobro, da komunikacijo razdelimo na plasti?",
+    "words": 156,
+    "firstTokenMs": 886,
+    "firstSpokenMs": 1810,
+    "writtenMs": 4086,
+    "totalMs": 4086,
+    "stats": {
+      "units": 8,
+      "outcomes": {
+        "corrected": 3,
+        "unchanged": 5,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 923
+    },
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  }
+]

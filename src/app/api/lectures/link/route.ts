@@ -9,7 +9,6 @@ import {
 } from "@/lib/link-source-validation";
 import { ExpectedLectureInputError } from "@/lib/lecture-processing-errors";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
-import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -30,8 +29,6 @@ const createLinkLectureSchema = z.object({
   // one any more, and a default here would assert Slovenian over every
   // source the pipeline is now meant to detect for itself.
   languageHint: languageHintSchema.optional(),
-  createInitialAudio: z.boolean().optional().default(false),
-  initialAudioVoice: noteTtsVoiceSchema.optional(),
 });
 
 export const maxDuration = 300;
@@ -117,8 +114,6 @@ export async function POST(request: Request) {
           title: titleHint,
           language_hint: parsed.data.languageHint ?? null,
           processing_metadata: {
-            createInitialAudio: parsed.data.createInitialAudio,
-            initialAudioVoice: parsed.data.initialAudioVoice ?? null,
             pendingLinkUrl: parsed.data.url,
             processing: {
               stage: "reading_link",

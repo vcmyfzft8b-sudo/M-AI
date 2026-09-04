@@ -72,16 +72,16 @@ test("cleans strings, keys and nested values on their way into a jsonb column", 
 test("leaves non-string leaves alone", () => {
   const date = new Date("2026-08-16T17:30:52.204Z");
   const sanitized = sanitizeJsonForDatabase({
-    createInitialAudio: true,
-    initialAudioVoice: null,
+    isPresentation: true,
+    languageHint: null,
     durationSeconds: 412,
     updatedAt: date,
     missing: undefined,
   });
 
   assert.deepEqual(sanitized, {
-    createInitialAudio: true,
-    initialAudioVoice: null,
+    isPresentation: true,
+    languageHint: null,
     durationSeconds: 412,
     updatedAt: date,
     missing: undefined,

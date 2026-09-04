@@ -1,11 +1,6 @@
 import type { LectureArtifactRow, LectureRow } from "@/lib/database.types";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
-import {
-  DEFAULT_NOTE_TTS_VOICE,
-  normalizeNoteTtsVoice,
-  type NoteTtsVoice,
-} from "@/lib/note-tts-settings";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -54,18 +49,6 @@ export function getManualImportSourceType(metadata: unknown) {
   return typeof sourceType === "string" && MANUAL_SOURCE_TYPES.has(sourceType)
     ? sourceType
     : null;
-}
-
-export function shouldCreateInitialNoteAudio(metadata: unknown) {
-  return isRecord(metadata) && metadata.createInitialAudio === true;
-}
-
-export function getInitialNoteAudioVoice(metadata: unknown): NoteTtsVoice {
-  if (!isRecord(metadata)) {
-    return DEFAULT_NOTE_TTS_VOICE;
-  }
-
-  return normalizeNoteTtsVoice(metadata.initialAudioVoice);
 }
 
 export function getEffectiveLectureSourceType(

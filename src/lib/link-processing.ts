@@ -1,10 +1,6 @@
 import "server-only";
 
-import {
-  getInitialNoteAudioVoice,
-  isRecord,
-  shouldCreateInitialNoteAudio,
-} from "@/lib/lecture-source-metadata";
+import { isRecord } from "@/lib/lecture-source-metadata";
 import {
   extractWebpageImages,
   storeDocumentImagesAsNoteMedia,
@@ -101,8 +97,6 @@ export async function processStoredLinkLecture(params: {
       blocks: transcript.blocks,
       titleHint: transcript.title ?? undefined,
       languageHint: lectureRow.language_hint ?? "sl",
-      createInitialAudio: shouldCreateInitialNoteAudio(metadata),
-      initialAudioVoice: getInitialNoteAudioVoice(metadata),
       modelMetadata: {
         importMode: "link",
         linkKind: "youtube",
@@ -137,8 +131,6 @@ export async function processStoredLinkLecture(params: {
     text: webpage.text,
     titleHint: webpage.title,
     languageHint: lectureRow.language_hint ?? "sl",
-    createInitialAudio: shouldCreateInitialNoteAudio(metadata),
-    initialAudioVoice: getInitialNoteAudioVoice(metadata),
     modelMetadata: {
       importMode: "link",
       sourceUrl: pendingLinkUrl,

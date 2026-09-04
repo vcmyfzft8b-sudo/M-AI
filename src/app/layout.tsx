@@ -4,6 +4,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import { I18nProvider } from "@/components/i18n-provider";
 import { KeyboardInset } from "@/components/keyboard-inset";
+import { LaunchScreen } from "@/components/launch-screen";
 import { ServiceWorkerRegistration } from "@/components/service-worker";
 import { ThemeController } from "@/components/theme-controller";
 import { VisitTracker } from "@/components/visit-tracker";
@@ -250,6 +251,19 @@ export default async function RootLayout({
                   }
                 } catch (error) {}
                 try {
+                  /*
+                   * iOS's own standalone flag, mirrored onto the element so
+                   * CSS can read it. The display-mode media query covers this
+                   * on every current iOS, and both gate the launch screen;
+                   * this is the older test, kept because the launch screen is
+                   * the one thing that has to be right before anything else
+                   * runs.
+                   */
+                  if (window.navigator.standalone === true) {
+                    document.documentElement.dataset.standalone = "";
+                  }
+                } catch (error) {}
+                try {
                   // Which promo card the home screen last showed, so its
                   // skeleton can draw that card instead of a hole where it
                   // goes. See src/lib/home-promo-hint.ts.
@@ -266,6 +280,12 @@ export default async function RootLayout({
         />
       </head>
       <body>
+        {/*
+          * First in the body: the launch screen is the only thing on screen
+          * while the app arrives, and being first is what lets the HTML parser
+          * start its one image before it reaches anything else.
+          */}
+        <LaunchScreen />
         <I18nProvider locale={locale} messages={getMessages(locale)}>
           <ThemeController />
           <ServiceWorkerRegistration />

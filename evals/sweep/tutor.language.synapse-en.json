@@ -1,0 +1,423 @@
+[
+  {
+    "arm": "glm",
+    "kind": "teach",
+    "language": "en",
+    "written": "So here's the sequence itself, and your lecturer said it out loud: learn this, because it will be asked. Picture the action potential sweeping down the axon and arriving at the terminal. That depolarisation opens voltage-gated calcium channels in the presynaptic membrane, and calcium rushes in — outside the cell there's far more of it than inside, so the gradient is huge. That calcium influx is the key step: it converts an electrical signal into a chemical one. It makes synaptic vesicles — little membrane sacs already loaded with neurotransmitter — fuse with the presynaptic membrane and dump their contents into the cleft. That fusion is exocytosis. Then the neurotransmitter diffuses across the cleft, binds to receptors on the postsynaptic membrane, and you get a postsynaptic potential. Electrical in, chemical across the gap, electrical out. Before we move on — how would you run that sequence back to me in your own words?",
+    "spoken": "So here's the sequence itself, and your lecturer said it out loud: learn this, because it will be asked. Picture the action potential sweeping down the axon and arriving at the terminal. That depolarisation opens voltage-gated calcium channels in the presynaptic membrane, and calcium rushes in — outside the cell there's far more of it than inside, so the gradient is huge. That calcium influx is the key step: it converts an electrical signal into a chemical one. It makes synaptic vesicles — little membrane sacs already loaded with neurotransmitter — fuse with the presynaptic membrane and dump their contents into the cleft. That fusion is exocytosis. Then the neurotransmitter diffuses across the cleft, binds to receptors on the postsynaptic membrane, and you get a postsynaptic potential. Electrical in, chemical across the gap, electrical out. Before we move on — how would you run that sequence back to me in your own words?",
+    "words": 153,
+    "firstTokenMs": 1420,
+    "firstSpokenMs": 1420,
+    "writtenMs": 2083,
+    "totalMs": 2083,
+    "stats": null,
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm",
+    "kind": "teach",
+    "language": "en",
+    "written": "Okay, here's the sequence your lecturer warned you he'll ask about, so let's actually walk through it, not just read it. Picture the action potential rolling down the axon and arriving at the terminal, like a wave hitting the end of a pier. That depolarisation opens voltage-gated calcium channels in the membrane there. Calcium is far more concentrated outside the cell than inside, so the moment those channels open, calcium floods in. And that influx is the whole switch — it's what converts the electrical signal into a chemical one. The calcium makes synaptic vesicles, little sacs already packed with neurotransmitter, fuse with the presynaptic membrane and dump their contents into the cleft. That dumping is exocytosis. Then the transmitter drifts across the cleft, locks onto receptors on the postsynaptic membrane, and there you get a postsynaptic potential. Arrive, calcium in, vesicles fuse, bind, potential. Before we go on — say that sequence back to me in your own words.",
+    "spoken": "Okay, here's the sequence your lecturer warned you he'll ask about, so let's actually walk through it, not just read it. Picture the action potential rolling down the axon and arriving at the terminal, like a wave hitting the end of a pier. That depolarisation opens voltage-gated calcium channels in the membrane there. Calcium is far more concentrated outside the cell than inside, so the moment those channels open, calcium floods in. And that influx is the whole switch — it's what converts the electrical signal into a chemical one. The calcium makes synaptic vesicles, little sacs already packed with neurotransmitter, fuse with the presynaptic membrane and dump their contents into the cleft. That dumping is exocytosis. Then the transmitter drifts across the cleft, locks onto receptors on the postsynaptic membrane, and there you get a postsynaptic potential. Arrive, calcium in, vesicles fuse, bind, potential. Before we go on — say that sequence back to me in your own words.",
+    "words": 160,
+    "firstTokenMs": 821,
+    "firstSpokenMs": 821,
+    "writtenMs": 1644,
+    "totalMs": 1644,
+    "stats": null,
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm",
+    "kind": "teach",
+    "language": "en",
+    "written": "Let's build the sequence from the ground up. Picture the axon terminal as a loading dock. An action potential arrives there, and that depolarisation opens voltage-gated calcium channels in the presynaptic membrane. Outside the cell, calcium concentration is far higher than inside, so calcium rushes in. And here's the key step: that calcium influx is what converts an electrical signal into a chemical one. It makes the synaptic vesicles, which are little membrane sacs already packed with neurotransmitter, fuse with the presynaptic membrane and dump their contents into the cleft. That release is called exocytosis. Then the neurotransmitter diffuses across the cleft, binds to receptors on the postsynaptic membrane, and you get a postsynaptic potential. Arrival, calcium in, vesicles fuse, transmitter crosses, receptor acts. So before we go on — how would you say that sequence back to me in your own words?",
+    "spoken": "Let's build the sequence from the ground up. Picture the axon terminal as a loading dock. An action potential arrives there, and that depolarisation opens voltage-gated calcium channels in the presynaptic membrane. Outside the cell, calcium concentration is far higher than inside, so calcium rushes in. And here's the key step: that calcium influx is what converts an electrical signal into a chemical one. It makes the synaptic vesicles, which are little membrane sacs already packed with neurotransmitter, fuse with the presynaptic membrane and dump their contents into the cleft. That release is called exocytosis. Then the neurotransmitter diffuses across the cleft, binds to receptors on the postsynaptic membrane, and you get a postsynaptic potential. Arrival, calcium in, vesicles fuse, transmitter crosses, receptor acts. So before we go on — how would you say that sequence back to me in your own words?",
+    "words": 143,
+    "firstTokenMs": 780,
+    "firstSpokenMs": 780,
+    "writtenMs": 1618,
+    "totalMs": 1618,
+    "stats": null,
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm",
+    "kind": "teach",
+    "language": "en",
+    "written": "So you've got the picture from last time: two neurons, a tiny gap called the cleft between them. Now here's what actually happens, step by step, and this is the spine of the whole topic. An action potential arrives at the axon terminal. That depolarisation opens voltage-gated calcium channels in the presynaptic membrane, and calcium rushes in — because outside the cell its concentration is far higher than inside. That calcium influx is the trigger. It converts the electrical signal into a chemical one: synaptic vesicles, little membrane sacs already loaded with neurotransmitter, fuse with the presynaptic membrane and dump their contents into the cleft. That dumping is called exocytosis. Then the neurotransmitter diffuses across the cleft, binds to receptors on the postsynaptic membrane, and the receptor produces a postsynaptic potential. Electrical in, chemical across, electrical out. Before we move on — say the sequence back to me in your own words.",
+    "spoken": "So you've got the picture from last time: two neurons, a tiny gap called the cleft between them. Now here's what actually happens, step by step, and this is the spine of the whole topic. An action potential arrives at the axon terminal. That depolarisation opens voltage-gated calcium channels in the presynaptic membrane, and calcium rushes in — because outside the cell its concentration is far higher than inside. That calcium influx is the trigger. It converts the electrical signal into a chemical one: synaptic vesicles, little membrane sacs already loaded with neurotransmitter, fuse with the presynaptic membrane and dump their contents into the cleft. That dumping is called exocytosis. Then the neurotransmitter diffuses across the cleft, binds to receptors on the postsynaptic membrane, and the receptor produces a postsynaptic potential. Electrical in, chemical across, electrical out. Before we move on — say the sequence back to me in your own words.",
+    "words": 152,
+    "firstTokenMs": 992,
+    "firstSpokenMs": 992,
+    "writtenMs": 1917,
+    "totalMs": 1917,
+    "stats": null,
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm",
+    "kind": "answer",
+    "language": "en",
+    "written": "Sure, here's the picture. Imagine the neuron is a little delivery room. An electric pulse runs up to the end of the wire, like a knock on the door. The knock opens tiny doors that let calcium rush in, and calcium is the signal that says, deliver the package now. Little bubbles of chemicals bump into the wall and dump their contents into the gap, like dropping a letter into the neighbour's garden. The letter floats across, lands on the neighbour's mailbox, the receptor, and that changes what the neighbour does. Then the letter gets swept away. Does that picture make sense?",
+    "spoken": "Sure, here's the picture. Imagine the neuron is a little delivery room. An electric pulse runs up to the end of the wire, like a knock on the door. The knock opens tiny doors that let calcium rush in, and calcium is the signal that says, deliver the package now. Little bubbles of chemicals bump into the wall and dump their contents into the gap, like dropping a letter into the neighbour's garden. The letter floats across, lands on the neighbour's mailbox, the receptor, and that changes what the neighbour does. Then the letter gets swept away. Does that picture make sense?",
+    "words": 102,
+    "firstTokenMs": 686,
+    "firstSpokenMs": 686,
+    "writtenMs": 1263,
+    "totalMs": 1263,
+    "stats": null,
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm",
+    "kind": "answer",
+    "language": "en",
+    "written": "Sure, let's do it with a little story. Imagine two people standing close together, and between them a tiny puddle of air they can't cross. The first one gets a zap of electricity down their arm — that's the action potential arriving. The zap tells their hand to throw little water balloons across the puddle. That throw happens because calcium rushes in — calcium is what pulls the trigger. The balloons land on the other person, burst, and splash them — that's the neurotransmitter hitting the receptors. The splash makes the second person react somehow. So: zap, calcium, throw balloons, splash, reaction. Does that picture make sense?",
+    "spoken": "Sure, let's do it with a little story. Imagine two people standing close together, and between them a tiny puddle of air they can't cross. The first one gets a zap of electricity down their arm — that's the action potential arriving. The zap tells their hand to throw little water balloons across the puddle. That throw happens because calcium rushes in — calcium is what pulls the trigger. The balloons land on the other person, burst, and splash them — that's the neurotransmitter hitting the receptors. The splash makes the second person react somehow. So: zap, calcium, throw balloons, splash, reaction. Does that picture make sense?",
+    "words": 107,
+    "firstTokenMs": 735,
+    "firstSpokenMs": 735,
+    "writtenMs": 1515,
+    "totalMs": 1515,
+    "stats": null,
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm",
+    "kind": "answer",
+    "language": "en",
+    "written": "Sure. Imagine two tiny brain cells standing close together, with a small gap between them. One cell shouts a message, but it can't jump the gap itself. So it grabs little bubble-packed parcels of chemicals and throws them across. The parcels land on the other cell's doorbells, the doorbells ring, and that cell gets the message. The calcium is like the hand that throws the parcels — without it, nothing gets thrown at all.",
+    "spoken": "Sure. Imagine two tiny brain cells standing close together, with a small gap between them. One cell shouts a message, but it can't jump the gap itself. So it grabs little bubble-packed parcels of chemicals and throws them across. The parcels land on the other cell's doorbells, the doorbells ring, and that cell gets the message. The calcium is like the hand that throws the parcels — without it, nothing gets thrown at all.",
+    "words": 74,
+    "firstTokenMs": 648,
+    "firstSpokenMs": 648,
+    "writtenMs": 1359,
+    "totalMs": 1359,
+    "stats": null,
+    "grade": {
+      "errors": [],
+      "coveredPoints": [],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm",
+    "kind": "answer",
+    "language": "en",
+    "written": "Okay, here's the simple picture. Imagine two houses standing really close together, with a tiny alley between them. The first house is shouting a message, but it can't throw the note across the alley itself. So when the shout arrives, it rings the doorbell, and that doorbell is calcium. Calcium is what makes the little mailbags, the vesicles, walk up to the wall and dump their letters, the neurotransmitter, into the alley. The letters drift across, and the second house reads them at its door, the receptors, and decides what to do next. Shout, doorbell, mailbags, letters, reading. Does that picture make sense to you?",
+    "spoken": "Okay, here's the simple picture. Imagine two houses standing really close together, with a tiny alley between them. The first house is shouting a message, but it can't throw the note across the alley itself. So when the shout arrives, it rings the doorbell, and that doorbell is calcium. Calcium is what makes the little mailbags, the vesicles, walk up to the wall and dump their letters, the neurotransmitter, into the alley. The letters drift across, and the second house reads them at its door, the receptors, and decides what to do next. Shout, doorbell, mailbags, letters, reading. Does that picture make sense to you?",
+    "words": 105,
+    "firstTokenMs": 1390,
+    "firstSpokenMs": 1390,
+    "writtenMs": 2387,
+    "totalMs": 2387,
+    "stats": null,
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "teach",
+    "language": "en",
+    "written": "Let's walk the sequence itself, step by step, because this is the part the lecturer said he'll examine. Picture the action potential sweeping down the axon and arriving at the terminal. That depolarisation opens voltage-gated calcium channels in the presynaptic membrane, and calcium rushes in — because outside the cell its concentration is far higher than inside, so it flows down its gradient. Now here's the key move: that calcium influx is the trigger that converts the electrical signal into a chemical one. It makes synaptic vesicles — little membrane sacs already loaded with neurotransmitter — fuse with the presynaptic membrane and dump their contents into the cleft. That's exocytosis. The transmitter then diffuses across the cleft, which is only about twenty nanometres wide, and binds to receptors on the postsynaptic membrane. The receptor does its thing, and you get a postsynaptic potential. Electrical in, chemical across the gap, electrical out. Before we move on, say the sequence back to me in your own words — starting from the action potential arriving.",
+    "spoken": "Let's walk the sequence itself, step by step, because this is the part the lecturer said he'll examine. Picture the action potential sweeping down the axon and arriving at the terminal. That depolarisation opens voltage-gated calcium channels in the presynaptic membrane, and calcium rushes in — because outside the cell its concentration is far higher than inside, so it flows down its gradient. Now here's the key move: that calcium influx is the trigger that converts the electrical signal into a chemical one. It makes synaptic vesicles — little membrane sacs already loaded with neurotransmitter — fuse with the presynaptic membrane and dump their contents into the cleft. That's exocytosis. The transmitter then diffuses across the cleft, which is only about twenty nanometres wide, and binds to receptors on the postsynaptic membrane. The receptor does its thing, and you get a postsynaptic potential. Electrical in, chemical across the gap, electrical out. Before we move on, say the sequence back to me in your own words — starting from the action potential arriving.",
+    "words": 172,
+    "firstTokenMs": 573,
+    "firstSpokenMs": 1392,
+    "writtenMs": 1846,
+    "totalMs": 2525,
+    "stats": {
+      "units": 8,
+      "outcomes": {
+        "corrected": 0,
+        "unchanged": 8,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 781
+    },
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "teach",
+    "language": "en",
+    "written": "So you know the picture already: two neurons almost touching, with a tiny gap between them called the synaptic cleft, about twenty nanometres wide. The question is, how does a signal jump that gap? Here's the sequence, and it's worth learning in order. First, an action potential arrives at the axon terminal. That depolarisation opens voltage-gated calcium channels, and calcium rushes in from outside, because its concentration out there is far higher than inside. Second, that calcium influx is the trigger — the step that converts an electrical signal into a chemical one. It makes synaptic vesicles, little membrane sacs loaded with neurotransmitter, fuse with the presynaptic membrane and dump their contents into the cleft. That's exocytosis. Third, the transmitter diffuses across the cleft and binds to receptors on the postsynaptic membrane, which produces a postsynaptic potential. The lecturer's warning is worth hearing: no calcium, no release — the action potential still arrives and nothing happens. Before we move on, how would you say the sequence back to me in your own words?",
+    "spoken": "So you know the picture already: two neurons almost touching, with a tiny gap between them called the synaptic cleft, about twenty nanometres wide. The question is, how does a signal jump that gap? Here's the sequence, and it's worth learning in order. First, an action potential arrives at the axon terminal. That depolarisation opens voltage-gated calcium channels, and calcium rushes in from outside, because its concentration out there is far higher than inside. Second, that calcium influx is the trigger — the step that converts an electrical signal into a chemical one. It makes synaptic vesicles, little membrane sacs loaded with neurotransmitter, fuse with the presynaptic membrane and dump their contents into the cleft. That's exocytosis. Third, the transmitter diffuses across the cleft and binds to receptors on the postsynaptic membrane, which produces a postsynaptic potential. The lecturer's warning is worth hearing: no calcium, no release — the action potential still arrives and nothing happens. Before we move on, how would you say the sequence back to me in your own words?",
+    "words": 173,
+    "firstTokenMs": 742,
+    "firstSpokenMs": 1438,
+    "writtenMs": 1853,
+    "totalMs": 2615,
+    "stats": {
+      "units": 9,
+      "outcomes": {
+        "corrected": 0,
+        "unchanged": 9,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 622
+    },
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "teach",
+    "language": "en",
+    "written": "Okay, the sequence itself. Picture an action potential running down the axon and arriving at the axon terminal. That depolarisation opens voltage-gated calcium channels in the presynaptic membrane, and calcium rushes in from outside, because outside the cell the concentration is far higher than inside. This is the key step. That calcium influx is what converts an electrical signal into a chemical one. It makes synaptic vesicles, little membrane sacs already loaded with neurotransmitter, fuse with the presynaptic membrane and dump their contents into the cleft. That fusion and dumping is called exocytosis. Then the neurotransmitter drifts across the cleft, which is only about twenty nanometres wide, and binds to receptors on the postsynaptic membrane. The receptor does whatever it does, and you get a postsynaptic potential. Electrical in, chemical across, electrical out. That's the whole sequence. Before we go on, how would you say it back to me in your own words?",
+    "spoken": "Okay, the sequence itself. Picture an action potential running down the axon and arriving at the axon terminal. That depolarisation opens voltage-gated calcium channels in the presynaptic membrane, and calcium rushes in from outside, because outside the cell the concentration is far higher than inside. This is the key step. That calcium influx is what converts an electrical signal into a chemical one. It makes synaptic vesicles, little membrane sacs already loaded with neurotransmitter, fuse with the presynaptic membrane and dump their contents into the cleft. That fusion and dumping is called exocytosis. Then the neurotransmitter drifts across the cleft, which is only about twenty nanometres wide, and binds to receptors on the postsynaptic membrane. The receptor does whatever it does, and you get a postsynaptic potential. Electrical in, chemical across, electrical out. That's the whole sequence. Before we go on, how would you say it back to me in your own words?",
+    "words": 153,
+    "firstTokenMs": 724,
+    "firstSpokenMs": 1624,
+    "writtenMs": 1901,
+    "totalMs": 2479,
+    "stats": {
+      "units": 7,
+      "outcomes": {
+        "corrected": 0,
+        "unchanged": 7,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 707
+    },
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "teach",
+    "language": "en",
+    "written": "So here's the sequence itself, the one your lecturer said he'll ask you. Picture the action potential charging down the axon and arriving at the terminal. That depolarisation opens voltage-gated calcium channels in the presynaptic membrane, and calcium rushes in — because outside the cell there's far more of it than inside, so it flows down its gradient. And this is the big moment: the calcium influx is what converts an electrical signal into a chemical one. It makes the synaptic vesicles, those little sacs of neurotransmitter waiting in the terminal, fuse with the presynaptic membrane and dump their contents into the cleft. That dumping is exocytosis. Then the transmitter drifts across the cleft — it's only about twenty nanometres, so it's a quick diffusion — and binds to receptors on the postsynaptic membrane. The receptor reacts, and you get a postsynaptic potential. Electrical in, chemical bridge, electrical out. That's the whole story in three steps. Before we move on — how would you say that sequence back to me, in your own words?",
+    "spoken": "So here's the sequence itself, the one your lecturer said he'll ask you. Picture the action potential charging down the axon and arriving at the terminal. That depolarisation opens voltage-gated calcium channels in the presynaptic membrane, and calcium rushes in — because outside the cell there's far more of it than inside, so it flows down its gradient. And this is the big moment: the calcium influx is what converts an electrical signal into a chemical one. It makes the synaptic vesicles, those little sacs of neurotransmitter waiting in the terminal, fuse with the presynaptic membrane and dump their contents into the cleft. That dumping is exocytosis. Then the transmitter drifts across the cleft — it's only about twenty nanometres, so it's a quick diffusion — and binds to receptors on the postsynaptic membrane. The receptor reacts, and you get a postsynaptic potential. Electrical in, chemical bridge, electrical out. That's the whole story in three steps. Before we move on — how would you say that sequence back to me, in your own words?",
+    "words": 174,
+    "firstTokenMs": 568,
+    "firstSpokenMs": 1198,
+    "writtenMs": 2237,
+    "totalMs": 2998,
+    "stats": {
+      "units": 8,
+      "outcomes": {
+        "corrected": 0,
+        "unchanged": 8,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 583
+    },
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "answer",
+    "language": "en",
+    "written": "Sure, here's the whole thing as a story. A neuron is like a kid holding a water balloon. The electric signal travels down its arm to its hand. Reaching the hand makes little doors open, and calcium, which is crowded outside, floods in. That flood is the signal to throw: the kid hurls the balloon, full of chemical messenger, across a small gap. The messenger lands on the neighbour's ear, which is a little gate, and the neighbour reacts. So it's electricity to the hand, a throw, and a catch. Does that picture make sense?",
+    "spoken": "Sure, here's the whole thing as a story. A neuron is like a kid holding a water balloon. The electric signal travels down its arm to its hand. Reaching the hand makes little doors open, and calcium, which is crowded outside, floods in. That flood is the signal to throw: the kid hurls the balloon, full of chemical messenger, across a small gap. The messenger lands on the neighbour's ear, which is a little gate, and the neighbour reacts. So it's electricity to the hand, a throw, and a catch. Does that picture make sense?",
+    "words": 95,
+    "firstTokenMs": 649,
+    "firstSpokenMs": 1465,
+    "writtenMs": 1469,
+    "totalMs": 2408,
+    "stats": {
+      "units": 6,
+      "outcomes": {
+        "corrected": 0,
+        "unchanged": 6,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 740
+    },
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "answer",
+    "language": "en",
+    "written": "Sure, here's the whole thing as a story. Imagine a courier, the action potential, running right up to a locked door. The knock at the door makes little mail bags, the vesicles, tip their letters, the neurotransmitter, into a tiny gap. The letters float across and slide into mailboxes on the other side, the receptors, and each mailbox makes something happen in that cell. So it goes electricity, then a chemical post message, then electricity again. That's the whole sequence in three beats.",
+    "spoken": "Sure, here's the whole thing as a story. Imagine a courier, the action potential, running right up to a locked door. The knock at the door makes little mail bags, the vesicles, tip their letters, the neurotransmitter, into a tiny gap. The letters float across and slide into mailboxes on the other side, the receptors, and each mailbox makes something happen in that cell. So it goes electricity, then a chemical post message, then electricity again. That's the whole sequence in three beats.",
+    "words": 83,
+    "firstTokenMs": 545,
+    "firstSpokenMs": 1276,
+    "writtenMs": 1634,
+    "totalMs": 2246,
+    "stats": {
+      "units": 4,
+      "outcomes": {
+        "corrected": 0,
+        "unchanged": 4,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 685
+    },
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "answer",
+    "language": "en",
+    "written": "Okay, simple picture. Imagine the nerve cell is a mailroom worker. A message — the action potential — runs down the hallway and reaches the mailroom. The doorbell that opens is calcium: calcium rushes in, and that's the cue to throw the packages. Each package is a little bubble full of chemical letters, and it slams into the wall and dumps the letters into the gap. The letters float across, land on the neighbour's mailbox, and that starts the next message. So: signal arrives, calcium opens the door, packages release, letters cross the gap. Does that picture make sense?",
+    "spoken": "Okay, simple picture. Imagine the nerve cell is a mailroom worker. A message — the action potential — runs down the hallway and reaches the mailroom. The door that opens is calcium: calcium rushes in, and that's the cue to throw the packages. Each package is a little bubble full of chemical letters, and it slams into the wall and dumps the letters into the gap. The letters float across, land on the neighbour's mailbox, and that starts the next message. So: signal arrives, calcium opens the door, packages release, letters cross the gap. Does that picture make sense?",
+    "words": 99,
+    "firstTokenMs": 755,
+    "firstSpokenMs": 1626,
+    "writtenMs": 1520,
+    "totalMs": 2579,
+    "stats": {
+      "units": 7,
+      "outcomes": {
+        "corrected": 1,
+        "unchanged": 6,
+        "rejected": 0,
+        "timedOut": 0,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 774
+    },
+    "grade": {
+      "errors": [],
+      "coveredPoints": [
+        1,
+        2,
+        3
+      ],
+      "meaningChanged": false
+    }
+  },
+  {
+    "arm": "glm-proof",
+    "kind": "answer",
+    "language": "en",
+    "written": "Sure. Picture two people standing on opposite sides of a small stream. The first one runs up holding a message. Running up makes him sweat, and the sweat is calcium. The sweat is what makes him throw a little bottle across the stream. The bottle is the neurotransmitter, and it floats over to the other person. She picks it up, reads it, and reacts — that reaction is the postsynaptic potential. So electricity arrives, calcium makes it throw the bottle, and the bottle's message does the work on the far side. Does that picture make sense to you now?",
+    "spoken": "Sure. Picture two people standing on opposite sides of a small stream. The first one runs up holding a message. Running up makes him sweat, and the sweat is calcium. The sweat is what makes him throw a little bottle across the stream. The bottle is the neurotransmitter, and it floats over to the other person. She picks it up, reads it, and reacts — that reaction is the postsynaptic potential. So electricity arrives, calcium makes it throw the bottle, and the bottle's message does the work on the far side. Does that picture make sense to you now?",
+    "words": 99,
+    "firstTokenMs": 966,
+    "firstSpokenMs": 2478,
+    "writtenMs": 1629,
+    "totalMs": 2645,
+    "stats": {
+      "units": 6,
+      "outcomes": {
+        "corrected": 0,
+        "unchanged": 5,
+        "rejected": 0,
+        "timedOut": 1,
+        "failed": 0
+      },
+      "firstUnitWaitMs": 1404
+    },
+    "grade": {
+      "errors": [],
+      "coveredPoints": [],
+      "meaningChanged": false
+    }
+  }
+]

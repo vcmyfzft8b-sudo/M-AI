@@ -8,7 +8,6 @@ import { getUserEntitlementState } from "@/lib/billing";
 import { STORAGE_BUCKET } from "@/lib/constants";
 import type { Json, LectureTtsChunkRow, TtsGenerationEventRow } from "@/lib/database.types";
 import { normalizeNoteLanguage } from "@/lib/languages";
-import { INITIAL_NOTE_AUDIO_STAGE } from "@/lib/note-audio-stage";
 import { DEFAULT_NOTE_TTS_VOICE, type NoteTtsVoice } from "@/lib/note-tts-settings";
 import type { TtsAlignmentPiece } from "@/lib/note-tts-alignment";
 import {
@@ -17,8 +16,6 @@ import {
 } from "@/lib/note-tts-synthesis";
 import {
   NOTE_TTS_CHUNK_PLAN_VERSION,
-  buildNoteTtsChunks,
-  parseNoteTtsDocument,
   stripLeadingRedundantHeading,
   type NoteTtsChunkPlan,
   type NoteTtsWord,
@@ -129,7 +126,6 @@ const TTS_FALLBACK_SYNTHESIS_RESERVE_MS = 40_000;
 const TTS_WAIT_INTERVAL_MS = 2_000;
 const TTS_CACHE_WAIT_TIMEOUT_MS = 24_000;
 const TTS_GENERATION_RESERVATION_STALE_MS = 10 * 60 * 1000;
-const TTS_PROVIDER_RETRY_DELAYS_MS = [1_500, 3_500] as const;
 
 let sonioxClient: SonioxNodeClient | undefined;
 
@@ -170,62 +166,6 @@ function isTtsProviderRateLimitError(error: unknown) {
     message.includes("rate limit") ||
     message.includes("Concurrent requests limit")
   );
-}
-
-async function retryTtsProviderRateLimit<T>(operation: () => Promise<T>) {
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt <= TTS_PROVIDER_RETRY_DELAYS_MS.length; attempt += 1) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error;
-
-      if (!isTtsProviderRateLimitError(error) || attempt >= TTS_PROVIDER_RETRY_DELAYS_MS.length) {
-        throw error;
-      }
-
-      await wait(TTS_PROVIDER_RETRY_DELAYS_MS[attempt] ?? 0);
-    }
-  }
-
-  throw lastError;
-}
-
-function getInitialTtsErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Initial note audio could not be prepared.";
-}
-
-function getMetadataRecord(value: unknown) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-export async function markInitialNoteAudioPreparing(params: {
-  lectureId: string;
-  processingMetadata: unknown;
-}) {
-  const metadata = getMetadataRecord(params.processingMetadata);
-  const { error } = await createSupabaseServiceRoleClient()
-    .from("lectures")
-    .update(
-      {
-        processing_metadata: {
-          ...metadata,
-          processing: {
-            stage: INITIAL_NOTE_AUDIO_STAGE,
-            updatedAt: new Date().toISOString(),
-            errorMessage: null,
-          },
-        },
-      } as never,
-    )
-    .eq("id", params.lectureId);
-
-  if (error) {
-    throw error;
-  }
 }
 
 export function getTtsDailyLimitSeconds(hasPaidAccess: boolean) {
@@ -1287,85 +1227,6 @@ export async function getOrCreateTtsChunk(params: {
   }
 }
 
-export async function prepareInitialNoteTtsChunks(params: {
-  userId: string;
-  lectureId: string;
-  content: string;
-  title?: string | null;
-  languageHint: string | null;
-  voice?: NoteTtsVoice;
-  quotaContext?: TtsQuotaContext;
-  chunkCount?: number;
-}) {
-  const content = stripLeadingRedundantHeading(params.content, params.title).trim();
-
-  if (!content) {
-    return [];
-  }
-
-  const document = parseNoteTtsDocument(content);
-  const chunks = buildNoteTtsChunks(document);
-  const initialChunks = chunks.slice(0, Math.max(1, params.chunkCount ?? 2));
-
-  if (initialChunks.length === 0) {
-    return [];
-  }
-
-  const quotaContext =
-    params.quotaContext ?? (await getTtsQuotaContext({ userId: params.userId }));
-  const prepared = [];
-
-  for (const chunk of initialChunks) {
-    try {
-      const result = await retryTtsProviderRateLimit(() =>
-        getOrCreateTtsChunk({
-          userId: params.userId,
-          lectureId: params.lectureId,
-          contentHash: hashNoteTtsContent(content),
-          chunk,
-          allWords: document.words,
-          languageHint: params.languageHint,
-          voice: params.voice,
-          quotaContext,
-        }),
-      );
-
-      prepared.push(result);
-    } catch (error) {
-      if (error instanceof TtsQuotaLimitError || error instanceof TtsGenerationPendingError) {
-        break;
-      }
-
-      throw error;
-    }
-  }
-
-  return prepared;
-}
-
-export async function prepareInitialNoteTtsChunksSafely(
-  params: Parameters<typeof prepareInitialNoteTtsChunks>[0],
-) {
-  try {
-    const chunks = await prepareInitialNoteTtsChunks(params);
-
-    return {
-      status: chunks.length > 0 ? "ready" : "skipped",
-      errorMessage: null,
-    } as const;
-  } catch (error) {
-    console.error("Initial note audio preparation failed", {
-      lectureId: params.lectureId,
-      error,
-    });
-
-    return {
-      status: "failed",
-      errorMessage: getInitialTtsErrorMessage(error),
-    } as const;
-  }
-}
-
 // How many chunks from the start of the note are already synthesized for this voice. The note
 // page warms that many (at most two) the moment it opens, so a note listened to before starts on
 // the click rather than after a round trip — without ever generating anything, and so without
@@ -1410,12 +1271,3 @@ export async function getReadyLeadingTtsChunkCount(params: {
   return count;
 }
 
-export async function hasInitialNoteTtsChunk(params: {
-  lectureId: string;
-  content: string;
-  title?: string | null;
-  languageHint: string | null;
-  voice?: NoteTtsVoice;
-}) {
-  return (await getReadyLeadingTtsChunkCount({ ...params, limit: 1 })) > 0;
-}

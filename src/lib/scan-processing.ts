@@ -1,10 +1,6 @@
 import "server-only";
 
 import { MAX_SCAN_IMAGE_BYTES, STORAGE_BUCKET } from "@/lib/constants";
-import {
-  getInitialNoteAudioVoice,
-  shouldCreateInitialNoteAudio,
-} from "@/lib/lecture-source-metadata";
 import { LectureNoLongerExistsError } from "@/lib/lecture-processing-errors";
 import { extractTextFromImage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
 import {
@@ -18,10 +14,6 @@ import {
   type ScanOcrImageDiagnostics,
 } from "@/lib/scan-ocr-errors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import {
-  markInitialNoteAudioPreparing,
-  prepareInitialNoteTtsChunksSafely,
-} from "@/lib/note-tts";
 import { sourceLocaleMessage } from "@/lib/lecture-failure-text";
 
 const SCAN_OCR_CONCURRENCY = 3;
@@ -222,7 +214,7 @@ export async function processStoredScanLecture(
     if (hasPreparedScanImport) {
       const { data: artifact, error: artifactError } = await supabase
         .from("lecture_artifacts")
-        .select("lecture_id, structured_notes_md")
+        .select("lecture_id")
         .eq("lecture_id", lectureRow.id)
         .maybeSingle();
 
@@ -231,20 +223,6 @@ export async function processStoredScanLecture(
       }
 
       if (artifact) {
-        if (shouldCreateInitialNoteAudio(metadata)) {
-          await markInitialNoteAudioPreparing({
-            lectureId: lectureRow.id,
-            processingMetadata: metadata,
-          });
-          await prepareInitialNoteTtsChunksSafely({
-            userId: lectureRow.user_id,
-            lectureId: lectureRow.id,
-            content: (artifact as { structured_notes_md: string }).structured_notes_md,
-            title: lectureRow.title,
-            languageHint: lectureRow.language_hint,
-            voice: getInitialNoteAudioVoice(metadata),
-          });
-        }
         const { error: updateError } = await supabase
           .from("lectures")
           .update(
@@ -404,8 +382,6 @@ export async function processStoredScanLecture(
     blocks,
     titleHint,
     languageHint: lectureRow.language_hint ?? "sl",
-    createInitialAudio: shouldCreateInitialNoteAudio(metadata),
-    initialAudioVoice: getInitialNoteAudioVoice(metadata),
     modelMetadata: {
       importMode: "scan",
       sourceFileNames,

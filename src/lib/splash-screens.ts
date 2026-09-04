@@ -17,6 +17,15 @@
  * A device missing from the list simply falls back to the blank canvas, so
  * adding hardware is additive and never a regression.
  *
+ * This is only half the launch screen, and the half iOS reserves the right to
+ * skip. It draws nothing on a screen that is not in the list, nothing on a
+ * phone in Display Zoom (which reports a size no image can match), nothing on
+ * Android, and — because it resolves the image when the app is added to the
+ * home screen — nothing when an icon is carried onto a new phone by a device
+ * transfer. The other half is `LaunchScreen`, which draws the same mark on the
+ * same colour from inside the document, where none of those conditions apply.
+ * Keep the two showing the same picture: `SPLASH_MARK_*` below is that mark.
+ *
  * KEEP THIS LIST SHORT. The first cut of this shipped 120 links — every device
  * in both orientations, and landscape twice over to cover a media-query
  * ambiguity — and iOS silently ignored the lot: a freshly added web app opened
@@ -73,6 +82,26 @@ export const SPLASH_DEVICES: SplashDevice[] = [
   { width: 1024, height: 1366, ratio: 2, devices: 'iPad Pro 12.9", iPad Air 13"' },
   { width: 1032, height: 1376, ratio: 2, devices: 'iPad Pro 13" (M4)' },
 ];
+
+/**
+ * The mark on its own, for the launch screen the page draws itself.
+ *
+ * iOS's `apple-touch-startup-image` covers only the window before the first
+ * paint, and only where iOS agrees to use it — an exact pixel match, cached at
+ * install, no Display Zoom, nothing on Android. The same mark on the same
+ * canvas, painted by the document, has none of those conditions attached; see
+ * `LaunchScreen`. This is the file it draws.
+ *
+ * 384px is the widest it is ever shown at: 30vmin (the `SPLASH_LOGO_SCALE` the
+ * baked-in screens use) is 128 CSS px on the widest phone in the matrix, and a
+ * phone screen is 3x. Tablets show it larger and rescale a 384px source, which
+ * is invisible on a mark this soft and not worth another asset.
+ */
+export const SPLASH_MARK_FILE = "splash/mark.png";
+export const SPLASH_MARK_SRC = `/${SPLASH_MARK_FILE}`;
+export const SPLASH_MARK_WIDTH = 384;
+/** The mark is 512x460; kept in step so the <img> reserves the right box. */
+export const SPLASH_MARK_HEIGHT = 345;
 
 export const SPLASH_THEMES = ["light", "dark"] as const;
 export type SplashTheme = (typeof SPLASH_THEMES)[number];

@@ -792,7 +792,6 @@ function getLectureProcessingStage(metadata: unknown) {
 }
 
 const LECTURE_STAGE_KEYS: Record<string, MessageKey> = {
-  preparing_audio: "stage.lecture.preparingAudio",
   extracting_document_text: "stage.lecture.extractingDocument",
   extracting_scan_text: "stage.lecture.extractingScan",
   annotating_notes: "stage.lecture.annotating",

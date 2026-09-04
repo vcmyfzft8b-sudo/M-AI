@@ -1181,6 +1181,7 @@ export function LectureWorkspace({
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
   const quizAdvanceTimerRef = useRef<number | null>(null);
   const closeMobileChat = useCallback(() => setIsMobileChatOpen(false), []);
+  const leavePalace = useCallback(() => setActiveTab("notes"), []);
   /*
    * Dictation for the chat composer. What it hears is appended to whatever is
    * already in the field rather than replacing it, so speaking after typing
@@ -3879,6 +3880,9 @@ export function LectureWorkspace({
           practiceQuestions={detail.practiceTestQuestions}
           sections={detail.studySections}
           isReady={detail.lecture.status === "ready"}
+          /* Leaving the town puts the reader on the note, which is what the
+             button in it says it does. */
+          onLeave={leavePalace}
         />
       );
     }

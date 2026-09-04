@@ -106,6 +106,7 @@ export function LecturePalace({
   practiceQuestions,
   sections,
   isReady,
+  onLeave,
 }: {
   lectureId: string;
   cards: FlashcardWithCitations[];
@@ -113,6 +114,8 @@ export function LecturePalace({
   practiceQuestions: PracticeTestQuestion[];
   sections: StudySectionWithProgress[];
   isReady: boolean;
+  /** Where "back to the note" goes: the note itself, not this tab. */
+  onLeave?: () => void;
 }) {
   const t = useT();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -519,6 +522,57 @@ export function LecturePalace({
     [],
   );
 
+  /*
+   * One way out, however it is asked for: the button, Escape, or the phone's
+   * own back gesture. It closes the town and puts the reader back on the note
+   * rather than on the tab they left from — the button says "back to the note",
+   * and it should be telling the truth.
+   */
+  /*
+   * Held in a ref so the history effect below can depend on nothing but whether
+   * the town is open: a caller that rebuilds this callback every render would
+   * otherwise make that effect tear down and re-arm, and its teardown walks the
+   * history back.
+   */
+  const onLeaveRef = useRef(onLeave);
+
+  useEffect(() => {
+    onLeaveRef.current = onLeave;
+  }, [onLeave]);
+
+  const leaveGame = useCallback(() => {
+    setIsOpen(false);
+    onLeaveRef.current?.();
+  }, []);
+
+  /*
+   * Opening the town adds a history entry, so the browser's back button and the
+   * phone's back gesture close it instead of leaving the note altogether. A
+   * full-screen overlay that swallows Back is the fastest way to trap someone.
+   */
+  useEffect(() => {
+    if (!isOpen) return;
+
+    window.history.pushState({ memoPalace: true }, "");
+
+    const onPopState = () => {
+      /* The entry is already gone, so this must not walk history again. */
+      setIsOpen(false);
+      onLeaveRef.current?.();
+    };
+
+    window.addEventListener("popstate", onPopState);
+
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+
+      /* Closed some other way: take our entry back off the stack. */
+      if (window.history.state?.memoPalace) {
+        window.history.back();
+      }
+    };
+  }, [isOpen]);
+
   /* The page behind must not scroll under the town while it is open. */
   useEffect(() => {
     if (!isOpen) return;
@@ -543,7 +597,7 @@ export function LecturePalace({
     const onVisibility = () => gameRef.current?.setPaused(document.hidden);
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setIsOpen(false);
+        leaveGame();
       }
     };
 
@@ -556,7 +610,7 @@ export function LecturePalace({
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [isOpen, sizeMinimap]);
+  }, [isOpen, leaveGame, sizeMinimap]);
 
   /* The map sheet stops the world; the loop keeps rendering. */
   useEffect(() => {
@@ -1142,7 +1196,7 @@ export function LecturePalace({
             <button
               type="button"
               className="memo-palace-exit"
-              onClick={() => setIsOpen(false)}
+              onClick={leaveGame}
               aria-label={t("palace.exit")}
             >
               <Msym name="arrow_back" size="1.1rem" />
@@ -1164,7 +1218,7 @@ export function LecturePalace({
                 <button
                   type="button"
                   className="memo-button-outline small"
-                  onClick={() => setIsOpen(false)}
+                  onClick={leaveGame}
                 >
                   {t("palace.exit")}
                 </button>
@@ -1273,7 +1327,7 @@ export function LecturePalace({
                       <button
                         type="button"
                         className="memo-button-outline small"
-                        onClick={() => setIsOpen(false)}
+                        onClick={leaveGame}
                       >
                         {t("palace.exit")}
                       </button>

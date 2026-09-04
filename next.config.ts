@@ -45,6 +45,21 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        /*
+         * The tutor's voice clips: eleven pre-rendered files per language that change only when
+         * somebody regenerates them. Cached for a week and served stale for a month while a new
+         * one is fetched behind it, so auditioning a voice is instant on every tap after the
+         * first and instant on the first tap of every later session.
+         */
+        source: "/tutor-demo/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=604800, stale-while-revalidate=2592000",
+          },
+        ],
+      },
     ];
   },
   experimental: {

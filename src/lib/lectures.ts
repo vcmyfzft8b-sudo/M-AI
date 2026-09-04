@@ -38,6 +38,7 @@ import type {
   StudySession,
 } from "@/lib/types";
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
+import { PREVIEW_AUTH_BYPASS_USER_ID } from "@/lib/auth";
 import { lectureRowMatchesOwner } from "@/lib/lecture-ownership";
 import {
   isRecord,
@@ -811,7 +812,61 @@ function buildStudySections(params: {
   });
 }
 
+/**
+ * The library the dev sign-in bypass sees.
+ *
+ * `PREVIEW_AUTH_BYPASS` fabricates a user rather than creating one, so the
+ * account owns no rows and its library opens empty — which leaves most of the
+ * app unreachable, because nearly all of it is a screen about a note. It is
+ * lent one of the demo notes instead: the same fixtures `/creator` runs on, so
+ * this is a real note with real markdown, flashcards and quiz questions rather
+ * than a stub.
+ *
+ * Gated on the fabricated id, which only exists while `PREVIEW_AUTH_BYPASS` is
+ * set and which production never issues. The import is dynamic so the demo
+ * content stays out of the server bundle for every real account.
+ */
+/*
+ * A uuid rather than the demo's own readable slug: every lecture route runs the
+ * id through `uuidSchema` before anything else, so a slug 404s before it can
+ * reach the account that was lent it.
+ */
+const PREVIEW_BYPASS_LECTURE_ID = "00000000-0000-4000-8000-000000000010";
+const PREVIEW_BYPASS_DEMO_NOTE = "demo-note-anatomija";
+
+function isPreviewBypassUser(userId: string) {
+  return userId === PREVIEW_AUTH_BYPASS_USER_ID;
+}
+
+async function previewBypassLectureDetail(lectureId: string): Promise<LectureDetail | null> {
+  if (lectureId !== PREVIEW_BYPASS_LECTURE_ID) {
+    return null;
+  }
+
+  const { buildDemoSeedDetail } = await import("@/lib/creator-demo/build");
+  const detail = buildDemoSeedDetail(PREVIEW_BYPASS_DEMO_NOTE);
+
+  if (!detail) {
+    return null;
+  }
+
+  return {
+    ...detail,
+    lecture: {
+      ...detail.lecture,
+      id: PREVIEW_BYPASS_LECTURE_ID,
+      user_id: PREVIEW_AUTH_BYPASS_USER_ID,
+    },
+  };
+}
+
 export async function listLecturesForUser(userId: string): Promise<AppLectureListItem[]> {
+  if (isPreviewBypassUser(userId)) {
+    const detail = await previewBypassLectureDetail(PREVIEW_BYPASS_LECTURE_ID);
+
+    return detail ? [detail.lecture] : [];
+  }
+
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase
     .from("lectures")
@@ -838,6 +893,14 @@ export async function getLectureDetailForUser(params: {
   // pre-check omit it, and the lookup stays their ownership check.
   verifiedLecture?: LectureRow | null;
 }): Promise<LectureDetail | null> {
+  /*
+   * Ahead of the uuid check so this branch reads the same in all three entry
+   * points; the lent id is a uuid, so it would pass that check either way.
+   */
+  if (isPreviewBypassUser(params.userId)) {
+    return previewBypassLectureDetail(params.lectureId);
+  }
+
   if (!uuidSchema.safeParse(params.lectureId).success) {
     return null;
   }
@@ -1217,6 +1280,13 @@ export async function ensureUserOwnsLecture(params: {
 }): Promise<LectureRow | null> {
   if (!uuidSchema.safeParse(params.lectureId).success) {
     return null;
+  }
+
+  /* The lent note has no row to own, so ownership is the lending itself. */
+  if (isPreviewBypassUser(params.user.id)) {
+    const detail = await previewBypassLectureDetail(params.lectureId);
+
+    return detail?.lecture ?? null;
   }
 
   const supabase = await createSupabaseServerClient();

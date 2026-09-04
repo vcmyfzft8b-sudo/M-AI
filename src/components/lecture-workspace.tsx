@@ -21,6 +21,7 @@ import { useT, useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { NoteReadAloud } from "@/components/note-read-aloud";
+import { NoteSpeedReader } from "@/components/note-speed-reader";
 import { StudyCompletionCard } from "@/components/study-completion-card";
 import { MemoPortal } from "@/components/memo-portal";
 import { RecordingPlayer } from "@/components/recording-player";
@@ -76,7 +77,15 @@ import {
   formatTimestamp,
 } from "@/lib/utils";
 
-type WorkspaceTab = "notes" | "study" | "tutor" | "mindmap" | "chat" | "transcript" | "audio";
+type WorkspaceTab =
+  | "notes"
+  | "study"
+  | "tutor"
+  | "mindmap"
+  | "speed"
+  | "chat"
+  | "transcript"
+  | "audio";
 type StudyMaterialView = "flashcards" | "quiz" | "practice_test";
 type FlashcardSessionResult = {
   attempts: number;
@@ -297,9 +306,18 @@ const NOTE_TABS = [
     icon: "graphic_eq",
     tint: "oklch(0.66 0.15 50)",
   },
+  {
+    id: "flashcards",
+    view: "flashcards",
+    labelKey: "note.tab.flashcards",
+    icon: "style",
+    tint: "oklch(0.66 0.15 295)",
+  },
+  { id: "quiz", view: "quiz", labelKey: "note.tab.quiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
   /*
-   * The third way to take the note in rather than a fourth thing to practise: read it, hear it,
-   * or see its shape. It sits with the other two for that reason, ahead of the practice pills.
+   * Last of the revision pills and immediately before the test, because that is the order the
+   * work is done in: cards, then questions, then the map you check the whole shape against —
+   * and then you sit the test.
    */
   {
     id: "mindmap",
@@ -309,19 +327,25 @@ const NOTE_TABS = [
     tint: "oklch(0.66 0.15 200)",
   },
   {
-    id: "flashcards",
-    view: "flashcards",
-    labelKey: "note.tab.flashcards",
-    icon: "style",
-    tint: "oklch(0.66 0.15 295)",
-  },
-  { id: "quiz", view: "quiz", labelKey: "note.tab.quiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
-  {
     id: "test",
     view: "practice_test",
     labelKey: "note.tab.test",
     icon: "assignment",
     tint: "oklch(0.66 0.15 150)",
+  },
+  /*
+   * Another way through the note itself — one word at a time, held still, for a
+   * reader who wants the whole thing at pace rather than explained. It sits at
+   * the end of the row rather than beside the walkthrough: the three practice
+   * screens are what the row is mostly reached for, and a fourth pill between
+   * them and the note pushed them along by one.
+   */
+  {
+    id: "speed",
+    view: null,
+    labelKey: "note.tab.speed",
+    icon: "bolt",
+    tint: "oklch(0.66 0.15 275)",
   },
   {
     id: "transcript",
@@ -1288,6 +1312,7 @@ const SUB_SCREEN_TITLE_KEYS: Record<string, MessageKey | null> = {
   test: "note.subScreen.test",
   tutor: "tutor.subScreenTitle",
   mindmap: "note.tab.mindmap",
+  speed: "note.tab.speed",
   transcript: "note.tab.transcript",
 };
 
@@ -4202,6 +4227,20 @@ export function LectureWorkspace({
       );
     }
 
+    if (activeTab === "speed") {
+      return (
+        <NoteSpeedReader
+          lectureId={detail.lecture.id}
+          /*
+           * The same markdown the note screen renders, so the two are never
+           * reading different versions of the note.
+           */
+          content={detail.lecture.status === "ready" ? cleanedStructuredNotes : null}
+          onClose={() => setActiveTab("notes")}
+        />
+      );
+    }
+
     if (activeTab === "notes") {
       // The dock's annotate layer: brush, underline, colour, photo, and the
       // swatch row the colour button slides open.
@@ -5849,13 +5888,15 @@ export function LectureWorkspace({
         ? "tutor"
         : activeTab === "mindmap"
           ? "mindmap"
-          : activeTab === "transcript" || activeTab === "audio"
-            ? "transcript"
-            : activeStudyView === "flashcards"
-              ? "flashcards"
-              : activeStudyView === "quiz"
-                ? "quiz"
-                : "test";
+          : activeTab === "speed"
+            ? "speed"
+            : activeTab === "transcript" || activeTab === "audio"
+              ? "transcript"
+              : activeStudyView === "flashcards"
+                ? "flashcards"
+                : activeStudyView === "quiz"
+                  ? "quiz"
+                  : "test";
 
   /*
    * The pill row follows the tab it is on. The pills overflow their scroller
@@ -6243,6 +6284,11 @@ export function LectureWorkspace({
 
     if (tab.id === "mindmap") {
       setActiveTab("mindmap");
+      return;
+    }
+
+    if (tab.id === "speed") {
+      setActiveTab("speed");
       return;
     }
 

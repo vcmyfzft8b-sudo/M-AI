@@ -39,6 +39,7 @@ import {
   NoReadableScanTextError,
   type ScanOcrAttemptDiagnostics,
 } from "@/lib/scan-ocr-errors";
+import { classifyImageOcrText, hasFailurePhrase } from "@/lib/scan-ocr-text";
 import { getServerEnv } from "@/lib/server-env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import {
@@ -91,17 +92,8 @@ const TRANSCRIPT_SEGMENT_INSERT_BATCH_SIZE = 25;
 const OCR_PRIMARY_MAX_OUTPUT_TOKENS = 3500;
 const OCR_RESCUE_MAX_OUTPUT_TOKENS = 6000;
 const PDF_FALLBACK_MAX_OUTPUT_TOKENS = 12000;
-const OCR_MIN_ACCEPTED_TEXT_CHARS = 120;
 // Thinking suppression is version-specific (3.5+ rejects thinkingBudget with a bare 400), so
 // the config is resolved from the model right before each call instead of being a constant.
-const OCR_FAILURE_PATTERNS = [
-  /\b(can(?:not|'t)\s+(?:read|extract|see)|unable\s+to\s+(?:read|extract|see))\b/i,
-  /\b(no|without)\s+(?:readable\s+)?text\b/i,
-  /\bimage\s+(?:is\s+)?(?:blank|too\s+blurry|illegible)\b/i,
-  /\bnot\s+enough\s+readable\s+text\b/i,
-  /\bni\s+(?:berljivega\s+)?besedila\b/i,
-  /\bne\s+morem\s+(?:prebrati|razbrati)\b/i,
-];
 
 type TranscriptSegmentInsertRow = {
   lecture_id: string;
@@ -231,30 +223,6 @@ function normalizeOcrPlainText(value: string) {
   const textMatch = normalized.match(/(?:^|\n)TEXT:\s*\n([\s\S]*)$/i);
 
   return normalizeWhitespace(textMatch?.[1] ?? normalized.replace(/^TITLE:\s*.+$/im, ""));
-}
-
-function hasFailurePhrase(text: string) {
-  return OCR_FAILURE_PATTERNS.some((pattern) => pattern.test(text));
-}
-
-export function isAcceptableImageOcrText(text: string) {
-  const normalized = normalizeWhitespace(text);
-
-  if (normalized.length < OCR_MIN_ACCEPTED_TEXT_CHARS || hasFailurePhrase(normalized)) {
-    return false;
-  }
-
-  const compact = normalized.replace(/\s/g, "");
-
-  if (!compact) {
-    return false;
-  }
-
-  const readableCharacters = Array.from(compact).filter((character) =>
-    /[\p{L}\p{N}=+\-*/^.,;:()[\]{}<>%$#@]/u.test(character),
-  ).length;
-
-  return readableCharacters / compact.length >= 0.45;
 }
 
 function deriveImageTitle(file: File, text: string) {
@@ -1504,18 +1472,19 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
       }),
     });
     const text = normalizeOcrPlainText(primaryText);
-    const acceptable = isAcceptableImageOcrText(text);
+    const verdict = classifyImageOcrText(text);
     attempts.push({
-      acceptable,
+      acceptable: verdict.acceptable,
       errorMessage: null,
       maxOutputTokens: OCR_PRIMARY_MAX_OUTPUT_TOKENS,
       mediaResolution: "medium",
       model: env.GEMINI_OCR_MODEL,
       outputLength: text.length,
+      rejection: verdict.acceptable ? null : verdict.rejection,
       stage: "ocr_primary",
     });
 
-    if (acceptable) {
+    if (verdict.acceptable) {
       return {
         title: deriveImageTitle(file, text),
         text,
@@ -1530,6 +1499,9 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
       mediaResolution: "medium",
       model: env.GEMINI_OCR_MODEL,
       outputLength: error instanceof GeminiEmptyTextOutputError ? 0 : null,
+      // An empty reply is the photo; any other throw is us or the provider, and says nothing
+      // about what was on the page.
+      rejection: error instanceof GeminiEmptyTextOutputError ? "unreadable" : null,
       stage: "ocr_primary",
     });
   }
@@ -1550,18 +1522,19 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
       }),
     });
     const text = normalizeOcrPlainText(rescueText);
-    const acceptable = isAcceptableImageOcrText(text);
+    const verdict = classifyImageOcrText(text);
     attempts.push({
-      acceptable,
+      acceptable: verdict.acceptable,
       errorMessage: null,
       maxOutputTokens: OCR_RESCUE_MAX_OUTPUT_TOKENS,
       mediaResolution: "high",
       model: env.GEMINI_OCR_RESCUE_MODEL,
       outputLength: text.length,
+      rejection: verdict.acceptable ? null : verdict.rejection,
       stage: "ocr_rescue",
     });
 
-    if (!acceptable) {
+    if (!verdict.acceptable) {
       throw buildNoReadableImageTextError({
         attempts,
         context,
@@ -1592,6 +1565,7 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
         mediaResolution: "high",
         model: env.GEMINI_OCR_RESCUE_MODEL,
         outputLength: 0,
+        rejection: "unreadable",
         stage: "ocr_rescue",
       });
 

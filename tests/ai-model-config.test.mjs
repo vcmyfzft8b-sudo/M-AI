@@ -6,6 +6,8 @@ import {
   GLM_TEXT_MODEL,
   isLanguageCheckEnabled,
   LANGUAGE_CHECK_MODEL,
+  TUTOR_VOICE_MODEL,
+  writerNeedsLanguageCheck,
   resolveStageFallbackModel,
   resolveStageFallbackReserveMs,
   resolveStageModelConfig,
@@ -393,4 +395,45 @@ test("the language check is on unless it is explicitly turned off", () => {
   for (const value of ["off", "OFF", " off ", "0", "false", "disabled"]) {
     assert.equal(isLanguageCheckEnabled({ LANGUAGE_CHECK: value }), false, value);
   }
+});
+
+test("the tutor runs on two models, because its halves are judged on different things", () => {
+  // The plan decides which topics exist and is marked on coverage: GLM covered 23 of 23 key facts
+  // where the turn writer covered 9. The turns are judged on prose and latency, where that is
+  // reversed. Collapsing these back into one stage loses whichever half it is not chosen for.
+  assert.equal(resolve("tutor_plan", {}).model, GLM_TEXT_MODEL);
+  assert.equal(resolve("tutor_turn", {}).model, TUTOR_VOICE_MODEL);
+  assert.notEqual(resolve("tutor_plan", {}).model, resolve("tutor_turn", {}).model);
+});
+
+test("the plan is not held to the spoken turn's leash", () => {
+  // Sharing it aborted GLM on five runs in six (measured 19-51s) and taught the session from a
+  // fallback plan covering half the material.
+  const planMs = resolveStageTimeoutMs("tutor_plan", GLM_TEXT_MODEL);
+  const turnMs = resolveStageTimeoutMs("tutor_turn", TUTOR_VOICE_MODEL);
+
+  assert.ok(planMs >= 90_000, `plan timeout ${planMs} must clear the measured 51s tail`);
+  assert.ok(planMs > turnMs);
+  // Both tiers plus a fallback still have to fit the route's 300s invocation.
+  assert.ok(planMs < 300_000);
+});
+
+test("both tutor stages sort hosts for latency, not throughput", () => {
+  assert.equal(resolve("tutor_plan", {}).providerSort, "latency");
+  assert.equal(resolve("tutor_turn", {}).providerSort, "latency");
+});
+
+test("either tutor stage can be moved without a deploy", () => {
+  assert.equal(resolve("tutor_plan", { GEMINI_TUTOR_PLAN_MODEL: "gemini-2.5-flash" }).model, "gemini-2.5-flash");
+  assert.equal(resolve("tutor_turn", { GEMINI_TUTOR_TURN_MODEL: GLM_TEXT_MODEL }).model, GLM_TEXT_MODEL);
+});
+
+test("the language check follows the writer rather than a second setting", () => {
+  // Rolling the turn writer back to GLM must bring its checker back in the same breath, and
+  // nobody should be able to end up on the fast writer with the slow safety net still attached.
+  assert.equal(writerNeedsLanguageCheck(GLM_TEXT_MODEL), true);
+  assert.equal(writerNeedsLanguageCheck("glm-5.3-flash"), true);
+  assert.equal(writerNeedsLanguageCheck(TUTOR_VOICE_MODEL), false);
+  assert.equal(writerNeedsLanguageCheck("gemini-2.5-flash-lite"), false);
+  assert.equal(writerNeedsLanguageCheck("or/google/gemini-3.7-flash"), false);
 });

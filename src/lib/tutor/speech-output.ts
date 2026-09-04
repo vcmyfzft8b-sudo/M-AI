@@ -549,6 +549,27 @@ export class TutorSpeechOutput {
     }
 
     if (typeof message.error_code === "string" || typeof message.error_code === "number") {
+      /*
+       * Errors belong to a stream, so they are filtered by one like every other frame.
+       *
+       * Measured against `tts-rt-v2` on 2026-09-04: every error frame names its
+       * `stream_id` — the 400 `invalid_stream_state` from cancelling a stream that has
+       * already terminated, the 408 `request_timeout` of a stream left without text, a
+       * 401 for a rejected key, a 400 for a field out of range. Each is followed by
+       * `{terminated: true}` for that same stream and the connection stays open.
+       *
+       * An error naming a stream that is not the current turn is therefore a dead turn's,
+       * and failing the live turn for it ends the lesson over speech the learner has
+       * already moved on from — which is what MEMOAI-WEB-3D was. Soniox sends an empty
+       * `stream_id` when it could not attribute the failure to a stream at all, and that,
+       * like a frame with no id, is connection-level and has to reach the learner.
+       */
+      const streamId = typeof message.stream_id === "string" ? message.stream_id : "";
+
+      if (streamId && streamId !== this.turn?.streamId) {
+        return;
+      }
+
       const error = new SpeechOutputError(
         typeof message.error_message === "string"
           ? message.error_message

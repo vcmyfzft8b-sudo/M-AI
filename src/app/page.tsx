@@ -160,7 +160,6 @@ export default async function HomePage() {
           <h2 id="landing-tutor-title" className="landing-v2-section-title">
             {t("landing.tutor.title")}
           </h2>
-          <p className="landing-v2-tutor-lead">{t("landing.tutor.lead")}</p>
         </div>
         <div className="landing-v2-tutor-stage" data-scroll-reveal="">
           <LandingTutorDemo />

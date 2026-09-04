@@ -25,35 +25,47 @@ import { useTranslations } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { NOTE_TTS_VOICES, type NoteTtsVoice } from "@/lib/note-tts-settings";
+import { pillNeighbourhoodScrollTarget } from "@/lib/tab-scroll";
 import { TutorClipPlayer } from "@/lib/tutor/clip-player";
 import { showsHeardLine, type TutorPhase } from "@/lib/tutor/heard-line";
 import { voiceHue } from "@/lib/tutor/voice-colors";
-import { tutorDemoClip, voiceSampleClip } from "@/lib/tutor/voice-clips";
+import { tutorAnswerClip, tutorDemoClip, voiceSampleClip } from "@/lib/tutor/voice-clips";
 
 /*
- * The walkthrough, as a script. The two questions are the learner's; the tutor's
- * own words are never printed in the app either — they are in the room — so
- * there is nothing else here to write.
+ * The walkthrough, as a script. Only the learner's question is written down; the
+ * tutor's own words are never printed in the app either — they are in the room —
+ * so what it says lives in the recordings rather than here.
  */
 type ScriptStep = {
   phase: TutorPhase;
   ms: number;
   heardKey?: MessageKey;
+  /** Which recording this turn speaks. */
+  clip?: "tutor" | "answer";
   /*
-   * The last thing the tutor says runs until the recording runs out rather than
-   * for a fixed time, so the demo ends on a finished sentence whatever the voice
-   * and whatever the language. `ms` is what it falls back to when there is no
-   * sound — a walkthrough nobody started with a tap, or a browser that refused.
+   * The answer runs until the recording runs out rather than for a fixed time, so
+   * the demo ends on a finished sentence whatever the voice and whatever the
+   * language. `ms` is what it falls back to when there is no sound — a
+   * walkthrough nobody started with a tap, or a browser that refused one.
    */
   untilClipEnds?: boolean;
 };
 
+/*
+ * The exchange, which is the whole thing this feature is: the tutor explaining,
+ * the learner cutting in, the tutor answering *that* and not simply carrying on.
+ *
+ * The first turn is cut off deliberately. Its recording runs about nine seconds
+ * and gets five and a half, so the question lands mid-sentence and the voice stops
+ * dead — which is what barge-in looks like, and what a turn that politely finished
+ * first would not show. The answer is a recording of its own; see voice-clips.ts.
+ */
 const SCRIPT: ScriptStep[] = [
   { phase: "preparing", ms: 2000 },
-  { phase: "speaking", ms: 8000 },
-  { phase: "listening", ms: 3600, heardKey: "tutorDemo.heard1" },
+  { phase: "speaking", ms: 5500, clip: "tutor" },
+  { phase: "listening", ms: 3800, heardKey: "tutorDemo.heard1" },
   { phase: "thinking", ms: 1500 },
-  { phase: "speaking", ms: 7000, untilClipEnds: true },
+  { phase: "speaking", ms: 11000, clip: "answer", untilClipEnds: true },
   { phase: "finished", ms: 0 },
 ];
 
@@ -64,7 +76,7 @@ const HEARD_WORD_MS = 190;
 const VOICE_SAMPLE_MS = 8000;
 
 export type LandingTutorDemoProps = {
-  /** Pulls the voice row's bleed back to the phone's own gutter. */
+  /** Pulls the voice row's bleed back to the phone mockup's own gutter. */
   inset?: "page" | "phone";
   /** Token overrides — the phone mockup hands it `--m-*`. */
   style?: CSSProperties;
@@ -100,6 +112,8 @@ export function LandingTutorDemo({ inset = "page", style, className }: LandingTu
   const playerRef = useRef<TutorClipPlayer | null>(null);
   const [audible, setAudible] = useState(false);
   const levelRaf = useRef<number | undefined>(undefined);
+  /* Which turn's recording is loaded, so Continue resumes it instead of replaying it. */
+  const speakingStep = useRef<number | null>(null);
 
   const player = () => {
     if (!playerRef.current) {
@@ -166,10 +180,6 @@ export function LandingTutorDemo({ inset = "page", style, className }: LandingTu
     return Math.min(next, SCRIPT.length - 1);
   }, []);
 
-  /* Whether the recording has been started this run, so a resumed turn carries on
-     from where the learner cut in rather than from the top. */
-  const clipStarted = useRef(false);
-
   /*
    * The sphere on the real voice.
    *
@@ -216,28 +226,34 @@ export function LandingTutorDemo({ inset = "page", style, className }: LandingTu
     const spec = SCRIPT[step];
 
     /*
-     * The voice follows the phase, which is the whole point of the thing: it
-     * speaks while the tutor speaks, and stops the moment the learner takes the
-     * floor — a duck, held through the beat where the answer is put together,
-     * and picked up again exactly where it left off.
+     * The voice follows the phase: it speaks while the tutor speaks, and stops the
+     * moment the learner takes the floor and through the beat where the answer is
+     * put together.
      */
     if (audible) {
       const active = player();
 
-      if (paused || spec.phase === "listening" || spec.phase === "thinking") {
+      if (paused) {
         active.pause();
-      } else if (spec.phase === "speaking") {
-        if (clipStarted.current) {
-          void active.resume().then(followClipLevel);
-        } else {
-          clipStarted.current = true;
-          void active
-            .play(tutorDemoClip(voice, locale), { muted: mutedRef.current })
-            .then(followClipLevel)
-            .catch(() => setAudible(false));
-        }
-      } else if (spec.phase === "finished") {
-        active.stop();
+      } else if (!spec.clip) {
+        active.pause();
+      } else if (speakingStep.current === step) {
+        /* Coming back from Pause, so it carries on rather than starting over. */
+        void active.resume().then(followClipLevel);
+      } else {
+        /*
+         * A turn is its own recording, played from the top. The first one is
+         * abandoned rather than resumed when the learner interrupts, because that
+         * is what the tutor does: it answers the question instead of finishing the
+         * sentence nobody is still listening to.
+         */
+        speakingStep.current = step;
+        const src = spec.clip === "answer" ? tutorAnswerClip(voice, locale) : tutorDemoClip(voice, locale);
+
+        void active
+          .play(src, { muted: mutedRef.current })
+          .then(followClipLevel)
+          .catch(() => setAudible(false));
       }
     }
 
@@ -272,7 +288,7 @@ export function LandingTutorDemo({ inset = "page", style, className }: LandingTu
   }, [audible, clearTimers, followClipLevel, locale, nextStep, paused, step, t, voice]);
 
   const startSession = useCallback((withSound: boolean) => {
-    clipStarted.current = false;
+    speakingStep.current = null;
 
     if (withSound) {
       /* The clip's own end is what finishes the last turn. */
@@ -316,6 +332,7 @@ export function LandingTutorDemo({ inset = "page", style, className }: LandingTu
 
   const end = useCallback(() => {
     clearTimers();
+    speakingStep.current = null;
     playerRef.current?.stop();
     setStep(null);
     setPaused(false);
@@ -338,6 +355,14 @@ export function LandingTutorDemo({ inset = "page", style, className }: LandingTu
    */
   const voiceRowRef = useRef<HTMLDivElement | null>(null);
 
+  /*
+   * Screen pixels per layout pixel. One everywhere except inside the phone
+   * mockup, which draws this panel through a `transform: scale()` — there a
+   * pointer moves in screen pixels and `scrollLeft` counts in layout ones, and a
+   * drag that ignores the difference trails the cursor by the scale factor.
+   */
+  const rowScale = (row: HTMLElement) => row.getBoundingClientRect().width / row.clientWidth || 1;
+
   useEffect(() => {
     const row = voiceRowRef.current;
     if (!row) return;
@@ -351,7 +376,7 @@ export function LandingTutorDemo({ inset = "page", style, className }: LandingTu
         delta < 0 ? row.scrollLeft : row.scrollWidth - row.clientWidth - row.scrollLeft;
       if (!delta || room < 1) return;
       event.preventDefault();
-      row.scrollLeft += delta;
+      row.scrollLeft += delta / rowScale(row);
     };
 
     /* Non-passive, and native: React's own wheel listener cannot preventDefault. */
@@ -380,17 +405,95 @@ export function LandingTutorDemo({ inset = "page", style, className }: LandingTu
     const drag = voiceDrag.current;
     const row = voiceRowRef.current;
     if (!drag || !row) return;
+
     const dx = event.clientX - drag.x;
+
     /* A few pixels of slop, so a click that wobbles is still a click. */
     if (!drag.moved && Math.abs(dx) < 4) return;
-    drag.moved = true;
-    voiceDragged.current = true;
-    row.scrollLeft = drag.from - dx;
+
+    if (!drag.moved) {
+      drag.moved = true;
+      voiceDragged.current = true;
+      /*
+       * Claimed only once it is really a drag, and only then: capturing on the
+       * press would swallow the click that plays a voice. From here the row keeps
+       * receiving the pointer even when it wanders off the row's own few pixels
+       * of height, which is most of a horizontal drag.
+       */
+      row.setPointerCapture?.(event.pointerId);
+      /* Snapping fights a drag, pulling it back a chip at a time. */
+      row.style.scrollSnapType = "none";
+    }
+
+    row.scrollLeft = drag.from - dx / rowScale(row);
   };
 
-  const endVoiceRowDrag = () => {
+  const endVoiceRowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const row = voiceRowRef.current;
+
+    if (row && voiceDrag.current?.moved) {
+      row.releasePointerCapture?.(event.pointerId);
+      row.style.removeProperty("scroll-snap-type");
+    }
+
     voiceDrag.current = null;
   };
+
+  /*
+   * Keep the chosen voice in view, as the app does.
+   *
+   * Where the row scrolls, the voice that is selected is regularly past its right
+   * edge — which looks exactly like nothing being selected at all. The same
+   * arithmetic the app uses, from the same helper, so the row lands in the same
+   * place: the chosen chip whole, its neighbour still peeking in to say the row
+   * keeps going, and no movement at all when it was already comfortably visible.
+   */
+  useEffect(() => {
+    const row = voiceRowRef.current;
+    const chip = row?.querySelector<HTMLElement>(".landing-tutor-voice.active");
+
+    if (!row || !chip) return;
+
+    const rowRect = row.getBoundingClientRect();
+
+    /*
+     * The one thing the app does not have to think about: the phone mockup draws
+     * this whole panel through a `transform: scale()`, so `getBoundingClientRect`
+     * answers in screen pixels while `scrollLeft` and `clientWidth` answer in
+     * layout pixels. Feeding the helper both at once halves every measurement it
+     * takes and it under-scrolls — the selected chip stays cut off at the edge,
+     * which is exactly what the row is being scrolled to avoid. Rects are divided
+     * back into layout pixels here; unscaled hosts divide by one.
+     */
+    const scale = rowScale(row);
+    const inLayoutPixels = (rect: DOMRect) => ({
+      left: (rect.left - rowRect.left) / scale,
+      width: rect.width / scale,
+    });
+
+    const previous = chip.previousElementSibling;
+    const next = chip.nextElementSibling;
+    const target = pillNeighbourhoodScrollTarget({
+      /* Named explicitly, never spread: these are prototype getters. */
+      row: {
+        scrollLeft: row.scrollLeft,
+        clientWidth: row.clientWidth,
+        scrollWidth: row.scrollWidth,
+        /* Already subtracted out by `inLayoutPixels`. */
+        left: 0,
+      },
+      pill: inLayoutPixels(chip.getBoundingClientRect()),
+      previous: previous instanceof HTMLElement ? inLayoutPixels(previous.getBoundingClientRect()) : null,
+      next: next instanceof HTMLElement ? inLayoutPixels(next.getBoundingClientRect()) : null,
+    });
+
+    if (target === null) return;
+
+    row.scrollTo({
+      left: target,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+  }, [voice, isRunning]);
 
   /* Idle has no status of its own — the start screen's own line says what this is. */
   const statusKey: MessageKey | null =

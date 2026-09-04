@@ -13,10 +13,11 @@
  * `<audio>` tag. Instant in the app, possible on the page.
  *
  * Two clips per voice per language:
- *   sample — the line the app has always previewed a voice with, kept verbatim.
- *   tutor  — a longer bed for the page's demo, which is the tutor actually
- *            explaining rather than introducing itself. Landing locales only;
- *            the app never plays it.
+ *   sample — the line the app previews a voice with.
+ *   tutor  — the page demo's opening: the tutor starting to explain.
+ *   answer — what it says when the learner cuts in with the question the page
+ *            prints under the sphere.
+ * The last two are landing locales only; the app never plays them.
  *
  * Usage:  node scripts/generate-tutor-voice-clips.mjs [--voice Grace] [--language sl] [--force]
  */
@@ -69,33 +70,57 @@ const SAMPLE = {
 };
 
 /*
- * The page's demo. Deliberately about how the tutor works rather than about any
- * particular lecture: the page's sample note is one thing, a visitor's own notes
- * are another, and a bed that named a topic would be wrong the moment it is
- * heard anywhere else. Around twenty seconds, which is the whole walkthrough —
- * the demo pauses it when the learner cuts in and resumes where it stopped.
+ * The page's demo, as an exchange rather than a monologue: the tutor starts
+ * explaining, the learner cuts in mid-sentence with the question the page prints
+ * under the sphere, and the tutor answers *that* question and carries on. Both
+ * halves are here because both are heard — a demo where the question is answered
+ * by the same sentence continuing is not a demo of a tutor.
+ *
+ * Deliberately about how the tutor works rather than about any particular
+ * lecture: the page's sample note is one thing and a visitor's own notes are
+ * another, and a line that named a topic would be wrong the moment it is heard
+ * anywhere else.
  */
 const TUTOR = {
   sl:
-    "Živjo, jaz sem tvoj tutor. Poglejva tvoje zapiske skupaj. Vzel bom eno temo naenkrat, " +
-    "s preprostimi besedami, in se ustavil pri tistem, kar se najlažje zamenja. " +
-    "Če ti kaj ni jasno, kar povej na glas – slišim te, ustavim se in razložim še enkrat.",
+    "Živjo, jaz sem tvoj tutor. Poglejva tvoje zapiske skupaj – eno temo naenkrat, " +
+    "s preprostimi besedami, in se ustaviva pri tistem, kar se najlažje zamenja.",
   en:
-    "Hi, I'm your tutor. Let's go through your notes together. I'll take one topic at a time, " +
-    "in plain words, and stop on the parts that are easy to get wrong. " +
-    "If something doesn't land, just say so out loud — I'll hear you, stop, and explain it again.",
+    "Hi, I'm your tutor. Let's go through your notes together — one topic at a time, " +
+    "in plain words, stopping on the parts that are easy to get wrong.",
   hr:
-    "Bok, ja sam tvoj tutor. Prođimo zajedno kroz tvoje bilješke. Uzet ću jednu temu po jednu, " +
-    "jednostavnim riječima, i zastati ondje gdje se najlakše pogriješi. " +
-    "Ako ti nešto nije jasno, samo reci naglas – čujem te, stanem i objasnim ponovno.",
+    "Bok, ja sam tvoj tutor. Prođimo zajedno kroz tvoje bilješke – jednu temu po jednu, " +
+    "jednostavnim riječima, i zastanimo ondje gdje se najlakše pogriješi.",
   bs:
-    "Zdravo, ja sam tvoj tutor. Prođimo zajedno kroz tvoje bilješke. Uzeću jednu temu po jednu, " +
-    "jednostavnim riječima, i zastati ondje gdje se najlakše pogriješi. " +
-    "Ako ti nešto nije jasno, samo reci naglas – čujem te, stanem i objasnim ponovo.",
+    "Zdravo, ja sam tvoj tutor. Prođimo zajedno kroz tvoje bilješke – jednu temu po jednu, " +
+    "jednostavnim riječima, i zastanimo ondje gdje se najlakše pogriješi.",
   sr:
-    "Zdravo, ja sam tvoj tutor. Prođimo zajedno kroz tvoje beleške. Uzeću jednu temu po jednu, " +
-    "jednostavnim rečima, i zastati tamo gde se najlakše pogreši. " +
-    "Ako ti nešto nije jasno, samo reci naglas – čujem te, stanem i objasnim ponovo.",
+    "Zdravo, ja sam tvoj tutor. Prođimo zajedno kroz tvoje beleške – jednu temu po jednu, " +
+    "jednostavnim rečima, i zastanimo tamo gde se najlakše pogreši.",
+};
+
+/*
+ * The answer, to the question the page shows the learner asking. The two are
+ * written together and have to stay together: `tutorDemo.heard1` in the message
+ * catalogues is that question, and changing one without the other leaves the
+ * tutor answering something nobody asked.
+ */
+const ANSWER = {
+  sl:
+    "Potem me kar ustavi. Povej na glas, jaz te slišim, tisti del razložim še enkrat, " +
+    "drugače, in nadaljujeva točno tam, kjer sva ostala. Vprašaj, kolikokrat hočeš – zato sem tu.",
+  en:
+    "Then stop me. Say it out loud, I'll hear you, go back over that part a different way, " +
+    "and we carry on from exactly where we left off. Ask as often as you like — that's what I'm here for.",
+  hr:
+    "Onda me samo zaustavi. Reci naglas, ja te čujem, taj dio objasnim ponovno, drukčije, " +
+    "i nastavljamo točno ondje gdje smo stali. Pitaj koliko god želiš – zato sam tu.",
+  bs:
+    "Onda me samo zaustavi. Reci naglas, ja te čujem, taj dio objasnim ponovo, drugačije, " +
+    "i nastavljamo tačno ondje gdje smo stali. Pitaj koliko god želiš – zato sam tu.",
+  sr:
+    "Onda me samo zaustavi. Reci naglas, ja te čujem, taj deo objasnim ponovo, drugačije, " +
+    "i nastavljamo tačno tamo gde smo stali. Pitaj koliko god želiš – zato sam tu.",
 };
 
 /*
@@ -182,6 +207,7 @@ async function main() {
   for (const [kind, texts] of [
     ["sample", SAMPLE],
     ["tutor", TUTOR],
+    ["answer", ANSWER],
   ]) {
     for (const [language, text] of Object.entries(texts)) {
       if (onlyLanguage && onlyLanguage !== language) {

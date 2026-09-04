@@ -1654,9 +1654,30 @@
 }
 
 /*
- * A scroller rather than a grid: there are eleven voices and the point is to try
- * a few, not to survey them all at once. Tapping plays the voice, which is why
- * each one wears a play icon rather than looking like a plain filter chip.
+ * The mockup is a phone, and a phone draws no scrollbar.
+ *
+ * Its screens scroll — the library, the note, the sheets — and on a desktop
+ * browser each of those grew the platform's own grey bar down the inside of the
+ * bezel, which is the one thing on the mockup that could not be on a phone. Said
+ * once here rather than on eight inline styles, because `::-webkit-scrollbar` is
+ * not something an inline style can reach.
+ */
+.landing-v2-phone-host * {
+  scrollbar-width: none;
+}
+
+.landing-v2-phone-host *::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * The eleven voices, on one line that scrolls — the app's own row.
+ *
+ * Out here it is as often under a cursor as a thumb, and a cursor has nothing to
+ * grab: the design hides the scrollbar, and a wheel scrolls the page. So the
+ * component adds the two things a mouse needs — the row can be dragged, and a
+ * wheel over it moves it sideways for as long as it has somewhere to go, handing
+ * the page its scroll back at either end. The cursor says so.
  */
 .landing-tutor-voices {
   display: flex;
@@ -1665,14 +1686,21 @@
   padding: 0.15rem 1.25rem;
   margin: 0 -1.25rem;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
   scroll-snap-type: x proximity;
-  /* The row can be dragged with a mouse out here, and a drag across the chips
-     would otherwise select their labels instead of moving the row. */
+  cursor: grab;
+  /* A drag across the chips would otherwise select their labels. */
   user-select: none;
   -webkit-user-select: none;
+  /* A hard cut through a chip reads as a broken layout rather than as more to
+     scroll. Fading the ends says "there is more here" with nothing drawn. */
   mask-image: linear-gradient(to right, transparent, #000 1.75rem, #000 calc(100% - 1.75rem), transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, #000 1.75rem, #000 calc(100% - 1.75rem), transparent);
+}
+
+.landing-tutor-voices:active {
+  cursor: grabbing;
 }
 
 .landing-tutor-voices::-webkit-scrollbar {
@@ -1794,14 +1822,6 @@
   box-sizing: border-box;
 }
 
-.landing-v2-tutor-lead {
-  margin: 0;
-  max-width: 34rem;
-  color: var(--l-second);
-  font-size: 1.05rem;
-  line-height: 1.5;
-  text-wrap: pretty;
-}
 
 /* ── Study results ─────────────────────────────────────────── */
 /*

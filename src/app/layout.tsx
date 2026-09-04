@@ -67,7 +67,6 @@ const MATERIAL_SYMBOL_NAMES = [
   "home",
   "ink_highlighter",
   "ios_share",
-  "keyboard_double_arrow_up",
   "language",
   "link",
   "menu",

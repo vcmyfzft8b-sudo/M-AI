@@ -1700,7 +1700,6 @@ export const en: Messages = {
   "podcast.speaker.b": "Second voice",
   "podcast.speaker.solo": "Voice",
   "podcast.generate": "Make the episode",
-  "podcast.changeShow": "Change the show",
   "podcast.play": "Play",
   "podcast.pause": "Pause",
   "podcast.back10": "Back 10 seconds",

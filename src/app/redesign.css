@@ -13798,22 +13798,9 @@
     padding: 0.75rem 1rem 1rem;
   }
 
-  /*
-   * The artwork goes while a choice is being made, and stays in the player where it is the
-   * subject. `:has` is what keeps those two apart — the cover is the same element in both.
-   */
-  .memo-podcast:has(.memo-podcast-setup) .memo-podcast-cover {
-    display: none;
-  }
-
+  /* The chooser drops the artwork at every width now, in the markup — see the component. */
   .memo-podcast-title {
     font-size: 1.05rem;
-  }
-
-  /* Explains the screen the first time and is furniture every time after. The player's own meta
-     line is NOT this and must survive — they used to share a class. */
-  .memo-podcast-intro {
-    display: none;
   }
 
   .memo-podcast-setup {

@@ -68,13 +68,22 @@ What it must never contain is one that disagrees. Measured on the omrezja-sl fix
 
 ## Three screens, and how you get between them
 
-The tab lands on one of two, never the third:
+The tab lands on one of two, never the third, and **the library is the hub** — every screen
+reaches every other through it, in at most two taps:
 
-- **Library** — the episodes this note already has, when it has any.
-- **Chooser** — the shows, lengths and voices, reached by "New episode".
+- **Library** — the episodes this note already has, when it has any. Tap one to play it, or
+  "New episode" for the chooser.
+- **Chooser** — the shows, lengths and voices, with a way back to the episodes.
 - **Player** — reached only by pressing Create or tapping an episode, and it starts playing
   by itself when it was opened by either of those: waiting through a generation is asking for
-  the episode, and landing in a paused player is being asked twice.
+  the episode, and landing in a paused player is being asked twice. Its one way out goes back
+  to the library rather than past it to the chooser — the route to the other episodes should
+  not run through a door marked "make a new one".
+
+The chooser carries no artwork, heading or standfirst. The pill row above it already reads
+"Podcast", the note's own title is above that, and four labelled cards do not need introducing.
+It is a form; the other two are about an episode, and that is the whole difference between them
+— it is also what makes the form fit a laptop with the chat panel open.
 
 The player used to appear on its own whenever a finished episode happened to match the saved
 show and length, which meant somebody opening the tab to make a new one was dropped into an

@@ -297,6 +297,21 @@ export function LecturePodcast({
    */
   const isProducing = isWriting || podcast?.status === "generating";
 
+  /**
+   * Which of the four screens this is.
+   *
+   * Named once rather than re-derived at each place that needs it: the branching, the artwork and
+   * the standfirst all used to work it out separately from the same three flags, which is how a
+   * screen ends up carrying decoration that belongs to a different one.
+   */
+  const view: "player" | "writing" | "library" | "chooser" = hasEpisode
+    ? "player"
+    : isProducing
+      ? "writing"
+      : episodes.length > 0 && !isChoosing
+        ? "library"
+        : "chooser";
+
   /* Restored once, on the client: reading storage during render would differ from the server. */
   useEffect(() => {
     setFormat(readStored(PODCAST_FORMAT_STORAGE_KEY, normalizePodcastFormat));
@@ -552,6 +567,30 @@ export function LecturePodcast({
        * which would otherwise land a moment later and put "still generating" back on screen.
        */
       statusRequestRef.current += 1;
+      /*
+       * Filed in the library immediately rather than on the next status load, so the player's way
+       * back is never a button that is not there yet.
+       */
+      setEpisodes((current) =>
+        current.some((episode) => episode.id === payload.podcast!.id)
+          ? current
+          : [
+              {
+                id: payload.podcast!.id,
+                format: payload.podcast!.format,
+                length: payload.podcast!.length,
+                language: payload.podcast!.language,
+                title: payload.podcast!.title,
+                turnCount: payload.podcast!.turns.length,
+                estimatedSeconds: payload.podcast!.turns.reduce(
+                  (sum, turn) => sum + estimatedSpokenSeconds(turn.text),
+                  0,
+                ),
+                createdAt: new Date().toISOString(),
+              },
+              ...current,
+            ],
+      );
       setPodcast(payload.podcast);
       setOpenedEpisodeId(payload.podcast.id);
       setIsWriting(false);
@@ -919,6 +958,21 @@ export function LecturePodcast({
     chooseLength(episode.length);
   }
 
+  /**
+   * Closes the player and returns to the library.
+   *
+   * Playback stops on the way out, because the player is the only place with controls — leaving
+   * it while the audio carried on would mean sound with nothing to pause it.
+   */
+  function leavePlayer() {
+    stopPlayback();
+    releaseSegments();
+    setOpenedEpisodeId(null);
+    setIsChoosing(false);
+    setCurrentIndex(0);
+    setPositionMs(0);
+  }
+
   function chooseFormat(next: PodcastFormat) {
     setFormat(next);
     writeStored(PODCAST_FORMAT_STORAGE_KEY, next);
@@ -1156,7 +1210,12 @@ export function LecturePodcast({
         />
       ))}
 
-      {cover}
+      {/*
+        * The artwork is the episode's, so it appears where an episode is the subject — the
+        * library, the player, the wait for one — and not on the form that chooses a show, where
+        * it is a hundred and twenty points of decoration pushing the controls off the screen.
+        */}
+      {view === "chooser" ? null : cover}
 
       {hasEpisode ? (
         <>
@@ -1227,20 +1286,17 @@ export function LecturePodcast({
             {voiceRow("a")}
             {speakerCount === 2 ? voiceRow("b") : null}
 
-            <button
-              type="button"
-              className="memo-podcast-secondary"
-              onClick={() => {
-                stopPlayback();
-                releaseSegments();
-                setOpenedEpisodeId(null);
-                setIsChoosing(true);
-                setCurrentIndex(0);
-                setPositionMs(0);
-              }}
-            >
-              <Msym name="tune" size="1.1rem" fill={false} weight={500} />
-              <span>{t("podcast.changeShow")}</span>
+            {/*
+              * Out of the player, and back to the episodes rather than past them to the chooser.
+              *
+              * The library is the hub: from it you reach any episode in one tap and the chooser in
+              * one more. Sending this button straight to the chooser instead left the only route
+              * back to the other episodes running through making a new one — reachable, but by a
+              * door marked something else.
+              */}
+            <button type="button" className="memo-podcast-secondary" onClick={leavePlayer}>
+              <Msym name="arrow_back" size="1.1rem" fill={false} weight={500} />
+              <span>{t("podcast.library.back")}</span>
             </button>
           </div>
         </>
@@ -1260,8 +1316,18 @@ export function LecturePodcast({
         </>
       ) : (
         <>
-          <h2 className="memo-podcast-title">{t("podcast.title")}</h2>
-          <p className="memo-podcast-subtitle memo-podcast-intro">{t("podcast.intro")}</p>
+          {/*
+            * The chooser carries no heading, no artwork and no standfirst: the pill row above it
+            * already reads "Podcast", the note's own title is above that, and four labelled cards
+            * do not need to be introduced. It is a form, and the other two screens are about an
+            * episode — which is the whole difference between them.
+            */}
+          {view === "library" ? (
+            <>
+              <h2 className="memo-podcast-title">{t("podcast.title")}</h2>
+              <p className="memo-podcast-subtitle memo-podcast-intro">{t("podcast.intro")}</p>
+            </>
+          ) : null}
 
           {episodes.length > 0 && !isChoosing ? (
             <div className="memo-podcast-setup">

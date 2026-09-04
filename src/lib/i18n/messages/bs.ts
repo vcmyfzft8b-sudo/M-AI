@@ -1710,7 +1710,6 @@ export const bs: Messages = {
   "podcast.speaker.b": "Drugi glas",
   "podcast.speaker.solo": "Glas",
   "podcast.generate": "Napravi epizodu",
-  "podcast.changeShow": "Promijeni emisiju",
   "podcast.play": "Pokreni",
   "podcast.pause": "Pauziraj",
   "podcast.back10": "Nazad 10 sekundi",

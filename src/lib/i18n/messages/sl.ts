@@ -1729,7 +1729,6 @@ export const sl = {
   "podcast.speaker.b": "Drugi glas",
   "podcast.speaker.solo": "Glas",
   "podcast.generate": "Ustvari epizodo",
-  "podcast.changeShow": "Zamenjaj oddajo",
   "podcast.play": "Predvajaj",
   "podcast.pause": "Ustavi",
   "podcast.back10": "Nazaj 10 sekund",

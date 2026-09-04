@@ -35,6 +35,7 @@ import {
 import { TutorClipPlayer } from "@/lib/tutor/clip-player";
 import { reportTutorFailure, resetTutorFailureReports } from "@/lib/tutor/report";
 import { SpeechOutputError, TutorSpeechOutput } from "@/lib/tutor/speech-output";
+import { appendSpokenSoFar } from "@/lib/tutor/spoken-so-far";
 import { voiceHue } from "@/lib/tutor/voice-colors";
 import { voiceSampleClip } from "@/lib/tutor/voice-clips";
 import {
@@ -996,7 +997,7 @@ export function LectureTutor({
            * teach turn that follows must continue from it rather than start over —
            * which is exactly what `spokenSoFar` is for.
            */
-          spokenSoFarRef.current = `${spokenSoFarRef.current} ${spoken}`.trim();
+          spokenSoFarRef.current = appendSpokenSoFar(spokenSoFarRef.current, spoken);
         }
 
         historyRef.current.push({ role: "tutor", content: spoken });

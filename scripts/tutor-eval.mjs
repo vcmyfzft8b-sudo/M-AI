@@ -124,7 +124,9 @@ async function streamTurnOnce({ schema, instructions, input, model, maxOutputTok
         json_schema: { name: "structured_output", strict: true, schema: responseSchema },
       },
       ...(routedModel.includes("glm") ? { reasoning: { effort: "low", exclude: true } } : {}),
-      provider: { sort: "throughput", require_parameters: true },
+      // Mirrors buildProviderBlock for the tutor stage: this is the one stage that sorts hosts
+      // by latency rather than throughput, and the two differ by an order of magnitude on GLM.
+      provider: { sort: "latency", require_parameters: true },
     }),
   });
 

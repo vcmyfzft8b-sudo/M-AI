@@ -63,13 +63,41 @@ const JUDGE_MODEL = flag("judge", "or/google/gemini-3.7-flash");
  */
 const ARMS = {
   glm: { writer: GLM_TEXT_MODEL },
-  "glm-t03": { writer: GLM_TEXT_MODEL, temperature: 0.3 },
-  "glm-t00": { writer: GLM_TEXT_MODEL, temperature: 0 },
-  gemini: { writer: "or/google/gemini-2.5-flash" },
-  "glm-proof": { writer: GLM_TEXT_MODEL, proofread: PROOFREAD_MODEL },
+  "glm-check": { writer: GLM_TEXT_MODEL, proofread: PROOFREAD_MODEL },
+  /*
+   * The other architecture: GLM keeps the extraction — the lesson plan, where a dropped topic is
+   * a topic the walkthrough never teaches — and a Gemini that writes the language correctly
+   * writes the spoken turns from it. No checker, because there is nothing to check.
+   */
+  "g35-lite": { writer: "or/google/gemini-3.5-flash-lite" },
+  "g25-lite": { writer: "or/google/gemini-2.5-flash-lite" },
+  "g25-flash": { writer: "or/google/gemini-2.5-flash" },
 };
 
 const armNames = flag("arms", Object.keys(ARMS).join(",")).split(",");
+
+/*
+ * What each model costs, per million tokens, read from OpenRouter's own catalogue at startup so
+ * the money in this report is the money on the bill rather than a number someone typed in a
+ * comment six months ago.
+ */
+const PRICES = await (async () => {
+  const response = await fetch("https://openrouter.ai/api/v1/models");
+  const catalogue = (await response.json()).data;
+
+  return new Map(
+    catalogue.map((model) => [
+      model.id,
+      { in: Number(model.pricing.prompt) * 1e6, out: Number(model.pricing.completion) * 1e6 },
+    ]),
+  );
+})();
+
+function usd(model, tokensIn, tokensOut) {
+  const price = PRICES.get(model.replace(/^or\//, ""));
+
+  return price ? (tokensIn * price.in + tokensOut * price.out) / 1e6 : 0;
+}
 
 const fixture = JSON.parse(
   fs.readFileSync(path.join(FIXTURE_DIR, `${fixtureName}.json`), "utf8"),
@@ -114,7 +142,7 @@ function requestBody({ model, schema, instructions, input, maxOutputTokens, temp
 
   return {
     model: routed,
-    ...(stream ? { stream: true } : {}),
+    ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
     messages: [
       { role: "system", content: instructions },
       {
@@ -137,13 +165,19 @@ function requestBody({ model, schema, instructions, input, maxOutputTokens, temp
   };
 }
 
-async function generate({ model, schema, instructions, input, maxOutputTokens, signal }) {
+async function generate({ model, schema, instructions, input, maxOutputTokens, signal, meter }) {
   const response = await openRouter(
     requestBody({ model, schema, instructions, input, maxOutputTokens }),
     { signal },
   );
   const payload = await response.json();
   const raw = payload.choices?.[0]?.message?.content ?? "";
+
+  if (meter && payload.usage) {
+    meter.in += payload.usage.prompt_tokens ?? 0;
+    meter.out += payload.usage.completion_tokens ?? 0;
+    meter.calls += 1;
+  }
 
   return schema.parse(JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)));
 }
@@ -175,6 +209,7 @@ async function streamTurn({ model, instructions, input, maxOutputTokens, tempera
   let buffer = "";
   let raw = "";
   let firstTokenMs = null;
+  let usage = null;
 
   for (;;) {
     const { done, value } = await reader.read();
@@ -210,6 +245,10 @@ async function streamTurn({ model, instructions, input, maxOutputTokens, tempera
         continue;
       }
 
+      if (payload.usage) {
+        usage = payload.usage;
+      }
+
       const delta = payload.choices?.[0]?.delta?.content;
 
       if (!delta) {
@@ -233,7 +272,7 @@ async function streamTurn({ model, instructions, input, maxOutputTokens, tempera
     JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)),
   );
 
-  return { parsed, firstTokenMs, writtenMs: Date.now() - started, startedAt: started };
+  return { parsed, firstTokenMs, usage, writtenMs: Date.now() - started, startedAt: started };
 }
 
 /* --- the lesson plan, generated once and shared by every arm -------------- */
@@ -380,6 +419,8 @@ async function runTurn(arm, kind) {
   let firstSpokenMs = null;
   let startedAt = Date.now();
   let stats = null;
+  /** Everything the checker spent on this turn, so the two architectures are priced like for like. */
+  const meter = { in: 0, out: 0, calls: 0 };
 
   const emit = (text) => {
     if (firstSpokenMs === null && text.trim()) {
@@ -402,6 +443,7 @@ async function runTurn(arm, kind) {
           }
 
           const result = await generate({
+            meter,
             model: config.proofread,
             schema: languageRepairSchema,
             instructions: buildLanguageRepairInstructions(passageLanguage, { spoken: true }),
@@ -415,7 +457,7 @@ async function runTurn(arm, kind) {
       })
     : null;
 
-  const { parsed, firstTokenMs, writtenMs } = await streamTurn({
+  const { parsed, firstTokenMs, usage, writtenMs } = await streamTurn({
     model: config.writer,
     instructions: buildTutorVoiceInstructions(kind),
     input,
@@ -430,6 +472,9 @@ async function runTurn(arm, kind) {
 
   const finalText = proofreader ? spoken : parsed.speech;
 
+  const writerIn = usage?.prompt_tokens ?? 0;
+  const writerOut = usage?.completion_tokens ?? 0;
+
   return {
     arm,
     kind,
@@ -442,6 +487,16 @@ async function runTurn(arm, kind) {
     writtenMs,
     totalMs: Date.now() - startedAt,
     stats,
+    cost: {
+      writerIn,
+      writerOut,
+      checkIn: meter.in,
+      checkOut: meter.out,
+      checkCalls: meter.calls,
+      usd:
+        usd(config.writer, writerIn, writerOut) +
+        (config.proofread ? usd(config.proofread, meter.in, meter.out) : 0),
+    },
   };
 }
 
@@ -488,8 +543,13 @@ const percentile = (values, p) => {
   return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p))];
 };
 
-console.log(`\n${"arm".padEnd(11)}${"turn".padEnd(8)}${"n".padEnd(4)}${"words".padEnd(8)}` +
-  `${"first word p50".padEnd(16)}${"p90".padEnd(8)}${"written".padEnd(10)}${"err/100w".padEnd(10)}covered`);
+console.log(
+  `\n${"arm".padEnd(12)}${"turn".padEnd(7)}${"n".padEnd(4)}${"words".padEnd(7)}` +
+    `${"1st word p50".padEnd(14)}${"p90".padEnd(9)}${"err/100w".padEnd(10)}${"covered".padEnd(12)}` +
+    `${"tok in".padEnd(9)}${"tok out".padEnd(9)}$/turn`,
+);
+
+const perArm = new Map();
 
 for (const arm of armNames) {
   for (const kind of ["teach", "answer"]) {
@@ -504,19 +564,51 @@ for (const arm of armNames) {
     const totalErrors = rows.reduce((sum, row) => sum + row.grade.errors.length, 0);
     const points = plan.topics[TOPIC_INDEX].points.length;
     const covered = rows.map((row) => row.grade.coveredPoints.length);
+    const mean = (pick) => rows.reduce((sum, row) => sum + pick(row), 0) / rows.length;
+    const tokensIn = mean((row) => row.cost.writerIn + row.cost.checkIn);
+    const tokensOut = mean((row) => row.cost.writerOut + row.cost.checkOut);
+    const perTurn = mean((row) => row.cost.usd);
+
+    perArm.set(arm, (perArm.get(arm) ?? 0) + perTurn);
 
     console.log(
-      arm.padEnd(11) +
-        kind.padEnd(8) +
+      arm.padEnd(12) +
+        kind.padEnd(7) +
         String(rows.length).padEnd(4) +
-        String(Math.round(totalWords / rows.length)).padEnd(8) +
-        `${percentile(firstWord, 0.5)}ms`.padEnd(16) +
-        `${percentile(firstWord, 0.9)}ms`.padEnd(8) +
-        `${Math.round(rows.reduce((s, r) => s + r.writtenMs, 0) / rows.length)}ms`.padEnd(10) +
+        String(Math.round(totalWords / rows.length)).padEnd(7) +
+        `${percentile(firstWord, 0.5)}ms`.padEnd(14) +
+        `${percentile(firstWord, 0.9)}ms`.padEnd(9) +
         ((totalErrors / totalWords) * 100).toFixed(2).padEnd(10) +
-        `${covered.join(",")}/${points}`,
+        `${covered.join(",")}/${points}`.padEnd(12) +
+        String(Math.round(tokensIn)).padEnd(9) +
+        String(Math.round(tokensOut)).padEnd(9) +
+        `$${perTurn.toFixed(5)}`,
     );
   }
+}
+
+/*
+ * A session is roughly the opening, eight teaching turns and half a dozen interruptions, which is
+ * the unit that actually shows up on the bill.
+ */
+const SESSION_TEACH_TURNS = 9;
+const SESSION_ANSWER_TURNS = 6;
+
+console.log(`\nper session (${SESSION_TEACH_TURNS} teach + ${SESSION_ANSWER_TURNS} answer turns):`);
+
+for (const arm of armNames) {
+  const teach = results.filter((row) => row.arm === arm && row.kind === "teach");
+  const answer = results.filter((row) => row.arm === arm && row.kind === "answer");
+
+  if (!teach.length || !answer.length) {
+    continue;
+  }
+
+  const meanOf = (rows) => rows.reduce((sum, row) => sum + row.cost.usd, 0) / rows.length;
+  const session =
+    meanOf(teach) * SESSION_TEACH_TURNS + meanOf(answer) * SESSION_ANSWER_TURNS;
+
+  console.log(`  ${arm.padEnd(12)} $${session.toFixed(4)}`);
 }
 
 const meaningChanges = results.filter((row) => row.grade.meaningChanged);
@@ -571,4 +663,20 @@ if (proofRows.length) {
 fs.mkdirSync(SWEEP_DIR, { recursive: true });
 const out = path.join(SWEEP_DIR, `tutor.language.${fixtureName}.json`);
 fs.writeFileSync(out, JSON.stringify(results, null, 2));
+
+/*
+ * The same run also appends to a log that is never overwritten. Five trials is enough to see a
+ * difference and not always enough to trust one, and the interesting questions are answered by
+ * pooling runs — "how often does this model drop material" is a rate, and a rate needs more than
+ * one sitting. Overwriting the transcripts, which this did until 2026-09-04, threw the earlier
+ * sitting away every time a new one started.
+ */
+const history = path.join(SWEEP_DIR, `tutor.language.${fixtureName}.history.jsonl`);
+const runAt = new Date().toISOString();
+fs.appendFileSync(
+  history,
+  `${results.map((row) => JSON.stringify({ runAt, ...row })).join("\n")}\n`,
+);
+
 console.log(`\nfull transcripts in ${path.relative(ROOT, out)}`);
+console.log(`pooled history in ${path.relative(ROOT, history)}`);

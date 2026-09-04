@@ -21,6 +21,12 @@ export function createEmptyCharacterTimings(): SpeechCharacterTimings {
  * The server sends these alongside the audio, one frame at a time, each covering
  * the characters spoken in that frame. Concatenated they are the model's own
  * text with a time against every character.
+ *
+ * `offsetSeconds` is where the stream these came from sits on the turn's own clock. A turn
+ * that outlives a stall is spoken over several streams, and each numbers its timestamps from
+ * its own zero — so without the offset the second stream's first character would claim to have
+ * been heard at the very start of the turn, and everything that reads this to work out what the
+ * learner actually heard would cut in the wrong place.
  */
 export function appendCharacterTimings(
   timings: SpeechCharacterTimings,
@@ -29,6 +35,7 @@ export function appendCharacterTimings(
     character_start_times_seconds?: unknown;
     character_end_times_seconds?: unknown;
   },
+  offsetSeconds = 0,
 ): SpeechCharacterTimings {
   const characters = Array.isArray(frame.characters) ? frame.characters : [];
   const starts = Array.isArray(frame.character_start_times_seconds)
@@ -49,8 +56,8 @@ export function appendCharacterTimings(
     }
 
     timings.characters.push(character);
-    timings.startSeconds.push(start);
-    timings.endSeconds.push(end);
+    timings.startSeconds.push(start + offsetSeconds);
+    timings.endSeconds.push(end + offsetSeconds);
   }
 
   return timings;

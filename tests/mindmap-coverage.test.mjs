@@ -267,3 +267,55 @@ test("the node ceiling leaves room for a note read whole", () => {
    */
   assert.ok(MINDMAP_MAX_NODES >= 12 * MINDMAP_MAX_CHILDREN_PER_TOPIC * 3);
 });
+
+test("a topic the plan named twice is one branch, not two identical ones", () => {
+  /*
+   * Nothing in the schema stops a plan repeating a topic, and keyed on the raw label both copies
+   * shared one children array — so the map drew the topic twice with the same subtree under each.
+   */
+  const branches = mergeWindowedBranches({
+    topics: [
+      { label: "Ravnovesje", brief: "Kje se ujameta." },
+      { label: "ravnovesje ", brief: "Isto, drugače zapisano." },
+      { label: "Ponudba", brief: "Prodajalci." },
+    ],
+    windows: [
+      {
+        branches: [
+          { topic: "Ravnovesje", children: [child("Presežek ponudbe")] },
+          { topic: "Ponudba", children: [child("Zakon ponudbe")] },
+        ],
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    branches.map((branch) => branch.label),
+    ["Ravnovesje", "Ponudba"],
+  );
+  /* And the surviving copy keeps the first brief, not the duplicate's. */
+  assert.equal(branches[0].detail, "Kje se ujameta.");
+});
+
+test("a topic with no name at all is dropped rather than made the catch-all", () => {
+  const branches = mergeWindowedBranches({
+    topics: [{ label: "   ", brief: "" }, { label: "Ponudba", brief: "Prodajalci." }],
+    windows: [
+      {
+        branches: [
+          { topic: "", children: [child("Nikamor")] },
+          { topic: "Ponudba", children: [child("Zakon ponudbe")] },
+        ],
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    branches.map((branch) => branch.label),
+    ["Ponudba"],
+  );
+  assert.deepEqual(
+    branches[0].children.map((entry) => entry.label),
+    ["Zakon ponudbe"],
+  );
+});

@@ -85,12 +85,24 @@ export function mergeWindowedBranches(params: {
   topics: { label: string; brief: string }[];
   windows: readonly (MindmapWindowAnswer | null)[];
 }) {
+  /*
+   * Keyed on the normalised label throughout, and the topic list deduplicated against it first.
+   * Nothing stops a plan naming the same topic twice, and keyed on the raw label that put both
+   * of them on the same array — two identical branches, drawn side by side with the same subtree
+   * under each.
+   */
+  const topics: { key: string; label: string; brief: string }[] = [];
   const byTopic = new Map<string, MindmapWireChild[]>();
-  const topicKeys = new Map<string, string>();
 
   for (const topic of params.topics) {
-    byTopic.set(topic.label, []);
-    topicKeys.set(normaliseLabelKey(topic.label), topic.label);
+    const key = normaliseLabelKey(topic.label);
+
+    if (!key || byTopic.has(key)) {
+      continue;
+    }
+
+    byTopic.set(key, []);
+    topics.push({ key, label: topic.label, brief: topic.brief });
   }
 
   const seen = new Set<string>();
@@ -98,15 +110,15 @@ export function mergeWindowedBranches(params: {
   for (const window of params.windows) {
     for (const branch of window?.branches ?? []) {
       /* A model that reworded a topic label still meant that topic. */
-      const label = topicKeys.get(normaliseLabelKey(branch.topic ?? ""));
-      const bucket = label ? byTopic.get(label) : undefined;
+      const topicKey = normaliseLabelKey(branch.topic ?? "");
+      const bucket = byTopic.get(topicKey);
 
       if (!bucket) {
         continue;
       }
 
       for (const child of branch.children ?? []) {
-        const key = `${label}::${normaliseLabelKey(child?.label ?? "")}`;
+        const key = `${topicKey}::${normaliseLabelKey(child?.label ?? "")}`;
 
         if (!child?.label || seen.has(key) || bucket.length >= MINDMAP_MAX_CHILDREN_PER_TOPIC) {
           continue;
@@ -118,11 +130,11 @@ export function mergeWindowedBranches(params: {
     }
   }
 
-  return params.topics
+  return topics
     .map((topic) => ({
       label: topic.label,
       detail: topic.brief,
-      children: byTopic.get(topic.label) ?? [],
+      children: byTopic.get(topic.key) ?? [],
     }))
     /* A topic no window said anything about was a topic the note did not have. */
     .filter((branch) => branch.children.length > 0);

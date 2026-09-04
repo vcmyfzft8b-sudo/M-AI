@@ -422,3 +422,45 @@ test("a phone folds harder than a laptop, because its frame is less than half th
     "what a phone opens on has to be legible on a phone",
   );
 });
+
+test("the PNG export stays inside the canvas ceiling a phone actually enforces", () => {
+  /*
+   * Safari refuses a canvas over ~16.7M pixels by leaving it blank rather than by throwing, and
+   * `toBlob` then returns a valid, fully transparent PNG — the export appears to work and saves
+   * nothing. Clamping the longest side alone let a tall map through: 1300x5000 came out as
+   * 2130x8192, inside the 8192 side limit and well over the area one.
+   */
+  const MAX_PIXELS = 16_000_000;
+  const MAX_EDGE = 8_192;
+  const MARGIN = 48;
+
+  const exportScale = (boundsWidth, boundsHeight) => {
+    const width = Math.ceil(boundsWidth + MARGIN * 2);
+    const height = Math.ceil(boundsHeight + MARGIN * 2);
+
+    return Math.min(
+      2,
+      MAX_EDGE / Math.max(width, height),
+      Math.sqrt(MAX_PIXELS / (width * height)),
+    );
+  };
+
+  for (const [boundsWidth, boundsHeight] of [
+    [1300, 5000],
+    [1300, 3000],
+    [2600, 900],
+    [4000, 12000],
+    [400, 300],
+  ]) {
+    const scale = exportScale(boundsWidth, boundsHeight);
+    const width = Math.ceil((boundsWidth + MARGIN * 2) * scale);
+    const height = Math.ceil((boundsHeight + MARGIN * 2) * scale);
+
+    assert.ok(width * height <= MAX_PIXELS * 1.01, `${boundsWidth}x${boundsHeight} busts the area`);
+    assert.ok(Math.max(width, height) <= MAX_EDGE + 1, `${boundsWidth}x${boundsHeight} busts a side`);
+    assert.ok(scale > 0, "a map must always export at some scale");
+  }
+
+  /* A map small enough to export at full retina still does. */
+  assert.equal(exportScale(400, 300), 2);
+});

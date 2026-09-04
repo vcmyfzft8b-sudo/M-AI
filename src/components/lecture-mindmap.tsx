@@ -49,8 +49,15 @@ type MindmapState = {
   doc: MindmapDoc | null;
   errorMessage: string | null;
   stale: boolean;
-  /** Doubles as the canvas key, so a redrawn map arrives framed rather than in the old view. */
-  generatedAt: string | null;
+  /**
+   * When the *map* was last finished — not when its row was last touched.
+   *
+   * It keys the canvas, so a redrawn map arrives framed instead of in the old view. Taking it
+   * from every response would remount the canvas on every poll of a running generation, since
+   * the row's `generated_at` moves on each status write: a reader who pressed "draw again" and
+   * panned while waiting would be snapped back to fit every two and a half seconds.
+   */
+  readyAt: string | null;
 };
 
 const POLL_INTERVAL_MS = 2500;
@@ -95,6 +102,12 @@ export function LectureMindmap({
   const canvasRef = useRef<MindmapCanvasHandle | null>(null);
 
   const [state, setState] = useState<MindmapState | null>(null);
+  /*
+   * Mirrors `state` for `load`, which needs the previous value but must not be rebuilt on every
+   * poll — a new `load` identity restarts the polling effect. Written beside every `setState`
+   * below rather than during render, so the two never disagree.
+   */
+  const stateRef = useRef<MindmapState | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
@@ -154,14 +167,16 @@ export function LectureMindmap({
   const load = useCallback(async () => {
     const response = await fetch(`/api/lectures/${lectureId}/mindmap`, { cache: "no-store" });
     const payload = await parseApiResponse<MindmapResponse>(response, t);
+    const previous = stateRef.current;
     const next: MindmapState = {
       status: payload.status,
       doc: parseMindmapDoc(payload.doc),
       errorMessage: payload.errorMessage,
       stale: Boolean(payload.stale),
-      generatedAt: payload.generatedAt,
+      readyAt: payload.status === "ready" ? payload.generatedAt : (previous?.readyAt ?? null),
     };
 
+    stateRef.current = next;
     setState(next);
 
     return next;
@@ -179,13 +194,19 @@ export function LectureMindmap({
         const response = await fetch(path, { method: "POST" });
         await parseApiResponse<{ ok: true }>(response, t);
         setFocusId(null);
-        setState((previous) => ({
-          status: "queued",
-          doc: previous?.doc ?? null,
-          errorMessage: null,
-          stale: previous?.stale ?? false,
-          generatedAt: previous?.generatedAt ?? null,
-        }));
+        setState((previous) => {
+          const next: MindmapState = {
+            status: "queued",
+            doc: previous?.doc ?? null,
+            errorMessage: null,
+            stale: previous?.stale ?? false,
+            readyAt: previous?.readyAt ?? null,
+          };
+
+          stateRef.current = next;
+
+          return next;
+        });
       } catch (error) {
         if (redirectToBillingIfNeeded({ error, router })) {
           return;
@@ -464,7 +485,7 @@ export function LectureMindmap({
 
   const canvas = doc ? (
     <MindmapCanvas
-      key={state?.generatedAt ?? "mindmap"}
+      key={state?.readyAt ?? "mindmap"}
       doc={doc}
       title={doc.title || lectureTitle}
       collapsedIds={collapsedIds}

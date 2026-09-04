@@ -13333,10 +13333,11 @@
   height: 100%;
 }
 
+/* Filled rather than stroked: a branch tapers from its parent to its child, and a stroke has
+   one width for its whole length. The outline comes from `linkRibbon` in mindmap-layout.ts. */
 .memo-mm-link {
-  fill: none;
-  stroke-linecap: round;
-  opacity: 0.78;
+  stroke: none;
+  opacity: 0.85;
   transition: opacity 0.18s ease;
 }
 
@@ -13368,6 +13369,7 @@
    reads as the thing the coloured branches belong to. */
 .memo-mm-node.d0 .memo-mm-box {
   fill: var(--text);
+  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.18));
 }
 
 .memo-mm-node.d0 .memo-mm-text {
@@ -13384,20 +13386,26 @@
   letter-spacing: -0.01em;
 }
 
-.memo-mm-node.d2 .memo-mm-box,
-.memo-mm-node.d3 .memo-mm-box {
-  fill: var(--surface);
-  stroke: var(--mm-accent);
-}
-
+/* Tinted rather than white: at this level the colour is what tells a reader which limb they are
+   reading without tracing the line back, and a page of white cards reads as a table. */
 .memo-mm-node.d2 .memo-mm-box {
-  stroke-width: 1.6;
-  stroke-opacity: 0.85;
+  fill: color-mix(in srgb, var(--mm-accent) 12%, var(--surface));
+  stroke: var(--mm-accent);
+  stroke-width: 1.4;
+  stroke-opacity: 0.7;
 }
 
-.memo-mm-node.d3 .memo-mm-box {
-  stroke-width: 1.2;
-  stroke-opacity: 0.5;
+/* The leaves carry no box at all — text on a rule, the way a mind map draws its outermost twigs. */
+.memo-mm-hit {
+  fill: transparent;
+}
+
+.memo-mm-rule {
+  stroke: var(--mm-accent);
+  stroke-width: 1.5;
+  stroke-opacity: 0.7;
+  stroke-linecap: round;
+  fill: none;
 }
 
 .memo-mm-node.d2 .memo-mm-text,
@@ -13414,6 +13422,18 @@
   stroke: var(--mm-accent, var(--text));
   stroke-width: 3;
   stroke-opacity: 1;
+}
+
+/* A boxless leaf says it is selected by thickening its rule, since it has no border to thicken. */
+.memo-mm-node.selected .memo-mm-rule,
+.memo-mm-node.matched .memo-mm-rule {
+  stroke-width: 3;
+  stroke-opacity: 1;
+}
+
+.memo-mm-node.selected .memo-mm-text,
+.memo-mm-node.matched .memo-mm-text {
+  font-weight: 700;
 }
 
 .memo-mm-node.d0.selected .memo-mm-box {

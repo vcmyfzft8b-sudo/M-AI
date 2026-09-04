@@ -7,8 +7,15 @@
  * covers the material — and neither is worth discovering from a screenshot.
  */
 
-/** Ideas per topic once every window has contributed. Beyond this a branch is a list, not a limb. */
-export const MINDMAP_MAX_CHILDREN_PER_TOPIC = 8;
+/**
+ * Ideas per topic once every window has contributed.
+ *
+ * A ceiling rather than a target, and a generous one: it is here so a topic every window wanted
+ * to fill cannot run away with the map, not to trim a topic that genuinely has this much in it.
+ * The screen copes with the size by folding and focusing, which is cheaper than dropping material
+ * the reader came here to find.
+ */
+export const MINDMAP_MAX_CHILDREN_PER_TOPIC = 10;
 
 export type MindmapWireChild = {
   label: string;

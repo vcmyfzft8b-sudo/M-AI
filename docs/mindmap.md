@@ -5,18 +5,24 @@ fold, search and save as an image.
 
 ## How it is built
 
-A map is a *shape* rather than a set of items, so it cannot be built a chunk at a time the way
-flashcards and practice tests are: chunks that each choose their own topics merge into several
-maps sharing a title, which is the structureless column the competing implementation draws. A
-note that fits one call therefore gets exactly one call.
+Two phases, for every note however short:
 
-A note that does not gets two phases, split along the seam that matters:
-
-1. **Topics**, decided once over a *skeleton* of the whole note — every heading and the first line
-   of prose under it. That stays a couple of thousand characters however long the note runs, so
-   the shape is still judged by something that has seen all of the material.
+1. **Topics**, decided once over the whole note — in full when it fits, and otherwise over a
+   *skeleton* of it: every heading and the first line of prose under it, which stays a couple of
+   thousand characters however long the note runs. So the shape is always judged by something
+   that has seen all of the material.
 2. **Filling**, one call per window (`planSourceWriteWindows`, the same helper note writing uses),
    each sorting its part of the note into that one agreed topic list, four at a time.
+
+A map is a *shape* rather than a set of items, so the topics can never be windowed: windows that
+each choose their own merge into several maps sharing a title, which is the structureless column
+the competing implementation draws. Only the filling is windowed.
+
+There used to be a second path — a note that fitted one call got one call, which had to invent
+the shape and fill it in the same budget. That is the request models economise on, and they
+economise by writing fewer children, which is exactly the thin map this was sent back to fix.
+Splitting the two jobs costs one extra call on a short note and buys every topic a call that has
+nothing else to do.
 
 `mergeWindowedBranches` folds the answers back together: ordered by the plan so the map reads in
 the note's own order, matched on a normalised label so a window that wrote "povprasevanje" is not
@@ -94,6 +100,24 @@ Folding takes things away; **focus** takes the reader in. `focusMindmapOn` re-ro
 node — that node becomes the centre and its children the branches — which is what makes a map of a
 long note navigable rather than merely foldable. Node ids are positional, so a fold, a selection
 and a search all survive the trip in and back out, and the trail above the canvas is the way back.
+
+## How it is drawn
+
+Three levels, three treatments, and the differences are load-bearing rather than decorative:
+
+- **Branches are filled ribbons, not stroked lines.** A stroke has one width for its whole
+  length; a real branch is thick where it leaves its parent and thin where it reaches its child,
+  and that taper is most of what makes a map look hand-drawn. `linkRibbon` returns a closed
+  outline — down one side of the curve and back up the other, converging.
+- **The second level is tinted, not white.** At that depth the colour is what tells a reader which
+  limb they are in without tracing the line back, and a page of white cards reads as a table.
+- **The leaves carry no box at all**: text on a coloured rule, met by its branch at the foot where
+  the rule begins. It reads lighter, it stops a large map looking like a wall of cards, and with
+  no horizontal padding to pay for it is the narrowest level too — on the axis that decides
+  whether the map fits.
+
+All three are drawn twice, once in SVG and once on a canvas for the export, so a change to one is
+a change to `mindmap-canvas.tsx` in two places. The geometry they share lives in the layout.
 
 ## The screen
 

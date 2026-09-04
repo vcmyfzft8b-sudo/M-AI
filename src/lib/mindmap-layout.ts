@@ -117,18 +117,29 @@ export const MINDMAP_DEPTH_STYLES: readonly DepthStyle[] = [
     radius: 12,
     maxLines: 4,
   },
+  /*
+   * The leaves are the one level drawn without a box: text sitting on a coloured underline, the
+   * way a mind map has always drawn its outermost twigs. It reads lighter, it is what stops a
+   * large map looking like a wall of cards — and with no horizontal padding to pay for, it is the
+   * narrowest level too, on the axis that decides whether the map fits.
+   */
   {
     fontSize: 12.5,
     fontWeight: 500,
     lineHeight: 17,
-    maxTextWidth: 142,
-    minWidth: 64,
-    paddingX: 10,
-    paddingY: 7,
-    radius: 10,
-    maxLines: 4,
+    maxTextWidth: 150,
+    minWidth: 40,
+    paddingX: 3,
+    paddingY: 5,
+    radius: 0,
+    maxLines: 3,
   },
 ];
+
+/** The levels drawn as text on a rule rather than as a box. Shared by the canvas and the export. */
+export function isUnderlinedDepth(depth: number) {
+  return depth >= 3;
+}
 
 export function mindmapDepthStyle(depth: number): DepthStyle {
   return MINDMAP_DEPTH_STYLES[Math.min(depth, MINDMAP_DEPTH_STYLES.length - 1)];
@@ -382,25 +393,50 @@ function placeSide(side: readonly SizedNode[], rootWidth: number, mirrored: bool
   }
 }
 
-function linkPath(params: {
+/**
+ * A branch, drawn as a filled ribbon rather than a stroked line.
+ *
+ * A stroke has one width for its whole length; a real branch is thick where it leaves its parent
+ * and thin where it reaches its child, and that taper is most of what makes a hand-drawn map look
+ * like one. SVG cannot taper a stroke, so each link is a closed outline: down one side of the
+ * curve and back up the other, with the two sides converging.
+ */
+function linkRibbon(params: {
   fromX: number;
   fromY: number;
   toX: number;
   toY: number;
+  fromWidth: number;
+  toWidth: number;
 }) {
   const dx = params.toX - params.fromX;
   /*
-   * A curve that leaves and arrives horizontally, so a line meets its node square rather than
+   * A curve that leaves and arrives horizontally, so a branch meets its node square rather than
    * at an angle. Two-thirds of the run is the flattest control offset that still reads as one
    * continuous stroke when a child sits far above or below its parent.
    */
-  const control = Math.abs(dx) * 0.62;
-  const c1 = params.fromX + Math.sign(dx || 1) * control;
-  const c2 = params.toX - Math.sign(dx || 1) * control;
+  const reach = Math.abs(dx) * 0.62 * Math.sign(dx || 1);
+  const c1 = params.fromX + reach;
+  const c2 = params.toX - reach;
+  const half = params.fromWidth / 2;
+  const tip = params.toWidth / 2;
 
-  return `M ${round(params.fromX)} ${round(params.fromY)} C ${round(c1)} ${round(
-    params.fromY,
-  )}, ${round(c2)} ${round(params.toY)}, ${round(params.toX)} ${round(params.toY)}`;
+  return [
+    `M ${round(params.fromX)} ${round(params.fromY - half)}`,
+    `C ${round(c1)} ${round(params.fromY - half)}, ${round(c2)} ${round(params.toY - tip)}, ${round(params.toX)} ${round(params.toY - tip)}`,
+    `L ${round(params.toX)} ${round(params.toY + tip)}`,
+    `C ${round(c2)} ${round(params.toY + tip)}, ${round(c1)} ${round(params.fromY + half)}, ${round(params.fromX)} ${round(params.fromY + half)}`,
+    "Z",
+  ].join(" ");
+}
+
+/** How thick a branch is where it leaves its parent, and where it arrives at its child. */
+export function mindmapLinkWidths(depth: number) {
+  if (depth <= 1) {
+    return { from: 8, to: 3.4 };
+  }
+
+  return depth === 2 ? { from: 4.6, to: 2.2 } : { from: 2.6, to: 1.4 };
 }
 
 function round(value: number) {
@@ -478,17 +514,22 @@ function collectLinks(node: SizedNode, side: MindmapSide, output: MindmapLayoutL
   const fromX = side === "right" ? node.x + node.width : node.x;
 
   for (const child of node.children) {
+    const widths = mindmapLinkWidths(child.depth);
+
     output.push({
       id: `${node.source.id}->${child.source.id}`,
       fromId: node.source.id,
       toId: child.source.id,
       branchIndex: node.branchIndex,
       depth: child.depth,
-      path: linkPath({
+      path: linkRibbon({
         fromX,
         fromY: node.y + node.height / 2,
         toX: side === "right" ? child.x : child.x + child.width,
-        toY: child.y + child.height / 2,
+        /* An underlined leaf is met at its foot, where the underline it flows into begins. */
+        toY: isUnderlinedDepth(child.depth) ? child.y + child.height : child.y + child.height / 2,
+        fromWidth: widths.from,
+        toWidth: widths.to,
       }),
     });
 
@@ -568,11 +609,13 @@ export function layoutMindmap(params: {
         toId: branch.source.id,
         branchIndex: branch.branchIndex,
         depth: 1,
-        path: linkPath({
+        path: linkRibbon({
           fromX: side === "right" ? rootWidth / 2 : -rootWidth / 2,
           fromY: 0,
           toX: side === "right" ? branch.x : branch.x + branch.width,
           toY: branch.y + branch.height / 2,
+          fromWidth: mindmapLinkWidths(1).from,
+          toWidth: mindmapLinkWidths(1).to,
         }),
       });
 

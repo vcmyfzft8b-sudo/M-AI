@@ -27,7 +27,7 @@ export const MINDMAP_TITLE_MAX_LENGTH = 120;
  * ceiling would have thrown away the last of it after all the work of reading it. The screen
  * copes because a big map opens folded, not because it is small.
  */
-export const MINDMAP_MAX_NODES = 420;
+export const MINDMAP_MAX_NODES = 520;
 /**
  * A label is a handle, not a sentence. Past this the words that will not fit are not dropped —
  * they become the node's detail, where the reader can still get at them.

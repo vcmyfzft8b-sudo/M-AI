@@ -6,11 +6,9 @@ import type { Json, LectureMindmapAssetRow, StudyAssetStatus } from "@/lib/datab
 import { generateStructuredObject } from "@/lib/ai/json";
 import {
   buildMindmapFillInstructions,
-  buildMindmapInstructions,
   buildMindmapTopicPlanInstructions,
   mindmapFillSchema,
   mindmapTopicPlanSchema,
-  mindmapWireSchema,
 } from "@/lib/ai/mindmap-prompt";
 import { isWorkAbortedError } from "@/lib/abort-context";
 import { resolveMaterialLanguage } from "@/lib/languages";
@@ -53,7 +51,7 @@ import { hashNotesContent } from "@/lib/tutor/plan-cache";
  * is a *window* size: a note longer than this is mapped in parts and merged, so the last page of
  * a long note reaches the map on the same terms as the first.
  */
-const MINDMAP_WINDOW_MAX_WORDS = 7_000;
+const MINDMAP_WINDOW_MAX_WORDS = 6_000;
 const MINDMAP_MAX_TOKENS = 14_000;
 /** Windows are independent calls over one note; the same pool size the study batches use. */
 const MINDMAP_WINDOW_CONCURRENCY = 4;
@@ -194,32 +192,16 @@ async function pool<TIn, TOut>(
   return results;
 }
 
-/** One call, for a note that fits in one. */
-async function generateWholeNoteMindmap(params: {
-  lectureId: string;
-  grounding: MindmapGrounding;
-}) {
-  return generateStructuredObject({
-    schema: mindmapWireSchema,
-    stage: "mindmap",
-    instructions: buildMindmapInstructions(),
-    input: JSON.stringify(
-      {
-        noteTitle: params.grounding.title,
-        summary: params.grounding.summary,
-        keyTopics: params.grounding.keyTopics,
-        notes: params.grounding.notes,
-      },
-      null,
-      2,
-    ),
-    maxOutputTokens: MINDMAP_MAX_TOKENS,
-    usageContext: { stage: "mindmap", lectureId: params.lectureId },
-  });
-}
-
-/** Topics once over the whole note, then the filling window by window. */
-async function generateWindowedMindmap(params: {
+/**
+ * Topics first, then the filling — for every note, however short.
+ *
+ * There used to be a second path here: a note that fitted one call got one call, which had to
+ * invent the shape and fill it in the same budget. That is the request models economise on, and
+ * they economise by writing fewer children — which is exactly the thin map this feature was sent
+ * back to fix. Splitting the two jobs costs one extra call on a short note and buys every topic a
+ * call that has nothing else to do.
+ */
+async function generateMindmapDocument(params: {
   lectureId: string;
   grounding: MindmapGrounding;
   windows: string[];
@@ -233,7 +215,13 @@ async function generateWindowedMindmap(params: {
         noteTitle: params.grounding.title,
         summary: params.grounding.summary,
         keyTopics: params.grounding.keyTopics,
-        outline: buildNoteSkeleton(params.grounding.notes),
+        /*
+         * A note short enough to plan from in full is planned from in full: the skeleton exists
+         * because a long note cannot be, not because headings are a better brief than prose.
+         */
+        ...(params.windows.length > 1
+          ? { outline: buildNoteSkeleton(params.grounding.notes) }
+          : { notes: params.grounding.notes }),
       },
       null,
       2,
@@ -422,10 +410,11 @@ export async function generateLectureMindmap(params: {
   const windows = planSourceWriteWindows(grounding.notes, MINDMAP_WINDOW_MAX_WORDS);
 
   try {
-    const generated =
-      windows.length <= 1
-        ? await generateWholeNoteMindmap({ lectureId: params.lectureId, grounding })
-        : await generateWindowedMindmap({ lectureId: params.lectureId, grounding, windows });
+    const generated = await generateMindmapDocument({
+      lectureId: params.lectureId,
+      grounding,
+      windows,
+    });
 
     const doc = parseMindmapDoc(generated);
 

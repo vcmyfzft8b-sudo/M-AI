@@ -1,5 +1,11 @@
 -- The mindmap a note can be read as: one row per lecture, holding the whole tree.
 --
+-- Numbered 0046 rather than 0043: the podcast branch claimed 0043 first and its migration is
+-- already live in production, and Supabase keys its history by that number alone. Renumbering
+-- the file no database has recorded is the safe half of the fix — see the two earlier collisions
+-- in docs/, and check `ls supabase/migrations | sed 's/_.*//' | sort | uniq -d` plus the open
+-- PRs before claiming a number.
+--
 -- The tree is stored as a single jsonb document rather than a node table on purpose. It is
 -- always read whole and never queried into — no screen asks for "the depth-2 nodes of this
 -- lecture" — and writing it as one row makes generation a single upsert that cannot leave a

@@ -21,6 +21,7 @@ import {
   type MindmapDoc,
 } from "@/lib/mindmap-doc";
 import { buildNoteSkeleton, mergeWindowedBranches } from "@/lib/mindmap-merge";
+import { describeMindmapFailure } from "@/lib/mindmap-failure";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import { planSourceWriteWindows } from "@/lib/notes/note-prompts";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -270,7 +271,7 @@ export function describeMindmapError(error: unknown) {
       .join("; ");
   }
 
-  return error instanceof Error ? error.message : "Unknown mindmap generation error.";
+  return describeMindmapFailure(error);
 }
 
 async function setMindmapStatus(params: {

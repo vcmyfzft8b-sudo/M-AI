@@ -7,6 +7,7 @@ import {
   MINDMAP_MAX_CHILDREN_PER_TOPIC,
 } from "../src/lib/mindmap-merge.ts";
 import { planSourceWriteWindows } from "../src/lib/notes/note-prompts.ts";
+import { describeMindmapFailure } from "../src/lib/mindmap-failure.ts";
 import {
   parseMindmapDoc,
   countMindmapNodes,
@@ -318,4 +319,26 @@ test("a topic with no name at all is dropped rather than made the catch-all", ()
     branches[0].children.map((entry) => entry.label),
     ["Zakon ponudbe"],
   );
+});
+
+test("a database failure says what went wrong instead of \"unknown\"", () => {
+  /*
+   * Postgrest returns a plain object rather than an `Error`, so an `instanceof Error` check misses
+   * every database failure. Production showed a learner "Unknown mindmap generation error." when
+   * the table was missing — the screen had the answer and threw it away.
+   */
+  assert.equal(
+    describeMindmapFailure({
+      code: "42P01",
+      message: 'relation "public.lecture_mindmap_assets" does not exist',
+      details: null,
+    }),
+    'relation "public.lecture_mindmap_assets" does not exist (42P01)',
+  );
+
+  assert.equal(describeMindmapFailure(new Error("the gateway timed out")), "the gateway timed out");
+  assert.equal(describeMindmapFailure({ message: "  spaced  " }), "spaced");
+  /* Only when there is genuinely nothing to say. */
+  assert.equal(describeMindmapFailure(null), "Unknown mindmap generation error.");
+  assert.equal(describeMindmapFailure({}), "Unknown mindmap generation error.");
 });

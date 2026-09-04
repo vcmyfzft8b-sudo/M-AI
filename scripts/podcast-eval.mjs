@@ -34,6 +34,7 @@ import { normalizePodcastTurns } from "../src/lib/podcast-script.ts";
 import {
   DEFAULT_PODCAST_VOICES,
   getPodcastFormat,
+  voiceGender,
   getPodcastLength,
   PODCAST_MAX_TURN_WORDS,
   PODCAST_MIN_TURN_WORDS,
@@ -250,7 +251,12 @@ const config = resolveStageModelConfig({
 
 console.log(`fixture ${fixtureName} (${fixture.language}) — ${fixture.title}`);
 console.log(`show "${format.id}" at "${length.id}" (~${length.targetWords} words) on ${config.model}`);
-console.log(`voices: A=${voices.a}${format.speakerCount === 2 ? `, B=${voices.b}` : ""}\n`);
+console.log(
+  `voices: A=${voices.a} (${voiceGender(voices.a)})${
+    format.speakerCount === 2 ? `, B=${voices.b} (${voiceGender(voices.b)})` : ""
+  }\n`,
+);
+
 
 const { parsed: script, usage, totalMs } = await generate({
   schema: podcastScriptSchema,
@@ -259,6 +265,10 @@ const { parsed: script, usage, totalMs } = await generate({
     format: format.id,
     speakerCount: format.speakerCount,
     targetWords: length.targetWords,
+    genders: {
+      a: voiceGender(voices.a),
+      ...(format.speakerCount === 2 ? { b: voiceGender(voices.b) } : {}),
+    },
   }),
   input: JSON.stringify({
     language: fixture.language,
@@ -366,6 +376,60 @@ if (Array.isArray(fixture.keyFacts) && fixture.keyFacts.length > 0) {
     `           ${grade.invented.length === 0 ? "nothing unsupported by the source" : `UNSUPPORTED — ${grade.invented.join("; ")}`}\n`,
   );
 }
+
+/* --- does each host speak of themselves in their own gender? -------------- */
+
+/*
+ * Slovenian and its neighbours agree l-participles with the gender of whoever they are about, so
+ * "sem razmišljal" from a woman is wrong — and wrong in a way a listener catches instantly,
+ * because they can hear which voice is speaking.
+ *
+ * This reports rather than asserts, because a run that happens to contain no gendered form is not
+ * a failure: an expository episode can go a whole five minutes without one. What it must never do
+ * is contain one that disagrees.
+ */
+const SELF_PAST = /\b(?:sem|nisem)\s+(?:[a-zšžčćđ]+\s+){0,2}([a-zšžčćđ]+?(la|l))\b/giu;
+const OTHER_PAST = /\b(?:si|nisi)\s+(?:[a-zšžčćđ]+\s+){0,2}([a-zšžčćđ]+?(la|l))\b/giu;
+
+const castGender = { a: voiceGender(voices.a), b: voiceGender(voices.b) };
+const other = (speaker) => (speaker === "a" ? "b" : "a");
+const disagreements = [];
+let genderedForms = 0;
+
+for (const turn of turns) {
+  for (const [pattern, about] of [[SELF_PAST, "self"], [OTHER_PAST, "other"]]) {
+    const re = new RegExp(pattern.source, "giu");
+    let match;
+
+    while ((match = re.exec(turn.text))) {
+      genderedForms += 1;
+
+      const spoken = match[2].toLowerCase() === "la" ? "f" : "m";
+      const expected =
+        about === "self" ? castGender[turn.speaker] : castGender[other(turn.speaker)];
+
+      if (format.speakerCount === 2 && spoken !== expected) {
+        disagreements.push(`${turn.speaker.toUpperCase()} about ${about}: "${match[0]}" reads ${spoken}, cast says ${expected}`);
+      }
+    }
+  }
+}
+
+console.log(
+  `GENDER     ${genderedForms} gender-marked form(s) in this run${
+    genderedForms === 0 ? " — nothing to check" : ""
+  }`,
+);
+
+for (const problem of disagreements) {
+  console.log(`   DISAGREES — ${problem}`);
+}
+
+if (genderedForms > 0 && disagreements.length === 0) {
+  console.log("           every one agrees with the cast");
+}
+
+console.log();
 
 /* --- say it out loud ------------------------------------------------------ */
 

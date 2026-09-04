@@ -23,6 +23,7 @@ import {
   PODCAST_MIN_TURN_WORDS,
   PODCAST_TARGET_TURN_WORDS,
   type PodcastFormat,
+  type VoiceGender,
 } from "../podcast-settings.ts";
 
 /*
@@ -202,15 +203,51 @@ const FORMAT_RULES: Record<PodcastFormat, string> = {
   ].join(" "),
 };
 
+/*
+ * Who the two hosts are, grammatically.
+ *
+ * This is the one thing about the cast the writer has to know, and it is not a nicety in the
+ * languages this app is used in. Slovenian, Croatian, Serbian and Bosnian agree past-tense verbs,
+ * participles and adjectives with the gender of whoever they are about — so a host saying "kot si
+ * rekel" to a woman is not informal, it is wrong, and in a conversation between two people it is
+ * wrong every few sentences. A writer told nothing picks one and uses it for both.
+ */
+function castRules(genders: { a: VoiceGender; b?: VoiceGender }) {
+  const name = (gender: VoiceGender) => (gender === "f" ? "a woman" : "a man");
+  const rules = [
+    `Host A is ${name(genders.a)}.`,
+  ];
+
+  if (genders.b) {
+    rules.push(
+      `Host B is ${name(genders.b)}.`,
+      "In any language where a verb, participle or adjective agrees with the gender of the person it is about, every such form must agree: the ones each host uses about THEMSELVES with their own gender, and the ones they use about the OTHER with the other's. In Slovenian and its neighbours that means \"kot si rekla\" to a woman and \"kot si rekel\" to a man, \"sem razmišljala\" from a woman and \"sem razmišljal\" from a man.",
+      "Get this right in every sentence, not just the first. It is the single most audible mistake this format can make, because a listener hears both voices and knows immediately which is which.",
+    );
+  } else {
+    rules.push(
+      "Everything the host says about themselves agrees with that: in Slovenian and its neighbours, \"sem razmišljala\" from a woman and \"sem razmišljal\" from a man.",
+    );
+  }
+
+  rules.push(
+    "This is the only thing you know about them. They still have no names, never address each other by name, and nothing else about them is invented — no age, no job, no history.",
+  );
+
+  return rules.join(" ");
+}
+
 /** Every rule the model is given, in the order it reads them. */
 export function buildPodcastScriptInstructions(params: {
   format: PodcastFormat;
   speakerCount: 1 | 2;
   targetWords: number;
+  genders: { a: VoiceGender; b?: VoiceGender };
 }) {
   return [
     "You are producing one episode of a podcast made from a student's own study material. It will be synthesized to audio and played to them — nobody will read it.",
     `## The show\n${FORMAT_RULES[params.format]}`,
+    `## Who is speaking\n${castRules(params.genders)}`,
     `## What it is about\n${GROUNDING}`,
     `## Language\n${LANGUAGE}`,
     `## Length and shape\n${lengthRules(params.targetWords, params.speakerCount)}`,

@@ -44,13 +44,37 @@ host's voice cost only that host's turns rather than a fresh generation — one
 | `src/app/api/lectures/[id]/podcast/route.ts` | `GET` what exists, `POST` to write it. |
 | `src/app/api/lectures/[id]/podcast/segments/route.ts` | `POST` one turn's audio. |
 
+## The cast decides the words, not just the sound
+
+Slovenian, Croatian, Serbian and Bosnian agree past-tense verbs, participles and adjectives with
+the gender of whoever they are about. So a host saying "kot si rekel" to a woman is not informal,
+it is wrong — and in a conversation between two people it is wrong every few sentences. English
+never notices; these languages notice immediately.
+
+The writer is therefore told the hosts' genders, and the stored script depends on them. Not on
+the voices: swapping Grace for Emma changes nothing a writer would write, and making it a
+different script would throw away an episode for no reason. The **cast key** is the gender pair,
+and it is folded into `content_hash` rather than added as a column — the note's hash stays its
+prefix, so the library still finds every episode of a note by matching that prefix alone.
+
+`scripts/podcast-eval.mjs` checks agreement on every run, reporting rather than asserting: an
+expository episode can run five minutes without one gendered form, and that is not a failure.
+What it must never contain is one that disagrees. Measured on the omrezja-sl fixture:
+
+| cast | forms | result |
+| --- | --- | --- |
+| Bennett (m) + Grace (f) | 2 | all agree |
+| Grace (f) + Emma (f) | 3 | all agree — "sem si jih morala", "si lepo povedala" |
+
 ## Three screens, and how you get between them
 
 The tab lands on one of two, never the third:
 
 - **Library** — the episodes this note already has, when it has any.
 - **Chooser** — the shows, lengths and voices, reached by "New episode".
-- **Player** — reached only by pressing Create or tapping an episode.
+- **Player** — reached only by pressing Create or tapping an episode, and it starts playing
+  by itself when it was opened by either of those: waiting through a generation is asking for
+  the episode, and landing in a paused player is being asked twice.
 
 The player used to appear on its own whenever a finished episode happened to match the saved
 show and length, which meant somebody opening the tab to make a new one was dropped into an
@@ -82,6 +106,20 @@ names that already say what they are, and the air between rows.
 One trap worth naming, since it cost an hour: **a media query adds no specificity**. The first
 version of this compaction was written next to the rules it shrinks, which put it above the base
 sizes in the file, and it did nothing at all on the phones it was written for.
+
+## Playing without seams
+
+Two `<audio>` elements, not one. With a single element every hand-off is `src = next; play()`,
+and even from a blob already in memory the browser still loads and decodes before the first
+sample — audible every time the conversation changes hands, which on a two-hander is every
+twenty seconds. The next turn is loaded into the idle element while this one is still speaking,
+so the hand-off is a bare `play()` on something already decoded.
+
+The first turn is fetched when the player opens rather than when Play is pressed. Synthesis is
+the whole wait, so starting it while the listener is reading the title makes the press instant.
+
+There is no speed control. It played at 1x for everyone in practice, and the rates were three
+more things on a screen that has to fit a phone.
 
 ## What is cached against what
 

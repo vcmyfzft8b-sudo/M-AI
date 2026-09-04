@@ -34,7 +34,9 @@ import {
   estimatedSpokenSeconds,
   getPodcastFormat,
   getPodcastLength,
+  podcastCastKey,
   reservedSpokenSeconds,
+  voiceGender,
   type PodcastFormat,
   type PodcastLength,
   type PodcastSpeaker,
@@ -185,6 +187,16 @@ export async function loadPodcastSource(lectureId: string): Promise<PodcastSourc
   };
 }
 
+/**
+ * Everything a stored script is an answer to.
+ *
+ * `contentHash` is the note's hash with the cast key appended, and that compound is deliberate.
+ * The script's words agree with the hosts' genders, so a script written for a woman and a man is
+ * not the script for two women — it has to be a different row. Folding the cast into the hash
+ * rather than adding a column keeps this inside the unique index the table already has, and the
+ * note's hash stays its prefix so the library can still find every episode of a note by matching
+ * on that prefix alone.
+ */
 type PodcastVariant = {
   lectureId: string;
   contentHash: string;
@@ -223,7 +235,8 @@ export async function listPodcastEpisodes(params: { lectureId: string; contentHa
     .from("lecture_podcasts")
     .select("id, format, length_id, language, title, turns, created_at")
     .eq("lecture_id", params.lectureId)
-    .eq("content_hash", params.contentHash)
+    /* Every cast of this note's text — see PodcastVariant for why the hash is compound. */
+    .like("content_hash", `${params.contentHash}:%`)
     .eq("status", "ready")
     .order("created_at", { ascending: false });
 
@@ -345,6 +358,7 @@ async function writePodcastScript(params: {
   source: PodcastSource;
   format: PodcastFormat;
   length: PodcastLength;
+  voices: Record<PodcastSpeaker, NoteTtsVoice>;
 }) {
   const format = getPodcastFormat(params.format);
   const length = getPodcastLength(params.length);
@@ -360,6 +374,10 @@ async function writePodcastScript(params: {
         format: params.format,
         speakerCount: format.speakerCount,
         targetWords: length.targetWords,
+        genders: {
+          a: voiceGender(params.voices.a),
+          ...(format.speakerCount === 2 ? { b: voiceGender(params.voices.b) } : {}),
+        },
       }),
       input: JSON.stringify({
         language: params.source.language,
@@ -431,6 +449,7 @@ export async function getOrCreatePodcastScript(params: {
   lectureId: string;
   format: PodcastFormat;
   length: PodcastLength;
+  voices: Record<PodcastSpeaker, NoteTtsVoice>;
 }) {
   const source = await loadPodcastSource(params.lectureId);
 
@@ -438,9 +457,13 @@ export async function getOrCreatePodcastScript(params: {
     throw new PodcastSourceNotReadyError();
   }
 
+  const format = getPodcastFormat(params.format);
   const variant: PodcastVariant = {
     lectureId: params.lectureId,
-    contentHash: source.contentHash,
+    contentHash: `${source.contentHash}:${podcastCastKey({
+      voices: params.voices,
+      speakerCount: format.speakerCount,
+    })}`,
     format: params.format,
     length: params.length,
     language: source.language,
@@ -467,6 +490,7 @@ export async function getOrCreatePodcastScript(params: {
       source,
       format: params.format,
       length: params.length,
+      voices: params.voices,
     }),
     source,
   };

@@ -228,6 +228,56 @@ export function segmentRequestAllowance(params: { bufferedAhead: number; rate: n
     : SEGMENT_REQUESTS_WHILE_CATCHING_UP;
 }
 
+export type VoiceGender = "f" | "m";
+
+/**
+ * Which voice sounds like a woman and which like a man.
+ *
+ * Needed because the languages this app is used in inflect for it. In Slovenian, Croatian,
+ * Serbian and Bosnian a past-tense verb, a participle and an adjective all agree with the gender
+ * of whoever they are about — so one host saying "kot si rekel" to a woman is not a stylistic
+ * slip, it is wrong, and it is wrong in every second sentence of a conversation between two
+ * people. English never notices; these languages notice immediately.
+ *
+ * Three of these are evidence rather than inference: tts-rt-v1's Claire, Maya and Noah were
+ * retired onto Sloane, Mina and Freddie (LEGACY_NOTE_TTS_VOICE_ALIASES), which fixes those three
+ * as female, female and male. The rest follow their names, which is how the provider presents
+ * them. If a voice is ever heard to disagree with this table, the table is what is wrong.
+ */
+const VOICE_GENDERS: Record<NoteTtsVoice, VoiceGender> = {
+  Grace: "f",
+  Mina: "f",
+  Emma: "f",
+  Sloane: "f",
+  Nina: "f",
+  Iris: "f",
+  Daniel: "m",
+  Adrian: "m",
+  Freddie: "m",
+  Bennett: "m",
+  Evan: "m",
+};
+
+export function voiceGender(voice: string): VoiceGender {
+  return VOICE_GENDERS[voice as NoteTtsVoice] ?? VOICE_GENDERS[DEFAULT_NOTE_TTS_VOICE];
+}
+
+/**
+ * The part of the cast a SCRIPT depends on.
+ *
+ * Not the voices themselves — swapping Grace for Emma changes nothing a writer would write, and
+ * making it change the script would throw away an episode for no reason. What the writer has to
+ * know is the genders, because the words it chooses agree with them.
+ */
+export function podcastCastKey(params: {
+  voices: Record<PodcastSpeaker, NoteTtsVoice>;
+  speakerCount: 1 | 2;
+}) {
+  return params.speakerCount === 1
+    ? voiceGender(params.voices.a)
+    : `${voiceGender(params.voices.a)}${voiceGender(params.voices.b)}`;
+}
+
 export const PODCAST_FORMAT_STORAGE_KEY = "memo-podcast-format";
 export const PODCAST_LENGTH_STORAGE_KEY = "memo-podcast-length";
 export const PODCAST_VOICE_A_STORAGE_KEY = "memo-podcast-voice-a";

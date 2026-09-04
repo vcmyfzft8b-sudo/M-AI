@@ -33,6 +33,18 @@ export function hasStaticVoiceSamples(language: string) {
   return SAMPLE_LANGUAGES.has(language);
 }
 
+/**
+ * The audition line for a podcast host.
+ *
+ * Never the pre-rendered files: those say the tutor's line, and a voice introducing itself as
+ * your tutor while you pick between two podcast hosts is the sort of seam that makes a screen
+ * feel assembled. Synthesized once per voice and language, then cached for ever — the answer for
+ * a given pair never changes.
+ */
+export function podcastVoiceSampleClip(voice: string, language: string) {
+  return `/api/tutor/voice-sample?voice=${encodeURIComponent(voice)}&language=${encodeURIComponent(language)}&context=podcast`;
+}
+
 /** The audition line, in the language the tutor will actually speak. */
 export function voiceSampleClip(voice: string, language: string) {
   /*

@@ -4,13 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 
 import { useT } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
-import {
-  DEFAULT_NOTE_TTS_PLAYBACK_RATE,
-  NOTE_TTS_PLAYBACK_RATES,
-  NOTE_TTS_VOICES,
-  type NoteTtsPlaybackRate,
-  type NoteTtsVoice,
-} from "@/lib/note-tts-settings";
+import { NOTE_TTS_VOICES, type NoteTtsVoice } from "@/lib/note-tts-settings";
 import {
   DEFAULT_PODCAST_FORMAT,
   DEFAULT_PODCAST_LENGTH,
@@ -36,7 +30,7 @@ import {
 } from "@/lib/podcast-settings";
 import { TutorClipPlayer } from "@/lib/tutor/clip-player";
 import { voiceHue } from "@/lib/tutor/voice-colors";
-import { voiceSampleClip } from "@/lib/tutor/voice-clips";
+import { podcastVoiceSampleClip } from "@/lib/tutor/voice-clips";
 
 /**
  * The generated podcast.
@@ -195,6 +189,8 @@ export function LecturePodcast({
    * screen now; this is set by pressing Create, or by picking an episode from the library.
    */
   const [openedEpisodeId, setOpenedEpisodeId] = useState<string | null>(null);
+  /* Set when the player was opened by an act that means "play it": Create, or tapping an episode. */
+  const [autoPlay, setAutoPlay] = useState(false);
   /*
    * An episode picked from the library, waiting for its script to arrive before it can open.
    *
@@ -211,14 +207,27 @@ export function LecturePodcast({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [positionMs, setPositionMs] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [rate, setRate] = useState<NoteTtsPlaybackRate>(DEFAULT_NOTE_TTS_PLAYBACK_RATE);
   const [preparingIndex, setPreparingIndex] = useState<number | null>(null);
   const [previewVoice, setPreviewVoice] = useState<NoteTtsVoice | null>(null);
   const [openVoiceSlot, setOpenVoiceSlot] = useState<PodcastSpeaker | null>(null);
   /* Bumped whenever the segment cache changes, so the render reads the ref's new contents. */
   const [segmentVersion, setSegmentVersion] = useState(0);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  /*
+   * Two elements, not one, and this is what removes the pause between speakers.
+   *
+   * With a single element every hand-off is `src = next; play()`, and even from a blob already in
+   * memory the browser still has to load and decode before the first sample — audible, every time
+   * the conversation changes hands, which on a two-hander is every twenty seconds.
+   *
+   * So the next turn is loaded into the OTHER element while this one is still speaking, and the
+   * hand-off is a bare play() on something already decoded and ready.
+   */
+  const audioARef = useRef<HTMLAudioElement | null>(null);
+  const audioBRef = useRef<HTMLAudioElement | null>(null);
+  const activeSlotRef = useRef<"a" | "b">("a");
+  /** Which turn is already loaded into which element, so a prepared hand-off is recognised. */
+  const preparedRef = useRef<{ slot: "a" | "b"; index: number } | null>(null);
   const segmentsRef = useRef(new Map<number, LoadedSegment>());
   const pendingRef = useRef(new Map<number, Promise<LoadedSegment | null>>());
   const inFlightRef = useRef(0);
@@ -230,10 +239,21 @@ export function LecturePodcast({
   const voicesRef = useRef(voices);
   const podcastRef = useRef<PodcastPayload | null>(null);
   const isPlayingRef = useRef(false);
+  /*
+   * Read inside loadStatus rather than closed over.
+   *
+   * `isWriting` used to be one of its dependencies, which made it a new function every time a
+   * generation started or stopped — and the effect that resets the screen when the show changes
+   * depends on loadStatus. So pressing Create reset the very screen it had just started: the
+   * episode was written and filed in the library, and the listener was put back in front of the
+   * library to watch it appear rather than hearing it.
+   */
+  const isWritingRef = useRef(false);
 
   voicesRef.current = voices;
   podcastRef.current = podcast;
   isPlayingRef.current = isPlaying;
+  isWritingRef.current = isWriting;
 
   /*
    * How much of the episode is already made, counted forward from the turn playing. Read from
@@ -246,10 +266,15 @@ export function LecturePodcast({
     bufferedAhead += 1;
   }
 
-  concurrencyRef.current = segmentRequestAllowance({ bufferedAhead, rate });
+  concurrencyRef.current = segmentRequestAllowance({ bufferedAhead, rate: 1 });
 
   /* Memoized so the derived durations and the prefetch effect do not rebuild on every render. */
   const turns = useMemo(() => podcast?.turns ?? [], [podcast]);
+
+  /* The player shows only an episode the listener opened — see openedEpisodeId. */
+  const hasEpisode = Boolean(
+    podcast && podcast.status === "ready" && turns.length > 0 && podcast.id === openedEpisodeId,
+  );
   const speakerCount = getPodcastFormat(format).speakerCount;
   /*
    * Being written — by this screen, or by a request that started before it was opened.
@@ -285,15 +310,21 @@ export function LecturePodcast({
     setSegmentVersion((version) => version + 1);
   }, []);
 
-  const stopPlayback = useCallback(() => {
-    const element = audioRef.current;
+  const elementFor = useCallback(
+    (slot: "a" | "b") => (slot === "a" ? audioARef.current : audioBRef.current),
+    [],
+  );
 
-    if (element) {
-      element.pause();
-      element.removeAttribute("src");
-      element.load();
+  const stopPlayback = useCallback(() => {
+    for (const element of [audioARef.current, audioBRef.current]) {
+      if (element) {
+        element.pause();
+        element.removeAttribute("src");
+        element.load();
+      }
     }
 
+    preparedRef.current = null;
     setIsPlaying(false);
   }, []);
 
@@ -307,7 +338,8 @@ export function LecturePodcast({
       segmentsRef.current.clear();
       pendingRef.current.clear();
       previewPlayerRef.current?.stop();
-      audioRef.current?.pause();
+      audioARef.current?.pause();
+      audioBRef.current?.pause();
     },
     [],
   );
@@ -409,9 +441,11 @@ export function LecturePodcast({
           pendingEpisodeIdRef.current = null;
           setCurrentIndex(0);
           setPositionMs(0);
+          /* Tapping an episode in the library is a request to hear it, not to look at it. */
+          setAutoPlay(true);
         }
 
-        if (payload.podcast?.status === "ready" && isWriting) {
+        if (payload.podcast?.status === "ready" && isWritingRef.current) {
           /* This screen asked for it and has been watching the bar; it opens on arrival. */
           setIsWriting(false);
           setOpenedEpisodeId(payload.podcast.id);
@@ -436,7 +470,7 @@ export function LecturePodcast({
         return null;
       }
     },
-    [format, length, lectureId, isWriting, t],
+    [format, length, lectureId, t],
   );
 
   /*
@@ -470,7 +504,12 @@ export function LecturePodcast({
       const response = await fetch(`/api/lectures/${lectureId}/podcast`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ format, length }),
+        body: JSON.stringify({
+          format,
+          length,
+          voiceA: voicesRef.current.a,
+          voiceB: voicesRef.current.b,
+        }),
       });
 
       if (response.status === 202) {
@@ -493,6 +532,11 @@ export function LecturePodcast({
       setIsWriting(false);
       setCurrentIndex(0);
       setPositionMs(0);
+      /*
+       * Waiting through a generation is asking for the episode. Landing in a paused player and
+       * having to press play again is asking twice.
+       */
+      setAutoPlay(true);
     } catch {
       setIsWriting(false);
       setError(t("podcast.error.script"));
@@ -708,15 +752,34 @@ export function LecturePodcast({
         return;
       }
 
-      const element = audioRef.current;
+      /*
+       * Use the element this turn was already loaded into if the hand-off was prepared; otherwise
+       * take whichever is idle. Either way the other one is silenced, so a seek during playback
+       * cannot leave two turns talking over each other.
+       */
+      const prepared = preparedRef.current;
+      const slot: "a" | "b" =
+        prepared && prepared.index === index
+          ? prepared.slot
+          : activeSlotRef.current === "a"
+            ? "b"
+            : "a";
+      const element = elementFor(slot);
+      const other = elementFor(slot === "a" ? "b" : "a");
 
       if (!element) {
         return;
       }
 
-      element.src = segment.objectUrl;
-      element.playbackRate = rate;
+      other?.pause();
+
+      if (element.src !== segment.objectUrl) {
+        element.src = segment.objectUrl;
+      }
+
       element.currentTime = offsetMs / 1000;
+      activeSlotRef.current = slot;
+      preparedRef.current = null;
 
       try {
         await element.play();
@@ -726,8 +789,70 @@ export function LecturePodcast({
         setIsPlaying(false);
       }
     },
-    [ensureSegment, rate, t],
+    [elementFor, ensureSegment, t],
   );
+
+  /*
+   * The first turn is fetched the moment the episode opens, before anything is pressed.
+   *
+   * Synthesis is the whole wait — roughly the length of the audio — and it used to start on the
+   * press, so Play meant fifteen seconds of nothing. Starting it when the player appears spends
+   * that wait while the listener is reading the title, and the press is then instant. It is not
+   * speculative work: an episode that has been opened is one somebody is about to play.
+   */
+  useEffect(() => {
+    if (!hasEpisode || turns.length === 0) {
+      return;
+    }
+
+    for (const index of [currentIndex, currentIndex + 1]) {
+      if (index < turns.length && !segmentsRef.current.has(index)) {
+        void ensureSegment(index).catch(() => {
+          /* Retried when playback actually reaches the turn. */
+        });
+      }
+    }
+    /* Deliberately not keyed on isPlaying: the point is to be ahead of it. */
+  }, [hasEpisode, currentIndex, turns.length, ensureSegment, segmentVersion]);
+
+  useEffect(() => {
+    if (!autoPlay || !hasEpisode || isPlaying) {
+      return;
+    }
+
+    setAutoPlay(false);
+    void playSegment(currentIndex, 0);
+    /* playSegment waits for the turn itself; this only has to fire once the episode is there. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPlay, hasEpisode]);
+
+  /*
+   * Loads the next turn into the idle element, which is what makes the hand-off silent. Runs
+   * whenever the turn or the cache changes, so it is ready long before it is needed.
+   */
+  useEffect(() => {
+    if (!hasEpisode) {
+      return;
+    }
+
+    const next = currentIndex + 1;
+    const segment = segmentsRef.current.get(next);
+
+    if (!segment || preparedRef.current?.index === next) {
+      return;
+    }
+
+    const slot = activeSlotRef.current === "a" ? "b" : "a";
+    const element = elementFor(slot);
+
+    if (!element) {
+      return;
+    }
+
+    element.src = segment.objectUrl;
+    element.load();
+    preparedRef.current = { slot, index: next };
+  }, [hasEpisode, currentIndex, segmentVersion, elementFor]);
 
   /* One turn ahead is not enough when a synthesis takes longer than a turn lasts. */
   useEffect(() => {
@@ -745,14 +870,6 @@ export function LecturePodcast({
       }
     }
   }, [podcast, currentIndex, isPlaying, ensureSegment, segmentVersion]);
-
-  useEffect(() => {
-    const element = audioRef.current;
-
-    if (element) {
-      element.playbackRate = rate;
-    }
-  }, [rate]);
 
   /**
    * Opens an episode the listener already has.
@@ -819,6 +936,12 @@ export function LecturePodcast({
     stopPlayback();
     releaseSegments((index) => (podcastRef.current?.turns[index]?.speaker ?? "a") === speaker);
     setPositionMs(0);
+    /*
+     * Reloaded because the cast may have changed grammatical gender, and the script's words agree
+     * with it — swapping a woman for a man is a different script, not the same one in a new voice.
+     * Swapping within a gender resolves to the same row and costs nothing.
+     */
+    setOpenedEpisodeId(null);
     void loadStatus({ silent: true });
 
     previewTokenRef.current += 1;
@@ -834,7 +957,7 @@ export function LecturePodcast({
     setPreviewVoice(next);
 
     try {
-      await player.play(voiceSampleClip(next, language));
+      await player.play(podcastVoiceSampleClip(next, language));
     } catch {
       if (token === previewTokenRef.current) {
         setPreviewVoice(null);
@@ -843,7 +966,7 @@ export function LecturePodcast({
   }
 
   function togglePlayback() {
-    const element = audioRef.current;
+    const element = elementFor(activeSlotRef.current);
 
     if (isPlaying) {
       element?.pause();
@@ -866,8 +989,10 @@ export function LecturePodcast({
     const target = elapsedMs + seconds * 1000;
     const located = locateAt(Math.max(0, Math.min(target, Math.max(0, totalMs - 1_000))));
 
-    if (located.index === currentIndex && audioRef.current?.src) {
-      audioRef.current.currentTime = located.offsetMs / 1000;
+    const active = elementFor(activeSlotRef.current);
+
+    if (located.index === currentIndex && active?.src) {
+      active.currentTime = located.offsetMs / 1000;
       setPositionMs(located.offsetMs);
       return;
     }
@@ -878,8 +1003,10 @@ export function LecturePodcast({
   function seekTo(targetMs: number) {
     const located = locateAt(targetMs);
 
-    if (located.index === currentIndex && audioRef.current?.src) {
-      audioRef.current.currentTime = located.offsetMs / 1000;
+    const active = elementFor(activeSlotRef.current);
+
+    if (located.index === currentIndex && active?.src) {
+      active.currentTime = located.offsetMs / 1000;
       setPositionMs(located.offsetMs);
       return;
     }
@@ -899,9 +1026,6 @@ export function LecturePodcast({
     );
   }
 
-  const hasEpisode = Boolean(
-    podcast && podcast.status === "ready" && turns.length > 0 && podcast.id === openedEpisodeId,
-  );
   const activeFormat = getPodcastFormat(format);
 
   const cover = (
@@ -978,22 +1102,34 @@ export function LecturePodcast({
   return (
     <div className="memo-podcast">
       {/* One element for the whole episode: turns are swapped into it as they are reached. */}
-      <audio
-        ref={audioRef}
-        preload="auto"
-        onTimeUpdate={(event) => setPositionMs(event.currentTarget.currentTime * 1000)}
-        onEnded={() => {
-          const next = currentIndex + 1;
+      {(["a", "b"] as const).map((slot) => (
+        <audio
+          key={slot}
+          ref={slot === "a" ? audioARef : audioBRef}
+          preload="auto"
+          onTimeUpdate={(event) => {
+            if (activeSlotRef.current === slot) {
+              setPositionMs(event.currentTarget.currentTime * 1000);
+            }
+          }}
+          onEnded={() => {
+            /* The idle element can fire this too, having been loaded and seeked. Ignore it. */
+            if (activeSlotRef.current !== slot) {
+              return;
+            }
 
-          if (next < turns.length) {
-            void playSegment(next, 0);
-            return;
-          }
+            const next = currentIndex + 1;
 
-          setIsPlaying(false);
-          setPositionMs(durationOf(currentIndex));
-        }}
-      />
+            if (next < turns.length) {
+              void playSegment(next, 0);
+              return;
+            }
+
+            setIsPlaying(false);
+            setPositionMs(durationOf(currentIndex));
+          }}
+        />
+      ))}
 
       {cover}
 
@@ -1051,18 +1187,6 @@ export function LecturePodcast({
               <Msym name="forward_10" size="1.4rem" fill={false} weight={500} />
             </button>
 
-            <div className="memo-podcast-rates" role="group" aria-label={t("podcast.speed")}>
-              {NOTE_TTS_PLAYBACK_RATES.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  className={`memo-podcast-rate ${rate === option ? "active" : ""}`.trim()}
-                  onClick={() => setRate(option)}
-                >
-                  {option}x
-                </button>
-              ))}
-            </div>
           </div>
 
           {preparingIndex !== null ? (

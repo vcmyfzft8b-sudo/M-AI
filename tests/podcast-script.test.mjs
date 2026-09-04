@@ -20,7 +20,9 @@ import {
   PODCAST_LENGTHS,
   PODCAST_MAX_TURN_WORDS,
   PODCAST_MIN_TURN_WORDS,
+  podcastCastKey,
   reservedSpokenSeconds,
+  voiceGender,
   SEGMENT_REQUESTS_WHILE_BUFFERED,
   SEGMENT_REQUESTS_WHILE_CATCHING_UP,
   segmentRequestAllowance,
@@ -266,5 +268,38 @@ test("the shortest episode is the one a listener waits through, and the ladder i
   assert.deepEqual(
     PODCAST_LENGTHS.map((length) => estimatedPodcastMinutes(length.id)),
     [4, 7, 12],
+  );
+});
+
+/*
+ * The cast decides the script's grammar, not its sound. Slovenian and its neighbours agree verbs,
+ * participles and adjectives with the gender of whoever they are about, so a script written for a
+ * woman and a man is the wrong script for two women — every few sentences.
+ */
+test("every voice has a gender, and the default is never a guess", () => {
+  for (const voice of NOTE_TTS_VOICES) {
+    assert.ok(["f", "m"].includes(voiceGender(voice)), `${voice} has no gender`);
+  }
+
+  assert.equal(voiceGender("Nonsense"), voiceGender("Grace"), "an unknown voice falls back");
+});
+
+test("the retired v1 voices fix three of the genders as evidence rather than inference", () => {
+  // Claire, Maya and Noah were retired onto these three, which settles them.
+  assert.equal(voiceGender("Sloane"), "f");
+  assert.equal(voiceGender("Mina"), "f");
+  assert.equal(voiceGender("Freddie"), "m");
+});
+
+test("a script is keyed on the cast's genders, not on which voices they are", () => {
+  const key = (a, b) => podcastCastKey({ voices: { a, b }, speakerCount: 2 });
+
+  assert.equal(key("Grace", "Emma"), key("Nina", "Iris"), "two women are two women");
+  assert.notEqual(key("Grace", "Bennett"), key("Grace", "Emma"), "a man is not a woman");
+  assert.notEqual(key("Grace", "Bennett"), key("Bennett", "Grace"), "which host is which matters");
+  assert.equal(
+    podcastCastKey({ voices: { a: "Grace", b: "Bennett" }, speakerCount: 1 }),
+    podcastCastKey({ voices: { a: "Grace", b: "Evan" }, speakerCount: 1 }),
+    "a solo episode has no second host, so the second voice cannot change its script",
   );
 });

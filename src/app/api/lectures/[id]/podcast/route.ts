@@ -18,6 +18,8 @@ import {
 } from "@/lib/podcast";
 import { parseStoredTurns } from "@/lib/podcast-script";
 import {
+  getPodcastFormat,
+  podcastCastKey,
   normalizePodcastFormat,
   normalizePodcastLength,
   normalizePodcastVoice,
@@ -42,6 +44,9 @@ const PODCAST_REQUEST_MAX_BYTES = 2 * 1024;
 const podcastRequestSchema = z.object({
   format: z.enum(PODCAST_FORMAT_IDS),
   length: z.enum(PODCAST_LENGTH_IDS),
+  /* The script's words agree with the hosts' genders, so the cast decides which script this is. */
+  voiceA: z.string().trim().min(1).max(32),
+  voiceB: z.string().trim().min(1).max(32),
 });
 
 async function resolveAccess(userId: string, lectureId: string, email?: string | null) {
@@ -126,6 +131,16 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const url = new URL(request.url);
   const format = normalizePodcastFormat(url.searchParams.get("format"));
   const length = normalizePodcastLength(url.searchParams.get("length"));
+  /*
+   * Normalized rather than validated: an unrecognised voice in a query string is a stale bundle
+   * or a hand-typed URL, and the honest answer to both is the default voice, not a 400 that
+   * leaves the screen with nothing to show.
+   */
+  const voices = {
+    a: normalizePodcastVoice(url.searchParams.get("voiceA"), "a"),
+    b: normalizePodcastVoice(url.searchParams.get("voiceB"), "b"),
+  };
+
   const source = await loadPodcastSource(id);
 
   if (!source) {
@@ -141,7 +156,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const [row, episodes] = await Promise.all([
     getPodcastRow({
       lectureId: id,
-      contentHash: source.contentHash,
+      contentHash: `${source.contentHash}:${podcastCastKey({
+        voices,
+        speakerCount: getPodcastFormat(format).speakerCount,
+      })}`,
       format,
       length,
       language: source.language,
@@ -160,15 +178,6 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     });
   }
 
-  /*
-   * Normalized rather than validated: an unrecognised voice in a query string is a stale bundle
-   * or a hand-typed URL, and the honest answer to both is the default voice, not a 400 that
-   * leaves the screen with nothing to show.
-   */
-  const voices = {
-    a: normalizePodcastVoice(url.searchParams.get("voiceA"), "a"),
-    b: normalizePodcastVoice(url.searchParams.get("voiceB"), "b"),
-  };
   const turns = parseStoredTurns(row.turns);
   const readySegments =
     row.status === "ready" ? await listReadyPodcastSegments({ podcastId: row.id, voices }) : [];
@@ -246,6 +255,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       lectureId: id,
       format: parsedBody.data.format,
       length: parsedBody.data.length,
+      voices: {
+        a: normalizePodcastVoice(parsedBody.data.voiceA, "a"),
+        b: normalizePodcastVoice(parsedBody.data.voiceB, "b"),
+      },
     });
 
     return NextResponse.json({

@@ -14,7 +14,6 @@ import {
   runLectureStage,
   transcribeLectureContent,
 } from "@/lib/pipeline";
-import { generateLectureMindmap } from "@/lib/mindmap";
 import { generateLecturePracticeTest } from "@/lib/practice-test";
 import { generateLectureQuiz } from "@/lib/quiz";
 import { warmTutorPlan } from "@/lib/tutor-plan";
@@ -345,50 +344,6 @@ export const processLecturePracticeTestFunction = inngest.createFunction(
           ok: false,
           error:
             error instanceof Error ? error.message : "Unknown practice-test generation error.",
-        };
-      }
-
-      return { ok: true };
-    });
-  },
-);
-
-/**
- * The mind map, drawn in the background when the reader opens its tab.
- *
- * `generateLectureMindmap` writes its own failure onto the asset row and resolves, so almost
- * nothing reaches this catch — what does is a database write that failed, which is worth an alert
- * rather than a silent retry. The budget overrun is re-thrown for the same reason as everywhere
- * else here: Inngest must see it and retry with a fresh invocation.
- */
-export const processLectureMindmapFunction = inngest.createFunction(
-  { id: "process-lecture-mindmap" },
-  { event: "lecture/mindmap.requested" },
-  async ({ event, step }) => {
-    await step.run("process-lecture-mindmap", async () => {
-      try {
-        await withStepBudget(() =>
-          generateLectureMindmap({
-            lectureId: event.data.lectureId,
-            regenerate: Boolean(event.data.regenerate),
-          }),
-        );
-      } catch (error) {
-        if (isBudgetOverrunFailure(error)) {
-          throw error;
-        }
-
-        if (!isExpectedLectureInputFailure(error)) {
-          captureRouteError(error, {
-            route: "inngest:process-lecture-mindmap",
-            operation: "generateLectureMindmap",
-            lectureId: event.data.lectureId,
-          });
-        }
-
-        return {
-          ok: false,
-          error: error instanceof Error ? error.message : "Unknown mindmap generation error.",
         };
       }
 

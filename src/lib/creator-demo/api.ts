@@ -10,7 +10,6 @@
  * the middle of a recording.
  */
 import { buildNoteTtsChunks, parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
-import { buildDemoMindmap } from "@/lib/creator-demo/mindmap";
 import { demoT } from "@/lib/creator-demo/demo-translator";
 import type { EditableNoteDoc } from "@/lib/note-doc";
 import {
@@ -389,34 +388,6 @@ async function handleLectureRoute(
 
         await waitForDetailRefreshWindow();
         return json({ ok: true });
-      }
-
-      return json({ ok: true });
-    }
-
-    /*
-     * The map is built from the demo note on the spot rather than stored. It is cheap, it can
-     * never fall out of step with a note the visitor has just edited on screen, and "ready" is
-     * the honest status: there is nothing to wait for here.
-     */
-    case "mindmap": {
-      if (method === "GET") {
-        const map = detail
-          ? buildDemoMindmap({
-              notesMd: detail.artifact?.structured_notes_md ?? "",
-              title: detail.lecture.title ?? "",
-            })
-          : null;
-
-        return json({
-          lectureId,
-          lectureStatus: detail?.lecture.status ?? "ready",
-          status: map ? "ready" : null,
-          doc: map,
-          errorMessage: null,
-          generatedAt: detail?.artifact?.generated_at ?? null,
-          stale: false,
-        });
       }
 
       return json({ ok: true });

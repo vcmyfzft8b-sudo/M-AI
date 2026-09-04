@@ -204,6 +204,16 @@ export function NoteSpeedReader({
       const below = inGrid + outsideGrid;
       const next = Math.max(MIN_AVAILABLE_HEIGHT, viewport - box.top - below - BOTTOM_GAP);
 
+      /*
+       * Written straight back onto the element rather than through the render.
+       * The height was just taken off to measure, and a render is not
+       * guaranteed to put it back: a resize that lands on the same answer — and
+       * on iOS the toolbar animating produces a stream of them — leaves the
+       * state unchanged, React with nothing to do, and the reader stuck at its
+       * natural height. The state below is for the density attribute, which
+       * does need a render.
+       */
+      section.style.setProperty("--speedread-available", `${next}px`);
       setAvailable((current) => (current !== null && Math.abs(current - next) < 2 ? current : next));
     };
 
@@ -219,12 +229,21 @@ export function NoteSpeedReader({
     };
   }, []);
 
-
   const words = useMemo(
     () => (content ? buildSpeedReadWords(parseNoteTtsDocument(content)) : []),
     [content],
   );
   const wordCount = words.length;
+
+  /* What the screen is allowed to give up, given the room it measured. */
+  const density =
+    available === null
+      ? undefined
+      : available < TIGHT_BELOW
+        ? "tight"
+        : available < COMPACT_BELOW
+          ? "compact"
+          : undefined;
 
   /*
    * Storage is read as the initial state rather than in an effect after mount.
@@ -232,9 +251,6 @@ export function NoteSpeedReader({
    * when the reader picks its tab, long after hydration — so there is no first
    * paint for a stored setting to disagree with.
    */
-  const density =
-    available === null ? undefined : available < TIGHT_BELOW ? "tight" : available < COMPACT_BELOW ? "compact" : undefined;
-
   const [settings, setSettings] = useState<SpeedReaderSettings>(readSettings);
   const [index, setIndex] = useState(() => readPosition(lectureId, wordCount));
   const [isPlaying, setIsPlaying] = useState(false);
@@ -431,7 +447,6 @@ export function NoteSpeedReader({
         className="memo-speedread"
         data-density={density}
         aria-label={t("speedRead.title")}
-        style={available === null ? undefined : ({ "--speedread-available": `${available}px` } as CSSProperties)}
       >
         <SpeedReaderHead onClose={onClose} title={t("speedRead.title")} />
         <p className="memo-speedread-empty">{t("speedRead.empty")}</p>
@@ -455,7 +470,6 @@ export function NoteSpeedReader({
       className="memo-speedread"
       data-density={density}
       aria-label={t("speedRead.title")}
-      style={available === null ? undefined : ({ "--speedread-available": `${available}px` } as CSSProperties)}
     >
       <SpeedReaderHead onClose={onClose} title={t("speedRead.title")} />
 

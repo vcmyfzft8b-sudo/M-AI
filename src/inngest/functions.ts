@@ -16,6 +16,7 @@ import {
 } from "@/lib/pipeline";
 import { generateLecturePracticeTest } from "@/lib/practice-test";
 import { generateLectureQuiz } from "@/lib/quiz";
+import { warmTutorPlan } from "@/lib/tutor-plan";
 import { generateLectureFlashcards } from "@/lib/study";
 
 // Inngest executes a step by calling POST /api/inngest, so a step gets exactly one Vercel
@@ -245,6 +246,36 @@ export const processLectureStudyFunction = inngest.createFunction(
       }
 
       return { ok: true };
+    });
+  },
+);
+
+/*
+ * The tutor's running order, worked out once the note exists rather than when a session starts.
+ * It is the one part of the tutor that cannot be made fast, and the moment it is wanted is the
+ * moment the learner has already pressed start. A failure here costs the wait it exists to
+ * remove, never the session: the plan regenerates on demand exactly as it did before.
+ */
+export const processLectureTutorPlanFunction = inngest.createFunction(
+  { id: "process-lecture-tutor-plan" },
+  { event: "lecture/tutor-plan.requested" },
+  async ({ event, step }) => {
+    await step.run("process-lecture-tutor-plan", async () => {
+      try {
+        await withStepBudget(() => warmTutorPlan(event.data.lectureId));
+      } catch (error) {
+        if (isBudgetOverrunFailure(error)) {
+          throw error;
+        }
+
+        if (!isExpectedLectureInputFailure(error)) {
+          captureRouteError(error, {
+            route: "inngest:process-lecture-tutor-plan",
+            operation: "warmTutorPlan",
+            lectureId: event.data.lectureId,
+          });
+        }
+      }
     });
   },
 );

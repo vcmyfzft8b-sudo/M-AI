@@ -791,6 +791,22 @@ export async function generateLectureNotesFromStoredTranscript(params: {
     durationSeconds: lecture.duration_seconds,
   });
 
+  /*
+   * The note is finished and the lecture is already ready, so this costs the learner nothing —
+   * which is the point. Working the tutor's running order out takes 19 to 51 seconds on the model
+   * that plans it well, and the moment it is wanted is the moment somebody has pressed start.
+   * Enqueued rather than awaited, and silent on failure: the plan still regenerates on demand.
+   */
+  try {
+    // Imported lazily for the same reason every other enqueue here is: jobs.ts reaches back into
+    // this module, and a top-level import would close the cycle.
+    const { enqueueLectureTutorPlanGeneration } = await import("@/lib/jobs");
+
+    await enqueueLectureTutorPlanGeneration(lecture.id);
+  } catch (error) {
+    console.error("Tutor plan warm-up could not be started", { lectureId: lecture.id, error });
+  }
+
   // The checkpoints exist to make retries of an unfinished generation cheap; once the lecture is
   // ready they are dead weight, and clearing here is what keeps the cache table bounded.
   await clearGenerationCache(lecture.id);

@@ -253,6 +253,10 @@ export function buildDemoLectureDetail(params: {
       editable_notes_doc: noteDoc as unknown as Json,
       editable_notes_md: null,
       editable_notes_plain: null,
+      // The demo never starts a tutor session, so it carries no warmed running order.
+      tutor_plan: null,
+      tutor_plan_notes_hash: null,
+      tutor_plan_generated_at: null,
       editable_notes_revision: 0,
       editable_notes_updated_at: null,
       model_metadata: {},

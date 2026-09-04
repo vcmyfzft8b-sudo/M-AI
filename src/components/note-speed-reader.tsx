@@ -40,6 +40,24 @@ const POSITION_STORAGE_PREFIX = "memo.speed-reader.at:";
 const COMFORTABLE_WORD_LENGTH = 13;
 const MIN_WORD_SCALE = 0.5;
 
+/** Breathing room under the last control, so it never sits on the edge. */
+const BOTTOM_GAP = 12;
+/**
+ * How much room the reader has to have before it stops giving things up. A
+ * viewport height cannot answer this — a desktop window can be 720px tall and
+ * still leave the reader 270px of it, once the header, the card and the pill
+ * row have taken theirs.
+ */
+const COMPACT_BELOW = 430;
+const TIGHT_BELOW = 330;
+/**
+ * Below this the reader is not usable however hard it squeezes, so it stops
+ * squeezing and lets the page scroll rather than folding the controls into
+ * each other. Roughly what the fixed parts need on the shortest phone in
+ * landscape.
+ */
+const MIN_AVAILABLE_HEIGHT = 210;
+
 type SpeedReaderSettings = {
   wpm: number;
   gradual: boolean;
@@ -123,11 +141,109 @@ export function NoteSpeedReader({
   onClose: () => void;
 }) {
   const t = useT();
+  /*
+   * How much room the reader actually has, measured rather than guessed.
+   *
+   * "Fits on one screen" cannot be written as a subtraction per breakpoint:
+   * what sits above this screen is a phone navbar on one device and a header,
+   * a card and a pill row on another, and on iOS the browser's own toolbar
+   * changes height as you scroll. So the reader asks where it starts and takes
+   * the rest, and the stage inside it absorbs whatever that turns out to be.
+   */
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const [available, setAvailable] = useState<number | null>(null);
+
+  useEffect(() => {
+    const measure = () => {
+      const section = sectionRef.current;
+      if (!section) {
+        return;
+      }
+
+      /* `visualViewport` is the one that shrinks under an iOS toolbar. */
+      const viewport = window.visualViewport?.height ?? window.innerHeight;
+
+      /*
+       * Let go of the height first, so what follows measures the page as it
+       * would be without this screen holding it to a size. Measuring while the
+       * previous answer is still applied would feed the next answer its own
+       * output, and the two would chase each other down to nothing. React puts
+       * the property back on the next render.
+       */
+      section.style.removeProperty("--speedread-available");
+
+      const box = section.getBoundingClientRect();
+      const documentElement = document.documentElement;
+
+      /*
+       * What the page keeps below the reader, in two parts.
+       *
+       * Inside the grid it is content — the note card's padding and the dock —
+       * so a rectangle answers it. Outside the grid it is the shell's own
+       * padding, and a rectangle does not: `.memo` carries `min-height: 100vh`,
+       * so on a short page its bottom edge is the window's, not its content's.
+       * Reading the box model instead gives the same number either way.
+       */
+      const grid = section.closest(".memo-grid") ?? section.closest(".memo-note-screen");
+      const inGrid = grid ? Math.max(0, grid.getBoundingClientRect().bottom - box.bottom) : 0;
+
+      let outsideGrid = 0;
+      for (let node = grid; node && node !== documentElement; node = node.parentElement) {
+        const own = window.getComputedStyle(node);
+        outsideGrid += Number.parseFloat(own.marginBottom) || 0;
+
+        const parent = node.parentElement;
+        if (parent) {
+          const around = window.getComputedStyle(parent);
+          outsideGrid +=
+            (Number.parseFloat(around.paddingBottom) || 0) +
+            (Number.parseFloat(around.borderBottomWidth) || 0);
+        }
+      }
+
+      const below = inGrid + outsideGrid;
+      const next = Math.max(MIN_AVAILABLE_HEIGHT, viewport - box.top - below - BOTTOM_GAP);
+
+      /*
+       * Written straight back onto the element rather than through the render.
+       * The height was just taken off to measure, and a render is not
+       * guaranteed to put it back: a resize that lands on the same answer — and
+       * on iOS the toolbar animating produces a stream of them — leaves the
+       * state unchanged, React with nothing to do, and the reader stuck at its
+       * natural height. The state below is for the density attribute, which
+       * does need a render.
+       */
+      section.style.setProperty("--speedread-available", `${next}px`);
+      setAvailable((current) => (current !== null && Math.abs(current - next) < 2 ? current : next));
+    };
+
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("orientationchange", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+    };
+  }, []);
+
   const words = useMemo(
     () => (content ? buildSpeedReadWords(parseNoteTtsDocument(content)) : []),
     [content],
   );
   const wordCount = words.length;
+
+  /* What the screen is allowed to give up, given the room it measured. */
+  const density =
+    available === null
+      ? undefined
+      : available < TIGHT_BELOW
+        ? "tight"
+        : available < COMPACT_BELOW
+          ? "compact"
+          : undefined;
 
   /*
    * Storage is read as the initial state rather than in an effect after mount.
@@ -326,7 +442,12 @@ export function NoteSpeedReader({
 
   if (wordCount === 0) {
     return (
-      <section className="memo-speedread" aria-label={t("speedRead.title")}>
+      <section
+        ref={sectionRef}
+        className="memo-speedread"
+        data-density={density}
+        aria-label={t("speedRead.title")}
+      >
         <SpeedReaderHead onClose={onClose} title={t("speedRead.title")} />
         <p className="memo-speedread-empty">{t("speedRead.empty")}</p>
       </section>
@@ -344,7 +465,12 @@ export function NoteSpeedReader({
   );
 
   return (
-    <section className="memo-speedread" aria-label={t("speedRead.title")}>
+    <section
+      ref={sectionRef}
+      className="memo-speedread"
+      data-density={density}
+      aria-label={t("speedRead.title")}
+    >
       <SpeedReaderHead onClose={onClose} title={t("speedRead.title")} />
 
       <button

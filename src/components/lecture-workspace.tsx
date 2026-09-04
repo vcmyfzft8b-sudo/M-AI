@@ -56,6 +56,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 
+import { LecturePalace } from "@/components/lecture-palace";
 import { LectureTutor } from "@/components/lecture-tutor";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
@@ -75,7 +76,7 @@ import {
   formatTimestamp,
 } from "@/lib/utils";
 
-type WorkspaceTab = "notes" | "study" | "tutor" | "chat" | "transcript" | "audio";
+type WorkspaceTab = "notes" | "study" | "tutor" | "palace" | "chat" | "transcript" | "audio";
 type StudyMaterialView = "flashcards" | "quiz" | "practice_test";
 type FlashcardSessionResult = {
   attempts: number;
@@ -310,6 +311,18 @@ const NOTE_TABS = [
     labelKey: "note.tab.test",
     icon: "assignment",
     tint: "oklch(0.66 0.15 150)",
+  },
+  /*
+   * The memory palace: the same cards, walked through rather than flipped. It
+   * follows the three practice screens because it is a way of practising them,
+   * not a sixth kind of material.
+   */
+  {
+    id: "palace",
+    view: null,
+    labelKey: "note.tab.palace",
+    icon: "explore",
+    tint: "oklch(0.66 0.15 200)",
   },
   {
     id: "transcript",
@@ -1275,6 +1288,7 @@ const SUB_SCREEN_TITLE_KEYS: Record<string, MessageKey | null> = {
   quiz: "note.tab.quiz",
   test: "note.subScreen.test",
   tutor: "tutor.subScreenTitle",
+  palace: "palace.title",
   transcript: "note.tab.transcript",
 };
 
@@ -4159,6 +4173,17 @@ export function LectureWorkspace({
   }
 
   function renderPanel() {
+    if (activeTab === "palace") {
+      return (
+        <LecturePalace
+          lectureId={detail.lecture.id}
+          cards={detail.flashcards}
+          sections={detail.studySections}
+          isReady={detail.lecture.status === "ready"}
+        />
+      );
+    }
+
     if (activeTab === "tutor") {
       return (
         <LectureTutor
@@ -5824,7 +5849,9 @@ export function LectureWorkspace({
       ? "notes"
       : activeTab === "tutor"
         ? "tutor"
-        : activeTab === "transcript" || activeTab === "audio"
+        : activeTab === "palace"
+          ? "palace"
+          : activeTab === "transcript" || activeTab === "audio"
           ? "transcript"
           : activeStudyView === "flashcards"
             ? "flashcards"
@@ -6206,6 +6233,11 @@ export function LectureWorkspace({
 
     if (tab.id === "tutor") {
       setActiveTab("tutor");
+      return;
+    }
+
+    if (tab.id === "palace") {
+      setActiveTab("palace");
       return;
     }
 

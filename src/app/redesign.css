@@ -13243,3 +13243,563 @@
     height: 8.5rem;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   The memory palace.
+
+   Two surfaces: the panel on the note tab, which is ordinary app furniture, and
+   the full-screen stage, which is a game HUD laid over a canvas. The stage sets
+   its own colours rather than reading the theme's — it sits over a daylit city
+   in both light and dark mode, so a dark-mode card would be a black hole in the
+   middle of a blue sky.
+   --------------------------------------------------------------------------- */
+
+.memo-palace-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1.5rem 1.25rem 2.5rem;
+  text-align: center;
+}
+
+/* A postcard of the place, drawn in CSS: three towers, a token, a sky. */
+.memo-palace-cover {
+  position: relative;
+  width: min(28rem, 100%);
+  height: 11rem;
+  border-radius: 24px;
+  overflow: hidden;
+  background: linear-gradient(#9fd8ff 0%, #cfeeff 62%, #7cc25b 62%, #62a447 100%);
+}
+
+.memo-palace-cover.placeholder {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+.memo-palace-cover-tower {
+  position: absolute;
+  bottom: 28%;
+  left: 32%;
+  width: 3.2rem;
+  height: 4.6rem;
+  border-radius: 6px 6px 0 0;
+  background: repeating-linear-gradient(#e9e9ef 0 0.55rem, #b9c6d8 0.55rem 0.85rem);
+}
+
+.memo-palace-cover-tower.tall {
+  left: 17%;
+  height: 7rem;
+  background: repeating-linear-gradient(#dcdce6 0 0.6rem, #9fb2cb 0.6rem 0.95rem);
+}
+
+.memo-palace-cover-tower.short {
+  left: 52%;
+  width: 4.4rem;
+  height: 3.2rem;
+  background: repeating-linear-gradient(#f2ded6 0 0.5rem, #d9b3a5 0.5rem 0.8rem);
+}
+
+.memo-palace-cover-token {
+  position: absolute;
+  right: 22%;
+  bottom: 34%;
+  width: 1.6rem;
+  height: 1.6rem;
+  rotate: 45deg;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #ffd166, #f4934f);
+  box-shadow: 0 0 0 6px rgba(255, 209, 102, 0.25);
+}
+
+.memo-palace-heading {
+  margin: 0.4rem 0 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.memo-palace-copy {
+  margin: 0;
+  max-width: 30rem;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.memo-palace-progress {
+  width: min(28rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.memo-palace-bar {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--text) 12%, transparent);
+  overflow: hidden;
+}
+
+.memo-palace-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #6c5ce7, #00b894);
+  transition: width 260ms ease;
+}
+
+.memo-palace-count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.memo-palace-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.memo-palace-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 3.2rem;
+  padding: 0 1.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--surface);
+  cursor: pointer;
+  font-size: 1.02rem;
+  font-weight: 750;
+}
+
+.memo-palace-cta.small {
+  height: 2.7rem;
+  padding: 0 1.1rem;
+  font-size: 0.95rem;
+}
+
+.memo-palace-districts {
+  width: min(28rem, 100%);
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: left;
+}
+
+.memo-palace-districts li,
+.memo-palace-sheet li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.25rem;
+  border-bottom: 1px solid color-mix(in oklch, var(--text) 8%, transparent);
+  font-size: 0.95rem;
+}
+
+.memo-palace-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  flex: none;
+}
+
+.memo-palace-district-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
+
+.memo-palace-district-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* --- the stage ----------------------------------------------------------- */
+
+.memo-palace-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #9fd8ff;
+  overscroll-behavior: none;
+  /* The canvas must never scroll the page under a drag, on any platform. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  color: #fff;
+  font-family: inherit;
+}
+
+.memo-palace-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* The look layer sits under every control, so a drag that starts on a button
+   moves the button, not the camera. */
+.memo-palace-look {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.memo-palace-stick {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 45%;
+  touch-action: none;
+}
+
+.memo-palace-knob {
+  position: fixed;
+  width: 3.4rem;
+  height: 3.4rem;
+  margin: -1.7rem 0 0 -1.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  pointer-events: none;
+}
+
+.memo-palace-map {
+  position: absolute;
+  top: calc(0.9rem + var(--memo-safe-top, 0px));
+  left: 0.9rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  line-height: 0;
+  cursor: pointer;
+}
+
+.memo-palace-map canvas {
+  width: 6.2rem;
+  height: 6.2rem;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+.memo-palace-hud-top {
+  position: absolute;
+  top: calc(0.9rem + var(--memo-safe-top, 0px));
+  right: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+
+.memo-palace-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(18, 16, 26, 0.72);
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-palace-score-slash {
+  opacity: 0.55;
+  font-weight: 600;
+}
+
+.memo-palace-score-token {
+  width: 1rem;
+  height: 1rem;
+  rotate: 45deg;
+  border-radius: 3px;
+  background: linear-gradient(135deg, #ffd166, #f4934f);
+}
+
+.memo-palace-district-pill {
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(18, 16, 26, 0.55);
+  font-size: 0.85rem;
+  font-weight: 700;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-palace-exit {
+  position: absolute;
+  left: 0.9rem;
+  bottom: calc(1rem + var(--memo-safe-bottom, 0px));
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.7rem;
+  padding: 0 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(18, 16, 26, 0.72);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.memo-palace-jump {
+  position: absolute;
+  right: 1.2rem;
+  bottom: calc(2.2rem + var(--memo-safe-bottom, 0px));
+  width: 4.4rem;
+  height: 4.4rem;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  background: rgba(18, 16, 26, 0.45);
+  color: #fff;
+  cursor: pointer;
+}
+
+.memo-palace-hint {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  bottom: calc(1.4rem + var(--memo-safe-bottom, 0px));
+  margin: 0;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(18, 16, 26, 0.45);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+
+.memo-palace-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  background: #6c1ae0;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.memo-palace-loading-bar {
+  position: relative;
+  width: min(20rem, 60vw);
+  height: 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+}
+
+.memo-palace-loading-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: 999px;
+  background: #fff;
+  animation: memo-palace-sweep 1.1s ease-in-out infinite;
+}
+
+@keyframes memo-palace-sweep {
+  0% { translate: -100% 0; }
+  100% { translate: 250% 0; }
+}
+
+/* The card you are standing in front of. */
+.memo-palace-card {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  bottom: calc(4.6rem + var(--memo-safe-bottom, 0px));
+  width: min(30rem, calc(100% - 2rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1.1rem 1.2rem 1.2rem;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #14121a;
+  box-shadow: 0 18px 44px rgba(10, 8, 20, 0.32);
+  animation: memo-palace-rise 180ms ease-out;
+}
+
+@keyframes memo-palace-rise {
+  from { opacity: 0; translate: -50% 12px; }
+  to { opacity: 1; translate: -50% 0; }
+}
+
+.memo-palace-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* Walking away is not an option while a card is open, so there is a way out of it. */
+.memo-palace-card-close {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  margin: -0.3rem -0.3rem 0 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(20, 18, 26, 0.07);
+  color: #14121a;
+  cursor: pointer;
+}
+
+.memo-palace-card-eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6f6b80;
+}
+
+.memo-palace-card-front {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.memo-palace-card-back {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: #34313f;
+}
+
+.memo-palace-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.memo-palace-card .memo-button-outline.small {
+  background: transparent;
+  color: #14121a;
+  border-color: rgba(20, 18, 26, 0.2);
+}
+
+.memo-palace-card .memo-palace-cta {
+  background: #14121a;
+  color: #fff;
+}
+
+.memo-palace-sheet {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(10, 8, 20, 0.55);
+}
+
+.memo-palace-sheet-inner {
+  width: min(28rem, 100%);
+  max-height: 80%;
+  overflow: auto;
+  padding: 1.2rem;
+  border-radius: 22px;
+  background: #fff;
+  color: #14121a;
+}
+
+.memo-palace-sheet-inner h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.memo-palace-sheet-inner ul {
+  margin: 0 0 0.9rem;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-palace-sheet-inner li {
+  border-bottom-color: rgba(20, 18, 26, 0.08);
+}
+
+.memo-palace-sheet-inner .memo-button-outline.small {
+  background: transparent;
+  color: #14121a;
+  border-color: rgba(20, 18, 26, 0.2);
+}
+
+.memo-palace-done {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: min(26rem, calc(100% - 2.4rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #14121a;
+  text-align: center;
+  box-shadow: 0 22px 60px rgba(10, 8, 20, 0.35);
+}
+
+.memo-palace-done-title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 850;
+}
+
+.memo-palace-done-copy {
+  margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.45;
+  color: #4a4657;
+}
+
+.memo-palace-done .memo-palace-card-actions {
+  justify-content: center;
+  margin-top: 0.4rem;
+}
+
+@media (max-width: 1099px) {
+  .memo-palace-intro {
+    padding: 1rem 1.15rem 2.5rem;
+  }
+
+  .memo-palace-cover {
+    height: 9rem;
+  }
+
+  /* The card sits above the thumb, not under it. */
+  .memo-palace-card {
+    bottom: calc(7.5rem + var(--memo-safe-bottom, 0px));
+  }
+}

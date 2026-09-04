@@ -13769,6 +13769,25 @@
   line-height: 1.45;
 }
 
+/* The learner's own words, above the answer they are marking against. */
+.memo-palace-model.yours {
+  background: color-mix(in oklch, var(--text) 3%, transparent);
+  border: 1px solid color-mix(in oklch, var(--text) 8%, transparent);
+}
+
+/* A right answer says so, and says why, in the same row a wrong one uses. */
+.memo-palace-panel .memo-quiz-result.correct .memo-quiz-result-badge {
+  color: #16a34a;
+  background: color-mix(in oklch, #16a34a 16%, transparent);
+}
+
+.memo-palace-why {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 0.35rem;
+}
+
 .memo-palace-card-actions {
   display: flex;
   gap: 0.5rem;

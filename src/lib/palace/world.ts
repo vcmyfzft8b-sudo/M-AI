@@ -112,6 +112,33 @@ function instanced(
 }
 
 /**
+ * A hipped roof: a square pyramid on a unit base, so it can be scaled straight
+ * onto a house's own width and depth. `ConeGeometry` with four segments looks
+ * the same but is inscribed in a circle, which leaves the eaves overhanging by
+ * different amounts front and side on any house that is not square.
+ */
+function pyramidGeometry() {
+  const geometry = new THREE.BufferGeometry();
+  const l = -0.5;
+  const r = 0.5;
+  const positions = [
+    /* Four faces, each from a base edge up to the apex. */
+    l, 0, r, r, 0, r, 0, 1, 0,
+    r, 0, r, r, 0, l, 0, 1, 0,
+    r, 0, l, l, 0, l, 0, 1, 0,
+    l, 0, l, l, 0, r, 0, 1, 0,
+    /* The underside, so a roof seen from a hill is not hollow. */
+    l, 0, l, r, 0, l, r, 0, r,
+    l, 0, l, r, 0, r, l, 0, r,
+  ];
+
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+
+  return geometry;
+}
+
+/**
  * A gable roof: a triangular prism whose ridge runs along X, so a house with
  * its front to +Z gets the slope facing the street rather than a wall of it.
  */
@@ -240,7 +267,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   const planeGeometry = track(new THREE.PlaneGeometry(1, 1));
   const cylinderGeometry = track(new THREE.CylinderGeometry(0.5, 0.5, 1, 10));
   const coneGeometry = track(new THREE.ConeGeometry(0.5, 1, 8));
-  const pyramidGeometry = track(new THREE.ConeGeometry(0.72, 1, 4));
+  const roofPyramid = track(pyramidGeometry());
   const domeGeometry = track(new THREE.SphereGeometry(0.5, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2));
   const prismGeometry = track(gableGeometry());
   const sphereGeometry = track(new THREE.SphereGeometry(0.5, 12, 10));
@@ -344,19 +371,28 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       depth: Math.abs(out.x) > 0.5 ? house.width : house.depth,
     });
 
-    /* The roof, which is most of what tells one house from the next. */
+    /*
+     * The roof, which is most of what tells one house from the next — and the
+     * thing that gives a house away if it is wrong. Every kind sits on the wall
+     * top with the same small eave all round, and a gable's ridge runs along
+     * the longer wall, the way a roof is actually framed.
+     */
     const roofBase = house.height;
+    const eave = 0.6;
+    const ridgeAlongWidth = house.width >= house.depth;
 
     if (house.roofKind === "gable") {
+      /* The prism's ridge runs along its local X, so a house that is deeper
+         than it is wide has its roof turned a quarter to match. */
       prisms.push({
         matrix: boxMatrix({
           x: house.x,
           y: roofBase,
           z: house.z,
-          width: house.width * 1.08,
-          height: 2.6,
-          depth: house.depth * 1.08,
-          rotation: house.facing,
+          width: (ridgeAlongWidth ? house.width : house.depth) + eave,
+          height: 2.7,
+          depth: (ridgeAlongWidth ? house.depth : house.width) + eave,
+          rotation: house.facing + (ridgeAlongWidth ? 0 : Math.PI / 2),
         }),
         color: roofColor,
       });
@@ -366,35 +402,52 @@ export function buildCity(layout: PalaceLayout): CityBuild {
           x: house.x,
           y: roofBase,
           z: house.z,
-          width: Math.max(house.width, house.depth) * 1.05,
-          height: house.roofKind === "spire" ? 8 : 3,
-          depth: Math.max(house.width, house.depth) * 1.05,
-          rotation: house.facing + Math.PI / 4,
+          width: house.width + eave,
+          height: house.roofKind === "spire" ? Math.max(house.width, house.depth) * 0.95 : 3.1,
+          depth: house.depth + eave,
+          rotation: house.facing,
         }),
         color: roofColor,
       });
     } else if (house.roofKind === "dome") {
+      /*
+       * A dome needs something to stand on: bare on the wall top it reads as a
+       * hat on a box, with the corners of the house sticking out from under it.
+       */
+      boxes.push({
+        matrix: boxMatrix({
+          x: house.x,
+          y: roofBase + 0.3,
+          z: house.z,
+          width: house.width + eave,
+          height: 0.6,
+          depth: house.depth + eave,
+          rotation: house.facing,
+        }),
+        color: roofColor,
+      });
       domes.push({
         matrix: boxMatrix({
           x: house.x,
-          y: roofBase,
+          y: roofBase + 0.6,
           z: house.z,
-          width: Math.min(house.width, house.depth) * 0.95,
+          width: Math.min(house.width, house.depth) * 0.86,
           height: Math.min(house.width, house.depth) * 0.5,
-          depth: Math.min(house.width, house.depth) * 0.95,
+          depth: Math.min(house.width, house.depth) * 0.86,
         }),
         color: roofColor,
       });
     } else {
-      /* Flat: a parapet, so the top is a line rather than a bare edge. */
+      /* Flat: a parapet standing proud of the wall, which is what makes a flat
+         roof read as a roof rather than as an unfinished wall. */
       boxes.push({
         matrix: boxMatrix({
           x: house.x,
-          y: roofBase + 0.25,
+          y: roofBase + 0.35,
           z: house.z,
-          width: house.width + 0.5,
-          height: 0.5,
-          depth: house.depth + 0.5,
+          width: house.width + eave,
+          height: 0.7,
+          depth: house.depth + eave,
           rotation: house.facing,
         }),
         color: roofColor,
@@ -540,10 +593,10 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       boxes.push({
         matrix: boxMatrix({
           x: chimney.x,
-          y: house.height + 1.6,
+          y: house.height + 2,
           z: chimney.z,
           width: 0.9,
-          height: 3.2,
+          height: 4,
           depth: 0.9,
           rotation: house.facing,
         }),
@@ -751,9 +804,9 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     if (has("flag")) {
       const top =
         house.roofKind === "spire"
-          ? house.height + 8
+          ? house.height + Math.max(house.width, house.depth) * 0.95
           : house.roofKind === "dome"
-            ? house.height + Math.min(house.width, house.depth) * 0.8
+            ? house.height + 0.6 + Math.min(house.width, house.depth) * 0.5
             : house.height + 3;
 
       cylinders.push({
@@ -1197,7 +1250,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
 
   group.add(instanced(boxGeometry, tinted(), boxes));
   group.add(instanced(prismGeometry, tinted(), prisms));
-  group.add(instanced(pyramidGeometry, tinted(), pyramids));
+  group.add(instanced(roofPyramid, tinted(), pyramids));
   group.add(instanced(domeGeometry, tinted(), domes));
   group.add(instanced(coneGeometry, tinted(), cones));
   group.add(instanced(cylinderGeometry, tinted(), cylinders));

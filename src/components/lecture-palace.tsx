@@ -11,7 +11,7 @@ import {
   FLASHCARD_EXIT_ANIMATION_MS,
   type FlashcardBucket,
 } from "@/lib/study/flashcard-drag";
-import { QUIZ_CORRECT_PAUSE_MS, quizOptionLetter, shuffleIndices } from "@/lib/study/quiz";
+import { quizOptionLetter, shuffleIndices } from "@/lib/study/quiz";
 import type { PalaceGame, PalaceSnapshot } from "@/lib/palace/game";
 import {
   buildPalaceLayout,
@@ -102,7 +102,6 @@ export function LecturePalace({
   const snapshotRef = useRef<PalaceSnapshot | null>(null);
   const stickRef = useRef<{ pointerId: number; originX: number; originY: number } | null>(null);
   const lookRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
-  const releaseTimerRef = useRef<number | null>(null);
   const exitTimerRef = useRef<number | null>(null);
   const exitTokenRef = useRef(0);
 
@@ -119,6 +118,8 @@ export function LecturePalace({
   const [isTestUnknown, setIsTestUnknown] = useState(false);
   const [isAnswerShown, setIsAnswerShown] = useState(false);
   const [cardExit, setCardExit] = useState<StudyFlashcardExit | null>(null);
+  /* How each stop went this session, for the label the deck screen shows too. */
+  const [results, setResults] = useState<Record<string, "again" | "easy">>({});
   const [districtIndex, setDistrictIndex] = useState(0);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [stickKnob, setStickKnob] = useState<{ x: number; y: number } | null>(null);
@@ -130,13 +131,46 @@ export function LecturePalace({
   const [canvasEpoch, setCanvasEpoch] = useState(0);
   /* The mascot, loaded once so the map can draw the real thing on every stop. */
   const mascotRef = useRef<HTMLImageElement | null>(null);
+  /*
+   * The mascot again, pre-scaled to exactly the size the map draws it at. A
+   * 320px sticker rescaled thirty times a frame is both wasted work and the
+   * reason the icons crawl as the map moves.
+   */
+  const mascotTileRef = useRef<HTMLCanvasElement | null>(null);
+  /*
+   * The map's backing store is sized to the device's pixels, not left at some
+   * round number and squeezed into whatever CSS gives it: a canvas drawn at 220
+   * and displayed at 122 shimmers on every line the moment anything moves.
+   */
+  const minimapSizeRef = useRef({ css: 0, dpr: 1 });
 
   useEffect(() => {
     const image = new Image();
 
     image.src = MASCOT_SRC;
     image.decoding = "async";
+    image.onload = () => {
+      mascotTileRef.current = null;
+    };
     mascotRef.current = image;
+  }, []);
+
+  const sizeMinimap = useCallback(() => {
+    const canvas = minimapRef.current;
+
+    if (!canvas) return;
+
+    const css = Math.round(canvas.getBoundingClientRect().width);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    if (css === 0) return;
+    if (minimapSizeRef.current.css === css && minimapSizeRef.current.dpr === dpr) return;
+
+    canvas.width = Math.round(css * dpr);
+    canvas.height = Math.round(css * dpr);
+    minimapSizeRef.current = { css, dpr };
+    /* The tile is cut for one resolution; a new one needs a new tile. */
+    mascotTileRef.current = null;
   }, []);
 
   const items = useMemo(
@@ -228,7 +262,13 @@ export function LecturePalace({
 
       if (!context) return;
 
-      const size = canvas.width;
+      const { css: size, dpr } = minimapSizeRef.current;
+
+      if (size === 0) return;
+
+      /* Everything below is in CSS pixels; the transform does the rest. */
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+
       const radius = size / 2;
       const scale = radius / MAP_RANGE;
       const toCanvas = (x: number, z: number) => ({
@@ -268,8 +308,19 @@ export function LecturePalace({
         context.stroke();
       });
 
-      const mascot = mascotRef.current;
       const icon = 20;
+      const mascot = mascotRef.current;
+
+      if (!mascotTileRef.current && mascot?.complete && mascot.naturalWidth > 0) {
+        const tile = document.createElement("canvas");
+
+        tile.width = Math.round(icon * dpr);
+        tile.height = Math.round(icon * dpr);
+        tile.getContext("2d")?.drawImage(mascot, 0, 0, tile.width, tile.height);
+        mascotTileRef.current = tile;
+      }
+
+      const mascotTile = mascotTileRef.current;
       let nearest: { distance: number; point: { x: number; y: number } } | null = null;
 
       layout.stations.forEach((entry) => {
@@ -325,8 +376,8 @@ export function LecturePalace({
         context.arc(point.x, point.y, icon / 2, 0, Math.PI * 2);
         context.fill();
 
-        if (mascot?.complete && mascot.naturalWidth > 0) {
-          context.drawImage(mascot, point.x - icon / 2, point.y - icon / 2, icon, icon);
+        if (mascotTile) {
+          context.drawImage(mascotTile, point.x - icon / 2, point.y - icon / 2, icon, icon);
         }
       });
 
@@ -390,7 +441,7 @@ export function LecturePalace({
 
       if (!canvas) return;
 
-      let minimapFrame = 0;
+      sizeMinimap();
 
       gameRef.current = createPalaceGame({
         canvas,
@@ -403,12 +454,12 @@ export function LecturePalace({
         },
         onFrame: (snapshot) => {
           snapshotRef.current = snapshot;
-          minimapFrame += 1;
-
-          /* Twenty map redraws a second is plenty, and leaves the GPU alone. */
-          if (minimapFrame % 3 === 0) {
-            drawMinimap(snapshot, collectedRef.current);
-          }
+          /*
+           * Every frame. The map is centred on the player, so everything on it
+           * slides whenever they move, and anything less than the frame rate
+           * reads as the map stuttering rather than as a saving.
+           */
+          drawMinimap(snapshot, collectedRef.current);
 
           setDistrictIndex((current) =>
             current === snapshot.districtIndex ? current : snapshot.districtIndex,
@@ -421,7 +472,7 @@ export function LecturePalace({
     } finally {
       setIsLoading(false);
     }
-  }, [drawMinimap, layout, openStation, t]);
+  }, [drawMinimap, layout, openStation, sizeMinimap, t]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -438,7 +489,6 @@ export function LecturePalace({
 
   useEffect(
     () => () => {
-      if (releaseTimerRef.current) window.clearTimeout(releaseTimerRef.current);
       if (exitTimerRef.current) window.clearTimeout(exitTimerRef.current);
     },
     [],
@@ -460,7 +510,10 @@ export function LecturePalace({
   useEffect(() => {
     if (!isOpen) return;
 
-    const onResize = () => gameRef.current?.resize();
+    const onResize = () => {
+      gameRef.current?.resize();
+      sizeMinimap();
+    };
     /* A backgrounded tab should not keep a render loop alive on a phone battery. */
     const onVisibility = () => gameRef.current?.setPaused(document.hidden);
     const onKeyDown = (event: KeyboardEvent) => {
@@ -478,7 +531,7 @@ export function LecturePalace({
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, sizeMinimap]);
 
   /* The map sheet stops the world; the loop keeps rendering. */
   useEffect(() => {
@@ -520,6 +573,8 @@ export function LecturePalace({
       confidenceBucket: FlashcardBucket,
       exitStart?: { xPercent: number; yPercent: number; rotationDeg: number },
     ) => {
+      setResults((current) => ({ ...current, [cardId]: confidenceBucket }));
+
       if (confidenceBucket === "easy") {
         collect(cardId);
       }
@@ -572,18 +627,28 @@ export function LecturePalace({
 
   const answerQuiz = useCallback(
     (questionId: string, optionIndex: number, correctIndex: number) => {
+      const right = optionIndex === correctIndex;
+
       setQuizChoice(optionIndex);
+      setResults((current) => ({ ...current, [questionId]: right ? "easy" : "again" }));
 
-      if (optionIndex !== correctIndex) return;
+      if (right) {
+        collect(questionId);
+      }
 
-      /* Right: let the green land for the same beat the quiz screen gives it. */
-      collect(questionId);
-      releaseTimerRef.current = window.setTimeout(leaveStation, QUIZ_CORRECT_PAUSE_MS);
+      /*
+       * Both answers stop and say what happened: right or wrong, which option
+       * was the right one, and the note's own explanation of why. On the deck
+       * screen a right answer moves on by itself, but here there is nothing
+       * queued up behind it to move on to — you are standing in a street — so
+       * the walk resumes when the learner says so.
+       */
     },
-    [collect, leaveStation],
+    [collect],
   );
 
   const restart = useCallback(() => {
+    setResults({});
     setCollected(new Set());
     writeCollected(lectureId, new Set());
     setIsOpen(false);
@@ -699,6 +764,12 @@ export function LecturePalace({
             onFlip={() => setIsFlipped((current) => !current)}
             onGrade={(bucket, exitStart) => void gradeCard(card.id, bucket, exitStart)}
             flipHint={flipHint}
+            answerLabel={
+              results[card.id]
+                ? t(results[card.id] === "again" ? "study.cards.didntKnow" : "study.cards.knew")
+                : null
+            }
+            answerClass={results[card.id] === "again" ? "again" : "easy"}
             exit={cardExit}
           />
 
@@ -775,18 +846,28 @@ export function LecturePalace({
             })}
           </div>
 
-          {wrong ? (
-            <div className="memo-quiz-result">
+          {quizChoice !== null ? (
+            <div className={`memo-quiz-result ${wrong ? "" : "correct"}`}>
               <span className="memo-quiz-result-badge">
-                <Msym name="cancel" size="1.25rem" />
+                <Msym name={wrong ? "cancel" : "check_circle"} size="1.25rem" />
               </span>
               <span className="memo-quiz-result-copy">
-                <span className="memo-quiz-result-title">{t("quiz.wrongTitle")}</span>
-                <span>
-                  {t("quiz.correctAnswerIs", {
-                    letter: quizOptionLetter(order, question.correct_option_idx),
-                  })}
+                <span className="memo-quiz-result-title">
+                  {wrong ? t("quiz.wrongTitle") : t("palace.correctTitle")}
                 </span>
+                {wrong ? (
+                  <span>
+                    {t("quiz.correctAnswerIs", {
+                      letter: quizOptionLetter(order, question.correct_option_idx),
+                    })}
+                  </span>
+                ) : null}
+                {question.explanation ? (
+                  <span className="memo-palace-why">
+                    <span className="memo-palace-model-label">{t("palace.explanation")}</span>
+                    {question.explanation}
+                  </span>
+                ) : null}
               </span>
               <div className="memo-quiz-result-actions">
                 <button type="button" className="memo-quiz-result-primary" onClick={leaveStation}>
@@ -826,22 +907,38 @@ export function LecturePalace({
         </div>
 
         {isAnswerShown ? (
-          <div className="memo-palace-model">
-            <span className="memo-palace-model-label">{t("test.expectedAnswer")}</span>
-            <p>{question.answer_guide}</p>
-          </div>
+          <>
+            {testAnswer.trim() && !isTestUnknown ? (
+              <div className="memo-palace-model yours">
+                <span className="memo-palace-model-label">{t("test.yourAnswer")}</span>
+                <p>{testAnswer}</p>
+              </div>
+            ) : null}
+            <div className="memo-palace-model">
+              <span className="memo-palace-model-label">{t("test.expectedAnswer")}</span>
+              <p>{question.answer_guide}</p>
+            </div>
+          </>
         ) : null}
 
         <div className="memo-test-actions">
           {isAnswerShown ? (
             <>
-              <button type="button" className="memo-test-prev" onClick={leaveStation}>
+              <button
+                type="button"
+                className="memo-test-prev"
+                onClick={() => {
+                  setResults((current) => ({ ...current, [question.id]: "again" }));
+                  leaveStation();
+                }}
+              >
                 {t("palace.notYet")}
               </button>
               <button
                 type="button"
                 className="memo-test-next"
                 onClick={() => {
+                  setResults((current) => ({ ...current, [question.id]: "easy" }));
                   collect(question.id);
                   leaveStation();
                 }}
@@ -956,7 +1053,7 @@ export function LecturePalace({
               onClick={() => setIsMapOpen(true)}
               aria-label={t("palace.map")}
             >
-              <canvas ref={minimapRef} width={220} height={220} />
+              <canvas ref={minimapRef} />
             </button>
 
             <div className="memo-palace-hud-top">

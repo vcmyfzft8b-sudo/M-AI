@@ -347,32 +347,40 @@ export function createPalaceGame({
       districtIndex = currentDistrict();
     }
 
-    const near = nearestStation(
-      character,
-      city.stations
-        .filter((visual) => !visual.collected && visual.station.id !== suppressedStationId)
-        .map((visual) => visual.station),
-      STATION_REACH,
-    );
-
-    if (suppressedStationId) {
-      const suppressed = city.stations.find(
-        (visual) => visual.station.id === suppressedStationId,
+    /*
+     * While a station is open nothing else is looked for: the screen in front
+     * of the learner stays until they close it. Collecting a card used to take
+     * the panel with it, which meant a right answer's explanation was on screen
+     * for exactly as long as it took to read the first word.
+     */
+    if (!interacting) {
+      const near = nearestStation(
+        character,
+        city.stations
+          .filter((visual) => !visual.collected && visual.station.id !== suppressedStationId)
+          .map((visual) => visual.station),
+        STATION_REACH,
       );
 
-      if (
-        !suppressed ||
-        Math.hypot(suppressed.station.x - character.x, suppressed.station.z - character.z) >
-          STATION_REACH + 1
-      ) {
-        suppressedStationId = null;
-      }
-    }
+      if (suppressedStationId) {
+        const suppressed = city.stations.find(
+          (visual) => visual.station.id === suppressedStationId,
+        );
 
-    if ((near?.id ?? null) !== nearStationId) {
-      nearStationId = near?.id ?? null;
-      interacting = nearStationId !== null;
-      onNearStation(nearStationId);
+        if (
+          !suppressed ||
+          Math.hypot(suppressed.station.x - character.x, suppressed.station.z - character.z) >
+            STATION_REACH + 1
+        ) {
+          suppressedStationId = null;
+        }
+      }
+
+      if ((near?.id ?? null) !== nearStationId) {
+        nearStationId = near?.id ?? null;
+        interacting = nearStationId !== null;
+        onNearStation(nearStationId);
+      }
     }
 
     onFrame({
@@ -412,11 +420,6 @@ export function createPalaceGame({
       if (!visual || visual.collected) return;
 
       markVisualCollected(visual);
-
-      if (nearStationId === stationId) {
-        nearStationId = null;
-        onNearStation(null);
-      }
     },
     releaseStation: () => {
       suppressedStationId = nearStationId ?? suppressedStationId;

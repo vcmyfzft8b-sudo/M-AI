@@ -1698,6 +1698,8 @@ export const hr: Messages = {
   "palace.progressLabel": "Pokupljene kartice",
   "palace.progressCount": "{done} od {total} pokupljeno",
   "palace.reveal": "Prikaži odgovor",
+  "palace.correctTitle": "Točno!",
+  "palace.explanation": "Zašto:",
   "palace.checkAnswer": "Provjeri odgovor",
   "palace.gotIt": "Znam",
   "palace.notYet": "Još ne",

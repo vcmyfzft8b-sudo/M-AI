@@ -14384,8 +14384,14 @@
 }
 
 @media (max-width: 1099px) {
-  .memo-palace-intro {
-    padding-bottom: 2.5rem;
+  /*
+   * The keyboard hint is desktop's. It is gated on `(pointer: coarse)` in the
+   * markup, which asks whether the device has a finger rather than whether this
+   * is the phone layout — so a narrow window on a laptop got a caption about
+   * WASD across the bottom of a screen laid out for a thumb.
+   */
+  .memo-palace-hint {
+    display: none;
   }
 
   /*

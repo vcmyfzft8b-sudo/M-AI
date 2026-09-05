@@ -12632,8 +12632,14 @@
 .memo-giveaway-podium {
   --podium-cap: #e9e9ee;
   --podium-cap-edge: #d2d2d9;
-  --podium-front: linear-gradient(180deg, #ff7a75 0%, #f45f5a 100%);
-  --podium-side: #d9504c;
+  /* The metals: gold for first, silver for second, bronze for third. */
+  --podium-gold-front: linear-gradient(180deg, #f8c453 0%, #e3a422 100%);
+  --podium-gold-side: #c78d16;
+  --podium-silver-front: linear-gradient(180deg, #d9dce3 0%, #b7bcc6 100%);
+  --podium-silver-side: #9aa0ab;
+  --podium-bronze-front: linear-gradient(180deg, #d9945a 0%, #bf7434 100%);
+  --podium-bronze-side: #a2602a;
+  --podium-side: #3a3a40;
   position: relative;
   isolation: isolate;
   display: grid;
@@ -12665,7 +12671,7 @@
     radial-gradient(circle, rgba(245, 166, 35, 0.8) 0 2px, transparent 3px) 86% 12% / 100% 100% no-repeat,
     radial-gradient(circle, rgba(244, 95, 90, 0.7) 0 2px, transparent 3px) 20% 40% / 100% 100% no-repeat,
     radial-gradient(circle, rgba(245, 166, 35, 0.7) 0 2px, transparent 3px) 80% 38% / 100% 100% no-repeat,
-    radial-gradient(circle, rgba(244, 95, 90, 0.6) 0 2px, transparent 3px) 50% 48% / 100% 100% no-repeat;
+    radial-gradient(circle, rgba(244, 95, 90, 0.6) 0 2px, transparent 3px) 36% 4% / 100% 100% no-repeat;
   pointer-events: none;
 }
 
@@ -12711,7 +12717,7 @@
   height: 0.55rem;
   border-radius: 3px;
   background: var(--podium-side);
-  opacity: 0.85;
+  opacity: 0.7;
 }
 
 .memo-giveaway-podium-place {
@@ -12820,18 +12826,19 @@
   width: 100%;
   height: 3.6rem;
   margin-top: 0.55rem;
-  background: var(--podium-front);
+  background: var(--podium-bronze-front);
   border-top: 0.85rem solid var(--podium-cap);
   box-shadow:
-    inset 0 -0.85rem 0 var(--podium-side),
+    inset 0 -0.85rem 0 var(--podium-bronze-side),
     inset 0 1px 0 var(--podium-cap-edge);
 }
 
 .memo-giveaway-podium-place.place-1 .memo-giveaway-podium-stand {
   height: 6.2rem;
   z-index: 1;
+  background: var(--podium-gold-front);
   box-shadow:
-    inset 0 -0.85rem 0 var(--podium-side),
+    inset 0 -0.85rem 0 var(--podium-gold-side),
     inset 0 1px 0 var(--podium-cap-edge),
     -6px 0 12px rgba(0, 0, 0, 0.12),
     6px 0 12px rgba(0, 0, 0, 0.12);
@@ -12839,6 +12846,10 @@
 
 .memo-giveaway-podium-place.place-2 .memo-giveaway-podium-stand {
   height: 4.8rem;
+  background: var(--podium-silver-front);
+  box-shadow:
+    inset 0 -0.85rem 0 var(--podium-silver-side),
+    inset 0 1px 0 var(--podium-cap-edge);
 }
 
 .memo-giveaway-podium-place.is-empty .memo-giveaway-podium-stand {
@@ -12863,6 +12874,12 @@
 
 .memo-giveaway-podium-place.place-1 .memo-giveaway-podium-rank {
   font-size: 2.1rem;
+}
+
+/* White reads badly on silver; the second block takes dark ink. */
+.memo-giveaway-podium-place.place-2 .memo-giveaway-podium-rank {
+  color: #2f2f35;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .memo-giveaway-podium-place.is-empty .memo-giveaway-podium-rank {

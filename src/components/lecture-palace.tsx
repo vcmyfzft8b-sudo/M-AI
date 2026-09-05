@@ -145,6 +145,8 @@ export function LecturePalace({
   const lookRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const exitTimerRef = useRef<number | null>(null);
   const exitTokenRef = useRef(0);
+  /* Set below; the key handler is armed before the layer it closes exists. */
+  const escapeRef = useRef<() => boolean>(() => false);
 
   const [isOpen, setIsOpen] = useState(false);
   /*
@@ -871,26 +873,26 @@ export function LecturePalace({
   const mapSheet = useSheet(closeMap, { scrollable: true });
 
   /*
-   * Held in a ref so the key handler below can be armed once for the whole
-   * visit rather than re-armed on every frame the town reports.
+   * What Escape should close, held in a ref so the key handler is armed once for
+   * the whole visit rather than re-armed on every frame the town reports.
    */
-  const escapeRef = useRef<() => boolean>(() => false);
+  useEffect(() => {
+    escapeRef.current = () => {
+      if (isMapOpen) {
+        mapSheet.dismiss();
 
-  escapeRef.current = () => {
-    if (isMapOpen) {
-      mapSheet.dismiss();
+        return true;
+      }
 
-      return true;
-    }
+      if (nearStationId) {
+        leaveStation();
 
-    if (nearStationId) {
-      leaveStation();
+        return true;
+      }
 
-      return true;
-    }
-
-    return false;
-  };
+      return false;
+    };
+  });
 
   /* The map sheet stops the world; the loop keeps rendering. */
   useEffect(() => {

@@ -13,11 +13,14 @@ import { isRecord } from "./lecture-source-metadata.ts";
 /**
  * How recently the draft has to have been created to be worth adopting.
  *
- * An hour, to match the stall sweep: past that the sweep has already settled the row into a
- * terminal state, so nothing here would find it anyway, and a draft older than the window the
- * pipeline itself trusts is not a retry — it is a different day.
+ * Ten minutes, deliberately far short of the stall sweep's hour rather than equal to it. Adopting
+ * a row does not touch its timestamps, so a draft handed back at fifty-nine minutes would carry
+ * an `updated_at` almost old enough for the sweep to settle it — and the sweep could delete or
+ * fail the very row the learner is at that moment uploading into. Ten minutes keeps an adopted
+ * draft nowhere near that bar, and is still two orders of magnitude more than a retry takes: the
+ * ones that stranded rows in production were six, eleven and twenty-eight seconds apart.
  */
-export const EMPTY_DRAFT_REUSE_WINDOW_MS = 60 * 60 * 1000;
+export const EMPTY_DRAFT_REUSE_WINDOW_MS = 10 * 60 * 1000;
 
 export type ReusableDraftCandidate = {
   id: string;

@@ -21,6 +21,7 @@ const stalled = (overrides = {}) => ({
   sourceType: "audio",
   storagePath: "lectures/a.m4a",
   hasTitle: true,
+  accessTier: "paid",
   hasArtifact: false,
   hasTranscript: true,
   updatedAt: Date.parse(LONG_AGO),
@@ -257,6 +258,21 @@ test("a run that got past uploading is never deleted, however bare the row looks
 
   assert.ok(isNeverStartedDraft(bare), "guard: this row really is empty by every other measure");
   assert.deepEqual(planStalledLecture(bare), { action: "fail", reason: "no-source" });
+});
+
+test("a trial draft is failed rather than deleted, however empty", () => {
+  /*
+   * `profiles.trial_lecture_id` points at the row with `on delete set null` while
+   * `trial_consumed_at` survives — so deleting one leaves a learner whose free note is spent and
+   * whose free note does not exist, unable to create another. A dead note is the smaller harm.
+   */
+  const trial = emptyDraft({ accessTier: "trial" });
+
+  assert.ok(isNeverStartedDraft(trial), "guard: empty by every measure except its tier");
+  assert.deepEqual(planStalledLecture(trial), {
+    action: "fail",
+    reason: "upload-never-finished",
+  });
 });
 
 test("a resumable run with empty metadata is still resumed, not discarded", () => {

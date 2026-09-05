@@ -83,6 +83,8 @@ export type StallPlanInput = {
   storagePath: string | null;
   /** Whether the row carries a name. Only a row the pipeline has touched has one. */
   hasTitle: boolean;
+  /** `paid` or `trial`. A trial row is the learner's one free note and is never deleted. */
+  accessTier: string | null;
   /** A complete artifact means the row is a status bug, not a stall; reconciliation owns those. */
   hasArtifact: boolean;
   /** Transcript rows exist, so the expensive half of the pipeline is already paid for. */
@@ -272,8 +274,14 @@ export function planStalledLecture(input: StallPlanInput): StallPlan {
      * Deliberately not reachable from the resumable statuses above: a lecture that got as far as
      * `queued` or `generating_notes` had a source once, whatever the row looks like now, and a
      * learner who is owed an explanation must never instead get silence.
+     *
+     * A trial row is never deleted, however empty. `profiles.trial_lecture_id` points at it with
+     * `on delete set null`, while `trial_consumed_at` survives the cascade — so deleting one
+     * leaves a learner whose free note is spent and whose free note does not exist, locked out of
+     * creating another with nothing to show for it. Failing it keeps the row, and with it the
+     * claim the entitlement check reads. A dead trial note in the library is the smaller harm.
      */
-    return isNeverStartedDraft(input)
+    return isNeverStartedDraft(input) && input.accessTier !== "trial"
       ? { action: "discard", reason: "never-started" }
       : { action: "fail", reason: "upload-never-finished" };
   }

@@ -52,6 +52,19 @@ export async function POST(request: Request) {
   const entitlement = await getUserEntitlementState(user.id);
 
   if (!entitlement.canCreateNotes) {
+    /*
+     * "Still being made" is not "you have run out". Since the free note is only spent once a
+     * note succeeds, a learner whose first one is mid-run has not spent anything — they simply
+     * cannot start a second beside it, because both could finish. Sending them to the paywall
+     * for that would be a lie, so this answers with a plain 409 the modal shows as text.
+     */
+    if (entitlement.trialLectureInProgress) {
+      return NextResponse.json(
+        { error: await tr("api.trialLectureInProgress") },
+        { status: 409 },
+      );
+    }
+
     return createBillingRequiredResponse(
       await tr("api.trialExhausted"),
       "trial_exhausted",

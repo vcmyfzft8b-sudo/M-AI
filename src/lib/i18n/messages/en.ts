@@ -467,6 +467,7 @@ export const en: Messages = {
   "api.paidRequired.access": "Access to this note requires a paid plan.",
   "api.trialExhausted": "Your free trial is used up. Upgrade to add new material.",
   "api.trialAlreadyUsed": "Your free trial has already been used. Upgrade to add new material.",
+  "api.trialLectureInProgress": "Your free note is still being made. Wait for it to finish.",
   "api.chatLimitReached": "You have used all 5 free messages in this chat.",
   "api.chatNotReady": "Chat becomes available once the note has finished processing.",
   "api.libraryChatPaid": "Chatting across all your notes requires a subscription.",

@@ -69,7 +69,6 @@ type SweepLectureRow = Pick<
   | "source_type"
   | "storage_path"
   | "title"
-  | "access_tier"
   | "updated_at"
 >;
 
@@ -206,7 +205,6 @@ export async function sweepStalledLectures(now = Date.now()): Promise<StallSweep
       sourceType: lecture.source_type,
       storagePath: lecture.storage_path,
       hasTitle: Boolean(lecture.title && lecture.title.trim().length > 0),
-      accessTier: lecture.access_tier,
       // Reconciliation above already promoted every lecture whose artifact was complete, so an
       // artifact still sitting here is an incomplete one the pipeline has yet to finish.
       hasArtifact: false,

@@ -13488,32 +13488,158 @@
    --------------------------------------------------------------------------- */
 
 /*
- * The tab's own front page, built on the study screens' empty state — the same
- * orb, the same headline, the same one call to action — so the palace opens the
- * way the deck, the quiz and the test open rather than looking like a screen
- * from another app.
+ * The tab's own front page.
+ *
+ * It was the study screens' empty state — orb, headline, one button — which is
+ * right for a deck that has no cards yet and wrong for this: the other tabs are
+ * a list of things, and this one is a place. So the first thing on it is the
+ * town, drawn from the note's own layout, and under that the numbers a walk is
+ * scored on. Everything is the app's own furniture at the app's own tokens; it
+ * reads as a game because of what it shows, not because it borrowed a palette.
  */
 .memo-palace-intro {
+  display: grid;
+  justify-items: center;
+  gap: 1.3rem;
+  width: 100%;
+  max-width: 34rem;
+  margin: 1.6rem auto 0;
   padding-bottom: 2.5rem;
+  text-align: center;
+  animation: memo-fade-in 0.2s ease-out;
 }
 
-.memo-palace-intro .memo-study-empty-orb {
+/* The card the walk starts from: the map behind, the name of the place over
+   it, and a gradient between them so the words stay readable on any town. */
+.memo-palace-card {
+  width: 100%;
+  border-radius: 26px;
+  overflow: hidden;
+  background: var(--tile);
+  box-shadow: var(--shadow);
+}
+
+.memo-palace-card-scene {
+  position: relative;
+}
+
+.memo-palace-card-map {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 0.66;
+}
+
+.memo-palace-card-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  justify-items: center;
+  align-content: end;
+  gap: 0.3rem;
+  padding: 1.4rem 1.4rem 1.5rem;
+  /* Light enough at the top that the streets read through it — the map is the
+     point of the card — and solid enough under the words to carry them. */
+  background: linear-gradient(
+    to bottom,
+    rgba(14, 12, 20, 0) 0%,
+    rgba(14, 12, 20, 0.18) 38%,
+    rgba(14, 12, 20, 0.82) 72%,
+    rgba(14, 12, 20, 0.95) 100%
+  );
+  color: #fff;
+}
+
+.memo-palace-card-orb {
+  display: grid;
+  place-items: center;
+  width: 4.6rem;
+  height: 4.6rem;
+  margin-bottom: 0.2rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   overflow: hidden;
 }
 
-.memo-palace-intro .memo-study-empty-orb img {
-  width: 6.9rem;
+.memo-palace-card-orb img {
+  width: 3.2rem;
   height: auto;
 }
 
-/* The state of the walk, under the fold: progress, the neighbourhoods, and
-   what it covers. */
-.memo-palace-summary {
+.memo-palace-card-title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.memo-palace-card-copy {
+  margin: 0;
+  max-width: 26rem;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.98rem;
+  font-weight: 550;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+/* Three numbers along the foot of the same card, divided by a hairline rather
+   than broken out onto tiles of their own. */
+.memo-palace-card-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 0.9rem 0.6rem;
+}
+
+.memo-palace-card-stats > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.memo-palace-card-stats > span + span {
+  border-left: 1px solid color-mix(in oklch, var(--text) 10%, transparent);
+}
+
+.memo-palace-card-stats b {
+  color: var(--text);
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-palace-intro-actions {
   display: grid;
   justify-items: center;
-  gap: 1.1rem;
+  gap: 0.7rem;
   width: 100%;
-  margin-top: 2.2rem;
+}
+
+/* The way in. The one filled pill on the screen, so there is no question which
+   control starts the walk. */
+.memo-palace-enter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 3.4rem;
+  padding: 0 1.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1.05rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
 }
 
 .memo-palace-progress {
@@ -13521,6 +13647,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  text-align: center;
 }
 
 .memo-palace-bar {

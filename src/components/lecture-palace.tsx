@@ -137,6 +137,8 @@ export function LecturePalace({
   const minimapRef = useRef<HTMLCanvasElement | null>(null);
   /* The same map again, whole and still, for when the corner one is not enough. */
   const townMapRef = useRef<HTMLCanvasElement | null>(null);
+  /* The same town, on the card that opens the walk. */
+  const introMapRef = useRef<HTMLCanvasElement | null>(null);
   const gameRef = useRef<PalaceGame | null>(null);
   const snapshotRef = useRef<PalaceSnapshot | null>(null);
   const stickRef = useRef<{ pointerId: number; originX: number; originY: number } | null>(null);
@@ -728,93 +730,135 @@ export function LecturePalace({
   }, [isOpen, leaveGame, sizeMinimap]);
 
   /*
-   * The whole town, painted once when the sheet opens: every street, every stop
-   * still waiting, and where the walker is standing. Nothing here moves, so it
-   * is drawn on demand rather than every frame.
+   * The whole town on a canvas: every street, and every stop with the colour
+   * its ring has on the ground. Shared by the map sheet and by the card on the
+   * way in, which are the same drawing at two sizes — one with the walker on
+   * it, one without, because on the way in there is no walker yet.
+   */
+  const paintTown = useCallback(
+    (canvas: HTMLCanvasElement | null, options?: { walker?: boolean; height?: number }) => {
+      if (!canvas || !layout) return;
+
+      const width = Math.round(canvas.getBoundingClientRect().width);
+
+      if (width === 0) return;
+
+      const height = Math.round(options?.height ? width * options.height : width);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+
+      const context = canvas.getContext("2d");
+
+      if (!context) return;
+
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const extent = mapExtent(layout);
+      /*
+       * The whole town has to fit, not fill: on the wide card the filling scale
+       * cropped it to a couple of streets and most of the stops fell off the
+       * edges, which is the opposite of what a map of the place is for. The
+       * roads are drawn edge to edge, so the air either side reads as more town
+       * rather than as margin.
+       */
+      const scale = Math.min(width, height) / (extent * 2);
+      const toCanvas = (x: number, z: number) => ({
+        x: width / 2 + x * scale,
+        y: height / 2 + z * scale,
+      });
+
+      context.clearRect(0, 0, width, height);
+      context.fillStyle = "rgba(14, 12, 20, 0.9)";
+      context.beginPath();
+      context.roundRect(0, 0, width, height, 18);
+      context.fill();
+
+      context.strokeStyle = "rgba(255, 255, 255, 0.16)";
+      context.lineWidth = Math.max(1.5, 11 * scale);
+      layout.roads.forEach((road) => {
+        const horizontal = road.width > road.depth;
+        const line = toCanvas(road.x, road.z);
+
+        context.beginPath();
+
+        if (horizontal) {
+          context.moveTo(0, line.y);
+          context.lineTo(width, line.y);
+        } else {
+          context.moveTo(line.x, 0);
+          context.lineTo(line.x, height);
+        }
+
+        context.stroke();
+      });
+
+      layout.stations.forEach((entry) => {
+        const point = toCanvas(entry.x, entry.z);
+        const done = collected.has(entry.id);
+
+        context.fillStyle = done
+          ? "rgba(255, 255, 255, 0.22)"
+          : `hsl(${STATION_HUE[entry.kind]} 80% 62%)`;
+        context.beginPath();
+        context.arc(point.x, point.y, done ? 2.6 : 4.2, 0, Math.PI * 2);
+        context.fill();
+      });
+
+      if (options?.walker === false) return;
+
+      const player = toCanvas(snapshotRef.current?.x ?? 0, snapshotRef.current?.z ?? 0);
+
+      context.save();
+      context.translate(player.x, player.y);
+      context.rotate(mapArrowAngle(snapshotRef.current?.facing ?? 0));
+      context.fillStyle = "#ffffff";
+      context.strokeStyle = "rgba(14, 12, 20, 0.9)";
+      context.lineWidth = 1.4;
+      context.beginPath();
+      context.moveTo(0, -7);
+      context.lineTo(5.4, 5.8);
+      context.lineTo(0, 2.6);
+      context.lineTo(-5.4, 5.8);
+      context.closePath();
+      context.fill();
+      context.stroke();
+      context.restore();
+    },
+    [collected, layout],
+  );
+
+  /* Painted once when the sheet opens; nothing on it moves. */
+  useEffect(() => {
+    if (!isMapOpen) return;
+
+    paintTown(townMapRef.current);
+  }, [isMapOpen, paintTown]);
+
+  /*
+   * And on the way in, where it is the picture of the thing: a note turned into
+   * somewhere with streets and corners, which is the whole claim the screen is
+   * making. Re-measured on resize, because it is a wide card rather than a
+   * square and the width it gets changes with the column.
    */
   useEffect(() => {
-    if (!isMapOpen || !layout) return;
+    if (isOpen) return;
 
-    const canvas = townMapRef.current;
+    const paint = () => paintTown(introMapRef.current, { walker: false, height: 0.52 });
+
+    paint();
+
+    const canvas = introMapRef.current;
 
     if (!canvas) return;
 
-    const width = Math.round(canvas.getBoundingClientRect().width);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const observer = new ResizeObserver(paint);
 
-    if (width === 0) return;
+    observer.observe(canvas);
 
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(width * dpr);
-
-    const context = canvas.getContext("2d");
-
-    if (!context) return;
-
-    context.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const extent = mapExtent(layout);
-    const scale = width / (extent * 2);
-    const toCanvas = (x: number, z: number) => ({
-      x: width / 2 + x * scale,
-      y: width / 2 + z * scale,
-    });
-
-    context.clearRect(0, 0, width, width);
-    context.fillStyle = "rgba(14, 12, 20, 0.9)";
-    context.beginPath();
-    context.roundRect(0, 0, width, width, 18);
-    context.fill();
-
-    context.strokeStyle = "rgba(255, 255, 255, 0.16)";
-    context.lineWidth = Math.max(1.5, 11 * scale);
-    layout.roads.forEach((road) => {
-      const horizontal = road.width > road.depth;
-      const line = toCanvas(road.x, road.z);
-
-      context.beginPath();
-
-      if (horizontal) {
-        context.moveTo(0, line.y);
-        context.lineTo(width, line.y);
-      } else {
-        context.moveTo(line.x, 0);
-        context.lineTo(line.x, width);
-      }
-
-      context.stroke();
-    });
-
-    layout.stations.forEach((entry) => {
-      const point = toCanvas(entry.x, entry.z);
-      const done = collected.has(entry.id);
-
-      context.fillStyle = done
-        ? "rgba(255, 255, 255, 0.22)"
-        : `hsl(${STATION_HUE[entry.kind]} 80% 62%)`;
-      context.beginPath();
-      context.arc(point.x, point.y, done ? 2.6 : 4.2, 0, Math.PI * 2);
-      context.fill();
-    });
-
-    const player = toCanvas(snapshotRef.current?.x ?? 0, snapshotRef.current?.z ?? 0);
-
-    context.save();
-    context.translate(player.x, player.y);
-    context.rotate(mapArrowAngle(snapshotRef.current?.facing ?? 0));
-    context.fillStyle = "#ffffff";
-    context.strokeStyle = "rgba(14, 12, 20, 0.9)";
-    context.lineWidth = 1.4;
-    context.beginPath();
-    context.moveTo(0, -7);
-    context.lineTo(5.4, 5.8);
-    context.lineTo(0, 2.6);
-    context.lineTo(-5.4, 5.8);
-    context.closePath();
-    context.fill();
-    context.stroke();
-    context.restore();
-  }, [collected, isMapOpen, layout]);
+    return () => observer.disconnect();
+  }, [isOpen, paintTown]);
 
   const closeMap = useCallback(() => setIsMapOpen(false), []);
   const mapSheet = useSheet(closeMap, { scrollable: true });
@@ -1360,32 +1404,64 @@ export function LecturePalace({
 
   return (
     <>
-      <div className="memo-study-empty memo-palace-intro">
-        <div className="memo-study-empty-orb">
-          {/*
-           * Memo's own face, the thing you will be collecting. Eager and at the
-           * front of the queue: it is the first thing on the screen, and left to
-           * lazy-load it arrived a beat after the title and the button, so the
-           * palace opened on an empty grey circle.
-           */}
-          <NextImage src={MASCOT_SRC} alt="" width={110} height={99} priority />
-        </div>
-        <p className="memo-study-empty-title">{t("palace.title")}</p>
-        <p className="memo-study-empty-copy">{t("palace.intro")}</p>
+      <div className="memo-palace-intro">
+        {/*
+         * The town, before you are in it. Every other study tab can show you
+         * what it is in a sentence; this one is a place, and a picture of the
+         * actual streets it generated says that in a way "vsaka hiša skriva
+         * vprašanje" cannot. It is the note's own layout, so the map you study
+         * here is the map you walk.
+         */}
+        <div className="memo-palace-card">
+          <div className="memo-palace-card-scene">
+            <canvas ref={introMapRef} className="memo-palace-card-map" aria-hidden="true" />
 
-        <button type="button" className="memo-study-empty-cta" onClick={enterGame}>
-          <Msym name="explore" size="1.2rem" fill={false} weight={500} />
-          {done > 0 ? t("palace.resume") : t("palace.start")}
-        </button>
-
-        {/* Everything below is the walk's own state, in the app's list idiom. */}
-        <div className="memo-palace-summary">
-          <div className="memo-palace-progress">
-            <div className="memo-palace-bar">
-              <span style={{ width: `${total === 0 ? 0 : (done / total) * 100}%` }} />
+            <div className="memo-palace-card-face">
+              <span className="memo-palace-card-orb">
+                {/*
+                 * Memo's own face, the thing you will be collecting. Eager and
+                 * at the front of the queue: it is the first thing on the
+                 * screen, and left to lazy-load it arrived a beat after the
+                 * title and the button, so the palace opened on an empty grey
+                 * circle.
+                 */}
+                <NextImage src={MASCOT_SRC} alt="" width={110} height={99} priority />
+              </span>
+              <h2 className="memo-palace-card-title">{t("palace.title")}</h2>
+              <p className="memo-palace-card-copy">{t("palace.intro")}</p>
             </div>
-            <p className="memo-palace-count">{t("palace.progressCount", { done, total })}</p>
           </div>
+
+          {/* The numbers a walk is scored on, on the card's own foot rather
+              than on three more surfaces underneath it. */}
+          <div className="memo-palace-card-stats">
+            <span>
+              <b>{total}</b>
+              {t("palace.stops")}
+            </span>
+            <span>
+              <b>{layout.districts.length}</b>
+              {t("palace.districts")}
+            </span>
+            <span>
+              <b>{firstTimeKnown}</b>
+              {t("palace.known")}
+            </span>
+          </div>
+        </div>
+
+        <div className="memo-palace-progress">
+          <div className="memo-palace-bar">
+            <span style={{ width: `${total === 0 ? 0 : (done / total) * 100}%` }} />
+          </div>
+          <p className="memo-palace-count">{t("palace.progressCount", { done, total })}</p>
+        </div>
+
+        <div className="memo-palace-intro-actions">
+          <button type="button" className="memo-palace-enter" onClick={enterGame}>
+            <Msym name="explore" size="1.25rem" fill={false} weight={500} />
+            {done > 0 ? t("palace.resume") : t("palace.start")}
+          </button>
 
           {done > 0 ? (
             <button type="button" className="memo-button-outline small" onClick={restart}>

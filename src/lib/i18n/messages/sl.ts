@@ -1715,6 +1715,8 @@ export const sl = {
   "palace.loading": "Gradim mesto …",
   "palace.unsupported": "Ta naprava ne zmore 3D palače. Kartice delujejo povsod.",
   "palace.exit": "Nazaj na zapisek",
+  "palace.stops": "Postaje",
+  "palace.known": "Znanih",
   "palace.progressCount": "{done} od {total} pobranih",
   "palace.reveal": "Pokaži odgovor",
   "palace.checking": "Preverjam odgovor …",

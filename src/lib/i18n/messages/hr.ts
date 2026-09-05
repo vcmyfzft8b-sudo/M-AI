@@ -1696,6 +1696,8 @@ export const hr: Messages = {
   "palace.loading": "Gradim grad …",
   "palace.unsupported": "Ovaj uređaj ne može pokrenuti 3D palaču. Kartice rade svugdje.",
   "palace.exit": "Natrag na bilješku",
+  "palace.stops": "Postaje",
+  "palace.known": "Znanih",
   "palace.progressCount": "{done} od {total} pokupljeno",
   "palace.reveal": "Prikaži odgovor",
   "palace.checking": "Provjeravam odgovor …",

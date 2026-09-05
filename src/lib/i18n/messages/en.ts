@@ -1686,6 +1686,8 @@ export const en: Messages = {
   "palace.loading": "Building the city…",
   "palace.unsupported": "This device can't run the 3D palace. The flashcards work everywhere.",
   "palace.exit": "Back to the note",
+  "palace.stops": "Stops",
+  "palace.known": "Known",
   "palace.progressCount": "{done} of {total} collected",
   "palace.reveal": "Show answer",
   "palace.checking": "Marking your answer…",

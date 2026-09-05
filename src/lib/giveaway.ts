@@ -127,7 +127,7 @@ function drawGiveawayCode() {
  * renders exactly as it does for a real account.
  */
 const DEMO_CODE: GiveawayCode = {
-  code: "BTS-DEMO26",
+  code: "BTS-SAMPLE",
   stripePromotionCodeId: "promo_demo",
 };
 
@@ -246,12 +246,31 @@ export async function ensureGiveawayCode(params: {
   throw new Error("Could not draw a unique giveaway code.");
 }
 
+/**
+ * Locally the demo code resolves to a made-up owner, so a developer can
+ * follow a friend's link through the paywall and checkout without a row in
+ * the database. Unreachable in production and previews, where NODE_ENV is
+ * `production`.
+ */
+const DEMO_CODE_OWNER = "00000000-0000-4000-8000-000000000002";
+
 /** The issued code behind a string a friend brought, if it is one of ours. */
 export async function findGiveawayCode(rawCode: string | null | undefined) {
   const code = normalizeGiveawayCode(rawCode);
 
   if (!isGiveawayCodeFormat(code)) {
     return null;
+  }
+
+  if (process.env.NODE_ENV === "development" && code === DEMO_CODE.code) {
+    return {
+      user_id: DEMO_CODE_OWNER,
+      campaign: GIVEAWAY_CAMPAIGN,
+      code,
+      stripe_promotion_code_id: DEMO_CODE.stripePromotionCodeId,
+      stripe_coupon_id: GIVEAWAY_COUPON_ID,
+      created_at: new Date(0).toISOString(),
+    } as GiveawayCodeRow;
   }
 
   const { data, error } = await createSupabaseServiceRoleClient()

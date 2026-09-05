@@ -133,7 +133,7 @@ export function GiveawayScreen({
   /** The "Get my code" button: one POST, and the code takes the button's place. */
   async function getCode() {
     if (isDemo) {
-      setState((current) => ({ ...current, code: "BTS-DEMO26" }));
+      setState((current) => ({ ...current, code: "BTS-SAMPLE" }));
       return;
     }
 

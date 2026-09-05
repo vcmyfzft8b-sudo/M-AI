@@ -289,6 +289,26 @@ async function handleLectureRoute(
       return json({ ok: true });
     }
 
+    /*
+     * The podcast cannot be demonstrated offline: an episode is a model call and then a
+     * synthesized turn per line, and neither exists in a store built out of fixtures. So the
+     * screen is told the truth it would be told without a subscription, rather than being left
+     * to read the catch-all `{ ok: true }` as "this note is not finished" — which is the one
+     * thing that is definitely not wrong with it.
+     */
+    case "podcast": {
+      return json({
+        available: false,
+        reason: "subscription_required",
+        podcast: null,
+        tier: "free",
+        limitSeconds: 0,
+        secondsUsed: 0,
+        remainingSeconds: 0,
+        hasUnlimitedUsage: false,
+      });
+    }
+
     case "chat": {
       const body = await readJsonBody(init, input);
       const question = typeof body.question === "string" ? body.question : "";

@@ -143,6 +143,32 @@ export const rateLimitPresets = {
   ttsStatus: [
     { windowSeconds: 60, maxRequests: 60, scope: "user", storage: "memory" },
   ] satisfies RateLimitRule[],
+  /*
+   * Writing an episode is the most expensive single model call in the product — a couple of
+   * thousand words from a thinking writer — and it is the one call a listener can ask for
+   * repeatedly by changing the show or the length. The window is wide enough to try each of the
+   * four formats at each of the three lengths and still have room to think again, and narrow
+   * enough that a client stuck in a retry loop cannot spend a day's budget overnight.
+   */
+  podcastScript: [
+    { windowSeconds: 900, maxRequests: 12, scope: "user" },
+    { windowSeconds: 86400, maxRequests: 60, scope: "user" },
+  ] satisfies RateLimitRule[],
+  /*
+   * One turn of a generated episode, which is not shaped like a read-aloud chunk.
+   *
+   * Two differences decide the numbers. A long episode is forty turns rather than a handful, and
+   * the client asks for each of them as it approaches — so a listener who finishes a fourteen
+   * minute episode legitimately makes forty requests spread over fourteen minutes. And when the
+   * organization's synthesis capacity is full, the route answers 202 without doing any work, and
+   * the client asks again: under contention most requests in the window are a database read and
+   * a JSON body. Sizing this like a chunk would turn a busy hour into the listener's own client
+   * rate-limiting them out of an episode they had already paid for.
+   */
+  podcastSegment: [
+    { windowSeconds: 300, maxRequests: 300, scope: "user" },
+    { windowSeconds: 3600, maxRequests: 1200, scope: "user" },
+  ] satisfies RateLimitRule[],
   ttsChunk: [
     { windowSeconds: 300, maxRequests: 120, scope: "user" },
     { windowSeconds: 3600, maxRequests: 600, scope: "user" },

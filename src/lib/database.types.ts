@@ -638,6 +638,93 @@ export type Database = {
           updated_at?: string;
         };
       };
+      lecture_podcasts: {
+        Row: {
+          id: string;
+          lecture_id: string;
+          content_hash: string;
+          format: string;
+          length_id: string;
+          language: string;
+          status: string;
+          title: string | null;
+          turns: Json;
+          model: string | null;
+          error_message: string | null;
+          generation_started_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          lecture_id: string;
+          content_hash: string;
+          format: string;
+          length_id: string;
+          language: string;
+          status?: string;
+          title?: string | null;
+          turns?: Json;
+          model?: string | null;
+          error_message?: string | null;
+          generation_started_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: string;
+          title?: string | null;
+          turns?: Json;
+          model?: string | null;
+          error_message?: string | null;
+          generation_started_at?: string | null;
+          updated_at?: string;
+        };
+      };
+      lecture_podcast_segments: {
+        Row: {
+          id: string;
+          podcast_id: string;
+          segment_index: number;
+          speaker: string;
+          text: string;
+          language: string;
+          voice: string;
+          model: string;
+          audio_storage_path: string;
+          audio_mime_type: string;
+          duration_ms: number;
+          generated_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          podcast_id: string;
+          segment_index: number;
+          speaker: string;
+          text: string;
+          language: string;
+          voice: string;
+          model: string;
+          audio_storage_path: string;
+          audio_mime_type?: string;
+          duration_ms: number;
+          generated_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          speaker?: string;
+          text?: string;
+          language?: string;
+          voice?: string;
+          model?: string;
+          audio_storage_path?: string;
+          audio_mime_type?: string;
+          duration_ms?: number;
+          generated_at?: string;
+          updated_at?: string;
+        };
+      };
       tts_daily_usage: {
         Row: {
           user_id: string;
@@ -1743,6 +1830,10 @@ export type LectureNoteMediaRow =
   Database["public"]["Tables"]["lecture_note_media"]["Row"];
 export type LectureTtsChunkRow =
   Database["public"]["Tables"]["lecture_tts_chunks"]["Row"];
+export type LecturePodcastRow =
+  Database["public"]["Tables"]["lecture_podcasts"]["Row"];
+export type LecturePodcastSegmentRow =
+  Database["public"]["Tables"]["lecture_podcast_segments"]["Row"];
 export type TtsDailyUsageRow =
   Database["public"]["Tables"]["tts_daily_usage"]["Row"];
 export type TtsGenerationEventRow =

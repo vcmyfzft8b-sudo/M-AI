@@ -31,3 +31,49 @@ const VOICE_HUES: Record<NoteTtsVoice, number> = {
 export function voiceHue(voice: string) {
   return VOICE_HUES[voice as NoteTtsVoice] ?? VOICE_HUES[NOTE_TTS_VOICES[0]];
 }
+
+/**
+ * The podcast's own reading of the same wheel: indigo on the left, pink on the right.
+ *
+ * The tutor spreads its voices right around the wheel, which is right there — one sphere at a
+ * time, and the colour is the only thing telling you which voice you picked. The podcast shows
+ * two at once, so a spread has a second job the tutor's never had: whichever two voices are
+ * chosen have to look like a pair.
+ *
+ * A band alone does not do that. Centred on the podcast tab's own coral it produced two spheres
+ * of nearly the same colour, and widened enough to separate them it wandered into the orange the
+ * tutor tab uses and the pink the quiz does. Every hue in this app already belongs to some tab.
+ *
+ * So the band is split rather than shared. Host A lives in the indigo half and host B in the
+ * pink, and the voice chosen moves that host WITHIN its own half — the choice still shows, the
+ * two hosts can never converge, and any pair reads as one indigo-to-pink object rather than two
+ * balls that happen to be near each other. A solo episode gets the indigo half, which is where
+ * its single sphere has always sat.
+ *
+ * The numbers are OKLCH angles, which is worth saying because the first attempt was not: these
+ * are read straight into an oklch() in the stylesheet, and 330 there is magenta rather than the
+ * pink it would be in HSL. The pair came out purple.
+ */
+/*
+ * Wide halves, not narrow ones. Thirty-five degrees kept a pair beautifully together and made
+ * the picker useless: eleven voices three degrees apart are eleven identical dots, and the whole
+ * reason these have a colour at all is that the tutor's picker shows you which voice you are
+ * choosing. A hundred degrees puts ten between neighbours — plainly different in a row — while
+ * the two halves still cannot meet, so no pair of hosts can ever come out the same colour.
+ */
+const PODCAST_HUE_HALVES = {
+  a: { start: 200, span: 100 },
+  b: { start: 310, span: 100 },
+} as const;
+
+const PODCAST_HUE_ORDER = Object.entries(VOICE_HUES)
+  .sort(([, a], [, b]) => a - b)
+  .map(([voice]) => voice);
+
+export function podcastVoiceHue(voice: string, speaker: "a" | "b" = "a") {
+  const rank = PODCAST_HUE_ORDER.indexOf(voice);
+  const step = rank < 0 ? 0 : rank / Math.max(1, PODCAST_HUE_ORDER.length - 1);
+  const half = PODCAST_HUE_HALVES[speaker];
+
+  return (half.start + step * half.span) % 360;
+}

@@ -13,8 +13,9 @@
  * `<audio>` tag. Instant in the app, possible on the page.
  *
  * Two clips per voice per language:
- *   sample — the line the app previews a voice with.
- *   tutor  — the page demo's opening: the tutor starting to explain.
+ *   sample  — the line the app previews a tutor voice with.
+ *   podcast — the same, for a podcast host, which is a different job and a different line.
+ *   tutor   — the page demo's opening: the tutor starting to explain.
  *   answer — what it says when the learner cuts in with the question the page
  *            prints under the sphere.
  * The last two are landing locales only; the app never plays them.
@@ -67,6 +68,25 @@ const SAMPLE = {
   sr: "Zdravo, ja sam tvoj tutor. Ovako zvučim dok ti objašnjavam gradivo.",
   de: "Hallo, ich bin dein Tutor. So klinge ich, wenn ich dir etwas erkläre.",
   it: "Ciao, sono il tuo tutor. Ecco come suono quando ti spiego le cose.",
+};
+
+/*
+ * The podcast's audition line.
+ *
+ * A separate line rather than the tutor's, because the two are auditions for different jobs: a
+ * tutor introduces itself to one learner, a host opens an episode. Hearing "I'm your tutor"
+ * while choosing between two podcast hosts is the sort of seam that makes a screen feel
+ * assembled out of parts. Rendered here for the same reason the tutor's is — the first tap on a
+ * voice used to open a Soniox channel and wait, for a line that never changes.
+ */
+const PODCAST = {
+  sl: "Živjo. Takole zvenim, ko se z nekom pogovarjam o kakšni temi.",
+  en: "Hi. This is how I sound when I'm talking a topic through with someone.",
+  hr: "Bok. Ovako zvučim kad s nekim prolazim kroz neku temu.",
+  bs: "Zdravo. Ovako zvučim kad s nekim prolazim kroz neku temu.",
+  sr: "Zdravo. Ovako zvučim kad s nekim prolazim kroz neku temu.",
+  de: "Hallo. So klinge ich, wenn ich mit jemandem ein Thema durchgehe.",
+  it: "Ciao. Ecco come suono quando parlo di un argomento con qualcuno.",
 };
 
 /*
@@ -206,6 +226,7 @@ async function main() {
 
   for (const [kind, texts] of [
     ["sample", SAMPLE],
+    ["podcast", PODCAST],
     ["tutor", TUTOR],
     ["answer", ANSWER],
   ]) {

@@ -16,6 +16,7 @@ export const AI_STAGES = [
   "mindmap",
   "tutor_plan",
   "tutor_turn",
+  "podcast_script",
   "language_check",
 ] as const;
 
@@ -250,6 +251,42 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
     providerSort: "latency",
   },
   /*
+   * One podcast episode, written in full before a word of it is heard.
+   *
+   * Nothing about this call is latency-sensitive: the listener is watching a progress bar and
+   * expects to wait, the way they wait for every other product that does this. What it is
+   * sensitive to is the failure the note pipeline already measured models on — dropping the
+   * material. An episode that comes back charming and empty is a worse outcome here than in a
+   * note, because there is no page to fall back to and the emptiness only becomes obvious ten
+   * minutes in. So this stage takes the shared writer, which is the one that held its recall.
+   *
+   * Thinking is on at medium and its headroom with it. A script is a single call that has to
+   * decide the running order of the whole episode and then write it — the same kind of work as
+   * the outline, where thinking is the one place in this pipeline it measurably paid.
+   */
+  /*
+   * Why this stage did NOT follow the tutor onto a Gemini.
+   *
+   * The tutor's answer to GLM's Slovenian was to change the writer, not to check it — see
+   * writerNeedsLanguageCheck. Tried here on 2026-09-04 with gemini-3.5-flash-lite writing the
+   * script, twice, against GLM's four runs on the same fixture:
+   *
+   *   writer                  recall        words (asked 920)
+   *   glm-5.3-flash           23/23 x4      670-790
+   *   gemini-3.5-flash-lite   20/23, 18/23  441, 504
+   *
+   * It is not close, and the reason is structural rather than a matter of quality. The tutor's
+   * writer is handed a plan, a topic and its points, so the hard part — carrying the lecture —
+   * has already been done by GLM upstream. This one is handed sixty thousand characters and has
+   * to hold the whole thing in a single call, which is the exact job GLM was picked for. Half an
+   * episode in better Slovenian is a worse episode.
+   *
+   * So the writer stays, and the defect it comes with is caught by the proofreading pass in
+   * podcast.ts instead — which the tutor cannot afford, because there the check sits between a
+   * learner and the first sound, and here it runs once behind a progress bar.
+   */
+  podcast_script: { thinkingLevel: "medium", outputHeadroom: 2.5, defaultModel: GLM_TEXT_MODEL },
+  /*
    * Repairing the language of text another model has already written — one passage of a note,
    * or one unit of a spoken turn while the rest of it is still being written.
    *
@@ -282,6 +319,7 @@ const STAGE_MODEL_ENV_KEYS: Record<AiStage, string> = {
   mindmap: "GEMINI_MINDMAP_MODEL",
   tutor_plan: "GEMINI_TUTOR_PLAN_MODEL",
   tutor_turn: "GEMINI_TUTOR_TURN_MODEL",
+  podcast_script: "GEMINI_PODCAST_SCRIPT_MODEL",
   language_check: "GEMINI_LANGUAGE_CHECK_MODEL",
 };
 
@@ -296,6 +334,7 @@ const STAGE_THINKING_ENV_KEYS: Record<AiStage, string> = {
   mindmap: "GEMINI_MINDMAP_THINKING",
   tutor_plan: "GEMINI_TUTOR_PLAN_THINKING",
   tutor_turn: "GEMINI_TUTOR_TURN_THINKING",
+  podcast_script: "GEMINI_PODCAST_SCRIPT_THINKING",
   language_check: "GEMINI_LANGUAGE_CHECK_THINKING",
 };
 
@@ -493,6 +532,13 @@ const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
    */
   tutor_plan: 90_000,
   /*
+   * A whole episode in one call, and nobody is listening yet — the screen is showing a progress
+   * bar and the wait is the wait every product that does this has. So this is sized by what the
+   * work costs rather than by what a listener will sit through: the writer produces a couple of
+   * thousand words at 20-60 tokens a second, which the shared 90s default cannot hold.
+   */
+  podcast_script: 240_000,
+  /*
    * One thinking call over the whole note, with a reader watching a spinner for it. The default
    * ninety seconds is the wrong shape for both halves of that: too tight for a long note on a
    * thinking model, and long enough that a stalled call leaves nothing but a spinner. Three
@@ -520,6 +566,7 @@ const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
 const MANDATORY_REASONING_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
   note_outline: 200_000,
   note_write: 200_000,
+  podcast_script: 200_000,
 };
 
 /**

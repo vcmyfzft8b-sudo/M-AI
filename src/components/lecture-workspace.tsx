@@ -56,6 +56,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 
+import { LecturePodcast } from "@/components/lecture-podcast";
 import { StudyGenerationNotice } from "@/components/generation-notice";
 import { LectureMindmap } from "@/components/lecture-mindmap";
 import { LecturePalace } from "@/components/lecture-palace";
@@ -83,6 +84,7 @@ type WorkspaceTab =
   | "notes"
   | "study"
   | "tutor"
+  | "podcast"
   | "mindmap"
   | "palace"
   | "speed"
@@ -295,6 +297,18 @@ const NOTE_TABS = [
     labelKey: "note.tab.flashcards",
     icon: "style",
     tint: "oklch(0.66 0.15 295)",
+  },
+  /*
+   * The episode, after the cards: it is the third way of taking in the note itself — read it, have it
+   * explained, or listen to it argued — and it belongs beside the walkthrough rather than among
+   * the practice screens, which are about testing yourself rather than about taking it in.
+   */
+  {
+    id: "podcast",
+    view: null,
+    labelKey: "note.tab.podcast",
+    icon: "podcasts",
+    tint: "oklch(0.66 0.15 20)",
   },
   { id: "quiz", view: "quiz", labelKey: "note.tab.quiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
   /*
@@ -1145,6 +1159,7 @@ const SUB_SCREEN_TITLE_KEYS: Record<string, MessageKey | null> = {
   quiz: "note.tab.quiz",
   test: "note.subScreen.test",
   tutor: "tutor.subScreenTitle",
+  podcast: "note.tab.podcast",
   mindmap: "note.tab.mindmap",
   palace: "palace.title",
   speed: "note.tab.speed",
@@ -3871,6 +3886,22 @@ export function LectureWorkspace({
   }
 
   function renderPanel() {
+    if (activeTab === "podcast") {
+      return (
+        <LecturePodcast
+          lectureId={detail.lecture.id}
+          isReady={detail.lecture.status === "ready"}
+          /* The same language the tutor auditions in, worked out the same way. */
+          language={resolveMaterialLanguage(
+            `${detail.artifact?.summary ?? ""}\n${detail.artifact?.structured_notes_md ?? ""}`,
+            detail.lecture.language_hint,
+          )}
+          /* The usage meter belongs in the dock, beside the tutor's — it is the same meter. */
+          dockSlot={dockSlot}
+        />
+      );
+    }
+
     if (activeTab === "palace") {
       return (
         <LecturePalace
@@ -5464,19 +5495,21 @@ export function LectureWorkspace({
       ? "notes"
       : activeTab === "tutor"
         ? "tutor"
-        : activeTab === "mindmap"
-          ? "mindmap"
-          : activeTab === "palace"
-            ? "palace"
-            : activeTab === "speed"
-              ? "speed"
-              : activeTab === "transcript" || activeTab === "audio"
-                ? "transcript"
-                : activeStudyView === "flashcards"
-                  ? "flashcards"
-                  : activeStudyView === "quiz"
-                    ? "quiz"
-                    : "test";
+        : activeTab === "podcast"
+          ? "podcast"
+          : activeTab === "mindmap"
+            ? "mindmap"
+            : activeTab === "palace"
+              ? "palace"
+              : activeTab === "speed"
+                ? "speed"
+                : activeTab === "transcript" || activeTab === "audio"
+                  ? "transcript"
+                  : activeStudyView === "flashcards"
+                    ? "flashcards"
+                    : activeStudyView === "quiz"
+                      ? "quiz"
+                      : "test";
 
   /*
    * The pill row follows the tab it is on. The pills overflow their scroller
@@ -5859,6 +5892,11 @@ export function LectureWorkspace({
 
     if (tab.id === "tutor") {
       setActiveTab("tutor");
+      return;
+    }
+
+    if (tab.id === "podcast") {
+      setActiveTab("podcast");
       return;
     }
 

@@ -12773,7 +12773,8 @@
 }
 
 /* On its own in the dock, the pill sits where the listen pill does on the note. */
-.memo-note-screen[data-note-tab="tutor"] .memo-dock {
+.memo-note-screen[data-note-tab="tutor"] .memo-dock,
+.memo-note-screen[data-note-tab="podcast"] .memo-dock {
   justify-content: center;
 }
 
@@ -13485,6 +13486,725 @@
     height: 8.5rem;
   }
 }
+
+
+/* --- the generated podcast ----------------------------------------------- */
+
+/*
+ * The episode screen borrows the walkthrough's language rather than inventing one: the same
+ * spheres, the same voice hues, the same pill row. They are the two spoken screens in the app and
+ * a listener should recognise the second from the first.
+ *
+ * What is different is that this one has something to read. A podcast has a transcript, and the
+ * transcript is the seek bar people actually use — so it is the tallest thing here, and the
+ * controls sit above it rather than under it, where a phone's thumb would cover the line being
+ * spoken.
+ */
+
+/* Same reasoning as the walkthrough: the dock's chat bar competes with a screen that is talking. */
+.memo-note-screen[data-note-tab="podcast"] .memo-m-chatbar,
+.memo-note-screen[data-note-tab="podcast"] .memo-m-chatbar-mic,
+.memo-note-screen[data-note-tab="podcast"] .memo-chat-fab {
+  display: none;
+}
+
+.memo-podcast {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1.25rem 1.25rem 1.5rem;
+  text-align: center;
+}
+
+/*
+ * Everything on this screen has to fit the screen, on a small phone as well as a laptop, because
+ * choosing a show is one decision and a decision you have to scroll to finish is one you make
+ * badly. Nothing here is dropped to achieve that — the parts that give ground are the ones with
+ * no information in them: the artwork, the standfirst, and the air between the rows.
+ */
+
+
+/*
+ * The short-phone floor.
+ *
+ * Measured on the note screen rather than guessed: on a 667pt screen the chooser came to 691pt of
+ * panel before the navbar and the pill row had taken their share, so roughly a hundred and fifty
+ * had to go. These two are what go, because they are the only things on the screen that carry no
+ * information a listener needs to choose with — the artwork, and a sentence of description under
+ * names that already say what they are ("Interview", "Solo"). The cards, the lengths, the voices
+ * and the button all survive intact.
+ */
+
+
+/*
+ * The cover.
+ *
+ * Two spheres for two voices, overlapped the way a record sleeve overlaps two faces — which is
+ * the one image that says "a conversation" before a word has played. A solo episode draws one,
+ * centred, rather than one sphere and an empty space where the other was.
+ */
+.memo-podcast-cover {
+  position: relative;
+  width: 11rem;
+  height: 7.5rem;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+/*
+ * Lit like the rest of the app rather than like a sweet.
+ *
+ * The lightness and chroma below are the tab icons' own — oklch(0.66 0.15) and its neighbours —
+ * where these were a good deal brighter and more saturated than anything else on the screen.
+ * Two of them at 0.78 chroma 0.17 made the artwork the loudest object in a deliberately quiet
+ * interface, which is why it read as candy however the hue was chosen.
+ */
+.memo-podcast-orb {
+  position: absolute;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 36% 30%, oklch(0.86 0.05 calc(var(--podcast-hue) + 25) / 0.95), transparent 42%),
+    radial-gradient(circle at 62% 74%, oklch(0.6 0.13 calc(var(--podcast-hue) - 15) / 0.9), transparent 60%),
+    linear-gradient(
+      160deg,
+      oklch(0.7 0.13 calc(var(--podcast-hue) + 10)),
+      oklch(0.55 0.14 calc(var(--podcast-hue) - 23))
+    );
+  box-shadow: 0 10px 30px oklch(0.6 0.14 var(--podcast-hue) / 0.35);
+}
+
+.memo-podcast-orb.primary {
+  width: 5.6rem;
+  height: 5.6rem;
+  left: 1.6rem;
+  z-index: 1;
+}
+
+.memo-podcast-orb.secondary {
+  width: 4.6rem;
+  height: 4.6rem;
+  right: 1.6rem;
+  top: 1.6rem;
+}
+
+/* A solo episode has one sphere and it belongs in the middle, not off to the left. */
+.memo-podcast-cover:not(:has(.secondary)) .memo-podcast-orb.primary {
+  left: auto;
+}
+
+.memo-podcast-title {
+  margin: 0;
+  max-width: 26rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.memo-podcast-subtitle,
+.memo-podcast-hint {
+  margin: 0;
+  max-width: 26rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/*
+ * The half-second before the screen knows which screen it is.
+ *
+ * Sized to roughly what replaces it, so the panel does not jump when the answer arrives.
+ */
+.memo-podcast-loading {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 12rem;
+  color: var(--muted-2);
+}
+
+.memo-podcast-loading .msym {
+  animation: memo-podcast-spin 1.1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-podcast-loading .msym {
+    animation: none;
+  }
+}
+
+/* --- what this note already has ------------------------------------------ */
+
+/*
+ * The episodes already made, and the reason this is a screen of its own rather than a strip
+ * above the chooser: the two together do not fit a phone, and somebody who has made an episode
+ * is far more often coming back to it than making another.
+ */
+.memo-podcast-library {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  /* Long libraries scroll inside themselves rather than pushing the button off the screen. */
+  max-height: min(22rem, 42vh);
+  overflow-y: auto;
+}
+
+.memo-podcast-episode {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  min-height: 3.4rem;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+/* The voices it was made in, as the two dots the cover already uses. */
+/* The row being opened: it spins where the play arrow was, and the rest wait their turn. */
+.memo-podcast-episode.opening .msym {
+  animation: memo-podcast-spin 1.1s linear infinite;
+}
+
+.memo-podcast-episode:disabled {
+  cursor: default;
+}
+
+.memo-podcast-episode:disabled:not(.opening) {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-podcast-episode.opening .msym {
+    animation: none;
+  }
+}
+
+.memo-podcast-episode-voices {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.memo-podcast-episode-voices > span {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: linear-gradient(
+    160deg,
+    oklch(0.78 0.17 calc(var(--podcast-hue) + 10)),
+    oklch(0.58 0.19 calc(var(--podcast-hue) - 23))
+  );
+}
+
+/* Overlapped, so a two-hander reads as two people at a glance. */
+.memo-podcast-episode-voices > span + span {
+  margin-left: -0.4rem;
+}
+
+.memo-podcast-episode-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.memo-podcast-episode-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  /* One line: an episode title is an identifier here, not something to read. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-podcast-episode-meta {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+/* --- choosing a show ----------------------------------------------------- */
+
+/*
+ * One column, one width.
+ *
+ * The shows, the lengths, the voices and the button are four decisions in a row, and they read as
+ * a form only if they share an edge — so everything below the title is the same width and the
+ * spacing between them is the only thing that groups them. The screen was previously a grid, a
+ * centred pill row, a full-width pair and a centred button, which gave the eye four different
+ * left edges to track down a single column.
+ */
+.memo-podcast-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  width: 100%;
+  max-width: 30rem;
+}
+
+.memo-podcast-formats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+/*
+ * A row, not a card: an icon and a name, the same shape as the tab that got you here. The
+ * descriptions moved out from under each one to a single line below the grid — see the
+ * component — so there is nothing left to stack and nothing left to make the heights uneven.
+ */
+.memo-podcast-format {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 3rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+/*
+ * The icon sits beside the name rather than above it. Stacked, it cost a whole row in a card
+ * whose job is to be scanned, and it pushed the description far enough from the title that the
+ * two stopped reading as one thing.
+ */
+.memo-podcast-format.active {
+  border-color: color-mix(in oklch, oklch(0.7 0.16 20) 60%, transparent);
+  background: color-mix(in oklch, oklch(0.7 0.16 20) 12%, transparent);
+}
+
+.memo-podcast-format-label {
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.memo-podcast-format-hint {
+  margin: -0.1rem 0 0;
+  min-height: 2.2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
+/*
+ * Three lengths, one row, equal shares. As centred pills they were three different widths in the
+ * middle of a column of full-width things, which is the sort of detail nobody names and everybody
+ * sees.
+ */
+.memo-podcast-lengths {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.memo-podcast-length {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.05rem;
+  min-height: 3rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.memo-podcast-length.active {
+  color: var(--text);
+  border-color: color-mix(in oklch, oklch(0.7 0.16 20) 60%, transparent);
+  background: color-mix(in oklch, oklch(0.7 0.16 20) 12%, transparent);
+}
+
+.memo-podcast-length-minutes {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- choosing the voices ------------------------------------------------- */
+
+.memo-podcast-voice-picker,
+.memo-podcast-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 30rem;
+}
+
+/* Inside the setup column it is already the right width; it only needs the rhythm. */
+.memo-podcast-setup .memo-podcast-voice-picker {
+  max-width: none;
+}
+
+.memo-podcast-voice-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.memo-podcast-voice-current {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.7rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--tile);
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* The colour of the voice, so the choice is visible without reading the name. */
+.memo-podcast-voice-dot {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+  border-radius: 50%;
+  background: linear-gradient(
+    160deg,
+    oklch(0.78 0.17 calc(var(--podcast-hue) + 10)),
+    oklch(0.58 0.19 calc(var(--podcast-hue) - 23))
+  );
+}
+
+.memo-podcast-voice-role {
+  color: var(--muted);
+}
+
+.memo-podcast-voice-name {
+  margin-left: auto;
+  font-weight: 650;
+}
+
+.memo-podcast-voice-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: center;
+}
+
+.memo-podcast-voice-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2rem;
+  padding: 0 0.65rem 0 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.memo-podcast-voice-option.active {
+  color: var(--text);
+  border-color: color-mix(in oklch, oklch(0.72 0.16 var(--podcast-hue)) 55%, transparent);
+  background: color-mix(in oklch, oklch(0.72 0.16 var(--podcast-hue)) 16%, transparent);
+}
+
+.memo-podcast-voice-option.playing {
+  color: oklch(0.82 0.13 var(--podcast-hue));
+}
+
+.memo-podcast-start {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.85rem 1.25rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.memo-podcast-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding: 0 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* --- while it is being written ------------------------------------------- */
+
+.memo-podcast-progress {
+  width: min(22rem, 100%);
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.memo-podcast-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, oklch(0.72 0.16 20), oklch(0.68 0.17 300));
+  transition: width 380ms ease-out;
+}
+
+/* --- playing ------------------------------------------------------------- */
+
+.memo-podcast-scrubber {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  max-width: 30rem;
+}
+
+.memo-podcast-clock {
+  flex: none;
+  min-width: 2.6rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-podcast-scrubber input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: oklch(0.7 0.16 20);
+  cursor: pointer;
+}
+
+.memo-podcast-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.memo-podcast-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.memo-podcast-control.primary {
+  width: 3.3rem;
+  height: 3.3rem;
+  border: none;
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.memo-podcast-control:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* The spinner the play button wears while the next turn is still being synthesized. */
+.memo-podcast-control:disabled .msym {
+  animation: memo-podcast-spin 1.1s linear infinite;
+}
+
+@keyframes memo-podcast-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-podcast-control:disabled .msym {
+    animation: none;
+  }
+}
+
+/*
+ * Everything below here is responsive override, and it lives at the END of this section on
+ * purpose: a media query adds no specificity, so a block placed above the rules it means to
+ * override silently loses to them. That is not hypothetical — the compaction below was
+ * written next to the rule it shrinks, sat above the base sizes, and did nothing at all on
+ * the phones it was written for.
+ */
+
+/*
+ * Choosing a show has to fit the screen it is chosen on, because a decision you have to scroll to
+ * finish is one you make badly. What gives ground is measured rather than guessed — the note
+ * screen's own navbar and pill row take about two hundred points before this panel starts, so on
+ * a phone the panel has to come in around five hundred.
+ *
+ * Keyed to WIDTH, not height. Phones are narrow whatever their length, and keying the compaction
+ * to height left a tall phone with the roomy desktop sizing and an overflowing screen.
+ */
+@media (max-width: 640px) {
+  .memo-podcast {
+    gap: 0.6rem;
+    padding: 0.75rem 1rem 1rem;
+  }
+
+  /* The chooser drops the artwork at every width now, in the markup — see the component. */
+  .memo-podcast-title {
+    font-size: 1.05rem;
+  }
+
+  .memo-podcast-setup {
+    gap: 0.6rem;
+  }
+
+  /*
+   * Two cards across, still. One per row gives the description a comfortable width and needs four
+   * rows to do it, which is most of a phone spent on a choice between four short names.
+   */
+  .memo-podcast-format {
+    padding: 0.65rem 0.7rem;
+    gap: 0.15rem;
+  }
+
+  .memo-podcast-format-label {
+    font-size: 0.88rem;
+  }
+
+  .memo-podcast-format-hint {
+    font-size: 0.75rem;
+  }
+
+  .memo-podcast-length {
+    min-height: 2.6rem;
+  }
+
+  .memo-podcast-voice-current {
+    min-height: 2.4rem;
+  }
+
+  .memo-podcast-start {
+    padding: 0.7rem 1.25rem;
+  }
+
+  .memo-podcast-episode {
+    min-height: 3.1rem;
+  }
+}
+
+/*
+ * The short-screen floor: a small phone, or any phone in landscape. Two more things go, and they
+ * are the only ones left on the screen carrying no information a listener chooses with — a
+ * sentence of description under names that already say what they are, and the last of the air.
+ */
+@media (max-width: 640px) and (max-height: 800px) {
+  /* The last few points, and they are real: on a 667pt screen the screen came to nine over. */
+  .memo-podcast {
+    gap: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .memo-podcast-format {
+    padding: 0.6rem 0.65rem;
+  }
+
+  .memo-podcast-setup {
+    gap: 0.45rem;
+  }
+
+  .memo-podcast-voice-current {
+    min-height: 2.25rem;
+  }
+
+  .memo-podcast-length {
+    min-height: 2.4rem;
+  }
+
+  /*
+   * The player, which the block above was never measured against — it was written for the
+   * chooser, and the two screens are not the same height. Measured on a 375x667 screen with an
+   * episode open: 700 points of content in a 667-point view, 33 over, and the artwork is the
+   * only thing on that screen carrying no information. Shrinking it and closing the last of the
+   * gaps brings the player inside the view on the smallest phone the site supports.
+   */
+  .memo-podcast-cover {
+    width: 7.8rem;
+    height: 4.7rem;
+  }
+
+  /*
+   * The spheres are absolutely positioned, so the box shrinking does not shrink them — left
+   * alone they spilled straight over the episode title. They come down in the same proportion,
+   * offsets included, so the pair still overlap the way the full-size artwork does.
+   */
+  .memo-podcast-orb.primary {
+    width: 3.5rem;
+    height: 3.5rem;
+    left: 1rem;
+  }
+
+  .memo-podcast-orb.secondary {
+    width: 2.9rem;
+    height: 2.9rem;
+    right: 1rem;
+    top: 0.9rem;
+  }
+
+  .memo-podcast-footer {
+    gap: 0.3rem;
+  }
+
+  .memo-podcast-secondary {
+    min-height: 2.25rem;
+  }
+}
+
+
+
+
+
+
 
 /* ---------------------------------------------------------------------------
    The memory palace.

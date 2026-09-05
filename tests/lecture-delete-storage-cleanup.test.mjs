@@ -31,20 +31,40 @@ test("read-aloud audio paths are read before the lecture row is deleted", () => 
 });
 
 test("every collected path list reaches the storage removal", () => {
-  // Two branches build storagePaths depending on whether the lecture has a source file; a list
-  // added to only one of them leaks for half of all notes.
-  const branches = DELETE_HANDLER.slice(
-    DELETE_HANDLER.indexOf("const storagePaths ="),
+  /*
+   * Two branches build storagePaths depending on whether the lecture has a source file, and a
+   * list added to only one of them leaks for half of all notes.
+   *
+   * This used to be checked by counting each list twice, once per branch. It is checked by shape
+   * now, because the shape changed when the podcast's segments became a fourth list: both
+   * branches are built from one shared array, so a fifth cannot be added to one branch and not
+   * the other. What is pinned is that the shared array holds every list and that both branches
+   * really do come from it — the same property, made structural instead of duplicated.
+   */
+  const expression = DELETE_HANDLER.slice(
+    DELETE_HANDLER.indexOf("const derivedPaths ="),
     DELETE_HANDLER.indexOf('service.storage.from("lecture-audio").remove('),
   );
 
-  for (const list of ["chunkPaths", "scanImagePaths", "noteMediaPaths", "ttsAudioPaths"]) {
-    assert.equal(
-      branches.split(`...${list}`).length - 1,
-      2,
-      `${list} is missing from one of the two storagePaths branches`,
+  for (const list of [
+    "chunkPaths",
+    "scanImagePaths",
+    "noteMediaPaths",
+    "podcastPaths",
+    "ttsAudioPaths",
+  ]) {
+    assert.match(
+      expression,
+      new RegExp(`\\.\\.\\.${list}\\b`),
+      `${list} never reaches the shared list the storage removal is built from`,
     );
   }
+
+  assert.match(
+    expression,
+    /const storagePaths = lecture\.storage_path\s*\?\s*\[lecture\.storage_path, \.\.\.derivedPaths\]\s*:\s*derivedPaths;/,
+    "the two storagePaths branches no longer both come from derivedPaths",
+  );
 });
 
 test("no other lecture-scoped table hides a storage path behind the cascade", () => {

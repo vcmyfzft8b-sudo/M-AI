@@ -643,3 +643,130 @@ test("a bulk upsert of mixed-shape rows would null a not-null column", options, 
   );
   assert.equal(row.classification, "unknown");
 });
+
+/*
+ * The split allowance, exercised as SQL rather than as arithmetic.
+ *
+ * tests/tutor-allowance.test.mjs already asserts the rules; what it cannot see is whether the
+ * TABLES can hold two allowances at once. Before 0047 they could not: one row per user per day
+ * was the primary key, so the podcast's seconds and the tutor's were the same number by
+ * construction, and no amount of correct arithmetic on top would have separated them.
+ */
+async function seedUser(query, email = "split@example.test") {
+  const [{ id }] = await query(
+    `insert into auth.users (email) values ($1) returning id`,
+    [email],
+  );
+
+  return id;
+}
+
+test("the day and the lifetime are counted per feature", options, async () => {
+  const { query } = await migratedDatabase();
+  const userId = await seedUser(query);
+
+  await query(`select public.record_tutor_usage($1, current_date, 600, 0, 'tutor')`, [userId]);
+  await query(`select public.record_tutor_usage($1, current_date, 900, 0, 'podcast')`, [userId]);
+
+  const daily = await query(
+    `select feature, seconds_used from public.tutor_daily_usage
+      where user_id = $1 order by feature`,
+    [userId],
+  );
+  const totals = await query(
+    `select feature, lifetime_seconds from public.tutor_usage_totals
+      where user_id = $1 order by feature`,
+    [userId],
+  );
+
+  assert.deepEqual(daily, [
+    { feature: "podcast", seconds_used: 900 },
+    { feature: "tutor", seconds_used: 600 },
+  ]);
+  assert.deepEqual(totals, [
+    { feature: "podcast", lifetime_seconds: 900 },
+    { feature: "tutor", lifetime_seconds: 600 },
+  ]);
+});
+
+test("spending one feature twice adds up without touching the other", options, async () => {
+  const { query } = await migratedDatabase();
+  const userId = await seedUser(query, "adds-up@example.test");
+
+  await query(`select public.record_tutor_usage($1, current_date, 60, 0, 'podcast')`, [userId]);
+  await query(`select public.record_tutor_usage($1, current_date, 90, 0, 'podcast')`, [userId]);
+
+  const [podcast] = await query(
+    `select seconds_used from public.tutor_daily_usage
+      where user_id = $1 and feature = 'podcast'`,
+    [userId],
+  );
+  const tutor = await query(
+    `select seconds_used from public.tutor_daily_usage
+      where user_id = $1 and feature = 'tutor'`,
+    [userId],
+  );
+
+  assert.equal(podcast.seconds_used, 150);
+  assert.deepEqual(tutor, []);
+});
+
+test("a bought hour is one balance, drawn down by whichever feature spends it", options, async () => {
+  const { query } = await migratedDatabase();
+  const userId = await seedUser(query, "credits@example.test");
+
+  await query(`select public.add_tutor_credit_seconds($1, 3600)`, [userId]);
+  await query(`select public.record_tutor_usage($1, current_date, 600, 600, 'tutor')`, [userId]);
+  await query(`select public.record_tutor_usage($1, current_date, 300, 300, 'podcast')`, [userId]);
+
+  const [balance] = await query(
+    `select seconds_remaining from public.tutor_credit_balances where user_id = $1`,
+    [userId],
+  );
+
+  // 3600 - 600 - 300. The split is of the daily allowance, not of what was paid for.
+  assert.equal(balance.seconds_remaining, 2700);
+});
+
+test("the four-argument form still works, and still means the tutor", options, async () => {
+  // Kept so that the minutes of a deploy where the database is ahead of the code do not throw.
+  const { query } = await migratedDatabase();
+  const userId = await seedUser(query, "legacy@example.test");
+
+  await query(`select public.record_tutor_usage($1, current_date, 120, 0)`, [userId]);
+
+  const rows = await query(
+    `select feature, seconds_used from public.tutor_daily_usage where user_id = $1`,
+    [userId],
+  );
+
+  assert.deepEqual(rows, [{ feature: "tutor", seconds_used: 120 }]);
+});
+
+test("a grant records which allowance it came out of", options, async () => {
+  const { query } = await migratedDatabase();
+  const userId = await seedUser(query, "grants@example.test");
+
+  await query(
+    `insert into public.tutor_usage_grants (user_id, usage_date, granted_seconds, source, feature)
+     values ($1, current_date, 1800, 'daily', 'podcast')`,
+    [userId],
+  );
+
+  const [grant] = await query(
+    `select feature, source from public.tutor_usage_grants where user_id = $1`,
+    [userId],
+  );
+
+  assert.equal(grant.feature, "podcast");
+  assert.equal(grant.source, "daily");
+
+  // And nothing else is allowed in that column, so a typo cannot open a third allowance.
+  await assert.rejects(
+    query(
+      `insert into public.tutor_usage_grants (user_id, usage_date, granted_seconds, source, feature)
+       values ($1, current_date, 60, 'daily', 'quiz')`,
+      [userId],
+    ),
+  );
+});

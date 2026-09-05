@@ -35,6 +35,13 @@ export const maxDuration = 60;
 const requestSchema = z.object({
   voice: z.enum(NOTE_TTS_VOICES),
   language: z.string().trim().min(2).max(8),
+  /*
+   * What the voice is being auditioned FOR. A tutor introduces itself to one learner; a podcast
+   * host opens an episode. Hearing "I'm your tutor" while choosing between two podcast hosts is
+   * a small thing that tells you the screen was assembled rather than designed, and the pitch
+   * and pacing of the two lines differ enough that the audition is misleading as well as odd.
+   */
+  context: z.enum(["tutor", "podcast"]).default("tutor"),
 });
 
 /*
@@ -42,7 +49,10 @@ const requestSchema = z.object({
  * Kept identical in meaning so that a voice auditioned in Polish is auditioned on the same words
  * as one auditioned in Slovenian.
  */
-const SAMPLE_LINE_EN = "Hi, I'm your tutor. This is how I sound when I explain things to you.";
+const SAMPLE_LINES_EN = {
+  tutor: "Hi, I'm your tutor. This is how I sound when I explain things to you.",
+  podcast: "Hi — this is how I sound when I'm talking through a topic with someone.",
+} as const;
 
 const sampleLineSchema = z.object({
   line: z
@@ -55,7 +65,7 @@ const sampleLineSchema = z.object({
 /** A year, because the answer for a given voice and language never changes. */
 const CACHE_HEADER = "public, max-age=31536000, s-maxage=31536000, immutable";
 
-async function sampleLineFor(language: string) {
+async function sampleLineFor(language: string, context: "tutor" | "podcast") {
   const { line } = await generateStructuredObject({
     schema: sampleLineSchema,
     stage: "language_check",
@@ -64,7 +74,7 @@ async function sampleLineFor(language: string) {
       "It is spoken aloud by a voice a learner is auditioning, so write what a person would say, not a literal translation: natural word order, the spoken form of the language, no formality it does not need.",
       "Keep it to one or two short sentences and keep the meaning exactly. Write nothing else — no quotes, no notes, no romanisation.",
     ].join("\n"),
-    input: SAMPLE_LINE_EN,
+    input: SAMPLE_LINES_EN[context],
     maxOutputTokens: 300,
     maxAttempts: 1,
   });
@@ -102,6 +112,7 @@ export async function GET(request: Request) {
   const parsed = requestSchema.safeParse({
     voice: url.searchParams.get("voice"),
     language: url.searchParams.get("language"),
+    context: url.searchParams.get("context") ?? undefined,
   });
 
   if (!parsed.success) {
@@ -118,9 +129,19 @@ export async function GET(request: Request) {
    * A language that has files should never reach here — voiceSampleClip sends it to them — so a
    * request for one is a client that has drifted, and paying to synthesize what is already on
    * disk would be the wrong way to be forgiving about it.
+   *
+   * Both auditions have files now — a tutor line and a host line, which are different jobs and
+   * different sentences. A language without them is a learner's material in something the app has
+   * no note furniture for, and that is synthesized once per voice and language and free for ever
+   * after: the answer never changes and is cached as such.
    */
   if (hasStaticVoiceSamples(language)) {
-    return NextResponse.redirect(new URL(`/tutor-demo/${language}/${parsed.data.voice.toLowerCase()}-sample.mp3`, url), 308);
+    const kind = parsed.data.context === "podcast" ? "podcast" : "sample";
+
+    return NextResponse.redirect(
+      new URL(`/tutor-demo/${language}/${parsed.data.voice.toLowerCase()}-${kind}.mp3`, url),
+      308,
+    );
   }
 
   const env = getServerEnv();
@@ -130,7 +151,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const line = await sampleLineFor(language);
+    const line = await sampleLineFor(language, parsed.data.context);
     const { audio } = await synthesizeTtsChunkWithTimestamps({
       client: new SonioxNodeClient({ api_key: env.SONIOX_API_KEY }),
       text: line,

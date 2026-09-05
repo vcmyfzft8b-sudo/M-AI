@@ -57,6 +57,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       userId: user.id,
       grantId: parsed.data.grantId,
       secondsUsed: parsed.data.secondsUsed,
+      feature: "tutor",
     });
 
     return NextResponse.json({ usage: toClientUsage(allowance) });
@@ -67,7 +68,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
      * A failed settlement must not look like a failed session: the learner has already had
      * the time, and the grant stays open to be charged in full. Answer with what is known.
      */
-    return NextResponse.json({ usage: toClientUsage(await getTutorAllowance(user.id)) });
+    return NextResponse.json({ usage: toClientUsage(await getTutorAllowance(user.id, "tutor")) });
   }
 }
 
@@ -97,5 +98,5 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return NextResponse.json({ error: await tr("api.invalidLectureId") }, { status: 400 });
   }
 
-  return NextResponse.json({ usage: toClientUsage(await getTutorAllowance(user.id)) });
+  return NextResponse.json({ usage: toClientUsage(await getTutorAllowance(user.id, "tutor")) });
 }

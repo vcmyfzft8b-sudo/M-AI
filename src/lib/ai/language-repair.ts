@@ -109,6 +109,19 @@ export function buildLanguageRepairInstructions(
     "- swap a technical term for a different one, or translate anything — subject terminology, acronyms and proper nouns stay exactly as written, including foreign ones;",
     "- change the register, the tone, or how the reader is addressed;",
     "- change punctuation or capitalisation.",
+    /*
+     * The one inflection the checker must not touch, and the reason it is stated only for
+     * spoken text.
+     *
+     * Whether "si rekel" or "si rekla" is right depends on who is being spoken to, and the
+     * passage does not say — the checker sees one turn and the one before it. In the tutor that
+     * is a learner whose gender nobody has asked for; in a podcast it is the other host, whose
+     * gender the WRITER was told and this reader was not. Left free to "fix" it, a checker
+     * corrects a correct form about as often as a wrong one, and it does so confidently.
+     */
+    options.spoken
+      ? "- change how a verb, participle or adjective agrees with a PERSON — the speaker, or whoever they are addressing. You cannot see who they are, so \"si rekel\" and \"si rekla\" are both correct as far as you know. Agreement with a thing named in the sentence is still yours to fix; agreement with a person is not."
+      : "- change how a term is capitalised across the document.",
     options.spoken
       ? "- change the square-bracket tags, which are sound effects and must survive untouched."
       : "- change one character of the markdown: every heading, list marker, table pipe, bold marker, code span and link stays exactly where it is, in the same order. Repair the words inside them and nothing else.",

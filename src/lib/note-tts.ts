@@ -70,7 +70,14 @@ export class LectureRemovedDuringTtsError extends Error {
   }
 }
 
-type TtsGenerationIdentity = {
+/**
+ * One piece of synthesized audio, named exactly enough to be charged for once.
+ *
+ * `contentHash` and `chunkIndex` are what the two callers differ in: read-aloud names a note's
+ * content and the chunk of it being spoken, and a podcast names the episode and the turn. The
+ * quota ledger does not care which — it only has to be able to tell two pieces apart.
+ */
+export type TtsGenerationIdentity = {
   userId: string;
   lectureId: string;
   contentHash: string;
@@ -101,9 +108,9 @@ export const UNLIMITED_TTS_USAGE_SECONDS = Number.MAX_SAFE_INTEGER;
 
 const UNLIMITED_TTS_USAGE_EMAILS = new Set(["nace.valencic@gmail.com"]);
 
-const TTS_OUTPUT_FORMAT = "mp3";
-const TTS_OUTPUT_MIME_TYPE = "audio/mpeg";
-const TTS_OUTPUT_BITRATE = 64_000;
+export const TTS_OUTPUT_FORMAT = "mp3";
+export const TTS_OUTPUT_MIME_TYPE = "audio/mpeg";
+export const TTS_OUTPUT_BITRATE = 64_000;
 // On the REST fallback the alignment transcription is the long pole, and it is not the only thing
 // that has to fit inside the calling route's maxDuration: synthesis runs before it, and the
 // storage upload, row insert and quota finalization run after it. This must therefore stay
@@ -146,7 +153,7 @@ function wait(ms: number) {
   });
 }
 
-function isTtsProviderRateLimitError(error: unknown) {
+export function isTtsProviderRateLimitError(error: unknown) {
   if (!error || typeof error !== "object") {
     return false;
   }
@@ -194,7 +201,7 @@ export function hashNoteTtsContent(content: string) {
     .digest("hex");
 }
 
-function safeStorageSegment(value: string) {
+export function safeStorageSegment(value: string) {
   return value.replace(/[^a-z0-9._-]+/gi, "-").replace(/^-+|-+$/g, "") || "default";
 }
 
@@ -1103,6 +1110,93 @@ async function generateTtsChunk(params: {
   return data as LectureTtsChunkRow;
 }
 
+/**
+ * Claims the right to synthesize one piece of audio, and holds the quota it will cost.
+ *
+ * Two callers need this and neither of them should own it: the read-aloud chunk below, and one
+ * turn of a generated podcast. What it does is not about either — it is the ledger that stops the
+ * same second of audio being paid for twice, whether "twice" means two tabs, a double tap or a
+ * client that retried a request that had in fact succeeded.
+ *
+ * `claimed: false` is not a failure. It means somebody else is already synthesizing exactly this,
+ * and the right move is to wait for their audio rather than to make a second copy of it.
+ */
+export async function claimTtsGeneration(params: {
+  identity: TtsGenerationIdentity;
+  estimatedSeconds: number;
+  quotaContext: TtsQuotaContext;
+}) {
+  const result = await reserveTtsGenerationQuota(params);
+
+  if (!result.quota.allowed) {
+    throw new TtsQuotaLimitError(result.quota);
+  }
+
+  if (!result.eventId) {
+    /*
+     * An account with no ceiling never takes a reservation at all, so there is nothing to hold
+     * and nothing to wait for — it simply generates. Everybody else without an event id lost the
+     * race for it.
+     */
+    return {
+      claimed: params.quotaContext.hasUnlimitedUsage,
+      reservation: null,
+      quota: result.quota,
+    };
+  }
+
+  if (result.usageDate === undefined || result.reservedSeconds === undefined) {
+    throw new Error("TTS generation reservation is missing quota metadata.");
+  }
+
+  return {
+    claimed: true,
+    reservation: {
+      eventId: result.eventId,
+      userId: params.identity.userId,
+      usageDate: result.usageDate,
+      reservedSeconds: result.reservedSeconds,
+      quota: result.quota,
+    } satisfies ReservedTtsGenerationQuota,
+    quota: result.quota,
+  };
+}
+
+/** Charges what the audio actually came to, once it exists. */
+export async function settleTtsGeneration(params: {
+  reservation: ReservedTtsGenerationQuota | null;
+  fallbackQuota: TtsQuotaState;
+  actualSeconds: number;
+}) {
+  return (
+    (await finalizeTtsGenerationQuota({
+      reservation: params.reservation,
+      actualSeconds: params.actualSeconds,
+    })) ?? params.fallbackQuota
+  );
+}
+
+/**
+ * Gives the reservation back after a generation that produced nothing.
+ *
+ * Must run on every failing path that had claimed one: an invocation Vercel kills runs no catch
+ * block, and a reservation nobody releases holds the listener's allowance for the ten minutes it
+ * takes to go stale.
+ */
+export async function abandonTtsGeneration(reservation: ReservedTtsGenerationQuota | null) {
+  if (!reservation) {
+    return;
+  }
+
+  await releaseTtsGenerationReservation({
+    eventId: reservation.eventId,
+    userId: reservation.userId,
+    usageDate: reservation.usageDate,
+    limitSeconds: reservation.quota.limitSeconds,
+    reservedSeconds: reservation.reservedSeconds,
+  });
+}
+
 export async function getOrCreateTtsChunk(params: {
   userId: string;
   lectureId: string;
@@ -1145,17 +1239,13 @@ export async function getOrCreateTtsChunk(params: {
     };
   }
 
-  const reservationResult = await reserveTtsGenerationQuota({
+  const claim = await claimTtsGeneration({
     identity,
     estimatedSeconds: params.chunk.estimatedSeconds,
     quotaContext: params.quotaContext,
   });
 
-  if (!reservationResult.quota.allowed) {
-    throw new TtsQuotaLimitError(reservationResult.quota);
-  }
-
-  if (!reservationResult.eventId && !params.quotaContext.hasUnlimitedUsage) {
+  if (!claim.claimed) {
     const generatedByConcurrentRequest = await waitForCachedTtsChunkRow(identity);
 
     if (!generatedByConcurrentRequest) {
@@ -1164,29 +1254,11 @@ export async function getOrCreateTtsChunk(params: {
 
     return {
       ...(await signTtsChunk(generatedByConcurrentRequest)),
-      quota: reservationResult.quota,
+      quota: claim.quota,
     };
   }
 
-  const reservationUsageDate = reservationResult.usageDate;
-  const reservationReservedSeconds = reservationResult.reservedSeconds;
-
-  let reservation: ReservedTtsGenerationQuota | null = null;
-
-  if (reservationResult.eventId) {
-    if (reservationUsageDate === undefined || reservationReservedSeconds === undefined) {
-      throw new Error("TTS generation reservation is missing quota metadata.");
-    }
-
-    reservation = {
-      eventId: reservationResult.eventId,
-      userId: params.userId,
-      usageDate: reservationUsageDate,
-      reservedSeconds: reservationReservedSeconds,
-      quota: reservationResult.quota,
-    };
-  }
-
+  const reservation = claim.reservation;
   let shouldReleaseReservation = Boolean(reservation);
 
   try {
@@ -1202,25 +1274,19 @@ export async function getOrCreateTtsChunk(params: {
 
     shouldReleaseReservation = false;
 
-    const finalizedQuota =
-      (await finalizeTtsGenerationQuota({
-        reservation,
-        actualSeconds: Math.max(1, Math.ceil(row.duration_ms / 1000)),
-      })) ?? reservationResult.quota;
+    const finalizedQuota = await settleTtsGeneration({
+      reservation,
+      fallbackQuota: claim.quota,
+      actualSeconds: Math.max(1, Math.ceil(row.duration_ms / 1000)),
+    });
 
     return {
       ...(await signTtsChunk(row)),
       quota: finalizedQuota,
     };
   } catch (error) {
-    if (reservation && shouldReleaseReservation) {
-      await releaseTtsGenerationReservation({
-        eventId: reservation.eventId,
-        userId: reservation.userId,
-        usageDate: reservation.usageDate,
-        limitSeconds: reservation.quota.limitSeconds,
-        reservedSeconds: reservation.reservedSeconds,
-      });
+    if (shouldReleaseReservation) {
+      await abandonTtsGeneration(reservation);
     }
 
     throw error;

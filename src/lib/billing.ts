@@ -7,6 +7,8 @@ import Stripe from "stripe";
 import { PREVIEW_AUTH_BYPASS_USER_ID, getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { isPreviewPremiumEnabled } from "@/lib/preview-mode";
+import { applyTestPersona } from "@/lib/test-persona";
+import { readTestPersonaFor } from "@/lib/test-persona-server";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 import { getServerEnv } from "@/lib/server-env";
 import { resolveSiteOrigin } from "@/lib/site-url";
@@ -461,7 +463,7 @@ export const getUserEntitlementState = cache(async function getUserEntitlementSt
     billingState.subscriptions,
   );
 
-  return buildEntitlementState({
+  const state = buildEntitlementState({
     profile: recoveredProfile,
     subscriptions: billingState.subscriptions,
     subscription: billingState.subscription,
@@ -470,6 +472,20 @@ export const getUserEntitlementState = cache(async function getUserEntitlementSt
     subscriptionTrialEligible,
     ...trialUsage,
   });
+
+  /*
+   * The one hook for the test-persona panel, and it is here rather than in
+   * `getViewerAppState` on purpose: this is what the API routes read too, so a
+   * persona that says "subscribed" gets past the entitlement checks as well as
+   * past the paywall. Anything narrower would show a paid library and then
+   * refuse to generate anything in it.
+   *
+   * It resolves to null for everybody except one confirmed account looking at
+   * its own state — see `readTestPersonaFor`.
+   */
+  const persona = await readTestPersonaFor(userId);
+
+  return persona ? applyTestPersona(state, persona, userId) : state;
 });
 
 /**
@@ -484,6 +500,16 @@ export const getSubscriptionTrialEligibility = cache(
 
     if (!entitlement.subscriptionTrialEligible) {
       return false;
+    }
+
+    /*
+     * A persona's answer is the whole answer. Stripe remembers what this
+     * account has really bought, and asking it here would put "Continue to
+     * payment" on a paywall the persona is testing precisely because it should
+     * read "Start 3-day free trial".
+     */
+    if (await readTestPersonaFor(userId)) {
+      return true;
     }
 
     try {

@@ -672,6 +672,7 @@ export const hr: Messages = {
   "capture.busy.uploadingPhoto": "Učitavam fotografiju...",
   "capture.busy.uploadingPhotos": "Učitavam fotografije ({count})...",
   "capture.busy.uploadingPhotoN": "Učitavam fotografiju {index} od {total}...",
+  "capture.busy.retryingUpload": "Veza je prekinuta. Pokušavam ponovno ({attempt}/{total})...",
   "capture.busy.preparingPhotoUploads": "Pripremam učitavanje fotografija...",
   "capture.busy.compressingPhoto": "Sažimam fotografiju...",
   "capture.busy.compressingPhotos": "Sažimam fotografije...",

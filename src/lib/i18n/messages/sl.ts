@@ -689,6 +689,7 @@ export const sl = {
   "capture.busy.uploadingPhoto": "Nalagam fotografijo...",
   "capture.busy.uploadingPhotos": "Nalagam fotografije ({count})...",
   "capture.busy.uploadingPhotoN": "Nalagam fotografijo {index} od {total}...",
+  "capture.busy.retryingUpload": "Povezava je zatajila. Poskušam znova ({attempt}/{total})...",
   "capture.busy.preparingPhotoUploads": "Pripravljam nalaganje fotografij...",
   "capture.busy.compressingPhoto": "Stiskam fotografijo...",
   "capture.busy.compressingPhotos": "Stiskam fotografije...",

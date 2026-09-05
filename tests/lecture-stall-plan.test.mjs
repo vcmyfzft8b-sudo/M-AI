@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   MAX_SWEEP_RESUMES,
   STALL_RESUME_AFTER_MS,
+  isNeverStartedDraft,
   planResumeJob,
   planStalledLecture,
   readProcessingUpdatedAt,
@@ -19,6 +20,7 @@ const stalled = (overrides = {}) => ({
   processingMetadata: { processing: { updatedAt: LONG_AGO } },
   sourceType: "audio",
   storagePath: "lectures/a.m4a",
+  hasTitle: true,
   hasArtifact: false,
   hasTranscript: true,
   updatedAt: Date.parse(LONG_AGO),
@@ -186,4 +188,84 @@ test("the stage stamp wins over the row timestamp, which is only the fallback", 
   assert.equal(readProcessingUpdatedAt({}, row), Date.parse(row));
   assert.equal(readProcessingUpdatedAt({ processing: { updatedAt: "nonsense" } }, row), Date.parse(row));
   assert.equal(readProcessingUpdatedAt(null, "nonsense"), 0);
+});
+
+/*
+ * The empty-draft rule. The lecture row is inserted before its source exists, so an attempt that
+ * dies in the seconds between the two leaves a row that never held anything — and failing one
+ * hands the learner an untitled note saying an upload they may not remember starting did not
+ * finish, with no retry button because there is nothing to retry.
+ */
+
+const emptyDraft = (overrides = {}) =>
+  stalled({
+    status: "uploading",
+    processingMetadata: {},
+    sourceType: "text",
+    storagePath: null,
+    hasTitle: false,
+    hasTranscript: false,
+    updatedAt: Date.parse(LONG_AGO),
+    ...overrides,
+  });
+
+test("a draft nothing was ever attached to is deleted, not failed", () => {
+  assert.deepEqual(planStalledLecture(emptyDraft()), {
+    action: "discard",
+    reason: "never-started",
+  });
+  assert.ok(isNeverStartedDraft(emptyDraft()));
+});
+
+test("a draft the learner put photos on is failed, so they hear about it", () => {
+  const withPhotos = emptyDraft({
+    processingMetadata: { pendingScanImages: [{ index: 0, path: "scans/1.jpg" }] },
+  });
+
+  assert.ok(!isNeverStartedDraft(withPhotos));
+  assert.deepEqual(planStalledLecture(withPhotos), {
+    action: "fail",
+    reason: "upload-never-finished",
+  });
+});
+
+test("anything the pipeline has already touched is never silently deleted", () => {
+  // Each of these on its own is proof the row is more than bookkeeping.
+  assert.ok(!isNeverStartedDraft(emptyDraft({ hasTitle: true })));
+  assert.ok(!isNeverStartedDraft(emptyDraft({ storagePath: "lectures/a.m4a" })));
+  assert.ok(!isNeverStartedDraft(emptyDraft({ hasTranscript: true })));
+  assert.ok(!isNeverStartedDraft(emptyDraft({ hasArtifact: true })));
+  assert.ok(
+    !isNeverStartedDraft(emptyDraft({ processingMetadata: { manualImport: { text: "hello" } } })),
+  );
+  assert.ok(
+    !isNeverStartedDraft(emptyDraft({ processingMetadata: { processing: { stage: "queued" } } })),
+  );
+});
+
+test("an empty draft young enough to still be filling is left alone", () => {
+  // The learner may be choosing photos this second. Nothing is deleted inside the stall window.
+  assert.deepEqual(planStalledLecture(emptyDraft({ updatedAt: NOW - 5 * 60_000 })), {
+    action: "wait",
+    reason: "recent",
+  });
+});
+
+test("a run that got past uploading is never deleted, however bare the row looks", () => {
+  // It had a source once, whatever is left on the row now. The learner is owed a sentence.
+  const bare = emptyDraft({ status: "generating_notes" });
+
+  assert.ok(isNeverStartedDraft(bare), "guard: this row really is empty by every other measure");
+  assert.deepEqual(planStalledLecture(bare), { action: "fail", reason: "no-source" });
+});
+
+test("a resumable run with empty metadata is still resumed, not discarded", () => {
+  // `generating_notes` with a written transcript is the pipeline's own work in progress. It has
+  // no source metadata left on the row, and deleting it would throw away a paid transcription.
+  const resumable = emptyDraft({
+    status: "generating_notes",
+    hasTranscript: true,
+  });
+
+  assert.deepEqual(planStalledLecture(resumable), { action: "resume", job: "notes" });
 });

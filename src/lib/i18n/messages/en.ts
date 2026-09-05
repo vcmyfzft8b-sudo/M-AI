@@ -664,6 +664,7 @@ export const en: Messages = {
   "capture.busy.uploadingPhoto": "Uploading the photo...",
   "capture.busy.uploadingPhotos": "Uploading photos ({count})...",
   "capture.busy.uploadingPhotoN": "Uploading photo {index} of {total}...",
+  "capture.busy.retryingUpload": "The connection dropped. Trying again ({attempt}/{total})...",
   "capture.busy.preparingPhotoUploads": "Preparing the photo uploads...",
   "capture.busy.compressingPhoto": "Compressing the photo...",
   "capture.busy.compressingPhotos": "Compressing the photos...",

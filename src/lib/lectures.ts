@@ -184,7 +184,7 @@ async function reconcileLectureWithArtifact(
   return nextLecture;
 }
 
-async function reconcileLecturesWithArtifacts(lectures: LectureRow[]) {
+export async function reconcileLecturesWithArtifacts(lectures: LectureRow[]) {
   const candidates = lectures.filter(
     (lecture) => lecture.status !== "ready" && lecture.status !== "failed",
   );

@@ -1326,6 +1326,7 @@ export const sl = {
   "api.formInvalidOrTooLarge": "Obrazec je neveljaven ali prevelik.",
   "api.codeSent": "Koda je poslana. Za nadaljevanje jo vnesi spodaj.",
   "failure.processing_stalled": "Obdelava se je zataknila. Poskusi znova.",
+  "failure.upload_incomplete": "Nalaganje se ni dokončalo, zato ni bilo gradiva za obdelavo. Naloži gradivo znova.",
 
   /* ---- File validation — document size and type ---- */
   "file.documentTooLarge": "Datoteka dokumenta je prevelika. Trenutna omejitev je 4 MB.",

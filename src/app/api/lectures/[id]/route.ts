@@ -14,6 +14,14 @@ import {
 import { sourceLocaleMessage } from "@/lib/lecture-failure-text";
 import { LectureProcessingStalledError } from "@/lib/lecture-processing-errors";
 import { isRecord } from "@/lib/lecture-source-metadata";
+import {
+  hasPendingDocument,
+  hasPendingLink,
+  hasPendingScanImages,
+  hasPreparedAudioSource,
+  hasPreparedManualImportText,
+  readProcessingUpdatedAt,
+} from "@/lib/lecture-stall-plan";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -30,50 +38,6 @@ const updateLectureSchema = z.object({
   title: lectureTitleSchema,
 });
 
-function getLectureProcessingUpdatedAt(processingMetadata: unknown) {
-  if (!isRecord(processingMetadata) || !isRecord(processingMetadata.processing)) {
-    return 0;
-  }
-
-  const updatedAt = processingMetadata.processing.updatedAt;
-
-  if (typeof updatedAt !== "string") {
-    return 0;
-  }
-
-  const timestamp = Date.parse(updatedAt);
-  return Number.isNaN(timestamp) ? 0 : timestamp;
-}
-
-function hasPendingScanImages(processingMetadata: unknown) {
-  return (
-    isRecord(processingMetadata) &&
-    Array.isArray(processingMetadata.pendingScanImages) &&
-    processingMetadata.pendingScanImages.length > 0
-  );
-}
-
-function hasPendingDocument(processingMetadata: unknown) {
-  return isRecord(processingMetadata) && isRecord(processingMetadata.pendingDocument);
-}
-
-function hasPendingLink(processingMetadata: unknown) {
-  return (
-    isRecord(processingMetadata) &&
-    typeof processingMetadata.pendingLinkUrl === "string" &&
-    processingMetadata.pendingLinkUrl.trim().length > 0
-  );
-}
-
-function hasPreparedManualImportText(processingMetadata: unknown) {
-  return (
-    isRecord(processingMetadata) &&
-    isRecord(processingMetadata.manualImport) &&
-    typeof processingMetadata.manualImport.text === "string" &&
-    processingMetadata.manualImport.text.trim().length > 0
-  );
-}
-
 function hasRecoverableNotesSource(detail: Awaited<ReturnType<typeof getLectureDetailForUser>>) {
   if (!detail) {
     return false;
@@ -83,24 +47,6 @@ function hasRecoverableNotesSource(detail: Awaited<ReturnType<typeof getLectureD
     detail.transcript.length > 0 ||
     hasPreparedManualImportText(detail.lecture.processing_metadata)
   );
-}
-
-function hasPreparedAudioSource(detail: Awaited<ReturnType<typeof getLectureDetailForUser>>) {
-  if (!detail || detail.lecture.source_type !== "audio") {
-    return false;
-  }
-
-  if (detail.lecture.storage_path) {
-    return true;
-  }
-
-  const audioChunks = parseAudioChunkManifest(
-    detail.lecture.processing_metadata && typeof detail.lecture.processing_metadata === "object"
-      ? (detail.lecture.processing_metadata as Record<string, unknown>).audioChunks
-      : null,
-  );
-
-  return audioChunks.length > 0;
 }
 
 async function touchLectureNotesRetryQueued(params: {
@@ -189,9 +135,10 @@ export async function GET(
     return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
-  const processingUpdatedAt =
-    getLectureProcessingUpdatedAt(detail.lecture.processing_metadata) ||
-    Date.parse(detail.lecture.updated_at);
+  const processingUpdatedAt = readProcessingUpdatedAt(
+    detail.lecture.processing_metadata,
+    detail.lecture.updated_at,
+  );
 
   if (
     detail.lecture.status === "generating_notes" &&
@@ -247,7 +194,13 @@ export async function GET(
           return;
         }
 
-        if (hasPreparedAudioSource(detail)) {
+        if (
+          hasPreparedAudioSource({
+            sourceType: detail.lecture.source_type,
+            storagePath: detail.lecture.storage_path,
+            processingMetadata: detail.lecture.processing_metadata,
+          })
+        ) {
           await enqueueLectureProcessing(detail.lecture.id);
         }
       } catch (error) {

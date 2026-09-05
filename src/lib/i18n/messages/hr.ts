@@ -1307,6 +1307,7 @@ export const hr: Messages = {
   "api.formInvalidOrTooLarge": "Obrazac je neispravan ili prevelik.",
   "api.codeSent": "Kod je poslan. Unesi ga ispod za nastavak.",
   "failure.processing_stalled": "Obrada je zapela. Pokušaj ponovno.",
+  "failure.upload_incomplete": "Učitavanje nije dovršeno pa nije bilo gradiva za obradu. Učitaj ponovno.",
 
   /* ---- File validation — document size and type ---- */
   "file.documentTooLarge": "Datoteka dokumenta je prevelika. Trenutačno ograničenje je 4 MB.",

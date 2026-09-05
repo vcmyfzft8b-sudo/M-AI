@@ -120,6 +120,23 @@ type Step = {
  */
 const WRAPPING_COLUMNS = "repeat(auto-fit, minmax(min(11rem, 47%), 1fr))";
 
+/*
+ * How much of a tile the icon, the gap and the padding are allowed to take.
+ *
+ * A one-per-row step has a whole screen width to spend, and the design's
+ * numbers are right for it. The two steps that go multi-column do not: on a
+ * 390px phone each tile is 174px wide, and the design's 0.95rem padding, 2.5rem
+ * icon and 0.8rem gap leave the label 92px — narrower than the single word
+ * "Personalizacija", which is 118px, so the word had nowhere to go but out
+ * through the side of its own tile. Trimming the chrome gives the label 120px,
+ * which is enough for the longest word in any of the five languages to sit on a
+ * line of its own.
+ */
+const OPTION_CHROME = {
+  single: { padding: "0.95rem", icon: "clamp(1.55rem, 4.6vh, 2.5rem)", gap: "0.8rem" },
+  columns: { padding: "0.6rem", icon: "clamp(1.4rem, 4vh, 1.75rem)", gap: "0.4rem" },
+} as const;
+
 const STEPS: readonly Step[] = [
   { id: "welcome", kind: "welcome" },
   { id: "heardFrom", kind: "q", key: "heardFrom", qk: "qHeard", sk: "subHeard", cols: "1fr" },
@@ -1190,6 +1207,8 @@ export function OnboardingFlow({
   const activeCard = CARDS[queue[Math.min(state.cardPos, queue.length - 1)]] ?? CARDS[0];
   const nextCard = CARDS[queue[state.cardPos + 1]];
 
+  const chrome = step.cols === WRAPPING_COLUMNS ? OPTION_CHROME.columns : OPTION_CHROME.single;
+
   const showCta = (kind !== "loading" || Boolean(saveError)) && kind !== "q";
 
   const ctaLabels: Partial<Record<StepKind, string>> = {
@@ -1228,6 +1247,9 @@ export function OnboardingFlow({
     title: step.qk ? c[step.qk] : "",
     subtitle: step.sk ? c[step.sk] : "",
     gridCols: step.cols || "1fr",
+    optionPad: chrome.padding,
+    optionIcon: chrome.icon,
+    optionGap: chrome.gap,
     options,
     summary,
     isWelcome: kind === "welcome",
@@ -1488,14 +1510,14 @@ export function OnboardingFlow({
       <p style={{ margin: "0 0 clamp(0.4rem, 1.6vh, 1.15rem)", fontSize: "clamp(0.84rem, 1.9vh, 0.96rem)", fontWeight: "600", lineHeight: "1.45", color: "var(--muted)" }}>{v.subtitle}</p>
       <div style={{ display: "grid", gap: "clamp(0.35rem, 1.1vh, 0.6rem)", gridTemplateColumns: v.gridCols }}>
       {v.options.map((item) => (<Fragment key={item.value}>
-      <button type="button" onClick={item.onSelect} aria-pressed={item.selected} style={{ display: "flex", alignItems: "center", gap: "0.8rem", width: "100%", minHeight: "clamp(2.35rem, 7vh, 3.9rem)", padding: "clamp(0.3rem, 1.2vh, 0.8rem) 0.95rem", border: "0", borderRadius: "clamp(0.85rem, 2.4vh, 1.15rem)", color: "var(--text)", textAlign: "left", cursor: "pointer", fontFamily: "inherit", transition: "transform 180ms cubic-bezier(0.2,0.85,0.2,1), background-color 200ms ease, box-shadow 240ms ease", background: item.bg, boxShadow: item.glow, transform: `translateY(${item.lift})` }} className="memo-ob-fx-2">
-      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "clamp(1.55rem, 4.6vh, 2.5rem)", height: "clamp(1.55rem, 4.6vh, 2.5rem)", flex: "0 0 auto", borderRadius: "0.8rem", background: "var(--tile)", color: "var(--text)", fontSize: "clamp(0.95rem, 2.3vh, 1.2rem)", lineHeight: "1" }}>
+      <button type="button" onClick={item.onSelect} aria-pressed={item.selected} style={{ display: "flex", alignItems: "center", gap: v.optionGap, width: "100%", minHeight: "clamp(2.35rem, 7vh, 3.9rem)", padding: `clamp(0.3rem, 1.2vh, 0.8rem) ${v.optionPad}`, border: "0", borderRadius: "clamp(0.85rem, 2.4vh, 1.15rem)", color: "var(--text)", textAlign: "left", cursor: "pointer", fontFamily: "inherit", transition: "transform 180ms cubic-bezier(0.2,0.85,0.2,1), background-color 200ms ease, box-shadow 240ms ease", background: item.bg, boxShadow: item.glow, transform: `translateY(${item.lift})` }} className="memo-ob-fx-2">
+      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: v.optionIcon, height: v.optionIcon, flex: "0 0 auto", borderRadius: "0.8rem", background: "var(--tile)", color: "var(--text)", fontSize: "clamp(0.95rem, 2.3vh, 1.2rem)", lineHeight: "1" }}>
       {item.noMark ? (<>{item.icon}</>) : null}
       {item.hasMark ? (<>
       <svg viewBox={item.vb} aria-hidden="true" style={{ width: "64%", height: "64%", display: "block" }}><path d={item.d} fill={item.svgFill} stroke={item.svgStroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </>) : null}
       </span>
-      <span style={{ flex: "1 1 auto", minWidth: "0", display: "grid", gap: "0.15rem" }}>
+      <span style={{ flex: "1 1 auto", minWidth: "0", display: "grid", gap: "0.15rem", overflowWrap: "anywhere" }}>
       <span style={{ fontSize: "clamp(0.88rem, 2.2vh, 1rem)", fontWeight: "750", lineHeight: "1.2" }}>{item.label}</span>
       {item.desc ? (<>
       <span style={{ fontSize: "clamp(0.7rem, 1.7vh, 0.82rem)", fontWeight: "600", lineHeight: "1.3", color: "var(--muted)" }}>{item.desc}</span>

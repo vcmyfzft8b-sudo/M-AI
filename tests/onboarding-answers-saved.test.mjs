@@ -301,3 +301,30 @@ test("Enter presses the call to action wherever there is one", () => {
   // Typing in the practice test's answer box is still typing.
   assert.match(handler, /\^\(INPUT\|TEXTAREA\)\$/);
 });
+
+/**
+ * A label has to fit inside its own tile, in every language.
+ *
+ * The two steps that lay their options out in columns give each tile about
+ * 174px on a 390px phone, and the design's padding, icon and gap took 82 of
+ * them — leaving 92px for the label, which is narrower than the single word
+ * "Personalizacija". A word cannot wrap inside itself, so it went out through
+ * the side of the tile. It is the longest word either of those steps has in any
+ * of the five languages, so the trimmed chrome that gives the label 120px is
+ * what makes all of them fit; `overflow-wrap` is the backstop for the day one
+ * of them gets longer.
+ */
+test("the option label has room to wrap and cannot leave its tile", () => {
+  assert.match(FLOW, /const OPTION_CHROME = \{/);
+  // The roomier single-column numbers are the design's own.
+  assert.match(FLOW, /single: \{ padding: "0\.95rem", icon: "clamp\(1\.55rem, 4\.6vh, 2\.5rem\)", gap: "0\.8rem" \}/);
+  // The trimmed ones apply exactly where the tiles are half-width.
+  assert.match(FLOW, /step\.cols === WRAPPING_COLUMNS \? OPTION_CHROME\.columns : OPTION_CHROME\.single/);
+
+  // And the tile actually reads them rather than carrying its own copy.
+  const button = FLOW.slice(FLOW.indexOf("{v.options.map("), FLOW.indexOf("{item.label}"));
+  assert.match(button, /gap: v\.optionGap/);
+  assert.match(button, /padding: `clamp\(0\.3rem, 1\.2vh, 0\.8rem\) \$\{v\.optionPad\}`/);
+  assert.match(button, /width: v\.optionIcon, height: v\.optionIcon/);
+  assert.match(button, /overflowWrap: "anywhere"/);
+});

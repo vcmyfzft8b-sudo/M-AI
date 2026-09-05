@@ -1634,7 +1634,6 @@ export const en: Messages = {
   "nav.language": "Language",
 
   /* ---- Back-to-school giveaway ---- */
-  "nav.giveaway": "Giveaway",
   "settings.giveaway.title": "Win an {prize}",
   "settings.giveaway.detail": "Share your 50% off code. The first to bring {goal} friends wins an {prize}.",
   "settings.giveaway.cta": "Open",
@@ -1677,10 +1676,6 @@ export const en: Messages = {
   "giveaway.anonymous": "Memo user",
   "giveaway.error.load": "The leaderboard could not be loaded.",
   "giveaway.error.unavailable": "The giveaway is not available right now.",
-  "landing.giveaway.title": "Win an {prize}.",
-  "landing.giveaway.lead": "Every user gets a personal 50% off code. Share it with friends – the first to bring {goal} wins an {prize}.",
-  "landing.giveaway.cta": "Get your code",
-  "landing.giveaway.leaderboardTitle": "Who is ahead",
   "landing.giveaway.referralBanner": "Code {code} gets you 50% off – it applies itself at checkout.",
   "paywall.referralApplied": "Code {code}: first period {amount} instead of {full}",
   "paywall.referralAppliedNamed": "{name} is giving you 50% off: first period {amount} instead of {full}",

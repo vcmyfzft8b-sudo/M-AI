@@ -11,10 +11,9 @@ server side — Stripe, the database, attribution, the leaderboard — is
 
 ## Where it appears
 
-- **Landing page** (`/`): a `#giveaway` section after the hero with the title,
-  one line, a CTA and the live board. It is in the nav menu. A visitor who came
-  through a share link also sees a pill under the hero buttons saying their
-  friend's code will be applied.
+- **Landing page** (`/`): nothing about the giveaway itself. A visitor who
+  came through a share link sees a pill under the hero buttons saying their
+  friend's code will be applied at checkout.
 - **Settings** (`/app/settings`): a card at the top, drawn like a settings row, that opens the
   giveaway screen.
 - **Giveaway screen** (`/app/giveaway`): a title and one line, the live
@@ -87,9 +86,16 @@ The winner is the first row when it has reached the goal. Names are masked on
 the server before they leave (`Ana K.`, or `ma***` for an account with no
 name); no email address ever reaches a browser.
 
-`GET /api/giveaway/leaderboard` is public and edge-cached for 20 s;
-`GET /api/giveaway` is the signed-in view (code, progress, board). Both
-screens poll every 30 s while the tab is visible.
+`GET /api/giveaway` is the signed-in view (code, progress, board); the screen
+polls it every 30 s while the tab is visible.
+
+**Seeded field.** `GIVEAWAY_SEED_ENTRIES` in `giveaway-shared.ts` is a list
+of made-up Slovenian names with small counts (the leader has 7). They are
+merged into the ranking on the way out by `rankGiveawayEntries`, which
+applies the same rule as the SQL. They are never stored, sit below any real
+account with the same count, and cannot reach the goal, so real accounts
+take the board over simply by referring more friends. Remove the list to
+end the illusion.
 
 ## Operating it
 

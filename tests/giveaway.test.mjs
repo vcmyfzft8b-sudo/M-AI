@@ -8,6 +8,8 @@ import {
   findGiveawayWinner,
   formatGiveawayCode,
   giveawayInitials,
+  giveawaySeedEntries,
+  rankGiveawayEntries,
   isGiveawayCodeFormat,
   maskGiveawayName,
   normalizeGiveawayCode,
@@ -70,4 +72,30 @@ test("podium initials come from the masked name and never from the mask", () => 
   assert.equal(giveawayInitials("ma***"), "M");
   assert.equal(giveawayInitials("Nika"), "N");
   assert.equal(giveawayInitials("Memo user"), "MU");
+});
+
+test("real accounts pass the seeded field on count, win ties, and win outright at the goal", () => {
+  const seeds = giveawaySeedEntries();
+  const real = (name, qualifiedCount, extra = {}) => ({
+    name,
+    qualifiedCount,
+    reachedGoalAt: null,
+    latestQualifiedAt: "2026-09-10T10:00:00.000Z",
+    ...extra,
+  });
+
+  // More friends than the seeded leader: first place.
+  assert.equal(rankGiveawayEntries([...seeds, real("Ana K.", 8)])[0].name, "Ana K.");
+  // The same count as the seeded leader: still above it.
+  assert.equal(rankGiveawayEntries([...seeds, real("Ana K.", 7)])[0].name, "Ana K.");
+  assert.equal(rankGiveawayEntries([...seeds, real("Ana K.", 7)])[1].name, "Žiga K.");
+  // Fewer: slotted where the count says, above seeds with the same count.
+  const board = rankGiveawayEntries([...seeds, real("Ana K.", 3)]);
+  assert.deepEqual(board.slice(4, 7).map((row) => row.name), ["Maja Z.", "Ana K.", "Jan H."]);
+  // Reaching the goal: first, whatever the counts around it.
+  const winner = real("Ana K.", GIVEAWAY_GOAL, { reachedGoalAt: "2026-09-20T10:00:00.000Z" });
+  assert.equal(findGiveawayWinner(rankGiveawayEntries([...seeds, winner]))?.name, "Ana K.");
+  // The board is capped and the ranked rows carry no tie-break time.
+  assert.equal(rankGiveawayEntries(seeds, 5).length, 5);
+  assert.equal("latestQualifiedAt" in rankGiveawayEntries(seeds)[0], false);
 });

@@ -1643,7 +1643,6 @@ export const sr: Messages = {
   "nav.language": "Jezik",
 
   /* ---- Back-to-school giveaway ---- */
-  "nav.giveaway": "Nagradna igra",
   "settings.giveaway.title": "Osvoji {prize}",
   "settings.giveaway.detail": "Podeli svoj kod za 50 % popusta. Prvi koji dovede {goal} prijatelja dobija {prize}.",
   "settings.giveaway.cta": "Otvori",
@@ -1689,10 +1688,6 @@ export const sr: Messages = {
   "giveaway.anonymous": "Korisnik Memo",
   "giveaway.error.load": "Rang-listu nije bilo moguće učitati.",
   "giveaway.error.unavailable": "Nagradna igra trenutno nije dostupna.",
-  "landing.giveaway.title": "Osvoji {prize}.",
-  "landing.giveaway.lead": "Svaki korisnik dobija svoj kod za 50 % popusta. Podeli ga s prijateljima – prvi koji ih dovede {goal} dobija {prize}.",
-  "landing.giveaway.cta": "Uzmi svoj kod",
-  "landing.giveaway.leaderboardTitle": "Ko vodi",
   "landing.giveaway.referralBanner": "Kod {code} donosi ti 50 % popusta – primenjuje se sam pri kupovini.",
   "paywall.referralApplied": "Kod {code}: prvi period {amount} umesto {full}",
   "paywall.referralAppliedNamed": "{name} ti poklanja 50 %: prvi period {amount} umesto {full}",

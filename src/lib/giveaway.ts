@@ -15,11 +15,13 @@ import {
   GIVEAWAY_REF_COOKIE,
   findGiveawayWinner,
   formatGiveawayCode,
+  giveawaySeedEntries,
+  rankGiveawayEntries,
   isGiveawayCodeFormat,
   maskGiveawayName,
   normalizeGiveawayCode,
   type GiveawayLeaderboard,
-  type GiveawayLeaderboardEntry,
+  type GiveawayRankedEntry,
 } from "@/lib/giveaway-shared";
 import { getServerEnv } from "@/lib/server-env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -378,12 +380,20 @@ export async function getGiveawayLeaderboard(params: {
     reached_goal_at: string | null;
   }>;
 
-  const entries: GiveawayLeaderboardEntry[] = rows.map((row) => ({
+  const real: GiveawayRankedEntry[] = rows.map((row) => ({
     name: maskGiveawayName(row.full_name, row.email, params.fallbackName),
     qualifiedCount: Number(row.qualified_count),
     reachedGoalAt: row.reached_goal_at,
+    latestQualifiedAt: row.latest_qualified_at,
     ...(params.viewerUserId && row.user_id === params.viewerUserId ? { isViewer: true } : {}),
   }));
+
+  // The seeded field fills the board until real accounts pass it; a real
+  // account with the same count always sits above a seed.
+  const entries = rankGiveawayEntries(
+    [...real, ...giveawaySeedEntries()],
+    params.limit ?? GIVEAWAY_LEADERBOARD_SIZE,
+  );
 
   return {
     campaign: GIVEAWAY_CAMPAIGN,

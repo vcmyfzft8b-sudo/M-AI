@@ -13,7 +13,6 @@ import type { MessageKey } from "@/lib/i18n/messages/keys";
 
 /* The page's own sections, in the order a visitor meets them. */
 const MENU_SECTIONS: Array<{ href: string; labelKey: MessageKey }> = [
-  { href: "#giveaway", labelKey: "nav.giveaway" },
   { href: "#how-it-works", labelKey: "nav.howItWorks" },
   { href: "#features", labelKey: "nav.features" },
   { href: "#faq", labelKey: "nav.faq" },

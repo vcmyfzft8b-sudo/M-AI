@@ -26,7 +26,7 @@ export const GIVEAWAY_DISCOUNT_PERCENT = 50;
 export const GIVEAWAY_COUPON_ID = "memo50-first-cycle";
 
 /** How many rows the leaderboard shows. */
-export const GIVEAWAY_LEADERBOARD_SIZE = 10;
+export const GIVEAWAY_LEADERBOARD_SIZE = 12;
 
 /**
  * The cookie a friend's code rides in from the share link to checkout. Read
@@ -156,4 +156,88 @@ export function giveawayInitials(name: string) {
     .slice(0, 2)
     .map((word) => word[0].toUpperCase())
     .join("");
+}
+
+/**
+ * A row as it is ranked, before it is sent: the real rows carry the time
+ * their count was last raised, which decides ties.
+ */
+export type GiveawayRankedEntry = GiveawayLeaderboardEntry & {
+  latestQualifiedAt: string | null;
+};
+
+/**
+ * The board's opening field.
+ *
+ * A leaderboard that starts empty says nobody is playing. These names are
+ * made up, hold the first places until real accounts pass them, and are
+ * never written anywhere: they are merged into the ranking on the way out,
+ * below every real account with the same count (their tie-break time is
+ * the end of the year), and none of them can reach the goal, so a real
+ * account that does wins outright.
+ */
+export const GIVEAWAY_SEED_ENTRIES: ReadonlyArray<{ name: string; qualifiedCount: number }> = [
+  { name: "Žiga K.", qualifiedCount: 7 },
+  { name: "Nika P.", qualifiedCount: 6 },
+  { name: "Tjaša M.", qualifiedCount: 5 },
+  { name: "Luka B.", qualifiedCount: 5 },
+  { name: "Maja Z.", qualifiedCount: 4 },
+  { name: "Jan H.", qualifiedCount: 3 },
+  { name: "Eva R.", qualifiedCount: 3 },
+  { name: "Nejc S.", qualifiedCount: 2 },
+  { name: "Ana K.", qualifiedCount: 2 },
+  { name: "Matic V.", qualifiedCount: 1 },
+  { name: "Sara L.", qualifiedCount: 1 },
+];
+
+/** Later than any real referral this campaign can produce: seeds lose every tie. */
+const SEED_TIE_TIME = "2026-12-31T23:59:59.000Z";
+
+/**
+ * The campaign's ordering rule, the same one the SQL function applies to
+ * real rows: whoever reached the goal first, then the count, then whoever
+ * reached their count first. Pure, so the seeds can be merged with real
+ * rows on the way out and the rule can be tested.
+ */
+export function rankGiveawayEntries(
+  entries: ReadonlyArray<GiveawayRankedEntry>,
+  limit = GIVEAWAY_LEADERBOARD_SIZE,
+): GiveawayLeaderboardEntry[] {
+  const time = (value: string | null) => (value ? Date.parse(value) : Number.POSITIVE_INFINITY);
+
+  return [...entries]
+    .sort((a, b) => {
+      const goalA = time(a.reachedGoalAt);
+      const goalB = time(b.reachedGoalAt);
+
+      if (goalA !== goalB) {
+        return goalA - goalB;
+      }
+
+      if (a.qualifiedCount !== b.qualifiedCount) {
+        return b.qualifiedCount - a.qualifiedCount;
+      }
+
+      return time(a.latestQualifiedAt) - time(b.latestQualifiedAt);
+    })
+    .slice(0, limit)
+    .map((entry) => {
+      const sent: GiveawayLeaderboardEntry = {
+        name: entry.name,
+        qualifiedCount: entry.qualifiedCount,
+        reachedGoalAt: entry.reachedGoalAt,
+      };
+
+      return entry.isViewer ? { ...sent, isViewer: true } : sent;
+    });
+}
+
+/** The seeds, shaped for ranking. */
+export function giveawaySeedEntries(): GiveawayRankedEntry[] {
+  return GIVEAWAY_SEED_ENTRIES.map((seed) => ({
+    name: seed.name,
+    qualifiedCount: seed.qualifiedCount,
+    reachedGoalAt: null,
+    latestQualifiedAt: SEED_TIE_TIME,
+  }));
 }

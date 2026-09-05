@@ -1661,7 +1661,6 @@ export const sl = {
   "nav.language": "Jezik",
 
   /* ---- Back-to-school giveaway ---- */
-  "nav.giveaway": "Nagradna igra",
   "settings.giveaway.title": "Osvoji {prize}",
   "settings.giveaway.detail": "Deli svojo kodo za 50 % popusta. Prvi, ki pripelje {goal} prijateljev, dobi {prize}.",
   "settings.giveaway.cta": "Odpri",
@@ -1710,10 +1709,6 @@ export const sl = {
   "giveaway.anonymous": "Uporabnik Memo",
   "giveaway.error.load": "Lestvice ni bilo mogoče naložiti.",
   "giveaway.error.unavailable": "Nagradna igra trenutno ni na voljo.",
-  "landing.giveaway.title": "Osvoji {prize}.",
-  "landing.giveaway.lead": "Vsak uporabnik dobi svojo kodo za 50 % popusta. Deli jo s prijatelji – prvi, ki jih pripelje {goal}, dobi {prize}.",
-  "landing.giveaway.cta": "Vzemi svojo kodo",
-  "landing.giveaway.leaderboardTitle": "Kdo vodi",
   "landing.giveaway.referralBanner": "Koda {code} ti prinese 50 % popusta – uporabi se sama ob nakupu.",
   "paywall.referralApplied": "Koda {code}: prvo obdobje {amount} namesto {full}",
   "paywall.referralAppliedNamed": "{name} ti podarja 50 %: prvo obdobje {amount} namesto {full}",

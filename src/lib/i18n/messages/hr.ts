@@ -1671,9 +1671,6 @@ export const hr: Messages = {
   "giveaway.leaderboard.title": "Ljestvica",
   "giveaway.leaderboard.live": "Uživo",
   "giveaway.podium.free": "Slobodno mjesto",
-  "giveaway.leaderboard.notRanked": "Još nisi na ljestvici – podijeli svoj kod i uvrsti se.",
-  "giveaway.leaderboard.yourPlace": "Tvoje mjesto",
-  "giveaway.leaderboard.you": "ti",
   "giveaway.leaderboard.friends": {
     one: "{count} prijatelj",
     few: "{count} prijatelja",

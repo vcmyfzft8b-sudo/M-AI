@@ -1671,9 +1671,6 @@ export const bs: Messages = {
   "giveaway.leaderboard.title": "Rang-lista",
   "giveaway.leaderboard.live": "Uživo",
   "giveaway.podium.free": "Slobodno mjesto",
-  "giveaway.leaderboard.notRanked": "Još nisi na rang-listi – podijeli svoj kod i uvrsti se.",
-  "giveaway.leaderboard.yourPlace": "Tvoje mjesto",
-  "giveaway.leaderboard.you": "ti",
   "giveaway.leaderboard.friends": {
     one: "{count} prijatelj",
     few: "{count} prijatelja",

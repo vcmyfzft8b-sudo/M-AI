@@ -12589,16 +12589,6 @@
   white-space: nowrap;
 }
 
-.memo-giveaway-you {
-  padding: 0.12rem 0.5rem;
-  border-radius: 999px;
-  background: var(--giveaway-tint);
-  color: var(--promo);
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 
 .memo-giveaway-friends {
   flex: 0 0 auto;
@@ -12799,9 +12789,6 @@
   font-size: 1.8rem;
 }
 
-.memo-giveaway-podium-place.is-viewer .memo-giveaway-podium-stand {
-  box-shadow: inset 0 0 0 2px var(--giveaway-tint-line);
-}
 
 /* Rows below the podium start at fourth place, grouped on one surface the
    way the settings list is. */
@@ -12813,20 +12800,7 @@
   box-shadow: var(--shadow);
 }
 
-.memo-giveaway-viewer-row {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  min-height: 3.1rem;
-  margin-top: 0.4rem;
-  padding: 0.45rem 0.2rem;
-  border-top: 1px dashed var(--line);
-}
 
-.memo-giveaway-viewer-row .memo-giveaway-name {
-  white-space: normal;
-  font-weight: 600;
-}
 
 @media (max-width: 1099px) {
   .memo-giveaway-podium {

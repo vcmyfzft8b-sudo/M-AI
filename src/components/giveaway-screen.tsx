@@ -205,12 +205,7 @@ export function GiveawayScreen({
                 </p>
               ) : null}
 
-              <GiveawayPodium
-                entries={state.leaderboard.entries}
-                prefix="memo-giveaway"
-                goal={goal}
-                viewer={{ qualifiedCount: qualified }}
-              />
+              <GiveawayPodium entries={state.leaderboard.entries} prefix="memo-giveaway" goal={goal} />
             </section>
 
             <section className="memo-giveaway-code-section">

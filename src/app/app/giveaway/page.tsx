@@ -24,7 +24,7 @@ export default async function GiveawayPage() {
   const [code, progress, leaderboard, referralCode] = await Promise.all([
     ensureGiveawayCode({ userId: user.id, email: user.email ?? null }),
     getGiveawayProgress(user.id),
-    getGiveawayLeaderboard({ viewerUserId: user.id, fallbackName: t("giveaway.anonymous") }),
+    getGiveawayLeaderboard({ fallbackName: t("giveaway.anonymous") }),
     readGiveawayReferralCookie(),
   ]);
 

@@ -27,7 +27,6 @@ export default function CreatorDemoGiveawayPage() {
             qualifiedCount: 5,
             reachedGoalAt: null,
             latestQualifiedAt: "2026-09-04T10:00:00.000Z",
-            isViewer: true,
           },
         ]),
         winner: null,

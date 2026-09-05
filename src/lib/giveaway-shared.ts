@@ -87,8 +87,6 @@ export type GiveawayLeaderboardEntry = {
   qualifiedCount: number;
   /** When this account's goal-th referral qualified, if it has. */
   reachedGoalAt: string | null;
-  /** True for the row belonging to the signed-in viewer. */
-  isViewer?: boolean;
 };
 
 export type GiveawayLeaderboard = {
@@ -221,15 +219,11 @@ export function rankGiveawayEntries(
       return time(a.latestQualifiedAt) - time(b.latestQualifiedAt);
     })
     .slice(0, limit)
-    .map((entry) => {
-      const sent: GiveawayLeaderboardEntry = {
-        name: entry.name,
-        qualifiedCount: entry.qualifiedCount,
-        reachedGoalAt: entry.reachedGoalAt,
-      };
-
-      return entry.isViewer ? { ...sent, isViewer: true } : sent;
-    });
+    .map((entry) => ({
+      name: entry.name,
+      qualifiedCount: entry.qualifiedCount,
+      reachedGoalAt: entry.reachedGoalAt,
+    }));
 }
 
 /** The seeds, shaped for ranking. */

@@ -348,11 +348,11 @@ export async function getGiveawayProgress(userId: string): Promise<GiveawayProgr
 /**
  * The standings, masked and ready to send.
  *
- * `viewerUserId` marks the viewer's own row; `fallbackName` is the already
- * translated label for an account with neither a name nor a usable address.
+ * `fallbackName` is the already translated label for an account with neither
+ * a name nor a usable address. The viewer is not marked: their own row looks
+ * like everyone else's.
  */
 export async function getGiveawayLeaderboard(params: {
-  viewerUserId?: string | null;
   fallbackName: string;
   limit?: number;
 }): Promise<GiveawayLeaderboard> {
@@ -385,7 +385,6 @@ export async function getGiveawayLeaderboard(params: {
     qualifiedCount: Number(row.qualified_count),
     reachedGoalAt: row.reached_goal_at,
     latestQualifiedAt: row.latest_qualified_at,
-    ...(params.viewerUserId && row.user_id === params.viewerUserId ? { isViewer: true } : {}),
   }));
 
   // The seeded field fills the board until real accounts pass it; a real

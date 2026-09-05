@@ -37,10 +37,7 @@ export async function GET(request: Request) {
     const [code, progress, leaderboard] = await Promise.all([
       ensureGiveawayCode({ userId: user.id, email: user.email ?? null }),
       getGiveawayProgress(user.id),
-      getGiveawayLeaderboard({
-        viewerUserId: user.id,
-        fallbackName: await tr("giveaway.anonymous"),
-      }),
+      getGiveawayLeaderboard({ fallbackName: await tr("giveaway.anonymous") }),
     ]);
 
     return NextResponse.json(

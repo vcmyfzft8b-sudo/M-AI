@@ -12,7 +12,8 @@ import { giveawayInitials, type GiveawayLeaderboardEntry } from "@/lib/giveaway-
  *
  * Empty stands are drawn rather than hidden: an empty podium is the
  * invitation — three open spots — and the block keeps its height while
- * the board fills up.
+ * the board fills up. Nobody is singled out: the viewer's own row looks
+ * like everyone else's, and their count is on the code card anyway.
  */
 
 /* Microsoft Fluent Emoji, 3D set (MIT), copied into /public/giveaway. */
@@ -23,21 +24,14 @@ const PODIUM_ORDER = [1, 0, 2];
 export function GiveawayPodium({
   entries,
   prefix,
-  viewer,
   goal,
 }: {
   entries: GiveawayLeaderboardEntry[];
   prefix: string;
-  /**
-   * The signed-in viewer's own count, when the screen knows it. Draws a
-   * "your place" row when the viewer is not already on the board.
-   */
-  viewer?: { qualifiedCount: number } | null;
   goal: number;
 }) {
   const { t } = useTranslations();
   const rest = entries.slice(3);
-  const viewerOnBoard = entries.some((entry) => entry.isViewer);
 
   return (
     <>
@@ -49,12 +43,7 @@ export function GiveawayPodium({
           return (
             <li
               key={place}
-              className={[
-                `${prefix}-podium-place`,
-                `place-${place + 1}`,
-                entry ? "" : "is-empty",
-                entry?.isViewer ? "is-viewer" : "",
-              ]
+              className={[`${prefix}-podium-place`, `place-${place + 1}`, entry ? "" : "is-empty"]
                 .filter(Boolean)
                 .join(" ")}
               style={{ order: PODIUM_ORDER.indexOf(place) }}
@@ -68,9 +57,6 @@ export function GiveawayPodium({
               </span>
               <span className={`${prefix}-podium-name`}>
                 {entry ? entry.name : t("giveaway.podium.free")}
-                {entry?.isViewer ? (
-                  <span className={`${prefix}-you`}>{t("giveaway.leaderboard.you")}</span>
-                ) : null}
               </span>
               <span className={`${prefix}-podium-count`}>
                 {entry ? t("giveaway.leaderboard.friends", { count: entry.qualifiedCount }) : "—"}
@@ -87,14 +73,11 @@ export function GiveawayPodium({
       {rest.length > 0 ? (
         <ol className={`${prefix}-list`} start={4}>
           {rest.map((entry, index) => (
-            <li key={`${entry.name}-${index}`} className={entry.isViewer ? "is-viewer" : undefined}>
+            <li key={`${entry.name}-${index}`}>
               <span className={`${prefix}-rank`} aria-hidden="true">
                 {index + 4}
               </span>
-              <span className={`${prefix}-name`}>
-                {entry.name}
-                {entry.isViewer ? <span className={`${prefix}-you`}>{t("giveaway.leaderboard.you")}</span> : null}
-              </span>
+              <span className={`${prefix}-name`}>{entry.name}</span>
               <span className={`${prefix}-friends`}>
                 {t("giveaway.leaderboard.friends", { count: entry.qualifiedCount })}
               </span>
@@ -103,22 +86,6 @@ export function GiveawayPodium({
         </ol>
       ) : null}
 
-      {viewer && !viewerOnBoard ? (
-        <div className={`${prefix}-viewer-row`}>
-          <span className={`${prefix}-rank`} aria-hidden="true">
-            –
-          </span>
-          <span className={`${prefix}-name`}>
-            {viewer.qualifiedCount > 0
-              ? t("giveaway.leaderboard.yourPlace")
-              : t("giveaway.leaderboard.notRanked")}
-            <span className={`${prefix}-you`}>{t("giveaway.leaderboard.you")}</span>
-          </span>
-          <span className={`${prefix}-friends`}>
-            {t("giveaway.leaderboard.friends", { count: viewer.qualifiedCount })}
-          </span>
-        </div>
-      ) : null}
     </>
   );
 }

@@ -1691,9 +1691,6 @@ export const sl = {
   "giveaway.leaderboard.title": "Lestvica",
   "giveaway.leaderboard.live": "V živo",
   "giveaway.podium.free": "Prosto mesto",
-  "giveaway.leaderboard.notRanked": "Še nisi na lestvici – deli svojo kodo in se uvrsti.",
-  "giveaway.leaderboard.yourPlace": "Tvoje mesto",
-  "giveaway.leaderboard.you": "ti",
   "giveaway.leaderboard.friends": {
     one: "{count} prijatelj",
     two: "{count} prijatelja",

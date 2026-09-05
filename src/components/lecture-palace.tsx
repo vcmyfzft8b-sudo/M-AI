@@ -736,14 +736,21 @@ export function LecturePalace({
    * it, one without, because on the way in there is no walker yet.
    */
   const paintTown = useCallback(
-    (canvas: HTMLCanvasElement | null, options?: { walker?: boolean; height?: number }) => {
+    (canvas: HTMLCanvasElement | null, options?: { walker?: boolean }) => {
       if (!canvas || !layout) return;
 
-      const width = Math.round(canvas.getBoundingClientRect().width);
+      /*
+       * Both measured off the element rather than one derived from the other:
+       * the card on the way in is capped in height so the screen fits without
+       * scrolling, and a canvas that works out its own height from its width
+       * would paint past that cap and be squashed by the box.
+       */
+      const box = canvas.getBoundingClientRect();
+      const width = Math.round(box.width);
+      const height = Math.round(box.height);
 
-      if (width === 0) return;
+      if (width === 0 || height === 0) return;
 
-      const height = Math.round(options?.height ? width * options.height : width);
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
       canvas.width = Math.round(width * dpr);
@@ -845,7 +852,7 @@ export function LecturePalace({
   useEffect(() => {
     if (isOpen) return;
 
-    const paint = () => paintTown(introMapRef.current, { walker: false, height: 0.52 });
+    const paint = () => paintTown(introMapRef.current, { walker: false });
 
     paint();
 
@@ -1412,42 +1419,48 @@ export function LecturePalace({
          * vprašanje" cannot. It is the note's own layout, so the map you study
          * here is the map you walk.
          */}
-        <div className="memo-palace-card">
-          <div className="memo-palace-card-scene">
-            <canvas ref={introMapRef} className="memo-palace-card-map" aria-hidden="true" />
+        {/*
+         * The town, before you are in it. Every other study tab can say what it
+         * is in a sentence; this one is a place, and the note's own streets say
+         * that in a way the sentence cannot. It is the map you will walk.
+         */}
+        <div className="memo-palace-hero">
+          <canvas ref={introMapRef} className="memo-palace-hero-map" aria-hidden="true" />
+          {/*
+           * Memo's own face, the thing you will be collecting. Eager and at the
+           * front of the queue: it is the first thing on the screen, and left to
+           * lazy-load it arrived a beat after the title and the button, so the
+           * palace opened on an empty grey circle.
+           */}
+          <NextImage
+            className="memo-palace-hero-mascot"
+            src={MASCOT_SRC}
+            alt=""
+            width={110}
+            height={99}
+            priority
+          />
+        </div>
 
-            <div className="memo-palace-card-face">
-              <span className="memo-palace-card-orb">
-                {/*
-                 * Memo's own face, the thing you will be collecting. Eager and
-                 * at the front of the queue: it is the first thing on the
-                 * screen, and left to lazy-load it arrived a beat after the
-                 * title and the button, so the palace opened on an empty grey
-                 * circle.
-                 */}
-                <NextImage src={MASCOT_SRC} alt="" width={110} height={99} priority />
-              </span>
-              <h2 className="memo-palace-card-title">{t("palace.title")}</h2>
-              <p className="memo-palace-card-copy">{t("palace.intro")}</p>
-            </div>
-          </div>
+        <div className="memo-palace-lede">
+          <h2>{t("palace.title")}</h2>
+          <p>{t("palace.intro")}</p>
+        </div>
 
-          {/* The numbers a walk is scored on, on the card's own foot rather
-              than on three more surfaces underneath it. */}
-          <div className="memo-palace-card-stats">
-            <span>
-              <b>{total}</b>
-              {t("palace.stops")}
-            </span>
-            <span>
-              <b>{layout.districts.length}</b>
-              {t("palace.districts")}
-            </span>
-            <span>
-              <b>{firstTimeKnown}</b>
-              {t("palace.known")}
-            </span>
-          </div>
+        {/* The numbers a walk is scored on. */}
+        <div className="memo-palace-figures">
+          <span>
+            <b>{total}</b>
+            <small>{t("palace.stops")}</small>
+          </span>
+          <span>
+            <b>{layout.districts.length}</b>
+            <small>{t("palace.districts")}</small>
+          </span>
+          <span>
+            <b>{firstTimeKnown}</b>
+            <small>{t("palace.known")}</small>
+          </span>
         </div>
 
         <div className="memo-palace-progress">
@@ -1459,7 +1472,9 @@ export function LecturePalace({
 
         <div className="memo-palace-intro-actions">
           <button type="button" className="memo-palace-enter" onClick={enterGame}>
-            <Msym name="explore" size="1.25rem" fill={false} weight={500} />
+            {/* A play arrow rather than a compass: the compass described the
+                town, and what the button does is start a game. */}
+            <Msym name="play_arrow" size="1.35rem" fill weight={500} />
             {done > 0 ? t("palace.resume") : t("palace.start")}
           </button>
 

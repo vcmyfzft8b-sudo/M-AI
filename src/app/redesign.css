@@ -13498,121 +13498,151 @@
  * reads as a game because of what it shows, not because it borrowed a palette.
  */
 .memo-palace-intro {
-  display: grid;
-  justify-items: center;
-  gap: 1.3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /*
+   * Everything on this screen is sized to the height it is given rather than to
+   * the width, because the whole of it has to be on screen at once: a walk you
+   * have to scroll to start is a walk that looks like it has more to read
+   * first. The map gives up its height before the gaps do, and the gaps before
+   * the type does.
+   */
+  gap: clamp(0.5rem, 1.6vh, 1.2rem);
   width: 100%;
   max-width: 34rem;
-  margin: 1.6rem auto 0;
-  padding-bottom: 2.5rem;
+  /*
+   * The room left under the note's header and its tab row, and above the chat
+   * dock. Bounding it here is what lets the map shrink instead of the button
+   * sliding under the dock: clamping the map's height alone still left the
+   * stack taller than a short phone, because everything under it is type and
+   * type does not give.
+   */
+  max-height: calc(100dvh - 13.5rem - var(--memo-safe-bottom, 0px));
+  margin: clamp(0.6rem, 2vh, 1.6rem) auto 0;
+  /* Clear of the chat dock, which floats over the bottom of every note tab and
+     was sitting on the one button that starts the walk. */
+  padding-bottom: calc(5.5rem + var(--memo-safe-bottom, 0px));
   text-align: center;
   animation: memo-fade-in 0.2s ease-out;
 }
 
-/* The card the walk starts from: the map behind, the name of the place over
-   it, and a gradient between them so the words stay readable on any town. */
-.memo-palace-card {
-  width: 100%;
-  border-radius: 26px;
-  overflow: hidden;
-  background: var(--tile);
-  box-shadow: var(--shadow);
-}
-
-.memo-palace-card-scene {
+/*
+ * The town, and then what it is — laid on the page rather than stacked into
+ * boxes. Every surface this had (a card round the map, a strip under it, tiles
+ * for the figures) was a border drawn between two things that belong together,
+ * and three of them on one short screen read as filing rather than as design.
+ * The map is the only object here; everything else is type.
+ */
+/*
+ * The one part that gives: it shrinks to whatever the screen has left. The
+ * shape lives here rather than on the canvas — a canvas carrying both an
+ * `aspect-ratio` and `height: 100%` keeps the aspect and overflows the box it
+ * was told to shrink into, and the title lands on top of the map.
+ */
+.memo-palace-hero {
   position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 0.52;
+  flex: 0 1 auto;
+  /* Under about this it is a band of stripes rather than a town, and a town you
+     cannot read is not worth the height it costs. */
+  min-height: 7rem;
+  max-height: 20rem;
 }
 
-.memo-palace-card-map {
+/* Everything under it is type, and holds its size. */
+.memo-palace-lede,
+.memo-palace-figures,
+.memo-palace-progress,
+.memo-palace-intro-actions {
+  flex: none;
+}
+
+.memo-palace-hero-map {
   display: block;
   width: 100%;
-  aspect-ratio: 1 / 0.66;
+  height: 100%;
+  border-radius: 22px;
 }
 
-.memo-palace-card-face {
+/*
+ * On the town's bottom edge, and carrying no ring: the sticker is drawn with a
+ * white outline of its own, which is the only separation it needs from the
+ * streets behind it.
+ */
+.memo-palace-hero-mascot {
   position: absolute;
-  inset: 0;
+  left: 50%;
+  bottom: -1.6rem;
+  translate: -50% 0;
+  width: 4.6rem;
+  height: auto;
+  filter: drop-shadow(0 6px 14px rgba(10, 8, 20, 0.45));
+}
+
+.memo-palace-lede {
   display: grid;
   justify-items: center;
-  align-content: end;
   gap: 0.3rem;
-  padding: 1.4rem 1.4rem 1.5rem;
-  /* Light enough at the top that the streets read through it — the map is the
-     point of the card — and solid enough under the words to carry them. */
-  background: linear-gradient(
-    to bottom,
-    rgba(14, 12, 20, 0) 0%,
-    rgba(14, 12, 20, 0.18) 38%,
-    rgba(14, 12, 20, 0.82) 72%,
-    rgba(14, 12, 20, 0.95) 100%
-  );
-  color: #fff;
+  margin-top: clamp(0.9rem, 2vh, 1.1rem);
 }
 
-.memo-palace-card-orb {
-  display: grid;
-  place-items: center;
-  width: 4.6rem;
-  height: 4.6rem;
-  margin-bottom: 0.2rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  overflow: hidden;
-}
-
-.memo-palace-card-orb img {
-  width: 3.2rem;
-  height: auto;
-}
-
-.memo-palace-card-title {
+.memo-palace-lede h2 {
   margin: 0;
-  font-size: 1.6rem;
+  font-size: clamp(1.25rem, 2.6vh, 1.55rem);
   font-weight: 800;
   letter-spacing: -0.04em;
 }
 
-.memo-palace-card-copy {
+.memo-palace-lede p {
   margin: 0;
-  max-width: 26rem;
-  color: rgba(255, 255, 255, 0.76);
+  max-width: 24rem;
+  color: var(--muted);
   font-size: 0.98rem;
   font-weight: 550;
   line-height: 1.45;
   text-wrap: pretty;
 }
 
-/* Three numbers along the foot of the same card, divided by a hairline rather
-   than broken out onto tiles of their own. */
-.memo-palace-card-stats {
+/* Three figures, stacked over the caps the rest of the app labels a number
+   with. No rules between them and nothing behind them — the space does it. */
+.memo-palace-figures {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  padding: 0.9rem 0.6rem;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 22rem;
 }
 
-.memo-palace-card-stats > span {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 0.35rem;
-  color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 650;
+.memo-palace-figures > span {
+  display: grid;
+  justify-items: center;
+  gap: 0.15rem;
 }
 
-.memo-palace-card-stats > span + span {
-  border-left: 1px solid color-mix(in oklch, var(--text) 10%, transparent);
-}
-
-.memo-palace-card-stats b {
-  color: var(--text);
-  font-size: 1.15rem;
+.memo-palace-figures b {
+  font-size: clamp(1.2rem, 2.4vh, 1.5rem);
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
 }
+
+.memo-palace-figures small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/*
+ * On a short screen the sentence goes rather than the map. It explains the
+ * town; the town explains itself, and the figures under it say how much of it
+ * there is. Squeezing both left a strip of stripes and a paragraph about a
+ * place you could no longer see.
+ */
 
 .memo-palace-intro-actions {
   display: grid;
@@ -13621,15 +13651,15 @@
   width: 100%;
 }
 
-/* The way in. The one filled pill on the screen, so there is no question which
-   control starts the walk. */
+/* The one filled control on the screen, so there is no question which of them
+   starts the walk. */
 .memo-palace-enter {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
   width: 100%;
-  min-height: 3.4rem;
+  min-height: clamp(2.9rem, 6vh, 3.4rem);
   padding: 0 1.5rem;
   border: 0;
   border-radius: 999px;
@@ -13640,6 +13670,50 @@
   font-size: 1.05rem;
   font-weight: 750;
   letter-spacing: -0.01em;
+}
+
+/* --- the short-screen ladder ------------------------------------------- */
+
+@media (max-height: 700px) {
+  .memo-palace-lede p {
+    display: none;
+  }
+
+  .memo-palace-lede {
+    margin-top: 0.7rem;
+  }
+}
+
+/*
+ * Shorter still — a landscape phone, or a small window — and the figures go
+ * too. They and the line under the bar are saying the same thing twice, and
+ * the line is the half that counts down as you walk. The two buttons come off
+ * their own rows for the same reason: a walk you have to scroll to start.
+ */
+@media (max-height: 640px) {
+  .memo-palace-figures {
+    display: none;
+  }
+
+  .memo-palace-intro-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: center;
+  }
+
+  /* A basis small enough that the restart fits beside it rather than wrapping
+     onto a second row and landing under the dock. */
+  .memo-palace-enter {
+    width: auto;
+    flex: 1 1 8rem;
+    min-width: 0;
+  }
+
+  .memo-palace-intro-actions .memo-button-outline {
+    flex: 0 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+  }
 }
 
 .memo-palace-progress {

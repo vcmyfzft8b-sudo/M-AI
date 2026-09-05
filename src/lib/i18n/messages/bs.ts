@@ -1687,9 +1687,9 @@ export const bs: Messages = {
   /* Palača pamćenja: grad u kojem su raspoređene kartice bilješke. */
   "note.tab.palace": "Palača",
   "palace.title": "Palača pamćenja",
-  "palace.intro": "Svaka kuća u gradu krije jedno pitanje iz tvojih bilježaka.",
-  "palace.start": "Uđi u grad",
-  "palace.resume": "Nastavi šetnju",
+  "palace.intro": "Grad izgrađen iz ove bilješke. Prošeći njime i pokupi sva pitanja.",
+  "palace.start": "Igraj",
+  "palace.resume": "Nastavi igru",
   "palace.restart": "Počni ispočetka",
   "palace.notReady": "Palača se otvara kada kartice budu spremne.",
   "palace.empty": "Ova bilješka još nema kartica pa u gradu nema šta postaviti.",

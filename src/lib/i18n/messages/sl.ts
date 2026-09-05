@@ -1706,9 +1706,9 @@ export const sl = {
   /* Palača spomina: mesto, po katerem se sprehodiš skozi kartice zapiska. */
   "note.tab.palace": "Palača",
   "palace.title": "Palača spomina",
-  "palace.intro": "Vsaka hiša v mestu skriva eno vprašanje iz tvojih zapiskov.",
-  "palace.start": "Vstopi v mesto",
-  "palace.resume": "Nadaljuj sprehod",
+  "palace.intro": "Mesto, zgrajeno iz tega zapiska. Sprehodi se po njem in poberi vsa vprašanja.",
+  "palace.start": "Igraj",
+  "palace.resume": "Nadaljuj igro",
   "palace.restart": "Začni znova",
   "palace.notReady": "Palača se odpre, ko so kartice pripravljene.",
   "palace.empty": "Ta zapisek še nima kartic, zato v mestu ni kaj postaviti.",

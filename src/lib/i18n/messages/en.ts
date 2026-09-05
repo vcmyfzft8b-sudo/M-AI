@@ -1677,9 +1677,9 @@ export const en: Messages = {
   /* The memory palace: the city a note's cards are laid out in. */
   "note.tab.palace": "Palace",
   "palace.title": "Memory palace",
-  "palace.intro": "Every house in town holds one question from your notes.",
-  "palace.start": "Enter the city",
-  "palace.resume": "Continue the walk",
+  "palace.intro": "A town built out of this note. Walk it, and collect every question.",
+  "palace.start": "Play",
+  "palace.resume": "Continue playing",
   "palace.restart": "Start over",
   "palace.notReady": "The palace opens once your cards are ready.",
   "palace.empty": "This note has no cards yet, so there is nothing to place in the city.",

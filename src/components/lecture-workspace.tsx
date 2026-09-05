@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Loader2,
-  X,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import type {
   CSSProperties,
   MouseEvent as ReactMouseEvent,
@@ -17,10 +11,11 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useAppLayout } from "@/components/app-layout-context";
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
-import { useT, useTranslations } from "@/components/i18n-provider";
+import { useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { NoteReadAloud } from "@/components/note-read-aloud";
+import { NoteSpeedReader } from "@/components/note-speed-reader";
 import { StudyCompletionCard } from "@/components/study-completion-card";
 import { MemoPortal } from "@/components/memo-portal";
 import { RecordingPlayer } from "@/components/recording-player";
@@ -47,6 +42,11 @@ import { PRACTICE_QUESTION_MAX_SCORE } from "@/lib/practice-test-scoring";
 import type { EditableNoteDoc, NoteAnnotation, NoteAnnotationKind } from "@/lib/note-doc";
 import { NOTE_TTS_HIGHLIGHT_COLORS } from "@/lib/note-tts-settings";
 import { parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
+import {
+  FLASHCARD_EXIT_ANIMATION_MS,
+  type FlashcardExitStart,
+} from "@/lib/study/flashcard-drag";
+import { QUIZ_CORRECT_PAUSE_MS, shuffleIndices } from "@/lib/study/quiz";
 import { pillNeighbourhoodScrollTarget } from "@/lib/tab-scroll";
 import {
   POLL_INTERVAL_MS,
@@ -57,6 +57,10 @@ import Image from "next/image";
 import { createPortal } from "react-dom";
 
 import { LecturePodcast } from "@/components/lecture-podcast";
+import { StudyGenerationNotice } from "@/components/generation-notice";
+import { LectureMindmap } from "@/components/lecture-mindmap";
+import { LecturePalace } from "@/components/lecture-palace";
+import { StudyFlashcard } from "@/components/study-flashcard";
 import { LectureTutor } from "@/components/lecture-tutor";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
@@ -76,7 +80,17 @@ import {
   formatTimestamp,
 } from "@/lib/utils";
 
-type WorkspaceTab = "notes" | "study" | "tutor" | "podcast" | "chat" | "transcript" | "audio";
+type WorkspaceTab =
+  | "notes"
+  | "study"
+  | "tutor"
+  | "podcast"
+  | "mindmap"
+  | "palace"
+  | "speed"
+  | "chat"
+  | "transcript"
+  | "audio";
 type StudyMaterialView = "flashcards" | "quiz" | "practice_test";
 type FlashcardSessionResult = {
   attempts: number;
@@ -101,20 +115,6 @@ type FlashcardExitAnimation = {
   startRotationDeg: number;
 };
 
-type FlashcardDragState = {
-  isDragging: boolean;
-  deltaX: number;
-  deltaY: number;
-  width: number;
-};
-
-type FlashcardDragSession = {
-  pointerId: number;
-  startX: number;
-  startY: number;
-  width: number;
-};
-
 type StudyManagerItemDragState = {
   id: string;
   pointerId: number;
@@ -123,12 +123,6 @@ type StudyManagerItemDragState = {
   startOffset: number;
   offset: number;
   isDragging: boolean;
-};
-
-type FlashcardExitStart = {
-  xPercent: number;
-  yPercent: number;
-  rotationDeg: number;
 };
 
 type QuizRoundSummary = {
@@ -317,12 +311,50 @@ const NOTE_TABS = [
     tint: "oklch(0.66 0.15 20)",
   },
   { id: "quiz", view: "quiz", labelKey: "note.tab.quiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
+  /*
+   * Last of the revision pills and immediately before the test, because that is the order the
+   * work is done in: cards, then questions, then the map you check the whole shape against —
+   * and then you sit the test.
+   */
+  {
+    id: "mindmap",
+    view: null,
+    labelKey: "note.tab.mindmap",
+    icon: "account_tree",
+    tint: "oklch(0.66 0.15 200)",
+  },
+  /*
+   * The same material again, walked through rather than read: it sits with the
+   * revision pills, after the map you check the shape against and before the
+   * test you sit at the end.
+   */
+  {
+    id: "palace",
+    view: null,
+    labelKey: "note.tab.palace",
+    icon: "explore",
+    tint: "oklch(0.66 0.15 100)",
+  },
   {
     id: "test",
     view: "practice_test",
     labelKey: "note.tab.test",
     icon: "assignment",
     tint: "oklch(0.66 0.15 150)",
+  },
+  /*
+   * Another way through the note itself — one word at a time, held still, for a
+   * reader who wants the whole thing at pace rather than explained. It sits at
+   * the end of the row rather than beside the walkthrough: the three practice
+   * screens are what the row is mostly reached for, and a fourth pill between
+   * them and the note pushed them along by one.
+   */
+  {
+    id: "speed",
+    view: null,
+    labelKey: "note.tab.speed",
+    icon: "bolt",
+    tint: "oklch(0.66 0.15 275)",
   },
   {
     id: "transcript",
@@ -635,16 +667,6 @@ function mergeLectureDetailForRefresh(current: LectureDetail, next: LectureDetai
   return merged;
 }
 
-function confidenceLabel(value: FlashcardConfidenceBucket, t: Translate<MessageKey>) {
-  return t(value === "again" ? "study.cards.didntKnow" : "study.cards.knew");
-}
-
-const FLASHCARD_EXIT_ANIMATION_MS = 193;
-const FLASHCARD_DRAG_TRIGGER_RATIO = 0.28;
-const FLASHCARD_DRAG_TRIGGER_MIN_PX = 88;
-const FLASHCARD_DRAG_TRIGGER_MAX_PX = 150;
-const FLASHCARD_DRAG_MAX_ROTATION_DEG = 8;
-
 function isScanImport(detail: LectureDetail) {
   const sourceType = getEffectiveLectureSourceType(detail.lecture);
 
@@ -833,159 +855,8 @@ function lectureProcessingStageLabel(
   return t(key ?? "stage.lecture.default");
 }
 
-type GenerationPreview = "notes" | "cards" | "quiz" | "test";
-
-/** The note body a generating note is on its way to becoming. */
-const GENERATION_NOTE_PARAGRAPHS = [
-  ["full", "full", "short"],
-  ["full", "full", "full", "short"],
-  ["full", "short"],
-] as const;
-
-const GENERATION_QUIZ_OPTIONS = [0, 1, 2, 3];
-
-/**
- * The ghost of the thing being generated, in the shape that will replace it.
- *
- * Built the way the two route skeletons are — out of the real screen's own
- * measurements rather than out of a spinner that says nothing about what is
- * coming. A wait that ends in a stack of flashcards should look like a stack of
- * flashcards filling in.
- */
-function GenerationSkeleton({ kind }: { kind: GenerationPreview }) {
-  if (kind === "notes") {
-    return (
-      <div className="memo-gen-preview" aria-hidden="true">
-        {GENERATION_NOTE_PARAGRAPHS.map((paragraph, index) => (
-          <div key={index} className="memo-gen-para">
-            <span className="app-loading-pill memo-gen-heading" />
-            {paragraph.map((line, lineIndex) => (
-              <span
-                key={lineIndex}
-                className={`app-loading-pill memo-gen-line ${line === "short" ? "short" : ""}`.trim()}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (kind === "cards") {
-    return (
-      <div className="memo-gen-preview" aria-hidden="true">
-        <div className="memo-gen-deckhead">
-          <div className="memo-gen-cardhead">
-            <span className="app-loading-pill" />
-            <span className="app-loading-pill" />
-          </div>
-          <span className="app-loading-pill memo-gen-bar cards" />
-        </div>
-        <div className="memo-gen-face">
-          <span className="app-loading-pill" />
-          <span className="app-loading-pill" />
-        </div>
-      </div>
-    );
-  }
-
-  if (kind === "quiz") {
-    return (
-      <div className="memo-gen-preview" aria-hidden="true">
-        <span className="app-loading-pill memo-gen-bar quiz" />
-        <div className="memo-gen-quizcard">
-          <span className="app-loading-pill memo-gen-prompt" />
-          {GENERATION_QUIZ_OPTIONS.map((option) => (
-            <span key={option} className="app-loading-pill memo-gen-option" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="memo-gen-preview" aria-hidden="true">
-      <span className="app-loading-pill memo-gen-bar test" />
-      <div className="memo-gen-testblock">
-        <span className="app-loading-pill memo-gen-prompt" />
-        <span className="app-loading-pill memo-gen-testinput" />
-      </div>
-    </div>
-  );
-}
-
-/**
- * A stage caption over the ghost of what is being made.
- *
- * The caption carries the one thing a skeleton cannot: these waits run for
- * minutes and move through named stages, and "Ustvarjam kartice" is the
- * difference between a screen that is working and a screen that is stuck. It
- * sits on the panel itself — the panel is already the surface, and the card
- * this used to draw around itself landed as a second card inside the first.
- */
-function StudyGenerationNotice({
-  stageCopy,
-  bodyCopy,
-  preview,
-}: {
-  stageCopy: string;
-  /** Defaults to the generic "this runs in the background" line. */
-  bodyCopy?: string;
-  preview: GenerationPreview;
-}) {
-  const t = useT();
-  const body = bodyCopy ?? t("study.generatingBody");
-  return (
-    <div className="memo-gen" role="status" aria-live="polite" aria-busy="true">
-      <div className="memo-gen-head">
-        <p className="memo-gen-stage">{stageCopy}</p>
-        <p className="memo-gen-copy">{body}</p>
-        <span className="memo-gen-track" aria-hidden="true">
-          <span />
-        </span>
-      </div>
-      <GenerationSkeleton kind={preview} />
-    </div>
-  );
-}
-
 function isLegacySectionId(value: string) {
   return value.startsWith("legacy-");
-}
-
-function randomInt(maxExclusive: number) {
-  if (maxExclusive <= 1) {
-    return 0;
-  }
-
-  if (!globalThis.crypto?.getRandomValues) {
-    return Math.floor(Math.random() * maxExclusive);
-  }
-
-  const maxUint32 = 0x1_0000_0000;
-  const biasSafeLimit = maxUint32 - (maxUint32 % maxExclusive);
-  const buffer = new Uint32Array(1);
-  let randomValue = 0;
-
-  do {
-    globalThis.crypto.getRandomValues(buffer);
-    randomValue = buffer[0] ?? 0;
-  } while (randomValue >= biasSafeLimit);
-
-  return randomValue % maxExclusive;
-}
-
-function shuffleIndices(length: number) {
-  const indices = Array.from({ length }, (_, index) => index);
-
-  for (let index = indices.length - 1; index > 0; index -= 1) {
-    const swapIndex = randomInt(index + 1);
-    const currentValue = indices[index];
-    indices[index] = indices[swapIndex] ?? index;
-    indices[swapIndex] = currentValue ?? swapIndex;
-  }
-
-  return indices;
 }
 
 function buildQuizOptionOrders(
@@ -1289,6 +1160,9 @@ const SUB_SCREEN_TITLE_KEYS: Record<string, MessageKey | null> = {
   test: "note.subScreen.test",
   tutor: "tutor.subScreenTitle",
   podcast: "note.tab.podcast",
+  mindmap: "note.tab.mindmap",
+  palace: "palace.title",
+  speed: "note.tab.speed",
   transcript: "note.tab.transcript",
 };
 
@@ -1322,6 +1196,7 @@ export function LectureWorkspace({
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
   const quizAdvanceTimerRef = useRef<number | null>(null);
   const closeMobileChat = useCallback(() => setIsMobileChatOpen(false), []);
+  const leavePalace = useCallback(() => setActiveTab("notes"), []);
   /*
    * Dictation for the chat composer. What it hears is appended to whatever is
    * already in the field rather than replacing it, so speaking after typing
@@ -1465,12 +1340,6 @@ export function LectureWorkspace({
   const [flashcardExitAnimation, setFlashcardExitAnimation] = useState<FlashcardExitAnimation | null>(
     null,
   );
-  const [flashcardDrag, setFlashcardDrag] = useState<FlashcardDragState>({
-    isDragging: false,
-    deltaX: 0,
-    deltaY: 0,
-    width: 0,
-  });
   const [flashcardSessionResults, setFlashcardSessionResults] = useState<
     Record<string, FlashcardSessionResult>
   >(initialFlashcardSession.sessionResults);
@@ -1512,9 +1381,6 @@ export function LectureWorkspace({
   const [streamingAnswer, setStreamingAnswer] = useState("");
   const flashcardFeedbackTimerRef = useRef<number | null>(null);
   const flashcardFeedbackTokenRef = useRef(0);
-  const flashcardDragSessionRef = useRef<FlashcardDragSession | null>(null);
-  const suppressNextFlashcardClickRef = useRef(false);
-  const suppressNextFlashcardClickTimerRef = useRef<number | null>(null);
   const studySessionPayloadRef = useRef<string | null>(null);
   const detailRefreshInFlightRef = useRef<Promise<void> | null>(null);
   const lastDetailRefreshAtRef = useRef(0);
@@ -1772,8 +1638,6 @@ export function LectureWorkspace({
 
   useEffect(() => {
     setIsFlashcardFlipped(false);
-    flashcardDragSessionRef.current = null;
-    setFlashcardDrag({ isDragging: false, deltaX: 0, deltaY: 0, width: 0 });
   }, [activeTab, currentReviewFlashcardId]);
 
   useEffect(() => {
@@ -1791,7 +1655,6 @@ export function LectureWorkspace({
     setFlashcardRoundSummary(nextState.roundSummary);
     setFlashcardSessionResults(nextState.sessionResults);
     setFlashcardExitAnimation(null);
-    setFlashcardDrag({ isDragging: false, deltaX: 0, deltaY: 0, width: 0 });
     setStudyError(null);
   }, [detail.studySession?.flashcard_state, flashcardDeckKey]);
 
@@ -1830,9 +1693,6 @@ export function LectureWorkspace({
     return () => {
       if (flashcardFeedbackTimerRef.current) {
         window.clearTimeout(flashcardFeedbackTimerRef.current);
-      }
-      if (suppressNextFlashcardClickTimerRef.current) {
-        window.clearTimeout(suppressNextFlashcardClickTimerRef.current);
       }
     };
   }, []);
@@ -2402,156 +2262,6 @@ export function LectureWorkspace({
     }
   }
 
-  function getFlashcardDragThreshold(width: number) {
-    return Math.min(
-      FLASHCARD_DRAG_TRIGGER_MAX_PX,
-      Math.max(FLASHCARD_DRAG_TRIGGER_MIN_PX, width * FLASHCARD_DRAG_TRIGGER_RATIO),
-    );
-  }
-
-  function getFlashcardDragRotation(deltaX: number, width: number) {
-    if (width <= 0) {
-      return 0;
-    }
-
-    const ratio = Math.max(-1, Math.min(1, deltaX / width));
-    return ratio * FLASHCARD_DRAG_MAX_ROTATION_DEG;
-  }
-
-  function getFlashcardExitStart(deltaX: number, deltaY: number, width: number): FlashcardExitStart {
-    const safeWidth = Math.max(width, 1);
-
-    return {
-      xPercent: (deltaX / safeWidth) * 100,
-      yPercent: (deltaY / safeWidth) * 100,
-      rotationDeg: getFlashcardDragRotation(deltaX, safeWidth),
-    };
-  }
-
-  function resetFlashcardDrag() {
-    flashcardDragSessionRef.current = null;
-    setFlashcardDrag({ isDragging: false, deltaX: 0, deltaY: 0, width: 0 });
-  }
-
-  function suppressNextFlashcardClick(durationMs = 700) {
-    suppressNextFlashcardClickRef.current = true;
-
-    if (suppressNextFlashcardClickTimerRef.current) {
-      window.clearTimeout(suppressNextFlashcardClickTimerRef.current);
-    }
-
-    suppressNextFlashcardClickTimerRef.current = window.setTimeout(() => {
-      suppressNextFlashcardClickRef.current = false;
-      suppressNextFlashcardClickTimerRef.current = null;
-    }, durationMs);
-  }
-
-  function clearNextFlashcardClickSuppression() {
-    suppressNextFlashcardClickRef.current = false;
-
-    if (suppressNextFlashcardClickTimerRef.current) {
-      window.clearTimeout(suppressNextFlashcardClickTimerRef.current);
-      suppressNextFlashcardClickTimerRef.current = null;
-    }
-  }
-
-  function handleFlashcardPointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (
-      flashcardExitAnimation ||
-      (event.pointerType === "mouse" && event.button !== 0)
-    ) {
-      return;
-    }
-
-    const bounds = event.currentTarget.getBoundingClientRect();
-    flashcardDragSessionRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      width: bounds.width,
-    };
-
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // Pointer capture can fail if the browser has already cancelled the pointer.
-    }
-  }
-
-  function handleFlashcardPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
-    const session = flashcardDragSessionRef.current;
-    if (!session || session.pointerId !== event.pointerId) {
-      return;
-    }
-
-    const rawDeltaX = event.clientX - session.startX;
-    const rawDeltaY = event.clientY - session.startY;
-    const hasIntent = Math.abs(rawDeltaX) > 4 || Math.abs(rawDeltaY) > 4;
-
-    if (!hasIntent) {
-      return;
-    }
-
-    if (Math.abs(rawDeltaX) > 8) {
-      suppressNextFlashcardClick();
-    }
-
-    const maxDrag = session.width * 0.56;
-    const deltaX = Math.max(-maxDrag, Math.min(maxDrag, rawDeltaX));
-    const deltaY = Math.max(-42, Math.min(42, rawDeltaY * 0.18));
-
-    setFlashcardDrag({
-      isDragging: true,
-      deltaX,
-      deltaY,
-      width: session.width,
-    });
-  }
-
-  function handleFlashcardPointerEnd(event: ReactPointerEvent<HTMLButtonElement>) {
-    const session = flashcardDragSessionRef.current;
-    if (!session || session.pointerId !== event.pointerId) {
-      return;
-    }
-
-    const rawDeltaX = event.clientX - session.startX;
-    const rawDeltaY = event.clientY - session.startY;
-    const maxDrag = session.width * 0.56;
-    const deltaX = Math.max(-maxDrag, Math.min(maxDrag, rawDeltaX));
-    const deltaY = Math.max(-42, Math.min(42, rawDeltaY * 0.18));
-    const threshold = getFlashcardDragThreshold(session.width);
-    const shouldSubmit = Math.abs(deltaX) >= threshold;
-    const bucket: FlashcardConfidenceBucket = deltaX < 0 ? "again" : "easy";
-
-    if (Math.abs(rawDeltaX) > 8 || Math.abs(rawDeltaY) > 8) {
-      suppressNextFlashcardClick();
-    }
-
-    resetFlashcardDrag();
-
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      // The pointer may already have been released by the browser.
-    }
-
-    if (shouldSubmit) {
-      suppressNextFlashcardClick();
-      void handleFlashcardProgress(bucket, {
-        exitStart: getFlashcardExitStart(deltaX, deltaY, session.width),
-      });
-    }
-  }
-
-  function handleFlashcardClick() {
-    if (suppressNextFlashcardClickRef.current) {
-      clearNextFlashcardClickSuppression();
-      return;
-    }
-
-    setIsFlashcardFlipped((current) => !current);
-  }
-
   async function handlePracticeTestSubmit() {
     if (!currentPracticeAttempt) {
       return;
@@ -2863,7 +2573,10 @@ export function LectureWorkspace({
     // beat, then moves on by itself. A miss waits for the feedback row.
     if (optionIndex === activeQuizQuestion.correct_option_idx) {
       window.clearTimeout(quizAdvanceTimerRef.current ?? undefined);
-      quizAdvanceTimerRef.current = window.setTimeout(() => moveQuizQuestion(1), 780);
+      quizAdvanceTimerRef.current = window.setTimeout(
+        () => moveQuizQuestion(1),
+        QUIZ_CORRECT_PAUSE_MS,
+      );
     }
   }
 
@@ -4189,6 +3902,22 @@ export function LectureWorkspace({
       );
     }
 
+    if (activeTab === "palace") {
+      return (
+        <LecturePalace
+          lectureId={detail.lecture.id}
+          cards={detail.flashcards}
+          quizQuestions={detail.quizQuestions}
+          practiceQuestions={detail.practiceTestQuestions}
+          sections={detail.studySections}
+          isReady={detail.lecture.status === "ready"}
+          /* Leaving the town puts the reader on the note, which is what the
+             button in it says it does. */
+          onLeave={leavePalace}
+        />
+      );
+    }
+
     if (activeTab === "tutor") {
       return (
         <LectureTutor
@@ -4205,6 +3934,30 @@ export function LectureWorkspace({
           )}
           /* The usage pill belongs in the dock, where this app keeps a screen's controls. */
           dockSlot={dockSlot}
+        />
+      );
+    }
+
+    if (activeTab === "mindmap") {
+      return (
+        <LectureMindmap
+          lectureId={detail.lecture.id}
+          lectureTitle={lectureTitle}
+          lectureReady={detail.lecture.status === "ready"}
+        />
+      );
+    }
+
+    if (activeTab === "speed") {
+      return (
+        <NoteSpeedReader
+          lectureId={detail.lecture.id}
+          /*
+           * The same markdown the note screen renders, so the two are never
+           * reading different versions of the note.
+           */
+          content={detail.lecture.status === "ready" ? cleanedStructuredNotes : null}
+          onClose={() => setActiveTab("notes")}
         />
       );
     }
@@ -4438,26 +4191,6 @@ export function LectureWorkspace({
       const canNavigatePreviousFlashcard = canNavigateFlashcard && activeFlashcardIndex > 0;
       const canNavigateNextFlashcard =
         canNavigateFlashcard && activeFlashcardIndex < reviewQueue.length - 1;
-      const flashcardDragThreshold = getFlashcardDragThreshold(flashcardDrag.width);
-      const flashcardDragProgress =
-        flashcardDragThreshold > 0
-          ? Math.min(1, Math.abs(flashcardDrag.deltaX) / flashcardDragThreshold)
-          : 0;
-      const flashcardDragDirection =
-        Math.abs(flashcardDrag.deltaX) > 4
-          ? flashcardDrag.deltaX < 0
-            ? "again"
-            : "easy"
-          : null;
-      const flashcardDragStyle = {
-        "--lecture-flashcard-drag-x": `${flashcardDrag.deltaX}px`,
-        "--lecture-flashcard-drag-y": `${flashcardDrag.deltaY}px`,
-        "--lecture-flashcard-drag-rotation": `${getFlashcardDragRotation(
-          flashcardDrag.deltaX,
-          flashcardDrag.width,
-        )}deg`,
-        "--lecture-flashcard-drag-progress": flashcardDragProgress,
-      } as CSSProperties;
       const shouldAutoSizeStudyShell =
         activeStudyView === "flashcards" ||
         activeStudyView === "quiz" ||
@@ -4666,134 +4399,42 @@ export function LectureWorkspace({
                     />
                   </div>
 
-                  <div className="lecture-flashcard-stage">
-                    <div className="lecture-flashcard-stage-card">
-                      <button
-                        type="button"
-                        className={`lecture-flashcard ${isFlashcardFlipped ? "flipped" : ""} ${
-                          flashcardDrag.isDragging ? "dragging" : ""
-                        } ${flashcardDragDirection ? `drag-${flashcardDragDirection}` : ""}`}
-                        style={flashcardDragStyle}
-                        onClick={handleFlashcardClick}
-                        onPointerDown={handleFlashcardPointerDown}
-                        onPointerMove={handleFlashcardPointerMove}
-                        onPointerUp={handleFlashcardPointerEnd}
-                        onPointerCancel={resetFlashcardDrag}
-                      >
-                        <div className="lecture-flashcard-rotator">
-                          <div className="lecture-flashcard-face lecture-flashcard-face-front">
-                            <div className="lecture-flashcard-face-header">
-                              {currentFlashcardAnswerLabel ? (
-                                <span className={`lecture-flashcard-answer-label ${currentFlashcardAnswerClass}`}>
-                                  {currentFlashcardAnswerLabel}
-                                </span>
-                              ) : null}
-                            </div>
-                            <p className="lecture-flashcard-content">{currentFlashcard.front}</p>
-                            <span className="lecture-flashcard-side-label">{flipHint}</span>
-                          </div>
-                          <div className="lecture-flashcard-face lecture-flashcard-face-answer">
-                            <div className="lecture-flashcard-face-header">
-                              {currentFlashcardAnswerLabel ? (
-                                <span className={`lecture-flashcard-answer-label ${currentFlashcardAnswerClass}`}>
-                                  {currentFlashcardAnswerLabel}
-                                </span>
-                              ) : null}
-                            </div>
-                            <p className="lecture-flashcard-content">{currentFlashcard.back}</p>
-                            <span className="lecture-flashcard-side-label">{flipHint}</span>
-                          </div>
-                        </div>
-                        <div className="lecture-flashcard-drag-overlay" aria-hidden="true">
-                          <EmojiIcon
-                            symbol={flashcardDragDirection === "again" ? "❌" : "✅"}
-                            size="2.25rem"
-                          />
-                        </div>
-                      </button>
-                      {flashcardExitAnimation ? (
-                        <div
-                          key={flashcardExitAnimation.token}
-                          className={`lecture-flashcard-exit-card ${flashcardExitAnimation.bucket} ${
-                            flashcardExitAnimation.flipped ? "flipped" : ""
-                          }`}
-                          style={
-                            {
-                              "--lecture-flashcard-exit-start-x": `${flashcardExitAnimation.startXPercent}%`,
-                              "--lecture-flashcard-exit-start-y": `${flashcardExitAnimation.startYPercent}%`,
-                              "--lecture-flashcard-exit-start-rotation": `${flashcardExitAnimation.startRotationDeg}deg`,
-                            } as CSSProperties
+                  <StudyFlashcard
+                    key={currentFlashcard.id}
+                    front={currentFlashcard.front}
+                    back={currentFlashcard.back}
+                    flipped={isFlashcardFlipped}
+                    onFlip={() => setIsFlashcardFlipped((current) => !current)}
+                    onGrade={(bucket, exitStart) =>
+                      void handleFlashcardProgress(bucket, { exitStart })
+                    }
+                    flipHint={flipHint}
+                    answerLabel={currentFlashcardAnswerLabel}
+                    answerClass={currentFlashcardAnswerClass}
+                    answer={currentFlashcardAnswer}
+                    missedCount={flashcardMissedCount}
+                    knownCount={flashcardKnownCount}
+                    navigation={{
+                      onPrevious: () => handleFlashcardNavigate("previous"),
+                      onNext: () => handleFlashcardNavigate("next"),
+                      canPrevious: canNavigatePreviousFlashcard,
+                      canNext: canNavigateNextFlashcard,
+                    }}
+                    exit={
+                      flashcardExitAnimation
+                        ? {
+                            bucket: flashcardExitAnimation.bucket,
+                            flipped: flashcardExitAnimation.flipped,
+                            token: flashcardExitAnimation.token,
+                            startXPercent: flashcardExitAnimation.startXPercent,
+                            startYPercent: flashcardExitAnimation.startYPercent,
+                            startRotationDeg: flashcardExitAnimation.startRotationDeg,
                           }
-                          aria-hidden="true"
-                        >
-                          <div className="lecture-flashcard-rotator">
-                            <div className="lecture-flashcard-face lecture-flashcard-face-front">
-                              <div className="lecture-flashcard-exit-blank" />
-                            </div>
-                            <div className="lecture-flashcard-face lecture-flashcard-face-answer">
-                              <div className="lecture-flashcard-exit-blank" />
-                            </div>
-                          </div>
-                          <div className="lecture-flashcard-exit-overlay">
-                            {flashcardExitAnimation.bucket === "again" ? (
-                              <EmojiIcon symbol="❌" size="2.25rem" />
-                            ) : (
-                              <EmojiIcon symbol="✅" size="2.25rem" />
-                            )}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
+                        : null
+                    }
+                    disabled={Boolean(flashcardExitAnimation)}
+                  />
 
-                  <div className="lecture-flashcard-toolbar">
-                    <div className="lecture-flashcard-review">
-                      <button
-                        type="button"
-                        onClick={() => handleFlashcardNavigate("previous")}
-                        disabled={!canNavigatePreviousFlashcard}
-                        className="lecture-flashcard-nav-button previous"
-                        aria-label={t("study.cards.previous")}
-                        title={t("study.cards.previous")}
-                      >
-                        <ArrowLeft aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleFlashcardProgress("again")}
-                        className={`lecture-flashcard-review-button again ${
-                          currentFlashcardAnswer === "again" ? "selected" : ""
-                        }`}
-                        aria-label={confidenceLabel("again", t)}
-                        title={confidenceLabel("again", t)}
-                      >
-                        <X aria-hidden="true" />
-                        <span>{flashcardMissedCount}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleFlashcardProgress("easy")}
-                        className={`lecture-flashcard-review-button easy ${
-                          currentFlashcardAnswer && currentFlashcardAnswer !== "again" ? "selected" : ""
-                        }`}
-                        aria-label={confidenceLabel("easy", t)}
-                        title={confidenceLabel("easy", t)}
-                      >
-                        <span>{flashcardKnownCount}</span>
-                        <Check aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleFlashcardNavigate("next")}
-                        disabled={!canNavigateNextFlashcard}
-                        className="lecture-flashcard-nav-button next"
-                        aria-label={t("study.cards.next")}
-                        title={t("study.cards.next")}
-                      >
-                        <ArrowRight aria-hidden="true" />
-                      </button>
-                    </div>
-                  </div>
                 </>
               ) : (
                 <StudyCompletionCard
@@ -5856,13 +5497,19 @@ export function LectureWorkspace({
         ? "tutor"
         : activeTab === "podcast"
           ? "podcast"
-          : activeTab === "transcript" || activeTab === "audio"
-          ? "transcript"
-          : activeStudyView === "flashcards"
-            ? "flashcards"
-            : activeStudyView === "quiz"
-              ? "quiz"
-              : "test";
+          : activeTab === "mindmap"
+            ? "mindmap"
+            : activeTab === "palace"
+              ? "palace"
+              : activeTab === "speed"
+                ? "speed"
+                : activeTab === "transcript" || activeTab === "audio"
+                  ? "transcript"
+                  : activeStudyView === "flashcards"
+                    ? "flashcards"
+                    : activeStudyView === "quiz"
+                      ? "quiz"
+                      : "test";
 
   /*
    * The pill row follows the tab it is on. The pills overflow their scroller
@@ -5926,7 +5573,14 @@ export function LectureWorkspace({
   // overlay covers, so leaving the note with it open left the note's chat
   // standing beside the library's skeleton until the route committed.
   const isLeavingNote = navigatingTo != null && navigatingTo !== notePathname;
-  const showChatPanel = !isChatDismissed && !isLeavingNote;
+  /*
+   * The map takes the chat's column while it is on screen, and this is the one screen worth
+   * doing that for. A mind map is the only thing here whose usefulness is a function of how wide
+   * it is drawn: with the conversation beside it the canvas is barely three hundred pixels, and
+   * a map framed into three hundred pixels is the unreadable single column this feature exists
+   * to be better than. Chat is a tab away, and on the phone the bar at the foot is untouched.
+   */
+  const showChatPanel = !isChatDismissed && !isLeavingNote && activeTabId !== "mindmap";
 
   useEffect(() => {
     setChatOpen(showChatPanel);
@@ -6246,6 +5900,21 @@ export function LectureWorkspace({
       return;
     }
 
+    if (tab.id === "mindmap") {
+      setActiveTab("mindmap");
+      return;
+    }
+
+    if (tab.id === "palace") {
+      setActiveTab("palace");
+      return;
+    }
+
+    if (tab.id === "speed") {
+      setActiveTab("speed");
+      return;
+    }
+
     setActiveTab("study");
 
     if (tab.view) {
@@ -6377,7 +6046,10 @@ export function LectureWorkspace({
           <div className="memo-dock">
             <div className="memo-dock-slot" ref={setDockSlot} />
 
-            {isChatDismissed && activeTabId !== "quiz" && activeTabId !== "tutor" ? (
+            {isChatDismissed &&
+            activeTabId !== "quiz" &&
+            activeTabId !== "tutor" &&
+            activeTabId !== "mindmap" ? (
               <button
                 type="button"
                 aria-label={t("chat.open")}

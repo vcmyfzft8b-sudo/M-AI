@@ -345,6 +345,19 @@ export async function DELETE(
     return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 
+  // Read-aloud audio has to be read before the delete for the same reason: lecture_tts_chunks
+  // cascades on lectures, so the rows holding the only record of where those MP3s live are gone
+  // the moment the lecture row is, and the objects would be orphaned in the bucket with no way
+  // left to find them.
+  const { data: ttsChunkRows, error: ttsChunkError } = await service
+    .from("lecture_tts_chunks")
+    .select("audio_storage_path")
+    .eq("lecture_id", id);
+
+  if (ttsChunkError) {
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
+  }
+
   const { error } = await supabase
     .from("lectures")
     .delete()
@@ -367,7 +380,16 @@ export async function DELETE(
   const podcastPaths = ((podcastSegmentRows ?? []) as Array<{ audio_storage_path: string | null }>)
     .map((row) => row.audio_storage_path)
     .filter((path): path is string => Boolean(path));
-  const derivedPaths = [...chunkPaths, ...scanImagePaths, ...noteMediaPaths, ...podcastPaths];
+  const ttsAudioPaths = ((ttsChunkRows ?? []) as Array<{ audio_storage_path: string | null }>)
+    .map((row) => row.audio_storage_path)
+    .filter((path): path is string => Boolean(path));
+  const derivedPaths = [
+    ...chunkPaths,
+    ...scanImagePaths,
+    ...noteMediaPaths,
+    ...podcastPaths,
+    ...ttsAudioPaths,
+  ];
   const storagePaths = lecture.storage_path
     ? [lecture.storage_path, ...derivedPaths]
     : derivedPaths;

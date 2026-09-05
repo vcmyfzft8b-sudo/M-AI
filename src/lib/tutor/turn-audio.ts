@@ -21,6 +21,12 @@ export function createEmptyCharacterTimings(): SpeechCharacterTimings {
  * The server sends these alongside the audio, one frame at a time, each covering
  * the characters spoken in that frame. Concatenated they are the model's own
  * text with a time against every character.
+ *
+ * `offsetSeconds` is where the stream these came from sits on the turn's own clock. A turn
+ * that outlives a stall is spoken over several streams, and each numbers its timestamps from
+ * its own zero — so without the offset the second stream's first character would claim to have
+ * been heard at the very start of the turn, and everything that reads this to work out what the
+ * learner actually heard would cut in the wrong place.
  */
 export function appendCharacterTimings(
   timings: SpeechCharacterTimings,
@@ -29,6 +35,7 @@ export function appendCharacterTimings(
     character_start_times_seconds?: unknown;
     character_end_times_seconds?: unknown;
   },
+  offsetSeconds = 0,
 ): SpeechCharacterTimings {
   const characters = Array.isArray(frame.characters) ? frame.characters : [];
   const starts = Array.isArray(frame.character_start_times_seconds)
@@ -49,8 +56,8 @@ export function appendCharacterTimings(
     }
 
     timings.characters.push(character);
-    timings.startSeconds.push(start);
-    timings.endSeconds.push(end);
+    timings.startSeconds.push(start + offsetSeconds);
+    timings.endSeconds.push(end + offsetSeconds);
   }
 
   return timings;
@@ -378,6 +385,28 @@ export function frameLevel(samples: Int16Array | Float32Array) {
   }
 
   return Math.sqrt(total / (samples.length || 1));
+}
+
+/**
+ * Whether cancelling this turn's stream would still mean anything to Soniox.
+ *
+ * A stream id is only a name on the connection it was announced on, and only for as
+ * long as that connection is still generating it. Two things end it early. Soniox
+ * terminates a stream once it has made the last of its audio, which is well before the
+ * learner has heard it — a long turn is still coming out of the speaker for seconds
+ * afterwards. And Soniox hangs up on an idle socket, after which the next turn opens a
+ * fresh one that has never heard of anything said on the old.
+ *
+ * In both cases the turn is deliberately still here, holding scheduled audio that has
+ * to play out or be stopped locally. Sending its id anyway asks a connection about a
+ * stream it does not have, and the 400 that comes back arrives long after the turn it
+ * names has gone — landing on whichever turn is current by then.
+ */
+export function canCancelStream<TSocket>(
+  turn: { opened: boolean; audioComplete: boolean; socket: TSocket },
+  socket: TSocket | null,
+) {
+  return turn.opened && !turn.audioComplete && socket !== null && socket === turn.socket;
 }
 
 /**

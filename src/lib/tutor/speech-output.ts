@@ -1,5 +1,6 @@
 import {
   appendCharacterTimings,
+  canCancelStream,
   createEmptyCharacterTimings,
   spokenTextBefore,
   type SpeechCharacterTimings,
@@ -25,6 +26,30 @@ const PLAYBACK_LEAD_SECONDS = 0.12;
 
 /** Soniox closes an idle speech socket; this is well inside its window. */
 const KEEPALIVE_INTERVAL_MS = 15_000;
+
+/**
+ * How long the writer may go quiet before the stream it is feeding is closed.
+ *
+ * Soniox kills a stream that is not fed, and measuring it live on `tts-rt-v2` turned up two
+ * separate rules rather than one. A stream hears nothing for about 5.2 seconds and dies with
+ * a 408 `request_timeout`; and a stream whose audio falls below roughly 0.8x of realtime dies
+ * with a 408 "output audio rate below minimum" at around 11 seconds. Neither can be talked out
+ * of it: `{keep_alive: true}` is scoped to the connection and does not touch the stream's clock
+ * at all, and an empty `text` frame — which does reset it, without putting a word in the tutor's
+ * mouth — only postpones the second rule. A model that stalls for six seconds mid-turn therefore
+ * used to end the lesson, and the learner was shown a connection error for a slow OpenRouter chunk.
+ *
+ * The way out is that closing a stream early costs nothing. `text_end` does not truncate: a
+ * stream given 216 characters and closed after 5 seconds, while synthesis was still running,
+ * still produced all 215 of them and 12.8 seconds of audio. So the writer going quiet is met by
+ * finishing the stream rather than by waiting to be killed, and the next word opens another one.
+ * A turn is a sequence of streams, and a stall between them is silence rather than a failure.
+ *
+ * 3.5 seconds sits well inside the 5.2 the server allows, with room for a slow round trip, and
+ * well outside the gap between two units of a turn — the language repair bounds its own wait at
+ * 2.5 seconds, so a segment normally lasts the whole turn and this never fires.
+ */
+const WRITER_QUIET_CLOSE_MS = 3_500;
 
 /**
  * How long the tutor's last words can still be in the room after its audio stops.
@@ -67,7 +92,55 @@ export type SpeechTurnHandle = {
 };
 
 type ActiveTurn = {
-  streamId: string;
+  /** The turn's own name. Its segments are numbered from it — see `openSegment`. */
+  id: string;
+  /** The last stream announced for this turn, or null before the first word. */
+  streamId: string | null;
+  /** Every stream this turn has announced, because audio and errors arrive named. */
+  segmentIds: Set<string>;
+  /** Numbers the segments, so each one's id is unique on the connection. */
+  segmentCounter: number;
+  /** Whether `streamId` can still be given text. A closed one still has audio to deliver. */
+  segmentOpen: boolean;
+  /**
+   * A closed segment that has not yet said it is finished.
+   *
+   * Streams on one connection run at the same time and their audio frames interleave — measured,
+   * `a b a b a b`. The audio graph schedules what arrives in the order it arrives, so opening the
+   * next segment before this one is done would splice the two together. Text waits in `pending`
+   * until Soniox terminates the closed stream, which it does as the last of its audio is
+   * delivered — while that audio is still playing, so the wait is not heard.
+   */
+  awaitingTermination: boolean;
+  /** Text with nowhere to go yet: no segment open, or one still finishing. */
+  pending: string;
+  /**
+   * What the open segment was given, and how much of it has come back as audio.
+   *
+   * Counted per segment rather than over the turn because Soniox drops the one trailing space
+   * of every stream it closes, so a count kept across segments drifts a character each time —
+   * and this is read as an index into the text when a starved stream has to be recovered from.
+   */
+  segmentPushed: string;
+  segmentSynthesized: number;
+  /** Held so the whole turn keeps one voice, not just its first segment. */
+  voice: string | undefined;
+  speed: number | undefined;
+  /** Fires when the writer has gone quiet long enough to close the segment. */
+  quietTimer: ReturnType<typeof setTimeout> | null;
+  /** One `drain` at a time; it awaits a socket and must not interleave with itself. */
+  draining: boolean;
+  /**
+   * Where this segment's first sample sits on the turn's own clock.
+   *
+   * Each stream numbers its character timestamps from its own zero, so without this the second
+   * segment's timings would claim the turn's opening seconds and `spokenTextBefore` would cut
+   * the record of what was heard in the wrong place — which is what the interruption record and
+   * the echo test both read.
+   */
+  segmentOffset: number | null;
+  /** The connection the id was announced on. It names nothing on any other — see `stop`. */
+  socket: WebSocket;
   /** The socket is not told about a turn until there is a word to say — see `speak`. */
   opened: boolean;
   timings: SpeechCharacterTimings;
@@ -210,8 +283,22 @@ export class TutorSpeechOutput {
            * turn is while the learner is still listening to it — but every sample is
            * already buffered and scheduled here, so it plays out and settles on its own.
            * Failing it would stop a turn mid-sentence and blame the connection.
+           *
+           * Neither is a turn between segments, and for the same reason. A stall long enough
+           * to close a segment is long enough for Soniox to hang up on a connection with
+           * nothing left to generate, so this is the ordinary end of a stall rather than a
+           * fault: `drain` opens a fresh connection when the writer comes back with a word.
            */
-          if (!this.turn?.audioComplete) {
+          const turn = this.turn;
+
+          if (turn && !turn.audioComplete && !turn.segmentOpen) {
+            turn.awaitingTermination = false;
+
+            if (turn.ended && !turn.pending) {
+              turn.audioComplete = true;
+              this.scheduleTurnEnd(turn);
+            }
+          } else if (!turn?.audioComplete) {
             this.failTurn(new SpeechOutputError("The speech connection closed.", null));
           }
 
@@ -314,7 +401,7 @@ export class TutorSpeechOutput {
     this.stop();
 
     this.turnCounter += 1;
-    const streamId = `turn-${this.turnCounter}`;
+    const id = `turn-${this.turnCounter}`;
     let resolve: () => void = () => {};
     let reject: (error: Error) => void = () => {};
     const finished = new Promise<void>((resolveInner, rejectInner) => {
@@ -322,8 +409,22 @@ export class TutorSpeechOutput {
       reject = rejectInner;
     });
 
-    this.turn = {
-      streamId,
+    const turn: ActiveTurn = {
+      id,
+      streamId: null,
+      segmentIds: new Set(),
+      segmentCounter: 0,
+      segmentOpen: false,
+      awaitingTermination: false,
+      pending: "",
+      segmentPushed: "",
+      segmentSynthesized: 0,
+      voice: options.voice,
+      speed: options.speed,
+      quietTimer: null,
+      draining: false,
+      segmentOffset: null,
+      socket,
       opened: false,
       timings: createEmptyCharacterTimings(),
       text: "",
@@ -336,80 +437,234 @@ export class TutorSpeechOutput {
       settled: false,
     };
 
-    /*
-     * The stream is opened by the first word, not by the intention to speak.
-     *
-     * Soniox starts a clock the moment a stream is announced and ends it with a
-     * 408 if no text follows — and the text here comes from a model that can
-     * take a couple of seconds to produce its first token, longer when it is
-     * reading a whole note first. Announcing the turn up front therefore raced
-     * a timeout on exactly the slow turns that most need to work. Opening on
-     * the first push costs nothing: there is no audio to wait for until there
-     * are words to make it from.
-     */
-    const openStream = () => {
-      if (this.turn?.streamId !== streamId || this.turn.opened) {
-        return;
-      }
-
-      this.turn.opened = true;
-      socket.send(
-        JSON.stringify({
-          api_key: this.apiKey,
-          model: this.config.model,
-          language: this.config.language,
-          voice: options.voice ?? this.config.voice,
-          ...(options.speed ?? this.config.speed
-            ? { speed: options.speed ?? this.config.speed }
-            : {}),
-          audio_format: "pcm_s16le",
-          sample_rate: this.sampleRate,
-          // Character timings are what let an interruption be recorded at the word the
-          // learner actually heard rather than at the end of what was generated.
-          return_timestamps: true,
-          stream_id: streamId,
-        }),
-      );
-    };
+    this.turn = turn;
 
     return {
       push: (text: string) => {
-        if (!text || this.turn?.streamId !== streamId || socket.readyState !== WebSocket.OPEN) {
+        if (!text || this.turn !== turn) {
           return;
         }
 
-        openStream();
-        this.turn.text += text;
-        socket.send(JSON.stringify({ text, text_end: false, stream_id: streamId }));
+        turn.text += text;
+        turn.pending += text;
+        this.armQuietTimer(turn);
+        void this.drain(turn);
       },
       end: () => {
-        if (this.turn?.streamId !== streamId || this.turn.ended) {
+        if (this.turn !== turn || turn.ended) {
           return;
         }
 
-        this.turn.ended = true;
-
-        if (socket.readyState !== WebSocket.OPEN) {
-          return;
-        }
-
-        if (!this.turn.opened) {
-          /*
-           * A turn that produced no text at all. Nothing was ever announced to
-           * the socket, so there is nothing to close there — but the caller is
-           * waiting on `finished`, and it must not wait forever.
-           */
-          const turn = this.turn;
-          this.turn = null;
-          this.settleTurn(turn);
-
-          return;
-        }
-
-        socket.send(JSON.stringify({ text: "", text_end: true, stream_id: streamId }));
+        turn.ended = true;
+        this.clearQuietTimer(turn);
+        void this.drain(turn);
       },
       finished,
     };
+  }
+
+  /**
+   * Announces the next stream of this turn.
+   *
+   * The first one is opened by the first word rather than by the intention to speak: Soniox
+   * starts its clock the moment a stream is announced, and the text here comes from a model
+   * that can take seconds to produce its first token. Every later one is opened by the first
+   * word after a stall, for the same reason — an empty stream is a stream being timed.
+   */
+  private openSegment(turn: ActiveTurn) {
+    turn.segmentCounter += 1;
+    const streamId = `${turn.id}.${turn.segmentCounter}`;
+
+    turn.streamId = streamId;
+    turn.segmentIds.add(streamId);
+    turn.segmentOpen = true;
+    turn.opened = true;
+    turn.segmentOffset = null;
+    turn.segmentPushed = "";
+    turn.segmentSynthesized = 0;
+
+    turn.socket.send(
+      JSON.stringify({
+        api_key: this.apiKey,
+        model: this.config.model,
+        language: this.config.language,
+        voice: turn.voice ?? this.config.voice,
+        ...(turn.speed ?? this.config.speed ? { speed: turn.speed ?? this.config.speed } : {}),
+        audio_format: "pcm_s16le",
+        sample_rate: this.sampleRate,
+        // Character timings are what let an interruption be recorded at the word the
+        // learner actually heard rather than at the end of what was generated.
+        return_timestamps: true,
+        stream_id: streamId,
+      }),
+    );
+  }
+
+  /**
+   * Sends whatever text is waiting, opening a stream and a connection if that is what it takes.
+   *
+   * Serialized against itself because it awaits the socket: two pushes arriving either side of
+   * a reconnect must not both decide they are the ones to open the next segment.
+   */
+  private async drain(turn: ActiveTurn) {
+    if (turn.draining) {
+      return;
+    }
+
+    turn.draining = true;
+
+    try {
+      while (this.turn === turn && !turn.settled && turn.pending) {
+        if (this.socket?.readyState !== WebSocket.OPEN) {
+          /*
+           * Soniox hangs up on a connection with nothing to generate after about ten seconds,
+           * which a stall longer than that reaches. The turn is not harmed by it — its audio is
+           * scheduled and playing — so the connection is replaced and the turn carries on, the
+           * same way `ensureOpen` replaces one between turns.
+           */
+          await this.ensureOpen();
+        }
+
+        const socket = this.socket;
+
+        if (this.turn !== turn || turn.settled || socket?.readyState !== WebSocket.OPEN) {
+          return;
+        }
+
+        /*
+         * A stream id names something only on the connection it was announced on, and nothing
+         * on that connection will report to us again. Whatever this turn was waiting for there
+         * is not coming, so the next word starts a stream on the connection we actually have.
+         */
+        if (turn.socket !== socket) {
+          turn.socket = socket;
+          turn.segmentOpen = false;
+          turn.awaitingTermination = false;
+        }
+
+        /* The closed segment is still delivering audio. Its `terminated` resumes this. */
+        if (turn.awaitingTermination) {
+          return;
+        }
+
+        if (!turn.segmentOpen) {
+          this.openSegment(turn);
+        }
+
+        const text = turn.pending;
+        turn.pending = "";
+        turn.segmentPushed += text;
+        socket.send(JSON.stringify({ text, text_end: false, stream_id: turn.streamId }));
+      }
+
+      if (this.turn === turn && !turn.settled && turn.ended && !turn.pending) {
+        this.closeSegment(turn);
+      }
+    } catch {
+      /*
+       * Only `ensureOpen` throws here, and only when the connection cannot be replaced at all.
+       * The turn keeps whatever audio it has and settles when that has played out; the socket's
+       * own close handler is what tells the session, so nothing is swallowed.
+       */
+      turn.pending = "";
+    } finally {
+      turn.draining = false;
+    }
+  }
+
+  /**
+   * Finishes the open segment, which is what makes a stall survivable — see WRITER_QUIET_CLOSE_MS.
+   *
+   * A turn with nothing open and nothing outstanding is simply over: that is the turn whose
+   * writer produced no text at all, and the caller waiting on `finished` must not wait forever.
+   */
+  private closeSegment(turn: ActiveTurn) {
+    this.clearQuietTimer(turn);
+
+    if (!turn.segmentOpen) {
+      if (turn.ended && !turn.awaitingTermination && !turn.pending && this.turn === turn) {
+        this.turn = null;
+        this.settleTurn(turn);
+      }
+
+      return;
+    }
+
+    turn.segmentOpen = false;
+    turn.awaitingTermination = true;
+
+    if (turn.socket.readyState === WebSocket.OPEN) {
+      turn.socket.send(JSON.stringify({ text: "", text_end: true, stream_id: turn.streamId }));
+    }
+  }
+
+  /**
+   * Puts back the space Soniox swallows at the end of every stream.
+   *
+   * A stream reports timestamps for every character it was given but the last one, when that
+   * last one is the space the writer ended on. Left out, the record of what the tutor said
+   * runs the two segments together — "cristae.Along those folds" — and that record is what the
+   * interruption bookkeeping reads to work out where the learner cut in.
+   */
+  private restoreSegmentSeam(turn: ActiveTurn) {
+    const missing = turn.segmentPushed.slice(turn.segmentSynthesized);
+
+    if (!missing || missing.trim() || turn.timings.characters.length === 0) {
+      return;
+    }
+
+    const lastEnd = turn.timings.endSeconds[turn.timings.endSeconds.length - 1];
+
+    for (const character of missing) {
+      turn.timings.characters.push(character);
+      turn.timings.startSeconds.push(lastEnd);
+      turn.timings.endSeconds.push(lastEnd);
+    }
+
+    turn.segmentSynthesized += missing.length;
+  }
+
+  /** Restarted by every word, so it only ever fires on a writer that has actually stopped. */
+  private armQuietTimer(turn: ActiveTurn) {
+    this.clearQuietTimer(turn);
+
+    turn.quietTimer = setTimeout(() => {
+      turn.quietTimer = null;
+
+      if (this.turn === turn && !turn.ended && !turn.settled) {
+        this.closeSegment(turn);
+      }
+    }, WRITER_QUIET_CLOSE_MS);
+  }
+
+  private clearQuietTimer(turn: ActiveTurn) {
+    if (turn.quietTimer) {
+      clearTimeout(turn.quietTimer);
+      turn.quietTimer = null;
+    }
+  }
+
+  /**
+   * A segment has stopped generating, cleanly or otherwise.
+   *
+   * The turn is only over when the writer has finished too and nothing is left waiting; short of
+   * that this is the signal the next segment has been waiting for, and the text held back while
+   * the old one drained its audio can go.
+   */
+  private finishSegment(turn: ActiveTurn) {
+    this.restoreSegmentSeam(turn);
+    turn.segmentOpen = false;
+    turn.awaitingTermination = false;
+    turn.segmentOffset = null;
+
+    if (turn.ended && !turn.pending) {
+      turn.audioComplete = true;
+      this.scheduleTurnEnd(turn);
+
+      return;
+    }
+
+    void this.drain(turn);
   }
 
   /**
@@ -494,7 +749,20 @@ export class TutorSpeechOutput {
     const wasSpeaking = turn.scheduledUntil > context.currentTime;
     const spokenText = spokenTextBefore(turn.timings, this.playedSeconds(turn, context), turn.text);
 
-    if (turn.opened && this.socket?.readyState === WebSocket.OPEN) {
+    this.clearQuietTimer(turn);
+    turn.pending = "";
+
+    /*
+     * Only a segment that is still generating can be cancelled, which between segments is none
+     * of them: the last one has already terminated and its id names nothing Soniox still holds.
+     * Sending it anyway is the stale cancel #342 removed, answered with a 400 that lands on
+     * whichever turn is current by then.
+     */
+    if (
+      (turn.segmentOpen || turn.awaitingTermination) &&
+      canCancelStream(turn, this.socket) &&
+      this.socket?.readyState === WebSocket.OPEN
+    ) {
       this.socket.send(JSON.stringify({ stream_id: turn.streamId, cancel: true }));
     }
 
@@ -545,6 +813,54 @@ export class TutorSpeechOutput {
     }
 
     if (typeof message.error_code === "string" || typeof message.error_code === "number") {
+      /*
+       * Errors belong to a stream, so they are filtered by one like every other frame.
+       *
+       * Measured against `tts-rt-v2` on 2026-09-04: every error frame names its
+       * `stream_id` — the 400 `invalid_stream_state` from cancelling a stream that has
+       * already terminated, the 408 `request_timeout` of a stream left without text, a
+       * 401 for a rejected key, a 400 for a field out of range. Each is followed by
+       * `{terminated: true}` for that same stream and the connection stays open.
+       *
+       * An error naming a stream that is not one of the current turn's is therefore a dead
+       * turn's, and failing the live turn for it ends the lesson over speech the learner has
+       * already moved on from — which is what MEMOAI-WEB-3D was. Soniox sends an empty
+       * `stream_id` when it could not attribute the failure to a stream at all, and that,
+       * like a frame with no id, is connection-level and has to reach the learner.
+       */
+      const streamId = typeof message.stream_id === "string" ? message.stream_id : "";
+      const turn = this.turn;
+
+      if (streamId && !turn?.segmentIds.has(streamId)) {
+        return;
+      }
+
+      /*
+       * A starved segment is not a failed turn.
+       *
+       * Closing on a quiet writer is what normally keeps this from happening, but it cannot
+       * cover a writer that dribbles: text arriving often enough to reset the 5 second clock
+       * and slowly enough to fall under the audio-rate floor still gets the stream killed at
+       * around eleven seconds. That is the one case left, and ending the lesson for it would
+       * be the very thing this is meant to stop. The segment is treated as finished instead,
+       * and whatever it had not yet turned into audio goes to the next one — the character
+       * timestamps are an exact prefix of the text pushed, so the remainder is what is left
+       * after them.
+       */
+      if (turn && streamId && String(message.error_code) === "408") {
+        /*
+         * Only for the segment being fed. A 408 naming one this turn has already moved past is
+         * a dead stream's and has nothing to recover — replaying its text would say a sentence
+         * the learner has already heard.
+         */
+        if (streamId === turn.streamId) {
+          turn.pending = turn.segmentPushed.slice(turn.segmentSynthesized) + turn.pending;
+          this.finishSegment(turn);
+        }
+
+        return;
+      }
+
       const error = new SpeechOutputError(
         typeof message.error_message === "string"
           ? message.error_message
@@ -560,22 +876,52 @@ export class TutorSpeechOutput {
 
     const turn = this.turn;
 
-    if (!turn || message.stream_id !== turn.streamId) {
+    if (
+      !turn ||
+      typeof message.stream_id !== "string" ||
+      !turn.segmentIds.has(message.stream_id)
+    ) {
       // A late frame from a turn the learner already interrupted. Nothing to play.
       return;
     }
 
-    if (message.timestamps && typeof message.timestamps === "object") {
-      appendCharacterTimings(turn.timings, message.timestamps as Record<string, unknown>);
-    }
-
+    /*
+     * Audio before timestamps, which is the reverse of how they read in the frame. A segment's
+     * timings are only meaningful once its offset on the turn's clock is known, and that is
+     * fixed by scheduling its first sample.
+     */
     if (typeof message.audio === "string") {
       this.enqueueAudio(turn, message.audio);
     }
 
-    if (message.audio_end === true || message.terminated === true) {
-      turn.audioComplete = true;
-      this.scheduleTurnEnd(turn);
+    if (message.timestamps && typeof message.timestamps === "object") {
+      const before = turn.timings.characters.length;
+
+      appendCharacterTimings(
+        turn.timings,
+        message.timestamps as Record<string, unknown>,
+        turn.segmentOffset ?? 0,
+      );
+
+      turn.segmentSynthesized += turn.timings.characters.length - before;
+    }
+
+    /*
+     * The end of a segment, not necessarily of the turn — `finishSegment` decides which.
+     * `audio_end` rides on the last audio frame rather than arriving as one of its own, which
+     * is why the audio above is enqueued before this is read and not after.
+     *
+     * Only the segment being fed may be finished by one of these. Soniox sends `audio_end` and
+     * then `terminated` for the same stream, and the first of them is enough to release the
+     * next segment — so by the time the second arrives it names a stream this turn has already
+     * moved past. Acting on it would mark the *live* segment closed while it was still being
+     * fed, and the words already sent to it would sit there until Soniox timed it out.
+     */
+    if (
+      (message.audio_end === true || message.terminated === true) &&
+      message.stream_id === turn.streamId
+    ) {
+      this.finishSegment(turn);
     }
   }
 
@@ -622,6 +968,16 @@ export class TutorSpeechOutput {
 
     if (turn.audioStartedAt === null) {
       turn.audioStartedAt = startAt;
+    }
+
+    /*
+     * Where this segment landed on the turn's clock, fixed by its first sample and applied to
+     * every timestamp it reports. A stall puts real silence between two segments, so this is
+     * the scheduled position rather than the audio delivered so far: the two differ by exactly
+     * the gap the learner heard.
+     */
+    if (turn.segmentOffset === null) {
+      turn.segmentOffset = startAt - turn.audioStartedAt;
     }
 
     turn.scheduledUntil = startAt + buffer.duration;

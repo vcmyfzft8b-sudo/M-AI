@@ -972,11 +972,20 @@ export function OnboardingFlow({
       const active = list[Math.max(0, list.findIndex((s) => s.id === current.stepId))];
 
       if (event.key === "ArrowRight" || event.key === "Enter") {
-        if (active.kind === "loading" || (active.kind === "q" && !current.form[active.key!])) {
+        // A question step has no button — picking an option is what advances it
+        // — so Enter goes on to the next step once one has been picked.
+        if (active.kind === "q") {
+          if (current.form[active.key!]) {
+            goRef.current(1);
+          }
+
           return;
         }
 
-        goRef.current(1);
+        if (ctaRef.current.enabled) {
+          ctaRef.current.press();
+        }
+
         return;
       }
 
@@ -1009,6 +1018,38 @@ export function OnboardingFlow({
       cancelAnimationFrame(raf.current);
     };
   }, []);
+
+  /*
+   * What the call to action does, named rather than written into the view, so
+   * that the keyboard can press the button rather than approximate it.
+   *
+   * Approximating it was wrong in both directions: Enter used to advance a step
+   * directly, which does nothing at all on the last screen — there is no step
+   * after it, so the one button in the flow that leaves it was the one button
+   * the keyboard could not press — and it was also refused on the loading step,
+   * where the button, when it is there at all, is the retry after a failed save.
+   */
+  const pressCta = () => {
+    if (kind === "done") {
+      finish();
+      return;
+    }
+
+    // The one place the CTA is not "onward": a save that failed leaves the
+    // loader parked with this button offering another go at it.
+    if (kind === "loading") {
+      setSaveError(null);
+      runLoader();
+      return;
+    }
+
+    go(1);
+  };
+
+  const ctaRef = useRef<{ press: () => void; enabled: boolean }>({
+    press: pressCta,
+    enabled: false,
+  });
 
   const soft = accentRgba(0.14);
 
@@ -1149,6 +1190,8 @@ export function OnboardingFlow({
   const activeCard = CARDS[queue[Math.min(state.cardPos, queue.length - 1)]] ?? CARDS[0];
   const nextCard = CARDS[queue[state.cardPos + 1]];
 
+  const showCta = (kind !== "loading" || Boolean(saveError)) && kind !== "q";
+
   const ctaLabels: Partial<Record<StepKind, string>> = {
     welcome: c.ctaStart,
     proof: c.ctaContinue,
@@ -1170,6 +1213,8 @@ export function OnboardingFlow({
     router.push(mapAppHrefForClient("/app/start"));
     router.refresh();
   };
+
+  ctaRef.current = { press: pressCta, enabled: showCta && !ctaDisabled };
 
   const v = {
     accent: ACCENT,
@@ -1380,29 +1425,14 @@ export function OnboardingFlow({
     loadingStage: state.pct >= 100 ? c.loadReady : c.loadWorking.replace("{n}", String(state.pct)),
     loadingRows: loaderRows,
 
-    next: () => {
-      if (kind === "done") {
-        finish();
-        return;
-      }
-
-      // The one place the CTA is not "onward": a save that failed leaves the
-      // loader parked with this button offering another go at it.
-      if (kind === "loading") {
-        setSaveError(null);
-        runLoader();
-        return;
-      }
-
-      go(1);
-    },
+    next: pressCta,
     back: () => go(-1),
     backDisabled: index === 0,
     backState: index === 0 ? "off" : "on",
     /* Single-select steps advance on tap, so a Continue button would be a
        second control for something already done. Only the steps with nothing
        to pick keep one. */
-    showCta: (kind !== "loading" || Boolean(saveError)) && kind !== "q",
+    showCta,
     ctaLabel: kind === "loading" ? t("common.retry") : ctaLabels[kind] ?? c.ctaContinue,
     ctaDisabled,
     ctaOpacity: ctaDisabled ? 0.45 : 1,

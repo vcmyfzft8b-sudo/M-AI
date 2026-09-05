@@ -17,6 +17,7 @@ import { splashScreens } from "@/lib/splash-screens";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 import "./redesign.css";
+import "./onboarding.css";
 
 /**
  * The redesign draws every glyph from Material Symbols Rounded. `next/font`

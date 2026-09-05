@@ -8720,9 +8720,20 @@
   text-transform: uppercase;
 }
 
+/*
+ * The one button the whole business runs through, in the app's own coral.
+ *
+ * The fill used to be set only in the phone branch below, so above 1100px the
+ * same button came out in the blue `globals.css` gives it — and it was already
+ * wearing the coral rim and coral glow the block near the top of this file
+ * hands every primary action, so a desktop buyer got a blue button inside a red
+ * halo. Coral is the colour of the primary action everywhere else in the app;
+ * it is the colour of this one at every width now.
+ */
 .memo-paywall-cta {
   height: 4rem;
   border-radius: 20px;
+  background: var(--coral);
   font-size: 1.15rem;
   font-weight: 900;
   letter-spacing: -0.01em;

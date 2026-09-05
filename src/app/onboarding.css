@@ -1,0 +1,234 @@
+/* The tutor step mounts the landing page's scripted walkthrough. */
+@import "./landing-tutor.css";
+
+/*
+ * The interactive onboarding's own layer.
+ *
+ * The flow is a port of a design canvas whose every rule is an inline style, so
+ * that is how `onboarding-flow.tsx` carries them — a number there can be read
+ * straight against the design file. Only what an inline style cannot express is
+ * here: the palette the design defines as tokens, its keyframes, and the
+ * hover/active pairs the canvas wrote as `style-hover` / `style-active`.
+ *
+ * The tokens are the artboard's, not the app's. They are close cousins —
+ * `redesign.css` lifts the dark ground to #121214 where this sits at #030303 —
+ * and copying the artboard's is deliberate: this screen is the design, and the
+ * app's chrome is nowhere on it.
+ */
+
+.memo-onboarding-v2 {
+  --bg: #030303;
+  --surface: #1f1f22;
+  --tile: #2c2c2e;
+  --tile-hi: #3a3a3e;
+  --sunken: #2a2a2f;
+  --text: #ffffff;
+  --muted: #8e8e95;
+  --muted-2: #77757d;
+  --line: rgba(255, 255, 255, 0.14);
+  --line-soft: rgba(255, 255, 255, 0.08);
+  --track: #231a35;
+  --ink: #ffffff;
+  --on-ink: #121214;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 18px 40px rgba(0, 0, 0, 0.45);
+  --mesh-lift: rgba(64, 64, 72, 0.5);
+  --mesh-sink: rgba(0, 0, 0, 0.85);
+
+  /* The design is a whole document; here it is one screen inside the app, and
+     this is what gives its `height: 100%` shell something to be 100% of. */
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--bg);
+}
+
+.memo-onboarding-v2 a {
+  color: #b28cff;
+  text-decoration: none;
+}
+
+.memo-onboarding-v2 a:hover {
+  color: #c9adff;
+}
+
+:root[data-theme="light"] .memo-onboarding-v2 {
+  --bg: #ebebef;
+  --surface: #ffffff;
+  --tile: rgba(0, 0, 0, 0.06);
+  --tile-hi: rgba(0, 0, 0, 0.1);
+  --sunken: #f1f1f5;
+  --text: #000000;
+  --muted: #66666d;
+  --muted-2: #86868b;
+  --line: rgba(0, 0, 0, 0.12);
+  --line-soft: rgba(0, 0, 0, 0.07);
+  --track: rgba(0, 0, 0, 0.08);
+  --ink: #17171a;
+  --on-ink: #ffffff;
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.12);
+  --mesh-lift: rgba(255, 255, 255, 0.95);
+  --mesh-sink: rgba(163, 163, 186, 0.5);
+  --mesh-opacity: 0.9;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .memo-onboarding-v2,
+  :root[data-theme="system"] .memo-onboarding-v2 {
+    --bg: #ebebef;
+    --surface: #ffffff;
+    --tile: rgba(0, 0, 0, 0.06);
+    --tile-hi: rgba(0, 0, 0, 0.1);
+    --sunken: #f1f1f5;
+    --text: #000000;
+    --muted: #66666d;
+    --muted-2: #86868b;
+    --line: rgba(0, 0, 0, 0.12);
+    --line-soft: rgba(0, 0, 0, 0.07);
+    --track: rgba(0, 0, 0, 0.08);
+    --ink: #17171a;
+    --on-ink: #ffffff;
+    --shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.12);
+    --mesh-lift: rgba(255, 255, 255, 0.95);
+    --mesh-sink: rgba(163, 163, 186, 0.5);
+    --mesh-opacity: 0.9;
+  }
+}
+
+/*
+ * The tutor step hosts the landing page's walkthrough, which names no colour of
+ * its own and reads `--lt-*` from whatever it is mounted in. Filled here from
+ * the onboarding's palette, so the sphere and its voice row sit in this screen
+ * rather than in the marketing page's. The step draws its own heading above the
+ * component, so the padding that separates it from a section edge goes.
+ */
+.memo-onboarding-v2 .landing-tutor {
+  --lt-text: var(--text);
+  --lt-muted: var(--muted);
+  --lt-tile: var(--tile);
+  --lt-line: var(--line);
+  --lt-surface: var(--surface);
+  --lt-ink: var(--ink);
+  --lt-on-ink: var(--on-ink);
+  /* The app's coral, which is this flow's accent too. */
+  --lt-flow: #ff6d68;
+  padding: 0 0 0.25rem;
+}
+
+/* See the note beside this class in onboarding-flow.tsx: four sources two-up on
+   a phone leave no room for a filename, and the badge is the redundant half. */
+@media (max-width: 419px) {
+  .memo-onboarding-v2 .memo-ob-file-ext {
+    display: none;
+  }
+}
+
+/* The voice row and the option grids scroll themselves; the bar belongs to
+   neither design. */
+.memo-onboarding-v2 ::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes memo-aurora {
+  0% { transform: translate3d(-6%, -4%, 0) scale(1); }
+  50% { transform: translate3d(8%, 6%, 0) scale(1.18); }
+  100% { transform: translate3d(-6%, -4%, 0) scale(1); }
+}
+
+@keyframes memo-bob {
+  0%, 100% { transform: translateY(0) rotate(-1.5deg); }
+  50% { transform: translateY(-10px) rotate(1.5deg); }
+}
+
+@keyframes memo-bars {
+  0%, 100% { transform: scaleY(0.45); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes memo-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes memo-rise {
+  0% { transform: translateY(14px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes memo-draw {
+  0% { stroke-dashoffset: 620; }
+  100% { stroke-dashoffset: 0; }
+}
+
+@keyframes memo-shimmer {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(220%); }
+}
+
+@keyframes memo-card-exit-right {
+  0% { opacity: 1; transform: translate3d(var(--ex, 0%), var(--ey, 0%), 0) rotate(var(--er, 0deg)) scale(1); }
+  22% { opacity: 1; transform: translate3d(var(--ex, 0%), calc(var(--ey, 0%) - 2%), 0) rotate(calc(var(--er, 0deg) - 1deg)) scale(1.01); }
+  84% { opacity: 1; transform: translate3d(calc(var(--ex, 0%) + 12%), calc(var(--ey, 0%) - 3%), 0) rotate(calc(var(--er, 0deg) + 4deg)) scale(1.02); }
+  96% { opacity: 1; transform: translate3d(calc(var(--ex, 0%) + 16%), calc(var(--ey, 0%) - 4%), 0) rotate(calc(var(--er, 0deg) + 5deg)) scale(1.02); }
+  100% { opacity: 0; transform: translate3d(calc(var(--ex, 0%) + 18%), calc(var(--ey, 0%) - 4%), 0) rotate(calc(var(--er, 0deg) + 6deg)) scale(1.02); }
+}
+
+@keyframes memo-card-exit-left {
+  0% { opacity: 1; transform: translate3d(var(--ex, 0%), var(--ey, 0%), 0) rotate(var(--er, 0deg)) scale(1); }
+  22% { opacity: 1; transform: translate3d(var(--ex, 0%), calc(var(--ey, 0%) - 2%), 0) rotate(calc(var(--er, 0deg) + 1deg)) scale(1.01); }
+  84% { opacity: 1; transform: translate3d(calc(var(--ex, 0%) - 12%), calc(var(--ey, 0%) - 3%), 0) rotate(calc(var(--er, 0deg) - 4deg)) scale(1.02); }
+  96% { opacity: 1; transform: translate3d(calc(var(--ex, 0%) - 16%), calc(var(--ey, 0%) - 4%), 0) rotate(calc(var(--er, 0deg) - 5deg)) scale(1.02); }
+  100% { opacity: 0; transform: translate3d(calc(var(--ex, 0%) - 18%), calc(var(--ey, 0%) - 4%), 0) rotate(calc(var(--er, 0deg) - 6deg)) scale(1.02); }
+}
+
+@keyframes memo-tutor-breathe {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.07); }
+}
+
+@keyframes memo-gen-sweep {
+  0%, 6% { transform: translateX(-105%); }
+  94%, 100% { transform: translateX(300%); }
+}
+
+@keyframes memo-skeleton {
+  0%, 100% { opacity: 0.34; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes memo-grow {
+  0% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-onboarding-v2 * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/*
+ * The design canvas's `style-hover` / `style-active`, which it applies as
+ * `!important` so they beat the element's own inline style. Same here: without
+ * it a selected option would keep its accent tint under the cursor, where the
+ * design drops it back to the plain surface.
+ */
+.memo-ob-fx-1:hover { background: rgba(255,255,255,0.16) !important; }
+.memo-ob-fx-1:active { transform: scale(0.9) !important; }
+.memo-ob-fx-2:hover { background: var(--sunken) !important; }
+.memo-ob-fx-2:active { transform: scale(0.975) !important; }
+.memo-ob-fx-3:hover { background: var(--tile-hi) !important; }
+.memo-ob-fx-3:active { transform: scale(0.88) !important; }
+.memo-ob-fx-4:hover { background: var(--tile-hi) !important; }
+.memo-ob-fx-4:active { transform: scale(0.98) !important; }
+.memo-ob-fx-5:active { transform: scale(0.94) !important; }
+.memo-ob-fx-6:active { transform: scale(0.98) !important; }
+.memo-ob-fx-7:active { transform: scale(0.97) !important; }
+.memo-ob-fx-8:hover { transform: translateY(-2px) !important; }
+.memo-ob-fx-8:active { transform: scale(0.98) !important; }

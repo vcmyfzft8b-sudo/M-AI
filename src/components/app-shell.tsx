@@ -51,7 +51,9 @@ export function AppShell({
   // contexts, so the header-provided path seeds it.
   const pathname = unmapDemoPathname(clientPathname ?? initialPathname, demoBasePath);
 
-  const isOnboarding = pathname === "/app/start";
+  // `/app/onboarding` is not a route of its own: it is what `/creator/onboarding`
+  // unmaps to, the demo mount of the survey. Both own the whole viewport.
+  const isOnboarding = pathname === "/app/start" || pathname === "/app/onboarding";
   const isNote = pathname.startsWith("/app/lectures/");
   const isHome = pathname === "/app";
 

@@ -143,12 +143,7 @@ test("the home screen drops the router's copy when the spin is taken", () => {
 
   assert.match(
     dashboard,
-    /hasRefreshedWheelState\.current = true;\s*router\.refresh\(\);/,
-    "the stale page must actually be discarded, and only once per visit",
-  );
-  assert.match(
-    dashboard,
-    /if \(!hasClaimedDiscount\) \{\s*return;\s*\}\s*dropStaleWheelPage\(\);/,
+    /if \(!hasClaimedDiscount\) \{\s*return;\s*\}\s*router\.refresh\(\);/,
     "taking the spin must discard the page rendered before it",
   );
 });
@@ -161,7 +156,7 @@ test("it drops the copy again when the server disagrees with the page", () => {
   // router is holding is wrong in the same way.
   assert.match(
     dashboard,
-    /if \(initialCanSpinWheel !== null && available !== initialCanSpinWheel\) \{\s*dropStaleWheelPage\(\);/,
+    /if \(initialCanSpinWheel !== null && available !== initialCanSpinWheel\) \{\s*router\.refresh\(\);/,
     "a page that disagrees with the server must not be kept for the way back",
   );
 });

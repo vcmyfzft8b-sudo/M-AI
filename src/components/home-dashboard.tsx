@@ -1503,18 +1503,13 @@ export function HomeDashboard({
    * So the page is discarded the moment it is known to be out of date, and the
    * way back is served one that already knows the prize is spent: the slot
    * holds the upgrade card from the first frame rather than correcting itself.
-   * Once per visit is enough — the copy only has to be replaced once.
+   *
+   * Both of the things that can date the copy do it, and neither stands in for
+   * the other: the answer below is asked for once, when the screen mounts, and
+   * the spin is taken after that. Nor does either repeat — the spin is taken
+   * once, and a copy that has just been replaced no longer disagrees with the
+   * server that rendered it.
    */
-  const hasRefreshedWheelState = useRef(false);
-  const dropStaleWheelPage = useCallback(() => {
-    if (hasRefreshedWheelState.current) {
-      return;
-    }
-
-    hasRefreshedWheelState.current = true;
-    router.refresh();
-  }, [router]);
-
   useEffect(() => {
     if (hasPaidAccess) {
       return;
@@ -1547,7 +1542,7 @@ export function HomeDashboard({
            * server having failed to look, which nothing disagrees with.
            */
           if (initialCanSpinWheel !== null && available !== initialCanSpinWheel) {
-            dropStaleWheelPage();
+            router.refresh();
           }
         }
       })
@@ -1561,20 +1556,16 @@ export function HomeDashboard({
     return () => {
       cancelled = true;
     };
-  }, [dropStaleWheelPage, hasPaidAccess, initialCanSpinWheel]);
+  }, [hasPaidAccess, initialCanSpinWheel, router]);
 
-  /*
-   * And the spin itself, which the answer above cannot catch: it is asked for
-   * once, when the screen mounts, which on the visit where the wheel is spun
-   * is before there is anything to report.
-   */
+  /* And the spin, for the same reason and in the same way. */
   useEffect(() => {
     if (!hasClaimedDiscount) {
       return;
     }
 
-    dropStaleWheelPage();
-  }, [dropStaleWheelPage, hasClaimedDiscount]);
+    router.refresh();
+  }, [hasClaimedDiscount, router]);
 
   const inLibraryView = !selectedFolderId && !deferredQuery.trim();
   /*

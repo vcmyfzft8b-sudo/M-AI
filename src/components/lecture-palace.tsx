@@ -11,6 +11,7 @@ import { MemoPortal } from "@/components/memo-portal";
 import { Emoji, Msym } from "@/components/msym";
 import { StudyCompletionCard } from "@/components/study-completion-card";
 import { StudyFlashcard, type StudyFlashcardExit } from "@/components/study-flashcard";
+import { sheetClass, useSheet } from "@/components/use-sheet";
 import {
   FLASHCARD_EXIT_ANIMATION_MS,
   type FlashcardBucket,
@@ -79,6 +80,12 @@ type PracticeMark = {
   missingPoints?: string;
 };
 /** The stick is dead in the middle, so a resting thumb is not a slow walk. */
+/*
+ * How long an answered quiz stays up before the walk resumes. A tick needs long
+ * enough to register; a wrong answer, or one the note explains, needs reading.
+ */
+const QUIZ_RESULT_PAUSE = 1600;
+const QUIZ_RESULT_READ_PAUSE = 6000;
 const STICK_DEADZONE = 6;
 const STICK_RADIUS = 46;
 
@@ -130,12 +137,16 @@ export function LecturePalace({
   const minimapRef = useRef<HTMLCanvasElement | null>(null);
   /* The same map again, whole and still, for when the corner one is not enough. */
   const townMapRef = useRef<HTMLCanvasElement | null>(null);
+  /* The same town, on the card that opens the walk. */
+  const introMapRef = useRef<HTMLCanvasElement | null>(null);
   const gameRef = useRef<PalaceGame | null>(null);
   const snapshotRef = useRef<PalaceSnapshot | null>(null);
   const stickRef = useRef<{ pointerId: number; originX: number; originY: number } | null>(null);
   const lookRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const exitTimerRef = useRef<number | null>(null);
   const exitTokenRef = useRef(0);
+  /* Set below; the key handler is armed before the layer it closes exists. */
+  const escapeRef = useRef<() => boolean>(() => false);
 
   const [isOpen, setIsOpen] = useState(false);
   /*
@@ -181,6 +192,17 @@ export function LecturePalace({
    * and displayed at 122 shimmers on every line the moment anything moves.
    */
   const minimapSizeRef = useRef({ css: 0, dpr: 1 });
+  /* The pending auto-dismiss of an answered quiz, so nothing closes a station
+     the player has already walked on from. */
+  const dismissRef = useRef<number | null>(null);
+  const clearDismiss = useCallback(() => {
+    if (dismissRef.current === null) return;
+
+    window.clearTimeout(dismissRef.current);
+    dismissRef.current = null;
+  }, []);
+
+  useEffect(() => clearDismiss, [clearDismiss]);
 
   useEffect(() => {
     const image = new Image();
@@ -518,6 +540,7 @@ export function LecturePalace({
   }, [collected]);
 
   const openStation = useCallback((stationId: string | null) => {
+    clearDismiss();
     setNearStationId(stationId);
     setIsFlipped(false);
     setQuizChoice(null);
@@ -526,7 +549,7 @@ export function LecturePalace({
     setIsTestUnknown(false);
     setIsMarking(false);
     setMark(null);
-  }, []);
+  }, [clearDismiss]);
 
   useEffect(() => {
     if (!station || stationItem) return;
@@ -683,10 +706,18 @@ export function LecturePalace({
     };
     /* A backgrounded tab should not keep a render loop alive on a phone battery. */
     const onVisibility = () => gameRef.current?.setPaused(document.hidden);
+    /*
+     * Escape takes one layer at a time, the way it does everywhere else in the
+     * app: the map if it is up, then the station, and only an Escape with
+     * neither of them open leaves the town. It used to close the whole thing
+     * from under an open card.
+     */
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        leaveGame();
-      }
+      if (event.key !== "Escape") return;
+
+      if (escapeRef.current()) return;
+
+      leaveGame();
     };
 
     window.addEventListener("resize", onResize);
@@ -701,93 +732,167 @@ export function LecturePalace({
   }, [isOpen, leaveGame, sizeMinimap]);
 
   /*
-   * The whole town, painted once when the sheet opens: every street, every stop
-   * still waiting, and where the walker is standing. Nothing here moves, so it
-   * is drawn on demand rather than every frame.
+   * The whole town on a canvas: every street, and every stop with the colour
+   * its ring has on the ground. Shared by the map sheet and by the card on the
+   * way in, which are the same drawing at two sizes — one with the walker on
+   * it, one without, because on the way in there is no walker yet.
+   */
+  const paintTown = useCallback(
+    (canvas: HTMLCanvasElement | null, options?: { walker?: boolean }) => {
+      if (!canvas || !layout) return;
+
+      /*
+       * Both measured off the element rather than one derived from the other:
+       * the card on the way in is capped in height so the screen fits without
+       * scrolling, and a canvas that works out its own height from its width
+       * would paint past that cap and be squashed by the box.
+       */
+      const box = canvas.getBoundingClientRect();
+      const width = Math.round(box.width);
+      const height = Math.round(box.height);
+
+      if (width === 0 || height === 0) return;
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+
+      const context = canvas.getContext("2d");
+
+      if (!context) return;
+
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const extent = mapExtent(layout);
+      /*
+       * The whole town has to fit, not fill: on the wide card the filling scale
+       * cropped it to a couple of streets and most of the stops fell off the
+       * edges, which is the opposite of what a map of the place is for. The
+       * roads are drawn edge to edge, so the air either side reads as more town
+       * rather than as margin.
+       */
+      const scale = Math.min(width, height) / (extent * 2);
+      const toCanvas = (x: number, z: number) => ({
+        x: width / 2 + x * scale,
+        y: height / 2 + z * scale,
+      });
+
+      context.clearRect(0, 0, width, height);
+      context.fillStyle = "rgba(14, 12, 20, 0.9)";
+      context.beginPath();
+      context.roundRect(0, 0, width, height, 18);
+      context.fill();
+
+      context.strokeStyle = "rgba(255, 255, 255, 0.16)";
+      context.lineWidth = Math.max(1.5, 11 * scale);
+      layout.roads.forEach((road) => {
+        const horizontal = road.width > road.depth;
+        const line = toCanvas(road.x, road.z);
+
+        context.beginPath();
+
+        if (horizontal) {
+          context.moveTo(0, line.y);
+          context.lineTo(width, line.y);
+        } else {
+          context.moveTo(line.x, 0);
+          context.lineTo(line.x, height);
+        }
+
+        context.stroke();
+      });
+
+      layout.stations.forEach((entry) => {
+        const point = toCanvas(entry.x, entry.z);
+        const done = collected.has(entry.id);
+
+        context.fillStyle = done
+          ? "rgba(255, 255, 255, 0.22)"
+          : `hsl(${STATION_HUE[entry.kind]} 80% 62%)`;
+        context.beginPath();
+        context.arc(point.x, point.y, done ? 2.6 : 4.2, 0, Math.PI * 2);
+        context.fill();
+      });
+
+      if (options?.walker === false) return;
+
+      const player = toCanvas(snapshotRef.current?.x ?? 0, snapshotRef.current?.z ?? 0);
+
+      context.save();
+      context.translate(player.x, player.y);
+      context.rotate(mapArrowAngle(snapshotRef.current?.facing ?? 0));
+      context.fillStyle = "#ffffff";
+      context.strokeStyle = "rgba(14, 12, 20, 0.9)";
+      context.lineWidth = 1.4;
+      context.beginPath();
+      context.moveTo(0, -7);
+      context.lineTo(5.4, 5.8);
+      context.lineTo(0, 2.6);
+      context.lineTo(-5.4, 5.8);
+      context.closePath();
+      context.fill();
+      context.stroke();
+      context.restore();
+    },
+    [collected, layout],
+  );
+
+  /* Painted once when the sheet opens; nothing on it moves. */
+  useEffect(() => {
+    if (!isMapOpen) return;
+
+    paintTown(townMapRef.current);
+  }, [isMapOpen, paintTown]);
+
+  /*
+   * And on the way in, where it is the picture of the thing: a note turned into
+   * somewhere with streets and corners, which is the whole claim the screen is
+   * making. Re-measured on resize, because it is a wide card rather than a
+   * square and the width it gets changes with the column.
    */
   useEffect(() => {
-    if (!isMapOpen || !layout) return;
+    if (isOpen) return;
 
-    const canvas = townMapRef.current;
+    const paint = () => paintTown(introMapRef.current, { walker: false });
+
+    paint();
+
+    const canvas = introMapRef.current;
 
     if (!canvas) return;
 
-    const width = Math.round(canvas.getBoundingClientRect().width);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const observer = new ResizeObserver(paint);
 
-    if (width === 0) return;
+    observer.observe(canvas);
 
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(width * dpr);
+    return () => observer.disconnect();
+  }, [isOpen, paintTown]);
 
-    const context = canvas.getContext("2d");
+  const closeMap = useCallback(() => setIsMapOpen(false), []);
+  const mapSheet = useSheet(closeMap, { scrollable: true });
 
-    if (!context) return;
+  /*
+   * What Escape should close, held in a ref so the key handler is armed once for
+   * the whole visit rather than re-armed on every frame the town reports.
+   */
+  useEffect(() => {
+    escapeRef.current = () => {
+      if (isMapOpen) {
+        mapSheet.dismiss();
 
-    context.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const extent = mapExtent(layout);
-    const scale = width / (extent * 2);
-    const toCanvas = (x: number, z: number) => ({
-      x: width / 2 + x * scale,
-      y: width / 2 + z * scale,
-    });
-
-    context.clearRect(0, 0, width, width);
-    context.fillStyle = "rgba(14, 12, 20, 0.9)";
-    context.beginPath();
-    context.roundRect(0, 0, width, width, 18);
-    context.fill();
-
-    context.strokeStyle = "rgba(255, 255, 255, 0.16)";
-    context.lineWidth = Math.max(1.5, 11 * scale);
-    layout.roads.forEach((road) => {
-      const horizontal = road.width > road.depth;
-      const line = toCanvas(road.x, road.z);
-
-      context.beginPath();
-
-      if (horizontal) {
-        context.moveTo(0, line.y);
-        context.lineTo(width, line.y);
-      } else {
-        context.moveTo(line.x, 0);
-        context.lineTo(line.x, width);
+        return true;
       }
 
-      context.stroke();
-    });
+      if (nearStationId) {
+        leaveStation();
 
-    layout.stations.forEach((entry) => {
-      const point = toCanvas(entry.x, entry.z);
-      const done = collected.has(entry.id);
+        return true;
+      }
 
-      context.fillStyle = done
-        ? "rgba(255, 255, 255, 0.22)"
-        : `hsl(${STATION_HUE[entry.kind]} 80% 62%)`;
-      context.beginPath();
-      context.arc(point.x, point.y, done ? 2.6 : 4.2, 0, Math.PI * 2);
-      context.fill();
-    });
-
-    const player = toCanvas(snapshotRef.current?.x ?? 0, snapshotRef.current?.z ?? 0);
-
-    context.save();
-    context.translate(player.x, player.y);
-    context.rotate(mapArrowAngle(snapshotRef.current?.facing ?? 0));
-    context.fillStyle = "#ffffff";
-    context.strokeStyle = "rgba(14, 12, 20, 0.9)";
-    context.lineWidth = 1.4;
-    context.beginPath();
-    context.moveTo(0, -7);
-    context.lineTo(5.4, 5.8);
-    context.lineTo(0, 2.6);
-    context.lineTo(-5.4, 5.8);
-    context.closePath();
-    context.fill();
-    context.stroke();
-    context.restore();
-  }, [collected, isMapOpen, layout]);
+      return false;
+    };
+  });
 
   /* The map sheet stops the world; the loop keeps rendering. */
   useEffect(() => {
@@ -798,11 +903,28 @@ export function LecturePalace({
     }
   }, [isMapOpen]);
 
-  const leaveStation = useCallback(() => {
+  /* What actually tears the station down, once the sheet has finished leaving. */
+  const closeStation = useCallback(() => {
+    clearDismiss();
     gameRef.current?.releaseStation();
     openStation(null);
-  }, [openStation]);
+  }, [clearDismiss, openStation]);
 
+  /*
+   * The station panel is a bottom sheet on the phone, so it is one of the app's
+   * bottom sheets: it comes up from the edge, tracks a thumb dragged down it,
+   * and drops out of frame on the way out rather than vanishing. It owns a
+   * scrolling answer, so only the grabber and the head start a drag.
+   */
+  const stationSheet = useSheet(closeStation, { scrollable: true });
+  const dismissStation = stationSheet.dismiss;
+
+  const leaveStation = useCallback(() => {
+    clearDismiss();
+    dismissStation();
+  }, [clearDismiss, dismissStation]);
+
+  /** Been to. The Memo goes out and the ring dims, whatever the answer was. */
   const collect = useCallback(
     (stationId: string) => {
       setCollected((current) => {
@@ -830,10 +952,7 @@ export function LecturePalace({
       exitStart?: { xPercent: number; yPercent: number; rotationDeg: number },
     ) => {
       setResults((current) => ({ ...current, [cardId]: confidenceBucket }));
-
-      if (confidenceBucket === "easy") {
-        collect(cardId);
-      }
+      collect(cardId);
 
       /*
        * The card flies off the way it does on the deck screen — same animation,
@@ -887,20 +1006,28 @@ export function LecturePalace({
 
       setQuizChoice(optionIndex);
       setResults((current) => ({ ...current, [questionId]: right ? "easy" : "again" }));
-
-      if (right) {
-        collect(questionId);
-      }
+      collect(questionId);
 
       /*
        * Both answers stop and say what happened: right or wrong, which option
-       * was the right one, and the note's own explanation of why. On the deck
-       * screen a right answer moves on by itself, but here there is nothing
-       * queued up behind it to move on to — you are standing in a street — so
-       * the walk resumes when the learner says so.
+       * was the right one, and the note's own explanation of why — and then the
+       * walk resumes on its own. Answering used to leave you holding a card you
+       * had already finished with until you pressed a second button, which on a
+       * sixty-stop walk is sixty presses that say nothing.
+       *
+       * How long it stays depends on whether there is anything to read: a right
+       * answer with no explanation behind it is a tick, and a tick does not need
+       * six seconds. The button stays for anyone who would rather not wait.
        */
+      const explained = Boolean(quizById.get(questionId)?.explanation);
+
+      clearDismiss();
+      dismissRef.current = window.setTimeout(
+        leaveStation,
+        right && !explained ? QUIZ_RESULT_PAUSE : QUIZ_RESULT_READ_PAUSE,
+      );
     },
-    [collect],
+    [clearDismiss, collect, leaveStation, quizById],
   );
 
   /**
@@ -1029,11 +1156,16 @@ export function LecturePalace({
   }
 
   const total = layout.stations.length;
-  const done = layout.stations.filter((entry) => collected.has(entry.id)).length;
   /*
-   * Recalled without having to come back for it. A card you missed and returned
-   * to is collected, but it is not a card you knew.
+   * Answered, not answered correctly. A stop you got wrong is a stop you have
+   * been to: leaving its Memo floating over the pavement told you nothing you
+   * could act on — the answer was already on the screen — and it meant the
+   * counter never moved and the walk could not end unless you were right sixty
+   * times running.
    */
+  const done = layout.stations.filter((entry) => collected.has(entry.id)).length;
+  /* What was recalled first time, which is the number the score is made of: a
+     stop you got wrong is walked, but it is not a stop you knew. */
   const firstTimeKnown = layout.stations.filter(
     (entry) => collected.has(entry.id) && results[entry.id] !== "again",
   ).length;
@@ -1256,10 +1388,7 @@ export function LecturePalace({
                   ...current,
                   [question.id]: passed ? "easy" : "again",
                 }));
-
-                if (passed) {
-                  collect(question.id);
-                }
+                collect(question.id);
 
                 leaveStation();
               }}
@@ -1284,27 +1413,72 @@ export function LecturePalace({
 
   return (
     <>
-      <div className="memo-study-empty memo-palace-intro">
-        <div className="memo-study-empty-orb">
-          {/* Memo's own face, the thing you will be collecting. */}
-          <NextImage src={MASCOT_SRC} alt="" width={110} height={99} />
+      <div className="memo-palace-intro">
+        {/*
+         * The town, before you are in it. Every other study tab can show you
+         * what it is in a sentence; this one is a place, and a picture of the
+         * actual streets it generated says that in a way "vsaka hiša skriva
+         * vprašanje" cannot. It is the note's own layout, so the map you study
+         * here is the map you walk.
+         */}
+        {/*
+         * The town, before you are in it. Every other study tab can say what it
+         * is in a sentence; this one is a place, and the note's own streets say
+         * that in a way the sentence cannot. It is the map you will walk.
+         */}
+        <div className="memo-palace-hero">
+          <canvas ref={introMapRef} className="memo-palace-hero-map" aria-hidden="true" />
+          {/*
+           * Memo's own face, the thing you will be collecting. Eager and at the
+           * front of the queue: it is the first thing on the screen, and left to
+           * lazy-load it arrived a beat after the title and the button, so the
+           * palace opened on an empty grey circle.
+           */}
+          <NextImage
+            className="memo-palace-hero-mascot"
+            src={MASCOT_SRC}
+            alt=""
+            width={110}
+            height={99}
+            priority
+          />
         </div>
-        <p className="memo-study-empty-title">{t("palace.title")}</p>
-        <p className="memo-study-empty-copy">{t("palace.intro")}</p>
 
-        <button type="button" className="memo-study-empty-cta" onClick={enterGame}>
-          <Msym name="explore" size="1.2rem" fill={false} weight={500} />
-          {done > 0 ? t("palace.resume") : t("palace.start")}
-        </button>
+        <div className="memo-palace-lede">
+          <h2>{t("palace.title")}</h2>
+          <p>{t("palace.intro")}</p>
+        </div>
 
-        {/* Everything below is the walk's own state, in the app's list idiom. */}
-        <div className="memo-palace-summary">
-          <div className="memo-palace-progress">
-            <div className="memo-palace-bar">
-              <span style={{ width: `${total === 0 ? 0 : (done / total) * 100}%` }} />
-            </div>
-            <p className="memo-palace-count">{t("palace.progressCount", { done, total })}</p>
+        {/* The numbers a walk is scored on. */}
+        <div className="memo-palace-figures">
+          <span>
+            <b>{total}</b>
+            <small>{t("palace.stops")}</small>
+          </span>
+          <span>
+            <b>{layout.districts.length}</b>
+            <small>{t("palace.districts")}</small>
+          </span>
+          <span>
+            <b>{firstTimeKnown}</b>
+            <small>{t("palace.known")}</small>
+          </span>
+        </div>
+
+        <div className="memo-palace-progress">
+          <div className="memo-palace-bar">
+            <span style={{ width: `${total === 0 ? 0 : (done / total) * 100}%` }} />
           </div>
+          <p className="memo-palace-count">{t("palace.progressCount", { done, total })}</p>
+        </div>
+
+        <div className="memo-palace-intro-actions">
+          <button type="button" className="memo-palace-enter" onClick={enterGame}>
+            {/* A play arrow rather than a compass: the compass described the
+                town, and what the button does is start a game. */}
+            <Msym name="play_arrow" size="1.35rem" fill weight={500} />
+            {done > 0 ? t("palace.resume") : t("palace.start")}
+          </button>
 
           {done > 0 ? (
             <button type="button" className="memo-button-outline small" onClick={restart}>
@@ -1407,8 +1581,29 @@ export function LecturePalace({
             ) : null}
 
             {station ? (
-              <div className={`memo-palace-panel ${station.kind}`}>
-                <div className="memo-palace-panel-head">
+              <div
+                className={sheetClass("memo-palace-panel-scrim", stationSheet.closing)}
+                role="presentation"
+                onClick={() => stationSheet.dismiss()}
+              >
+              <div
+                className={sheetClass(
+                  `memo-palace-panel mobile-draggable-sheet ${station.kind}`,
+                  stationSheet.closing,
+                )}
+                onClick={(event) => event.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-label={kindPill[station.kind].label}
+                {...stationSheet.dragProps}
+              >
+                <button
+                  type="button"
+                  className="mobile-sheet-drag-handle"
+                  aria-label={t("folders.dragToClose")}
+                  data-drag-handle
+                />
+                <div className="memo-palace-panel-head" data-drag-zone>
                   <span
                     className="memo-tab active memo-palace-panel-kind"
                     style={{ "--tab-tint": kindPill[station.kind].tint } as CSSProperties}
@@ -1419,7 +1614,7 @@ export function LecturePalace({
                   <span className="memo-palace-panel-where">{district?.title}</span>
                   <button
                     type="button"
-                    className="memo-palace-panel-close"
+                    className="memo-close-button"
                     aria-label={t("common.close")}
                     onClick={leaveStation}
                   >
@@ -1428,17 +1623,51 @@ export function LecturePalace({
                 </div>
                 {renderStation()}
               </div>
+              </div>
             ) : null}
 
             {isMapOpen ? (
-              <div className="memo-palace-sheet">
-                <div className="memo-palace-sheet-inner">
-                  <h3>{t("palace.map")}</h3>
-                  {/* The whole town, so the corner map's two blocks are a view
-                      of something rather than all there is. */}
-                  <canvas ref={townMapRef} className="memo-palace-townmap" />
-                  <h3>{t("palace.districts")}</h3>
-                  <ul>
+              <div
+                className={sheetClass("memo-palace-sheet", mapSheet.closing)}
+                role="presentation"
+                onClick={() => mapSheet.dismiss()}
+              >
+                <div
+                  className={sheetClass(
+                    "memo-palace-sheet-inner mobile-draggable-sheet",
+                    mapSheet.closing,
+                  )}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={t("palace.map")}
+                  onClick={(event) => event.stopPropagation()}
+                  {...mapSheet.dragProps}
+                >
+                  <button
+                    type="button"
+                    className="mobile-sheet-drag-handle"
+                    aria-label={t("folders.dragToClose")}
+                    data-drag-handle
+                  />
+                  <div className="memo-palace-sheet-head" data-drag-zone>
+                    <h3>{t("palace.map")}</h3>
+                    <button
+                      type="button"
+                      className="memo-close-button"
+                      aria-label={t("common.close")}
+                      onClick={() => mapSheet.dismiss()}
+                    >
+                      <Msym name="close" size="1.1rem" />
+                    </button>
+                  </div>
+                  {/* Everything under the head scrolls, so the title and its
+                      close stay where the thumb left them. */}
+                  <div className="memo-palace-sheet-body">
+                    {/* The whole town, so the corner map's two blocks are a view
+                        of something rather than all there is. */}
+                    <canvas ref={townMapRef} className="memo-palace-townmap" />
+                    <h3>{t("palace.districts")}</h3>
+                    <ul>
                     {layout.districts.map((entry) => {
                       const entryDone = entry.stationIds.filter((id) => collected.has(id)).length;
 
@@ -1456,23 +1685,18 @@ export function LecturePalace({
                             type="button"
                             className="memo-button-outline small"
                             onClick={() => {
-                              gameRef.current?.travelTo(entry.index);
-                              setIsMapOpen(false);
+                              const index = entry.index;
+
+                              mapSheet.dismiss(() => gameRef.current?.travelTo(index));
                             }}
                           >
                             {t("palace.travel")}
                           </button>
                         </li>
                       );
-                    })}
-                  </ul>
-                  <button
-                    type="button"
-                    className="memo-palace-cta small"
-                    onClick={() => setIsMapOpen(false)}
-                  >
-                    {t("common.close")}
-                  </button>
+                      })}
+                    </ul>
+                  </div>
                 </div>
               </div>
             ) : null}

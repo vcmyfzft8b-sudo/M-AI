@@ -532,9 +532,10 @@ export function buildPalaceLayout({
   /*
    * The grid is sized to the deck: two stations to a block, and never fewer
    * than nine blocks, so even a five-card note is a town with corners to turn
-   * rather than a single street.
+   * rather than a single street. Never fewer blocks than neighbourhoods
+   * either, or the last sections share one and their stops pile up.
    */
-  const blocksNeeded = Math.max(9, Math.ceil(stationCount / 3));
+  const blocksNeeded = Math.max(9, groups.length, Math.ceil(stationCount / 3));
   const gridSize = Math.ceil(Math.sqrt(blocksNeeded));
   const pitch = BLOCK_SIZE + ROAD_WIDTH;
   const half = ((gridSize - 1) * pitch) / 2;
@@ -570,14 +571,41 @@ export function buildPalaceLayout({
   const houses: PalaceHouse[] = [];
   const props: PalaceProp[] = [];
   const stations: PalaceStation[] = [];
-  const blocksPerDistrict = Math.max(1, Math.floor(blocks.length / groups.length));
+
+  /*
+   * How many blocks each neighbourhood gets: one each to start with, then the
+   * rest handed out one at a time to whichever is carrying the most stops per
+   * block it already has. An even split gave every leftover block to the last
+   * section, so a note with six sections had five cramped neighbourhoods and
+   * one that sprawled — which is what put some stops a street apart and others
+   * on the same square of grass.
+   */
+  const quota = groups.map(() => 1);
+
+  for (let spare = blocks.length - groups.length; spare > 0; spare -= 1) {
+    let tightest = 0;
+
+    quota.forEach((count, index) => {
+      const crowding = groups[index].items.length / count;
+
+      if (crowding > groups[tightest].items.length / quota[tightest]) tightest = index;
+    });
+
+    quota[tightest] += 1;
+  }
+
+  /* Still handed out in reading order, so a section is a contiguous corner of
+     town rather than a scatter of houses. */
+  const firstBlock = quota.map(
+    (_, index) => quota.slice(0, index).reduce((total, count) => total + count, 0),
+  );
 
   groups.forEach((group, districtIndex) => {
     const hue = (districtIndex * 47 + 20) % 360;
-    const mine =
-      districtIndex === groups.length - 1
-        ? blocks.slice(districtIndex * blocksPerDistrict)
-        : blocks.slice(districtIndex * blocksPerDistrict, (districtIndex + 1) * blocksPerDistrict);
+    const mine = blocks.slice(
+      firstBlock[districtIndex],
+      firstBlock[districtIndex] + quota[districtIndex],
+    );
     /*
      * Houses go up first and the study items are hung on them afterwards. A
      * house that would have overlapped its neighbour round a corner is simply
@@ -648,30 +676,50 @@ export function buildPalaceLayout({
      */
     const spots: Vec2[] = [];
 
+    /*
+     * The pavement runs half a road and half a pavement inside the road's
+     * centre line, which is itself half a pitch out from the block's middle.
+     * Deriving it any other way — as this once did — walks the candidates into
+     * the carriageway, where the filter below throws every one of them out and
+     * leaves nothing but the four spots on the green: four stops in a circle
+     * eight paces wide, which is exactly how they used to bunch.
+     */
+    const pavement = pitch / 2 - ROAD_WIDTH / 2 - PAVEMENT_WIDTH / 2;
+
     mine.forEach((block) => {
-      /* Along the pavements on all four sides of the block. */
+      /* Along the pavements on all four sides of the block, at even intervals
+         rather than at four random points that can land on top of each other. */
+      const perSide = 4;
+
       for (let side = 0; side < 4; side += 1) {
-        for (let step = 0; step < 3; step += 1) {
-          const along = random.range(-BLOCK_SIZE / 2 + 6, BLOCK_SIZE / 2 - 6);
-          const out = BLOCK_SIZE / 2 + ROAD_WIDTH / 2 - PAVEMENT_WIDTH / 2;
+        for (let step = 0; step < perSide; step += 1) {
+          const reach = BLOCK_SIZE / 2 - 7;
+          const along =
+            (step / (perSide - 1) - 0.5) * 2 * reach + random.range(-2.5, 2.5);
 
           spots.push(
             side === 0
-              ? { x: block.x + along, z: block.z - out }
+              ? { x: block.x + along, z: block.z - pavement }
               : side === 1
-                ? { x: block.x + along, z: block.z + out }
+                ? { x: block.x + along, z: block.z + pavement }
                 : side === 2
-                  ? { x: block.x - out, z: block.z + along }
-                  : { x: block.x + out, z: block.z + along },
+                  ? { x: block.x - pavement, z: block.z + along }
+                  : { x: block.x + pavement, z: block.z + along },
           );
         }
       }
 
-      /* And on the green in the middle, which the houses ring but do not fill. */
+      /* And on the green in the middle, which the houses ring but do not fill —
+         spread around it rather than dropped anywhere inside it. */
+      const turn = random.range(0, Math.PI * 2);
+
       for (let step = 0; step < 4; step += 1) {
+        const angle = turn + (step / 4) * Math.PI * 2;
+        const reach = random.range(5, 9);
+
         spots.push({
-          x: block.x + random.range(-8, 8),
-          z: block.z + random.range(-8, 8),
+          x: block.x + Math.cos(angle) * reach,
+          z: block.z + Math.sin(angle) * reach,
         });
       }
     });

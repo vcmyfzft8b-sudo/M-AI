@@ -52,11 +52,19 @@ export function createAvatar(): Avatar {
   const brim = new THREE.Mesh(box(0.6, 0.08, 0.34), capColor);
   const backpack = new THREE.Mesh(box(0.5, 0.6, 0.22), jeans);
 
+  /*
+   * The figure faces local +Z, because that is the way the controller walks.
+   * `facing` moves the character along `(sin facing, cos facing)` and the
+   * camera sits at the negative of that, behind the head — so a figure built
+   * facing -Z, as this one was, is turned exactly half a circle from the way it
+   * is going, and the whole town is walked backwards with the brim of the cap
+   * leading and the backpack pointed where the player is looking.
+   */
   torso.position.y = 1.16;
   head.position.y = 1.86;
   cap.position.set(0, 2.18, 0);
-  brim.position.set(0, 2.12, -0.42);
-  backpack.position.set(0, 1.2, 0.3);
+  brim.position.set(0, 2.12, 0.42);
+  backpack.position.set(0, 1.2, -0.3);
 
   /*
    * Limbs hang from pivots at the shoulder and hip, so rotating the pivot
@@ -89,8 +97,9 @@ export function createAvatar(): Avatar {
   const leftShoe = new THREE.Mesh(box(0.3, 0.16, 0.42), shoes);
   const rightShoe = new THREE.Mesh(box(0.3, 0.16, 0.42), shoes);
 
-  leftShoe.position.set(0, -0.78, -0.06);
-  rightShoe.position.set(0, -0.78, -0.06);
+  /* Toes lead, so they point the way the figure faces. */
+  leftShoe.position.set(0, -0.78, 0.06);
+  rightShoe.position.set(0, -0.78, 0.06);
   leftLeg.add(leftShoe);
   rightLeg.add(rightShoe);
 

@@ -12356,19 +12356,26 @@
 /* No cards: the board and the code sit on the page under plain headings,
    the way the theme switch does on Settings. */
 .memo-giveaway-board,
-.memo-giveaway-code-card {
+.memo-giveaway-code-section {
   display: grid;
   gap: 0.9rem;
   margin-top: 1.6rem;
 }
 
 .memo-giveaway-board .memo-settings-heading,
-.memo-giveaway-code-card .memo-settings-heading {
+.memo-giveaway-code-section .memo-settings-heading {
   display: block;
   margin: 0;
   font-size: 1.25rem;
   font-weight: 750;
   letter-spacing: -0.03em;
+}
+
+/* The code is the one thing here you act on: it takes the plan card's surface. */
+.memo-card-row.memo-giveaway-code-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.9rem;
 }
 
 .memo-giveaway-code {
@@ -12796,10 +12803,14 @@
   box-shadow: inset 0 0 0 2px var(--giveaway-tint-line);
 }
 
-/* Rows below the podium start at fourth place. */
+/* Rows below the podium start at fourth place, grouped on one surface the
+   way the settings list is. */
 .memo-giveaway-list {
   margin-top: 0.4rem;
-  border-top: 1px solid var(--line);
+  padding: 0.2rem 1.2rem;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .memo-giveaway-viewer-row {
@@ -12937,7 +12948,7 @@
   }
 
   .memo-giveaway-board .memo-settings-heading,
-  .memo-giveaway-code-card .memo-settings-heading {
+  .memo-giveaway-code-section .memo-settings-heading {
     margin: 0;
   }
 

@@ -213,8 +213,9 @@ export function GiveawayScreen({
               />
             </section>
 
-            <section className="memo-giveaway-code-card">
+            <section className="memo-giveaway-code-section">
               <h2 className="memo-settings-heading">{t("giveaway.code.label")}</h2>
+              <div className="memo-card-row memo-giveaway-code-card">
               <span className="memo-giveaway-code" aria-label={state.code}>
                 {state.code}
               </span>
@@ -260,6 +261,7 @@ export function GiveawayScreen({
                     {t("giveaway.progress.pending", { count: state.progress.pendingCount })}
                   </span>
                 ) : null}
+              </div>
               </div>
             </section>
 

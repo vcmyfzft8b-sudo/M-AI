@@ -460,6 +460,25 @@ export function LecturePodcast({
     [turns.length, durationOf],
   );
 
+  /**
+   * Stops waiting for an episode that is not coming.
+   *
+   * Only ever for the episode the listener actually tapped: a later tap replaces the pending id,
+   * and a stale answer about an earlier one must not take the current spinner down with it.
+   */
+  const giveUpOpening = useCallback(
+    (episodeId: string | null) => {
+      if (!episodeId || pendingEpisodeIdRef.current !== episodeId) {
+        return;
+      }
+
+      pendingEpisodeIdRef.current = null;
+      setOpeningEpisodeId(null);
+      setError(t("podcast.error.status"));
+    },
+    [t],
+  );
+
   const loadStatus = useCallback(
     async (options?: { silent?: boolean }) => {
       const query = new URLSearchParams({
@@ -468,6 +487,21 @@ export function LecturePodcast({
         voiceA: voicesRef.current.a,
         voiceB: voicesRef.current.b,
       });
+
+      /*
+       * Which episode this request is really about, when the listener has tapped one.
+       *
+       * Without it the answer is only ever "the episode for the show, length and cast currently
+       * on screen", and tapping a row asks the question sideways: point the settings at it and
+       * hope the same row comes back. Anything that makes it not come back — a cast that has
+       * been changed since, a rate-limited reply, a request superseded mid-flight — leaves the
+       * row spinning with nothing left to stop it, which is exactly what it did.
+       */
+      const wanted = pendingEpisodeIdRef.current;
+
+      if (wanted) {
+        query.set("episodeId", wanted);
+      }
 
       const requestId = statusRequestRef.current + 1;
       statusRequestRef.current = requestId;
@@ -480,12 +514,17 @@ export function LecturePodcast({
         if (!response.ok) {
           /* Still an answer: it settles the screen onto the chooser rather than a spinner. */
           setHasLoadedStatus(true);
+          giveUpOpening(wanted);
           return null;
         }
 
         const payload = (await response.json()) as PodcastStatus;
 
-        /* Something newer has been asked for since; this answer is about the past. */
+        /*
+         * Something newer has been asked for since; this answer is about the past. The open is
+         * left alone rather than abandoned: the request that superseded this one carries the
+         * same pending id and will either open the episode or give up on it.
+         */
         if (requestId !== statusRequestRef.current) {
           return null;
         }
@@ -509,6 +548,12 @@ export function LecturePodcast({
           setPositionMs(0);
           /* Tapping an episode in the library is a request to hear it, not to look at it. */
           setAutoPlay(true);
+        } else {
+          /*
+           * Asked for by id and not in the answer: it has been deleted, or the note has been
+           * edited since and its episodes retired with it. Either way the spinner is over.
+           */
+          giveUpOpening(wanted);
         }
 
         if (payload.podcast?.status === "ready" && isWritingRef.current) {
@@ -530,6 +575,7 @@ export function LecturePodcast({
         return payload;
       } catch {
         setHasLoadedStatus(true);
+        giveUpOpening(wanted);
 
         if (!options?.silent) {
           setError(t("podcast.error.status"));
@@ -538,7 +584,7 @@ export function LecturePodcast({
         return null;
       }
     },
-    [format, length, lectureId, t],
+    [format, length, lectureId, t, giveUpOpening],
   );
 
   /*
@@ -1007,7 +1053,11 @@ export function LecturePodcast({
     setIsChoosing(false);
 
     if (episode.format === format && episode.length === length) {
-      /* Already the variant on screen: nothing will change, so ask for it directly. */
+      /*
+       * Already the variant on screen, so nothing will change and no effect will fire: ask for
+       * it directly. The request carries the id either way — see loadStatus — so the answer is
+       * about this episode rather than about whatever the settings currently describe.
+       */
       void loadStatus({ silent: true });
       return;
     }

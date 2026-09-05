@@ -7,6 +7,7 @@ import { captureRouteError } from "@/lib/monitoring";
 import {
   getOrCreatePodcastScript,
   getPodcastRow,
+  getPodcastRowById,
   listPodcastEpisodes,
   listReadyPodcastSegments,
   loadPodcastSource,
@@ -120,19 +121,31 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     });
   }
 
+  /*
+   * The episode the listener actually tapped, when they tapped one.
+   *
+   * Without this the only question the route can answer is "which episode belongs to the show,
+   * length and cast on screen", and the library's rows are not filtered by cast — so tapping one
+   * made with Grace while the picker says Sloane asked for a variant that does not exist, got
+   * null, and left the row spinning. An id is not ambiguous. Ownership is still the lecture's:
+   * the row has to belong to the note whose page this is.
+   */
+  const episodeId = url.searchParams.get("episodeId");
   const [row, episodes] = await Promise.all([
-    getPodcastRow({
-      lectureId: id,
-      contentHash: `${source.contentHash}:${podcastCastKey({
-        voices,
-        speakerCount: getPodcastFormat(format).speakerCount,
-      })}`,
-      /* Episodes written before the cast joined the key are still found, and still open. */
-      legacyContentHash: source.contentHash,
-      format,
-      length,
-      language: source.language,
-    }),
+    episodeId
+      ? getPodcastRowById({ lectureId: id, podcastId: episodeId })
+      : getPodcastRow({
+          lectureId: id,
+          contentHash: `${source.contentHash}:${podcastCastKey({
+            voices,
+            speakerCount: getPodcastFormat(format).speakerCount,
+          })}`,
+          /* Episodes written before the cast joined the key are still found, and still open. */
+          legacyContentHash: source.contentHash,
+          format,
+          length,
+          language: source.language,
+        }),
     listPodcastEpisodes({ lectureId: id, contentHash: source.contentHash }),
   ]);
 

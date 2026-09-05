@@ -261,6 +261,32 @@ export async function getPodcastRow(variant: PodcastVariant) {
 }
 
 /**
+ * One episode, by its own id.
+ *
+ * The variant lookup above answers "which episode belongs to these settings", which is the right
+ * question while somebody is choosing and the wrong one once they have tapped a row: the library
+ * lists every episode of this note, and the settings on screen may describe a different cast
+ * entirely. Asked by id, the answer cannot come back empty because a voice was changed.
+ *
+ * Scoped to the lecture rather than trusted from the client — the id travels through the browser
+ * and ownership of the note is the only thing the route has actually verified.
+ */
+export async function getPodcastRowById(params: { lectureId: string; podcastId: string }) {
+  const { data, error } = await createSupabaseServiceRoleClient()
+    .from("lecture_podcasts")
+    .select("*")
+    .eq("id", params.podcastId)
+    .eq("lecture_id", params.lectureId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? null) as LecturePodcastRow | null;
+}
+
+/**
  * Every finished episode this note already has.
  *
  * Only for the note as it stands now: the content hash is part of a variant's identity, so an

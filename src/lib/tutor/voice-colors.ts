@@ -54,9 +54,16 @@ export function voiceHue(voice: string) {
  * are read straight into an oklch() in the stylesheet, and 330 there is magenta rather than the
  * pink it would be in HSL. The pair came out purple.
  */
+/*
+ * Wide halves, not narrow ones. Thirty-five degrees kept a pair beautifully together and made
+ * the picker useless: eleven voices three degrees apart are eleven identical dots, and the whole
+ * reason these have a colour at all is that the tutor's picker shows you which voice you are
+ * choosing. A hundred degrees puts ten between neighbours — plainly different in a row — while
+ * the two halves still cannot meet, so no pair of hosts can ever come out the same colour.
+ */
 const PODCAST_HUE_HALVES = {
-  a: { start: 265, span: 35 },
-  b: { start: 315, span: 35 },
+  a: { start: 200, span: 100 },
+  b: { start: 310, span: 100 },
 } as const;
 
 const PODCAST_HUE_ORDER = Object.entries(VOICE_HUES)

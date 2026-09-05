@@ -130,12 +130,18 @@ export async function GET(request: Request) {
    * request for one is a client that has drifted, and paying to synthesize what is already on
    * disk would be the wrong way to be forgiving about it.
    *
-   * The pre-rendered files say the tutor's line, so only the tutor may be sent to them. A podcast
-   * audition is synthesized in every language, which is one paid call per voice and language, and
-   * free for ever after — the answer never changes and is cached as such.
+   * Both auditions have files now — a tutor line and a host line, which are different jobs and
+   * different sentences. A language without them is a learner's material in something the app has
+   * no note furniture for, and that is synthesized once per voice and language and free for ever
+   * after: the answer never changes and is cached as such.
    */
-  if (parsed.data.context === "tutor" && hasStaticVoiceSamples(language)) {
-    return NextResponse.redirect(new URL(`/tutor-demo/${language}/${parsed.data.voice.toLowerCase()}-sample.mp3`, url), 308);
+  if (hasStaticVoiceSamples(language)) {
+    const kind = parsed.data.context === "podcast" ? "podcast" : "sample";
+
+    return NextResponse.redirect(
+      new URL(`/tutor-demo/${language}/${parsed.data.voice.toLowerCase()}-${kind}.mp3`, url),
+      308,
+    );
   }
 
   const env = getServerEnv();

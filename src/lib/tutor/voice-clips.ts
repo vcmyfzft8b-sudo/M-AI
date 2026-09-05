@@ -17,7 +17,7 @@ const SAMPLE_LANGUAGES = new Set<string>(NOTE_LANGUAGE_OPTIONS.map((option) => o
 /* The landing page's own locales. German and Italian are note languages, not page ones. */
 const BED_LANGUAGES = new Set(["sl", "en", "hr", "bs", "sr"]);
 
-function clip(language: string, voice: string, kind: "sample" | "tutor" | "answer") {
+function clip(language: string, voice: string, kind: "sample" | "podcast" | "tutor" | "answer") {
   return `/tutor-demo/${language}/${voice.toLowerCase()}-${kind}.mp3`;
 }
 
@@ -36,13 +36,16 @@ export function hasStaticVoiceSamples(language: string) {
 /**
  * The audition line for a podcast host.
  *
- * Never the pre-rendered files: those say the tutor's line, and a voice introducing itself as
- * your tutor while you pick between two podcast hosts is the sort of seam that makes a screen
- * feel assembled. Synthesized once per voice and language, then cached for ever — the answer for
- * a given pair never changes.
+ * Its own file rather than the tutor's: those say "I'm your tutor", and a voice introducing
+ * itself as your tutor while you pick between two podcast hosts is the sort of seam that makes a
+ * screen feel assembled out of parts. Pre-rendered for the seven languages the app has note
+ * furniture for, which is what makes the first tap instant; a learner's material can be in any
+ * language Soniox speaks, and those are still synthesized once and cached for ever.
  */
 export function podcastVoiceSampleClip(voice: string, language: string) {
-  return `/api/tutor/voice-sample?voice=${encodeURIComponent(voice)}&language=${encodeURIComponent(language)}&context=podcast`;
+  return hasStaticVoiceSamples(language)
+    ? clip(language, voice, "podcast")
+    : `/api/tutor/voice-sample?voice=${encodeURIComponent(voice)}&language=${encodeURIComponent(language)}&context=podcast`;
 }
 
 /** The audition line, in the language the tutor will actually speak. */

@@ -1709,6 +1709,4 @@ export const sl = {
   "giveaway.error.load": "Lestvice ni bilo mogoče naložiti.",
   "giveaway.error.unavailable": "Nagradna igra trenutno ni na voljo.",
   "landing.giveaway.referralBanner": "Koda {code} ti prinese 50 % popusta – uporabi se sama ob nakupu.",
-  "paywall.referralApplied": "Koda {code}: prvo obdobje {amount} namesto {full}",
-  "paywall.referralAppliedNamed": "{name} ti podarja 50 %: prvo obdobje {amount} namesto {full}",
 };

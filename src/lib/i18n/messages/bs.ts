@@ -1688,6 +1688,4 @@ export const bs: Messages = {
   "giveaway.error.load": "Rang-listu nije bilo moguće učitati.",
   "giveaway.error.unavailable": "Nagradna igra trenutno nije dostupna.",
   "landing.giveaway.referralBanner": "Kod {code} donosi ti 50 % popusta – primjenjuje se sam pri kupovini.",
-  "paywall.referralApplied": "Kod {code}: prvi period {amount} umjesto {full}",
-  "paywall.referralAppliedNamed": "{name} ti poklanja 50 %: prvi period {amount} umjesto {full}",
 };

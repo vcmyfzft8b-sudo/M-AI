@@ -1676,6 +1676,4 @@ export const en: Messages = {
   "giveaway.error.load": "The leaderboard could not be loaded.",
   "giveaway.error.unavailable": "The giveaway is not available right now.",
   "landing.giveaway.referralBanner": "Code {code} gets you 50% off – it applies itself at checkout.",
-  "paywall.referralApplied": "Code {code}: first period {amount} instead of {full}",
-  "paywall.referralAppliedNamed": "{name} is giving you 50% off: first period {amount} instead of {full}",
 };

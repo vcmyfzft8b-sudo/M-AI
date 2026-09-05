@@ -97,8 +97,15 @@ export async function POST(request: Request) {
      * the opposite of what the sheet promised. Charging the discounted period
      * straight away is what the offer actually says.
      */
+    /*
+     * A friend's giveaway code keeps the trial: the paywall promised three
+     * free days and says nothing about the code, so the buyer sees exactly
+     * what it said, and the 50 % lands on the first paid invoice — the same
+     * path as a code typed on Stripe's page. Only the wheel's prize removes
+     * the trial, for the reasons above.
+     */
     const subscriptionTrialEligible =
-      appState.subscriptionTrialEligible && !hasPriorStripeSubscription && !discount;
+      appState.subscriptionTrialEligible && !hasPriorStripeSubscription && !wheelCoupon;
     const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
       metadata: {
         userId: appState.user.id,

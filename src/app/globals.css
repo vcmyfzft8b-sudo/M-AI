@@ -701,20 +701,6 @@ a:visited {
   font-weight: 750;
 }
 
-/* A friend's giveaway code, applied at checkout: the line names the amount,
-   so it is longer than "Nothing to pay today" and may wrap. */
-.memo-paywall-due.memo-paywall-referral {
-  max-width: min(100%, 31rem);
-  color: #f45f5a;
-  font-size: clamp(0.95rem, 3.6vw, 1.1rem);
-  text-align: center;
-  text-wrap: balance;
-}
-
-.memo-paywall-due.memo-paywall-referral svg {
-  flex: 0 0 auto;
-}
-
 .memo-paywall-cta {
   position: relative;
   display: inline-flex;

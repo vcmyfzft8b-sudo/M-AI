@@ -1688,6 +1688,4 @@ export const hr: Messages = {
   "giveaway.error.load": "Ljestvicu nije bilo moguće učitati.",
   "giveaway.error.unavailable": "Nagradna igra trenutačno nije dostupna.",
   "landing.giveaway.referralBanner": "Kod {code} donosi ti 50 % popusta – primjenjuje se sam pri kupnji.",
-  "paywall.referralApplied": "Kod {code}: prvo razdoblje {amount} umjesto {full}",
-  "paywall.referralAppliedNamed": "{name} ti poklanja 50 %: prvo razdoblje {amount} umjesto {full}",
 };

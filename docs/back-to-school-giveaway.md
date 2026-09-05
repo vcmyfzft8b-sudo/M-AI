@@ -20,9 +20,8 @@ server side — Stripe, the database, attribution, the leaderboard — is
   board with the podium, the account's code with copy, share and progress,
   a buy button for accounts without a subscription, and one line of rules.
   The creator demo has the same screen on made-up data at `/creator/giveaway`.
-- **Paywall** (`/app/start`): when a friend's code is waiting, the "nothing to
-  pay today" line becomes "Code X: first period €65 instead of €130" for the
-  selected plan.
+- **Paywall** (`/app/start`): unchanged. A friend's code is applied at
+  checkout without being mentioned here.
 
 ## Codes
 
@@ -44,19 +43,18 @@ The row is in `public.giveaway_codes`, one per account per campaign.
 `/r/<code>` sets the `memo-giveaway-ref` cookie (30 days) and redirects to
 `/`, or to `/app/start` for a signed-in visitor. Checkout
 (`/api/billing/checkout`) reads the cookie, resolves it to the promotion code
-and attaches it as the session's discount. Because the discount is on the
-first payment, a checkout with a code **skips the 3-day trial** and charges
-the discounted first period straight away — the same decision the prize wheel
-made, and the reason a referral can qualify the moment a friend pays.
+and attaches it as the session's discount. The trial is kept: the paywall
+promises three free days and does not mention the code, so the buyer gets
+exactly that, and the 50 % lands on the first paid invoice. The referral is
+`pending` until then and counts when the trial converts.
 
-The first code a signed-in account is seen with — on the link, on the paywall,
-at checkout — is written to the profile (`giveaway_referral_code`, migration
+The first code a signed-in account is seen with — on the link or at checkout —
+is written to the profile (`giveaway_referral_code`, migration
 0041), and checkout falls back to it when the cookie is gone. That is what
 lets an existing user open a friend's link on one device and buy on another.
 An account cannot use its own code through the link (the cookie is ignored
 for the code's owner). A friend can also type the code on Stripe's page when
-no cookie is set; that path keeps the trial and the referral stays `pending`
-until the trial converts.
+no cookie is set; that path behaves the same way.
 
 ## Attribution
 

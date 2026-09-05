@@ -1483,6 +1483,38 @@ export function HomeDashboard({
     }
   }, [hasPaidAccess]);
 
+  /*
+   * Throws away the copy of this page the router is keeping for the way back.
+   *
+   * `canSpinWheel` arrives with the page, and the router holds a rendered page
+   * in memory for a minute so a tap that was warmed ahead of time does not
+   * wait for the network again — `staleTimes` in next.config.ts. Leaving the
+   * home screen for the upgrade screen and closing it again is a navigation
+   * between two pages this tab already has, so what draws on the way back is
+   * the copy taken *before* the spin: the gift card, offering a prize the
+   * account has just used, until the answer below lands and swaps it for the
+   * upgrade card. That swap is the flicker.
+   *
+   * `hasClaimedDiscount` cannot cover it. It is what hides the gift between
+   * the spin and the server catching up, but it belongs to this mount, and
+   * coming back from the upgrade screen is a new one — the card it was hiding
+   * is drawn again before it exists.
+   *
+   * So the page is discarded the moment it is known to be out of date, and the
+   * way back is served one that already knows the prize is spent: the slot
+   * holds the upgrade card from the first frame rather than correcting itself.
+   * Once per visit is enough — the copy only has to be replaced once.
+   */
+  const hasRefreshedWheelState = useRef(false);
+  const dropStaleWheelPage = useCallback(() => {
+    if (hasRefreshedWheelState.current) {
+      return;
+    }
+
+    hasRefreshedWheelState.current = true;
+    router.refresh();
+  }, [router]);
+
   useEffect(() => {
     if (hasPaidAccess) {
       return;
@@ -1500,7 +1532,23 @@ export function HomeDashboard({
           // means there is nothing to offer. Both are relaxed in development
           // so the wheel can be spun more than once an afternoon; production
           // decides them the same way it always has.
-          setCanSpinWheel(Boolean(state?.canSpin) && !state?.spunToday);
+          const available = Boolean(state?.canSpin) && !state?.spunToday;
+
+          setCanSpinWheel(available);
+
+          /*
+           * The page disagreeing with the server is the page being a stale
+           * copy — a spin taken in another tab or on the phone, or the day
+           * having turned over since it was rendered. Correcting the card here
+           * fixes this visit; dropping the copy fixes the next one, which is
+           * otherwise drawn from the same wrong answer and corrected again.
+           *
+           * Only when the page brought an answer of its own: `null` is the
+           * server having failed to look, which nothing disagrees with.
+           */
+          if (initialCanSpinWheel !== null && available !== initialCanSpinWheel) {
+            dropStaleWheelPage();
+          }
         }
       })
       .catch(() => {
@@ -1513,7 +1561,20 @@ export function HomeDashboard({
     return () => {
       cancelled = true;
     };
-  }, [hasPaidAccess]);
+  }, [dropStaleWheelPage, hasPaidAccess, initialCanSpinWheel]);
+
+  /*
+   * And the spin itself, which the answer above cannot catch: it is asked for
+   * once, when the screen mounts, which on the visit where the wheel is spun
+   * is before there is anything to report.
+   */
+  useEffect(() => {
+    if (!hasClaimedDiscount) {
+      return;
+    }
+
+    dropStaleWheelPage();
+  }, [dropStaleWheelPage, hasClaimedDiscount]);
 
   const inLibraryView = !selectedFolderId && !deferredQuery.trim();
   /*

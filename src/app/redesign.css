@@ -13311,18 +13311,26 @@
   place-items: center;
 }
 
+/*
+ * Lit like the rest of the app rather than like a sweet.
+ *
+ * The lightness and chroma below are the tab icons' own — oklch(0.66 0.15) and its neighbours —
+ * where these were a good deal brighter and more saturated than anything else on the screen.
+ * Two of them at 0.78 chroma 0.17 made the artwork the loudest object in a deliberately quiet
+ * interface, which is why it read as candy however the hue was chosen.
+ */
 .memo-podcast-orb {
   position: absolute;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 36% 30%, oklch(0.95 0.06 calc(var(--podcast-hue) + 25) / 0.95), transparent 42%),
-    radial-gradient(circle at 62% 74%, oklch(0.66 0.19 calc(var(--podcast-hue) - 15) / 0.9), transparent 60%),
+    radial-gradient(circle at 36% 30%, oklch(0.86 0.05 calc(var(--podcast-hue) + 25) / 0.95), transparent 42%),
+    radial-gradient(circle at 62% 74%, oklch(0.6 0.13 calc(var(--podcast-hue) - 15) / 0.9), transparent 60%),
     linear-gradient(
       160deg,
-      oklch(0.78 0.17 calc(var(--podcast-hue) + 10)),
-      oklch(0.58 0.19 calc(var(--podcast-hue) - 23))
+      oklch(0.7 0.13 calc(var(--podcast-hue) + 10)),
+      oklch(0.55 0.14 calc(var(--podcast-hue) - 23))
     );
-  box-shadow: 0 10px 30px oklch(0.62 0.2 var(--podcast-hue) / 0.35);
+  box-shadow: 0 10px 30px oklch(0.6 0.14 var(--podcast-hue) / 0.35);
 }
 
 .memo-podcast-orb.primary {

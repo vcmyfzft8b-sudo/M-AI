@@ -33,38 +33,40 @@ export function voiceHue(voice: string) {
 }
 
 /**
- * The podcast's own reading of the same wheel, kept inside the tab's colour.
+ * The podcast's own reading of the same wheel: indigo on the left, pink on the right.
  *
- * The tutor spreads its voices right around the wheel, which is right there: one sphere at a
- * time, and the colour is the only thing telling you which voice you picked. The podcast puts
- * two of them side by side under a coral tab, and the default pair came out orange and green —
- * two spheres that plainly did not belong to the same show, or to the screen they were on.
+ * The tutor spreads its voices right around the wheel, which is right there — one sphere at a
+ * time, and the colour is the only thing telling you which voice you picked. The podcast shows
+ * two at once, so a spread has a second job the tutor's never had: whichever two voices are
+ * chosen have to look like a pair.
  *
- * So the wheel is folded into a band around the podcast's own accent rather than replaced.
- * Every voice keeps its own colour and its place in the order; they just become shades of one
- * family — pink-coral through red and orange to amber — instead of eleven unrelated ones.
+ * A band alone does not do that. Centred on the podcast tab's own coral it produced two spheres
+ * of nearly the same colour, and widened enough to separate them it wandered into the orange the
+ * tutor tab uses and the pink the quiz does. Every hue in this app already belongs to some tab.
  *
- * Placed by RANK rather than by scaling the hue itself, because scaling inherits the gaps: the
- * tutor's hues cluster warm at the front by design, so scaling them put six voices into a third
- * of the band. Ranking spreads them evenly across it.
+ * So the band is split rather than shared. Host A lives in the indigo half and host B in the
+ * pink, and the voice chosen moves that host WITHIN its own half — the choice still shows, the
+ * two hosts can never converge, and any pair reads as one indigo-to-pink object rather than two
+ * balls that happen to be near each other. A solo episode gets the indigo half, which is where
+ * its single sphere has always sat.
  *
  * The numbers are OKLCH angles, which is worth saying because the first attempt was not: these
  * are read straight into an oklch() in the stylesheet, and 330 there is magenta rather than the
- * pink it would be in HSL. The pair came out purple. In OKLCH the podcast's own accent sits at
- * 20, so the band runs from red through coral to amber around it, and Grace and Bennett — the
- * pair nobody changes — land twenty-one degrees apart: two clearly different spheres, obviously
- * of one material, obviously belonging to the tab they are under.
+ * pink it would be in HSL. The pair came out purple.
  */
-const PODCAST_HUE_START = 0;
-const PODCAST_HUE_SPAN = 70;
+const PODCAST_HUE_HALVES = {
+  a: { start: 265, span: 35 },
+  b: { start: 315, span: 35 },
+} as const;
 
 const PODCAST_HUE_ORDER = Object.entries(VOICE_HUES)
   .sort(([, a], [, b]) => a - b)
   .map(([voice]) => voice);
 
-export function podcastVoiceHue(voice: string) {
+export function podcastVoiceHue(voice: string, speaker: "a" | "b" = "a") {
   const rank = PODCAST_HUE_ORDER.indexOf(voice);
   const step = rank < 0 ? 0 : rank / Math.max(1, PODCAST_HUE_ORDER.length - 1);
+  const half = PODCAST_HUE_HALVES[speaker];
 
-  return (PODCAST_HUE_START + step * PODCAST_HUE_SPAN) % 360;
+  return (half.start + step * half.span) % 360;
 }

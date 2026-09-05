@@ -1203,7 +1203,7 @@ export function LecturePodcast({
       {speakerCount === 2 ? (
         <span
           className="memo-podcast-orb secondary"
-          style={{ "--podcast-hue": podcastVoiceHue(voices.b) } as CSSProperties}
+          style={{ "--podcast-hue": podcastVoiceHue(voices.b, "b") } as CSSProperties}
         />
       ) : null}
     </div>
@@ -1214,7 +1214,7 @@ export function LecturePodcast({
       <button
         type="button"
         className="memo-podcast-voice-current"
-        style={{ "--podcast-hue": podcastVoiceHue(voices[speaker]) } as CSSProperties}
+        style={{ "--podcast-hue": podcastVoiceHue(voices[speaker], speaker) } as CSSProperties}
         aria-expanded={openVoiceSlot === speaker}
         onClick={() => setOpenVoiceSlot(openVoiceSlot === speaker ? null : speaker)}
       >
@@ -1248,7 +1248,7 @@ export function LecturePodcast({
               className={`memo-podcast-voice-option ${voices[speaker] === option ? "active" : ""} ${
                 previewVoice === option ? "playing" : ""
               }`.trim()}
-              style={{ "--podcast-hue": podcastVoiceHue(option) } as CSSProperties}
+              style={{ "--podcast-hue": podcastVoiceHue(option, speaker) } as CSSProperties}
               onClick={() => void chooseVoice(speaker, option)}
             >
               <Msym
@@ -1459,7 +1459,7 @@ export function LecturePodcast({
                       <span className="memo-podcast-episode-voices" aria-hidden="true">
                         <span style={{ "--podcast-hue": podcastVoiceHue(voices.a) } as CSSProperties} />
                         {shown.speakerCount === 2 ? (
-                          <span style={{ "--podcast-hue": podcastVoiceHue(voices.b) } as CSSProperties} />
+                          <span style={{ "--podcast-hue": podcastVoiceHue(voices.b, "b") } as CSSProperties} />
                         ) : null}
                       </span>
                       <span className="memo-podcast-episode-text">

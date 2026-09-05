@@ -1297,6 +1297,7 @@ export const en: Messages = {
   "api.formInvalidOrTooLarge": "The form is invalid or too large.",
   "api.codeSent": "The code is on its way. Enter it below to continue.",
   "failure.processing_stalled": "Processing got stuck. Try again.",
+  "failure.upload_incomplete": "This upload never finished, so there was nothing to work from. Upload it again.",
 
   /* ---- File validation — document size and type ---- */
   "file.documentTooLarge": "That document is too large. The limit is currently 4 MB.",

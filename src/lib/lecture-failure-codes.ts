@@ -54,6 +54,7 @@ export const LECTURE_FAILURE_MESSAGE_KEYS: Record<string, MessageKey> = {
   unsupported_link_content_type: "failure.unsupported_link_content_type",
   unsupported_link_protocol: "failure.unsupported_link_protocol",
   unsupported_video_link: "failure.unsupported_video_link",
+  upload_incomplete: "failure.upload_incomplete",
   youtube_no_captions: "failure.youtube_no_captions",
   youtube_request_blocked: "failure.youtube_request_blocked",
   // Not input failures: the AI or budget ones, recognised from the sentences the pipeline wrote
@@ -101,6 +102,9 @@ const UNRETRYABLE_LECTURE_FAILURE_CODES = new Set([
   "unsupported_link_content_type",
   "unsupported_link_protocol",
   "unsupported_video_link",
+  // Nothing reached us, so a retry would re-run the pipeline over an empty row. The learner
+  // has to upload the file again, which is a different button.
+  "upload_incomplete",
 ]);
 
 /**

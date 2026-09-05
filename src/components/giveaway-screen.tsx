@@ -184,9 +184,9 @@ export function GiveawayScreen({
             <h1>{t("giveaway.title", { prize: GIVEAWAY_PRIZE_NAME })}</h1>
             <p className="memo-giveaway-lead">{t("giveaway.lead", { goal, prize: GIVEAWAY_PRIZE_NAME })}</p>
 
-            <section className="memo-card-row memo-giveaway-card memo-giveaway-board">
+            <section className="memo-giveaway-board">
               <span className="memo-giveaway-board-head">
-                <span className="memo-giveaway-board-title">{t("giveaway.leaderboard.title")}</span>
+                <h2 className="memo-settings-heading">{t("giveaway.leaderboard.title")}</h2>
                 {!isDemo ? (
                   <span className="memo-giveaway-live">
                     <span aria-hidden="true" />
@@ -213,12 +213,10 @@ export function GiveawayScreen({
               />
             </section>
 
-            <section className="memo-card-row memo-giveaway-card memo-giveaway-code-card">
-              <span className="memo-card-row-copy">
-                <span className="memo-eyebrow">{t("giveaway.code.label")}</span>
-                <span className="memo-giveaway-code" aria-label={state.code}>
-                  {state.code}
-                </span>
+            <section className="memo-giveaway-code-card">
+              <h2 className="memo-settings-heading">{t("giveaway.code.label")}</h2>
+              <span className="memo-giveaway-code" aria-label={state.code}>
+                {state.code}
               </span>
               <div className="memo-giveaway-actions">
                 <button

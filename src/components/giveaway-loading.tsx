@@ -16,7 +16,7 @@ export function GiveawayLoading() {
           </h1>
           <span className="app-loading-pill" style={{ display: "block", height: "0.95rem", width: "min(26rem, 90%)", margin: "-0.4rem 0 1.4rem" }} />
 
-          <div className="memo-card-row memo-giveaway-card memo-giveaway-board">
+          <div className="memo-giveaway-board">
             <span className="app-loading-pill" style={{ height: "1.1rem", width: "7rem" }} />
             {[0, 1, 2].map((row) => (
               <span

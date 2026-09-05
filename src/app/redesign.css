@@ -12353,19 +12353,27 @@
   line-height: 1.45;
 }
 
-.memo-giveaway-card {
-  align-items: stretch;
-  flex-direction: column;
+/* No cards: the board and the code sit on the page under plain headings,
+   the way the theme switch does on Settings. */
+.memo-giveaway-board,
+.memo-giveaway-code-card {
+  display: grid;
   gap: 0.9rem;
+  margin-top: 1.6rem;
 }
 
-.memo-giveaway-card ~ .memo-giveaway-card {
-  margin-top: 1rem;
+.memo-giveaway-board .memo-settings-heading,
+.memo-giveaway-code-card .memo-settings-heading {
+  display: block;
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
 }
 
 .memo-giveaway-code {
   display: inline-block;
-  margin: 0.2rem 0 0.3rem;
+  margin: -0.2rem 0 0.1rem;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 1.9rem;
   font-weight: 800;
@@ -12417,9 +12425,7 @@
 .memo-giveaway-progress {
   display: grid;
   gap: 0.55rem;
-  margin-top: 0.3rem;
-  padding-top: 0.9rem;
-  border-top: 1px solid var(--line);
+  margin-top: 0.4rem;
 }
 
 .memo-giveaway-progress-row {
@@ -12910,19 +12916,29 @@
     font-size: 1.45rem;
   }
 
-  .memo-giveaway-card.memo-card-row {
-    gap: 0.8rem;
-  }
-
   .memo-giveaway-code {
     font-size: 1.7rem;
   }
 
   /* The phone paints the primary pill coral; the share button is the
      primary action here and keeps it, the copy button stays on the tile. */
-  .memo-card-row .memo-giveaway-secondary {
+  .memo-giveaway-code-card .memo-giveaway-secondary {
     width: 100%;
     height: 3.3rem;
+  }
+
+  .memo-giveaway-code-card .memo-primary-pill {
+    justify-content: center;
+    width: 100%;
+    height: 3.3rem;
+    background: var(--coral);
+    color: #fff;
+    box-shadow: 0 10px 22px rgba(244, 95, 90, 0.24);
+  }
+
+  .memo-giveaway-board .memo-settings-heading,
+  .memo-giveaway-code-card .memo-settings-heading {
+    margin: 0;
   }
 
   .memo-giveaway-buy {

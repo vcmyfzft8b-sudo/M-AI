@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useAppHref } from "@/components/creator-demo/creator-demo-context";
-import { GiveawayPhone } from "@/components/giveaway-phone";
 import { GiveawayPodium } from "@/components/giveaway-podium";
 import { useTranslations } from "@/components/i18n-provider";
 import { InstantLink } from "@/components/instant-link";
@@ -182,36 +181,12 @@ export function GiveawayScreen({
 
         <div className="memo-screen-scroll">
           <div className="memo-page">
-            {/* The prize first, and big: the phone is what the screen is about. */}
-            <header className="memo-giveaway-head">
-              <span className="memo-giveaway-head-copy">
-                <span className="memo-eyebrow">{t("giveaway.eyebrow")}</span>
-                <h1>{t("giveaway.title", { prize: GIVEAWAY_PRIZE_NAME })}</h1>
-                <p>{t("giveaway.lead", { goal, prize: GIVEAWAY_PRIZE_NAME })}</p>
-              </span>
-              <span className="memo-giveaway-prize">
-                <GiveawayPhone
-                  scale={0.34}
-                  note={{
-                    title: t("giveaway.phone.noteTitle"),
-                    body: t("giveaway.phone.noteBody", { goal }),
-                  }}
-                />
-                <span className="memo-giveaway-prize-tag">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/giveaway/trophy.png" alt="" width={64} height={64} />
-                  {t("giveaway.prize.tag", { goal })}
-                </span>
-              </span>
-            </header>
+            <h1>{t("giveaway.title", { prize: GIVEAWAY_PRIZE_NAME })}</h1>
+            <p className="memo-giveaway-lead">{t("giveaway.lead", { goal, prize: GIVEAWAY_PRIZE_NAME })}</p>
 
             <section className="memo-card-row memo-giveaway-card memo-giveaway-board">
               <span className="memo-giveaway-board-head">
-                <span className="memo-giveaway-board-title">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img className="memo-giveaway-trophy" src="/giveaway/trophy.png" alt="" width={64} height={64} />
-                  <span>{t("giveaway.leaderboard.title")}</span>
-                </span>
+                <span className="memo-giveaway-board-title">{t("giveaway.leaderboard.title")}</span>
                 {!isDemo ? (
                   <span className="memo-giveaway-live">
                     <span aria-hidden="true" />
@@ -236,10 +211,6 @@ export function GiveawayScreen({
                 goal={goal}
                 viewer={{ qualifiedCount: qualified }}
               />
-
-              {state.leaderboard.entries.length === 0 ? (
-                <p className="memo-giveaway-empty">{t("giveaway.leaderboard.empty")}</p>
-              ) : null}
             </section>
 
             <section className="memo-card-row memo-giveaway-card memo-giveaway-code-card">
@@ -248,7 +219,6 @@ export function GiveawayScreen({
                 <span className="memo-giveaway-code" aria-label={state.code}>
                   {state.code}
                 </span>
-                <span className="memo-card-row-detail">{t("giveaway.code.hint")}</span>
               </span>
               <div className="memo-giveaway-actions">
                 <button
@@ -299,11 +269,11 @@ export function GiveawayScreen({
               <div className="memo-giveaway-buy">
                 <span className="memo-giveaway-buy-copy">
                   <span className="memo-card-row-title">{t("giveaway.buy.title")}</span>
-                  <span className="memo-card-row-detail">
-                    {referralCode
-                      ? t("giveaway.buy.withCode", { code: referralCode })
-                      : t("giveaway.buy.detail")}
-                  </span>
+                  {referralCode ? (
+                    <span className="memo-card-row-detail">
+                      {t("giveaway.buy.withCode", { code: referralCode })}
+                    </span>
+                  ) : null}
                 </span>
                 <InstantLink href={startHref} className="memo-primary-pill">
                   <Emoji symbol="✨" size="1rem" />
@@ -312,16 +282,7 @@ export function GiveawayScreen({
               </div>
             ) : null}
 
-            <section className="memo-giveaway-rules">
-              <h2 className="memo-settings-heading">{t("giveaway.rules.title")}</h2>
-              <ul>
-                {(
-                  ["giveaway.rules.1", "giveaway.rules.2", "giveaway.rules.3", "giveaway.rules.4"] as const
-                ).map((key) => (
-                  <li key={key}>{t(key, { goal })}</li>
-                ))}
-              </ul>
-            </section>
+            <p className="memo-fine-print">{t("giveaway.rules.short")}</p>
           </div>
         </div>
       </div>

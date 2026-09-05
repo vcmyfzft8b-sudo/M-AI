@@ -64,11 +64,7 @@ export function LandingGiveawayBoard({ initial }: { initial: GiveawayLeaderboard
   return (
     <div className="landing-v2-giveaway-board">
       <div className="landing-v2-giveaway-board-head">
-        <h3>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/giveaway/trophy.png" alt="" width={64} height={64} />
-          {t("landing.giveaway.leaderboardTitle")}
-        </h3>
+        <h3>{t("landing.giveaway.leaderboardTitle")}</h3>
         <span className="landing-v2-giveaway-live">
           <span aria-hidden="true" />
           {t("giveaway.leaderboard.live")}
@@ -84,11 +80,6 @@ export function LandingGiveawayBoard({ initial }: { initial: GiveawayLeaderboard
 
       <GiveawayPodium entries={entries} prefix="landing-v2-giveaway" goal={board.goal} />
 
-      {entries.length === 0 ? (
-        <p className="landing-v2-giveaway-empty">{t("landing.giveaway.leaderboardEmpty")}</p>
-      ) : null}
-
-      <p className="landing-v2-giveaway-goal">{t("landing.giveaway.step3Title", { goal: board.goal })}</p>
     </div>
   );
 }

@@ -12317,14 +12317,6 @@
   min-width: 0;
 }
 
-.memo-giveaway-promo-eyebrow {
-  color: var(--promo);
-  font-size: 0.78rem;
-  font-weight: 750;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
 .memo-giveaway-promo-title {
   font-size: 1.08rem;
   font-weight: 700;
@@ -12353,78 +12345,12 @@
 }
 
 /* ---- The screen ---- */
-/* The heading and the prize side by side, the prize under a pool of light. */
-.memo-giveaway-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 1.5rem 2.5rem;
-  margin: 0 0 1.4rem;
-}
-
-.memo-giveaway-prize {
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  justify-items: center;
-  gap: 0.9rem;
-  padding: 1rem 0.5rem 0.4rem;
-}
-
-.memo-giveaway-prize::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  left: 50%;
-  top: 45%;
-  width: 22rem;
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  background:
-    radial-gradient(circle, rgba(244, 95, 90, 0.22) 0%, transparent 58%),
-    radial-gradient(circle at 60% 40%, rgba(124, 92, 255, 0.18) 0%, transparent 55%);
-  pointer-events: none;
-}
-
-.memo-giveaway-prize-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.4rem 0.9rem 0.4rem 0.6rem;
-  border-radius: 999px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  font-size: 0.88rem;
-  font-weight: 650;
-  text-align: center;
-}
-
-.memo-giveaway-prize-tag img {
-  width: 1.5rem;
-  height: 1.5rem;
-}
-
-.memo-giveaway-head-copy {
-  display: grid;
-  gap: 0.2rem;
-  min-width: 0;
-}
-
-.memo-giveaway-head .memo-eyebrow {
-  color: var(--promo);
-}
-
-.memo-giveaway-head h1 {
-  margin: 0;
-  font-size: 2.1rem;
-}
-
-.memo-giveaway-head p {
-  margin: 0;
-  max-width: 36rem;
+.memo-giveaway-lead {
+  margin: -0.4rem 0 1.4rem;
+  max-width: 40rem;
   color: var(--muted);
   font-size: 1rem;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 .memo-giveaway-card {
@@ -12543,17 +12469,9 @@
 }
 
 .memo-giveaway-board-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
   font-size: 1.08rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-}
-
-.memo-giveaway-board-title .memo-settings-tile {
-  width: 2.3rem;
-  height: 2.3rem;
 }
 
 .memo-giveaway-live {
@@ -12604,12 +12522,6 @@
   background: var(--giveaway-tint);
   font-size: 0.95rem;
   line-height: 1.4;
-}
-
-.memo-giveaway-empty {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.98rem;
 }
 
 .memo-giveaway-list {
@@ -12741,12 +12653,6 @@
 .memo-giveaway-podium-place.place-1 .memo-giveaway-podium-medal img {
   width: 2.7rem;
   height: 2.7rem;
-}
-
-.memo-giveaway-trophy {
-  width: 2.3rem;
-  height: 2.3rem;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.18));
 }
 
 .memo-giveaway-podium-avatar {
@@ -12935,7 +12841,7 @@
   }
 }
 
-/* ---- Buy and rules: rows on the page, not more cards ---- */
+/* ---- Buy: a row on the page, not another card ---- */
 .memo-giveaway-buy {
   display: flex;
   align-items: center;
@@ -12951,27 +12857,8 @@
   min-width: 0;
 }
 
-.memo-giveaway-rules {
-  margin-top: 1.6rem;
-}
 
-.memo-giveaway-rules .memo-settings-heading {
-  display: block;
-  margin: 0 0 0.5rem;
-  font-size: 1rem;
-  font-weight: 750;
-  letter-spacing: -0.02em;
-}
 
-.memo-giveaway-rules ul {
-  display: grid;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 0 0 0 1.1rem;
-  color: var(--muted);
-  font-size: 0.9rem;
-  line-height: 1.4;
-}
 
 @media (max-width: 1099px) {
   /* Back sits on the left, where the support screen's does. */
@@ -12982,45 +12869,6 @@
   /* Clears the floating back control, the way the support head does. */
   .memo-giveaway-screen .memo-page {
     padding-top: 3.6rem;
-  }
-
-  /* Stacked: the prize first, centred, then the heading under it. */
-  .memo-giveaway-head {
-    grid-template-columns: 1fr;
-    gap: 0.6rem;
-    margin-bottom: 1.2rem;
-    text-align: center;
-  }
-
-  .memo-giveaway-head-copy {
-    justify-items: center;
-  }
-
-  .memo-giveaway-head h1 {
-    font-size: 1.85rem;
-  }
-
-  .memo-giveaway-prize {
-    order: -1;
-    padding-top: 0.4rem;
-  }
-
-  .memo-giveaway-prize .giveaway-phone {
-    --phone-scale: 0.36;
-  }
-
-  .memo-giveaway-podium-medal img {
-    width: 1.9rem;
-    height: 1.9rem;
-  }
-
-  .memo-giveaway-podium-place.place-1 .memo-giveaway-podium-medal img {
-    width: 2.3rem;
-    height: 2.3rem;
-  }
-
-  .memo-giveaway-head p {
-    font-size: 0.95rem;
   }
 
   /* The settings card takes the phone list's proportions. */
@@ -13091,7 +12939,4 @@
     box-shadow: 0 10px 22px rgba(244, 95, 90, 0.24);
   }
 
-  .memo-giveaway-rules .memo-settings-heading {
-    margin: 0 0 0.5rem;
-  }
 }

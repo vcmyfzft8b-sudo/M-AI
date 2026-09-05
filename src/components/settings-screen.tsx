@@ -426,9 +426,6 @@ export function SettingsScreen({
                 <Emoji symbol="📱" size="1.5rem" />
               </span>
               <span className="memo-giveaway-promo-copy">
-                <span className="memo-giveaway-promo-eyebrow">
-                  {t("settings.giveaway.eyebrow")}
-                </span>
                 <span className="memo-giveaway-promo-title">
                   {t("settings.giveaway.title", { prize: GIVEAWAY_PRIZE_NAME })}
                 </span>

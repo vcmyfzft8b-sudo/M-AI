@@ -11,16 +11,16 @@ server side — Stripe, the database, attribution, the leaderboard — is
 
 ## Where it appears
 
-- **Landing page** (`/`): a `#giveaway` section after the hero with the rules,
-  a live top-five board, and a CTA. It is in the nav menu. A visitor who came
+- **Landing page** (`/`): a `#giveaway` section after the hero with the title,
+  one line, a CTA and the live board. It is in the nav menu. A visitor who came
   through a share link also sees a pill under the hero buttons saying their
   friend's code will be applied.
 - **Settings** (`/app/settings`): a card at the top, drawn like a settings row, that opens the
   giveaway screen.
-- **Giveaway screen** (`/app/giveaway`): the account's code with copy and
-  share, progress towards the goal, the live board, a buy card for accounts
-  without a subscription, how it works, and the rules. The creator demo has
-  the same screen on made-up data at `/creator/giveaway`.
+- **Giveaway screen** (`/app/giveaway`): a title and one line, the live
+  board with the podium, the account's code with copy, share and progress,
+  a buy button for accounts without a subscription, and one line of rules.
+  The creator demo has the same screen on made-up data at `/creator/giveaway`.
 - **Paywall** (`/app/start`): when a friend's code is waiting, the "nothing to
   pay today" line becomes "Code X: first period €65 instead of €130" for the
   selected plan.

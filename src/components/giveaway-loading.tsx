@@ -11,26 +11,10 @@ export function GiveawayLoading() {
 
       <div className="memo-screen-scroll">
         <div className="memo-page">
-          <div className="memo-giveaway-head">
-            <span className="memo-giveaway-head-copy">
-              <span className="app-loading-pill" style={{ height: "0.78rem", width: "9rem" }} />
-              <span className="app-loading-pill" style={{ height: "1.5rem", width: "11rem", marginTop: "0.3rem" }} />
-              <span className="app-loading-pill" style={{ height: "0.95rem", width: "min(24rem, 90%)", marginTop: "0.3rem" }} />
-            </span>
-            <span className="memo-giveaway-prize">
-              <span className="app-loading-pill" style={{ width: "9rem", height: "18.4rem", borderRadius: "1.6rem" }} />
-            </span>
-          </div>
-
-          <div className="memo-card-row memo-giveaway-card">
-            <span className="memo-card-row-copy">
-              <span className="app-loading-pill" style={{ height: "0.78rem", width: "4.5rem" }} />
-              <span className="app-loading-pill" style={{ height: "2rem", width: "10rem", marginTop: "0.5rem" }} />
-              <span className="app-loading-pill" style={{ height: "0.95rem", width: "min(18rem, 90%)", marginTop: "0.4rem" }} />
-            </span>
-            <span className="app-loading-pill" style={{ height: "3rem", width: "100%", borderRadius: "999px" }} />
-            <span className="app-loading-pill" style={{ height: "0.7rem", width: "100%", borderRadius: "999px" }} />
-          </div>
+          <h1>
+            <span className="app-loading-pill" style={{ display: "inline-block", height: "1.15rem", width: "13rem" }} />
+          </h1>
+          <span className="app-loading-pill" style={{ display: "block", height: "0.95rem", width: "min(26rem, 90%)", margin: "-0.4rem 0 1.4rem" }} />
 
           <div className="memo-card-row memo-giveaway-card memo-giveaway-board">
             <span className="app-loading-pill" style={{ height: "1.1rem", width: "7rem" }} />

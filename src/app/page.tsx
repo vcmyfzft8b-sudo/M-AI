@@ -8,7 +8,6 @@ import { LandingFaq } from "@/components/landing/landing-faq";
 import { LandingFeatureShowcase } from "@/components/landing/landing-feature-showcase";
 import { LandingFlowDemo } from "@/components/landing/landing-flow-demo";
 import { LandingGiveawayBoard } from "@/components/landing/landing-giveaway";
-import { GiveawayPhone } from "@/components/giveaway-phone";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { LandingTryCallout } from "@/components/landing/landing-try-callout";
 import { LandingUserCount } from "@/components/landing/landing-user-count";
@@ -162,55 +161,16 @@ export default async function HomePage() {
       </section>
 
       <section id="giveaway" className="landing-v2-section landing-v2-giveaway" aria-labelledby="landing-giveaway-title">
-        <div className="landing-v2-giveaway-card" data-scroll-reveal="">
-          <div className="landing-v2-giveaway-copy">
-            <p className="landing-v2-giveaway-eyebrow">{t("landing.giveaway.eyebrow")}</p>
-            <h2 id="landing-giveaway-title" className="landing-v2-giveaway-title">
-              {t("landing.giveaway.title", { prize: GIVEAWAY_PRIZE_NAME })}
-            </h2>
-            <p className="landing-v2-giveaway-lead">
-              {t("landing.giveaway.lead", { goal: GIVEAWAY_GOAL, prize: GIVEAWAY_PRIZE_NAME })}
-            </p>
-
-            <ol className="landing-v2-giveaway-steps">
-              {(
-                [
-                  ["landing.giveaway.step1Title", "landing.giveaway.step1"],
-                  ["landing.giveaway.step2Title", "landing.giveaway.step2"],
-                  ["landing.giveaway.step3Title", "landing.giveaway.step3"],
-                ] as const
-              ).map(([titleKey, copyKey], index) => (
-                <li key={titleKey}>
-                  <span className="landing-v2-giveaway-step" aria-hidden="true">
-                    {index + 1}
-                  </span>
-                  <span>
-                    <strong>{t(titleKey, { goal: GIVEAWAY_GOAL })}</strong>
-                    <span>{t(copyKey, { goal: GIVEAWAY_GOAL })}</span>
-                  </span>
-                </li>
-              ))}
-            </ol>
-
-            <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-light">
-              {t("landing.giveaway.cta")}
-            </LandingLoadingLink>
-          </div>
-
-          <div className="landing-v2-giveaway-prize">
-            <GiveawayPhone
-              scale={0.62}
-              note={{
-                title: t("giveaway.phone.noteTitle"),
-                body: t("giveaway.phone.noteBody", { goal: GIVEAWAY_GOAL }),
-              }}
-            />
-            <span className="landing-v2-giveaway-prize-tag">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/giveaway/trophy.png" alt="" width={64} height={64} />
-              {t("giveaway.prize.tag", { goal: GIVEAWAY_GOAL })}
-            </span>
-          </div>
+        <div className="landing-v2-section-head landing-v2-section-head-center" data-scroll-reveal="">
+          <h2 id="landing-giveaway-title" className="landing-v2-section-title">
+            {t("landing.giveaway.title", { prize: GIVEAWAY_PRIZE_NAME })}
+          </h2>
+          <p className="landing-v2-giveaway-lead">
+            {t("landing.giveaway.lead", { goal: GIVEAWAY_GOAL, prize: GIVEAWAY_PRIZE_NAME })}
+          </p>
+          <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-light">
+            {t("landing.giveaway.cta")}
+          </LandingLoadingLink>
         </div>
 
         {leaderboard ? (

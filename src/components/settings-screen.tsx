@@ -5,6 +5,7 @@ import { useCallback, useState, useSyncExternalStore } from "react";
 
 import { BillingPortalButton } from "@/components/billing-portal-button";
 import { useTranslations } from "@/components/i18n-provider";
+import { localizedPath } from "@/lib/i18n/routing";
 import { InstantLink } from "@/components/instant-link";
 import { LanguageSettingsRow } from "@/components/language-picker";
 import { Emoji, Msym } from "@/components/msym";
@@ -93,7 +94,7 @@ export function SettingsScreen({
   /** The creator demo has no account: sign-out and deletion are hidden. */
   isDemo?: boolean;
 }) {
-  const t = useTranslations().t;
+  const { locale, t } = useTranslations();
   const { navigateWithFeedback, overlay: navigationOverlay, isNavigating } = useInstantNavigation();
   const homeHref = useAppHref("/app");
   const startHref = useAppHref("/app/start");
@@ -450,7 +451,7 @@ export function SettingsScreen({
 
             <p className="memo-fine-print">
               {t("settings.finePrint.refundBefore")}
-              <InstantLink href="/legal/refund-policy" className="memo-underline-link">
+              <InstantLink href={localizedPath("/legal/refund-policy", locale)} className="memo-underline-link">
                 {t("settings.finePrint.refundLink")}
               </InstantLink>
               .

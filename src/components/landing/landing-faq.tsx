@@ -3,23 +3,7 @@
 import { useState } from "react";
 
 import { useT } from "@/components/i18n-provider";
-import type { MessageKey } from "@/lib/i18n/messages/keys";
-
-/*
- * The language answer used to promise study material "in another language too",
- * which the app has not done since it started writing every note in the
- * language of the source it was given (see `buildGeneratedContentLanguageInstruction`
- * in src/lib/languages.ts). Translating that claim into four more languages
- * would have spread a promise the product does not keep, so the answer now
- * says what actually happens.
- */
-const FAQ_ROWS: Array<{ q: MessageKey; a: MessageKey }> = [
-  { q: "landing.faq.processing.q", a: "landing.faq.processing.a" },
-  { q: "landing.faq.formats.q", a: "landing.faq.formats.a" },
-  { q: "landing.faq.language.q", a: "landing.faq.language.a" },
-  { q: "landing.faq.recordings.q", a: "landing.faq.recordings.a" },
-  { q: "landing.faq.price.q", a: "landing.faq.price.a" },
-];
+import { FAQ_ROWS } from "@/lib/landing-faq";
 
 export function LandingFaq() {
   const t = useT();

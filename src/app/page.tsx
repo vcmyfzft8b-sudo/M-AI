@@ -24,9 +24,13 @@ import {
   SEO_BRAND_NAME,
   SEO_SITE_URL,
 } from "@/lib/brand";
+import type { Locale } from "@/lib/i18n/locales";
+import { localizedPath } from "@/lib/i18n/routing";
 import { getTranslations } from "@/lib/i18n/server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
+import { FAQ_ROWS } from "@/lib/landing-faq";
 import { hasPublicSupabaseEnv } from "@/lib/public-env";
+import { localizedPageMetadata } from "@/lib/seo";
 
 import "./landing.css";
 
@@ -41,11 +45,21 @@ const interTight = Inter_Tight({
    generated face — the banner presents them as actual users. */
 const HERO_AVATARS = ["/avatars/student-1.jpg", "/avatars/student-3.jpg", "/avatars/student-2.jpg"];
 
-export const metadata: Metadata = {
-  alternates: {
-    canonical: "/",
-  },
-};
+/**
+ * The landing page exists at five addresses — `/` in English and `/sl`,
+ * `/hr`, `/bs`, `/sr` — so its canonical and its `hreflang` set both follow
+ * the language being served, which a static `metadata` object cannot do.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const { locale, t } = await getTranslations();
+
+  return localizedPageMetadata({
+    pathname: "/",
+    locale,
+    title: `${SEO_BRAND_NAME} | ${t("meta.shortline")}`,
+    description: t("meta.description"),
+  });
+}
 
 /**
  * The structured description search engines read. Built per request rather
@@ -54,7 +68,6 @@ export const metadata: Metadata = {
  */
 function buildHomepageJsonLd(locale: string, t: (key: MessageKey) => string) {
   return {
-    "@context": "https://schema.org",
     "@type": "WebApplication",
     name: SEO_BRAND_NAME,
     alternateName: BRAND_NAME,
@@ -80,6 +93,42 @@ function buildHomepageJsonLd(locale: string, t: (key: MessageKey) => string) {
   };
 }
 
+/**
+ * The five questions the FAQ section answers, in the form Google reads.
+ *
+ * Straight from `FAQ_ROWS`, the same list the accordion renders, because the
+ * schema is only eligible for a rich result while every question in it is
+ * visible on the page.
+ */
+function buildFaqJsonLd(locale: Locale, t: (key: MessageKey) => string) {
+  return {
+    "@type": "FAQPage",
+    inLanguage: locale,
+    mainEntity: FAQ_ROWS.map((row) => ({
+      "@type": "Question",
+      name: t(row.q),
+      acceptedAnswer: { "@type": "Answer", text: t(row.a) },
+    })),
+  };
+}
+
+/**
+ * Who publishes it. Separate from the WebApplication above because they answer
+ * different questions — that one describes the product, this one the company
+ * behind it, and it is the entity a knowledge panel and the logo beside a
+ * search result are attached to.
+ */
+function buildOrganizationJsonLd() {
+  return {
+    "@type": "Organization",
+    name: SEO_BRAND_NAME,
+    alternateName: BRAND_NAME,
+    url: `${SEO_SITE_URL}/`,
+    logo: `${SEO_SITE_URL}${BRAND_LOCKUP_SRC}`,
+    email: BRAND_SUPPORT_EMAIL,
+  };
+}
+
 export default async function HomePage() {
   if (hasPublicSupabaseEnv) {
     const user = await getOptionalUser();
@@ -93,10 +142,22 @@ export default async function HomePage() {
   return (
     <main className={`landing-v2 ${interTight.variable}`}>
       <LandingScrollReveal />
+      {/*
+        * Three descriptions, one script tag: `@graph` is how schema.org
+        * carries more than one top-level thing per page, and three separate
+        * tags would leave a parser to guess whether they are related.
+        */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(buildHomepageJsonLd(locale, t)).replace(/</g, "\\u003c"),
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@graph": [
+              buildHomepageJsonLd(locale, t),
+              buildOrganizationJsonLd(),
+              buildFaqJsonLd(locale, t),
+            ],
+          }).replace(/</g, "\\u003c"),
         }}
       />
 
@@ -217,9 +278,19 @@ export default async function HomePage() {
             <div className="landing-v2-footer-group">
               <h2>{t("landing.footer.support")}</h2>
               <a href={`mailto:${BRAND_SUPPORT_EMAIL}`}>{BRAND_SUPPORT_EMAIL}</a>
-              <Link href="/legal/terms-of-use">{t("landing.footer.terms")}</Link>
-              <Link href="/legal/privacy-policy">{t("landing.footer.privacy")}</Link>
-              <Link href="/legal/refund-policy">{t("landing.footer.refunds")}</Link>
+              {/* Prefixed for this reader's language. An unprefixed href
+                  would work — the proxy redirects it — but it would put a
+                  round trip in front of every legal page for four readers
+                  out of five. */}
+              <Link href={localizedPath("/legal/terms-of-use", locale)}>
+                {t("landing.footer.terms")}
+              </Link>
+              <Link href={localizedPath("/legal/privacy-policy", locale)}>
+                {t("landing.footer.privacy")}
+              </Link>
+              <Link href={localizedPath("/legal/refund-policy", locale)}>
+                {t("landing.footer.refunds")}
+              </Link>
             </div>
           </nav>
         </div>

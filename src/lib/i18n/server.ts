@@ -12,6 +12,7 @@ import {
   localeForCountry,
   parseLocale,
 } from "@/lib/i18n/locales";
+import { LOCALE_HEADER } from "@/lib/i18n/routing";
 import { createTranslator, type Translate } from "@/lib/i18n/translate";
 
 /**
@@ -27,11 +28,19 @@ export const GEO_COUNTRY_HEADER = "x-vercel-ip-country";
  *
  * The order is the whole policy:
  *
- *   1. The `memo-locale` cookie — an explicit choice, either made in the
+ *   1. The language the URL names — `/sl`, `/hr`, `/bs`, `/sr` — handed over
+ *      by src/proxy.ts in the `x-memo-locale` header. The address is the most
+ *      explicit statement there is of which version is being asked for, and it
+ *      is the one a search engine indexed and a reader shared. A Slovenian
+ *      page must be Slovenian for whoever opens it.
+ *   2. The `memo-locale` cookie — an explicit choice, either made in the
  *      picker or restored from the account's saved preference at sign-in.
- *      Nothing overrides someone having said what they want.
- *   2. The country the IP resolves to, for the four home markets.
- *   3. English.
+ *      Nothing but the URL overrides someone having said what they want.
+ *   3. The country the IP resolves to, for the four home markets.
+ *   4. English.
+ *
+ * Only the pages that have an address per language ever reach 1; everything
+ * behind the login has a single URL and starts at 2.
  *
  * Note what is *not* here: the account's `ui_language` column. Reading it
  * would put a database round trip in front of every page including the
@@ -42,6 +51,12 @@ export const GEO_COUNTRY_HEADER = "x-vercel-ip-country";
  */
 export const getLocale = cache(async function getLocale(): Promise<Locale> {
   const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
+
+  const fromUrl = parseLocale(headerStore.get(LOCALE_HEADER));
+
+  if (fromUrl) {
+    return fromUrl;
+  }
 
   const chosen = parseLocale(cookieStore.get(LOCALE_COOKIE)?.value);
 

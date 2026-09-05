@@ -147,6 +147,9 @@ export function applyTestPersona(
     hasConsumedTrial: spent,
     hasTrialLectureAvailable: !spent,
     canResumeTrialLecture: false,
+    // No half-made free note in either persona: `free` has not started one and
+    // `spent` has finished one, so nothing is ever mid-run.
+    trialLectureInProgress: false,
     canCreateNotes: !spent,
     canAccessPaywalledCreation: spent,
     shouldShowTrialEntry: true,

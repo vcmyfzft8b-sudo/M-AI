@@ -474,6 +474,7 @@ export const sr: Messages = {
   "api.paidRequired.access": "Za pristup ovoj belešci potreban je plaćeni paket.",
   "api.trialExhausted": "Tvoj besplatni probni period je iskorišćen. Nadogradi za novo gradivo.",
   "api.trialAlreadyUsed": "Tvoj besplatni probni period je već iskorišćen. Nadogradi za novo gradivo.",
+  "api.trialLectureInProgress": "Tvoja besplatna beleška se još izrađuje. Sačekaj da se završi.",
   "api.chatLimitReached": "Potrošio si svih 5 besplatnih poruka u ovom chatu.",
   "api.chatNotReady": "Chat je dostupan kada obrada beleške završi.",
   "api.libraryChatPaid": "Chat sa svim beleškama dostupan je uz pretplatu.",

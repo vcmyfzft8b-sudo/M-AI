@@ -490,6 +490,7 @@ export const sl = {
   "api.paidRequired.access": "Za dostop do tega zapiska je potreben plačljiv paket.",
   "api.trialExhausted": "Tvoj brezplačni preizkus je porabljen. Nadgradi za novo gradivo.",
   "api.trialAlreadyUsed": "Tvoj brezplačni preizkus je že porabljen. Nadgradi za novo gradivo.",
+  "api.trialLectureInProgress": "Tvoj brezplačni zapisek se še ustvarja. Počakaj, da bo končan.",
   "api.chatLimitReached": "Porabil si vseh 5 brezplačnih sporočil za ta klepet.",
   "api.chatNotReady": "Klepet je na voljo, ko je obdelava zapiska končana.",
   "api.libraryChatPaid": "Klepet z vsemi zapiski je na voljo z naročnino.",

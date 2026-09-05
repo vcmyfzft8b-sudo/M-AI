@@ -770,3 +770,161 @@ test("a grant records which allowance it came out of", options, async () => {
     ),
   );
 });
+
+/*
+ * The free note is spent when a note succeeds, and at no other moment (migration 0048).
+ *
+ * These run against the real trigger in a real Postgres, because the rule they encode is one
+ * the application cannot see: `ready` is written from three different modules today, so the
+ * invariant lives next to the data and has to be tested there.
+ */
+
+/** A learner with one note, with the trial pointed at it. Returns both ids. */
+async function learnerWithTrialNote(query, { status = "uploading" } = {}) {
+  const [user] = await query(
+    `insert into auth.users (email) values ('trial@example.com') returning id`,
+  );
+  await query(
+    `insert into public.profiles (id, email) values ($1, 'trial@example.com')
+     on conflict (id) do nothing`,
+    [user.id],
+  );
+  const [lecture] = await query(
+    `insert into public.lectures (user_id, status, access_tier, source_type)
+     values ($1, $2, 'trial', 'text') returning id`,
+    [user.id, status],
+  );
+  await query(`update public.profiles set trial_lecture_id = $2 where id = $1`, [
+    user.id,
+    lecture.id,
+  ]);
+  return { userId: user.id, lectureId: lecture.id };
+}
+
+const consumedAt = async (query, userId) => {
+  const [row] = await query(`select trial_consumed_at from public.profiles where id = $1`, [userId]);
+  return row.trial_consumed_at;
+};
+
+test("the free note is spent only once a note reaches ready", options, async () => {
+  const { query } = await migratedDatabase();
+  const { userId, lectureId } = await learnerWithTrialNote(query);
+
+  assert.equal(await consumedAt(query, userId), null, "creating a note must not spend it");
+
+  await query(`update public.lectures set status = 'transcribing' where id = $1`, [lectureId]);
+  assert.equal(await consumedAt(query, userId), null, "nor must working on it");
+
+  await query(`update public.lectures set status = 'ready' where id = $1`, [lectureId]);
+  assert.notEqual(await consumedAt(query, userId), null, "finishing it spends the free note");
+});
+
+test("a note that fails costs the learner nothing", options, async () => {
+  const { query } = await migratedDatabase();
+  const { userId, lectureId } = await learnerWithTrialNote(query);
+
+  await query(`update public.lectures set status = 'failed' where id = $1`, [lectureId]);
+
+  assert.equal(await consumedAt(query, userId), null);
+});
+
+test("deleting a finished note does not hand the free note back", options, async () => {
+  const { query } = await migratedDatabase();
+  const { userId, lectureId } = await learnerWithTrialNote(query);
+
+  await query(`update public.lectures set status = 'ready' where id = $1`, [lectureId]);
+  const spentAt = await consumedAt(query, userId);
+  await query(`delete from public.lectures where id = $1`, [lectureId]);
+
+  // The pointer goes with the row (on delete set null); the stamp is what outlives it.
+  const [profile] = await query(
+    `select trial_lecture_id, trial_consumed_at from public.profiles where id = $1`,
+    [userId],
+  );
+  assert.equal(profile.trial_lecture_id, null);
+  assert.deepEqual(profile.trial_consumed_at, spentAt, "the free note stays spent");
+});
+
+test("deleting a note that never finished leaves the free note unspent", options, async () => {
+  const { query } = await migratedDatabase();
+  const { userId, lectureId } = await learnerWithTrialNote(query);
+
+  await query(`update public.lectures set status = 'failed' where id = $1`, [lectureId]);
+  await query(`delete from public.lectures where id = $1`, [lectureId]);
+
+  assert.equal(await consumedAt(query, userId), null, "they may still make their free note");
+});
+
+test("someone else's note finishing does not spend this learner's free note", options, async () => {
+  const { query } = await migratedDatabase();
+  const { userId } = await learnerWithTrialNote(query);
+  const other = await learnerWithTrialNote(query);
+
+  await query(`update public.lectures set status = 'ready' where id = $1`, [other.lectureId]);
+
+  assert.equal(await consumedAt(query, userId), null);
+  assert.notEqual(await consumedAt(query, other.userId), null);
+});
+
+test("a second note finishing does not re-stamp an already spent trial", options, async () => {
+  const { query } = await migratedDatabase();
+  const { userId, lectureId } = await learnerWithTrialNote(query);
+
+  await query(`update public.lectures set status = 'ready' where id = $1`, [lectureId]);
+  const first = await consumedAt(query, userId);
+
+  // A note the trial does not point at, finishing later.
+  const [second] = await query(
+    `insert into public.lectures (user_id, status, access_tier, source_type)
+     values ($1, 'uploading', 'paid', 'text') returning id`,
+    [userId],
+  );
+  await query(`update public.lectures set status = 'ready' where id = $1`, [second.id]);
+
+  assert.deepEqual(await consumedAt(query, userId), first, "the first stamp stands");
+});
+
+test("the backfill frees only the learners who never received a note", options, async () => {
+  const { query } = await migratedDatabase();
+
+  // The migration has already run, so re-create each shape and re-run its statement.
+  const mk = async (email) => {
+    const [u] = await query(`insert into auth.users (email) values ($1) returning id`, [email]);
+    await query(
+      `insert into public.profiles (id, email, trial_consumed_at) values ($1, $2, now())
+       on conflict (id) do update set trial_consumed_at = now()`,
+      [u.id, email],
+    );
+    return u.id;
+  };
+  const neverGotOne = await mk('never@example.com');
+  const hasOne = await mk('has@example.com');
+  const deletedTheirs = await mk('deleted@example.com');
+
+  await query(
+    `insert into public.lectures (user_id, status, access_tier, source_type)
+     values ($1, 'ready', 'trial', 'text')`,
+    [hasOne],
+  );
+  // No lecture left, but the pipeline is on record as having written them one.
+  await query(
+    `insert into public.ai_usage_events (user_id, provider, model, stage, success)
+     values ($1, 'openrouter', 'glm', 'note_write', true)`,
+    [deletedTheirs],
+  );
+
+  await query(`
+    update public.profiles as p
+    set trial_consumed_at = null
+    where p.trial_consumed_at is not null
+      and not exists (select 1 from public.lectures as l where l.user_id = p.id and l.status = 'ready')
+      and not exists (
+        select 1 from public.ai_usage_events as e
+        where e.user_id = p.id and e.stage = 'note_write' and e.success
+      )
+  `);
+
+  assert.equal(await consumedAt(query, neverGotOne), null, "gets their free note back");
+  assert.notEqual(await consumedAt(query, hasOne), null, "still has the note, still spent");
+  assert.notEqual(await consumedAt(query, deletedTheirs), null, "had one and deleted it, still spent");
+});

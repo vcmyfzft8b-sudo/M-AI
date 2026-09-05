@@ -269,14 +269,24 @@ export async function getPodcastRow(variant: PodcastVariant) {
  * entirely. Asked by id, the answer cannot come back empty because a voice was changed.
  *
  * Scoped to the lecture rather than trusted from the client — the id travels through the browser
- * and ownership of the note is the only thing the route has actually verified.
+ * and ownership of the note is the only thing the route has actually verified. Scoped to the
+ * note's current text as well, because the library hides episodes written from an earlier draft
+ * and an id must not be a way back to one: a listener with a stale list open would otherwise be
+ * played a script about text that no longer exists, labelled as an episode of this note.
  */
-export async function getPodcastRowById(params: { lectureId: string; podcastId: string }) {
+export async function getPodcastRowById(params: {
+  lectureId: string;
+  podcastId: string;
+  /** The note as it stands now. An episode of an older draft is not an episode of this note. */
+  contentHash: string;
+}) {
   const { data, error } = await createSupabaseServiceRoleClient()
     .from("lecture_podcasts")
     .select("*")
     .eq("id", params.podcastId)
     .eq("lecture_id", params.lectureId)
+    /* The same predicate the library lists by — see listPodcastEpisodes for the two shapes. */
+    .or(`content_hash.eq.${params.contentHash},content_hash.like.${params.contentHash}:*`)
     .maybeSingle();
 
   if (error) {
@@ -904,8 +914,15 @@ export async function getOrCreatePodcastSegment(params: {
 
     const row = data as LecturePodcastSegmentRow;
 
-    settled = true;
-
+    /*
+     * Raised only once the settle has actually happened, not before it.
+     *
+     * Set ahead of the await, a settle that threw left the flag saying the grant was closed and
+     * the catch below skipping the close — and a grant nobody closes is swept later and charged
+     * at what it RESERVED, which on a fresh paid day is the listener's whole half hour. One
+     * transient database error would have cost them the day. Settling twice is harmless:
+     * settleTutorGrant returns early on a grant that is already settled.
+     */
     const allowance = grant.grantId
       ? await settleTutorGrant({
           userId: params.userId,
@@ -914,6 +931,8 @@ export async function getOrCreatePodcastSegment(params: {
           feature: "podcast",
         })
       : grant.allowance;
+
+    settled = true;
 
     return { row, audioUrl: await signSegment(row), allowance };
   } catch (error) {

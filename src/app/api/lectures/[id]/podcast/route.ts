@@ -41,6 +41,8 @@ export const maxDuration = 300;
 
 const PODCAST_REQUEST_MAX_BYTES = 2 * 1024;
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const podcastRequestSchema = z.object({
   format: z.enum(PODCAST_FORMAT_IDS),
   length: z.enum(PODCAST_LENGTH_IDS),
@@ -130,10 +132,17 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
    * null, and left the row spinning. An id is not ambiguous. Ownership is still the lecture's:
    * the row has to belong to the note whose page this is.
    */
-  const episodeId = url.searchParams.get("episodeId");
+  /*
+   * Normalized rather than validated, like the voices above: an id that is not a uuid is a stale
+   * bundle or a hand-typed URL, and the honest answer to both is the ordinary variant lookup —
+   * whereas passing it through would put a malformed literal in front of a uuid column and turn
+   * the screen's status request into a 500.
+   */
+  const episodeIdParam = url.searchParams.get("episodeId");
+  const episodeId = episodeIdParam && UUID_PATTERN.test(episodeIdParam) ? episodeIdParam : null;
   const [row, episodes] = await Promise.all([
     episodeId
-      ? getPodcastRowById({ lectureId: id, podcastId: episodeId })
+      ? getPodcastRowById({ lectureId: id, podcastId: episodeId, contentHash: source.contentHash })
       : getPodcastRow({
           lectureId: id,
           contentHash: `${source.contentHash}:${podcastCastKey({

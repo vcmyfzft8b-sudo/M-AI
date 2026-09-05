@@ -54,13 +54,19 @@ $$;
 -- the old key forbade and the new one has to allow.
 alter table public.tutor_daily_usage drop constraint if exists tutor_daily_usage_pkey;
 
+/*
+ * Only "it is already exactly this" is tolerated. `invalid_table_definition` here means the drop
+ * above did not match the live constraint and the table still has its old two-column key —
+ * swallowing that would report a successful migration and leave record_tutor_usage raising "no
+ * unique or exclusion constraint matching the ON CONFLICT specification" on every call, which is
+ * every second of usage going unrecorded, silently.
+ */
 do $$
 begin
   alter table public.tutor_daily_usage
     add constraint tutor_daily_usage_pkey primary key (user_id, usage_date, feature);
 exception
   when duplicate_table then null;
-  when invalid_table_definition then null;
 end
 $$;
 
@@ -72,7 +78,6 @@ begin
     add constraint tutor_usage_totals_pkey primary key (user_id, feature);
 exception
   when duplicate_table then null;
-  when invalid_table_definition then null;
 end
 $$;
 

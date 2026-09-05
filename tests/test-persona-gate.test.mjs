@@ -191,3 +191,46 @@ test("an unreadable cookie is no persona rather than a broken one", () => {
     }
   }
 });
+
+/**
+ * A persona must not be a door that locks behind you.
+ *
+ * "Not onboarded" is a state the panel can put this account into, and the app
+ * answers it by sending every route to the survey — including Settings, which
+ * is where the switch that turns it off lives. Completing the survey does not
+ * help on its own either: it writes a real completion the persona then
+ * contradicts, so the flow ends by sending you back to the start of itself.
+ * Both exits are asserted here because the way in is one tap.
+ */
+test("finishing the survey ends a persona that says it is unfinished", () => {
+  const route = readSource("src/app/api/profile/onboarding/route.ts");
+  const handler = route.slice(route.indexOf("export async function POST"));
+
+  assert.match(handler, /await clearOnboardingTestPersona\(\)/);
+  // After the write, not before: a save that failed leaves the persona alone.
+  assert.ok(
+    handler.indexOf("clearOnboardingTestPersona") > handler.lastIndexOf("status: 500"),
+    "the persona must only be cleared once the profile is actually saved",
+  );
+
+  const server = readSource("src/lib/test-persona-server.ts");
+  const clear = server.slice(server.indexOf("export async function clearOnboardingTestPersona"));
+
+  // Only the onboarding half, and only when it is the half that traps.
+  assert.match(clear, /persona\.onboarding !== "pending"/);
+  assert.match(clear, /onboarding: "real"/);
+  assert.doesNotMatch(clear, /billing: "real"/);
+});
+
+test("settings stays reachable while a persona is in force", () => {
+  const layout = readSource("src/app/app/layout.tsx");
+  const guard = layout.slice(
+    layout.indexOf("!appState.onboardingComplete"),
+    layout.indexOf("hasPaidAccess"),
+  );
+
+  assert.match(guard, /pathname === "\/app\/settings" && \(await readActiveTestPersona\(\)\)/);
+  // And nothing else changes: everyone without a persona still gets sent to the
+  // survey, from every route including that one.
+  assert.match(guard, /redirect\("\/app\/start"\)/);
+});

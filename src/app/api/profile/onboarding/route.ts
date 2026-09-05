@@ -20,6 +20,7 @@ import {
   createSupabaseServerClient,
   createSupabaseServiceRoleClient,
 } from "@/lib/supabase/server";
+import { clearOnboardingTestPersona } from "@/lib/test-persona-server";
 import { tr } from "@/lib/i18n/server";
 
 const gradeSchema = z.number().min(1).max(10).nullish();
@@ -121,6 +122,11 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
+
+  // The account has now onboarded, so a test persona claiming it has not is
+  // over. Without this the survey it just completed is the screen it is sent
+  // back to, and the panel that would stop that is behind the same redirect.
+  await clearOnboardingTestPersona();
 
   return NextResponse.json({ ok: true });
 }

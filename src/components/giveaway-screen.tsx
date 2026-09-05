@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useAppHref } from "@/components/creator-demo/creator-demo-context";
@@ -30,7 +31,8 @@ import {
  */
 
 export type GiveawayScreenProps = {
-  code: string;
+  /** Null until the account has asked for one. */
+  code: string | null;
   progress: { qualifiedCount: number; pendingCount: number };
   leaderboard: GiveawayLeaderboard;
   hasSubscription: boolean;
@@ -56,6 +58,7 @@ export function GiveawayScreen({
   const [state, setState] = useState<GiveawayState>({ code, progress, leaderboard });
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | null>(null);
+  const [isGettingCode, setIsGettingCode] = useState(false);
 
   useEffect(() => {
     if (isDemo) {
@@ -124,7 +127,34 @@ export function GiveawayScreen({
   }
 
   function shareUrl() {
-    return buildGiveawayShareUrl(window.location.origin, state.code);
+    return buildGiveawayShareUrl(window.location.origin, state.code ?? "");
+  }
+
+  /** The "Get my code" button: one POST, and the code takes the button's place. */
+  async function getCode() {
+    if (isDemo) {
+      setState((current) => ({ ...current, code: "BTS-DEMO26" }));
+      return;
+    }
+
+    setIsGettingCode(true);
+
+    try {
+      const response = await fetch("/api/giveaway", { method: "POST" });
+      const payload = (await response.json().catch(() => null)) as
+        | { code?: string; error?: string }
+        | null;
+
+      if (!response.ok || !payload?.code) {
+        throw new Error(payload?.error ?? t("giveaway.code.getFailed"));
+      }
+
+      setState((current) => ({ ...current, code: payload.code ?? current.code }));
+    } catch (caught) {
+      showToast(caught instanceof Error ? caught.message : t("giveaway.code.getFailed"));
+    } finally {
+      setIsGettingCode(false);
+    }
   }
 
   async function copyText(text: string, message: string) {
@@ -211,23 +241,44 @@ export function GiveawayScreen({
             <section className="memo-giveaway-code-section">
               <h2 className="memo-settings-heading">{t("giveaway.code.label")}</h2>
               <div className="memo-card-row memo-giveaway-code-card">
-              <span className="memo-giveaway-code" aria-label={state.code}>
-                {state.code}
-              </span>
-              <div className="memo-giveaway-actions">
-                <button
-                  type="button"
-                  className="memo-giveaway-secondary"
-                  onClick={() => copyText(state.code, t("giveaway.code.copied"))}
-                >
-                  <Msym name="content_copy" size="1.2rem" fill={false} weight={500} />
-                  <span>{t("giveaway.code.copy")}</span>
-                </button>
-                <button type="button" className="memo-primary-pill memo-giveaway-share" onClick={share}>
-                  <Msym name="ios_share" size="1.2rem" fill={false} weight={500} />
-                  <span>{t("giveaway.share.button")}</span>
-                </button>
-              </div>
+              {state.code ? (
+                <>
+                  <span className="memo-giveaway-code" aria-label={state.code}>
+                    {state.code}
+                  </span>
+                  <div className="memo-giveaway-actions">
+                    <button
+                      type="button"
+                      className="memo-giveaway-secondary"
+                      onClick={() => copyText(state.code ?? "", t("giveaway.code.copied"))}
+                    >
+                      <Msym name="content_copy" size="1.2rem" fill={false} weight={500} />
+                      <span>{t("giveaway.code.copy")}</span>
+                    </button>
+                    <button type="button" className="memo-primary-pill memo-giveaway-share" onClick={share}>
+                      <Msym name="ios_share" size="1.2rem" fill={false} weight={500} />
+                      <span>{t("giveaway.share.button")}</span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="memo-giveaway-actions">
+                  <button
+                    type="button"
+                    className="memo-primary-pill memo-giveaway-share"
+                    onClick={getCode}
+                    disabled={isGettingCode}
+                    aria-busy={isGettingCode}
+                  >
+                    {isGettingCode ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Emoji symbol="🎟️" size="1rem" />
+                    )}
+                    <span>{t("giveaway.code.get")}</span>
+                  </button>
+                </div>
+              )}
 
               {/* Progress lives with the code: the code is how the number moves. */}
               <div className="memo-giveaway-progress">

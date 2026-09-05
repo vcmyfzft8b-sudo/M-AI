@@ -727,3 +727,18 @@ test("the giveaway leaderboard ranks by who reached the goal first, then by coun
     [],
   );
 });
+
+test("a friend's giveaway code sticks to the profile, first one wins", options, async () => {
+  const { query } = await migratedDatabase();
+  const [user] = await query(`insert into auth.users (email) values ('friend@memo.app') returning id`);
+
+  const remember = async (code) =>
+    query(
+      `update public.profiles set giveaway_referral_code = $2, giveaway_referral_seen_at = now()
+        where id = $1 and giveaway_referral_code is null returning giveaway_referral_code`,
+      [user.id, code],
+    );
+
+  assert.deepEqual((await remember("BTS-AAAAAA")).map((row) => row.giveaway_referral_code), ["BTS-AAAAAA"]);
+  assert.equal((await remember("BTS-BBBBBB")).length, 0, "a second code does not replace the first");
+});

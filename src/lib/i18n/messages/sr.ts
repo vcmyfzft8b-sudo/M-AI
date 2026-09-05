@@ -1649,6 +1649,8 @@ export const sr: Messages = {
   "giveaway.title": "Osvoji {prize}",
   "giveaway.lead": "Svaki prijatelj koji se pretplati s tvojim kodom dobija 50 % popusta. Prvi koji ih dovede {goal} dobija {prize}.",
   "giveaway.code.label": "Tvoj kod",
+  "giveaway.code.get": "Preuzmi svoj kod",
+  "giveaway.code.getFailed": "Kod nije bilo moguće kreirati. Pokušaj ponovo.",
   "giveaway.code.copy": "Kopiraj kod",
   "giveaway.code.copied": "Kod kopiran",
   "giveaway.share.button": "Podeli link",

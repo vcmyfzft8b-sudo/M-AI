@@ -10,11 +10,18 @@ import {
  * The demo runs the real giveaway screen on made-up standings, so creators
  * can record it. Nothing here polls or touches Stripe.
  */
-export default function CreatorDemoGiveawayPage() {
+export default async function CreatorDemoGiveawayPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ empty?: string }>;
+}) {
+  // `?empty=1` shows the screen before a code exists: the "Get my code" button.
+  const { empty } = await searchParams;
+
   return (
     <GiveawayScreen
       isDemo
-      code="BTS-DEMO26"
+      code={empty === "1" ? null : "BTS-DEMO26"}
       hasSubscription={false}
       progress={{ qualifiedCount: 5, pendingCount: 1 }}
       leaderboard={{

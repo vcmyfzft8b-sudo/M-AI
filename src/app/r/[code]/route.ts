@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getOptionalUser } from "@/lib/auth";
-import { findGiveawayCode } from "@/lib/giveaway";
+import { findGiveawayCode, rememberGiveawayReferral } from "@/lib/giveaway";
 import {
   GIVEAWAY_REF_COOKIE,
   GIVEAWAY_REF_COOKIE_MAX_AGE,
@@ -31,7 +31,14 @@ export async function GET(
   const origin = resolveSiteOrigin(request);
 
   const known = isGiveawayCodeFormat(code) ? await findGiveawayCode(code).catch(() => null) : null;
-  const signedIn = hasPublicSupabaseEnv ? Boolean(await getOptionalUser()) : false;
+  const user = hasPublicSupabaseEnv ? await getOptionalUser() : null;
+  const signedIn = Boolean(user);
+
+  // An existing account opening a friend's link: the code sticks to the
+  // account right here, so a purchase later, from anywhere, credits the friend.
+  if (user && known && known.user_id !== user.id) {
+    await rememberGiveawayReferral(user.id, known.code);
+  }
 
   const response = NextResponse.redirect(
     new URL(signedIn ? "/app/start" : "/", origin),

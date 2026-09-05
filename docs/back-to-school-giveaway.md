@@ -26,8 +26,11 @@ server side — Stripe, the database, attribution, the leaderboard — is
 
 ## Codes
 
-A code is created the first time an account opens `/app/giveaway` (or calls
-`GET /api/giveaway`): a Stripe **promotion code** on the existing
+A code is created when onboarding completes (the onboarding route creates it
+after the response) and, for accounts that predate the campaign, when they
+press "Get my code" on `/app/giveaway` (`POST /api/giveaway`). Reading the
+screen or `GET /api/giveaway` never creates one, so codes only exist for
+accounts that take part. A code is a Stripe **promotion code** on the existing
 `memo50-first-cycle` coupon (50 % off, `duration: once`), shaped `BTS-XXXXXX`
 from an alphabet without 0/O/1/I. It carries the same metadata every other
 Memo promotion has (`app`, `billing_key`, `coupon_id`, `promotion_code`) plus
@@ -46,6 +49,10 @@ first payment, a checkout with a code **skips the 3-day trial** and charges
 the discounted first period straight away — the same decision the prize wheel
 made, and the reason a referral can qualify the moment a friend pays.
 
+The first code a signed-in account is seen with — on the link, on the paywall,
+at checkout — is written to the profile (`giveaway_referral_code`, migration
+0041), and checkout falls back to it when the cookie is gone. That is what
+lets an existing user open a friend's link on one device and buy on another.
 An account cannot use its own code through the link (the cookie is ignored
 for the code's owner). A friend can also type the code on Stripe's page when
 no cookie is set; that path keeps the trial and the referral stays `pending`

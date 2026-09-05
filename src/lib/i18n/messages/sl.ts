@@ -1667,6 +1667,8 @@ export const sl = {
   "giveaway.title": "Osvoji {prize}",
   "giveaway.lead": "Vsak prijatelj, ki se naroči s tvojo kodo, dobi 50 % popusta. Prvi, ki jih pripelje {goal}, dobi {prize}.",
   "giveaway.code.label": "Tvoja koda",
+  "giveaway.code.get": "Pridobi svojo kodo",
+  "giveaway.code.getFailed": "Kode ni bilo mogoče ustvariti. Poskusi znova.",
   "giveaway.code.copy": "Kopiraj kodo",
   "giveaway.code.copied": "Koda kopirana",
   "giveaway.share.button": "Deli povezavo",

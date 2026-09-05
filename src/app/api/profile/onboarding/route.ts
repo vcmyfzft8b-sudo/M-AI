@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
@@ -14,6 +14,7 @@ import {
   SCHOOL_YEAR_VALUES,
   SUBJECT_VALUES,
 } from "@/lib/onboarding-options";
+import { ensureGiveawayCode } from "@/lib/giveaway";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
 import {
@@ -121,6 +122,20 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
+
+  // Finishing onboarding is when an account gets its giveaway code. After
+  // the response: it is a Stripe call, and the paywall must not wait on it.
+  // The giveaway screen creates the code itself if this ever fails.
+  after(async () => {
+    try {
+      await ensureGiveawayCode({ userId: user.id, email: user.email ?? null });
+    } catch (caught) {
+      console.error("[giveaway] could not create a code at onboarding", {
+        userId: user.id,
+        error: caught,
+      });
+    }
+  });
 
   return NextResponse.json({ ok: true });
 }

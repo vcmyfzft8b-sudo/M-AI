@@ -1640,6 +1640,8 @@ export const en: Messages = {
   "giveaway.title": "Win an {prize}",
   "giveaway.lead": "Every friend who subscribes with your code gets 50% off. The first to bring {goal} wins an {prize}.",
   "giveaway.code.label": "Your code",
+  "giveaway.code.get": "Get my code",
+  "giveaway.code.getFailed": "The code could not be created. Try again.",
   "giveaway.code.copy": "Copy code",
   "giveaway.code.copied": "Code copied",
   "giveaway.share.button": "Share link",

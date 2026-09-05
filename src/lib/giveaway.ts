@@ -281,9 +281,65 @@ export async function readGiveawayReferralCookie() {
 }
 
 /**
- * Turns the cookie into something checkout can attach.
+ * Attaches a friend's code to the account, once.
  *
- * Returns null when there is no cookie, the code is unknown, or it belongs to
+ * The cookie lives in one browser; the account outlives it. The first code
+ * an account is seen with is kept — on the share link, on the paywall, at
+ * checkout — so a purchase from another device, or after the cookie has
+ * gone, still credits the friend. Never throws: this is bookkeeping beside
+ * a request that must succeed anyway.
+ */
+export async function rememberGiveawayReferral(userId: string, code: string) {
+  if (userId === PREVIEW_AUTH_BYPASS_USER_ID) {
+    return;
+  }
+
+  const { error } = await createSupabaseServiceRoleClient()
+    .from("profiles")
+    .update({
+      giveaway_referral_code: normalizeGiveawayCode(code),
+      giveaway_referral_seen_at: new Date().toISOString(),
+    } as never)
+    .eq("id", userId)
+    .is("giveaway_referral_code", null);
+
+  if (error && !isMissingGiveawaySchema(error) && error.code !== "42703" && error.code !== "PGRST204") {
+    console.error("[giveaway] could not remember referral", { userId, error });
+  }
+}
+
+/** The friend's code the account was attached to earlier, if any. */
+async function readRememberedGiveawayReferral(userId: string) {
+  if (userId === PREVIEW_AUTH_BYPASS_USER_ID) {
+    return null;
+  }
+
+  const { data, error } = await createSupabaseServiceRoleClient()
+    .from("profiles")
+    .select("giveaway_referral_code")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    return null;
+  }
+
+  const code = normalizeGiveawayCode(
+    (data as { giveaway_referral_code: string | null } | null)?.giveaway_referral_code,
+  );
+
+  return isGiveawayCodeFormat(code) ? code : null;
+}
+
+/**
+ * Turns a friend's code into something checkout can attach.
+ *
+ * The cookie is read first; when it carries a code the account is attached
+ * to it (first code wins). Without a cookie the account's remembered code is
+ * used instead, which is what lets a purchase from another device still
+ * credit the friend.
+ *
+ * Returns null when there is no code, the code is unknown, or it belongs to
  * the viewer — buying with your own code is not bringing a friend, and the
  * discount would be a self-serve 50 % off that the campaign never offered.
  */
@@ -291,7 +347,8 @@ export async function resolveGiveawayReferral(
   viewerUserId: string,
   rawCode?: string | null,
 ): Promise<GiveawayReferral | null> {
-  const code = rawCode === undefined ? await readGiveawayReferralCookie() : rawCode;
+  const fromCookie = rawCode === undefined ? await readGiveawayReferralCookie() : rawCode;
+  const code = fromCookie ?? (await readRememberedGiveawayReferral(viewerUserId));
 
   if (!code) {
     return null;
@@ -301,6 +358,10 @@ export async function resolveGiveawayReferral(
 
   if (!row || row.user_id === viewerUserId) {
     return null;
+  }
+
+  if (fromCookie) {
+    await rememberGiveawayReferral(viewerUserId, row.code);
   }
 
   const { data: profile } = await createSupabaseServiceRoleClient()

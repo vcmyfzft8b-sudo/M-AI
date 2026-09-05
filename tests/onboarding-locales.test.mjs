@@ -56,7 +56,10 @@ test("secondary-school onboarding follows the selected programme", () => {
 });
 
 test("non-school roles keep the shared university-year choices", () => {
-  const expected = ["senior", "junior", "sophomore", "freshman", "graduate"];
+  // First year first. Every other year list in the survey counts up, and the
+  // redesign brought this one into line rather than starting at the top of the
+  // degree; the stored values are unchanged, only the order they are offered in.
+  const expected = ["freshman", "sophomore", "junior", "senior", "graduate"];
 
   for (const locale of ["sl", "en", "hr", "bs", "sr"]) {
     assert.deepEqual(values(getOnboardingYearOptions(locale, "teacher")), expected, locale);

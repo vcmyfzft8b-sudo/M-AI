@@ -158,11 +158,13 @@ export function getOnboardingYearOptions(
   return UNIVERSITY_YEAR_OPTIONS;
 }
 
+// First year first: the redesign counts up, the way every other year list on
+// the screen does, rather than starting at the top of the degree.
 export const UNIVERSITY_YEAR_OPTIONS = [
-  { value: "senior", labelKey: "onboarding.opt.uniYear4Plus", icon: "🌳" },
-  { value: "junior", labelKey: "onboarding.opt.uniYear3", icon: "🪴" },
-  { value: "sophomore", labelKey: "onboarding.opt.uniYear2", icon: "🌿" },
   { value: "freshman", labelKey: "onboarding.opt.uniYear1", icon: "🌱" },
+  { value: "sophomore", labelKey: "onboarding.opt.uniYear2", icon: "🌿" },
+  { value: "junior", labelKey: "onboarding.opt.uniYear3", icon: "🪴" },
+  { value: "senior", labelKey: "onboarding.opt.uniYear4Plus", icon: "🌳" },
   { value: "graduate", labelKey: "onboarding.opt.uniGraduate", icon: "🍂" },
 ] as const;
 
@@ -187,12 +189,24 @@ export const MOTIVATION_OPTIONS = [
   { value: "something_else", labelKey: "onboarding.opt.somethingElse", icon: "✍️" },
 ] as const;
 
+/*
+ * Everything Memo AI can make out of one note, in the order the onboarding
+ * shows them. The six added for the redesign are the tools that shipped after
+ * the original survey was written; the stored values are new, and the columns
+ * that hold them are free text, so nothing has to be migrated for them.
+ */
 export const FEATURE_OPTIONS = [
-  { value: "audio_notes", labelKey: "onboarding.opt.feature.audioNotes", icon: "🎧" },
   { value: "quizzes", labelKey: "onboarding.opt.feature.quizzes", icon: "📝" },
   { value: "flashcards", labelKey: "note.tab.flashcards", icon: "🃏" },
-  { value: "record_lectures", labelKey: "onboarding.opt.feature.personalisation", icon: "✨" },
   { value: "tests", labelKey: "onboarding.opt.feature.tests", icon: "✅" },
+  { value: "voice_tutor", labelKey: "onboarding.opt.feature.tutor", icon: "🎙️" },
+  { value: "podcast", labelKey: "onboarding.opt.feature.podcast", icon: "📻" },
+  { value: "memory_palace", labelKey: "onboarding.opt.feature.palace", icon: "🏛️" },
+  { value: "record_lectures", labelKey: "onboarding.opt.feature.personalisation", icon: "✨" },
+  { value: "speed_read", labelKey: "onboarding.opt.feature.speedRead", icon: "⚡" },
+  { value: "mindmap", labelKey: "onboarding.opt.feature.mindmap", icon: "🕸️" },
+  { value: "audio_notes", labelKey: "onboarding.opt.feature.audioNotes", icon: "🎧" },
+  { value: "library_chat", labelKey: "library.chatFab", icon: "💬" },
   { value: "ai_chat_notes", labelKey: "onboarding.opt.feature.readAloud", icon: "🔊" },
 ] as const;
 
@@ -241,6 +255,54 @@ export const MOTIVATION_VALUES = optionValues(MOTIVATION_OPTIONS);
 export const FEATURE_VALUES = optionValues(FEATURE_OPTIONS);
 export const CLASS_FOCUS_VALUES = optionValues(CLASS_FOCUS_OPTIONS);
 export const DAILY_GOAL_VALUES = optionValues(DAILY_GOAL_OPTIONS);
+
+/**
+ * Whether a school marks out of ten rather than out of five.
+ *
+ * Universities and colleges here do; every school below them does not. It
+ * decides both the range the grade steppers move in and the `gradeScale` the
+ * answer is stored with, so it lives beside the options rather than inside the
+ * screen that draws them.
+ */
+export function usesTenPointGrades(schoolLevel: string) {
+  return schoolLevel === "university" || schoolLevel === "college";
+}
+
+/** The range and step the grade steppers move in, for a given school. */
+export function gradeBounds(schoolLevel: string) {
+  return usesTenPointGrades(schoolLevel)
+    ? { min: 5, max: 10, step: 0.5, current: 6, target: 8 }
+    : { min: 1, max: 5, step: 0.1, current: 3.5, target: 4.5 };
+}
+
+/**
+ * The `education_level` a school answer is stored as.
+ *
+ * `profiles.education_level` predates the survey's own school list and has five
+ * values where the survey has ten, so every school the survey can offer is
+ * mapped onto one of them here — and it must stay total, because the column is
+ * what the rest of the app reads.
+ */
+export function mapEducationLevel(schoolLevel: string): (typeof EDUCATION_OPTIONS)[number]["value"] {
+  if (
+    schoolLevel === "elementary_school" ||
+    schoolLevel === "high_school" ||
+    schoolLevel === "technical_school" ||
+    schoolLevel === "vocational_school"
+  ) {
+    return "high_school";
+  }
+
+  if (schoolLevel === "college") {
+    return "university";
+  }
+
+  if (schoolLevel === "other") {
+    return "other";
+  }
+
+  return "university";
+}
 
 export const GRADE_SCALES = [5, 10] as const;
 export type GradeScale = (typeof GRADE_SCALES)[number];

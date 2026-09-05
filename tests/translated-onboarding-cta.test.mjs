@@ -124,12 +124,29 @@ test("a wrapped label stays the button's own child, and the spinner lands first"
   assert.equal(label.childNodes[0].tag, "font");
 });
 
-test("the onboarding CTA and the paywall CTA both wrap their label", () => {
-  const source = readSource("src/components/onboarding-paywall.tsx");
+test("the paywall CTA wraps its label", () => {
+  assert.match(
+    readSource("src/components/onboarding-paywall.tsx"),
+    /<span className="memo-paywall-cta-label">/,
+  );
+});
 
-  assert.match(source, /<span>\{currentStep\.action\}<\/span>/);
-  assert.doesNotMatch(source, /^\s*\{currentStep\.action\}$/m);
-  assert.match(source, /<span className="memo-paywall-cta-label">/);
+/*
+ * The survey's own button no longer needs wrapping, and this is why.
+ *
+ * The throw needs two things in one parent: a label React holds as a host
+ * sibling, and something conditional that gets inserted before it. The
+ * redesigned survey's call to action never gains a sibling — no spinner, no
+ * icon, nothing that appears partway through — so its label is the button's
+ * only child and there is nothing to insert before. That is a stronger
+ * guarantee than a wrapper, but only while it holds, so it is asserted.
+ */
+test("the survey CTA has nothing that could be inserted beside its label", () => {
+  const source = readSource("src/components/onboarding-flow.tsx");
+  const cta = source.slice(source.indexOf("{v.showCta ?"), source.indexOf("{v.footNote}"));
+
+  assert.match(cta, /disabled=\{v\.ctaDisabled\}[^>]*>\{v\.ctaLabel\}<\/button>/);
+  assert.doesNotMatch(cta, /<svg|Loader2|animate-spin/);
 });
 
 /**

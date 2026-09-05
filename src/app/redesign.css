@@ -12630,13 +12630,88 @@
 }
 
 .memo-giveaway-podium {
+  --podium-cap: #e9e9ee;
+  --podium-cap-edge: #d2d2d9;
+  --podium-front: linear-gradient(180deg, #ff7a75 0%, #f45f5a 100%);
+  --podium-side: #d9504c;
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
-  gap: 0.6rem;
+  gap: 0;
   margin: 0.4rem 0 0.2rem;
-  padding: 0;
+  padding: 3.4rem 0.6rem 0;
   list-style: none;
+}
+
+/* The spotlight from above and the confetti hanging in it. */
+.memo-giveaway-podium::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 0;
+  width: 110%;
+  height: 100%;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(60% 55% at 50% 0%, rgba(255, 255, 255, 0.55) 0%, transparent 70%),
+    radial-gradient(circle, rgba(244, 95, 90, 0.9) 0 2px, transparent 3px) 12% 18% / 100% 100% no-repeat,
+    radial-gradient(circle, rgba(245, 166, 35, 0.9) 0 2px, transparent 3px) 28% 8% / 100% 100% no-repeat,
+    radial-gradient(circle, rgba(244, 95, 90, 0.8) 0 2px, transparent 3px) 44% 26% / 100% 100% no-repeat,
+    radial-gradient(circle, rgba(245, 166, 35, 0.9) 0 2px, transparent 3px) 58% 6% / 100% 100% no-repeat,
+    radial-gradient(circle, rgba(244, 95, 90, 0.9) 0 2px, transparent 3px) 72% 20% / 100% 100% no-repeat,
+    radial-gradient(circle, rgba(245, 166, 35, 0.8) 0 2px, transparent 3px) 86% 12% / 100% 100% no-repeat,
+    radial-gradient(circle, rgba(244, 95, 90, 0.7) 0 2px, transparent 3px) 20% 40% / 100% 100% no-repeat,
+    radial-gradient(circle, rgba(245, 166, 35, 0.7) 0 2px, transparent 3px) 80% 38% / 100% 100% no-repeat,
+    radial-gradient(circle, rgba(244, 95, 90, 0.6) 0 2px, transparent 3px) 50% 48% / 100% 100% no-repeat;
+  pointer-events: none;
+}
+
+:root[data-theme="dark"] .memo-giveaway-podium::before,
+:root:not([data-theme="light"]) .memo-giveaway-podium::before {
+  background-image:
+    radial-gradient(60% 55% at 50% 0%, rgba(255, 255, 255, 0.12) 0%, transparent 70%),
+    radial-gradient(circle, rgba(255, 109, 104, 0.9) 0 2px, transparent 3px),
+    radial-gradient(circle, rgba(245, 192, 78, 0.9) 0 2px, transparent 3px),
+    radial-gradient(circle, rgba(255, 109, 104, 0.8) 0 2px, transparent 3px),
+    radial-gradient(circle, rgba(245, 192, 78, 0.9) 0 2px, transparent 3px),
+    radial-gradient(circle, rgba(255, 109, 104, 0.9) 0 2px, transparent 3px),
+    radial-gradient(circle, rgba(245, 192, 78, 0.8) 0 2px, transparent 3px),
+    radial-gradient(circle, rgba(255, 109, 104, 0.7) 0 2px, transparent 3px),
+    radial-gradient(circle, rgba(245, 192, 78, 0.7) 0 2px, transparent 3px),
+    radial-gradient(circle, rgba(255, 109, 104, 0.6) 0 2px, transparent 3px);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .memo-giveaway-podium::before {
+    background-image:
+      radial-gradient(60% 55% at 50% 0%, rgba(255, 255, 255, 0.55) 0%, transparent 70%),
+      radial-gradient(circle, rgba(244, 95, 90, 0.9) 0 2px, transparent 3px),
+      radial-gradient(circle, rgba(245, 166, 35, 0.9) 0 2px, transparent 3px),
+      radial-gradient(circle, rgba(244, 95, 90, 0.8) 0 2px, transparent 3px),
+      radial-gradient(circle, rgba(245, 166, 35, 0.9) 0 2px, transparent 3px),
+      radial-gradient(circle, rgba(244, 95, 90, 0.9) 0 2px, transparent 3px),
+      radial-gradient(circle, rgba(245, 166, 35, 0.8) 0 2px, transparent 3px),
+      radial-gradient(circle, rgba(244, 95, 90, 0.7) 0 2px, transparent 3px),
+      radial-gradient(circle, rgba(245, 166, 35, 0.7) 0 2px, transparent 3px),
+      radial-gradient(circle, rgba(244, 95, 90, 0.6) 0 2px, transparent 3px);
+  }
+}
+
+/* The runner the podium stands on. */
+.memo-giveaway-podium::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -0.4rem;
+  right: -0.4rem;
+  bottom: -0.55rem;
+  height: 0.55rem;
+  border-radius: 3px;
+  background: var(--podium-side);
+  opacity: 0.85;
 }
 
 .memo-giveaway-podium-place {
@@ -12732,63 +12807,73 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The stand: its height is the rank, its fill the progress to the goal. */
+/*
+ * The block: a pale top cap, a coral front, the rank on the front. The
+ * three touch, the first is tallest, and each casts a little shade on
+ * the one it stands beside.
+ */
 .memo-giveaway-podium-stand {
   position: relative;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   width: 100%;
-  height: 3.2rem;
-  margin-top: 0.3rem;
-  border-radius: 14px 14px 6px 6px;
-  background: var(--tile);
-  overflow: hidden;
+  height: 3.6rem;
+  margin-top: 0.55rem;
+  background: var(--podium-front);
+  border-top: 0.85rem solid var(--podium-cap);
+  box-shadow:
+    inset 0 -0.85rem 0 var(--podium-side),
+    inset 0 1px 0 var(--podium-cap-edge);
 }
 
 .memo-giveaway-podium-place.place-1 .memo-giveaway-podium-stand {
-  height: 5.4rem;
+  height: 6.2rem;
+  z-index: 1;
+  box-shadow:
+    inset 0 -0.85rem 0 var(--podium-side),
+    inset 0 1px 0 var(--podium-cap-edge),
+    -6px 0 12px rgba(0, 0, 0, 0.12),
+    6px 0 12px rgba(0, 0, 0, 0.12);
 }
 
 .memo-giveaway-podium-place.place-2 .memo-giveaway-podium-stand {
-  height: 4.2rem;
+  height: 4.8rem;
+}
+
+.memo-giveaway-podium-place.is-empty .memo-giveaway-podium-stand {
+  background: var(--tile);
+  box-shadow: inset 0 -0.85rem 0 rgba(0, 0, 0, 0.08);
 }
 
 .memo-giveaway-podium-fill {
-  position: absolute;
-  inset: auto 0 0 0;
-  opacity: 0.18;
-  transition: height 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  display: none;
 }
-
-.memo-giveaway-podium-place.place-1 .memo-giveaway-podium-fill {
-  background: var(--podium-gold-ink);
-}
-
-.memo-giveaway-podium-place.place-2 .memo-giveaway-podium-fill {
-  background: var(--podium-silver-ink);
-}
-
-.memo-giveaway-podium-place.place-3 .memo-giveaway-podium-fill {
-  background: var(--podium-bronze-ink);
-}
-
 
 .memo-giveaway-podium-rank {
   position: relative;
-  padding-bottom: 0.45rem;
-  color: var(--muted);
-  font-size: 1.35rem;
+  margin-bottom: 0.7rem;
+  color: #ffffff;
+  font-size: 1.6rem;
   font-weight: 850;
   letter-spacing: -0.04em;
   line-height: 1;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
 }
 
 .memo-giveaway-podium-place.place-1 .memo-giveaway-podium-rank {
-  color: var(--text);
-  font-size: 1.8rem;
+  font-size: 2.1rem;
 }
 
+.memo-giveaway-podium-place.is-empty .memo-giveaway-podium-rank {
+  color: var(--muted);
+  text-shadow: none;
+}
+
+/* The board's own container: room under the runner before the list. */
+.memo-giveaway-board .memo-giveaway-podium {
+  margin-bottom: 1.1rem;
+}
 
 /* Rows below the podium start at fourth place, grouped on one surface the
    way the settings list is. */

@@ -586,10 +586,35 @@ export function OnboardingFlow({
     }
   }, [demo, gradeTouched, locale, t]);
 
+  /*
+   * The last screen is reached when two things have both happened: the ring has
+   * filled and sat for the design's 900ms beat, and the answers are on the
+   * server. Either can finish first — the ring takes two to four seconds and a
+   * save on a bad connection can take longer — so whichever finishes last is
+   * the one that moves the flow on. Asking once, at the end of the beat,
+   * stranded anyone whose save had not come back yet on a screen that says
+   * "your plan is ready" and carries no button at all.
+   */
+  const loaderSettled = useRef(false);
+
+  const finishLoading = useCallback(() => {
+    if (!loaderSettled.current || !(saved.current || demo)) {
+      return;
+    }
+
+    if (stateRef.current.stepId === "personalizing") {
+      goRef.current(1);
+    }
+  }, [demo]);
+
+  const finishLoadingRef = useRef(finishLoading);
+  finishLoadingRef.current = finishLoading;
+
   const runLoader = useCallback(() => {
     clearLoop("load");
+    loaderSettled.current = false;
     patch({ pct: 0 });
-    void submit();
+    void submit().then(() => finishLoadingRef.current());
 
     intervals.current.load = setInterval(() => {
       setState((current) => {
@@ -599,19 +624,15 @@ export function OnboardingFlow({
           clearLoop("load");
           clearTimer("loadDone");
           timers.current.loadDone = setTimeout(() => {
-            // The design lands on the last screen 900ms after the ring fills.
-            // A save that has not come back yet holds it there rather than
-            // showing a finished flow that never reached the server.
-            if (stateRef.current.stepId === "personalizing" && (saved.current || demo)) {
-              goRef.current(1);
-            }
+            loaderSettled.current = true;
+            finishLoadingRef.current();
           }, 900);
         }
 
         return { ...current, pct: next };
       });
     }, 190);
-  }, [demo, patch, submit]);
+  }, [patch, submit]);
 
   /** `go` is called from timers and from the keyboard, so it lives on a ref too. */
   const goRef = useRef<(delta: number) => void>(() => {});

@@ -212,3 +212,65 @@ test("the study goal cannot exceed the length the endpoint accepts", () => {
   const limit = Number(ROUTE.match(/studyGoal: z\.string\(\)\.trim\(\)\.min\(1\)\.max\((\d+)\)/)[1]);
   assert.match(FLOW, new RegExp(`\\.slice\\(0, ${limit}\\)`));
 });
+
+/**
+ * The last screen is reached when two independent things have both finished:
+ * the loader's ring filling and sitting for its beat, and the answers reaching
+ * the server. The ring takes two to four seconds; a save on a bad connection
+ * can take longer. Asking once, at the end of the beat, left anyone whose save
+ * had not come back stranded on a screen that says the plan is ready and
+ * carries no button at all — no error, no retry, nothing to press.
+ */
+test("the loader waits for whichever finishes last, the beat or the save", () => {
+  const loader = FLOW.slice(FLOW.indexOf("const finishLoading"), FLOW.indexOf("const goRef"));
+
+  // Both sides call it: the beat's timer, and the save resolving.
+  assert.match(loader, /submit\(\)\.then\(\(\) => finishLoadingRef\.current\(\)\)/);
+  assert.match(loader, /loaderSettled\.current = true;\s*\n\s*finishLoadingRef\.current\(\);/);
+
+  // And it refuses until both are true, rather than sampling one of them.
+  assert.match(
+    FLOW.slice(FLOW.indexOf("const finishLoading"), FLOW.indexOf("const finishLoadingRef")),
+    /if \(!loaderSettled\.current \|\| !\(saved\.current \|\| demo\)\) \{\s*\n\s*return;/,
+  );
+
+  // A retry starts the wait over rather than inheriting the last one's beat.
+  assert.match(FLOW, /loaderSettled\.current = false;/);
+});
+
+test("a saved profile is complete enough to count as onboarded", () => {
+  /*
+   * `hasCompletedOnboardingProfile` wants five columns, not just the timestamp.
+   * A save that set the timestamp and left one of the others empty would return
+   * 200 and still land the user back at the start of the survey, which is the
+   * same trap by another route — so the endpoint must write all five, and the
+   * schema must refuse a request that would leave any of them blank.
+   */
+  const billing = readFileSync(
+    fileURLToPath(new URL("../src/lib/billing.ts", import.meta.url)),
+    "utf8",
+  );
+  const required = billing
+    .slice(billing.indexOf("function hasCompletedOnboardingProfile"))
+    .slice(0, billing.slice(billing.indexOf("function hasCompletedOnboardingProfile")).indexOf("}"))
+    .match(/profile\??\.(\w+)/g)
+    .map((match) => match.split(".")[1]);
+
+  assert.ok(required.length >= 5, `expected five columns, found ${required.join(", ")}`);
+
+  const upsert = ROUTE.slice(ROUTE.indexOf(".upsert({"), ROUTE.indexOf("as never"));
+
+  for (const column of required) {
+    assert.match(upsert, new RegExp(`\\b${column}:`), `the endpoint never writes "${column}"`);
+    assert.doesNotMatch(
+      upsert,
+      new RegExp(`\\b${column}: null`),
+      `the endpoint writes "${column}" as null, which never counts as onboarded`,
+    );
+  }
+
+  // The three the survey sends as text can never arrive empty.
+  for (const field of ["currentAverageGrade", "targetGrade", "studyGoal"]) {
+    assert.match(ROUTE, new RegExp(`${field}: z\\.string\\(\\)\\.trim\\(\\)\\.min\\(1\\)`), field);
+  }
+});

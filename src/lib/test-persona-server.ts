@@ -8,6 +8,7 @@ import {
   isRealPersona,
   parseTestPersona,
   REAL_TEST_PERSONA,
+  serializeTestPersona,
   TEST_PERSONA_COOKIE,
   type TestPersona,
 } from "@/lib/test-persona";
@@ -69,4 +70,40 @@ export async function readTestPersonaFor(userId: string): Promise<TestPersona | 
  */
 export async function readTestPersonaOrReal(): Promise<TestPersona> {
   return (await readActiveTestPersona()) ?? REAL_TEST_PERSONA;
+}
+
+/**
+ * Ends an onboarding persona that the account has just made untrue.
+ *
+ * A persona saying "not onboarded" is what puts you back into the survey, and
+ * finishing the survey writes a real `onboarding_completed_at` — after which
+ * the persona is still saying you have not finished, so the app sends you
+ * straight back to the start of it. The loop has no exit inside the flow, and
+ * the panel that would turn it off is behind the same redirect.
+ *
+ * So finishing it for real is what ends it. Testing the survey again is one tap
+ * in Settings; being unable to leave it is not.
+ */
+export async function clearOnboardingTestPersona() {
+  const persona = await readActiveTestPersona();
+
+  if (!persona || persona.onboarding !== "pending") {
+    return;
+  }
+
+  const next: TestPersona = { ...persona, onboarding: "real" };
+  const store = await cookies();
+
+  if (isRealPersona(next)) {
+    store.delete(TEST_PERSONA_COOKIE);
+    return;
+  }
+
+  store.set(TEST_PERSONA_COOKIE, serializeTestPersona(next), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 12,
+  });
 }

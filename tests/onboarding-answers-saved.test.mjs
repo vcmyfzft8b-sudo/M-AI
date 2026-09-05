@@ -274,3 +274,30 @@ test("a saved profile is complete enough to count as onboarded", () => {
     assert.match(ROUTE, new RegExp(`${field}: z\\.string\\(\\)\\.trim\\(\\)\\.min\\(1\\)`), field);
   }
 });
+
+/**
+ * The keyboard presses the button rather than guessing at what it does.
+ *
+ * Enter used to advance a step directly, which is not the same thing: on the
+ * last screen there is no step after it, so "Make my first note" — the one
+ * button that leaves the flow — was the only call to action in it the keyboard
+ * could not press, and on the loading step Enter was refused outright even when
+ * the button there was the retry after a failed save.
+ */
+test("Enter presses the call to action wherever there is one", () => {
+  const handler = FLOW.slice(FLOW.indexOf("const onKey ="), FLOW.indexOf('window.addEventListener("keydown"'));
+
+  assert.match(handler, /if \(ctaRef\.current\.enabled\) \{\s*\n\s*ctaRef\.current\.press\(\);/);
+  // A question step has no button at all — picking an option is what advances
+  // it — so that one case still moves the step directly.
+  assert.match(handler, /if \(active\.kind === "q"\)/);
+  // And the old shortcut is gone from every other case.
+  assert.doesNotMatch(handler, /active\.kind === "loading"/);
+
+  // One definition of "pressable", shared by the button and the keyboard.
+  assert.match(FLOW, /ctaRef\.current = \{ press: pressCta, enabled: showCta && !ctaDisabled \}/);
+  assert.match(FLOW, /next: pressCta,/);
+
+  // Typing in the practice test's answer box is still typing.
+  assert.match(handler, /\^\(INPUT\|TEXTAREA\)\$/);
+});

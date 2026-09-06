@@ -373,6 +373,33 @@ const NOTE_TABS = [
 
 type NoteTabId = (typeof NOTE_TABS)[number]["id"];
 
+/**
+ * Tabs that take the chat's column while they are on screen.
+ *
+ * Chat beside the note is the point of the note tab: you read a paragraph and
+ * ask about it. These five are not reading — they are a thing you watch, listen
+ * to, walk through or play, and each of them was worse for having a conversation
+ * bolted to its side:
+ *
+ * - the map and the palace are drawn, and a drawing squeezed into the ~300px the
+ *   chat leaves is the unreadable single column they exist to be better than;
+ * - the tutor is already a conversation, so a second one beside it asks the
+ *   reader which of the two to talk to;
+ * - the speed reader wants one word held still in the middle of an empty screen,
+ *   which is the one thing a panel of text beside it undoes;
+ * - the podcast is audio, and there is nothing on screen to ask about.
+ *
+ * The list decides both surfaces: the desktop column and the phone's bar at the
+ * foot. Chat is one pill away on any of them.
+ */
+const TABS_WITHOUT_CHAT = new Set<NoteTabId>([
+  "mindmap",
+  "palace",
+  "tutor",
+  "speed",
+  "podcast",
+]);
+
 /** How close to the foot of the chat log still counts as "reading the tail". */
 const STICK_TO_BOTTOM_PX = 120;
 
@@ -1245,7 +1272,34 @@ export function LectureWorkspace({
     },
     [],
   );
+  /*
+   * Whether the answered quiz collapses to the answers worth reading.
+   *
+   * Only on a phone. Beside a rail there is room for the question, four answers and the
+   * verdict all at once, and seeing the three you did not pick is worth something; on a
+   * phone that same set had to be shrunk until a long answer had nowhere to be written,
+   * which is worth rather less.
+   */
+  const [collapsesAnsweredQuiz, setCollapsesAnsweredQuiz] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 1099px)");
+    const sync = () => setCollapsesAnsweredQuiz(mediaQuery.matches);
+
+    sync();
+    mediaQuery.addEventListener("change", sync);
+
+    return () => mediaQuery.removeEventListener("change", sync);
+  }, []);
+
   const [dockSlot, setDockSlot] = useState<HTMLElement | null>(null);
+  /*
+   * The other end of the note's title row, where a screen may hang one control of its own.
+   * The walkthrough's usage meter is what it was opened for: a fact about the screen you are
+   * on rather than a control belonging to the dock, and in the dock it sat below the thing it
+   * describes.
+   */
+  const [headSlot, setHeadSlot] = useState<HTMLElement | null>(null);
 
   const [isSending, setIsSending] = useState(false);
   const [trialChatMessagesRemaining, setTrialChatMessagesRemaining] = useState(
@@ -3932,8 +3986,22 @@ export function LectureWorkspace({
             `${detail.artifact?.summary ?? ""}\n${detail.artifact?.structured_notes_md ?? ""}`,
             detail.lecture.language_hint,
           )}
-          /* The usage pill belongs in the dock, where this app keeps a screen's controls. */
-          dockSlot={dockSlot}
+          /* Beside the note's title: "28 min left today" is a fact about this screen. */
+          headSlot={headSlot}
+          /*
+           * A finished walkthrough is the best moment in the app to offer the cards — they
+           * have just spent eight minutes proving they want this material, and the pill row
+           * is the only route to them otherwise. Withheld when there are none to open.
+           */
+          onOpenFlashcards={
+            detail.flashcards.length > 0
+              ? () => {
+                  hasChosenStudyViewRef.current = true;
+                  setActiveStudyView("flashcards");
+                  setActiveTab("study");
+                }
+              : undefined
+          }
         />
       );
     }
@@ -4243,23 +4311,29 @@ export function LectureWorkspace({
             <div
               className={`ios-card lecture-study-shell ${shouldAutoSizeStudyShell ? "auto-height" : ""}`}
             >
-              <div className="lecture-study-header">
-                {/* The design carries no readiness chip here — the material
-                    being on screen is the signal. */}
-                <div className="lecture-study-title" />
-                <div className="lecture-study-header-actions">
-                  {canManageActiveStudyView ? (
+              {/*
+                * Editing used to have a row to itself above the material, holding a single
+                * button and sixty pixels of height on every study screen — height these
+                * screens spend on the card, the question or the room they exist to show.
+                *
+                * The deck puts it at the end of its review row, beside the arrow that moves
+                * through the cards it edits. The screens with no such row put it beside the
+                * note's title, in the slot the walkthrough's meter uses: a screen's own one
+                * control, on the line that names the note it belongs to.
+                */}
+              {activeStudyView === "flashcards" || !canManageActiveStudyView || !headSlot
+                ? null
+                : createPortal(
                     <button
                       type="button"
-                      className="lecture-study-manage-button"
+                      className="lecture-study-manage-button lecture-study-head-edit"
                       onClick={openStudyManager}
                     >
                       <Msym name="edit_square" size="1.2rem" fill={false} weight={500} />
                       <span>{t("study.edit")}</span>
-                    </button>
-                  ) : null}
-                </div>
-              </div>
+                    </button>,
+                    headSlot,
+                  )}
 
               <div className="ios-segmented lecture-study-mode-switch">
                 {([
@@ -4420,6 +4494,18 @@ export function LectureWorkspace({
                       canPrevious: canNavigatePreviousFlashcard,
                       canNext: canNavigateNextFlashcard,
                     }}
+                    trailing={
+                      canManageActiveStudyView ? (
+                        <button
+                          type="button"
+                          className="lecture-study-manage-button lecture-flashcard-edit"
+                          onClick={openStudyManager}
+                        >
+                          <Msym name="edit_square" size="1.2rem" fill={false} weight={500} />
+                          <span>{t("study.edit")}</span>
+                        </button>
+                      ) : null
+                    }
                     exit={
                       flashcardExitAnimation
                         ? {
@@ -4584,7 +4670,29 @@ export function LectureWorkspace({
                     <p className="lecture-quiz-prompt">{activeQuizQuestion.prompt}</p>
 
                     <div className="lecture-quiz-options">
-                      {activeQuizOptionOrder.map((optionIndex, displayIndex) => {
+                      {activeQuizOptionOrder
+                        /*
+                         * Answered, the list is down to what there is left to learn from: the
+                         * right answer, and — when they missed it — the one they chose.
+                         *
+                         * Showing all four afterwards meant four boxes of text competing for
+                         * the height the verdict also needed, which is what drove the options
+                         * to shrink until a long answer had nowhere to be written. None of the
+                         * three they did not pick is being read at that moment; the one that
+                         * is, is now the only one there, at its full size.
+                         *
+                         * The letters keep the position they were asked in, because the
+                         * verdict underneath names the answer by letter.
+                         */
+                        .map((optionIndex, displayIndex) => ({ optionIndex, displayIndex }))
+                        .filter(
+                          ({ optionIndex }) =>
+                            !collapsesAnsweredQuiz ||
+                            activeQuizSelection === null ||
+                            optionIndex === activeQuizQuestion.correct_option_idx ||
+                            optionIndex === activeQuizSelection,
+                        )
+                        .map(({ optionIndex, displayIndex }) => {
                         const option = activeQuizQuestion.options[optionIndex] ?? "";
                         const isSelected = activeQuizSelection === optionIndex;
                         const isCorrect =
@@ -5560,31 +5668,32 @@ export function LectureWorkspace({
    * portalled into the slot the shell renders (see AppLayoutProvider). The
    * phone shows the same body as a full-height sheet.
    *
-   * The quiz owns the bottom of the screen with its own result sheet, so chat
-   * steps aside there — matching the redesign, where "Preglej zakaj" is the way
-   * into chat from a quiz.
+   * It is open beside the reading tabs and gone on the ones in
+   * TABS_WITHOUT_CHAT. The quiz keeps it but withholds the button that brings
+   * it back: it owns the bottom of the screen with its own result sheet, and
+   * "Preglej zakaj" is the way into chat from there.
+   *
+   * It also closes the moment a navigation away starts. The panel is portalled
+   * into the shell's third grid column, outside the content area the loading
+   * overlay covers, so leaving the note with it open left the note's chat
+   * standing beside the library's skeleton until the route committed.
    */
-  // The design keeps the chat panel open on every tab; only the button that
-  // brings it back is withheld on the quiz, which wants the full width while a
-  // question is on screen.
-  //
-  // It also closes the moment a navigation away starts. The panel is portalled
-  // into the shell's third grid column, outside the content area the loading
-  // overlay covers, so leaving the note with it open left the note's chat
-  // standing beside the library's skeleton until the route committed.
   const isLeavingNote = navigatingTo != null && navigatingTo !== notePathname;
+  const showChatPanel =
+    !isChatDismissed && !isLeavingNote && !TABS_WITHOUT_CHAT.has(activeTabId);
   /*
-   * The map takes the chat's column while it is on screen, and this is the one screen worth
-   * doing that for. A mind map is the only thing here whose usefulness is a function of how wide
-   * it is drawn: with the conversation beside it the canvas is barely three hundred pixels, and
-   * a map framed into three hundred pixels is the unreadable single column this feature exists
-   * to be better than. Chat is a tab away, and on the phone the bar at the foot is untouched.
+   * The phone's bar at the foot follows the same list. It is not the same
+   * control as the desktop column — it is a bar that opens a sheet, and
+   * dismissing the column has never hidden it — so it only asks whether this
+   * tab has a chat at all.
    */
-  const showChatPanel = !isChatDismissed && !isLeavingNote && activeTabId !== "mindmap";
+  const showsChatBar = !TABS_WITHOUT_CHAT.has(activeTabId);
 
   useEffect(() => {
     setChatOpen(showChatPanel);
-    return () => setChatOpen(false);
+    // Back to "undecided" rather than to closed: this screen is gone, and what
+    // the shell should do about the column is now whatever the next one says.
+    return () => setChatOpen(null);
   }, [setChatOpen, showChatPanel]);
 
   const desktopChatPanel =
@@ -6009,11 +6118,14 @@ export function LectureWorkspace({
           <div className="memo-note-scroll" ref={noteScrollRef}>
             {tabPills}
 
-            <div className="memo-note-head memo-only-desktop">
-              <span className="memo-note-head-emoji">
-                <Emoji symbol={noteEmojiSymbol} size="1.45rem" />
-              </span>
-              <h1>{lectureTitle}</h1>
+            <div className="memo-note-headrow">
+              <div className="memo-note-head memo-only-desktop">
+                <span className="memo-note-head-emoji">
+                  <Emoji symbol={noteEmojiSymbol} size="1.45rem" />
+                </span>
+                <h1>{lectureTitle}</h1>
+              </div>
+              <div className="memo-note-head-slot" ref={setHeadSlot} />
             </div>
 
             <h1 className="memo-m-note-title memo-only-mobile memo-notes-tab-only">
@@ -6046,10 +6158,9 @@ export function LectureWorkspace({
           <div className="memo-dock">
             <div className="memo-dock-slot" ref={setDockSlot} />
 
-            {isChatDismissed &&
-            activeTabId !== "quiz" &&
-            activeTabId !== "tutor" &&
-            activeTabId !== "mindmap" ? (
+            {/* Nothing to bring back on a tab that has no chat column, and the
+                quiz has its own way in ("Preglej zakaj"). */}
+            {isChatDismissed && activeTabId !== "quiz" && !TABS_WITHOUT_CHAT.has(activeTabId) ? (
               <button
                 type="button"
                 aria-label={t("chat.open")}
@@ -6061,18 +6172,23 @@ export function LectureWorkspace({
               </button>
             ) : null}
 
-            <button
-              type="button"
-              className="memo-m-chatbar memo-only-mobile"
-              onClick={() => setIsMobileChatOpen(true)}
-              aria-label={t("chat.mobileBar")}
-            >
-              <span className="memo-m-chatbar-label">{t("chat.mobileBar")}</span>
-              <span className="memo-m-chatbar-icon">
-                <Msym name="mic" size="1.35rem" className="mic" />
-                <Msym name="chat_bubble" size="1.35rem" className="bubble" />
-              </span>
+            {/* The phone's way into chat, on the same tabs the desktop column
+                appears on: a screen that is watched, listened to or played is
+                not one you ask questions about, at either width. */}
+            {showsChatBar ? (
+              <button
+                type="button"
+                className="memo-m-chatbar memo-only-mobile"
+                onClick={() => setIsMobileChatOpen(true)}
+                aria-label={t("chat.mobileBar")}
+              >
+                <span className="memo-m-chatbar-label">{t("chat.mobileBar")}</span>
+                <span className="memo-m-chatbar-icon">
+                  <Msym name="mic" size="1.35rem" className="mic" />
+                  <Msym name="chat_bubble" size="1.35rem" className="bubble" />
+                </span>
               </button>
+            ) : null}
 
             {/*
               * The circle at the end of the bar is a microphone, so it dictates
@@ -6082,7 +6198,7 @@ export function LectureWorkspace({
               * contain another button — the stylesheet lays it over the icon
               * slot the bar already draws.
               */}
-            {dictation.supported ? (
+            {showsChatBar && dictation.supported ? (
               <button
                 type="button"
                 className={`memo-m-chatbar-mic ${dictation.listening ? "listening" : ""} ${

@@ -1,32 +1,38 @@
-# Memo design system — rules for changing the UI
+# Memo design system
 
-Read this before any UI change. The short version is the "Design rules" block at
-the bottom, which is also pasted into `AGENTS.md` so every agent session picks it
-up without being told to.
+The rules for changing Memo's UI. Read this before any visual change; the short
+version lives in [AGENTS.md](/AGENTS.md) under "Design rules".
 
-The browsable version of this document (with live specimens in both appearances)
-is the `Memo Design System.dc.html` artifact.
-
----
+Everything here is a description of `src/app/redesign.css` as it stands, not an
+aspiration. Where the code still disagrees with a rule, that is noted.
 
 ## Where the design lives
 
 | Layer | File | Scope | Use for |
 | --- | --- | --- | --- |
 | **App (canonical)** | `src/app/redesign.css` | `.memo`, `.memo-portal` | Everything inside the product |
-| Legacy | `src/app/globals.css` | `:root` | Auth, landing, paywall. Do not extend. |
+| Legacy | `src/app/globals.css` | `:root` | Landing, paywall. Do not extend. |
 | Onboarding | `src/app/onboarding.css` | `.memo-onboarding-v2` | Onboarding flow only |
 | Paywall | `src/app/globals.css` | `.memo-paywall-shell` | Paywall only |
 
-**New UI goes in the `.memo` layer.** If you are editing anything else, you are in
+**New UI goes in the `.memo` layer.** If you are editing anything else you are on
 a legacy surface — check which token names are in scope before typing a colour.
+`onboarding.css` deliberately redeclares the redesign's token *names* with its own
+values (`--bg: #030303` rather than `#121214`, and so on); a value that looks
+familiar there is not the same value.
 
 ## Tokens
 
-Declared on `.memo, .memo-portal`. Dark is re-declared in **three** places:
-`[data-theme="dark"]`, `[data-theme="system"]`, and the bare
-`prefers-color-scheme: dark` block. **A new token must be added to all three** or
-dark mode breaks silently.
+Declared on `.memo, .memo-portal` (`src/app/redesign.css:397`). Dark is declared
+in **two** blocks:
+
+- `:root[data-theme="dark"] .memo, .memo-portal` — the explicit dark setting.
+- inside `@media (prefers-color-scheme: dark)`, covering both
+  `:root:not([data-theme])` and `:root[data-theme="system"]`.
+
+**A new token that changes between appearances must be added to both**, or dark
+breaks silently. A token that is the same in both (`--coral`, `--blue`,
+`--btn-*`) is declared once, in the light block.
 
 ### Ground and ink
 
@@ -49,10 +55,16 @@ dark mode breaks silently.
 
 | Token | Value | Use |
 | --- | --- | --- |
-| `--coral` | `linear-gradient(135deg,#ff6d68,#f45f5a)` | The primary action, and only that. **It is a gradient** — cannot be a border or text colour. |
-| `--promo` | `#f45f5a` / `#ff6d68` | Solid coral: switch-on, notification dot, discount copy. |
-| `--upgrade-tint/-line/-ink` | periwinkle | Upgrade prompts. Deliberately quieter than coral. |
+| `--coral` | `linear-gradient(135deg,#ff6d68,#f45f5a)` | The primary action, and only that. **It is a gradient** — it cannot be a border or a text colour. |
+| `--promo` | `#f45f5a` light / `#ff6d68` dark | Solid coral: switch-on, notification dot, discount copy. |
+| `--upgrade-tint` / `-line` / `-ink` | periwinkle | Upgrade prompts. Deliberately quieter than coral. |
 | `--blue` | `#0066cc` | One button only (create-folder ready). Do not add a second. |
+
+`--danger` (`#ff3b30` / `#ff453a`) and `--danger-tint` are declared in all three
+blocks — use them for anything destructive or failed. They are new, so the ~58
+older declarations still type `#ff3b30` and `rgba(255, 59, 48, 0.12)` by hand and
+never lighten in dark; convert those as you touch them, and do not invent a third
+red.
 
 ### Five colour rules
 
@@ -65,8 +77,8 @@ dark mode breaks silently.
    translate.
 4. Focus goes on the field's **container** using `--focus-ring`, never the
    browser's outline.
-5. No scrollbars anywhere. `globals.css` hides them globally; content fades under
-   floating chrome with a `mask-image` ramp.
+5. No scrollbars anywhere. `globals.css:267` hides them globally; content fades
+   under floating chrome with a `mask-image` ramp instead.
 
 ## Type
 
@@ -99,6 +111,10 @@ is not a card is a pill (`999px`).
 item · `20px` note row, capture row · `22px` card, settings row, textarea ·
 `26px` modal · `34px 34px 0 0` bottom sheet · `999px` every button, tile, badge.
 
+A handful of one-off values survive from before the redesign (`3px`, `8px`, `9px`,
+`10px`, `24px`, `28px`, `30px`). They are not part of the scale. Do not copy one
+into new work, and do not add a tenth value.
+
 ## Spacing and heights
 
 Gaps: `0.5rem` buttons in a row · `0.6rem` tabs and chips · `0.85rem` rows in a
@@ -121,7 +137,7 @@ Card padding: `0 1.5rem` fixed-height row · `1.2rem 1.6rem` wrapping card row �
 - `0 30px 80px rgba(0,0,0,.24)` — modals. `--shadow-lg` is the upward variant for
   sheets.
 
-A shadow inside a card reads as a smudge — use `--sunken` + a `--line` border
+A shadow inside a card reads as a smudge — use `--sunken` plus a `--line` border
 instead.
 
 ## Motion
@@ -138,7 +154,8 @@ Entrances: `memo-fade-in` 0.18s (panels, screens), `memo-pop-in` 0.16–0.22s
 (toasts, action rows, modals).
 
 Never animate `height`, `top`, or shadow spread. `prefers-reduced-motion` is
-already enforced globally in `globals.css` — never re-implement that check.
+already enforced globally in `globals.css:234` — never re-implement that check in
+a component.
 
 ## Components — reuse before you write CSS
 
@@ -166,11 +183,12 @@ Chrome: `.memo-folder-chip` · `.memo-dock-pill` · `.memo-rail-item` ·
 `.memo-empty`.
 
 Icons: `<Msym name="…" />` from `src/components/msym.tsx` — Material Symbols
-Rounded. **Every name must also be added to the `icon_names` subset in
-`src/app/layout.tsx`**, or the ligature renders as literal text. Filled glyphs for
-solid affordances (play, close, check), outlined for navigation and tools.
-Emoji (`<Emoji symbol="…" />`) do the content iconography; Material Symbols are
-for chrome only.
+Rounded. **Every name must also be added to `MATERIAL_SYMBOL_NAMES` in
+`src/app/layout.tsx:31`**, which becomes the font's `icon_names` subset; a name
+that is missing renders as literal text. Filled glyphs for solid affordances
+(play, close, check), outlined for navigation and tools. Emoji
+(`<Emoji symbol="…" />`) do the content iconography; Material Symbols are for
+chrome only.
 
 ## Layout — one breakpoint, 1100px
 
@@ -178,54 +196,58 @@ There is no tablet layout and no intermediate state.
 
 **Desktop (`min-width: 1100px`)** — `.memo-grid` at
 `width: min(78%, 100% - 3rem)`, centred, `gap 1.25rem`, `padding-top 2rem`.
-Columns `240px minmax(0,1fr)`; with chat open a third at
-`minmax(18rem,25rem)`. The note screen is the exception: `4.5% / 1fr / 36.8%`,
-`gap 1.5%`. Reading measure capped at `max-width: 68rem`. The page scrolls; rail
-and chat columns are `align-self: stretch` so sticky children have travel.
+Columns `240px minmax(0,1fr)`; with chat open a third at `minmax(18rem,25rem)`.
+The note screen is the exception: `4.5% / 1fr / 36.8%`, `gap 1.5%`. Reading
+measure is capped at `max-width: 68rem`. The page scrolls; rail and chat columns
+are `align-self: stretch` so sticky children have travel.
 
 **Phone (`max-width: 1099px`)** — desktop chrome is switched off entirely
 (`.memo-header`, `.memo-rail`, `.memo-chat-slot`, `.memo-homebar-wrap` →
-`display:none`). `.memo-screen` is a fixed frame at
+`display: none`). `.memo-screen` is a fixed frame at
 `inset: var(--memo-safe-top) 0 var(--memo-kb) 0`; `.memo-screen-scroll` is the one
-scroller inside it; the shell is `100dvh / overflow:hidden`. Content fades under
+scroller inside it; the shell is `100dvh / overflow: hidden`. Content fades under
 floating chrome with
 `mask-image: linear-gradient(to bottom, transparent 0, transparent 2.1rem, #000 3.9rem)`
 and `padding-top: 4rem` — reuse those exact stops. Rows get **bigger**, not
 smaller: taller tiles, heavier titles, wrapping text, swipe actions.
 
-Safe areas come from `--memo-safe-top` / `--memo-safe-bottom`, keyboard from
+1100px is the only structural breakpoint. Three narrow-phone queries also exist
+(`640px`, and a `479/480px` pair) for text that will not fit on a small handset.
+They tune what is already there; do not build a layout inside one, and do not add
+a fourth width.
+
+Safe areas come from `--memo-safe-top` / `--memo-safe-bottom`, the keyboard from
 `--memo-kb`. Never use raw `env(safe-area-inset-*)` in a component.
 
 z-index ladder: folder chip 50 · search / dock 60 · phone home bar 80 · route
 skeleton 90 · portalled sheets 105+ · toast 140 · nav progress 2000.
 
----
+## Known inconsistencies
 
-## Design rules (paste this block into AGENTS.md / CLAUDE.md)
+Real, and worth knowing before you copy a pattern out of the stylesheet:
 
-```md
-## Design rules
+1. **Destructive red is only half tokenised.** `--danger` / `--danger-tint` now
+   exist and the auth screens use them, but ~58 older declarations still type the
+   literal and stay light-mode red in dark.
+2. **Coral has no solid token.** `--coral` is a gradient, so `#ff6d68` and
+   `#f45f5a` are retyped by hand wherever coral must be a border or text colour.
+3. **Three parallel token vocabularies** for the same concepts: `globals.css`
+   (`--label`, `--separator`, `--surface-solid`, `--tint`), `redesign.css`
+   (`--text`, `--line`, `--surface`), and `onboarding.css`, which reuses the
+   redesign's names with different values.
+4. **Nine button classes, four heights**, with overlapping roles:
+   `.memo-button-solid` (3.2rem) and `.memo-primary-pill` (3rem) are the same ink
+   button twice; `.memo-button-coral` and `.memo-sheet-coral` are the same
+   primary twice; `.memo-create-folder.ready` is a third primary in `--blue`; and
+   `.memo-subscribe-cta` uses an amber gradient that appears nowhere else,
+   despite `--upgrade-*` existing to be the upgrade accent.
+5. **Both dark blocks are written out longhand**, so they can drift. The
+   `--upgrade-*` lines in the media block are already mis-indented. Values match
+   today — keep them matching.
+6. **Both stylesheets are flat and ~16k lines**, so a component's rules sit far
+   from the media queries that override them. That is how
+   `.memo-settings-signout` ended up styled only inside a phone-width query and
+   rendered as a bare browser button between 480px and 1099px.
 
-Read `docs/design-system.md` before any UI change. In short:
-
-- New UI goes in the `.memo` layer (`src/app/redesign.css`). `globals.css` is
-  legacy — do not extend it.
-- Never type a raw colour. Use a token. If a token is missing, add it to the
-  `.memo` block AND all three dark blocks (`[data-theme="dark"]`,
-  `[data-theme="system"]`, bare `prefers-color-scheme`).
-- Reuse an existing `.memo-*` component before writing CSS. New classes are
-  `.memo-*` and live in `redesign.css`, not in a component file.
-- One primary action per screen, and it is coral. Ink confirms; periwinkle upsells.
-- Hover marks an edge (`inset 0 0 0 1px var(--hover-ring)`), never a lift. Focus
-  goes on the container via `--focus-ring`.
-- Snap to the existing scales: radius 12/14/16/18/20/22/26/999, the nine type
-  sizes, the listed control heights. Do not introduce new values.
-- One breakpoint: 1100px. Build the phone layout first; desktop is the rail
-  wrapped around it. One scroller per screen, never `scrollIntoView`, never a
-  visible scrollbar.
-- Every user-facing string comes from the i18n catalogue. No literal copy in a
-  component — there are coverage tests.
-- New Material Symbols names must be added to `icon_names` in
-  `src/app/layout.tsx`.
-- `prefers-reduced-motion` is handled globally. Do not re-implement it.
-```
+Fix them one at a time, with a commit each — every one is a wide find-and-replace
+and a mistake is much easier to spot alone.

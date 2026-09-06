@@ -1,9 +1,7 @@
-import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import Image from "next/image";
 
-import { BrandLogo } from "@/components/brand-logo";
+import { AuthScreen } from "@/components/auth-screen";
 import { CheckEmailCard } from "@/components/check-email-card";
-import { BRAND_NAME } from "@/lib/brand";
 import { getTranslations } from "@/lib/i18n/server";
 import { normalizeNextPath, sanitizeUserInput } from "@/lib/validation";
 
@@ -38,23 +36,23 @@ export default async function CheckEmailPage({
   const cooldownSeconds = Number(params?.cooldownSeconds);
 
   return (
-    <main className="landing-shell landing-auth-page check-email-page">
-      <div className="check-email-topbar">
-        <Link href="/" className="app-back-button">
-          <ChevronLeft className="h-5 w-5" />
-          {t("common.back")}
-        </Link>
-      </div>
-
-      <section className="landing-auth-wrap check-email-wrap">
-        <Link href="/" className="landing-auth-brand check-email-brand" aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}>
-          <BrandLogo compact priority />
-        </Link>
-
-        <div className="check-email-hero">
-          <p className="check-email-eyebrow">{t("auth.checkEmail.eyebrow")}</p>
-          <h1 className="check-email-title">{t("auth.checkEmail.title")}</h1>
-          <p className="check-email-copy">
+    <AuthScreen>
+      <div className="memo-auth-card">
+        {/* The heading belongs to the page rather than the card component, and
+            it stays here — but on the card's head, so this screen reads as the
+            same object as the one it was reached from. */}
+        <div className="memo-auth-head">
+          <Image
+            src="/memo-mascot.png"
+            alt=""
+            width={320}
+            height={288}
+            className="memo-auth-mascot"
+            priority
+          />
+          <p className="memo-eyebrow">{t("auth.checkEmail.eyebrow")}</p>
+          <h1 className="memo-auth-title">{t("auth.checkEmail.title")}</h1>
+          <p className="memo-auth-copy long">
             {t("auth.checkEmail.copyBefore")}
             <strong>{email}</strong>
             {t("auth.checkEmail.copyAfter")}
@@ -70,7 +68,7 @@ export default async function CheckEmailPage({
           sentAt={Number.isFinite(sentAt) ? sentAt : 0}
           cooldownSeconds={Number.isFinite(cooldownSeconds) ? cooldownSeconds : 60}
         />
-      </section>
-    </main>
+      </div>
+    </AuthScreen>
   );
 }

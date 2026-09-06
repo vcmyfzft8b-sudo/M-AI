@@ -1727,7 +1727,7 @@ export function LecturePodcast({
     <div className="memo-podcast">
       <VoiceUsageSheet
         usage={status?.usage ?? null}
-        dockSlot={dockSlot}
+        slot={dockSlot}
         blocked={limitReached}
         buyingCredits={buyingCredits}
         onBuyCredits={() => void buyCredits()}

@@ -1,10 +1,9 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 
-import { AuthBackLink } from "@/components/auth-back-link";
-import { BrandLogo } from "@/components/brand-logo";
+import { AuthScreen } from "@/components/auth-screen";
 import { EmailEntryForm } from "@/components/email-entry-form";
 import { getOptionalUser } from "@/lib/auth";
-import { BRAND_NAME } from "@/lib/brand";
 import { getTranslations } from "@/lib/i18n/server";
 import { normalizeNextPath, sanitizeUserInput } from "@/lib/validation";
 
@@ -31,26 +30,24 @@ export default async function EmailEntryPage({
   }
 
   return (
-    <main className="landing-shell landing-auth-page email-entry-page">
-      <div className="email-entry-topbar">
-        <AuthBackLink />
-      </div>
-
-      <section className="landing-auth-wrap email-entry-wrap">
-        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-        <a href="/" className="landing-auth-brand email-entry-brand" aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}>
-          <BrandLogo compact priority />
-        </a>
-
-        <div className="landing-auth-hero email-entry-copy">
-          <h1 className="landing-auth-title email-entry-title">{t("auth.emailEntryTitle")}</h1>
-          <p className="landing-auth-copy email-entry-text">
-            {t("auth.emailEntryCopy")}
-          </p>
+    <AuthScreen>
+      <div className="memo-auth-card">
+        <div className="memo-auth-head">
+          <Image
+            src="/memo-mascot.png"
+            alt=""
+            width={320}
+            height={288}
+            className="memo-auth-mascot"
+            priority
+          />
+          <p className="memo-eyebrow">{t(mode === "login" ? "auth.signIn" : "auth.signUp")}</p>
+          <h1 className="memo-auth-title">{t("auth.emailEntryTitle")}</h1>
+          <p className="memo-auth-copy">{t("auth.emailEntryCopy")}</p>
         </div>
 
         <EmailEntryForm email={email} mode={mode} next={next} />
-      </section>
-    </main>
+      </div>
+    </AuthScreen>
   );
 }

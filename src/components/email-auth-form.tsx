@@ -1,13 +1,16 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
+
+import { Msym } from "@/components/msym";
 
 type EmailAuthFormProps = {
   buttonClassName: string;
   defaultEmail?: string;
   formClassName?: string;
   helperText?: string;
+  /** Drawn inside the field, ahead of the input. */
+  icon?: ReactNode;
   inputClassName?: string;
   inputWrapperClassName?: string;
   mode: "login" | "signup";
@@ -58,6 +61,7 @@ export function EmailAuthForm(props: EmailAuthFormProps) {
       <input type="hidden" name="next" value={props.next} />
 
       <label className={props.inputWrapperClassName}>
+        {props.icon}
         <input
           type="email"
           name="email"
@@ -77,11 +81,11 @@ export function EmailAuthForm(props: EmailAuthFormProps) {
         disabled={isSubmitting}
         aria-busy={isSubmitting}
       >
-        {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /> : null}
+        {isSubmitting ? <Msym name="progress_activity" fill={false} weight={500} className="memo-spin" /> : null}
         <span>{isSubmitting ? props.pendingLabel : props.submitLabel}</span>
       </button>
 
-      {props.helperText ? <p className="auth-helper-copy">{props.helperText}</p> : null}
+      {props.helperText ? <p className="memo-auth-helper">{props.helperText}</p> : null}
     </form>
   );
 }

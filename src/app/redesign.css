@@ -427,6 +427,11 @@
   --scrim: rgba(0, 0, 0, 0.32);
   --coral: linear-gradient(135deg, #ff6d68, #f45f5a);
   --blue: #0066cc;
+  /* Destructive. Until now every delete, every error note and every danger
+     outline typed `#ff3b30` straight into the rule, which is why dark mode kept
+     showing the light-mode red. */
+  --danger: #ff3b30;
+  --danger-tint: rgba(255, 59, 48, 0.12);
   /* Focus is shown on the field's container, not as the UA's blue box. */
   --focus-ring: rgba(0, 0, 0, 0.22);
   /* Cards mark hover with an edge rather than a lift. */
@@ -470,6 +475,8 @@
   --upgrade-line: rgba(130, 148, 218, 0.4);
   --upgrade-ink: #b9c2f0;
   --promo: #ff6d68;
+  --danger: #ff453a;
+  --danger-tint: rgba(255, 69, 58, 0.15);
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.75);
   --scrim: rgba(0, 0, 0, 0.5);
@@ -499,6 +506,8 @@
   --upgrade-line: rgba(130, 148, 218, 0.4);
   --upgrade-ink: #b9c2f0;
     --promo: #ff6d68;
+    --danger: #ff453a;
+    --danger-tint: rgba(255, 69, 58, 0.15);
     --shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
     --shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.75);
     --scrim: rgba(0, 0, 0, 0.5);
@@ -16600,4 +16609,537 @@
 .memo-persona-reset:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* ---------------------------------------------------------------------------
+   Auth — the way in
+   ---------------------------------------------------------------------------
+   These screens were the last product surface still speaking the pre-redesign
+   `globals.css` vocabulary (`--label`, `--separator`, `--surface-solid`), so
+   the first thing anyone saw did not look like the app behind it. They are on
+   the `.memo` layer now, and this is the whole of their styling.
+
+   Auth sits outside the app shell: no rail, no chat column, so the 1100px
+   switch is not a layout change here — only type and padding step up. The card
+   keeps its `min(100%, 28rem)` cap at every width, because a sign-in form does
+   not get better by being wider.
+   ------------------------------------------------------------------------ */
+
+.memo-auth {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+  /*
+   * The soft keyboard covers the bottom of the viewport without shrinking it —
+   * `dvh` answers for the browser's own chrome, not for the keys — so the
+   * screen has to end above the keyboard itself, or the field being typed into
+   * and the button under it sit behind it. `--memo-kb` is the measured height
+   * `KeyboardInset` publishes; with `border-box` the padding comes out of the
+   * 100dvh, so the stage centres in what is actually still visible and the
+   * page does not grow a keyboard's worth of empty scroll.
+   */
+  padding-bottom: var(--memo-kb, 0px);
+}
+
+/* The back control leads the row and the lockup trails it, because the thing
+   you might press belongs where a thumb already is. On desktop the two swap
+   into one group on the left — see the media query at the foot of this block. */
+.memo-auth-header {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: calc(0.8rem + var(--memo-safe-top, 0px)) 1.15rem 0.8rem;
+}
+
+.memo-auth-header-gap {
+  flex: 0 0 auto;
+}
+
+.memo-auth-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--btn-round);
+  height: var(--btn-round);
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  transition: box-shadow 0.16s ease;
+}
+
+.memo-auth-back .msym {
+  font-size: var(--btn-round-glyph);
+}
+
+.memo-auth-back:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-auth-lockup {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  color: var(--text);
+}
+
+.memo-auth-lockup .brand-logo.compact .brand-logo-mark {
+  --lockup-h: 1.6rem;
+}
+
+/*
+ * Centred by auto margins rather than by `align-content`, because centring is
+ * only wanted while the content fits. With the keyboard open — or on a short
+ * phone in landscape — a centred grid overflows equally in both directions and
+ * the top of the card ends up above the scroll origin, out of reach. Auto
+ * margins collapse to zero the moment there is no free space, so the card
+ * starts at the top and the page simply scrolls.
+ */
+.memo-auth-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem 1.15rem
+    calc(2.5rem + max(0px, var(--memo-safe-bottom, 0px) - var(--memo-kb, 0px)));
+}
+
+.memo-auth-stage > :first-child {
+  margin-top: auto;
+}
+
+.memo-auth-stage > :last-child {
+  margin-bottom: auto;
+}
+
+.memo-auth-card {
+  display: grid;
+  gap: 1.1rem;
+  width: min(100%, 28rem);
+  padding: 1.5rem 1.25rem 1.6rem;
+  border-radius: 26px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+/* The panel carried no mark at all, so the mascot — the app's whole identity —
+   appeared nowhere on the way in. */
+.memo-auth-head {
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  text-align: center;
+}
+
+.memo-auth-mascot {
+  width: 3.6rem;
+  height: auto;
+  display: block;
+}
+
+.memo-auth-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.16;
+  text-wrap: pretty;
+}
+
+.memo-auth-copy {
+  margin: 0;
+  max-width: 17rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+/* The sign-in line is one short sentence and reads best held to a narrow
+   measure. The code and error screens carry a real paragraph, which at 17rem
+   turns into a column. */
+.memo-auth-copy.long {
+  max-width: 24rem;
+}
+
+.memo-auth-copy strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.memo-auth-stack {
+  display: grid;
+  gap: 0.6rem;
+}
+
+/* Provider buttons are pills like everything else tappable in the app. The
+   `mark` is passed in, so a second provider drops in with no layout change. */
+.memo-auth-provider {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  width: 100%;
+  height: 3.4rem;
+  padding: 0 1.1rem;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1.02rem;
+  font-weight: 700;
+  transition: box-shadow 0.16s ease;
+}
+
+/* An edge, not a lift. The old rule was `transform: translateY(-1px)`. */
+.memo-auth-provider:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-auth-provider:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.memo-auth-provider-form {
+  display: block;
+}
+
+.memo-auth-provider-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
+}
+
+.memo-auth-provider .msym {
+  flex: 0 0 auto;
+  font-size: 1.25rem;
+}
+
+/* Apple's mark is drawn smaller inside its own box than Google's is. */
+.memo-auth-provider-icon-apple {
+  width: 1.42rem;
+  height: 1.42rem;
+  margin-right: -0.18rem;
+}
+
+/* The card's own rhythm is 1.1rem; inside the provider stack the divider has to
+   buy that back, or the three rows read as one undifferentiated group. */
+.memo-auth-stack .memo-auth-divider {
+  margin: 0.25rem 0;
+}
+
+.memo-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.memo-auth-divider::before,
+.memo-auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.memo-auth-form {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.memo-auth-field {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  height: 3.6rem;
+  padding: 0 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+/* Focus is drawn on the container, never as the browser's outline. Before this
+   the email field had no focus treatment of any kind. */
+.memo-auth-field:focus-within {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-auth-field .msym {
+  flex: 0 0 auto;
+  font-size: 1.25rem;
+  color: var(--muted);
+  transition: color 0.16s ease;
+}
+
+.memo-auth-field:focus-within .msym {
+  color: var(--text);
+}
+
+.memo-auth-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 1.05rem;
+}
+
+.memo-auth-field input::placeholder {
+  color: var(--muted-2);
+}
+
+/* The code field is the same control one step up: taller, rounder, and the
+   value tracked apart so eight digits stay countable. */
+.memo-auth-field.code {
+  height: 3.9rem;
+  padding: 0 1.1rem;
+  border-radius: 18px;
+}
+
+.memo-auth-field.code input {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-auth-field.code input::placeholder {
+  font-weight: 400;
+  letter-spacing: normal;
+}
+
+.memo-auth-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.memo-auth-helper {
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.memo-auth-note {
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.memo-auth-note.error {
+  color: var(--danger);
+}
+
+.memo-auth-actions {
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* Countdown-gated: for the first cooldown after arrival this button is drawn
+   disabled, which is the state worth designing. `tabular-nums` keeps the
+   countdown from jittering as the seconds change width. */
+.memo-auth-resend {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-auth-resend:disabled {
+  color: var(--muted-2);
+  cursor: default;
+}
+
+.memo-auth-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 3rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 650;
+  transition: box-shadow 0.16s ease;
+}
+
+.memo-auth-ghost:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+/* A footnote about the page, not a step in it — so it sits outside the card,
+   where it no longer competes with the action. */
+.memo-auth-legal {
+  margin: 0.9rem 0 0;
+  max-width: 28rem;
+  text-align: center;
+  color: var(--muted-2);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.memo-auth-legal a {
+  color: var(--muted);
+  border-bottom: 1px solid var(--muted-2);
+}
+
+.memo-auth-legal button,
+.memo-auth-legal-button {
+  border: 0;
+  border-bottom: 1px solid var(--muted-2);
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.memo-auth-legal button[data-pending],
+.memo-auth-legal-button[data-pending] {
+  opacity: 0.65;
+  pointer-events: none;
+  border-bottom-color: transparent;
+}
+
+/* Why an attempt was turned away — admin sign-in only. */
+.memo-auth-notice {
+  width: min(100%, 28rem);
+  margin: 0.9rem 0 0;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Above the card on the admin sign-in. Only the bottom margin moves: the top
+   one is the stage's `auto`, and overriding it here would stop the screen
+   centring the moment a notice appeared. */
+.memo-auth-notice:first-child {
+  margin-top: 0.9rem;
+  margin-bottom: 0.9rem;
+}
+
+.memo-auth-notice strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.memo-auth-notice code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85em;
+}
+
+.memo-auth-notice[data-tone="error"] {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+.memo-auth-notice[data-tone="error"] strong {
+  color: var(--danger);
+}
+
+.memo-auth-badge {
+  display: inline-flex;
+  width: 3.6rem;
+  height: 3.6rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+}
+
+.memo-auth-badge.error {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+@media (max-width: 1099px) {
+  /*
+   * While a field is focused the keyboard has taken half the screen, and the
+   * mascot is the one thing on the card that is only decoration. It goes, so
+   * the field and the button under it stay above the keys instead of the
+   * screen having to be scrolled to reach its own submit.
+   */
+  .memo-auth-card:has(input:focus) .memo-auth-mascot {
+    display: none;
+  }
+}
+
+@media (min-width: 1100px) {
+  .memo-auth-header {
+    gap: 1rem;
+    padding: calc(1rem + var(--memo-safe-top, 0px)) 1.6rem 1rem;
+  }
+
+  /* The pair leads the row together; the gap does the pushing instead. */
+  .memo-auth-lockup {
+    margin-left: 0;
+  }
+
+  .memo-auth-lockup .brand-logo.compact .brand-logo-mark {
+    --lockup-h: 1.8rem;
+  }
+
+  .memo-auth-header-gap {
+    flex: 1 1 auto;
+  }
+
+  .memo-auth-stage {
+    padding: 2.5rem 1.6rem 3rem;
+  }
+
+  .memo-auth-card {
+    gap: 1.2rem;
+    padding: 2rem 2.1rem 2.1rem;
+  }
+
+  .memo-auth-head {
+    gap: 0.6rem;
+  }
+
+  .memo-auth-mascot {
+    width: 4.2rem;
+  }
+
+  .memo-auth-copy {
+    max-width: 20rem;
+    font-size: 1rem;
+  }
+
+  .memo-auth-form {
+    gap: 0.65rem;
+  }
+
+  .memo-auth-legal {
+    margin-top: 1.2rem;
+  }
 }

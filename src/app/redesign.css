@@ -624,6 +624,29 @@
   overflow-y: hidden;
 }
 
+/*
+ * Set for as long as a pull lasts (useChipRowWheelScroll).
+ *
+ * No `cursor: grab` on the row at rest: whether it can be pulled depends on
+ * whether it overflows, which CSS cannot see, and a grab hand over a row that
+ * does not move is worse than no hint at all. `grabbing` covers the pills too,
+ * or the button under the pointer keeps its own `pointer` for the whole drag.
+ *
+ * `scroll-behavior` is the important half. The pill row scrolls itself smoothly
+ * when the tab changes, and a smooth scroller told to follow a hand lags a frame
+ * or two behind it, which reads as the row being heavy rather than held. Snapping
+ * fights the same way, so it steps aside for the length of the gesture.
+ */
+.memo-chiprow.is-dragging,
+.memo-chiprow.is-dragging * {
+  cursor: grabbing;
+}
+
+.memo-chiprow.is-dragging {
+  scroll-behavior: auto;
+  scroll-snap-type: none;
+}
+
 
 /* --- breakpoint utilities ------------------------------------------------- */
 

@@ -1729,9 +1729,12 @@ export function LectureTutor({
 
       {!isRunning ? (
         <>
-          {/* Pick a voice, hear it, then start. Tapping one plays it. */}
+          {/* Pick a voice, hear it, then start. Tapping one plays it.
+              `memo-chiprow` because this is one: it takes the wheel on desktop,
+              pins the gesture to one axis, and stops the last chip from
+              chaining into the iOS back-swipe. */}
           <div
-            className="memo-tutor-voices"
+            className="memo-tutor-voices memo-chiprow"
             ref={voiceRowRef}
             role="radiogroup"
             aria-label={t("tutor.voice.label")}

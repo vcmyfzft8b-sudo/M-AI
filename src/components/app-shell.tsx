@@ -11,6 +11,7 @@ import { InstantLink } from "@/components/instant-link";
 import { LectureChatLoading } from "@/components/lecture-loading";
 import { Msym } from "@/components/msym";
 import { useNavigationFeedback } from "@/components/navigation-loading";
+import { useChipRowWheelScroll } from "@/components/use-wheel-to-horizontal";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -48,6 +49,15 @@ export function AppShell({
   const demoBasePath = useCreatorDemoBasePath();
   const clientPathname = usePathname();
   const router = useRouter();
+
+  /*
+   * The sideways rows — the note's pills, the chat suggestions, the tutor's
+   * voices — overflow on desktop too, and a mouse has no way of its own to push
+   * a horizontal scroller: the wheel scrolls the page behind the row instead,
+   * leaving everything past the fold unreachable, because the design hides the
+   * scrollbar that would otherwise drag it.
+   */
+  useChipRowWheelScroll();
 
   // `usePathname` is null on the very first server-rendered pass in some
   // contexts, so the header-provided path seeds it.

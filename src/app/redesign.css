@@ -12783,18 +12783,14 @@
  * a participant.
  */
 /*
- * The walkthrough keeps the dock but empties it of the chat.
+ * The walkthrough keeps the dock but empties it of the chat: offering a second
+ * place to ask a question — with a second microphone button — beside a tutor
+ * that is already listening is two answers to one question. The dock itself
+ * stays, because it is where this app puts the controls belonging to the screen
+ * you are on, so the usage pill goes in it rather than floating somewhere new.
  *
- * Offering a second place to ask a question — with a second microphone button — beside a
- * tutor that is already listening is two answers to one question. But the dock itself is
- * where this app puts the controls that belong to the screen you are on, so the usage pill
- * goes in it rather than floating somewhere new.
+ * Which tabs drop the chat is decided in TABS_WITHOUT_CHAT, not here.
  */
-.memo-note-screen[data-note-tab="tutor"] .memo-m-chatbar,
-.memo-note-screen[data-note-tab="tutor"] .memo-m-chatbar-mic,
-.memo-note-screen[data-note-tab="tutor"] .memo-chat-fab {
-  display: none;
-}
 
 /* On its own in the dock, the pill sits where the listen pill does on the note. */
 .memo-note-screen[data-note-tab="tutor"] .memo-dock,
@@ -13524,13 +13520,6 @@
  * controls sit above it rather than under it, where a phone's thumb would cover the line being
  * spoken.
  */
-
-/* Same reasoning as the walkthrough: the dock's chat bar competes with a screen that is talking. */
-.memo-note-screen[data-note-tab="podcast"] .memo-m-chatbar,
-.memo-note-screen[data-note-tab="podcast"] .memo-m-chatbar-mic,
-.memo-note-screen[data-note-tab="podcast"] .memo-chat-fab {
-  display: none;
-}
 
 .memo-podcast {
   display: flex;
@@ -16398,7 +16387,7 @@
 
 /*
  * The reader owns the screen: there is nothing to ask a question with while a
- * word is being held still under the eye.
+ * word is being held still under the eye — see TABS_WITHOUT_CHAT.
  *
  * The scroller is left alone, though — unlike the walkthrough, this screen has
  * controls under its stage, and a short phone in landscape would put the speed
@@ -16406,11 +16395,6 @@
  * being capped in viewport units, so on any ordinary screen there is nothing
  * to scroll anyway.
  */
-.memo-note-screen[data-note-tab="speed"] .memo-m-chatbar,
-.memo-note-screen[data-note-tab="speed"] .memo-m-chatbar-mic,
-.memo-note-screen[data-note-tab="speed"] .memo-chat-fab {
-  display: none;
-}
 
 /*
  * The note's own heading goes too. A title, a date and a breadcrumb above a

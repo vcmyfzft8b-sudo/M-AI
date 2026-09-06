@@ -66,7 +66,6 @@ import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { readChatStream } from "@/lib/chat-stream-client";
 import { sheetClass, useSheet } from "@/components/use-sheet";
-import { useWheelToHorizontal } from "@/components/use-wheel-to-horizontal";
 import { usePathname, useRouter } from "next/navigation";
 import type {
   ChatMessageWithCitations,
@@ -5540,14 +5539,6 @@ export function LectureWorkspace({
                       : "test";
 
   /*
-   * The row overflows on desktop too — there are ten pills — and a mouse has no
-   * way of its own to push a sideways scroller. Without this the wheel scrolls
-   * the note behind the row and the pills past the fold are unreachable, because
-   * the design hides the scrollbar that would otherwise drag them.
-   */
-  useWheelToHorizontal(tabRowRef);
-
-  /*
    * The pill row follows the tab it is on. The pills overflow their scroller
    * on the phone, so the one you reach for is regularly the half-cut one at
    * the edge — and a tap that only changed the tab left it exactly as cut as
@@ -5611,6 +5602,13 @@ export function LectureWorkspace({
   const isLeavingNote = navigatingTo != null && navigatingTo !== notePathname;
   const showChatPanel =
     !isChatDismissed && !isLeavingNote && !TABS_WITHOUT_CHAT.has(activeTabId);
+  /*
+   * The phone's bar at the foot follows the same list. It is not the same
+   * control as the desktop column — it is a bar that opens a sheet, and
+   * dismissing the column has never hidden it — so it only asks whether this
+   * tab has a chat at all.
+   */
+  const showsChatBar = !TABS_WITHOUT_CHAT.has(activeTabId);
 
   useEffect(() => {
     setChatOpen(showChatPanel);
@@ -6092,18 +6090,23 @@ export function LectureWorkspace({
               </button>
             ) : null}
 
-            <button
-              type="button"
-              className="memo-m-chatbar memo-only-mobile"
-              onClick={() => setIsMobileChatOpen(true)}
-              aria-label={t("chat.mobileBar")}
-            >
-              <span className="memo-m-chatbar-label">{t("chat.mobileBar")}</span>
-              <span className="memo-m-chatbar-icon">
-                <Msym name="mic" size="1.35rem" className="mic" />
-                <Msym name="chat_bubble" size="1.35rem" className="bubble" />
-              </span>
+            {/* The phone's way into chat, on the same tabs the desktop column
+                appears on: a screen that is watched, listened to or played is
+                not one you ask questions about, at either width. */}
+            {showsChatBar ? (
+              <button
+                type="button"
+                className="memo-m-chatbar memo-only-mobile"
+                onClick={() => setIsMobileChatOpen(true)}
+                aria-label={t("chat.mobileBar")}
+              >
+                <span className="memo-m-chatbar-label">{t("chat.mobileBar")}</span>
+                <span className="memo-m-chatbar-icon">
+                  <Msym name="mic" size="1.35rem" className="mic" />
+                  <Msym name="chat_bubble" size="1.35rem" className="bubble" />
+                </span>
               </button>
+            ) : null}
 
             {/*
               * The circle at the end of the bar is a microphone, so it dictates
@@ -6113,7 +6116,7 @@ export function LectureWorkspace({
               * contain another button — the stylesheet lays it over the icon
               * slot the bar already draws.
               */}
-            {dictation.supported ? (
+            {showsChatBar && dictation.supported ? (
               <button
                 type="button"
                 className={`memo-m-chatbar-mic ${dictation.listening ? "listening" : ""} ${

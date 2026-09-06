@@ -647,7 +647,6 @@
   scroll-snap-type: none;
 }
 
-
 /* --- breakpoint utilities ------------------------------------------------- */
 
 /* Desktop and phone differ structurally in places (the home header, the note
@@ -12806,16 +12805,16 @@
  * a participant.
  */
 /*
- * The walkthrough keeps the dock but empties it of the chat: offering a second
- * place to ask a question — with a second microphone button — beside a tutor
- * that is already listening is two answers to one question. The dock itself
- * stays, because it is where this app puts the controls belonging to the screen
- * you are on, so the usage pill goes in it rather than floating somewhere new.
+ * The walkthrough and the episode keep the dock but empty it of the chat —
+ * offering a second place to ask a question, with a second microphone button,
+ * beside a tutor that is already listening is two answers to one question. That
+ * emptying is TABS_WITHOUT_CHAT's doing, not this file's.
  *
- * Which tabs drop the chat is decided in TABS_WITHOUT_CHAT, not here.
+ * The dock itself stays, because it is where this app puts the controls that
+ * belong to the screen you are on, so the usage pill goes in it rather than
+ * floating somewhere new — and on its own in there it sits where the listen pill
+ * does on the note.
  */
-
-/* On its own in the dock, the pill sits where the listen pill does on the note. */
 .memo-note-screen[data-note-tab="tutor"] .memo-dock,
 .memo-note-screen[data-note-tab="podcast"] .memo-dock {
   justify-content: center;
@@ -13543,7 +13542,6 @@
  * controls sit above it rather than under it, where a phone's thumb would cover the line being
  * spoken.
  */
-
 .memo-podcast {
   display: flex;
   flex-direction: column;
@@ -16409,10 +16407,11 @@
 }
 
 /*
- * The reader owns the screen: there is nothing to ask a question with while a
- * word is being held still under the eye — see TABS_WITHOUT_CHAT.
+ * The reader owns the screen. There is nothing to ask a question with while a
+ * word is being held still under the eye — that is TABS_WITHOUT_CHAT's doing —
+ * and the note's own heading goes the same way.
  *
- * The scroller is left alone, though — unlike the walkthrough, this screen has
+ * The scroller is left alone, though: unlike the walkthrough, this screen has
  * controls under its stage, and a short phone in landscape would put the speed
  * slider below a fold that could not be reached. The stage gives way instead,
  * being capped in viewport units, so on any ordinary screen there is nothing
@@ -16420,10 +16419,9 @@
  */
 
 /*
- * The note's own heading goes too. A title, a date and a breadcrumb above a
- * word being held still are three more things to look at, and they push the
- * fixation point down the screen — on a phone far enough that the controls
- * under it need scrolling to reach.
+ * A title, a date and a breadcrumb above a word being held still are three more
+ * things to look at, and they push the fixation point down the screen — on a
+ * phone far enough that the controls under it need scrolling to reach.
  */
 .memo-note-screen[data-note-tab="speed"] .memo-breadcrumb,
 .memo-note-screen[data-note-tab="speed"] .memo-note-head,

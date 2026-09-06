@@ -54,9 +54,36 @@ export function useChipRowWheelScroll() {
       pointerId: number;
       start: { pointerX: number; scrollLeft: number };
       moved: boolean;
+      userSelectWas: string;
     } | null = null;
 
+    /*
+     * A pointerup that ends a drag is still followed by a click on whichever
+     * pill happens to be under it, which would change tab at the end of every
+     * pull. It is swallowed by a flag rather than by a one-shot listener armed
+     * on release: the browser is not obliged to dispatch that click in the same
+     * task as the pointerup, so any listener torn down on a timer is a race that
+     * happens to pass on this machine.
+     *
+     * Cleared at the start of the next gesture — pointer or key — so a flag set
+     * by a drag that ended with no click at all cannot eat someone's next real
+     * one.
+     */
+    let swallowNextClick = false;
+
+    const onClickCapture = (event: MouseEvent) => {
+      if (!swallowNextClick) {
+        return;
+      }
+
+      swallowNextClick = false;
+      event.stopPropagation();
+      event.preventDefault();
+    };
+
     const onPointerDown = (event: PointerEvent) => {
+      swallowNextClick = false;
+
       const row = rowUnder(event.target);
       if (
         !row ||
@@ -75,6 +102,7 @@ export function useChipRowWheelScroll() {
         pointerId: event.pointerId,
         start: { pointerX: event.clientX, scrollLeft: row.scrollLeft },
         moved: false,
+        userSelectWas: "",
       };
     };
 
@@ -94,9 +122,12 @@ export function useChipRowWheelScroll() {
          * A drag across a row of buttons otherwise selects their labels, and the
          * row ends the gesture with half its text highlighted. Set on the row's
          * document rather than on the row, because the pointer spends most of a
-         * long pull outside it.
+         * long pull outside it — and put back exactly as found, so this cannot
+         * quietly release a `user-select` somebody else was holding.
          */
-        drag.row.ownerDocument.body.style.userSelect = "none";
+        const { body } = drag.row.ownerDocument;
+        drag.userSelectWas = body.style.userSelect;
+        body.style.userSelect = "none";
         drag.row.classList.add("is-dragging");
       }
 
@@ -110,31 +141,18 @@ export function useChipRowWheelScroll() {
         return;
       }
 
-      drag.row.ownerDocument.body.style.userSelect = "";
-      drag.row.classList.remove("is-dragging");
-
-      /*
-       * A pointerup that ends a drag is still followed by a click on whichever
-       * pill happens to be under it, which would change tab at the end of every
-       * pull. Swallowed in the capture phase so React's own delegated handler
-       * never sees it — and only when the row actually moved, so a plain click
-       * on a pill is untouched.
-       *
-       * `setPointerCapture` would be the tidier way to own the gesture and is
-       * deliberately not used: it also swallows the clicks that should land.
-       */
       if (drag.moved) {
-        const swallow = (click: MouseEvent) => {
-          click.stopPropagation();
-          click.preventDefault();
-        };
-        document.addEventListener("click", swallow, { capture: true, once: true });
-        // If no click follows (the pointer ended outside the row), the listener
-        // would sit there and eat the next real one.
-        setTimeout(() => document.removeEventListener("click", swallow, { capture: true }), 0);
+        drag.row.ownerDocument.body.style.userSelect = drag.userSelectWas;
+        drag.row.classList.remove("is-dragging");
+        // Only when the row actually moved, so a plain press on a pill lands.
+        swallowNextClick = true;
       }
 
       drag = null;
+    };
+
+    const clearSwallow = () => {
+      swallowNextClick = false;
     };
 
     document.addEventListener("wheel", onWheel, { passive: false });
@@ -142,6 +160,10 @@ export function useChipRowWheelScroll() {
     document.addEventListener("pointermove", onPointerMove, { passive: false });
     document.addEventListener("pointerup", endDrag);
     document.addEventListener("pointercancel", endDrag);
+    document.addEventListener("click", onClickCapture, { capture: true });
+    // A keyboard activation arrives as a click with no pointer gesture in front
+    // of it, so it needs its own way of clearing a stale flag.
+    document.addEventListener("keydown", clearSwallow);
 
     return () => {
       document.removeEventListener("wheel", onWheel);
@@ -149,6 +171,8 @@ export function useChipRowWheelScroll() {
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", endDrag);
       document.removeEventListener("pointercancel", endDrag);
+      document.removeEventListener("click", onClickCapture, { capture: true });
+      document.removeEventListener("keydown", clearSwallow);
     };
   }, []);
 }

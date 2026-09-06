@@ -389,8 +389,8 @@ type NoteTabId = (typeof NOTE_TABS)[number]["id"];
  *   which is the one thing a panel of text beside it undoes;
  * - the podcast is audio, and there is nothing on screen to ask about.
  *
- * Chat is one pill away on any of them, and the phone's bar at the foot is
- * untouched — this is only the desktop column.
+ * The list decides both surfaces: the desktop column and the phone's bar at the
+ * foot. Chat is one pill away on any of them.
  */
 const TABS_WITHOUT_CHAT = new Set<NoteTabId>([
   "mindmap",
@@ -5587,18 +5587,16 @@ export function LectureWorkspace({
    * portalled into the slot the shell renders (see AppLayoutProvider). The
    * phone shows the same body as a full-height sheet.
    *
-   * The quiz owns the bottom of the screen with its own result sheet, so chat
-   * steps aside there — matching the redesign, where "Preglej zakaj" is the way
-   * into chat from a quiz.
+   * It is open beside the reading tabs and gone on the ones in
+   * TABS_WITHOUT_CHAT. The quiz keeps it but withholds the button that brings
+   * it back: it owns the bottom of the screen with its own result sheet, and
+   * "Preglej zakaj" is the way into chat from there.
+   *
+   * It also closes the moment a navigation away starts. The panel is portalled
+   * into the shell's third grid column, outside the content area the loading
+   * overlay covers, so leaving the note with it open left the note's chat
+   * standing beside the library's skeleton until the route committed.
    */
-  // The panel is open beside the reading tabs and gone on the ones listed in
-  // TABS_WITHOUT_CHAT; only the button that brings it back is withheld on the
-  // quiz, which wants the full width while a question is on screen.
-  //
-  // It also closes the moment a navigation away starts. The panel is portalled
-  // into the shell's third grid column, outside the content area the loading
-  // overlay covers, so leaving the note with it open left the note's chat
-  // standing beside the library's skeleton until the route committed.
   const isLeavingNote = navigatingTo != null && navigatingTo !== notePathname;
   const showChatPanel =
     !isChatDismissed && !isLeavingNote && !TABS_WITHOUT_CHAT.has(activeTabId);

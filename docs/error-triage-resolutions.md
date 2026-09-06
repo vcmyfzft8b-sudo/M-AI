@@ -132,3 +132,66 @@ backlog entry, so the run that meets them next can recognise them as its predece
 
 That verification session is also the cleanest evidence the fix works: it kept loading the seeded
 page across the deployment boundary, and the loads carrying release `f2103c68` filed nothing.
+
+### 2026-09-05 — How to classify a post-cutoff event under this issue
+
+Not a resolution. This records what the catch-all above actually is, so that each triage run does
+not rediscover it from scratch. Two post-cutoff events were investigated on 2026-09-05
+(`2026-09-05T11:02:37.351Z` on `/`, `2026-09-05T14:03:47.351Z` on `/app/start`, both on release
+`118c6ca079c98effed7cf8fd8cec6dc5b9748403`).
+
+**This issue will never carry a stack trace.** Its events are synthesized by Sentry's *replay*
+hydration detector, not captured by the SDK as exceptions: `type: 5003`, `entries: []`,
+`exception: null`, `request: null`, tag `interface_type: contexts`, and the matching breadcrumb is
+`replay.hydrate-error` carrying nothing but a `url`. There is no React `componentStack` to wait for
+and no minified frame to unminify. Localising a cause from the Sentry event alone is not possible,
+so triage must either reproduce the page or read the replay.
+
+**The replay is the evidence, and its `<html>` attributes are the fastest read.** Download the
+recording segments for the event's `replayId` and find the full rrweb snapshot immediately before
+the `replay.hydrate-error` breadcrumb:
+
+    GET $SENTRY_BASE_URL/api/0/projects/<org>/<project>/replays/<replayId>/recording-segments/?download=1
+
+Two cautions. All text is masked (`maskAllText: true`), so the replay shows structure, never
+content — which is also why it must not be quoted anywhere. And when the error follows a hard
+navigation, that pre-error snapshot is the *previous* document, not the one that failed to hydrate;
+the snapshot after the error is post-recovery. Neither shows the mismatch itself, so use them for
+the environment the failure happened in rather than for a diff.
+
+**Browser page translation is a confirmed non-app cause.** The `/` event was a visitor in Hong Kong
+whose Chrome was translating the site: the snapshot 800ms before the error carried
+`<html lang="zh-TW" class="translated-ltr">`, and 1932 `<font>` elements were injected over the
+session. Chrome's translator re-parents text nodes into `<font>` wrappers, so React's hydrating pass
+finds an element where the server sent text — the same external mechanism that produced the
+`insertBefore` failure fixed in PR #315, reported here as #418 instead. Nothing in application code
+prevents a browser from rewriting the document before hydration, and `translate="no"` over the page
+would take translation away from the readers who want it. **An event whose replay shows
+`translated-ltr` on `<html>`, or injected `<font>` elements, is browser translation and is not a
+defect** — record it and move on rather than opening a fix.
+
+**The `/app/start` event is not explained.** Its replay shows no translation markers and no `<font>`
+elements, so it is a genuine mismatch in application code, on a page that needs a signed-in,
+not-yet-onboarded account to render at all. Ruled out by reading the code and by loading a local
+production build (Sentry DSN unset, so nothing was filed) across seven device and appearance
+variants and three locale/timezone pairs, all clean:
+
+- `formatCalendarDate` and the other `Intl` helpers in `src/lib/utils.ts` pin
+  `timeZone: "Europe/Ljubljana"`, so no formatted date can differ between the server and a reader's
+  own zone. Confirmed against `America/Los_Angeles` and `Asia/Hong_Kong`.
+- `MemoAppPreview.isDark()` reads `prefers-color-scheme` outside React state, but only from
+  `renderNote`, `renderFoldersSheet`, `renderSettingsSheet` and `renderSupportSheet` — none of which
+  are on the first pass, which opens on the home screen with no sheet.
+- `LandingUserCount` renders a constant baseline and reads `sessionStorage` in an effect.
+- Every component the root layout mounts on all three routes — `LaunchScreen`, `ThemeController`,
+  `ServiceWorkerRegistration`, `KeyboardInset`, `VisitTracker`, `I18nProvider` — touches the
+  document only from effects.
+- `public/sw.js` caches `/_next/static/` only and never a document, so a stale cached page cannot be
+  the source.
+- The `x-pathname` fallback in `src/app/app/layout.tsx` would put the wrong shell on the server for
+  `/app/start`, but `src/lib/supabase/middleware.ts` sets that header on every page request, and a
+  request that missed it would redirect to itself rather than mismatch.
+
+The next step for a human is the one the automation cannot take: open the `/app/start` replay in
+Sentry, or reproduce with a real not-yet-onboarded account and a browser console, since production
+React reports #418 without naming the component.

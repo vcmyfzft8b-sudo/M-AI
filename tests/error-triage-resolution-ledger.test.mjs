@@ -38,3 +38,19 @@ test("both 2026-09-01 resolutions have durable fingerprints and PRs", () => {
     assert.ok(LEDGER.includes(required), `resolution ledger is missing ${required}`);
   }
 });
+
+/*
+ * The hydration catch-all (MEMOAI-WEB-7) has no stack trace and never will, so every triage run
+ * that meets it pays the same investigation over again unless the ledger keeps the findings. These
+ * are the two that decide whether a post-cutoff event is worth a branch at all.
+ */
+test("the hydration catch-all records why it cannot be localised from Sentry alone", () => {
+  for (const required of [
+    "MEMOAI-WEB-7",
+    "replay.hydrate-error",
+    "translated-ltr",
+    "recording-segments",
+  ]) {
+    assert.ok(LEDGER.includes(required), `resolution ledger is missing ${required}`);
+  }
+});

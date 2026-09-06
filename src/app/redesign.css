@@ -13137,12 +13137,12 @@
  * artboard draws neither. What is left is then sized against the window instead of against
  * itself, screen by screen, below.
  */
-.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) :is(.memo-breadcrumb, .memo-note-date) {
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) :is(.memo-breadcrumb, .memo-note-date) {
   display: none;
 }
 
 /* And the page's own top margin, which on these tabs is a screen's worth of nothing. */
-.memo-grid:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"])) {
+.memo-grid:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"])) {
   padding-top: 1rem;
 }
 
@@ -13151,7 +13151,7 @@
  * window. A screen that is not meant to scroll has no long note to end, and that 2.5rem
  * was the last thing putting a scrollbar on a card that otherwise fitted.
  */
-.memo:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"])) {
+.memo:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"])) {
   padding-bottom: 1rem;
 }
 
@@ -13160,12 +13160,12 @@
  * that hugs it. These five are given the window's height instead — see below — so the floor
  * does nothing here but hold the column open past the bottom of it.
  */
-.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-panel.study {
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-panel.study {
   min-height: 0;
 }
 
 /* An ancestor, so `:has()` rather than a descendant selector. */
-.memo-main:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"])) {
+.memo-main:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"])) {
   padding-top: 1rem;
 }
 
@@ -13209,10 +13209,27 @@
   --orb-swell: clamp(0, calc(var(--orb-level, 0) * 4.2), 1);
 }
 
+/*
+ * Stacked and centred inside the walkthrough's box. The podcast lays its own two spheres out
+ * side by side instead, so this is only the arrangement — being round is not, and lives on
+ * the parts themselves below.
+ */
 .memo-orb > * {
   position: absolute;
   inset: 0;
   margin: auto;
+}
+
+/*
+ * A sphere is round wherever it is drawn.
+ *
+ * This used to ride on `.memo-orb > *`, which was true while the walkthrough was the only
+ * screen with one. The episode draws its two directly inside its cover — there is no orb box
+ * around them to be a child of — so they came out as squares wearing a sphere's gradient.
+ */
+.memo-orb-glow,
+.memo-orb-body,
+.memo-orb-ring {
   border-radius: 50%;
 }
 
@@ -13263,6 +13280,49 @@
   transform: scale(calc(0.94 + var(--orb-swell) * 0.16));
   /* A slow drift under the audio-driven scale, so a held pause still looks alive. */
   animation: memo-tutor-breathe 5.5s ease-in-out infinite;
+}
+
+/*
+ * The sphere at tile size, where the bloom comes off.
+ *
+ * An 18px blur around a 2rem ball is mush, and the outer glow shadow at that size is a smudge
+ * under a list row rather than light. The two inner shadows are what is left, and they are
+ * what keeps it from flattening — so they are scaled with the sphere rather than dropped. The
+ * ratios are the full-size ones re-measured for a small ball, which needs a stronger
+ * terminator to survive being 2rem across.
+ *
+ * Sized off `--orb-size` rather than the percentages above, because these are not children of
+ * an orb box: the episode draws them inline in a row, and each one is told how big it is.
+ */
+.memo-orb-body.compact {
+  width: var(--orb-size);
+  height: var(--orb-size);
+  box-shadow:
+    inset 0 calc(var(--orb-size) * -0.143) calc(var(--orb-size) * 0.286)
+      oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45),
+    inset 0 calc(var(--orb-size) * 0.095) calc(var(--orb-size) * 0.19)
+      oklch(0.98 0.05 calc(var(--orb-hue) + 35) / 0.35);
+  animation: none;
+}
+
+/*
+ * Smaller than about 1.7rem the second highlight has nowhere to land — it and the first meet
+ * in the middle and read as a mottle rather than as two lights. Highlight one and the
+ * gradient are the floor at which this is still recognisably the same object.
+ */
+.memo-orb-body.mini {
+  width: var(--orb-size);
+  height: var(--orb-size);
+  background:
+    radial-gradient(circle at 36% 30%, oklch(0.95 0.06 calc(var(--orb-hue) + 25) / 0.95), transparent 42%),
+    linear-gradient(
+      160deg,
+      oklch(0.78 0.17 calc(var(--orb-hue) + 10)),
+      oklch(0.58 0.19 calc(var(--orb-hue) - 23))
+    );
+  box-shadow: inset 0 calc(var(--orb-size) * -0.147) calc(var(--orb-size) * 0.294)
+    oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45);
+  animation: none;
 }
 
 /* The rings are the walkthrough's listening state: they only expand when the learner talks. */
@@ -13987,19 +14047,19 @@
 
 /* The card has to be a column too, or the scroller inside it has no definite height to
    hand on and every `flex: 1` below resolves against content instead. */
-.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-card {
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-card {
   display: flex;
   flex-direction: column;
 }
 
-.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-scroll {
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-scroll {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-height: 0;
 }
 
-.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-panel.study {
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-panel.study {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -14013,7 +14073,7 @@
   justify-content: center;
 }
 
-.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) :is(.workspace-panel-stack, .lecture-study-shell, .lecture-practice-shell) {
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) :is(.workspace-panel-stack, .lecture-study-shell, .lecture-practice-shell) {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -14349,22 +14409,22 @@
  * disc to be that big; the disc is celebration, and celebration is the thing that can be
  * smaller when there is no room for it.
  */
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result {
   padding-top: clamp(0.3rem, 2.4vh, 1.6rem);
 }
 
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb-wrap {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb-wrap {
   width: clamp(8rem, 100dvh - 39rem, 12rem);
   height: clamp(8rem, 100dvh - 39rem, 12rem);
 }
 
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb {
   width: 78%;
   height: 78%;
 }
 
 /* Sized inline by the component, so it has to be overridden rather than inherited. */
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb .memo-emoji {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb .memo-emoji {
   font-size: clamp(2.4rem, 7vh, 4.4rem);
 }
 
@@ -14376,31 +14436,31 @@
  * and covered the half of it that has the arm in it. Both now ride the same measure, so
  * the badge clips the disc's corner at every size, which is the thing it is meant to do.
  */
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-badge {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-badge {
   padding: clamp(0.25rem, 0.9vh, 0.45rem) clamp(0.45rem, 1.5vh, 0.8rem);
   border-radius: clamp(10px, 1.6vh, 14px);
   font-size: clamp(0.95rem, 2.4vh, 1.5rem);
 }
 
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-eyebrow {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-eyebrow {
   margin-top: clamp(0.5rem, 1.8vh, 1.2rem);
 }
 
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-title {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-title {
   margin-top: clamp(0.6rem, 2vh, 1.4rem);
   font-size: clamp(1.35rem, 3.6vh, 1.75rem);
 }
 
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-eyebrow + .memo-result-title {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-eyebrow + .memo-result-title {
   margin-top: clamp(0.3rem, 1vh, 0.5rem);
 }
 
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-line {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-line {
   margin-top: clamp(0.35rem, 1.2vh, 0.7rem);
 }
 
 /* The largest single gap on the card, and the one nobody reads. */
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-actions {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-actions {
   margin-top: clamp(0.9rem, 3.2vh, 2.4rem);
 }
 
@@ -14456,7 +14516,7 @@
  * The empty states — no test written yet, no cards yet. A 9.4rem disc holding one emoji is
  * the most expendable height on any of these screens.
  */
-.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-study-empty-orb {
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-study-empty-orb {
   width: clamp(5.5rem, 14vh, 9.4rem);
   height: clamp(5.5rem, 14vh, 9.4rem);
 }
@@ -14471,7 +14531,7 @@
  * it does beside a rail.
  */
 @media (max-width: 1099px) {
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-scroll {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-scroll {
   /*
    * `auto`, not `hidden`, and the distinction matters more than it looks.
    *
@@ -14550,44 +14610,44 @@
    * case that broke it is a reader with the root font size turned up, where every `rem` here
    * grows while the screen it has to fit does not.
    */
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result {
     padding-top: clamp(0.2rem, 1.4vh, 1.6rem);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb-wrap {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb-wrap {
     width: min(12rem, 19vh);
     height: min(12rem, 19vh);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb {
     width: 78%;
     height: 78%;
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb .memo-emoji {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb .memo-emoji {
     font-size: min(4.4rem, 8vh);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-badge {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-badge {
     padding: min(0.45rem, 0.8vh) min(0.8rem, 1.4vh);
     font-size: min(1.5rem, 2.6vh);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-eyebrow {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-eyebrow {
     margin-top: min(1.2rem, 1.6vh);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-title {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-title {
     margin-top: min(0.5rem, 0.9vh);
     font-size: min(1.75rem, 3.4vh);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-line {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-line {
     margin-top: min(0.7rem, 1.1vh);
     font-size: min(1.1rem, 2.1vh);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-actions {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-actions {
     margin-top: min(2.4rem, 3vh);
   }
 
@@ -14612,7 +14672,7 @@
  */
 @media (max-width: 1099px) and (max-height: 740px) {
   /* A little of that air back, on a screen that has none to spare. */
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-scroll {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-scroll {
     padding-bottom: 5.6rem;
   }
 
@@ -14668,12 +14728,12 @@
    * real to divide up — and on the rare screen that still cannot fit, what overflows is the
    * panel's own scroller rather than the page, so the chrome around it never moves.
    */
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-card {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-card {
     height: calc(100dvh - 8.5rem);
   }
 
   /* The note's title needs less air above it on a screen that is counting its pixels. */
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-headrow .memo-note-head {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-headrow .memo-note-head {
     margin-top: 0.5rem;
   }
 
@@ -14685,7 +14745,7 @@
    * a letterbox. Written so that the moment anything real is portalled into it, or the chat
    * is dismissed and its button appears, the band comes back.
    */
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-dock:not(:has(.memo-chat-fab)):not(
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-dock:not(:has(.memo-chat-fab)):not(
       :has(.memo-dock-slot > *:not(.memo-only-mobile))
     ) {
     display: none;
@@ -14710,20 +14770,20 @@
  * Above this height none of it applies and the screens look exactly as drawn.
  */
 @media (min-width: 1100px) and (max-height: 810px) {
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-head-emoji {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head-emoji {
     width: 2.5rem;
     height: 2.5rem;
   }
 
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-head-emoji .memo-emoji {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head-emoji .memo-emoji {
     font-size: 1.2rem;
   }
 
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-head h1 {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head h1 {
     font-size: 1.5rem;
   }
 
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-card {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-card {
     padding-top: 1.2rem;
     padding-bottom: 1.2rem;
   }
@@ -14751,11 +14811,11 @@
  * before anything a learner is actually working with does.
  */
 @media (min-width: 1100px) and (max-height: 680px) {
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-head h1 {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head h1 {
     font-size: 1.3rem;
   }
 
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-card {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-card {
     padding-top: 0.9rem;
     padding-bottom: 0.9rem;
   }
@@ -14773,25 +14833,25 @@
    * The note's emoji, which at this height is a 2.5rem disc setting the height of the title
    * row for a picture the title already says in words.
    */
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-head-emoji {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head-emoji {
     display: none;
   }
 
   /* The results card's own floors, one notch lower again. */
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb-wrap {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb-wrap {
     width: clamp(6rem, 100dvh - 39rem, 12rem);
     height: clamp(6rem, 100dvh - 39rem, 12rem);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-title {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-title {
     font-size: 1.2rem;
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-line {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-line {
     font-size: 0.98rem;
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-actions {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-actions {
     margin-top: 0.7rem;
   }
 
@@ -15167,6 +15227,68 @@
 
 .memo-podcast-cover > * {
   position: absolute;
+}
+
+/*
+ * --- the episode fits the window too ---------------------------------------
+ *
+ * The same arrangement the other study screens got: the column fills the card it is given
+ * and the one thing on it that is a picture rather than a fact — the cover — is what gives
+ * ground when there is less of it. Everything else here is a line of type or a button, and
+ * neither of those has anything to spare.
+ */
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast {
+  flex: 1;
+  min-height: 0;
+}
+
+/*
+ * The player centres in the card rather than sitting at the top of it.
+ *
+ * It is five short rows — artwork, title, byline, scrubber, transport — and the card is
+ * whatever the window gives, so left alone the whole thing sat under the note's title with a
+ * screen's worth of nothing beneath it. Centred, the empty room is shared above and below,
+ * which is where a thing being listened to belongs.
+ */
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+/*
+ * And the way out travels with it.
+ *
+ * Pinned to the panel's corner it was right while the player started at the top of the card:
+ * the two were level, and the corner read as this screen's own control. Centred, the player
+ * moves down and the button stays behind — a glyph alone at the top of an empty half, closing
+ * something that is no longer next to it. In the flow it sits just above the artwork, at the
+ * same right edge, and reads as belonging to the thing it dismisses.
+ */
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast-back {
+  position: static;
+  align-self: flex-end;
+  margin-bottom: 0.35rem;
+}
+
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast-hero {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast-cover {
+  flex: 0 1 auto;
+  /* Under about this the two spheres stop reading as a pair and start reading as two dots. */
+  min-height: 4.5rem;
+  max-height: min(var(--cover-h), 24vh);
+  max-width: 100%;
 }
 
 .memo-podcast-cover .memo-orb-body.a {
@@ -16327,11 +16449,15 @@
  * the full-size player then finished 76 points below the fold, taking the transport with it.
  * The one control a listener actually needs was the thing off the screen.
  *
- * So above 900 points of viewport the player keeps the artboard's sizes, and below it falls
- * back to the phone's — which is not a compromise so much as an admission that a short laptop
- * has a phone's worth of vertical room.
+ * So above this the player keeps the artboard's sizes, and below it falls back to the phone's
+ * — which is not a compromise so much as an admission that a short laptop has a phone's worth
+ * of vertical room.
+ *
+ * The thresholds moved down eighty points when the breadcrumb and the note's date left these
+ * tabs: the 407 points of chrome this was measured against is now nearer 320, and a tier that
+ * does not know that shrinks the artwork on screens with the room for it.
  */
-@media (min-width: 1100px) and (max-height: 900px) {
+@media (min-width: 1100px) and (max-height: 820px) {
   .memo-podcast {
     padding: 0.5rem 0 0.75rem;
   }
@@ -16374,7 +16500,7 @@
  * carrying no information, which is the same rule the phone's floors already follow. The
  * transport, the clocks and the title never move.
  */
-@media (min-width: 1100px) and (max-height: 820px) {
+@media (min-width: 1100px) and (max-height: 740px) {
   .memo-podcast {
     padding-bottom: 0.5rem;
   }

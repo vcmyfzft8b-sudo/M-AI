@@ -13862,16 +13862,19 @@
    * scrollbar, and that clip caught the throw a few centimetres in — the gesture is meant to
    * read as putting the card away, and a card that vanishes into a straight vertical line
    * halfway there reads as a bug instead. The clip is released only while a drag is actually
-   * happening, and by then everything on this tab already fits, so there is no scroll
-   * position to lose.
+   * happening — and that is only half the gesture. The card the finger holds is one
+   * element; the clone that carries on from where it was let go is another, and keying the
+   * release on `.dragging` alone slammed the clip shut at exactly the moment of release, so
+   * every throw was sliced off at the edge of the note card. Both halves release it. By this
+   * point everything on the tab already fits, so there is no scroll position to lose.
    */
-  .memo-note-screen[data-note-tab="flashcards"] :is(.memo-note-scroll, .memo-panel, .workspace-panel-stack, .lecture-study-shell, .lecture-flashcard-stage):has(.lecture-flashcard.dragging) {
+  .memo-note-screen[data-note-tab="flashcards"] :is(.memo-note-scroll, .memo-panel, .workspace-panel-stack, .lecture-study-shell, .lecture-flashcard-stage):has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
     overflow: visible;
   }
 
   /* The outermost of them, and an ancestor of the screen — so `:has()` reaches down for the
      tab as well as for the drag. Its `overflow-x: clip` is the last thing cutting the throw. */
-  .memo-main:has(.memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard.dragging) {
+  .memo-main:has(.memo-note-screen[data-note-tab="flashcards"] :is(.lecture-flashcard.dragging, .lecture-flashcard-exit-card)) {
     overflow: visible;
   }
 
@@ -13880,7 +13883,7 @@
    * own, so it is already its own stacking context — what needs lifting is the chain it sits
    * in, or the chat panel (fixed, and later in the document) paints over the throw.
    */
-  .memo-note-screen[data-note-tab="flashcards"] :is(.memo-note-card, .memo-panel, .workspace-panel-stack, .lecture-study-shell, .lecture-flashcard-stage, .lecture-flashcard-stage-card):has(.lecture-flashcard.dragging) {
+  .memo-note-screen[data-note-tab="flashcards"] :is(.memo-note-card, .memo-panel, .workspace-panel-stack, .lecture-study-shell, .lecture-flashcard-stage, .lecture-flashcard-stage-card):has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
     position: relative;
     z-index: 130;
   }
@@ -13951,9 +13954,44 @@
     margin-bottom: 0.9rem;
   }
 
+  /*
+   * The list fills what is spare but never shrinks below its own rows.
+   *
+   * `min-height: 0` here was a bug with a plausible face on it: it is what every other link
+   * in this chain needs, but a grid does not shrink its rows to match a shorter box — it
+   * simply overflows one. So the answered state's verdict row was drawn on top of the last
+   * option, which is the one moment on this screen when both matter.
+   */
   .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-options {
-    flex: 1;
-    min-height: 0;
+    flex: 1 1 auto;
+  }
+
+  /*
+   * Answering adds a row, and changes what the options are for: they were four things to aim
+   * at and they are now four things to read, one of them marked. So they give up the height
+   * the verdict needs rather than pushing it off the screen.
+   */
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
+    min-height: clamp(2.6rem, 5.4vh, 4rem);
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-options {
+    gap: clamp(0.35rem, 0.9vh, 0.6rem);
+  }
+
+  /* The last centimetre, so the verdict's second line is not clipped by the card's edge. */
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-stage:has(.memo-quiz-result) .memo-progress.quiz {
+    margin-bottom: 0.7rem;
+  }
+
+  /* It carries 1.4rem of margin and 1.4rem of padding above it, which is two gaps for one. */
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
+    padding-top: 0.9rem;
+    margin-top: 0.9rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-prompt {
+    margin-bottom: 0.6rem;
   }
 
   .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-option {

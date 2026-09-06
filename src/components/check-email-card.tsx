@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useT } from "@/components/i18n-provider";
+import { Msym } from "@/components/msym";
 
 function formatCountdown(seconds: number) {
   const minutes = Math.floor(seconds / 60);
@@ -78,11 +78,11 @@ export function CheckEmailCard(props: {
   }
 
   return (
-    <div className="check-email-card">
+    <>
       <form
         action="/auth/email/verify"
         method="post"
-        className="auth-email-form auth-code-form check-email-form"
+        className="memo-auth-form"
         onSubmit={(event) => {
           lockAndSubmit(event, "verify");
         }}
@@ -91,7 +91,8 @@ export function CheckEmailCard(props: {
         <input type="hidden" name="mode" value={props.mode} />
         <input type="hidden" name="next" value={props.next} />
 
-        <label className="auth-field auth-code-field check-email-code-field">
+        <label className="memo-auth-field code">
+          <Msym name="password" fill={false} weight={500} />
           <input
             type="text"
             name="code"
@@ -101,7 +102,6 @@ export function CheckEmailCard(props: {
             maxLength={8}
             autoComplete="one-time-code"
             placeholder={t("auth.enterCodePlaceholder")}
-            className="auth-code-input check-email-code-input"
             value={code}
             onChange={(event) => {
               setCode(event.target.value.replace(/\D/g, "").slice(0, 8));
@@ -114,24 +114,31 @@ export function CheckEmailCard(props: {
 
         <button
           type="submit"
-          className="ios-primary-button auth-submit-button check-email-submit"
+          className="memo-button-coral memo-auth-submit"
           disabled={pendingAction !== null}
           aria-busy={pendingAction === "verify"}
         >
-          {pendingAction === "verify" ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /> : null}
+          {pendingAction === "verify" ? (
+            <Msym name="progress_activity" fill={false} weight={500} className="memo-spin" />
+          ) : null}
           <span>{t(pendingAction === "verify" ? "auth.verifying" : "common.continue")}</span>
         </button>
       </form>
 
-      <p className={`auth-status-note check-email-status-note ${props.messageType === "error" ? "error" : ""}`}>
-        {props.message ?? t("auth.codeValidNote")}
-      </p>
+      {/* `auth.codeValidNote` says the same thing as the copy on the page above
+          this card, word for word, so the note is kept for what only it can
+          say: what the server sent back on the last attempt. */}
+      {props.message ? (
+        <p className={`memo-auth-note ${props.messageType === "error" ? "error" : ""}`}>
+          {props.message}
+        </p>
+      ) : null}
 
-      <div className="auth-check-actions check-email-actions">
+      <div className="memo-auth-actions">
         <form
           action="/auth/email"
           method="post"
-          className="auth-resend-form"
+          className="memo-auth-provider-form"
           onSubmit={(event) => {
             lockAndSubmit(event, "resend");
           }}
@@ -141,7 +148,7 @@ export function CheckEmailCard(props: {
           <input type="hidden" name="next" value={props.next} />
           <button
             type="submit"
-            className="auth-secondary-link auth-provider-button-submit auth-tertiary-button check-email-secondary"
+            className="memo-button-outline memo-auth-resend"
             disabled={secondsLeft > 0 || pendingAction !== null}
             aria-disabled={secondsLeft > 0 || pendingAction !== null}
             aria-busy={pendingAction === "resend"}
@@ -153,10 +160,10 @@ export function CheckEmailCard(props: {
                 : t("auth.resendNow")}
           </button>
         </form>
-        <Link href="/" className="auth-secondary-link auth-tertiary-button check-email-secondary">
+        <Link href="/" className="memo-auth-ghost">
           {t("auth.useAnotherMethod")}
         </Link>
       </div>
-    </div>
+    </>
   );
 }

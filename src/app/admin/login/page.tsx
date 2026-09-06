@@ -1,12 +1,11 @@
-import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 
 import { NativeSubmitButton } from "@/components/admin/native-submit";
-import { BrandLogo } from "@/components/brand-logo";
+import { AuthScreen } from "@/components/auth-screen";
 import { LandingAuthOptions } from "@/components/landing-auth-options";
 import { getAdminContext } from "@/lib/admin/auth";
 import { getAuthProviderAvailability } from "@/lib/auth-providers";
-import { BRAND_NAME } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -34,13 +33,13 @@ export default async function AdminLoginPage() {
   // not exist.
   const notice =
     result.reason === "lookup_failed" ? (
-      <p className="landing-auth-notice" data-tone="error" role="status">
+      <p className="memo-auth-notice" data-tone="error" role="status">
         <strong>Seznama skrbnikov ni bilo mogoče prebrati.</strong> To je napaka
         v nastavitvah, ne v tvojem računu — najverjetneje migracija{" "}
         <code>0027</code> še ni bila izvedena na tej bazi.
       </p>
     ) : result.reason === "not_allowlisted" ? (
-      <p className="landing-auth-notice" data-tone="error" role="status">
+      <p className="memo-auth-notice" data-tone="error" role="status">
         Prijavljen si kot <strong>{result.email}</strong>, ki nima skrbniškega
         dostopa. Prijavi se z dovoljenim e-naslovom ali prosi lastnika, da doda
         tvojega.
@@ -48,39 +47,43 @@ export default async function AdminLoginPage() {
     ) : null;
 
   return (
-    <main className="landing-shell landing-auth-page">
-      <div className="landing-auth-wrap">
-        <Link href="/" className="landing-auth-brand" aria-label={`Domov ${BRAND_NAME}`}>
-          <BrandLogo compact priority />
-        </Link>
+    <AuthScreen>
+      {notice}
 
-        <section className="landing-auth-hero">
-          <h1 className="landing-auth-title">Prijava</h1>
-          <p className="landing-auth-copy">
+      <div className="memo-auth-card">
+        <div className="memo-auth-head">
+          <Image
+            src="/memo-mascot.png"
+            alt=""
+            width={320}
+            height={288}
+            className="memo-auth-mascot"
+            priority
+          />
+          <h1 className="memo-auth-title">Prijava</h1>
+          <p className="memo-auth-copy long">
             Nadzorna plošča za kampanjo, prodajo in uporabnike.
           </p>
-        </section>
-
-        {notice}
+        </div>
 
         <LandingAuthOptions providers={providers} next="/admin" mode="login" />
-
-        {result.reason === "not_allowlisted" ? (
-          // `/auth/logout` only accepts POST, so this has to be a form.
-          <NativeSubmitButton
-            action="/auth/logout"
-            formClassName="landing-auth-legal"
-            className="landing-auth-signout"
-            pendingLabel="Odjavljam…"
-          >
-            Odjavi se in uporabi drug račun
-          </NativeSubmitButton>
-        ) : (
-          <p className="landing-auth-legal">
-            Dostop imajo samo e-naslovi na seznamu skrbnikov.
-          </p>
-        )}
       </div>
-    </main>
+
+      {result.reason === "not_allowlisted" ? (
+        // `/auth/logout` only accepts POST, so this has to be a form.
+        <NativeSubmitButton
+          action="/auth/logout"
+          className="memo-auth-legal-button"
+          formClassName="memo-auth-legal"
+          pendingLabel="Odjavljam…"
+        >
+          Odjavi se in uporabi drug račun
+        </NativeSubmitButton>
+      ) : (
+        <p className="memo-auth-legal">
+          Dostop imajo samo e-naslovi na seznamu skrbnikov.
+        </p>
+      )}
+    </AuthScreen>
   );
 }

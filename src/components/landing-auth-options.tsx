@@ -1,14 +1,14 @@
 "use client";
 
-import { Loader2, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { useT } from "@/components/i18n-provider";
+import { Msym } from "@/components/msym";
 
 function GoogleMark() {
   return (
-    <svg className="auth-provider-icon" viewBox="0 0 24 24" aria-hidden="true">
+    <svg className="memo-auth-provider-icon" viewBox="0 0 24 24" aria-hidden="true">
       <path
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
         fill="#4285F4"
@@ -31,7 +31,7 @@ function GoogleMark() {
 
 function AppleMark() {
   return (
-    <svg className="auth-provider-icon auth-provider-icon-apple" viewBox="0 0 24 24" aria-hidden="true">
+    <svg className="memo-auth-provider-icon memo-auth-provider-icon-apple" viewBox="0 0 24 24" aria-hidden="true">
       <path
         fill="currentColor"
         d="M16.67 12.91c.02 2.29 2 3.05 2.02 3.06-.02.05-.31 1.06-1.03 2.1-.62.89-1.27 1.78-2.29 1.8-1 .02-1.32-.59-2.46-.59-1.15 0-1.5.57-2.44.61-.99.04-1.75-.99-2.37-1.88-1.27-1.83-2.24-5.18-.94-7.44.65-1.12 1.8-1.83 3.06-1.85.95-.02 1.86.64 2.46.64.61 0 1.75-.79 2.95-.67.5.02 1.91.2 2.82 1.53-.08.05-1.69.99-1.68 2.69Zm-2.11-7.29c.52-.63.87-1.5.78-2.37-.75.03-1.65.5-2.18 1.13-.48.56-.9 1.45-.79 2.31.84.07 1.68-.42 2.19-1.07Z"
@@ -66,12 +66,12 @@ export function LandingAuthOptions(props: {
   }
 
   return (
-    <div className="landing-auth-stack">
+    <div className="memo-auth-stack">
       {props.providers.google ? (
         <form
           action="/auth/google"
           method="post"
-          className="auth-provider-form"
+          className="memo-auth-provider-form"
           onSubmit={() => {
             setPendingTarget("google");
           }}
@@ -79,11 +79,11 @@ export function LandingAuthOptions(props: {
           <input type="hidden" name="next" value={props.next} />
           <button
             type="submit"
-            className="landing-provider-button primary"
+            className="memo-auth-provider"
             disabled={pendingTarget !== null}
             aria-busy={isPending("google")}
           >
-            {isPending("google") ? <Loader2 className="auth-provider-icon animate-spin" /> : <GoogleMark />}
+            {isPending("google") ? <Msym name="progress_activity" fill={false} weight={500} className="memo-spin" /> : <GoogleMark />}
             <span>{t(isPending("google") ? "auth.redirecting" : "auth.continueGoogle")}</span>
           </button>
         </form>
@@ -93,7 +93,7 @@ export function LandingAuthOptions(props: {
         <form
           action="/auth/apple"
           method="post"
-          className="auth-provider-form"
+          className="memo-auth-provider-form"
           onSubmit={() => {
             setPendingTarget("apple");
           }}
@@ -101,20 +101,24 @@ export function LandingAuthOptions(props: {
           <input type="hidden" name="next" value={props.next} />
           <button
             type="submit"
-            className="landing-provider-button secondary"
+            className="memo-auth-provider"
             disabled={pendingTarget !== null}
             aria-busy={isPending("apple")}
           >
-            {isPending("apple") ? <Loader2 className="auth-provider-icon animate-spin" /> : <AppleMark />}
+            {isPending("apple") ? <Msym name="progress_activity" fill={false} weight={500} className="memo-spin" /> : <AppleMark />}
             <span>{t(isPending("apple") ? "auth.redirecting" : "auth.continueApple")}</span>
           </button>
         </form>
       ) : null}
 
+      {props.providers.email && (props.providers.google || props.providers.apple) ? (
+        <div className="memo-auth-divider">{t("auth.or")}</div>
+      ) : null}
+
       {props.providers.email ? (
         <button
           type="button"
-          className="landing-provider-button tertiary"
+          className="memo-auth-provider"
           disabled={pendingTarget !== null}
           aria-busy={isPending("email")}
           onClick={() => {
@@ -122,7 +126,7 @@ export function LandingAuthOptions(props: {
             router.push(emailHref);
           }}
         >
-          {isPending("email") ? <Loader2 className="auth-provider-icon animate-spin" /> : <Mail className="auth-provider-icon" />}
+          {isPending("email") ? <Msym name="progress_activity" fill={false} weight={500} className="memo-spin" /> : <Msym name="mail" fill={false} weight={500} />}
           <span>{t(isPending("email") ? "auth.opening" : "auth.continueEmail")}</span>
         </button>
       ) : null}

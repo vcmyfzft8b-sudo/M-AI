@@ -11,7 +11,7 @@ aspiration. Where the code still disagrees with a rule, that is noted.
 | Layer | File | Scope | Use for |
 | --- | --- | --- | --- |
 | **App (canonical)** | `src/app/redesign.css` | `.memo`, `.memo-portal` | Everything inside the product |
-| Legacy | `src/app/globals.css` | `:root` | Auth, landing, paywall. Do not extend. |
+| Legacy | `src/app/globals.css` | `:root` | Landing, paywall. Do not extend. |
 | Onboarding | `src/app/onboarding.css` | `.memo-onboarding-v2` | Onboarding flow only |
 | Paywall | `src/app/globals.css` | `.memo-paywall-shell` | Paywall only |
 
@@ -60,10 +60,11 @@ breaks silently. A token that is the same in both (`--coral`, `--blue`,
 | `--upgrade-tint` / `-line` / `-ink` | periwinkle | Upgrade prompts. Deliberately quieter than coral. |
 | `--blue` | `#0066cc` | One button only (create-folder ready). Do not add a second. |
 
-Destructive red is **not** tokenised yet: `#ff3b30` and `rgba(255, 59, 48, 0.12)`
-are typed out across ~58 declarations and dark never lightens them. Use those
-exact literals until they become `--danger` / `--danger-tint`; do not invent a
-third red.
+`--danger` (`#ff3b30` / `#ff453a`) and `--danger-tint` are declared in all three
+blocks — use them for anything destructive or failed. They are new, so the ~58
+older declarations still type `#ff3b30` and `rgba(255, 59, 48, 0.12)` by hand and
+never lighten in dark; convert those as you touch them, and do not invent a third
+red.
 
 ### Five colour rules
 
@@ -225,26 +226,25 @@ skeleton 90 · portalled sheets 105+ · toast 140 · nav progress 2000.
 
 Real, and worth knowing before you copy a pattern out of the stylesheet:
 
-1. **Destructive red is untokenised** — see Accents above.
+1. **Destructive red is only half tokenised.** `--danger` / `--danger-tint` now
+   exist and the auth screens use them, but ~58 older declarations still type the
+   literal and stay light-mode red in dark.
 2. **Coral has no solid token.** `--coral` is a gradient, so `#ff6d68` and
    `#f45f5a` are retyped by hand wherever coral must be a border or text colour.
 3. **Three parallel token vocabularies** for the same concepts: `globals.css`
    (`--label`, `--separator`, `--surface-solid`, `--tint`), `redesign.css`
    (`--text`, `--line`, `--surface`), and `onboarding.css`, which reuses the
    redesign's names with different values.
-4. **The auth screens are pre-redesign** — 16px radius, 1px borders, and a
-   `translateY(-1px)` hover lift the redesign explicitly does not do. It is the
-   first screen a new user sees.
-5. **Nine button classes, four heights**, with overlapping roles:
+4. **Nine button classes, four heights**, with overlapping roles:
    `.memo-button-solid` (3.2rem) and `.memo-primary-pill` (3rem) are the same ink
    button twice; `.memo-button-coral` and `.memo-sheet-coral` are the same
    primary twice; `.memo-create-folder.ready` is a third primary in `--blue`; and
    `.memo-subscribe-cta` uses an amber gradient that appears nowhere else,
    despite `--upgrade-*` existing to be the upgrade accent.
-6. **Both dark blocks are written out longhand**, so they can drift. The
+5. **Both dark blocks are written out longhand**, so they can drift. The
    `--upgrade-*` lines in the media block are already mis-indented. Values match
    today — keep them matching.
-7. **Both stylesheets are flat and ~16k lines**, so a component's rules sit far
+6. **Both stylesheets are flat and ~16k lines**, so a component's rules sit far
    from the media queries that override them. That is how
    `.memo-settings-signout` ended up styled only inside a phone-width query and
    rendered as a bare browser button between 480px and 1099px.

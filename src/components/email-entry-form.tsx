@@ -2,6 +2,7 @@
 
 import { EmailAuthForm } from "@/components/email-auth-form";
 import { useT } from "@/components/i18n-provider";
+import { Msym } from "@/components/msym";
 
 export function EmailEntryForm({
   email,
@@ -16,10 +17,11 @@ export function EmailEntryForm({
 
   return (
     <EmailAuthForm
-      buttonClassName="email-entry-submit"
+      buttonClassName="memo-button-coral memo-auth-submit"
       defaultEmail={email}
-      formClassName="email-entry-form"
-      inputClassName="email-entry-input"
+      formClassName="memo-auth-form"
+      icon={<Msym name="mail" fill={false} weight={500} />}
+      inputWrapperClassName="memo-auth-field"
       mode={mode}
       next={next}
       placeholder={t("auth.enterEmailPlaceholder")}

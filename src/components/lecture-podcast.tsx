@@ -1568,12 +1568,20 @@ export function LecturePodcast({
     return parts.join(" · ");
   }
 
+  /*
+   * Whose voices these are, in the words the header above the list uses.
+   *
+   * It is the group's accessible name as well as the tab's label, because the list swaps in
+   * place when the host changes: without it a screen reader announces eleven radios with no
+   * way of telling which host is about to be given the one you pick.
+   */
+  const speakerLabel = (speaker: PodcastSpeaker) =>
+    speakerCount === 1
+      ? t("podcast.speaker.solo")
+      : t(speaker === "a" ? "podcast.speaker.a" : "podcast.speaker.b");
+
   const voiceOptions = (speaker: PodcastSpeaker) => (
-    <div
-      className="memo-podcast-voice-options"
-      role="radiogroup"
-      aria-label={t("podcast.voice.label")}
-    >
+    <div className="memo-podcast-voice-options" role="radiogroup" aria-label={speakerLabel(speaker)}>
       {NOTE_TTS_VOICES.map((option) => (
         <button
           key={option}
@@ -1714,17 +1722,17 @@ export function LecturePodcast({
       {activeVoiceSlot !== null ? (
         <div className="memo-podcast-picker">
           {speakerCount === 2 ? (
-            <div
-              className="memo-podcast-picker-tabs"
-              role="tablist"
-              aria-label={t("podcast.voice.label")}
-            >
+            /*
+              * Two toggles rather than a `tablist`: a tab promises a tab panel, and what is
+              * below is the same radiogroup with different radios in it. `aria-pressed` says
+              * what is actually true — this host's list is the one showing.
+              */
+            <div className="memo-podcast-picker-tabs">
               {PODCAST_SPEAKERS.map((slot) => (
                 <button
                   key={slot}
                   type="button"
-                  role="tab"
-                  aria-selected={activeVoiceSlot === slot}
+                  aria-pressed={activeVoiceSlot === slot}
                   className={`memo-podcast-picker-tab ${
                     activeVoiceSlot === slot ? "active" : ""
                   }`.trim()}
@@ -1733,7 +1741,7 @@ export function LecturePodcast({
                 >
                   <span className="memo-orb-body mini" aria-hidden="true" />
                   <span className="memo-podcast-picker-tab-copy">
-                    <span>{t(slot === "a" ? "podcast.speaker.a" : "podcast.speaker.b")}</span>
+                    <span>{speakerLabel(slot)}</span>
                     <span>{voices[slot]}</span>
                   </span>
                 </button>

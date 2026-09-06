@@ -16670,7 +16670,7 @@
   background: var(--tile);
   color: var(--text);
   cursor: pointer;
-  transition: background 0.16s ease;
+  transition: box-shadow 0.16s ease;
 }
 
 .memo-auth-back .msym {
@@ -17039,9 +17039,12 @@
   line-height: 1.5;
 }
 
+/* Above the card on the admin sign-in. Only the bottom margin moves: the top
+   one is the stage's `auto`, and overriding it here would stop the screen
+   centring the moment a notice appeared. */
 .memo-auth-notice:first-child {
-  margin-top: 0;
-  margin-bottom: 0.2rem;
+  margin-top: 0.9rem;
+  margin-bottom: 0.9rem;
 }
 
 .memo-auth-notice strong {
@@ -17086,7 +17089,7 @@
    * the field and the button under it stay above the keys instead of the
    * screen having to be scrolled to reach its own submit.
    */
-  .memo-auth-card:focus-within .memo-auth-mascot {
+  .memo-auth-card:has(input:focus) .memo-auth-mascot {
     display: none;
   }
 }

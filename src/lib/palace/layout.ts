@@ -1,5 +1,6 @@
 // Imported by its real filename so the Node test runner can load the layout
 // directly; it cannot resolve the "@/" alias.
+import { roomIdentity, roomPoint } from "./rooms.ts";
 import { createRandom, seedFromString, type Random } from "./rng.ts";
 
 /**
@@ -114,7 +115,8 @@ export type PalaceStation = {
   kind: StudyKind;
   index: number;
   districtIndex: number;
-  /** Where the token floats, on the path outside its house. */
+  /** A stable indoor or outdoor memory location. */
+  placement: "inside" | "outside";
   x: number;
   z: number;
   hue: number;
@@ -760,10 +762,16 @@ export function buildPalaceLayout({
      * on the same pavement.
      */
     group.items.forEach((item) => {
-      let spot = walkable[0] ?? { x: 0, z: 0 };
+      const placement = stations.length % 2 === 0 ? "inside" : "outside";
+      const identity = roomIdentity(stations.length);
+      const candidates = placement === "inside"
+        ? placed.filter((index) => !houses[index].landmark)
+          .map((index) => roomPoint(houses[index], identity.anchorX, identity.anchorZ))
+        : walkable;
+      let spot = candidates[0] ?? { x: 0, z: 0 };
       let best = -1;
 
-      walkable.forEach((candidate) => {
+      candidates.forEach((candidate) => {
         const nearest = taken.reduce(
           (closest, other) =>
             Math.min(closest, Math.hypot(candidate.x - other.x, candidate.z - other.z)),
@@ -817,8 +825,8 @@ export function buildPalaceLayout({
         kind: item.kind,
         index: stations.length,
         districtIndex,
-        x: spot.x,
-        z: spot.z,
+        placement,
+        ...spot,
         hue,
         houseIndex,
       });
@@ -862,11 +870,19 @@ export function buildPalaceLayout({
       const edge = value + (side * ROAD_WIDTH) / 2;
       const path = edge + (side * PAVEMENT_WIDTH) / 2;
 
-      kerbs.push(
-        horizontal
-          ? { x: 0, z: edge, width: long, depth: 0.7, height: 0.16 }
-          : { x: edge, z: 0, width: 0.7, depth: long, height: 0.16 },
-      );
+      // Kerbs end at intersections instead of forming barriers across the road.
+      const sortedLines = [...lines].sort((a, b) => a - b);
+      let from = -bounds;
+      for (const crossing of [...sortedLines, bounds + ROAD_WIDTH / 2]) {
+        const to = crossing - ROAD_WIDTH / 2;
+        if (to > from) {
+          const center = (from + to) / 2;
+          kerbs.push(horizontal
+            ? { x: center, z: edge, width: to - from, depth: 0.35, height: 0.12 }
+            : { x: edge, z: center, width: 0.35, depth: to - from, height: 0.12 });
+        }
+        from = crossing + ROAD_WIDTH / 2;
+      }
       pavements.push(
         horizontal
           ? { x: 0, z: path, width: long, depth: PAVEMENT_WIDTH, height: 0 }
@@ -904,12 +920,12 @@ export function buildPalaceLayout({
    * the junction: any further out and a town this size is more paint than road.
    */
   const crossingOffset = ROAD_WIDTH / 2 + 2.2;
-  const crossingLength = ROAD_WIDTH - 3.5;
+  const crossingLength = 3;
 
   lines.forEach((z) => {
     lines.forEach((x) => {
-      for (let stripe = 0; stripe < 4; stripe += 1) {
-        const offset = (stripe - 1.5) * 2.1;
+      for (let stripe = 0; stripe < 6; stripe += 1) {
+        const offset = (stripe - 2.5) * 1.7;
 
         roadMarks.push({ x: x + offset, z: z - crossingOffset, width: 0.85, depth: crossingLength, height: 0 });
         roadMarks.push({ x: x + offset, z: z + crossingOffset, width: 0.85, depth: crossingLength, height: 0 });
@@ -1085,23 +1101,16 @@ export function buildPalaceLayout({
    */
   const first = stations[0];
   const firstHouse = first ? houses[first.houseIndex] : null;
-  const away = firstHouse
-    ? { x: first.x - firstHouse.x, z: first.z - firstHouse.z }
-    : { x: 0, z: 1 };
-  const length = Math.hypot(away.x, away.z) || 1;
-  const spawn = first
-    ? {
-        x: first.x + (away.x / length) * 7,
-        z: first.z + (away.z / length) * 7,
-        yaw: Math.atan2(-away.x / length, -away.z / length),
-      }
-    : { x: 0, z: 0, yaw: 0 };
+  const approach = firstHouse ? roomPoint(firstHouse, 0, firstHouse.depth / 2 + 7) : { x: 0, z: 0 };
+  const spawn = { ...approach, yaw: firstHouse ? firstHouse.facing + Math.PI : 0 };
 
   return {
     seed,
     districts,
     houses,
-    props,
+    // Keep the full approach to each outdoor marker clear of street furniture.
+    props: props.filter((prop) => prop.y > 5 || stations.every((station) =>
+      station.placement === "inside" || Math.hypot(prop.x - station.x, prop.z - station.z) > 5 + prop.scale * 2)),
     stations,
     roads,
     pavements,

@@ -10657,15 +10657,12 @@
     touch-action: none;
   }
 
-  /*
-   * A sheet that owns a scrolling list still has to pan. The flashcard station
-   * is deliberately not on this list: its gesture is a horizontal throw, and
-   * handing the browser a vertical pan on the same surface is how a slightly
-   * diagonal swipe gets cancelled out from under the card.
-   */
+  /* Study content scrolls vertically; the shared card handles horizontal throws.
+     The header and grabber reserve their gestures for sheet dismissal. */
   .memo-sheet-full,
   .note-source-modal.mobile-draggable-sheet,
   .study-manager-sheet.mobile-draggable-sheet,
+  .memo-palace-panel.card,
   .memo-palace-panel.quiz,
   .memo-palace-panel.test,
   .memo-palace-sheet-inner {
@@ -14786,8 +14783,8 @@
 }
 
 /* The station itself — everything under the head — is what scrolls. */
-.memo-palace-panel.quiz > :not(.memo-palace-panel-head),
-.memo-palace-panel.test > :not(.memo-palace-panel-head) {
+.memo-palace-panel.quiz > .lecture-quiz-card,
+.memo-palace-panel.test > .lecture-practice-stage {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -15165,7 +15162,7 @@
     --panel-paint: var(--surface);
     background: var(--panel-paint);
     box-shadow: var(--shadow-lg);
-    animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+
   }
 
   /* The way out moves to the top corner: the bottom left is where the thumb
@@ -16439,3 +16436,75 @@
   flex: 1 1 auto;
   min-height: 0;
 }
+
+.memo-palace-stage button:focus-visible { outline: 3px solid #f5cb84; outline-offset: 4px; }
+.memo-palace-stage .memo-palace-hint { background: rgba(27, 35, 34, 0.78); font-size: 0.75rem; }
+@media (max-width: 900px) {
+  .memo-palace-stage .memo-palace-hint { display: block; bottom: calc(4.4rem + var(--memo-safe-bottom, 0px)); left: auto; right: 1rem; translate: none; max-width: 12rem; text-align: center; font-size: 0.65rem; }
+}
+.memo-palace-panel-where { max-width: 60%; }
+
+.memo-palace-panel-head, .memo-palace-panel > .mobile-sheet-drag-handle { flex-shrink: 0; touch-action: none; }
+
+.memo-palace-map-frame { position: relative; width: min(100%, 55dvh); aspect-ratio: 1; margin: 0 auto 1rem; }
+.memo-palace-map-frame .memo-palace-townmap { display: block; width: 100%; height: 100%; margin: 0; }
+.memo-palace-map-north { position: absolute; top: 0.5rem; left: 0.65rem; color: white; font-size: 0.7rem; font-weight: 800; }
+.memo-palace-map-marker { position: absolute; translate: -50% -50%; width: 1.8rem; height: 1.8rem; border: 2px solid var(--marker-color); border-radius: 50%; background: #211f28; color: white; font-size: 0.7rem; font-weight: 800; cursor: pointer; }
+.memo-palace-map-marker.collected { border-color: #9fb9ac; color: #b9e7cd; }
+.memo-palace-map-marker[aria-pressed="true"], .memo-palace-map-marker:focus-visible { outline: 3px solid white; outline-offset: 2px; z-index: 2; }
+.memo-palace-map-selection { display: flex; align-items: center; gap: 0.75rem; margin: 0 0 1.2rem; padding: 0.8rem; border-radius: 16px; background: var(--surface-2, var(--bg)); }
+.memo-palace-map-selection > div { flex: 1; min-width: 0; }
+.memo-palace-map-selection strong, .memo-palace-map-selection span { display: block; font-size: 0.85rem; }
+.memo-palace-map-selection span { margin-top: 0.3rem; color: var(--muted); }
+.memo-palace-map-selection button { flex-shrink: 0; }
+
+/* Use the app's centred sheet heading, close control and wide grabber. */
+.memo-palace-panel-head.memo-sheet-title, .memo-palace-sheet-head.memo-sheet-title { position: relative; justify-content: center; min-height: var(--btn-round); padding: 0 3.2rem; margin: 0; flex-shrink: 0; user-select: none; -webkit-user-select: none; }
+.memo-palace-panel-head .memo-sheet-close, .memo-palace-sheet-head .memo-sheet-close { position: absolute; right: 0; }
+.memo-palace-sheet-head h3 { flex: none; margin: 0; }
+.memo-palace-panel > .memo-palace-panel-where { flex: none; max-width: 100%; text-align: center; user-select: none; -webkit-user-select: none; }
+.memo-palace-grab { display: none; flex-shrink: 0; border: 0; background: transparent; }
+@media (max-width: 1099px) {
+  .memo-palace-grab.memo-grab-wide { display: block; width: 100%; }
+}
+
+@media (max-width: 1099px) and (max-height: 540px) {
+  .memo-palace-panel {
+    max-height: calc(100dvh - var(--memo-kb) - 1rem);
+    padding-top: 0.35rem;
+    padding-bottom: calc(0.6rem + var(--memo-safe-bottom));
+    gap: 0.35rem;
+  }
+  .memo-palace-panel.card { --palace-card-height: clamp(5rem, calc(100dvh - 13.5rem), 10rem); }
+  .memo-palace-panel .lecture-flashcard,
+  .memo-palace-panel .lecture-flashcard-rotator,
+  .memo-palace-panel .lecture-flashcard-face { min-height: var(--palace-card-height); height: var(--palace-card-height); }
+  .memo-palace-panel .lecture-flashcard-face { padding: 0.6rem 1rem; gap: 0.3rem; }
+  .memo-palace-panel .lecture-flashcard-content { min-height: 0; max-height: calc(var(--palace-card-height) - 2.5rem); overflow-y: auto; margin: 0; font-size: 0.95rem; }
+  .memo-palace-panel .lecture-flashcard-toolbar { flex-shrink: 0; }
+}
+
+/* Mouse/trackpad users get the app's centred study card, even in a narrow panel. */
+.memo-palace-panel[data-presentation="dialog"] {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  translate: -50% -50%;
+  width: min(40rem, calc(100% - 3rem));
+  max-height: calc(100% - 3rem);
+  padding: 1.4rem;
+  border-radius: 24px;
+  --panel-paint: var(--bg);
+  background: var(--panel-paint);
+  animation: memo-pop-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.memo-palace-panel[data-presentation="dialog"] .memo-palace-grab,
+.memo-palace-sheet-inner[data-presentation="dialog"] .memo-palace-grab { display: none; }
+.memo-palace-panel[data-presentation="dialog"] [data-drag-zone],
+.memo-palace-sheet-inner[data-presentation="dialog"] [data-drag-zone] { cursor: default; }
+.memo-palace-panel[data-presentation="dialog"] .lecture-flashcard,
+.memo-palace-panel[data-presentation="dialog"] .lecture-flashcard-rotator,
+.memo-palace-panel[data-presentation="dialog"] .lecture-flashcard-face { min-height: clamp(8rem, 34dvh, 22rem); height: auto; }
+.memo-palace-sheet-inner[data-presentation="dialog"] { position: absolute; inset: 50% auto auto 50%; translate: -50% -50%; width: min(32rem, calc(100% - 3rem)); max-height: calc(100% - 3rem); padding: 1.2rem; border-radius: 24px; background: var(--bg); animation: memo-pop-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+.memo-palace-panel > .memo-palace-close,
+.memo-palace-sheet-inner > .memo-palace-close { position: absolute; top: 0.9rem; right: 0.9rem; z-index: 3; }

@@ -6,6 +6,7 @@ import NextImage from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { useT } from "@/components/i18n-provider";
+import { StudyQuizQuestion, StudyPracticeQuestion } from "@/components/study-question";
 import { StudyGenerationNotice } from "@/components/generation-notice";
 import { MemoPortal } from "@/components/memo-portal";
 import { Emoji, Msym } from "@/components/msym";
@@ -17,6 +18,9 @@ import {
   type FlashcardBucket,
 } from "@/lib/study/flashcard-drag";
 import { quizOptionLetter, shuffleIndices } from "@/lib/study/quiz";
+import { minimapMarker, townMapPoint } from "@/lib/palace/navigation";
+import { roomIdentity, outdoorLandmark } from "@/lib/palace/rooms";
+import { parsePalaceResults } from "@/lib/palace/progress";
 import type { PalaceGame, PalaceSnapshot } from "@/lib/palace/game";
 import {
   buildPalaceLayout,
@@ -39,9 +43,9 @@ import type {
  * The oldest study technique there is, which is why it is worth building: a walk
  * through a place is held far better than a list. So the note's own study
  * material is scattered through a town — one neighbourhood per section of the
- * note, one house per item, every house built differently — and you walk it.
+ * note, indoor and outdoor landmarks, every house built differently — and you walk it.
  *
- * What waits outside a house is the app's own study screen, not a copy of it:
+ * What waits at a landmark is the app's own study screen, not a copy of it:
  * the flashcard that flips, the quiz that marks you, the practice question with
  * its model answer. The town is the index; the screens are the ones the rest of
  * the app already uses.
@@ -54,7 +58,8 @@ import type {
  */
 
 const COLLECTED_STORAGE_PREFIX = "memo.palace.collected.";
-/** Memo's mascot, the same file the town hangs outside its houses. */
+const RESULTS_STORAGE_PREFIX = "memo.palace.results.";
+/** Memo's mascot, the same file used at the town's memory locations. */
 const MASCOT_SRC = "/memo-mascot.png";
 /** How far the minimap sees, in metres — about two blocks in every direction. */
 const MAP_RANGE = 95;
@@ -85,7 +90,6 @@ type PracticeMark = {
  * enough to register; a wrong answer, or one the note explains, needs reading.
  */
 const QUIZ_RESULT_PAUSE = 1600;
-const QUIZ_RESULT_READ_PAUSE = 6000;
 const STICK_DEADZONE = 6;
 const STICK_RADIUS = 46;
 
@@ -169,7 +173,10 @@ export function LecturePalace({
   const [cardExit, setCardExit] = useState<StudyFlashcardExit | null>(null);
   /* How each stop went this session, for the label the deck screen shows too. */
   const [results, setResults] = useState<Record<string, "again" | "easy">>({});
-  const [districtIndex, setDistrictIndex] = useState(0);
+  const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
+  const [hasMoved, setHasMoved] = useState(false);
+  const movementOriginRef = useRef<{ x: number; z: number } | null>(null);
+  const movementStartedRef = useRef(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [stickKnob, setStickKnob] = useState<{ x: number; y: number } | null>(null);
   const [isTouch, setIsTouch] = useState(false);
@@ -195,6 +202,8 @@ export function LecturePalace({
   /* The pending auto-dismiss of an answered quiz, so nothing closes a station
      the player has already walked on from. */
   const dismissRef = useRef<number | null>(null);
+  const gradingRef = useRef<AbortController | null>(null);
+  useEffect(() => () => gradingRef.current?.abort(), []);
   const clearDismiss = useCallback(() => {
     if (dismissRef.current === null) return;
 
@@ -227,6 +236,8 @@ export function LecturePalace({
     minimapRef.current = node;
 
     if (node) {
+      // A reopened game mounts a new canvas, even at the same CSS size.
+      minimapSizeRef.current = { css: 0, dpr: 0 };
       sizeMinimapRef.current();
     }
   }, []);
@@ -298,16 +309,31 @@ export function LecturePalace({
   /* Where the walk got to last time, restored on the client only. */
   useEffect(() => {
     setCollected(readCollected(lectureId));
+    try { setResults(parsePalaceResults(window.localStorage.getItem(`${RESULTS_STORAGE_PREFIX}${lectureId}`))); }
+    catch { setResults({}); }
+  }, [lectureId]);
+
+  const recordResult = useCallback((id: string, grade: "again" | "easy") => {
+    setResults((current) => {
+      const next = { ...current, [id]: grade };
+      try { window.localStorage.setItem(`${RESULTS_STORAGE_PREFIX}${lectureId}`, JSON.stringify(next)); } catch { /* Private mode still works. */ }
+      return next;
+    });
   }, [lectureId]);
 
   useEffect(() => {
-    setIsTouch(window.matchMedia("(pointer: coarse)").matches);
+    const query = window.matchMedia("(pointer: coarse)");
+    const update = () => setIsTouch(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
   }, []);
 
   const station = useMemo(
     () => layout?.stations.find((entry) => entry.id === nearStationId) ?? null,
     [layout, nearStationId],
   );
+  const isComplete = Boolean(layout?.stations.length && layout.stations.every((entry) => collected.has(entry.id)) && !station);
   /*
    * The material behind the open station. A note whose deck is regenerated
    * mid-walk can leave a stop pointing at a card that no longer exists, and
@@ -420,6 +446,16 @@ export function LecturePalace({
         context.stroke();
       });
 
+      // Building footprints make doors and street corners readable on the map.
+      layout.houses.forEach((house) => {
+        const point = toCanvas(house.x, house.z);
+        if (point.x < -12 || point.x > size + 12 || point.y < -12 || point.y > size + 12) return;
+        context.save();context.translate(point.x, point.y);context.rotate(-house.facing);
+        context.fillStyle = house.landmark ? `hsl(${house.hue} 28% 64% / 0.85)` : "rgba(192, 205, 195, 0.35)";
+        context.fillRect(-house.width * scale / 2, -house.depth * scale / 2, house.width * scale, house.depth * scale);
+        context.restore();
+      });
+
       const icon = Math.round(Math.min(20, Math.max(13, size * 0.15)));
       const mascot = mascotRef.current;
 
@@ -439,13 +475,13 @@ export function LecturePalace({
       const mascotTile = mascotTileRef.current;
       /* Nearest first, so what is drawn when the map runs out of room is what
          the walker is closest to. */
-      const inRange = layout.stations
+      const allMarkers = layout.stations
         .map((entry) => ({
           entry,
           distance: Math.hypot(entry.x - snapshot.x, entry.z - snapshot.z),
         }))
-        .filter((candidate) => candidate.distance <= MAP_RANGE)
         .sort((left, right) => left.distance - right.distance);
+      const inRange = allMarkers.filter((candidate) => candidate.distance <= MAP_RANGE);
 
       /* The ticks go down first, behind everything: they are history, not the route. */
       inRange
@@ -470,10 +506,10 @@ export function LecturePalace({
       const drawn: { x: number; y: number }[] = [];
       let nearest: { x: number; y: number } | null = null;
 
-      inRange
+      allMarkers
         .filter(({ entry }) => !collectedIds.has(entry.id))
         .forEach(({ entry }) => {
-          const point = toCanvas(entry.x, entry.z);
+          const point = minimapMarker(snapshot, entry, size, MAP_RANGE, icon / 2 + 6 * unit);
 
           if (!nearest) {
             nearest = point;
@@ -511,10 +547,14 @@ export function LecturePalace({
         context.stroke();
       }
 
-      /* The player sits at the middle of their own map, facing up the screen. */
+      context.fillStyle = "#fff";
+      context.font = `600 ${9 * unit}px system-ui`;
+      context.textAlign = "center";
+      context.fillText("N", radius, 12 * unit);
+      // The arrow follows the view, even when standing still and looking around.
       context.save();
       context.translate(radius, radius);
-      context.rotate(mapArrowAngle(snapshot.facing));
+      context.rotate(mapArrowAngle(snapshot.cameraYaw));
       context.fillStyle = "#ffffff";
       context.strokeStyle = "rgba(14, 12, 20, 0.9)";
       context.lineWidth = 1.6 * unit;
@@ -540,6 +580,7 @@ export function LecturePalace({
   }, [collected]);
 
   const openStation = useCallback((stationId: string | null) => {
+    gradingRef.current?.abort();
     clearDismiss();
     setNearStationId(stationId);
     setIsFlipped(false);
@@ -564,6 +605,9 @@ export function LecturePalace({
     setLoadError(null);
 
     try {
+      movementOriginRef.current = null;
+      movementStartedRef.current = false;
+      setHasMoved(false);
       const { createPalaceGame } = await import("@/lib/palace/game");
       const canvas = canvasRef.current;
 
@@ -577,6 +621,7 @@ export function LecturePalace({
         collectedIds: [...collectedRef.current],
         onNearStation: openStation,
         onContextLost: () => {
+          gameRef.current?.dispose();
           gameRef.current = null;
           setCanvasEpoch((current) => current + 1);
         },
@@ -589,9 +634,11 @@ export function LecturePalace({
            */
           drawMinimap(snapshot, collectedRef.current);
 
-          setDistrictIndex((current) =>
-            current === snapshot.districtIndex ? current : snapshot.districtIndex,
-          );
+          if (!movementOriginRef.current) movementOriginRef.current = snapshot;
+          if (!movementStartedRef.current && Math.hypot(snapshot.x - movementOriginRef.current.x, snapshot.z - movementOriginRef.current.z) > 0.08) {
+            movementStartedRef.current = true;
+            setHasMoved(true);
+          }
         },
       });
       setIsBuilt(true);
@@ -705,7 +752,7 @@ export function LecturePalace({
       sizeMinimap();
     };
     /* A backgrounded tab should not keep a render loop alive on a phone battery. */
-    const onVisibility = () => gameRef.current?.setPaused(document.hidden);
+    const onVisibility = () => gameRef.current?.setPaused(document.hidden || isMapOpen || isComplete);
     /*
      * Escape takes one layer at a time, the way it does everywhere else in the
      * app: the map if it is up, then the station, and only an Escape with
@@ -729,7 +776,7 @@ export function LecturePalace({
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [isOpen, leaveGame, sizeMinimap]);
+  }, [isComplete, isMapOpen, isOpen, leaveGame, sizeMinimap]);
 
   /*
    * The whole town on a canvas: every street, and every stop with the colour
@@ -773,10 +820,7 @@ export function LecturePalace({
        * rather than as margin.
        */
       const scale = Math.min(width, height) / (extent * 2);
-      const toCanvas = (x: number, z: number) => ({
-        x: width / 2 + x * scale,
-        y: height / 2 + z * scale,
-      });
+      const toCanvas = (x: number, z: number) => townMapPoint({ x, z }, extent, width, height);
 
       context.clearRect(0, 0, width, height);
       context.fillStyle = "rgba(14, 12, 20, 0.9)";
@@ -803,6 +847,14 @@ export function LecturePalace({
         context.stroke();
       });
 
+      layout.houses.forEach((house) => {
+        const point = toCanvas(house.x, house.z);
+        context.save();context.translate(point.x, point.y);context.rotate(-house.facing);
+        context.fillStyle = house.landmark ? `hsl(${house.hue} 28% 64% / 0.85)` : "rgba(192, 205, 195, 0.28)";
+        context.fillRect(-house.width * scale / 2, -house.depth * scale / 2, house.width * scale, house.depth * scale);
+        context.restore();
+      });
+
       layout.stations.forEach((entry) => {
         const point = toCanvas(entry.x, entry.z);
         const done = collected.has(entry.id);
@@ -821,7 +873,7 @@ export function LecturePalace({
 
       context.save();
       context.translate(player.x, player.y);
-      context.rotate(mapArrowAngle(snapshotRef.current?.facing ?? 0));
+      context.rotate(mapArrowAngle(snapshotRef.current?.cameraYaw ?? 0));
       context.fillStyle = "#ffffff";
       context.strokeStyle = "rgba(14, 12, 20, 0.9)";
       context.lineWidth = 1.4;
@@ -842,7 +894,13 @@ export function LecturePalace({
   useEffect(() => {
     if (!isMapOpen) return;
 
-    paintTown(townMapRef.current);
+    const canvas = townMapRef.current;
+    if (!canvas) return;
+    const paint = () => paintTown(canvas);
+    paint();
+    const observer = new ResizeObserver(paint);
+    observer.observe(canvas);
+    return () => observer.disconnect();
   }, [isMapOpen, paintTown]);
 
   /*
@@ -870,7 +928,7 @@ export function LecturePalace({
   }, [isOpen, paintTown]);
 
   const closeMap = useCallback(() => setIsMapOpen(false), []);
-  const mapSheet = useSheet(closeMap, { scrollable: true });
+  const mapSheet = useSheet(closeMap, { scrollable: true, presentation: isTouch ? "sheet" : "dialog" });
 
   /*
    * What Escape should close, held in a ref so the key handler is armed once for
@@ -896,12 +954,12 @@ export function LecturePalace({
 
   /* The map sheet stops the world; the loop keeps rendering. */
   useEffect(() => {
-    gameRef.current?.setPaused(isMapOpen);
+    gameRef.current?.setPaused(isMapOpen || isComplete || document.hidden);
 
     if (isMapOpen) {
       gameRef.current?.setMove(0, 0);
     }
-  }, [isMapOpen]);
+  }, [isComplete, isMapOpen]);
 
   /* What actually tears the station down, once the sheet has finished leaving. */
   const closeStation = useCallback(() => {
@@ -916,7 +974,7 @@ export function LecturePalace({
    * and drops out of frame on the way out rather than vanishing. It owns a
    * scrolling answer, so only the grabber and the head start a drag.
    */
-  const stationSheet = useSheet(closeStation, { scrollable: true });
+  const stationSheet = useSheet(closeStation, { scrollable: true, presentation: isTouch ? "sheet" : "dialog" });
   const dismissStation = stationSheet.dismiss;
 
   const leaveStation = useCallback(() => {
@@ -951,7 +1009,7 @@ export function LecturePalace({
       confidenceBucket: FlashcardBucket,
       exitStart?: { xPercent: number; yPercent: number; rotationDeg: number },
     ) => {
-      setResults((current) => ({ ...current, [cardId]: confidenceBucket }));
+      recordResult(cardId, confidenceBucket);
       collect(cardId);
 
       /*
@@ -997,7 +1055,7 @@ export function LecturePalace({
         /* Offline in a lecture hall is the normal case, not an error to raise. */
       }
     },
-    [collect, isFlipped, leaveStation],
+    [collect, isFlipped, leaveStation, recordResult],
   );
 
   const answerQuiz = useCallback(
@@ -1005,29 +1063,16 @@ export function LecturePalace({
       const right = optionIndex === correctIndex;
 
       setQuizChoice(optionIndex);
-      setResults((current) => ({ ...current, [questionId]: right ? "easy" : "again" }));
+      recordResult(questionId, right ? "easy" : "again");
       collect(questionId);
 
-      /*
-       * Both answers stop and say what happened: right or wrong, which option
-       * was the right one, and the note's own explanation of why — and then the
-       * walk resumes on its own. Answering used to leave you holding a card you
-       * had already finished with until you pressed a second button, which on a
-       * sixty-stop walk is sixty presses that say nothing.
-       *
-       * How long it stays depends on whether there is anything to read: a right
-       * answer with no explanation behind it is a tick, and a tick does not need
-       * six seconds. The button stays for anyone who would rather not wait.
-       */
-      const explained = Boolean(quizById.get(questionId)?.explanation);
-
+      // Explanations and mistakes stay until the learner is ready to continue.
       clearDismiss();
-      dismissRef.current = window.setTimeout(
-        leaveStation,
-        right && !explained ? QUIZ_RESULT_PAUSE : QUIZ_RESULT_READ_PAUSE,
-      );
+      if (right && !quizById.get(questionId)?.explanation) {
+        dismissRef.current = window.setTimeout(leaveStation, QUIZ_RESULT_PAUSE);
+      }
     },
-    [clearDismiss, collect, leaveStation, quizById],
+    [clearDismiss, collect, leaveStation, quizById, recordResult],
   );
 
   /**
@@ -1037,10 +1082,20 @@ export function LecturePalace({
    */
   const checkAnswer = useCallback(
     async (questionId: string) => {
+      gradingRef.current?.abort();
+      // The app's grader also scores a declared unknown as zero without AI.
+      if (isTestUnknown) {
+        setMark({ marked: true, score: 0, maxScore: 5, expectedAnswer: testById.get(questionId)?.answer_guide ?? "" });
+        setIsMarking(false);
+        return;
+      }
+      const controller = new AbortController();
+      gradingRef.current = controller;
       setIsMarking(true);
 
       try {
         const response = await fetch(`/api/lectures/${lectureId}/practice-test/check`, {
+          signal: controller.signal,
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1052,8 +1107,10 @@ export function LecturePalace({
 
         if (!response.ok) throw new Error("unmarked");
 
-        setMark((await response.json()) as PracticeMark);
+        const result = (await response.json()) as PracticeMark;
+        if (!controller.signal.aborted) setMark(result);
       } catch {
+        if (controller.signal.aborted) return;
         /*
          * Offline, rate-limited, or the grader would not answer: the learner
          * still gets the answer to mark themselves against, which is what the
@@ -1065,18 +1122,30 @@ export function LecturePalace({
           expectedAnswer: testById.get(questionId)?.answer_guide ?? "",
         });
       } finally {
-        setIsMarking(false);
+        if (!controller.signal.aborted) setIsMarking(false);
       }
     },
     [isTestUnknown, lectureId, testAnswer, testById],
   );
 
   const restart = useCallback(() => {
+    setSelectedMapId(null);
     setResults({});
     setCollected(new Set());
     writeCollected(lectureId, new Set());
+    try { window.localStorage.removeItem(`${RESULTS_STORAGE_PREFIX}${lectureId}`); } catch { /* Optional storage. */ }
     setIsOpen(false);
   }, [lectureId]);
+
+  const reviewMissed = () => {
+    const remaining = new Set([...collected].filter((id) => results[id] !== "again"));
+    const retained = Object.fromEntries(Object.entries(results).filter(([, grade]) => grade === "easy"));
+    setCollected(remaining);
+    setResults(retained);
+    writeCollected(lectureId, remaining);
+    try { window.localStorage.setItem(`${RESULTS_STORAGE_PREFIX}${lectureId}`, JSON.stringify(retained)); } catch { /* Optional storage. */ }
+    setIsOpen(false);
+  };
 
   const onStickPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (stickRef.current) return;
@@ -1169,7 +1238,12 @@ export function LecturePalace({
   const firstTimeKnown = layout.stations.filter(
     (entry) => collected.has(entry.id) && results[entry.id] !== "again",
   ).length;
-  const district = layout.districts[districtIndex] ?? layout.districts[0];
+  const placeName = (index: number) => {
+    const room = roomIdentity(index);
+    return `${String(room.number).padStart(2, "0")} · ${t(`palace.color.${room.color}`)} · ${t(layout.stations[index]?.placement === "outside" ? `palace.outdoor.${outdoorLandmark(index)}` : `palace.room.${room.theme}`)}`;
+  };
+  const selectedMapStation = layout.stations.find((entry) => entry.id === selectedMapId) ?? null;
+  const missedCount = layout.stations.filter((entry) => results[entry.id] === "again").length;
   /*
    * The chip on the panel is the note's own tab pill — same shape, same icon,
    * same tint — because it is answering the same question: which of the three
@@ -1192,12 +1266,7 @@ export function LecturePalace({
    * "Click to flip" on a mouse, "Tap to flip" on a phone — both rendered, the
    * stylesheet picks, exactly as the deck screen does it.
    */
-  const flipHint = (
-    <>
-      <span className="memo-only-desktop">{t("study.cards.flipDesktop")}</span>
-      <span className="memo-only-mobile">{t("study.cards.flipMobile")}</span>
-    </>
-  );
+  const flipHint = t(isTouch ? "study.cards.flipMobile" : "study.cards.flipDesktop");
 
   function renderStation() {
     if (!station) return null;
@@ -1246,39 +1315,8 @@ export function LecturePalace({
 
       return (
         <div className="lecture-quiz-card">
-          <span className="memo-quiz-eyebrow">{t("quiz.chooseOne")}</span>
-          <p className="lecture-quiz-prompt">{question.prompt}</p>
-
-          <div className="lecture-quiz-options">
-            {order.map((optionIndex, displayIndex) => {
-              const option = question.options[optionIndex] ?? "";
-              const isSelected = quizChoice === optionIndex;
-              const isCorrect = quizChoice !== null && optionIndex === question.correct_option_idx;
-              const isIncorrect = quizChoice !== null && isSelected && !isCorrect;
-
-              return (
-                <button
-                  key={`${question.id}-${optionIndex}`}
-                  type="button"
-                  disabled={quizChoice !== null}
-                  onClick={() => answerQuiz(question.id, optionIndex, question.correct_option_idx)}
-                  className={`lecture-quiz-option ${isSelected ? "selected" : ""} ${
-                    isCorrect ? "correct" : ""
-                  } ${isIncorrect ? "incorrect" : ""}`}
-                >
-                  <span className="lecture-quiz-option-label">
-                    {String.fromCharCode(65 + displayIndex)}
-                  </span>
-                  <span className="lecture-quiz-option-copy">{option}</span>
-                  {isCorrect || isIncorrect ? (
-                    <span className="lecture-quiz-option-mark">
-                      <Msym name={isCorrect ? "check" : "close"} size="1.2rem" />
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
+          <StudyQuizQuestion question={question} order={order} selection={quizChoice}
+            onSelect={(optionIndex) => answerQuiz(question.id, optionIndex, question.correct_option_idx)} />
 
           {quizChoice !== null ? (
             <div className={`memo-quiz-result ${wrong ? "" : "correct"}`}>
@@ -1322,29 +1360,9 @@ export function LecturePalace({
 
     return (
       <div className="lecture-practice-stage">
-        <p className="lecture-practice-prompt">{question.prompt}</p>
-
-        <textarea
-          value={testAnswer}
-          onChange={(event) => setTestAnswer(event.target.value)}
-          disabled={isTestUnknown || isMarking || mark !== null}
-          className="ios-textarea lecture-practice-textarea"
-          placeholder={t("test.answerPlaceholder")}
-        />
-
-        {mark ? null : (
-          <div className="lecture-practice-controls">
-            <label className="lecture-practice-unknown">
-              <input
-                type="checkbox"
-                checked={isTestUnknown}
-                disabled={isMarking}
-                onChange={(event) => setIsTestUnknown(event.target.checked)}
-              />
-              {t("test.dontKnow")}
-            </label>
-          </div>
-        )}
+        <StudyPracticeQuestion prompt={question.prompt} answer={testAnswer}
+          unknown={isTestUnknown} disabled={isMarking || mark !== null} showUnknown={mark === null}
+          onAnswer={setTestAnswer} onUnknown={setIsTestUnknown} />
 
         {mark ? (
           <div className={`memo-palace-mark ${passed ? "pass" : "fail"}`}>
@@ -1384,10 +1402,7 @@ export function LecturePalace({
               type="button"
               className="memo-test-next"
               onClick={() => {
-                setResults((current) => ({
-                  ...current,
-                  [question.id]: passed ? "easy" : "again",
-                }));
+                recordResult(question.id, passed ? "easy" : "again");
                 collect(question.id);
 
                 leaveStation();
@@ -1449,22 +1464,6 @@ export function LecturePalace({
           <p>{t("palace.intro")}</p>
         </div>
 
-        {/* The numbers a walk is scored on. */}
-        <div className="memo-palace-figures">
-          <span>
-            <b>{total}</b>
-            <small>{t("palace.stops")}</small>
-          </span>
-          <span>
-            <b>{layout.districts.length}</b>
-            <small>{t("palace.districts")}</small>
-          </span>
-          <span>
-            <b>{firstTimeKnown}</b>
-            <small>{t("palace.known")}</small>
-          </span>
-        </div>
-
         <div className="memo-palace-progress">
           <div className="memo-palace-bar">
             <span style={{ width: `${total === 0 ? 0 : (done / total) * 100}%` }} />
@@ -1473,6 +1472,7 @@ export function LecturePalace({
         </div>
 
         <div className="memo-palace-intro-actions">
+          {missedCount > 0 ? <button type="button" className="memo-button-outline" onClick={reviewMissed}>{t("palace.reviewMissed", { count: missedCount })}</button> : null}
           <button type="button" className="memo-palace-enter" onClick={enterGame}>
             {/* A play arrow rather than a compass: the compass described the
                 town, and what the button does is start a game. */}
@@ -1541,7 +1541,6 @@ export function LecturePalace({
                 <span className="memo-palace-score-token" aria-hidden="true" />
                 {done} <span className="memo-palace-score-slash">/</span> {total}
               </span>
-              <span className="memo-palace-district-pill">{district?.title}</span>
             </div>
 
             <button
@@ -1554,7 +1553,7 @@ export function LecturePalace({
               <span className="memo-palace-exit-label">{t("palace.exit")}</span>
             </button>
 
-            {isTouch ? null : <p className="memo-palace-hint">{t("palace.hintDesktop")}</p>}
+            {!hasMoved && !station && !isMapOpen ? <p className="memo-palace-hint">{t(isTouch ? "palace.hintTouch" : "palace.hintDesktop")}</p> : null}
 
             {!isBuilt && !loadError ? (
               /* The app's own wait, in the shape of the thing being built. */
@@ -1595,15 +1594,24 @@ export function LecturePalace({
                 role="dialog"
                 aria-modal="true"
                 aria-label={kindPill[station.kind].label}
+                data-presentation={isTouch ? "sheet" : "dialog"}
                 {...stationSheet.dragProps}
               >
                 <button
                   type="button"
-                  className="mobile-sheet-drag-handle"
+                  className="memo-grab-wide memo-palace-grab"
                   aria-label={t("folders.dragToClose")}
                   data-drag-handle
-                />
-                <div className="memo-palace-panel-head" data-drag-zone>
+                ><span /></button>
+                <button
+                    type="button"
+                    className="memo-sheet-close memo-palace-close"
+                    aria-label={t("common.close")}
+                    onClick={leaveStation}
+                  >
+                    <Msym name="close" size="1.1rem" />
+                  </button>
+                <div className="memo-palace-panel-head memo-sheet-title" data-drag-zone>
                   <span
                     className="memo-tab active memo-palace-panel-kind"
                     style={{ "--tab-tint": kindPill[station.kind].tint } as CSSProperties}
@@ -1611,16 +1619,9 @@ export function LecturePalace({
                     <Msym name={kindPill[station.kind].icon} size="1.2rem" fill={false} weight={500} />
                     <span>{kindPill[station.kind].label}</span>
                   </span>
-                  <span className="memo-palace-panel-where">{district?.title}</span>
-                  <button
-                    type="button"
-                    className="memo-close-button"
-                    aria-label={t("common.close")}
-                    onClick={leaveStation}
-                  >
-                    <Msym name="close" size="1.1rem" />
-                  </button>
+
                 </div>
+                <div className="memo-palace-panel-where" data-drag-zone>{placeName(station.index)}</div>
                 {renderStation()}
               </div>
               </div>
@@ -1640,32 +1641,58 @@ export function LecturePalace({
                   role="dialog"
                   aria-modal="true"
                   aria-label={t("palace.map")}
+                  data-presentation={isTouch ? "sheet" : "dialog"}
                   onClick={(event) => event.stopPropagation()}
                   {...mapSheet.dragProps}
                 >
                   <button
                     type="button"
-                    className="mobile-sheet-drag-handle"
+                    className="memo-grab-wide memo-palace-grab"
                     aria-label={t("folders.dragToClose")}
                     data-drag-handle
-                  />
-                  <div className="memo-palace-sheet-head" data-drag-zone>
-                    <h3>{t("palace.map")}</h3>
-                    <button
+                  ><span /></button>
+                  <button
                       type="button"
-                      className="memo-close-button"
+                      className="memo-sheet-close memo-palace-close"
                       aria-label={t("common.close")}
                       onClick={() => mapSheet.dismiss()}
                     >
                       <Msym name="close" size="1.1rem" />
                     </button>
+                  <div className="memo-palace-sheet-head memo-sheet-title" data-drag-zone>
+                    <h3>{t("palace.map")}</h3>
+
                   </div>
                   {/* Everything under the head scrolls, so the title and its
                       close stay where the thumb left them. */}
                   <div className="memo-palace-sheet-body">
                     {/* The whole town, so the corner map's two blocks are a view
                         of something rather than all there is. */}
-                    <canvas ref={townMapRef} className="memo-palace-townmap" />
+                    <div className="memo-palace-map-frame">
+                      <canvas ref={townMapRef} className="memo-palace-townmap" aria-hidden="true" />
+                      <span className="memo-palace-map-north" aria-hidden="true">N</span>
+                      {layout.stations.map((entry) => {
+                        const point = townMapPoint(entry, mapExtent(layout), 100, 100);
+                        const done = collected.has(entry.id);
+                        return <button key={entry.id} type="button"
+                          className={`memo-palace-map-marker ${done ? "collected" : ""}`}
+                          style={{ left: `${point.x}%`, top: `${point.y}%`, "--marker-color": `hsl(${STATION_HUE[entry.kind]} 75% 60%)` } as CSSProperties}
+                          aria-label={`${placeName(entry.index)} · ${kindPill[entry.kind].label} · ${t(entry.placement === "inside" ? "palace.inside" : "palace.outside")}${done ? ` · ${t("palace.collected")}` : ""}`}
+                          aria-pressed={selectedMapId === entry.id}
+                          onClick={() => setSelectedMapId(entry.id)}>
+                          {done ? "✓" : entry.index + 1}
+                        </button>;
+                      })}
+                    </div>
+                    {selectedMapStation ? <div className="memo-palace-map-selection" aria-live="polite">
+                      <div><strong>{placeName(selectedMapStation.index)}</strong>
+                        <span>{kindPill[selectedMapStation.kind].label} · {t(selectedMapStation.placement === "inside" ? "palace.inside" : "palace.outside")}</span>
+                      </div>
+                      <button type="button" className="memo-button-outline small"
+                        onClick={() => mapSheet.dismiss(() => gameRef.current?.travelToStation(selectedMapStation.id))}>
+                        {t("palace.travel")}
+                      </button>
+                    </div> : null}
                     <h3>{t("palace.districts")}</h3>
                     <ul>
                     {layout.districts.map((entry) => {
@@ -1701,7 +1728,7 @@ export function LecturePalace({
               </div>
             ) : null}
 
-            {done === total ? (
+            {isComplete ? (
               /*
                * The same results screen a finished deck, quiz or test gets —
                * the walk is one of them, so it ends the way they do rather than
@@ -1730,6 +1757,7 @@ export function LecturePalace({
                         <Msym name="replay" size="1.2rem" fill={false} weight={500} />
                         {t("palace.restart")}
                       </button>
+                      {missedCount > 0 ? <button type="button" className="memo-button-outline" onClick={reviewMissed}>{t("palace.reviewMissed", { count: missedCount })}</button> : null}
                       {/* The design gives a results screen's second action its
                           own surface-and-border treatment; this only has to
                           bring the text colour and the pill shape. */}

@@ -373,6 +373,33 @@ const NOTE_TABS = [
 
 type NoteTabId = (typeof NOTE_TABS)[number]["id"];
 
+/**
+ * Tabs that take the chat's column while they are on screen.
+ *
+ * Chat beside the note is the point of the note tab: you read a paragraph and
+ * ask about it. These five are not reading — they are a thing you watch, listen
+ * to, walk through or play, and each of them was worse for having a conversation
+ * bolted to its side:
+ *
+ * - the map and the palace are drawn, and a drawing squeezed into the ~300px the
+ *   chat leaves is the unreadable single column they exist to be better than;
+ * - the tutor is already a conversation, so a second one beside it asks the
+ *   reader which of the two to talk to;
+ * - the speed reader wants one word held still in the middle of an empty screen,
+ *   which is the one thing a panel of text beside it undoes;
+ * - the podcast is audio, and there is nothing on screen to ask about.
+ *
+ * The list decides both surfaces: the desktop column and the phone's bar at the
+ * foot. Chat is one pill away on any of them.
+ */
+const TABS_WITHOUT_CHAT = new Set<NoteTabId>([
+  "mindmap",
+  "palace",
+  "tutor",
+  "speed",
+  "podcast",
+]);
+
 /** How close to the foot of the chat log still counts as "reading the tail". */
 const STICK_TO_BOTTOM_PX = 120;
 
@@ -5560,31 +5587,32 @@ export function LectureWorkspace({
    * portalled into the slot the shell renders (see AppLayoutProvider). The
    * phone shows the same body as a full-height sheet.
    *
-   * The quiz owns the bottom of the screen with its own result sheet, so chat
-   * steps aside there — matching the redesign, where "Preglej zakaj" is the way
-   * into chat from a quiz.
+   * It is open beside the reading tabs and gone on the ones in
+   * TABS_WITHOUT_CHAT. The quiz keeps it but withholds the button that brings
+   * it back: it owns the bottom of the screen with its own result sheet, and
+   * "Preglej zakaj" is the way into chat from there.
+   *
+   * It also closes the moment a navigation away starts. The panel is portalled
+   * into the shell's third grid column, outside the content area the loading
+   * overlay covers, so leaving the note with it open left the note's chat
+   * standing beside the library's skeleton until the route committed.
    */
-  // The design keeps the chat panel open on every tab; only the button that
-  // brings it back is withheld on the quiz, which wants the full width while a
-  // question is on screen.
-  //
-  // It also closes the moment a navigation away starts. The panel is portalled
-  // into the shell's third grid column, outside the content area the loading
-  // overlay covers, so leaving the note with it open left the note's chat
-  // standing beside the library's skeleton until the route committed.
   const isLeavingNote = navigatingTo != null && navigatingTo !== notePathname;
+  const showChatPanel =
+    !isChatDismissed && !isLeavingNote && !TABS_WITHOUT_CHAT.has(activeTabId);
   /*
-   * The map takes the chat's column while it is on screen, and this is the one screen worth
-   * doing that for. A mind map is the only thing here whose usefulness is a function of how wide
-   * it is drawn: with the conversation beside it the canvas is barely three hundred pixels, and
-   * a map framed into three hundred pixels is the unreadable single column this feature exists
-   * to be better than. Chat is a tab away, and on the phone the bar at the foot is untouched.
+   * The phone's bar at the foot follows the same list. It is not the same
+   * control as the desktop column — it is a bar that opens a sheet, and
+   * dismissing the column has never hidden it — so it only asks whether this
+   * tab has a chat at all.
    */
-  const showChatPanel = !isChatDismissed && !isLeavingNote && activeTabId !== "mindmap";
+  const showsChatBar = !TABS_WITHOUT_CHAT.has(activeTabId);
 
   useEffect(() => {
     setChatOpen(showChatPanel);
-    return () => setChatOpen(false);
+    // Back to "undecided" rather than to closed: this screen is gone, and what
+    // the shell should do about the column is now whatever the next one says.
+    return () => setChatOpen(null);
   }, [setChatOpen, showChatPanel]);
 
   const desktopChatPanel =
@@ -6046,10 +6074,9 @@ export function LectureWorkspace({
           <div className="memo-dock">
             <div className="memo-dock-slot" ref={setDockSlot} />
 
-            {isChatDismissed &&
-            activeTabId !== "quiz" &&
-            activeTabId !== "tutor" &&
-            activeTabId !== "mindmap" ? (
+            {/* Nothing to bring back on a tab that has no chat column, and the
+                quiz has its own way in ("Preglej zakaj"). */}
+            {isChatDismissed && activeTabId !== "quiz" && !TABS_WITHOUT_CHAT.has(activeTabId) ? (
               <button
                 type="button"
                 aria-label={t("chat.open")}
@@ -6061,18 +6088,23 @@ export function LectureWorkspace({
               </button>
             ) : null}
 
-            <button
-              type="button"
-              className="memo-m-chatbar memo-only-mobile"
-              onClick={() => setIsMobileChatOpen(true)}
-              aria-label={t("chat.mobileBar")}
-            >
-              <span className="memo-m-chatbar-label">{t("chat.mobileBar")}</span>
-              <span className="memo-m-chatbar-icon">
-                <Msym name="mic" size="1.35rem" className="mic" />
-                <Msym name="chat_bubble" size="1.35rem" className="bubble" />
-              </span>
+            {/* The phone's way into chat, on the same tabs the desktop column
+                appears on: a screen that is watched, listened to or played is
+                not one you ask questions about, at either width. */}
+            {showsChatBar ? (
+              <button
+                type="button"
+                className="memo-m-chatbar memo-only-mobile"
+                onClick={() => setIsMobileChatOpen(true)}
+                aria-label={t("chat.mobileBar")}
+              >
+                <span className="memo-m-chatbar-label">{t("chat.mobileBar")}</span>
+                <span className="memo-m-chatbar-icon">
+                  <Msym name="mic" size="1.35rem" className="mic" />
+                  <Msym name="chat_bubble" size="1.35rem" className="bubble" />
+                </span>
               </button>
+            ) : null}
 
             {/*
               * The circle at the end of the bar is a microphone, so it dictates
@@ -6082,7 +6114,7 @@ export function LectureWorkspace({
               * contain another button — the stylesheet lays it over the icon
               * slot the bar already draws.
               */}
-            {dictation.supported ? (
+            {showsChatBar && dictation.supported ? (
               <button
                 type="button"
                 className={`memo-m-chatbar-mic ${dictation.listening ? "listening" : ""} ${

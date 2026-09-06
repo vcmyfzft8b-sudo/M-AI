@@ -44,12 +44,12 @@ export default async function AuthErrorPage({
             <h1 className="auth-title">{t("auth.error.title")}</h1>
             <p className="auth-copy">{message ?? t("auth.error.copy")}</p>
 
+            {/* One door: `/auth/continue` offers signing in and signing up
+                together, so a second button here would only be the same page
+                under a different name. */}
             <div className="auth-check-actions">
-              <Link href="/auth/login?next=/app/start" className="ios-primary-button auth-submit-button">
+              <Link href="/auth/continue" className="ios-primary-button auth-submit-button">
                 {t("auth.error.backToLogin")}
-              </Link>
-              <Link href="/auth/signup?next=/app/start" className="auth-secondary-link">
-                {t("auth.createAccount")}
               </Link>
             </div>
           </div>

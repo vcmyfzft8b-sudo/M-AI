@@ -624,6 +624,28 @@
   overflow-y: hidden;
 }
 
+/*
+ * Set for as long as a pull lasts (useChipRowWheelScroll).
+ *
+ * No `cursor: grab` on the row at rest: whether it can be pulled depends on
+ * whether it overflows, which CSS cannot see, and a grab hand over a row that
+ * does not move is worse than no hint at all. `grabbing` covers the pills too,
+ * or the button under the pointer keeps its own `pointer` for the whole drag.
+ *
+ * `scroll-behavior` is the important half. The pill row scrolls itself smoothly
+ * when the tab changes, and a smooth scroller told to follow a hand lags a frame
+ * or two behind it, which reads as the row being heavy rather than held. Snapping
+ * fights the same way, so it steps aside for the length of the gesture.
+ */
+.memo-chiprow.is-dragging,
+.memo-chiprow.is-dragging * {
+  cursor: grabbing;
+}
+
+.memo-chiprow.is-dragging {
+  scroll-behavior: auto;
+  scroll-snap-type: none;
+}
 
 /* --- breakpoint utilities ------------------------------------------------- */
 
@@ -1409,6 +1431,19 @@
   margin: 0 auto;
   pointer-events: none;
   grid-template-columns: 240px minmax(0, 1fr);
+}
+
+/*
+ * While a note's skeleton stands in the grid, the home screen it is replacing is
+ * still mounted underneath. Its ask-bar is `position: fixed`, so it escapes the
+ * overlay that covers the content column and is painted across the note and the
+ * chat column the skeleton has just opened — a control from the page you have
+ * left, sitting on the page you are waiting for. The phone bar is the same
+ * escape at the other width.
+ */
+.memo-grid[data-note-skeleton] .memo-homebar-wrap,
+.memo-grid[data-note-skeleton] .memo-m-homebar {
+  display: none;
 }
 
 .memo-homebar {
@@ -12770,20 +12805,16 @@
  * a participant.
  */
 /*
- * The walkthrough keeps the dock but empties it of the chat.
+ * The walkthrough and the episode keep the dock but empty it of the chat —
+ * offering a second place to ask a question, with a second microphone button,
+ * beside a tutor that is already listening is two answers to one question. That
+ * emptying is TABS_WITHOUT_CHAT's doing, not this file's.
  *
- * Offering a second place to ask a question — with a second microphone button — beside a
- * tutor that is already listening is two answers to one question. But the dock itself is
- * where this app puts the controls that belong to the screen you are on, so the usage pill
- * goes in it rather than floating somewhere new.
+ * The dock itself stays, because it is where this app puts the controls that
+ * belong to the screen you are on, so the usage pill goes in it rather than
+ * floating somewhere new — and on its own in there it sits where the listen pill
+ * does on the note.
  */
-.memo-note-screen[data-note-tab="tutor"] .memo-m-chatbar,
-.memo-note-screen[data-note-tab="tutor"] .memo-m-chatbar-mic,
-.memo-note-screen[data-note-tab="tutor"] .memo-chat-fab {
-  display: none;
-}
-
-/* On its own in the dock, the pill sits where the listen pill does on the note. */
 .memo-note-screen[data-note-tab="tutor"] .memo-dock,
 .memo-note-screen[data-note-tab="podcast"] .memo-dock {
   justify-content: center;
@@ -13511,14 +13542,6 @@
  * controls sit above it rather than under it, where a phone's thumb would cover the line being
  * spoken.
  */
-
-/* Same reasoning as the walkthrough: the dock's chat bar competes with a screen that is talking. */
-.memo-note-screen[data-note-tab="podcast"] .memo-m-chatbar,
-.memo-note-screen[data-note-tab="podcast"] .memo-m-chatbar-mic,
-.memo-note-screen[data-note-tab="podcast"] .memo-chat-fab {
-  display: none;
-}
-
 .memo-podcast {
   display: flex;
   flex-direction: column;
@@ -16384,26 +16407,21 @@
 }
 
 /*
- * The reader owns the screen: there is nothing to ask a question with while a
- * word is being held still under the eye.
+ * The reader owns the screen. There is nothing to ask a question with while a
+ * word is being held still under the eye — that is TABS_WITHOUT_CHAT's doing —
+ * and the note's own heading goes the same way.
  *
- * The scroller is left alone, though — unlike the walkthrough, this screen has
+ * The scroller is left alone, though: unlike the walkthrough, this screen has
  * controls under its stage, and a short phone in landscape would put the speed
  * slider below a fold that could not be reached. The stage gives way instead,
  * being capped in viewport units, so on any ordinary screen there is nothing
  * to scroll anyway.
  */
-.memo-note-screen[data-note-tab="speed"] .memo-m-chatbar,
-.memo-note-screen[data-note-tab="speed"] .memo-m-chatbar-mic,
-.memo-note-screen[data-note-tab="speed"] .memo-chat-fab {
-  display: none;
-}
 
 /*
- * The note's own heading goes too. A title, a date and a breadcrumb above a
- * word being held still are three more things to look at, and they push the
- * fixation point down the screen — on a phone far enough that the controls
- * under it need scrolling to reach.
+ * A title, a date and a breadcrumb above a word being held still are three more
+ * things to look at, and they push the fixation point down the screen — on a
+ * phone far enough that the controls under it need scrolling to reach.
  */
 .memo-note-screen[data-note-tab="speed"] .memo-breadcrumb,
 .memo-note-screen[data-note-tab="speed"] .memo-note-head,

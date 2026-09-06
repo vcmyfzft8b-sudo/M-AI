@@ -15446,6 +15446,12 @@
   height: 6.7rem;
   left: 0.55rem;
   top: 0.3rem;
+  /*
+   * The tutor's `phase-preparing` sets this and this copy of it did not, so the bright leading
+   * arc — the half of the signal you actually see — spun at `opacity: 0`, inherited from the
+   * ring's listening rest state. Only the fainter second arc was ever on screen.
+   */
+  opacity: 1;
   border: 2px solid transparent;
   border-top-color: oklch(0.78 0.16 var(--orb-hue));
   border-right-color: oklch(0.78 0.16 var(--orb-hue) / 0.35);

@@ -22,8 +22,13 @@ import {
 } from "@/lib/mindmap-doc";
 import { buildNoteSkeleton, mergeWindowedBranches } from "@/lib/mindmap-merge";
 import { describeMindmapFailure } from "@/lib/mindmap-failure";
+import {
+  LectureNoLongerExistsError,
+  isLectureNoLongerExistsError,
+} from "@/lib/lecture-processing-errors";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import { planSourceWriteWindows } from "@/lib/notes/note-prompts";
+import { isMissingLectureReferenceError } from "@/lib/postgres-errors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { hashNotesContent } from "@/lib/tutor/plan-cache";
 
@@ -306,6 +311,16 @@ async function setMindmapStatus(params: {
     .upsert(payload as never, { onConflict: "lecture_id" });
 
   if (error) {
+    /*
+     * The note was deleted while the map was being drawn. Every row keyed by `lecture_id` cascades
+     * from `public.lectures`, so this row is already gone and no retry can put it back — a race the
+     * learner won, not a database that is broken. Named here so the callers above can tell it apart
+     * from a write that genuinely failed.
+     */
+    if (isMissingLectureReferenceError(error)) {
+      throw new LectureNoLongerExistsError(params.lectureId);
+    }
+
     throw error;
   }
 }
@@ -458,6 +473,15 @@ export async function generateLectureMindmap(params: {
       },
     });
   } catch (error) {
+    if (isLectureNoLongerExistsError(error)) {
+      /*
+       * There is nothing left to write the failure onto: the asset row went with the note. Trying
+       * anyway is the same foreign key violation a second time, which is how this surfaced as a
+       * defect rather than as the deletion it is.
+       */
+      return;
+    }
+
     if (isWorkAbortedError(error)) {
       /*
        * The invocation ran out of time rather than the work failing. Left as `generating` the

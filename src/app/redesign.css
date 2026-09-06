@@ -13260,6 +13260,13 @@
 .memo-orb-body {
   width: 65.2%;
   height: 65.2%;
+  /*
+   * How wide this ball actually is, so the light on it can be stated as a fraction of it.
+   *
+   * The percentage above is what the tutor's sphere is; a host that sizes the body itself — the
+   * podcast's cover draws two of them at once — overrides this to match. See the shadows below.
+   */
+  --body-size: calc(var(--orb-size, 11.5rem) * 0.652);
   background:
     radial-gradient(circle at 36% 30%, oklch(0.95 0.06 calc(var(--orb-hue) + 25) / 0.95), transparent 42%),
     radial-gradient(circle at 62% 74%, oklch(0.66 0.19 calc(var(--orb-hue) - 15) / 0.9), transparent 60%),
@@ -13268,10 +13275,22 @@
       oklch(0.78 0.17 calc(var(--orb-hue) + 10)),
       oklch(0.58 0.19 calc(var(--orb-hue) - 23))
     );
+  /*
+   * The bloom, the terminator and the top light, as fractions of the ball rather than in rem.
+   *
+   * The fractions are the design's own numbers over the tutor's 7.5rem sphere — 2.5rem of bloom,
+   * a 0.75rem/1.5rem shadow at the bottom, a 0.5rem/1rem light at the top — so at that size this
+   * computes to exactly what it always did. Stated in rem they did not survive a second size: the
+   * podcast's 5.1rem host wore the same absolute shadow on a smaller ball, which is half again as
+   * much shading and bloom per inch of sphere, and read as a different material rather than as the
+   * same one further away.
+   */
   box-shadow:
-    0 0 2.5rem oklch(0.7 0.18 calc(var(--orb-hue) - 5) / 0.5),
-    inset 0 -0.75rem 1.5rem oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45),
-    inset 0 0.5rem 1rem oklch(0.98 0.05 calc(var(--orb-hue) + 35) / 0.35);
+    0 0 calc(var(--body-size) * 0.3334) oklch(0.7 0.18 calc(var(--orb-hue) - 5) / 0.5),
+    inset 0 calc(var(--body-size) * -0.1) calc(var(--body-size) * 0.2001)
+      oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45),
+    inset 0 calc(var(--body-size) * 0.0667) calc(var(--body-size) * 0.1334)
+      oklch(0.98 0.05 calc(var(--orb-hue) + 35) / 0.35);
   /* A voice change should feel like the same object changing colour, not a swap. */
   transition:
     transform 80ms ease-out,
@@ -13297,6 +13316,8 @@
 .memo-orb-body.compact {
   width: var(--orb-size);
   height: var(--orb-size);
+  /* Nothing here rides audio, so it sits at its own size rather than at the sphere's rest scale. */
+  transform: none;
   box-shadow:
     inset 0 calc(var(--orb-size) * -0.143) calc(var(--orb-size) * 0.286)
       oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45),
@@ -13313,6 +13334,7 @@
 .memo-orb-body.mini {
   width: var(--orb-size);
   height: var(--orb-size);
+  transform: none;
   background:
     radial-gradient(circle at 36% 30%, oklch(0.95 0.06 calc(var(--orb-hue) + 25) / 0.95), transparent 42%),
     linear-gradient(
@@ -15223,6 +15245,21 @@
   flex: none;
   width: var(--cover-w);
   height: var(--cover-h);
+  /*
+   * The second host of the shared sphere, so it declares the same knob the first one does.
+   *
+   * `.memo-orb-body` and `.memo-orb-glow` sit at rest on `scale(0.94 + swell * 0.16)` and
+   * `scale(0.86 + swell * 0.34)` / `opacity(0.55 + swell * 0.45)`. Without `--orb-swell` in
+   * scope every one of those declarations is invalid at computed-value time, and an invalid
+   * transform is `none` and an invalid opacity is 1 — which is why this artwork's spheres came
+   * out a size larger than the tutor's under a bloom at nearly twice the strength. Declared
+   * here, the pair sits exactly where the tutor's sphere sits between sentences.
+   *
+   * Over `--orb-level` rather than a flat 0, because the contract is the same one: whoever is
+   * speaking sets the level and the sphere answers. Nothing sets it on this screen yet — the
+   * podcast plays a rendered file rather than a live stream — and 0 is the rest state.
+   */
+  --orb-swell: clamp(0, calc(var(--orb-level, 0) * 4.2), 1);
 }
 
 .memo-podcast-cover > * {
@@ -15273,6 +15310,23 @@
   min-height: 0;
 }
 
+/*
+ * The library centres in the card the same way the other two screens do.
+ *
+ * The hero and the player both fill the card and sit in the middle of it; the shelf was the one
+ * state still pinned to the top-left corner of a card that is a whole window tall. On a phone the
+ * column is the width of the screen and the miss only showed as room underneath, but above 1100px
+ * the 34rem cap left the rows hugging the left edge of an 800-point panel with nothing beside them.
+ *
+ * `margin: auto` rather than `justify-content`/`align-content`, because a flex item's auto margins
+ * are dropped when the free space runs out: a library long enough to overflow scrolls from its own
+ * first row instead of hiding it above the top edge.
+ */
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast-shelf {
+  width: 100%;
+  margin: auto;
+}
+
 .memo-note-screen[data-note-tab="podcast"] .memo-podcast-cover {
   flex: 0 1 auto;
   /* Under about this the two spheres stop reading as a pair and start reading as two dots. */
@@ -15284,6 +15338,8 @@
 .memo-podcast-cover .memo-orb-body.a {
   width: var(--body-a);
   height: var(--body-a);
+  /* The light is a fraction of the ball — tell it which ball. */
+  --body-size: var(--body-a);
   left: var(--a-left);
   top: var(--a-top);
   z-index: 2;
@@ -15292,6 +15348,7 @@
 .memo-podcast-cover .memo-orb-body.b {
   width: var(--body-b);
   height: var(--body-b);
+  --body-size: var(--body-b);
   right: var(--b-right);
   top: var(--b-top);
   z-index: 1;
@@ -15367,8 +15424,10 @@
   animation: memo-tutor-preparing 2s ease-in-out infinite;
   /* The outer bloom shadow belongs to a lit sphere; this one is not lit yet. */
   box-shadow:
-    inset 0 -0.75rem 1.5rem oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45),
-    inset 0 0.5rem 1rem oklch(0.98 0.05 calc(var(--orb-hue) + 35) / 0.35);
+    inset 0 calc(var(--body-size) * -0.1) calc(var(--body-size) * 0.2001)
+      oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45),
+    inset 0 calc(var(--body-size) * 0.0667) calc(var(--body-size) * 0.1334)
+      oklch(0.98 0.05 calc(var(--orb-hue) + 35) / 0.35);
 }
 
 .memo-podcast-cover.writing .memo-orb-glow.a {
@@ -15387,6 +15446,12 @@
   height: 6.7rem;
   left: 0.55rem;
   top: 0.3rem;
+  /*
+   * The tutor's `phase-preparing` sets this and this copy of it did not, so the bright leading
+   * arc — the half of the signal you actually see — spun at `opacity: 0`, inherited from the
+   * ring's listening rest state. Only the fainter second arc was ever on screen.
+   */
+  opacity: 1;
   border: 2px solid transparent;
   border-top-color: oklch(0.78 0.16 var(--orb-hue));
   border-right-color: oklch(0.78 0.16 var(--orb-hue) / 0.35);
@@ -16285,10 +16350,16 @@
     top: 0.6rem;
   }
 
-  /* The extra width is spent on information rather than on stretch — see the meta line. */
+  /*
+   * It shares the rows' width, the way it does on a phone.
+   *
+   * It used to be a start-aligned pill, from when the shelf itself ran the full width of the panel
+   * and a stretched button would have been a metre of empty capsule. The shelf is a centred column
+   * now, so the pill reads as the last row of the list rather than as a stray control beside it.
+   */
   .memo-podcast-new {
-    justify-self: start;
-    width: auto;
+    justify-self: stretch;
+    width: 100%;
     padding: 0 1.3rem;
   }
 

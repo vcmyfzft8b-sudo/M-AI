@@ -3502,6 +3502,26 @@
   margin: 0.85rem 0 1.4rem;
 }
 
+/*
+ * Text for a screen reader and nobody else.
+ *
+ * The clip-rect form rather than `display: none` or `visibility: hidden`, both of which take
+ * the text out of the accessibility tree along with the pixels — which is the opposite of
+ * what this is for. Used where an icon and a number carry a meaning between them that the
+ * number alone does not: "0" beside a tick is a score, but read aloud it is just a nought.
+ */
+.memo-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* --- flashcards ----------------------------------------------------------- */
 
 .memo-card-stage {
@@ -4477,6 +4497,46 @@
   font-family: inherit;
   font-size: 1.05rem;
   font-weight: 750;
+}
+
+/*
+ * The two counts on a phone, where grading is a throw rather than a press.
+ *
+ * The same shape and colour as the buttons they replace — the score has not changed, only
+ * the fact that it is now something you read rather than something you do — but without the
+ * pointer, the pressed state, or the minimum width a thumb needed.
+ */
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 3.3rem;
+  flex: 0 0 auto;
+  padding: 0 0.95rem;
+  border-radius: 999px;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-score svg {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-score.again {
+  background: rgba(244, 95, 90, 0.14);
+  color: #f45f5a;
+}
+
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-score.easy {
+  background: rgba(22, 163, 74, 0.12);
+  color: #16a34a;
+}
+
+/* Nothing here is pressed any more, so the row sits where a row of type sits. */
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review.swipe-only {
+  gap: 0.75rem;
 }
 
 :is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-button svg {
@@ -5483,13 +5543,132 @@
 }
 
 .memo-gen-cardhead > span:first-child {
-  height: 1.5rem;
-  width: 8rem;
+  height: 1.15rem;
+  width: 7rem;
 }
 
 .memo-gen-cardhead > span:last-child {
-  height: 1.35rem;
-  width: 5rem;
+  height: 1.05rem;
+  width: 4.5rem;
+}
+
+/*
+ * --- the ghost fits the same box the screen does --------------------------
+ *
+ * A skeleton's whole job is to be the shape of what is coming, and these were drawn against
+ * the screens as they used to be: a full-width 22rem slab where the card is now a 5:3 card,
+ * a surface around the quiz where the quiz no longer has one. Worse, they sat outside the
+ * flex chain everything else joined, so on a phone they ran on past the bottom of the card
+ * and under the chat bar — the one part of these screens that still did.
+ *
+ * So they join it, and they take the shapes their screens take. What loads then does not
+ * jump: the card fades in where the ghost of it was.
+ */
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="test"], [data-note-tab="palace"]) .memo-gen {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  gap: 1.1rem;
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="test"], [data-note-tab="palace"]) .memo-gen-preview {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0.9rem;
+}
+
+/* The deck: its head holds its size, and the card takes what is left, at the card's ratio. */
+.memo-note-screen[data-note-tab="flashcards"] .memo-gen-deckhead {
+  flex: 0 0 auto;
+}
+
+/*
+ * The ghost is the shape of the card at THIS width, which is not one shape.
+ *
+ * On a phone the real card fills the column and takes the height it is given; only beside a
+ * rail does it become a 5:3 card with air either side. A ghost drawn in the desktop shape on
+ * a phone is as wrong as one drawn in no shape at all — it just fails in the other
+ * direction.
+ */
+.memo-note-screen[data-note-tab="flashcards"] .memo-gen-face {
+  flex: 1 1 auto;
+  min-height: 8rem;
+  /*
+   * `60cqw` is the 5:3 ratio written as a ceiling — three fifths of the column's width. The
+   * card takes its height from the flexbox and its width from the ratio, and when the column
+   * caps that width first the ratio would otherwise break and the ghost square up. This is
+   * the same drift the real card had until its stage was given a ceiling; here the ceiling
+   * can be exact, because the container is the thing to measure against.
+   */
+  padding: 1.4rem 1.5rem;
+}
+
+@media (min-width: 1100px) {
+  .memo-note-screen[data-note-tab="flashcards"] .memo-gen-preview {
+    /* So the card below can be measured against its own column — see `cqw`. */
+    container-type: inline-size;
+  }
+
+  .memo-note-screen[data-note-tab="flashcards"] .memo-gen-face {
+    width: auto;
+    max-width: 100%;
+    margin-inline: auto;
+    aspect-ratio: 5 / 3;
+    /*
+     * `60cqw` is the 5:3 ratio written as a ceiling — three fifths of the column's width.
+     * The card takes its height from the flexbox and its width from the ratio, and when the
+     * column caps that width first the ratio would otherwise break and the ghost square up.
+     */
+    max-height: min(22rem, 60cqw);
+  }
+}
+
+/*
+ * The quiz: no card, because the quiz has no card. Production paints this one with a
+ * gradient under a `:root[data-theme]` selector, which outweighs a plain two-class rule —
+ * hence the extra ancestor rather than an `!important`, the same way the real one does it.
+ */
+.memo-note-screen[data-note-tab="quiz"] .memo-panel .memo-gen-quizcard {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  gap: clamp(0.35rem, 0.9vh, 0.7rem);
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.memo-note-screen[data-note-tab="quiz"] .memo-gen-prompt {
+  flex: 0 0 auto;
+  margin-bottom: 0.3rem;
+}
+
+/* The four answers divide what is left, exactly as the real four do. */
+.memo-note-screen[data-note-tab="quiz"] .memo-gen-option {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 2.4rem;
+  max-height: 4.4rem;
+}
+
+/* The test: the box the answer gets typed into is the part that gives. */
+.memo-note-screen[data-note-tab="test"] .memo-gen-testblock {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.memo-note-screen[data-note-tab="test"] .memo-gen-testinput {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 5.5rem;
 }
 
 .memo-gen-bar {
@@ -5497,16 +5676,15 @@
   border-radius: 999px;
 }
 
-.memo-gen-bar.cards {
-  height: 1.05rem;
-}
-
-.memo-gen-bar.quiz {
-  height: 0.6rem;
-}
-
+/*
+ * One height, because there is one bar. These were the three the real screens used to draw
+ * — 1.05, 0.6 and 0.75 — and a ghost that is a different weight from the thing it stands in
+ * for is worse than no ghost: the screen visibly changes shape as it finishes loading.
+ */
+.memo-gen-bar.cards,
+.memo-gen-bar.quiz,
 .memo-gen-bar.test {
-  height: 0.75rem;
+  height: 0.4rem;
 }
 
 .memo-gen-face {
@@ -14033,12 +14211,73 @@
 }
 
 /*
- * Answered, the options go lower still. They were four things to aim a cursor at and are
- * now four lines to read with one of them marked, and a line needs less room than a
- * target — which is exactly the room the verdict underneath them needs.
+ * Once answered there are one or two rows rather than four, so they stop dividing the space
+ * and simply take what they need — a single surviving answer stretched to the height of four
+ * is a stranger thing to look at than the empty room below it. This is also what lets the
+ * shrinking go: the floors that used to be tuned per screen height existed only because four
+ * boxes of text and a verdict were competing for one column.
  */
-.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
-  min-height: 1.85rem;
+/*
+ * The answered layout, which belongs to the collapse and so to the phone.
+ *
+ * With one or two rows left they stop dividing the space and take what they need — a single
+ * surviving answer stretched to the height of four is a stranger thing to look at than the
+ * empty room below it — and they take it at the size they were asked at, because an answer
+ * worth reading afterwards is worth as much room as it had when it was worth choosing.
+ *
+ * The verdict then goes back to the foot of the card. It followed the options directly,
+ * which was right while they filled the column and wrong the moment they stopped: collapsed
+ * to two, the row rode up the middle with the space beneath it. `auto` puts it back on the
+ * floor it has always sat on, so "Razumem" is where the thumb already is.
+ */
+@media (max-width: 1099px) {
+  /*
+   * The two that are left take the room the other two vacated, and go on taking whatever the
+   * screen gives — the same arrangement the four had, dividing what is spare between them
+   * rather than being told a height that is right on one phone and wrong on the next.
+   *
+   * The verdict does not need its `auto` margin to stay at the foot once they fill: there is
+   * no free space left for it to be pushed by, and it is at the bottom because they end
+   * there. The margin is kept for the case where their ceiling bites first.
+   */
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-options {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
+    flex: 1 1 0;
+    /* Two answers taller than this stop reading as answers and start reading as panels. */
+    max-height: 9rem;
+    min-height: 3.4rem;
+  }
+
+  /*
+   * And the letter comes back with them.
+   *
+   * The phone hides the badges, which is right while the question is being answered — four
+   * lettered discs beside four answers you are picking between by touching them is a label
+   * for nothing. It stops being right the moment the verdict underneath says "the correct
+   * answer is C", because C is then the name of something no longer on the screen.
+   */
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option-label {
+    display: inline-flex;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
+    margin-top: auto;
+  }
+}
+
+/*
+ * Beside a rail all four answers stay, so they go on sharing the column with the verdict the
+ * way they did before the collapse — and go on giving it a little height to do it, which on
+ * a desktop costs an answer nothing it needs.
+ */
+@media (min-width: 1100px) {
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
+    min-height: 1.85rem;
+  }
 }
 
 /* The verdict itself, at the size of the row it is rather than of the card it replaced. */
@@ -14075,7 +14314,6 @@
 /* It carries 1.4rem of margin and 1.4rem of padding above it, which is two gaps for one. */
 .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
   padding-top: clamp(0.55rem, 1.8vh, 0.9rem);
-  margin-top: clamp(0.55rem, 1.8vh, 0.9rem);
   gap: clamp(0.6rem, 1.8vh, 1rem);
 }
 
@@ -14285,7 +14523,6 @@
   .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
     gap: 0.6rem 0.75rem;
     padding-top: 0.7rem;
-    margin-top: 0.7rem;
   }
 
   .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-title {
@@ -14390,6 +14627,14 @@
     min-height: 2.1rem;
   }
 
+  /*
+   * Except once answered, where there are two of them rather than four and the floor above
+   * — written for four sharing a short column — would squeeze an answer that now has room.
+   */
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
+    min-height: 3rem;
+  }
+
   .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
     min-height: 1.55rem;
   }
@@ -14397,7 +14642,6 @@
   .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
     gap: 0.4rem 0.6rem;
     padding-top: 0.5rem;
-    margin-top: 0.5rem;
   }
 
   .memo-note-screen[data-note-tab="quiz"] :is(.memo-quiz-result-ghost, .memo-quiz-result-primary) {
@@ -14491,7 +14735,6 @@
   /* The rule above the verdict, at the tightest the divider still reads as one. */
   .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
     padding-top: 0.5rem;
-    margin-top: 0.5rem;
   }
 
   /* A question that runs to three lines is the tallest this screen gets. */
@@ -14563,7 +14806,6 @@
 
   .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
     padding-top: 0.4rem;
-    margin-top: 0.4rem;
   }
 
   .memo-note-screen[data-note-tab="quiz"] .memo-progress.quiz {

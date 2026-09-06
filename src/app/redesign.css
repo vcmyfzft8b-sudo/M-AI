@@ -13266,7 +13266,7 @@
    * The percentage above is what the tutor's sphere is; a host that sizes the body itself — the
    * podcast's cover draws two of them at once — overrides this to match. See the shadows below.
    */
-  --body-size: calc(var(--orb-size) * 0.652);
+  --body-size: calc(var(--orb-size, 11.5rem) * 0.652);
   background:
     radial-gradient(circle at 36% 30%, oklch(0.95 0.06 calc(var(--orb-hue) + 25) / 0.95), transparent 42%),
     radial-gradient(circle at 62% 74%, oklch(0.66 0.19 calc(var(--orb-hue) - 15) / 0.9), transparent 60%),

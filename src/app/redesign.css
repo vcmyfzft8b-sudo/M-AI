@@ -15273,6 +15273,23 @@
   min-height: 0;
 }
 
+/*
+ * The library centres in the card the same way the other two screens do.
+ *
+ * The hero and the player both fill the card and sit in the middle of it; the shelf was the one
+ * state still pinned to the top-left corner of a card that is a whole window tall. On a phone the
+ * column is the width of the screen and the miss only showed as room underneath, but above 1100px
+ * the 34rem cap left the rows hugging the left edge of an 800-point panel with nothing beside them.
+ *
+ * `margin: auto` rather than `justify-content`/`align-content`, because a flex item's auto margins
+ * are dropped when the free space runs out: a library long enough to overflow scrolls from its own
+ * first row instead of hiding it above the top edge.
+ */
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast-shelf {
+  width: 100%;
+  margin: auto;
+}
+
 .memo-note-screen[data-note-tab="podcast"] .memo-podcast-cover {
   flex: 0 1 auto;
   /* Under about this the two spheres stop reading as a pair and start reading as two dots. */
@@ -16285,10 +16302,16 @@
     top: 0.6rem;
   }
 
-  /* The extra width is spent on information rather than on stretch — see the meta line. */
+  /*
+   * It shares the rows' width, the way it does on a phone.
+   *
+   * It used to be a start-aligned pill, from when the shelf itself ran the full width of the panel
+   * and a stretched button would have been a metre of empty capsule. The shelf is a centred column
+   * now, so the pill reads as the last row of the list rather than as a stray control beside it.
+   */
   .memo-podcast-new {
-    justify-self: start;
-    width: auto;
+    justify-self: stretch;
+    width: 100%;
     padding: 0 1.3rem;
   }
 

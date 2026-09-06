@@ -1704,10 +1704,10 @@ export function LectureTutor({
         * voice UI look fake.
         */}
       <div className="memo-tutor-orb" ref={orbRef} aria-hidden="true">
-        <span className="memo-tutor-orb-glow" />
-        <span className="memo-tutor-orb-body" />
-        <span className="memo-tutor-orb-ring" />
-        <span className="memo-tutor-orb-ring second" />
+        <span className="memo-orb-glow" />
+        <span className="memo-orb-body" />
+        <span className="memo-orb-ring" />
+        <span className="memo-orb-ring second" />
       </div>
 
       {statusKey ? (

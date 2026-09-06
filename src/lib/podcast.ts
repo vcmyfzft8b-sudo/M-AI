@@ -306,7 +306,9 @@ export async function getPodcastRowById(params: {
 export async function listPodcastEpisodes(params: { lectureId: string; contentHash: string }) {
   const { data, error } = await createSupabaseServiceRoleClient()
     .from("lecture_podcasts")
-    .select("id, format, length_id, language, title, turns, created_at")
+    .select(
+      "id, format, length_id, language, title, turns, created_at, position_ms, duration_ms, finished_at",
+    )
     .eq("lecture_id", params.lectureId)
     /*
      * Every cast of this note's text — see PodcastVariant for why the hash is compound — and the
@@ -330,6 +332,9 @@ export async function listPodcastEpisodes(params: { lectureId: string; contentHa
     title: string | null;
     turns: unknown;
     created_at: string;
+    position_ms: number | null;
+    duration_ms: number | null;
+    finished_at: string | null;
   }>).map((row) => {
     const turns = parseStoredTurns(row.turns);
 
@@ -344,8 +349,55 @@ export async function listPodcastEpisodes(params: { lectureId: string; contentHa
          it came out, and the listener is choosing between things that already exist. */
       estimatedSeconds: turns.reduce((sum, turn) => sum + estimatedSpokenSeconds(turn.text), 0),
       createdAt: row.created_at,
+      /*
+       * Where this listener got to, so the library can offer to resume rather than to restart.
+       *
+       * The measured length is preferred over the estimate wherever it exists: until every turn
+       * has been synthesized the estimate is all there is, and "2:34 left" computed against a
+       * total that is out by a fifth reads as a bug rather than as an estimate.
+       */
+      positionMs: row.position_ms ?? 0,
+      durationMs: row.duration_ms,
+      finished: Boolean(row.finished_at),
     };
   });
+}
+
+/**
+ * Records where a listener got to.
+ *
+ * Last write wins, deliberately. Two devices playing the same episode at once is not a thing
+ * worth merging — the honest answer to it is wherever the listener most recently was — and a
+ * position is cheap enough to be wrong for one round trip.
+ *
+ * `finished` only ever goes on. An episode played to the end and then scrubbed back to the
+ * middle is still one this listener has heard, and the library says `replay` about it; clearing
+ * the flag on the next progress write would make that state flicker as they re-listened.
+ */
+export async function savePodcastProgress(params: {
+  lectureId: string;
+  podcastId: string;
+  positionMs: number;
+  durationMs: number | null;
+  finished: boolean;
+}) {
+  const { error } = await createSupabaseServiceRoleClient()
+    .from("lecture_podcasts")
+    .update({
+      position_ms: Math.max(0, Math.round(params.positionMs)),
+      ...(params.durationMs !== null && params.durationMs > 0
+        ? { duration_ms: Math.round(params.durationMs) }
+        : {}),
+      ...(params.finished ? { finished_at: new Date().toISOString() } : {}),
+    } as never)
+    .eq("id", params.podcastId)
+    /* The row has to belong to the note whose page this is; ownership of the note is checked by
+       the route. Both together are what stops an id from another account being writable. */
+    .eq("lecture_id", params.lectureId);
+
+  if (error) {
+    throw error;
+  }
 }
 
 function isStalePodcastGeneration(row: LecturePodcastRow) {

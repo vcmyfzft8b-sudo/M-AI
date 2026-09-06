@@ -114,3 +114,28 @@ each wrote to production's migration history from an unmerged branch and cost an
 ## Documentation
 
 - Follow the workflow in [docs/development-workflow.md](/docs/development-workflow.md) for branching, GitHub pushes, Vercel previews, and merging to production.
+
+## Design rules
+
+Read [docs/design-system.md](/docs/design-system.md) before any UI change. In short:
+
+- New UI goes in the `.memo` layer (`src/app/redesign.css`). `globals.css` is
+  legacy — do not extend it.
+- Never type a raw colour. Use a token. If a token is missing, add it to the
+  `.memo` block AND all three dark blocks (`[data-theme="dark"]`,
+  `[data-theme="system"]`, bare `prefers-color-scheme`).
+- Reuse an existing `.memo-*` component before writing CSS. New classes are
+  `.memo-*` and live in `redesign.css`, not in a component file.
+- One primary action per screen, and it is coral. Ink confirms; periwinkle upsells.
+- Hover marks an edge (`inset 0 0 0 1px var(--hover-ring)`), never a lift. Focus
+  goes on the container via `--focus-ring`.
+- Snap to the existing scales: radius 12/14/16/18/20/22/26/999, the nine type
+  sizes, the listed control heights. Do not introduce new values.
+- One breakpoint: 1100px. Build the phone layout first; desktop is the rail
+  wrapped around it. One scroller per screen, never `scrollIntoView`, never a
+  visible scrollbar.
+- Every user-facing string comes from the i18n catalogue. No literal copy in a
+  component — there are coverage tests.
+- New Material Symbols names must be added to `icon_names` in
+  `src/app/layout.tsx`.
+- `prefers-reduced-motion` is handled globally. Do not re-implement it.

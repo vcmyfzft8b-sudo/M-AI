@@ -15259,19 +15259,9 @@
   min-height: 0;
 }
 
-/*
- * And the way out travels with it.
- *
- * Pinned to the panel's corner it was right while the player started at the top of the card:
- * the two were level, and the corner read as this screen's own control. Centred, the player
- * moves down and the button stays behind — a glyph alone at the top of an empty half, closing
- * something that is no longer next to it. In the flow it sits just above the artwork, at the
- * same right edge, and reads as belonging to the thing it dismisses.
- */
-.memo-note-screen[data-note-tab="podcast"] .memo-podcast-back {
+/* It is one of the transport's buttons now, so it drops the corner it was pinned to. */
+.memo-podcast-back {
   position: static;
-  align-self: flex-end;
-  margin-bottom: 0.35rem;
 }
 
 .memo-note-screen[data-note-tab="podcast"] .memo-podcast-hero {
@@ -15907,12 +15897,7 @@
  * width, and out of the flow it stops costing the player a row of height it does not have on a
  * short laptop.
  */
-.memo-podcast-back {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 1;
-}
+
 
 .memo-podcast-stage {
   display: grid;

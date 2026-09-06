@@ -1939,15 +1939,6 @@ export function LecturePodcast({
             * glyph. What a top-right corner offers is "leave this", which is what the app's own
             * `.memo-esc` puts there too.
             */}
-          <button
-            type="button"
-            className="memo-podcast-control memo-podcast-back"
-            onClick={leavePlayer}
-            aria-label={t("podcast.library.back")}
-          >
-            <Msym name="close" size="1.45rem" fill={false} weight={500} />
-          </button>
-
           <div className="memo-podcast-stage">
             {cover("playing")}
 
@@ -2003,13 +1994,23 @@ export function LecturePodcast({
                 <Msym name={isPlaying ? "pause" : "play_arrow"} size="1.8rem" fill weight={500} />
               </button>
 
+              {/*
+                * Back ten, pause, leave — and no forward.
+                *
+                * Skipping ahead in a spoken explanation is not the same gesture as skipping
+                * ahead in a song: what is coming has not been heard, so there is nothing to
+                * skip past, only something to miss. Going back is the one a listener actually
+                * reaches for, when a sentence went by while they were thinking about the last
+                * one. Its place goes to the way out, which leaves this screen ending on the
+                * same three controls, in the same order, as the walkthrough.
+                */}
               <button
                 type="button"
-                className="memo-podcast-control"
-                onClick={() => skip(SKIP_SECONDS)}
-                aria-label={t("podcast.forward10")}
+                className="memo-podcast-control memo-podcast-back"
+                onClick={leavePlayer}
+                aria-label={t("podcast.library.back")}
               >
-                <Msym name="forward_10" size="1.45rem" fill={false} weight={500} />
+                <Msym name="close" size="1.45rem" fill={false} weight={500} />
               </button>
             </div>
 

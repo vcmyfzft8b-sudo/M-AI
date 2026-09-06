@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
+import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
+import { sheetClass, useSheet } from "@/components/use-sheet";
 import { useT } from "@/components/i18n-provider";
 import { VoiceUsageSheet, type VoiceUsage } from "@/components/voice-usage-sheet";
 import { readChatStream } from "@/lib/chat-stream-client";
-import { pillNeighbourhoodScrollTarget } from "@/lib/tab-scroll";
 import {
   DEFAULT_NOTE_TTS_VOICE,
   NOTE_TTS_VOICES,
@@ -24,12 +25,7 @@ import {
   SpeechInputError,
   TutorSpeechInput,
 } from "@/lib/tutor/speech-input";
-import {
-  acceptsHeardLine,
-  clearsHeardLine,
-  showsHeardLine,
-  type TutorPhase,
-} from "@/lib/tutor/heard-line";
+import { type TutorPhase } from "@/lib/tutor/heard-line";
 import { TutorClipPlayer } from "@/lib/tutor/clip-player";
 import { reportTutorFailure, resetTutorFailureReports } from "@/lib/tutor/report";
 import { SpeechOutputError, TutorSpeechOutput } from "@/lib/tutor/speech-output";
@@ -162,7 +158,8 @@ export function LectureTutor({
   lectureId,
   isReady,
   language,
-  dockSlot,
+  headSlot,
+  onOpenFlashcards,
 }: {
   lectureId: string;
   isReady: boolean;
@@ -172,31 +169,50 @@ export function LectureTutor({
    * plays the language it is being auditioned for — see the call site.
    */
   language: string;
-  /** The note screen's floating dock, which the usage pill is portalled into. */
-  dockSlot: HTMLElement | null;
+  /** The note's title row, which the usage pill is portalled into. */
+  headSlot: HTMLElement | null;
+  /**
+   * The way to the cards, offered at the end of a walkthrough. Absent when the note has
+   * none — an empty deck is a worse ending than no second button.
+   */
+  onOpenFlashcards?: () => void;
 }) {
   const t = useT();
 
   const [phase, setPhase] = useState<TutorPhase>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [muted, setMuted] = useState(false);
   /** False when the microphone was refused or is absent: the walkthrough runs, barge-in does not. */
   const [canListen, setCanListen] = useState(true);
-  /**
-   * The one line under the sphere.
-   *
-   * Not a chat log — the tutor's own words are already in the room, and printing
-   * them competes with listening to them. All this has to do is prove the
-   * microphone heard the learner, so it holds exactly one thing: what they are
-   * saying, or the last thing they said, and only for as long as the floor is
-   * theirs. The tutor speaking clears it.
-   */
-  const [heard, setHeard] = useState<{ text: string; settled: boolean } | null>(null);
   const [voice, setVoice] = useState<NoteTtsVoice>(DEFAULT_NOTE_TTS_VOICE);
   const [previewVoice, setPreviewVoice] = useState<NoteTtsVoice | null>(null);
   const [usage, setUsage] = useState<TutorUsage | null>(null);
   const [blocked, setBlocked] = useState<TutorBlock | null>(null);
   const [buyingCredits, setBuyingCredits] = useState(false);
+  /** The picker behind the collapsed voice row, open. */
+  const [pickingVoice, setPickingVoice] = useState(false);
+  /**
+   * Where the walkthrough has got to, as state rather than as the ref the turn loop runs on.
+   *
+   * The running order lives in a ref because the turns read it from inside async
+   * continuations that must not close over a stale render. But it is also a fact about the
+   * screen now — a topic, and a position in a list of them — so the two are kept alongside
+   * each other and this one is written wherever the ref moves.
+   */
+  const [progress, setProgress] = useState<{ title: string; index: number; total: number } | null>(
+    null,
+  );
+  /**
+   * What the session came to, held for the screen that says so.
+   *
+   * Counted here rather than read off the refs at render time because settling the grant
+   * zeroes the seconds the moment the walkthrough ends — the summary is the last thing that
+   * wants those numbers and it would be reading them a beat too late.
+   */
+  const [summary, setSummary] = useState<{
+    topics: number;
+    minutes: number;
+    questions: number;
+  } | null>(null);
   /*
    * The slice this session is spending, and how much of it has gone. Counted in the browser
    * because the audio is made there; the server reserved the whole slice up front, so this
@@ -271,11 +287,6 @@ export function LectureTutor({
   const setPhaseNow = useCallback((next: TutorPhase) => {
     phaseRef.current = next;
     setPhase(next);
-
-    /* The line under the sphere is the learner's, so the tutor's voice takes it down. */
-    if (clearsHeardLine(next)) {
-      setHeard(null);
-    }
   }, []);
 
   const clearTimer = (ref: { current: number | null }) => {
@@ -285,12 +296,6 @@ export function LectureTutor({
     }
   };
 
-  /** Shows what the learner said. The tutor's own turns are heard, not read. */
-  const showHeard = useCallback((text: string, settled: boolean) => {
-    const trimmed = text.trim();
-
-    setHeard(trimmed ? { text: trimmed, settled } : null);
-  }, []);
 
   /**
    * Ends an audition.
@@ -322,7 +327,7 @@ export function LectureTutor({
     }
 
     envelopeRef.current.reset();
-    orbRef.current?.style.setProperty("--tutor-level", "0");
+    orbRef.current?.style.setProperty("--orb-level", "0");
 
     planPromiseRef.current = null;
     stopPreview();
@@ -330,7 +335,6 @@ export function LectureTutor({
     outputRef.current = null;
     inputRef.current?.close();
     inputRef.current = null;
-    setHeard(null);
   }, [stopPreview]);
 
   /*
@@ -379,25 +383,20 @@ export function LectureTutor({
     };
   }, [language, voice]);
 
-  const heardRef = useRef<HTMLParagraphElement | null>(null);
 
+  const pickerRef = useRef<HTMLDetailsElement | null>(null);
   /*
-   * Keeps the transcript's two-line window on the words just spoken.
-   *
-   * The line is a fixed height and the text runs past it, so left alone it shows the
-   * opening of a long sentence and nothing after — which reads as the recognizer having
-   * given up. Scrolling to the bottom on every revision is what makes it a live caption
-   * rather than a stuck one.
+   * Closing is driven from the element rather than from state alone: `<details>` owns its
+   * own open flag, and setting only the React copy leaves a panel that will not reopen.
    */
-  useEffect(() => {
-    const element = heardRef.current;
+  const closePicker = useCallback(() => {
+    setPickingVoice(false);
 
-    if (element) {
-      element.scrollTop = element.scrollHeight;
+    if (pickerRef.current) {
+      pickerRef.current.open = false;
     }
-  }, [heard]);
-
-  const voiceRowRef = useRef<HTMLDivElement | null>(null);
+  }, []);
+  const sheet = useSheet(closePicker);
 
   useEffect(() => {
     setVoice(readStoredVoice());
@@ -646,52 +645,6 @@ export function LectureTutor({
   const adoptCredentialsRef = useRef(adoptCredentials);
   adoptCredentialsRef.current = adoptCredentials;
 
-  /*
-   * The row overflows, and the saved voice is regularly past its right edge — which
-   * looks exactly like nothing being selected at all.
-   *
-   * Moved with the same arithmetic the note's pill row uses (`tabScrollTarget`), not with
-   * `scrollIntoView`: that scrolls every scrollable ancestor as well, so asking a chip to
-   * centre itself also dragged the note screen behind it. This moves one element, leaves
-   * the row alone when the chip is already comfortably visible, and keeps a gutter so the
-   * next voice along still peeks in — which is what says the row keeps going.
-   */
-  useEffect(() => {
-    const row = voiceRowRef.current;
-    const chip = row?.querySelector<HTMLElement>(".memo-tutor-voice.active");
-
-    if (!row || !chip) {
-      return;
-    }
-
-    const previous = chip.previousElementSibling;
-    const next = chip.nextElementSibling;
-    const target = pillNeighbourhoodScrollTarget({
-      /*
-       * Named explicitly, never spread: scrollLeft, clientWidth and scrollWidth are
-       * getters on the prototype, so `{ ...row }` silently yields none of them and the
-       * arithmetic quietly becomes NaN.
-       */
-      row: {
-        scrollLeft: row.scrollLeft,
-        clientWidth: row.clientWidth,
-        scrollWidth: row.scrollWidth,
-        left: row.getBoundingClientRect().left,
-      },
-      pill: chip.getBoundingClientRect(),
-      previous: previous instanceof HTMLElement ? previous.getBoundingClientRect() : null,
-      next: next instanceof HTMLElement ? next.getBoundingClientRect() : null,
-    });
-
-    if (target === null) {
-      return;
-    }
-
-    row.scrollTo({
-      left: target,
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-    });
-  }, [voice]);
 
   useEffect(() => teardown, [teardown]);
 
@@ -746,7 +699,7 @@ export function LectureTutor({
       const listening = inputRef.current?.getLevel() ?? 0;
       const raw = Math.max(speaking, phaseRef.current === "listening" ? listening * 1.6 : 0);
 
-      orbRef.current?.style.setProperty("--tutor-level", envelopeRef.current.push(raw).toFixed(4));
+      orbRef.current?.style.setProperty("--orb-level", envelopeRef.current.push(raw).toFixed(4));
       levelFrameRef.current = window.requestAnimationFrame(pump);
     };
 
@@ -1021,6 +974,15 @@ export function LectureTutor({
     awaitingExplanation: boolean,
   ) {
     if (kind === "closing") {
+      /*
+       * Counted here, before the slice is handed back: settling zeroes the seconds, and
+       * they are half of what the closing screen has to say.
+       */
+      setSummary({
+        topics: planRef.current?.topics.length ?? 0,
+        minutes: Math.max(1, Math.round(spentSecondsRef.current / 60)),
+        questions: historyRef.current.filter((entry) => entry.role === "learner").length,
+      });
       setPhaseNow("finished");
       /* The walkthrough is over; hand the rest of the slice back straight away. */
       settleGrant();
@@ -1105,6 +1067,22 @@ export function LectureTutor({
     advanceToNextTopic(index);
   }
 
+  /** Puts the running order's current position on the screen. Silent until the plan lands. */
+  function showTopic(index: number) {
+    const topics = planRef.current?.topics ?? [];
+
+    if (topics.length === 0) {
+      setProgress(null);
+
+      return;
+    }
+
+    /* The closing turn runs on the last topic's index, which is one past the end of the walk. */
+    const shown = Math.min(index, topics.length - 1);
+
+    setProgress({ title: topics[shown].title, index: shown, total: topics.length });
+  }
+
   function advanceToNextTopic(index: number) {
     const nextIndex = index + 1;
     const total = planRef.current?.topics.length ?? 0;
@@ -1112,6 +1090,7 @@ export function LectureTutor({
     spokenSoFarRef.current = "";
     awaitingExplanationRef.current = false;
     topicIndexRef.current = nextIndex;
+    showTopic(nextIndex);
 
     if (nextIndex >= total) {
       void runTurnRef.current("closing", { index: Math.max(0, total - 1) });
@@ -1197,16 +1176,18 @@ export function LectureTutor({
      * wrong voice, saying something that has nothing to do with the note.
      */
     stopPreview();
+    closePicker();
 
     /* A new session gets a clean slate: last session's failures are not this one's. */
     resetTutorFailureReports();
     setError(null);
     setCanListen(true);
-    setHeard(null);
     historyRef.current = [];
     spokenSoFarRef.current = "";
     awaitingExplanationRef.current = false;
     topicIndexRef.current = 0;
+    setProgress(null);
+    setSummary(null);
     setPhaseNow("preparing");
 
     runIdRef.current += 1;
@@ -1237,6 +1218,12 @@ export function LectureTutor({
 
         if (runId === runIdRef.current) {
           planRef.current = payload.plan;
+          /*
+           * The greeting has been playing for most of a minute by now with nothing under it
+           * saying what is being walked through, because until this lands there is nothing
+           * to say. This is the first moment there is.
+           */
+          showTopic(topicIndexRef.current);
         }
 
         return payload.plan;
@@ -1354,10 +1341,6 @@ export function LectureTutor({
           }
 
           if (phaseRef.current !== "speaking") {
-            if (acceptsHeardLine(phaseRef.current)) {
-              showHeard(text, false);
-            }
-
             return;
           }
 
@@ -1367,7 +1350,6 @@ export function LectureTutor({
            * about how loud the room is. The floor is theirs.
            */
           commitInterruption();
-          showHeard(text, false);
         },
         onUtterance: (text) => {
 
@@ -1390,7 +1372,6 @@ export function LectureTutor({
 
           clearTimer(followUpTimerRef);
           historyRef.current.push({ role: "learner", content: text });
-          showHeard(text, true);
 
           /*
            * If the tutor had asked them to explain the idea back, this is that attempt —
@@ -1496,15 +1477,14 @@ export function LectureTutor({
     outputRef.current = output;
     inputRef.current = listening ? input : null;
     setCanListen(listening);
-    setMuted(!listening);
 
     void runTurnRef.current("opening", { index: 0 });
   }, [
+    closePicker,
     commitInterruption,
     lectureId,
     setPhaseNow,
     settleGrant,
-    showHeard,
     stopPreview,
     t,
     voice,
@@ -1544,10 +1524,45 @@ export function LectureTutor({
     void runTurnRef.current(spokenSoFarRef.current ? "resume" : "teach");
   }
 
+  /**
+   * Back to the top of a topic — the one it is on, or the one before it.
+   *
+   * A walkthrough is not a track list, so this is not "previous track": what a learner
+   * wants when a paragraph goes past them is that paragraph again, and only when they are
+   * already at the start of one do they mean the one before. So the first press repeats
+   * what is being said now, and a second press — with nothing said yet on this topic —
+   * steps back. That also makes it safe on the first topic, where there is no back to go.
+   */
+  function skipToPreviousTopic() {
+    if (!planRef.current) {
+      return;
+    }
+
+    const atTopicStart = spokenSoFarRef.current === "";
+    const index = Math.max(0, atTopicStart ? topicIndexRef.current - 1 : topicIndexRef.current);
+
+    floorTokenRef.current += 1;
+    clearTimer(followUpTimerRef);
+    turnAbortRef.current?.abort();
+    turnAbortRef.current = null;
+    outputRef.current?.stop();
+
+    spokenSoFarRef.current = "";
+    awaitingExplanationRef.current = false;
+    topicIndexRef.current = index;
+    showTopic(index);
+    setError(null);
+
+    void restoreListening();
+    void runTurnRef.current("teach", { index });
+  }
+
   function end() {
     settleGrant();
     teardown();
     planRef.current = null;
+    setProgress(null);
+    setSummary(null);
     setPhaseNow("idle");
   }
 
@@ -1635,23 +1650,6 @@ export function LectureTutor({
     }
   }
 
-  function toggleMute() {
-    const next = !muted;
-    setMuted(next);
-    inputRef.current?.setMuted(next);
-
-    /*
-     * Muted means "do not listen to me", so the stream goes back to the pool the same way
-     * it does on a pause. Unmuting asks for one again, which is a handshake rather than a
-     * permission prompt, because the microphone itself never went anywhere.
-     */
-    if (next) {
-      inputRef.current?.stopListening();
-    } else {
-      void restoreListening();
-    }
-  }
-
   const isRunning = phase !== "idle";
   /*
    * Starting is its own state, not a running walkthrough with a different caption.
@@ -1675,144 +1673,286 @@ export function LectureTutor({
               : phase === "finished"
                 ? "tutor.state.finished"
                 : null;
+  /*
+   * The phase is now said by a mark as well as a word, so the word can be the short one.
+   * "Preparing the walkthrough…" was carrying the whole signal on its own; the dot beside
+   * it is doing that job from here, and a status line long enough to wrap is a caption.
+   */
+  const isPaused = phase === "paused";
 
   if (!isReady) {
     return <p className="ios-info lecture-empty-message">{t("api.tutorNotReady")}</p>;
   }
+
+  /*
+   * The voices, behind the row that says which one you have.
+   *
+   * Eleven chips used to be on the screen the whole time, bleeding off both edges under the
+   * sphere, for a decision most people make once and never revisit. The scroller is the same
+   * scroller — tapping a chip still plays that voice — it just waits behind a tap now.
+   */
+  const voicePicker = (
+    <div className="memo-tutor-voices" role="radiogroup" aria-label={t("tutor.voice.label")}>
+      {NOTE_TTS_VOICES.map((option) => (
+        <button
+          key={option}
+          type="button"
+          role="radio"
+          aria-checked={voice === option}
+          className={`memo-tutor-voice ${voice === option ? "active" : ""} ${
+            previewVoice === option ? "playing" : ""
+          }`.trim()}
+          /*
+           * Its own hue, not the chosen voice's. The eleven are spread round the wheel
+           * precisely so that the choice is a visible one, and a picker that draws them all
+           * in the colour of the voice you already have throws that away — see
+           * voice-colors.ts.
+           */
+          style={{ "--voice-hue": voiceHue(option) } as CSSProperties}
+          onClick={() => void previewVoiceSample(option)}
+        >
+          <span className="memo-tutor-voice-dot" aria-hidden="true" />
+          <span>{option}</span>
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <>
       {/*
         * One meter for both spoken features. The tutor and the podcast spend the same minutes,
         * so they show them with the same object rather than two that drift apart.
+        *
+        * It sits in the note's own title row rather than in the dock: "28 min left today" is
+        * the whole question somebody asks of it, and at the foot of the screen it was below
+        * the thing it describes.
         */}
       <VoiceUsageSheet
         usage={usage}
-        dockSlot={dockSlot}
+        slot={headSlot}
         blocked={Boolean(blocked)}
         buyingCredits={buyingCredits}
         onBuyCredits={() => void buyCredits()}
       />
       <div
         className={`memo-tutor phase-${phase}`}
-      style={{ "--tutor-hue": voiceHue(previewVoice ?? voice) } as CSSProperties}
-    >
-      {/*
-        * The sphere. Its scale and glow ride the live audio level, so it breathes
-        * with whichever voice is in the room rather than animating on a timer —
-        * a loop that runs while nothing is being said is the thing that makes a
-        * voice UI look fake.
-        */}
-      <div className="memo-tutor-orb" ref={orbRef} aria-hidden="true">
-        <span className="memo-tutor-orb-glow" />
-        <span className="memo-tutor-orb-body" />
-        <span className="memo-tutor-orb-ring" />
-        <span className="memo-tutor-orb-ring second" />
-      </div>
-
-      {statusKey ? (
-        <p className="memo-tutor-status" role="status">
-          {t(statusKey)}
-        </p>
-      ) : null}
-
-      {isPreparing ? <p className="memo-tutor-hint">{t("tutor.state.preparingHint")}</p> : null}
-
-      {error ? <p className="memo-inline-error memo-tutor-error">{error}</p> : null}
-
-      {/* One line, and only while the floor is theirs. */}
-      {heard && showsHeardLine(phase) ? (
-        <p ref={heardRef} className={`memo-tutor-heard ${heard.settled ? "" : "draft"}`.trim()}>
-          {heard.text}
-        </p>
-      ) : null}
-
-      {!isRunning ? (
-        <>
-          {/* Pick a voice, hear it, then start. Tapping one plays it.
-              `memo-chiprow` because this is one: it takes the wheel on desktop,
-              pins the gesture to one axis, and stops the last chip from
-              chaining into the iOS back-swipe. */}
-          <div
-            className="memo-tutor-voices memo-chiprow"
-            ref={voiceRowRef}
-            role="radiogroup"
-            aria-label={t("tutor.voice.label")}
-          >
-            {NOTE_TTS_VOICES.map((option) => (
-              <button
-                key={option}
-                type="button"
-                role="radio"
-                aria-checked={voice === option}
-                className={`memo-tutor-voice ${voice === option ? "active" : ""} ${
-                  previewVoice === option ? "playing" : ""
-                }`.trim()}
-                onClick={() => void previewVoiceSample(option)}
-              >
-                <Msym
-                  name={previewVoice === option ? "graphic_eq" : "play_arrow"}
-                  size="1rem"
-                  fill={false}
-                  weight={500}
-                />
-                <span>{option}</span>
-              </button>
-            ))}
-          </div>
-
-          <button type="button" className="memo-tutor-start" onClick={() => void startSession()}>
-            <Msym name="graphic_eq" size="1.2rem" fill={false} weight={500} />
-            <span>{t("tutor.start")}</span>
-          </button>
-        </>
-      ) : isPreparing ? (
-        /* One way out and nothing else: there is nothing yet to pause, skip or mute. */
-        <div className="memo-tutor-controls">
-          <button type="button" className="memo-tutor-control" onClick={end}>
-            <Msym name="close" size="1.3rem" fill={false} weight={500} />
-            <span>{t("common.cancel")}</span>
-          </button>
+        style={{ "--orb-hue": voiceHue(previewVoice ?? voice) } as CSSProperties}
+      >
+        {/*
+          * The sphere. Its scale and glow ride the live audio level, so it breathes
+          * with whichever voice is in the room rather than animating on a timer —
+          * a loop that runs while nothing is being said is the thing that makes a
+          * voice UI look fake.
+          */}
+        <div className="memo-orb" ref={orbRef} aria-hidden="true">
+          <span className="memo-orb-glow" />
+          <span className="memo-orb-body" />
+          <span className="memo-orb-ring" />
+          <span className="memo-orb-ring second" />
         </div>
-      ) : (
-        <>
-          {canListen && muted ? <p className="memo-tutor-hint">{t("tutor.hint.muted")}</p> : null}
 
+        {!isRunning ? (
+          /* What this is, before it has said anything. */
+          <div className="memo-tutor-intro">
+            <p className="memo-tutor-title">{t("tutor.idle.title")}</p>
+            <p className="memo-tutor-lede">{t("tutor.idle.lede")}</p>
+          </div>
+        ) : phase === "finished" ? (
+          <div className="memo-tutor-intro">
+            <p className="memo-tutor-title">{t("tutor.finished.title")}</p>
+            {/* What happened, not "Finished" — the sphere going quiet already said that. */}
+            <p className="memo-tutor-lede">
+              {summary
+                ? t(summary.questions > 0 ? "tutor.finished.summary" : "tutor.finished.summaryQuiet", {
+                    topics: t("tutor.finished.topics", { count: summary.topics }),
+                    minutes: t("tutor.finished.minutes", { count: summary.minutes }),
+                    questions: t("tutor.finished.questions", { count: summary.questions }),
+                  })
+                : t("tutor.state.finished")}
+            </p>
+          </div>
+        ) : statusKey ? (
+          /*
+           * The phase, said once: a dot in the voice's own hue and one word. The dot is the
+           * half that gets read — the sphere at rest and the sphere mid-sentence look almost
+           * the same, and a mark that moves with the state resolves that without being read.
+           */
+          <p className="memo-tutor-statusrow" role="status">
+            <span className="memo-tutor-status-dot" aria-hidden="true" />
+            {t(statusKey)}
+          </p>
+        ) : null}
+
+        {isPreparing ? <p className="memo-tutor-hint">{t("tutor.state.preparingHint")}</p> : null}
+
+        {/*
+          * The microphone was refused or is absent, so the walkthrough runs but cutting in
+          * does not — which is the one thing this screen promises that would otherwise fail
+          * silently. It used to be said by the mute button sitting disabled; the button has
+          * gone, so it is said in words.
+          */}
+        {isRunning && !canListen && phase !== "finished" ? (
+          <p className="memo-tutor-hint">{t("tutor.hint.muted")}</p>
+        ) : null}
+
+        {error ? <p className="memo-inline-error memo-tutor-error">{error}</p> : null}
+
+        {/*
+          * Where the walkthrough has got to. One row rather than the two quiet lines it
+          * replaces, with the bar every other measure of progress in this app uses.
+          */}
+        {isRunning && phase !== "finished" && progress ? (
+          <div className="memo-tutor-topicrow">
+            <div className="memo-tutor-topic">
+              <span className="memo-tutor-topic-title">{progress.title}</span>
+              <span className="memo-tutor-topic-count">
+                {progress.index + 1} / {progress.total}
+              </span>
+            </div>
+            <div
+              className="memo-tutor-topicbar"
+              role="progressbar"
+              aria-valuemin={1}
+              aria-valuemax={progress.total}
+              aria-valuenow={progress.index + 1}
+              aria-label={progress.title}
+            >
+              <span style={{ width: `${((progress.index + 1) / progress.total) * 100}%` }} />
+            </div>
+          </div>
+        ) : null}
+
+        {!isRunning ? (
+          <>
+            {/*
+              * The voice, collapsed to one row that shows it and its colour. Opens the same
+              * picker on a tap: a popover against itself on the desktop, and on the phone the
+              * dragged sheet every other choice in this app arrives in — which is exactly what
+              * the usage meter beside the title already does.
+              */}
+            <details
+              className="memo-tutor-picker"
+              ref={pickerRef}
+              onToggle={(event) => setPickingVoice(event.currentTarget.open)}
+            >
+              <summary className="memo-capture-row memo-tutor-voicerow">
+                <span className="memo-tutor-voice-swatch" aria-hidden="true" />
+                <span className="memo-capture-row-copy">
+                  <span>{voice}</span>
+                  <span>{t("tutor.voice.label")}</span>
+                </span>
+                <Msym
+                  name={pickingVoice ? "expand_more" : "chevron_right"}
+                  size="1.5rem"
+                  fill={false}
+                  weight={400}
+                />
+              </summary>
+              <div className="memo-tutor-picker-popover memo-only-desktop">
+                <p className="memo-tutor-picker-heading">{t("tutor.voice.hint")}</p>
+                {voicePicker}
+              </div>
+            </details>
+
+            {pickingVoice ? (
+              <MemoPortal>
+                <button
+                  type="button"
+                  className={sheetClass("note-read-usage-mobile-backdrop memo-only-mobile", sheet.closing)}
+                  onClick={() => sheet.dismiss()}
+                  aria-label={t("common.close")}
+                />
+                <div
+                  className={sheetClass(
+                    "note-read-usage-mobile-sheet memo-tutor-picker-sheet memo-only-mobile",
+                    sheet.closing,
+                  )}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={t("tutor.voice.label")}
+                  {...sheet.dragProps}
+                  /*
+                   * The sheet is portalled to the end of the document, so it is not inside
+                   * `.memo-tutor` and inherits nothing from it — including the hue the
+                   * chosen chip is tinted with. Without this the selected voice loses its
+                   * fill and its ring and reads as one of the ten that are not selected.
+                   *
+                   * Merged into the drag's own style rather than set beside it: that one
+                   * carries the finger's translate, and whichever of the two is written
+                   * second wins outright.
+                   */
+                  style={
+                    {
+                      ...sheet.dragProps.style,
+                      "--orb-hue": voiceHue(previewVoice ?? voice),
+                    } as CSSProperties
+                  }
+                >
+                  <p className="memo-tutor-picker-heading">{t("tutor.voice.hint")}</p>
+                  {voicePicker}
+                </div>
+              </MemoPortal>
+            ) : null}
+
+            <button type="button" className="memo-tutor-start" onClick={() => void startSession()}>
+              <Msym name="play_arrow" size="1.3rem" fill weight={500} />
+              <span>{t("tutor.start")}</span>
+            </button>
+          </>
+        ) : phase === "finished" ? (
+          /*
+           * Two ways out, and the second is new. Everything they have just had explained is
+           * also sitting in the cards, and the end of a walkthrough is the one moment in the
+           * app where somebody has just proved they want this material — so the cards are
+           * offered here rather than left to the pill row, which is the only route today.
+           */
+          <div className="memo-tutor-actions">
+            <button type="button" className="memo-tutor-start" onClick={() => void startSession()}>
+              {/* `replay`, not `restart_alt`: that glyph draws its arrowhead detached from
+                  the ring, which at this size reads as a broken icon rather than as a
+                  circular arrow. */}
+              <Msym name="replay" size="1.3rem" fill={false} weight={500} />
+              <span>{t("tutor.restart")}</span>
+            </button>
+
+            {onOpenFlashcards ? (
+              <button type="button" className="memo-tutor-second" onClick={onOpenFlashcards}>
+                <Msym name="style" size="1.2rem" fill={false} weight={500} />
+                <span>{t("tutor.finished.flashcards")}</span>
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          /*
+           * The transport. Round icon buttons rather than bordered pills with the word
+           * "Pause" written beside a pause glyph, and the same set the podcast player uses —
+           * the two spoken screens are one instrument and should not need different hands.
+           *
+           * Preparing keeps the row rather than swapping in a lone Cancel: the shape of the
+           * screen should not change between starting and started. There is simply nothing
+           * yet to go back to or to pause, so those two are disabled instead of missing.
+           */
           <div className="memo-tutor-controls">
             <button
               type="button"
-              className={`memo-tutor-control ${muted ? "off" : ""}`.trim()}
-              onClick={toggleMute}
-              aria-pressed={muted}
-              disabled={!canListen}
-              aria-label={t(muted ? "tutor.unmute" : "tutor.mute")}
+              className="memo-tutor-control"
+              onClick={skipToPreviousTopic}
+              disabled={isPreparing || !progress}
+              aria-label={t("tutor.previous")}
             >
-              <Msym name={muted ? "mic_off" : "mic"} size="1.3rem" fill={false} weight={500} />
+              <Msym name="skip_previous" size="1.45rem" fill={false} weight={500} />
             </button>
 
-            {phase === "paused" || phase === "finished" ? (
-              <button
-                type="button"
-                className="memo-tutor-control primary"
-                onClick={phase === "finished" ? () => void startSession() : resume}
-              >
-                {/* `replay`, not `restart_alt`: that glyph draws its arrowhead
-                    detached from the ring, which at this size reads as a broken
-                    icon rather than as a circular arrow. */}
-                <Msym
-                  name={phase === "finished" ? "replay" : "play_arrow"}
-                  size="1.35rem"
-                  fill={false}
-                  weight={500}
-                />
-                <span>{t(phase === "finished" ? "tutor.restart" : "tutor.resume")}</span>
-              </button>
-            ) : (
-              <button type="button" className="memo-tutor-control primary" onClick={pause}>
-                <Msym name="pause" size="1.35rem" fill={false} weight={500} />
-                <span>{t("tutor.pause")}</span>
-              </button>
-            )}
+            <button
+              type="button"
+              className="memo-tutor-control primary"
+              onClick={isPaused ? resume : pause}
+              disabled={isPreparing}
+              aria-label={t(isPaused ? "tutor.resume" : "tutor.pause")}
+            >
+              <Msym name={isPaused ? "play_arrow" : "pause"} size="1.8rem" fill weight={500} />
+            </button>
 
             <button
               type="button"
@@ -1820,11 +1960,10 @@ export function LectureTutor({
               onClick={end}
               aria-label={t("tutor.end")}
             >
-              <Msym name="close" size="1.3rem" fill={false} weight={500} />
+              <Msym name="close" size="1.45rem" fill={false} weight={500} />
             </button>
           </div>
-        </>
-      )}
+        )}
       </div>
     </>
   );

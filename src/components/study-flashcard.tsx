@@ -63,6 +63,7 @@ export function StudyFlashcard({
   missedCount,
   knownCount,
   navigation = null,
+  trailing = null,
   exit = null,
   disabled = false,
 }: {
@@ -87,6 +88,12 @@ export function StudyFlashcard({
     canPrevious: boolean;
     canNext: boolean;
   } | null;
+  /**
+   * One control belonging to the deck rather than to the card, sat at the end of the review
+   * row. Editing lives here rather than in a header of its own above the card: a row of its
+   * own cost sixty pixels of card on every screen, for a button pressed once a term.
+   */
+  trailing?: ReactNode;
   exit?: StudyFlashcardExit | null;
   disabled?: boolean;
 }) {
@@ -354,6 +361,7 @@ export function StudyFlashcard({
             <ArrowRight aria-hidden="true" />
           </button>
         ) : null}
+        {trailing}
       </div>
     </div>
     </>

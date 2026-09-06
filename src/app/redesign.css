@@ -2325,13 +2325,6 @@
     margin-top: 0.8rem;
   }
 
-  /*
-   * Editing is already in the phone's dock, as the pill this app puts a screen's controls
-   * in. The desktop copy beside the title would be the same control twice.
-   */
-  .lecture-study-head-edit {
-    display: none;
-  }
 }
 
 .memo-note-head {
@@ -13813,6 +13806,555 @@
  * allowed to shrink. `min-height: 0` at each step is what allows it: a flex item refuses by
  * default to go below its content, which is exactly the refusal being overridden here.
  */
+
+/* The card has to be a column too, or the scroller inside it has no definite height to
+   hand on and every `flex: 1` below resolves against content instead. */
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-panel.study {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: clamp(0.5rem, 1.6vh, 0.9rem);
+}
+
+/* The walkthrough is the one that centres: it is an object being looked at rather than a
+   column of things being worked through. */
+.memo-note-screen[data-note-tab="tutor"] .memo-panel.study {
+  justify-content: center;
+}
+
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) :is(.workspace-panel-stack, .lecture-study-shell, .lecture-practice-shell) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/*
+ * The card is the thing that gives — but it has to stay a card.
+ *
+ * Its three fixed 22rem floors (stage, rotator, and the two faces sitting absolutely
+ * inside it) are what made this a scrolling screen. Simply letting them shrink is worse
+ * than the scrollbar: told only to get smaller, a box whose faces are `position: absolute`
+ * and contribute no height flattens into a letterbox with the question spilling out of it.
+ *
+ * So the height is taken from the column and the WIDTH follows it, at a fixed ratio. The
+ * card gets smaller on a short window and stays the shape of a card, which is the thing a
+ * learner is actually looking at.
+ */
+.memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1.2rem;
+  /*
+   * A ceiling on the height, so the ratio below survives a tall window. The card's width
+   * comes from its height and the column caps that width — so past this point the card
+   * stopped getting wider and only got taller, drifting from a card towards a square. The
+   * room above this becomes air around it instead.
+   */
+  max-height: 22rem;
+}
+
+.memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-stage-card {
+  flex: 0 1 auto;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  aspect-ratio: 5 / 3;
+}
+
+.memo-note-screen[data-note-tab="flashcards"] :is(.lecture-flashcard, .lecture-flashcard-rotator) {
+  height: 100%;
+  /* Small enough to be a short card, large enough to still be one. */
+  min-height: 11rem;
+}
+
+.memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-face {
+  min-height: 0;
+  padding: 1.4rem 1.5rem;
+  overflow: hidden;
+}
+
+/* The question sets the card's size on a tall window and gives way on a short one. */
+.memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-content {
+  font-size: clamp(1.05rem, 2.4vh, 1.35rem);
+}
+
+.memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-toolbar {
+  margin-top: 1.1rem;
+}
+
+/*
+ * The head and its bar belong to the card, so they sit right under the note's title with
+ * nothing between them now that editing has moved down to the review row.
+ */
+.memo-note-screen[data-note-tab="flashcards"] .memo-progress {
+  margin-top: 0.85rem;
+}
+
+.memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-stage {
+  margin-top: 0.9rem;
+}
+
+/*
+ * A card thrown to one side should leave the screen, not be sliced off at the edge of the
+ * note card it happens to be sitting in.
+ *
+ * The scroller clips both axes so that a pill row cannot hand the note a sideways
+ * scrollbar, and that clip caught the throw a few centimetres in — the gesture is meant to
+ * read as putting the card away, and a card that vanishes into a straight vertical line
+ * halfway there reads as a bug instead. The clip is released only while a drag is actually
+ * happening — and that is only half the gesture. The card the finger holds is one
+ * element; the clone that carries on from where it was let go is another, and keying the
+ * release on `.dragging` alone slammed the clip shut at exactly the moment of release, so
+ * every throw was sliced off at the edge of the note card. Both halves release it. By this
+ * point everything on the tab already fits, so there is no scroll position to lose.
+ */
+.memo-note-screen[data-note-tab="flashcards"] :is(.memo-note-scroll, .memo-panel, .workspace-panel-stack, .lecture-study-shell, .lecture-flashcard-stage):has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
+  overflow: visible;
+}
+
+/* The outermost of them, and an ancestor of the screen — so `:has()` reaches down for the
+   tab as well as for the drag. Its `overflow-x: clip` is the last thing cutting the throw. */
+.memo-main:has(.memo-note-screen[data-note-tab="flashcards"] :is(.lecture-flashcard.dragging, .lecture-flashcard-exit-card)) {
+  overflow: visible;
+}
+
+/*
+ * Over the chat column beside it, rather than under. The card carries a transform of its
+ * own, so it is already its own stacking context — what needs lifting is the chain it sits
+ * in, or the chat panel (fixed, and later in the document) paints over the throw.
+ */
+.memo-note-screen[data-note-tab="flashcards"] :is(.memo-note-card, .memo-panel, .workspace-panel-stack, .lecture-study-shell, .lecture-flashcard-stage, .lecture-flashcard-stage-card):has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
+  position: relative;
+  z-index: 130;
+}
+
+/*
+ * The quiz: the options are the screen. Everything above them is one line of eyebrow and
+ * one of question, so the list is what fills the card and what gives when there is less
+ * room — a shorter option is still a readable option, where a fourth one below the fold is
+ * not an option at all.
+ */
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/*
+ * The question is not in a card.
+ *
+ * It was: a surface inside the note's own card, holding one question and four answers that
+ * are themselves surfaces — three layers of card for one thing to read, and the phone
+ * layout had already stopped doing it. The options are the only boxes that need to be
+ * boxes, because they are the things being chosen between.
+ *
+ * Production paints this card with a gradient under a `:root[data-theme]` selector, which
+ * outweighs a plain two-class rule — hence the extra ancestor rather than an `!important`,
+ * the same way the phone rule does it.
+ */
+.memo-note-screen[data-note-tab="quiz"] .memo-panel .lecture-quiz-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+/* "Choose one answer" over four obviously-choosable answers. */
+.memo-note-screen[data-note-tab="quiz"] .memo-quiz-eyebrow {
+  display: none;
+}
+
+/* Same margins as the deck's, since they are now the same bar. */
+.memo-note-screen[data-note-tab="quiz"] .memo-progress.quiz {
+  margin: 0.85rem 0 1.1rem;
+}
+
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-prompt {
+  margin-bottom: 0.9rem;
+}
+
+/*
+ * The options share whatever is left, rather than being told a height and hoping.
+ *
+ * This went wrong twice before it went right, and both failures came from the same place:
+ * the list was a grid, and a grid does not shrink its rows to fit a shorter box — it
+ * overflows one. Letting the box shrink put the verdict on top of the last option; not
+ * letting it shrink pushed the last option through the bottom of the card. And no clamp
+ * can fix either, because the budget is not knowable in CSS: the question above wraps to
+ * one line or three depending on the question, and answering adds a whole row underneath.
+ *
+ * So the list is a column of flex children at `flex: 1 1 0`. Whatever height is left after
+ * the question and the verdict have taken theirs is divided between the four of them, and
+ * it is divided again the moment either of those changes. Nothing has to be predicted, so
+ * nothing can be predicted wrong. The floor is the point below which an option stops being
+ * comfortably tappable; four of those plus everything else fits any window this app runs in.
+ */
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-options {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: clamp(0.35rem, 0.9vh, 0.7rem);
+  /*
+   * Deliberately NOT `min-height: 0`, which every other link in this chain wants. The list
+   * must never be smaller than the options inside it: shrink it past them and they are
+   * drawn over whatever follows, and what follows is the verdict. Below the floor the
+   * panel gives a little instead — a short scroll is recoverable, two things drawn on top
+   * of each other is not.
+   */
+}
+
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-option {
+  flex: 1 1 0;
+  min-height: 2.4rem;
+  max-height: 4.4rem;
+}
+
+/*
+ * Answered, the options go lower still. They were four things to aim a cursor at and are
+ * now four lines to read with one of them marked, and a line needs less room than a
+ * target — which is exactly the room the verdict underneath them needs.
+ */
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
+  min-height: 1.85rem;
+}
+
+/* The verdict itself, at the size of the row it is rather than of the card it replaced. */
+.memo-note-screen[data-note-tab="quiz"] :is(.memo-quiz-result-ghost, .memo-quiz-result-primary) {
+  height: 2.6rem;
+  padding: 0 0.95rem;
+  font-size: 0.95rem;
+}
+
+.memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-badge {
+  width: 2.2rem;
+  height: 2.2rem;
+}
+
+.memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-title {
+  font-size: 1.08rem;
+}
+
+/* The question gives a little too, rather than the options giving all of it. */
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-prompt {
+  font-size: clamp(1.08rem, 2.9vh, 1.3rem);
+  line-height: 1.28;
+}
+
+.memo-note-screen[data-note-tab="quiz"] .memo-progress.quiz {
+  margin: clamp(0.5rem, 1.6vh, 0.85rem) 0 clamp(0.6rem, 2vh, 1.1rem);
+}
+
+/* The last centimetre, so the verdict's second line is not clipped by the card's edge. */
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-stage:has(.memo-quiz-result) .memo-progress.quiz {
+  margin-bottom: 0.7rem;
+}
+
+/* It carries 1.4rem of margin and 1.4rem of padding above it, which is two gaps for one. */
+.memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
+  padding-top: clamp(0.55rem, 1.8vh, 0.9rem);
+  margin-top: clamp(0.55rem, 1.8vh, 0.9rem);
+  gap: clamp(0.6rem, 1.8vh, 1rem);
+}
+
+/*
+ * One line, but only where there is a line's worth of width.
+ *
+ * On the desktop the verdict, the right answer and the way onward came to four pixels more
+ * than the column beside an open chat panel is wide, so the two buttons wrapped to a second
+ * row — and a second row on a screen with no spare height is a row below the card's edge
+ * that has to be scrolled to. The copy gives up the width instead; it is a sentence, and a
+ * sentence can be narrower.
+ *
+ * A phone has no such width to give. Forced onto one line there, "Ups, ni pravilno." broke
+ * after two words and the buttons were pushed off the card entirely — so the phone lets the
+ * row wrap and pays for the second line out of the options above it.
+ */
+@media (min-width: 1100px) {
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
+    flex-wrap: nowrap;
+  }
+}
+
+.memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-actions {
+  flex: 0 0 auto;
+}
+
+/*
+ * The results screen gives ground the same way everything else on these tabs does.
+ *
+ * It is a fixed 474px — a 12rem disc, a 4.4rem emoji and generous air between five lines
+ * of type — which fits a tall window and hangs a hundred pixels below the fold of a
+ * laptop's. What it says is four short facts and one button, and none of that needs the
+ * disc to be that big; the disc is celebration, and celebration is the thing that can be
+ * smaller when there is no room for it.
+ */
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result {
+  padding-top: clamp(0.3rem, 2.4vh, 1.6rem);
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb-wrap {
+  width: clamp(8rem, 100dvh - 39rem, 12rem);
+  height: clamp(8rem, 100dvh - 39rem, 12rem);
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb {
+  width: 78%;
+  height: 78%;
+}
+
+/* Sized inline by the component, so it has to be overridden rather than inherited. */
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb .memo-emoji {
+  font-size: clamp(2.4rem, 7vh, 4.4rem);
+}
+
+/*
+ * The score shrinks with the disc it is pinned to.
+ *
+ * It is positioned at the corner of the orb's box and sized in rem, so leaving it alone
+ * while the disc got smaller did not move it aside — it sat over the middle of the emoji
+ * and covered the half of it that has the arm in it. Both now ride the same measure, so
+ * the badge clips the disc's corner at every size, which is the thing it is meant to do.
+ */
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-badge {
+  padding: clamp(0.25rem, 0.9vh, 0.45rem) clamp(0.45rem, 1.5vh, 0.8rem);
+  border-radius: clamp(10px, 1.6vh, 14px);
+  font-size: clamp(0.95rem, 2.4vh, 1.5rem);
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-eyebrow {
+  margin-top: clamp(0.5rem, 1.8vh, 1.2rem);
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-title {
+  margin-top: clamp(0.6rem, 2vh, 1.4rem);
+  font-size: clamp(1.35rem, 3.6vh, 1.75rem);
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-eyebrow + .memo-result-title {
+  margin-top: clamp(0.3rem, 1vh, 0.5rem);
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-line {
+  margin-top: clamp(0.35rem, 1.2vh, 0.7rem);
+}
+
+/* The largest single gap on the card, and the one nobody reads. */
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-actions {
+  margin-top: clamp(0.9rem, 3.2vh, 2.4rem);
+}
+
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-prompt {
+  margin-bottom: 0.6rem;
+}
+
+
+
+/*
+ * The test: the box you write the answer in is the thing that gives.
+ *
+ * It is a fixed 13rem, which is generous for a sentence and is the only part of this
+ * screen that has no fixed content to hold — the question above it and the two buttons
+ * below are what they are. So it takes whatever is left instead, down to a floor of about
+ * three lines, and the Submit button stays on screen where it can be pressed.
+ */
+.memo-note-screen[data-note-tab="test"] .lecture-practice-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.memo-note-screen[data-note-tab="test"] .lecture-practice-textarea {
+  flex: 1 1 auto;
+  min-height: 5.5rem;
+}
+
+/*
+ * The palace: the town is the only thing here that is a picture rather than a fact, so it
+ * is the only thing that gives. Its own `min-height` already says where it stops being a
+ * town and becomes a band of stripes.
+ */
+.memo-note-screen[data-note-tab="palace"] .memo-palace-intro {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  justify-content: center;
+}
+
+.memo-note-screen[data-note-tab="palace"] .memo-palace-hero {
+  /* It grows into the space rather than only giving it up: the town is the one thing on this
+     screen that is a picture, and a picture is what a screen with room to spare should spend
+     it on. */
+  flex: 1 1 auto;
+  min-height: 6rem;
+  max-height: clamp(6rem, 34vh, 20rem);
+}
+
+/*
+ * The empty states — no test written yet, no cards yet. A 9.4rem disc holding one emoji is
+ * the most expendable height on any of these screens.
+ */
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-study-empty-orb {
+  width: clamp(5.5rem, 14vh, 9.4rem);
+  height: clamp(5.5rem, 14vh, 9.4rem);
+}
+
+/*
+ * The phone gets the same treatment, and one thing the desktop does not need.
+ *
+ * Its dock floats over the foot of the card rather than sitting under it — the chat bar is
+ * `position: absolute`, so the scroller runs the full height of the card and the last thing
+ * on any of these screens was drawn underneath it. The band is reserved here instead, and
+ * the scroller stops scrolling: below this, everything fits by giving ground, the same way
+ * it does beside a rail.
+ */
+@media (max-width: 1099px) {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-scroll {
+    overflow-y: hidden;
+    /*
+     * The dock's own band is about 5rem of it; the rest is air, so that whatever ends the
+     * screen — the last option, a button, the foot of a card — is not drawn flush against
+     * the chat bar floating over it.
+     */
+    padding-bottom: 6.4rem;
+  }
+
+  /*
+   * Editing is already in the phone's dock, beside the chat bar, as the pill this app puts a
+   * screen's controls in — so the copy beside the note's title is the same control twice,
+   * and a whole row of height spent on it.
+   *
+   * Two classes deep, and declared here rather than up with the other phone rules: the
+   * button's own `display: inline-flex` comes from an `:is()` selector of equal specificity
+   * that sits later in this file, and equal specificity is settled by source order — so the
+   * first attempt matched perfectly and lost anyway.
+   */
+  .memo-note-head-slot .lecture-study-manage-button.lecture-study-head-edit {
+    display: none;
+  }
+
+  /*
+   * And the type comes down a step, because a phone column is narrower than the desktop one
+   * and every one of these lines was set for the wider column: the question, the options and
+   * the verdict all wrap a line sooner here, and a line here costs more than it does there.
+   */
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-prompt {
+    font-size: 1.12rem;
+    line-height: 1.28;
+    margin-bottom: 0.7rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-option {
+    font-size: 1rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
+    gap: 0.6rem 0.75rem;
+    padding-top: 0.7rem;
+    margin-top: 0.7rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-title {
+    font-size: 1.02rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-badge {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] :is(.memo-quiz-result-ghost, .memo-quiz-result-primary) {
+    height: 2.7rem;
+    padding: 0 1rem;
+    font-size: 0.98rem;
+  }
+
+  /* The walkthrough's sphere gives ground here too, rather than holding a fixed 11.5rem. */
+  .memo-tutor .memo-orb {
+    flex: 0 1 auto;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    aspect-ratio: 1;
+    min-height: 6rem;
+    max-height: 11.5rem;
+  }
+}
+
+/*
+ * The short phone — a 667pt screen, which is still a lot of the phones this is used on.
+ *
+ * Everything above has already given proportionally; this is the last of it. The quiz is the
+ * only screen that needs the tier: it is the one carrying a question, four answers and a
+ * verdict at once, and on a screen this short those three cannot all keep their full size.
+ */
+@media (max-width: 1099px) and (max-height: 740px) {
+  /* A little of that air back, on a screen that has none to spare. */
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-scroll {
+    padding-bottom: 5.6rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-prompt {
+    font-size: 1.02rem;
+    line-height: 1.25;
+    margin-bottom: 0.5rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-option {
+    font-size: 0.95rem;
+    min-height: 2.1rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
+    min-height: 1.55rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
+    gap: 0.4rem 0.6rem;
+    padding-top: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] :is(.memo-quiz-result-ghost, .memo-quiz-result-primary) {
+    height: 2.4rem;
+    font-size: 0.92rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-count {
+    font-size: 1rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-progress.quiz {
+    margin: 0.5rem 0 0.6rem;
+  }
+}
+
+/* --- and the parts of it that only make sense beside a rail --- */
+
 @media (min-width: 1100px) {
   /*
    * A definite height, not a floor. `min-height` was the obvious thing to write and it does
@@ -13825,147 +14367,9 @@
     height: calc(100dvh - 8.5rem);
   }
 
-  /* The card has to be a column too, or the scroller inside it has no definite height to
-     hand on and every `flex: 1` below resolves against content instead. */
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-card {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-scroll {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-panel.study {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
-    margin-top: clamp(0.5rem, 1.6vh, 0.9rem);
-  }
-
-  /* The walkthrough is the one that centres: it is an object being looked at rather than a
-     column of things being worked through. */
-  .memo-note-screen[data-note-tab="tutor"] .memo-panel.study {
-    justify-content: center;
-  }
-
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) :is(.workspace-panel-stack, .lecture-study-shell, .lecture-practice-shell) {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
-  }
-
   /* The note's title needs less air above it on a screen that is counting its pixels. */
   .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-headrow .memo-note-head {
     margin-top: 0.5rem;
-  }
-
-  /*
-   * The card is the thing that gives — but it has to stay a card.
-   *
-   * Its three fixed 22rem floors (stage, rotator, and the two faces sitting absolutely
-   * inside it) are what made this a scrolling screen. Simply letting them shrink is worse
-   * than the scrollbar: told only to get smaller, a box whose faces are `position: absolute`
-   * and contribute no height flattens into a letterbox with the question spilling out of it.
-   *
-   * So the height is taken from the column and the WIDTH follows it, at a fixed ratio. The
-   * card gets smaller on a short window and stays the shape of a card, which is the thing a
-   * learner is actually looking at.
-   */
-  .memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-stage {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-    justify-content: center;
-    align-items: center;
-    margin-top: 1.2rem;
-    /*
-     * A ceiling on the height, so the ratio below survives a tall window. The card's width
-     * comes from its height and the column caps that width — so past this point the card
-     * stopped getting wider and only got taller, drifting from a card towards a square. The
-     * room above this becomes air around it instead.
-     */
-    max-height: 22rem;
-  }
-
-  .memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-stage-card {
-    flex: 0 1 auto;
-    height: 100%;
-    width: auto;
-    max-width: 100%;
-    aspect-ratio: 5 / 3;
-  }
-
-  .memo-note-screen[data-note-tab="flashcards"] :is(.lecture-flashcard, .lecture-flashcard-rotator) {
-    height: 100%;
-    /* Small enough to be a short card, large enough to still be one. */
-    min-height: 11rem;
-  }
-
-  .memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-face {
-    min-height: 0;
-    padding: 1.4rem 1.5rem;
-    overflow: hidden;
-  }
-
-  /* The question sets the card's size on a tall window and gives way on a short one. */
-  .memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-content {
-    font-size: clamp(1.05rem, 2.4vh, 1.35rem);
-  }
-
-  .memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-toolbar {
-    margin-top: 1.1rem;
-  }
-
-  /*
-   * The head and its bar belong to the card, so they sit right under the note's title with
-   * nothing between them now that editing has moved down to the review row.
-   */
-  .memo-note-screen[data-note-tab="flashcards"] .memo-progress {
-    margin-top: 0.85rem;
-  }
-
-  .memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-stage {
-    margin-top: 0.9rem;
-  }
-
-  /*
-   * A card thrown to one side should leave the screen, not be sliced off at the edge of the
-   * note card it happens to be sitting in.
-   *
-   * The scroller clips both axes so that a pill row cannot hand the note a sideways
-   * scrollbar, and that clip caught the throw a few centimetres in — the gesture is meant to
-   * read as putting the card away, and a card that vanishes into a straight vertical line
-   * halfway there reads as a bug instead. The clip is released only while a drag is actually
-   * happening — and that is only half the gesture. The card the finger holds is one
-   * element; the clone that carries on from where it was let go is another, and keying the
-   * release on `.dragging` alone slammed the clip shut at exactly the moment of release, so
-   * every throw was sliced off at the edge of the note card. Both halves release it. By this
-   * point everything on the tab already fits, so there is no scroll position to lose.
-   */
-  .memo-note-screen[data-note-tab="flashcards"] :is(.memo-note-scroll, .memo-panel, .workspace-panel-stack, .lecture-study-shell, .lecture-flashcard-stage):has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
-    overflow: visible;
-  }
-
-  /* The outermost of them, and an ancestor of the screen — so `:has()` reaches down for the
-     tab as well as for the drag. Its `overflow-x: clip` is the last thing cutting the throw. */
-  .memo-main:has(.memo-note-screen[data-note-tab="flashcards"] :is(.lecture-flashcard.dragging, .lecture-flashcard-exit-card)) {
-    overflow: visible;
-  }
-
-  /*
-   * Over the chat column beside it, rather than under. The card carries a transform of its
-   * own, so it is already its own stacking context — what needs lifting is the chain it sits
-   * in, or the chat panel (fixed, and later in the document) paints over the throw.
-   */
-  .memo-note-screen[data-note-tab="flashcards"] :is(.memo-note-card, .memo-panel, .workspace-panel-stack, .lecture-study-shell, .lecture-flashcard-stage, .lecture-flashcard-stage-card):has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
-    position: relative;
-    z-index: 130;
   }
 
   /*
@@ -13980,270 +14384,6 @@
       :has(.memo-dock-slot > *:not(.memo-only-mobile))
     ) {
     display: none;
-  }
-
-  /*
-   * The quiz: the options are the screen. Everything above them is one line of eyebrow and
-   * one of question, so the list is what fills the card and what gives when there is less
-   * room — a shorter option is still a readable option, where a fourth one below the fold is
-   * not an option at all.
-   */
-  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-stage {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  /*
-   * The question is not in a card.
-   *
-   * It was: a surface inside the note's own card, holding one question and four answers that
-   * are themselves surfaces — three layers of card for one thing to read, and the phone
-   * layout had already stopped doing it. The options are the only boxes that need to be
-   * boxes, because they are the things being chosen between.
-   *
-   * Production paints this card with a gradient under a `:root[data-theme]` selector, which
-   * outweighs a plain two-class rule — hence the extra ancestor rather than an `!important`,
-   * the same way the phone rule does it.
-   */
-  .memo-note-screen[data-note-tab="quiz"] .memo-panel .lecture-quiz-card {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
-    padding: 0;
-    border-radius: 0;
-    background: none;
-    background-color: transparent;
-    box-shadow: none;
-  }
-
-  /* "Choose one answer" over four obviously-choosable answers. */
-  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-eyebrow {
-    display: none;
-  }
-
-  /* Same margins as the deck's, since they are now the same bar. */
-  .memo-note-screen[data-note-tab="quiz"] .memo-progress.quiz {
-    margin: 0.85rem 0 1.1rem;
-  }
-
-  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-prompt {
-    margin-bottom: 0.9rem;
-  }
-
-  /*
-   * The options share whatever is left, rather than being told a height and hoping.
-   *
-   * This went wrong twice before it went right, and both failures came from the same place:
-   * the list was a grid, and a grid does not shrink its rows to fit a shorter box — it
-   * overflows one. Letting the box shrink put the verdict on top of the last option; not
-   * letting it shrink pushed the last option through the bottom of the card. And no clamp
-   * can fix either, because the budget is not knowable in CSS: the question above wraps to
-   * one line or three depending on the question, and answering adds a whole row underneath.
-   *
-   * So the list is a column of flex children at `flex: 1 1 0`. Whatever height is left after
-   * the question and the verdict have taken theirs is divided between the four of them, and
-   * it is divided again the moment either of those changes. Nothing has to be predicted, so
-   * nothing can be predicted wrong. The floor is the point below which an option stops being
-   * comfortably tappable; four of those plus everything else fits any window this app runs in.
-   */
-  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-options {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    gap: clamp(0.35rem, 0.9vh, 0.7rem);
-    /*
-     * Deliberately NOT `min-height: 0`, which every other link in this chain wants. The list
-     * must never be smaller than the options inside it: shrink it past them and they are
-     * drawn over whatever follows, and what follows is the verdict. Below the floor the
-     * panel gives a little instead — a short scroll is recoverable, two things drawn on top
-     * of each other is not.
-     */
-  }
-
-  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-option {
-    flex: 1 1 0;
-    min-height: 2.4rem;
-    max-height: 4.4rem;
-  }
-
-  /*
-   * Answered, the options go lower still. They were four things to aim a cursor at and are
-   * now four lines to read with one of them marked, and a line needs less room than a
-   * target — which is exactly the room the verdict underneath them needs.
-   */
-  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
-    min-height: 2rem;
-  }
-
-  /* The verdict itself, at the size of the row it is rather than of the card it replaced. */
-  .memo-note-screen[data-note-tab="quiz"] :is(.memo-quiz-result-ghost, .memo-quiz-result-primary) {
-    height: 2.6rem;
-    padding: 0 0.95rem;
-    font-size: 0.95rem;
-  }
-
-  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-badge {
-    width: 2.2rem;
-    height: 2.2rem;
-  }
-
-  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-title {
-    font-size: 1.08rem;
-  }
-
-  /* The question gives a little too, rather than the options giving all of it. */
-  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-prompt {
-    font-size: clamp(1.08rem, 2.9vh, 1.3rem);
-    line-height: 1.28;
-  }
-
-  .memo-note-screen[data-note-tab="quiz"] .memo-progress.quiz {
-    margin: clamp(0.5rem, 1.6vh, 0.85rem) 0 clamp(0.6rem, 2vh, 1.1rem);
-  }
-
-  /* The last centimetre, so the verdict's second line is not clipped by the card's edge. */
-  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-stage:has(.memo-quiz-result) .memo-progress.quiz {
-    margin-bottom: 0.7rem;
-  }
-
-  /* It carries 1.4rem of margin and 1.4rem of padding above it, which is two gaps for one. */
-  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
-    padding-top: clamp(0.55rem, 1.8vh, 0.9rem);
-    margin-top: clamp(0.55rem, 1.8vh, 0.9rem);
-    gap: clamp(0.6rem, 1.8vh, 1rem);
-    /*
-     * One line, always. The verdict, the right answer and the way onward came to four pixels
-     * more than the column beside an open chat panel is wide, so the two buttons wrapped to a
-     * second row — and a second row on a screen with no spare height is a row below the card's
-     * edge that has to be scrolled to. The copy gives up the width instead; it is a sentence,
-     * and a sentence can be narrower.
-     */
-    flex-wrap: nowrap;
-  }
-
-  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-actions {
-    flex: 0 0 auto;
-  }
-
-  /*
-   * The results screen gives ground the same way everything else on these tabs does.
-   *
-   * It is a fixed 474px — a 12rem disc, a 4.4rem emoji and generous air between five lines
-   * of type — which fits a tall window and hangs a hundred pixels below the fold of a
-   * laptop's. What it says is four short facts and one button, and none of that needs the
-   * disc to be that big; the disc is celebration, and celebration is the thing that can be
-   * smaller when there is no room for it.
-   */
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result {
-    padding-top: clamp(0.3rem, 2.4vh, 1.6rem);
-  }
-
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb-wrap {
-    width: clamp(8rem, 100dvh - 39rem, 12rem);
-    height: clamp(8rem, 100dvh - 39rem, 12rem);
-  }
-
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb {
-    width: 78%;
-    height: 78%;
-  }
-
-  /* Sized inline by the component, so it has to be overridden rather than inherited. */
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb .memo-emoji {
-    font-size: clamp(2.4rem, 7vh, 4.4rem);
-  }
-
-  /*
-   * The score shrinks with the disc it is pinned to.
-   *
-   * It is positioned at the corner of the orb's box and sized in rem, so leaving it alone
-   * while the disc got smaller did not move it aside — it sat over the middle of the emoji
-   * and covered the half of it that has the arm in it. Both now ride the same measure, so
-   * the badge clips the disc's corner at every size, which is the thing it is meant to do.
-   */
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-badge {
-    padding: clamp(0.25rem, 0.9vh, 0.45rem) clamp(0.45rem, 1.5vh, 0.8rem);
-    border-radius: clamp(10px, 1.6vh, 14px);
-    font-size: clamp(0.95rem, 2.4vh, 1.5rem);
-  }
-
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-eyebrow {
-    margin-top: clamp(0.5rem, 1.8vh, 1.2rem);
-  }
-
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-title {
-    margin-top: clamp(0.6rem, 2vh, 1.4rem);
-    font-size: clamp(1.35rem, 3.6vh, 1.75rem);
-  }
-
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-eyebrow + .memo-result-title {
-    margin-top: clamp(0.3rem, 1vh, 0.5rem);
-  }
-
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-line {
-    margin-top: clamp(0.35rem, 1.2vh, 0.7rem);
-  }
-
-  /* The largest single gap on the card, and the one nobody reads. */
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-actions {
-    margin-top: clamp(0.9rem, 3.2vh, 2.4rem);
-  }
-
-  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-prompt {
-    margin-bottom: 0.6rem;
-  }
-
-
-
-  /*
-   * The test: the box you write the answer in is the thing that gives.
-   *
-   * It is a fixed 13rem, which is generous for a sentence and is the only part of this
-   * screen that has no fixed content to hold — the question above it and the two buttons
-   * below are what they are. So it takes whatever is left instead, down to a floor of about
-   * three lines, and the Submit button stays on screen where it can be pressed.
-   */
-  .memo-note-screen[data-note-tab="test"] .lecture-practice-stage {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .memo-note-screen[data-note-tab="test"] .lecture-practice-textarea {
-    flex: 1 1 auto;
-    min-height: 5.5rem;
-  }
-
-  /*
-   * The palace: the town is the only thing here that is a picture rather than a fact, so it
-   * is the only thing that gives. Its own `min-height` already says where it stops being a
-   * town and becomes a band of stripes.
-   */
-  .memo-note-screen[data-note-tab="palace"] .memo-palace-intro {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
-    justify-content: center;
-  }
-
-  .memo-note-screen[data-note-tab="palace"] .memo-palace-hero {
-    flex: 0 1 auto;
-    min-height: 6rem;
-    max-height: clamp(6rem, 26vh, 20rem);
-  }
-
-  /*
-   * The empty states — no test written yet, no cards yet. A 9.4rem disc holding one emoji is
-   * the most expendable height on any of these screens.
-   */
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-study-empty-orb {
-    width: clamp(5.5rem, 14vh, 9.4rem);
-    height: clamp(5.5rem, 14vh, 9.4rem);
   }
 }
 

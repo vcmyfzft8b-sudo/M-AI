@@ -13,8 +13,8 @@ import { sheetClass, useSheet } from "@/components/use-sheet";
  *
  * The tutor and the podcast draw on one allowance — the same minutes, the same daily reset, the
  * same hour to buy — so they answer "how much is left" with one object rather than two that look
- * nearly alike. It lives in the note screen's dock, where this app keeps the controls belonging
- * to the screen you are on: a popover on the desktop, a dragged sheet on the phone.
+ * nearly alike. Where it hangs is the caller's business — see `slot` — but how it opens is not:
+ * a popover on the desktop, a dragged sheet on the phone.
  */
 export type VoiceUsage = {
   /*
@@ -69,14 +69,19 @@ function UsageBar({
 
 export function VoiceUsageSheet({
   usage,
-  dockSlot,
+  slot,
   blocked,
   buyingCredits,
   onBuyCredits,
   extra,
 }: {
   usage: VoiceUsage | null;
-  dockSlot: HTMLElement | null;
+  /**
+   * Where on the screen the pill is drawn. The episode keeps it in the dock, where this app
+   * puts the controls belonging to the screen you are on; the walkthrough has moved it up
+   * beside the note's title, which is the only thing left on that screen it belongs next to.
+   */
+  slot: HTMLElement | null;
   /** The feature has already refused for want of time, so the offer is made without opening it. */
   blocked?: boolean;
   buyingCredits?: boolean;
@@ -105,7 +110,7 @@ export function VoiceUsageSheet({
     return () => close();
   }, [isOpen, close]);
 
-  if (!dockSlot) {
+  if (!slot) {
     return null;
   }
 
@@ -287,5 +292,5 @@ export function VoiceUsageSheet({
     </span>
   );
 
-  return createPortal(meter, dockSlot);
+  return createPortal(meter, slot);
 }

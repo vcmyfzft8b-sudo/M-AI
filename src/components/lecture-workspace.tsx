@@ -1273,6 +1273,13 @@ export function LectureWorkspace({
     [],
   );
   const [dockSlot, setDockSlot] = useState<HTMLElement | null>(null);
+  /*
+   * The other end of the note's title row, where a screen may hang one control of its own.
+   * The walkthrough's usage meter is what it was opened for: a fact about the screen you are
+   * on rather than a control belonging to the dock, and in the dock it sat below the thing it
+   * describes.
+   */
+  const [headSlot, setHeadSlot] = useState<HTMLElement | null>(null);
 
   const [isSending, setIsSending] = useState(false);
   const [trialChatMessagesRemaining, setTrialChatMessagesRemaining] = useState(
@@ -3959,8 +3966,22 @@ export function LectureWorkspace({
             `${detail.artifact?.summary ?? ""}\n${detail.artifact?.structured_notes_md ?? ""}`,
             detail.lecture.language_hint,
           )}
-          /* The usage pill belongs in the dock, where this app keeps a screen's controls. */
-          dockSlot={dockSlot}
+          /* Beside the note's title: "28 min left today" is a fact about this screen. */
+          headSlot={headSlot}
+          /*
+           * A finished walkthrough is the best moment in the app to offer the cards — they
+           * have just spent eight minutes proving they want this material, and the pill row
+           * is the only route to them otherwise. Withheld when there are none to open.
+           */
+          onOpenFlashcards={
+            detail.flashcards.length > 0
+              ? () => {
+                  hasChosenStudyViewRef.current = true;
+                  setActiveStudyView("flashcards");
+                  setActiveTab("study");
+                }
+              : undefined
+          }
         />
       );
     }
@@ -4270,23 +4291,29 @@ export function LectureWorkspace({
             <div
               className={`ios-card lecture-study-shell ${shouldAutoSizeStudyShell ? "auto-height" : ""}`}
             >
-              <div className="lecture-study-header">
-                {/* The design carries no readiness chip here — the material
-                    being on screen is the signal. */}
-                <div className="lecture-study-title" />
-                <div className="lecture-study-header-actions">
-                  {canManageActiveStudyView ? (
+              {/*
+                * Editing used to have a row to itself above the material, holding a single
+                * button and sixty pixels of height on every study screen — height these
+                * screens spend on the card, the question or the room they exist to show.
+                *
+                * The deck puts it at the end of its review row, beside the arrow that moves
+                * through the cards it edits. The screens with no such row put it beside the
+                * note's title, in the slot the walkthrough's meter uses: a screen's own one
+                * control, on the line that names the note it belongs to.
+                */}
+              {activeStudyView === "flashcards" || !canManageActiveStudyView || !headSlot
+                ? null
+                : createPortal(
                     <button
                       type="button"
-                      className="lecture-study-manage-button"
+                      className="lecture-study-manage-button lecture-study-head-edit"
                       onClick={openStudyManager}
                     >
                       <Msym name="edit_square" size="1.2rem" fill={false} weight={500} />
                       <span>{t("study.edit")}</span>
-                    </button>
-                  ) : null}
-                </div>
-              </div>
+                    </button>,
+                    headSlot,
+                  )}
 
               <div className="ios-segmented lecture-study-mode-switch">
                 {([
@@ -4447,6 +4474,18 @@ export function LectureWorkspace({
                       canPrevious: canNavigatePreviousFlashcard,
                       canNext: canNavigateNextFlashcard,
                     }}
+                    trailing={
+                      canManageActiveStudyView ? (
+                        <button
+                          type="button"
+                          className="lecture-study-manage-button lecture-flashcard-edit"
+                          onClick={openStudyManager}
+                        >
+                          <Msym name="edit_square" size="1.2rem" fill={false} weight={500} />
+                          <span>{t("study.edit")}</span>
+                        </button>
+                      ) : null
+                    }
                     exit={
                       flashcardExitAnimation
                         ? {
@@ -6037,11 +6076,14 @@ export function LectureWorkspace({
           <div className="memo-note-scroll" ref={noteScrollRef}>
             {tabPills}
 
-            <div className="memo-note-head memo-only-desktop">
-              <span className="memo-note-head-emoji">
-                <Emoji symbol={noteEmojiSymbol} size="1.45rem" />
-              </span>
-              <h1>{lectureTitle}</h1>
+            <div className="memo-note-headrow">
+              <div className="memo-note-head memo-only-desktop">
+                <span className="memo-note-head-emoji">
+                  <Emoji symbol={noteEmojiSymbol} size="1.45rem" />
+                </span>
+                <h1>{lectureTitle}</h1>
+              </div>
+              <div className="memo-note-head-slot" ref={setHeadSlot} />
             </div>
 
             <h1 className="memo-m-note-title memo-only-mobile memo-notes-tab-only">

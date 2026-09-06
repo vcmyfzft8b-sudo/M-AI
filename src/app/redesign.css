@@ -14673,15 +14673,38 @@
     margin-top: min(2.4rem, 3vh);
   }
 
-  /* The walkthrough's sphere gives ground here too, rather than holding a fixed 11.5rem. */
+  /*
+   * The column fills the card here too, rather than being a centred block of its own height.
+   *
+   * The sphere below takes what is left over, and a box exactly as tall as its contents has
+   * nothing left over — which is why the phone's sphere sat on its floor with a band of empty
+   * card under the start button. The desktop block already says this; the phone was relying on
+   * `min-height: min(30rem, 60vh)`, a guess at the room rather than a measurement of it.
+   */
+  .memo-tutor {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 0;
+  }
+
+  /*
+   * The walkthrough's sphere takes the room that is left here too.
+   *
+   * It was `flex: 0 1 auto` — shrink but never grow — so on a phone it sat on its 6rem floor
+   * with a hand's width of empty column above it, whatever the screen had spare. Measured at
+   * 390x844 it was 96 points of a 480-point column. Growing is the safe half of flex: it only
+   * ever spends space the column already has left over, so a running walkthrough with its
+   * status row and transport still pushes it back down to the floor on its own.
+   */
   .memo-tutor .memo-orb {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     width: auto;
     height: auto;
     max-width: 100%;
     aspect-ratio: 1;
     min-height: 6rem;
-    max-height: 11.5rem;
+    /* Above this it stops being a presence on a phone and starts being the whole screen. */
+    max-height: 13.5rem;
   }
 }
 
@@ -15356,9 +15379,23 @@
   animation-delay: 1.4s;
 }
 
+/*
+ * The bloom, blurred in proportion to itself.
+ *
+ * `.memo-orb-glow` blurs a flat 18px, which is the tutor's number for the tutor's box — 7.5% of
+ * the 240pt bloom it draws on a laptop. The same 18px on a 122pt bloom here is twice that share,
+ * and a blur that wide relative to what it is blurring spreads the light into a mist instead of
+ * a halo: the same colour, over the same radius, at half the definition. Restated as the tutor's
+ * share of each ball's own bloom, the two glow alike at every size — the halo reaches 30% of the
+ * sphere's width past its edge, against the tutor's 32%.
+ *
+ * The tutor keeps the absolute number because its bloom is `100%` of an orb the flexbox sizes,
+ * so there is no length here to take a share of.
+ */
 .memo-podcast-cover .memo-orb-glow.a {
   width: var(--glow-a);
   height: var(--glow-a);
+  filter: blur(calc(var(--glow-a) * 0.075));
   left: calc(var(--a-left) - (var(--glow-a) - var(--body-a)) / 2);
   top: calc(var(--a-top) - (var(--glow-a) - var(--body-a)) / 2);
 }
@@ -15366,6 +15403,7 @@
 .memo-podcast-cover .memo-orb-glow.b {
   width: var(--glow-b);
   height: var(--glow-b);
+  filter: blur(calc(var(--glow-b) * 0.075));
   right: calc(var(--b-right) - (var(--glow-b) - var(--body-b)) / 2);
   top: calc(var(--b-top) - (var(--glow-b) - var(--body-b)) / 2);
 }
@@ -15588,9 +15626,17 @@
 }
 
 /* A part-listened row carries a third line, so it is the one that is taller. */
+/*
+ * Vertical padding, not just a floor.
+ *
+ * The row sized itself with `min-height` alone, which is room a one-line title never needs and
+ * a three-line one never gets: past the floor the copy simply grew to the edges, and a
+ * part-listened episode put its progress bar hard against the bottom of the card. The padding
+ * is inside the floor for a short row, so nothing moves until the title actually wraps.
+ */
 .memo-podcast-episode {
   min-height: 4.6rem;
-  padding: 0 1.15rem;
+  padding: 0.8rem 1.15rem;
   gap: 1.1rem;
 }
 
@@ -15879,19 +15925,116 @@
   position: static;
 }
 
-.memo-podcast-voice-options {
+/* --- picking a voice ------------------------------------------------------ */
+
+/*
+ * One host's list, under a header saying whose it is.
+ *
+ * Both lists used to open at once, centre-wrapped, one under the other: twenty-two name chips
+ * in ragged rows with nothing between them saying where one host ended and the other began.
+ * The half you are not choosing is never worth the height it costs on a phone.
+ */
+.memo-podcast-picker {
+  display: grid;
+  gap: 0.6rem;
+}
+
+/* The two hosts, each carrying its own sphere and the name it is currently set to. */
+.memo-podcast-picker-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.memo-podcast-picker-tab {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  justify-content: center;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 3rem;
+  padding: 0 0.85rem;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.memo-podcast-picker-tab .memo-orb-body {
+  --orb-size: 1.35rem;
+  flex: 0 0 auto;
+}
+
+.memo-podcast-picker-tab-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.05rem;
+}
+
+/* The host's label, which is the smaller of the two lines: the name is what changes. */
+.memo-podcast-picker-tab-copy > span:first-child {
+  color: var(--muted-2);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.memo-podcast-picker-tab-copy > span:last-child {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The open one is tinted with its own voice, which is the same tint its chip below carries. */
+.memo-podcast-picker-tab.active {
+  border-color: oklch(0.7 0.16 var(--orb-hue));
+  background: color-mix(in oklch, oklch(0.7 0.16 var(--orb-hue)) 14%, var(--surface));
+}
+
+/* A solo cast has no tab to choose between, so the header is only a label. */
+.memo-podcast-picker-caption {
+  margin: 0;
+  color: var(--muted-2);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/*
+ * A grid rather than a centred wrap.
+ *
+ * Eleven names of eleven different lengths, centred, come out as four rows that each start and
+ * end somewhere new — a heap of chips rather than a list of voices. In columns they line up,
+ * and the ragged end is one short row instead of four.
+ */
+.memo-podcast-voice-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  /*
+   * A ceiling, so the sheet cannot grow past the screen and take the make-the-episode button
+   * with it. Well above the four rows this list actually has: it is here for a longer cast
+   * list, not for this one.
+   */
+  max-height: 40vh;
+  overflow-y: auto;
 }
 
 .memo-podcast-voice-option {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.3rem;
+  min-width: 0;
   min-height: 2.4rem;
-  padding: 0 0.75rem 0 0.6rem;
+  padding: 0 0.5rem;
   border: var(--btn-border-width) solid var(--btn-border);
   border-radius: 12px;
   background: var(--surface);
@@ -15912,6 +16055,13 @@
 
 .memo-podcast-voice-option.playing {
   color: oklch(0.62 0.16 var(--orb-hue));
+}
+
+/* A column is a third of a phone; the longest name gets the cell rather than escaping it. */
+.memo-podcast-voice-option > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The usage line, which only ever appears when there is an allowance to report. */
@@ -16209,6 +16359,48 @@
   .memo-podcast-chooser .memo-folder-modal-head {
     display: none;
   }
+
+  /*
+   * When the sheet runs out of screen, the voice list is what gives — not the button.
+   *
+   * The sheet has a ceiling and scrolls past it, which on a 667pt phone put "Ustvari epizodo"
+   * 6 points below the bottom edge with the picker open: the one control the sheet exists for,
+   * off screen, behind a scroll nobody knows is there. As a flex column the shortfall lands on
+   * the one child that can afford it — a list of eleven names, which scrolls perfectly well in
+   * its own right — and every row above it, and the button below it, keep their size.
+   *
+   * The sheet keeps `overflow-y: auto` from `.memo-confirm-fixed` as the last resort, for a
+   * screen so short that even an empty list leaves nothing over.
+   */
+  .memo-podcast-chooser {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .memo-podcast-chooser .memo-podcast-form {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  /* Rows with a size of their own keep it; only the list below is allowed to give. */
+  .memo-podcast-chooser .memo-podcast-form > * {
+    flex: none;
+  }
+
+  .memo-podcast-chooser .memo-podcast-picker {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .memo-podcast-chooser .memo-podcast-voice-options {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
 }
 
 /* The short-screen floor: a small phone, or any phone in landscape. */
@@ -16314,7 +16506,7 @@
 
   .memo-podcast-episode {
     min-height: 5.4rem;
-    padding: 0 1.5rem;
+    padding: 0.85rem 1.5rem;
     gap: 1.15rem;
   }
 
@@ -16479,6 +16671,13 @@
   .memo-podcast-voices {
     min-height: 3.6rem;
     padding: 0.5rem 1.15rem;
+  }
+
+  /* A 38rem modal holds four names across, and the modal has its own ceiling already. */
+  .memo-podcast-voice-options {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    max-height: none;
+    overflow-y: visible;
   }
 
   .memo-podcast-actions {

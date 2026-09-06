@@ -23,6 +23,7 @@ import {
   PODCAST_FORMAT_STORAGE_KEY,
   PODCAST_LENGTHS,
   PODCAST_LENGTH_STORAGE_KEY,
+  PODCAST_SPEAKERS,
   PODCAST_VOICE_A_STORAGE_KEY,
   PODCAST_VOICE_B_STORAGE_KEY,
   segmentRequestAllowance,
@@ -347,6 +348,15 @@ export function LecturePodcast({
     podcast && podcast.status === "ready" && turns.length > 0 && podcast.id === openedEpisodeId,
   );
   const speakerCount = getPodcastFormat(format).speakerCount;
+  /*
+   * Whose list the picker is showing.
+   *
+   * `openVoiceSlot` can still name the second host after a switch to a solo format — the format
+   * row does not close the picker, and it should not: you are still choosing a voice. A cast of
+   * one has only the one list, so it is the one that shows.
+   */
+  const activeVoiceSlot: PodcastSpeaker | null =
+    openVoiceSlot === null ? null : speakerCount === 1 ? "a" : openVoiceSlot;
   /*
    * Being written — by this screen, or by a request that started before it was opened.
    *
@@ -1558,12 +1568,20 @@ export function LecturePodcast({
     return parts.join(" · ");
   }
 
+  /*
+   * Whose voices these are, in the words the header above the list uses.
+   *
+   * It is the group's accessible name as well as the tab's label, because the list swaps in
+   * place when the host changes: without it a screen reader announces eleven radios with no
+   * way of telling which host is about to be given the one you pick.
+   */
+  const speakerLabel = (speaker: PodcastSpeaker) =>
+    speakerCount === 1
+      ? t("podcast.speaker.solo")
+      : t(speaker === "a" ? "podcast.speaker.a" : "podcast.speaker.b");
+
   const voiceOptions = (speaker: PodcastSpeaker) => (
-    <div
-      className="memo-podcast-voice-options"
-      role="radiogroup"
-      aria-label={t("podcast.voice.label")}
-    >
+    <div className="memo-podcast-voice-options" role="radiogroup" aria-label={speakerLabel(speaker)}>
       {NOTE_TTS_VOICES.map((option) => (
         <button
           key={option}
@@ -1693,14 +1711,47 @@ export function LecturePodcast({
       </div>
 
       {/*
-        * The per-voice pickers, unchanged and previewing on tap as they always have. They are
-        * only reached from the row above now, which is the whole of the change to them.
+        * The picker: one host at a time, and it says which one.
+        *
+        * Both hosts' lists used to open at once — twenty-two unlabelled name chips down a phone
+        * sheet, with nothing saying which half belonged to whom and the make-the-episode button
+        * pushed off the bottom of the screen. Half of it is never the half being chosen, so the
+        * two lists become two tabs over one list: the same chips, the host's own sphere and
+        * current voice on the tab that owns them, and a sheet that ends where it should.
         */}
-      {openVoiceSlot !== null ? (
-        <>
-          {voiceOptions("a")}
-          {speakerCount === 2 ? voiceOptions("b") : null}
-        </>
+      {activeVoiceSlot !== null ? (
+        <div className="memo-podcast-picker">
+          {speakerCount === 2 ? (
+            /*
+              * Two toggles rather than a `tablist`: a tab promises a tab panel, and what is
+              * below is the same radiogroup with different radios in it. `aria-pressed` says
+              * what is actually true — this host's list is the one showing.
+              */
+            <div className="memo-podcast-picker-tabs">
+              {PODCAST_SPEAKERS.map((slot) => (
+                <button
+                  key={slot}
+                  type="button"
+                  aria-pressed={activeVoiceSlot === slot}
+                  className={`memo-podcast-picker-tab ${
+                    activeVoiceSlot === slot ? "active" : ""
+                  }`.trim()}
+                  style={{ "--orb-hue": slot === "a" ? hueA : hueB } as CSSProperties}
+                  onClick={() => setOpenVoiceSlot(slot)}
+                >
+                  <span className="memo-orb-body mini" aria-hidden="true" />
+                  <span className="memo-podcast-picker-tab-copy">
+                    <span>{speakerLabel(slot)}</span>
+                    <span>{voices[slot]}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="memo-podcast-picker-caption">{t("podcast.speaker.solo")}</p>
+          )}
+          {voiceOptions(activeVoiceSlot)}
+        </div>
       ) : null}
 
       {error ? <p className="memo-inline-error">{error}</p> : null}

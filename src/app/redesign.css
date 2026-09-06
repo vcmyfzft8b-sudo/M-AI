@@ -13705,8 +13705,17 @@
     justify-content: center;
     min-height: 0;
     gap: 1.1rem;
-    /* Capped and centred: the note column is wide here, and a bubble or a progress bar
-       drawn the whole width of it stops being about the sphere in the middle. */
+    /*
+     * Capped and centred: the note column is wide here, and a topic bar drawn the whole
+     * width of it stops being about the sphere in the middle.
+     *
+     * `width: 100%` is not redundant beside the cap. Making the panel a flex column turned
+     * this into a flex item, and a flex item in a column shrinks to its content rather than
+     * filling the line — so the column quietly became as wide as its widest button, about
+     * two thirds of the 30rem it is supposed to be, and the voice picker had room for two
+     * names a row instead of four.
+     */
+    width: 100%;
     max-width: 30rem;
     margin-inline: auto;
   }
@@ -14276,6 +14285,19 @@
 
   .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
     min-height: 1.85rem;
+  }
+
+  /* The rule above the verdict, at the tightest the divider still reads as one. */
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
+    padding-top: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  /* A question that runs to three lines is the tallest this screen gets. */
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-prompt {
+    font-size: 1.05rem;
+    line-height: 1.25;
+    margin-bottom: 0.7rem;
   }
 }
 

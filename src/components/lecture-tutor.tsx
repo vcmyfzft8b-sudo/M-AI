@@ -1889,6 +1889,9 @@ export function LectureTutor({
                     } as CSSProperties
                   }
                 >
+                  {/* The grabber every sheet in this app wears, and the one place `useSheet`
+                      will start a drag from without swallowing a chip's tap. */}
+                  <div className="memo-grab" data-drag-handle />
                   <p className="memo-tutor-picker-heading">{t("tutor.voice.hint")}</p>
                   {voicePicker}
                 </div>

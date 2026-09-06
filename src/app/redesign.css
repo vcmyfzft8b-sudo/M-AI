@@ -14234,7 +14234,17 @@
  */
 @media (max-width: 1099px) {
   .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-scroll {
-    overflow-y: hidden;
+  /*
+   * `auto`, not `hidden`, and the distinction matters more than it looks.
+   *
+   * Everything above is arranged so these screens fit without scrolling, and when they fit
+   * `auto` scrolls no more than `hidden` does — the bar simply never appears. What it buys
+   * is the case the arrangement cannot cover: a reader with the root font size turned up,
+   * or a locale whose strings run longer than the ones this was measured against. Under
+   * `hidden` that content is not merely off the screen, it is unreachable — at a 20px root
+   * this screen hid seventeen pixels of the last option with no way to get at them.
+   */
+    overflow-y: auto;
     /*
      * The dock's own band is about 5rem of it; the rest is air, so that whatever ends the
      * screen — the last option, a button, the foot of a card — is not drawn flush against
@@ -14291,6 +14301,57 @@
     height: 2.7rem;
     padding: 0 1rem;
     font-size: 0.98rem;
+  }
+
+  /*
+   * The results screen scales on a phone as well.
+   *
+   * Its clamps were written inside the desktop breakpoint, so here it stayed a fixed 12rem
+   * disc over five lines of type set at their full size — and being a grid rather than part
+   * of the flex chain, it did not overflow the card politely, it overflowed the panel and
+   * came out from under the chat bar. Measured in `vh` rather than `rem` on purpose: the
+   * case that broke it is a reader with the root font size turned up, where every `rem` here
+   * grows while the screen it has to fit does not.
+   */
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result {
+    padding-top: clamp(0.2rem, 1.4vh, 1.6rem);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb-wrap {
+    width: min(12rem, 19vh);
+    height: min(12rem, 19vh);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb {
+    width: 78%;
+    height: 78%;
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb .memo-emoji {
+    font-size: min(4.4rem, 8vh);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-badge {
+    padding: min(0.45rem, 0.8vh) min(0.8rem, 1.4vh);
+    font-size: min(1.5rem, 2.6vh);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-eyebrow {
+    margin-top: min(1.2rem, 1.6vh);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-title {
+    margin-top: min(0.5rem, 0.9vh);
+    font-size: min(1.75rem, 3.4vh);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-line {
+    margin-top: min(0.7rem, 1.1vh);
+    font-size: min(1.1rem, 2.1vh);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-actions {
+    margin-top: min(2.4rem, 3vh);
   }
 
   /* The walkthrough's sphere gives ground here too, rather than holding a fixed 11.5rem. */

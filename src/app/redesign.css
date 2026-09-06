@@ -13137,12 +13137,12 @@
  * artboard draws neither. What is left is then sized against the window instead of against
  * itself, screen by screen, below.
  */
-.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) :is(.memo-breadcrumb, .memo-note-date) {
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) :is(.memo-breadcrumb, .memo-note-date) {
   display: none;
 }
 
 /* And the page's own top margin, which on these tabs is a screen's worth of nothing. */
-.memo-grid:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"])) {
+.memo-grid:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"])) {
   padding-top: 1rem;
 }
 
@@ -13151,7 +13151,7 @@
  * window. A screen that is not meant to scroll has no long note to end, and that 2.5rem
  * was the last thing putting a scrollbar on a card that otherwise fitted.
  */
-.memo:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"])) {
+.memo:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"])) {
   padding-bottom: 1rem;
 }
 
@@ -13160,12 +13160,12 @@
  * that hugs it. These five are given the window's height instead — see below — so the floor
  * does nothing here but hold the column open past the bottom of it.
  */
-.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-panel.study {
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-panel.study {
   min-height: 0;
 }
 
 /* An ancestor, so `:has()` rather than a descendant selector. */
-.memo-main:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"])) {
+.memo-main:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"])) {
   padding-top: 1rem;
 }
 
@@ -13209,10 +13209,27 @@
   --orb-swell: clamp(0, calc(var(--orb-level, 0) * 4.2), 1);
 }
 
+/*
+ * Stacked and centred inside the walkthrough's box. The podcast lays its own two spheres out
+ * side by side instead, so this is only the arrangement — being round is not, and lives on
+ * the parts themselves below.
+ */
 .memo-orb > * {
   position: absolute;
   inset: 0;
   margin: auto;
+}
+
+/*
+ * A sphere is round wherever it is drawn.
+ *
+ * This used to ride on `.memo-orb > *`, which was true while the walkthrough was the only
+ * screen with one. The episode draws its two directly inside its cover — there is no orb box
+ * around them to be a child of — so they came out as squares wearing a sphere's gradient.
+ */
+.memo-orb-glow,
+.memo-orb-body,
+.memo-orb-ring {
   border-radius: 50%;
 }
 
@@ -13263,6 +13280,49 @@
   transform: scale(calc(0.94 + var(--orb-swell) * 0.16));
   /* A slow drift under the audio-driven scale, so a held pause still looks alive. */
   animation: memo-tutor-breathe 5.5s ease-in-out infinite;
+}
+
+/*
+ * The sphere at tile size, where the bloom comes off.
+ *
+ * An 18px blur around a 2rem ball is mush, and the outer glow shadow at that size is a smudge
+ * under a list row rather than light. The two inner shadows are what is left, and they are
+ * what keeps it from flattening — so they are scaled with the sphere rather than dropped. The
+ * ratios are the full-size ones re-measured for a small ball, which needs a stronger
+ * terminator to survive being 2rem across.
+ *
+ * Sized off `--orb-size` rather than the percentages above, because these are not children of
+ * an orb box: the episode draws them inline in a row, and each one is told how big it is.
+ */
+.memo-orb-body.compact {
+  width: var(--orb-size);
+  height: var(--orb-size);
+  box-shadow:
+    inset 0 calc(var(--orb-size) * -0.143) calc(var(--orb-size) * 0.286)
+      oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45),
+    inset 0 calc(var(--orb-size) * 0.095) calc(var(--orb-size) * 0.19)
+      oklch(0.98 0.05 calc(var(--orb-hue) + 35) / 0.35);
+  animation: none;
+}
+
+/*
+ * Smaller than about 1.7rem the second highlight has nowhere to land — it and the first meet
+ * in the middle and read as a mottle rather than as two lights. Highlight one and the
+ * gradient are the floor at which this is still recognisably the same object.
+ */
+.memo-orb-body.mini {
+  width: var(--orb-size);
+  height: var(--orb-size);
+  background:
+    radial-gradient(circle at 36% 30%, oklch(0.95 0.06 calc(var(--orb-hue) + 25) / 0.95), transparent 42%),
+    linear-gradient(
+      160deg,
+      oklch(0.78 0.17 calc(var(--orb-hue) + 10)),
+      oklch(0.58 0.19 calc(var(--orb-hue) - 23))
+    );
+  box-shadow: inset 0 calc(var(--orb-size) * -0.147) calc(var(--orb-size) * 0.294)
+    oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45);
+  animation: none;
 }
 
 /* The rings are the walkthrough's listening state: they only expand when the learner talks. */
@@ -13987,19 +14047,19 @@
 
 /* The card has to be a column too, or the scroller inside it has no definite height to
    hand on and every `flex: 1` below resolves against content instead. */
-.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-card {
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-card {
   display: flex;
   flex-direction: column;
 }
 
-.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-scroll {
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-scroll {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-height: 0;
 }
 
-.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-panel.study {
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-panel.study {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -14013,7 +14073,7 @@
   justify-content: center;
 }
 
-.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) :is(.workspace-panel-stack, .lecture-study-shell, .lecture-practice-shell) {
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) :is(.workspace-panel-stack, .lecture-study-shell, .lecture-practice-shell) {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -14349,22 +14409,22 @@
  * disc to be that big; the disc is celebration, and celebration is the thing that can be
  * smaller when there is no room for it.
  */
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result {
   padding-top: clamp(0.3rem, 2.4vh, 1.6rem);
 }
 
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb-wrap {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb-wrap {
   width: clamp(8rem, 100dvh - 39rem, 12rem);
   height: clamp(8rem, 100dvh - 39rem, 12rem);
 }
 
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb {
   width: 78%;
   height: 78%;
 }
 
 /* Sized inline by the component, so it has to be overridden rather than inherited. */
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb .memo-emoji {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb .memo-emoji {
   font-size: clamp(2.4rem, 7vh, 4.4rem);
 }
 
@@ -14376,31 +14436,31 @@
  * and covered the half of it that has the arm in it. Both now ride the same measure, so
  * the badge clips the disc's corner at every size, which is the thing it is meant to do.
  */
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-badge {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-badge {
   padding: clamp(0.25rem, 0.9vh, 0.45rem) clamp(0.45rem, 1.5vh, 0.8rem);
   border-radius: clamp(10px, 1.6vh, 14px);
   font-size: clamp(0.95rem, 2.4vh, 1.5rem);
 }
 
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-eyebrow {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-eyebrow {
   margin-top: clamp(0.5rem, 1.8vh, 1.2rem);
 }
 
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-title {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-title {
   margin-top: clamp(0.6rem, 2vh, 1.4rem);
   font-size: clamp(1.35rem, 3.6vh, 1.75rem);
 }
 
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-eyebrow + .memo-result-title {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-eyebrow + .memo-result-title {
   margin-top: clamp(0.3rem, 1vh, 0.5rem);
 }
 
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-line {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-line {
   margin-top: clamp(0.35rem, 1.2vh, 0.7rem);
 }
 
 /* The largest single gap on the card, and the one nobody reads. */
-.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-actions {
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-actions {
   margin-top: clamp(0.9rem, 3.2vh, 2.4rem);
 }
 
@@ -14456,7 +14516,7 @@
  * The empty states — no test written yet, no cards yet. A 9.4rem disc holding one emoji is
  * the most expendable height on any of these screens.
  */
-.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-study-empty-orb {
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-study-empty-orb {
   width: clamp(5.5rem, 14vh, 9.4rem);
   height: clamp(5.5rem, 14vh, 9.4rem);
 }
@@ -14471,7 +14531,7 @@
  * it does beside a rail.
  */
 @media (max-width: 1099px) {
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-scroll {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-scroll {
   /*
    * `auto`, not `hidden`, and the distinction matters more than it looks.
    *
@@ -14550,44 +14610,44 @@
    * case that broke it is a reader with the root font size turned up, where every `rem` here
    * grows while the screen it has to fit does not.
    */
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result {
     padding-top: clamp(0.2rem, 1.4vh, 1.6rem);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb-wrap {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb-wrap {
     width: min(12rem, 19vh);
     height: min(12rem, 19vh);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb {
     width: 78%;
     height: 78%;
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb .memo-emoji {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb .memo-emoji {
     font-size: min(4.4rem, 8vh);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-badge {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-badge {
     padding: min(0.45rem, 0.8vh) min(0.8rem, 1.4vh);
     font-size: min(1.5rem, 2.6vh);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-eyebrow {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-eyebrow {
     margin-top: min(1.2rem, 1.6vh);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-title {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-title {
     margin-top: min(0.5rem, 0.9vh);
     font-size: min(1.75rem, 3.4vh);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-line {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-line {
     margin-top: min(0.7rem, 1.1vh);
     font-size: min(1.1rem, 2.1vh);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-actions {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-actions {
     margin-top: min(2.4rem, 3vh);
   }
 
@@ -14612,7 +14672,7 @@
  */
 @media (max-width: 1099px) and (max-height: 740px) {
   /* A little of that air back, on a screen that has none to spare. */
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-scroll {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-scroll {
     padding-bottom: 5.6rem;
   }
 
@@ -14668,12 +14728,12 @@
    * real to divide up — and on the rare screen that still cannot fit, what overflows is the
    * panel's own scroller rather than the page, so the chrome around it never moves.
    */
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-card {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-card {
     height: calc(100dvh - 8.5rem);
   }
 
   /* The note's title needs less air above it on a screen that is counting its pixels. */
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-headrow .memo-note-head {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-headrow .memo-note-head {
     margin-top: 0.5rem;
   }
 
@@ -14685,7 +14745,7 @@
    * a letterbox. Written so that the moment anything real is portalled into it, or the chat
    * is dismissed and its button appears, the band comes back.
    */
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-dock:not(:has(.memo-chat-fab)):not(
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-dock:not(:has(.memo-chat-fab)):not(
       :has(.memo-dock-slot > *:not(.memo-only-mobile))
     ) {
     display: none;
@@ -14710,20 +14770,20 @@
  * Above this height none of it applies and the screens look exactly as drawn.
  */
 @media (min-width: 1100px) and (max-height: 810px) {
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-head-emoji {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head-emoji {
     width: 2.5rem;
     height: 2.5rem;
   }
 
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-head-emoji .memo-emoji {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head-emoji .memo-emoji {
     font-size: 1.2rem;
   }
 
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-head h1 {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head h1 {
     font-size: 1.5rem;
   }
 
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-card {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-card {
     padding-top: 1.2rem;
     padding-bottom: 1.2rem;
   }
@@ -14751,11 +14811,11 @@
  * before anything a learner is actually working with does.
  */
 @media (min-width: 1100px) and (max-height: 680px) {
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-head h1 {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head h1 {
     font-size: 1.3rem;
   }
 
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-card {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-card {
     padding-top: 0.9rem;
     padding-bottom: 0.9rem;
   }
@@ -14773,25 +14833,25 @@
    * The note's emoji, which at this height is a 2.5rem disc setting the height of the title
    * row for a picture the title already says in words.
    */
-  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-note-head-emoji {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head-emoji {
     display: none;
   }
 
   /* The results card's own floors, one notch lower again. */
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-orb-wrap {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb-wrap {
     width: clamp(6rem, 100dvh - 39rem, 12rem);
     height: clamp(6rem, 100dvh - 39rem, 12rem);
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-title {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-title {
     font-size: 1.2rem;
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-line {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-line {
     font-size: 0.98rem;
   }
 
-  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"]) .memo-result-actions {
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-actions {
     margin-top: 0.7rem;
   }
 
@@ -15101,116 +15161,32 @@
 /* --- the generated podcast ----------------------------------------------- */
 
 /*
- * The episode screen borrows the walkthrough's language rather than inventing one: the same
- * spheres, the same voice hues, the same pill row. They are the two spoken screens in the app and
- * a listener should recognise the second from the first.
+ * The shelf.
  *
- * What is different is that this one has something to read. A podcast has a transcript, and the
- * transcript is the seek bar people actually use — so it is the tallest thing here, and the
- * controls sit above it rather than under it, where a phone's thumb would cover the line being
- * spoken.
+ * The library is the only home. Making an episode is a sheet over it on a phone and a centred
+ * modal on a laptop, which is what retired the conditional back button: a sheet has a grabber
+ * and a scrim, so "is there a screen behind me" is answered by looking rather than by state.
+ *
+ * The artwork is the tutor's sphere — see `.memo-orb-body` — rather than the flat disc this
+ * screen used to draw for itself. They are the two spoken screens in the app and a listener
+ * should recognise the second from the first.
  */
+.memo-podcast,
+.memo-podcast-chooser {
+  /*
+   * The podcast tab's own tint, from NOTE_TABS in lecture-workspace.tsx. Declared rather than
+   * inherited because `--tab-tint` is set inline on the pill itself, which is a sibling of this
+   * panel rather than an ancestor of it. If the tab's tint moves, this moves with it.
+   */
+  --pod-tint: oklch(0.66 0.15 20);
+}
+
 .memo-podcast {
+  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 0.85rem;
-  padding: 1.25rem 1.25rem 1.5rem;
-  text-align: center;
-}
-
-/*
- * Everything on this screen has to fit the screen, on a small phone as well as a laptop, because
- * choosing a show is one decision and a decision you have to scroll to finish is one you make
- * badly. Nothing here is dropped to achieve that — the parts that give ground are the ones with
- * no information in them: the artwork, the standfirst, and the air between the rows.
- */
-
-
-/*
- * The short-phone floor.
- *
- * Measured on the note screen rather than guessed: on a 667pt screen the chooser came to 691pt of
- * panel before the navbar and the pill row had taken their share, so roughly a hundred and fifty
- * had to go. These two are what go, because they are the only things on the screen that carry no
- * information a listener needs to choose with — the artwork, and a sentence of description under
- * names that already say what they are ("Interview", "Solo"). The cards, the lengths, the voices
- * and the button all survive intact.
- */
-
-
-/*
- * The cover.
- *
- * Two spheres for two voices, overlapped the way a record sleeve overlaps two faces — which is
- * the one image that says "a conversation" before a word has played. A solo episode draws one,
- * centred, rather than one sphere and an empty space where the other was.
- */
-.memo-podcast-cover {
-  position: relative;
-  width: 11rem;
-  height: 7.5rem;
-  flex: none;
-  display: grid;
-  place-items: center;
-}
-
-/*
- * Lit like the rest of the app rather than like a sweet.
- *
- * The lightness and chroma below are the tab icons' own — oklch(0.66 0.15) and its neighbours —
- * where these were a good deal brighter and more saturated than anything else on the screen.
- * Two of them at 0.78 chroma 0.17 made the artwork the loudest object in a deliberately quiet
- * interface, which is why it read as candy however the hue was chosen.
- */
-.memo-podcast-orb {
-  position: absolute;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 36% 30%, oklch(0.86 0.05 calc(var(--podcast-hue) + 25) / 0.95), transparent 42%),
-    radial-gradient(circle at 62% 74%, oklch(0.6 0.13 calc(var(--podcast-hue) - 15) / 0.9), transparent 60%),
-    linear-gradient(
-      160deg,
-      oklch(0.7 0.13 calc(var(--podcast-hue) + 10)),
-      oklch(0.55 0.14 calc(var(--podcast-hue) - 23))
-    );
-  box-shadow: 0 10px 30px oklch(0.6 0.14 var(--podcast-hue) / 0.35);
-}
-
-.memo-podcast-orb.primary {
-  width: 5.6rem;
-  height: 5.6rem;
-  left: 1.6rem;
-  z-index: 1;
-}
-
-.memo-podcast-orb.secondary {
-  width: 4.6rem;
-  height: 4.6rem;
-  right: 1.6rem;
-  top: 1.6rem;
-}
-
-/* A solo episode has one sphere and it belongs in the middle, not off to the left. */
-.memo-podcast-cover:not(:has(.secondary)) .memo-podcast-orb.primary {
-  left: auto;
-}
-
-.memo-podcast-title {
-  margin: 0;
-  max-width: 26rem;
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-}
-
-.memo-podcast-subtitle,
-.memo-podcast-hint {
-  margin: 0;
-  max-width: 26rem;
-  font-size: 0.85rem;
-  color: var(--muted);
+  padding: 1rem 0 1.25rem;
 }
 
 /*
@@ -15227,53 +15203,340 @@
 }
 
 .memo-podcast-loading .msym {
-  animation: memo-podcast-spin 1.1s linear infinite;
+  animation: memo-tutor-spin 1.1s linear infinite;
 }
 
+/* --- the artwork ---------------------------------------------------------- */
+
+/*
+ * A pair of spheres, overlapped the way a record sleeve overlaps two faces — the one image that
+ * says "a conversation" before a word has played. A solo episode draws one, centred.
+ *
+ * Every size this appears at sets the same nine values, and the glows are computed from them
+ * rather than given: a bloom is concentric with the sphere it belongs to, and stating that once
+ * is what stops a bloom drifting off its ball the next time a size is tuned.
+ */
+.memo-podcast-cover {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--cover-w);
+  height: var(--cover-h);
+}
+
+.memo-podcast-cover > * {
+  position: absolute;
+}
+
+/*
+ * --- the episode fits the window too ---------------------------------------
+ *
+ * The same arrangement the other study screens got: the column fills the card it is given
+ * and the one thing on it that is a picture rather than a fact — the cover — is what gives
+ * ground when there is less of it. Everything else here is a line of type or a button, and
+ * neither of those has anything to spare.
+ */
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast {
+  flex: 1;
+  min-height: 0;
+}
+
+/*
+ * The player centres in the card rather than sitting at the top of it.
+ *
+ * It is five short rows — artwork, title, byline, scrubber, transport — and the card is
+ * whatever the window gives, so left alone the whole thing sat under the note's title with a
+ * screen's worth of nothing beneath it. Centred, the empty room is shared above and below,
+ * which is where a thing being listened to belongs.
+ */
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+/* It is one of the transport's buttons now, so it drops the corner it was pinned to. */
+.memo-podcast-back {
+  position: static;
+}
+
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast-hero {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast-cover {
+  flex: 0 1 auto;
+  /* Under about this the two spheres stop reading as a pair and start reading as two dots. */
+  min-height: 4.5rem;
+  max-height: min(var(--cover-h), 24vh);
+  max-width: 100%;
+}
+
+.memo-podcast-cover .memo-orb-body.a {
+  width: var(--body-a);
+  height: var(--body-a);
+  left: var(--a-left);
+  top: var(--a-top);
+  z-index: 2;
+}
+
+.memo-podcast-cover .memo-orb-body.b {
+  width: var(--body-b);
+  height: var(--body-b);
+  right: var(--b-right);
+  top: var(--b-top);
+  z-index: 1;
+  /* Out of phase with A, so the pair drifts rather than pulsing as one object. */
+  animation-delay: 1.4s;
+}
+
+.memo-podcast-cover .memo-orb-glow.a {
+  width: var(--glow-a);
+  height: var(--glow-a);
+  left: calc(var(--a-left) - (var(--glow-a) - var(--body-a)) / 2);
+  top: calc(var(--a-top) - (var(--glow-a) - var(--body-a)) / 2);
+}
+
+.memo-podcast-cover .memo-orb-glow.b {
+  width: var(--glow-b);
+  height: var(--glow-b);
+  right: calc(var(--b-right) - (var(--glow-b) - var(--body-b)) / 2);
+  top: calc(var(--b-top) - (var(--glow-b) - var(--body-b)) / 2);
+}
+
+/* A solo episode has one sphere and it belongs in the middle, not off to the left. */
+.memo-podcast-cover.solo .memo-orb-body.a,
+.memo-podcast-cover.solo .memo-orb-glow.a {
+  left: auto;
+}
+
+/* The empty and writing screens: the one place the artwork earns full size. */
+.memo-podcast-cover {
+  --cover-w: 11rem;
+  --cover-h: 8rem;
+  --body-a: 4.6rem;
+  --body-b: 3.8rem;
+  --glow-a: 7rem;
+  --glow-b: 5.8rem;
+  --a-left: 1.55rem;
+  --a-top: 1.55rem;
+  --b-right: 1.35rem;
+  --b-top: 2.55rem;
+}
+
+.memo-podcast-cover.playing {
+  --cover-w: 12rem;
+  --cover-h: 8.5rem;
+  --body-a: 5.1rem;
+  --body-b: 4.2rem;
+  --glow-a: 7.6rem;
+  --glow-b: 6.4rem;
+  --a-top: 1.65rem;
+  --b-right: 1.3rem;
+}
+
+/*
+ * Being written.
+ *
+ * The tutor's `phase-preparing`, reused rather than reinvented: the leading sphere dims and cools
+ * and two counter-rotating arcs run around it — the working signal every spinner has trained
+ * people to read, wrapped around the object it belongs to. The second host is held back and
+ * desaturated, and fades up as the script lands: the picture of two hosts assembling.
+ */
+.memo-podcast-cover.writing {
+  --cover-h: 8.5rem;
+  --body-a: 4.3rem;
+  --body-b: 3.5rem;
+  --glow-a: 6rem;
+  --a-left: 1.75rem;
+  --a-top: 1.5rem;
+  --b-right: 1.4rem;
+  --b-top: 2.7rem;
+}
+
+.memo-podcast-cover.writing .memo-orb-body.a {
+  animation: memo-tutor-preparing 2s ease-in-out infinite;
+  /* The outer bloom shadow belongs to a lit sphere; this one is not lit yet. */
+  box-shadow:
+    inset 0 -0.75rem 1.5rem oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45),
+    inset 0 0.5rem 1rem oklch(0.98 0.05 calc(var(--orb-hue) + 35) / 0.35);
+}
+
+.memo-podcast-cover.writing .memo-orb-glow.a {
+  opacity: 0.35;
+}
+
+.memo-podcast-cover.writing .memo-orb-body.b {
+  opacity: 0.4;
+  filter: saturate(0.45) brightness(0.7);
+  animation: none;
+  transition: opacity 0.4s ease;
+}
+
+.memo-podcast-cover.writing .memo-orb-ring {
+  width: 6.7rem;
+  height: 6.7rem;
+  left: 0.55rem;
+  top: 0.3rem;
+  border: 2px solid transparent;
+  border-top-color: oklch(0.78 0.16 var(--orb-hue));
+  border-right-color: oklch(0.78 0.16 var(--orb-hue) / 0.35);
+  animation: memo-tutor-spin 1.1s linear infinite;
+}
+
+/* A second, slower, fainter arc the other way, so it reads as motion rather than as a picture. */
+.memo-podcast-cover.writing .memo-orb-ring.second {
+  width: 7.7rem;
+  height: 7.7rem;
+  left: 0.05rem;
+  top: -0.2rem;
+  border-top-color: transparent;
+  border-left-color: oklch(0.7 0.13 calc(var(--orb-hue) - 10) / 0.45);
+  opacity: 0.7;
+  animation: memo-tutor-spin 2.6s linear infinite reverse;
+}
+
+/*
+ * Without the spin there is no motion to say "working", so the arcs hold a steady lit quadrant
+ * and the dimmed core carries the rest of the signal. The globally-shared orb block above has
+ * already cancelled the animations by the time this is read.
+ */
 @media (prefers-reduced-motion: reduce) {
   .memo-podcast-loading .msym {
     animation: none;
   }
+
+  .memo-podcast-cover.writing .memo-orb-ring {
+    opacity: 1 !important;
+  }
+
+  .memo-podcast-cover.writing .memo-orb-body.a {
+    filter: saturate(0.45) brightness(0.6) !important;
+  }
 }
 
-/* --- what this note already has ------------------------------------------ */
+/* --- the empty and writing screens ---------------------------------------- */
+
+.memo-podcast-hero {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  padding: 1rem 0 0;
+  text-align: center;
+}
+
+.memo-podcast-hero.writing {
+  gap: 0.95rem;
+  padding: 2.2rem 0.5rem;
+}
+
+.memo-podcast-title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.32;
+  color: var(--text);
+}
+
+.memo-podcast-body {
+  margin: 0;
+  max-width: 16rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+.memo-podcast-hero.writing .memo-podcast-body {
+  max-width: 17rem;
+}
+
+/* What was chosen, restated. A two-minute wait is long enough to doubt what you picked. */
+.memo-podcast-choice {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+}
 
 /*
- * The episodes already made, and the reason this is a screen of its own rather than a strip
- * above the chooser: the two together do not fit a phone, and somebody who has made an episode
- * is far more often coming back to it than making another.
+ * The one action on the screen, and it is ink rather than coral: the tab's own tint is already
+ * spending this panel's accent, so a coral button here would be a second primary.
  */
-.memo-podcast-library {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  /* Long libraries scroll inside themselves rather than pushing the button off the screen. */
-  max-height: min(22rem, 42vh);
-  overflow-y: auto;
-}
-
-.memo-podcast-episode {
-  display: flex;
+.memo-podcast-primary {
+  display: inline-flex;
   align-items: center;
-  gap: 0.7rem;
+  justify-content: center;
+  gap: 0.5rem;
   width: 100%;
-  min-height: 3.4rem;
-  padding: 0.5rem 0.85rem;
-  border: 1px solid var(--line);
-  border-radius: 0.9rem;
-  background: transparent;
-  color: var(--text);
-  text-align: left;
+  height: 3.4rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 1.05rem;
+  font-weight: 750;
   cursor: pointer;
-  transition:
-    border-color 140ms ease,
-    background 140ms ease;
 }
 
-/* The voices it was made in, as the two dots the cover already uses. */
-/* The row being opened: it spins where the play arrow was, and the rest wait their turn. */
-.memo-podcast-episode.opening .msym {
-  animation: memo-podcast-spin 1.1s linear infinite;
+.memo-podcast-hero .memo-podcast-primary {
+  margin-top: 0.5rem;
+}
+
+.memo-podcast-primary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* --- the library ---------------------------------------------------------- */
+
+.memo-podcast-shelf {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.memo-podcast-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+/*
+ * The same second line at two widths.
+ *
+ * A phone has about 164 measured points here and the date does not fit in them, so the phone
+ * spends the line on time remaining and the desktop spends it on both. Which one applies is a
+ * fact about the viewport, and asking JavaScript for it would make the first paint disagree with
+ * the HTML the server built — so both are rendered and the stylesheet picks.
+ */
+.memo-podcast-meta-desktop {
+  display: none;
+}
+
+/* A part-listened row carries a third line, so it is the one that is taller. */
+.memo-podcast-episode {
+  min-height: 4.6rem;
+  padding: 0 1.15rem;
+  gap: 1.1rem;
+}
+
+.memo-podcast-episode.resumable {
+  min-height: 5.1rem;
+}
+
+.memo-podcast-episode .memo-note-title {
+  font-size: 1.08rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
 }
 
 .memo-podcast-episode:disabled {
@@ -15284,165 +15547,205 @@
   opacity: 0.5;
 }
 
+.memo-podcast-episode.opening .msym {
+  animation: memo-tutor-spin 1.1s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .memo-podcast-episode.opening .msym {
     animation: none;
   }
 }
 
-.memo-podcast-episode-voices {
+/* The spheres take the emoji tile's slot, at the smallest size one still reads as a sphere. */
+.memo-podcast-episode-art {
+  position: relative;
   display: inline-flex;
-  flex: none;
+  flex: 0 0 auto;
   align-items: center;
+  width: 2.7rem;
+  height: 2.5rem;
 }
 
-.memo-podcast-episode-voices > span {
-  width: 1.1rem;
-  height: 1.1rem;
-  border-radius: 50%;
+.memo-podcast-episode-art .memo-orb-body {
+  --orb-size: 2.1rem;
+  position: absolute;
+  left: 0;
+  z-index: 2;
+}
+
+.memo-podcast-episode-art .memo-orb-body.b {
+  --orb-size: 1.75rem;
+  left: auto;
+  right: 0;
+  top: 0.55rem;
+  z-index: 1;
+}
+
+/* One sphere sits in the middle of the slot rather than at its left edge. */
+.memo-podcast-episode-art.solo {
+  justify-content: center;
+}
+
+.memo-podcast-episode-art.solo .memo-orb-body {
+  position: static;
+}
+
+/* Only ever on a part-listened row: a bar at 0% or 100% is decoration. */
+.memo-podcast-episode-bar {
+  display: block;
+  height: 0.2rem;
+  margin-top: 0.1rem;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.memo-podcast-episode-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
   background: linear-gradient(
-    160deg,
-    oklch(0.78 0.17 calc(var(--podcast-hue) + 10)),
-    oklch(0.58 0.19 calc(var(--podcast-hue) - 23))
+    90deg,
+    oklch(0.7 0.16 var(--hue-a)),
+    oklch(0.7 0.16 var(--hue-b))
   );
 }
 
-/* Overlapped, so a two-hander reads as two people at a glance. */
-.memo-podcast-episode-voices > span + span {
-  margin-left: -0.4rem;
+.memo-podcast-new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  height: 3.2rem;
+  margin-top: 0.1rem;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background 0.16s ease;
 }
 
-.memo-podcast-episode-text {
+.memo-podcast-new:hover {
+  background: var(--tile);
+}
+
+/* --- choosing a show ------------------------------------------------------ */
+
+/*
+ * A sheet on a phone, a modal on a laptop — and it is the app's own overlay, not a second one.
+ *
+ * `.memo-confirm-fixed` already IS both of those, and it already carries the rise from the
+ * bottom edge, the finger-tracking transform, the spring back, the `.closing` slide off and the
+ * centred pop-in above 1100px. Every other sheet in the product moves through it, so borrowing
+ * it is what makes this one move the same way rather than nearly the same way. What is left
+ * here is only what the podcast's own artboard asks for: a wider modal, and a `--surface` fill
+ * rather than the sheet's usual `--bg`, because the segment thumb inside it is `--sunken` and
+ * that ladder only reads on a surface.
+ *
+ * It is portalled to the viewport rather than placed inside the tab panel, which is what the
+ * artboard draws. The panel lives inside the note screen's one scroller, so a sheet pinned to
+ * its bottom edge is pinned to a moving target — below the fold on a long library, and sliding
+ * as the note scrolls.
+ */
+.memo-podcast-chooser {
+  width: min(38rem, 100%);
+  padding: 2rem 2.1rem 2.1rem;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.24);
+}
+
+.memo-podcast-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.memo-podcast-shows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.memo-podcast-show {
   display: flex;
-  flex-direction: column;
-  gap: 0.05rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 2.7rem;
+  padding: 0 0.6rem;
   min-width: 0;
-  flex: 1;
 }
 
-.memo-podcast-episode-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  /* One line: an episode title is an identifier here, not something to read. */
+.memo-podcast-show .msym {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.memo-podcast-show > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.memo-podcast-episode-meta {
-  font-size: 0.76rem;
-  color: var(--muted);
+/* The tab row's own active treatment, so a chosen show reads the way a chosen tab does. */
+.memo-podcast-show.active {
+  border-color: var(--pod-tint);
+  background: color-mix(in oklch, var(--pod-tint) 16%, var(--surface));
+  font-weight: 700;
 }
 
-/* --- choosing a show ----------------------------------------------------- */
+.memo-podcast-show.active .msym {
+  color: var(--pod-tint);
+}
 
 /*
- * One column, one width.
+ * One description, for the show that is actually selected. All four at once was a wall of prose
+ * above a choice between four short names; the names and the icons carry the choice, and this
+ * line carries what a name does not.
  *
- * The shows, the lengths, the voices and the button are four decisions in a row, and they read as
- * a form only if they share an edge — so everything below the title is the same width and the
- * spacing between them is the only thing that groups them. The screen was previously a grid, a
- * centred pill row, a full-width pair and a centred button, which gave the eye four different
- * left edges to track down a single column.
+ * Scoped to the container, and that is not decoration. `.memo-confirm` dresses its own
+ * paragraphs as a dialog's standfirst — 1.02rem, line-height 1.6, and a 1.5rem gap beneath —
+ * and `.memo-confirm p` is a class plus an element, so it outranks any bare component class
+ * inside it. Unscoped, this line came out a size too big with a hole under it.
  */
-.memo-podcast-setup {
-  display: flex;
-  flex-direction: column;
-  gap: 1.1rem;
-  width: 100%;
-  max-width: 30rem;
+.memo-podcast-chooser p {
+  margin: 0;
 }
 
-.memo-podcast-formats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
-}
-
-/*
- * A row, not a card: an icon and a name, the same shape as the tab that got you here. The
- * descriptions moved out from under each one to a single line below the grid — see the
- * component — so there is nothing left to stack and nothing left to make the heights uneven.
- */
-.memo-podcast-format {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  min-height: 3rem;
-  padding: 0.6rem 0.8rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  transition:
-    border-color 140ms ease,
-    background 140ms ease;
-}
-
-/*
- * The icon sits beside the name rather than above it. Stacked, it cost a whole row in a card
- * whose job is to be scanned, and it pushed the description far enough from the title that the
- * two stopped reading as one thing.
- */
-.memo-podcast-format.active {
-  border-color: color-mix(in oklch, oklch(0.7 0.16 20) 60%, transparent);
-  background: color-mix(in oklch, oklch(0.7 0.16 20) 12%, transparent);
-}
-
-.memo-podcast-format-label {
-  font-size: 0.92rem;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-
-.memo-podcast-format-hint {
-  margin: -0.1rem 0 0;
-  min-height: 2.2rem;
+.memo-podcast-chooser .memo-podcast-show-hint {
+  min-height: 2.6rem;
   color: var(--muted);
-  font-size: 0.8rem;
-  line-height: 1.35;
+  font-size: 0.92rem;
+  line-height: 1.4;
   text-align: center;
+  text-wrap: pretty;
 }
 
-/*
- * Three lengths, one row, equal shares. As centred pills they were three different widths in the
- * middle of a column of full-width things, which is the sort of detail nobody names and everybody
- * sees.
- */
+/* The artboard's track: tighter than the app's phone default, so the thumb fills more of it. */
 .memo-podcast-lengths {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
+  padding: 0.25rem;
 }
 
-.memo-podcast-length {
+.memo-podcast-lengths button {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.05rem;
-  min-height: 3rem;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 0.9rem;
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    border-color 140ms ease,
-    background 140ms ease,
-    color 140ms ease;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  font-size: 0.9rem;
 }
 
-.memo-podcast-length.active {
-  color: var(--text);
-  border-color: color-mix(in oklch, oklch(0.7 0.16 20) 60%, transparent);
-  background: color-mix(in oklch, oklch(0.7 0.16 20) 12%, transparent);
+/*
+ * A white thumb on a white card has no edge, and this segment is always inside one — the sheet
+ * and the modal are both `--surface`. So the thumb steps down rather than up.
+ */
+.memo-podcast-lengths button.active {
+  background: var(--sunken);
 }
 
 .memo-podcast-length-minutes {
@@ -15452,63 +15755,63 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* --- choosing the voices ------------------------------------------------- */
-
-.memo-podcast-voice-picker,
-.memo-podcast-footer {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.4rem;
-  width: 100%;
-  max-width: 30rem;
-}
-
-/* Inside the setup column it is already the right width; it only needs the rhythm. */
-.memo-podcast-setup .memo-podcast-voice-picker {
-  max-width: none;
-}
-
-.memo-podcast-voice-slot {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.memo-podcast-voice-current {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-height: 2.7rem;
-  padding: 0 0.75rem;
-  border: 1px solid var(--line);
-  border-radius: 0.9rem;
-  background: var(--tile);
-  color: var(--text);
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-/* The colour of the voice, so the choice is visible without reading the name. */
-.memo-podcast-voice-dot {
-  width: 1.15rem;
-  height: 1.15rem;
-  flex: none;
-  border-radius: 50%;
-  background: linear-gradient(
-    160deg,
-    oklch(0.78 0.17 calc(var(--podcast-hue) + 10)),
-    oklch(0.58 0.19 calc(var(--podcast-hue) - 23))
-  );
-}
-
-.memo-podcast-voice-role {
+.memo-podcast-lengths button.active .memo-podcast-length-minutes {
   color: var(--muted);
 }
 
-.memo-podcast-voice-name {
-  margin-left: auto;
-  font-weight: 650;
+/* --- the cast ------------------------------------------------------------- */
+
+/*
+ * The length and the cast, which are one decision at two widths.
+ *
+ * On a phone they stack and are simply two more rows of the form, so they carry the form's own
+ * rhythm; the desktop block puts them side by side, which is what keeps a form this size from
+ * becoming a column of stripes. Without the gap here the segment sat directly on top of the
+ * cast row with nothing between them.
+ */
+.memo-podcast-cast {
+  display: grid;
+  gap: 0.85rem;
+}
+
+/*
+ * Both hosts on one row, which is what buys the room for the sheet to fit a phone. Tapping it
+ * opens the per-voice picker below, which is unchanged — it is only reached from here now.
+ */
+.memo-podcast-voices {
+  min-height: 4rem;
+  padding: 0.7rem 1.15rem;
+  gap: 0.9rem;
+}
+
+.memo-podcast-voices-art {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  width: 2.6rem;
+  height: 1.7rem;
+}
+
+.memo-podcast-voices-art .memo-orb-body {
+  --orb-size: 1.7rem;
+  position: absolute;
+  left: 0;
+  z-index: 2;
+}
+
+.memo-podcast-voices-art .memo-orb-body.b {
+  left: auto;
+  right: 0;
+  z-index: 1;
+}
+
+.memo-podcast-voices-art.solo {
+  width: 1.7rem;
+}
+
+.memo-podcast-voices-art.solo .memo-orb-body {
+  position: static;
 }
 
 .memo-podcast-voice-options {
@@ -15522,63 +15825,49 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  min-height: 2rem;
-  padding: 0 0.65rem 0 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--tile);
+  min-height: 2.4rem;
+  padding: 0 0.75rem 0 0.6rem;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 12px;
+  background: var(--surface);
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   font-weight: 600;
+  letter-spacing: -0.02em;
   cursor: pointer;
+  transition: background 0.16s ease;
 }
 
 .memo-podcast-voice-option.active {
   color: var(--text);
-  border-color: color-mix(in oklch, oklch(0.72 0.16 var(--podcast-hue)) 55%, transparent);
-  background: color-mix(in oklch, oklch(0.72 0.16 var(--podcast-hue)) 16%, transparent);
+  border-color: oklch(0.7 0.16 var(--orb-hue));
+  background: color-mix(in oklch, oklch(0.7 0.16 var(--orb-hue)) 16%, var(--surface));
+  font-weight: 700;
 }
 
 .memo-podcast-voice-option.playing {
-  color: oklch(0.82 0.13 var(--podcast-hue));
+  color: oklch(0.62 0.16 var(--orb-hue));
 }
 
-.memo-podcast-start {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.85rem 1.25rem;
-  border: none;
-  border-radius: 999px;
-  background: var(--ink);
-  color: var(--bg);
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.memo-podcast-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  min-height: 2.5rem;
-  padding: 0 0.9rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: transparent;
+/* The usage line, which only ever appears when there is an allowance to report. */
+.memo-podcast-usage {
+  margin: 0;
   color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
+  font-size: 0.92rem;
+  text-align: center;
 }
 
-/* --- while it is being written ------------------------------------------- */
+/* Scoped for the same reason as the description above — see `.memo-confirm p`. */
+.memo-podcast-chooser .memo-podcast-usage,
+.memo-podcast-chooser .memo-inline-error {
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+/* --- while it is being written -------------------------------------------- */
 
 .memo-podcast-progress {
-  width: min(22rem, 100%);
+  width: min(18rem, 100%);
   height: 0.4rem;
   border-radius: 999px;
   background: var(--track);
@@ -15589,216 +15878,629 @@
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, oklch(0.72 0.16 20), oklch(0.68 0.17 300));
+  background: linear-gradient(
+    90deg,
+    oklch(0.7 0.16 var(--hue-a)),
+    oklch(0.7 0.16 var(--hue-b))
+  );
   transition: width 380ms ease-out;
 }
 
-/* --- playing ------------------------------------------------------------- */
+/* --- playing -------------------------------------------------------------- */
+
+/*
+ * The way out, in the panel's top-right corner.
+ *
+ * It was a full-width row above the player, which is what the artboard draws — and on a desktop
+ * that stranded it at the far left of a panel whose player is a centred 30rem column, a long way
+ * from anything it belongs to. In the corner it reads as this screen's own control at either
+ * width, and out of the flow it stops costing the player a row of height it does not have on a
+ * short laptop.
+ */
+
+
+.memo-podcast-stage {
+  display: grid;
+  justify-items: center;
+  gap: 0.95rem;
+  text-align: center;
+}
+
+.memo-podcast-titles {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.memo-podcast-stage .memo-podcast-title {
+  max-width: 17rem;
+}
+
+.memo-podcast-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
 
 .memo-podcast-scrubber {
   display: flex;
   align-items: center;
   gap: 0.6rem;
   width: 100%;
-  max-width: 30rem;
+  margin-top: 0.1rem;
 }
 
 .memo-podcast-clock {
   flex: none;
   min-width: 2.6rem;
-  font-size: 0.75rem;
   color: var(--muted);
+  font-size: 0.92rem;
   font-variant-numeric: tabular-nums;
 }
 
+.memo-podcast-clock.end {
+  text-align: right;
+}
+
+/*
+ * A styled range rather than a div, so the position stays keyboard-reachable and announced —
+ * `accent-color` is what had to go, because it cannot carry the voice pair's two hues.
+ */
 .memo-podcast-scrubber input[type="range"] {
   flex: 1;
   min-width: 0;
-  accent-color: oklch(0.7 0.16 20);
+  height: 0.9rem;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
   cursor: pointer;
+}
+
+.memo-podcast-scrubber input[type="range"]::-webkit-slider-runnable-track {
+  height: 0.4rem;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, oklch(0.7 0.16 var(--hue-a)), oklch(0.7 0.16 var(--hue-b))) left / var(--played, 0%)
+      100% no-repeat,
+    var(--track);
+}
+
+.memo-podcast-scrubber input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 0.9rem;
+  height: 0.9rem;
+  /* Half the thumb minus half the track, so it rides the centre line rather than the top of it. */
+  margin-top: -0.25rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.memo-podcast-scrubber input[type="range"]::-moz-range-track {
+  height: 0.4rem;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, oklch(0.7 0.16 var(--hue-a)), oklch(0.7 0.16 var(--hue-b))) left / var(--played, 0%)
+      100% no-repeat,
+    var(--track);
+}
+
+.memo-podcast-scrubber input[type="range"]::-moz-range-thumb {
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .memo-podcast-controls {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
   justify-content: center;
+  gap: 1rem;
 }
 
 .memo-podcast-control {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.6rem;
-  height: 2.6rem;
-  border: 1px solid var(--line);
+  width: var(--btn-round);
+  height: var(--btn-round);
+  flex: 0 0 auto;
+  border: 0;
   border-radius: 999px;
   background: var(--tile);
   color: var(--text);
   cursor: pointer;
 }
 
+.memo-podcast-control .msym {
+  font-size: var(--btn-round-glyph);
+}
+
 .memo-podcast-control.primary {
-  width: 3.3rem;
-  height: 3.3rem;
-  border: none;
+  width: 3.4rem;
+  height: 3.4rem;
   background: var(--ink);
   color: var(--bg);
 }
 
-.memo-podcast-control:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-/* The spinner the play button wears while the next turn is still being synthesized. */
-.memo-podcast-control:disabled .msym {
-  animation: memo-podcast-spin 1.1s linear infinite;
-}
-
-@keyframes memo-podcast-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .memo-podcast-control:disabled .msym {
-    animation: none;
-  }
+.memo-podcast-control.primary .msym {
+  font-size: 1.8rem;
 }
 
 /*
- * Everything below here is responsive override, and it lives at the END of this section on
- * purpose: a media query adds no specificity, so a block placed above the rules it means to
- * override silently loses to them. That is not hypothetical — the compaction below was
- * written next to the rule it shrinks, sat above the base sizes, and did nothing at all on
- * the phones it was written for.
- */
-
-/*
- * Choosing a show has to fit the screen it is chosen on, because a decision you have to scroll to
- * finish is one you make badly. What gives ground is measured rather than guessed — the note
- * screen's own navbar and pill row take about two hundred points before this panel starts, so on
- * a phone the panel has to come in around five hundred.
+ * "Preparing the next part" is a status line, not a state of the play button.
  *
- * Keyed to WIDTH, not height. Phones are narrow whatever their length, and keying the compaction
- * to height left a tall phone with the roomy desktop sizing and an overflowing screen.
+ * It used to disable the button and spin its glyph, which took the control out from under the
+ * listener's thumb in the middle of an episode — over a wait they can do nothing about and which
+ * usually ends before they have finished reading it. The button stays live.
  */
-@media (max-width: 640px) {
-  .memo-podcast {
-    gap: 0.6rem;
-    padding: 0.75rem 1rem 1rem;
-  }
+.memo-podcast-status {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
 
-  /* The chooser drops the artwork at every width now, in the markup — see the component. */
-  .memo-podcast-title {
-    font-size: 1.05rem;
-  }
+/*
+ * The dot, and the ping off it.
+ *
+ * A still dot beside "preparing the next part" is indistinguishable from a bullet — it says a
+ * colour, not that anything is happening, and this line is the ONLY thing on the screen saying
+ * so now that the play button no longer spins. So the dot keeps its size and a ring leaves it
+ * on a slow beat: the same idiom as a recording light, read at a glance and ignorable while
+ * listening.
+ *
+ * Transform and opacity only. Animating the spread of a box-shadow would have needed no extra
+ * element and is exactly what the design system rules out.
+ */
+.memo-podcast-status-dot {
+  position: relative;
+  width: 0.4rem;
+  height: 0.4rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--pod-tint);
+  /* The dot itself never goes out, so there is something moving between rings too. */
+  animation: memo-podcast-status-pulse 1.4s ease-in-out infinite;
+}
 
-  .memo-podcast-setup {
-    gap: 0.6rem;
-  }
+.memo-podcast-status-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--pod-tint);
+  /* Invisible at rest, which is also where the global reduced-motion rule leaves it. */
+  opacity: 0;
+  animation: memo-podcast-ping 1.4s linear infinite;
+}
 
-  /*
-   * Two cards across, still. One per row gives the description a comfortable width and needs four
-   * rows to do it, which is most of a phone spent on a choice between four short names.
-   */
-  .memo-podcast-format {
-    padding: 0.65rem 0.7rem;
-    gap: 0.15rem;
+@keyframes memo-podcast-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
   }
-
-  .memo-podcast-format-label {
-    font-size: 0.88rem;
-  }
-
-  .memo-podcast-format-hint {
-    font-size: 0.75rem;
-  }
-
-  .memo-podcast-length {
-    min-height: 2.6rem;
-  }
-
-  .memo-podcast-voice-current {
-    min-height: 2.4rem;
-  }
-
-  .memo-podcast-start {
-    padding: 0.7rem 1.25rem;
-  }
-
-  .memo-podcast-episode {
-    min-height: 3.1rem;
+  50% {
+    opacity: 0.4;
   }
 }
 
 /*
- * The short-screen floor: a small phone, or any phone in landscape. Two more things go, and they
- * are the only ones left on the screen carrying no information a listener chooses with — a
- * sentence of description under names that already say what they are, and the last of the air.
+ * Linear, and faded across the whole travel rather than at the end of it.
+ *
+ * The usual ping curve is front-loaded — the ring reaches full size in the first third and
+ * spends the rest of the cycle invisible, which reads as an occasional flicker rather than as
+ * something working. Spreading it evenly means there is a ring on screen at every moment.
  */
+@keyframes memo-podcast-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(2.2);
+    opacity: 0.26;
+  }
+  100% {
+    transform: scale(3.4);
+    opacity: 0;
+  }
+}
+
+/* --- the phone ------------------------------------------------------------ */
+
+/*
+ * This block is at the END of the section on purpose: a media query adds no specificity, so a
+ * compaction written next to the rule it shrinks loses to it silently. That is not hypothetical
+ * — the previous version of this screen had exactly that bug, and it did nothing at all on the
+ * phones it was written for.
+ */
+
+@media (max-width: 1099px) {
+  /*
+   * The chooser as a bottom sheet.
+   *
+   * `.memo-confirm-fixed` has already turned itself into one by here — edge, radius, rise,
+   * drag and exit. These four declarations are the podcast's own: the artboard's padding, and
+   * a `--surface` fill where the app's other sheets sit on `--bg`. The fill is not a whim; the
+   * length segment's active thumb is `--sunken`, and a `--sunken` thumb on a `--bg` sheet is
+   * the same colour as the sheet.
+   */
+  .memo-podcast-chooser {
+    width: auto;
+    padding: 0.7rem 1.25rem calc(1.3rem + var(--memo-safe-bottom));
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* The grabber says "drag me down"; a title and a close button would say it twice. */
+  .memo-podcast-chooser .memo-folder-modal-head {
+    display: none;
+  }
+}
+
+/* The short-screen floor: a small phone, or any phone in landscape. */
 @media (max-width: 640px) and (max-height: 800px) {
-  /* The last few points, and they are real: on a 667pt screen the screen came to nine over. */
   .memo-podcast {
-    gap: 0.5rem;
+    gap: 0.6rem;
     padding-bottom: 0.5rem;
   }
 
-  .memo-podcast-format {
-    padding: 0.6rem 0.65rem;
+  .memo-podcast-hero {
+    gap: 0.6rem;
+    padding-top: 0.5rem;
   }
 
-  .memo-podcast-setup {
-    gap: 0.45rem;
-  }
-
-  .memo-podcast-voice-current {
-    min-height: 2.25rem;
-  }
-
-  .memo-podcast-length {
-    min-height: 2.4rem;
+  .memo-podcast-hero.writing {
+    gap: 0.7rem;
+    padding: 1.2rem 0.5rem;
   }
 
   /*
-   * The player, which the block above was never measured against — it was written for the
-   * chooser, and the two screens are not the same height. Measured on a 375x667 screen with an
-   * episode open: 700 points of content in a 667-point view, 33 over, and the artwork is the
-   * only thing on that screen carrying no information. Shrinking it and closing the last of the
-   * gaps brings the player inside the view on the smallest phone the site supports.
+   * The artwork gives ground before anything else does, because it is the only thing on either
+   * screen carrying no information. It comes down in proportion, offsets included, so the pair
+   * still overlaps the way the full-size version does.
    */
   .memo-podcast-cover {
-    width: 7.8rem;
-    height: 4.7rem;
+    --cover-w: 8.6rem;
+    --cover-h: 6.2rem;
+    --body-a: 3.6rem;
+    --body-b: 3rem;
+    --glow-a: 5.5rem;
+    --glow-b: 4.5rem;
+    --a-left: 1.2rem;
+    --a-top: 1.2rem;
+    --b-right: 1.05rem;
+    --b-top: 2rem;
+  }
+
+  .memo-podcast-cover.playing {
+    --cover-w: 9.4rem;
+    --cover-h: 6.6rem;
+    --body-a: 4rem;
+    --body-b: 3.3rem;
+    --glow-a: 6rem;
+    --glow-b: 5rem;
+    --a-top: 1.3rem;
+    --b-right: 1rem;
+  }
+
+  .memo-podcast-cover.writing {
+    --cover-h: 6.6rem;
+    --body-a: 3.4rem;
+    --body-b: 2.8rem;
+    --glow-a: 4.7rem;
+    --a-left: 1.35rem;
+    --a-top: 1.2rem;
+    --b-right: 1.1rem;
+    --b-top: 2.1rem;
+  }
+
+  .memo-podcast-cover.writing .memo-orb-ring {
+    width: 5.3rem;
+    height: 5.3rem;
+    left: 0.4rem;
+    top: 0.25rem;
+  }
+
+  .memo-podcast-cover.writing .memo-orb-ring.second {
+    width: 6.1rem;
+    height: 6.1rem;
+    left: 0;
+    top: -0.15rem;
+  }
+
+  .memo-podcast-stage {
+    gap: 0.7rem;
+  }
+
+  .memo-podcast-shelf {
+    gap: 0.6rem;
   }
 
   /*
-   * The spheres are absolutely positioned, so the box shrinking does not shrink them — left
-   * alone they spilled straight over the episode title. They come down in the same proportion,
-   * offsets included, so the pair still overlap the way the full-size artwork does.
+   * The chooser is deliberately NOT compacted here.
+   *
+   * The floor exists because the hero and the library have to share a 667pt screen with the note
+   * screen's own chrome. The sheet shares that screen with nothing — it is over everything, and
+   * measured at 375x667 it comes to 409 points of a 667-point viewport. Squeezing it bought
+   * nothing and cost the form the rhythm the artboard draws.
    */
-  .memo-podcast-orb.primary {
-    width: 3.5rem;
-    height: 3.5rem;
-    left: 1rem;
+}
+
+/* --- the desktop ---------------------------------------------------------- */
+
+@media (min-width: 1100px) {
+  /* Rows never become unreadably wide; the reading column's own cap is 68rem. */
+  .memo-podcast-shelf {
+    max-width: 34rem;
   }
 
-  .memo-podcast-orb.secondary {
-    width: 2.9rem;
-    height: 2.9rem;
-    right: 1rem;
-    top: 0.9rem;
+  .memo-podcast-list {
+    gap: 0.85rem;
   }
 
-  .memo-podcast-footer {
-    gap: 0.3rem;
+  .memo-podcast-episode {
+    min-height: 5.4rem;
+    padding: 0 1.5rem;
+    gap: 1.15rem;
   }
 
-  .memo-podcast-secondary {
-    min-height: 2.25rem;
+  .memo-podcast-episode.resumable {
+    min-height: 5.4rem;
+  }
+
+  .memo-podcast-episode .memo-note-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .memo-podcast-meta-phone {
+    display: none;
+  }
+
+  .memo-podcast-meta-desktop {
+    display: block;
+  }
+
+  .memo-podcast-episode-art {
+    width: 3.4rem;
+    height: 2.85rem;
+  }
+
+  .memo-podcast-episode-art .memo-orb-body {
+    --orb-size: 2.4rem;
+  }
+
+  .memo-podcast-episode-art .memo-orb-body.b {
+    --orb-size: 2rem;
+    top: 0.6rem;
+  }
+
+  /* The extra width is spent on information rather than on stretch — see the meta line. */
+  .memo-podcast-new {
+    justify-self: start;
+    width: auto;
+    padding: 0 1.3rem;
+  }
+
+  /* The sphere is most of what the player is, so it takes the room the phone does not have. */
+  .memo-podcast-cover.playing {
+    --cover-w: 15rem;
+    --cover-h: 10.5rem;
+    --body-a: 6.4rem;
+    --body-b: 5.3rem;
+    --glow-a: 9.5rem;
+    --glow-b: 8rem;
+    --a-left: 1.95rem;
+    --a-top: 2.05rem;
+    --b-right: 1.65rem;
+    --b-top: 3.2rem;
+  }
+
+  /* Centred rather than stretched: a player across a widescreen is a control bar, not a player. */
+  .memo-podcast-stage {
+    max-width: 30rem;
+    margin: 0 auto;
+    gap: 1.1rem;
+  }
+
+  .memo-podcast-stage .memo-podcast-title {
+    max-width: none;
+    font-size: 1.55rem;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 1.25;
+  }
+
+  .memo-podcast-subtitle {
+    font-size: 1rem;
+  }
+
+  .memo-podcast-scrubber {
+    gap: 0.7rem;
+  }
+
+  .memo-podcast-clock {
+    min-width: 2.8rem;
+    font-size: 0.95rem;
+  }
+
+  /* Hit targets do not need to grow for a mouse; only the space between them does. */
+  .memo-podcast-controls {
+    gap: 1.1rem;
+  }
+
+  .memo-podcast-status {
+    font-size: 0.95rem;
+  }
+
+  /*
+   * At this width the sheet is already a centred modal — `.memo-confirm-fixed` does that on its
+   * own. All that is left is the head, which the phone hides in favour of the grabber, and the
+   * two grids the extra width buys.
+   */
+  .memo-podcast-chooser .memo-folder-modal-head {
+    display: flex;
+    margin-bottom: 1.4rem;
+  }
+
+  /*
+   * A ceiling, because a centred dialog has no edge to run off: it spills equally past the top
+   * and the bottom, and the primary lands on the wrong side of both. The voice picker is what
+   * makes that reachable — eleven chips opening under a form that is already six rows tall.
+   */
+  .memo-podcast-chooser {
+    max-height: calc(100dvh - 3rem);
+    overflow-y: auto;
+  }
+
+  .memo-podcast-form {
+    gap: 1.1rem;
+  }
+
+  /* The width buys one row of four shows instead of two by two. */
+  .memo-podcast-shows {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  /*
+   * Four across in a 38rem modal is 128px a chip, and the longest show name plus its icon comes
+   * to within a few points of that — so the padding goes rather than the label. Centred content
+   * in a fixed cell does not need it.
+   */
+  .memo-podcast-show {
+    gap: 0.4rem;
+    padding: 0 0.35rem;
+  }
+
+  .memo-podcast-chooser .memo-podcast-show-hint {
+    min-height: 0;
+    font-size: 1rem;
+    line-height: 1.45;
+    text-align: left;
+  }
+
+  .memo-podcast-chooser .memo-podcast-usage {
+    font-size: 0.95rem;
+    text-align: left;
+  }
+
+  /*
+   * The length segment beside the cast rather than under it, which is what keeps a form this
+   * size from becoming a column of stripes.
+   */
+  .memo-podcast-cast {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.85rem;
+    align-items: center;
+  }
+
+  .memo-podcast-voices {
+    min-height: 3.6rem;
+    padding: 0.5rem 1.15rem;
+  }
+
+  .memo-podcast-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 0.2rem;
+  }
+
+  .memo-podcast-actions .memo-podcast-primary {
+    flex: 1 1 14rem;
+    width: auto;
+  }
+
+}
+
+/*
+ * The desktop bump is a luxury, and it is conditional on there being room for it.
+ *
+ * The player grows its sphere at 1100px on the grounds that the sphere is most of what the
+ * screen is — which is true on a monitor and false on a laptop. Measured on a 1440x789 MacBook
+ * Air: the note screen's own title and tab row spend 407 points before this panel starts, and
+ * the full-size player then finished 76 points below the fold, taking the transport with it.
+ * The one control a listener actually needs was the thing off the screen.
+ *
+ * So above this the player keeps the artboard's sizes, and below it falls back to the phone's
+ * — which is not a compromise so much as an admission that a short laptop has a phone's worth
+ * of vertical room.
+ *
+ * The thresholds moved down eighty points when the breadcrumb and the note's date left these
+ * tabs: the 407 points of chrome this was measured against is now nearer 320, and a tier that
+ * does not know that shrinks the artwork on screens with the room for it.
+ */
+@media (min-width: 1100px) and (max-height: 820px) {
+  .memo-podcast {
+    padding: 0.5rem 0 0.75rem;
+  }
+
+  .memo-podcast-stage {
+    gap: 0.85rem;
+  }
+
+  .memo-podcast-cover.playing {
+    --cover-w: 12rem;
+    --cover-h: 8.5rem;
+    --body-a: 5.1rem;
+    --body-b: 4.2rem;
+    --glow-a: 7.6rem;
+    --glow-b: 6.4rem;
+    --a-left: 1.55rem;
+    --a-top: 1.65rem;
+    --b-right: 1.3rem;
+    --b-top: 2.55rem;
+  }
+
+  /* The title comes back to the sheet rung; at this height it is a label, not a headline. */
+  .memo-podcast-stage .memo-podcast-title {
+    font-size: 1.3rem;
+    font-weight: 750;
+    letter-spacing: -0.03em;
+  }
+
+  .memo-podcast-subtitle {
+    font-size: 0.92rem;
+  }
+}
+
+/*
+ * One more step down, and it exists because of a number worth writing down: the note screen
+ * spends 407 points on its breadcrumb, tab row, title and date before this panel starts, and
+ * that cost is the same on every tab. On a 720-point viewport it leaves the player 313.
+ *
+ * The sphere is what gives ground, and only the sphere — it is the one thing on this screen
+ * carrying no information, which is the same rule the phone's floors already follow. The
+ * transport, the clocks and the title never move.
+ */
+@media (min-width: 1100px) and (max-height: 740px) {
+  .memo-podcast {
+    padding-bottom: 0.5rem;
+  }
+
+  .memo-podcast-cover.playing {
+    --cover-w: 10.6rem;
+    --cover-h: 7.5rem;
+    --body-a: 4.5rem;
+    --body-b: 3.7rem;
+    --glow-a: 6.7rem;
+    --glow-b: 5.6rem;
+    --a-left: 1.4rem;
+    --a-top: 1.45rem;
+    --b-right: 1.15rem;
+    --b-top: 2.25rem;
   }
 }
 

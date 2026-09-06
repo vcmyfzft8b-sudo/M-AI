@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
-import { useT } from "@/components/i18n-provider";
+import { useTranslations } from "@/components/i18n-provider";
+import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
+import { sheetClass, useSheet } from "@/components/use-sheet";
 import { VoiceUsageSheet, type VoiceUsage } from "@/components/voice-usage-sheet";
 import { NOTE_TTS_VOICES, type NoteTtsVoice } from "@/lib/note-tts-settings";
 import {
@@ -29,9 +31,19 @@ import {
   type PodcastSpeaker,
   type PodcastTurn,
 } from "@/lib/podcast-settings";
+import {
+  beaconPodcastProgress,
+  hasFinished,
+  isResumable,
+  mergeStoredProgress,
+  flushBufferedProgress,
+  PROGRESS_SAVE_INTERVAL_MS,
+  savePodcastProgress,
+} from "@/lib/podcast-progress";
 import { TutorClipPlayer } from "@/lib/tutor/clip-player";
 import { podcastVoiceHue } from "@/lib/tutor/voice-colors";
 import { podcastVoiceSampleClip } from "@/lib/tutor/voice-clips";
+import { formatCalendarDate } from "@/lib/utils";
 
 /**
  * The generated podcast.
@@ -94,6 +106,14 @@ type PodcastEpisode = {
   turnCount: number;
   estimatedSeconds: number;
   createdAt: string;
+  /*
+   * Where this listener got to, from the episode row rather than from this browser — the point
+   * of the number is that it follows somebody from the bus to a desk. See podcast-progress.ts.
+   */
+  positionMs: number;
+  /* What the episode actually came to, once every turn has been synthesized. Null until then. */
+  durationMs: number | null;
+  finished: boolean;
 };
 
 /*
@@ -174,7 +194,7 @@ export function LecturePodcast({
   /** The note's own language, so voices audition in the one the episode will be in. */
   language: string;
 }) {
-  const t = useT();
+  const { t, locale } = useTranslations();
 
   const [format, setFormat] = useState<PodcastFormat>(DEFAULT_PODCAST_FORMAT);
   const [length, setLength] = useState<PodcastLength>(DEFAULT_PODCAST_LENGTH);
@@ -222,8 +242,15 @@ export function LecturePodcast({
    * value — null — and quietly decline to open the episode the listener just tapped.
    */
   const pendingEpisodeIdRef = useRef<string | null>(null);
-  /* Whether the chooser is showing instead of the library. Always true when there is no library. */
-  const [isChoosing, setIsChoosing] = useState(false);
+  /*
+   * Whether the sheet (phone) or modal (desktop) for making an episode is up.
+   *
+   * It used to mean "the chooser is showing INSTEAD of the library", which made it also the
+   * answer to "is there a screen behind me" and therefore the thing a conditional back button
+   * was derived from. A sheet has a grabber and a scrim and a modal has an Escape key, so there
+   * is no longer a question to answer: this is only ever "the overlay is open".
+   */
+  const [isChooserOpen, setIsChooserOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /* Set when a 402 says the shared listening allowance is spent. */
   const [limitReached, setLimitReached] = useState(false);
@@ -231,6 +258,14 @@ export function LecturePodcast({
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [positionMs, setPositionMs] = useState(0);
+  /*
+   * Where an episode being opened should resume from.
+   *
+   * A ref for the same reason `pendingEpisodeIdRef` is one: the position is read from the row
+   * the listener tapped, in the tick they tapped it, and the effect that acts on it runs after
+   * a render that closed over the previous value.
+   */
+  const resumeMsRef = useRef(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [preparingIndex, setPreparingIndex] = useState<number | null>(null);
   const [previewVoice, setPreviewVoice] = useState<NoteTtsVoice | null>(null);
@@ -323,21 +358,25 @@ export function LecturePodcast({
   const isProducing = isWriting || podcast?.status === "generating";
 
   /**
-   * Which of the four screens this is.
+   * Which screen this is.
+   *
+   * Four now rather than five: the chooser is no longer one of them. It is an overlay over
+   * whichever of these is underneath, which is what `isChooserOpen` says and what removed the
+   * only reason this screen ever needed a conditional way back.
    *
    * Named once rather than re-derived at each place that needs it: the branching, the artwork and
    * the standfirst all used to work it out separately from the same three flags, which is how a
    * screen ends up carrying decoration that belongs to a different one.
    */
-  const view: "player" | "writing" | "library" | "chooser" | "loading" = hasEpisode
+  const view: "player" | "writing" | "library" | "empty" | "loading" = hasEpisode
     ? "player"
     : isProducing
       ? "writing"
       : !hasLoadedStatus
         ? "loading"
-        : episodes.length > 0 && !isChoosing
+        : episodes.length > 0
           ? "library"
-          : "chooser";
+          : "empty";
 
   /* Restored once, on the client: reading storage during render would differ from the server. */
   useEffect(() => {
@@ -460,6 +499,167 @@ export function LecturePodcast({
     [turns.length, durationOf],
   );
 
+  /*
+   * The episode's length as it was actually heard, rather than as it was estimated.
+   *
+   * Null until every turn has been synthesized, and that distinction is the whole reason this
+   * exists: the library has only `estimatedSpokenSeconds` over the script until then, and "2:34
+   * left" computed against a total that is out by a fifth reads as a bug rather than as an
+   * estimate. A null is written as "we still do not know", not as zero.
+   */
+  const measuredMs = useMemo(() => {
+    if (turns.length === 0) {
+      return null;
+    }
+
+    for (let index = 0; index < turns.length; index += 1) {
+      const known =
+        segmentsRef.current.get(index)?.durationMs ??
+        podcast?.readySegments.find((segment) => segment.segmentIndex === index)?.durationMs;
+
+      if (!known) {
+        return null;
+      }
+    }
+
+    return totalMs;
+    /* segmentVersion is the signal that the cache changed; the ref itself is not reactive. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turns.length, totalMs, podcast, segmentVersion]);
+
+  /*
+   * What the savers write, read from a ref rather than closed over.
+   *
+   * They are an interval, a pause handler and an unload listener, and every one of them would
+   * otherwise be rebuilt on each `timeupdate` — which on an interval means it never survives
+   * long enough to fire.
+   */
+  const progressRef = useRef<{
+    episodeId: string | null;
+    positionMs: number;
+    durationMs: number | null;
+  }>({ episodeId: null, positionMs: 0, durationMs: null });
+
+  progressRef.current = {
+    episodeId: hasEpisode ? openedEpisodeId : null,
+    positionMs: elapsedMs,
+    durationMs: measuredMs,
+  };
+
+  /**
+   * Writes where the listener got to, and shows it on the row without waiting for the round trip.
+   *
+   * The optimistic update is not a nicety: leaving the player puts the library on screen in the
+   * same frame, and a row that still says "7 min" about an episode just listened to half of is
+   * the one moment this feature is being judged on.
+   */
+  const persistProgress = useCallback(
+    (override?: { positionMs?: number; finished?: boolean }) => {
+      const { episodeId, durationMs } = progressRef.current;
+      const at = override?.positionMs ?? progressRef.current.positionMs;
+
+      if (!episodeId) {
+        return;
+      }
+
+      const finished = override?.finished || hasFinished(at, durationMs);
+
+      setEpisodes((current) =>
+        current.map((episode) =>
+          episode.id === episodeId
+            ? {
+                ...episode,
+                positionMs: at,
+                durationMs: durationMs ?? episode.durationMs,
+                /* Only ever on: an episode heard once stays heard, however it is scrubbed after. */
+                finished: episode.finished || finished,
+              }
+            : episode,
+        ),
+      );
+
+      void savePodcastProgress({ lectureId, episodeId, positionMs: at, durationMs });
+    },
+    [lectureId],
+  );
+
+  /*
+   * The chooser moves the way every other sheet in this app moves.
+   *
+   * `useSheet` is the whole of it: the rise from the bottom edge, the finger tracking a drag,
+   * the spring back under the threshold and the slide off over it, and the `.closing` exit that
+   * every dismissal is routed through — the scrim, Escape, the close button, and pressing
+   * Create. Above 1100px it knows there is no edge to be dragged off and closes on the spot,
+   * which is what the centred modal wants.
+   */
+  const chooserSheet = useSheet(useCallback(() => setIsChooserOpen(false), []));
+
+  /*
+   * Escape closes it.
+   *
+   * On the document rather than on the dialog, because nothing inside it has focus when it
+   * opens — a keydown handler on the container would only fire once something had been tabbed
+   * to, which is the one case where the key is least needed.
+   */
+  useEffect(() => {
+    if (!isChooserOpen) {
+      return;
+    }
+
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        chooserSheet.dismiss();
+      }
+    };
+
+    document.addEventListener("keydown", close);
+
+    return () => document.removeEventListener("keydown", close);
+  }, [isChooserOpen, chooserSheet]);
+
+  /* Anything a previous session could not send goes out once, on the way in. */
+  useEffect(() => {
+    flushBufferedProgress(lectureId);
+  }, [lectureId]);
+
+  /*
+   * A safety net under the real saves, which happen on pause and on the way out of the player.
+   * What it is for is the listen that ends in neither: a phone that dies, a tab that crashes.
+   */
+  useEffect(() => {
+    if (!isPlaying || !hasEpisode) {
+      return;
+    }
+
+    const timer = window.setInterval(() => persistProgress(), PROGRESS_SAVE_INTERVAL_MS);
+
+    return () => window.clearInterval(timer);
+  }, [isPlaying, hasEpisode, persistProgress]);
+
+  /*
+   * The last save, and the only one that cannot await anything.
+   *
+   * `pagehide` rather than `beforeunload`, because iOS fires the latter unreliably and a phone
+   * put in a pocket mid-episode is the commonest way this screen ends. `sendBeacon` survives the
+   * page; a fetch from here does not.
+   */
+  useEffect(() => {
+    const flush = () => {
+      const { episodeId, positionMs: at, durationMs } = progressRef.current;
+
+      if (episodeId) {
+        beaconPodcastProgress({ lectureId, episodeId, positionMs: at, durationMs });
+      }
+    };
+
+    window.addEventListener("pagehide", flush);
+
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      flush();
+    };
+  }, [lectureId]);
+
   /**
    * Stops waiting for an episode that is not coming.
    *
@@ -512,7 +712,7 @@ export function LecturePodcast({
         });
 
         if (!response.ok) {
-          /* Still an answer: it settles the screen onto the chooser rather than a spinner. */
+          /* Still an answer: it settles the screen onto the library rather than onto a spinner. */
           setHasLoadedStatus(true);
           giveUpOpening(wanted);
           return null;
@@ -533,7 +733,11 @@ export function LecturePodcast({
 
         setStatus(payload);
         setPodcast(payload.podcast);
-        setEpisodes(payload.episodes ?? []);
+        /*
+         * Corrected by anything this device saved and failed to send — a locked phone, a lift.
+         * The server's copy is the truth in every other case; see podcast-progress.ts.
+         */
+        setEpisodes(mergeStoredProgress(payload.episodes ?? []));
 
         /*
          * The episode picked from the library has arrived with its script. Matching on the id
@@ -692,6 +896,10 @@ export function LecturePodcast({
                   0,
                 ),
                 createdAt: new Date().toISOString(),
+                /* Brand new, and about to be played from the top. */
+                positionMs: 0,
+                durationMs: null,
+                finished: false,
               },
               ...current,
             ],
@@ -701,6 +909,7 @@ export function LecturePodcast({
       setIsWriting(false);
       setCurrentIndex(0);
       setPositionMs(0);
+      resumeMsRef.current = 0;
       /*
        * Waiting through a generation is asking for the episode. Landing in a paused player and
        * having to press play again is asking twice.
@@ -988,7 +1197,17 @@ export function LecturePodcast({
     }
 
     setAutoPlay(false);
-    void playSegment(currentIndex, 0);
+
+    /*
+     * Resumed rather than restarted, when the row said there was somewhere to resume to.
+     *
+     * `locateAt` is what turns one number into a turn and an offset into it, and it can only be
+     * asked once the script has arrived — which is exactly now. A position of zero locates to
+     * the top of the first turn, so there is no branch here.
+     */
+    const from = locateAt(resumeMsRef.current);
+    resumeMsRef.current = 0;
+    void playSegment(from.index, from.offsetMs);
     /* playSegment waits for the turn itself; this only has to fire once the episode is there. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoPlay, hasEpisode]);
@@ -1050,7 +1269,14 @@ export function LecturePodcast({
     setError(null);
     pendingEpisodeIdRef.current = episode.id;
     setOpeningEpisodeId(episode.id);
-    setIsChoosing(false);
+    setIsChooserOpen(false);
+    /*
+     * An episode heard to the end is offered as `replay` and starts again; anything else picks
+     * up where it was left. A position in the first few seconds is not a place anybody left off,
+     * it is a tap that opened the wrong episode — see isResumable.
+     */
+    resumeMsRef.current =
+      !episode.finished && isResumable(episode) ? episode.positionMs : 0;
 
     if (episode.format === format && episode.length === length) {
       /*
@@ -1070,17 +1296,20 @@ export function LecturePodcast({
    * Closes the player and returns to the library.
    *
    * Playback stops on the way out, because the player is the only place with controls — leaving
-   * it while the audio carried on would mean sound with nothing to pause it.
+   * it while the audio carried on would mean sound with nothing to pause it. The position is
+   * written first, so the row the listener lands back on already says where they got to.
    */
   function leavePlayer() {
+    persistProgress();
     pendingEpisodeIdRef.current = null;
     setOpeningEpisodeId(null);
     stopPlayback();
     releaseSegments();
     setOpenedEpisodeId(null);
-    setIsChoosing(false);
+    setIsChooserOpen(false);
     setCurrentIndex(0);
     setPositionMs(0);
+    resumeMsRef.current = 0;
   }
 
   /**
@@ -1187,6 +1416,8 @@ export function LecturePodcast({
     if (isPlaying) {
       element?.pause();
       setIsPlaying(false);
+      /* Pausing is the clearest statement anybody makes about where they got to. */
+      persistProgress();
       return;
     }
 
@@ -1243,75 +1474,252 @@ export function LecturePodcast({
   }
 
   const activeFormat = getPodcastFormat(format);
+  const hueA = podcastVoiceHue(voices.a, "a");
+  const hueB = podcastVoiceHue(voices.b, "b");
+  /* The pair's two hues, which the progress bars and the scrub track are drawn in. */
+  const pairHues = { "--hue-a": hueA, "--hue-b": hueB } as CSSProperties;
 
-  const cover = (
-    <div className="memo-podcast-cover" aria-hidden="true">
-      <span
-        className="memo-podcast-orb primary"
-        style={{ "--podcast-hue": podcastVoiceHue(voices.a) } as CSSProperties}
-      />
+  /**
+   * The artwork: one sphere per host, laid out by the stylesheet.
+   *
+   * `variant` is the size, not the shape — the geometry for all four lives in `.memo-podcast-cover`
+   * and its modifiers, because it is nine related numbers per size and putting them in the markup
+   * is how a bloom drifts off its ball the next time one of them is tuned.
+   */
+  const cover = (variant?: "playing" | "writing") => (
+    <div
+      className={`memo-podcast-cover ${variant ?? ""} ${speakerCount === 1 ? "solo" : ""}`.trim()}
+      aria-hidden="true"
+    >
+      {variant === "writing" ? (
+        <>
+          <span
+            className="memo-orb-ring"
+            style={{ "--orb-hue": hueA } as CSSProperties}
+          />
+          <span
+            className="memo-orb-ring second"
+            style={{ "--orb-hue": hueA } as CSSProperties}
+          />
+        </>
+      ) : null}
+      <span className="memo-orb-glow a" style={{ "--orb-hue": hueA } as CSSProperties} />
+      <span className="memo-orb-body a" style={{ "--orb-hue": hueA } as CSSProperties} />
       {speakerCount === 2 ? (
-        <span
-          className="memo-podcast-orb secondary"
-          style={{ "--podcast-hue": podcastVoiceHue(voices.b, "b") } as CSSProperties}
-        />
+        <>
+          {/* The second bloom is what the writing screen holds back, so it is not drawn there. */}
+          {variant === "writing" ? null : (
+            <span className="memo-orb-glow b" style={{ "--orb-hue": hueB } as CSSProperties} />
+          )}
+          <span className="memo-orb-body b" style={{ "--orb-hue": hueB } as CSSProperties} />
+        </>
       ) : null}
     </div>
   );
 
-  const voiceRow = (speaker: PodcastSpeaker) => (
-    <div className="memo-podcast-voice-slot">
-      <button
-        type="button"
-        className="memo-podcast-voice-current"
-        style={{ "--podcast-hue": podcastVoiceHue(voices[speaker], speaker) } as CSSProperties}
-        aria-expanded={openVoiceSlot === speaker}
-        onClick={() => setOpenVoiceSlot(openVoiceSlot === speaker ? null : speaker)}
-      >
-        <span className="memo-podcast-voice-dot" />
-        <span className="memo-podcast-voice-role">
-          {t(
-            speakerCount === 1
-              ? "podcast.speaker.solo"
-              : speaker === "a"
-                ? "podcast.speaker.a"
-                : "podcast.speaker.b",
-          )}
-        </span>
-        <span className="memo-podcast-voice-name">{voices[speaker]}</span>
-        <Msym
-          name={openVoiceSlot === speaker ? "expand_less" : "expand_more"}
-          size="1.1rem"
-          fill={false}
-          weight={500}
-        />
-      </button>
+  /**
+   * An episode's second line, which is a different sentence at each width.
+   *
+   * Both are rendered and one is hidden, rather than a width being measured: a phone has 164
+   * measured points of room here and the date does not fit in them, but which of the two applies
+   * is a fact about the viewport and reading it in JavaScript would make the first paint disagree
+   * with the server's.
+   */
+  function episodeMeta(episode: PodcastEpisode, withDate: boolean) {
+    const shown = getPodcastFormat(episode.format);
+    const totalSeconds = Math.round((episode.durationMs ?? episode.estimatedSeconds * 1000) / 1000);
+    const minutes = t("podcast.minutes.exact", { count: Math.max(1, Math.round(totalSeconds / 60)) });
+    const remaining = t("podcast.remaining", {
+      time: formatClock(Math.max(0, totalSeconds * 1000 - episode.positionMs)),
+    });
+    const resuming = !episode.finished && isResumable(episode);
 
-      {openVoiceSlot === speaker ? (
-        <div className="memo-podcast-voice-options" role="radiogroup" aria-label={t("podcast.voice.label")}>
-          {NOTE_TTS_VOICES.map((option) => (
+    const parts = [t(shown.labelKey)];
+
+    /* On a phone the remaining time REPLACES the length: there is room for one of the two. */
+    if (resuming && !withDate) {
+      parts.push(remaining);
+    } else {
+      parts.push(minutes);
+
+      if (resuming) {
+        parts.push(remaining);
+      }
+    }
+
+    if (episode.finished) {
+      parts.push(t("podcast.listened"));
+    }
+
+    if (withDate) {
+      parts.push(formatCalendarDate(episode.createdAt, locale));
+    }
+
+    return parts.join(" · ");
+  }
+
+  const voiceOptions = (speaker: PodcastSpeaker) => (
+    <div
+      className="memo-podcast-voice-options"
+      role="radiogroup"
+      aria-label={t("podcast.voice.label")}
+    >
+      {NOTE_TTS_VOICES.map((option) => (
+        <button
+          key={option}
+          type="button"
+          role="radio"
+          aria-checked={voices[speaker] === option}
+          className={`memo-podcast-voice-option ${voices[speaker] === option ? "active" : ""} ${
+            previewVoice === option ? "playing" : ""
+          }`.trim()}
+          style={{ "--orb-hue": podcastVoiceHue(option, speaker) } as CSSProperties}
+          onClick={() => void chooseVoice(speaker, option)}
+        >
+          <Msym
+            name={previewVoice === option ? "graphic_eq" : "play_arrow"}
+            size="0.95rem"
+            fill={false}
+            weight={500}
+          />
+          <span>{option}</span>
+        </button>
+      ))}
+    </div>
+  );
+
+  /*
+   * The usage line. Shown wherever an episode is about to be paid for, and only when there is an
+   * allowance to report — an unlimited account is not being told how much of nothing is left.
+   */
+  const usageLine =
+    status?.usage && !status.usage.hasUnlimitedUsage ? (
+      <p className="memo-podcast-usage">
+        {t("podcast.usage.remaining", {
+          minutes: Math.max(0, Math.floor(status.usage.remainingSeconds / 60)),
+        })}
+      </p>
+    ) : null;
+
+  /*
+   * The form, which is the same in the sheet and in the modal.
+   *
+   * Only two grids differ between the two — four shows across instead of two by two, and the
+   * length segment beside the cast rather than under it — and both of those are declarations in
+   * the desktop block of the stylesheet rather than a second implementation here.
+   */
+  const chooserForm = (
+    <div className="memo-podcast-form">
+      <div className="memo-podcast-shows" role="radiogroup" aria-label={t("podcast.format.label")}>
+        {PODCAST_FORMATS.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            role="radio"
+            aria-checked={format === option.id}
+            className={`memo-chip memo-podcast-show ${format === option.id ? "active" : ""}`.trim()}
+            onClick={() => chooseFormat(option.id)}
+          >
+            <Msym name={option.icon} size="1.15rem" fill={false} weight={500} />
+            <span>{t(option.labelKey)}</span>
+          </button>
+        ))}
+      </div>
+
+      <p className="memo-podcast-show-hint">{t(activeFormat.descriptionKey)}</p>
+
+      <div className="memo-podcast-cast">
+        <div
+          className="memo-segment memo-podcast-lengths"
+          role="radiogroup"
+          aria-label={t("podcast.length.label")}
+        >
+          {PODCAST_LENGTHS.map((option) => (
             <button
-              key={option}
+              key={option.id}
               type="button"
               role="radio"
-              aria-checked={voices[speaker] === option}
-              className={`memo-podcast-voice-option ${voices[speaker] === option ? "active" : ""} ${
-                previewVoice === option ? "playing" : ""
-              }`.trim()}
-              style={{ "--podcast-hue": podcastVoiceHue(option, speaker) } as CSSProperties}
-              onClick={() => void chooseVoice(speaker, option)}
+              aria-checked={length === option.id}
+              className={length === option.id ? "active" : ""}
+              onClick={() => chooseLength(option.id)}
             >
-              <Msym
-                name={previewVoice === option ? "graphic_eq" : "play_arrow"}
-                size="0.95rem"
-                fill={false}
-                weight={500}
-              />
-              <span>{option}</span>
+              <span>{t(option.labelKey)}</span>
+              <span className="memo-podcast-length-minutes">
+                {t("podcast.minutes", { count: estimatedPodcastMinutes(option.id) })}
+              </span>
             </button>
           ))}
         </div>
+
+        {/*
+          * Both hosts on one row.
+          *
+          * Two rows, one per host, is what this used to be, and collapsing them is what buys the
+          * room for the sheet to fit a phone. Nothing is lost: the pair is what anybody is
+          * actually choosing, the spheres say which two voices it is before the names do, and
+          * the per-voice pickers are one tap behind it.
+          */}
+        <button
+          type="button"
+          className="memo-capture-row memo-podcast-voices"
+          aria-expanded={openVoiceSlot !== null}
+          onClick={() => setOpenVoiceSlot(openVoiceSlot === null ? "a" : null)}
+        >
+          <span
+            className={`memo-podcast-voices-art ${speakerCount === 1 ? "solo" : ""}`.trim()}
+            aria-hidden="true"
+          >
+            <span
+              className="memo-orb-body mini a"
+              style={{ "--orb-hue": hueA } as CSSProperties}
+            />
+            {speakerCount === 2 ? (
+              <span
+                className="memo-orb-body mini b"
+                style={{ "--orb-hue": hueB } as CSSProperties}
+              />
+            ) : null}
+          </span>
+          <span className="memo-capture-row-copy">
+            <span>
+              {speakerCount === 1
+                ? voices.a
+                : t("podcast.cast.pair", { a: voices.a, b: voices.b })}
+            </span>
+            <span>{t(speakerCount === 1 ? "podcast.oneVoice" : "podcast.twoVoices")}</span>
+          </span>
+          <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
+        </button>
+      </div>
+
+      {/*
+        * The per-voice pickers, unchanged and previewing on tap as they always have. They are
+        * only reached from the row above now, which is the whole of the change to them.
+        */}
+      {openVoiceSlot !== null ? (
+        <>
+          {voiceOptions("a")}
+          {speakerCount === 2 ? voiceOptions("b") : null}
+        </>
       ) : null}
+
+      {error ? <p className="memo-inline-error">{error}</p> : null}
+
+      <div className="memo-podcast-actions">
+        <button
+          type="button"
+          className="memo-podcast-primary"
+          onClick={() => {
+            /* The sheet slides off while the writing screen appears behind it. */
+            chooserSheet.dismiss();
+            void requestScript();
+          }}
+        >
+          <Msym name="graphic_eq" size="1.3rem" fill={false} weight={500} />
+          <span>{t("podcast.generate")}</span>
+        </button>
+        {usageLine}
+      </div>
     </div>
   );
 
@@ -1324,7 +1732,7 @@ export function LecturePodcast({
         buyingCredits={buyingCredits}
         onBuyCredits={() => void buyCredits()}
       />
-      {/* One element for the whole episode: turns are swapped into it as they are reached. */}
+      {/* Two elements, so the hand-off between turns is a bare play() on something decoded. */}
       {(["a", "b"] as const).map((slot) => (
         <audio
           key={slot}
@@ -1350,117 +1758,53 @@ export function LecturePodcast({
 
             setIsPlaying(false);
             setPositionMs(durationOf(currentIndex));
+            /*
+             * Played to the end, which is the one thing a position alone cannot say: a position
+             * at the end is indistinguishable from one abandoned three seconds before it. The
+             * override carries the total, because the state that would have produced it is set
+             * in this same tick and this reads the render before it.
+             */
+            persistProgress({ positionMs: totalMs, finished: true });
           }}
         />
       ))}
 
-      {/*
-        * The artwork is the episode's, so it appears where an episode is the subject — the
-        * library, the player, the wait for one — and not on the form that chooses a show, where
-        * it is a hundred and twenty points of decoration pushing the controls off the screen.
-        */}
-      {view === "chooser" ? null : cover}
-
-      {hasEpisode ? (
-        <>
-          <h2 className="memo-podcast-title">{podcast?.title ?? t("podcast.title")}</h2>
-          <p className="memo-podcast-subtitle">
-            {t(activeFormat.labelKey)} · {formatClock(totalMs)}
-          </p>
-
-          <div className="memo-podcast-scrubber">
-            <span className="memo-podcast-clock">{formatClock(elapsedMs)}</span>
-            <input
-              type="range"
-              min={0}
-              max={Math.max(1, Math.round(totalMs))}
-              value={Math.min(Math.round(elapsedMs), Math.max(1, Math.round(totalMs)))}
-              aria-label={t("podcast.seek")}
-              onChange={(event) => seekTo(Number(event.currentTarget.value))}
-            />
-            <span className="memo-podcast-clock">{formatClock(totalMs)}</span>
-          </div>
-
-          <div className="memo-podcast-controls">
-            <button
-              type="button"
-              className="memo-podcast-control"
-              onClick={() => skip(-SKIP_SECONDS)}
-              aria-label={t("podcast.back10")}
-            >
-              <Msym name="replay_10" size="1.4rem" fill={false} weight={500} />
-            </button>
-
-            <button
-              type="button"
-              className="memo-podcast-control primary"
-              onClick={togglePlayback}
-              aria-label={t(isPlaying ? "podcast.pause" : "podcast.play")}
-              disabled={preparingIndex !== null}
-            >
-              <Msym
-                name={preparingIndex !== null ? "progress_activity" : isPlaying ? "pause" : "play_arrow"}
-                size="1.7rem"
-                fill
-                weight={500}
-              />
-            </button>
-
-            <button
-              type="button"
-              className="memo-podcast-control"
-              onClick={() => skip(SKIP_SECONDS)}
-              aria-label={t("podcast.forward10")}
-            >
-              <Msym name="forward_10" size="1.4rem" fill={false} weight={500} />
-            </button>
-
-          </div>
-
-          {preparingIndex !== null ? (
-            <p className="memo-podcast-hint" role="status">
-              {t("podcast.status.preparingTurn")}
-            </p>
-          ) : null}
-
-          {error ? <p className="memo-inline-error">{error}</p> : null}
-
-          {/*
-            * No voices here. They are picked on the way in, and a listener who is already
-            * listening has answered that question — leaving the pickers under the transport
-            * turned the player into a settings screen with a play button on it. Changing a
-            * host is still one tap away: the way back to the episodes is below, and the
-            * chooser is one more from there.
-            */}
-          <div className="memo-podcast-footer">
-            {/*
-              * Out of the player, and back to the episodes rather than past them to the chooser.
-              *
-              * The library is the hub: from it you reach any episode in one tap and the chooser in
-              * one more. Sending this button straight to the chooser instead left the only route
-              * back to the other episodes running through making a new one — reachable, but by a
-              * door marked something else.
-              */}
-            <button type="button" className="memo-podcast-secondary" onClick={leavePlayer}>
-              <Msym name="arrow_back" size="1.1rem" fill={false} weight={500} />
-              <span>{t("podcast.library.back")}</span>
-            </button>
-          </div>
-        </>
-      ) : view === "loading" ? (
+      {view === "loading" ? (
         /*
-         * Held still until the first status load says which screen this is. Rendering the chooser
-         * meanwhile is what made the tab open on "make a new one" and flick to the library.
+         * Held still until the first status load says which screen this is. Rendering the library
+         * meanwhile is what made the tab open on the wrong screen and flick to the right one.
          */
         <div className="memo-podcast-loading" role="status" aria-label={t("common.loading")}>
           <Msym name="progress_activity" size="1.5rem" fill={false} weight={500} />
         </div>
-      ) : isProducing ? (
-        <>
+      ) : null}
+
+      {view === "empty" ? (
+        <div className="memo-podcast-hero">
+          {cover()}
+          <h2 className="memo-podcast-title">{t("podcast.empty.title")}</h2>
+          <p className="memo-podcast-body">{t("podcast.empty.body")}</p>
+          {error ? <p className="memo-inline-error">{error}</p> : null}
+          <button
+            type="button"
+            className="memo-podcast-primary"
+            onClick={() => setIsChooserOpen(true)}
+          >
+            <Msym name="graphic_eq" size="1.3rem" fill={false} weight={500} />
+            <span>{t("podcast.generate")}</span>
+          </button>
+          {usageLine}
+        </div>
+      ) : null}
+
+      {view === "writing" ? (
+        <div className="memo-podcast-hero writing">
+          {cover("writing")}
           <h2 className="memo-podcast-title">{t("podcast.status.writing")}</h2>
-          <p className="memo-podcast-subtitle">{t("podcast.status.writingHint")}</p>
+          <p className="memo-podcast-body">{t("podcast.status.writingHint")}</p>
           <div
             className="memo-podcast-progress"
+            style={pairHues}
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={100}
@@ -1468,169 +1812,271 @@ export function LecturePodcast({
           >
             <span style={{ width: `${writingPercent}%` }} />
           </div>
-        </>
-      ) : (
+          {/* A two-minute wait is long enough to start doubting what you picked. */}
+          <p className="memo-podcast-choice">
+            {t(activeFormat.labelKey)} · {t("podcast.minutes", { count: estimatedPodcastMinutes(length) })}
+          </p>
+        </div>
+      ) : null}
+
+      {view === "library" ? (
+        <div className="memo-podcast-shelf">
+          <div className="memo-podcast-list" role="list">
+            {episodes.map((episode) => {
+              const shown = getPodcastFormat(episode.format);
+              const totalMsForRow = episode.durationMs ?? episode.estimatedSeconds * 1000;
+              const resuming = !episode.finished && isResumable(episode);
+              /*
+               * The library's rows carry the cast currently chosen rather than each episode's
+               * own, because the row does not record one — see listPodcastEpisodes. The colours
+               * still separate two shows from each other, which is what they are doing here.
+               */
+              const rowHueB = shown.speakerCount === 2 ? hueB : hueA;
+
+              return (
+                <button
+                  key={episode.id}
+                  type="button"
+                  role="listitem"
+                  className={`memo-note-row memo-podcast-episode ${resuming ? "resumable" : ""} ${
+                    openingEpisodeId === episode.id ? "opening" : ""
+                  }`.trim()}
+                  disabled={openingEpisodeId !== null}
+                  onClick={() => openEpisode(episode)}
+                >
+                  <span
+                    className={`memo-podcast-episode-art ${
+                      shown.speakerCount === 1 ? "solo" : ""
+                    }`.trim()}
+                    aria-hidden="true"
+                  >
+                    <span
+                      className="memo-orb-body compact a"
+                      style={{ "--orb-hue": hueA } as CSSProperties}
+                    />
+                    {shown.speakerCount === 2 ? (
+                      <span
+                        className="memo-orb-body compact b"
+                        style={{ "--orb-hue": rowHueB } as CSSProperties}
+                      />
+                    ) : null}
+                  </span>
+
+                  <span className="memo-note-copy">
+                    <span className="memo-note-title">
+                      {episode.title ?? t("podcast.title")}
+                    </span>
+                    <span className="memo-note-meta memo-podcast-meta-phone">
+                      {episodeMeta(episode, false)}
+                    </span>
+                    <span className="memo-note-meta memo-podcast-meta-desktop">
+                      {episodeMeta(episode, true)}
+                    </span>
+                    {resuming ? (
+                      <span
+                        className="memo-podcast-episode-bar"
+                        style={{ "--hue-a": hueA, "--hue-b": rowHueB } as CSSProperties}
+                      >
+                        <span
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              Math.round((episode.positionMs / Math.max(1, totalMsForRow)) * 100),
+                            )}%`,
+                          }}
+                        />
+                      </span>
+                    ) : null}
+                  </span>
+
+                  <Msym
+                    name={
+                      openingEpisodeId === episode.id
+                        ? "progress_activity"
+                        : episode.finished
+                          ? "replay"
+                          : "play_arrow"
+                    }
+                    size="1.55rem"
+                    fill={false}
+                    weight={400}
+                  />
+                </button>
+              );
+            })}
+          </div>
+
+          {error ? <p className="memo-inline-error">{error}</p> : null}
+
+          <button
+            type="button"
+            className="memo-podcast-new"
+            onClick={() => setIsChooserOpen(true)}
+          >
+            <Msym name="add" size="1.2rem" fill={false} weight={500} />
+            <span>{t("podcast.newEpisode")}</span>
+          </button>
+
+          {usageLine}
+        </div>
+      ) : null}
+
+      {view === "player" ? (
         <>
           {/*
-            * The chooser carries no heading, no artwork and no standfirst: the pill row above it
-            * already reads "Podcast", the note's own title is above that, and four labelled cards
-            * do not need to be introduced. It is a form, and the other two screens are about an
-            * episode — which is the whole difference between them.
+            * The way out, and it is permanent.
+            *
+            * It used to be a button at the bottom that appeared only when the screen believed
+            * there was something behind it. There is exactly one place a player goes back to —
+            * the library, never past it to the chooser — so there is nothing left to decide and
+            * nothing left to get wrong. The label went with the row: an episode has one exit,
+            * and its name lives on the control for anybody listening to the page rather than
+            * looking at it.
+            *
+            * `close` rather than `arrow_back`, and that is about where it now sits. On a phone
+            * the note screen's own navbar already carries a back arrow in the top LEFT, and a
+            * second left-pointing arrow in the top right is two different journeys drawn as one
+            * glyph. What a top-right corner offers is "leave this", which is what the app's own
+            * `.memo-esc` puts there too.
             */}
-          {view === "library" ? (
-            <>
-              <h2 className="memo-podcast-title">{t("podcast.title")}</h2>
-              <p className="memo-podcast-subtitle memo-podcast-intro">{t("podcast.intro")}</p>
-            </>
-          ) : null}
+          <div className="memo-podcast-stage">
+            {cover("playing")}
 
-          {episodes.length > 0 && !isChoosing ? (
-            <div className="memo-podcast-setup">
+            <div className="memo-podcast-titles">
+              <h2 className="memo-podcast-title">{podcast?.title ?? t("podcast.title")}</h2>
+              <p className="memo-podcast-subtitle">
+                {t(activeFormat.labelKey)} ·{" "}
+                {speakerCount === 1
+                  ? voices.a
+                  : t("podcast.cast.pair", { a: voices.a, b: voices.b })}
+              </p>
+            </div>
+
+            <div className="memo-podcast-scrubber" style={pairHues}>
+              <span className="memo-podcast-clock">{formatClock(elapsedMs)}</span>
+              <input
+                type="range"
+                min={0}
+                max={Math.max(1, Math.round(totalMs))}
+                value={Math.min(Math.round(elapsedMs), Math.max(1, Math.round(totalMs)))}
+                aria-label={t("podcast.seek")}
+                style={
+                  {
+                    "--played": `${Math.min(100, (elapsedMs / Math.max(1, totalMs)) * 100)}%`,
+                  } as CSSProperties
+                }
+                onChange={(event) => seekTo(Number(event.currentTarget.value))}
+              />
+              <span className="memo-podcast-clock end">{formatClock(totalMs)}</span>
+            </div>
+
+            <div className="memo-podcast-controls">
+              <button
+                type="button"
+                className="memo-podcast-control"
+                onClick={() => skip(-SKIP_SECONDS)}
+                aria-label={t("podcast.back10")}
+              >
+                <Msym name="replay_10" size="1.45rem" fill={false} weight={500} />
+              </button>
+
               {/*
-                * What this note already has. Shown instead of the chooser rather than above it,
-                * because both together cannot fit one screen on a phone — and because somebody
-                * who has made an episode is far more often coming back to it than making another.
+                * Live even while the next turn is being made. Disabling it took the control out
+                * from under the listener's thumb in the middle of an episode, over a wait they
+                * can do nothing about — the status line below says what is happening instead.
                 */}
-              <div className="memo-podcast-library" role="list">
-                {episodes.map((episode) => {
-                  const shown = getPodcastFormat(episode.format);
-
-                  return (
-                    <button
-                      key={episode.id}
-                      type="button"
-                      role="listitem"
-                      className={`memo-podcast-episode ${
-                        openingEpisodeId === episode.id ? "opening" : ""
-                      }`.trim()}
-                      disabled={openingEpisodeId !== null}
-                      onClick={() => openEpisode(episode)}
-                    >
-                      <span className="memo-podcast-episode-voices" aria-hidden="true">
-                        <span style={{ "--podcast-hue": podcastVoiceHue(voices.a) } as CSSProperties} />
-                        {shown.speakerCount === 2 ? (
-                          <span style={{ "--podcast-hue": podcastVoiceHue(voices.b, "b") } as CSSProperties} />
-                        ) : null}
-                      </span>
-                      <span className="memo-podcast-episode-text">
-                        <span className="memo-podcast-episode-title">
-                          {episode.title ?? t("podcast.title")}
-                        </span>
-                        <span className="memo-podcast-episode-meta">
-                          {t(shown.labelKey)} ·{" "}
-                          {t("podcast.minutes", {
-                            count: Math.max(1, Math.round(episode.estimatedSeconds / 60)),
-                          })}
-                        </span>
-                      </span>
-                      <Msym
-                        name={openingEpisodeId === episode.id ? "progress_activity" : "play_arrow"}
-                        size="1.3rem"
-                        fill={openingEpisodeId !== episode.id}
-                        weight={500}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-
               <button
                 type="button"
-                className="memo-podcast-secondary"
-                onClick={() => setIsChoosing(true)}
+                className="memo-podcast-control primary"
+                onClick={togglePlayback}
+                aria-label={t(isPlaying ? "podcast.pause" : "podcast.play")}
               >
-                <Msym name="add" size="1.1rem" fill={false} weight={500} />
-                <span>{t("podcast.newEpisode")}</span>
+                <Msym name={isPlaying ? "pause" : "play_arrow"} size="1.8rem" fill weight={500} />
               </button>
-            </div>
-          ) : (
-          <div className="memo-podcast-setup">
-            <div className="memo-podcast-formats" role="radiogroup" aria-label={t("podcast.format.label")}>
-              {PODCAST_FORMATS.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={format === option.id}
-                  className={`memo-podcast-format ${format === option.id ? "active" : ""}`.trim()}
-                  onClick={() => chooseFormat(option.id)}
-                >
-                  <Msym name={option.icon} size="1.15rem" fill={false} weight={500} />
-                  <span className="memo-podcast-format-label">{t(option.labelKey)}</span>
-                </button>
-              ))}
-            </div>
 
-            {/*
-              * One description, for the show that is actually selected.
-              *
-              * All four at once was four paragraphs of prose above the thing being chosen, and
-              * on a phone it was most of the screen — a wall of text to make a choice between
-              * four short names. The names and the icons carry the choice; this line carries
-              * what the name does not, for the one card the eye is on.
-              */}
-            <p className="memo-podcast-format-hint">{t(getPodcastFormat(format).descriptionKey)}</p>
-
-            <div className="memo-podcast-lengths" role="radiogroup" aria-label={t("podcast.length.label")}>
-              {PODCAST_LENGTHS.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={length === option.id}
-                  className={`memo-podcast-length ${length === option.id ? "active" : ""}`.trim()}
-                  onClick={() => chooseLength(option.id)}
-                >
-                  <span>{t(option.labelKey)}</span>
-                  <span className="memo-podcast-length-minutes">
-                    {t("podcast.minutes", { count: estimatedPodcastMinutes(option.id) })}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            <div className="memo-podcast-voice-picker">
-              {voiceRow("a")}
-              {speakerCount === 2 ? voiceRow("b") : null}
-            </div>
-
-              {error ? <p className="memo-inline-error">{error}</p> : null}
-
-            <button type="button" className="memo-podcast-start" onClick={() => void requestScript()}>
-              <Msym name="graphic_eq" size="1.2rem" fill={false} weight={500} />
-              <span>{t("podcast.generate")}</span>
-            </button>
-
-            {/*
-              * Shown when there is a screen behind this one — which is what `isChoosing` means:
-              * the listener pressed "New episode" to get here. Gating it on whether the note has
-              * episodes was wrong twice over: it is a fact about data rather than about where you
-              * came from, and it can change underneath you, so the way back could vanish while
-              * you were looking at it. When the chooser IS the landing screen, there is genuinely
-              * nothing behind it and no button pretends otherwise.
-              */}
-            {isChoosing ? (
+              {/*
+                * Back ten, pause, leave — and no forward.
+                *
+                * Skipping ahead in a spoken explanation is not the same gesture as skipping
+                * ahead in a song: what is coming has not been heard, so there is nothing to
+                * skip past, only something to miss. Going back is the one a listener actually
+                * reaches for, when a sentence went by while they were thinking about the last
+                * one. Its place goes to the way out, which leaves this screen ending on the
+                * same three controls, in the same order, as the walkthrough.
+                */}
               <button
                 type="button"
-                className="memo-podcast-secondary"
-                onClick={() => setIsChoosing(false)}
+                className="memo-podcast-control memo-podcast-back"
+                onClick={leavePlayer}
+                aria-label={t("podcast.library.back")}
               >
-                <Msym name="arrow_back" size="1.1rem" fill={false} weight={500} />
-                <span>{t("podcast.library.back")}</span>
+                <Msym name="close" size="1.45rem" fill={false} weight={500} />
               </button>
+            </div>
+
+            {preparingIndex !== null ? (
+              <p className="memo-podcast-status" role="status">
+                {/*
+                  * A real element rather than a pseudo, because the ring that pings off it is a
+                  * second box — and the one thing that must not be animated to make it is the
+                  * shadow spread the design system rules out. A dot inside a dot, scaling.
+                  */}
+                <span className="memo-podcast-status-dot" aria-hidden="true" />
+                {t("podcast.status.preparingTurn")}
+              </p>
             ) : null}
-          </div>
-          )}
 
-          {status?.usage && !status.usage.hasUnlimitedUsage ? (
-            <p className="memo-podcast-hint">
-              {t("podcast.usage.remaining", {
-                minutes: Math.max(0, Math.floor(status.usage.remainingSeconds / 60)),
-              })}
-            </p>
-          ) : null}
+            {error ? <p className="memo-inline-error">{error}</p> : null}
+          </div>
         </>
-      )}
+      ) : null}
+
+      {/*
+        * The chooser.
+        *
+        * Portalled, because it is a sheet on a phone and a modal on a laptop and both of those
+        * are anchored to the viewport rather than to this panel — which lives inside the note
+        * screen's one scroller and therefore moves. Dismissing it is the scrim, the grabber's
+        * own sheet, or Escape; there is no conditional back button anywhere on this screen now.
+        */}
+      {isChooserOpen ? (
+        <MemoPortal>
+          <button
+            type="button"
+            aria-label={t("common.close")}
+            className={sheetClass("memo-scrim", chooserSheet.closing)}
+            onClick={() => chooserSheet.dismiss()}
+          />
+          <div
+            className={sheetClass(
+              "memo-confirm memo-confirm-fixed memo-podcast-chooser",
+              chooserSheet.closing,
+            )}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("podcast.newEpisode.title")}
+            {...chooserSheet.dragProps}
+          >
+            {/* Shown only on the phone, where there is an edge to be dragged off. */}
+            <div className="memo-grab" data-drag-handle />
+            <div className="memo-folder-modal-head" data-drag-zone>
+              <span className="memo-folder-modal-title">{t("podcast.newEpisode.title")}</span>
+              {/* The keyboard route stated rather than implied — see `.memo-esc`. */}
+              <span className="memo-esc">
+                <button
+                  type="button"
+                  onClick={() => chooserSheet.dismiss()}
+                  aria-label={t("common.close")}
+                >
+                  <Msym name="close" size="1.4rem" fill weight={500} />
+                </button>
+                <small>esc</small>
+              </span>
+            </div>
+            {chooserForm}
+          </div>
+        </MemoPortal>
+      ) : null}
     </div>
   );
 }

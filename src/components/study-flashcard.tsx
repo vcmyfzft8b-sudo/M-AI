@@ -107,6 +107,31 @@ export function StudyFlashcard({
   const suppressClickRef = useRef(false);
   const suppressTimerRef = useRef<number | null>(null);
   const [drag, setDrag] = useState({ isDragging: false, deltaX: 0, deltaY: 0, width: 0 });
+  /*
+   * On a screen too narrow for the row, grading goes back to being a throw.
+   *
+   * The row is four controls wide — two arrows and the two grades — and on a phone it is
+   * already the widest thing under the card. Where it no longer fits, the two grades stop
+   * being pressable and become the score they were also showing, and the arrows go: the card
+   * can still be graded by throwing it, which is how it is mostly graded anyway, and a row
+   * that overflows its card is worse than no row.
+   *
+   * Measured rather than guessed. At 375px the row asks for 306 of the 338 it is given, so
+   * the arrows stay on every ordinary phone. It runs out somewhere around 350 — call it 353
+   * once a two-digit score has widened both grades — and 359 is the last common width below
+   * that, an iPhone SE at 320 being what this is really for.
+   */
+  const [swipeOnly, setSwipeOnly] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 359px)");
+    const sync = () => setSwipeOnly(mediaQuery.matches);
+
+    sync();
+    mediaQuery.addEventListener("change", sync);
+
+    return () => mediaQuery.removeEventListener("change", sync);
+  }, []);
 
   const resetDrag = useCallback(() => {
     sessionRef.current = null;
@@ -314,8 +339,8 @@ export function StudyFlashcard({
     {/* The review row, which is the same row on both screens: a miss and its
         running count on the left, the count and a tick on the right. */}
     <div className="lecture-flashcard-toolbar">
-      <div className="lecture-flashcard-review">
-        {navigation ? (
+      <div className={`lecture-flashcard-review ${swipeOnly ? "swipe-only" : ""}`.trim()}>
+        {navigation && !swipeOnly ? (
           <button
             type="button"
             onClick={navigation.onPrevious}
@@ -327,29 +352,50 @@ export function StudyFlashcard({
             <ArrowLeft aria-hidden="true" />
           </button>
         ) : null}
-        <button
-          type="button"
-          onClick={() => onGrade("again", { xPercent: 0, yPercent: 0, rotationDeg: 0 })}
-          className={`lecture-flashcard-review-button again ${answer === "again" ? "selected" : ""}`}
-          aria-label={againLabel}
-          title={againLabel}
-        >
-          <X aria-hidden="true" />
-          <span>{missedCount}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onGrade("easy", { xPercent: 0, yPercent: 0, rotationDeg: 0 })}
-          className={`lecture-flashcard-review-button easy ${
-            answer && answer !== "again" ? "selected" : ""
-          }`}
-          aria-label={knewLabel}
-          title={knewLabel}
-        >
-          <span>{knownCount}</span>
-          <Check aria-hidden="true" />
-        </button>
-        {navigation ? (
+        {swipeOnly ? (
+          /*
+           * A score, not a control. Rendered as text rather than as a disabled button so
+           * that it is read as the running count it is — a button nothing can press is a
+           * worse thing to meet with a screen reader than no button at all.
+           */
+          <span className="lecture-flashcard-review-score again">
+            <X aria-hidden="true" />
+            <span>{missedCount}</span>
+            <span className="memo-visually-hidden">{againLabel}</span>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onGrade("again", { xPercent: 0, yPercent: 0, rotationDeg: 0 })}
+            className={`lecture-flashcard-review-button again ${answer === "again" ? "selected" : ""}`}
+            aria-label={againLabel}
+            title={againLabel}
+          >
+            <X aria-hidden="true" />
+            <span>{missedCount}</span>
+          </button>
+        )}
+        {swipeOnly ? (
+          <span className="lecture-flashcard-review-score easy">
+            <span>{knownCount}</span>
+            <Check aria-hidden="true" />
+            <span className="memo-visually-hidden">{knewLabel}</span>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onGrade("easy", { xPercent: 0, yPercent: 0, rotationDeg: 0 })}
+            className={`lecture-flashcard-review-button easy ${
+              answer && answer !== "again" ? "selected" : ""
+            }`}
+            aria-label={knewLabel}
+            title={knewLabel}
+          >
+            <span>{knownCount}</span>
+            <Check aria-hidden="true" />
+          </button>
+        )}
+        {navigation && !swipeOnly ? (
           <button
             type="button"
             onClick={navigation.onNext}

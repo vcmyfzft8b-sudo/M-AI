@@ -1272,6 +1272,26 @@ export function LectureWorkspace({
     },
     [],
   );
+  /*
+   * Whether the answered quiz collapses to the answers worth reading.
+   *
+   * Only on a phone. Beside a rail there is room for the question, four answers and the
+   * verdict all at once, and seeing the three you did not pick is worth something; on a
+   * phone that same set had to be shrunk until a long answer had nowhere to be written,
+   * which is worth rather less.
+   */
+  const [collapsesAnsweredQuiz, setCollapsesAnsweredQuiz] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 1099px)");
+    const sync = () => setCollapsesAnsweredQuiz(mediaQuery.matches);
+
+    sync();
+    mediaQuery.addEventListener("change", sync);
+
+    return () => mediaQuery.removeEventListener("change", sync);
+  }, []);
+
   const [dockSlot, setDockSlot] = useState<HTMLElement | null>(null);
   /*
    * The other end of the note's title row, where a screen may hang one control of its own.
@@ -4650,7 +4670,29 @@ export function LectureWorkspace({
                     <p className="lecture-quiz-prompt">{activeQuizQuestion.prompt}</p>
 
                     <div className="lecture-quiz-options">
-                      {activeQuizOptionOrder.map((optionIndex, displayIndex) => {
+                      {activeQuizOptionOrder
+                        /*
+                         * Answered, the list is down to what there is left to learn from: the
+                         * right answer, and — when they missed it — the one they chose.
+                         *
+                         * Showing all four afterwards meant four boxes of text competing for
+                         * the height the verdict also needed, which is what drove the options
+                         * to shrink until a long answer had nowhere to be written. None of the
+                         * three they did not pick is being read at that moment; the one that
+                         * is, is now the only one there, at its full size.
+                         *
+                         * The letters keep the position they were asked in, because the
+                         * verdict underneath names the answer by letter.
+                         */
+                        .map((optionIndex, displayIndex) => ({ optionIndex, displayIndex }))
+                        .filter(
+                          ({ optionIndex }) =>
+                            !collapsesAnsweredQuiz ||
+                            activeQuizSelection === null ||
+                            optionIndex === activeQuizQuestion.correct_option_idx ||
+                            optionIndex === activeQuizSelection,
+                        )
+                        .map(({ optionIndex, displayIndex }) => {
                         const option = activeQuizQuestion.options[optionIndex] ?? "";
                         const isSelected = activeQuizSelection === optionIndex;
                         const isCorrect =

@@ -66,6 +66,7 @@ import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { readChatStream } from "@/lib/chat-stream-client";
 import { sheetClass, useSheet } from "@/components/use-sheet";
+import { useWheelToHorizontal } from "@/components/use-wheel-to-horizontal";
 import { usePathname, useRouter } from "next/navigation";
 import type {
   ChatMessageWithCitations,
@@ -372,6 +373,33 @@ const NOTE_TABS = [
 }>;
 
 type NoteTabId = (typeof NOTE_TABS)[number]["id"];
+
+/**
+ * Tabs that take the chat's column while they are on screen.
+ *
+ * Chat beside the note is the point of the note tab: you read a paragraph and
+ * ask about it. These five are not reading — they are a thing you watch, listen
+ * to, walk through or play, and each of them was worse for having a conversation
+ * bolted to its side:
+ *
+ * - the map and the palace are drawn, and a drawing squeezed into the ~300px the
+ *   chat leaves is the unreadable single column they exist to be better than;
+ * - the tutor is already a conversation, so a second one beside it asks the
+ *   reader which of the two to talk to;
+ * - the speed reader wants one word held still in the middle of an empty screen,
+ *   which is the one thing a panel of text beside it undoes;
+ * - the podcast is audio, and there is nothing on screen to ask about.
+ *
+ * Chat is one pill away on any of them, and the phone's bar at the foot is
+ * untouched — this is only the desktop column.
+ */
+const TABS_WITHOUT_CHAT = new Set<NoteTabId>([
+  "mindmap",
+  "palace",
+  "tutor",
+  "speed",
+  "podcast",
+]);
 
 /** How close to the foot of the chat log still counts as "reading the tail". */
 const STICK_TO_BOTTOM_PX = 120;
@@ -5512,6 +5540,14 @@ export function LectureWorkspace({
                       : "test";
 
   /*
+   * The row overflows on desktop too — there are ten pills — and a mouse has no
+   * way of its own to push a sideways scroller. Without this the wheel scrolls
+   * the note behind the row and the pills past the fold are unreachable, because
+   * the design hides the scrollbar that would otherwise drag them.
+   */
+  useWheelToHorizontal(tabRowRef);
+
+  /*
    * The pill row follows the tab it is on. The pills overflow their scroller
    * on the phone, so the one you reach for is regularly the half-cut one at
    * the edge — and a tap that only changed the tab left it exactly as cut as
@@ -5564,27 +5600,23 @@ export function LectureWorkspace({
    * steps aside there — matching the redesign, where "Preglej zakaj" is the way
    * into chat from a quiz.
    */
-  // The design keeps the chat panel open on every tab; only the button that
-  // brings it back is withheld on the quiz, which wants the full width while a
-  // question is on screen.
+  // The panel is open beside the reading tabs and gone on the ones listed in
+  // TABS_WITHOUT_CHAT; only the button that brings it back is withheld on the
+  // quiz, which wants the full width while a question is on screen.
   //
   // It also closes the moment a navigation away starts. The panel is portalled
   // into the shell's third grid column, outside the content area the loading
   // overlay covers, so leaving the note with it open left the note's chat
   // standing beside the library's skeleton until the route committed.
   const isLeavingNote = navigatingTo != null && navigatingTo !== notePathname;
-  /*
-   * The map takes the chat's column while it is on screen, and this is the one screen worth
-   * doing that for. A mind map is the only thing here whose usefulness is a function of how wide
-   * it is drawn: with the conversation beside it the canvas is barely three hundred pixels, and
-   * a map framed into three hundred pixels is the unreadable single column this feature exists
-   * to be better than. Chat is a tab away, and on the phone the bar at the foot is untouched.
-   */
-  const showChatPanel = !isChatDismissed && !isLeavingNote && activeTabId !== "mindmap";
+  const showChatPanel =
+    !isChatDismissed && !isLeavingNote && !TABS_WITHOUT_CHAT.has(activeTabId);
 
   useEffect(() => {
     setChatOpen(showChatPanel);
-    return () => setChatOpen(false);
+    // Back to "undecided" rather than to closed: this screen is gone, and what
+    // the shell should do about the column is now whatever the next one says.
+    return () => setChatOpen(null);
   }, [setChatOpen, showChatPanel]);
 
   const desktopChatPanel =
@@ -6046,10 +6078,9 @@ export function LectureWorkspace({
           <div className="memo-dock">
             <div className="memo-dock-slot" ref={setDockSlot} />
 
-            {isChatDismissed &&
-            activeTabId !== "quiz" &&
-            activeTabId !== "tutor" &&
-            activeTabId !== "mindmap" ? (
+            {/* Nothing to bring back on a tab that has no chat column, and the
+                quiz has its own way in ("Preglej zakaj"). */}
+            {isChatDismissed && activeTabId !== "quiz" && !TABS_WITHOUT_CHAT.has(activeTabId) ? (
               <button
                 type="button"
                 aria-label={t("chat.open")}

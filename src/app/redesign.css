@@ -1411,6 +1411,19 @@
   grid-template-columns: 240px minmax(0, 1fr);
 }
 
+/*
+ * While a note's skeleton stands in the grid, the home screen it is replacing is
+ * still mounted underneath. Its ask-bar is `position: fixed`, so it escapes the
+ * overlay that covers the content column and is painted across the note and the
+ * chat column the skeleton has just opened — a control from the page you have
+ * left, sitting on the page you are waiting for. The phone bar is the same
+ * escape at the other width.
+ */
+.memo-grid[data-note-skeleton] .memo-homebar-wrap,
+.memo-grid[data-note-skeleton] .memo-m-homebar {
+  display: none;
+}
+
 .memo-homebar {
   grid-column: 2;
   justify-self: center;

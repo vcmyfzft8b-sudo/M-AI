@@ -412,8 +412,27 @@ const CHAT_SUGGESTIONS: MessageKey[] = [
   "chat.suggestion.extend",
 ];
 
-function getNoteTabs({ showsTranscript }: { showsTranscript: boolean }) {
-  return NOTE_TABS.filter((tab) => tab.id !== "transcript" || showsTranscript);
+/*
+ * The demo is offline by construction: `createCreatorDemoFetch` answers the
+ * `/api/lectures/...` calls from fixtures, and it has no case for the tutor —
+ * a walkthrough is a live conversation against minted realtime keys, which is
+ * the one thing a visitor with no account cannot be given. Its unhandled
+ * routes fall to a catch-all `{ ok: true }`, so pressing Start used to read
+ * back a 200 with no credentials in it and throw "the walkthrough could not be
+ * started" a frame later. `build.ts` already says the demo never starts a tutor
+ * session; the pill is dropped so it cannot be asked to.
+ */
+function getNoteTabs({
+  showsTranscript,
+  isCreatorDemo,
+}: {
+  showsTranscript: boolean;
+  isCreatorDemo: boolean;
+}) {
+  return NOTE_TABS.filter(
+    (tab) =>
+      (tab.id !== "transcript" || showsTranscript) && (tab.id !== "tutor" || !isCreatorDemo),
+  );
 }
 
 function shouldPollLecture(status: LectureDetail["lecture"]["status"]) {
@@ -5963,7 +5982,7 @@ export function LectureWorkspace({
 
   const tabPills = (
     <div className="memo-tabs memo-chiprow" ref={tabRowRef}>
-      {getNoteTabs({ showsTranscript }).map((tab) => (
+      {getNoteTabs({ showsTranscript, isCreatorDemo }).map((tab) => (
         <button
           key={tab.id}
           type="button"

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 
+import { insideHouse, roomPoint, roomIdentity } from "./rooms";
 import { createAvatar } from "@/lib/palace/avatar";
 import type { PalaceLayout } from "@/lib/palace/layout";
 import {
@@ -27,6 +28,7 @@ export type PalaceSnapshot = {
   x: number;
   z: number;
   facing: number;
+  cameraYaw: number;
   districtIndex: number;
   nearStationId: string | null;
 };
@@ -45,6 +47,7 @@ export type PalaceGame = {
   releaseStation: () => void;
   /** Walk the camera to a district without walking there — the map's shortcut. */
   travelTo: (districtIndex: number) => void;
+  travelToStation: (stationId: string) => void;
   setPaused: (paused: boolean) => void;
   resize: () => void;
   snapshot: () => PalaceSnapshot;
@@ -56,7 +59,7 @@ export type PalaceGame = {
  * enough that walking up to the front door counts as arriving, since that is
  * what a player aims at rather than the token on the path.
  */
-export const STATION_REACH = 4.4;
+export const STATION_REACH = 1.8;
 const LOOK_SENSITIVITY = 0.0042;
 /** How far behind the character the camera rides when nothing is in the way. */
 const CAMERA_DISTANCE = 8.4;
@@ -83,7 +86,7 @@ export function createPalaceGame({
 }): PalaceGame {
   const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: window.devicePixelRatio < 2,
+    antialias: true,
     powerPreference: "high-performance",
   });
 
@@ -94,6 +97,7 @@ export function createPalaceGame({
    * so phones get 1.5 and desktops keep 2.
    */
   const onAPhone = window.innerWidth < 900;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, onAPhone ? 1.5 : 2));
   /*
@@ -102,11 +106,13 @@ export function createPalaceGame({
    * device, because a phone drawing 2048² of shadow every frame is a phone
    * getting warm for no visible gain at that screen size.
    */
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(58, 1, 0.5, 420);
+  const camera = new THREE.PerspectiveCamera(64, 1, 0.5, 720);
   const lighting = createLighting(scene, onAPhone ? 1024 : 2048);
   const city = buildCity(layout);
   const avatar = createAvatar();
@@ -140,7 +146,8 @@ export function createPalaceGame({
   let cameraYaw = layout.spawn.yaw;
   /* A little above the eaves: low enough to feel like a street, high enough
      that the camera does not spend its life inside somebody's roof. */
-  let cameraPitch = 0.42;
+  let cameraPitch = 0.3;
+  const cameraTarget = new THREE.Vector3();
   const move = { forward: 0, right: 0 };
   let sprinting = false;
   let paused = false;
@@ -247,6 +254,9 @@ export function createPalaceGame({
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
+    if (paused || interacting || (event.target instanceof HTMLElement &&
+      (event.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)))) return;
+    if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) event.preventDefault();
     if (event.repeat) return;
 
     if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
@@ -264,6 +274,8 @@ export function createPalaceGame({
     keysDown.delete(event.code);
   };
 
+  const clearInput = () => { keysDown.clear(); move.forward = 0; move.right = 0; sprinting = false; };
+  window.addEventListener("blur", clearInput);
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
 
@@ -326,18 +338,23 @@ export function createPalaceGame({
     lighting.follow(character.x, character.z);
 
     const eye = { x: character.x, y: character.y + 0.9, z: character.z };
+    const indoors = layout.houses.some((house) => insideHouse(character, house));
+    const activePitch = indoors ? Math.max(0.08, Math.min(cameraPitch, 0.42)) : cameraPitch;
     const distance = clampCameraDistance({
       target: eye,
       yaw: cameraYaw,
-      pitch: cameraPitch,
-      maxDistance: portrait ? CAMERA_DISTANCE_PORTRAIT : CAMERA_DISTANCE,
+      pitch: activePitch,
+      maxDistance: indoors ? 4 : portrait ? CAMERA_DISTANCE_PORTRAIT : CAMERA_DISTANCE,
       colliders: city.colliders,
     });
-    const desired = cameraPosition({ target: eye, yaw: cameraYaw, pitch: cameraPitch, distance });
+    const desired = cameraPosition({ target: eye, yaw: cameraYaw, pitch: activePitch, distance });
 
     /* The camera trails rather than tracks, which is what makes running feel fast. */
-    camera.position.lerp(new THREE.Vector3(desired.x, Math.max(desired.y, 1.2), desired.z), 1 - Math.pow(0.0025, delta));
-    camera.lookAt(eye.x, eye.y + 0.7, eye.z);
+    cameraTarget.set(desired.x, Math.max(desired.y, 1.2), desired.z);
+    // A wall can move closer faster than an eased camera; snap inward to avoid
+    // crossing its face while keeping the character visible in third person.
+    camera.position.lerp(cameraTarget, indoors || reducedMotion ? 1 : 1 - Math.pow(0.0025, delta));
+    camera.lookAt(eye.x, eye.y + 0.7 + (indoors ? 0 : Math.max(0, -activePitch) * 8), eye.z);
 
     const seconds = time / 1000;
 
@@ -349,7 +366,7 @@ export function createPalaceGame({
        * mascot bobs instead, each one out of step with its neighbours so a
        * plaza does not pulse as one.
        */
-      visual.token.position.y = 2.45 + Math.sin(seconds * 2 + visual.station.index) * 0.18;
+      visual.token.position.y = 1.65 + (reducedMotion ? 0 : Math.sin(seconds * 2 + visual.station.index) * 0.1);
     });
 
     if (time > districtRefreshAt) {
@@ -367,7 +384,8 @@ export function createPalaceGame({
       const near = nearestStation(
         character,
         city.stations
-          .filter((visual) => !visual.collected && visual.station.id !== suppressedStationId)
+          .filter((visual) => !visual.collected && visual.station.id !== suppressedStationId &&
+            (visual.station.placement === "outside" || insideHouse(character, layout.houses[visual.station.houseIndex])))
           .map((visual) => visual.station),
         STATION_REACH,
       );
@@ -389,25 +407,57 @@ export function createPalaceGame({
       if ((near?.id ?? null) !== nearStationId) {
         nearStationId = near?.id ?? null;
         interacting = nearStationId !== null;
+        if (interacting) clearInput();
         onNearStation(nearStationId);
       }
     }
 
-    onFrame({
-      x: character.x,
-      z: character.z,
-      facing: character.facing,
-      districtIndex,
-      nearStationId,
-    });
+    onFrame(snapshot());
 
     renderer.render(scene, camera);
   };
+
+  const snapshot = (): PalaceSnapshot => ({
+    x: character.x, z: character.z, facing: character.facing, cameraYaw, districtIndex, nearStationId,
+  });
 
   frame = requestAnimationFrame(tick);
 
   const findVisual = (stationId: string): StationVisual | undefined =>
     city.stations.find((visual) => visual.station.id === stationId);
+
+  const travelToStation = (stationId: string) => {
+    const target = findVisual(stationId);
+    if (!target) return;
+    const house = layout.houses[target.station.houseIndex];
+    const room = roomIdentity(target.station.index);
+    const approach = target.station.placement === "inside"
+      ? roomPoint(house, room.anchorX, room.anchorZ + 1.7)
+      : { x: target.station.x, z: target.station.z + 1.7 };
+    character = createCharacter(approach.x, approach.z, target.station.placement === "inside" ? house.facing + Math.PI : Math.PI);
+    cameraYaw = character.facing;
+    nearStationId = null;
+    clearInput();
+    interacting = false;
+    suppressedStationId = null;
+    lighting.follow(character.x, character.z);
+
+    const eye = { x: character.x, y: 0.9, z: character.z };
+    const spot = cameraPosition({
+      target: eye,
+      yaw: cameraYaw,
+      pitch: cameraPitch,
+      distance: clampCameraDistance({
+        target: eye,
+        yaw: cameraYaw,
+        pitch: cameraPitch,
+        maxDistance: CAMERA_DISTANCE,
+        colliders: city.colliders,
+      }),
+    });
+
+    camera.position.set(spot.x, Math.max(spot.y, 1.2), spot.z);
+  };
 
   return {
     setMove: (forward, right) => {
@@ -426,6 +476,7 @@ export function createPalaceGame({
 
       if (!visual || visual.collected) return;
 
+      collected.add(stationId);
       markVisualCollected(visual);
     },
     releaseStation: () => {
@@ -435,76 +486,26 @@ export function createPalaceGame({
       onNearStation(null);
     },
     travelTo: (index) => {
-      const district = layout.districts[index];
-
-      if (!district) return;
-
-      /*
-       * The map drops you outside the next house that still has something
-       * waiting at it, facing its door — not at the middle of the
-       * neighbourhood, which in a town of blocks is somebody's back garden.
-       */
-      const target =
-        city.stations.find(
-          (visual) => visual.station.districtIndex === index && !visual.collected,
-        ) ??
-        city.stations.find((visual) => visual.station.districtIndex === index);
-
-      if (!target) return;
-
-      const house = layout.houses[target.station.houseIndex];
-      const away = {
-        x: target.station.x - house.x,
-        z: target.station.z - house.z,
-      };
-      const length = Math.hypot(away.x, away.z) || 1;
-      const step = 4.2;
-
-      character = createCharacter(
-        target.station.x + (away.x / length) * step,
-        target.station.z + (away.z / length) * step,
-        Math.atan2(-away.x / length, -away.z / length),
-      );
-      cameraYaw = character.facing;
-      interacting = false;
-      suppressedStationId = null;
-      lighting.follow(character.x, character.z);
-
-      const eye = { x: character.x, y: 0.9, z: character.z };
-      const spot = cameraPosition({
-        target: eye,
-        yaw: cameraYaw,
-        pitch: cameraPitch,
-        distance: clampCameraDistance({
-          target: eye,
-          yaw: cameraYaw,
-          pitch: cameraPitch,
-          maxDistance: CAMERA_DISTANCE,
-          colliders: city.colliders,
-        }),
-      });
-
-      camera.position.set(spot.x, Math.max(spot.y, 1.2), spot.z);
+      const target = city.stations.find((visual) => visual.station.districtIndex === index && !visual.collected)
+        ?? city.stations.find((visual) => visual.station.districtIndex === index);
+      if (target) travelToStation(target.station.id);
     },
+    travelToStation,
     setPaused: (value) => {
       paused = value;
+      if (value) clearInput();
 
       if (!value) {
         lastTime = 0;
       }
     },
     resize,
-    snapshot: () => ({
-      x: character.x,
-      z: character.z,
-      facing: character.facing,
-      districtIndex,
-      nearStationId,
-    }),
+    snapshot,
     dispose: () => {
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       canvas.removeEventListener("webglcontextlost", onWebglContextLost);
+      window.removeEventListener("blur", clearInput);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       lighting.dispose();

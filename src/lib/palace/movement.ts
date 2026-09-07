@@ -42,8 +42,8 @@ export type Collider = {
   depth: number;
 };
 
-export const WALK_SPEED = 7.4;
-export const SPRINT_SPEED = 12.2;
+export const WALK_SPEED = 5.2;
+export const SPRINT_SPEED = 9.2;
 export const JUMP_VELOCITY = 9.4;
 export const GRAVITY = 26;
 export const CHARACTER_RADIUS = 0.55;
@@ -242,7 +242,7 @@ export function clampCameraDistance({
 }
 
 /** The pitch stays inside a range where the camera is neither underground nor overhead. */
-export const MIN_PITCH = -0.12;
+export const MIN_PITCH = -0.4;
 export const MAX_PITCH = 0.85;
 
 export function clampPitch(pitch: number) {

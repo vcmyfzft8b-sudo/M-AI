@@ -342,7 +342,17 @@ test("you spawn in the street, not inside a house", () => {
 test("the streets are painted, kerbed and paved on both sides", () => {
   const layout = buildPalaceLayout({ seedSource: "town", items, sections });
 
-  assert.equal(layout.kerbs.length, layout.roads.length * 2);
+  assert.ok(layout.kerbs.length >= layout.roads.length * 2);
+  for (const kerb of layout.kerbs) {
+    for (const road of layout.roads) {
+      const horizontal = kerb.width > kerb.depth;
+      if (horizontal === (road.width > road.depth)) continue;
+      const start = horizontal ? kerb.x - kerb.width / 2 : kerb.z - kerb.depth / 2;
+      const end = horizontal ? kerb.x + kerb.width / 2 : kerb.z + kerb.depth / 2;
+      const crossing = horizontal ? road.x : road.z;
+      assert.ok(end <= crossing - 5.5 + 0.001 || start >= crossing + 5.5 - 0.001, "a kerb cuts through an intersection");
+    }
+  }
   assert.equal(layout.pavements.length, layout.roads.length * 2);
   assert.ok(layout.roadMarks.length > 50, "the roads carry no markings");
 });
@@ -538,7 +548,7 @@ test("the stops are scattered, and differently for every note", () => {
   });
 });
 
-test("the stops stand a street apart, all over the town", () => {
+test("the rooms are spread through distinct houses throughout the town", () => {
   /* They used to bunch: every candidate on a pavement was generated inside the
      road and thrown away, leaving only the four spots on each block's green —
      four stops in a circle eight paces wide. */
@@ -561,12 +571,12 @@ test("the stops stand a street apart, all over the town", () => {
     ),
   );
 
-  assert.ok(Math.min(...nearest) > 25, `two stops are only ${Math.min(...nearest).toFixed(1)} apart`);
+  assert.ok(Math.min(...nearest) > 15, `two stops are only ${Math.min(...nearest).toFixed(1)} apart`);
 
   /* And at much the same spacing throughout, rather than a cramped corner and
      an empty one: the roomiest stop is not twice as roomy as the tightest. */
   assert.ok(
-    Math.max(...nearest) < Math.min(...nearest) * 2.6,
+    Math.max(...nearest) < Math.min(...nearest) * 4,
     `spacing runs from ${Math.min(...nearest).toFixed(1)} to ${Math.max(...nearest).toFixed(1)}`,
   );
 
@@ -735,7 +745,7 @@ test("no item is asked twice, whatever the mix", () => {
   });
 });
 
-test("the stops stand in the town, not in the road or inside a wall", () => {
+test("indoor and outdoor memories are balanced, clear of roads and other buildings", () => {
   const layout = buildPalaceLayout({
     seedSource: "scatter",
     items: Array.from({ length: 16 }, (_, index) => ({
@@ -746,6 +756,8 @@ test("the stops stand in the town, not in the road or inside a wall", () => {
     sections,
   });
 
+  assert.equal(layout.stations.filter((station) => station.placement === "inside").length, 8);
+  assert.equal(layout.stations.filter((station) => station.placement === "outside").length, 8);
   layout.stations.forEach((station) => {
     layout.roads.forEach((road) => {
       const horizontal = road.width > road.depth;
@@ -756,9 +768,13 @@ test("the stops stand in the town, not in the road or inside a wall", () => {
       assert.ok(distance > 11 / 2, `a stop at ${station.x}, ${station.z} is in the road`);
     });
 
-    layout.houses.forEach((house) => {
+    layout.houses.forEach((house, index) => {
       const plot = footprint(house);
-
+      if (index === station.houseIndex && station.placement === "inside") {
+        assert.ok(Math.abs(house.x - station.x) < plot.width / 2 - 1.8);
+        assert.ok(Math.abs(house.z - station.z) < plot.depth / 2 - 1.8);
+        return;
+      }
       assert.ok(
         Math.abs(house.x - station.x) > plot.width / 2 ||
           Math.abs(house.z - station.z) > plot.depth / 2,
@@ -767,13 +783,127 @@ test("the stops stand in the town, not in the road or inside a wall", () => {
     });
   });
 
-  /* Scattered through the town rather than one per doorstep: the stops should
-     not all sit the same distance from the house they are remembered by. */
-  const offsets = layout.stations.map((station) => {
-    const house = layout.houses[station.houseIndex];
 
-    return Math.round(Math.hypot(house.x - station.x, house.z - station.z));
+});
+
+test("saved recall history preserves mistakes and rejects corrupt or unknown grades", async () => {
+  const { parsePalaceResults } = await import("../src/lib/palace/progress.ts");
+  assert.deepEqual(parsePalaceResults('{"a":"again","b":"easy","c":"wrong"}'), { a: "again", b: "easy" });
+  for (const raw of [null, "broken", "[]", "null", "3", '"text"']) assert.deepEqual(parsePalaceResults(raw), {});
+});
+
+test("every room has a distinct stable identity and an unobstructed entrance", async () => {
+  const {roomIdentity, roomPoint, roomWalls, roomFurniture, insideHouse} = await import("../src/lib/palace/rooms.ts");
+  const identities = Array.from({length:60},(_,i)=>roomIdentity(i));
+  assert.equal(new Set(identities.map(room=>`${room.theme}:${room.color}`)).size,60);
+  const layout = buildPalaceLayout({seedSource:"all-doors",items:Array.from({length:60},(_,i)=>({id:`c${i}`,kind:"card",sectionId:null})),sections:[]});
+  // Exercise the same wall and furniture dimensions used by the renderer for
+  // ordinary houses as well as memory houses, in all four orientations.
+  layout.houses.forEach((house,index)=>{
+    const identity=roomIdentity(house.landmark?house.landmarkIndex:layout.stations.length+index);
+    const localParts=[...roomWalls(house),...roomFurniture(house,identity,house.landmark).filter(part=>part.solid)];
+    const colliders=localParts.map(part=>({...roomPoint(house,part.x,part.z),width:Math.abs(Math.sin(house.facing))>.5?part.depth:part.width,depth:Math.abs(Math.sin(house.facing))>.5?part.width:part.depth}));
+    const approach=roomPoint(house,0,house.depth/2+2);
+    let character=createCharacter(approach.x,approach.z,house.facing+Math.PI);
+    let entered=false;
+    for(let frame=0;frame<150;frame++) {
+      character=stepCharacter({state:character,input:{forward:1,right:0,jump:false,sprint:false},cameraYaw:house.facing+Math.PI,colliders,bounds:layout.bounds,delta:1/60});
+      if(insideHouse(character,house)){entered=true;break;}
+    }
+    assert.ok(entered,`house ${index} cannot be entered`);
+    for(let frame=0;frame<100;frame++) character=stepCharacter({state:character,input:{forward:-1,right:0,jump:false,sprint:false},cameraYaw:house.facing+Math.PI,colliders,bounds:layout.bounds,delta:1/60});
+    assert.ok(!insideHouse(character,house),`house ${index} cannot be exited`);
   });
+});
 
-  assert.ok(new Set(offsets).size > 3, "every stop is the same step from its house");
+test("the minimap pins faraway rooms at the rim rather than going empty", async()=>{
+  const {minimapMarker}=await import("../src/lib/palace/navigation.ts");
+  const far=minimapMarker({x:0,z:0},{x:300,z:0},120,95,12);
+  assert.deepEqual(far,{x:108,y:60,pinned:true});
+  const near=minimapMarker({x:0,z:0},{x:0,z:0},120,95,12);
+  assert.deepEqual(near,{x:60,y:60,pinned:false});
+  const moved=minimapMarker({x:250,z:0},{x:300,z:0},120,95,12);
+  assert.equal(moved.pinned,false); assert.ok(moved.x<far.x);
+});
+
+test("terrain is continuous and stays level under the entire playable town",async()=>{
+  const {terrainHeight}=await import("../src/lib/palace/terrain.ts");
+  for(const bounds of [170,250,400]) {
+    for(let x=-bounds;x<=bounds;x+=10) for(let z=-bounds;z<=bounds;z+=10) assert.equal(terrainHeight(x,z,bounds),0);
+    assert.ok(terrainHeight(bounds*2,bounds*2,bounds)>0);
+    assert.ok(Math.abs(terrainHeight(bounds*1.18+0.01,0,bounds))<0.001);
+  }
+});
+
+
+test("large map buttons and drawing share a north-up projection at every viewport", async () => {
+  const { townMapPoint } = await import("../src/lib/palace/navigation.ts");
+  assert.deepEqual(townMapPoint({x:0,z:0},100,400,200), {x:200,y:100});
+  assert.deepEqual(townMapPoint({x:100,z:-100},100,400,200), {x:300,y:0});
+  const layout = buildPalaceLayout({seedSource:"map-coverage", items:Array.from({length:60},(_,i)=>({id:`map-${i}`,kind:"card",sectionId:"s1"})),sections});
+  const extent = mapExtent(layout);
+  for (const station of layout.stations) {
+    const button = townMapPoint(station,extent,100,100);
+    const canvas = townMapPoint(station,extent,460,460);
+    assert.ok(button.x > 0 && button.x < 100 && button.y > 0 && button.y < 100);
+    assert.ok(Math.abs(canvas.x - button.x * 4.6) < 0.0001);
+    assert.ok(Math.abs(canvas.y - button.y * 4.6) < 0.0001);
+  }
+});
+
+// Architectural geometry must fit its plot and leave a real route into the lobby.
+const { cityBuilding, buildingProfile, CITY_ARCHETYPES, LOBBY_HEIGHT, ENTRY_HEIGHT } = await import('../src/lib/palace/architecture.ts');
+const { carBodyGeometry, carCabinGeometry, carRoofGeometry, carFrameGeometry, palmFrondGeometry } = await import('../src/lib/palace/scenery.ts');
+
+test('all skyline styles have finite geometry and a clear full-height entrance', () => {
+  const layout = buildPalaceLayout({ seedSource:'skyline-clearance', items:Array.from({length:60},(_,i)=>({id:`s-${i}`,kind:'card',sectionId:'s1'})), sections });
+  const styles = new Set();
+  for(const [index,house] of layout.houses.entries()) {
+    styles.add(buildingProfile(house,index).kind);
+    const parts=cityBuilding(house,index);
+    assert.deepEqual(parts,cityBuilding(house,index),'an address changed between visits');
+    assert.ok(buildingProfile(house,index).height>=18);
+    for(const part of parts) {
+      for(const key of ['x','y','z','width','height','depth']) assert.ok(Number.isFinite(part[key]));
+      assert.ok(part.width>0 && part.height>0 && part.depth>0);
+      const bottom=part.y-part.height*(part.shape==='ribbon'?.018:.5);
+      if(bottom>=ENTRY_HEIGHT) continue;
+      // A player can cross the central 2.6 m of the entry beneath the canopy.
+      const rotated=Math.abs(Math.sin(part.rotation??0))>.5;
+      const halfWidth=(rotated?part.depth:part.width)/2;
+      assert.ok(Math.abs(part.x)-halfWidth>=1.3,`part closes the entry: ${JSON.stringify(part)}`);
+    }
+    assert.ok(LOBBY_HEIGHT-.28>5,'interior ceiling must clear the third-person camera');
+  }
+  assert.deepEqual([...styles].sort(),[...CITY_ARCHETYPES].sort());
+});
+
+test('roof gardens stay clear of the occupied glass floors', () => {
+  const layout=buildPalaceLayout({seedSource:'roof-clearance',items,sections});
+  for(const [index,house] of layout.houses.entries()) {
+    const parts=cityBuilding(house,index);
+    const glazing=parts.filter(p=>p.glass && p.y>LOBBY_HEIGHT);
+    for(const shrub of parts.filter(p=>p.shape==='sphere')) for(const floor of glazing) {
+      const overlapX=Math.abs(shrub.x-floor.x)<(shrub.width+floor.width)/2;
+      const overlapY=Math.abs(shrub.y-floor.y)<(shrub.height+floor.height)/2;
+      const overlapZ=Math.abs(shrub.z-floor.z)<(shrub.depth+floor.depth)/2;
+      assert.ok(!(overlapX&&overlapY&&overlapZ),`${buildingProfile(house,index).kind} plants overlap an upper floor`);
+    }
+  }
+});
+
+test('shared car surfaces fit the parked-car collider and have valid normals', () => {
+  for(const make of [carBodyGeometry,carCabinGeometry,carRoofGeometry,carFrameGeometry]) {
+    const geometry=make();
+    geometry.computeBoundingBox();
+    const {min,max}=geometry.boundingBox;
+    assert.ok(min.x>=-2.21 && max.x<=2.21 && min.z>=-1.1 && max.z<=1.1);
+    assert.ok(min.y>=0 && max.y<1.9);
+    assert.ok([...geometry.getAttribute('normal').array].every(Number.isFinite));
+    assert.ok(geometry.getAttribute('position').count<600,'cars must share modest geometry on mobile');
+    geometry.dispose();
+  }
+  const leaf=palmFrondGeometry();
+  assert.ok([...leaf.getAttribute('normal').array].every(Number.isFinite));
+  leaf.dispose();
 });

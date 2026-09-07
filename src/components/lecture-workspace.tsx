@@ -60,6 +60,7 @@ import { LecturePodcast } from "@/components/lecture-podcast";
 import { StudyGenerationNotice } from "@/components/generation-notice";
 import { LectureMindmap } from "@/components/lecture-mindmap";
 import { LecturePalace } from "@/components/lecture-palace";
+import { StudyQuizQuestion, StudyPracticeQuestion } from "@/components/study-question";
 import { StudyFlashcard } from "@/components/study-flashcard";
 import { LectureTutor } from "@/components/lecture-tutor";
 import { TypingDots } from "@/components/typing-dots";
@@ -4666,64 +4667,10 @@ export function LectureWorkspace({
                   </div>
 
                   <div className="lecture-quiz-card">
-                    <span className="memo-quiz-eyebrow">{t("quiz.chooseOne")}</span>
-                    <p className="lecture-quiz-prompt">{activeQuizQuestion.prompt}</p>
-
-                    <div className="lecture-quiz-options">
-                      {activeQuizOptionOrder
-                        /*
-                         * Answered, the list is down to what there is left to learn from: the
-                         * right answer, and — when they missed it — the one they chose.
-                         *
-                         * Showing all four afterwards meant four boxes of text competing for
-                         * the height the verdict also needed, which is what drove the options
-                         * to shrink until a long answer had nowhere to be written. None of the
-                         * three they did not pick is being read at that moment; the one that
-                         * is, is now the only one there, at its full size.
-                         *
-                         * The letters keep the position they were asked in, because the
-                         * verdict underneath names the answer by letter.
-                         */
-                        .map((optionIndex, displayIndex) => ({ optionIndex, displayIndex }))
-                        .filter(
-                          ({ optionIndex }) =>
-                            !collapsesAnsweredQuiz ||
-                            activeQuizSelection === null ||
-                            optionIndex === activeQuizQuestion.correct_option_idx ||
-                            optionIndex === activeQuizSelection,
-                        )
-                        .map(({ optionIndex, displayIndex }) => {
-                        const option = activeQuizQuestion.options[optionIndex] ?? "";
-                        const isSelected = activeQuizSelection === optionIndex;
-                        const isCorrect =
-                          activeQuizSelection !== null &&
-                          optionIndex === activeQuizQuestion.correct_option_idx;
-                        const isIncorrect =
-                          activeQuizSelection !== null &&
-                          isSelected &&
-                          optionIndex !== activeQuizQuestion.correct_option_idx;
-
-                        return (
-                          <button
-                            key={`${activeQuizQuestion.id}-${optionIndex}`}
-                            type="button"
-                            onClick={() => handleQuizSelection(optionIndex)}
-                            disabled={activeQuizSelection !== null}
-                            className={`lecture-quiz-option ${isSelected ? "selected" : ""} ${isCorrect ? "correct" : ""} ${isIncorrect ? "incorrect" : ""}`}
-                          >
-                            <span className="lecture-quiz-option-label">
-                              {String.fromCharCode(65 + displayIndex)}
-                            </span>
-                            <span className="lecture-quiz-option-copy">{option}</span>
-                            {isCorrect || isIncorrect ? (
-                              <span className="lecture-quiz-option-mark">
-                                <Msym name={isCorrect ? "check" : "close"} size="1.2rem" />
-                              </span>
-                            ) : null}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <StudyQuizQuestion question={activeQuizQuestion}
+                      order={activeQuizOptionOrder} selection={activeQuizSelection}
+                      collapseAnswered={collapsesAnsweredQuiz}
+                      onSelect={handleQuizSelection} />
 
                     {quizAnswerWasWrong ? (
                       <div className="memo-quiz-result">
@@ -4861,29 +4808,11 @@ export function LectureWorkspace({
                         />
                       </div>
 
-                      <p className="lecture-practice-prompt">
-                        {answer.question?.prompt ?? t("test.questionUnavailable")}
-                      </p>
-                      <textarea
-                        value={practiceTextAnswers[questionId] ?? ""}
-                        onChange={(event) => handlePracticeAnswerChange(questionId, event.target.value)}
-                        disabled={isUnknown}
-                        className="ios-textarea lecture-practice-textarea"
-                        placeholder={t("test.answerPlaceholder")}
-                      />
-
-                      <div className="lecture-practice-controls">
-                        <label className="lecture-practice-unknown">
-                          <input
-                            type="checkbox"
-                            checked={isUnknown}
-                            onChange={(event) =>
-                              handlePracticeUnknownToggle(questionId, event.target.checked)
-                            }
-                          />
-                          {t("test.dontKnow")}
-                        </label>
-                      </div>
+                      <StudyPracticeQuestion
+                        prompt={answer.question?.prompt ?? t("test.questionUnavailable")}
+                        answer={practiceTextAnswers[questionId] ?? ""} unknown={isUnknown}
+                        onAnswer={(value) => handlePracticeAnswerChange(questionId, value)}
+                        onUnknown={(value) => handlePracticeUnknownToggle(questionId, value)} />
 
                       <div className="memo-test-actions">
                         <button

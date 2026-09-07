@@ -29,6 +29,8 @@ function isPhone() {
 }
 
 type SheetOptions = {
+  /** Override the width breakpoint for device-specific study presentations. */
+  presentation?: "sheet" | "dialog";
   /**
    * The sheet owns a scrolling list. Only the grabber may start a drag, so a
    * finger on the list pans it instead of dismissing the sheet.
@@ -69,10 +71,12 @@ export function useSheet(onClosed: () => void, options?: SheetOptions) {
   // Escape handlers and scrim buttons that should not re-subscribe per render.
   const onClosedRef = useRef(onClosed);
   const lockedRef = useRef(locked);
+  const presentationRef = useRef(options?.presentation);
 
   useEffect(() => {
     onClosedRef.current = onClosed;
     lockedRef.current = locked;
+    presentationRef.current = options?.presentation;
   });
 
   useEffect(
@@ -100,7 +104,7 @@ export function useSheet(onClosed: () => void, options?: SheetOptions) {
 
     // On desktop there is no exit to wait for, and delaying the close would
     // just make the dialog feel slow to dismiss.
-    if (!isPhone()) {
+    if (presentationRef.current === "dialog" || (presentationRef.current !== "sheet" && !isPhone())) {
       setDragY(0);
       onClosedRef.current();
       after?.();
@@ -123,7 +127,7 @@ export function useSheet(onClosed: () => void, options?: SheetOptions) {
 
   const onPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
-      if (closingRef.current || lockedRef.current) {
+      if (closingRef.current || lockedRef.current || presentationRef.current === "dialog") {
         return;
       }
 

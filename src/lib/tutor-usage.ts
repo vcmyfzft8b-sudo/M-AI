@@ -10,6 +10,7 @@ import {
   FREE_TUTOR_LIFETIME_SECONDS,
   PAID_TUTOR_DAILY_SECONDS,
   TUTOR_CREDIT_PACK_SECONDS,
+  TUTOR_GRANT_KEY_GRACE_SECONDS,
   type TutorAllowance,
   type VoiceFeature,
 } from "@/lib/tutor-allowance";
@@ -36,14 +37,6 @@ export {
   type TutorAllowance,
   type VoiceFeature,
 };
-
-/**
- * Slack on the Soniox keys over the slice they are for.
- *
- * The keys must outlive the slice by enough to finish the sentence in progress and report
- * back, or the last turn of every slice would be cut off mid-word.
- */
-const TUTOR_GRANT_KEY_GRACE_SECONDS = 45;
 
 export type TutorGrant = {
   grantId: string | null;

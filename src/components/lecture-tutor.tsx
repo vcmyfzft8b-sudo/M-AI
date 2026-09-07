@@ -8,6 +8,7 @@ import { sheetClass, useSheet } from "@/components/use-sheet";
 import { useT } from "@/components/i18n-provider";
 import { VoiceUsageSheet, type VoiceUsage } from "@/components/voice-usage-sheet";
 import { readChatStream } from "@/lib/chat-stream-client";
+import { TUTOR_GRANT_KEY_GRACE_SECONDS } from "@/lib/tutor-allowance";
 import {
   DEFAULT_NOTE_TTS_VOICE,
   NOTE_TTS_VOICES,
@@ -29,6 +30,7 @@ import { type TutorPhase } from "@/lib/tutor/heard-line";
 import { TutorClipPlayer } from "@/lib/tutor/clip-player";
 import { reportTutorFailure, resetTutorFailureReports } from "@/lib/tutor/report";
 import { SpeechOutputError, TutorSpeechOutput } from "@/lib/tutor/speech-output";
+import { isFinalSlice, nextSliceDueAt } from "@/lib/tutor/slice";
 import { appendSpokenSoFar } from "@/lib/tutor/spoken-so-far";
 import { voiceHue } from "@/lib/tutor/voice-colors";
 import { hasStaticVoiceSamples, voiceSampleClip } from "@/lib/tutor/voice-clips";
@@ -86,12 +88,16 @@ function isTransportFailure(caught: unknown) {
 /**
  * How long before the Soniox keys expire the session quietly takes its next slice.
  *
- * The keys are minted for the slice of talking time the server reserved — half an hour —
- * and they are the whole enforcement, so they really do stop working. Renewing on a
- * margin rather than on the expiry itself keeps the swap out of the middle of a turn and
- * leaves room for the round trip that fetches it. Without this the conversation ran into
- * a wall at the half hour: Soniox answers an expired key with a 401, which reached the
- * learner as "the connection to the voice service dropped" and paused the walkthrough.
+ * The keys are minted for the slice of talking time the server reserved, and they are the
+ * whole enforcement, so they really do stop working. Renewing on a margin rather than on
+ * the expiry itself keeps the swap out of the middle of a turn and leaves room for the
+ * round trip that fetches it. Without this the conversation ran into a wall at the half
+ * hour: Soniox answers an expired key with a 401, which reached the learner as "the
+ * connection to the voice service dropped" and paused the walkthrough.
+ *
+ * Only ever a margin on a slice long enough to have one. A slice shorter than this margin
+ * is already due the moment it is adopted, which is why `nextSliceDueAt` decides the
+ * moment instead of this constant alone — see the reasoning in `@/lib/tutor/slice`.
  */
 const CREDENTIAL_RENEWAL_MARGIN_MS = 120_000;
 
@@ -250,6 +256,12 @@ export function LectureTutor({
   const turnAbortRef = useRef<AbortController | null>(null);
   /** When the keys in the browser's hands stop working, as milliseconds. */
   const credentialsExpireAtRef = useRef<number | null>(null);
+  /*
+   * When to reach for the next slice. Held rather than recomputed from the expiry, because
+   * a final slice comes due at the end of its talking time and an ordinary one on the
+   * renewal margin, and the alarm and the check before each turn have to agree on which.
+   */
+  const nextSliceDueAtRef = useRef<number | null>(null);
   const renewalTimerRef = useRef<number | null>(null);
   /* Declared here and filled in below, so a turn can pause the session it is running in. */
   const pauseRef = useRef<() => void>(() => {});
@@ -320,6 +332,7 @@ export function LectureTutor({
     clearTimer(followUpTimerRef);
     clearTimer(renewalTimerRef);
     credentialsExpireAtRef.current = null;
+    nextSliceDueAtRef.current = null;
 
     if (levelFrameRef.current !== null) {
       window.cancelAnimationFrame(levelFrameRef.current);
@@ -550,9 +563,9 @@ export function LectureTutor({
   }, [lectureId, setPhaseNow, settleGrant, t, teardown, voice]);
 
   const renewCredentials = useCallback(async () => {
-    const expiresAt = credentialsExpireAtRef.current;
+    const dueAt = nextSliceDueAtRef.current;
 
-    if (expiresAt === null || Date.now() < expiresAt - CREDENTIAL_RENEWAL_MARGIN_MS) {
+    if (dueAt === null || Date.now() < dueAt) {
       return true;
     }
 
@@ -629,13 +642,19 @@ export function LectureTutor({
     credentialsExpireAtRef.current = Number.isNaN(expiresAt) ? null : expiresAt;
 
     if (credentialsExpireAtRef.current === null) {
+      nextSliceDueAtRef.current = null;
+
       return;
     }
 
-    const delay = Math.max(
-      0,
-      credentialsExpireAtRef.current - CREDENTIAL_RENEWAL_MARGIN_MS - Date.now(),
-    );
+    nextSliceDueAtRef.current = nextSliceDueAt({
+      expiresAt: credentialsExpireAtRef.current,
+      finalSlice: isFinalSlice(session),
+      renewalMarginMs: CREDENTIAL_RENEWAL_MARGIN_MS,
+      keyGraceMs: TUTOR_GRANT_KEY_GRACE_SECONDS * 1000,
+    });
+
+    const delay = Math.max(0, nextSliceDueAtRef.current - Date.now());
 
     renewalTimerRef.current = window.setTimeout(() => {
       void renewCredentialsRef.current();

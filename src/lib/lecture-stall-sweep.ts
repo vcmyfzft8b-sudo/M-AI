@@ -27,9 +27,10 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
  * open the note. See `lecture-stall-plan.ts` for the policy and why it is shaped by cost.
  *
  * Every run ends with each lecture it touched in a terminal state or on its way to one: ready
- * (the notes were there all along and only the status was wrong), resumed once, or failed with a
- * sentence the note screen renders in the reader's language — `processing_stalled` for a run that
- * died on our side, `upload_incomplete` for a file the browser never finished sending.
+ * (the notes were there all along and only the status was wrong), resumed once, deleted where the
+ * row never held anything at all, or failed with a sentence the note screen renders in the
+ * reader's language — `processing_stalled` for a run that died on our side, `upload_incomplete`
+ * for a file the browser started sending and never finished.
  */
 
 /**
@@ -53,6 +54,8 @@ export type StallSweepOutcome = {
   reconciled: number;
   resumed: Array<{ lectureId: string; job: StallResumeJob }>;
   failed: string[];
+  /** Empty drafts removed rather than failed. See `isNeverStartedDraft`. */
+  discarded: string[];
   waiting: number;
   deferred: number;
   errors: Array<{ lectureId: string; message: string }>;
@@ -60,7 +63,13 @@ export type StallSweepOutcome = {
 
 type SweepLectureRow = Pick<
   LectureRow,
-  "id" | "status" | "processing_metadata" | "source_type" | "storage_path" | "updated_at"
+  | "id"
+  | "status"
+  | "processing_metadata"
+  | "source_type"
+  | "storage_path"
+  | "title"
+  | "updated_at"
 >;
 
 async function loadCandidates(now: number): Promise<LectureRow[]> {
@@ -140,12 +149,31 @@ async function markResumed(lecture: SweepLectureRow, nowIso: string) {
   }
 }
 
+/**
+ * Removes a draft nothing was ever attached to.
+ *
+ * Safe to do plainly, with no storage sweep behind it: `isNeverStartedDraft` has already
+ * established there is no file, no transcript and no artifact, and the row's children would go
+ * with it on the cascade in any case. What we are deleting is a row the learner never saw fill.
+ */
+async function discardEmptyDraft(lectureId: string) {
+  const { error } = await createSupabaseServiceRoleClient()
+    .from("lectures")
+    .delete()
+    .eq("id", lectureId);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function sweepStalledLectures(now = Date.now()): Promise<StallSweepOutcome> {
   const outcome: StallSweepOutcome = {
     scanned: 0,
     reconciled: 0,
     resumed: [],
     failed: [],
+    discarded: [],
     waiting: 0,
     deferred: 0,
     errors: [],
@@ -176,6 +204,7 @@ export async function sweepStalledLectures(now = Date.now()): Promise<StallSweep
       processingMetadata: lecture.processing_metadata,
       sourceType: lecture.source_type,
       storagePath: lecture.storage_path,
+      hasTitle: Boolean(lecture.title && lecture.title.trim().length > 0),
       // Reconciliation above already promoted every lecture whose artifact was complete, so an
       // artifact still sitting here is an incomplete one the pipeline has yet to finish.
       hasArtifact: false,
@@ -190,6 +219,12 @@ export async function sweepStalledLectures(now = Date.now()): Promise<StallSweep
     }
 
     try {
+      if (plan.action === "discard") {
+        await discardEmptyDraft(lecture.id);
+        outcome.discarded.push(lecture.id);
+        continue;
+      }
+
       if (plan.action === "resume") {
         if (outcome.resumed.length >= MAX_RESUMES_PER_RUN) {
           outcome.deferred += 1;

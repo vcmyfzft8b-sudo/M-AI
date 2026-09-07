@@ -212,3 +212,119 @@ test("the study goal cannot exceed the length the endpoint accepts", () => {
   const limit = Number(ROUTE.match(/studyGoal: z\.string\(\)\.trim\(\)\.min\(1\)\.max\((\d+)\)/)[1]);
   assert.match(FLOW, new RegExp(`\\.slice\\(0, ${limit}\\)`));
 });
+
+/**
+ * The last screen is reached when two independent things have both finished:
+ * the loader's ring filling and sitting for its beat, and the answers reaching
+ * the server. The ring takes two to four seconds; a save on a bad connection
+ * can take longer. Asking once, at the end of the beat, left anyone whose save
+ * had not come back stranded on a screen that says the plan is ready and
+ * carries no button at all — no error, no retry, nothing to press.
+ */
+test("the loader waits for whichever finishes last, the beat or the save", () => {
+  const loader = FLOW.slice(FLOW.indexOf("const finishLoading"), FLOW.indexOf("const goRef"));
+
+  // Both sides call it: the beat's timer, and the save resolving.
+  assert.match(loader, /submit\(\)\.then\(\(\) => finishLoadingRef\.current\(\)\)/);
+  assert.match(loader, /loaderSettled\.current = true;\s*\n\s*finishLoadingRef\.current\(\);/);
+
+  // And it refuses until both are true, rather than sampling one of them.
+  assert.match(
+    FLOW.slice(FLOW.indexOf("const finishLoading"), FLOW.indexOf("const finishLoadingRef")),
+    /if \(!loaderSettled\.current \|\| !\(saved\.current \|\| demo\)\) \{\s*\n\s*return;/,
+  );
+
+  // A retry starts the wait over rather than inheriting the last one's beat.
+  assert.match(FLOW, /loaderSettled\.current = false;/);
+});
+
+test("a saved profile is complete enough to count as onboarded", () => {
+  /*
+   * `hasCompletedOnboardingProfile` wants five columns, not just the timestamp.
+   * A save that set the timestamp and left one of the others empty would return
+   * 200 and still land the user back at the start of the survey, which is the
+   * same trap by another route — so the endpoint must write all five, and the
+   * schema must refuse a request that would leave any of them blank.
+   */
+  const billing = readFileSync(
+    fileURLToPath(new URL("../src/lib/billing.ts", import.meta.url)),
+    "utf8",
+  );
+  const required = billing
+    .slice(billing.indexOf("function hasCompletedOnboardingProfile"))
+    .slice(0, billing.slice(billing.indexOf("function hasCompletedOnboardingProfile")).indexOf("}"))
+    .match(/profile\??\.(\w+)/g)
+    .map((match) => match.split(".")[1]);
+
+  assert.ok(required.length >= 5, `expected five columns, found ${required.join(", ")}`);
+
+  const upsert = ROUTE.slice(ROUTE.indexOf(".upsert({"), ROUTE.indexOf("as never"));
+
+  for (const column of required) {
+    assert.match(upsert, new RegExp(`\\b${column}:`), `the endpoint never writes "${column}"`);
+    assert.doesNotMatch(
+      upsert,
+      new RegExp(`\\b${column}: null`),
+      `the endpoint writes "${column}" as null, which never counts as onboarded`,
+    );
+  }
+
+  // The three the survey sends as text can never arrive empty.
+  for (const field of ["currentAverageGrade", "targetGrade", "studyGoal"]) {
+    assert.match(ROUTE, new RegExp(`${field}: z\\.string\\(\\)\\.trim\\(\\)\\.min\\(1\\)`), field);
+  }
+});
+
+/**
+ * The keyboard presses the button rather than guessing at what it does.
+ *
+ * Enter used to advance a step directly, which is not the same thing: on the
+ * last screen there is no step after it, so "Make my first note" — the one
+ * button that leaves the flow — was the only call to action in it the keyboard
+ * could not press, and on the loading step Enter was refused outright even when
+ * the button there was the retry after a failed save.
+ */
+test("Enter presses the call to action wherever there is one", () => {
+  const handler = FLOW.slice(FLOW.indexOf("const onKey ="), FLOW.indexOf('window.addEventListener("keydown"'));
+
+  assert.match(handler, /if \(ctaRef\.current\.enabled\) \{\s*\n\s*ctaRef\.current\.press\(\);/);
+  // A question step has no button at all — picking an option is what advances
+  // it — so that one case still moves the step directly.
+  assert.match(handler, /if \(active\.kind === "q"\)/);
+  // And the old shortcut is gone from every other case.
+  assert.doesNotMatch(handler, /active\.kind === "loading"/);
+
+  // One definition of "pressable", shared by the button and the keyboard.
+  assert.match(FLOW, /ctaRef\.current = \{ press: pressCta, enabled: showCta && !ctaDisabled \}/);
+  assert.match(FLOW, /next: pressCta,/);
+
+  // Typing in the practice test's answer box is still typing.
+  assert.match(handler, /\^\(INPUT\|TEXTAREA\)\$/);
+});
+
+/**
+ * A label has to fit inside its own tile, in every language.
+ *
+ * The two steps that lay their options out in columns give each tile about
+ * 174px on a 390px phone, and the design's padding, icon and gap took 82 of
+ * them — leaving 92px for the label, which is narrower than the single word
+ * "Personalizacija". A word cannot wrap inside itself, so it went out through
+ * the side of the tile. It is the longest word either of those steps has in any
+ * of the five languages, so the trimmed chrome that gives the label 120px is
+ * what makes all of them fit; `overflow-wrap` is the backstop for the day one
+ * of them gets longer.
+ */
+test("the option label has room to wrap and cannot leave its tile", () => {
+  assert.match(FLOW, /const OPTION_CHROME = \{/);
+  // The roomier single-column numbers are the design's own.
+  assert.match(FLOW, /single: \{ padding: "0\.95rem", icon: "clamp\(1\.55rem, 4\.6vh, 2\.5rem\)", gap: "0\.8rem" \}/);
+  // The trimmed ones apply exactly where the tiles are half-width.
+  assert.match(FLOW, /step\.cols === WRAPPING_COLUMNS \? OPTION_CHROME\.columns : OPTION_CHROME\.single/);
+
+  // And the tile actually reads them rather than carrying its own copy.
+  const button = FLOW.slice(FLOW.indexOf("{v.options.map("), FLOW.indexOf("{item.label}"));
+  assert.match(button, /gap: v\.optionGap/);
+  assert.match(button, /padding: `clamp\(0\.3rem, 1\.2vh, 0\.8rem\) \$\{v\.optionPad\}`/);
+  assert.match(button, /width: v\.optionIcon, height: v\.optionIcon/);
+  assert.match(button, /overflowWrap: "anywhere"/);
+});

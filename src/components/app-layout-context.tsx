@@ -21,14 +21,23 @@ import {
  * it, which keeps the panel a real grid child (so it can be sticky and full
  * height) without the shell having to know anything about chat.
  */
+/**
+ * `null` means no note screen has answered yet — it is still loading, or the
+ * route is not a note at all. The shell needs that apart from a decided `false`:
+ * while a note's skeleton is on screen it reserves the column anyway, so the
+ * load has the same shape as the note that replaces it. Only a mounted note
+ * screen ever sets a boolean.
+ */
+type ChatOpenState = boolean | null;
+
 type AppLayoutValue = {
-  chatOpen: boolean;
-  setChatOpen: (open: boolean) => void;
+  chatOpen: ChatOpenState;
+  setChatOpen: (open: ChatOpenState) => void;
   chatSlot: HTMLElement | null;
 };
 
 const AppLayoutContext = createContext<AppLayoutValue>({
-  chatOpen: false,
+  chatOpen: null,
   setChatOpen: () => {},
   chatSlot: null,
 });
@@ -37,14 +46,14 @@ export function AppLayoutProvider({
   children,
 }: {
   children: (value: {
-    chatOpen: boolean;
+    chatOpen: ChatOpenState;
     registerChatSlot: (node: HTMLElement | null) => void;
   }) => ReactNode;
 }) {
-  const [chatOpen, setChatOpenState] = useState(false);
+  const [chatOpen, setChatOpenState] = useState<ChatOpenState>(null);
   const [chatSlot, setChatSlot] = useState<HTMLElement | null>(null);
 
-  const setChatOpen = useCallback((open: boolean) => setChatOpenState(open), []);
+  const setChatOpen = useCallback((open: ChatOpenState) => setChatOpenState(open), []);
   const registerChatSlot = useCallback((node: HTMLElement | null) => setChatSlot(node), []);
 
   /*

@@ -12,8 +12,8 @@ export default async function PalaceLocalQA({
 }: {
   searchParams: Promise<{ large?: string; isolated?: string }>;
 }) {
-  const { large, isolated } = await searchParams;
   if (process.env.NODE_ENV !== "development") notFound();
+  const { large, isolated } = await searchParams;
   const cards = [
     {
       id: "qa-card",

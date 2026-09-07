@@ -6,6 +6,12 @@ import {
   createBillingRequiredResponse,
   getUserEntitlementState,
 } from "@/lib/billing";
+import {
+  EMPTY_DRAFT_REUSE_WINDOW_MS,
+  REUSABLE_DRAFT_COLUMNS,
+  isReusableEmptyDraft,
+  type ReusableDraftCandidate,
+} from "@/lib/empty-draft-reuse";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -23,6 +29,45 @@ const createManualLectureSchema = z.object({
   languageHint: languageHintSchema.optional(),
 });
 
+/**
+ * The learner's most recent untouched draft of this kind, if they have one.
+ *
+ * Reads a handful of their newest `uploading` rows rather than asking the database to express
+ * "empty metadata" — that shape lives in `isReusableEmptyDraft`, where it can be tested, and a
+ * learner never has enough drafts open at once for the difference to matter.
+ */
+async function findReusableEmptyDraft(params: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  userId: string;
+  sourceType: string;
+  accessTier: string;
+}) {
+  const now = Date.now();
+  const { data, error } = await params.supabase
+    .from("lectures")
+    .select(REUSABLE_DRAFT_COLUMNS)
+    .eq("user_id", params.userId)
+    .eq("status", "uploading")
+    .gte("created_at", new Date(now - EMPTY_DRAFT_REUSE_WINDOW_MS).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  if (error || !data) {
+    // Reuse is an optimisation. A learner who cannot have it should still get a note.
+    return null;
+  }
+
+  const reusable = (data as unknown as ReusableDraftCandidate[]).find((candidate) =>
+    isReusableEmptyDraft(candidate, {
+      sourceType: params.sourceType,
+      accessTier: params.accessTier,
+      now,
+    }),
+  );
+
+  return reusable?.id ?? null;
+}
+
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   const {
@@ -36,6 +81,19 @@ export async function POST(request: Request) {
   const entitlement = await getUserEntitlementState(user.id);
 
   if (!entitlement.canCreateNotes) {
+    /*
+     * "Still being made" is not "you have run out". Since the free note is only spent once a
+     * note succeeds, a learner whose first one is mid-run has not spent anything — they simply
+     * cannot start a second beside it, because both could finish. Sending them to the paywall
+     * for that would be a lie, so this answers with a plain 409 the modal shows as text.
+     */
+    if (entitlement.trialLectureInProgress) {
+      return NextResponse.json(
+        { error: await tr("api.trialLectureInProgress") },
+        { status: 409 },
+      );
+    }
+
     return createBillingRequiredResponse(
       await tr("api.trialExhausted"),
       "trial_exhausted",
@@ -67,13 +125,39 @@ export async function POST(request: Request) {
     return parsed.response;
   }
 
+  /*
+   * A learner who is trying again gets the draft they already have, rather than a second one.
+   *
+   * This row is created before there is anything to put in it, so every attempt that dies
+   * between here and the source upload leaves an empty one behind — and the learner's next move
+   * is almost always to press the button again. Without this they collect one dead note per
+   * attempt: on 2026-09-05 one account made three drafts inside 39 seconds and kept two of them
+   * as untitled failures. Adopting the empty draft makes the retry idempotent, and it holds even
+   * for the attempts we cannot clean up client-side, where the tab is simply gone.
+   *
+   * Only a genuinely untouched row qualifies — no title, no source metadata, no storage path.
+   * Anything else is a draft with work in it, and handing two attempts the same id would make
+   * the second overwrite the first.
+   */
+  const accessTier = entitlement.hasPaidAccess ? "paid" : "trial";
+  const reusableDraft = await findReusableEmptyDraft({
+    supabase,
+    userId: user.id,
+    sourceType: parsed.data.sourceType,
+    accessTier,
+  });
+
+  if (reusableDraft) {
+    return NextResponse.json({ lectureId: reusableDraft });
+  }
+
   const { data: lecture, error } = await supabase
     .from("lectures")
     .insert(
       {
         user_id: user.id,
         source_type: parsed.data.sourceType,
-        access_tier: entitlement.hasPaidAccess ? "paid" : "trial",
+        access_tier: accessTier,
         status: "uploading",
         language_hint: parsed.data.languageHint ?? null,
       } as never,

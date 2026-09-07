@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useCallback, useState, useSyncExternalStore } from "react";
 
 import { BillingPortalButton } from "@/components/billing-portal-button";
+import { SettingsTestPersona } from "@/components/settings-test-persona";
 import { useTranslations } from "@/components/i18n-provider";
 import { InstantLink } from "@/components/instant-link";
 import { LanguageSettingsRow } from "@/components/language-picker";
@@ -15,6 +16,7 @@ import { useInstantNavigation } from "@/components/navigation-loading";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { BRAND_NAME, BRAND_SUPPORT_EMAIL } from "@/lib/brand";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
+import type { TestPersona } from "@/lib/test-persona";
 import type { ThemePreference } from "@/lib/theme";
 import {
   detectInstallPlatform,
@@ -79,6 +81,7 @@ export function SettingsScreen({
   hasSubscription,
   installGuideSeen = false,
   isDemo = false,
+  testPersona = null,
 }: {
   email: string;
   planLabel: string;
@@ -92,6 +95,11 @@ export function SettingsScreen({
   installGuideSeen?: boolean;
   /** The creator demo has no account: sign-out and deletion are hidden. */
   isDemo?: boolean;
+  /**
+   * Non-null for exactly one account. The page decides; see `super-admin.ts`
+   * for who, and `test-persona.ts` for what it does.
+   */
+  testPersona?: TestPersona | null;
 }) {
   const t = useTranslations().t;
   const { navigateWithFeedback, overlay: navigationOverlay, isNavigating } = useInstantNavigation();
@@ -447,6 +455,8 @@ export function SettingsScreen({
                 </InstantLink>
               )}
             </div>
+
+            {testPersona ? <SettingsTestPersona persona={testPersona} /> : null}
 
             <p className="memo-fine-print">
               {t("settings.finePrint.refundBefore")}

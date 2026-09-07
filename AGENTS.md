@@ -111,6 +111,36 @@ each wrote to production's migration history from an unmerged branch and cost an
 - Reporting days are Europe/Ljubljana everywhere, in both the SQL aggregates and `src/lib/admin/ranges.ts`. Do not bucket a date by UTC in this area.
 - Setup, cost, detection rules and the limits of historical backfill are in [docs/admin-dashboard.md](/docs/admin-dashboard.md).
 
+## Design rules
+
+Read [docs/design-system.md](/docs/design-system.md) before any UI change. In short:
+
+- New UI goes in the `.memo` layer (`src/app/redesign.css`). `globals.css` is
+  legacy — do not extend it. `onboarding.css` reuses the redesign's token names
+  with different values; do not assume a name means the same colour there.
+- Never type a raw colour. Use a token. A new token that changes between
+  appearances must be added to the `.memo` block **and both** dark blocks
+  (`:root[data-theme="dark"]`, and the `prefers-color-scheme: dark` block that
+  covers unset and `data-theme="system"`).
+- Reuse an existing `.memo-*` component before writing CSS. New classes are
+  `.memo-*` and live in `redesign.css`, not in a component file.
+- One primary action per screen, and it is coral. Ink confirms; periwinkle
+  upsells. They never appear in the same row.
+- Hover marks an edge (`inset 0 0 0 1px var(--hover-ring)`), never a lift. Focus
+  goes on the container via `--focus-ring`, never the browser outline.
+- Snap to the existing scales: radius 12/14/16/18/20/22/26/34/999, the nine type
+  sizes, the listed control heights. Do not introduce a new value.
+- One structural breakpoint: 1100px. Build the phone layout first; desktop is the
+  rail wrapped around it. One scroller per screen, never `scrollIntoView`, never
+  a visible scrollbar.
+- Every user-facing string comes from the i18n catalogue. No literal copy in a
+  component — `tests/i18n-catalogues.test.mjs` checks coverage.
+- A new Material Symbols name must be added to `MATERIAL_SYMBOL_NAMES` in
+  `src/app/layout.tsx`, or the glyph renders as literal text.
+- `prefers-reduced-motion` is handled globally in `globals.css`. Do not
+  re-implement it.
+
 ## Documentation
 
 - Follow the workflow in [docs/development-workflow.md](/docs/development-workflow.md) for branching, GitHub pushes, Vercel previews, and merging to production.
+- Follow [docs/design-system.md](/docs/design-system.md) for tokens, components, layout and the known inconsistencies before changing the UI.

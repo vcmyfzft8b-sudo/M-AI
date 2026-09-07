@@ -120,6 +120,23 @@ type Step = {
  */
 const WRAPPING_COLUMNS = "repeat(auto-fit, minmax(min(11rem, 47%), 1fr))";
 
+/*
+ * How much of a tile the icon, the gap and the padding are allowed to take.
+ *
+ * A one-per-row step has a whole screen width to spend, and the design's
+ * numbers are right for it. The two steps that go multi-column do not: on a
+ * 390px phone each tile is 174px wide, and the design's 0.95rem padding, 2.5rem
+ * icon and 0.8rem gap leave the label 92px — narrower than the single word
+ * "Personalizacija", which is 118px, so the word had nowhere to go but out
+ * through the side of its own tile. Trimming the chrome gives the label 120px,
+ * which is enough for the longest word in any of the five languages to sit on a
+ * line of its own.
+ */
+const OPTION_CHROME = {
+  single: { padding: "0.95rem", icon: "clamp(1.55rem, 4.6vh, 2.5rem)", gap: "0.8rem" },
+  columns: { padding: "0.6rem", icon: "clamp(1.4rem, 4vh, 1.75rem)", gap: "0.4rem" },
+} as const;
+
 const STEPS: readonly Step[] = [
   { id: "welcome", kind: "welcome" },
   { id: "heardFrom", kind: "q", key: "heardFrom", qk: "qHeard", sk: "subHeard", cols: "1fr" },
@@ -586,10 +603,35 @@ export function OnboardingFlow({
     }
   }, [demo, gradeTouched, locale, t]);
 
+  /*
+   * The last screen is reached when two things have both happened: the ring has
+   * filled and sat for the design's 900ms beat, and the answers are on the
+   * server. Either can finish first — the ring takes two to four seconds and a
+   * save on a bad connection can take longer — so whichever finishes last is
+   * the one that moves the flow on. Asking once, at the end of the beat,
+   * stranded anyone whose save had not come back yet on a screen that says
+   * "your plan is ready" and carries no button at all.
+   */
+  const loaderSettled = useRef(false);
+
+  const finishLoading = useCallback(() => {
+    if (!loaderSettled.current || !(saved.current || demo)) {
+      return;
+    }
+
+    if (stateRef.current.stepId === "personalizing") {
+      goRef.current(1);
+    }
+  }, [demo]);
+
+  const finishLoadingRef = useRef(finishLoading);
+  finishLoadingRef.current = finishLoading;
+
   const runLoader = useCallback(() => {
     clearLoop("load");
+    loaderSettled.current = false;
     patch({ pct: 0 });
-    void submit();
+    void submit().then(() => finishLoadingRef.current());
 
     intervals.current.load = setInterval(() => {
       setState((current) => {
@@ -599,19 +641,15 @@ export function OnboardingFlow({
           clearLoop("load");
           clearTimer("loadDone");
           timers.current.loadDone = setTimeout(() => {
-            // The design lands on the last screen 900ms after the ring fills.
-            // A save that has not come back yet holds it there rather than
-            // showing a finished flow that never reached the server.
-            if (stateRef.current.stepId === "personalizing" && (saved.current || demo)) {
-              goRef.current(1);
-            }
+            loaderSettled.current = true;
+            finishLoadingRef.current();
           }, 900);
         }
 
         return { ...current, pct: next };
       });
     }, 190);
-  }, [demo, patch, submit]);
+  }, [patch, submit]);
 
   /** `go` is called from timers and from the keyboard, so it lives on a ref too. */
   const goRef = useRef<(delta: number) => void>(() => {});
@@ -951,11 +989,20 @@ export function OnboardingFlow({
       const active = list[Math.max(0, list.findIndex((s) => s.id === current.stepId))];
 
       if (event.key === "ArrowRight" || event.key === "Enter") {
-        if (active.kind === "loading" || (active.kind === "q" && !current.form[active.key!])) {
+        // A question step has no button — picking an option is what advances it
+        // — so Enter goes on to the next step once one has been picked.
+        if (active.kind === "q") {
+          if (current.form[active.key!]) {
+            goRef.current(1);
+          }
+
           return;
         }
 
-        goRef.current(1);
+        if (ctaRef.current.enabled) {
+          ctaRef.current.press();
+        }
+
         return;
       }
 
@@ -988,6 +1035,38 @@ export function OnboardingFlow({
       cancelAnimationFrame(raf.current);
     };
   }, []);
+
+  /*
+   * What the call to action does, named rather than written into the view, so
+   * that the keyboard can press the button rather than approximate it.
+   *
+   * Approximating it was wrong in both directions: Enter used to advance a step
+   * directly, which does nothing at all on the last screen — there is no step
+   * after it, so the one button in the flow that leaves it was the one button
+   * the keyboard could not press — and it was also refused on the loading step,
+   * where the button, when it is there at all, is the retry after a failed save.
+   */
+  const pressCta = () => {
+    if (kind === "done") {
+      finish();
+      return;
+    }
+
+    // The one place the CTA is not "onward": a save that failed leaves the
+    // loader parked with this button offering another go at it.
+    if (kind === "loading") {
+      setSaveError(null);
+      runLoader();
+      return;
+    }
+
+    go(1);
+  };
+
+  const ctaRef = useRef<{ press: () => void; enabled: boolean }>({
+    press: pressCta,
+    enabled: false,
+  });
 
   const soft = accentRgba(0.14);
 
@@ -1128,6 +1207,10 @@ export function OnboardingFlow({
   const activeCard = CARDS[queue[Math.min(state.cardPos, queue.length - 1)]] ?? CARDS[0];
   const nextCard = CARDS[queue[state.cardPos + 1]];
 
+  const chrome = step.cols === WRAPPING_COLUMNS ? OPTION_CHROME.columns : OPTION_CHROME.single;
+
+  const showCta = (kind !== "loading" || Boolean(saveError)) && kind !== "q";
+
   const ctaLabels: Partial<Record<StepKind, string>> = {
     welcome: c.ctaStart,
     proof: c.ctaContinue,
@@ -1150,6 +1233,8 @@ export function OnboardingFlow({
     router.refresh();
   };
 
+  ctaRef.current = { press: pressCta, enabled: showCta && !ctaDisabled };
+
   const v = {
     accent: ACCENT,
     c,
@@ -1162,6 +1247,9 @@ export function OnboardingFlow({
     title: step.qk ? c[step.qk] : "",
     subtitle: step.sk ? c[step.sk] : "",
     gridCols: step.cols || "1fr",
+    optionPad: chrome.padding,
+    optionIcon: chrome.icon,
+    optionGap: chrome.gap,
     options,
     summary,
     isWelcome: kind === "welcome",
@@ -1359,29 +1447,14 @@ export function OnboardingFlow({
     loadingStage: state.pct >= 100 ? c.loadReady : c.loadWorking.replace("{n}", String(state.pct)),
     loadingRows: loaderRows,
 
-    next: () => {
-      if (kind === "done") {
-        finish();
-        return;
-      }
-
-      // The one place the CTA is not "onward": a save that failed leaves the
-      // loader parked with this button offering another go at it.
-      if (kind === "loading") {
-        setSaveError(null);
-        runLoader();
-        return;
-      }
-
-      go(1);
-    },
+    next: pressCta,
     back: () => go(-1),
     backDisabled: index === 0,
     backState: index === 0 ? "off" : "on",
     /* Single-select steps advance on tap, so a Continue button would be a
        second control for something already done. Only the steps with nothing
        to pick keep one. */
-    showCta: (kind !== "loading" || Boolean(saveError)) && kind !== "q",
+    showCta,
     ctaLabel: kind === "loading" ? t("common.retry") : ctaLabels[kind] ?? c.ctaContinue,
     ctaDisabled,
     ctaOpacity: ctaDisabled ? 0.45 : 1,
@@ -1437,14 +1510,14 @@ export function OnboardingFlow({
       <p style={{ margin: "0 0 clamp(0.4rem, 1.6vh, 1.15rem)", fontSize: "clamp(0.84rem, 1.9vh, 0.96rem)", fontWeight: "600", lineHeight: "1.45", color: "var(--muted)" }}>{v.subtitle}</p>
       <div style={{ display: "grid", gap: "clamp(0.35rem, 1.1vh, 0.6rem)", gridTemplateColumns: v.gridCols }}>
       {v.options.map((item) => (<Fragment key={item.value}>
-      <button type="button" onClick={item.onSelect} aria-pressed={item.selected} style={{ display: "flex", alignItems: "center", gap: "0.8rem", width: "100%", minHeight: "clamp(2.35rem, 7vh, 3.9rem)", padding: "clamp(0.3rem, 1.2vh, 0.8rem) 0.95rem", border: "0", borderRadius: "clamp(0.85rem, 2.4vh, 1.15rem)", color: "var(--text)", textAlign: "left", cursor: "pointer", fontFamily: "inherit", transition: "transform 180ms cubic-bezier(0.2,0.85,0.2,1), background-color 200ms ease, box-shadow 240ms ease", background: item.bg, boxShadow: item.glow, transform: `translateY(${item.lift})` }} className="memo-ob-fx-2">
-      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "clamp(1.55rem, 4.6vh, 2.5rem)", height: "clamp(1.55rem, 4.6vh, 2.5rem)", flex: "0 0 auto", borderRadius: "0.8rem", background: "var(--tile)", color: "var(--text)", fontSize: "clamp(0.95rem, 2.3vh, 1.2rem)", lineHeight: "1" }}>
+      <button type="button" onClick={item.onSelect} aria-pressed={item.selected} style={{ display: "flex", alignItems: "center", gap: v.optionGap, width: "100%", minHeight: "clamp(2.35rem, 7vh, 3.9rem)", padding: `clamp(0.3rem, 1.2vh, 0.8rem) ${v.optionPad}`, border: "0", borderRadius: "clamp(0.85rem, 2.4vh, 1.15rem)", color: "var(--text)", textAlign: "left", cursor: "pointer", fontFamily: "inherit", transition: "transform 180ms cubic-bezier(0.2,0.85,0.2,1), background-color 200ms ease, box-shadow 240ms ease", background: item.bg, boxShadow: item.glow, transform: `translateY(${item.lift})` }} className="memo-ob-fx-2">
+      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: v.optionIcon, height: v.optionIcon, flex: "0 0 auto", borderRadius: "0.8rem", background: "var(--tile)", color: "var(--text)", fontSize: "clamp(0.95rem, 2.3vh, 1.2rem)", lineHeight: "1" }}>
       {item.noMark ? (<>{item.icon}</>) : null}
       {item.hasMark ? (<>
       <svg viewBox={item.vb} aria-hidden="true" style={{ width: "64%", height: "64%", display: "block" }}><path d={item.d} fill={item.svgFill} stroke={item.svgStroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </>) : null}
       </span>
-      <span style={{ flex: "1 1 auto", minWidth: "0", display: "grid", gap: "0.15rem" }}>
+      <span style={{ flex: "1 1 auto", minWidth: "0", display: "grid", gap: "0.15rem", overflowWrap: "anywhere" }}>
       <span style={{ fontSize: "clamp(0.88rem, 2.2vh, 1rem)", fontWeight: "750", lineHeight: "1.2" }}>{item.label}</span>
       {item.desc ? (<>
       <span style={{ fontSize: "clamp(0.7rem, 1.7vh, 0.82rem)", fontWeight: "600", lineHeight: "1.3", color: "var(--muted)" }}>{item.desc}</span>

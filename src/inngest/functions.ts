@@ -4,7 +4,10 @@ import {
   runWithinInvocationBudget,
 } from "@/lib/invocation-budget";
 import { isBudgetOverrunFailure } from "@/lib/ai/errors";
-import { isExpectedLectureInputFailure } from "@/lib/lecture-processing-errors";
+import {
+  isExpectedLectureInputFailure,
+  isLectureNoLongerExistsError,
+} from "@/lib/lecture-processing-errors";
 import { captureRouteError } from "@/lib/monitoring";
 import { isLectureGenerationBudgetExceededError } from "@/lib/notes/generation-guard";
 import type { NotesGenerationPhase } from "@/lib/note-generation";
@@ -358,8 +361,10 @@ export const processLecturePracticeTestFunction = inngest.createFunction(
  *
  * `generateLectureMindmap` writes its own failure onto the asset row and resolves, so almost
  * nothing reaches this catch — what does is a database write that failed, which is worth an alert
- * rather than a silent retry. The budget overrun is re-thrown for the same reason as everywhere
- * else here: Inngest must see it and retry with a fresh invocation.
+ * rather than a silent retry. The exception is the note being deleted mid-draw: the asset row
+ * cascades away with it, so the write cannot land and there is no defect to report. The budget
+ * overrun is re-thrown for the same reason as everywhere else here: Inngest must see it and retry
+ * with a fresh invocation.
  */
 export const processLectureMindmapFunction = inngest.createFunction(
   { id: "process-lecture-mindmap" },
@@ -378,7 +383,7 @@ export const processLectureMindmapFunction = inngest.createFunction(
           throw error;
         }
 
-        if (!isExpectedLectureInputFailure(error)) {
+        if (!isExpectedLectureInputFailure(error) && !isLectureNoLongerExistsError(error)) {
           captureRouteError(error, {
             route: "inngest:process-lecture-mindmap",
             operation: "generateLectureMindmap",

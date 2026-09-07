@@ -1,6 +1,5 @@
 "use client";
 
-import { STORAGE_BUCKET } from "@/lib/constants";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
 import {
@@ -12,7 +11,10 @@ import {
   normalizeRecordedAudioForUpload,
 } from "@/lib/audio-processing-client";
 import { parseApiResponse } from "@/lib/billing-client";
-import { getPublicEnv } from "@/lib/public-env";
+import {
+  isRetryableUploadFailure,
+  uploadToSignedUrlWithRetry,
+} from "@/lib/signed-upload-client";
 import { normalizeUploadAudioMimeType } from "@/lib/storage";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type { CreateLectureResponse } from "@/lib/types";
@@ -74,12 +76,21 @@ export async function createAudioLectureWithProcessingChunks(params: {
   assertNotAborted(params.signal);
   params.onStageChange?.("creating", params.t("capture.busy.preparing"));
 
+  /*
+   * Deliberately not abortable, unlike every other request here.
+   *
+   * The row is inserted by the time the server starts writing the response, so aborting this one
+   * does not un-create the lecture — it only throws away the id, and an id nobody holds is a row
+   * nobody can delete. That is where the untitled `upload_incomplete` notes at the top of a
+   * learner's library came from: cancel during the create, and the draft outlives the modal that
+   * made it. Letting it finish costs a moment on a request that carries no file, and the
+   * `assertNotAborted` below still stops us the instant it returns.
+   */
   const createResponse = await fetch("/api/lectures", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    signal: params.signal,
     body: JSON.stringify({
       mimeType: normalizedMimeType,
       fileName: uploadFile.name,
@@ -103,6 +114,11 @@ export async function createAudioLectureWithProcessingChunks(params: {
     file: uploadFile,
     contentType: normalizedMimeType,
     signal: params.signal,
+    onRetry: (attempt, attempts) =>
+      params.onStageChange?.(
+        "uploading-original",
+        params.t("capture.busy.retryingUpload", { attempt, total: attempts }),
+      ),
   });
 
   const shouldChunk = shouldUseClientAudioChunking({
@@ -168,6 +184,11 @@ export async function createAudioLectureWithProcessingChunks(params: {
           file: chunk.file,
           contentType: chunk.mimeType,
           signal: params.signal,
+          onRetry: (attempt, attempts) =>
+            params.onStageChange?.(
+              "uploading-chunks",
+              params.t("capture.busy.retryingUpload", { attempt, total: attempts }),
+            ),
         });
       }
     } catch (chunkError) {
@@ -201,89 +222,21 @@ export async function createAudioLectureWithProcessingChunks(params: {
   };
 }
 
-function shouldRetryWithRawBody(error: { message?: string; name?: string }) {
-  const message = `${error.name ?? ""} ${error.message ?? ""}`.toLowerCase();
-
-  return (
-    message.includes("load failed") ||
-    message.includes("failed to fetch") ||
-    message.includes("network")
-  );
-}
-
-function createUploadError(error: { message?: string; name?: string }, t: Translate<MessageKey>) {
-  if (shouldRetryWithRawBody(error)) {
+/**
+ * The message a failed upload leaves the learner with.
+ *
+ * A retryable failure has already been retried by the time it reaches here — the connection
+ * never came back — so "check your connection and try again" is still the right advice. Anything
+ * else is a verdict on the file itself, and its own message says more than ours would.
+ */
+function createUploadError(error: unknown, t: Translate<MessageKey>) {
+  if (isRetryableUploadFailure(error)) {
     return new Error(t("audio.upload.failedRetry"));
   }
 
-  return new Error(error.message ?? t("audio.upload.failed"));
-}
+  const message = (error as { message?: string } | null)?.message;
 
-async function readUploadBytes(file: File, t: Translate<MessageKey>) {
-  try {
-    return await file.arrayBuffer();
-  } catch (error) {
-    throw createUploadError(error instanceof Error ? error : {}, t);
-  }
-}
-
-function buildSignedUploadUrl(params: { path: string; token: string }) {
-  const { supabaseUrl } = getPublicEnv();
-
-  if (!supabaseUrl) {
-    throw new Error("Missing Supabase public environment variables.");
-  }
-
-  const encodedPath = params.path
-    .split("/")
-    .map((part) => encodeURIComponent(part))
-    .join("/");
-  const url = new URL(
-    `/storage/v1/object/upload/sign/${STORAGE_BUCKET}/${encodedPath}`,
-    supabaseUrl,
-  );
-  url.searchParams.set("token", params.token);
-  return url.toString();
-}
-
-async function uploadRawBytesToSignedUrl(params: {
-  path: string;
-  token: string;
-  bytes: ArrayBuffer;
-  contentType: string;
-  signal?: AbortSignal;
-}) {
-  const response = await fetch(
-    buildSignedUploadUrl({
-      path: params.path,
-      token: params.token,
-    }),
-    {
-      method: "PUT",
-      headers: {
-        "cache-control": "max-age=3600",
-        "content-type": params.contentType,
-      },
-      body: params.bytes,
-      signal: params.signal,
-    },
-  );
-
-  if (response.ok) {
-    return;
-  }
-
-  const clonedResponse = response.clone();
-  const payload = (await response.json().catch(() => null)) as
-    | { error?: string; message?: string }
-    | null;
-  const fallbackText = await clonedResponse.text().catch(() => "");
-  throw new Error(
-    payload?.message ??
-      payload?.error ??
-      (fallbackText.trim().length > 0 ? fallbackText.trim().slice(0, 240) : null) ??
-      `Upload failed with status ${response.status}.`,
-  );
+  return new Error(message ?? t("audio.upload.failed"));
 }
 
 async function uploadAudioFileToSignedUrl(params: {
@@ -294,43 +247,24 @@ async function uploadAudioFileToSignedUrl(params: {
   file: File;
   contentType: string;
   signal?: AbortSignal;
+  onRetry?: (attempt: number, attempts: number) => void;
 }) {
-  const upload = async (body: File | ArrayBuffer) =>
-    params.supabase.storage
-      .from(STORAGE_BUCKET)
-      .uploadToSignedUrl(params.path, params.token, body, {
-        contentType: params.contentType,
-        upsert: true,
-      });
-
-  assertNotAborted(params.signal);
-
   try {
-    const uploadResult = await upload(params.file);
-
-    if (!uploadResult.error) {
-      return;
-    }
+    await uploadToSignedUrlWithRetry({
+      supabase: params.supabase,
+      path: params.path,
+      token: params.token,
+      file: params.file,
+      contentType: params.contentType,
+      signal: params.signal,
+      onRetry: params.onRetry,
+    });
   } catch (error) {
     if (params.signal?.aborted) {
       throw error;
     }
-  }
 
-  assertNotAborted(params.signal);
-  const fileBytes = await readUploadBytes(params.file, params.t);
-  assertNotAborted(params.signal);
-
-  try {
-    await uploadRawBytesToSignedUrl({
-      path: params.path,
-      token: params.token,
-      bytes: fileBytes,
-      contentType: params.contentType,
-      signal: params.signal,
-    });
-  } catch (error) {
-    throw createUploadError(error instanceof Error ? error : {}, params.t);
+    throw createUploadError(error, params.t);
   }
 }
 

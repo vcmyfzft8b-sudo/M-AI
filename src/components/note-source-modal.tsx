@@ -37,7 +37,6 @@ import {
   MAX_SCAN_IMAGE_COUNT,
   MAX_SCAN_IMAGE_BYTES,
   SCAN_IMAGE_INPUT_ACCEPT,
-  STORAGE_BUCKET,
 } from "@/lib/constants";
 import { parseApiResponse, redirectToBillingIfNeeded } from "@/lib/billing-client";
 import { mapAppHref } from "@/lib/creator-demo/paths";
@@ -55,6 +54,7 @@ import {
 } from "@/lib/file-compression-client";
 import { prepareAudioSourceForUpload } from "@/lib/audio-source-preparation";
 import { canConvertScanPreview } from "@/lib/scan-preview";
+import { uploadToSignedUrlWithRetry } from "@/lib/signed-upload-client";
 import {
   getExtensionForMimeType,
   isSupportedScanImageMimeType,
@@ -329,6 +329,15 @@ export function NoteSourceModal({
   const requestCloseRef = useRef<() => void>(() => undefined);
   const activeRequestControllerRef = useRef<AbortController | null>(null);
   const createdLectureIdRef = useRef<string | null>(null);
+  /*
+   * Set synchronously the instant a submit starts, so a second tap cannot start a second one.
+   *
+   * The busy state already swaps the create button for a cancel button, but that is React state:
+   * two taps inside the same frame both see the old button and both run. That used to cost a
+   * stray draft row; now that the server hands a retry the draft it already has, it would cost
+   * worse — two attempts uploading different sources onto the same lecture.
+   */
+  const submitInFlightRef = useRef(false);
   const cancelRequestedRef = useRef(false);
   const sourceSheetDragStartYRef = useRef<number | null>(null);
   const sourceSheetDragOffsetRef = useRef(0);
@@ -559,6 +568,7 @@ export function NoteSourceModal({
     activeRequestControllerRef.current = null;
     createdLectureIdRef.current = null;
     cancelRequestedRef.current = false;
+    submitInFlightRef.current = false;
     demoStagedModesRef.current.clear();
   }, [clearAudioSource]);
 
@@ -577,15 +587,22 @@ export function NoteSourceModal({
 
   const createManualLecture = useCallback(
     async (sourceType: "text" | "pdf" | "link") => {
-      const controller = new AbortController();
-      activeRequestControllerRef.current = controller;
-
+      /*
+       * The only request in this modal that cancelling does not abort.
+       *
+       * The server inserts the draft row before it answers, so aborting mid-flight does not
+       * un-create anything — it only loses the id, and `deleteCreatedLecture` can delete nothing
+       * without one. That is exactly how a learner ends up with an untitled "the upload did not
+       * finish" note pinned above their library: they pressed cancel, or the tab went away, in
+       * the second this request was open. Every caller re-checks `cancelRequestedRef` the moment
+       * it returns and deletes the draft there instead, so the cancel still lands — it just
+       * lands on a row we can name. `fetchWithTimeout` keeps its own timeout either way.
+       */
       const response = await fetchWithTimeout("/api/lectures/manual", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        signal: controller.signal,
         timeoutMessage: t("capture.error.notePrepTooLong"),
         body: JSON.stringify({
           sourceType,
@@ -1033,6 +1050,12 @@ export function NoteSourceModal({
       return;
     }
 
+    if (submitInFlightRef.current) {
+      return;
+    }
+
+    submitInFlightRef.current = true;
+
     let processingStarted = false;
 
     try {
@@ -1076,6 +1099,7 @@ export function NoteSourceModal({
         );
       }
     } finally {
+      submitInFlightRef.current = false;
       activeRequestControllerRef.current = null;
       setBusyLabel(null);
       setIsCancelling(false);
@@ -1098,6 +1122,12 @@ export function NoteSourceModal({
       ]);
       return;
     }
+
+    if (submitInFlightRef.current) {
+      return;
+    }
+
+    submitInFlightRef.current = true;
 
     try {
       setBusyLabel(t("capture.busy.preparing"));
@@ -1161,16 +1191,22 @@ export function NoteSourceModal({
               }),
         );
 
-        const uploadResult = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .uploadToSignedUrl(uploadTarget.path, uploadTarget.token, uploadFile.file, {
-            contentType: uploadFile.mimeType,
-            upsert: true,
-          });
-
-        if (uploadResult.error) {
-          throw new Error(uploadResult.error.message);
-        }
+        /*
+         * Retried, because this is the one place in the app where a learner can lose real work.
+         * Ten photographed pages go up one at a time, and until this call retried, a single
+         * dropped PUT anywhere in that sequence threw the whole set away — the note was swept as
+         * `upload_incomplete` an hour later and there was nothing left on the row to retry from.
+         */
+        await uploadToSignedUrlWithRetry({
+          supabase,
+          path: uploadTarget.path,
+          token: uploadTarget.token,
+          file: uploadFile.file,
+          contentType: uploadFile.mimeType,
+          signal: controller.signal,
+          onRetry: (attempt, attempts) =>
+            setBusyLabel(t("capture.busy.retryingUpload", { attempt, total: attempts })),
+        });
       }
 
       setBusyLabel(t("capture.busy.queueing"));
@@ -1224,6 +1260,7 @@ export function NoteSourceModal({
         );
       }
     } finally {
+      submitInFlightRef.current = false;
       activeRequestControllerRef.current = null;
       setBusyLabel(null);
       setIsCancelling(false);
@@ -1245,6 +1282,12 @@ export function NoteSourceModal({
       await createDemoNote("link", [t("capture.busy.preparing"), t("capture.busy.readingLink"), t("capture.busy.queueing")]);
       return;
     }
+
+    if (submitInFlightRef.current) {
+      return;
+    }
+
+    submitInFlightRef.current = true;
 
     try {
       setBusyLabel(t("capture.busy.preparing"));
@@ -1292,6 +1335,7 @@ export function NoteSourceModal({
         );
       }
     } finally {
+      submitInFlightRef.current = false;
       activeRequestControllerRef.current = null;
       setBusyLabel(null);
       setIsCancelling(false);
@@ -1633,6 +1677,12 @@ export function NoteSourceModal({
       return;
     }
 
+    if (submitInFlightRef.current) {
+      return;
+    }
+
+    submitInFlightRef.current = true;
+
     try {
       setBusyLabel(t("capture.busy.preparing"));
       setError(null);
@@ -1687,6 +1737,7 @@ export function NoteSourceModal({
         );
       }
     } finally {
+      submitInFlightRef.current = false;
       activeRequestControllerRef.current = null;
       setBusyLabel(null);
       setIsCancelling(false);

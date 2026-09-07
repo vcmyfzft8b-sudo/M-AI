@@ -9,6 +9,7 @@ export function StudyQuizQuestion({
   order,
   selection,
   onSelect,
+  collapseAnswered = false,
 }: {
   question: {
     id: string;
@@ -18,6 +19,7 @@ export function StudyQuizQuestion({
   };
   order: number[];
   selection: number | null;
+  collapseAnswered?: boolean;
   onSelect: (index: number) => void;
 }) {
   const t = useT();
@@ -26,33 +28,42 @@ export function StudyQuizQuestion({
       <span className="memo-quiz-eyebrow">{t("quiz.chooseOne")}</span>
       <p className="lecture-quiz-prompt">{question.prompt}</p>
       <div className="lecture-quiz-options">
-        {order.map((optionIndex, displayIndex) => {
-          const selected = selection === optionIndex;
-          const correct =
-            selection !== null && optionIndex === question.correct_option_idx;
-          const incorrect = selection !== null && selected && !correct;
-          return (
-            <button
-              key={`${question.id}-${optionIndex}`}
-              type="button"
-              disabled={selection !== null}
-              onClick={() => onSelect(optionIndex)}
-              className={`lecture-quiz-option ${selected ? "selected" : ""} ${correct ? "correct" : ""} ${incorrect ? "incorrect" : ""}`}
-            >
-              <span className="lecture-quiz-option-label">
-                {String.fromCharCode(65 + displayIndex)}
-              </span>
-              <span className="lecture-quiz-option-copy">
-                {question.options[optionIndex] ?? ""}
-              </span>
-              {correct || incorrect ? (
-                <span className="lecture-quiz-option-mark">
-                  <Msym name={correct ? "check" : "close"} size="1.2rem" />
+        {order
+          .map((optionIndex, displayIndex) => ({ optionIndex, displayIndex }))
+          .filter(
+            ({ optionIndex }) =>
+              !collapseAnswered ||
+              selection === null ||
+              optionIndex === selection ||
+              optionIndex === question.correct_option_idx,
+          )
+          .map(({ optionIndex, displayIndex }) => {
+            const selected = selection === optionIndex;
+            const correct =
+              selection !== null && optionIndex === question.correct_option_idx;
+            const incorrect = selection !== null && selected && !correct;
+            return (
+              <button
+                key={`${question.id}-${optionIndex}`}
+                type="button"
+                disabled={selection !== null}
+                onClick={() => onSelect(optionIndex)}
+                className={`lecture-quiz-option ${selected ? "selected" : ""} ${correct ? "correct" : ""} ${incorrect ? "incorrect" : ""}`}
+              >
+                <span className="lecture-quiz-option-label">
+                  {String.fromCharCode(65 + displayIndex)}
                 </span>
-              ) : null}
-            </button>
-          );
-        })}
+                <span className="lecture-quiz-option-copy">
+                  {question.options[optionIndex] ?? ""}
+                </span>
+                {correct || incorrect ? (
+                  <span className="lecture-quiz-option-mark">
+                    <Msym name={correct ? "check" : "close"} size="1.2rem" />
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
       </div>
     </>
   );

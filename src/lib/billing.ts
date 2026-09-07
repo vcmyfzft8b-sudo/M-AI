@@ -7,6 +7,8 @@ import Stripe from "stripe";
 import { PREVIEW_AUTH_BYPASS_USER_ID, getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { isPreviewPremiumEnabled } from "@/lib/preview-mode";
+import { applyTestPersona } from "@/lib/test-persona";
+import { readTestPersonaFor } from "@/lib/test-persona-server";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 import { getServerEnv } from "@/lib/server-env";
 import { resolveSiteOrigin } from "@/lib/site-url";
@@ -34,6 +36,8 @@ export type UserEntitlementState = {
   hasConsumedTrial: boolean;
   hasTrialLectureAvailable: boolean;
   canResumeTrialLecture: boolean;
+  /** A run is underway on the free note: no second one may start beside it. */
+  trialLectureInProgress: boolean;
   trialChatMessagesUsed: number;
   trialChatMessagesRemaining: number;
   subscriptionTrialEligible: boolean;
@@ -320,23 +324,34 @@ async function recoverTrialLectureForUser(params: {
   const service = createSupabaseServiceRoleClient();
   const { data: orphanLectureData } = await service
     .from("lectures")
-    .select("id, created_at")
+    .select("id, created_at, status")
     .eq("user_id", params.userId)
     .eq("access_tier", "trial")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const orphanLecture = orphanLectureData as { id: string; created_at: string } | null;
+  const orphanLecture = orphanLectureData as
+    | { id: string; created_at: string; status: string }
+    | null;
 
   if (!orphanLecture) {
     return params.profile;
   }
 
+  /*
+   * Re-pointing the trial at a note the profile lost track of used to mark the trial spent at
+   * the same time. It no longer does unless that note actually finished: the repair is about
+   * which note holds the trial, and a repair must not decide a learner has had their free note
+   * when the note in question never produced one.
+   */
+  const consumedAt =
+    params.profile.trial_consumed_at ??
+    (orphanLecture.status === "ready" ? orphanLecture.created_at : null);
   const repairedProfile = {
     ...params.profile,
     trial_lecture_id: orphanLecture.id,
     trial_started_at: params.profile.trial_started_at ?? orphanLecture.created_at,
-    trial_consumed_at: params.profile.trial_consumed_at ?? orphanLecture.created_at,
+    trial_consumed_at: consumedAt,
   };
 
   await service
@@ -351,13 +366,24 @@ async function recoverTrialLectureForUser(params: {
   return repairedProfile;
 }
 
-async function getTrialLectureResumeState(params: {
+/**
+ * What the learner's free note is currently doing.
+ *
+ * `canResume` means the row is safe to hand a new source to: it exists, it never finished, and
+ * nothing has been produced on it. `inProgress` is the other live case — a run is underway, so
+ * the row must not be reused (a second source would overwrite the first) and the learner must not
+ * be handed a second free note either, or two could finish and they would get two.
+ *
+ * A failed note is neither: since the trial is only spent when a note *succeeds*, a failure
+ * leaves the learner free to start again.
+ */
+async function getTrialLectureState(params: {
   userId: string;
   trialLectureId: string | null;
   hasPaidAccess: boolean;
-}) {
+}): Promise<{ canResume: boolean; inProgress: boolean }> {
   if (params.hasPaidAccess || !params.trialLectureId) {
-    return false;
+    return { canResume: false, inProgress: false };
   }
 
   const service = createSupabaseServiceRoleClient();
@@ -381,19 +407,14 @@ async function getTrialLectureResumeState(params: {
   const lecture = lectureData as { id: string; status: string } | null;
   const artifact = artifactData as { lecture_id: string } | null;
 
-  if (!lecture) {
-    return false;
+  // Deleted, or finished, or failed: nothing live is holding the trial.
+  if (!lecture || lecture.status === "ready" || lecture.status === "failed") {
+    return { canResume: false, inProgress: false };
   }
 
-  if (lecture.status === "ready") {
-    return false;
-  }
+  const untouched = !artifact && (transcriptCount ?? 0) === 0;
 
-  if (artifact) {
-    return false;
-  }
-
-  return (transcriptCount ?? 0) === 0;
+  return { canResume: untouched, inProgress: !untouched };
 }
 function buildEntitlementState(params: {
   profile: ProfileRow | null;
@@ -401,16 +422,29 @@ function buildEntitlementState(params: {
   subscription: BillingSubscriptionRow | null;
   hasPaidAccess: boolean;
   canResumeTrialLecture: boolean;
+  /** A run is underway on the free note: it can be neither reused nor joined by a second one. */
+  trialLectureInProgress: boolean;
   trialChatMessagesUsed: number;
   trialChatMessagesRemaining: number;
   subscriptionTrialEligible: boolean;
 }) {
   const onboardingComplete = hasCompletedOnboardingProfile(params.profile);
   const trialLectureId = params.profile?.trial_lecture_id ?? null;
-  const hasConsumedTrial = Boolean(params.profile?.trial_consumed_at || trialLectureId);
+  /*
+   * The free note is spent when a note *succeeds*, and at no other moment.
+   *
+   * It used to be spent the instant the learner pressed create, which meant any attempt that
+   * broke — a dropped upload, a source we could not read, a note they abandoned — took their one
+   * free note with it. On 2026-09-06 that was 160 accounts blocked from creating anything,
+   * having received nothing. `trial_consumed_at` is now stamped by a database trigger when a
+   * lecture reaches `ready`, so it says what its name says.
+   *
+   * It stays stamped if the learner later deletes that note: they had their free note, and the
+   * stamp outlives the row it came from. What a failure no longer does is spend anything.
+   */
+  const hasConsumedTrial = Boolean(params.profile?.trial_consumed_at);
   const hasTrialLectureAvailable =
-    !params.hasPaidAccess &&
-    (!hasConsumedTrial || Boolean(trialLectureId && params.canResumeTrialLecture));
+    !params.hasPaidAccess && !hasConsumedTrial && !params.trialLectureInProgress;
   const canCreateNotes = params.hasPaidAccess || hasTrialLectureAvailable;
   const shouldShowTrialEntry = !params.hasPaidAccess;
 
@@ -424,6 +458,7 @@ function buildEntitlementState(params: {
     hasConsumedTrial,
     hasTrialLectureAvailable,
     canResumeTrialLecture: params.canResumeTrialLecture,
+    trialLectureInProgress: params.trialLectureInProgress,
     trialChatMessagesUsed: params.trialChatMessagesUsed,
     trialChatMessagesRemaining: params.trialChatMessagesRemaining,
     subscriptionTrialEligible: params.subscriptionTrialEligible,
@@ -445,8 +480,8 @@ export const getUserEntitlementState = cache(async function getUserEntitlementSt
     profile,
     hasPaidAccess: billingState.hasPaidAccess,
   });
-  const [canResumeTrialLecture, trialUsage] = await Promise.all([
-    getTrialLectureResumeState({
+  const [trialLectureState, trialUsage] = await Promise.all([
+    getTrialLectureState({
       userId,
       trialLectureId: recoveredProfile?.trial_lecture_id ?? null,
       hasPaidAccess: billingState.hasPaidAccess,
@@ -461,15 +496,30 @@ export const getUserEntitlementState = cache(async function getUserEntitlementSt
     billingState.subscriptions,
   );
 
-  return buildEntitlementState({
+  const state = buildEntitlementState({
     profile: recoveredProfile,
     subscriptions: billingState.subscriptions,
     subscription: billingState.subscription,
     hasPaidAccess: billingState.hasPaidAccess,
-    canResumeTrialLecture,
+    canResumeTrialLecture: trialLectureState.canResume,
+    trialLectureInProgress: trialLectureState.inProgress,
     subscriptionTrialEligible,
     ...trialUsage,
   });
+
+  /*
+   * The one hook for the test-persona panel, and it is here rather than in
+   * `getViewerAppState` on purpose: this is what the API routes read too, so a
+   * persona that says "subscribed" gets past the entitlement checks as well as
+   * past the paywall. Anything narrower would show a paid library and then
+   * refuse to generate anything in it.
+   *
+   * It resolves to null for everybody except one confirmed account looking at
+   * its own state — see `readTestPersonaFor`.
+   */
+  const persona = await readTestPersonaFor(userId);
+
+  return persona ? applyTestPersona(state, persona, userId) : state;
 });
 
 /**
@@ -484,6 +534,16 @@ export const getSubscriptionTrialEligibility = cache(
 
     if (!entitlement.subscriptionTrialEligible) {
       return false;
+    }
+
+    /*
+     * A persona's answer is the whole answer. Stripe remembers what this
+     * account has really bought, and asking it here would put "Continue to
+     * payment" on a paywall the persona is testing precisely because it should
+     * read "Start 3-day free trial".
+     */
+    if (await readTestPersonaFor(userId)) {
+      return true;
     }
 
     try {
@@ -793,14 +853,17 @@ export async function claimTrialLecture(userId: string, lectureId: string) {
     } satisfies ClaimTrialLectureResult;
   }
 
+  /*
+   * Claiming the free note marks which note holds it, and starts the clock — but it does not
+   * spend it. `trial_consumed_at` is stamped by the database when a lecture reaches `ready`
+   * (migration 0048), so an attempt that fails costs the learner nothing and they can try again.
+   */
   if (entitlement.profile.trial_lecture_id === lectureId) {
-    if (!entitlement.profile.trial_consumed_at) {
-      const claimedAt = new Date().toISOString();
+    if (!entitlement.profile.trial_started_at) {
       await createSupabaseServiceRoleClient()
         .from("profiles")
         .update({
-          trial_started_at: entitlement.profile.trial_started_at ?? claimedAt,
-          trial_consumed_at: claimedAt,
+          trial_started_at: new Date().toISOString(),
         } as never)
         .eq("id", userId)
         .eq("trial_lecture_id", lectureId);
@@ -821,16 +884,32 @@ export async function claimTrialLecture(userId: string, lectureId: string) {
 
   const service = createSupabaseServiceRoleClient();
   const claimedAt = new Date().toISOString();
-  const { data: claimedProfile, error: claimError } = await service
+  const previousTrialLectureId = entitlement.profile.trial_lecture_id;
+  /*
+   * The pointer moves to this note, and only the pointer.
+   *
+   * "Must still be null" was the old guard, and it cannot be the guard any more: an earlier
+   * attempt that failed still owns the pointer, and taking it over from that attempt is exactly
+   * what "a failure does not spend the free note" means. What replaces it is the value we read a
+   * moment ago — so two requests racing to claim the free note still cannot both win, because
+   * the loser's expected pointer no longer matches. Without that, two notes started in the same
+   * second could both finish and the learner would get two free ones.
+   *
+   * `trial_consumed_at is null` stays alongside it, and is the condition that actually rations
+   * the free note now that it is stamped only when one succeeds.
+   */
+  const claim = service
     .from("profiles")
     .update({
       trial_lecture_id: lectureId,
       trial_started_at: entitlement.profile.trial_started_at ?? claimedAt,
-      trial_consumed_at: entitlement.profile.trial_consumed_at ?? claimedAt,
     } as never)
     .eq("id", userId)
-    .is("trial_lecture_id", null)
-    .is("trial_consumed_at", null)
+    .is("trial_consumed_at", null);
+  const { data: claimedProfile, error: claimError } = await (previousTrialLectureId
+    ? claim.eq("trial_lecture_id", previousTrialLectureId)
+    : claim.is("trial_lecture_id", null)
+  )
     .select("id, trial_lecture_id")
     .maybeSingle();
 

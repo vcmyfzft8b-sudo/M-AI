@@ -1,5 +1,4 @@
-/* ===========================================================================
-   Memo AI redesign
+/* ====================================================================   Memo AI redesign
    ---------------------------------------------------------------------------
    One design system for the whole product surface. Desktop (>= 1100px) is the
    rail + column layout; below that every screen switches to the phone design.
@@ -427,6 +426,11 @@
   --scrim: rgba(0, 0, 0, 0.32);
   --coral: linear-gradient(135deg, #ff6d68, #f45f5a);
   --blue: #0066cc;
+  /* Destructive. Until now every delete, every error note and every danger
+     outline typed `#ff3b30` straight into the rule, which is why dark mode kept
+     showing the light-mode red. */
+  --danger: #ff3b30;
+  --danger-tint: rgba(255, 59, 48, 0.12);
   /* Focus is shown on the field's container, not as the UA's blue box. */
   --focus-ring: rgba(0, 0, 0, 0.22);
   /* Cards mark hover with an edge rather than a lift. */
@@ -470,6 +474,8 @@
   --upgrade-line: rgba(130, 148, 218, 0.4);
   --upgrade-ink: #b9c2f0;
   --promo: #ff6d68;
+  --danger: #ff453a;
+  --danger-tint: rgba(255, 69, 58, 0.15);
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.75);
   --scrim: rgba(0, 0, 0, 0.5);
@@ -499,6 +505,8 @@
   --upgrade-line: rgba(130, 148, 218, 0.4);
   --upgrade-ink: #b9c2f0;
     --promo: #ff6d68;
+    --danger: #ff453a;
+    --danger-tint: rgba(255, 69, 58, 0.15);
     --shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
     --shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.75);
     --scrim: rgba(0, 0, 0, 0.5);
@@ -624,6 +632,28 @@
   overflow-y: hidden;
 }
 
+/*
+ * Set for as long as a pull lasts (useChipRowWheelScroll).
+ *
+ * No `cursor: grab` on the row at rest: whether it can be pulled depends on
+ * whether it overflows, which CSS cannot see, and a grab hand over a row that
+ * does not move is worse than no hint at all. `grabbing` covers the pills too,
+ * or the button under the pointer keeps its own `pointer` for the whole drag.
+ *
+ * `scroll-behavior` is the important half. The pill row scrolls itself smoothly
+ * when the tab changes, and a smooth scroller told to follow a hand lags a frame
+ * or two behind it, which reads as the row being heavy rather than held. Snapping
+ * fights the same way, so it steps aside for the length of the gesture.
+ */
+.memo-chiprow.is-dragging,
+.memo-chiprow.is-dragging * {
+  cursor: grabbing;
+}
+
+.memo-chiprow.is-dragging {
+  scroll-behavior: auto;
+  scroll-snap-type: none;
+}
 
 /* --- breakpoint utilities ------------------------------------------------- */
 
@@ -754,8 +784,7 @@
   }
 }
 
-/* ===========================================================================
-   Desktop shell
+/* ====================================================================   Desktop shell
    ========================================================================= */
 
 .memo-shell {
@@ -1013,8 +1042,7 @@
   align-self: stretch;
 }
 
-/* ===========================================================================
-   Home
+/* ====================================================================   Home
    ========================================================================= */
 
 /* Explicit classes, not `.memo-home h1`: the phone screen has its own h1 and
@@ -1409,6 +1437,19 @@
   margin: 0 auto;
   pointer-events: none;
   grid-template-columns: 240px minmax(0, 1fr);
+}
+
+/*
+ * While a note's skeleton stands in the grid, the home screen it is replacing is
+ * still mounted underneath. Its ask-bar is `position: fixed`, so it escapes the
+ * overlay that covers the content column and is painted across the note and the
+ * chat column the skeleton has just opened — a control from the page you have
+ * left, sitting on the page you are waiting for. The phone bar is the same
+ * escape at the other width.
+ */
+.memo-grid[data-note-skeleton] .memo-homebar-wrap,
+.memo-grid[data-note-skeleton] .memo-m-homebar {
+  display: none;
 }
 
 .memo-homebar {
@@ -2129,8 +2170,7 @@
   font-size: 0.95rem;
 }
 
-/* ===========================================================================
-   Note screen
+/* ====================================================================   Note screen
    ========================================================================= */
 
 .memo-note-card {
@@ -2245,6 +2285,42 @@
   font-weight: 750;
   letter-spacing: -0.025em;
   white-space: nowrap;
+}
+
+/*
+ * The line the note's title sits on, and the one place a screen may hang a control of its
+ * own beside it.
+ *
+ * The walkthrough's meter is the first tenant: "28 min left today" is a fact about the
+ * screen you are on rather than a control belonging to the dock, and in the dock it was
+ * below the fold of the thing it describes. On the phone the title itself is up in the
+ * navbar, so the row carries only the pill — which still puts the number at the top of the
+ * screen instead of the bottom.
+ */
+.memo-note-headrow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.memo-note-headrow .memo-note-head {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.memo-note-head-slot {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-left: auto;
+}
+
+@media (max-width: 1099px) {
+  /* Only when something is actually in it: an empty row must not push the panel down. */
+  .memo-note-head-slot:not(:empty) {
+    margin-top: 0.8rem;
+  }
+
 }
 
 .memo-note-head {
@@ -2436,8 +2512,7 @@
   cursor: pointer;
 }
 
-/* ===========================================================================
-   Note dock (listen player + annotation tools)
+/* ====================================================================   Note dock (listen player + annotation tools)
    ========================================================================= */
 
 .memo-dock {
@@ -2785,8 +2860,7 @@
   font-size: 1.35rem;
 }
 
-/* ===========================================================================
-   Chat panel (note)
+/* ====================================================================   Chat panel (note)
    ========================================================================= */
 
 .memo-chat-scrim {
@@ -3339,8 +3413,7 @@
   display: none;
 }
 
-/* ===========================================================================
-   Study modes
+/* ====================================================================   Study modes
    ========================================================================= */
 
 .memo-study-narrow {
@@ -3355,17 +3428,23 @@
   gap: 1rem;
 }
 
+/*
+ * "Kartica 1" and "0 ostalo" are the smallest fact on the screen and were set at the size
+ * of a section heading, which put them in competition with the card underneath — the thing
+ * actually being read. They keep their weight, so the row still reads as a header, and drop
+ * to the row-title size the rest of the app uses for exactly this.
+ */
 .memo-study-head-title {
-  font-size: 1.4rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .memo-study-head-count {
   color: var(--muted);
-  font-size: 1.25rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: 0.98rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
 .memo-progress {
@@ -3380,19 +3459,60 @@
   transition: width 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/*
+ * One bar, at one weight.
+ *
+ * The deck's was a 1.05rem slab and the quiz's a 0.6rem line, for the same fact told the
+ * same way — how far through you are. A rule that thick stops reading as a measure and
+ * starts reading as a filled container, and it was taking height from the card underneath
+ * it. Both are now the 0.4rem the walkthrough's topic bar already uses, so the three screens
+ * that count you through something all count in the same hand, and the air above and below
+ * grows to carry the line now that the line itself is not doing it.
+ */
 .memo-progress.cards {
-  height: 1.05rem;
-  margin: 0.8rem 0 0;
+  height: 0.4rem;
+  margin: 0.9rem 0 0;
 }
 
 .memo-progress.quiz {
-  height: 0.6rem;
-  margin: 0.6rem 0 1.2rem;
+  height: 0.4rem;
+  margin: 0.75rem 0 1.2rem;
+}
+
+/*
+ * Coral, on the bars that measure a run through the material.
+ *
+ * The token is a gradient, so it can only ever be a fill — which is exactly what this is.
+ * Ink is the neutral fill for a meter that reports a limit (talking time, storage); these
+ * three report progress the learner is making, and progress in this app is coral.
+ */
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="test"]) .memo-progress > div {
+  background: var(--coral);
 }
 
 .memo-progress.test {
-  height: 0.75rem;
-  margin: 0.7rem 0 1.4rem;
+  height: 0.4rem;
+  margin: 0.85rem 0 1.4rem;
+}
+
+/*
+ * Text for a screen reader and nobody else.
+ *
+ * The clip-rect form rather than `display: none` or `visibility: hidden`, both of which take
+ * the text out of the accessibility tree along with the pixels — which is the opposite of
+ * what this is for. Used where an icon and a number carry a meaning between them that the
+ * number alone does not: "0" beside a tick is a score, but read aloud it is just a nought.
+ */
+.memo-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* --- flashcards ----------------------------------------------------------- */
@@ -4091,8 +4211,7 @@
 }
 
 
-/* ===========================================================================
-   Study surfaces
+/* ====================================================================   Study surfaces
    ---------------------------------------------------------------------------
    The flashcard, quiz and practice-test machinery already has the shape the
    redesign draws — stage, rotator, faces, verdict row — so it keeps its markup
@@ -4130,7 +4249,7 @@
  * gradient. Its shadow has to be stated, or production's coloured glow
  * cascades through — nothing here was overriding box-shadow.
  */
-.memo-panel .lecture-study-manage-button,
+:is(.memo-panel, .memo-note-head-slot) .lecture-study-manage-button,
 .memo-panel .lecture-study-refresh,
 .memo-panel .lecture-study-create-button {
   display: inline-flex;
@@ -4151,13 +4270,13 @@
   transition: box-shadow 0.16s ease;
 }
 
-.memo-panel .lecture-study-manage-button {
+:is(.memo-panel, .memo-note-head-slot) .lecture-study-manage-button {
   background: var(--surface);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
 }
 
 /* Hover marks an edge rather than lifting, as everywhere else. */
-.memo-panel .lecture-study-manage-button:hover,
+:is(.memo-panel, .memo-note-head-slot) .lecture-study-manage-button:hover,
 .memo-panel .lecture-study-refresh:hover,
 .memo-panel .lecture-study-create-button:hover {
   transform: none;
@@ -4166,7 +4285,7 @@
     inset 0 0 0 1px var(--hover-ring);
 }
 
-.memo-panel .lecture-study-manage-button .msym {
+:is(.memo-panel, .memo-note-head-slot) .lecture-study-manage-button .msym {
   color: var(--muted);
 }
 
@@ -4302,6 +4421,34 @@
   gap: 0.6rem;
 }
 
+/*
+ * Beside the note's title, on the screens with no control row of their own to join.
+ *
+ * Portalled into the head slot, which is outside `.memo-panel` — so without the `:is()`
+ * above it fell all the way back to the legacy button in globals.css and came out a rounded
+ * rectangle beside a row of pills. It keeps the deck's own height so that the same control
+ * is the same size wherever it lands.
+ */
+.lecture-study-head-edit {
+  flex: 0 0 auto;
+  height: 2.7rem;
+  color: var(--muted);
+}
+
+/*
+ * Editing, at the end of the review row rather than in a header of its own.
+ *
+ * It is the only thing in that row that is not part of grading a card, so it is set apart by
+ * a gap of its own and drawn quieter than the buttons either side of it — present for the
+ * once-a-term visit to the deck, and not competing with the two that get pressed on every
+ * card.
+ */
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-edit {
+  margin-left: 0.6rem;
+  min-height: 2.7rem;
+  color: var(--muted);
+}
+
 :is(.memo-panel, .memo-palace-panel) .lecture-flashcard-nav-button {
   display: inline-flex;
   align-items: center;
@@ -4342,6 +4489,46 @@
   font-family: inherit;
   font-size: 1.05rem;
   font-weight: 750;
+}
+
+/*
+ * The two counts on a phone, where grading is a throw rather than a press.
+ *
+ * The same shape and colour as the buttons they replace — the score has not changed, only
+ * the fact that it is now something you read rather than something you do — but without the
+ * pointer, the pressed state, or the minimum width a thumb needed.
+ */
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 3.3rem;
+  flex: 0 0 auto;
+  padding: 0 0.95rem;
+  border-radius: 999px;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-score svg {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-score.again {
+  background: rgba(244, 95, 90, 0.14);
+  color: #f45f5a;
+}
+
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-score.easy {
+  background: rgba(22, 163, 74, 0.12);
+  color: #16a34a;
+}
+
+/* Nothing here is pressed any more, so the row sits where a row of type sits. */
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review.swipe-only {
+  gap: 0.75rem;
 }
 
 :is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-button svg {
@@ -4991,9 +5178,18 @@
   font-weight: 650;
 }
 
+/*
+ * The same bar as the deck's and the quiz's — it is the same fact.
+ *
+ * These two rules restate the shared ones at equal specificity and later in the file, so
+ * they were quietly winning: the test's bar stayed a 0.75rem slab filled with `--text` while
+ * the other two went thin and coral. Restated here rather than deleted because the fill has
+ * to beat this block's own `> div`, and a third rule to out-specify a duplicate is how a
+ * stylesheet gets to have four bars that are meant to be one.
+ */
 .memo-panel .memo-progress.test {
-  height: 0.75rem;
-  margin: 0.7rem 0 1.4rem;
+  height: 0.4rem;
+  margin: 0.85rem 0 1.4rem;
   border-radius: 999px;
   background: var(--field);
   overflow: hidden;
@@ -5002,7 +5198,7 @@
 .memo-panel .memo-progress.test > div {
   height: 100%;
   border-radius: 999px;
-  background: var(--text);
+  background: var(--coral);
   transition: width 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -5339,13 +5535,132 @@
 }
 
 .memo-gen-cardhead > span:first-child {
-  height: 1.5rem;
-  width: 8rem;
+  height: 1.15rem;
+  width: 7rem;
 }
 
 .memo-gen-cardhead > span:last-child {
-  height: 1.35rem;
-  width: 5rem;
+  height: 1.05rem;
+  width: 4.5rem;
+}
+
+/*
+ * --- the ghost fits the same box the screen does --------------------------
+ *
+ * A skeleton's whole job is to be the shape of what is coming, and these were drawn against
+ * the screens as they used to be: a full-width 22rem slab where the card is now a 5:3 card,
+ * a surface around the quiz where the quiz no longer has one. Worse, they sat outside the
+ * flex chain everything else joined, so on a phone they ran on past the bottom of the card
+ * and under the chat bar — the one part of these screens that still did.
+ *
+ * So they join it, and they take the shapes their screens take. What loads then does not
+ * jump: the card fades in where the ghost of it was.
+ */
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="test"], [data-note-tab="palace"]) .memo-gen {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  gap: 1.1rem;
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="test"], [data-note-tab="palace"]) .memo-gen-preview {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0.9rem;
+}
+
+/* The deck: its head holds its size, and the card takes what is left, at the card's ratio. */
+.memo-note-screen[data-note-tab="flashcards"] .memo-gen-deckhead {
+  flex: 0 0 auto;
+}
+
+/*
+ * The ghost is the shape of the card at THIS width, which is not one shape.
+ *
+ * On a phone the real card fills the column and takes the height it is given; only beside a
+ * rail does it become a 5:3 card with air either side. A ghost drawn in the desktop shape on
+ * a phone is as wrong as one drawn in no shape at all — it just fails in the other
+ * direction.
+ */
+.memo-note-screen[data-note-tab="flashcards"] .memo-gen-face {
+  flex: 1 1 auto;
+  min-height: 8rem;
+  /*
+   * `60cqw` is the 5:3 ratio written as a ceiling — three fifths of the column's width. The
+   * card takes its height from the flexbox and its width from the ratio, and when the column
+   * caps that width first the ratio would otherwise break and the ghost square up. This is
+   * the same drift the real card had until its stage was given a ceiling; here the ceiling
+   * can be exact, because the container is the thing to measure against.
+   */
+  padding: 1.4rem 1.5rem;
+}
+
+@media (min-width: 1100px) {
+  .memo-note-screen[data-note-tab="flashcards"] .memo-gen-preview {
+    /* So the card below can be measured against its own column — see `cqw`. */
+    container-type: inline-size;
+  }
+
+  .memo-note-screen[data-note-tab="flashcards"] .memo-gen-face {
+    width: auto;
+    max-width: 100%;
+    margin-inline: auto;
+    aspect-ratio: 5 / 3;
+    /*
+     * `60cqw` is the 5:3 ratio written as a ceiling — three fifths of the column's width.
+     * The card takes its height from the flexbox and its width from the ratio, and when the
+     * column caps that width first the ratio would otherwise break and the ghost square up.
+     */
+    max-height: min(22rem, 60cqw);
+  }
+}
+
+/*
+ * The quiz: no card, because the quiz has no card. Production paints this one with a
+ * gradient under a `:root[data-theme]` selector, which outweighs a plain two-class rule —
+ * hence the extra ancestor rather than an `!important`, the same way the real one does it.
+ */
+.memo-note-screen[data-note-tab="quiz"] .memo-panel .memo-gen-quizcard {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  gap: clamp(0.35rem, 0.9vh, 0.7rem);
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.memo-note-screen[data-note-tab="quiz"] .memo-gen-prompt {
+  flex: 0 0 auto;
+  margin-bottom: 0.3rem;
+}
+
+/* The four answers divide what is left, exactly as the real four do. */
+.memo-note-screen[data-note-tab="quiz"] .memo-gen-option {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 2.4rem;
+  max-height: 4.4rem;
+}
+
+/* The test: the box the answer gets typed into is the part that gives. */
+.memo-note-screen[data-note-tab="test"] .memo-gen-testblock {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.memo-note-screen[data-note-tab="test"] .memo-gen-testinput {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 5.5rem;
 }
 
 .memo-gen-bar {
@@ -5353,16 +5668,15 @@
   border-radius: 999px;
 }
 
-.memo-gen-bar.cards {
-  height: 1.05rem;
-}
-
-.memo-gen-bar.quiz {
-  height: 0.6rem;
-}
-
+/*
+ * One height, because there is one bar. These were the three the real screens used to draw
+ * — 1.05, 0.6 and 0.75 — and a ghost that is a different weight from the thing it stands in
+ * for is worse than no ghost: the screen visibly changes shape as it finishes loading.
+ */
+.memo-gen-bar.cards,
+.memo-gen-bar.quiz,
 .memo-gen-bar.test {
-  height: 0.75rem;
+  height: 0.4rem;
 }
 
 .memo-gen-face {
@@ -5587,8 +5901,7 @@
   color: #ff3b30;
 }
 
-/* ===========================================================================
-   Settings + Help
+/* ====================================================================   Settings + Help
    ========================================================================= */
 
 .memo-page {
@@ -6033,8 +6346,7 @@
   font-weight: 750;
 }
 
-/* ===========================================================================
-   Overlays: modals, sheets, toast
+/* ====================================================================   Overlays: modals, sheets, toast
    ========================================================================= */
 
 .memo-overlay {
@@ -6697,8 +7009,7 @@
   font-size: 1.2rem;
 }
 
-/* ===========================================================================
-   Capture modal
+/* ====================================================================   Capture modal
    ---------------------------------------------------------------------------
    The "Nov zapisek" sheet keeps its own flows — recording, file pickers, PDF
    page selection, the scan importer — and takes the redesign's chrome: a
@@ -7253,8 +7564,7 @@
   margin-top: 1.5rem;
 }
 
-/* ===========================================================================
-   Discount wheel + one-time offer
+/* ====================================================================   Discount wheel + one-time offer
    ---------------------------------------------------------------------------
    Both are full-height sheets on every breakpoint: the offer is a moment, not
    a page, and it reads the same on a laptop as on a phone.
@@ -7924,8 +8234,7 @@
   color: #ff3b30;
 }
 
-/* ===========================================================================
-   Study manager, capture guide, practice-test detail
+/* ====================================================================   Study manager, capture guide, practice-test detail
    ---------------------------------------------------------------------------
    The last production surfaces reachable from the redesigned screens: the
    flashcard/quiz editor behind "Uredi", the record-with-your-phone-off guide
@@ -8415,8 +8724,7 @@
   font-weight: 750;
 }
 
-/* ===========================================================================
-   Folder sheet and modals
+/* ====================================================================   Folder sheet and modals
    ---------------------------------------------------------------------------
    The folder picker's sheet, the "Nova mapa" modal and the folder editor keep
    their production markup and behaviour (drag-to-dismiss, the lecture picker,
@@ -8660,8 +8968,7 @@
   font-weight: 700;
 }
 
-/* ===========================================================================
-   Paywall
+/* ====================================================================   Paywall
    ---------------------------------------------------------------------------
    The paywall already had the redesign's structure and its blue accent (the
    `--memo-paywall-purple` variable is a misnomer — it resolves to --tint). What
@@ -8822,8 +9129,7 @@
   outline-offset: 2px;
 }
 
-/* ===========================================================================
-   Mobile (< 1100px) — the phone design
+/* ====================================================================   Mobile (< 1100px) — the phone design
    ---------------------------------------------------------------------------
    The artboard draws a 390x844 device; here the same layout fills the
    viewport. Sheets are fixed to the viewport rather than to a phone frame,
@@ -9543,10 +9849,8 @@
    * and the options carry no letter badges and no "Izberi en odgovor" — that
    * card, those badges and that line are the desktop artboard's.
    */
-  /* The phone's quiz bar is the taller one the artboard draws. */
   .memo-progress.quiz {
-    height: 0.75rem;
-    margin: 0.7rem 0 1.4rem;
+    margin: 0.8rem 0 1.4rem;
   }
 
   .memo-quiz-head {
@@ -12333,8 +12637,7 @@
   }
 }
 
-/* ===========================================================================
-   Paywall: one screen, never a scroller
+/* ====================================================================   Paywall: one screen, never a scroller
    ---------------------------------------------------------------------------
    The paywall is the screen the business runs through, and it only works when
    the price, the plan cards and the call to action are visible at once. Every
@@ -12581,8 +12884,7 @@
   }
 }
 
-/* ===========================================================================
-   The discount offer, on one screen too
+/* ====================================================================   The discount offer, on one screen too
    ---------------------------------------------------------------------------
    This is the other paywall, and it is the one a buyer lands on straight after
    backing out of Stripe — `getBillingCancelUrl` sends a discounted checkout
@@ -12760,28 +13062,26 @@
  * glance whether the tutor is talking, listening or thinking without reading a
  * word.
  *
- * Everything moving here rides `--tutor-level`, the live RMS of the audio, set
+ * Everything moving here rides `--orb-level`, the live RMS of the audio, set
  * from the animation frame loop in lecture-tutor.tsx. Nothing is on a timer.
  * That distinction is the whole design: a pulse that keeps going during silence
  * is the thing that makes a voice interface read as a decoration rather than as
  * a participant.
  */
 /*
- * The walkthrough keeps the dock but empties it of the chat.
+ * The walkthrough empties the dock, and then loses it.
  *
  * Offering a second place to ask a question — with a second microphone button — beside a
- * tutor that is already listening is two answers to one question. But the dock itself is
- * where this app puts the controls that belong to the screen you are on, so the usage pill
- * goes in it rather than floating somewhere new.
+ * tutor that is already listening is two answers to one question, and that emptying is
+ * TABS_WITHOUT_CHAT's doing rather than this file's. What is left is the usage pill, and
+ * that has moved up beside the note's title: nothing remains in the band at all, so the
+ * band goes with it.
  */
-.memo-note-screen[data-note-tab="tutor"] .memo-m-chatbar,
-.memo-note-screen[data-note-tab="tutor"] .memo-m-chatbar-mic,
-.memo-note-screen[data-note-tab="tutor"] .memo-chat-fab {
+.memo-note-screen[data-note-tab="tutor"] .memo-dock {
   display: none;
 }
 
-/* On its own in the dock, the pill sits where the listen pill does on the note. */
-.memo-note-screen[data-note-tab="tutor"] .memo-dock,
+/* The episode's own meter is still in there, on its own, where the listen pill sits. */
 .memo-note-screen[data-note-tab="podcast"] .memo-dock {
   justify-content: center;
 }
@@ -12800,53 +13100,132 @@
   -webkit-mask-image: none;
 }
 
-.memo-tutor {
-  /* Overridden per voice from the component; see voice-colors.ts. */
-  --tutor-hue: 45;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.85rem;
-  padding: 1.5rem 1.25rem 2rem;
-  text-align: center;
-  /* Fills whatever the note scroller leaves, so the sphere sits at the optical centre
-     rather than pinned under the pill row with a screen of nothing beneath it. */
-  min-height: min(34rem, 68vh);
+/*
+ * --- the study screens fit the window ---------------------------------------
+ *
+ * Everything on these screens has to be on the screen.
+ *
+ * A walkthrough, a card, a question, a room, a test: each is one object and a handful of
+ * controls that act on it, and each is answered in place rather than read through. If the
+ * controls are below the fold then the first thing a learner does on a screen built for
+ * answering is scroll — past the thing they came to answer — and on most of these tabs there
+ * is nothing down there to reach.
+ *
+ * So the note chrome that carries nothing any of them needs is dropped: the trail back to
+ * the library, which the rail already offers, and the note's date. The design's own desktop
+ * artboard draws neither. What is left is then sized against the window instead of against
+ * itself, screen by screen, below.
+ */
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) :is(.memo-breadcrumb, .memo-note-date) {
+  display: none;
 }
 
-.memo-tutor-orb {
+/* And the page's own top margin, which on these tabs is a screen's worth of nothing. */
+.memo-grid:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"])) {
+  padding-top: 1rem;
+}
+
+/*
+ * The shell keeps 2.5rem under the page so a long note does not end flush against the
+ * window. A screen that is not meant to scroll has no long note to end, and that 2.5rem
+ * was the last thing putting a scrollbar on a card that otherwise fitted.
+ */
+.memo:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"])) {
+  padding-bottom: 1rem;
+}
+
+/*
+ * The study panel is floored at 26rem so that a deck of three cards does not sit in a card
+ * that hugs it. These five are given the window's height instead — see below — so the floor
+ * does nothing here but hold the column open past the bottom of it.
+ */
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-panel.study {
+  min-height: 0;
+}
+
+/* An ancestor, so `:has()` rather than a descendant selector. */
+.memo-main:has(.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"])) {
+  padding-top: 1rem;
+}
+
+/* --- the sphere ----------------------------------------------------------- */
+
+/*
+ * The glowing ball, shared.
+ *
+ * Two screens in this app are somebody talking — the walkthrough and the episode — and
+ * both drew their own sphere. They were the same sphere: the same two offset highlights,
+ * the same bloom behind them, the same trick of riding the live audio level rather than a
+ * timer. Two copies of one object is how the two spoken screens drift apart, so it is one
+ * object now, generic over `--orb-hue` and `--orb-level`, and whoever is speaking sets
+ * those two numbers.
+ *
+ * The rings stay the walkthrough's own: they are the listening state, and only one of the
+ * two screens has a microphone open.
+ */
+.memo-orb {
   position: relative;
-  width: 11.5rem;
-  height: 11.5rem;
+  width: var(--orb-size);
+  height: var(--orb-size);
   display: grid;
   place-items: center;
   flex: none;
+  /*
+   * One knob. Every layer inside is a percentage of this box rather than its own rem value,
+   * so the sphere is resized by changing one number — which is what lets it give ground on a
+   * short window instead of pushing the controls under the fold. The percentages are the
+   * design's own numbers over the phone's 11.5rem box, and they come out within a fifth of a
+   * percent of the desktop's 13rem ones, so the two sizes are genuinely one sphere.
+   */
+  --orb-size: 11.5rem;
+  /*
+   * `--orb-hue` is inherited, never defaulted here: a custom property declared on the
+   * element itself beats the same property inherited from an ancestor, so a fallback in
+   * this block would quietly override whatever the screen above set. Every screen using
+   * a sphere declares the hue on its own root — see `.memo-tutor` below.
+   */
   /* Clamped so a shout cannot fill the panel and a whisper still shows. */
-  --tutor-swell: clamp(0, calc(var(--tutor-level, 0) * 4.2), 1);
+  --orb-swell: clamp(0, calc(var(--orb-level, 0) * 4.2), 1);
 }
 
-.memo-tutor-orb > * {
+/*
+ * Stacked and centred inside the walkthrough's box. The podcast lays its own two spheres out
+ * side by side instead, so this is only the arrangement — being round is not, and lives on
+ * the parts themselves below.
+ */
+.memo-orb > * {
   position: absolute;
   inset: 0;
   margin: auto;
+}
+
+/*
+ * A sphere is round wherever it is drawn.
+ *
+ * This used to ride on `.memo-orb > *`, which was true while the walkthrough was the only
+ * screen with one. The episode draws its two directly inside its cover — there is no orb box
+ * around them to be a child of — so they came out as squares wearing a sphere's gradient.
+ */
+.memo-orb-glow,
+.memo-orb-body,
+.memo-orb-ring {
   border-radius: 50%;
 }
 
 /* The bloom. Sits behind everything and carries most of the "glowing" — a blur
    this wide reads as light in the room rather than as a ring on a surface. */
-.memo-tutor-orb-glow {
-  width: 11.5rem;
-  height: 11.5rem;
+.memo-orb-glow {
+  width: 100%;
+  height: 100%;
   background: radial-gradient(
     circle at 50% 45%,
-    oklch(0.72 0.18 var(--tutor-hue) / 0.55),
-    oklch(0.62 0.2 calc(var(--tutor-hue) - 20) / 0.28) 45%,
+    oklch(0.72 0.18 var(--orb-hue) / 0.55),
+    oklch(0.62 0.2 calc(var(--orb-hue) - 20) / 0.28) 45%,
     transparent 70%
   );
   filter: blur(18px);
-  transform: scale(calc(0.86 + var(--tutor-swell) * 0.34));
-  opacity: calc(0.55 + var(--tutor-swell) * 0.45);
+  transform: scale(calc(0.86 + var(--orb-swell) * 0.34));
+  opacity: calc(0.55 + var(--orb-swell) * 0.45);
   transition:
     transform 90ms ease-out,
     opacity 90ms ease-out;
@@ -12857,124 +13236,81 @@
  * circle from reading as a flat disc: the small bright one is a specular
  * highlight and the large dim one is the light wrapping round the far side.
  */
-.memo-tutor-orb-body {
-  width: 7.5rem;
-  height: 7.5rem;
+.memo-orb-body {
+  width: 65.2%;
+  height: 65.2%;
   background:
-    radial-gradient(circle at 36% 30%, oklch(0.95 0.06 calc(var(--tutor-hue) + 25) / 0.95), transparent 42%),
-    radial-gradient(circle at 62% 74%, oklch(0.66 0.19 calc(var(--tutor-hue) - 15) / 0.9), transparent 60%),
+    radial-gradient(circle at 36% 30%, oklch(0.95 0.06 calc(var(--orb-hue) + 25) / 0.95), transparent 42%),
+    radial-gradient(circle at 62% 74%, oklch(0.66 0.19 calc(var(--orb-hue) - 15) / 0.9), transparent 60%),
     linear-gradient(
       160deg,
-      oklch(0.78 0.17 calc(var(--tutor-hue) + 10)),
-      oklch(0.58 0.19 calc(var(--tutor-hue) - 23))
+      oklch(0.78 0.17 calc(var(--orb-hue) + 10)),
+      oklch(0.58 0.19 calc(var(--orb-hue) - 23))
     );
   box-shadow:
-    0 0 2.5rem oklch(0.7 0.18 calc(var(--tutor-hue) - 5) / 0.5),
-    inset 0 -0.75rem 1.5rem oklch(0.4 0.12 calc(var(--tutor-hue) - 25) / 0.45),
-    inset 0 0.5rem 1rem oklch(0.98 0.05 calc(var(--tutor-hue) + 35) / 0.35);
+    0 0 2.5rem oklch(0.7 0.18 calc(var(--orb-hue) - 5) / 0.5),
+    inset 0 -0.75rem 1.5rem oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45),
+    inset 0 0.5rem 1rem oklch(0.98 0.05 calc(var(--orb-hue) + 35) / 0.35);
   /* A voice change should feel like the same object changing colour, not a swap. */
   transition:
     transform 80ms ease-out,
     background 320ms ease,
     box-shadow 320ms ease;
-  transform: scale(calc(0.94 + var(--tutor-swell) * 0.16));
+  transform: scale(calc(0.94 + var(--orb-swell) * 0.16));
   /* A slow drift under the audio-driven scale, so a held pause still looks alive. */
   animation: memo-tutor-breathe 5.5s ease-in-out infinite;
 }
 
-/* The rings are the listening state: they only expand when the learner talks. */
-.memo-tutor-orb-ring {
-  width: 8.5rem;
-  height: 8.5rem;
-  border: 1px solid oklch(0.75 0.14 var(--tutor-hue) / 0.4);
-  opacity: 0;
-  transform: scale(1);
-}
-
-.memo-tutor.phase-listening .memo-tutor-orb-ring {
-  opacity: calc(0.25 + var(--tutor-swell) * 0.75);
-  transform: scale(calc(1 + var(--tutor-swell) * 0.28));
-  transition:
-    transform 110ms ease-out,
-    opacity 110ms ease-out;
-}
-
-.memo-tutor.phase-listening .memo-tutor-orb-ring.second {
-  transform: scale(calc(1.14 + var(--tutor-swell) * 0.4));
-  opacity: calc(0.12 + var(--tutor-swell) * 0.4);
-}
-
-/* Thinking has no audio to ride, so this is the one state that does animate on
-   a clock — there is genuinely nothing being said to follow. */
-.memo-tutor.phase-thinking .memo-tutor-orb-body {
-  animation: memo-tutor-think 1.6s ease-in-out infinite;
+/*
+ * The sphere at tile size, where the bloom comes off.
+ *
+ * An 18px blur around a 2rem ball is mush, and the outer glow shadow at that size is a smudge
+ * under a list row rather than light. The two inner shadows are what is left, and they are
+ * what keeps it from flattening — so they are scaled with the sphere rather than dropped. The
+ * ratios are the full-size ones re-measured for a small ball, which needs a stronger
+ * terminator to survive being 2rem across.
+ *
+ * Sized off `--orb-size` rather than the percentages above, because these are not children of
+ * an orb box: the episode draws them inline in a row, and each one is told how big it is.
+ */
+.memo-orb-body.compact {
+  width: var(--orb-size);
+  height: var(--orb-size);
+  box-shadow:
+    inset 0 calc(var(--orb-size) * -0.143) calc(var(--orb-size) * 0.286)
+      oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45),
+    inset 0 calc(var(--orb-size) * 0.095) calc(var(--orb-size) * 0.19)
+      oklch(0.98 0.05 calc(var(--orb-hue) + 35) / 0.35);
+  animation: none;
 }
 
 /*
- * Starting up.
- *
- * This has to be unmistakably a loading state. The sphere at rest and the sphere
- * mid-sentence look almost the same — both are a still, glowing ball — so a
- * caption was the only thing saying which, and a caption is not what anybody
- * reads. So while it prepares, the sphere dims and cools, and a bright arc runs
- * around it: an unambiguous "working" signal, the same one every progress
- * spinner has trained people to read, wrapped around the object it belongs to.
+ * Smaller than about 1.7rem the second highlight has nowhere to land — it and the first meet
+ * in the middle and read as a mottle rather than as two lights. Highlight one and the
+ * gradient are the floor at which this is still recognisably the same object.
  */
-/* Its own keyframes rather than `memo-tutor-think`, which animates `filter` and so
-   overrode the dimming that is half the signal. */
-.memo-tutor.phase-preparing .memo-tutor-orb-body {
-  animation: memo-tutor-preparing 2s ease-in-out infinite;
-  transform: scale(0.88);
+.memo-orb-body.mini {
+  width: var(--orb-size);
+  height: var(--orb-size);
+  background:
+    radial-gradient(circle at 36% 30%, oklch(0.95 0.06 calc(var(--orb-hue) + 25) / 0.95), transparent 42%),
+    linear-gradient(
+      160deg,
+      oklch(0.78 0.17 calc(var(--orb-hue) + 10)),
+      oklch(0.58 0.19 calc(var(--orb-hue) - 23))
+    );
+  box-shadow: inset 0 calc(var(--orb-size) * -0.147) calc(var(--orb-size) * 0.294)
+    oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45);
+  animation: none;
 }
 
-@keyframes memo-tutor-preparing {
-  0%,
-  100% {
-    filter: saturate(0.45) brightness(0.6);
-  }
-  50% {
-    filter: saturate(0.6) brightness(0.8);
-  }
-}
-
-.memo-tutor.phase-preparing .memo-tutor-orb-glow {
-  opacity: 0.35;
-  transform: scale(0.9);
-}
-
-/* The arc itself: one lit quadrant of an otherwise invisible ring, spinning. */
-.memo-tutor.phase-preparing .memo-tutor-orb-ring {
-  width: 9.25rem;
-  height: 9.25rem;
-  opacity: 1;
-  border-color: transparent;
-  border-top-color: oklch(0.78 0.16 var(--tutor-hue));
-  border-right-color: oklch(0.78 0.16 var(--tutor-hue) / 0.35);
-  border-width: 2px;
-  animation: memo-tutor-spin 1.1s linear infinite;
-}
-
-/* A second, slower, fainter arc going the other way, so it reads as motion
-   rather than as a rotating picture. */
-.memo-tutor.phase-preparing .memo-tutor-orb-ring.second {
-  width: 10.5rem;
-  height: 10.5rem;
-  border-top-color: transparent;
-  border-left-color: oklch(0.7 0.13 calc(var(--tutor-hue) - 10) / 0.45);
-  opacity: 0.7;
-  animation: memo-tutor-spin 2.6s linear infinite reverse;
-}
-
-@keyframes memo-tutor-spin {
-  to {
-    transform: rotate(1turn);
-  }
-}
-
-.memo-tutor.phase-paused .memo-tutor-orb-body,
-.memo-tutor.phase-finished .memo-tutor-orb-body,
-.memo-tutor.phase-idle .memo-tutor-orb-body {
-  filter: saturate(0.55);
+/* The rings are the walkthrough's listening state: they only expand when the learner talks. */
+.memo-orb-ring {
+  width: 73.9%;
+  height: 73.9%;
+  border: 1px solid oklch(0.75 0.14 var(--orb-hue) / 0.4);
+  opacity: 0;
+  transform: scale(1);
 }
 
 @keyframes memo-tutor-breathe {
@@ -12999,10 +13335,144 @@
   }
 }
 
+@keyframes memo-tutor-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* --- the spoken walkthrough ----------------------------------------------- */
+
+.memo-tutor {
+  /* Overridden per voice from the component; see voice-colors.ts. */
+  --orb-hue: 45;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.95rem;
+  padding: 1.5rem 1.25rem 2rem;
+  text-align: center;
+  /*
+   * Fills whatever the note scroller leaves, so the sphere sits at the optical centre rather
+   * than pinned under the pill row with a screen of nothing beneath it. Measured against the
+   * screen rather than set at 34rem flat: the usage meter has moved up into a row of its own
+   * above this, and a floor that did not know about it pushed the start button off the
+   * bottom of a phone that is not allowed to scroll.
+   */
+  min-height: min(30rem, 60vh);
+}
+
+.memo-tutor.phase-listening .memo-orb-ring {
+  opacity: calc(0.25 + var(--orb-swell) * 0.75);
+  transform: scale(calc(1 + var(--orb-swell) * 0.28));
+  transition:
+    transform 110ms ease-out,
+    opacity 110ms ease-out;
+}
+
+.memo-tutor.phase-listening .memo-orb-ring.second {
+  transform: scale(calc(1.14 + var(--orb-swell) * 0.4));
+  opacity: calc(0.12 + var(--orb-swell) * 0.4);
+}
+
+/* Thinking has no audio to ride, so this is the one state that does animate on
+   a clock — there is genuinely nothing being said to follow. */
+.memo-tutor.phase-thinking .memo-orb-body {
+  animation: memo-tutor-think 1.6s ease-in-out infinite;
+}
+
+/*
+ * Starting up.
+ *
+ * This has to be unmistakably a loading state. The sphere at rest and the sphere
+ * mid-sentence look almost the same — both are a still, glowing ball — so a
+ * caption was the only thing saying which, and a caption is not what anybody
+ * reads. So while it prepares, the sphere dims and cools, and a bright arc runs
+ * around it: an unambiguous "working" signal, the same one every progress
+ * spinner has trained people to read, wrapped around the object it belongs to.
+ */
+/* Its own keyframes rather than `memo-tutor-think`, which animates `filter` and so
+   overrode the dimming that is half the signal. */
+.memo-tutor.phase-preparing .memo-orb-body {
+  animation: memo-tutor-preparing 2s ease-in-out infinite;
+  transform: scale(0.88);
+}
+
+@keyframes memo-tutor-preparing {
+  0%,
+  100% {
+    filter: saturate(0.45) brightness(0.6);
+  }
+  50% {
+    filter: saturate(0.6) brightness(0.8);
+  }
+}
+
+.memo-tutor.phase-preparing .memo-orb-glow {
+  opacity: 0.35;
+  transform: scale(0.9);
+}
+
+/* The arc itself: one lit quadrant of an otherwise invisible ring, spinning. */
+.memo-tutor.phase-preparing .memo-orb-ring {
+  width: 80.4%;
+  height: 80.4%;
+  opacity: 1;
+  border-color: transparent;
+  border-top-color: oklch(0.78 0.16 var(--orb-hue));
+  border-right-color: oklch(0.78 0.16 var(--orb-hue) / 0.35);
+  border-width: 2px;
+  animation: memo-tutor-spin 1.1s linear infinite;
+}
+
+/* A second, slower, fainter arc going the other way, so it reads as motion
+   rather than as a rotating picture. */
+.memo-tutor.phase-preparing .memo-orb-ring.second {
+  width: 91.3%;
+  height: 91.3%;
+  border-top-color: transparent;
+  border-left-color: oklch(0.7 0.13 calc(var(--orb-hue) - 10) / 0.45);
+  opacity: 0.7;
+  animation: memo-tutor-spin 2.6s linear infinite reverse;
+}
+
+.memo-tutor.phase-paused .memo-orb-body,
+.memo-tutor.phase-finished .memo-orb-body,
+.memo-tutor.phase-idle .memo-orb-body {
+  filter: saturate(0.55);
+}
+
+/*
+ * Finished: the sphere stops being the interface.
+ *
+ * Nothing is going to be said again unless they ask for it, so the thing that was the
+ * whole screen shrinks out of the way of the two things now worth doing. It keeps its
+ * place in the column rather than disappearing — the object they have been talking to
+ * for eight minutes should not blink out at the end of the conversation.
+ */
+.memo-tutor.phase-finished .memo-orb {
+  height: calc(var(--orb-size) * 0.783);
+}
+
+.memo-tutor.phase-finished .memo-orb-glow {
+  width: 78.3%;
+  height: auto;
+  aspect-ratio: 1;
+  opacity: 0.4;
+}
+
+.memo-tutor.phase-finished .memo-orb-body {
+  width: 50.4%;
+  height: auto;
+  aspect-ratio: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .memo-tutor-orb-glow,
-  .memo-tutor-orb-body,
-  .memo-tutor-orb-ring {
+  .memo-orb-glow,
+  .memo-orb-body,
+  .memo-orb-ring,
+  .memo-tutor-status-dot {
     animation: none !important;
     transform: none !important;
     transition: none !important;
@@ -13010,39 +13480,135 @@
 
   /* Without the spin there is no motion to say "working", so the ring holds a
      steady lit arc and the dimmed core carries the rest of the signal. */
-  .memo-tutor.phase-preparing .memo-tutor-orb-ring {
+  .memo-tutor.phase-preparing .memo-orb-ring {
     opacity: 1 !important;
   }
 
-  .memo-tutor.phase-preparing .memo-tutor-orb-body {
+  .memo-tutor.phase-preparing .memo-orb-body {
     filter: saturate(0.45) brightness(0.6) !important;
   }
 }
 
-.memo-tutor-status {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+/* --- what it is, before it has said anything ------------------------------ */
+
+.memo-tutor-intro {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: center;
 }
 
-.memo-tutor-topic {
+.memo-tutor-title {
   margin: 0;
-  display: inline-flex;
+  font-size: 1.3rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.32;
+}
+
+.memo-tutor-lede {
+  margin: 0;
+  max-width: 17rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+/* --- the phase, said once ------------------------------------------------- */
+
+/*
+ * A dot in the voice's own hue, and one word.
+ *
+ * The sphere at rest and the sphere mid-sentence look almost the same — the stylesheet
+ * above says so about the loading state, and it is just as true of speaking against
+ * listening. This is the line that resolves it, so it is one line rather than the three
+ * quiet ones it replaces, and it carries a mark that animates with the phase: the state
+ * is legible from across a desk without reading the word.
+ */
+.memo-tutor-statusrow {
+  margin: 0;
+  display: flex;
   align-items: center;
-  gap: 0.5rem;
-  max-width: 26rem;
-  font-size: 0.85rem;
+  gap: 0.45rem;
+  font-size: 0.92rem;
+  font-weight: 650;
   color: var(--muted);
 }
 
-.memo-tutor-progress {
+.memo-tutor-status-dot {
+  width: 0.45rem;
+  height: 0.45rem;
   flex: none;
-  padding: 0.1rem 0.45rem;
   border-radius: 999px;
-  background: var(--tile);
+  background: oklch(0.7 0.16 var(--orb-hue));
+  transition: background 320ms ease;
+}
+
+.memo-tutor.phase-thinking .memo-tutor-status-dot,
+.memo-tutor.phase-preparing .memo-tutor-status-dot {
+  animation: memo-tutor-think 1.6s ease-in-out infinite;
+}
+
+/* Nothing is being spent, so the mark stops looking live. */
+.memo-tutor.phase-paused .memo-tutor-status-dot,
+.memo-tutor.phase-finished .memo-tutor-status-dot {
+  background: var(--muted-2);
+}
+
+/* --- where the walkthrough has got to ------------------------------------- */
+
+/*
+ * The topic and the position in one row, with a bar under it.
+ *
+ * These were two separate quiet lines — a title, and a `3 / 7` pill somewhere near it —
+ * which is two things to find for one fact. A labelled bar is the shape everything else
+ * that measures progress in this app already uses, and it answers "how much of this is
+ * left" without being read at all.
+ */
+.memo-tutor-topicrow {
+  display: grid;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.memo-tutor-topic {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  text-align: left;
+}
+
+.memo-tutor-topic-title {
+  min-width: 0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.memo-tutor-topic-count {
+  flex: none;
+  font-size: 0.92rem;
   font-variant-numeric: tabular-nums;
-  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.memo-tutor-topicbar {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.memo-tutor-topicbar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: oklch(0.7 0.16 var(--orb-hue));
+  transition:
+    width 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background 320ms ease;
 }
 
 .memo-tutor-hint {
@@ -13056,177 +13622,1255 @@
   max-width: 26rem;
 }
 
-/*
- * What the learner just said, and nothing else.
- *
- * This was a six-line scrollback of both sides of the conversation, and it was the
- * worst thing on the screen: the tutor's words are already in the room, so printing
- * them competes with listening to them, and a log nobody reads still has to be
- * looked past. One line does the only job that was ever needed — proving the
- * microphone heard them — and leaves the sphere as the thing being looked at.
- */
-.memo-tutor-heard {
-  margin: 0;
-  max-width: 30rem;
-  font-size: 0.95rem;
-  line-height: 1.5;
-  color: var(--text);
-  /*
-   * Two lines is a question; more than that is a transcript. Held as a two-line window
-   * that the component keeps scrolled to the bottom rather than as a line clamp: a clamp
-   * keeps the FIRST two lines, so a learner talking for more than a breath watched their
-   * own words stop halfway through a sentence and never move again. What matters while
-   * you are still speaking is the words you have just said.
-   */
-  max-height: 3em;
-  overflow: hidden;
-  animation: memo-tutor-heard-in 220ms ease-out;
-}
-
-/* Still being revised by the recognizer, so it is shown as provisional rather than
-   as something the tutor has committed to having heard. */
-.memo-tutor-heard.draft {
-  color: var(--muted);
-}
-
-@keyframes memo-tutor-heard-in {
-  from {
-    opacity: 0;
-    transform: translateY(0.25rem);
-  }
-}
-
 /* --- picking a voice ------------------------------------------------------ */
 
 /*
- * A scroller rather than a grid: there are eleven voices and the point is to try a
- * few, not to survey them all at once. Tapping plays the voice, which is why each
- * one wears a play icon rather than looking like a plain filter chip.
+ * One row rather than eleven chips.
+ *
+ * The scroller used to be on the screen the whole time, bleeding off both edges under
+ * the sphere — eleven names competing with the one object this screen is about, for a
+ * decision most people make once. Collapsed to a row showing the voice they have and the
+ * colour it is, it answers "which voice is this" at a glance and opens the same picker
+ * on a tap.
+ */
+.memo-tutor-picker {
+  position: relative;
+  width: 100%;
+}
+
+.memo-tutor-picker > summary {
+  list-style: none;
+}
+
+.memo-tutor-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.memo-capture-row.memo-tutor-voicerow {
+  min-height: 4rem;
+  padding: 0.7rem 1.15rem;
+  gap: 0.9rem;
+}
+
+/* The same object as the sphere above it, small — so the row is plainly about that. */
+.memo-tutor-voice-swatch {
+  width: 1.7rem;
+  height: 1.7rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 36% 30%, oklch(0.95 0.06 calc(var(--orb-hue) + 25) / 0.95), transparent 42%),
+    linear-gradient(
+      160deg,
+      oklch(0.78 0.17 calc(var(--orb-hue) + 10)),
+      oklch(0.58 0.19 calc(var(--orb-hue) - 23))
+    );
+  box-shadow: inset 0 -0.25rem 0.5rem oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45);
+  transition: background 320ms ease;
+}
+
+/*
+ * Eleven voices, all of them on screen, each in its own colour.
+ *
+ * This was a horizontal scroller, which made sense while it lived permanently under the
+ * sphere and had to take almost no room. Behind a tap it has the whole width of a sheet, and
+ * a scroller there just hides seven of the eleven behind a fade — the one thing a picker
+ * must not do. Wrapped pills show the lot, and wrap rather than grid because the names run
+ * from "Iris" to "Bennett" and a fixed column clips the long ones.
+ *
+ * The colour is the point of the row. `voice-colors.ts` spreads the eleven round the wheel
+ * so that choosing one is a visible decision rather than a name you will not remember
+ * picking; drawing them all in the hue of the voice already chosen threw exactly that away.
  */
 .memo-tutor-voices {
   display: flex;
-  gap: 0.4rem;
-  max-width: 100%;
-  padding: 0.15rem 1.25rem;
-  margin: 0 -1.25rem;
-  overflow-x: auto;
-  scroll-snap-type: x proximity;
-  /* The row runs off both edges, and a hard cut through a chip reads as a broken
-     layout rather than as more to scroll. Fading the ends says "there is more here"
-     with no arrows or shadows to draw. */
-  mask-image: linear-gradient(
-    to right,
-    transparent,
-    #000 1.75rem,
-    #000 calc(100% - 1.75rem),
-    transparent
-  );
-  -webkit-mask-image: linear-gradient(
-    to right,
-    transparent,
-    #000 1.75rem,
-    #000 calc(100% - 1.75rem),
-    transparent
-  );
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .memo-tutor-voice {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.5rem;
   flex: none;
-  scroll-snap-align: center;
-  min-height: 2.1rem;
-  padding: 0 0.7rem 0 0.55rem;
-  border: 1px solid var(--line);
+  min-height: 2.7rem;
+  padding: 0 0.95rem 0 0.65rem;
+  border: var(--btn-border-width) solid var(--btn-border);
   border-radius: 999px;
-  background: var(--tile);
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 600;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
   cursor: pointer;
   transition:
-    color 140ms ease,
     background 140ms ease,
-    border-color 140ms ease;
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
-.memo-tutor-voice.active {
-  color: var(--text);
-  border-color: color-mix(in oklch, oklch(0.72 0.16 var(--tutor-hue)) 55%, transparent);
-  background: color-mix(in oklch, oklch(0.72 0.16 var(--tutor-hue)) 16%, transparent);
-}
-
-/* Playing right now — the icon has already swapped to a waveform, this lifts it. */
-.memo-tutor-voice.playing {
-  color: oklch(0.82 0.13 var(--tutor-hue));
+/* The sphere, small — so a voice in the list and the voice on the screen are one object. */
+.memo-tutor-voice-dot {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 36% 30%, oklch(0.95 0.06 calc(var(--voice-hue) + 25) / 0.95), transparent 42%),
+    linear-gradient(
+      160deg,
+      oklch(0.78 0.17 calc(var(--voice-hue) + 10)),
+      oklch(0.58 0.19 calc(var(--voice-hue) - 23))
+    );
+  box-shadow: inset 0 -0.18rem 0.35rem oklch(0.4 0.12 calc(var(--voice-hue) - 25) / 0.45);
 }
 
 /*
- * The voice row runs the full width of the phone.
- *
- * It is a scroller, and a scroller that stops short of both edges reads as a boxed-in
- * list rather than as something that keeps going. Measured against the viewport rather
- * than by unwinding the padding of the three ancestors between here and the screen edge,
- * which is what the old fixed negative margin was doing — and getting wrong by the note
- * scroller's own inset.
+ * The chosen voice wears the note row's own selected treatment — a tint of its colour and a
+ * ring in it — so that picking a voice looks like picking a tab.
  */
-@media (max-width: 1099px) {
-  .memo-tutor-voices {
-    width: 100vw;
-    /* The base rule caps this at the parent's width, which silently undid the bleed. */
-    max-width: none;
-    margin-inline: calc(50% - 50vw);
-    padding-inline: 1.25rem;
-  }
+.memo-tutor-voice.active {
+  border-color: transparent;
+  background: color-mix(in oklch, oklch(0.72 0.16 var(--voice-hue)) 16%, var(--surface));
+  box-shadow: inset 0 0 0 1.5px oklch(0.72 0.16 var(--voice-hue));
 }
 
-.memo-tutor-start {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.7rem 1.25rem;
-  border: none;
-  border-radius: 999px;
-  background: var(--ink);
-  color: var(--bg);
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
+/* Playing right now. The mark that is already the voice does the saying. */
+.memo-tutor-voice.playing .memo-tutor-voice-dot {
+  animation: memo-tutor-think 1.6s ease-in-out infinite;
 }
+
+/*
+ * The picker opens against the row, the way the usage meter opens against its own pill:
+ * a panel on the desktop, and on the phone the dragged sheet every other choice in this
+ * app arrives in.
+ */
+/*
+ * Upwards, like the usage meter's own panel and for the same reason: the walkthrough does
+ * not scroll and the note card clips what leaves it, so a panel dropped from a row this
+ * near the foot of the column loses its last centimetre. Above the row it covers the lede
+ * and some of the sphere, which is exactly what somebody choosing a voice is not reading.
+ */
+.memo-tutor-picker-popover {
+  position: absolute;
+  bottom: calc(100% + 0.6rem);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  padding: 1rem 1.1rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    0 18px 48px rgba(0, 0, 0, 0.28);
+  animation: memo-pop-in 0.16s ease-out both;
+}
+
+.memo-tutor-picker-sheet {
+  /*
+   * Read-aloud's sheet carries speed, voice and a colour picker, so globals.css floors the
+   * shared class at `min(46vh, 25rem)`. This one is a line and a wrapped set of pills, and
+   * inheriting that floor left two thirds of a phone screen of nothing under them.
+   */
+  min-height: 0;
+}
+
+.memo-tutor-picker-heading {
+  margin: 0 0 0.7rem;
+  font-size: 0.92rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* --- the transport -------------------------------------------------------- */
 
 .memo-tutor-controls {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 1rem;
   justify-content: center;
 }
 
+/*
+ * The documented round set, which is also the podcast player's — the two spoken screens
+ * are the same instrument and should not need different hands. The labels went with the
+ * pills: "Pause" beside a pause glyph is a caption on a picture of a word.
+ */
 .memo-tutor-control {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  min-height: 2.6rem;
-  padding: 0 0.85rem;
-  border: 1px solid var(--line);
+  justify-content: center;
+  width: var(--btn-round);
+  height: var(--btn-round);
+  flex: none;
+  padding: 0;
+  border: 0;
   border-radius: 999px;
   background: var(--tile);
   color: var(--text);
-  font-size: 0.85rem;
-  font-weight: 600;
   cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease;
 }
 
+/* Not faded: a dimmed glyph on the same tile says "not yet" without the button
+   looking like it has been switched off. */
 .memo-tutor-control:disabled {
-  opacity: 0.4;
+  color: var(--muted-2);
   cursor: default;
 }
 
 .memo-tutor-control.primary {
+  width: 3.4rem;
+  height: 3.4rem;
   background: var(--ink);
-  border-color: transparent;
   color: var(--bg);
+}
+
+/*
+ * The tile buttons say "not yet" by greying their glyph, which an ink fill cannot do —
+ * a white glyph on black is exactly what the live primary looks like. This one steps back
+ * as a whole instead, the same way the coral primary does everywhere else.
+ */
+.memo-tutor-control.primary:disabled {
+  opacity: 0.45;
+}
+
+/* --- starting, and starting again ----------------------------------------- */
+
+.memo-tutor-start {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 3.4rem;
+  padding: 0 1.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 1.05rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.memo-tutor-actions {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+/*
+ * The second way out of a finished walkthrough.
+ *
+ * Everything they have just had explained is also sitting in the cards, and the end of a
+ * walkthrough is the one moment in the app where somebody has just proved they want this
+ * material — so the cards are offered here rather than left to the pill row, which is the
+ * only route to them today. Outline, not ink: one primary per screen, and the primary is
+ * hearing it again.
+ */
+.memo-tutor-second {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: 3.2rem;
+  padding: 0 1.25rem;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: box-shadow 0.16s ease;
+}
+
+.memo-tutor-second:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+/*
+ * Desktop sits the whole thing higher.
+ *
+ * The phone gives this screen everything below the pill row, so centring puts the sphere
+ * where the eye already is. Desktop does not: the note's title and date sit above the
+ * panel, and centring inside what is left pushed the sphere towards the bottom of the
+ * card with the controls near the fold. Anchoring to the top instead, with enough room
+ * above to breathe, puts it back where it is being looked for.
+ */
+@media (min-width: 1100px) {
+  .memo-tutor {
+    /*
+     * Fills the panel rather than being centred inside it as a content-sized block: the
+     * sphere below takes what is left over, and there is nothing left over in a box that is
+     * exactly as tall as its contents. The centring moves in here instead, where it applies
+     * once the sphere has reached its cap on a tall window.
+     */
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 0;
+    gap: 1.1rem;
+    /*
+     * Capped and centred: the note column is wide here, and a topic bar drawn the whole
+     * width of it stops being about the sphere in the middle.
+     *
+     * `width: 100%` is not redundant beside the cap. Making the panel a flex column turned
+     * this into a flex item, and a flex item in a column shrinks to its content rather than
+     * filling the line — so the column quietly became as wide as its widest button, about
+     * two thirds of the 30rem it is supposed to be, and the voice picker had room for two
+     * names a row instead of four.
+     */
+    width: 100%;
+    max-width: 30rem;
+    margin-inline: auto;
+  }
+
+  /*
+   * The sphere takes the room that is left, rather than a room worked out in advance.
+   *
+   * This started as a `clamp()` against `100dvh` with the rest of the column subtracted, and
+   * that arithmetic is a guess dressed up as a measurement: the column's height changes with
+   * the note's title wrapping, with the lede appearing, with the phase — so the guess was
+   * right at the height it was tuned at and wrong either side, leaving the sphere at its
+   * floor with a hand's width of empty column around it on one window and pressed against
+   * the buttons on another.
+   *
+   * As a flex item it simply takes whatever is left after the rows that have a size of their
+   * own, at every height, in every phase. The blank space around it is then the padding
+   * below — a share of the window rather than a leftover — so the screen keeps the same
+   * proportions from a short laptop to a tall monitor. `aspect-ratio` keeps it round: the
+   * height comes from the flexbox and the width follows.
+   */
+  .memo-tutor .memo-orb {
+    flex: 1 1 auto;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    aspect-ratio: 1;
+    /* Below this it is a bead rather than a presence; above it, a beach ball. */
+    min-height: 6.5rem;
+    max-height: 15rem;
+  }
+
+  /*
+   * The air, as a share of the window rather than a fixed measure, so the same proportion of
+   * the screen is empty whatever its size.
+   */
+  .memo-tutor {
+    padding-top: 2.5vh;
+    padding-bottom: 3vh;
+  }
+
+  /*
+   * Finished, the sphere stops being the interface and gets out of the way of the two things
+   * now worth doing. Expressed as a smaller ceiling rather than as the old height arithmetic,
+   * which was written against a fixed `--orb-size` this no longer has.
+   */
+  .memo-tutor.phase-finished .memo-orb {
+    height: auto;
+    max-height: 9.5rem;
+  }
+
+  .memo-tutor-statusrow {
+    font-size: 0.95rem;
+  }
+
+  .memo-tutor-topic-title {
+    font-size: 1.08rem;
+  }
+
+  .memo-tutor-topic-count {
+    font-size: 0.95rem;
+  }
+
+  /* Hit targets, and a mouse does not need a bigger one than a thumb. */
+  .memo-tutor-controls {
+    gap: 1.1rem;
+  }
+
+  /* The air between the rows is the other thing that gives on a short window. */
+  .memo-tutor {
+    gap: clamp(0.7rem, 100dvh - 78rem, 1.1rem);
+    padding-bottom: clamp(0.75rem, 100dvh - 78rem, 2rem);
+  }
+
+  /*
+   * The trail and the date are already gone on this tab; this is the rest of what the note
+   * chrome can give back before the sphere has to.
+   */
+  .memo-note-screen[data-note-tab="tutor"] .memo-note-headrow .memo-note-head {
+    margin-top: 0.5rem;
+  }
+
+}
+
+/*
+ * The card is given the window's height, and its contents are made to fit inside it.
+ *
+ * Two halves, and both are needed. Without the first the card hugs its contents and stops
+ * two thirds of the way down beside a chat column that always reaches the bottom of the
+ * window — one short card and one tall one, for no reason a reader can see. Without the
+ * second the contents simply run past the bottom of the card they were given and get
+ * clipped, which is worse than the scrollbar it replaced.
+ *
+ * So every link in the chain from the card down to the one element that can afford to give
+ * ground — the sphere, the flashcard, the question, the room — is a flex column that is
+ * allowed to shrink. `min-height: 0` at each step is what allows it: a flex item refuses by
+ * default to go below its content, which is exactly the refusal being overridden here.
+ */
+
+/* The card has to be a column too, or the scroller inside it has no definite height to
+   hand on and every `flex: 1` below resolves against content instead. */
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-panel.study {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: clamp(0.5rem, 1.6vh, 0.9rem);
+}
+
+/* The walkthrough is the one that centres: it is an object being looked at rather than a
+   column of things being worked through. */
+.memo-note-screen[data-note-tab="tutor"] .memo-panel.study {
+  justify-content: center;
+}
+
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) :is(.workspace-panel-stack, .lecture-study-shell, .lecture-practice-shell) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/*
+ * The card is the thing that gives — but it has to stay a card.
+ *
+ * Its three fixed 22rem floors (stage, rotator, and the two faces sitting absolutely
+ * inside it) are what made this a scrolling screen. Simply letting them shrink is worse
+ * than the scrollbar: told only to get smaller, a box whose faces are `position: absolute`
+ * and contribute no height flattens into a letterbox with the question spilling out of it.
+ *
+ * So the height is taken from the column and the WIDTH follows it, at a fixed ratio. The
+ * card gets smaller on a short window and stays the shape of a card, which is the thing a
+ * learner is actually looking at.
+ */
+.memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1.2rem;
+  /*
+   * A ceiling on the height, so the ratio below survives a tall window. The card's width
+   * comes from its height and the column caps that width — so past this point the card
+   * stopped getting wider and only got taller, drifting from a card towards a square. The
+   * room above this becomes air around it instead.
+   */
+  max-height: 22rem;
+}
+
+.memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-stage-card {
+  flex: 0 1 auto;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  aspect-ratio: 5 / 3;
+}
+
+.memo-note-screen[data-note-tab="flashcards"] :is(.lecture-flashcard, .lecture-flashcard-rotator) {
+  height: 100%;
+  /* Small enough to be a short card, large enough to still be one. */
+  min-height: 11rem;
+}
+
+.memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-face {
+  min-height: 0;
+  padding: 1.4rem 1.5rem;
+  overflow: hidden;
+}
+
+/* The question sets the card's size on a tall window and gives way on a short one. */
+.memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-content {
+  font-size: clamp(1.05rem, 2.4vh, 1.35rem);
+}
+
+.memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-toolbar {
+  margin-top: 1.1rem;
+}
+
+/*
+ * The head and its bar belong to the card, so they sit right under the note's title with
+ * nothing between them now that editing has moved down to the review row.
+ */
+.memo-note-screen[data-note-tab="flashcards"] .memo-progress {
+  margin-top: 0.85rem;
+}
+
+.memo-note-screen[data-note-tab="flashcards"] .lecture-flashcard-stage {
+  margin-top: 0.9rem;
+}
+
+/*
+ * A card thrown to one side should leave the screen, not be sliced off at the edge of the
+ * note card it happens to be sitting in.
+ *
+ * The scroller clips both axes so that a pill row cannot hand the note a sideways
+ * scrollbar, and that clip caught the throw a few centimetres in — the gesture is meant to
+ * read as putting the card away, and a card that vanishes into a straight vertical line
+ * halfway there reads as a bug instead. The clip is released only while a drag is actually
+ * happening — and that is only half the gesture. The card the finger holds is one
+ * element; the clone that carries on from where it was let go is another, and keying the
+ * release on `.dragging` alone slammed the clip shut at exactly the moment of release, so
+ * every throw was sliced off at the edge of the note card. Both halves release it. By this
+ * point everything on the tab already fits, so there is no scroll position to lose.
+ */
+.memo-note-screen[data-note-tab="flashcards"] :is(.memo-note-scroll, .memo-panel, .workspace-panel-stack, .lecture-study-shell, .lecture-flashcard-stage):has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
+  overflow: visible;
+}
+
+/* The outermost of them, and an ancestor of the screen — so `:has()` reaches down for the
+   tab as well as for the drag. Its `overflow-x: clip` is the last thing cutting the throw. */
+.memo-main:has(.memo-note-screen[data-note-tab="flashcards"] :is(.lecture-flashcard.dragging, .lecture-flashcard-exit-card)) {
+  overflow: visible;
+}
+
+/*
+ * Over the chat column beside it, rather than under. The card carries a transform of its
+ * own, so it is already its own stacking context — what needs lifting is the chain it sits
+ * in, or the chat panel (fixed, and later in the document) paints over the throw.
+ */
+.memo-note-screen[data-note-tab="flashcards"] :is(.memo-note-card, .memo-panel, .workspace-panel-stack, .lecture-study-shell, .lecture-flashcard-stage, .lecture-flashcard-stage-card):has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
+  position: relative;
+  z-index: 130;
+}
+
+/*
+ * The quiz: the options are the screen. Everything above them is one line of eyebrow and
+ * one of question, so the list is what fills the card and what gives when there is less
+ * room — a shorter option is still a readable option, where a fourth one below the fold is
+ * not an option at all.
+ */
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/*
+ * The question is not in a card.
+ *
+ * It was: a surface inside the note's own card, holding one question and four answers that
+ * are themselves surfaces — three layers of card for one thing to read, and the phone
+ * layout had already stopped doing it. The options are the only boxes that need to be
+ * boxes, because they are the things being chosen between.
+ *
+ * Production paints this card with a gradient under a `:root[data-theme]` selector, which
+ * outweighs a plain two-class rule — hence the extra ancestor rather than an `!important`,
+ * the same way the phone rule does it.
+ */
+.memo-note-screen[data-note-tab="quiz"] .memo-panel .lecture-quiz-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+/* "Choose one answer" over four obviously-choosable answers. */
+.memo-note-screen[data-note-tab="quiz"] .memo-quiz-eyebrow {
+  display: none;
+}
+
+/* Same margins as the deck's, since they are now the same bar. */
+.memo-note-screen[data-note-tab="quiz"] .memo-progress.quiz {
+  margin: 0.85rem 0 1.1rem;
+}
+
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-prompt {
+  margin-bottom: 0.9rem;
+}
+
+/*
+ * The options share whatever is left, rather than being told a height and hoping.
+ *
+ * This went wrong twice before it went right, and both failures came from the same place:
+ * the list was a grid, and a grid does not shrink its rows to fit a shorter box — it
+ * overflows one. Letting the box shrink put the verdict on top of the last option; not
+ * letting it shrink pushed the last option through the bottom of the card. And no clamp
+ * can fix either, because the budget is not knowable in CSS: the question above wraps to
+ * one line or three depending on the question, and answering adds a whole row underneath.
+ *
+ * So the list is a column of flex children at `flex: 1 1 0`. Whatever height is left after
+ * the question and the verdict have taken theirs is divided between the four of them, and
+ * it is divided again the moment either of those changes. Nothing has to be predicted, so
+ * nothing can be predicted wrong. The floor is the point below which an option stops being
+ * comfortably tappable; four of those plus everything else fits any window this app runs in.
+ */
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-options {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: clamp(0.35rem, 0.9vh, 0.7rem);
+  /*
+   * Deliberately NOT `min-height: 0`, which every other link in this chain wants. The list
+   * must never be smaller than the options inside it: shrink it past them and they are
+   * drawn over whatever follows, and what follows is the verdict. Below the floor the
+   * panel gives a little instead — a short scroll is recoverable, two things drawn on top
+   * of each other is not.
+   */
+}
+
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-option {
+  flex: 1 1 0;
+  min-height: 2.4rem;
+  max-height: 4.4rem;
+}
+
+/*
+ * Once answered there are one or two rows rather than four, so they stop dividing the space
+ * and simply take what they need — a single surviving answer stretched to the height of four
+ * is a stranger thing to look at than the empty room below it. This is also what lets the
+ * shrinking go: the floors that used to be tuned per screen height existed only because four
+ * boxes of text and a verdict were competing for one column.
+ */
+/*
+ * The answered layout, which belongs to the collapse and so to the phone.
+ *
+ * With one or two rows left they stop dividing the space and take what they need — a single
+ * surviving answer stretched to the height of four is a stranger thing to look at than the
+ * empty room below it — and they take it at the size they were asked at, because an answer
+ * worth reading afterwards is worth as much room as it had when it was worth choosing.
+ *
+ * The verdict then goes back to the foot of the card. It followed the options directly,
+ * which was right while they filled the column and wrong the moment they stopped: collapsed
+ * to two, the row rode up the middle with the space beneath it. `auto` puts it back on the
+ * floor it has always sat on, so "Razumem" is where the thumb already is.
+ */
+@media (max-width: 1099px) {
+  /*
+   * The two that are left take the room the other two vacated, and go on taking whatever the
+   * screen gives — the same arrangement the four had, dividing what is spare between them
+   * rather than being told a height that is right on one phone and wrong on the next.
+   *
+   * The verdict does not need its `auto` margin to stay at the foot once they fill: there is
+   * no free space left for it to be pushed by, and it is at the bottom because they end
+   * there. The margin is kept for the case where their ceiling bites first.
+   */
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-options {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
+    flex: 1 1 0;
+    /* Two answers taller than this stop reading as answers and start reading as panels. */
+    max-height: 9rem;
+    min-height: 3.4rem;
+  }
+
+  /*
+   * And the letter comes back with them.
+   *
+   * The phone hides the badges, which is right while the question is being answered — four
+   * lettered discs beside four answers you are picking between by touching them is a label
+   * for nothing. It stops being right the moment the verdict underneath says "the correct
+   * answer is C", because C is then the name of something no longer on the screen.
+   */
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option-label {
+    display: inline-flex;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
+    margin-top: auto;
+  }
+}
+
+/*
+ * Beside a rail all four answers stay, so they go on sharing the column with the verdict the
+ * way they did before the collapse — and go on giving it a little height to do it, which on
+ * a desktop costs an answer nothing it needs.
+ */
+@media (min-width: 1100px) {
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
+    min-height: 1.85rem;
+  }
+}
+
+/* The verdict itself, at the size of the row it is rather than of the card it replaced. */
+.memo-note-screen[data-note-tab="quiz"] :is(.memo-quiz-result-ghost, .memo-quiz-result-primary) {
+  height: 2.6rem;
+  padding: 0 0.95rem;
+  font-size: 0.95rem;
+}
+
+.memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-badge {
+  width: 2.2rem;
+  height: 2.2rem;
+}
+
+.memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-title {
+  font-size: 1.08rem;
+}
+
+/* The question gives a little too, rather than the options giving all of it. */
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-prompt {
+  font-size: clamp(1.08rem, 2.9vh, 1.3rem);
+  line-height: 1.28;
+}
+
+.memo-note-screen[data-note-tab="quiz"] .memo-progress.quiz {
+  margin: clamp(0.5rem, 1.6vh, 0.85rem) 0 clamp(0.6rem, 2vh, 1.1rem);
+}
+
+/* The last centimetre, so the verdict's second line is not clipped by the card's edge. */
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-stage:has(.memo-quiz-result) .memo-progress.quiz {
+  margin-bottom: 0.7rem;
+}
+
+/* It carries 1.4rem of margin and 1.4rem of padding above it, which is two gaps for one. */
+.memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
+  padding-top: clamp(0.55rem, 1.8vh, 0.9rem);
+  gap: clamp(0.6rem, 1.8vh, 1rem);
+}
+
+/*
+ * One line, but only where there is a line's worth of width.
+ *
+ * On the desktop the verdict, the right answer and the way onward came to four pixels more
+ * than the column beside an open chat panel is wide, so the two buttons wrapped to a second
+ * row — and a second row on a screen with no spare height is a row below the card's edge
+ * that has to be scrolled to. The copy gives up the width instead; it is a sentence, and a
+ * sentence can be narrower.
+ *
+ * A phone has no such width to give. Forced onto one line there, "Ups, ni pravilno." broke
+ * after two words and the buttons were pushed off the card entirely — so the phone lets the
+ * row wrap and pays for the second line out of the options above it.
+ */
+@media (min-width: 1100px) {
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
+    flex-wrap: nowrap;
+  }
+}
+
+.memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-actions {
+  flex: 0 0 auto;
+}
+
+/*
+ * The results screen gives ground the same way everything else on these tabs does.
+ *
+ * It is a fixed 474px — a 12rem disc, a 4.4rem emoji and generous air between five lines
+ * of type — which fits a tall window and hangs a hundred pixels below the fold of a
+ * laptop's. What it says is four short facts and one button, and none of that needs the
+ * disc to be that big; the disc is celebration, and celebration is the thing that can be
+ * smaller when there is no room for it.
+ */
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result {
+  padding-top: clamp(0.3rem, 2.4vh, 1.6rem);
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb-wrap {
+  width: clamp(8rem, 100dvh - 39rem, 12rem);
+  height: clamp(8rem, 100dvh - 39rem, 12rem);
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb {
+  width: 78%;
+  height: 78%;
+}
+
+/* Sized inline by the component, so it has to be overridden rather than inherited. */
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb .memo-emoji {
+  font-size: clamp(2.4rem, 7vh, 4.4rem);
+}
+
+/*
+ * The score shrinks with the disc it is pinned to.
+ *
+ * It is positioned at the corner of the orb's box and sized in rem, so leaving it alone
+ * while the disc got smaller did not move it aside — it sat over the middle of the emoji
+ * and covered the half of it that has the arm in it. Both now ride the same measure, so
+ * the badge clips the disc's corner at every size, which is the thing it is meant to do.
+ */
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-badge {
+  padding: clamp(0.25rem, 0.9vh, 0.45rem) clamp(0.45rem, 1.5vh, 0.8rem);
+  border-radius: clamp(10px, 1.6vh, 14px);
+  font-size: clamp(0.95rem, 2.4vh, 1.5rem);
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-eyebrow {
+  margin-top: clamp(0.5rem, 1.8vh, 1.2rem);
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-title {
+  margin-top: clamp(0.6rem, 2vh, 1.4rem);
+  font-size: clamp(1.35rem, 3.6vh, 1.75rem);
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-eyebrow + .memo-result-title {
+  margin-top: clamp(0.3rem, 1vh, 0.5rem);
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-line {
+  margin-top: clamp(0.35rem, 1.2vh, 0.7rem);
+}
+
+/* The largest single gap on the card, and the one nobody reads. */
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-actions {
+  margin-top: clamp(0.9rem, 3.2vh, 2.4rem);
+}
+
+.memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-prompt {
+  margin-bottom: 0.6rem;
+}
+
+
+
+/*
+ * The test: the box you write the answer in is the thing that gives.
+ *
+ * It is a fixed 13rem, which is generous for a sentence and is the only part of this
+ * screen that has no fixed content to hold — the question above it and the two buttons
+ * below are what they are. So it takes whatever is left instead, down to a floor of about
+ * three lines, and the Submit button stays on screen where it can be pressed.
+ */
+.memo-note-screen[data-note-tab="test"] .lecture-practice-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.memo-note-screen[data-note-tab="test"] .lecture-practice-textarea {
+  flex: 1 1 auto;
+  min-height: 5.5rem;
+}
+
+/*
+ * The palace: the town is the only thing here that is a picture rather than a fact, so it
+ * is the only thing that gives. Its own `min-height` already says where it stops being a
+ * town and becomes a band of stripes.
+ */
+.memo-note-screen[data-note-tab="palace"] .memo-palace-intro {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  justify-content: center;
+}
+
+.memo-note-screen[data-note-tab="palace"] .memo-palace-hero {
+  /* It grows into the space rather than only giving it up: the town is the one thing on this
+     screen that is a picture, and a picture is what a screen with room to spare should spend
+     it on. */
+  flex: 1 1 auto;
+  min-height: 6rem;
+  max-height: clamp(6rem, 34vh, 20rem);
+}
+
+/*
+ * The empty states — no test written yet, no cards yet. A 9.4rem disc holding one emoji is
+ * the most expendable height on any of these screens.
+ */
+.memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-study-empty-orb {
+  width: clamp(5.5rem, 14vh, 9.4rem);
+  height: clamp(5.5rem, 14vh, 9.4rem);
+}
+
+/*
+ * The phone gets the same treatment, and one thing the desktop does not need.
+ *
+ * Its dock floats over the foot of the card rather than sitting under it — the chat bar is
+ * `position: absolute`, so the scroller runs the full height of the card and the last thing
+ * on any of these screens was drawn underneath it. The band is reserved here instead, and
+ * the scroller stops scrolling: below this, everything fits by giving ground, the same way
+ * it does beside a rail.
+ */
+@media (max-width: 1099px) {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-scroll {
+  /*
+   * `auto`, not `hidden`, and the distinction matters more than it looks.
+   *
+   * Everything above is arranged so these screens fit without scrolling, and when they fit
+   * `auto` scrolls no more than `hidden` does — the bar simply never appears. What it buys
+   * is the case the arrangement cannot cover: a reader with the root font size turned up,
+   * or a locale whose strings run longer than the ones this was measured against. Under
+   * `hidden` that content is not merely off the screen, it is unreachable — at a 20px root
+   * this screen hid seventeen pixels of the last option with no way to get at them.
+   */
+    overflow-y: auto;
+    /*
+     * The dock's own band is about 5rem of it; the rest is air, so that whatever ends the
+     * screen — the last option, a button, the foot of a card — is not drawn flush against
+     * the chat bar floating over it.
+     */
+    padding-bottom: 6.4rem;
+  }
+
+  /*
+   * Editing is already in the phone's dock, beside the chat bar, as the pill this app puts a
+   * screen's controls in — so the copy beside the note's title is the same control twice,
+   * and a whole row of height spent on it.
+   *
+   * Two classes deep, and declared here rather than up with the other phone rules: the
+   * button's own `display: inline-flex` comes from an `:is()` selector of equal specificity
+   * that sits later in this file, and equal specificity is settled by source order — so the
+   * first attempt matched perfectly and lost anyway.
+   */
+  .memo-note-head-slot .lecture-study-manage-button.lecture-study-head-edit {
+    display: none;
+  }
+
+  /*
+   * And the type comes down a step, because a phone column is narrower than the desktop one
+   * and every one of these lines was set for the wider column: the question, the options and
+   * the verdict all wrap a line sooner here, and a line here costs more than it does there.
+   */
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-prompt {
+    font-size: 1.12rem;
+    line-height: 1.28;
+    margin-bottom: 0.7rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-option {
+    font-size: 1rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
+    gap: 0.6rem 0.75rem;
+    padding-top: 0.7rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-title {
+    font-size: 1.02rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-badge {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] :is(.memo-quiz-result-ghost, .memo-quiz-result-primary) {
+    height: 2.7rem;
+    padding: 0 1rem;
+    font-size: 0.98rem;
+  }
+
+  /*
+   * The results screen scales on a phone as well.
+   *
+   * Its clamps were written inside the desktop breakpoint, so here it stayed a fixed 12rem
+   * disc over five lines of type set at their full size — and being a grid rather than part
+   * of the flex chain, it did not overflow the card politely, it overflowed the panel and
+   * came out from under the chat bar. Measured in `vh` rather than `rem` on purpose: the
+   * case that broke it is a reader with the root font size turned up, where every `rem` here
+   * grows while the screen it has to fit does not.
+   */
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result {
+    padding-top: clamp(0.2rem, 1.4vh, 1.6rem);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb-wrap {
+    width: min(12rem, 19vh);
+    height: min(12rem, 19vh);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb {
+    width: 78%;
+    height: 78%;
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb .memo-emoji {
+    font-size: min(4.4rem, 8vh);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-badge {
+    padding: min(0.45rem, 0.8vh) min(0.8rem, 1.4vh);
+    font-size: min(1.5rem, 2.6vh);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-eyebrow {
+    margin-top: min(1.2rem, 1.6vh);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-title {
+    margin-top: min(0.5rem, 0.9vh);
+    font-size: min(1.75rem, 3.4vh);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-line {
+    margin-top: min(0.7rem, 1.1vh);
+    font-size: min(1.1rem, 2.1vh);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-actions {
+    margin-top: min(2.4rem, 3vh);
+  }
+
+  /* The walkthrough's sphere gives ground here too, rather than holding a fixed 11.5rem. */
+  .memo-tutor .memo-orb {
+    flex: 0 1 auto;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    aspect-ratio: 1;
+    min-height: 6rem;
+    max-height: 11.5rem;
+  }
+}
+
+/*
+ * The short phone — a 667pt screen, which is still a lot of the phones this is used on.
+ *
+ * Everything above has already given proportionally; this is the last of it. The quiz is the
+ * only screen that needs the tier: it is the one carrying a question, four answers and a
+ * verdict at once, and on a screen this short those three cannot all keep their full size.
+ */
+@media (max-width: 1099px) and (max-height: 740px) {
+  /* A little of that air back, on a screen that has none to spare. */
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-scroll {
+    padding-bottom: 5.6rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-prompt {
+    font-size: 1.02rem;
+    line-height: 1.25;
+    margin-bottom: 0.5rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-option {
+    font-size: 0.95rem;
+    min-height: 2.1rem;
+  }
+
+  /*
+   * Except once answered, where there are two of them rather than four and the floor above
+   * — written for four sharing a short column — would squeeze an answer that now has room.
+   */
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
+    min-height: 3rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
+    min-height: 1.55rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
+    gap: 0.4rem 0.6rem;
+    padding-top: 0.5rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] :is(.memo-quiz-result-ghost, .memo-quiz-result-primary) {
+    height: 2.4rem;
+    font-size: 0.92rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-count {
+    font-size: 1rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-progress.quiz {
+    margin: 0.5rem 0 0.6rem;
+  }
+}
+
+/* --- and the parts of it that only make sense beside a rail --- */
+
+@media (min-width: 1100px) {
+  /*
+   * A definite height, not a floor. `min-height` was the obvious thing to write and it does
+   * not bound anything: the card still grew past it whenever its contents wanted to, which
+   * is exactly the case being fixed. Given a height, every `flex: 1` below has something
+   * real to divide up — and on the rare screen that still cannot fit, what overflows is the
+   * panel's own scroller rather than the page, so the chrome around it never moves.
+   */
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-card {
+    height: calc(100dvh - 8.5rem);
+  }
+
+  /* The note's title needs less air above it on a screen that is counting its pixels. */
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-headrow .memo-note-head {
+    margin-top: 0.5rem;
+  }
+
+  /*
+   * An empty band at the foot of the card, and a tall one: the dock is a fixed 3.4rem with
+   * 1.8rem above it, and on these tabs at desktop width it holds nothing at all — its one
+   * tenant is a pill that only exists on the phone. That is a hundred and twelve pixels of
+   * card, which on a laptop is most of the difference between a flashcard worth reading and
+   * a letterbox. Written so that the moment anything real is portalled into it, or the chat
+   * is dismissed and its button appears, the band comes back.
+   */
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-dock:not(:has(.memo-chat-fab)):not(
+      :has(.memo-dock-slot > *:not(.memo-only-mobile))
+    ) {
+    display: none;
+  }
+}
+
+/*
+ * The last thing to give, on a laptop short enough that everything else already has.
+ *
+ * Below this the sphere is at its floor and the rows are as tight as they go, and something
+ * has to leave or the button that starts the walkthrough goes under the fold. The lede is
+ * the only thing on the screen that is read once and never again — the title above it
+ * already says what this is, and the sphere says it louder.
+ */
+/*
+ * The short-window pass.
+ *
+ * Everything above has already given what it can proportionally; this is the note's own
+ * chrome giving too, and only on a window short enough to need it. The title row is the
+ * biggest single thing on these screens that is not the thing you came for — a 3rem disc
+ * and a 1.85rem headline, above a card that is being clipped to make room for them.
+ * Above this height none of it applies and the screens look exactly as drawn.
+ */
+@media (min-width: 1100px) and (max-height: 810px) {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head-emoji {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head-emoji .memo-emoji {
+    font-size: 1.2rem;
+  }
+
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head h1 {
+    font-size: 1.5rem;
+  }
+
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-card {
+    padding-top: 1.2rem;
+    padding-bottom: 1.2rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
+    min-height: 1.85rem;
+  }
+
+  /* The rule above the verdict, at the tightest the divider still reads as one. */
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
+    padding-top: 0.5rem;
+  }
+
+  /* A question that runs to three lines is the tallest this screen gets. */
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-prompt {
+    font-size: 1.05rem;
+    line-height: 1.25;
+    margin-bottom: 0.7rem;
+  }
+}
+
+/*
+ * And a tighter tier again, for a laptop that has given most of its window to browser
+ * chrome. Same idea, one notch further: the note's title and the card's own padding go
+ * before anything a learner is actually working with does.
+ */
+@media (min-width: 1100px) and (max-height: 680px) {
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head h1 {
+    font-size: 1.3rem;
+  }
+
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-card {
+    padding-top: 0.9rem;
+    padding-bottom: 0.9rem;
+  }
+
+  /*
+   * A clamp rather than a value, so this tier keeps giving instead of stopping dead at its
+   * own breakpoint — below 680 the window keeps shrinking and something has to keep matching
+   * it.
+   */
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
+    min-height: clamp(1.15rem, 100dvh - 41.5rem, 1.45rem);
+  }
+
+  /*
+   * The note's emoji, which at this height is a 2.5rem disc setting the height of the title
+   * row for a picture the title already says in words.
+   */
+  .memo-note-screen:is([data-note-tab="tutor"], [data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-note-head-emoji {
+    display: none;
+  }
+
+  /* The results card's own floors, one notch lower again. */
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-orb-wrap {
+    width: clamp(6rem, 100dvh - 39rem, 12rem);
+    height: clamp(6rem, 100dvh - 39rem, 12rem);
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-title {
+    font-size: 1.2rem;
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-line {
+    font-size: 0.98rem;
+  }
+
+  .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="palace"], [data-note-tab="test"], [data-note-tab="podcast"]) .memo-result-actions {
+    margin-top: 0.7rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] :is(.memo-quiz-result-ghost, .memo-quiz-result-primary) {
+    height: 2.4rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result-badge {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-result {
+    padding-top: 0.4rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-progress.quiz {
+    margin: 0.35rem 0 0.4rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-prompt {
+    font-size: 1rem;
+  }
+
+  .memo-note-screen[data-note-tab="quiz"] .memo-quiz-count {
+    font-size: 0.92rem;
+  }
+}
+
+@media (min-width: 1100px) and (max-height: 750px) {
+  .memo-tutor-lede {
+    display: none;
+  }
+
+
+
+  .memo-capture-row.memo-tutor-voicerow {
+    min-height: 3.6rem;
+    padding: 0.5rem 1.15rem;
+  }
 }
 
 /* --- how much talking time is left ---------------------------------------- */
@@ -13248,20 +14892,48 @@
   display: inline-flex;
 }
 
+/*
+ * The number, not a glyph for it.
+ *
+ * "28 min left today" is the whole question somebody asks of this control, so the pill
+ * says the number and keeps the popover behind it for the rest. On the phone that is all
+ * it says — the row it now sits in already has the note's title in it and there is no
+ * width to spend on an icon repeating what the digits mean.
+ */
 .memo-tutor-usage-trigger {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  min-height: 2.1rem;
-  padding: 0 0.85rem;
-  border: 1px solid var(--line);
+  height: 2.3rem;
+  padding: 0 0.75rem;
+  border: 0;
   border-radius: 999px;
   background: var(--tile);
   color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 600;
+  font-size: 0.85rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
   list-style: none;
+  transition: box-shadow 0.16s ease;
+}
+
+.memo-tutor-usage-trigger:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+@media (max-width: 1099px) {
+  .memo-tutor-usage-trigger > .msym {
+    display: none;
+  }
+}
+
+@media (min-width: 1100px) {
+  .memo-tutor-usage-trigger {
+    height: 2.7rem;
+    padding: 0 0.95rem;
+    font-size: 0.95rem;
+  }
 }
 
 .memo-tutor-usage-trigger::-webkit-details-marker {
@@ -13323,18 +14995,16 @@
 }
 
 /*
- * The desktop panel opens upwards and centres on the pill. Read-aloud has the same rule, but
- * scoped to `.memo-dock-player` — the tutor's pill sits in the dock's own slot instead, so it
- * inherited the default drop-down and fell straight off the bottom of the card.
+ * The desktop panel, in this layer's own materials rather than read-aloud's legacy ones:
+ * the class is theirs, and inheriting its `--separator` border and `--surface-solid` fill
+ * put a legacy card in the middle of a redesigned screen.
+ *
+ * Right-anchored rather than centred on the pill: a 20rem panel centred on a trigger that
+ * sits at the right-hand end of its row runs past the note card and under the chat column
+ * beside it.
  */
 .memo-tutor-usage-menu .note-read-usage-inline-popover {
-  top: auto;
-  bottom: calc(100% + 0.75rem);
   left: auto;
-  /*
-   * Right-anchored, not centred on the pill: the pill sits in the middle of the dock, and a
-   * 20rem panel centred there runs past the note card and under the chat column beside it.
-   */
   right: 0;
   width: min(20rem, calc(100vw - 2rem));
   padding: 1rem 1.1rem;
@@ -13346,6 +15016,18 @@
     0 18px 48px rgba(0, 0, 0, 0.28);
   color: var(--text);
   animation: memo-pop-in 0.16s ease-out both;
+}
+
+/*
+ * In the dock it has to open upwards. Read-aloud has the same rule, but scoped to
+ * `.memo-dock-player` — the episode's pill sits in the dock's own slot instead, so it
+ * inherited the default drop-down and fell straight off the bottom of the card. The
+ * walkthrough's pill has left the dock for the note's title row, where dropping down is
+ * both correct and what the base class already does.
+ */
+.memo-dock .memo-tutor-usage-menu .note-read-usage-inline-popover {
+  top: auto;
+  bottom: calc(100% + 0.75rem);
 }
 
 /*
@@ -13455,168 +15137,35 @@
   text-decoration: none;
 }
 
-/* Muted is a state worth seeing across the room: the tutor cannot hear you. */
-.memo-tutor-control.off {
-  background: color-mix(in oklch, var(--promo) 22%, transparent);
-  border-color: color-mix(in oklch, var(--promo) 45%, transparent);
-  color: var(--promo);
-}
-
-/*
- * Desktop sits the whole thing higher.
- *
- * The phone gives this screen everything below the pill row, so centring puts the sphere
- * where the eye already is. Desktop does not: the note's title and date sit above the
- * panel, and centring inside what is left pushed the sphere towards the bottom of the
- * card with the controls near the fold. Anchoring to the top instead, with enough room
- * above to breathe, puts it back where it is being looked for.
- */
-@media (min-width: 1100px) {
-  .memo-tutor {
-    justify-content: flex-start;
-    padding-top: 0.5rem;
-    min-height: 0;
-  }
-
-  /* Room the phone does not have, so use it: the sphere is the whole interface here. */
-  .memo-tutor-orb {
-    width: 13rem;
-    height: 13rem;
-  }
-
-  .memo-tutor-orb-glow {
-    width: 13rem;
-    height: 13rem;
-  }
-
-  .memo-tutor-orb-body {
-    width: 8.5rem;
-    height: 8.5rem;
-  }
-}
-
-
 /* --- the generated podcast ----------------------------------------------- */
 
 /*
- * The episode screen borrows the walkthrough's language rather than inventing one: the same
- * spheres, the same voice hues, the same pill row. They are the two spoken screens in the app and
- * a listener should recognise the second from the first.
+ * The shelf.
  *
- * What is different is that this one has something to read. A podcast has a transcript, and the
- * transcript is the seek bar people actually use — so it is the tallest thing here, and the
- * controls sit above it rather than under it, where a phone's thumb would cover the line being
- * spoken.
+ * The library is the only home. Making an episode is a sheet over it on a phone and a centred
+ * modal on a laptop, which is what retired the conditional back button: a sheet has a grabber
+ * and a scrim, so "is there a screen behind me" is answered by looking rather than by state.
+ *
+ * The artwork is the tutor's sphere — see `.memo-orb-body` — rather than the flat disc this
+ * screen used to draw for itself. They are the two spoken screens in the app and a listener
+ * should recognise the second from the first.
  */
-
-/* Same reasoning as the walkthrough: the dock's chat bar competes with a screen that is talking. */
-.memo-note-screen[data-note-tab="podcast"] .memo-m-chatbar,
-.memo-note-screen[data-note-tab="podcast"] .memo-m-chatbar-mic,
-.memo-note-screen[data-note-tab="podcast"] .memo-chat-fab {
-  display: none;
+.memo-podcast,
+.memo-podcast-chooser {
+  /*
+   * The podcast tab's own tint, from NOTE_TABS in lecture-workspace.tsx. Declared rather than
+   * inherited because `--tab-tint` is set inline on the pill itself, which is a sibling of this
+   * panel rather than an ancestor of it. If the tab's tint moves, this moves with it.
+   */
+  --pod-tint: oklch(0.66 0.15 20);
 }
 
 .memo-podcast {
+  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 0.85rem;
-  padding: 1.25rem 1.25rem 1.5rem;
-  text-align: center;
-}
-
-/*
- * Everything on this screen has to fit the screen, on a small phone as well as a laptop, because
- * choosing a show is one decision and a decision you have to scroll to finish is one you make
- * badly. Nothing here is dropped to achieve that — the parts that give ground are the ones with
- * no information in them: the artwork, the standfirst, and the air between the rows.
- */
-
-
-/*
- * The short-phone floor.
- *
- * Measured on the note screen rather than guessed: on a 667pt screen the chooser came to 691pt of
- * panel before the navbar and the pill row had taken their share, so roughly a hundred and fifty
- * had to go. These two are what go, because they are the only things on the screen that carry no
- * information a listener needs to choose with — the artwork, and a sentence of description under
- * names that already say what they are ("Interview", "Solo"). The cards, the lengths, the voices
- * and the button all survive intact.
- */
-
-
-/*
- * The cover.
- *
- * Two spheres for two voices, overlapped the way a record sleeve overlaps two faces — which is
- * the one image that says "a conversation" before a word has played. A solo episode draws one,
- * centred, rather than one sphere and an empty space where the other was.
- */
-.memo-podcast-cover {
-  position: relative;
-  width: 11rem;
-  height: 7.5rem;
-  flex: none;
-  display: grid;
-  place-items: center;
-}
-
-/*
- * Lit like the rest of the app rather than like a sweet.
- *
- * The lightness and chroma below are the tab icons' own — oklch(0.66 0.15) and its neighbours —
- * where these were a good deal brighter and more saturated than anything else on the screen.
- * Two of them at 0.78 chroma 0.17 made the artwork the loudest object in a deliberately quiet
- * interface, which is why it read as candy however the hue was chosen.
- */
-.memo-podcast-orb {
-  position: absolute;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 36% 30%, oklch(0.86 0.05 calc(var(--podcast-hue) + 25) / 0.95), transparent 42%),
-    radial-gradient(circle at 62% 74%, oklch(0.6 0.13 calc(var(--podcast-hue) - 15) / 0.9), transparent 60%),
-    linear-gradient(
-      160deg,
-      oklch(0.7 0.13 calc(var(--podcast-hue) + 10)),
-      oklch(0.55 0.14 calc(var(--podcast-hue) - 23))
-    );
-  box-shadow: 0 10px 30px oklch(0.6 0.14 var(--podcast-hue) / 0.35);
-}
-
-.memo-podcast-orb.primary {
-  width: 5.6rem;
-  height: 5.6rem;
-  left: 1.6rem;
-  z-index: 1;
-}
-
-.memo-podcast-orb.secondary {
-  width: 4.6rem;
-  height: 4.6rem;
-  right: 1.6rem;
-  top: 1.6rem;
-}
-
-/* A solo episode has one sphere and it belongs in the middle, not off to the left. */
-.memo-podcast-cover:not(:has(.secondary)) .memo-podcast-orb.primary {
-  left: auto;
-}
-
-.memo-podcast-title {
-  margin: 0;
-  max-width: 26rem;
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-}
-
-.memo-podcast-subtitle,
-.memo-podcast-hint {
-  margin: 0;
-  max-width: 26rem;
-  font-size: 0.85rem;
-  color: var(--muted);
+  padding: 1rem 0 1.25rem;
 }
 
 /*
@@ -13633,53 +15182,340 @@
 }
 
 .memo-podcast-loading .msym {
-  animation: memo-podcast-spin 1.1s linear infinite;
+  animation: memo-tutor-spin 1.1s linear infinite;
 }
 
+/* --- the artwork ---------------------------------------------------------- */
+
+/*
+ * A pair of spheres, overlapped the way a record sleeve overlaps two faces — the one image that
+ * says "a conversation" before a word has played. A solo episode draws one, centred.
+ *
+ * Every size this appears at sets the same nine values, and the glows are computed from them
+ * rather than given: a bloom is concentric with the sphere it belongs to, and stating that once
+ * is what stops a bloom drifting off its ball the next time a size is tuned.
+ */
+.memo-podcast-cover {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--cover-w);
+  height: var(--cover-h);
+}
+
+.memo-podcast-cover > * {
+  position: absolute;
+}
+
+/*
+ * --- the episode fits the window too ---------------------------------------
+ *
+ * The same arrangement the other study screens got: the column fills the card it is given
+ * and the one thing on it that is a picture rather than a fact — the cover — is what gives
+ * ground when there is less of it. Everything else here is a line of type or a button, and
+ * neither of those has anything to spare.
+ */
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast {
+  flex: 1;
+  min-height: 0;
+}
+
+/*
+ * The player centres in the card rather than sitting at the top of it.
+ *
+ * It is five short rows — artwork, title, byline, scrubber, transport — and the card is
+ * whatever the window gives, so left alone the whole thing sat under the note's title with a
+ * screen's worth of nothing beneath it. Centred, the empty room is shared above and below,
+ * which is where a thing being listened to belongs.
+ */
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+/* It is one of the transport's buttons now, so it drops the corner it was pinned to. */
+.memo-podcast-back {
+  position: static;
+}
+
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast-hero {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.memo-note-screen[data-note-tab="podcast"] .memo-podcast-cover {
+  flex: 0 1 auto;
+  /* Under about this the two spheres stop reading as a pair and start reading as two dots. */
+  min-height: 4.5rem;
+  max-height: min(var(--cover-h), 24vh);
+  max-width: 100%;
+}
+
+.memo-podcast-cover .memo-orb-body.a {
+  width: var(--body-a);
+  height: var(--body-a);
+  left: var(--a-left);
+  top: var(--a-top);
+  z-index: 2;
+}
+
+.memo-podcast-cover .memo-orb-body.b {
+  width: var(--body-b);
+  height: var(--body-b);
+  right: var(--b-right);
+  top: var(--b-top);
+  z-index: 1;
+  /* Out of phase with A, so the pair drifts rather than pulsing as one object. */
+  animation-delay: 1.4s;
+}
+
+.memo-podcast-cover .memo-orb-glow.a {
+  width: var(--glow-a);
+  height: var(--glow-a);
+  left: calc(var(--a-left) - (var(--glow-a) - var(--body-a)) / 2);
+  top: calc(var(--a-top) - (var(--glow-a) - var(--body-a)) / 2);
+}
+
+.memo-podcast-cover .memo-orb-glow.b {
+  width: var(--glow-b);
+  height: var(--glow-b);
+  right: calc(var(--b-right) - (var(--glow-b) - var(--body-b)) / 2);
+  top: calc(var(--b-top) - (var(--glow-b) - var(--body-b)) / 2);
+}
+
+/* A solo episode has one sphere and it belongs in the middle, not off to the left. */
+.memo-podcast-cover.solo .memo-orb-body.a,
+.memo-podcast-cover.solo .memo-orb-glow.a {
+  left: auto;
+}
+
+/* The empty and writing screens: the one place the artwork earns full size. */
+.memo-podcast-cover {
+  --cover-w: 11rem;
+  --cover-h: 8rem;
+  --body-a: 4.6rem;
+  --body-b: 3.8rem;
+  --glow-a: 7rem;
+  --glow-b: 5.8rem;
+  --a-left: 1.55rem;
+  --a-top: 1.55rem;
+  --b-right: 1.35rem;
+  --b-top: 2.55rem;
+}
+
+.memo-podcast-cover.playing {
+  --cover-w: 12rem;
+  --cover-h: 8.5rem;
+  --body-a: 5.1rem;
+  --body-b: 4.2rem;
+  --glow-a: 7.6rem;
+  --glow-b: 6.4rem;
+  --a-top: 1.65rem;
+  --b-right: 1.3rem;
+}
+
+/*
+ * Being written.
+ *
+ * The tutor's `phase-preparing`, reused rather than reinvented: the leading sphere dims and cools
+ * and two counter-rotating arcs run around it — the working signal every spinner has trained
+ * people to read, wrapped around the object it belongs to. The second host is held back and
+ * desaturated, and fades up as the script lands: the picture of two hosts assembling.
+ */
+.memo-podcast-cover.writing {
+  --cover-h: 8.5rem;
+  --body-a: 4.3rem;
+  --body-b: 3.5rem;
+  --glow-a: 6rem;
+  --a-left: 1.75rem;
+  --a-top: 1.5rem;
+  --b-right: 1.4rem;
+  --b-top: 2.7rem;
+}
+
+.memo-podcast-cover.writing .memo-orb-body.a {
+  animation: memo-tutor-preparing 2s ease-in-out infinite;
+  /* The outer bloom shadow belongs to a lit sphere; this one is not lit yet. */
+  box-shadow:
+    inset 0 -0.75rem 1.5rem oklch(0.4 0.12 calc(var(--orb-hue) - 25) / 0.45),
+    inset 0 0.5rem 1rem oklch(0.98 0.05 calc(var(--orb-hue) + 35) / 0.35);
+}
+
+.memo-podcast-cover.writing .memo-orb-glow.a {
+  opacity: 0.35;
+}
+
+.memo-podcast-cover.writing .memo-orb-body.b {
+  opacity: 0.4;
+  filter: saturate(0.45) brightness(0.7);
+  animation: none;
+  transition: opacity 0.4s ease;
+}
+
+.memo-podcast-cover.writing .memo-orb-ring {
+  width: 6.7rem;
+  height: 6.7rem;
+  left: 0.55rem;
+  top: 0.3rem;
+  border: 2px solid transparent;
+  border-top-color: oklch(0.78 0.16 var(--orb-hue));
+  border-right-color: oklch(0.78 0.16 var(--orb-hue) / 0.35);
+  animation: memo-tutor-spin 1.1s linear infinite;
+}
+
+/* A second, slower, fainter arc the other way, so it reads as motion rather than as a picture. */
+.memo-podcast-cover.writing .memo-orb-ring.second {
+  width: 7.7rem;
+  height: 7.7rem;
+  left: 0.05rem;
+  top: -0.2rem;
+  border-top-color: transparent;
+  border-left-color: oklch(0.7 0.13 calc(var(--orb-hue) - 10) / 0.45);
+  opacity: 0.7;
+  animation: memo-tutor-spin 2.6s linear infinite reverse;
+}
+
+/*
+ * Without the spin there is no motion to say "working", so the arcs hold a steady lit quadrant
+ * and the dimmed core carries the rest of the signal. The globally-shared orb block above has
+ * already cancelled the animations by the time this is read.
+ */
 @media (prefers-reduced-motion: reduce) {
   .memo-podcast-loading .msym {
     animation: none;
   }
+
+  .memo-podcast-cover.writing .memo-orb-ring {
+    opacity: 1 !important;
+  }
+
+  .memo-podcast-cover.writing .memo-orb-body.a {
+    filter: saturate(0.45) brightness(0.6) !important;
+  }
 }
 
-/* --- what this note already has ------------------------------------------ */
+/* --- the empty and writing screens ---------------------------------------- */
+
+.memo-podcast-hero {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  padding: 1rem 0 0;
+  text-align: center;
+}
+
+.memo-podcast-hero.writing {
+  gap: 0.95rem;
+  padding: 2.2rem 0.5rem;
+}
+
+.memo-podcast-title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.32;
+  color: var(--text);
+}
+
+.memo-podcast-body {
+  margin: 0;
+  max-width: 16rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+.memo-podcast-hero.writing .memo-podcast-body {
+  max-width: 17rem;
+}
+
+/* What was chosen, restated. A two-minute wait is long enough to doubt what you picked. */
+.memo-podcast-choice {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+}
 
 /*
- * The episodes already made, and the reason this is a screen of its own rather than a strip
- * above the chooser: the two together do not fit a phone, and somebody who has made an episode
- * is far more often coming back to it than making another.
+ * The one action on the screen, and it is ink rather than coral: the tab's own tint is already
+ * spending this panel's accent, so a coral button here would be a second primary.
  */
-.memo-podcast-library {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  /* Long libraries scroll inside themselves rather than pushing the button off the screen. */
-  max-height: min(22rem, 42vh);
-  overflow-y: auto;
-}
-
-.memo-podcast-episode {
-  display: flex;
+.memo-podcast-primary {
+  display: inline-flex;
   align-items: center;
-  gap: 0.7rem;
+  justify-content: center;
+  gap: 0.5rem;
   width: 100%;
-  min-height: 3.4rem;
-  padding: 0.5rem 0.85rem;
-  border: 1px solid var(--line);
-  border-radius: 0.9rem;
-  background: transparent;
-  color: var(--text);
-  text-align: left;
+  height: 3.4rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 1.05rem;
+  font-weight: 750;
   cursor: pointer;
-  transition:
-    border-color 140ms ease,
-    background 140ms ease;
 }
 
-/* The voices it was made in, as the two dots the cover already uses. */
-/* The row being opened: it spins where the play arrow was, and the rest wait their turn. */
-.memo-podcast-episode.opening .msym {
-  animation: memo-podcast-spin 1.1s linear infinite;
+.memo-podcast-hero .memo-podcast-primary {
+  margin-top: 0.5rem;
+}
+
+.memo-podcast-primary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* --- the library ---------------------------------------------------------- */
+
+.memo-podcast-shelf {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.memo-podcast-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+/*
+ * The same second line at two widths.
+ *
+ * A phone has about 164 measured points here and the date does not fit in them, so the phone
+ * spends the line on time remaining and the desktop spends it on both. Which one applies is a
+ * fact about the viewport, and asking JavaScript for it would make the first paint disagree with
+ * the HTML the server built — so both are rendered and the stylesheet picks.
+ */
+.memo-podcast-meta-desktop {
+  display: none;
+}
+
+/* A part-listened row carries a third line, so it is the one that is taller. */
+.memo-podcast-episode {
+  min-height: 4.6rem;
+  padding: 0 1.15rem;
+  gap: 1.1rem;
+}
+
+.memo-podcast-episode.resumable {
+  min-height: 5.1rem;
+}
+
+.memo-podcast-episode .memo-note-title {
+  font-size: 1.08rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
 }
 
 .memo-podcast-episode:disabled {
@@ -13690,165 +15526,205 @@
   opacity: 0.5;
 }
 
+.memo-podcast-episode.opening .msym {
+  animation: memo-tutor-spin 1.1s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .memo-podcast-episode.opening .msym {
     animation: none;
   }
 }
 
-.memo-podcast-episode-voices {
+/* The spheres take the emoji tile's slot, at the smallest size one still reads as a sphere. */
+.memo-podcast-episode-art {
+  position: relative;
   display: inline-flex;
-  flex: none;
+  flex: 0 0 auto;
   align-items: center;
+  width: 2.7rem;
+  height: 2.5rem;
 }
 
-.memo-podcast-episode-voices > span {
-  width: 1.1rem;
-  height: 1.1rem;
-  border-radius: 50%;
+.memo-podcast-episode-art .memo-orb-body {
+  --orb-size: 2.1rem;
+  position: absolute;
+  left: 0;
+  z-index: 2;
+}
+
+.memo-podcast-episode-art .memo-orb-body.b {
+  --orb-size: 1.75rem;
+  left: auto;
+  right: 0;
+  top: 0.55rem;
+  z-index: 1;
+}
+
+/* One sphere sits in the middle of the slot rather than at its left edge. */
+.memo-podcast-episode-art.solo {
+  justify-content: center;
+}
+
+.memo-podcast-episode-art.solo .memo-orb-body {
+  position: static;
+}
+
+/* Only ever on a part-listened row: a bar at 0% or 100% is decoration. */
+.memo-podcast-episode-bar {
+  display: block;
+  height: 0.2rem;
+  margin-top: 0.1rem;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.memo-podcast-episode-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
   background: linear-gradient(
-    160deg,
-    oklch(0.78 0.17 calc(var(--podcast-hue) + 10)),
-    oklch(0.58 0.19 calc(var(--podcast-hue) - 23))
+    90deg,
+    oklch(0.7 0.16 var(--hue-a)),
+    oklch(0.7 0.16 var(--hue-b))
   );
 }
 
-/* Overlapped, so a two-hander reads as two people at a glance. */
-.memo-podcast-episode-voices > span + span {
-  margin-left: -0.4rem;
+.memo-podcast-new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  height: 3.2rem;
+  margin-top: 0.1rem;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background 0.16s ease;
 }
 
-.memo-podcast-episode-text {
+.memo-podcast-new:hover {
+  background: var(--tile);
+}
+
+/* --- choosing a show ------------------------------------------------------ */
+
+/*
+ * A sheet on a phone, a modal on a laptop — and it is the app's own overlay, not a second one.
+ *
+ * `.memo-confirm-fixed` already IS both of those, and it already carries the rise from the
+ * bottom edge, the finger-tracking transform, the spring back, the `.closing` slide off and the
+ * centred pop-in above 1100px. Every other sheet in the product moves through it, so borrowing
+ * it is what makes this one move the same way rather than nearly the same way. What is left
+ * here is only what the podcast's own artboard asks for: a wider modal, and a `--surface` fill
+ * rather than the sheet's usual `--bg`, because the segment thumb inside it is `--sunken` and
+ * that ladder only reads on a surface.
+ *
+ * It is portalled to the viewport rather than placed inside the tab panel, which is what the
+ * artboard draws. The panel lives inside the note screen's one scroller, so a sheet pinned to
+ * its bottom edge is pinned to a moving target — below the fold on a long library, and sliding
+ * as the note scrolls.
+ */
+.memo-podcast-chooser {
+  width: min(38rem, 100%);
+  padding: 2rem 2.1rem 2.1rem;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.24);
+}
+
+.memo-podcast-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.memo-podcast-shows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.memo-podcast-show {
   display: flex;
-  flex-direction: column;
-  gap: 0.05rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 2.7rem;
+  padding: 0 0.6rem;
   min-width: 0;
-  flex: 1;
 }
 
-.memo-podcast-episode-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  /* One line: an episode title is an identifier here, not something to read. */
+.memo-podcast-show .msym {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.memo-podcast-show > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.memo-podcast-episode-meta {
-  font-size: 0.76rem;
-  color: var(--muted);
+/* The tab row's own active treatment, so a chosen show reads the way a chosen tab does. */
+.memo-podcast-show.active {
+  border-color: var(--pod-tint);
+  background: color-mix(in oklch, var(--pod-tint) 16%, var(--surface));
+  font-weight: 700;
 }
 
-/* --- choosing a show ----------------------------------------------------- */
+.memo-podcast-show.active .msym {
+  color: var(--pod-tint);
+}
 
 /*
- * One column, one width.
+ * One description, for the show that is actually selected. All four at once was a wall of prose
+ * above a choice between four short names; the names and the icons carry the choice, and this
+ * line carries what a name does not.
  *
- * The shows, the lengths, the voices and the button are four decisions in a row, and they read as
- * a form only if they share an edge — so everything below the title is the same width and the
- * spacing between them is the only thing that groups them. The screen was previously a grid, a
- * centred pill row, a full-width pair and a centred button, which gave the eye four different
- * left edges to track down a single column.
+ * Scoped to the container, and that is not decoration. `.memo-confirm` dresses its own
+ * paragraphs as a dialog's standfirst — 1.02rem, line-height 1.6, and a 1.5rem gap beneath —
+ * and `.memo-confirm p` is a class plus an element, so it outranks any bare component class
+ * inside it. Unscoped, this line came out a size too big with a hole under it.
  */
-.memo-podcast-setup {
-  display: flex;
-  flex-direction: column;
-  gap: 1.1rem;
-  width: 100%;
-  max-width: 30rem;
+.memo-podcast-chooser p {
+  margin: 0;
 }
 
-.memo-podcast-formats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
-}
-
-/*
- * A row, not a card: an icon and a name, the same shape as the tab that got you here. The
- * descriptions moved out from under each one to a single line below the grid — see the
- * component — so there is nothing left to stack and nothing left to make the heights uneven.
- */
-.memo-podcast-format {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  min-height: 3rem;
-  padding: 0.6rem 0.8rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  transition:
-    border-color 140ms ease,
-    background 140ms ease;
-}
-
-/*
- * The icon sits beside the name rather than above it. Stacked, it cost a whole row in a card
- * whose job is to be scanned, and it pushed the description far enough from the title that the
- * two stopped reading as one thing.
- */
-.memo-podcast-format.active {
-  border-color: color-mix(in oklch, oklch(0.7 0.16 20) 60%, transparent);
-  background: color-mix(in oklch, oklch(0.7 0.16 20) 12%, transparent);
-}
-
-.memo-podcast-format-label {
-  font-size: 0.92rem;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-
-.memo-podcast-format-hint {
-  margin: -0.1rem 0 0;
-  min-height: 2.2rem;
+.memo-podcast-chooser .memo-podcast-show-hint {
+  min-height: 2.6rem;
   color: var(--muted);
-  font-size: 0.8rem;
-  line-height: 1.35;
+  font-size: 0.92rem;
+  line-height: 1.4;
   text-align: center;
+  text-wrap: pretty;
 }
 
-/*
- * Three lengths, one row, equal shares. As centred pills they were three different widths in the
- * middle of a column of full-width things, which is the sort of detail nobody names and everybody
- * sees.
- */
+/* The artboard's track: tighter than the app's phone default, so the thumb fills more of it. */
 .memo-podcast-lengths {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
+  padding: 0.25rem;
 }
 
-.memo-podcast-length {
+.memo-podcast-lengths button {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.05rem;
-  min-height: 3rem;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 0.9rem;
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    border-color 140ms ease,
-    background 140ms ease,
-    color 140ms ease;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  font-size: 0.9rem;
 }
 
-.memo-podcast-length.active {
-  color: var(--text);
-  border-color: color-mix(in oklch, oklch(0.7 0.16 20) 60%, transparent);
-  background: color-mix(in oklch, oklch(0.7 0.16 20) 12%, transparent);
+/*
+ * A white thumb on a white card has no edge, and this segment is always inside one — the sheet
+ * and the modal are both `--surface`. So the thumb steps down rather than up.
+ */
+.memo-podcast-lengths button.active {
+  background: var(--sunken);
 }
 
 .memo-podcast-length-minutes {
@@ -13858,63 +15734,63 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* --- choosing the voices ------------------------------------------------- */
-
-.memo-podcast-voice-picker,
-.memo-podcast-footer {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.4rem;
-  width: 100%;
-  max-width: 30rem;
-}
-
-/* Inside the setup column it is already the right width; it only needs the rhythm. */
-.memo-podcast-setup .memo-podcast-voice-picker {
-  max-width: none;
-}
-
-.memo-podcast-voice-slot {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.memo-podcast-voice-current {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-height: 2.7rem;
-  padding: 0 0.75rem;
-  border: 1px solid var(--line);
-  border-radius: 0.9rem;
-  background: var(--tile);
-  color: var(--text);
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-/* The colour of the voice, so the choice is visible without reading the name. */
-.memo-podcast-voice-dot {
-  width: 1.15rem;
-  height: 1.15rem;
-  flex: none;
-  border-radius: 50%;
-  background: linear-gradient(
-    160deg,
-    oklch(0.78 0.17 calc(var(--podcast-hue) + 10)),
-    oklch(0.58 0.19 calc(var(--podcast-hue) - 23))
-  );
-}
-
-.memo-podcast-voice-role {
+.memo-podcast-lengths button.active .memo-podcast-length-minutes {
   color: var(--muted);
 }
 
-.memo-podcast-voice-name {
-  margin-left: auto;
-  font-weight: 650;
+/* --- the cast ------------------------------------------------------------- */
+
+/*
+ * The length and the cast, which are one decision at two widths.
+ *
+ * On a phone they stack and are simply two more rows of the form, so they carry the form's own
+ * rhythm; the desktop block puts them side by side, which is what keeps a form this size from
+ * becoming a column of stripes. Without the gap here the segment sat directly on top of the
+ * cast row with nothing between them.
+ */
+.memo-podcast-cast {
+  display: grid;
+  gap: 0.85rem;
+}
+
+/*
+ * Both hosts on one row, which is what buys the room for the sheet to fit a phone. Tapping it
+ * opens the per-voice picker below, which is unchanged — it is only reached from here now.
+ */
+.memo-podcast-voices {
+  min-height: 4rem;
+  padding: 0.7rem 1.15rem;
+  gap: 0.9rem;
+}
+
+.memo-podcast-voices-art {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  width: 2.6rem;
+  height: 1.7rem;
+}
+
+.memo-podcast-voices-art .memo-orb-body {
+  --orb-size: 1.7rem;
+  position: absolute;
+  left: 0;
+  z-index: 2;
+}
+
+.memo-podcast-voices-art .memo-orb-body.b {
+  left: auto;
+  right: 0;
+  z-index: 1;
+}
+
+.memo-podcast-voices-art.solo {
+  width: 1.7rem;
+}
+
+.memo-podcast-voices-art.solo .memo-orb-body {
+  position: static;
 }
 
 .memo-podcast-voice-options {
@@ -13928,63 +15804,49 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  min-height: 2rem;
-  padding: 0 0.65rem 0 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--tile);
+  min-height: 2.4rem;
+  padding: 0 0.75rem 0 0.6rem;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 12px;
+  background: var(--surface);
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   font-weight: 600;
+  letter-spacing: -0.02em;
   cursor: pointer;
+  transition: background 0.16s ease;
 }
 
 .memo-podcast-voice-option.active {
   color: var(--text);
-  border-color: color-mix(in oklch, oklch(0.72 0.16 var(--podcast-hue)) 55%, transparent);
-  background: color-mix(in oklch, oklch(0.72 0.16 var(--podcast-hue)) 16%, transparent);
+  border-color: oklch(0.7 0.16 var(--orb-hue));
+  background: color-mix(in oklch, oklch(0.7 0.16 var(--orb-hue)) 16%, var(--surface));
+  font-weight: 700;
 }
 
 .memo-podcast-voice-option.playing {
-  color: oklch(0.82 0.13 var(--podcast-hue));
+  color: oklch(0.62 0.16 var(--orb-hue));
 }
 
-.memo-podcast-start {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.85rem 1.25rem;
-  border: none;
-  border-radius: 999px;
-  background: var(--ink);
-  color: var(--bg);
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.memo-podcast-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  min-height: 2.5rem;
-  padding: 0 0.9rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: transparent;
+/* The usage line, which only ever appears when there is an allowance to report. */
+.memo-podcast-usage {
+  margin: 0;
   color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
+  font-size: 0.92rem;
+  text-align: center;
 }
 
-/* --- while it is being written ------------------------------------------- */
+/* Scoped for the same reason as the description above — see `.memo-confirm p`. */
+.memo-podcast-chooser .memo-podcast-usage,
+.memo-podcast-chooser .memo-inline-error {
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+/* --- while it is being written -------------------------------------------- */
 
 .memo-podcast-progress {
-  width: min(22rem, 100%);
+  width: min(18rem, 100%);
   height: 0.4rem;
   border-radius: 999px;
   background: var(--track);
@@ -13995,216 +15857,629 @@
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, oklch(0.72 0.16 20), oklch(0.68 0.17 300));
+  background: linear-gradient(
+    90deg,
+    oklch(0.7 0.16 var(--hue-a)),
+    oklch(0.7 0.16 var(--hue-b))
+  );
   transition: width 380ms ease-out;
 }
 
-/* --- playing ------------------------------------------------------------- */
+/* --- playing -------------------------------------------------------------- */
+
+/*
+ * The way out, in the panel's top-right corner.
+ *
+ * It was a full-width row above the player, which is what the artboard draws — and on a desktop
+ * that stranded it at the far left of a panel whose player is a centred 30rem column, a long way
+ * from anything it belongs to. In the corner it reads as this screen's own control at either
+ * width, and out of the flow it stops costing the player a row of height it does not have on a
+ * short laptop.
+ */
+
+
+.memo-podcast-stage {
+  display: grid;
+  justify-items: center;
+  gap: 0.95rem;
+  text-align: center;
+}
+
+.memo-podcast-titles {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.memo-podcast-stage .memo-podcast-title {
+  max-width: 17rem;
+}
+
+.memo-podcast-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
 
 .memo-podcast-scrubber {
   display: flex;
   align-items: center;
   gap: 0.6rem;
   width: 100%;
-  max-width: 30rem;
+  margin-top: 0.1rem;
 }
 
 .memo-podcast-clock {
   flex: none;
   min-width: 2.6rem;
-  font-size: 0.75rem;
   color: var(--muted);
+  font-size: 0.92rem;
   font-variant-numeric: tabular-nums;
 }
 
+.memo-podcast-clock.end {
+  text-align: right;
+}
+
+/*
+ * A styled range rather than a div, so the position stays keyboard-reachable and announced —
+ * `accent-color` is what had to go, because it cannot carry the voice pair's two hues.
+ */
 .memo-podcast-scrubber input[type="range"] {
   flex: 1;
   min-width: 0;
-  accent-color: oklch(0.7 0.16 20);
+  height: 0.9rem;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
   cursor: pointer;
+}
+
+.memo-podcast-scrubber input[type="range"]::-webkit-slider-runnable-track {
+  height: 0.4rem;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, oklch(0.7 0.16 var(--hue-a)), oklch(0.7 0.16 var(--hue-b))) left / var(--played, 0%)
+      100% no-repeat,
+    var(--track);
+}
+
+.memo-podcast-scrubber input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 0.9rem;
+  height: 0.9rem;
+  /* Half the thumb minus half the track, so it rides the centre line rather than the top of it. */
+  margin-top: -0.25rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.memo-podcast-scrubber input[type="range"]::-moz-range-track {
+  height: 0.4rem;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, oklch(0.7 0.16 var(--hue-a)), oklch(0.7 0.16 var(--hue-b))) left / var(--played, 0%)
+      100% no-repeat,
+    var(--track);
+}
+
+.memo-podcast-scrubber input[type="range"]::-moz-range-thumb {
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .memo-podcast-controls {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
   justify-content: center;
+  gap: 1rem;
 }
 
 .memo-podcast-control {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.6rem;
-  height: 2.6rem;
-  border: 1px solid var(--line);
+  width: var(--btn-round);
+  height: var(--btn-round);
+  flex: 0 0 auto;
+  border: 0;
   border-radius: 999px;
   background: var(--tile);
   color: var(--text);
   cursor: pointer;
 }
 
+.memo-podcast-control .msym {
+  font-size: var(--btn-round-glyph);
+}
+
 .memo-podcast-control.primary {
-  width: 3.3rem;
-  height: 3.3rem;
-  border: none;
+  width: 3.4rem;
+  height: 3.4rem;
   background: var(--ink);
   color: var(--bg);
 }
 
-.memo-podcast-control:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-/* The spinner the play button wears while the next turn is still being synthesized. */
-.memo-podcast-control:disabled .msym {
-  animation: memo-podcast-spin 1.1s linear infinite;
-}
-
-@keyframes memo-podcast-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .memo-podcast-control:disabled .msym {
-    animation: none;
-  }
+.memo-podcast-control.primary .msym {
+  font-size: 1.8rem;
 }
 
 /*
- * Everything below here is responsive override, and it lives at the END of this section on
- * purpose: a media query adds no specificity, so a block placed above the rules it means to
- * override silently loses to them. That is not hypothetical — the compaction below was
- * written next to the rule it shrinks, sat above the base sizes, and did nothing at all on
- * the phones it was written for.
- */
-
-/*
- * Choosing a show has to fit the screen it is chosen on, because a decision you have to scroll to
- * finish is one you make badly. What gives ground is measured rather than guessed — the note
- * screen's own navbar and pill row take about two hundred points before this panel starts, so on
- * a phone the panel has to come in around five hundred.
+ * "Preparing the next part" is a status line, not a state of the play button.
  *
- * Keyed to WIDTH, not height. Phones are narrow whatever their length, and keying the compaction
- * to height left a tall phone with the roomy desktop sizing and an overflowing screen.
+ * It used to disable the button and spin its glyph, which took the control out from under the
+ * listener's thumb in the middle of an episode — over a wait they can do nothing about and which
+ * usually ends before they have finished reading it. The button stays live.
  */
-@media (max-width: 640px) {
-  .memo-podcast {
-    gap: 0.6rem;
-    padding: 0.75rem 1rem 1rem;
-  }
+.memo-podcast-status {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
 
-  /* The chooser drops the artwork at every width now, in the markup — see the component. */
-  .memo-podcast-title {
-    font-size: 1.05rem;
-  }
+/*
+ * The dot, and the ping off it.
+ *
+ * A still dot beside "preparing the next part" is indistinguishable from a bullet — it says a
+ * colour, not that anything is happening, and this line is the ONLY thing on the screen saying
+ * so now that the play button no longer spins. So the dot keeps its size and a ring leaves it
+ * on a slow beat: the same idiom as a recording light, read at a glance and ignorable while
+ * listening.
+ *
+ * Transform and opacity only. Animating the spread of a box-shadow would have needed no extra
+ * element and is exactly what the design system rules out.
+ */
+.memo-podcast-status-dot {
+  position: relative;
+  width: 0.4rem;
+  height: 0.4rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--pod-tint);
+  /* The dot itself never goes out, so there is something moving between rings too. */
+  animation: memo-podcast-status-pulse 1.4s ease-in-out infinite;
+}
 
-  .memo-podcast-setup {
-    gap: 0.6rem;
-  }
+.memo-podcast-status-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--pod-tint);
+  /* Invisible at rest, which is also where the global reduced-motion rule leaves it. */
+  opacity: 0;
+  animation: memo-podcast-ping 1.4s linear infinite;
+}
 
-  /*
-   * Two cards across, still. One per row gives the description a comfortable width and needs four
-   * rows to do it, which is most of a phone spent on a choice between four short names.
-   */
-  .memo-podcast-format {
-    padding: 0.65rem 0.7rem;
-    gap: 0.15rem;
+@keyframes memo-podcast-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
   }
-
-  .memo-podcast-format-label {
-    font-size: 0.88rem;
-  }
-
-  .memo-podcast-format-hint {
-    font-size: 0.75rem;
-  }
-
-  .memo-podcast-length {
-    min-height: 2.6rem;
-  }
-
-  .memo-podcast-voice-current {
-    min-height: 2.4rem;
-  }
-
-  .memo-podcast-start {
-    padding: 0.7rem 1.25rem;
-  }
-
-  .memo-podcast-episode {
-    min-height: 3.1rem;
+  50% {
+    opacity: 0.4;
   }
 }
 
 /*
- * The short-screen floor: a small phone, or any phone in landscape. Two more things go, and they
- * are the only ones left on the screen carrying no information a listener chooses with — a
- * sentence of description under names that already say what they are, and the last of the air.
+ * Linear, and faded across the whole travel rather than at the end of it.
+ *
+ * The usual ping curve is front-loaded — the ring reaches full size in the first third and
+ * spends the rest of the cycle invisible, which reads as an occasional flicker rather than as
+ * something working. Spreading it evenly means there is a ring on screen at every moment.
  */
+@keyframes memo-podcast-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(2.2);
+    opacity: 0.26;
+  }
+  100% {
+    transform: scale(3.4);
+    opacity: 0;
+  }
+}
+
+/* --- the phone ------------------------------------------------------------ */
+
+/*
+ * This block is at the END of the section on purpose: a media query adds no specificity, so a
+ * compaction written next to the rule it shrinks loses to it silently. That is not hypothetical
+ * — the previous version of this screen had exactly that bug, and it did nothing at all on the
+ * phones it was written for.
+ */
+
+@media (max-width: 1099px) {
+  /*
+   * The chooser as a bottom sheet.
+   *
+   * `.memo-confirm-fixed` has already turned itself into one by here — edge, radius, rise,
+   * drag and exit. These four declarations are the podcast's own: the artboard's padding, and
+   * a `--surface` fill where the app's other sheets sit on `--bg`. The fill is not a whim; the
+   * length segment's active thumb is `--sunken`, and a `--sunken` thumb on a `--bg` sheet is
+   * the same colour as the sheet.
+   */
+  .memo-podcast-chooser {
+    width: auto;
+    padding: 0.7rem 1.25rem calc(1.3rem + var(--memo-safe-bottom));
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* The grabber says "drag me down"; a title and a close button would say it twice. */
+  .memo-podcast-chooser .memo-folder-modal-head {
+    display: none;
+  }
+}
+
+/* The short-screen floor: a small phone, or any phone in landscape. */
 @media (max-width: 640px) and (max-height: 800px) {
-  /* The last few points, and they are real: on a 667pt screen the screen came to nine over. */
   .memo-podcast {
-    gap: 0.5rem;
+    gap: 0.6rem;
     padding-bottom: 0.5rem;
   }
 
-  .memo-podcast-format {
-    padding: 0.6rem 0.65rem;
+  .memo-podcast-hero {
+    gap: 0.6rem;
+    padding-top: 0.5rem;
   }
 
-  .memo-podcast-setup {
-    gap: 0.45rem;
-  }
-
-  .memo-podcast-voice-current {
-    min-height: 2.25rem;
-  }
-
-  .memo-podcast-length {
-    min-height: 2.4rem;
+  .memo-podcast-hero.writing {
+    gap: 0.7rem;
+    padding: 1.2rem 0.5rem;
   }
 
   /*
-   * The player, which the block above was never measured against — it was written for the
-   * chooser, and the two screens are not the same height. Measured on a 375x667 screen with an
-   * episode open: 700 points of content in a 667-point view, 33 over, and the artwork is the
-   * only thing on that screen carrying no information. Shrinking it and closing the last of the
-   * gaps brings the player inside the view on the smallest phone the site supports.
+   * The artwork gives ground before anything else does, because it is the only thing on either
+   * screen carrying no information. It comes down in proportion, offsets included, so the pair
+   * still overlaps the way the full-size version does.
    */
   .memo-podcast-cover {
-    width: 7.8rem;
-    height: 4.7rem;
+    --cover-w: 8.6rem;
+    --cover-h: 6.2rem;
+    --body-a: 3.6rem;
+    --body-b: 3rem;
+    --glow-a: 5.5rem;
+    --glow-b: 4.5rem;
+    --a-left: 1.2rem;
+    --a-top: 1.2rem;
+    --b-right: 1.05rem;
+    --b-top: 2rem;
+  }
+
+  .memo-podcast-cover.playing {
+    --cover-w: 9.4rem;
+    --cover-h: 6.6rem;
+    --body-a: 4rem;
+    --body-b: 3.3rem;
+    --glow-a: 6rem;
+    --glow-b: 5rem;
+    --a-top: 1.3rem;
+    --b-right: 1rem;
+  }
+
+  .memo-podcast-cover.writing {
+    --cover-h: 6.6rem;
+    --body-a: 3.4rem;
+    --body-b: 2.8rem;
+    --glow-a: 4.7rem;
+    --a-left: 1.35rem;
+    --a-top: 1.2rem;
+    --b-right: 1.1rem;
+    --b-top: 2.1rem;
+  }
+
+  .memo-podcast-cover.writing .memo-orb-ring {
+    width: 5.3rem;
+    height: 5.3rem;
+    left: 0.4rem;
+    top: 0.25rem;
+  }
+
+  .memo-podcast-cover.writing .memo-orb-ring.second {
+    width: 6.1rem;
+    height: 6.1rem;
+    left: 0;
+    top: -0.15rem;
+  }
+
+  .memo-podcast-stage {
+    gap: 0.7rem;
+  }
+
+  .memo-podcast-shelf {
+    gap: 0.6rem;
   }
 
   /*
-   * The spheres are absolutely positioned, so the box shrinking does not shrink them — left
-   * alone they spilled straight over the episode title. They come down in the same proportion,
-   * offsets included, so the pair still overlap the way the full-size artwork does.
+   * The chooser is deliberately NOT compacted here.
+   *
+   * The floor exists because the hero and the library have to share a 667pt screen with the note
+   * screen's own chrome. The sheet shares that screen with nothing — it is over everything, and
+   * measured at 375x667 it comes to 409 points of a 667-point viewport. Squeezing it bought
+   * nothing and cost the form the rhythm the artboard draws.
    */
-  .memo-podcast-orb.primary {
-    width: 3.5rem;
-    height: 3.5rem;
-    left: 1rem;
+}
+
+/* --- the desktop ---------------------------------------------------------- */
+
+@media (min-width: 1100px) {
+  /* Rows never become unreadably wide; the reading column's own cap is 68rem. */
+  .memo-podcast-shelf {
+    max-width: 34rem;
   }
 
-  .memo-podcast-orb.secondary {
-    width: 2.9rem;
-    height: 2.9rem;
-    right: 1rem;
-    top: 0.9rem;
+  .memo-podcast-list {
+    gap: 0.85rem;
   }
 
-  .memo-podcast-footer {
-    gap: 0.3rem;
+  .memo-podcast-episode {
+    min-height: 5.4rem;
+    padding: 0 1.5rem;
+    gap: 1.15rem;
   }
 
-  .memo-podcast-secondary {
-    min-height: 2.25rem;
+  .memo-podcast-episode.resumable {
+    min-height: 5.4rem;
+  }
+
+  .memo-podcast-episode .memo-note-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .memo-podcast-meta-phone {
+    display: none;
+  }
+
+  .memo-podcast-meta-desktop {
+    display: block;
+  }
+
+  .memo-podcast-episode-art {
+    width: 3.4rem;
+    height: 2.85rem;
+  }
+
+  .memo-podcast-episode-art .memo-orb-body {
+    --orb-size: 2.4rem;
+  }
+
+  .memo-podcast-episode-art .memo-orb-body.b {
+    --orb-size: 2rem;
+    top: 0.6rem;
+  }
+
+  /* The extra width is spent on information rather than on stretch — see the meta line. */
+  .memo-podcast-new {
+    justify-self: start;
+    width: auto;
+    padding: 0 1.3rem;
+  }
+
+  /* The sphere is most of what the player is, so it takes the room the phone does not have. */
+  .memo-podcast-cover.playing {
+    --cover-w: 15rem;
+    --cover-h: 10.5rem;
+    --body-a: 6.4rem;
+    --body-b: 5.3rem;
+    --glow-a: 9.5rem;
+    --glow-b: 8rem;
+    --a-left: 1.95rem;
+    --a-top: 2.05rem;
+    --b-right: 1.65rem;
+    --b-top: 3.2rem;
+  }
+
+  /* Centred rather than stretched: a player across a widescreen is a control bar, not a player. */
+  .memo-podcast-stage {
+    max-width: 30rem;
+    margin: 0 auto;
+    gap: 1.1rem;
+  }
+
+  .memo-podcast-stage .memo-podcast-title {
+    max-width: none;
+    font-size: 1.55rem;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 1.25;
+  }
+
+  .memo-podcast-subtitle {
+    font-size: 1rem;
+  }
+
+  .memo-podcast-scrubber {
+    gap: 0.7rem;
+  }
+
+  .memo-podcast-clock {
+    min-width: 2.8rem;
+    font-size: 0.95rem;
+  }
+
+  /* Hit targets do not need to grow for a mouse; only the space between them does. */
+  .memo-podcast-controls {
+    gap: 1.1rem;
+  }
+
+  .memo-podcast-status {
+    font-size: 0.95rem;
+  }
+
+  /*
+   * At this width the sheet is already a centred modal — `.memo-confirm-fixed` does that on its
+   * own. All that is left is the head, which the phone hides in favour of the grabber, and the
+   * two grids the extra width buys.
+   */
+  .memo-podcast-chooser .memo-folder-modal-head {
+    display: flex;
+    margin-bottom: 1.4rem;
+  }
+
+  /*
+   * A ceiling, because a centred dialog has no edge to run off: it spills equally past the top
+   * and the bottom, and the primary lands on the wrong side of both. The voice picker is what
+   * makes that reachable — eleven chips opening under a form that is already six rows tall.
+   */
+  .memo-podcast-chooser {
+    max-height: calc(100dvh - 3rem);
+    overflow-y: auto;
+  }
+
+  .memo-podcast-form {
+    gap: 1.1rem;
+  }
+
+  /* The width buys one row of four shows instead of two by two. */
+  .memo-podcast-shows {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  /*
+   * Four across in a 38rem modal is 128px a chip, and the longest show name plus its icon comes
+   * to within a few points of that — so the padding goes rather than the label. Centred content
+   * in a fixed cell does not need it.
+   */
+  .memo-podcast-show {
+    gap: 0.4rem;
+    padding: 0 0.35rem;
+  }
+
+  .memo-podcast-chooser .memo-podcast-show-hint {
+    min-height: 0;
+    font-size: 1rem;
+    line-height: 1.45;
+    text-align: left;
+  }
+
+  .memo-podcast-chooser .memo-podcast-usage {
+    font-size: 0.95rem;
+    text-align: left;
+  }
+
+  /*
+   * The length segment beside the cast rather than under it, which is what keeps a form this
+   * size from becoming a column of stripes.
+   */
+  .memo-podcast-cast {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.85rem;
+    align-items: center;
+  }
+
+  .memo-podcast-voices {
+    min-height: 3.6rem;
+    padding: 0.5rem 1.15rem;
+  }
+
+  .memo-podcast-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 0.2rem;
+  }
+
+  .memo-podcast-actions .memo-podcast-primary {
+    flex: 1 1 14rem;
+    width: auto;
+  }
+
+}
+
+/*
+ * The desktop bump is a luxury, and it is conditional on there being room for it.
+ *
+ * The player grows its sphere at 1100px on the grounds that the sphere is most of what the
+ * screen is — which is true on a monitor and false on a laptop. Measured on a 1440x789 MacBook
+ * Air: the note screen's own title and tab row spend 407 points before this panel starts, and
+ * the full-size player then finished 76 points below the fold, taking the transport with it.
+ * The one control a listener actually needs was the thing off the screen.
+ *
+ * So above this the player keeps the artboard's sizes, and below it falls back to the phone's
+ * — which is not a compromise so much as an admission that a short laptop has a phone's worth
+ * of vertical room.
+ *
+ * The thresholds moved down eighty points when the breadcrumb and the note's date left these
+ * tabs: the 407 points of chrome this was measured against is now nearer 320, and a tier that
+ * does not know that shrinks the artwork on screens with the room for it.
+ */
+@media (min-width: 1100px) and (max-height: 820px) {
+  .memo-podcast {
+    padding: 0.5rem 0 0.75rem;
+  }
+
+  .memo-podcast-stage {
+    gap: 0.85rem;
+  }
+
+  .memo-podcast-cover.playing {
+    --cover-w: 12rem;
+    --cover-h: 8.5rem;
+    --body-a: 5.1rem;
+    --body-b: 4.2rem;
+    --glow-a: 7.6rem;
+    --glow-b: 6.4rem;
+    --a-left: 1.55rem;
+    --a-top: 1.65rem;
+    --b-right: 1.3rem;
+    --b-top: 2.55rem;
+  }
+
+  /* The title comes back to the sheet rung; at this height it is a label, not a headline. */
+  .memo-podcast-stage .memo-podcast-title {
+    font-size: 1.3rem;
+    font-weight: 750;
+    letter-spacing: -0.03em;
+  }
+
+  .memo-podcast-subtitle {
+    font-size: 0.92rem;
+  }
+}
+
+/*
+ * One more step down, and it exists because of a number worth writing down: the note screen
+ * spends 407 points on its breadcrumb, tab row, title and date before this panel starts, and
+ * that cost is the same on every tab. On a 720-point viewport it leaves the player 313.
+ *
+ * The sphere is what gives ground, and only the sphere — it is the one thing on this screen
+ * carrying no information, which is the same rule the phone's floors already follow. The
+ * transport, the clocks and the title never move.
+ */
+@media (min-width: 1100px) and (max-height: 740px) {
+  .memo-podcast {
+    padding-bottom: 0.5rem;
+  }
+
+  .memo-podcast-cover.playing {
+    --cover-w: 10.6rem;
+    --cover-h: 7.5rem;
+    --body-a: 4.5rem;
+    --body-b: 3.7rem;
+    --glow-a: 6.7rem;
+    --glow-b: 5.6rem;
+    --a-left: 1.4rem;
+    --a-top: 1.45rem;
+    --b-right: 1.15rem;
+    --b-top: 2.25rem;
   }
 }
 
@@ -16381,26 +18656,21 @@
 }
 
 /*
- * The reader owns the screen: there is nothing to ask a question with while a
- * word is being held still under the eye.
+ * The reader owns the screen. There is nothing to ask a question with while a
+ * word is being held still under the eye — that is TABS_WITHOUT_CHAT's doing —
+ * and the note's own heading goes the same way.
  *
- * The scroller is left alone, though — unlike the walkthrough, this screen has
+ * The scroller is left alone, though: unlike the walkthrough, this screen has
  * controls under its stage, and a short phone in landscape would put the speed
  * slider below a fold that could not be reached. The stage gives way instead,
  * being capped in viewport units, so on any ordinary screen there is nothing
  * to scroll anyway.
  */
-.memo-note-screen[data-note-tab="speed"] .memo-m-chatbar,
-.memo-note-screen[data-note-tab="speed"] .memo-m-chatbar-mic,
-.memo-note-screen[data-note-tab="speed"] .memo-chat-fab {
-  display: none;
-}
 
 /*
- * The note's own heading goes too. A title, a date and a breadcrumb above a
- * word being held still are three more things to look at, and they push the
- * fixation point down the screen — on a phone far enough that the controls
- * under it need scrolling to reach.
+ * A title, a date and a breadcrumb above a word being held still are three more
+ * things to look at, and they push the fixation point down the screen — on a
+ * phone far enough that the controls under it need scrolling to reach.
  */
 .memo-note-screen[data-note-tab="speed"] .memo-breadcrumb,
 .memo-note-screen[data-note-tab="speed"] .memo-note-head,
@@ -16437,9 +18707,9 @@
   min-height: 0;
 }
 
-.memo-palace-stage button:focus-visible { outline: 3px solid #f5cb84; outline-offset: 4px; }
+.memo-palace-stage button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .memo-palace-stage .memo-palace-hint { background: rgba(27, 35, 34, 0.78); font-size: 0.75rem; }
-@media (max-width: 900px) {
+@media (max-width: 1099px) {
   .memo-palace-stage .memo-palace-hint { display: block; bottom: calc(4.4rem + var(--memo-safe-bottom, 0px)); left: auto; right: 1rem; translate: none; max-width: 12rem; text-align: center; font-size: 0.65rem; }
 }
 .memo-palace-panel-where { max-width: 60%; }
@@ -16452,7 +18722,7 @@
 .memo-palace-map-marker { position: absolute; translate: -50% -50%; width: 1.8rem; height: 1.8rem; border: 2px solid var(--marker-color); border-radius: 50%; background: #211f28; color: white; font-size: 0.7rem; font-weight: 800; cursor: pointer; }
 .memo-palace-map-marker.collected { border-color: #9fb9ac; color: #b9e7cd; }
 .memo-palace-map-marker[aria-pressed="true"], .memo-palace-map-marker:focus-visible { outline: 3px solid white; outline-offset: 2px; z-index: 2; }
-.memo-palace-map-selection { display: flex; align-items: center; gap: 0.75rem; margin: 0 0 1.2rem; padding: 0.8rem; border-radius: 16px; background: var(--surface-2, var(--bg)); }
+.memo-palace-map-selection { display: flex; align-items: center; gap: 0.75rem; margin: 0 0 1.2rem; padding: 0.8rem; border-radius: 16px; background: var(--sunken); }
 .memo-palace-map-selection > div { flex: 1; min-width: 0; }
 .memo-palace-map-selection strong, .memo-palace-map-selection span { display: block; font-size: 0.85rem; }
 .memo-palace-map-selection span { margin-top: 0.3rem; color: var(--muted); }
@@ -16492,7 +18762,7 @@
   width: min(40rem, calc(100% - 3rem));
   max-height: calc(100% - 3rem);
   padding: 1.4rem;
-  border-radius: 24px;
+  border-radius: 26px;
   --panel-paint: var(--bg);
   background: var(--panel-paint);
   animation: memo-pop-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -16504,7 +18774,683 @@
 .memo-palace-panel[data-presentation="dialog"] .lecture-flashcard,
 .memo-palace-panel[data-presentation="dialog"] .lecture-flashcard-rotator,
 .memo-palace-panel[data-presentation="dialog"] .lecture-flashcard-face { min-height: clamp(8rem, 34dvh, 22rem); height: auto; }
-.memo-palace-sheet-inner[data-presentation="dialog"] { position: absolute; inset: 50% auto auto 50%; translate: -50% -50%; width: min(32rem, calc(100% - 3rem)); max-height: calc(100% - 3rem); padding: 1.2rem; border-radius: 24px; background: var(--bg); animation: memo-pop-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.memo-palace-sheet-inner[data-presentation="dialog"] { position: absolute; inset: 50% auto auto 50%; translate: -50% -50%; width: min(32rem, calc(100% - 3rem)); max-height: calc(100% - 3rem); padding: 1.2rem; border-radius: 26px; background: var(--bg); animation: memo-pop-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 .memo-palace-panel > .memo-palace-close,
 .memo-palace-sheet-inner > .memo-palace-close { position: absolute; top: 0.9rem; right: 0.9rem; z-index: 3; }
+/* ---------------------------------------------------------------------------
+   Test persona
+   ---------------------------------------------------------------------------
+   A card in Settings that only one account ever renders, so it is styled from
+   the tokens the rest of the settings card uses rather than getting a palette
+   of its own. Amber when a persona is on, because "the app is lying to you
+   right now" is the one thing this panel has to say from across the room.
+   ------------------------------------------------------------------------ */
+.memo-persona {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem 1.1rem 1.15rem;
+  border-radius: 1.1rem;
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.memo-persona:has(.memo-persona-badge.on) {
+  box-shadow: inset 0 0 0 1.5px rgba(255, 204, 77, 0.55);
+}
+
+.memo-persona-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.memo-persona-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.memo-persona-badge {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.memo-persona-badge.on {
+  background: rgba(255, 204, 77, 0.2);
+  color: #ffcc4d;
+}
+
+.memo-persona-lead,
+.memo-persona-note,
+.memo-persona-error {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.memo-persona-note {
+  color: #ffcc4d;
+}
+
+.memo-persona-error {
+  color: var(--promo);
+}
+
+.memo-persona-group {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.memo-persona-label {
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted-2, var(--muted));
+}
+
+.memo-persona-options {
+  display: grid;
+  gap: 0.4rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(9.5rem, 47%), 1fr));
+}
+
+.memo-persona-options button {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.55rem 0.7rem;
+  border: 0;
+  border-radius: 0.8rem;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: box-shadow 160ms ease, background 160ms ease, opacity 160ms ease;
+}
+
+.memo-persona-options button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.memo-persona-options button.active {
+  background: rgba(255, 204, 77, 0.12);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 204, 77, 0.6);
+}
+
+.memo-persona-options button strong {
+  font-size: 0.86rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.memo-persona-options button small {
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--muted);
+}
+
+.memo-persona-reset {
+  justify-self: start;
+  min-height: 2.4rem;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.memo-persona-reset:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------------------
+   Auth — the way in
+   ---------------------------------------------------------------------------
+   These screens were the last product surface still speaking the pre-redesign
+   `globals.css` vocabulary (`--label`, `--separator`, `--surface-solid`), so
+   the first thing anyone saw did not look like the app behind it. They are on
+   the `.memo` layer now, and this is the whole of their styling.
+
+   Auth sits outside the app shell: no rail, no chat column, so the 1100px
+   switch is not a layout change here — only type and padding step up. The card
+   keeps its `min(100%, 28rem)` cap at every width, because a sign-in form does
+   not get better by being wider.
+   ------------------------------------------------------------------------ */
+
+.memo-auth {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+  /*
+   * The soft keyboard covers the bottom of the viewport without shrinking it —
+   * `dvh` answers for the browser's own chrome, not for the keys — so the
+   * screen has to end above the keyboard itself, or the field being typed into
+   * and the button under it sit behind it. `--memo-kb` is the measured height
+   * `KeyboardInset` publishes; with `border-box` the padding comes out of the
+   * 100dvh, so the stage centres in what is actually still visible and the
+   * page does not grow a keyboard's worth of empty scroll.
+   */
+  padding-bottom: var(--memo-kb, 0px);
+}
+
+/* The back control leads the row and the lockup trails it, because the thing
+   you might press belongs where a thumb already is. On desktop the two swap
+   into one group on the left — see the media query at the foot of this block. */
+.memo-auth-header {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: calc(0.8rem + var(--memo-safe-top, 0px)) 1.15rem 0.8rem;
+}
+
+.memo-auth-header-gap {
+  flex: 0 0 auto;
+}
+
+.memo-auth-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--btn-round);
+  height: var(--btn-round);
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  transition: box-shadow 0.16s ease;
+}
+
+.memo-auth-back .msym {
+  font-size: var(--btn-round-glyph);
+}
+
+.memo-auth-back:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-auth-lockup {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  color: var(--text);
+}
+
+.memo-auth-lockup .brand-logo.compact .brand-logo-mark {
+  --lockup-h: 1.6rem;
+}
+
+/*
+ * Centred by auto margins rather than by `align-content`, because centring is
+ * only wanted while the content fits. With the keyboard open — or on a short
+ * phone in landscape — a centred grid overflows equally in both directions and
+ * the top of the card ends up above the scroll origin, out of reach. Auto
+ * margins collapse to zero the moment there is no free space, so the card
+ * starts at the top and the page simply scrolls.
+ */
+.memo-auth-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem 1.15rem
+    calc(2.5rem + max(0px, var(--memo-safe-bottom, 0px) - var(--memo-kb, 0px)));
+}
+
+.memo-auth-stage > :first-child {
+  margin-top: auto;
+}
+
+.memo-auth-stage > :last-child {
+  margin-bottom: auto;
+}
+
+.memo-auth-card {
+  display: grid;
+  gap: 1.1rem;
+  width: min(100%, 28rem);
+  padding: 1.5rem 1.25rem 1.6rem;
+  border-radius: 26px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+/* The panel carried no mark at all, so the mascot — the app's whole identity —
+   appeared nowhere on the way in. */
+.memo-auth-head {
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  text-align: center;
+}
+
+.memo-auth-mascot {
+  width: 3.6rem;
+  height: auto;
+  display: block;
+}
+
+.memo-auth-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.16;
+  text-wrap: pretty;
+}
+
+.memo-auth-copy {
+  margin: 0;
+  max-width: 17rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+/* The sign-in line is one short sentence and reads best held to a narrow
+   measure. The code and error screens carry a real paragraph, which at 17rem
+   turns into a column. */
+.memo-auth-copy.long {
+  max-width: 24rem;
+}
+
+.memo-auth-copy strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.memo-auth-stack {
+  display: grid;
+  gap: 0.6rem;
+}
+
+/* Provider buttons are pills like everything else tappable in the app. The
+   `mark` is passed in, so a second provider drops in with no layout change. */
+.memo-auth-provider {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  width: 100%;
+  height: 3.4rem;
+  padding: 0 1.1rem;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1.02rem;
+  font-weight: 700;
+  transition: box-shadow 0.16s ease;
+}
+
+/* An edge, not a lift. The old rule was `transform: translateY(-1px)`. */
+.memo-auth-provider:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-auth-provider:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.memo-auth-provider-form {
+  display: block;
+}
+
+.memo-auth-provider-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
+}
+
+.memo-auth-provider .msym {
+  flex: 0 0 auto;
+  font-size: 1.25rem;
+}
+
+/* Apple's mark is drawn smaller inside its own box than Google's is. */
+.memo-auth-provider-icon-apple {
+  width: 1.42rem;
+  height: 1.42rem;
+  margin-right: -0.18rem;
+}
+
+/* The card's own rhythm is 1.1rem; inside the provider stack the divider has to
+   buy that back, or the three rows read as one undifferentiated group. */
+.memo-auth-stack .memo-auth-divider {
+  margin: 0.25rem 0;
+}
+
+.memo-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.memo-auth-divider::before,
+.memo-auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.memo-auth-form {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.memo-auth-field {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  height: 3.6rem;
+  padding: 0 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+/* Focus is drawn on the container, never as the browser's outline. Before this
+   the email field had no focus treatment of any kind. */
+.memo-auth-field:focus-within {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-auth-field .msym {
+  flex: 0 0 auto;
+  font-size: 1.25rem;
+  color: var(--muted);
+  transition: color 0.16s ease;
+}
+
+.memo-auth-field:focus-within .msym {
+  color: var(--text);
+}
+
+.memo-auth-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 1.05rem;
+}
+
+.memo-auth-field input::placeholder {
+  color: var(--muted-2);
+}
+
+/* The code field is the same control one step up: taller, rounder, and the
+   value tracked apart so eight digits stay countable. */
+.memo-auth-field.code {
+  height: 3.9rem;
+  padding: 0 1.1rem;
+  border-radius: 18px;
+}
+
+.memo-auth-field.code input {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-auth-field.code input::placeholder {
+  font-weight: 400;
+  letter-spacing: normal;
+}
+
+.memo-auth-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.memo-auth-helper {
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.memo-auth-note {
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.memo-auth-note.error {
+  color: var(--danger);
+}
+
+.memo-auth-actions {
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* Countdown-gated: for the first cooldown after arrival this button is drawn
+   disabled, which is the state worth designing. `tabular-nums` keeps the
+   countdown from jittering as the seconds change width. */
+.memo-auth-resend {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-auth-resend:disabled {
+  color: var(--muted-2);
+  cursor: default;
+}
+
+.memo-auth-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 3rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 650;
+  transition: box-shadow 0.16s ease;
+}
+
+.memo-auth-ghost:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+/* A footnote about the page, not a step in it — so it sits outside the card,
+   where it no longer competes with the action. */
+.memo-auth-legal {
+  margin: 0.9rem 0 0;
+  max-width: 28rem;
+  text-align: center;
+  color: var(--muted-2);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.memo-auth-legal a {
+  color: var(--muted);
+  border-bottom: 1px solid var(--muted-2);
+}
+
+.memo-auth-legal button,
+.memo-auth-legal-button {
+  border: 0;
+  border-bottom: 1px solid var(--muted-2);
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.memo-auth-legal button[data-pending],
+.memo-auth-legal-button[data-pending] {
+  opacity: 0.65;
+  pointer-events: none;
+  border-bottom-color: transparent;
+}
+
+/* Why an attempt was turned away — admin sign-in only. */
+.memo-auth-notice {
+  width: min(100%, 28rem);
+  margin: 0.9rem 0 0;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Above the card on the admin sign-in. Only the bottom margin moves: the top
+   one is the stage's `auto`, and overriding it here would stop the screen
+   centring the moment a notice appeared. */
+.memo-auth-notice:first-child {
+  margin-top: 0.9rem;
+  margin-bottom: 0.9rem;
+}
+
+.memo-auth-notice strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.memo-auth-notice code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85em;
+}
+
+.memo-auth-notice[data-tone="error"] {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+.memo-auth-notice[data-tone="error"] strong {
+  color: var(--danger);
+}
+
+.memo-auth-badge {
+  display: inline-flex;
+  width: 3.6rem;
+  height: 3.6rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+}
+
+.memo-auth-badge.error {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+@media (max-width: 1099px) {
+  /*
+   * While a field is focused the keyboard has taken half the screen, and the
+   * mascot is the one thing on the card that is only decoration. It goes, so
+   * the field and the button under it stay above the keys instead of the
+   * screen having to be scrolled to reach its own submit.
+   */
+  .memo-auth-card:has(input:focus) .memo-auth-mascot {
+    display: none;
+  }
+}
+
+@media (min-width: 1100px) {
+  .memo-auth-header {
+    gap: 1rem;
+    padding: calc(1rem + var(--memo-safe-top, 0px)) 1.6rem 1rem;
+  }
+
+  /* The pair leads the row together; the gap does the pushing instead. */
+  .memo-auth-lockup {
+    margin-left: 0;
+  }
+
+  .memo-auth-lockup .brand-logo.compact .brand-logo-mark {
+    --lockup-h: 1.8rem;
+  }
+
+  .memo-auth-header-gap {
+    flex: 1 1 auto;
+  }
+
+  .memo-auth-stage {
+    padding: 2.5rem 1.6rem 3rem;
+  }
+
+  .memo-auth-card {
+    gap: 1.2rem;
+    padding: 2rem 2.1rem 2.1rem;
+  }
+
+  .memo-auth-head {
+    gap: 0.6rem;
+  }
+
+  .memo-auth-mascot {
+    width: 4.2rem;
+  }
+
+  .memo-auth-copy {
+    max-width: 20rem;
+    font-size: 1rem;
+  }
+
+  .memo-auth-form {
+    gap: 0.65rem;
+  }
+
+  .memo-auth-legal {
+    margin-top: 1.2rem;
+  }
+}

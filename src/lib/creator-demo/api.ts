@@ -290,23 +290,21 @@ async function handleLectureRoute(
     }
 
     /*
-     * The podcast cannot be demonstrated offline: an episode is a model call and then a
-     * synthesized turn per line, and neither exists in a store built out of fixtures. So the
-     * screen is told the truth it would be told without a subscription, rather than being left
-     * to read the catch-all `{ ok: true }` as "this note is not finished" — which is the one
-     * thing that is definitely not wrong with it.
+     * The podcast, demonstrated without making one.
+     *
+     * A real episode is a model call and then a synthesized turn per line, which is both slow
+     * and the most expensive thing this app does — so the demo does neither. It answers with
+     * an episode written into the fixtures and, for every segment asked for, one of the voice
+     * clips already shipped under `public/tutor-demo`. Nothing is generated and nothing is
+     * billed; what a visitor gets is the screen, the transport and two voices that really do
+     * differ, which is what they came to see.
+     *
+     * The clips are the auditions rather than this episode's own lines, so the words do not
+     * match the transcript. That is the one honest seam in it, and it is a better seam than
+     * telling somebody the feature needs a subscription when what they wanted was to look.
      */
     case "podcast": {
-      return json({
-        available: false,
-        reason: "subscription_required",
-        podcast: null,
-        tier: "free",
-        limitSeconds: 0,
-        secondsUsed: 0,
-        remainingSeconds: 0,
-        hasUnlimitedUsage: false,
-      });
+      return handleDemoPodcastRoute(lectureId, tail, method, input, init);
     }
 
     case "chat": {
@@ -544,6 +542,121 @@ async function handleFolderRoute(
   }
 
   return json({ ok: true });
+}
+
+/*
+ * A demo episode: written once, spoken with clips that already ship.
+ *
+ * The turns are short and generic on purpose. They have to read as two people talking about
+ * a note without knowing which note, because the demo carries four of them and writing four
+ * scripts would be writing the feature rather than showing it.
+ */
+const DEMO_PODCAST_TURNS: Array<{ speaker: "a" | "b"; text: string }> = [
+  { speaker: "a", text: "Pa poglejva ta zapisek — kaj je tisto, kar si moraš zares zapomniti?" },
+  { speaker: "b", text: "Najprej okvir: brez njega so posamezni podatki samo seznam." },
+  { speaker: "a", text: "Se pravi, da najprej razumeš, čemu služi, in šele nato podrobnosti." },
+  { speaker: "b", text: "Točno. In ko to enkrat sedi, si podrobnosti zapomniš skoraj same od sebe." },
+  { speaker: "a", text: "Dobro. Vzemiva zdaj po vrsti in preveriva, kje se najpogosteje zatakne." },
+  { speaker: "b", text: "Prav. In na koncu povzameva v enem stavku, da ti ostane za izpit." },
+];
+
+/** Roughly what a turn of this length takes to say, so the transport has something to show. */
+const DEMO_PODCAST_SEGMENT_MS = 7_000;
+
+function demoPodcastPayload(lectureId: string) {
+  const detail = getCreatorDemoState().details[lectureId];
+
+  return {
+    id: `demo-podcast-${lectureId}`,
+    status: "ready",
+    title: detail?.lecture?.title ?? null,
+    format: "deep_dive",
+    length: "standard",
+    language: "sl",
+    turns: DEMO_PODCAST_TURNS,
+    readySegments: DEMO_PODCAST_TURNS.map((_, segmentIndex) => ({
+      segmentIndex,
+      durationMs: DEMO_PODCAST_SEGMENT_MS,
+    })),
+  };
+}
+
+function demoPodcastUsage() {
+  return {
+    feature: "podcast" as const,
+    remainingSeconds: 1_800,
+    limitSeconds: 1_800,
+    usedSeconds: 0,
+    creditSeconds: 0,
+    hasPaidAccess: true,
+    hasUnlimitedUsage: false,
+  };
+}
+
+async function handleDemoPodcastRoute(
+  lectureId: string,
+  tail: string[],
+  method: string,
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+) {
+  const [action] = tail;
+
+  /*
+   * One clip per turn, alternating between the two chosen voices, so the pair a visitor picked
+   * is the pair they hear. `-podcast` rather than `-sample`: those are the takes recorded for
+   * this screen's own auditions, and they are the ones that sound like an episode.
+   */
+  if (action === "segments") {
+    const body = await readJsonBody(init, input);
+    const segmentIndex = typeof body.segmentIndex === "number" ? body.segmentIndex : 0;
+    const speaker = DEMO_PODCAST_TURNS[segmentIndex]?.speaker ?? "a";
+    const voice = typeof body[speaker === "a" ? "voiceA" : "voiceB"] === "string"
+      ? (body[speaker === "a" ? "voiceA" : "voiceB"] as string)
+      : "Grace";
+
+    return json({
+      audioUrl: `/tutor-demo/sl/${voice.toLowerCase()}-podcast.mp3`,
+      durationMs: DEMO_PODCAST_SEGMENT_MS,
+    });
+  }
+
+  /* Where somebody got to is real state, but only for as long as this tab is open. */
+  if (action === "progress") {
+    return json({ ok: true });
+  }
+
+  const podcast = demoPodcastPayload(lectureId);
+
+  /* Asking for an episode hands back the one that already exists, instantly. */
+  if (method === "POST") {
+    return json({ podcast, usage: demoPodcastUsage() });
+  }
+
+  return json({
+    available: true,
+    reason: null,
+    language: "sl",
+    podcast,
+    episodes: [
+      {
+        id: podcast.id,
+        format: podcast.format,
+        length: podcast.length,
+        language: podcast.language,
+        title: podcast.title,
+        turnCount: DEMO_PODCAST_TURNS.length,
+        estimatedSeconds: Math.round(
+          (DEMO_PODCAST_TURNS.length * DEMO_PODCAST_SEGMENT_MS) / 1000,
+        ),
+        createdAt: new Date().toISOString(),
+        positionMs: 0,
+        durationMs: DEMO_PODCAST_TURNS.length * DEMO_PODCAST_SEGMENT_MS,
+        finished: false,
+      },
+    ],
+    usage: demoPodcastUsage(),
+  });
 }
 
 async function handleDemoRequest(

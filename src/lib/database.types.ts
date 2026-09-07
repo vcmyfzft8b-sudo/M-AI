@@ -652,6 +652,9 @@ export type Database = {
           model: string | null;
           error_message: string | null;
           generation_started_at: string | null;
+          position_ms: number;
+          duration_ms: number | null;
+          finished_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -668,6 +671,9 @@ export type Database = {
           model?: string | null;
           error_message?: string | null;
           generation_started_at?: string | null;
+          position_ms?: number;
+          duration_ms?: number | null;
+          finished_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -678,6 +684,9 @@ export type Database = {
           model?: string | null;
           error_message?: string | null;
           generation_started_at?: string | null;
+          position_ms?: number;
+          duration_ms?: number | null;
+          finished_at?: string | null;
           updated_at?: string;
         };
       };

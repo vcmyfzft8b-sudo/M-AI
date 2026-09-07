@@ -1315,7 +1315,7 @@ export function LecturePalace({
 
       return (
         <div className="lecture-quiz-card">
-          <StudyQuizQuestion question={question} order={order} selection={quizChoice}
+          <StudyQuizQuestion question={question} order={order} selection={quizChoice} collapseAnswered={isTouch}
             onSelect={(optionIndex) => answerQuiz(question.id, optionIndex, question.correct_option_idx)} />
 
           {quizChoice !== null ? (

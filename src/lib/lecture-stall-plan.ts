@@ -73,6 +73,7 @@ export type StallResumeJob = "notes" | "scan" | "document" | "link" | "audio";
 export type StallPlan =
   | { action: "wait"; reason: "recent" | "settled" }
   | { action: "resume"; job: StallResumeJob }
+  | { action: "discard"; reason: "never-started" }
   | { action: "fail"; reason: "no-source" | "already-resumed" | "upload-never-finished" };
 
 export type StallPlanInput = {
@@ -80,6 +81,8 @@ export type StallPlanInput = {
   processingMetadata: unknown;
   sourceType: string | null;
   storagePath: string | null;
+  /** Whether the row carries a name. Only a row the pipeline has touched has one. */
+  hasTitle: boolean;
   /** A complete artifact means the row is a status bug, not a stall; reconciliation owns those. */
   hasArtifact: boolean;
   /** Transcript rows exist, so the expensive half of the pipeline is already paid for. */
@@ -227,6 +230,26 @@ export function planResumeJob(input: {
   return null;
 }
 
+/**
+ * A row nothing was ever attached to: no name, no source, no bytes, no transcript.
+ *
+ * These are not failed uploads, they are bookkeeping. The lecture is inserted before the source
+ * exists, so an attempt that dies in the seconds between the two leaves a row that never held
+ * anything — most often because the learner pressed cancel, or their phone took the tab away,
+ * mid-request. Empty metadata is the whole test: the moment a learner picks a source, something
+ * lands in it (`pendingScanImages`, `manualImport`, `pendingDocument`), and a row with any of
+ * that is a learner who did work and is owed an explanation.
+ */
+export function isNeverStartedDraft(input: StallPlanInput) {
+  return (
+    !input.hasTitle &&
+    !input.hasArtifact &&
+    !input.hasTranscript &&
+    !input.storagePath &&
+    (!isRecord(input.processingMetadata) || Object.keys(input.processingMetadata).length === 0)
+  );
+}
+
 export function planStalledLecture(input: StallPlanInput): StallPlan {
   if (input.status === "ready" || input.status === "failed" || input.hasArtifact) {
     return { action: "wait", reason: "settled" };
@@ -237,7 +260,29 @@ export function planStalledLecture(input: StallPlanInput): StallPlan {
   }
 
   if (!RESUMABLE_STATUSES.has(input.status)) {
-    return { action: "fail", reason: "upload-never-finished" };
+    /*
+     * Deleted rather than failed, and only from here — a row that never left `uploading`.
+     *
+     * Failing an empty row buys the learner an untitled note pinned to the top of their library,
+     * saying an upload they may not remember starting did not finish, with no retry button
+     * because there is nothing to retry. 15 of the 71 failed notes in production on 2026-09-05
+     * were exactly that, and in every case we could trace, the learner had already made the note
+     * they wanted seconds later. There is nothing here to tell them about, so it goes.
+     *
+     * Deliberately not reachable from the resumable statuses above: a lecture that got as far as
+     * `queued` or `generating_notes` had a source once, whatever the row looks like now, and a
+     * learner who is owed an explanation must never instead get silence.
+     *
+     * A trial row is deleted like any other, which it was not when this rule first landed.
+     * Back then the free note was spent the moment the learner pressed create, so deleting the
+     * row left them locked out with nothing — `profiles.trial_lecture_id` is cleared by the
+     * cascade while `trial_consumed_at` survives it. Since 0048 the free note is spent only when
+     * a note reaches `ready`, so an empty trial draft holds nothing: clearing the pointer simply
+     * hands the learner back the attempt they never got to make.
+     */
+    return isNeverStartedDraft(input)
+      ? { action: "discard", reason: "never-started" }
+      : { action: "fail", reason: "upload-never-finished" };
   }
 
   if (readStallSweepCount(input.processingMetadata) >= MAX_SWEEP_RESUMES) {

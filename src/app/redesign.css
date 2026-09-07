@@ -1,4 +1,5 @@
-/* ====================================================================   Memo AI redesign
+/* ===========================================================================
+   Memo AI redesign
    ---------------------------------------------------------------------------
    One design system for the whole product surface. Desktop (>= 1100px) is the
    rail + column layout; below that every screen switches to the phone design.
@@ -784,7 +785,8 @@
   }
 }
 
-/* ====================================================================   Desktop shell
+/* ===========================================================================
+   Desktop shell
    ========================================================================= */
 
 .memo-shell {
@@ -1042,7 +1044,8 @@
   align-self: stretch;
 }
 
-/* ====================================================================   Home
+/* ===========================================================================
+   Home
    ========================================================================= */
 
 /* Explicit classes, not `.memo-home h1`: the phone screen has its own h1 and
@@ -2170,7 +2173,8 @@
   font-size: 0.95rem;
 }
 
-/* ====================================================================   Note screen
+/* ===========================================================================
+   Note screen
    ========================================================================= */
 
 .memo-note-card {
@@ -2512,7 +2516,8 @@
   cursor: pointer;
 }
 
-/* ====================================================================   Note dock (listen player + annotation tools)
+/* ===========================================================================
+   Note dock (listen player + annotation tools)
    ========================================================================= */
 
 .memo-dock {
@@ -2860,7 +2865,8 @@
   font-size: 1.35rem;
 }
 
-/* ====================================================================   Chat panel (note)
+/* ===========================================================================
+   Chat panel (note)
    ========================================================================= */
 
 .memo-chat-scrim {
@@ -3413,7 +3419,8 @@
   display: none;
 }
 
-/* ====================================================================   Study modes
+/* ===========================================================================
+   Study modes
    ========================================================================= */
 
 .memo-study-narrow {
@@ -4211,7 +4218,8 @@
 }
 
 
-/* ====================================================================   Study surfaces
+/* ===========================================================================
+   Study surfaces
    ---------------------------------------------------------------------------
    The flashcard, quiz and practice-test machinery already has the shape the
    redesign draws — stage, rotator, faces, verdict row — so it keeps its markup
@@ -5901,7 +5909,8 @@
   color: #ff3b30;
 }
 
-/* ====================================================================   Settings + Help
+/* ===========================================================================
+   Settings + Help
    ========================================================================= */
 
 .memo-page {
@@ -6346,7 +6355,8 @@
   font-weight: 750;
 }
 
-/* ====================================================================   Overlays: modals, sheets, toast
+/* ===========================================================================
+   Overlays: modals, sheets, toast
    ========================================================================= */
 
 .memo-overlay {
@@ -7009,7 +7019,8 @@
   font-size: 1.2rem;
 }
 
-/* ====================================================================   Capture modal
+/* ===========================================================================
+   Capture modal
    ---------------------------------------------------------------------------
    The "Nov zapisek" sheet keeps its own flows — recording, file pickers, PDF
    page selection, the scan importer — and takes the redesign's chrome: a
@@ -7564,7 +7575,8 @@
   margin-top: 1.5rem;
 }
 
-/* ====================================================================   Discount wheel + one-time offer
+/* ===========================================================================
+   Discount wheel + one-time offer
    ---------------------------------------------------------------------------
    Both are full-height sheets on every breakpoint: the offer is a moment, not
    a page, and it reads the same on a laptop as on a phone.
@@ -8234,7 +8246,8 @@
   color: #ff3b30;
 }
 
-/* ====================================================================   Study manager, capture guide, practice-test detail
+/* ===========================================================================
+   Study manager, capture guide, practice-test detail
    ---------------------------------------------------------------------------
    The last production surfaces reachable from the redesigned screens: the
    flashcard/quiz editor behind "Uredi", the record-with-your-phone-off guide
@@ -8724,7 +8737,8 @@
   font-weight: 750;
 }
 
-/* ====================================================================   Folder sheet and modals
+/* ===========================================================================
+   Folder sheet and modals
    ---------------------------------------------------------------------------
    The folder picker's sheet, the "Nova mapa" modal and the folder editor keep
    their production markup and behaviour (drag-to-dismiss, the lecture picker,
@@ -8968,7 +8982,8 @@
   font-weight: 700;
 }
 
-/* ====================================================================   Paywall
+/* ===========================================================================
+   Paywall
    ---------------------------------------------------------------------------
    The paywall already had the redesign's structure and its blue accent (the
    `--memo-paywall-purple` variable is a misnomer — it resolves to --tint). What
@@ -9129,7 +9144,8 @@
   outline-offset: 2px;
 }
 
-/* ====================================================================   Mobile (< 1100px) — the phone design
+/* ===========================================================================
+   Mobile (< 1100px) — the phone design
    ---------------------------------------------------------------------------
    The artboard draws a 390x844 device; here the same layout fills the
    viewport. Sheets are fixed to the viewport rather than to a phone frame,
@@ -12637,7 +12653,8 @@
   }
 }
 
-/* ====================================================================   Paywall: one screen, never a scroller
+/* ===========================================================================
+   Paywall: one screen, never a scroller
    ---------------------------------------------------------------------------
    The paywall is the screen the business runs through, and it only works when
    the price, the plan cards and the call to action are visible at once. Every
@@ -12884,7 +12901,8 @@
   }
 }
 
-/* ====================================================================   The discount offer, on one screen too
+/* ===========================================================================
+   The discount offer, on one screen too
    ---------------------------------------------------------------------------
    This is the other paywall, and it is the one a buyer lands on straight after
    backing out of Stripe — `getBillingCancelUrl` sends a discounted checkout

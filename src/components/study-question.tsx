@@ -34,6 +34,7 @@ export function StudyQuizQuestion({
             ({ optionIndex }) =>
               !collapseAnswered ||
               selection === null ||
+              selection === question.correct_option_idx ||
               optionIndex === selection ||
               optionIndex === question.correct_option_idx,
           )

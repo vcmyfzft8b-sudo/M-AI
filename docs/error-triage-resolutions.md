@@ -56,6 +56,39 @@ After it is merged, events at or before its production deployment cutoff are his
 later recurrence is new evidence: confirm whether both bounded attempts failed and whether the
 fallback completed before deciding that code needs another change.
 
+## 2026-09-07 — The creator demo offered a walkthrough it cannot start
+
+- **Sentry:** `MEMOAI-WEB-3J`, issue `145468997`
+- **Route:** `/creator/lectures/:id` (client-side, and it can have no Vercel counterpart — the
+  request never leaves the browser)
+- **Operation:** pressing Start on the walkthrough tab of a creator-demo note
+- **Normalized message:** `Inštruktorja ni bilo mogoče začeti.` — the Slovenian for
+  `tutor.error.startFailed`, which is **the same sentence** as `api.tutorStartFailed`
+- **Historical event:** `2026-09-07T11:16:58.080Z`, release `747887b9125cb5867923c8d2f63fc14935571f9a`
+- **Resolution:** [PR #383](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/383) — **open at the time
+  of writing**
+- **Regression test:** `tests/creator-demo-tutor-tab.test.mjs`
+
+The demo runs the real workspace against `createCreatorDemoFetch`, which answers unimplemented
+routes with a catch-all `json({ ok: true })` at status 200 so a stray background call cannot put an
+error banner into a recording. There is no `case "tutor"`, so `POST .../tutor/session` returned an ok
+response carrying neither `realtime` nor an `error`, which is the exact shape `startSession` throws
+on (`src/components/lecture-tutor.tsx:1267`). PR #383 drops the pill in the demo rather than touching
+the catch-all, which is doing the job it was written for.
+
+**Do not read this message as a 502 from the real route.** `tutor.error.startFailed` and
+`api.tutorStartFailed` are identical strings in `sl`, `sr`, `bs`, `hr` and `en`, so the message alone
+cannot tell a client-side fallback from the server's own failure. Separate them by the breadcrumbs:
+this one fired 24ms after the click with **no fetch breadcrumb** for either tutor route, because the
+stub never touches the network. A genuine 502 has a fetch breadcrumb, a Vercel 5xx beside it, and
+takes far longer than a frame.
+
+**While PR #383 is open the button is still live on production**, so a visitor pressing Start will
+bump `lastSeen` again. A recurrence before that PR's production cutoff is the same known defect
+waiting on a human merge, not a regression: update or wait for PR #383 rather than opening a
+duplicate. Only an event after it is deployed is new evidence, and the first thing to check then is
+whether the pill is somehow back in the demo's tab row.
+
 ## 2026-09-03 — Page translation moved the onboarding CTA's label out of the button
 
 - **Sentry:** `MEMOAI-WEB-3A`, issue `144571793`

@@ -16,6 +16,20 @@ export const FREE_TUTOR_LIFETIME_SECONDS = 60;
 export const PAID_TUTOR_DAILY_SECONDS = 30 * 60;
 
 /**
+ * Slack on the Soniox keys over the slice they are for.
+ *
+ * The keys must outlive the slice by enough to finish the sentence in progress and report
+ * back, or the last turn of every slice would be cut off mid-word.
+ *
+ * Lives here, beside the allowance itself, because both halves of the session need it: the
+ * server mints the keys for the slice plus this, and the client has to subtract exactly the
+ * same number to find the end of the talking time it was given. When only the server knew
+ * it, the client guessed with the renewal margin instead and came due before the slice had
+ * started.
+ */
+export const TUTOR_GRANT_KEY_GRACE_SECONDS = 45;
+
+/**
  * The two things that spend spoken time, and the fact that they no longer spend the same
  * allowance.
  *

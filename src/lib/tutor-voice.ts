@@ -233,9 +233,9 @@ export type TutorTurnRequest = {
 export async function speakTutorTurn(params: {
   grounding: TutorGrounding;
   /*
-   * Null only for the opening turn, which is generated before the running order
-   * exists. The greeting needs the note, not the plan, and firing the two at once
-   * is what takes time-to-first-word from about ten seconds down to three.
+   * Opening, answer and feedback turns can run before the plan exists. Replies
+   * are grounded in the note and conversation; only lesson progression needs
+   * the running order. An early question must not wait for the planner.
    */
   plan: (Omit<TutorLessonPlan, "language"> & { language: string | null }) | null;
   request: TutorTurnRequest;

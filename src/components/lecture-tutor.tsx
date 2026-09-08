@@ -268,6 +268,7 @@ export function LectureTutor({
   /** The renewal in progress, so three callers cannot reserve three slices. */
   const renewalInFlightRef = useRef<Promise<boolean> | null>(null);
   const followUpTimerRef = useRef<number | null>(null);
+  const followUpRef = useRef<{ action: () => void; delay: number } | null>(null);
   const levelFrameRef = useRef<number | null>(null);
   /*
    * Auditioning a voice used to be a session: credentials, a socket, and the model
@@ -307,6 +308,12 @@ export function LectureTutor({
       ref.current = null;
     }
   };
+
+  const scheduleFollowUp = useCallback((action: () => void, delay: number) => {
+    clearTimer(followUpTimerRef);
+    followUpRef.current = { action, delay };
+    followUpTimerRef.current = window.setTimeout(action, delay);
+  }, []);
 
 
   /**
@@ -768,38 +775,42 @@ export function LectureTutor({
         return;
       }
 
-      /*
-       * Only the opening can run without the running order. Every other kind waits
-       * for it here — by which point the greeting has been playing for the better
-       * part of a minute and it has long since arrived, so this normally resolves
-       * instantly.
-       */
-      const currentPlan =
-        kind === "opening" ? null : (planRef.current ?? (await planPromiseRef.current) ?? null);
-
-      if (kind !== "opening" && !currentPlan) {
-        setError(t("tutor.error.startFailed"));
-        setPhaseNow("paused");
-
-        return;
-      }
-
-      if (runId !== runIdRef.current) {
-        return;
-      }
-
-      const index = options.index ?? topicIndexRef.current;
+      // Claim the floor before any await, including a still-loading lesson plan.
+      // Pausing or speaking again must invalidate this turn even during preparation.
       const controller = new AbortController();
+      turnAbortRef.current?.abort();
       floorTokenRef.current += 1;
       const floorToken = floorTokenRef.current;
+      const isCurrent = () =>
+        !controller.signal.aborted &&
+        runId === runIdRef.current &&
+        floorToken === floorTokenRef.current;
       turnAbortRef.current = controller;
+      clearTimer(followUpTimerRef);
       setPhaseNow("thinking");
       inputRef.current?.resetUtterance();
 
+      const index = options.index ?? topicIndexRef.current;
       let turn: ReturnType<TutorSpeechOutput["speak"]> | null = null;
       const buffer = new SpeechTextBuffer();
 
       try {
+        // Replies use the note and conversation directly. Waiting for the running
+        // order here can hold an opening interruption for tens of seconds.
+        const needsPlan = kind === "teach" || kind === "resume" || kind === "closing";
+        const currentPlan =
+          kind === "opening"
+            ? null
+            : (planRef.current ?? (needsPlan ? await planPromiseRef.current : null));
+
+        if (!isCurrent()) {
+          return;
+        }
+
+        if (needsPlan && !currentPlan) {
+          throw new Error(t("tutor.error.startFailed"));
+        }
+
         /*
          * One retry, and only for the request itself.
          *
@@ -809,54 +820,55 @@ export function LectureTutor({
          * fixed itself. Retried only here, before a word has been spoken: asking again
          * once the voice has started would say the same sentence twice.
          */
-        let response: Response | null = null;
+        const requestTurn = async () => {
+          for (let attempt = 0; ; attempt += 1) {
+            controller.signal.throwIfAborted();
+            try {
+              return await fetch(`/api/lectures/${lectureId}/tutor/turn`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                signal: controller.signal,
+                body: JSON.stringify({
+                  kind,
+                  topicIndex: index,
+                  plan: currentPlan,
+                  spokenSoFar: kind === "teach" || kind === "resume" ? spokenSoFarRef.current : "",
+                  question: options.question ?? null,
+                  history: historyRef.current.slice(-12),
+                }),
+              });
+            } catch (caught) {
+              if (attempt >= 1 || controller.signal.aborted) {
+                throw caught;
+              }
 
-        for (let attempt = 0; response === null; attempt += 1) {
-          try {
-            response = await fetch(`/api/lectures/${lectureId}/tutor/turn`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              signal: controller.signal,
-              body: JSON.stringify({
-                kind,
-                topicIndex: index,
-                plan: currentPlan,
-                spokenSoFar: kind === "teach" || kind === "resume" ? spokenSoFarRef.current : "",
-                question: options.question ?? null,
-                history: historyRef.current.slice(-12),
-              }),
-            });
-          } catch (caught) {
-            if (attempt >= 1 || controller.signal.aborted) {
-              throw caught;
+              await new Promise((settle) => {
+                window.setTimeout(settle, TURN_RETRY_DELAY_MS);
+              });
             }
-
-            await new Promise((settle) => {
-              window.setTimeout(settle, TURN_RETRY_DELAY_MS);
-            });
           }
+        };
+
+        // Warm an idle socket while the server authenticates and writes the reply.
+        // Only the confirmed utterance starts a model call; warming sends no speech.
+        const prepareSpeech = async () => {
+          if (!(await renewCredentialsRef.current()) || !isCurrent()) {
+            return false;
+          }
+          await output.ensureOpen();
+          return isCurrent();
+        };
+        const [response, speechReady] = await Promise.all([requestTurn(), prepareSpeech()]);
+
+        if (!isCurrent() || !speechReady) {
+          controller.abort();
+          return;
         }
 
         if (!response.ok || !response.headers.get("Content-Type")?.includes("text/event-stream")) {
           const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-
           throw new Error(payload?.error ?? t("tutor.error.turnFailed"));
         }
-
-        /*
-         * The keys are minted for a slice of time and this conversation may have outlived
-         * it. Renewing is a no-op until the expiry is close, and it happens between turns
-         * where a new recognizer socket costs a handshake nobody hears.
-         */
-        if (!(await renewCredentialsRef.current())) {
-          return;
-        }
-
-        /*
-         * Checked here rather than at connect time: Soniox closes an idle stream, and the
-         * turn that has just been written is the first thing with anything to say.
-         */
-        await output.ensureOpen();
 
         turn = output.speak();
         setPhaseNow("speaking");
@@ -869,6 +881,9 @@ export function LectureTutor({
         }>(
           response,
           (text) => {
+            if (!isCurrent()) {
+              return;
+            }
             const ready = buffer.push(text);
 
             if (ready) {
@@ -965,6 +980,8 @@ export function LectureTutor({
         );
         setPhaseNow("paused");
       } finally {
+        // Also cancel the request if the parallel speech preparation failed.
+        controller.abort();
         if (turnAbortRef.current === controller) {
           turnAbortRef.current = null;
         }
@@ -1020,7 +1037,7 @@ export function LectureTutor({
       awaitingExplanationRef.current = true;
       setPhaseNow("listening");
       clearTimer(followUpTimerRef);
-      followUpTimerRef.current = window.setTimeout(() => {
+      scheduleFollowUp(() => {
         if (phaseRef.current !== "listening") {
           return;
         }
@@ -1039,7 +1056,7 @@ export function LectureTutor({
       const wasExplainBack = kind === "feedback";
       awaitingExplanationRef.current = false;
 
-      followUpTimerRef.current = window.setTimeout(
+      scheduleFollowUp(
         () => {
           if (phaseRef.current !== "listening") {
             return;
@@ -1180,12 +1197,12 @@ export function LectureTutor({
      * can always cut in again.
      */
     clearTimer(followUpTimerRef);
-    followUpTimerRef.current = window.setTimeout(() => {
+    scheduleFollowUp(() => {
       if (phaseRef.current === "listening") {
         void runTurnRef.current("resume");
       }
     }, FOLLOW_UP_SILENCE_MS);
-  }, [setPhaseNow]);
+  }, [scheduleFollowUp, setPhaseNow]);
 
   const startSession = useCallback(async () => {
     /*
@@ -1355,20 +1372,33 @@ export function LectureTutor({
       },
       {
         onPartial: (text) => {
+          if (
+            phaseRef.current === "paused" || phaseRef.current === "finished" ||
+            phaseRef.current === "idle" || phaseRef.current === "preparing"
+          ) {
+            return;
+          }
           if (whoSpoke(text) !== "learner") {
             return;
           }
 
-          if (phaseRef.current !== "speaking") {
-            return;
+          // A reply still loading must yield on the first real word too.
+          if (phaseRef.current === "speaking" || phaseRef.current === "thinking") {
+            commitInterruption();
           }
 
-          /*
-           * A word, from a person, while the tutor is talking. That is the whole
-           * test — no waiting to see whether it becomes a sentence, and nothing
-           * about how loud the room is. The floor is theirs.
-           */
-          commitInterruption();
+          // A silence timer is measured from the learner's latest words, not
+          // from when we asked. Preserve its action (including explain-back).
+          const followUp = followUpRef.current;
+          if (phaseRef.current === "listening" && followUp) {
+            scheduleFollowUp(
+              followUp.action,
+              Math.max(
+                followUp.delay,
+                awaitingExplanationRef.current ? EXPLAIN_BACK_SILENCE_MS : FOLLOW_UP_SILENCE_MS,
+              ),
+            );
+          }
         },
         onUtterance: (text) => {
 
@@ -1501,6 +1531,7 @@ export function LectureTutor({
   }, [
     closePicker,
     commitInterruption,
+    scheduleFollowUp,
     lectureId,
     setPhaseNow,
     settleGrant,

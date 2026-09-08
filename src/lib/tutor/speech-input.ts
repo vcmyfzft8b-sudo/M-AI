@@ -24,12 +24,11 @@ const FRAME_MS = 20;
 const KEEPALIVE_INTERVAL_MS = 10_000;
 
 /**
- * How long after the last word the recognizer waits before calling the turn over.
- *
- * Soniox allows 500ms to 3000ms. A short value makes the tutor quick to answer
- * and quick to cut somebody off mid-thought; a long one is the reverse. Nine
- * hundred milliseconds is about the length of the pause people leave inside a
- * sentence when they are thinking, which is the pause that must NOT end a turn.
+ * Upper bound on semantic endpointing, not a fixed delay before every reply.
+ * Keep thinking pauses intact: 300ms is below Soniox's documented 500–3000ms
+ * range and mainly shortens ambiguous endings. Clean endings can arrive sooner
+ * than this cap. Reduce request/socket waits instead of guessing from partials.
+ * https://soniox.com/docs/stt/rt/endpoint-detection
  */
 const ENDPOINT_DELAY_MS = 900;
 

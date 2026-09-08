@@ -75,6 +75,38 @@ Three details that are easy to get wrong:
   without a token an interruption looked exactly like a finished turn and the walkthrough
   advanced over the learner.
 
+## Response timing and turn ownership (2026-09-08)
+
+Keep `max_endpoint_delay_ms` at 900. It caps Soniox's semantic endpointing rather
+than imposing a fixed wait. The proposed 300ms value is below the documented
+500–3000ms range and trades away thinking pauses; a clean ending can already
+arrive before the cap. See [Soniox endpoint detection](https://soniox.com/docs/stt/rt/endpoint-detection).
+Only an endpoint triggers an answer. Partials stop an existing turn but never
+speculatively generate or speak an answer.
+
+The client now removes waits elsewhere:
+
+- `answer` and `feedback` use the authenticated note and conversation immediately,
+  with a plan if one is already available. They do not wait for the planner. Lesson
+  progression (`teach`, `resume`, `closing`) still requires the plan.
+- Credential renewal and an idle speech socket reconnect overlap the turn request.
+  Opening a connection sends no speech; a synthesis stream still starts on its
+  first text. In the controlled regression, an 800ms request plus a 300ms reconnect
+  took 1100ms before and 800ms after. These are simulated timings, not live percentiles.
+- Every turn claims its cancellation token before waiting for anything. A pause,
+  end, newer turn, or real learner word invalidates it during planning, fetching,
+  renewal, reconnecting, and streaming. Real partials cancel `thinking` as well as
+  `speaking`; noise and echo still pass through `judgeHeard` first.
+- Recognized learner speech extends the pending silence timer. Explain-back keeps
+  its 16-second window and its original next-topic action. A follow-up after a
+  hand-back gets at least seven seconds from the latest words. An endpoint answers
+  immediately; abandoned speech can still time out and resume the lesson.
+
+`tests/tutor-session-turns.test.mjs` drives the actual component callbacks through
+controlled network, audio, and timers. It covers the cancellation races, early
+questions, echo/noise, explain-back and follow-up timers, and overlapping startup.
+Real microphone/room acoustics still need a device check on the PR preview.
+
 ## Which language it speaks
 
 **The note's**, not the app's. Somebody studying a Slovenian lecture wants it explained in

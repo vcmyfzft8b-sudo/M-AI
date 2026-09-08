@@ -1360,6 +1360,7 @@ export function LectureWorkspace({
   const studyManagerSheetRef = useRef<HTMLDivElement | null>(null);
   const noteScrollRef = useRef<HTMLDivElement | null>(null);
   const tabRowRef = useRef<HTMLDivElement | null>(null);
+  const [tabsOverflow, setTabsOverflow] = useState(true);
   const studyManagerItemSuppressClickRef = useRef(false);
   const studyManagerItemDragRef = useRef<StudyManagerItemDragState | null>(null);
   const deletingStudyItemIdsRef = useRef(new Set<string>());
@@ -5615,6 +5616,19 @@ export function LectureWorkspace({
                       ? "quiz"
                       : "test";
 
+  // Measure the actual labels and available space, including monitor resizing
+  // and translated text. A row that fits needs neither scrolling nor edge fades.
+  useEffect(() => {
+    const row = tabRowRef.current;
+    if (!row) return;
+    const measure = () => setTabsOverflow(row.scrollWidth > row.clientWidth + 1);
+    const observer = new ResizeObserver(measure);
+    observer.observe(row);
+    for (const pill of row.children) observer.observe(pill);
+    measure();
+    return () => observer.disconnect();
+  }, [showsTranscript, isCreatorDemo]);
+
   /*
    * The pill row follows the tab it is on. The pills overflow their scroller
    * on the phone, so the one you reach for is regularly the half-cut one at
@@ -6029,7 +6043,7 @@ export function LectureWorkspace({
   }
 
   const tabPills = (
-    <div className="memo-tabs memo-chiprow" ref={tabRowRef}>
+    <div className="memo-tabs memo-chiprow" ref={tabRowRef} data-overflow={tabsOverflow}>
       {getNoteTabs({ showsTranscript, isCreatorDemo }).map((tab) => (
         <button
           key={tab.id}

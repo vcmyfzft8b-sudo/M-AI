@@ -60,6 +60,10 @@ const WRITER_QUIET_CLOSE_MS = 3_500;
  * echo test needs the words to recognize it by.
  */
 const ROOM_TAIL_MS = 1_200;
+/** Includes recognizer/network lag without treating a whole lesson as room echo. */
+const ACTIVE_ECHO_WINDOW_SECONDS = 6;
+/** De-click a recognized interruption without waiting for another word or endpoint. */
+const INTERRUPTION_FADE_SECONDS = 0.07;
 
 /**
  * How much of that last turn is kept.
@@ -173,12 +177,15 @@ export class TutorSpeechOutput {
   private analyserBuffer: Float32Array<ArrayBuffer> | null = null;
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
   private sources = new Set<AudioBufferSourceNode>();
+  private fadingSources = new Set<AudioBufferSourceNode>();
   private turn: ActiveTurn | null = null;
   private turnCounter = 0;
   /** The last thing said out loud, and how long it can still be in the room. */
   private roomTail = "";
   private roomTailUntil = 0;
   private closed = false;
+  /** Interrupted preparation and its replacement share one socket handshake. */
+  private connectionPromise: Promise<void> | null = null;
 
   /** The playback rate the socket is asked for, and the rate the graph is built at. */
   private sampleRate = 24_000;
@@ -259,13 +266,22 @@ export class TutorSpeechOutput {
 
       const onOpen = () => {
         socket.removeEventListener("error", onError);
+        if (this.closed) {
+          socket.close();
+          resolve();
+          return;
+        }
         this.socket = socket;
         this.keepaliveTimer = setInterval(() => {
           if (socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ keep_alive: true }));
           }
         }, KEEPALIVE_INTERVAL_MS);
-        socket.addEventListener("message", (event) => this.handleMessage(event));
+        socket.addEventListener("message", (event) => {
+          if (!this.closed && this.socket === socket) {
+            this.handleMessage(event);
+          }
+        });
         socket.addEventListener("close", () => {
           /*
            * Only the socket currently in use gets to fail anything. `ensureOpen` replaces
@@ -329,6 +345,15 @@ export class TutorSpeechOutput {
    * immediately before it is used instead.
    */
   async ensureOpen() {
+    if (this.closed) {
+      throw new SpeechOutputError("The speech output is closed.", null);
+    }
+
+    if (this.connectionPromise) {
+      await this.connectionPromise;
+      return;
+    }
+
     if (this.socket?.readyState === WebSocket.OPEN) {
       return;
     }
@@ -341,7 +366,15 @@ export class TutorSpeechOutput {
     this.socket?.close();
     this.socket = null;
 
-    await this.openSocket();
+    const connection = this.openSocket();
+    this.connectionPromise = connection;
+    try {
+      await connection;
+    } finally {
+      if (this.connectionPromise === connection) {
+        this.connectionPromise = null;
+      }
+    }
   }
 
   /**
@@ -675,7 +708,7 @@ export class TutorSpeechOutput {
    * the learner has not heard yet cannot be echoing back at the microphone, and
    * counting them would only make the tutor deaf to a learner who happened to use one.
    *
-   * It narrows as the tutor stops: everything played while a turn is in progress, then
+   * Only the recent six seconds can still be in the recognizer. After a turn, keep
    * only the few words it ended on for as long as those can still be in the air, then
    * nothing at all. That last state is most of the session — during the learner's turn
    * nothing they say is measured against the tutor — and it is what makes it safe for
@@ -695,9 +728,15 @@ export class TutorSpeechOutput {
       return previous;
     }
 
-    const played = spokenTextBefore(turn.timings, this.playedSeconds(turn, context), turn.text);
+    const now = this.playedSeconds(turn, context);
+    const played = spokenTextBefore(turn.timings, now, turn.text);
+    // Keep the full conservative fallback when timestamps are unavailable.
+    const earlier = turn.timings.characters.length && now > ACTIVE_ECHO_WINDOW_SECONDS
+      ? spokenTextBefore(turn.timings, now - ACTIVE_ECHO_WINDOW_SECONDS, turn.text)
+      : "";
+    const recent = played.slice(earlier.length).trim();
 
-    return `${previous} ${played}`.trim();
+    return `${previous} ${recent}`.trim();
   }
 
   /** How much of this turn has been heard, in seconds of its own audio. */
@@ -731,16 +770,29 @@ export class TutorSpeechOutput {
   }
 
   /**
-   * Stops the turn now and reports what was actually heard of it.
+   * Cancels the turn now and reports what was actually heard of it. A recognized
+   * interruption may fade the existing audio over 70ms; Pause and End stop it hard.
    *
    * Everything still queued is discarded, the socket is told to stop generating,
    * and the text is cut at the last character whose audio had already left the
    * speaker — see `spokenTextBefore` for why that is not the same as the text
    * that was generated.
    */
-  stop() {
+  stop({ fadeOut = false }: { fadeOut?: boolean } = {}) {
     const turn = this.turn;
     const context = this.context;
+
+    // Pause, End and replacement speech also silence any unfinished fade.
+    for (const source of this.fadingSources) {
+      source.onended = null;
+      try { source.stop(); } catch { /* Already ended. */ }
+      source.disconnect();
+    }
+    this.fadingSources.clear();
+    if (context && this.gain) {
+      this.gain.gain.cancelScheduledValues(context.currentTime);
+      this.gain.gain.setValueAtTime(1, context.currentTime);
+    }
 
     if (!turn || !context) {
       return { spokenText: "", wasSpeaking: false };
@@ -748,6 +800,10 @@ export class TutorSpeechOutput {
 
     const wasSpeaking = turn.scheduledUntil > context.currentTime;
     const spokenText = spokenTextBefore(turn.timings, this.playedSeconds(turn, context), turn.text);
+    const fade = fadeOut && wasSpeaking && context.state === "running" &&
+      turn.audioStartedAt !== null && turn.audioStartedAt <= context.currentTime;
+    const stopAt = context.currentTime + (fade ? INTERRUPTION_FADE_SECONDS : 0);
+    if (fade) this.gain?.gain.linearRampToValueAtTime(0, stopAt);
 
     this.clearQuietTimer(turn);
     turn.pending = "";
@@ -768,8 +824,18 @@ export class TutorSpeechOutput {
 
     for (const source of this.sources) {
       try {
-        source.onended = null;
-        source.stop();
+        if (fade) {
+          this.fadingSources.add(source);
+          source.onended = () => {
+            this.fadingSources.delete(source);
+            source.disconnect();
+          };
+          source.stop(stopAt);
+        } else {
+          source.onended = null;
+          source.stop();
+          source.disconnect();
+        }
       } catch {
         // Already finished. Stopping a stopped source throws and means nothing.
       }

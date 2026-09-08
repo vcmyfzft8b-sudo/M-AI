@@ -32,9 +32,9 @@ const turnSchema = z.object({
   kind: z.enum(["opening", "teach", "answer", "feedback", "resume", "closing"]),
   topicIndex: z.number().int().min(0).max(31),
   /*
-   * Absent for the opening turn, which is fired before the running order exists —
-   * that is the whole reason the tutor starts talking in about three seconds
-   * rather than ten. Every other kind carries it.
+   * Opening and early answer/feedback turns may omit the running order.
+   * Replies still read the authenticated note and conversation; waiting for a
+   * plan here would delay a learner's question without improving its grounding.
    */
   plan: z
     .object({
@@ -112,19 +112,21 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
 
   const { id } = parsedParams.data;
-  const lecture = await ensureUserOwnsLecture({ lectureId: id, user });
+  const [lecture, access] = await Promise.all([
+    ensureUserOwnsLecture({ lectureId: id, user }),
+    canUseLectureFeatures(user.id, id, "chat"),
+  ]);
 
   if (!lecture) {
     return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
-  const access = await canUseLectureFeatures(user.id, id, "chat");
-
   if (!access.allowed) {
     return createBillingRequiredResponse(await tr("api.trialOnly.tutor"), access.code);
   }
 
-  const grounding = await loadTutorGrounding(id);
+  // Reuse the owned lecture metadata rather than reading that row a second time.
+  const grounding = await loadTutorGrounding(id, lecture);
 
   if (!grounding) {
     return NextResponse.json({ error: await tr("api.tutorNotReady") }, { status: 409 });

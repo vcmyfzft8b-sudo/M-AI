@@ -77,7 +77,10 @@ type TutorGrounding = {
  * Read with the service-role client because ownership has already been checked
  * at the route — the same shape every other lecture-scoped helper here uses.
  */
-export async function loadTutorGrounding(lectureId: string): Promise<TutorGrounding | null> {
+export async function loadTutorGrounding(
+  lectureId: string,
+  ownedLecture?: { title: string | null; language_hint: string | null },
+): Promise<TutorGrounding | null> {
   const supabase = createSupabaseServiceRoleClient();
   const [{ data: artifact }, { data: lecture }] = await Promise.all([
     supabase
@@ -85,7 +88,9 @@ export async function loadTutorGrounding(lectureId: string): Promise<TutorGround
       .select("summary, key_topics, structured_notes_md, tutor_plan, tutor_plan_notes_hash")
       .eq("lecture_id", lectureId)
       .maybeSingle(),
-    supabase.from("lectures").select("title, language_hint").eq("id", lectureId).maybeSingle(),
+    ownedLecture
+      ? Promise.resolve({ data: ownedLecture })
+      : supabase.from("lectures").select("title, language_hint").eq("id", lectureId).maybeSingle(),
   ]);
 
   const artifactRow = (artifact ?? null) as {
@@ -233,9 +238,9 @@ export type TutorTurnRequest = {
 export async function speakTutorTurn(params: {
   grounding: TutorGrounding;
   /*
-   * Null only for the opening turn, which is generated before the running order
-   * exists. The greeting needs the note, not the plan, and firing the two at once
-   * is what takes time-to-first-word from about ten seconds down to three.
+   * Opening, answer and feedback turns can run before the plan exists. Replies
+   * are grounded in the note and conversation; only lesson progression needs
+   * the running order. An early question must not wait for the planner.
    */
   plan: (Omit<TutorLessonPlan, "language"> & { language: string | null }) | null;
   request: TutorTurnRequest;

@@ -89,7 +89,7 @@ const OFF_TOPIC = [
 export const TUTOR_LANGUAGE = [
   "Always reply in the language of the learner's latest message. Always — this outranks everything else about how you write.",
   "Do not answer in English because these instructions are in English, and do not answer in the language of their notes when they asked in another one. If they switch language, switch with them.",
-  "When a message is too short to tell — a greeting, \"ok\", \"hvala\", a single word — do not guess from the wording. Stay in the language the conversation is already in; if it has only just begun, use the language of their material; and if that settles nothing, answer in Slovenian, which is this app's language. This matters most between closely related languages: Slovenian, Croatian, Serbian and Bosnian are not interchangeable, and a learner writing Slovenian must not be answered in Croatian.",
+  "When a message is too short to tell — a greeting, \"ok\", \"hvala\", a single word — do not guess from the wording. Stay in the language the conversation is already in; if it has only just begun, use the language of their material; and if that settles nothing, answer in English. This matters most between closely related languages: Slovenian, Croatian, Serbian and Bosnian are not interchangeable, and a learner writing Slovenian must not be answered in Croatian.",
   "Keep technical terms, proper nouns and quoted wording as their material has them, even when the rest of your answer is in another language.",
 ].join(" ");
 

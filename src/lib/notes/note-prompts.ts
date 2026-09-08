@@ -444,7 +444,7 @@ export function buildKnowledgeExtractionInstructions(params: {
   outputLanguage?: string | null;
   sourceType: "audio" | "document";
 }) {
-  const languageInstruction = buildGeneratedContentLanguageInstruction();
+  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
   const sourceNoun = params.sourceType === "audio" ? "spoken lecture transcript" : "course material";
 
   return `${languageInstruction}
@@ -469,7 +469,7 @@ ${MATH_FORMATTING_INSTRUCTIONS}`;
 }
 
 export function buildNoteOutlineInstructions(params: { outputLanguage?: string | null }) {
-  const languageInstruction = buildGeneratedContentLanguageInstruction();
+  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
 
   return `${languageInstruction}
 
@@ -647,12 +647,15 @@ export function buildSourceNoteInstructions(params: {
   /** Set when the source is split into consecutive parts; see planSourceWriteWindows. */
   window?: { index: number; count: number };
 }) {
-  const languageInstruction = buildGeneratedContentLanguageInstruction();
+  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
   const labels = getStructuredPlusLabels(params.outputLanguage);
   const window = params.window;
   const windowed = window && window.count > 1;
   // The renderer recognises these exact bold labels (note-tts-text.ts getCalloutKind) and turns
   // the blockquote into a coloured box; any other label falls back to the plain blue one.
+  const labelInstruction = STRUCTURED_PLUS_LABELS[normalizeNoteLanguage(params.outputLanguage)]
+    ? "Use the exact localized callout labels shown below."
+    : "The callout labels below describe meanings in English only. Translate each label naturally into the source language and script; never print the English example labels in non-English notes.";
   const calloutBudget = windowed ? "at most 2 callouts in this part" : "at most 4 callouts in the whole note";
 
   const outputContract = windowed
@@ -685,6 +688,8 @@ OUTPUT CONTRACT
 ${outputContract}
 
 LANGUAGE
+
+${labelInstruction}
 
 Keep original technical terms and any English terms the source itself uses in brackets (for example: "uporabna informatika - informacijski sistemi (information systems)"). Never translate terminology the student will be tested on.
 
@@ -895,7 +900,8 @@ export function buildLegacyStructuredPlusInstructions(params: {
 }) {
   const labels = getStructuredPlusLabels(params.outputLanguage);
 
-  return `Use a selective expert study-notes style: read the source section by section, decide what the learner actually needs to know, and turn that into clear summarized notes with explanations. Cover the material by concepts and learning value, not by rewriting every sentence.
+  return `All headings and callout labels below are semantic examples: translate them into the source language and script when the supplied labels are not already in that language. Preserve their markdown structure.
+Use a selective expert study-notes style: read the source section by section, decide what the learner actually needs to know, and turn that into clear summarized notes with explanations. Cover the material by concepts and learning value, not by rewriting every sentence.
 
 Selection rules:
 - For each source section or chunk, identify the important learning points: central concepts, definitions, rules, formulas, processes, comparisons, causes and effects, exceptions, caveats, and source examples that make a concept easier to understand.

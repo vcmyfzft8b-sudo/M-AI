@@ -6,6 +6,8 @@ import { STRUCTURED_FALLBACK_RESERVE_MS } from "./attempt-budget.ts";
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
 
 export const AI_STAGES = [
+  "source_language",
+  "speech_translation",
   "source_condense",
   "note_extract",
   "note_outline",
@@ -134,6 +136,8 @@ export const LANGUAGE_CHECK_MODEL = "or/google/gemini-3.5-flash-lite";
 export const TUTOR_VOICE_MODEL = "or/google/gemini-3.5-flash-lite";
 
 const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
+  source_language: { thinkingLevel: "minimal", outputHeadroom: 1, defaultModel: LANGUAGE_CHECK_MODEL, providerSort: "latency" },
+  speech_translation: { thinkingLevel: "minimal", outputHeadroom: 1, defaultModel: LANGUAGE_CHECK_MODEL, providerSort: "latency" },
   // Selection over one chunk at a time: reads a lot, writes unit numbers. Same profile as
   // extraction — high volume, local judgment, and thinking measurably hurts this kind of call.
   source_condense: { thinkingLevel: "minimal", outputHeadroom: 1, defaultModel: GLM_TEXT_MODEL },
@@ -309,6 +313,8 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
 };
 
 const STAGE_MODEL_ENV_KEYS: Record<AiStage, string> = {
+  source_language: "GEMINI_SOURCE_LANGUAGE_MODEL",
+  speech_translation: "GEMINI_SPEECH_TRANSLATION_MODEL",
   source_condense: "GEMINI_SOURCE_CONDENSE_MODEL",
   note_extract: "GEMINI_NOTE_EXTRACT_MODEL",
   note_outline: "GEMINI_NOTE_OUTLINE_MODEL",
@@ -324,6 +330,8 @@ const STAGE_MODEL_ENV_KEYS: Record<AiStage, string> = {
 };
 
 const STAGE_THINKING_ENV_KEYS: Record<AiStage, string> = {
+  source_language: "GEMINI_SOURCE_LANGUAGE_THINKING",
+  speech_translation: "GEMINI_SPEECH_TRANSLATION_THINKING",
   source_condense: "GEMINI_SOURCE_CONDENSE_THINKING",
   note_extract: "GEMINI_NOTE_EXTRACT_THINKING",
   note_outline: "GEMINI_NOTE_OUTLINE_THINKING",

@@ -12,6 +12,7 @@ import { tr } from "@/lib/i18n/server";
 
 const chatSchema = z.object({
   question: chatQuestionSchema,
+  sourceLanguageAction: z.boolean().optional().default(false),
 });
 
 export const maxDuration = 300;
@@ -89,6 +90,7 @@ export async function POST(
     lectureId: id,
     userId: user.id,
     question: parsed.data.question,
+        sourceLanguageAction: parsed.data.sourceLanguageAction,
   });
 
   return NextResponse.json(result);

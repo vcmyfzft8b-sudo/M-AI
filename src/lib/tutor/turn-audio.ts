@@ -1,3 +1,5 @@
+import { toSpeechScript } from "../speech-language.ts";
+
 // The parts of the voice tutor that are decisions rather than plumbing: where an interrupted turn
 // was actually cut off, whether what the microphone heard was a word or a noise, and whether it
 // was the tutor's own voice coming back.
@@ -355,7 +357,12 @@ export type HeardSpeaker = "learner" | "tutor" | "noise";
  * is empty whenever the room has been the learner's for a moment — which is what
  * makes it safe for the echo test to be as strict as it is.
  */
-export function judgeHeard(heard: string, tutorSpokenTail: string): HeardSpeaker {
+export function judgeHeard(heard: string, tutorSpokenTail: string, language = ""): HeardSpeaker {
+  // STT can return Cyrillic while Soniox speaks the Latin copy. Compare the same
+  // alphabet without changing the learner's displayed transcript or turn history.
+  const comparisonLanguage = /[ђћљњџЂЋЉЊЏ]/u.test(heard + tutorSpokenTail) ? "sr" : language;
+  heard = toSpeechScript(heard, comparisonLanguage);
+  tutorSpokenTail = toSpeechScript(tutorSpokenTail, comparisonLanguage);
   if (!hasSpokenWord(heard)) {
     return "noise";
   }

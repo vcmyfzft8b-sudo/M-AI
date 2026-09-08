@@ -220,6 +220,7 @@ async function streamLibraryAnswer(
 export async function answerLibraryChat(params: {
   userId: string;
   question: string;
+  sourceLanguageAction?: boolean;
   scope: LibraryChatScope;
   folderId: string | null;
   useTranscripts: boolean;
@@ -289,6 +290,7 @@ export async function answerLibraryChat(params: {
     stage: "chat" as const,
     instructions: [
       buildTutorInstructions("library"),
+      params.sourceLanguageAction ? "This is a translated interface action, not a typed language choice. Override the latest-message language rule: use the predominant source-note language and script. When notes have different languages, preserve each note's language for its own study content; use the conversation language (or English if absent) only for connecting commentary. Never translate Bosnian, Croatian or Serbian into a neighboring variety." : "",
       "List in usedNotes the exact titles of the notes you actually drew on.",
     ].join("\n\n"),
     input: JSON.stringify(

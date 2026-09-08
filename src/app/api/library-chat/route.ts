@@ -19,6 +19,7 @@ import { tr } from "@/lib/i18n/server";
  */
 const librarySchema = z.object({
   question: z.string().trim().min(1).max(2000),
+  sourceLanguageAction: z.boolean().optional().default(false),
   scope: z.enum(LIBRARY_CHAT_SCOPES).default("recent"),
   folderId: z.string().uuid().nullable().default(null),
   useTranscripts: z.boolean().default(true),
@@ -89,6 +90,7 @@ export async function POST(request: Request) {
       answerLibraryChat({
         userId: user.id,
         question: parsed.data.question,
+        sourceLanguageAction: parsed.data.sourceLanguageAction,
         scope: parsed.data.scope,
         folderId: parsed.data.folderId,
         useTranscripts: parsed.data.useTranscripts,

@@ -86,7 +86,7 @@ export async function processStoredLinkLecture(params: {
   if (youtubeVideoId) {
     const transcript = await fetchYoutubeTranscriptSource({
       videoId: youtubeVideoId,
-      languageHint: lectureRow.language_hint,
+      languageHint: lectureRow.language_hint ?? undefined,
     });
 
     await prepareLectureFromTextSource({
@@ -96,7 +96,7 @@ export async function processStoredLinkLecture(params: {
       text: transcript.text,
       blocks: transcript.blocks,
       titleHint: transcript.title ?? undefined,
-      languageHint: lectureRow.language_hint ?? "sl",
+      languageHint: lectureRow.language_hint ?? undefined,
       modelMetadata: {
         importMode: "link",
         linkKind: "youtube",
@@ -130,7 +130,7 @@ export async function processStoredLinkLecture(params: {
     sourceType: "link",
     text: webpage.text,
     titleHint: webpage.title,
-    languageHint: lectureRow.language_hint ?? "sl",
+    languageHint: lectureRow.language_hint ?? undefined,
     modelMetadata: {
       importMode: "link",
       sourceUrl: pendingLinkUrl,

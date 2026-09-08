@@ -1,4 +1,6 @@
 import "server-only";
+import { resolveSourceLanguage } from "@/lib/source-language";
+import { buildSpeechLanguageInstruction, resolveSpeechLanguage, toSpeechScript } from "@/lib/speech-language";
 
 import { generateStructuredObject, streamStructuredObject } from "@/lib/ai/json";
 import { repairPassage } from "@/lib/ai/language-check";
@@ -18,8 +20,7 @@ import {
   type TutorLessonPlan,
   type TutorTurnKind,
 } from "@/lib/ai/tutor-voice-prompt";
-import { normalizeSpokenLanguageCode, resolveMaterialLanguage } from "@/lib/languages";
-import { selectUsableTutorPlan } from "@/lib/tutor/plan-cache";
+import { normalizeSpokenLanguageCode } from "@/lib/languages";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import { resolvePassageLanguage, resolveSpokenLanguage } from "@/lib/tutor/spoken-language";
 import { getServerEnv } from "@/lib/server-env";
@@ -82,7 +83,7 @@ export async function loadTutorGrounding(lectureId: string): Promise<TutorGround
   const [{ data: artifact }, { data: lecture }] = await Promise.all([
     supabase
       .from("lecture_artifacts")
-      .select("summary, key_topics, structured_notes_md, tutor_plan, tutor_plan_notes_hash")
+      .select("summary, key_topics, structured_notes_md, model_metadata")
       .eq("lecture_id", lectureId)
       .maybeSingle(),
     supabase.from("lectures").select("title, language_hint").eq("id", lectureId).maybeSingle(),
@@ -92,8 +93,7 @@ export async function loadTutorGrounding(lectureId: string): Promise<TutorGround
     summary: string;
     key_topics: string[];
     structured_notes_md: string;
-    tutor_plan: unknown;
-    tutor_plan_notes_hash: string | null;
+    model_metadata: unknown;
   } | null;
   const lectureRow = (lecture ?? null) as {
     title: string | null;
@@ -109,30 +109,12 @@ export async function loadTutorGrounding(lectureId: string): Promise<TutorGround
     lectureRow?.title ?? null,
   ).slice(0, TUTOR_NOTE_CHAR_CAP);
 
-  /*
-   * What language to teach in, best evidence first.
-   *
-   * The lesson plan knows, because a model read the whole note to write it and was asked to name
-   * the language it was reading. That beats everything else here: detection recognises seven
-   * languages and answers null for the rest, and the hint is only ever what somebody typed at
-   * upload. Without the plan a Polish lecture came out as "en" — not because anything failed, but
-   * because "en" is what this app says when it has not heard of a language.
-   *
-   * The plan is read from the same row, so it costs nothing, and it is only trusted while its
-   * hash still matches the note it was planned from.
-   */
-  const planned = normalizeSpokenLanguageCode(
-    selectUsableTutorPlan({
-      plan: artifactRow.tutor_plan,
-      notesHash: artifactRow.tutor_plan_notes_hash,
-      notes: artifactRow.structured_notes_md ?? "",
-    })?.language,
-  );
-
-  /* The note screen works the fallback out the same way, from the same helper. */
-  const materialLanguage =
-    planned ??
-    resolveMaterialLanguage(`${artifactRow.summary ?? ""}\n${notes}`, lectureRow?.language_hint);
+  // Trust generation metadata only while its full-note hash matches. Older or edited
+  // material is detected once and shared through the source-language cache.
+  const materialLanguage = await resolveSourceLanguage({
+    text: artifactRow.structured_notes_md ?? "", hint: lectureRow?.language_hint,
+    lectureId, metadata: artifactRow.model_metadata,
+  });
 
   return {
     title: lectureRow?.title ?? null,
@@ -246,10 +228,10 @@ export async function speakTutorTurn(params: {
   const call = {
     schema: tutorTurnSchema,
     stage: "tutor_turn" as const,
-    instructions: buildTutorVoiceInstructions(request.kind),
+    instructions: buildTutorVoiceInstructions(request.kind) + "\n" + buildSpeechLanguageInstruction(params.grounding.language),
     input: JSON.stringify(
       {
-        language: params.grounding.language,
+        language: resolveSpeechLanguage(params.grounding.language),
         noteTitle: params.grounding.title,
         subject: plan?.subject ?? params.grounding.summary,
         runningOrder:
@@ -297,8 +279,9 @@ export async function speakTutorTurn(params: {
    */
   let spoken = "";
   const emit = (text: string) => {
-    spoken += text;
-    params.onDelta(text);
+    const speakable = toSpeechScript(text, language);
+    spoken += speakable;
+    params.onDelta(speakable);
   };
 
   /*

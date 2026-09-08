@@ -419,7 +419,7 @@ async function generateQuestionsForUnit(params: {
   repairOnly?: boolean;
 }) {
   const targetCount = countTargetQuestions(params.concepts);
-  const languageInstruction = buildGeneratedContentLanguageInstruction();
+  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
   const requestedConceptKeys = new Set(params.concepts.map((concept) => concept.conceptKey));
 
   const batch = await generateStructuredObject({

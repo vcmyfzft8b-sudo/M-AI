@@ -264,6 +264,8 @@ export async function POST(
         chunk,
         allWords: document.words,
         languageHint: detail.lecture.language_hint,
+        sourceText: detail.artifact?.structured_notes_md ?? "",
+        sourceMetadata: detail.artifact?.model_metadata,
         voice: parsedBody.data.voice,
         quotaContext: {
           hasPaidAccess: access.entitlement.hasPaidAccess,

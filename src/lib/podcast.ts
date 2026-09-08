@@ -1,4 +1,6 @@
 import "server-only";
+import { resolveSourceLanguage } from "@/lib/source-language";
+import { buildSpeechLanguageInstruction, resolveSpeechLanguage, toSpeechScript } from "@/lib/speech-language";
 
 import { createHash } from "node:crypto";
 
@@ -19,7 +21,6 @@ import {
 } from "@/lib/ai/podcast-prompt";
 import { STORAGE_BUCKET } from "@/lib/constants";
 import type { Json, LecturePodcastRow, LecturePodcastSegmentRow } from "@/lib/database.types";
-import { normalizeSpokenLanguageCode, resolveMaterialLanguage } from "@/lib/languages";
 import {
   isTtsProviderRateLimitError,
   safeStorageSegment,
@@ -53,7 +54,6 @@ import { isMissingLectureReferenceError } from "@/lib/postgres-errors";
 import { getServerEnv, requireSonioxEnv } from "@/lib/server-env";
 import { retryTransientStorageOperation } from "@/lib/storage-download-errors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { selectUsableTutorPlan } from "@/lib/tutor/plan-cache";
 
 /**
  * How much of the note the episode is written from.
@@ -128,7 +128,7 @@ function getSonioxClient() {
 }
 
 export function hashPodcastSource(content: string) {
-  return createHash("sha256").update(`podcast-v1:${content}`).digest("hex");
+  return createHash("sha256").update(`podcast-v2-source-language:${content}`).digest("hex");
 }
 
 export type PodcastSource = {
@@ -140,21 +140,13 @@ export type PodcastSource = {
   language: string;
 };
 
-/**
- * The note an episode is made from, and the language it is made in.
- *
- * The language is worked out exactly the way the tutor works it out, from the same three signals
- * in the same order: the lesson plan first, because a model read the whole note to write it and
- * named the language it was reading; then detection; then the hint somebody typed at upload. It
- * has to be this and not the app's locale — a Slovenian lecture is a Slovenian podcast however
- * the interface is set.
- */
+/** Resolve the source language independently of the interface and old tutor plans. */
 export async function loadPodcastSource(lectureId: string): Promise<PodcastSource | null> {
   const supabase = createSupabaseServiceRoleClient();
   const [{ data: artifact }, { data: lecture }] = await Promise.all([
     supabase
       .from("lecture_artifacts")
-      .select("summary, key_topics, structured_notes_md, tutor_plan, tutor_plan_notes_hash")
+      .select("summary, key_topics, structured_notes_md, model_metadata")
       .eq("lecture_id", lectureId)
       .maybeSingle(),
     supabase.from("lectures").select("title, language_hint, status").eq("id", lectureId).maybeSingle(),
@@ -164,8 +156,7 @@ export async function loadPodcastSource(lectureId: string): Promise<PodcastSourc
     summary: string | null;
     key_topics: string[] | null;
     structured_notes_md: string | null;
-    tutor_plan: unknown;
-    tutor_plan_notes_hash: string | null;
+    model_metadata: unknown;
   } | null;
   const lectureRow = (lecture ?? null) as {
     title: string | null;
@@ -186,13 +177,10 @@ export async function loadPodcastSource(lectureId: string): Promise<PodcastSourc
     return null;
   }
 
-  const planned = normalizeSpokenLanguageCode(
-    selectUsableTutorPlan({
-      plan: artifactRow.tutor_plan,
-      notesHash: artifactRow.tutor_plan_notes_hash,
-      notes: artifactRow.structured_notes_md ?? "",
-    })?.language,
-  );
+  const materialLanguage = await resolveSourceLanguage({
+    text: artifactRow.structured_notes_md ?? "", hint: lectureRow.language_hint,
+    lectureId, metadata: artifactRow.model_metadata,
+  });
 
   return {
     title: lectureRow.title,
@@ -205,8 +193,7 @@ export async function loadPodcastSource(lectureId: string): Promise<PodcastSourc
      * for the second.
      */
     contentHash: hashPodcastSource(full),
-    language:
-      planned ?? resolveMaterialLanguage(`${artifactRow.summary ?? ""}\n${full}`, lectureRow.language_hint),
+    language: resolveSpeechLanguage(materialLanguage),
   };
 }
 
@@ -629,7 +616,7 @@ async function writePodcastScript(params: {
           a: voiceGender(params.voices.a),
           ...(format.speakerCount === 2 ? { b: voiceGender(params.voices.b) } : {}),
         },
-      }),
+      }) + "\n" + buildSpeechLanguageInstruction(params.source.language),
       input: JSON.stringify({
         language: params.source.language,
         title: params.source.title,
@@ -1025,7 +1012,7 @@ async function synthesizePodcastTurn(params: {
   try {
     const synthesized = await synthesizeTtsChunkWithTimestamps({
       client,
-      text: params.text,
+      text: toSpeechScript(params.text, params.language),
       model: params.model,
       voice: params.voice,
       language: params.language,
@@ -1053,7 +1040,7 @@ async function synthesizePodcastTurn(params: {
   }
 
   const audio = await client.tts.generate({
-    text: params.text,
+    text: toSpeechScript(params.text, params.language),
     model: params.model,
     voice: params.voice,
     language: params.language,

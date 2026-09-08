@@ -93,7 +93,7 @@ Each ${params.unitNoun} draws only on its own item. The other items in the batch
 }
 
 export function buildFlashcardInstructions(params: { outputLanguage?: string | null }) {
-  return `${buildGeneratedContentLanguageInstruction()}
+  return `${buildGeneratedContentLanguageInstruction(params.outputLanguage)}
 
 ${buildItemContract({ verb: "Write one flashcard for each.", unitNoun: "card" })}
 
@@ -117,7 +117,7 @@ ${STANDALONE_RULES}`;
 }
 
 export function buildQuizInstructions(params: { outputLanguage?: string | null }) {
-  return `${buildGeneratedContentLanguageInstruction()}
+  return `${buildGeneratedContentLanguageInstruction(params.outputLanguage)}
 
 ${buildItemContract({
     verb: "Write one multiple-choice question for each.",
@@ -142,7 +142,7 @@ ${STANDALONE_RULES}`;
 }
 
 export function buildPracticeTestInstructions(params: { outputLanguage?: string | null }) {
-  return `${buildGeneratedContentLanguageInstruction()}
+  return `${buildGeneratedContentLanguageInstruction(params.outputLanguage)}
 
 ${buildItemContract({
     verb: "Write one open written-exam question for each.",

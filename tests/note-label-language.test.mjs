@@ -1,26 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { detectSourceLanguage } from "../src/lib/languages.ts";
+import { resolveMaterialLanguage } from "../src/lib/languages.ts";
 import {
   buildLegacyStructuredPlusInstructions,
   buildSourceNoteInstructions,
   getStructuredPlusLabels,
 } from "../src/lib/notes/note-prompts.ts";
 
-/*
- * A note's headings and callout labels are literal strings handed to the model,
- * so they cannot follow the source the way the body does. They used to follow a
- * language the learner picked; nobody picks one any more, and `language_hint`
- * is null on every note created since — which resolves to English.
- *
- * This is the rule that stops a Slovenian lecture coming back under "Quick
- * Overview". `note-generation.ts` is server-only, so the resolution it performs
- * is restated here against the same two functions it composes.
- */
-function resolveNoteLabelLanguage(sourceText, outputLanguage) {
-  return detectSourceLanguage(sourceText) ?? outputLanguage ?? "sl";
-}
+// Exercise the shared source resolver, not a local copy of the old Slovenian default.
+const resolveNoteLabelLanguage = resolveMaterialLanguage;
 
 const SLOVENIAN_SOURCE = `
 Predavanje govori o entropiji, ki je mera nereda v sistemu. Drugi zakon
@@ -48,12 +37,12 @@ test("an English source gets English headings", () => {
   assert.equal(getStructuredPlusLabels(language).overview, "## Quick Overview");
 });
 
-test("an undetectable source falls back to the app's language, not English", () => {
+test("an undetectable source never invents Slovenian", () => {
   // Too short to count, which is exactly when the old default mattered.
   const language = resolveNoteLabelLanguage("Ok.", null);
 
-  assert.equal(language, "sl");
-  assert.equal(getStructuredPlusLabels(language).overview, "## Hiter pregled");
+  assert.equal(language, "en");
+  assert.equal(getStructuredPlusLabels(language).overview, "## Quick Overview");
 });
 
 test("a stored hint is still honoured when detection cannot decide", () => {

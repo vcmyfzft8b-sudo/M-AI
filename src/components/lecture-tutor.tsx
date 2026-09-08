@@ -1137,14 +1137,14 @@ export function LectureTutor({
    * contains no word of theirs to lose.
    */
   const whoSpoke = useCallback((text: string) => {
-    const speaker = judgeHeard(text, outputRef.current?.spokenIntoRoom() ?? "");
+    const speaker = judgeHeard(text, outputRef.current?.spokenIntoRoom() ?? "", language);
 
     if (speaker !== "learner") {
       inputRef.current?.resetUtterance();
     }
 
     return speaker;
-  }, []);
+  }, [language]);
 
   /**
    * The learner has taken the floor. Stop, and record only what they heard.

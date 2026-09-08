@@ -1,3 +1,4 @@
+import { resolveSourceLanguage } from "@/lib/source-language";
 import "server-only";
 
 import type {
@@ -550,6 +551,12 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
       throw new Error("The lecture transcript is empty.");
     }
 
+    const outputLanguage = await resolveSourceLanguage({
+      text: artifactRow.structured_notes_md ?? transcriptRows.map(segment => segment.text).join("\n"),
+      hint: lectureRow.language_hint, metadata: artifactRow.model_metadata,
+      lectureId: lectureRow.id, userId: lectureRow.user_id,
+    });
+
     const { units, sections } = buildSourceUnits({
       lecture: lectureRow,
       transcript: transcriptRows,
@@ -571,7 +578,7 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
         ? await extractStudyItems({
             units,
             sourceType: lectureRow.source_type === "audio" ? "audio" : "document",
-            outputLanguage: lectureRow.language_hint,
+            outputLanguage,
             usageContext: { lectureId: params.lectureId, userId: lectureRow.user_id },
             artifactModelMetadata: artifactRow.model_metadata,
           })
@@ -608,7 +615,7 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
           await generateItemCardDrafts({
             items: studyItems,
             units: effectiveUnits,
-            outputLanguage: lectureRow.language_hint,
+            outputLanguage,
             usageContext: { lectureId: params.lectureId, userId: lectureRow.user_id },
           })
         ).drafts
@@ -618,7 +625,7 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
           keyTopics: artifactRow.key_topics,
           units: effectiveUnits,
           plans: plannedCoverage,
-          outputLanguage: lectureRow.language_hint,
+          outputLanguage,
         });
 
     let validation = validateCoverage({
@@ -658,7 +665,7 @@ export async function generateLectureFlashcards(params: { lectureId: string }) {
         units: effectiveUnits,
         plans: plannedCoverage,
         missingConceptsByUnit: validation.missingConceptsByUnit,
-        outputLanguage: lectureRow.language_hint,
+        outputLanguage,
       });
 
       generatedCards = dedupeAcceptedCards([...generatedCards, ...repairedCards]);

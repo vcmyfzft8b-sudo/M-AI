@@ -11,7 +11,8 @@ import {
   mindmapTopicPlanSchema,
 } from "@/lib/ai/mindmap-prompt";
 import { isWorkAbortedError } from "@/lib/abort-context";
-import { resolveMaterialLanguage } from "@/lib/languages";
+import { resolveSourceLanguage } from "@/lib/source-language";
+import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
 import {
   countMindmapNodes,
   mindmapDepth,
@@ -67,7 +68,7 @@ async function loadMindmapGrounding(lectureId: string): Promise<MindmapGrounding
   const [{ data: artifact }, { data: lecture }] = await Promise.all([
     supabase
       .from("lecture_artifacts")
-      .select("summary, key_topics, structured_notes_md")
+      .select("summary, key_topics, structured_notes_md, model_metadata")
       .eq("lecture_id", lectureId)
       .maybeSingle(),
     supabase.from("lectures").select("title, language_hint").eq("id", lectureId).maybeSingle(),
@@ -77,6 +78,7 @@ async function loadMindmapGrounding(lectureId: string): Promise<MindmapGrounding
     summary: string | null;
     key_topics: string[] | null;
     structured_notes_md: string | null;
+    model_metadata: unknown;
   } | null;
   const lectureRow = (lecture ?? null) as {
     title: string | null;
@@ -101,7 +103,10 @@ async function loadMindmapGrounding(lectureId: string): Promise<MindmapGrounding
     summary: artifactRow.summary ?? null,
     keyTopics: artifactRow.key_topics ?? [],
     notes,
-    languageHint: lectureRow?.language_hint ?? "",
+    languageHint: await resolveSourceLanguage({
+      text: artifactRow.structured_notes_md ?? notes, hint: lectureRow?.language_hint,
+      metadata: artifactRow.model_metadata, lectureId,
+    }),
   };
 }
 
@@ -143,7 +148,7 @@ async function generateMindmapDocument(params: {
     (feedback) => generateStructuredObject({
       schema: mindmapTopicPlanSchema,
       stage: "mindmap",
-      instructions: buildMindmapTopicPlanInstructions(),
+      instructions: buildMindmapTopicPlanInstructions() + "\n" + buildGeneratedContentLanguageInstruction(params.grounding.languageHint),
       input: JSON.stringify({
         noteTitle: params.grounding.title,
         summary: params.grounding.summary,
@@ -163,7 +168,7 @@ async function generateMindmapDocument(params: {
     fill: (topics, sections, feedback, index) => generateStructuredObject({
       schema: mindmapFillSchema,
       stage: "mindmap",
-      instructions: buildMindmapFillInstructions(),
+      instructions: buildMindmapFillInstructions() + "\n" + buildGeneratedContentLanguageInstruction(params.grounding.languageHint),
       input: JSON.stringify({
         topics,
         sections,
@@ -372,9 +377,7 @@ export async function generateLectureMindmap(params: {
     const finished: MindmapDoc = {
       ...doc,
       title,
-      language:
-        doc.language ||
-        resolveMaterialLanguage(`${grounding.summary ?? ""}\n${grounding.notes}`, grounding.languageHint),
+      language: grounding.languageHint,
     };
 
     await setMindmapStatus({

@@ -404,3 +404,12 @@ audio to silence over 70ms. Late audio is discarded as soon as the turn is cance
 Pause, End and replacement speech also hard-stop an unfinished fade; the next turn restores
 full volume. Noise and echo do not trigger a fade. This smooths the cutoff after recognition;
 it does not claim to remove speech-recognition latency or change semantic endpointing.
+
+## Spoken introduction
+
+The opening uses a first-person introduction in the material's language. Slovenian starts
+with “Živjo, jaz sem Memo AI.” rather than a literal translation of “Memo AI here”. The prompt
+specifies native introductions for the five app locales and German, Italian, French, Spanish,
+Portuguese, Polish and Hungarian, with a natural first-person equivalent for other languages.
+Only the opening gets this instruction; answers and resumed explanations do not reintroduce
+the tutor. A live writer check on 2026-09-08 produced the expected opening in all 12 languages.

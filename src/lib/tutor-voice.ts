@@ -20,7 +20,6 @@ import {
   type TutorLessonPlan,
   type TutorTurnKind,
 } from "@/lib/ai/tutor-voice-prompt";
-import { normalizeSpokenLanguageCode } from "@/lib/languages";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import { resolvePassageLanguage, resolveSpokenLanguage } from "@/lib/tutor/spoken-language";
 import { getServerEnv } from "@/lib/server-env";
@@ -261,10 +260,7 @@ export async function speakTutorTurn(params: {
    * finished turn. The repair is allowed to fail: a unit whose correction is late or refused is
    * spoken exactly as GLM wrote it, so the worst case here is the turn we would have had anyway.
    */
-  const language = resolveSpokenLanguage(
-    normalizeSpokenLanguageCode(plan?.language) ?? params.grounding.language,
-    request,
-  );
+  const language = resolveSpeechLanguage(resolveSpokenLanguage(params.grounding.language, request));
 
   /*
    * Chat can throw away a half-streamed answer and re-run the call, because
@@ -332,7 +328,7 @@ export async function speakTutorTurn(params: {
        * if nothing was ever emitted, something went wrong on the way out and the model's own text
        * is a better answer than an empty turn.
        */
-      return { ...streamed, speech: spoken.trim() ? spoken : streamed.speech };
+      return { ...streamed, speech: spoken.trim() ? spoken : toSpeechScript(streamed.speech, language) };
     }
   } catch (error) {
     console.error("[tutor] streaming failed", error);
@@ -364,5 +360,5 @@ export async function speakTutorTurn(params: {
       })
     : null;
 
-  return { ...generated, speech: repaired ?? generated.speech };
+  return { ...generated, speech: toSpeechScript(repaired ?? generated.speech, language) };
 }

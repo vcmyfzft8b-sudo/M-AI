@@ -35,27 +35,46 @@
  *
  * ## The silent switch
  *
- * The one place rerouting is not free. iOS decides whether the ring/silent switch mutes a sound
- * from the audio *session category*, and a WebAudio graph defaults to the ambient one — so an
- * element that played through a locked-down phone perfectly well before goes quiet the moment
- * its audio arrives via a graph. `navigator.audioSession` is the opt-out, and this is a podcast:
- * "playback" is exactly what it is. Available from Safari 16.4, which is the floor the site
- * already builds to, and a no-op anywhere it is missing.
+ * The one place rerouting is not free, and the second thing that can only ever cost the motion
+ * here. iOS decides whether the ring/silent switch mutes a sound from the audio *session
+ * category*, and a WebAudio graph defaults to the ambient one — so an element that played
+ * through a silenced phone perfectly well before goes quiet the moment its audio arrives via a
+ * graph. `navigator.audioSession` is the opt-out, and this is a podcast: "playback" is exactly
+ * what it is. It has been in Safari since 16.4, which is the floor the site already builds to.
+ *
+ * Where it is missing the platform decides whether that matters. On a desktop browser there is
+ * no hardware switch to be caught by and nothing to opt out of, so the meter runs. On an iPhone
+ * there is, so the meter does not run at all: a still sphere is a smaller loss than a podcast
+ * that plays in silence for everyone who keeps their ringer off, and that is not a trade to
+ * make on the strength of a version number.
  */
 
 /** Small window, heavy smoothing — this drives a shape, not a meter. The tutor's numbers. */
 const FFT_SIZE = 512;
 const SMOOTHING = 0.72;
 
-/** Tells iOS this is a podcast, not a UI sound, so the ring/silent switch leaves it alone. */
-function declarePlayback() {
+/**
+ * Declares this a podcast rather than a UI sound, so the ring/silent switch leaves it alone.
+ * Answers whether the graph is safe to use at all — see "The silent switch" above.
+ */
+function canPlayThroughGraph() {
   const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
 
   if (session) {
     try {
       session.type = "playback";
-    } catch {}
+      return true;
+    } catch {
+      /* Present but not settable: treat it as absent and let the platform decide below. */
+    }
   }
+
+  /* iPadOS reports itself as a Mac, and a touch count is what gives it away. */
+  const isApplePhoneOrTablet =
+    /iPad|iPhone|iPod/u.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  return !isApplePhoneOrTablet;
 }
 
 type Wired = {
@@ -124,8 +143,12 @@ export class PodcastLevelMeter {
         return null;
       }
 
+      if (!canPlayThroughGraph()) {
+        this.failed = true;
+        return null;
+      }
+
       this.context = new Context();
-      declarePlayback();
 
       return this.context;
     } catch {

@@ -50,10 +50,28 @@ const { PodcastLevelMeter } = await import("../src/lib/podcast-level.ts");
  * `window` is read when the context is opened, not when the meter is built, so it stays
  * installed for the life of the test rather than only for the constructor.
  */
-function meterWith(context) {
+function meterWith(context, { platform = "desktop" } = {}) {
   globalThis.window = { AudioContext: function () { return context; } };
+  installNavigator(platform);
 
   return new PodcastLevelMeter();
+}
+
+/*
+ * Node ships a read-only `navigator`, so the platform is faked by shadowing the property for
+ * the duration of a test rather than by assigning to it.
+ */
+function installNavigator(platform) {
+  const values = {
+    desktop: { userAgent: "Mozilla/5.0 (Macintosh) Chrome", platform: "MacIntel", maxTouchPoints: 0 },
+    // Safari 16.4 and up: the graph can declare itself playback, so the switch is not a problem.
+    "ios-modern": { userAgent: "Mozilla/5.0 (iPhone) Safari", platform: "iPhone", maxTouchPoints: 5, audioSession: { type: "auto" } },
+    // A WebKit without the opt-out: the ring switch would mute the podcast, so nothing is taken.
+    "ios-old": { userAgent: "Mozilla/5.0 (iPhone) Safari", platform: "iPhone", maxTouchPoints: 5 },
+    "ipados-old": { userAgent: "Mozilla/5.0 (Macintosh) Safari", platform: "MacIntel", maxTouchPoints: 5 },
+  }[platform];
+
+  Object.defineProperty(globalThis, "navigator", { value: values, configurable: true, writable: true });
 }
 
 test("a context that will not wake is never given the audio", async () => {
@@ -114,6 +132,33 @@ test("a running context meters both elements and still feeds the speakers", asyn
   assert.equal(meter.getLevel(a), 0.5);
   b.paused = true;
   assert.equal(meter.getLevel(b), 0);
+});
+
+test("an iPhone that cannot ask for the playback session keeps its own audio", async () => {
+  // Losing the sphere motion is cheap. Losing the podcast for everyone who keeps their ringer
+  // off is not, and a WebAudio graph is what the ring/silent switch mutes.
+  for (const platform of ["ios-old", "ipados-old"]) {
+    const context = fakeContext();
+    const meter = meterWith(context, { platform });
+    const element = fakeAudio();
+
+    meter.start([element]);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(context.sourced, [], `${platform} must not be rerouted`);
+  }
+});
+
+test("an iPhone that can ask for it is metered, and asks", async () => {
+  const context = fakeContext();
+  const meter = meterWith(context, { platform: "ios-modern" });
+  const element = fakeAudio();
+
+  meter.start([element]);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(navigator.audioSession.type, "playback");
+  assert.deepEqual(context.sourced, [element]);
 });
 
 test("offering the same element twice does not source it twice", async () => {

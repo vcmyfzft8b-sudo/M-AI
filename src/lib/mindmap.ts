@@ -239,8 +239,18 @@ async function setMindmapStatus(params: {
   }
 }
 
-export async function queueLectureMindmapGeneration(lectureId: string) {
+export async function queueLectureMindmapGeneration(lectureId: string, regenerate = false) {
+  if (!regenerate) {
+    const existing = await readMindmapRow(lectureId);
+    if (existing?.status === "ready" && parseMindmapDoc(existing.map_json)) {
+      const currentHash = await readNotesHash(lectureId);
+      // Preserve the ready status and metadata so a repeated request cannot erase the cache.
+      // Old generation versions are deliberately reusable until the reader chooses Draw again.
+      if (currentHash !== null && existing.notes_hash === currentHash) return false;
+    }
+  }
   await setMindmapStatus({ lectureId, status: "queued", errorMessage: null });
+  return true;
 }
 
 async function readMindmapRow(lectureId: string) {

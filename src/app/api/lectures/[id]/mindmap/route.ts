@@ -122,7 +122,9 @@ export async function POST(
   }
 
   try {
-    await queueLectureMindmapGeneration(id);
+    if (!await queueLectureMindmapGeneration(id)) {
+      return NextResponse.json({ ok: true });
+    }
   } catch (error) {
     return NextResponse.json({ error: describeMindmapError(error) }, { status: 500 });
   }

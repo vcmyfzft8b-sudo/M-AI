@@ -1912,7 +1912,7 @@ export function LectureTutor({
           * Where the walkthrough has got to. One row rather than the two quiet lines it
           * replaces, with the bar every other measure of progress in this app uses.
           */}
-        {isRunning && phase !== "finished" && progress ? (
+        {isRunning && !isPreparing && phase !== "finished" && progress ? (
           <div className="memo-tutor-topicrow">
             <div className="memo-tutor-topic">
               <span className="memo-tutor-topic-title">{progress.title}</span>

@@ -13437,6 +13437,10 @@
 }
 
 /* Visible orbits signal startup; speech and listening still follow the live audio. */
+.memo-tutor.phase-preparing {
+  padding-block: 1rem;
+}
+
 .memo-tutor.phase-preparing .memo-orb-body {
   animation: memo-tutor-warmup 2.4s ease-in-out infinite;
 }

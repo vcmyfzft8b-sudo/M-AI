@@ -1941,7 +1941,7 @@ export const bs: Messages = {
 
   /* Palača pamćenja: grad u kojem su raspoređene kartice bilješke. */
   "note.tab.palace": "Palača",
-  "palace.hintTouch": "Lijevi palac za hodanje · povuci desno za pogled",
+  "palace.hintTouch": "Lijevi palac za hodanje/trčanje · povuci desno za pogled",
   "palace.reviewMissed": "Ponovi nepoznate ({count})",
   "palace.inside": "Unutra",
   "palace.outside": "Vani",
@@ -2042,6 +2042,11 @@ export const bs: Messages = {
   "speedRead.position": "Mjesto u bilješci",
   "speedRead.positionValue": "Riječ {current} od {total}",
   "speedRead.empty": "Ova bilješka još nema teksta za čitanje.",
+  "palace.building.townhouse": "Gradska kuća s balkonima",
+  "palace.building.greenhouse": "Staklenik",
+  "palace.building.warehouse": "Radionica s nazubljenim krovom",
+  "palace.building.pavilion": "Paviljon s bakrenim krovom",
+  "palace.building.windmill": "Vjetrenjača",
   "palace.building.helix": "Spiralni neboder",
   "palace.building.cottage": "Klasična kuća",
   "palace.building.houseboat": "Privezana kuća na vodi",

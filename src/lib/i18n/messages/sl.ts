@@ -1963,7 +1963,7 @@ export const sl = {
 
   /* Palača spomina: mesto, po katerem se sprehodiš skozi kartice zapiska. */
   "note.tab.palace": "Palača",
-  "palace.hintTouch": "Levi palec za hojo · povleci desno za pogled",
+  "palace.hintTouch": "Levi palec za hojo/tek · povleci desno za pogled",
   "palace.reviewMissed": "Ponovi neznane ({count})",
   "palace.inside": "Znotraj",
   "palace.outside": "Zunaj",
@@ -2064,6 +2064,11 @@ export const sl = {
   "speedRead.position": "Mesto v zapisku",
   "speedRead.positionValue": "Beseda {current} od {total}",
   "speedRead.empty": "Ta zapisek še nima besedila za branje.",
+  "palace.building.townhouse": "Mestna hiša z balkoni",
+  "palace.building.greenhouse": "Stekleni rastlinjak",
+  "palace.building.warehouse": "Delavnica z zobato streho",
+  "palace.building.pavilion": "Paviljon z bakreno streho",
+  "palace.building.windmill": "Mlin na veter",
   "palace.building.helix": "Spiralni nebotičnik",
   "palace.building.cottage": "Klasična hiša",
   "palace.building.houseboat": "Privezana bivalna ladja",

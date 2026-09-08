@@ -175,6 +175,8 @@ export function LecturePalace({
   /* How each stop went this session, for the label the deck screen shows too. */
   const [results, setResults] = useState<Record<string, "again" | "easy">>({});
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
+  const selectedMapRef = useRef<string | null>(null);
+  useEffect(() => { selectedMapRef.current = selectedMapId; }, [selectedMapId]);
   const [hasMoved, setHasMoved] = useState(false);
   const movementOriginRef = useRef<{ x: number; z: number } | null>(null);
   const movementStartedRef = useRef(false);
@@ -481,7 +483,12 @@ export function LecturePalace({
           entry,
           distance: Math.hypot(entry.x - snapshot.x, entry.z - snapshot.z),
         }))
-        .sort((left, right) => left.distance - right.distance);
+        .sort((left, right) => {
+          const selected = selectedMapRef.current;
+          if (left.entry.id === selected && !collectedIds.has(selected)) return -1;
+          if (right.entry.id === selected && !collectedIds.has(selected)) return 1;
+          return left.distance - right.distance;
+        });
       const inRange = allMarkers.filter((candidate) => candidate.distance <= MAP_RANGE);
 
       /* The ticks go down first, behind everything: they are history, not the route. */
@@ -1167,6 +1174,7 @@ export function LecturePalace({
 
     if (distance < STICK_DEADZONE) {
       gameRef.current?.setMove(0, 0);
+      gameRef.current?.setSprint(false);
 
       return;
     }
@@ -1177,6 +1185,7 @@ export function LecturePalace({
 
     /* Up on the stick is forward, so the vertical axis is inverted. */
     gameRef.current?.setMove(-ny, nx);
+    gameRef.current?.setSprint(clamped > 0.92);
     setStickKnob({ x: stick.originX + nx * STICK_RADIUS, y: stick.originY + ny * STICK_RADIUS });
   };
 
@@ -1185,6 +1194,7 @@ export function LecturePalace({
 
     stickRef.current = null;
     gameRef.current?.setMove(0, 0);
+    gameRef.current?.setSprint(false);
     setStickKnob(null);
   };
 
@@ -1691,10 +1701,6 @@ export function LecturePalace({
                       <div><strong>{placeName(selectedMapStation.index)}</strong>
                         <span>{kindPill[selectedMapStation.kind].label} · {t(selectedMapStation.placement === "inside" ? "palace.inside" : "palace.outside")}</span>
                       </div>
-                      <button type="button" className="memo-button-outline small"
-                        onClick={() => mapSheet.dismiss(() => gameRef.current?.travelToStation(selectedMapStation.id))}>
-                        {t("palace.travel")}
-                      </button>
                     </div> : null}
                     <h3>{t("palace.districts")}</h3>
                     <ul>
@@ -1711,17 +1717,6 @@ export function LecturePalace({
                           <span className="memo-palace-district-count">
                             {entryDone}/{entry.stationIds.length}
                           </span>
-                          <button
-                            type="button"
-                            className="memo-button-outline small"
-                            onClick={() => {
-                              const index = entry.index;
-
-                              mapSheet.dismiss(() => gameRef.current?.travelTo(index));
-                            }}
-                          >
-                            {t("palace.travel")}
-                          </button>
                         </li>
                       );
                       })}

@@ -1928,7 +1928,7 @@ export const en: Messages = {
 
   /* The memory palace: the city a note's cards are laid out in. */
   "note.tab.palace": "Palace",
-  "palace.hintTouch": "Left thumb to walk · drag right to look",
+  "palace.hintTouch": "Left thumb to walk/run · drag right to look",
   "palace.reviewMissed": "Review missed ({count})",
   "palace.inside": "Indoors",
   "palace.outside": "Outdoors",
@@ -2029,6 +2029,11 @@ export const en: Messages = {
   "speedRead.position": "Position in the note",
   "speedRead.positionValue": "Word {current} of {total}",
   "speedRead.empty": "This note has no text to read yet.",
+  "palace.building.townhouse": "Balcony townhouse",
+  "palace.building.greenhouse": "Glass conservatory",
+  "palace.building.warehouse": "Sawtooth workshop",
+  "palace.building.pavilion": "Copper-roof pavilion",
+  "palace.building.windmill": "Windmill",
   "palace.building.helix": "Spiral skyscraper",
   "palace.building.cottage": "Classic cottage",
   "palace.building.houseboat": "Moored houseboat",

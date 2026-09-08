@@ -27,6 +27,7 @@ import {
   noteOutlineSchema,
   noteWriteSchema,
   normalizeGeneratedNoteMarkdown,
+  normalizeNoteCalloutLanguage,
   splitTextForExtraction,
   type IndexedKnowledgeItem,
 } from "@/lib/notes/note-prompts";
@@ -395,9 +396,9 @@ async function generateNotesContentDriven(
     }));
   }
 
-  const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(
+  const normalizedStructuredNotesMd = normalizeNoteCalloutLanguage(normalizeGeneratedNoteMarkdown(
     assembleSourceNoteParts(windowMarkdowns),
-  );
+  ), labelLanguage);
   const normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
 
   return {
@@ -510,9 +511,9 @@ async function generateNotesLegacy(
     ),
   });
 
-  const normalizedStructuredNotesMd = await repairWrittenNote({
+  const normalizedStructuredNotesMd = normalizeNoteCalloutLanguage(await repairWrittenNote({
     text: normalizeGeneratedNoteMarkdown(result.structuredNotesMd), language: labelLanguage,
-  });
+  }), labelLanguage);
   const normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
 
   return {

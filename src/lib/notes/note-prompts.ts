@@ -130,6 +130,33 @@ export function getStructuredPlusLabels(outputLanguage?: string | null) {
   };
 }
 
+/** Keep a missed English example label out of otherwise native-language notes. */
+export function normalizeNoteCalloutLanguage(markdown: string, language?: string | null) {
+  const code = normalizeNoteLanguage(language);
+  if (code === "en") return markdown;
+  const labels = STRUCTURED_PLUS_LABELS[code];
+  const keys: Record<string, string> = {
+    definition: "definition", "common mistake": "commonMistake", "key takeaway": "keyTakeaway",
+  };
+  let fence: string | null = null;
+  return markdown.split("\n").map(line => {
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
+    if (marker) {
+      if (!fence) fence = marker;
+      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
+      return line;
+    }
+    if (fence) return line;
+    return line.replace(/^( {0,3}>[ \t]*)\*\*(Definition|Common mistake|Key takeaway):\*\*[ \t]*/iu,
+      (_match, prefix: string, label: string) => {
+        const localized = labels?.[keys[label.toLowerCase()]];
+        // Other languages normally generate a native label themselves. If the writer copied an
+        // English example anyway, retain the highlighted content without that untranslated label.
+        return localized ? `${prefix}**${localized}:** ` : prefix;
+      });
+  }).join("\n");
+}
+
 /* -------------------------------------------------------------------------- */
 /* Content-driven note pipeline                                               */
 /* -------------------------------------------------------------------------- */

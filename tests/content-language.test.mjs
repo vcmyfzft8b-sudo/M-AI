@@ -7,7 +7,7 @@ import { judgeHeard } from '../src/lib/tutor/turn-audio.ts';
 import { SONIOX_LANGUAGES, resolveSpeechLanguage, needsEnglishSpeechFallback, toSpeechScript } from '../src/lib/speech-language.ts';
 import { sourceLanguageSchema, sampleSourceLanguage, SOURCE_LANGUAGE_INSTRUCTIONS } from '../src/lib/source-language-policy.ts';
 import { generationCacheKey } from '../src/lib/notes/generation-cache-key.ts';
-import { buildSourceNoteInstructions } from '../src/lib/notes/note-prompts.ts';
+import { buildSourceNoteInstructions, normalizeNoteCalloutLanguage } from '../src/lib/notes/note-prompts.ts';
 
 const ESTONIAN = 'Närvirakkude vahel liigub signaal sünapsi kaudu. Kui impulss jõuab aksoni lõppu, avanevad kaltsiumikanalid ja kaltsium siseneb rakku. See põhjustab virgatsaine vabanemise ning aine seondub järgmise raku retseptoritega. Signaal lõpeb, kui virgatsaine eemaldatakse. See on oluline, sest ilma kaltsiumita ei saa signaal edasi liikuda.';
 
@@ -134,4 +134,15 @@ test('a failed or rewriting proofreader cannot erase a successfully generated no
   assert.equal(await failed({ text, language: 'bs' }), text);
   const rewritten = await loadWrittenRepair(async () => ({ corrected: '## Novi sadržaj\n\nPotpuno druga tema.' }));
   assert.equal(await rewritten({ text, language: 'bs' }), text);
+});
+
+
+test('foreign callout examples cannot leak into native notes, and code samples stay unchanged', () => {
+  const text = '> **Key takeaway:** Ilma kaltsiumita virgatsaine ei vabane.\n';
+  assert.equal(normalizeNoteCalloutLanguage(text, 'et'), '> Ilma kaltsiumita virgatsaine ei vabane.\n');
+  assert.equal(normalizeNoteCalloutLanguage(text, 'en'), text);
+  assert.equal(normalizeNoteCalloutLanguage('> **Key takeaway:** Калцијум је неопходан.', 'sr-Cyrl'), '> **Кључно:** Калцијум је неопходан.');
+  const code = '```md\n' + text + '```';
+  assert.equal(normalizeNoteCalloutLanguage(code, 'et'), code);
+  assert.equal(normalizeNoteCalloutLanguage('> **Peamine järeldus:** Eesti tekst.', 'et'), '> **Peamine järeldus:** Eesti tekst.');
 });

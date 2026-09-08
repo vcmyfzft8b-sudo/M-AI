@@ -62,6 +62,7 @@ type Instance = { matrix: THREE.Matrix4; color?: THREE.Color };
 export type StationVisual = {
   station: PalaceStation;
   token: THREE.Sprite;
+  plaque: THREE.Mesh;
   ring: THREE.Mesh;
   collected: boolean;
 };
@@ -1089,7 +1090,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     )
     .forEach(addProp);
 
-  for (const station of layout.stations.filter(
+  for (const station of layout.stations.map(station => station.originalLocation ? {...station, ...station.originalLocation} : station).filter(
     (entry) => entry.placement === "outside",
   )) {
     const identity = roomIdentity(station.index);
@@ -1474,7 +1475,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     ring.position.set(station.x, 0.11, station.z);
 
     group.add(token, ring);
-    stations.push({ station, token, ring, collected: false });
+    stations.push({ station, token, ring, plaque, collected: false });
   });
 
   return {

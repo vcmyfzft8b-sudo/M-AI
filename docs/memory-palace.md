@@ -37,3 +37,9 @@ Selecting an uncollected destination prioritizes its marker on the minimap witho
 The needle landmark uses three centered, rounded glass volumes with restrained setbacks instead of an offset step on every floor.
 
 A single stepped stone pyramid occupies the unused building lot nearest the town center. Its entrance chamber remains walkable, and placing it never moves or replaces a study destination.
+
+## Continuous recall
+
+Only successful answers collect a memory. A missed flashcard or incorrect quiz answer immediately moves its marker and address plaque to a random clear pavement location, at least 18 metres away and six metres from every other marker. The answer panel keeps its original location label while feedback is read; the engine and both maps update without resetting the player. Written practice retries only a marked zero-point answer; positive partial credit collects the item. An unavailable grade leaves the item active without treating it as correct.
+
+Locations and latest results persist per note in optional local storage. Old collected entries without a successful result are returned to the active route. The menu has Start/Continue and Reset; no separate missed-item round. Reset clears results, collections and relocation overrides, restoring the original seeded route. Completion appears only when every item has been collected successfully.

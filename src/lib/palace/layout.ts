@@ -112,6 +112,8 @@ export type PalaceHouse = {
 };
 
 export type PalaceStation = {
+  /** Original scenery stays in place when the study marker moves. */
+  originalLocation?: { x: number; z: number; placement: "inside" | "outside" };
   /** The flashcard, quiz question or practice question this is. */
   id: string;
   kind: StudyKind;

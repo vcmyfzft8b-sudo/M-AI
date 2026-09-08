@@ -39,6 +39,7 @@ export type PalaceGame = {
   /** Drag or mouse look, in pixels. */
   look: (deltaX: number, deltaY: number) => void;
   markCollected: (stationId: string) => void;
+  relocateStation: (station: PalaceLayout["stations"][number]) => void;
   /**
    * Done with the card that is open: the player can walk again, and this
    * station will not re-open until they have stepped away from it.
@@ -441,6 +442,15 @@ export function createPalaceGame({
 
       collected.add(stationId);
       markVisualCollected(visual);
+    },
+    relocateStation: (station) => {
+      const visual = findVisual(station.id);
+      if (!visual || visual.collected) return;
+      visual.station = station;
+      visual.token.position.set(station.x, 1.65, station.z);
+      visual.ring.position.set(station.x, 0.11, station.z);
+      visual.plaque.position.set(station.x, 0.4, station.z + 0.61);
+      visual.plaque.rotation.y = 0;
     },
     releaseStation: () => {
       if (nearStationId && collected.has(nearStationId) && !reducedMotion) {

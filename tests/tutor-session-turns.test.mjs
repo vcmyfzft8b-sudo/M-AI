@@ -154,3 +154,62 @@ test("a silent explain-back still advances after its original 16-second window",
   await h.tick(1);
   assert.equal(h.calls.filter(c => c.kind === "closing").length, 1);
 });
+
+test("a stable question prepares silently and only its confirmed endpoint can speak", async () => {
+  const h = sessionHarness(); await h.start();
+  const before = h.audio.length;
+  h.state.input.handlers.onPartial("Why does calcium trigger release");
+  await h.tick(300);
+  assert.equal(h.calls.filter(c => c.kind === "answer").length, 1);
+  assert.equal(h.audio.length, before);
+  assert.equal(h.tutor.phaseRef.current, "listening");
+  h.state.input.handlers.onUtterance("Why does calcium trigger release?");
+  await settle();
+  assert.equal(h.calls.filter(c => c.kind === "answer").length, 1, "reuse the prepared request");
+  assert.equal(h.audio.length, before + 1);
+});
+
+test("a changed final question discards preparation and answers the complete wording", async () => {
+  const h = sessionHarness(); await h.start();
+  h.state.input.handlers.onPartial("Why does calcium trigger release"); await h.tick(300);
+  const prepared = h.calls.find(c => c.kind === "answer");
+  h.state.input.handlers.onUtterance("Why does calcium not trigger release here?"); await settle();
+  assert.equal(prepared.signal.aborted, true);
+  assert.equal(h.calls.filter(c => c.kind === "answer").length, 2);
+  assert.equal(h.calls.at(-2).question, "Why does calcium not trigger release here?");
+});
+
+for (const stop of ["pause", "end"]) {
+  test(`${stop} discards a prepared reply without playing it`, async () => {
+    const h = sessionHarness(); await h.start(); const before = h.audio.length;
+    h.state.input.handlers.onPartial("Why does calcium trigger release"); await h.tick(300);
+    const prepared = h.calls.find(c => c.kind === "answer");
+    h.tutor[stop](); await h.tick(1000);
+    assert.equal(prepared.signal.aborted, true);
+    assert.equal(h.audio.length, before);
+  });
+}
+
+test("rapid revisions debounce preparation and long speech spends at most two rehearsals", async () => {
+  const h = sessionHarness(); await h.start();
+  for (const text of ["Why does calcium trigger", "Why does calcium trigger release", "Why does calcium trigger release here"]) {
+    h.state.input.handlers.onPartial(text); await h.tick(100);
+  }
+  assert.equal(h.calls.filter(c => c.kind === "answer").length, 0);
+  await h.tick(200);
+  for (const text of ["Why does calcium trigger release here in cells", "Why does calcium trigger release here in cells but not there"]) {
+    h.state.input.handlers.onPartial(text); await h.tick(300);
+  }
+  assert.equal(h.calls.filter(c => c.kind === "answer").length, 2);
+  assert.equal(h.tutor.phaseRef.current, "listening");
+});
+
+test("subtitles show only the latest learner sentence while history keeps the whole utterance", async () => {
+  const h = sessionHarness(); await h.start();
+  h.state.input.handlers.onPartial("I understand the channels. Why does calcium trigger release?");
+  assert.equal(h.state.updates.filter(v => v?.text).at(-1).text, "Why does calcium trigger release?");
+  h.state.input.handlers.onUtterance("I understand the channels. Why does calcium trigger release?");
+  await settle();
+  assert.equal(h.calls.find(c => c.kind === "answer").question, "I understand the channels. Why does calcium trigger release?");
+  assert.equal(h.state.updates.at(-2), null, "speaking clears the caption");
+});

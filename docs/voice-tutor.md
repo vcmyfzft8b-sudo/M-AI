@@ -81,8 +81,13 @@ Keep `max_endpoint_delay_ms` at 900. It caps Soniox's semantic endpointing rathe
 than imposing a fixed wait. The proposed 300ms value is below the documented
 500–3000ms range and trades away thinking pauses; a clean ending can already
 arrive before the cap. See [Soniox endpoint detection](https://soniox.com/docs/stt/rt/endpoint-detection).
-Only an endpoint triggers an answer. Partials stop an existing turn but never
-speculatively generate or speak an answer.
+Only an endpoint can play an answer. A real multiword question that stays unchanged
+for 300ms may prepare a response silently. Endpointing claims it only when every
+word still matches (case and terminal punctuation may differ). Any changed words
+abort and discard it; Pause, End and a new session clear it. There are at most two
+preparations per utterance, and explain-back does not speculate. This can save time
+when the recognizer supplies a stable question early; it cannot guarantee instant
+answers when the final words arrive only with the endpoint.
 
 The client now removes waits elsewhere:
 
@@ -372,3 +377,22 @@ Two things follow from the shape of that bill:
   the recognizer's words come back. A real VAD model (Silero, what Soniox's reference
   app uses) would judge those too; the recognizer-confirmation step means the cost
   today is a moment of quiet, never a wrong interruption.
+
+
+### Follow-up: captions, startup, interruptions and wide toolbars
+
+- Learner subtitles are restored, showing the latest sentence during listening
+  and thinking. Full utterances still reach the model. New sessions, Pause, End
+  and tutor speech clear the line; echo/noise never write it.
+- Startup uses one soft orbit, a short translated status and Cancel, without
+  showing disabled playback controls before anything is playing.
+- While speaking, echo matching uses the last six seconds of timestamped audio,
+  including room/recognizer lag, instead of the whole turn. This prevents an old
+  teaching word from swallowing a later interruption. Missing timestamps retain
+  the conservative full-turn fallback; recent echo and thinking sounds stay filtered.
+- Turn ownership and entitlement checks overlap. Grounding reuses the already
+  owned lecture metadata; content is still read on the server and no model runs
+  before access succeeds.
+- The note toolbar measures its actual overflow (including translated labels).
+  On desktop, rows that fit are centered with no edge fades or horizontal scrolling;
+  rows that overflow retain their existing navigation behavior.

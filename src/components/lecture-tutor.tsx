@@ -26,7 +26,8 @@ import {
   SpeechInputError,
   TutorSpeechInput,
 } from "@/lib/tutor/speech-input";
-import { type TutorPhase } from "@/lib/tutor/heard-line";
+import { clearsHeardLine, latestHeardSentence, showsHeardLine, type TutorPhase } from "@/lib/tutor/heard-line";
+import { PreparedTutorReply, preparedReplyKey } from "@/lib/tutor/prepared-reply";
 import { TutorClipPlayer } from "@/lib/tutor/clip-player";
 import { reportTutorFailure, resetTutorFailureReports } from "@/lib/tutor/report";
 import { SpeechOutputError, TutorSpeechOutput } from "@/lib/tutor/speech-output";
@@ -189,6 +190,13 @@ export function LectureTutor({
   const [error, setError] = useState<string | null>(null);
   /** False when the microphone was refused or is absent: the walkthrough runs, barge-in does not. */
   const [canListen, setCanListen] = useState(true);
+  const [heard, setHeard] = useState<{ text: string; settled: boolean } | null>(null);
+  const heardRef = useRef<HTMLParagraphElement | null>(null);
+
+  useEffect(() => {
+    // Keep the latest words visible when one sentence fills the caption window.
+    if (heardRef.current) heardRef.current.scrollTop = heardRef.current.scrollHeight;
+  }, [heard]);
   const [voice, setVoice] = useState<NoteTtsVoice>(DEFAULT_NOTE_TTS_VOICE);
   const [previewVoice, setPreviewVoice] = useState<NoteTtsVoice | null>(null);
   const [usage, setUsage] = useState<TutorUsage | null>(null);
@@ -296,9 +304,14 @@ export function LectureTutor({
    * that wakes up no longer holding it simply stops.
    */
   const floorTokenRef = useRef(0);
+  const preparedReplyRef = useRef(new PreparedTutorReply<Response>());
 
   const setPhaseNow = useCallback((next: TutorPhase) => {
     phaseRef.current = next;
+    if (clearsHeardLine(next)) {
+      setHeard(null);
+      preparedReplyRef.current.clear();
+    }
     setPhase(next);
   }, []);
 
@@ -332,6 +345,7 @@ export function LectureTutor({
   }, []);
 
   const teardown = useCallback(() => {
+    preparedReplyRef.current.clear();
     runIdRef.current += 1;
     floorTokenRef.current += 1;
     turnAbortRef.current?.abort();
@@ -777,7 +791,11 @@ export function LectureTutor({
 
       // Claim the floor before any await, including a still-loading lesson plan.
       // Pausing or speaking again must invalidate this turn even during preparation.
-      const controller = new AbortController();
+      const prepared = (kind === "answer" || kind === "feedback") && options.question
+        ? preparedReplyRef.current.take(preparedReplyKey(kind, options.index ?? topicIndexRef.current, options.question))
+        : null;
+      preparedReplyRef.current.clear();
+      const controller = prepared?.controller ?? new AbortController();
       turnAbortRef.current?.abort();
       floorTokenRef.current += 1;
       const floorToken = floorTokenRef.current;
@@ -821,6 +839,11 @@ export function LectureTutor({
          * once the voice has started would say the same sentence twice.
          */
         const requestTurn = async () => {
+          if (prepared) {
+            const ready = await prepared.result;
+            controller.signal.throwIfAborted();
+            if (ready) return ready;
+          }
           for (let attempt = 0; ; attempt += 1) {
             controller.signal.throwIfAborted();
             try {
@@ -850,7 +873,7 @@ export function LectureTutor({
         };
 
         // Warm an idle socket while the server authenticates and writes the reply.
-        // Only the confirmed utterance starts a model call; warming sends no speech.
+        // Only a confirmed utterance can start speech; any prepared reply stays silent.
         const prepareSpeech = async () => {
           if (!(await renewCredentialsRef.current()) || !isCurrent()) {
             return false;
@@ -1387,6 +1410,26 @@ export function LectureTutor({
             commitInterruption();
           }
 
+          setHeard({ text: latestHeardSentence(text, language), settled: false });
+
+          // Prepare silently after a stable multiword partial. No speech is created
+          // until endpointing confirms these exact words; revisions discard it.
+          if (!awaitingExplanationRef.current && text.length <= 1000 && (text.match(/\p{Letter}+/gu)?.length ?? 0) >= 4) {
+            const kind = awaitingExplanationRef.current ? "feedback" : "answer";
+            const index = topicIndexRef.current;
+            const body = JSON.stringify({
+              kind, topicIndex: index, plan: planRef.current, question: text,
+              history: [...historyRef.current, { role: "learner", content: text }].slice(-12),
+            });
+            preparedReplyRef.current.update(preparedReplyKey(kind, index, text), (signal) =>
+              fetch(`/api/lectures/${lectureId}/tutor/turn`, {
+                method: "POST", headers: { "Content-Type": "application/json" }, signal, body,
+              }),
+            );
+          } else {
+            preparedReplyRef.current.discard();
+          }
+
           // A silence timer is measured from the learner's latest words, not
           // from when we asked. Preserve its action (including explain-back).
           const followUp = followUpRef.current;
@@ -1422,6 +1465,7 @@ export function LectureTutor({
           }
 
           clearTimer(followUpTimerRef);
+          setHeard({ text: latestHeardSentence(text, language), settled: true });
           historyRef.current.push({ role: "learner", content: text });
 
           /*
@@ -1534,6 +1578,7 @@ export function LectureTutor({
     closePicker,
     commitInterruption,
     scheduleFollowUp,
+    language,
     lectureId,
     setPhaseNow,
     settleGrant,
@@ -1824,6 +1869,11 @@ export function LectureTutor({
                 : t("tutor.state.finished")}
             </p>
           </div>
+        ) : isPreparing ? (
+          <div className="memo-tutor-loading-copy" role="status">
+            <p className="memo-tutor-title">{t("tutor.state.preparing")}</p>
+            <p className="memo-tutor-lede">{t("tutor.state.preparingHint")}</p>
+          </div>
         ) : statusKey ? (
           /*
            * The phase, said once: a dot in the voice's own hue and one word. The dot is the
@@ -1836,7 +1886,15 @@ export function LectureTutor({
           </p>
         ) : null}
 
-        {isPreparing ? <p className="memo-tutor-hint">{t("tutor.state.preparingHint")}</p> : null}
+        {isRunning && !isPreparing && phase !== "finished" ? (
+          <div className="memo-tutor-caption" aria-live="off">
+            {heard && showsHeardLine(phase) ? (
+              <p ref={heardRef} className={`memo-tutor-heard ${heard.settled ? "" : "draft"}`.trim()}>
+                {heard.text}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {/*
           * The microphone was refused or is absent, so the walkthrough runs but cutting in
@@ -1978,15 +2036,16 @@ export function LectureTutor({
               </button>
             ) : null}
           </div>
+        ) : isPreparing ? (
+          <button type="button" className="memo-button-ghost memo-tutor-cancel" onClick={end}>
+            {t("common.cancel")}
+          </button>
         ) : (
           /*
            * The transport. Round icon buttons rather than bordered pills with the word
            * "Pause" written beside a pause glyph, and the same set the podcast player uses —
            * the two spoken screens are one instrument and should not need different hands.
            *
-           * Preparing keeps the row rather than swapping in a lone Cancel: the shape of the
-           * screen should not change between starting and started. There is simply nothing
-           * yet to go back to or to pause, so those two are disabled instead of missing.
            */
           <div className="memo-tutor-controls">
             <button

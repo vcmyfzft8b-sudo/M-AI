@@ -60,6 +60,8 @@ const WRITER_QUIET_CLOSE_MS = 3_500;
  * echo test needs the words to recognize it by.
  */
 const ROOM_TAIL_MS = 1_200;
+/** Includes recognizer/network lag without treating a whole lesson as room echo. */
+const ACTIVE_ECHO_WINDOW_SECONDS = 6;
 
 /**
  * How much of that last turn is kept.
@@ -703,7 +705,7 @@ export class TutorSpeechOutput {
    * the learner has not heard yet cannot be echoing back at the microphone, and
    * counting them would only make the tutor deaf to a learner who happened to use one.
    *
-   * It narrows as the tutor stops: everything played while a turn is in progress, then
+   * Only the recent six seconds can still be in the recognizer. After a turn, keep
    * only the few words it ended on for as long as those can still be in the air, then
    * nothing at all. That last state is most of the session — during the learner's turn
    * nothing they say is measured against the tutor — and it is what makes it safe for
@@ -723,9 +725,15 @@ export class TutorSpeechOutput {
       return previous;
     }
 
-    const played = spokenTextBefore(turn.timings, this.playedSeconds(turn, context), turn.text);
+    const now = this.playedSeconds(turn, context);
+    const played = spokenTextBefore(turn.timings, now, turn.text);
+    // Keep the full conservative fallback when timestamps are unavailable.
+    const earlier = turn.timings.characters.length && now > ACTIVE_ECHO_WINDOW_SECONDS
+      ? spokenTextBefore(turn.timings, now - ACTIVE_ECHO_WINDOW_SECONDS, turn.text)
+      : "";
+    const recent = played.slice(earlier.length).trim();
 
-    return `${previous} ${played}`.trim();
+    return `${previous} ${recent}`.trim();
   }
 
   /** How much of this turn has been heard, in seconds of its own audio. */

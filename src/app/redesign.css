@@ -2255,6 +2255,15 @@
     );
 }
 
+@media (min-width: 1100px) {
+  .memo-tabs[data-overflow="false"] {
+    justify-content: center;
+    overflow-x: hidden;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+}
+
 .memo-tab {
   display: inline-flex;
   align-items: center;
@@ -13422,20 +13431,9 @@
   animation: memo-tutor-think 1.6s ease-in-out infinite;
 }
 
-/*
- * Starting up.
- *
- * This has to be unmistakably a loading state. The sphere at rest and the sphere
- * mid-sentence look almost the same — both are a still, glowing ball — so a
- * caption was the only thing saying which, and a caption is not what anybody
- * reads. So while it prepares, the sphere dims and cools, and a bright arc runs
- * around it: an unambiguous "working" signal, the same one every progress
- * spinner has trained people to read, wrapped around the object it belongs to.
- */
-/* Its own keyframes rather than `memo-tutor-think`, which animates `filter` and so
-   overrode the dimming that is half the signal. */
+/* One quiet orbit keeps startup distinct from speech without dimming the voice away. */
 .memo-tutor.phase-preparing .memo-orb-body {
-  animation: memo-tutor-preparing 2s ease-in-out infinite;
+  animation: memo-tutor-breathe 2s ease-in-out infinite;
   transform: scale(0.88);
 }
 
@@ -13454,27 +13452,56 @@
   transform: scale(0.9);
 }
 
-/* The arc itself: one lit quadrant of an otherwise invisible ring, spinning. */
+/* A single orbit; the second ring remains reserved for the learner's voice. */
 .memo-tutor.phase-preparing .memo-orb-ring {
-  width: 80.4%;
-  height: 80.4%;
-  opacity: 1;
-  border-color: transparent;
-  border-top-color: oklch(0.78 0.16 var(--orb-hue));
-  border-right-color: oklch(0.78 0.16 var(--orb-hue) / 0.35);
-  border-width: 2px;
-  animation: memo-tutor-spin 1.1s linear infinite;
-}
-
-/* A second, slower, fainter arc going the other way, so it reads as motion
-   rather than as a rotating picture. */
-.memo-tutor.phase-preparing .memo-orb-ring.second {
   width: 91.3%;
   height: 91.3%;
-  border-top-color: transparent;
-  border-left-color: oklch(0.7 0.13 calc(var(--orb-hue) - 10) / 0.45);
-  opacity: 0.7;
-  animation: memo-tutor-spin 2.6s linear infinite reverse;
+  opacity: 0.75;
+  border-color: var(--line);
+  border-top-color: var(--promo);
+  animation: memo-tutor-spin 2.6s linear infinite;
+}
+
+.memo-tutor.phase-preparing .memo-orb-ring.second {
+  display: none;
+}
+
+.memo-tutor-loading-copy {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+}
+
+.memo-tutor-cancel {
+  min-height: var(--btn-round);
+  padding-inline: 1.5rem;
+  color: var(--muted);
+}
+
+/* A stable subtitle window shows one learner sentence, never a conversation log. */
+.memo-tutor-caption {
+  width: 100%;
+  min-height: 4.5em;
+  font-size: 1.1rem;
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.memo-tutor-heard {
+  margin: 0;
+  max-width: 30rem;
+  max-height: 4.5em;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.memo-tutor-heard.draft {
+  color: var(--muted);
 }
 
 .memo-tutor.phase-paused .memo-orb-body,

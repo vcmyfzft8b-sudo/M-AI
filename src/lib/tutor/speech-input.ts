@@ -237,7 +237,7 @@ export class TutorSpeechInput {
      * path for no gain — Soniox takes raw PCM at any rate, and a resampler in
      * front of a recognizer is a place for artefacts, not a saving.
      */
-    const context = new AudioContextClass();
+    const context = new AudioContextClass({ latencyHint: "interactive" });
     await context.resume();
     this.context = context;
 

@@ -51,5 +51,15 @@ export function showsHeardLine(phase: TutorPhase): boolean {
  * question over a new silence.
  */
 export function clearsHeardLine(phase: TutorPhase): boolean {
-  return phase === "speaking";
+  return !showsHeardLine(phase);
+}
+
+/** Only the current sentence belongs in the subtitle; the full utterance still goes to the tutor. */
+export function latestHeardSentence(text: string, language: string): string {
+  const sentences = new Intl.Segmenter(language, { granularity: "sentence" }).segment(text.trim());
+  let latest = "";
+  for (const { segment } of sentences) {
+    if (segment.trim()) latest = segment.trim();
+  }
+  return latest;
 }

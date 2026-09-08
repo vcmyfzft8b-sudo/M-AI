@@ -44,3 +44,23 @@ test("late frames from a replaced speech socket cannot fail the new turn", async
   output.close();
   await turn.finished;
 });
+
+test("old teaching words no longer block an interruption but recent speaker echo still does", async () => {
+  const { judgeHeard } = await import("../src/lib/tutor/turn-audio.ts");
+  installGlobals(); const output = new TutorSpeechOutput(config); await output.connect();
+  output.speak();
+  const old = "Calcium opens channels. ", recent = "Vesicles release transmitters. ";
+  output.turn.text = old + recent;
+  output.turn.timings = {
+    characters: [...old, ...recent],
+    startSeconds: [...old].map(() => 0).concat([...recent].map(() => 10)),
+    endSeconds: [...old].map(() => 1).concat([...recent].map(() => 11)),
+  };
+  output.turn.audioStartedAt = 0; output.turn.scheduledUntil = 30; output.context.currentTime = 12;
+  assert.equal(output.spokenIntoRoom(), recent.trim());
+  assert.equal(judgeHeard("Calcium", output.spokenIntoRoom()), "learner");
+  assert.equal(judgeHeard("Vesicles", output.spokenIntoRoom()), "tutor");
+  output.turn.timings = { characters: [], startSeconds: [], endSeconds: [] };
+  assert.equal(judgeHeard("Calcium", output.spokenIntoRoom()), "tutor", "missing timestamps keep the conservative echo guard");
+  output.close();
+});

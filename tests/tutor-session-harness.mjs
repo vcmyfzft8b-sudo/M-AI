@@ -2,6 +2,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import * as turnAudio from "../src/lib/tutor/turn-audio.ts";
+import * as heardLine from "../src/lib/tutor/heard-line.ts";
 import * as spokenSoFar from "../src/lib/tutor/spoken-so-far.ts";
 
 export const deferred = () => {
@@ -31,7 +32,7 @@ export function sessionHarness({ source } = {}) {
   const timers = new Map();
   const calls = [], audio = [], errors = [];
   const pendingPlan = deferred();
-  const state = { request: async () => response(), open: async () => {}, input: null, output: null };
+  const state = { updates: [], request: async () => response(), open: async () => {}, input: null, output: null };
   const window = {
     setTimeout: (fn, delay) => { const id = ++timerId; timers.set(id, { fn, at: now + delay }); return id; },
     clearTimeout: (id) => timers.delete(id),
@@ -54,11 +55,17 @@ export function sessionHarness({ source } = {}) {
       return { push: (text) => { entry.text += text; }, end() {}, finished: entry.done.promise };
     }
   }
+  const preparation = { exports: {}, AbortController, setTimeout: window.setTimeout, clearTimeout: window.clearTimeout };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL("../src/lib/tutor/prepared-reply.ts", import.meta.url), "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText, preparation);
   const stubs = {
-    react: { useRef: (current) => ({ current }), useState: (initial) => [initial, () => {}], useCallback: (fn) => fn, useEffect() {} },
+    react: { useRef: (current) => ({ current }), useState: (initial) => [initial, (value) => state.updates.push(value)], useCallback: (fn) => fn, useEffect() {} },
     "@/components/i18n-provider": { useT: () => (key) => key },
     "@/components/use-sheet": { useSheet: () => ({}) },
     "@/lib/tutor/turn-audio": turnAudio,
+    "@/lib/tutor/heard-line": heardLine,
+    "@/lib/tutor/prepared-reply": preparation.exports,
     "@/lib/tutor/spoken-so-far": spokenSoFar,
     "@/lib/tutor/speech-input": { TutorSpeechInput: Input, SpeechInputError: class extends Error {} },
     "@/lib/tutor/speech-output": { TutorSpeechOutput: Output, SpeechOutputError: class extends Error {} },

@@ -120,3 +120,20 @@ test("nothing is drawn outside a turn of theirs", () => {
     assert.equal(showsHeardLine(phase), true, phase);
   }
 });
+
+test("subtitle segmentation keeps one sentence, including partials and Slovenian punctuation", async () => {
+  const { latestHeardSentence } = await import("../src/lib/tutor/heard-line.ts");
+  assert.equal(latestHeardSentence("Razumem. Zakaj kalcij?", "sl"), "Zakaj kalcij?");
+  assert.equal(latestHeardSentence("Razumem. Zakaj kal", "sl"), "Zakaj kal");
+  assert.equal(latestHeardSentence("Razumem.  ", "sl"), "Razumem.");
+  assert.equal(latestHeardSentence("", "en"), "");
+  assert.equal(latestHeardSentence("The value is 3.14. Why?", "en"), "Why?");
+});
+
+test("pausing or ending clears a subtitle so it cannot reappear in another turn", () => {
+  for (const next of ["paused", "idle", "finished", "preparing"]) {
+    const line = createLine(); line.enter("listening"); line.hears("old question");
+    line.enter(next); line.enter("listening");
+    assert.equal(line.onScreen(), null);
+  }
+});

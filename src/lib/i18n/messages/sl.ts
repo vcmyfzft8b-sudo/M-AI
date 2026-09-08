@@ -1963,7 +1963,7 @@ export const sl = {
 
   /* Palača spomina: mesto, po katerem se sprehodiš skozi kartice zapiska. */
   "note.tab.palace": "Palača",
-  "palace.hintTouch": "Levi palec za hojo/tek · povleci desno za pogled",
+  "palace.hintTouch": "Levi palec za hojo · povleci desno za pogled",
   "palace.reviewMissed": "Ponovi neznane ({count})",
   "palace.inside": "Znotraj",
   "palace.outside": "Zunaj",

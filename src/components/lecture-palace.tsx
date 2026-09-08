@@ -1174,7 +1174,6 @@ export function LecturePalace({
 
     if (distance < STICK_DEADZONE) {
       gameRef.current?.setMove(0, 0);
-      gameRef.current?.setSprint(false);
 
       return;
     }
@@ -1185,7 +1184,6 @@ export function LecturePalace({
 
     /* Up on the stick is forward, so the vertical axis is inverted. */
     gameRef.current?.setMove(-ny, nx);
-    gameRef.current?.setSprint(clamped > 0.92);
     setStickKnob({ x: stick.originX + nx * STICK_RADIUS, y: stick.originY + ny * STICK_RADIUS });
   };
 
@@ -1194,7 +1192,6 @@ export function LecturePalace({
 
     stickRef.current = null;
     gameRef.current?.setMove(0, 0);
-    gameRef.current?.setSprint(false);
     setStickKnob(null);
   };
 
@@ -1527,6 +1524,7 @@ export function LecturePalace({
                 onPointerMove={onStickPointerMove}
                 onPointerUp={endStick}
                 onPointerCancel={endStick}
+                onLostPointerCapture={endStick}
               >
                 {/* A base at rest, so the stick is somewhere you can see rather
                     than somewhere you have to know about. */}

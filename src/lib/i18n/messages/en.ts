@@ -1928,7 +1928,7 @@ export const en: Messages = {
 
   /* The memory palace: the city a note's cards are laid out in. */
   "note.tab.palace": "Palace",
-  "palace.hintTouch": "Left thumb to walk/run · drag right to look",
+  "palace.hintTouch": "Left thumb to walk · drag right to look",
   "palace.reviewMissed": "Review missed ({count})",
   "palace.inside": "Indoors",
   "palace.outside": "Outdoors",

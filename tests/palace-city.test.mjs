@@ -989,3 +989,17 @@ test('every town has one central pyramid without displacing any study memory', (
     assert.equal(new Set(layout.stations.map(station=>station.id)).size,count);
   }
 });
+
+test("releasing movement stops immediately even after sprinting", () => {
+  const environment = { cameraYaw: 0, colliders: [], bounds: 200, delta: 1 / 60 };
+  const running = stepCharacter({ ...environment, state: createCharacter(0, 0, 0),
+    input: { forward: 1, right: 0, jump: false, sprint: true } });
+  let stopped = running;
+  for (let frame = 0; frame < 120; frame++) {
+    stopped = stepCharacter({ ...environment, state: stopped,
+      input: { forward: 0, right: 0, jump: false, sprint: false } });
+  }
+  assert.equal(stopped.x, running.x);
+  assert.equal(stopped.z, running.z);
+  assert.equal(stopped.speed, 0);
+});

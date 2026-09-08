@@ -36,7 +36,6 @@ export type PalaceSnapshot = {
 export type PalaceGame = {
   /** Stick or WASD, each axis in [-1, 1]. */
   setMove: (forward: number, right: number) => void;
-  setSprint: (sprinting: boolean) => void;
   /** Drag or mouse look, in pixels. */
   look: (deltaX: number, deltaY: number) => void;
   markCollected: (stationId: string) => void;
@@ -148,7 +147,6 @@ export function createPalaceGame({
   let cameraPitch = 0.3;
   const cameraTarget = new THREE.Vector3();
   const move = { forward: 0, right: 0 };
-  let sprinting = false;
   let paused = false;
   let nearStationId: string | null = null;
   /*
@@ -258,22 +256,14 @@ export function createPalaceGame({
     if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) event.preventDefault();
     if (event.repeat) return;
 
-    if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
-      sprinting = true;
-    }
-
     keysDown.add(event.code);
   };
 
   const onKeyUp = (event: KeyboardEvent) => {
-    if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
-      sprinting = false;
-    }
-
     keysDown.delete(event.code);
   };
 
-  const clearInput = () => { keysDown.clear(); move.forward = 0; move.right = 0; sprinting = false; };
+  const clearInput = () => { keysDown.clear(); move.forward = 0; move.right = 0; };
   window.addEventListener("blur", clearInput);
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
@@ -319,7 +309,7 @@ export function createPalaceGame({
            * ground over the kerbs.
            */
           jump: false,
-          sprint: sprinting,
+          sprint: keysDown.has("ShiftLeft") || keysDown.has("ShiftRight"),
         };
 
     character = stepCharacter({
@@ -439,9 +429,6 @@ export function createPalaceGame({
     setMove: (forward, right) => {
       move.forward = forward;
       move.right = right;
-    },
-    setSprint: (value) => {
-      sprinting = value;
     },
     look: (deltaX, deltaY) => {
       cameraYaw -= deltaX * LOOK_SENSITIVITY;

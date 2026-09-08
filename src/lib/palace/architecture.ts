@@ -244,22 +244,23 @@ export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
     const floors = Math.max(3, Math.round(height / 3));
     for (let floor = 0; floor < floors; floor++) {
       const t = floor / floors;
+      // Three centered volumes keep the landmark slender without a staircase silhouette.
       const taper =
         profile.kind === "spire"
-          ? 1 - t * 0.7
+          ? 1 - Math.floor(t * 3) * 0.12
           : profile.kind === "terrace"
             ? 1 - Math.floor(t * 3) * 0.17
             : 1;
       const w = width * taper,
         d = depth * (profile.kind === "courtyard" ? 0.84 : taper);
-      const x = profile.kind === "spire" ? (width - w) * 0.36 : 0;
+      const x = 0;
       const y = base + floor * 3;
-      const floorShape = profile.kind === "courtyard" ? "rounded" : "box";
+      const floorShape = profile.kind === "courtyard" || profile.kind === "spire" ? "rounded" : "box";
       add(floorShape, x, y + 1.5, 0, w, 2.8, d, profile.glass, true);
       add(floorShape, x, y + 0.08, 0, w + 0.35, 0.24, d + 0.35);
       for (const side of [-1, 1]) {
         for (let column = 0; column < 4; column++) {
-          const mullionSpread = profile.kind === "courtyard" ? 0.62 : 1;
+          const mullionSpread = profile.kind === "courtyard" || profile.kind === "spire" ? 0.62 : 1;
           const along = (column / 3 - 0.5) * (w - 0.2) * mullionSpread;
           box(x + along, y + 1.5, (side * d) / 2, 0.07, 2.9, 0.09, silver);
           box(
@@ -308,11 +309,11 @@ export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
     }
     const roofScale =
       profile.kind === "spire"
-        ? 1 - ((floors - 1) / floors) * 0.7
+        ? 0.76
         : profile.kind === "terrace"
           ? 0.66
           : 1;
-    const roofX = profile.kind === "spire" ? width * (1 - roofScale) * 0.36 : 0;
+    const roofX = 0;
     if (profile.kind === "courtyard") {
       add(
         "rounded",

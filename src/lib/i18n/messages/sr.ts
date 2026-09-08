@@ -1941,7 +1941,7 @@ export const sr: Messages = {
 
   /* Palata pamćenja: grad u kojem su raspoređene kartice beleške. */
   "note.tab.palace": "Palata",
-  "palace.hintTouch": "Levi palac za hodanje/trčanje · povuci desno za pogled",
+  "palace.hintTouch": "Levi palac za hodanje · povuci desno za pogled",
   "palace.reviewMissed": "Ponovi nepoznate ({count})",
   "palace.inside": "Unutra",
   "palace.outside": "Napolju",

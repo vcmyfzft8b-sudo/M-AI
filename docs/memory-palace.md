@@ -28,8 +28,10 @@ The route uses distinct architectural identities, beginning with a spiral skyscr
 
 Background streets use a separate predominantly low-rise building mix: no background slots are skyscrapers. Townhouses, conservatories, workshops, copper-roof pavilions and windmills add distinct roof silhouettes; terrace and courtyard blocks stay low. Study landmarks retain deterministic named destinations. Each of the spiral, needle and glass skyscrapers appears at most once across the entire town, including large decks; subsequent route cycles use other building families.
 
-The city map shows named destinations and progress, but no longer offers teleport shortcuts. Walk speed is tuned to 6.7 m/s and sprint to 11.1 m/s for controlled exploration. Conservatory roofs now have fitted triangular glass end panels and framing on both ends.
+The city map shows named destinations and progress, but no longer offers teleport shortcuts. Walk speed is tuned to 7.37 m/s and sprint to 12.21 m/s for controlled exploration. Conservatory roofs now have fitted triangular glass end panels and framing on both ends.
 
-Selecting an uncollected destination prioritizes its marker on the minimap without teleporting. The touch stick runs when pushed fully outward and slows for careful doorway movement; collected ground rings briefly acknowledge completion after the study card closes.
+Selecting an uncollected destination prioritizes its marker on the minimap without teleporting. The touch stick only walks, slows for careful doorway movement and stops on release, cancellation or lost pointer capture. Sprinting requires holding Shift; collected ground rings briefly acknowledge completion after the study card closes.
+
+The needle landmark uses three centered, rounded glass volumes with restrained setbacks instead of an offset step on every floor.
 
 A single stepped stone pyramid occupies the unused building lot nearest the town center. Its entrance chamber remains walkable, and placing it never moves or replaces a study destination.

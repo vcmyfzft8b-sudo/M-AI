@@ -12,10 +12,10 @@ import type {
 export default async function PalaceLocalQA({
   searchParams,
 }: {
-  searchParams: Promise<{ large?: string; isolated?: string; loading?: string }>;
+  searchParams: Promise<{ large?: string; isolated?: string; loading?: string; kind?: string }>;
 }) {
   if (process.env.NODE_ENV !== "development") notFound();
-  const { large, isolated, loading } = await searchParams;
+  const { large, isolated, loading, kind } = await searchParams;
   if (loading) return <MemoPortal><div className="memo-palace-stage"><PalaceLoading /></div></MemoPortal>;
   const cards = [
     {
@@ -58,9 +58,9 @@ export default async function PalaceLocalQA({
   return (
     <main style={{ padding: 32 }}>
       <LecturePalace
-        lectureId={`palace-local-synthetic${large ? "-large" : isolated ? "-isolated" : ""}`}
+        lectureId={`palace-local-synthetic${large ? "-large" : ""}${isolated ? "-isolated" : ""}${kind ? `-${kind}` : ""}`}
         cards={
-          large
+          kind && kind !== "card" ? [] : large
             ? Array.from({ length: 60 }, (_, index) => ({
                 ...cards[0],
                 id: `qa-card-${index}`,
@@ -68,8 +68,8 @@ export default async function PalaceLocalQA({
               }))
             : cards
         }
-        quizQuestions={quiz}
-        practiceQuestions={practice}
+        quizQuestions={kind && kind !== "quiz" ? [] : large ? Array.from({ length: 20 }, (_, index) => ({ ...quiz[0], id: `qa-quiz-${index}` })) : quiz}
+        practiceQuestions={kind && kind !== "test" ? [] : large ? Array.from({ length: 12 }, (_, index) => ({ ...practice[0], id: `qa-test-${index}` })) : practice}
         sections={sections}
         isReady
       />

@@ -2048,6 +2048,7 @@ export const sl = {
   "mindmap.wholeMap": "Cel vzorec",
   "mindmap.saveImage": "Shrani kot sliko",
   "mindmap.exportFailed": "Slike ni bilo mogoče shraniti.",
+  "mindmap.outdated": "Nariši vzorec znova za boljšo pokritost snovi.",
   "mindmap.stale": "Zapisek se je spremenil.",
   "mindmap.foldNode": "Skrij podteme ({count})",
   "mindmap.unfoldNode": "Pokaži podteme ({count})",

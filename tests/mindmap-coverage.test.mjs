@@ -2,9 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  buildNoteSkeleton,
   mergeWindowedBranches,
-  MINDMAP_MAX_CHILDREN_PER_TOPIC,
 } from "../src/lib/mindmap-merge.ts";
 import { planSourceWriteWindows } from "../src/lib/notes/note-prompts.ts";
 import { describeMindmapFailure } from "../src/lib/mindmap-failure.ts";
@@ -31,56 +29,6 @@ function longNote({ sections, wordsPerSection }) {
       `## ${index + 1}. Tema ${index + 1}\n\nUvodna poved teme ${index + 1}.\n\n- ${filler}\n`,
   ).join("\n");
 }
-
-test("the skeleton keeps every heading of a note far too long to read whole", () => {
-  const notes = longNote({ sections: 40, wordsPerSection: 900 });
-  const skeleton = buildNoteSkeleton(notes);
-
-  for (let index = 1; index <= 40; index += 1) {
-    assert.ok(
-      skeleton.includes(`Tema ${index}`),
-      `heading ${index} did not survive into the skeleton`,
-    );
-    assert.ok(skeleton.includes(`Uvodna poved teme ${index}.`), `lead ${index} was dropped`);
-  }
-
-  /* And it is small enough to plan from: the point of a skeleton is that its size is the outline's. */
-  assert.ok(notes.length > 200_000, "fixture is not the long note this is about");
-  assert.ok(skeleton.length < notes.length / 40);
-});
-
-test("the skeleton keeps prose and drops the furniture", () => {
-  const skeleton = buildNoteSkeleton(
-    [
-      "## Ravnovesje",
-      "",
-      "> **Ključno:** to je citat.",
-      "",
-      "| Drzava | BDP |",
-      "| --- | --- |",
-      "",
-      "Ravnovesje je cena, pri kateri se ponudba in povpraševanje ujameta.",
-      "",
-      "Druga poved, ki je ne potrebujemo.",
-      "",
-      "### Primer",
-      "",
-      "- alineja",
-      "",
-      "Vstopnica stane 60 EUR.",
-    ].join("\n"),
-  );
-
-  assert.match(skeleton, /## Ravnovesje/);
-  assert.match(skeleton, /Ravnovesje je cena/);
-  assert.match(skeleton, /### Primer/);
-  /* One lead per heading, not the whole section. */
-  assert.doesNotMatch(skeleton, /Druga poved/);
-  assert.doesNotMatch(skeleton, /Drzava/);
-  assert.doesNotMatch(skeleton, /Ključno/);
-  /* A bullet is not the lead, so the sentence after it still counts as one. */
-  assert.match(skeleton, /Vstopnica stane 60 EUR\./);
-});
 
 test("a long note is windowed rather than cut, so its last page still reaches the map", () => {
   const notes = longNote({ sections: 30, wordsPerSection: 900 });
@@ -195,14 +143,14 @@ test("a window that never came back costs its share, not the map", () => {
   assert.equal(branches[0].children.length, 1);
 });
 
-test("a topic every window wanted to fill is capped rather than allowed to run", () => {
+test("later ideas survive when a topic has more than ten children", () => {
   const many = Array.from({ length: 30 }, (_, index) => child(`Ideja ${index}`));
   const branches = mergeWindowedBranches({
     topics: TOPICS,
     windows: [{ branches: [{ topic: "Ponudba", children: many }] }],
   });
 
-  assert.equal(branches[0].children.length, MINDMAP_MAX_CHILDREN_PER_TOPIC);
+  assert.equal(branches[0].children.length, 30);
 });
 
 test("a merged map parses into a document the canvas can draw", () => {
@@ -266,7 +214,7 @@ test("the node ceiling leaves room for a note read whole", () => {
    * Windowing exists so a long note reaches the map entire; a ceiling that then threw the last
    * of it away would have spent every one of those calls for nothing.
    */
-  assert.ok(MINDMAP_MAX_NODES >= 12 * MINDMAP_MAX_CHILDREN_PER_TOPIC * 3);
+  assert.ok(MINDMAP_MAX_NODES >= 12 * 10 * 3);
 });
 
 test("a topic the plan named twice is one branch, not two identical ones", () => {

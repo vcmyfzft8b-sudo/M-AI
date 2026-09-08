@@ -313,7 +313,7 @@ test("depth is capped, so a model that nests forever cannot", () => {
 });
 
 test("a runaway map is cut at the node ceiling instead of drawn", () => {
-  const branches = Array.from({ length: 40 }, (_, branch) => ({
+  const branches = Array.from({ length: Math.ceil(MINDMAP_MAX_NODES / 13) + 1 }, (_, branch) => ({
     label: `B${branch}`,
     children: Array.from({ length: 12 }, (_, child) => ({ label: `C${branch}.${child}` })),
   }));

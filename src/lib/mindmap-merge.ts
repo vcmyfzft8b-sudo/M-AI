@@ -7,63 +7,16 @@
  * covers the material — and neither is worth discovering from a screenshot.
  */
 
-/**
- * Ideas per topic once every window has contributed.
- *
- * A ceiling rather than a target, and a generous one: it is here so a topic every window wanted
- * to fill cannot run away with the map, not to trim a topic that genuinely has this much in it.
- * The screen copes with the size by folding and focusing, which is cheaper than dropping material
- * the reader came here to find.
- */
-export const MINDMAP_MAX_CHILDREN_PER_TOPIC = 10;
-
 export type MindmapWireChild = {
   label: string;
   detail: string;
+  sourceIds?: string[];
   children?: { label: string; detail: string }[];
 };
 
 export type MindmapWindowAnswer = {
   branches: { topic: string; children: MindmapWireChild[] }[];
 };
-
-/**
- * The note reduced to its own outline: every heading, and the first line of prose under each.
- *
- * This is what the topic phase reads, and the reason it can be trusted with a note of any length
- * — a 120,000-character note has perhaps eighty headings, so the skeleton is a couple of thousand
- * characters whatever the body does.
- */
-export function buildNoteSkeleton(notes: string) {
-  const lines = notes.split("\n");
-  const output: string[] = [];
-  let wantsLead = false;
-
-  for (const raw of lines) {
-    const line = raw.trim();
-    const heading = /^(#{1,4})\s+(.*)$/.exec(line);
-
-    if (heading) {
-      output.push(`${heading[1]} ${heading[2]}`);
-      wantsLead = true;
-      continue;
-    }
-
-    if (!wantsLead || line.length === 0) {
-      continue;
-    }
-
-    /* Tables, quotes and fences say nothing about what a section is about. */
-    if (/^[|>`:-]/.test(line)) {
-      continue;
-    }
-
-    output.push(line.slice(0, 240));
-    wantsLead = false;
-  }
-
-  return output.join("\n");
-}
 
 /**
  * Drops the facts under an idea that only repeat something already on the map: the idea itself,
@@ -75,22 +28,24 @@ function pruneEchoes(
   topics: ReadonlyMap<string, unknown>,
 ): MindmapWireChild["children"] {
   const own = normaliseLabelKey(child.label ?? "");
-  const seen = new Set<string>();
+  const seen = new Map<string, { label: string; detail: string }>();
 
-  return (child.children ?? []).filter((leaf) => {
+  for (const leaf of child.children ?? []) {
     const key = normaliseLabelKey(leaf?.label ?? "");
-
-    if (!key || key === own || key === topicKey || topics.has(key) || seen.has(key)) {
-      return false;
+    if (!key || (!leaf.detail && (key === own || key === topicKey || topics.has(key)))) continue;
+    const existing = seen.get(key);
+    if (existing) {
+      if (leaf.detail && !existing.detail.includes(leaf.detail)) {
+        existing.detail = [existing.detail, leaf.detail].filter(Boolean).join(" ");
+      }
+    } else {
+      seen.set(key, { ...leaf });
     }
-
-    seen.add(key);
-
-    return true;
-  });
+  }
+  return [...seen.values()];
 }
 
-function normaliseLabelKey(label: string) {
+export function normaliseLabelKey(label: string) {
   return label
     .toLocaleLowerCase()
     .normalize("NFD")
@@ -130,7 +85,7 @@ export function mergeWindowedBranches(params: {
     topics.push({ key, label: topic.label, brief: topic.brief });
   }
 
-  const seen = new Set<string>();
+  const seen = new Map<string, MindmapWireChild>();
 
   for (const window of params.windows) {
     for (const branch of window?.branches ?? []) {
@@ -146,7 +101,21 @@ export function mergeWindowedBranches(params: {
         const childKey = normaliseLabelKey(child?.label ?? "");
         const key = `${topicKey}::${childKey}`;
 
-        if (!child?.label || seen.has(key) || bucket.length >= MINDMAP_MAX_CHILDREN_PER_TOPIC) {
+        if (!childKey) {
+          continue;
+        }
+
+        const existing = seen.get(key);
+        if (existing) {
+          existing.sourceIds = [...new Set([...(existing.sourceIds ?? []), ...(child.sourceIds ?? [])])];
+          const additionalDetails = existing.detail && child.detail && child.detail !== existing.detail
+            ? [{ label: child.detail, detail: child.detail }]
+            : [];
+          if (!existing.detail) existing.detail = child.detail;
+          existing.children = pruneEchoes({
+            ...existing,
+            children: [...(existing.children ?? []), ...(child.children ?? []), ...additionalDetails],
+          }, topicKey, byTopic);
           continue;
         }
 
@@ -156,12 +125,13 @@ export function mergeWindowedBranches(params: {
          * topic's "overview of concepts" — which tells a reader nothing they cannot see by
          * looking at the middle of the map, and costs two nodes to say it.
          */
-        if (byTopic.has(childKey)) {
+        if (byTopic.has(childKey) && !child.detail && !child.children?.length) {
           continue;
         }
 
-        seen.add(key);
-        bucket.push({ ...child, children: pruneEchoes(child, topicKey, byTopic) });
+        const merged = { ...child, children: pruneEchoes(child, topicKey, byTopic) };
+        seen.set(key, merged);
+        bucket.push(merged);
       }
     }
   }
@@ -172,7 +142,6 @@ export function mergeWindowedBranches(params: {
       detail: topic.brief,
       children: byTopic.get(topic.key) ?? [],
     }))
-    /* A topic no window said anything about was a topic the note did not have. */
+    /* The generation coverage check repairs missing topics before accepting the result. */
     .filter((branch) => branch.children.length > 0);
 }
-

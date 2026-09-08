@@ -42,8 +42,8 @@ export type Collider = {
   depth: number;
 };
 
-export const WALK_SPEED = 7.4;
-export const SPRINT_SPEED = 12.2;
+export const WALK_SPEED = 6.0;
+export const SPRINT_SPEED = 10.0;
 export const JUMP_VELOCITY = 9.4;
 export const GRAVITY = 26;
 export const CHARACTER_RADIUS = 0.55;

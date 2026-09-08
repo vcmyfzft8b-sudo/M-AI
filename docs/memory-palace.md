@@ -28,6 +28,6 @@ The route now alternates nine architectural identities, beginning with a spiral 
 
 Background streets use a separate predominantly low-rise building mix: no background slots are skyscrapers. Townhouses, conservatories, workshops, copper-roof pavilions and windmills add distinct roof silhouettes; terrace and courtyard blocks stay low. Study landmarks retain deterministic named destinations. Each of the spiral, needle and glass skyscrapers appears at most once across the entire town, including large decks; subsequent route cycles use other building families.
 
-The city map shows named destinations and progress, but no longer offers teleport shortcuts. Walk speed is restored to 7.4 m/s and sprint to 12.2 m/s, matching the earlier controller. Conservatory roofs now have fitted triangular glass end panels and framing on both ends.
+The city map shows named destinations and progress, but no longer offers teleport shortcuts. Walk speed is tuned to 6.0 m/s and sprint to 10.0 m/s for controlled exploration. Conservatory roofs now have fitted triangular glass end panels and framing on both ends.
 
 Selecting an uncollected destination prioritizes its marker on the minimap without teleporting. The touch stick runs when pushed fully outward and slows for careful doorway movement; collected ground rings briefly acknowledge completion after the study card closes.

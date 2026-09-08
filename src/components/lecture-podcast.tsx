@@ -447,21 +447,20 @@ export function LecturePodcast({
   );
 
   /*
-   * Wires both elements into the meter and wakes its context.
+   * Offers both elements to the meter.
    *
-   * Called from the two places a listener starts audio, rather than once on mount, because a
-   * context built before any gesture starts suspended — and a suspended context's analyser
-   * reads silence while the speakers play, which is a still sphere over a talking host. Both
-   * elements are attached together: the hand-off between turns swaps which one is playing with
-   * no gesture of its own, and an element first met halfway through an episode would have to be
-   * wired mid-sentence.
+   * Called from every place a listener starts audio rather than once on mount, and the
+   * repetition is the point: the first play of an episode comes from the autoplay effect
+   * below, with no user gesture in scope, and a browser that will not wake an audio context
+   * without one leaves the meter asleep. Every later press is another chance, and the meter
+   * takes nothing until its context is actually running — see podcast-level.ts.
+   *
+   * Both elements go together because the hand-off between turns swaps which one is playing
+   * with no gesture of its own, and an element first offered halfway through an episode would
+   * have to be taken mid-sentence.
    */
   const startMetering = useCallback(() => {
-    const meter = (meterRef.current ??= new PodcastLevelMeter());
-
-    meter.attach(audioARef.current);
-    meter.attach(audioBRef.current);
-    meter.resume();
+    (meterRef.current ??= new PodcastLevelMeter()).start([audioARef.current, audioBRef.current]);
   }, []);
 
   /*

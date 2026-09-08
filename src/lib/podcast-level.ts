@@ -22,6 +22,17 @@
  * cannot read, a context the autoplay policy keeps suspended: each of those costs the motion
  * and nothing else. The audio still plays, because the audio is the element's own.
  *
+ * ## Never source into a context that is not running
+ *
+ * The rule the rest of this file is built around, and the reason `attach` refuses more often
+ * than it looks like it should. A suspended context processes nothing — so an element sourced
+ * into one is not a sphere that fails to move, it is a podcast that plays silently while the
+ * transport runs and the clock advances. And a context is suspended more often than the happy
+ * path suggests: the first play of an episode comes from an effect rather than from the tap
+ * that opened it, so there is no transient user activation in scope, and iOS Safari refuses
+ * `resume()` without one. Hence: resume first, wire second, and wire nothing until the context
+ * says it is running. An element that is never wired keeps its own output and plays normally.
+ *
  * ## The silent switch
  *
  * The one place rerouting is not free. iOS decides whether the ring/silent switch mutes a sound
@@ -61,72 +72,108 @@ export class PodcastLevelMeter {
   private failed = false;
 
   /**
-   * Routes an element through the meter, once. Safe to call on every play: the second call for
-   * an element is a no-op, which is what makes this callable from the hand-off path.
+   * Meters these elements, if and when the browser lets us.
+   *
+   * Call it on every play rather than once: an element already wired is skipped, and a call
+   * made while the context is asleep does nothing but ask it to wake — which is what makes a
+   * later play, with a real tap behind it, the retry.
    */
-  attach(element: HTMLAudioElement | null) {
-    if (!element || this.failed || this.wired.has(element) || this.refused.has(element)) {
+  start(elements: ReadonlyArray<HTMLAudioElement | null>) {
+    const context = this.open();
+
+    if (!context) {
       return;
     }
 
+    if (context.state === "running") {
+      this.wire(context, elements);
+      return;
+    }
+
+    /*
+     * Asleep. Ask it to wake and wire only if it does — never before, and never in the
+     * rejection path. A resume refused for want of a gesture leaves every element exactly as
+     * it was, which is playing through its own output.
+     */
+    void context
+      .resume()
+      .then(() => {
+        if (context.state === "running") {
+          this.wire(context, elements);
+        }
+      })
+      .catch(() => {});
+  }
+
+  private open() {
+    if (this.failed) {
+      return null;
+    }
+
+    if (this.context) {
+      return this.context;
+    }
+
     try {
-      const Context = window.AudioContext ?? (window as unknown as {
-        webkitAudioContext?: typeof AudioContext;
-      }).webkitAudioContext;
+      const Context =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
 
       if (!Context) {
         this.failed = true;
-        return;
+        return null;
       }
 
-      const context = this.context ?? new Context();
-      this.context = context;
+      this.context = new Context();
       declarePlayback();
 
-      /*
-       * Past this line the element is committed: a sourced element no longer reaches the
-       * speakers by itself, and there is no way to give it back. So the source is held and
-       * every later step is guarded — a failure after this point must still leave the audio
-       * connected to something, and it is better to lose the meter than the podcast.
-       */
-      const source = context.createMediaElementSource(element);
-
-      try {
-        const analyser = context.createAnalyser();
-        analyser.fftSize = FFT_SIZE;
-        analyser.smoothingTimeConstant = SMOOTHING;
-
-        source.connect(analyser);
-        analyser.connect(context.destination);
-
-        this.wired.set(element, {
-          analyser,
-          buffer: new Float32Array(new ArrayBuffer(analyser.fftSize * 4)),
-        });
-      } catch (error) {
-        source.connect(context.destination);
-        throw error;
-      }
+      return this.context;
     } catch {
-      /*
-       * The element is left alone and never tried again — it either kept its own output or was
-       * wired straight through above, and retrying on every play would only repeat whatever
-       * just failed. A missing constructor or a refused context condemns the whole meter,
-       * because there is nothing element-specific about either.
-       */
-      this.refused.add(element);
-      this.failed = !this.context;
+      /* No context, no meter, and nothing element-specific about it: stop trying. */
+      this.failed = true;
+      return null;
     }
   }
 
-  /**
-   * Wakes the context. A context created before the listener has pressed anything starts
-   * suspended, and a suspended context's analyser reads silence while the audio plays — so this
-   * is called from the same path as `play()`, where a gesture is in hand.
-   */
-  resume() {
-    if (this.context?.state === "suspended") {
-      void this.context.resume().catch(() => {});
+  private wire(context: AudioContext, elements: ReadonlyArray<HTMLAudioElement | null>) {
+    for (const element of elements) {
+      if (!element || this.wired.has(element) || this.refused.has(element)) {
+        continue;
+      }
+
+      try {
+        /*
+         * Past this line the element is committed: a sourced element no longer reaches the
+         * speakers by itself, and there is no way to give it back. So the source is held and
+         * every later step is guarded — a failure after this point must still leave the audio
+         * connected to something, and it is better to lose the meter than the podcast.
+         */
+        const source = context.createMediaElementSource(element);
+
+        try {
+          const analyser = context.createAnalyser();
+          analyser.fftSize = FFT_SIZE;
+          analyser.smoothingTimeConstant = SMOOTHING;
+
+          source.connect(analyser);
+          analyser.connect(context.destination);
+
+          this.wired.set(element, {
+            analyser,
+            buffer: new Float32Array(new ArrayBuffer(analyser.fftSize * 4)),
+          });
+        } catch (error) {
+          source.connect(context.destination);
+          throw error;
+        }
+      } catch {
+        /*
+         * Left alone and never tried again — it either kept its own output or was wired
+         * straight through above, and retrying on every play would only repeat what just
+         * failed.
+         */
+        this.refused.add(element);
+      }
     }
   }
 

@@ -3,6 +3,8 @@ import { z } from "zod";
 
 import { canAccessLectureContent, createBillingRequiredResponse } from "@/lib/billing";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
+import { captureRouteError } from "@/lib/monitoring";
+import { isMissingLectureReferenceError } from "@/lib/postgres-errors";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -143,6 +145,43 @@ async function updateStudySession(
     );
 
   if (error) {
+    /*
+     * The autosave flushes as the workspace unmounts, which is exactly what deleting a note does:
+     * `deleteNote` navigates away the moment the DELETE returns. A write already past
+     * `ensureUserOwnsLecture` above then lands on a row whose lecture has cascaded away, and
+     * `lecture_study_sessions.lecture_id` is `on delete cascade`, so PostgREST answers 23503.
+     * The note really is gone, so this is the same 404 the ownership check would have given a
+     * moment later — not a server fault. The TTS chunk route settles the same race the same way.
+     */
+    if (isMissingLectureReferenceError(error)) {
+      return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
+    }
+
+    /*
+     * Anything else keeps its 500, but must stop being invisible. This autosave fails on a page
+     * the learner is usually leaving, so it produces no error-level platform line, and the route
+     * used to discard `error` entirely: two production 500s (2026-09-02T16:55:06Z and
+     * 2026-09-07T19:17:15Z, different lectures) were each reduced to an empty log record with no
+     * SQLSTATE to reason from. The counts and flags below say which part of the payload was in
+     * play; the answers themselves are the learner's own writing and never leave the row.
+     */
+    captureRouteError(error, {
+      route: "/api/lectures/[id]/study-session",
+      operation: "upsertStudySession",
+      request,
+      userId: user.id,
+      lectureId: id,
+      extra: {
+        activeStudyView: parsed.data.activeStudyView,
+        hasFlashcardState: parsed.data.flashcardState !== null,
+        hasQuizState: parsed.data.quizState !== null,
+        hasPracticeTestState: parsed.data.practiceTestState !== null,
+        textAnswerCount: parsed.data.practiceTestState
+          ? Object.keys(parsed.data.practiceTestState.textAnswers).length
+          : 0,
+      },
+    });
+
     return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
 

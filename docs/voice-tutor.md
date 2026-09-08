@@ -96,7 +96,9 @@ The client now removes waits elsewhere:
 - Every turn claims its cancellation token before waiting for anything. A pause,
   end, newer turn, or real learner word invalidates it during planning, fetching,
   renewal, reconnecting, and streaming. Real partials cancel `thinking` as well as
-  `speaking`; noise and echo still pass through `judgeHeard` first.
+  `speaking`; noise and echo still pass through `judgeHeard` first. Muted input
+  discards in-flight words, and closed/replaced recognizers cannot deliver stale
+  words or errors into the current session.
 - Recognized learner speech extends the pending silence timer. Explain-back keeps
   its 16-second window and its original next-topic action. A follow-up after a
   hand-back gets at least seven seconds from the latest words. An endpoint answers

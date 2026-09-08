@@ -1401,8 +1401,10 @@ export function LectureTutor({
           }
         },
         onUtterance: (text) => {
-
-          if (phaseRef.current === "paused" || phaseRef.current === "finished") {
+          if (
+            phaseRef.current === "paused" || phaseRef.current === "finished" ||
+            phaseRef.current === "idle" || phaseRef.current === "preparing"
+          ) {
             return;
           }
 

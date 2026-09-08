@@ -289,7 +289,13 @@ export class TutorSpeechInput {
             socket.send(JSON.stringify({ type: "keepalive" }));
           }
         }, KEEPALIVE_INTERVAL_MS);
-        socket.addEventListener("message", (event) => this.handleMessage(event));
+        socket.addEventListener("message", (event) => {
+          // A replaced/closed recognizer can still have queued frames. They must
+          // neither answer in the new session nor close its current socket.
+          if (!this.closed && this.socket === socket) {
+            this.handleMessage(event);
+          }
+        });
         socket.addEventListener("close", () => {
           /*
            * Only the socket in use gets to report a failure. `useKey` replaces this one
@@ -504,6 +510,11 @@ export class TutorSpeechInput {
         ),
       );
 
+      return;
+    }
+
+    // Muting also discards words already in flight from before the tap.
+    if (this.muted) {
       return;
     }
 

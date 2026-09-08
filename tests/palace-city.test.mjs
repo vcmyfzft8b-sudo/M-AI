@@ -862,12 +862,13 @@ test('all skyline styles have finite geometry and a clear full-height entrance',
     styles.add(buildingProfile(house,index).kind);
     const parts=cityBuilding(house,index);
     assert.deepEqual(parts,cityBuilding(house,index),'an address changed between visits');
-    assert.ok(buildingProfile(house,index).height>=18);
+    assert.ok(buildingProfile(house,index).height>=3);
+    if(['helix','tower','spire'].includes(buildingProfile(house,index).kind)) assert.ok(buildingProfile(house,index).height>=18);
     for(const part of parts) {
       for(const key of ['x','y','z','width','height','depth']) assert.ok(Number.isFinite(part[key]));
       assert.ok(part.width>0 && part.height>0 && part.depth>0);
       const bottom=part.y-part.height*(part.shape==='ribbon'?.018:.5);
-      if(bottom>=ENTRY_HEIGHT) continue;
+      if(bottom>=ENTRY_HEIGHT || part.y+part.height/2 < .2 || part.z+part.depth/2 < house.depth/2-.3) continue;
       // A player can cross the central 2.6 m of the entry beneath the canopy.
       const rotated=Math.abs(Math.sin(part.rotation??0))>.5;
       const halfWidth=(rotated?part.depth:part.width)/2;
@@ -906,4 +907,38 @@ test('shared car surfaces fit the parked-car collider and have valid normals', (
   const leaf=palmFrondGeometry();
   assert.ok([...leaf.getAttribute('normal').array].every(Number.isFinite));
   leaf.dispose();
+});
+
+
+test('short memory routes include a skyscraper, cottage and accessible moored boat', async () => {
+  const {marinaBarriers}=await import('../src/lib/palace/landmarks.ts');
+  const {roomPoint}=await import('../src/lib/palace/rooms.ts');
+  const layout=buildPalaceLayout({seedSource:'distinctive-places',items:Array.from({length:3},(_,i)=>({id:`place-${i}`,kind:'card',sectionId:null})),sections:[]});
+  assert.deepEqual(layout.stations.map(s=>buildingProfile(layout.houses[s.houseIndex],s.houseIndex).kind),['helix','cottage','houseboat']);
+  const boat=layout.houses[layout.stations[2].houseIndex];
+  const parts=cityBuilding(boat,layout.stations[2].houseIndex);
+  assert.ok(parts.some(p=>p.surface==='water'));
+  assert.ok(parts.some(p=>p.shape==='bow'));
+  const sideways=Math.abs(Math.sin(boat.facing))>.5;
+  const colliders=marinaBarriers(boat).map(p=>({...roomPoint(boat,p.x,p.z),width:sideways?p.depth:p.width,depth:sideways?p.width:p.depth}));
+  let player=createCharacter(...Object.values(roomPoint(boat,0,boat.depth/2+4)),boat.facing+Math.PI);
+  for(let frame=0;frame<110;frame++) player=stepCharacter({state:player,input:{forward:1,right:0,jump:false,sprint:false},cameraYaw:boat.facing+Math.PI,colliders,bounds:layout.bounds,delta:1/60});
+  const inside=roomPoint(boat,0,0);
+  assert.ok(Math.hypot(player.x-inside.x,player.z-inside.z)<boat.depth/2,'the gangway blocks access');
+  for(const station of layout.stations) for(const collider of colliders) {
+    assert.ok(Math.abs(station.x-collider.x)>collider.width/2+.3 || Math.abs(station.z-collider.z)>collider.depth/2+.3,'a marina barrier obstructs a memory');
+  }
+});
+
+test('clock roofs cover all four tower corners with outward-facing closed slopes', async () => {
+  const THREE=await import('three');
+  const {pyramidRoofGeometry}=await import('../src/lib/palace/roof-geometry.ts');
+  const geometry=pyramidRoofGeometry();
+  const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
+  mesh.updateMatrixWorld();
+  for(const x of [-.49,0,.49]) for(const z of [-.49,0,.49]) {
+    const ray=new THREE.Raycaster(new THREE.Vector3(x,2,z),new THREE.Vector3(0,-1,0));
+    assert.ok(ray.intersectObject(mesh).length>0,`roof leaves a corner open at ${x}, ${z}`);
+  }
+  geometry.dispose(); mesh.material.dispose();
 });

@@ -9,10 +9,13 @@ import {
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import {
   cityBuilding,
+  buildingProfile,
   LOBBY_HEIGHT,
   ENTRY_HEIGHT,
   type CityPart,
 } from "./architecture";
+import { pyramidRoofGeometry } from "./roof-geometry";
+import { marinaBarriers } from "./landmarks";
 import { terrainHeight } from "./terrain";
 import {
   roomIdentity,
@@ -317,6 +320,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   const spheres: Instance[] = [];
   const glassCylinders: Instance[] = [];
   const ribbons: Instance[] = [];
+  const gables: Instance[] = [], pyramids: Instance[] = [], bows: Instance[] = [], domes: Instance[] = [], sails: Instance[] = [], water: Instance[] = [];
   const rings: Instance[] = [];
   const palmLeaves: Instance[] = [];
   const carBodies: Instance[] = [],
@@ -336,26 +340,36 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     new THREE.CylinderGeometry(0.5, 0.5, 1, 32, 1, true),
   );
   const cityLeafGeometry = track(palmFrondGeometry());
+  const triangle = new THREE.Shape();
+  triangle.moveTo(-.5,-.5); triangle.lineTo(.5,-.5); triangle.lineTo(0,.5); triangle.closePath();
+  const gableGeometry = track(new THREE.ExtrudeGeometry(triangle,{depth:1,bevelEnabled:false}));
+  gableGeometry.translate(0,0,-.5);
+  const pyramidGeometry = track(pyramidRoofGeometry());
+  const sailTriangle = new THREE.Shape();
+  sailTriangle.moveTo(-.5,-.5); sailTriangle.lineTo(.5,-.5); sailTriangle.lineTo(-.5,.5); sailTriangle.closePath();
+  const sailGeometry = track(new THREE.ExtrudeGeometry(sailTriangle,{depth:1,bevelEnabled:false}));
+  sailGeometry.translate(0,0,-.5);
+  const bowGeometry = track(gableGeometry.clone());
+  bowGeometry.rotateX(-Math.PI/2);
+  const domeGeometry = track(new THREE.SphereGeometry(.5,24,12,0,Math.PI*2,0,Math.PI/2));
+  domeGeometry.scale(1,2,1);
   const addCityPart = (part: CityPart, house: PalaceHouse) => {
     const position = roomPoint(house, part.x, part.z);
-    const entries =
-      part.shape === "rounded"
-        ? part.glass
-          ? roundedGlazing
-          : roundedBuildings
-        : part.shape === "ribbon"
-          ? ribbons
-          : part.shape === "ring"
-            ? rings
-            : part.shape === "sphere"
-              ? spheres
-              : part.shape === "cylinder"
-                ? part.glass
-                  ? glassCylinders
-                  : cylinders
-                : part.glass
-                  ? glass
-                  : boxes;
+    const entries = part.surface === "wood" ? woodwork
+      : part.surface === "stone" ? walls
+      : part.surface === "water" ? water
+      : part.shape === "gable" ? gables
+      : part.shape === "pyramid" ? pyramids
+      : part.shape === "bow" ? bows
+      : part.shape === "dome" ? domes
+      : part.shape === "sail" ? sails
+      : part.shape === "cone" ? cones
+      : part.shape === "rounded" ? (part.glass ? roundedGlazing : roundedBuildings)
+      : part.shape === "ribbon" ? ribbons
+      : part.shape === "ring" ? rings
+      : part.shape === "sphere" ? spheres
+      : part.shape === "cylinder" ? (part.glass ? glassCylinders : cylinders)
+      : part.glass ? glass : boxes;
     entries.push({
       matrix: boxMatrix({
         ...part,
@@ -499,7 +513,8 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       x: house.x + out.x * forward + along.x * sideways,
       z: house.z + out.z * forward + along.z * sideways,
     });
-    const wall = new THREE.Color(0xeeeede);
+    const profile = buildingProfile(house, layout.houses.indexOf(house));
+    const wall = new THREE.Color(profile.wall);
     const body = house.depth;
 
     const room = roomIdentity(
@@ -646,6 +661,12 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     } else {
       addWall(0, 0, house.width, body);
     }
+    if(profile.kind === "houseboat") {
+      marinaBarriers(house).forEach((part) => {
+        const sideways = Math.abs(Math.sin(house.facing)) > .5;
+        colliders.push({...roomPoint(house,part.x,part.z),width:sideways?part.depth:part.width,depth:sideways?part.width:part.depth});
+      });
+    }
     cityBuilding(house, layout.houses.indexOf(house)).forEach((part) =>
       addCityPart(part, house),
     );
@@ -662,7 +683,13 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     colliders.push({ x, z, width, depth });
   };
 
+  const marinas = layout.houses.filter((house,index)=>buildingProfile(house,index).kind === "houseboat");
   const addProp = (prop: PalaceProp) => {
+    // Keep the mooring clear of garden props originally placed on the dry plot.
+    if(prop.kind !== "cloud" && prop.kind !== "hill" && marinas.some(house=>{
+      const dx=prop.x-house.x,dz=prop.z-house.z;
+      return Math.abs(dx*Math.cos(house.facing)-dz*Math.sin(house.facing))<house.width/2+2.4 && Math.abs(dx*Math.sin(house.facing)+dz*Math.cos(house.facing))<house.depth/2+3.5;
+    })) return;
     if (prop.kind === "tree") {
       const height = (10.5 + Math.sin(prop.rotation) * 0.7) * prop.scale;
       // A tapered, gently leaning trunk with a dense crown of drooping fronds.
@@ -1283,6 +1310,12 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       envMapIntensity: 1.3,
     }),
   );
+  group.add(instanced(gableGeometry, tinted(), gables));
+  group.add(instanced(pyramidGeometry, tinted(), pyramids));
+  group.add(instanced(sailGeometry, tinted(), sails));
+  group.add(instanced(bowGeometry, tinted(), bows));
+  group.add(instanced(domeGeometry, track(new THREE.MeshStandardMaterial({color:0xffffff,roughness:.38,metalness:.35})), domes));
+  group.add(instanced(boxGeometry, track(new THREE.MeshStandardMaterial({color:0xffffff,roughness:.16,metalness:.3,envMapIntensity:1.4})), water, {shadows:false}));
   group.add(instanced(roundedGeometry, tinted(), roundedBuildings));
   group.add(instanced(roundedGeometry, cityGlassMaterial, roundedGlazing));
   group.add(instanced(autoBody, carPaint, carBodies));

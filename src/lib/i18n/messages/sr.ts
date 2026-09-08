@@ -2042,4 +2042,13 @@ export const sr: Messages = {
   "speedRead.position": "Mesto u belešci",
   "speedRead.positionValue": "Reč {current} od {total}",
   "speedRead.empty": "Ova beleška još nema teksta za čitanje.",
+  "palace.building.helix": "Spiralni neboder",
+  "palace.building.cottage": "Klasična kuća",
+  "palace.building.houseboat": "Privezana kuća na vodi",
+  "palace.building.terrace": "Toranj sa terasama",
+  "palace.building.clocktower": "Toranj sa satom",
+  "palace.building.observatory": "Opservatorija sa kupolom",
+  "palace.building.spire": "Šiljasti neboder",
+  "palace.building.tower": "Stakleni neboder",
+  "palace.building.courtyard": "Zgrada sa dvorištem",
 };

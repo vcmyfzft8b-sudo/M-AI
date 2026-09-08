@@ -1,7 +1,9 @@
 import type { PalaceHouse } from "./layout";
+import { landmarkBuilding } from "./landmarks.ts";
 
 export type CityPart = {
-  shape: "box" | "rounded" | "cylinder" | "sphere" | "ribbon" | "ring";
+  shape: "box" | "rounded" | "cylinder" | "sphere" | "ribbon" | "ring" | "gable" | "bow" | "dome" | "cone" | "sail" | "pyramid";
+  surface?: "wood" | "stone" | "water";
   x: number;
   y: number;
   z: number;
@@ -20,7 +22,11 @@ export const ENTRY_HEIGHT = 3.6;
 
 export const CITY_ARCHETYPES = [
   "helix",
+  "cottage",
+  "houseboat",
   "terrace",
+  "clocktower",
+  "observatory",
   "spire",
   "tower",
   "courtyard",
@@ -30,10 +36,12 @@ export const CITY_ARCHETYPES = [
 export function buildingProfile(house: PalaceHouse, index: number) {
   const variant = house.landmark ? house.landmarkIndex : index + 3;
   const kind = CITY_ARCHETYPES[variant % CITY_ARCHETYPES.length];
-  const height = house.landmark ? 42 + (variant % 5) * 6 : 18 + (index % 7) * 3;
+  const height = kind === "cottage" ? 4.6 : kind === "houseboat" ? 10 : kind === "clocktower" ? 16.5 : kind === "observatory" ? 10 : house.landmark ? 42 + (variant % 5) * 6 : 18 + (index % 7) * 3;
+  const wall = kind === "cottage" ? [0xead6bb,0xd4ded3,0xdfc9bc,0xe5dfd0][Math.floor(variant/9)%4] : kind === "houseboat" ? 0xe7e1cf : kind === "clocktower" ? 0xcebea3 : kind === "observatory" ? 0xd4d0c4 : 0xeeeede;
   return {
     kind,
     height,
+    wall,
     glass: [0x48c1e8, 0x42b4e5, 0x65d0e7, 0x4cb7e2, 0x49c9d8][variant % 5],
   };
 }
@@ -42,6 +50,9 @@ export function buildingProfile(house: PalaceHouse, index: number) {
 export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
   const parts: CityPart[] = [];
   const profile = buildingProfile(house, index);
+  if (["cottage", "houseboat", "clocktower", "observatory"].includes(profile.kind)) {
+    return landmarkBuilding(house, profile.kind as "cottage" | "houseboat" | "clocktower" | "observatory", LOBBY_HEIGHT, house.landmark ? house.landmarkIndex : index + 3);
+  }
   const white = 0xf2f1e9,
     silver = 0xc6d5d3,
     green = 0x80b84f;

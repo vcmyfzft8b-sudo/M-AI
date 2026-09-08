@@ -2029,4 +2029,13 @@ export const en: Messages = {
   "speedRead.position": "Position in the note",
   "speedRead.positionValue": "Word {current} of {total}",
   "speedRead.empty": "This note has no text to read yet.",
+  "palace.building.helix": "Spiral skyscraper",
+  "palace.building.cottage": "Classic cottage",
+  "palace.building.houseboat": "Moored houseboat",
+  "palace.building.terrace": "Terraced garden tower",
+  "palace.building.clocktower": "Clock tower",
+  "palace.building.observatory": "Domed observatory",
+  "palace.building.spire": "Needle skyscraper",
+  "palace.building.tower": "Glass skyscraper",
+  "palace.building.courtyard": "Courtyard building",
 };

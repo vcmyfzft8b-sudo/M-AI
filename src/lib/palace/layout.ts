@@ -390,7 +390,9 @@ export function groupItemsIntoDistricts(
           }));
         })();
 
-  const loose = items.filter(
+  // Fallback districts already contain every item; redistributing them would
+  // duplicate IDs and make multiple locations open the same question.
+  const loose = used.length === 0 ? [] : items.filter(
     (item) => !used.some((section) => section.id === item.sectionId),
   );
 

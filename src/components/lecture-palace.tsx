@@ -19,6 +19,7 @@ import {
 } from "@/lib/study/flashcard-drag";
 import { quizOptionLetter, shuffleIndices } from "@/lib/study/quiz";
 import { minimapMarker, townMapPoint } from "@/lib/palace/navigation";
+import { buildingProfile } from "@/lib/palace/architecture";
 import { roomIdentity, outdoorLandmark } from "@/lib/palace/rooms";
 import { parsePalaceResults } from "@/lib/palace/progress";
 import type { PalaceGame, PalaceSnapshot } from "@/lib/palace/game";
@@ -1240,7 +1241,9 @@ export function LecturePalace({
   ).length;
   const placeName = (index: number) => {
     const room = roomIdentity(index);
-    return `${String(room.number).padStart(2, "0")} · ${t(`palace.color.${room.color}`)} · ${t(layout.stations[index]?.placement === "outside" ? `palace.outdoor.${outdoorLandmark(index)}` : `palace.room.${room.theme}`)}`;
+    const houseIndex = layout.stations[index]?.houseIndex;
+    const building = houseIndex === undefined ? "" : t(`palace.building.${buildingProfile(layout.houses[houseIndex],houseIndex).kind}`);
+    return `${building} · ${String(room.number).padStart(2, "0")} · ${t(`palace.color.${room.color}`)} · ${t(layout.stations[index]?.placement === "outside" ? `palace.outdoor.${outdoorLandmark(index)}` : `palace.room.${room.theme}`)}`;
   };
   const selectedMapStation = layout.stations.find((entry) => entry.id === selectedMapId) ?? null;
   const missedCount = layout.stations.filter((entry) => results[entry.id] === "again").length;

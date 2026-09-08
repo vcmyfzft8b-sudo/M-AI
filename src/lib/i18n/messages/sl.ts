@@ -2064,4 +2064,13 @@ export const sl = {
   "speedRead.position": "Mesto v zapisku",
   "speedRead.positionValue": "Beseda {current} od {total}",
   "speedRead.empty": "Ta zapisek še nima besedila za branje.",
+  "palace.building.helix": "Spiralni nebotičnik",
+  "palace.building.cottage": "Klasična hiša",
+  "palace.building.houseboat": "Privezana bivalna ladja",
+  "palace.building.terrace": "Stolpnica s terasami",
+  "palace.building.clocktower": "Stolp z uro",
+  "palace.building.observatory": "Observatorij s kupolo",
+  "palace.building.spire": "Koničasti nebotičnik",
+  "palace.building.tower": "Stekleni nebotičnik",
+  "palace.building.courtyard": "Stavba z dvoriščem",
 };

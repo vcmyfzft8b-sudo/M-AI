@@ -9,9 +9,12 @@
 
 - Use a single GitHub repository for this project. Do not create a second repo for testing work.
 - Treat `main` as the production branch. Only production-ready code should be merged into `main`.
-- For every new feature, bug fix, refactor, or experiment, create a separate branch before making code changes.
+- Start every new work session in a fresh, isolated Git worktree with a descriptive task branch based on the latest `origin/main`, before making code changes. Keep all edits and local testing for that session in its worktree; do not reuse another session's checkout or branch.
 - Branch names should be descriptive, for example: `fix/login-redirect`, `feature/flashcards-export`, `chore/update-copy`.
-- Agents should make changes on the current non-`main` branch when one already exists for the task. If work starts on `main`, create a new branch first unless the user explicitly asks otherwise.
+- Continue an existing session in its assigned worktree and branch. Only reuse a different checkout or branch when the user explicitly asks.
+- Concurrent tasks must stay isolated: run every file edit, Git command, install, build, and test from that session's worktree. Use a free, task-specific port for each dev server, and keep `.next`, test artifacts, and local environment files in that worktree. Do not mutate a dependency directory shared with another task.
+- Never switch, reset, stash, clean, delete, or commit another task's checkout or branch, and never stop its processes. Stop only servers started by the current session. Do not remove another task's worktree or branch, including during PR merge cleanup.
+- Git worktrees share repository refs: fetch updates normally, but integrate `origin/main` only into your own task branch. Check the final PR diff contains only the current task's intended changes before pushing or merging.
 - Test changes locally first with the normal local development workflow.
 - After local testing, agents may prepare commits on the branch, but they must not push to GitHub unless the user explicitly asks for that push.
 - The user is the default person responsible for pushing branches to GitHub and opening or merging pull requests.

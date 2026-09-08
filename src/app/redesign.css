@@ -4650,6 +4650,7 @@
 :is(.memo-panel, .memo-palace-panel) .lecture-quiz-option-copy {
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 :is(.memo-panel, .memo-palace-panel) .lecture-quiz-option.correct {
@@ -14239,6 +14240,13 @@
   box-shadow: none;
 }
 
+/* Carry the answers' content height up to the existing scroller. Otherwise
+ * overflowing flex children bypass its bottom padding and end behind the dock. */
+.memo-note-screen[data-note-tab="quiz"] :is(.memo-panel.study, .workspace-panel-stack, .lecture-study-shell, .lecture-quiz-stage, .lecture-quiz-card) {
+  flex: 1 0 auto;
+  min-height: auto;
+}
+
 /* "Choose one answer" over four obviously-choosable answers. */
 .memo-note-screen[data-note-tab="quiz"] .memo-quiz-eyebrow {
   display: none;
@@ -14253,84 +14261,25 @@
   margin-bottom: 0.9rem;
 }
 
-/*
- * The options share whatever is left, rather than being told a height and hoping.
- *
- * This went wrong twice before it went right, and both failures came from the same place:
- * the list was a grid, and a grid does not shrink its rows to fit a shorter box — it
- * overflows one. Letting the box shrink put the verdict on top of the last option; not
- * letting it shrink pushed the last option through the bottom of the card. And no clamp
- * can fix either, because the budget is not knowable in CSS: the question above wraps to
- * one line or three depending on the question, and answering adds a whole row underneath.
- *
- * So the list is a column of flex children at `flex: 1 1 0`. Whatever height is left after
- * the question and the verdict have taken theirs is divided between the four of them, and
- * it is divided again the moment either of those changes. Nothing has to be predicted, so
- * nothing can be predicted wrong. The floor is the point below which an option stops being
- * comfortably tappable; four of those plus everything else fits any window this app runs in.
- */
+/* Share spare room, but never shrink an answer below its wrapped text. Long
+ * questions use the existing panel scroller instead of overflowing their cards. */
 .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-options {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 0 auto;
   flex-direction: column;
   gap: clamp(0.35rem, 0.9vh, 0.7rem);
-  /*
-   * Deliberately NOT `min-height: 0`, which every other link in this chain wants. The list
-   * must never be smaller than the options inside it: shrink it past them and they are
-   * drawn over whatever follows, and what follows is the verdict. Below the floor the
-   * panel gives a little instead — a short scroll is recoverable, two things drawn on top
-   * of each other is not.
-   */
 }
 
 .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-option {
-  flex: 1 1 0;
-  min-height: 2.4rem;
-  max-height: 4.4rem;
+  flex: 1 0 auto;
+  min-height: 3.4rem;
+  max-height: none;
+  padding-block: 0.7rem;
 }
 
-/*
- * Once answered there are one or two rows rather than four, so they stop dividing the space
- * and simply take what they need — a single surviving answer stretched to the height of four
- * is a stranger thing to look at than the empty room below it. This is also what lets the
- * shrinking go: the floors that used to be tuned per screen height existed only because four
- * boxes of text and a verdict were competing for one column.
- */
-/*
- * The answered layout, which belongs to the collapse and so to the phone.
- *
- * With one or two rows left they stop dividing the space and take what they need — a single
- * surviving answer stretched to the height of four is a stranger thing to look at than the
- * empty room below it — and they take it at the size they were asked at, because an answer
- * worth reading afterwards is worth as much room as it had when it was worth choosing.
- *
- * The verdict then goes back to the foot of the card. It followed the options directly,
- * which was right while they filled the column and wrong the moment they stopped: collapsed
- * to two, the row rode up the middle with the space beneath it. `auto` puts it back on the
- * floor it has always sat on, so "Razumem" is where the thumb already is.
- */
+/* A wrong answer collapses to the selected and correct choices on mobile.
+ * Keep both readable and leave the verdict at the foot when space permits. */
 @media (max-width: 1099px) {
-  /*
-   * The two that are left take the room the other two vacated, and go on taking whatever the
-   * screen gives — the same arrangement the four had, dividing what is spare between them
-   * rather than being told a height that is right on one phone and wrong on the next.
-   *
-   * The verdict does not need its `auto` margin to stay at the foot once they fill: there is
-   * no free space left for it to be pushed by, and it is at the bottom because they end
-   * there. The margin is kept for the case where their ceiling bites first.
-   */
-  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-options {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-
-  .memo-note-screen[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option {
-    flex: 1 1 0;
-    /* Two answers taller than this stop reading as answers and start reading as panels. */
-    max-height: 9rem;
-    min-height: 3.4rem;
-  }
-
   /*
    * And the letter comes back with them.
    *

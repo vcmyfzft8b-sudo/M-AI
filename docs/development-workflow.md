@@ -25,7 +25,7 @@ That keeps:
 
 ### 1. Start from `main`
 
-Make sure your local `main` is up to date, then create a new branch for the task.
+Start every new work session in a fresh, isolated Git worktree and task branch from the latest `origin/main`. Continue that session in its assigned worktree; leave other sessions' checkouts untouched.
 
 Example branch names:
 
@@ -36,10 +36,24 @@ Example branch names:
 Example commands:
 
 ```bash
-git checkout main
-git pull origin main
-git checkout -b fix/signup-error
+git fetch origin main
+git worktree add ../Memo_AI-signup-error -b fix/signup-error origin/main
+cd ../Memo_AI-signup-error
 ```
+
+### Concurrent sessions
+
+Each session owns its worktree and branch. Run all edits, Git operations, installs,
+builds, and tests from that directory. Keep build output (`.next`), test artifacts,
+and local environment files separate, and choose an unused dev-server port, for
+example `npm run dev -- --port 3017`. Do not mutate dependencies shared with another
+session.
+
+Leave other sessions' branches, files, worktrees, and processes untouched. Never
+switch, reset, stash, clean, or commit their checkout, and stop only your own servers.
+Do not delete another session's worktree or branch during merge cleanup. Worktrees
+share Git refs, so fetch normally and integrate `origin/main` only into your own
+branch. Review the final PR diff for unrelated changes before pushing or merging.
 
 ### 2. Build and test locally
 
@@ -197,7 +211,7 @@ Do not create schema changes only in a Supabase dashboard. If a dashboard is use
 When an agent works on this repository, it should:
 
 1. avoid direct work on `main` for features or fixes
-2. create or use a task-specific branch
+2. create a fresh worktree and task branch for every new session
 3. test locally first
 4. prepare the branch for user review and wait for the user to push it
 5. use the Vercel preview deployment for browser testing

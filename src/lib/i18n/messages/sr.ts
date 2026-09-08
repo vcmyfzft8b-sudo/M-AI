@@ -2047,6 +2047,7 @@ export const sr: Messages = {
   "palace.building.warehouse": "Radionica sa nazubljenim krovom",
   "palace.building.pavilion": "Paviljon sa bakarnim krovom",
   "palace.building.windmill": "Vetrenjača",
+  "palace.building.pyramid": "Stepenasta kamena piramida",
   "palace.building.helix": "Spiralni neboder",
   "palace.building.cottage": "Klasična kuća",
   "palace.building.houseboat": "Privezana kuća na vodi",

@@ -21,7 +21,7 @@ export type CityPart = {
 export const LOBBY_HEIGHT = 5.8;
 export const ENTRY_HEIGHT = 3.6;
 
-export const CITY_ARCHETYPES = [
+const STUDY_ARCHETYPES = [
   "helix",
   "cottage",
   "houseboat",
@@ -37,6 +37,7 @@ export const CITY_ARCHETYPES = [
   "pavilion",
   "windmill",
 ] as const;
+export const CITY_ARCHETYPES = [...STUDY_ARCHETYPES, "pyramid"] as const;
 
 // Skyscrapers belong to one memorable study address each, never background lots.
 // Ordinary streets stay low so their roofs do not hide those unique landmarks.
@@ -51,14 +52,15 @@ const BACKGROUND_KINDS = [
 export function buildingProfile(house: PalaceHouse, index: number) {
   const variant = house.landmark ? house.landmarkIndex : index + house.districtIndex * 7;
   let kind: typeof CITY_ARCHETYPES[number] = house.landmark
-    ? CITY_ARCHETYPES[variant % CITY_ARCHETYPES.length]
+    ? STUDY_ARCHETYPES[variant % STUDY_ARCHETYPES.length]
     : BACKGROUND_KINDS[variant % BACKGROUND_KINDS.length];
   // Do not repeat a distinctive skyscraper on every cycle of a large deck.
   // Later questions use other architectural families with different rooflines.
-  if (house.landmark && variant >= CITY_ARCHETYPES.length && ["helix", "spire", "tower"].includes(kind)) {
+  if (house.landmark && variant >= STUDY_ARCHETYPES.length && ["helix", "spire", "tower"].includes(kind)) {
     const alternatives = ["townhouse", "warehouse", "pavilion", "observatory", "cottage", "windmill", "greenhouse"] as const;
-    kind = alternatives[(Math.floor(variant / CITY_ARCHETYPES.length) * 3 + variant) % alternatives.length];
+    kind = alternatives[(Math.floor(variant / STUDY_ARCHETYPES.length) * 3 + variant) % alternatives.length];
   }
+  if (house.monument === "pyramid") kind = "pyramid";
   const tall = kind === "helix" || kind === "spire" || kind === "tower";
   const height = tall ? (house.landmark ? 30 + (variant % 5) * 6 : 18 + (variant % 3) * 6)
     : kind === "terrace" ? 9 + (variant % 2) * 3
@@ -66,7 +68,7 @@ export function buildingProfile(house: PalaceHouse, index: number) {
     : kind === "clocktower" ? 16.5 : kind === "houseboat" || kind === "observatory" ? 10 : 4.6;
   const palette = [0xe2c8ac,0xb6c8bc,0xd2b3a6,0xcecadb,0xd6cda9];
   const wall = tall || kind === "terrace" || kind === "courtyard" ? 0xeeeede
-    : kind === "houseboat" ? 0xe7e1cf : palette[(variant + Math.floor(index/5)) % palette.length];
+    : kind === "pyramid" ? 0xc8a971 : kind === "houseboat" ? 0xe7e1cf : palette[(variant + Math.floor(index/5)) % palette.length];
   return { kind, height, wall, variant,
     glass: [0x48c1e8, 0x76aebc, 0x65b4bd, 0x608b9e, 0x78b9b0][variant % 5],
   };
@@ -76,7 +78,7 @@ export function buildingProfile(house: PalaceHouse, index: number) {
 export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
   const parts: CityPart[] = [];
   const profile = buildingProfile(house, index);
-  if (["townhouse", "greenhouse", "warehouse", "pavilion", "windmill"].includes(profile.kind)) {
+  if (["townhouse", "greenhouse", "warehouse", "pavilion", "windmill", "pyramid"].includes(profile.kind)) {
     return neighborhoodBuilding(house, profile.kind as NeighborhoodKind, LOBBY_HEIGHT, profile.variant);
   }
   if (["cottage", "houseboat", "clocktower", "observatory"].includes(profile.kind)) {

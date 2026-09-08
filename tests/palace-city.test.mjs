@@ -976,3 +976,16 @@ test('conservatory roofs close both triangular ends without crossing the doorway
   }
   assert.ok(checked>0);
 });
+
+
+test('every town has one central pyramid without displacing any study memory', () => {
+  for(const count of [3,60]) {
+    const layout=buildPalaceLayout({seedSource:`central-pyramid-${count}`,items:Array.from({length:count},(_,i)=>({id:`p-${i}`,kind:'card',sectionId:null})),sections:[]});
+    const pyramids=layout.houses.filter(house=>house.monument==='pyramid');
+    assert.equal(pyramids.length,1);
+    assert.ok(!pyramids[0].landmark);
+    const distance=Math.hypot(pyramids[0].x,pyramids[0].z);
+    assert.ok(layout.houses.filter(house=>!house.landmark).every(house=>Math.hypot(house.x,house.z)>=distance));
+    assert.equal(new Set(layout.stations.map(station=>station.id)).size,count);
+  }
+});

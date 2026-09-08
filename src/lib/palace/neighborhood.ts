@@ -1,7 +1,7 @@
 import type { PalaceHouse } from "./layout";
 import type { CityPart } from "./architecture";
 
-export const NEIGHBORHOOD_KINDS = ["townhouse", "greenhouse", "warehouse", "pavilion", "windmill"] as const;
+export const NEIGHBORHOOD_KINDS = ["townhouse", "greenhouse", "warehouse", "pavilion", "windmill", "pyramid"] as const;
 export type NeighborhoodKind = typeof NEIGHBORHOOD_KINDS[number];
 
 /** Small buildings give the skyline breathing room and the route distinct roofs. */
@@ -27,10 +27,26 @@ export function neighborhoodBuilding(house: PalaceHouse, kind: NeighborhoodKind,
   // Every address keeps the same clear door and furnished ground floor.
   for(const side of [-1,1]) box(side*1.52,1.9,d/2+.16,.18,3.8,.25,trim);
   box(0,3.9,d/2+.16,3.25,.2,.25,trim);
-  windows(2.65);
+  if(kind!=="pyramid") windows(2.65);
   box(0,base,0,w+.5,.25,d+.5,trim);
 
-  if(kind==="townhouse") {
+  if(kind==="pyramid") {
+    const sandstone=0xc8a971;
+    // A stepped pyramid over a full-height entrance chamber. Solid tiers and
+    // a closed square cap avoid roof holes while preserving the walking route.
+    for(let level=0;level<8;level++) {
+      const scale=1-level*.1;
+      box(0,base+level*1.12+.56,0,(w+.6)*scale,1.12,(d+.6)*scale,sandstone,{surface:"stone"});
+      box(0,base+level*1.12+.06,0,(w+.6)*scale+.12,.12,(d+.6)*scale+.12,0xddc18c);
+    }
+    parts.push({shape:"pyramid",x:0,y:base+9.85,z:0,width:(w+.6)*.3,height:1.8,depth:(d+.6)*.3,color:0xc4a04f});
+    for(const side of [-1,1]) {
+      box(side*(w/4+1),base/2,d/2+.15,w/2-2,base,.32,sandstone,{surface:"stone"});
+      for(let course=0;course<6;course++) box(side*(w/4+1),course*.92+.2,d/2+.33,w/2-2,.045,.03,0xa88b5c);
+      box(side*1.65,2,d/2+.36,.35,4,.5,0xb09158,{surface:"stone"});
+    }
+    box(0,4.15,d/2+.36,3.65,.35,.5,sandstone,{surface:"stone"});
+  } else if(kind==="townhouse") {
     const floors=1+variant%2;
     box(0,base+floors*1.5,0,w,floors*3,d,paint,{surface:"stone"});
     for(let floor=0;floor<floors;floor++) {

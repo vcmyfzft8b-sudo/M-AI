@@ -2034,6 +2034,7 @@ export const en: Messages = {
   "palace.building.warehouse": "Sawtooth workshop",
   "palace.building.pavilion": "Copper-roof pavilion",
   "palace.building.windmill": "Windmill",
+  "palace.building.pyramid": "Stepped stone pyramid",
   "palace.building.helix": "Spiral skyscraper",
   "palace.building.cottage": "Classic cottage",
   "palace.building.houseboat": "Moored houseboat",

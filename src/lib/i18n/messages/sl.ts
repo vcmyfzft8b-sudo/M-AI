@@ -2069,6 +2069,7 @@ export const sl = {
   "palace.building.warehouse": "Delavnica z zobato streho",
   "palace.building.pavilion": "Paviljon z bakreno streho",
   "palace.building.windmill": "Mlin na veter",
+  "palace.building.pyramid": "Stopničasta kamnita piramida",
   "palace.building.helix": "Spiralni nebotičnik",
   "palace.building.cottage": "Klasična hiša",
   "palace.building.houseboat": "Privezana bivalna ladja",

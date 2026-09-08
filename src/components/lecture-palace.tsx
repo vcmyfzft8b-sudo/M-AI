@@ -21,6 +21,7 @@ import { quizOptionLetter, shuffleIndices } from "@/lib/study/quiz";
 import { minimapMarker, townMapPoint } from "@/lib/palace/navigation";
 import { buildingProfile } from "@/lib/palace/architecture";
 import { roomIdentity, outdoorLandmark } from "@/lib/palace/rooms";
+import { chooseRelocation, parsePalaceLocations, practiceAnswerKnown, relocatedStation, relocationSpots, type PalaceLocations } from "@/lib/palace/relocation";
 import { parsePalaceResults } from "@/lib/palace/progress";
 import type { PalaceGame, PalaceSnapshot } from "@/lib/palace/game";
 import {
@@ -30,6 +31,7 @@ import {
   selectPalaceItems,
   STATION_HUE,
   type StudyKind,
+  type PalaceStation,
 } from "@/lib/palace/layout";
 import type {
   FlashcardWithCitations,
@@ -59,6 +61,7 @@ import type {
  */
 
 const COLLECTED_STORAGE_PREFIX = "memo.palace.collected.";
+const LOCATIONS_STORAGE_PREFIX = "memo.palace.locations.";
 const RESULTS_STORAGE_PREFIX = "memo.palace.results.";
 /** Memo's mascot, the same file used at the town's memory locations. */
 const MASCOT_SRC = "/memo-mascot.png";
@@ -70,12 +73,6 @@ const MAP_RANGE = 95;
  * walked to anyway.
  */
 const MAX_MAP_MARKERS = 5;
-/**
- * Out of five, the mark at which a practice answer counts as known and its
- * house is collected. The same three-out-of-five a teacher would call a pass.
- */
-const PRACTICE_PASS_SCORE = 3;
-
 /** What the marker sends back for one answer. */
 type PracticeMark = {
   marked: boolean;
@@ -162,6 +159,10 @@ export function LecturePalace({
   const [isBuilt, setIsBuilt] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [collected, setCollected] = useState<Set<string>>(() => new Set());
+  const [locations, setLocations] = useState<PalaceLocations>({});
+  const locationsRef = useRef<PalaceLocations>({});
+  const answeredRef = useRef<string | null>(null);
+  const [station, setStation] = useState<PalaceStation | null>(null);
   const [nearStationId, setNearStationId] = useState<string | null>(null);
   const [isFlipped, setIsFlipped] = useState(false);
   const [quizChoice, setQuizChoice] = useState<number | null>(null);
@@ -286,7 +287,7 @@ export function LecturePalace({
     [cards, practiceQuestions, quizQuestions],
   );
 
-  const layout = useMemo(
+  const baseLayout = useMemo(
     () =>
       items.length === 0
         ? null
@@ -299,6 +300,13 @@ export function LecturePalace({
     [items, lectureId, sections, t],
   );
 
+  const spots = useMemo(() => baseLayout ? relocationSpots(baseLayout) : [], [baseLayout]);
+  const layout = useMemo(() => baseLayout ? {...baseLayout, stations: baseLayout.stations.map(entry =>
+    spots[locations[entry.id]] ? relocatedStation(entry, spots[locations[entry.id]]) : entry)} : null,
+    [baseLayout, locations, spots]);
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+
   const cardsById = useMemo(() => new Map(cards.map((card) => [card.id, card])), [cards]);
   const quizById = useMemo(
     () => new Map(quizQuestions.map((question) => [question.id, question])),
@@ -309,12 +317,19 @@ export function LecturePalace({
     [practiceQuestions],
   );
 
-  /* Where the walk got to last time, restored on the client only. */
+  /* Older versions collected wrong answers too. Only successful recalls survive that migration. */
   useEffect(() => {
-    setCollected(readCollected(lectureId));
-    try { setResults(parsePalaceResults(window.localStorage.getItem(`${RESULTS_STORAGE_PREFIX}${lectureId}`))); }
-    catch { setResults({}); }
-  }, [lectureId]);
+    let restoredResults: Record<string, "again" | "easy"> = {};
+    let restoredLocations: PalaceLocations = {};
+    try {
+      restoredResults = parsePalaceResults(window.localStorage.getItem(`${RESULTS_STORAGE_PREFIX}${lectureId}`));
+      restoredLocations = parsePalaceLocations(window.localStorage.getItem(`${LOCATIONS_STORAGE_PREFIX}${lectureId}`), spots, items.map(item => item.id));
+    } catch { /* Storage is optional. */ }
+    setResults(restoredResults);
+    setCollected(new Set([...readCollected(lectureId)].filter(id => restoredResults[id] === "easy")));
+    locationsRef.current = restoredLocations;
+    setLocations(restoredLocations);
+  }, [lectureId, spots, items]);
 
   const recordResult = useCallback((id: string, grade: "again" | "easy") => {
     setResults((current) => {
@@ -332,10 +347,6 @@ export function LecturePalace({
     return () => query.removeEventListener("change", update);
   }, []);
 
-  const station = useMemo(
-    () => layout?.stations.find((entry) => entry.id === nearStationId) ?? null,
-    [layout, nearStationId],
-  );
   const isComplete = Boolean(layout?.stations.length && layout.stations.every((entry) => collected.has(entry.id)) && !station);
   /*
    * The material behind the open station. A note whose deck is regenerated
@@ -380,6 +391,7 @@ export function LecturePalace({
     (snapshot: PalaceSnapshot, collectedIds: Set<string>) => {
       const canvas = minimapRef.current;
 
+      const layout = layoutRef.current;
       if (!canvas || !layout) return;
 
       const context = canvas.getContext("2d");
@@ -577,7 +589,7 @@ export function LecturePalace({
       context.restore();
       context.restore();
     },
-    [layout, sizeMinimap],
+    [sizeMinimap],
   );
 
   /* The frame callback must not re-render: it fires sixty times a second. */
@@ -590,6 +602,8 @@ export function LecturePalace({
   const openStation = useCallback((stationId: string | null) => {
     gradingRef.current?.abort();
     clearDismiss();
+    answeredRef.current = null;
+    setStation(stationId ? layoutRef.current?.stations.find(entry => entry.id === stationId) ?? null : null);
     setNearStationId(stationId);
     setIsFlipped(false);
     setQuizChoice(null);
@@ -608,7 +622,7 @@ export function LecturePalace({
   }, [openStation, station, stationItem]);
 
   const startGame = useCallback(async () => {
-    if (!layout || gameRef.current) return;
+    if (!baseLayout || gameRef.current) return;
 
     setLoadError(null);
 
@@ -620,8 +634,9 @@ export function LecturePalace({
       // Let the loading artwork paint before synchronous geometry and shader work.
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       const canvas = canvasRef.current;
+      const layout = layoutRef.current;
 
-      if (!canvas || gameRef.current) return;
+      if (!canvas || !layout || gameRef.current) return;
 
       sizeMinimap();
 
@@ -656,7 +671,7 @@ export function LecturePalace({
       /* A device without WebGL, or a chunk that never arrived. */
       setLoadError(error instanceof Error ? error.message : t("palace.unsupported"));
     }
-  }, [drawMinimap, layout, openStation, sizeMinimap, t]);
+  }, [baseLayout, drawMinimap, openStation, sizeMinimap, t]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -992,7 +1007,7 @@ export function LecturePalace({
     dismissStation();
   }, [clearDismiss, dismissStation]);
 
-  /** Been to. The Memo goes out and the ring dims, whatever the answer was. */
+  /** Only a successful recall removes a marker from the active route. */
   const collect = useCallback(
     (stationId: string) => {
       setCollected((current) => {
@@ -1008,6 +1023,27 @@ export function LecturePalace({
     [lectureId],
   );
 
+  const resolveAnswer = useCallback((id: string, known: boolean) => {
+    if (answeredRef.current === id) return;
+    answeredRef.current = id;
+    recordResult(id, known ? "easy" : "again");
+    if (known) { collect(id); return; }
+    const currentLayout = layoutRef.current;
+    const current = currentLayout?.stations.find(entry => entry.id === id);
+    if (!currentLayout || !current) return;
+    const spotIndex = chooseRelocation(current, currentLayout.stations, spots);
+    if (spotIndex === null) return;
+    const moved = relocatedStation(current, spots[spotIndex]);
+    const next = {...locationsRef.current, [id]: spotIndex};
+    locationsRef.current = next;
+    // Update the engine and maps together without rebuilding the town or moving the player.
+    layoutRef.current = {...currentLayout, stations: currentLayout.stations.map(entry => entry.id === id ? moved : entry)};
+    gameRef.current?.relocateStation(moved);
+    setLocations(next);
+    setSelectedMapId(id);
+    try { window.localStorage.setItem(`${LOCATIONS_STORAGE_PREFIX}${lectureId}`, JSON.stringify(next)); } catch { /* Optional storage. */ }
+  }, [collect, lectureId, recordResult, spots]);
+
   /**
    * A flashcard graded in the town is a flashcard graded in the app: the same
    * record the deck screen writes. Fire and forget on purpose — a dropped
@@ -1019,8 +1055,8 @@ export function LecturePalace({
       confidenceBucket: FlashcardBucket,
       exitStart?: { xPercent: number; yPercent: number; rotationDeg: number },
     ) => {
-      recordResult(cardId, confidenceBucket);
-      collect(cardId);
+      if (answeredRef.current === cardId) return;
+      resolveAnswer(cardId, confidenceBucket === "easy");
 
       /*
        * The card flies off the way it does on the deck screen — same animation,
@@ -1065,16 +1101,16 @@ export function LecturePalace({
         /* Offline in a lecture hall is the normal case, not an error to raise. */
       }
     },
-    [collect, isFlipped, leaveStation, recordResult],
+    [resolveAnswer, isFlipped, leaveStation],
   );
 
   const answerQuiz = useCallback(
     (questionId: string, optionIndex: number, correctIndex: number) => {
+      if (answeredRef.current === questionId) return;
       const right = optionIndex === correctIndex;
 
       setQuizChoice(optionIndex);
-      recordResult(questionId, right ? "easy" : "again");
-      collect(questionId);
+      resolveAnswer(questionId, right);
 
       // Explanations and mistakes stay until the learner is ready to continue.
       clearDismiss();
@@ -1082,7 +1118,7 @@ export function LecturePalace({
         dismissRef.current = window.setTimeout(leaveStation, QUIZ_RESULT_PAUSE);
       }
     },
-    [clearDismiss, collect, leaveStation, quizById, recordResult],
+    [clearDismiss, resolveAnswer, leaveStation, quizById],
   );
 
   /**
@@ -1096,6 +1132,7 @@ export function LecturePalace({
       // The app's grader also scores a declared unknown as zero without AI.
       if (isTestUnknown) {
         setMark({ marked: true, score: 0, maxScore: 5, expectedAnswer: testById.get(questionId)?.answer_guide ?? "" });
+        resolveAnswer(questionId, false);
         setIsMarking(false);
         return;
       }
@@ -1118,7 +1155,11 @@ export function LecturePalace({
         if (!response.ok) throw new Error("unmarked");
 
         const result = (await response.json()) as PracticeMark;
-        if (!controller.signal.aborted) setMark(result);
+        if (!controller.signal.aborted) {
+          setMark(result);
+          const known = practiceAnswerKnown(result);
+          if (known !== null) resolveAnswer(questionId, known);
+        }
       } catch {
         if (controller.signal.aborted) return;
         /*
@@ -1135,27 +1176,21 @@ export function LecturePalace({
         if (!controller.signal.aborted) setIsMarking(false);
       }
     },
-    [isTestUnknown, lectureId, testAnswer, testById],
+    [isTestUnknown, lectureId, testAnswer, testById, resolveAnswer],
   );
 
   const restart = useCallback(() => {
     setSelectedMapId(null);
+    locationsRef.current = {};
+    setLocations({});
+    answeredRef.current = null;
+    try { window.localStorage.removeItem(`${LOCATIONS_STORAGE_PREFIX}${lectureId}`); } catch { /* Optional storage. */ }
     setResults({});
     setCollected(new Set());
     writeCollected(lectureId, new Set());
     try { window.localStorage.removeItem(`${RESULTS_STORAGE_PREFIX}${lectureId}`); } catch { /* Optional storage. */ }
     setIsOpen(false);
   }, [lectureId]);
-
-  const reviewMissed = () => {
-    const remaining = new Set([...collected].filter((id) => results[id] !== "again"));
-    const retained = Object.fromEntries(Object.entries(results).filter(([, grade]) => grade === "easy"));
-    setCollected(remaining);
-    setResults(retained);
-    writeCollected(lectureId, remaining);
-    try { window.localStorage.setItem(`${RESULTS_STORAGE_PREFIX}${lectureId}`, JSON.stringify(retained)); } catch { /* Optional storage. */ }
-    setIsOpen(false);
-  };
 
   const onStickPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (stickRef.current) return;
@@ -1235,27 +1270,16 @@ export function LecturePalace({
   }
 
   const total = layout.stations.length;
-  /*
-   * Answered, not answered correctly. A stop you got wrong is a stop you have
-   * been to: leaving its Memo floating over the pavement told you nothing you
-   * could act on — the answer was already on the screen — and it meant the
-   * counter never moved and the walk could not end unless you were right sixty
-   * times running.
-   */
   const done = layout.stations.filter((entry) => collected.has(entry.id)).length;
-  /* What was recalled first time, which is the number the score is made of: a
-     stop you got wrong is walked, but it is not a stop you knew. */
-  const firstTimeKnown = layout.stations.filter(
-    (entry) => collected.has(entry.id) && results[entry.id] !== "again",
-  ).length;
-  const placeName = (index: number) => {
+  const hasProgress = Object.keys(results).length > 0 || Object.keys(locations).length > 0;
+  const placeName = (index: number, location = layout.stations[index]) => {
     const room = roomIdentity(index);
-    const houseIndex = layout.stations[index]?.houseIndex;
+    const houseIndex = location?.houseIndex;
     const building = houseIndex === undefined ? "" : t(`palace.building.${buildingProfile(layout.houses[houseIndex],houseIndex).kind}`);
-    return `${building} · ${String(room.number).padStart(2, "0")} · ${t(`palace.color.${room.color}`)} · ${t(layout.stations[index]?.placement === "outside" ? `palace.outdoor.${outdoorLandmark(index)}` : `palace.room.${room.theme}`)}`;
+    if (location?.originalLocation) return `${building} · ${String(room.number).padStart(2, "0")} · ${t("palace.outside")}`;
+    return `${building} · ${String(room.number).padStart(2, "0")} · ${t(`palace.color.${room.color}`)} · ${t(location?.placement === "outside" ? `palace.outdoor.${outdoorLandmark(index)}` : `palace.room.${room.theme}`)}`;
   };
   const selectedMapStation = layout.stations.find((entry) => entry.id === selectedMapId) ?? null;
-  const missedCount = layout.stations.filter((entry) => results[entry.id] === "again").length;
   /*
    * The chip on the panel is the note's own tab pill — same shape, same icon,
    * same tint — because it is answering the same question: which of the three
@@ -1368,7 +1392,7 @@ export function LecturePalace({
 
     if (!question) return null;
 
-    const passed = mark?.marked === true && (mark.score ?? 0) >= PRACTICE_PASS_SCORE;
+    const passed = mark ? practiceAnswerKnown(mark) === true : false;
 
     return (
       <div className="lecture-practice-stage">
@@ -1414,9 +1438,6 @@ export function LecturePalace({
               type="button"
               className="memo-test-next"
               onClick={() => {
-                recordResult(question.id, passed ? "easy" : "again");
-                collect(question.id);
-
                 leaveStation();
               }}
             >
@@ -1484,15 +1505,14 @@ export function LecturePalace({
         </div>
 
         <div className="memo-palace-intro-actions">
-          {missedCount > 0 ? <button type="button" className="memo-button-outline" onClick={reviewMissed}>{t("palace.reviewMissed", { count: missedCount })}</button> : null}
           <button type="button" className="memo-palace-enter" onClick={enterGame}>
             {/* A play arrow rather than a compass: the compass described the
                 town, and what the button does is start a game. */}
             <Msym name="play_arrow" size="1.35rem" fill weight={500} />
-            {done > 0 ? t("palace.resume") : t("palace.start")}
+            {hasProgress ? t("palace.resume") : t("palace.start")}
           </button>
 
-          {done > 0 ? (
+          {hasProgress ? (
             <button type="button" className="memo-button-outline small" onClick={restart}>
               <Msym name="replay" size="1.1rem" fill={false} weight={500} />
               {t("palace.restart")}
@@ -1625,7 +1645,7 @@ export function LecturePalace({
                   </span>
 
                 </div>
-                <div className="memo-palace-panel-where" data-drag-zone>{placeName(station.index)}</div>
+                <div className="memo-palace-panel-where" data-drag-zone>{placeName(station.index, station)}</div>
                 {renderStation()}
               </div>
               </div>
@@ -1721,19 +1741,18 @@ export function LecturePalace({
               /*
                * The same results screen a finished deck, quiz or test gets —
                * the walk is one of them, so it ends the way they do rather than
-               * with a panel of its own. The score is what was recalled first
-               * time: a card you had to come back to is not a card you knew.
+               * with a panel of its own. Every stop has now been recalled successfully.
                */
               <div className="memo-palace-finish">
                 <StudyCompletionCard
                   eyebrow={t("study.completed")}
                   title={t("palace.done.title")}
                   subtitle={t("palace.done.copy")}
-                  percentage={total === 0 ? 0 : (firstTimeKnown / total) * 100}
+                  percentage={total === 0 ? 0 : (done / total) * 100}
                   percentageLabel={t("study.score")}
                   primaryMetric={{
                     label: t("study.correctAnswers"),
-                    value: `${firstTimeKnown}/${total}`,
+                    value: `${done}/${total}`,
                   }}
                   actions={
                     <>
@@ -1746,7 +1765,6 @@ export function LecturePalace({
                         <Msym name="replay" size="1.2rem" fill={false} weight={500} />
                         {t("palace.restart")}
                       </button>
-                      {missedCount > 0 ? <button type="button" className="memo-button-outline" onClick={reviewMissed}>{t("palace.reviewMissed", { count: missedCount })}</button> : null}
                       {/* The design gives a results screen's second action its
                           own surface-and-border treatment; this only has to
                           bring the text colour and the pill shape. */}

@@ -20,17 +20,7 @@ export const MATH_FORMATTING_INSTRUCTIONS = `Formula formatting rules:
 - For multi-line derivations, use one display math block with an aligned environment inside: $$\\begin{aligned} a &= b \\\\ c &= d \\end{aligned}$$.
 - Never write raw dollar-sign inline math, broken subscripts like $Yt$ or $I{t/0}$, or plain text formulas like Yt / Y0 100.`;
 
-/*
- * A note's furniture — its section headings and its callout labels — is a set of literal strings
- * handed to the model, so unlike the body it cannot simply follow the source. It follows the
- * language the source was detected in, and English is the fallback for a language with no set
- * here rather than the default for everyone.
- *
- * Bosnian has its own set because the two words that differ from Croatian in it — "Poređenje"
- * and "greška" — are exactly the two that would read as foreign. It is only reached through an
- * explicitly stored `bs` hint: the detector answers ijekavian material as `hr` (see
- * `refineBcsVariety`), which is the closer of the two wrong answers when it cannot tell.
- */
+// Known labels are exact; other languages translate semantic examples into the source script.
 const STRUCTURED_PLUS_LABELS: Record<string, Record<string, string>> = {
   sl: {
     overview: "## Hiter pregled",
@@ -79,6 +69,22 @@ const STRUCTURED_PLUS_LABELS: Record<string, Record<string, string>> = {
     definition: "Definicija",
     commonMistake: "Česta greška",
     keyTakeaway: "Ključno",
+  },
+  "sr-Cyrl": {
+    overview: "## Брзи преглед",
+    keyThings: "## Кључне ствари које мораш знати",
+    topicExample: "## 1. Назив теме",
+    coreIdea: "### Главна идеја",
+    detailedNotes: "### Детаљне белешке",
+    keyTerms: "### Кључни појмови",
+    example: "### Пример",
+    compare: "### Поређење",
+    process: "### Процес",
+    checkYourself: "### Провери своје знање",
+    finalReview: "## Завршни преглед",
+    definition: "Дефиниција",
+    commonMistake: "Честа грешка",
+    keyTakeaway: "Кључно",
   },
   sr: {
     overview: "## Brzi pregled",
@@ -726,7 +732,7 @@ FORMATTING RULES
 
 CALLOUTS
 
-The app renders blockquotes of the form "> **Label:** text" as coloured highlight boxes. Use them to lift the few things a student must not miss, and you are the judge of what earns one: a make-or-break definition, the distinction everyone gets wrong on the exam, the one takeaway a section exists for. You are also the judge of whether a note needs any at all — a note can have zero callouts. Use ${calloutBudget}, each 1-2 lines, never two in a row, and never for material that is merely interesting. A callout must not restate a sentence that already appears in the surrounding text; it replaces it. Use exactly these labels:
+The app renders blockquotes of the form "> **Label:** text" as coloured highlight boxes. Use them to lift the few things a student must not miss, and you are the judge of what earns one: a make-or-break definition, the distinction everyone gets wrong on the exam, the one takeaway a section exists for. You are also the judge of whether a note needs any at all — a note can have zero callouts. Use ${calloutBudget}, each 1-2 lines, never two in a row, and never for material that is merely interesting. A callout must not restate a sentence that already appears in the surrounding text; it replaces it. ${labelInstruction} The label examples are:
 - "> **${labels.definition}:** ..." for a foundational definition the subject is built on
 - "> **${labels.commonMistake}:** ..." for the confusion or error students are tested on
 - "> **${labels.keyTakeaway}:** ..." for the single most important consequence or rule of a section

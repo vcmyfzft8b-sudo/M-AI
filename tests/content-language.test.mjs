@@ -48,7 +48,8 @@ test('Estonian and all app languages have native speech, Amharic has English spe
   assert.equal(SONIOX_LANGUAGES.size,60);
 });
 test('unknown-language callout examples explicitly require translation, including the script',()=>{
-  for (const code of ['et','am','sr-Cyrl']) assert.match(buildSourceNoteInstructions({outputLanguage:code}),/Translate each label naturally into the source language and script/);
+  for (const code of ['et','am']) assert.match(buildSourceNoteInstructions({outputLanguage:code}),/Translate each label naturally into the source language and script/);
+  assert.match(buildSourceNoteInstructions({outputLanguage:'sr-Cyrl'}), /Кључно/);
   assert.match(buildSourceNoteInstructions({outputLanguage:'bs'}),/Use the exact localized callout labels/);
 });
 test('language sampling covers the body and tail, with a bounded model input',()=>{
@@ -88,4 +89,49 @@ test('Serbian script changes cannot turn leaked tutor audio into an interruption
   assert.equal(judgeHeard('Синапса','Sinapsa','sr'),'tutor');
   assert.equal(judgeHeard('Чекај, зашто је то важно?','Kalcijum ulazi u ćeliju','sr-Cyrl'),'learner');
   assert.equal(judgeHeard('Калцијум улази у ћелију','','sr-Cyrl'),'learner');
+});
+
+function loadWrittenRepair(generate) {
+  const source = fs.readFileSync(new URL('../src/lib/ai/language-check.ts', import.meta.url), 'utf8')
+    .replace(/^import[\s\S]*?;\n/gm, '').replace(/export /g, '');
+  const js = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  const entries = new Map();
+  const checkpoint = async (p) => {
+    if (entries.has(p.cacheKey)) return entries.get(p.cacheKey);
+    const result = p.schema.parse(await p.generate());
+    entries.set(p.cacheKey, result);
+    return result;
+  };
+  return import('../src/lib/ai/language-repair.ts').then(repair => {
+    const dependencies = {
+      ...repair, generateStructuredObject: generate, isLanguageCheckEnabled: () => true,
+      getCurrentAbortSignal: () => undefined, getRemainingBudgetMs: () => undefined,
+      runWithAbortSignal: (_signal, call) => call(), generationCacheKey,
+      stageModelCacheKeyPart: () => 'test-model', withGenerationCheckpoint: checkpoint,
+    };
+    return new Function(...Object.keys(dependencies), js + '\nreturn repairWrittenNote;')(...Object.values(dependencies));
+  });
+}
+
+test('written corrections preserve markdown, reuse checkpoints, and leave English alone', async () => {
+  let calls = 0;
+  const repair = await loadWrittenRepair(async p => {
+    calls++;
+    return { corrected: JSON.parse(p.input).textToCorrect.replace('between', 'između') };
+  });
+  const text = '## Sinapsa\n\nPrijenos signala between dvije ćelije.\n';
+  const params = { text, language: 'bs', usageContext: { lectureId: 'fixture' } };
+  assert.equal(await repair(params), text.replace('between', 'između'));
+  assert.equal(await repair(params), text.replace('between', 'između'));
+  assert.equal(calls, 1);
+  assert.equal(await repair({ ...params, language: 'en' }), text);
+  assert.equal(calls, 1);
+});
+
+test('a failed or rewriting proofreader cannot erase a successfully generated note', async () => {
+  const text = '## Sinapsa\n\nKalcij ulazi u ćeliju i pokreće oslobađanje neurotransmitera.\n';
+  const failed = await loadWrittenRepair(async () => { throw Error('test outage'); });
+  assert.equal(await failed({ text, language: 'bs' }), text);
+  const rewritten = await loadWrittenRepair(async () => ({ corrected: '## Novi sadržaj\n\nPotpuno druga tema.' }));
+  assert.equal(await rewritten({ text, language: 'bs' }), text);
 });

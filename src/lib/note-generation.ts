@@ -1,4 +1,5 @@
 import "server-only";
+import { repairWrittenNote } from "@/lib/ai/language-check";
 import { resolveSourceLanguage } from "@/lib/source-language";
 
 import { chunkSummarySchema, noteArtifactSchema } from "@/lib/ai/schemas";
@@ -388,7 +389,10 @@ async function generateNotesContentDriven(
         }),
     });
 
-    windowMarkdowns.push(written.structuredNotesMd.trim());
+    windowMarkdowns.push(await repairWrittenNote({
+      text: normalizeGeneratedNoteMarkdown(written.structuredNotesMd).trim(),
+      language: labelLanguage, usageContext: params.usageContext,
+    }));
   }
 
   const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(
@@ -506,7 +510,9 @@ async function generateNotesLegacy(
     ),
   });
 
-  const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(result.structuredNotesMd);
+  const normalizedStructuredNotesMd = await repairWrittenNote({
+    text: normalizeGeneratedNoteMarkdown(result.structuredNotesMd), language: labelLanguage,
+  });
   const normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
 
   return {

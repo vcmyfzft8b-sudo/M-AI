@@ -91,7 +91,8 @@ The client now removes waits elsewhere:
   progression (`teach`, `resume`, `closing`) still requires the plan.
 - Credential renewal and an idle speech socket reconnect overlap the turn request.
   Opening a connection sends no speech; a synthesis stream still starts on its
-  first text. In the controlled regression, an 800ms request plus a 300ms reconnect
+  first text. An interrupted preparation and its replacement share a pending
+  handshake; closing the session cannot resurrect that connection. In the controlled regression, an 800ms request plus a 300ms reconnect
   took 1100ms before and 800ms after. These are simulated timings, not live percentiles.
 - Every turn claims its cancellation token before waiting for anything. A pause,
   end, newer turn, or real learner word invalidates it during planning, fetching,

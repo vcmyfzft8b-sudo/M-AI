@@ -179,6 +179,8 @@ export class TutorSpeechOutput {
   private roomTail = "";
   private roomTailUntil = 0;
   private closed = false;
+  /** Interrupted preparation and its replacement share one socket handshake. */
+  private connectionPromise: Promise<void> | null = null;
 
   /** The playback rate the socket is asked for, and the rate the graph is built at. */
   private sampleRate = 24_000;
@@ -259,13 +261,22 @@ export class TutorSpeechOutput {
 
       const onOpen = () => {
         socket.removeEventListener("error", onError);
+        if (this.closed) {
+          socket.close();
+          resolve();
+          return;
+        }
         this.socket = socket;
         this.keepaliveTimer = setInterval(() => {
           if (socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ keep_alive: true }));
           }
         }, KEEPALIVE_INTERVAL_MS);
-        socket.addEventListener("message", (event) => this.handleMessage(event));
+        socket.addEventListener("message", (event) => {
+          if (!this.closed && this.socket === socket) {
+            this.handleMessage(event);
+          }
+        });
         socket.addEventListener("close", () => {
           /*
            * Only the socket currently in use gets to fail anything. `ensureOpen` replaces
@@ -329,6 +340,15 @@ export class TutorSpeechOutput {
    * immediately before it is used instead.
    */
   async ensureOpen() {
+    if (this.closed) {
+      throw new SpeechOutputError("The speech output is closed.", null);
+    }
+
+    if (this.connectionPromise) {
+      await this.connectionPromise;
+      return;
+    }
+
     if (this.socket?.readyState === WebSocket.OPEN) {
       return;
     }
@@ -341,7 +361,15 @@ export class TutorSpeechOutput {
     this.socket?.close();
     this.socket = null;
 
-    await this.openSocket();
+    const connection = this.openSocket();
+    this.connectionPromise = connection;
+    try {
+      await connection;
+    } finally {
+      if (this.connectionPromise === connection) {
+        this.connectionPromise = null;
+      }
+    }
   }
 
   /**

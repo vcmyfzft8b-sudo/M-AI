@@ -13385,6 +13385,11 @@
 }
 
 @keyframes memo-tutor-spin {
+  /* Match transform functions: interpolating from the ring's scale(1) to a
+     full rotation otherwise decomposes both into the same identity matrix. */
+  from {
+    transform: rotate(0turn);
+  }
   to {
     transform: rotate(1turn);
   }
@@ -13431,10 +13436,19 @@
   animation: memo-tutor-think 1.6s ease-in-out infinite;
 }
 
-/* One quiet orbit keeps startup distinct from speech without dimming the voice away. */
+/* Visible orbits signal startup; speech and listening still follow the live audio. */
 .memo-tutor.phase-preparing .memo-orb-body {
-  animation: memo-tutor-breathe 2s ease-in-out infinite;
-  transform: scale(0.88);
+  animation: memo-tutor-warmup 2.4s ease-in-out infinite;
+}
+
+@keyframes memo-tutor-warmup {
+  0%,
+  100% {
+    transform: scale(0.94) rotate(-8deg);
+  }
+  50% {
+    transform: scale(1) rotate(8deg);
+  }
 }
 
 @keyframes memo-tutor-preparing {
@@ -13448,22 +13462,43 @@
 }
 
 .memo-tutor.phase-preparing .memo-orb-glow {
-  opacity: 0.35;
-  transform: scale(0.9);
+  opacity: 0.5;
+  animation: memo-tutor-warmup 2.4s ease-in-out infinite;
 }
 
-/* A single orbit; the second ring remains reserved for the learner's voice. */
 .memo-tutor.phase-preparing .memo-orb-ring {
   width: 91.3%;
   height: 91.3%;
-  opacity: 0.75;
+  opacity: 1;
+  border-width: 2px;
   border-color: var(--line);
   border-top-color: var(--promo);
-  animation: memo-tutor-spin 2.6s linear infinite;
+  border-right-color: var(--promo);
+  animation: memo-tutor-spin 1.8s linear infinite;
+}
+
+.memo-tutor.phase-preparing .memo-orb-ring:not(.second)::after {
+  content: "";
+  position: absolute;
+  top: -0.25rem;
+  left: calc(50% - 0.25rem);
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--promo);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--promo) 12%, transparent);
 }
 
 .memo-tutor.phase-preparing .memo-orb-ring.second {
-  display: none;
+  width: 76.1%;
+  height: 76.1%;
+  opacity: 0.55;
+  border-width: 1px;
+  border-color: transparent;
+  border-bottom-color: var(--promo);
+  border-left-color: var(--promo);
+  animation-duration: 3s;
+  animation-direction: reverse;
 }
 
 .memo-tutor-loading-copy {

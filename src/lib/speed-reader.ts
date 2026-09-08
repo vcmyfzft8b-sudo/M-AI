@@ -73,13 +73,19 @@ const MAX_LENGTH_FACTOR = 2.5;
 const MATH_FACTOR = 2;
 
 /**
- * The optimal recognition point: the letter the eye lands on when it reads a
- * word in one fixation, slightly left of centre. Capped so a long word is not
- * dragged far off to one side — past about five letters in, holding the pivot
- * still matters more than placing it exactly.
+ * The letter the eye lands on when it reads a word in one fixation: the middle
+ * one, a shade left of centre on an even-length word.
+ *
+ * It used to be capped at the fifth letter, on the theory that a pivot too far
+ * into a long word drags the eye off the centre line. What that actually did
+ * was hang the whole of a long word off one side of the stage: the pivot is
+ * pinned to the middle of the screen, so "mikroekonomski" pivoted on its fifth
+ * letter has to fit nine letters into the right half and four into the left,
+ * and the right half is what ran off the edge. Balanced halves are what let a
+ * long word be shown whole, and being shown whole beats being pivoted ideally.
  */
 export function focusIndex(word: string) {
-  return Math.min(4, Math.max(0, Math.round(word.length / 2) - 1));
+  return Math.max(0, Math.round(word.length / 2) - 1);
 }
 
 /** Splits a word around its focus letter, ready for the three-column stage. */
@@ -91,6 +97,20 @@ export function splitAtFocus(word: string) {
     focus: word.slice(at, at + 1),
     after: word.slice(at + 1),
   };
+}
+
+/**
+ * How wide the word is on the stage, counted in letters.
+ *
+ * Not its length: the pivot is held on the centre line, so the stage has to be
+ * wide enough for *twice* the longer of the two halves, plus the pivot itself.
+ * A word measured by its length alone is sized to fit a space it does not get,
+ * and the far half is clipped. This is the number the type size is chosen for.
+ */
+export function stageWidthInLetters(word: string) {
+  const { before, after } = splitAtFocus(word);
+
+  return Math.max(before.length, after.length) * 2 + 1;
 }
 
 export function clampWpm(wpm: number) {

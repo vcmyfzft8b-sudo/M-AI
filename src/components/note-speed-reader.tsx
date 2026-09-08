@@ -16,6 +16,7 @@ import {
   nextSentenceStart,
   sentenceStart,
   splitAtFocus,
+  stageWidthInLetters,
   totalDurationMs,
   wordDurationMs,
   wpmAtProgress,
@@ -34,11 +35,21 @@ const SETTINGS_STORAGE_KEY = "memo.speed-reader.settings";
 const POSITION_STORAGE_PREFIX = "memo.speed-reader.at:";
 
 /**
- * Past this many letters the word is set smaller so its ends stay on the stage.
- * The pivot never moves, so only the tails are at risk.
+ * How many letters fit across the stage at full size, and the smallest the type
+ * is allowed to get so a very long token still fits whole.
+ *
+ * The count is of *stage* letters, not of the word's own: the pivot is pinned
+ * to the centre line, so a word occupies twice its longer half plus the pivot
+ * (see `stageWidthInLetters`). Sizing by the word's length instead is what used
+ * to let the far end of a long term run off the edge of the screen.
+ *
+ * The floor is set from the longest word that has to be shown whole. Past it —
+ * a URL, a chemical name — the type stops shrinking and the ends are clipped,
+ * because a word too small to read is no more use than one cut off.
  */
-const COMFORTABLE_WORD_LENGTH = 13;
-const MIN_WORD_SCALE = 0.5;
+const COMFORTABLE_STAGE_LETTERS = 13;
+const LONGEST_FITTED_STAGE = 31;
+const MIN_WORD_SCALE = COMFORTABLE_STAGE_LETTERS / LONGEST_FITTED_STAGE;
 
 /** Breathing room under the last control, so it never sits on the edge. */
 const BOTTOM_GAP = 12;
@@ -463,7 +474,7 @@ export function NoteSpeedReader({
   const remaining = formatMinutes(totalDurationMs(words, settings.wpm, settings.gradual, index));
   const scale = Math.max(
     MIN_WORD_SCALE,
-    Math.min(1, COMFORTABLE_WORD_LENGTH / Math.max(1, word.text.length)),
+    Math.min(1, COMFORTABLE_STAGE_LETTERS / stageWidthInLetters(word.text)),
   );
 
   return (

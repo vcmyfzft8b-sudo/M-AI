@@ -10,6 +10,7 @@ import {
   nextSentenceStart,
   sentenceStart,
   splitAtFocus,
+  stageWidthInLetters,
   totalDurationMs,
   wordDurationMs,
   wpmAtProgress,
@@ -25,14 +26,36 @@ function wordsOf(markdown) {
   return buildSpeedReadWords(parseNoteTtsDocument(markdown));
 }
 
-test("the pivot letter sits just left of the middle and never runs away", () => {
+test("the pivot letter is the middle one, however long the word is", () => {
   assert.equal(focusIndex("a"), 0);
   assert.equal(focusIndex("in"), 0);
   assert.equal(focusIndex("rasti"), 2);
   assert.equal(focusIndex("branje"), 2);
-  // Capped, so a long term is not dragged off to one side of the stage.
-  assert.equal(focusIndex("fotosinteza"), 4);
-  assert.equal(focusIndex("elektroencefalografija"), 4);
+  // A long term keeps its pivot in the middle rather than five letters in, so
+  // its two halves stay even and neither of them hangs off the stage.
+  assert.equal(focusIndex("fotosinteza"), 5);
+  assert.equal(focusIndex("mikroekonomski"), 6);
+  assert.equal(focusIndex("elektroencefalografija"), 10);
+});
+
+test("the stage is measured by the longer half of the word, doubled", () => {
+  // The pivot is pinned to the centre line, so a word needs room for twice its
+  // longer half — sizing type by the word's own length is what clipped the end
+  // of a long term off the screen.
+  assert.equal(stageWidthInLetters("a"), 1);
+  assert.equal(stageWidthInLetters("rasti"), 5);
+  assert.equal(stageWidthInLetters("mikroekonomski"), 15);
+
+  for (const word of ["a", "in", "rasti", "branje", "fotosinteza", "mikroekonomski"]) {
+    const { before, after } = splitAtFocus(word);
+    const width = stageWidthInLetters(word);
+
+    // Whatever the word, both halves fit inside the width claimed for it.
+    assert.ok(before.length <= (width - 1) / 2, word);
+    assert.ok(after.length <= (width - 1) / 2, word);
+    // And the claim is never more than one letter wider than the word itself.
+    assert.ok(width <= word.length + 1, word);
+  }
 });
 
 test("a word splits into exactly its own letters around the pivot", () => {
@@ -40,6 +63,11 @@ test("a word splits into exactly its own letters around the pivot", () => {
 
   assert.deepEqual(split, { before: "ra", focus: "s", after: "ti" });
   assert.equal(split.before + split.focus + split.after, "rasti");
+
+  // A long word too: every letter of it is on the stage, none dropped.
+  const long = splitAtFocus("mikroekonomski");
+  assert.deepEqual(long, { before: "mikroe", focus: "k", after: "onomski" });
+  assert.equal(long.before + long.focus + long.after, "mikroekonomski");
 
   // A one-letter word still has a focus letter rather than an empty stage.
   assert.deepEqual(splitAtFocus("a"), { before: "", focus: "a", after: "" });

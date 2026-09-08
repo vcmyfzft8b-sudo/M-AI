@@ -354,6 +354,8 @@ export function LandingTutorDemo({ inset = "page", style, className }: LandingTu
    * and trapping the reader halfway down the page.
    */
   const voiceRowRef = useRef<HTMLDivElement | null>(null);
+  /* Where the chosen chip sat last time, so the row knows which way it is being walked. */
+  const lastVoicePositionRef = useRef<number | null>(null);
 
   /*
    * Screen pixels per layout pixel. One everywhere except inside the phone
@@ -473,7 +475,12 @@ export function LandingTutorDemo({ inset = "page", style, className }: LandingTu
 
     const previous = chip.previousElementSibling;
     const next = chip.nextElementSibling;
+    const position = Array.prototype.indexOf.call(row.children, chip);
+    const from = lastVoicePositionRef.current;
+    lastVoicePositionRef.current = position;
     const target = pillNeighbourhoodScrollTarget({
+      /* Uncover what is ahead of the tap, which is behind it when they step back. */
+      travel: from !== null && position < from ? "previous" : "next",
       /* Named explicitly, never spread: these are prototype getters. */
       row: {
         scrollLeft: row.scrollLeft,

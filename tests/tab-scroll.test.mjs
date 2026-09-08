@@ -166,6 +166,58 @@ test("the pill before is given up rather than pushing the chosen one out of view
   assert.ok(target !== null && target >= 420, `the chosen pill must stay visible, got ${target}`);
 });
 
+test("stepping back uncovers the pill before, not the one already behind", () => {
+  /*
+   * A phone row: three pills do not fit, two do. Walking rightwards the pill after the
+   * chosen one is what has to show; walking back it is the pill before — and giving that
+   * one up instead is what left a leftward tap parked against the left fade with nothing
+   * ahead of it.
+   *
+   * The row sits at 430, so the chosen pill and the one after it are in view and the one
+   * before it is off the left edge.
+   */
+  const row = { scrollLeft: 430, clientWidth: 340, scrollWidth: 1200, left: 0 };
+  const neighbourhood = {
+    previous: { left: -130, width: 130 },
+    pill: { left: 10, width: 130 },
+    next: { left: 150, width: 130 },
+  };
+  /* In content coordinates: previous 300..430, chosen 440..570, next 580..710. */
+
+  const back = pillNeighbourhoodScrollTarget({ row, ...neighbourhood, travel: "previous" });
+  assert.ok(back !== null && back <= 300, `expected the pill before shown, got ${back}`);
+  assert.ok(back + 340 >= 570, `the chosen pill was cut off the end, got ${back}`);
+
+  const forward = pillNeighbourhoodScrollTarget({ row, ...neighbourhood, travel: "next" });
+  assert.ok(forward !== null && forward + 340 >= 710, `expected the pill after shown, got ${forward}`);
+  assert.ok(forward <= 440, `the chosen pill was cut off the start, got ${forward}`);
+
+  // Unstated travel is the rightward case, so every existing caller is unchanged.
+  assert.equal(pillNeighbourhoodScrollTarget({ row, ...neighbourhood }), forward);
+});
+
+test("the chosen pill stays whole from anywhere, whichever way the row is walked", () => {
+  // Deliberately narrower than a pair of pills, so both neighbours have to be given up.
+  const row = { scrollLeft: 0, clientWidth: 200, scrollWidth: 900, left: 0 };
+
+  for (const travel of ["previous", "next"]) {
+    for (let scrollLeft = 0; scrollLeft <= 700; scrollLeft += 11) {
+      const target =
+        pillNeighbourhoodScrollTarget({
+          row: { ...row, scrollLeft },
+          /* Content 430..550 whatever the row is scrolled to. */
+          previous: { left: 300 - scrollLeft, width: 120 },
+          pill: { left: 430 - scrollLeft, width: 120 },
+          next: { left: 560 - scrollLeft, width: 120 },
+          travel,
+        }) ?? scrollLeft;
+
+      assert.ok(430 >= target - 1, `cut at the start going ${travel} from ${scrollLeft}`);
+      assert.ok(550 <= target + row.clientWidth + 1, `cut at the end going ${travel} from ${scrollLeft}`);
+    }
+  }
+});
+
 test("a row that does not overflow never moves", () => {
   assert.equal(
     pillNeighbourhoodScrollTarget({

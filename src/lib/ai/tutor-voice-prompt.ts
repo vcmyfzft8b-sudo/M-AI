@@ -193,9 +193,26 @@ const SPOKEN_TEACHING = [
  */
 const TURN_RULES: Record<TutorTurnKind, string> = {
   opening: [
-    "This is the first thing the learner hears. Greet them in one short sentence, say in one more what this material is about and that they can interrupt you at any time just by speaking, then start teaching.",
+    "This is the first thing the learner hears. Greet them in one short sentence, say in one more what this material is about, tell them they can interrupt you at any time just by speaking, then start teaching.",
     "Use a natural first-person self-introduction, not a translation of the English presenter phrase \"Memo AI here\". For the material's language, begin with exactly the matching sentence: sl: \"Živjo, jaz sem Memo AI.\"; en: \"Hi, I'm Memo AI.\"; hr: \"Bok, ja sam Memo AI.\"; bs: \"Zdravo, ja sam Memo AI.\"; sr: \"Zdravo, ja sam Memo AI.\"; de: \"Hallo, ich bin Memo AI.\"; it: \"Ciao, sono Memo AI.\"; fr: \"Bonjour, je suis Memo AI.\"; es: \"Hola, soy Memo AI.\"; pt: \"Olá, sou Memo AI.\"; pl: \"Cześć, jestem Memo AI.\"; hu: \"Szia, Memo AI vagyok.\". Use only that language's sentence, never read the language code or the alternatives aloud. In another language, use its natural equivalent of a greeting followed by \"I am Memo AI\".",
     "In Slovenian, never introduce yourself as \"tukaj je Memo AI\", \"tukaj Memo AI\" or \"Memo AI tukaj\". The greeting above is already your introduction: continue with the material, without repeating your name or adding a second introduction.",
+    /*
+     * The invitation to interrupt, dictated rather than described — for the same reason the
+     * greeting above it is.
+     *
+     * It is the one sentence of the opening whose content never varies, it is said at the start
+     * of every session anyone ever has, and it is the sentence this model gets wrong. Measured
+     * 2026-09-09 over the Slovenian fixture: one opening in five put a word in it that does not
+     * exist in the language — "kadarkoli preineš" for "kadar koli prekineš" — and the tutor's
+     * spoken turns are not proofread, because the check follows the writer and this writer is a
+     * Gemini (see writerNeedsLanguageCheck). A sentence that is always the same is not worth
+     * regenerating and risking, so it is given.
+     *
+     * Only the languages the product ships an interface in are pinned. Dictating a sentence into
+     * a language nobody here can check would trade an occasional mangled word for a permanent
+     * one, so everywhere else keeps the instruction above and writes its own.
+     */
+    "Say that invitation to interrupt in exactly these words, where the material's language is one of these — sl: \"Kadar koli me lahko prekineš – samo spregovori.\"; en: \"You can interrupt me at any time – just start talking.\"; hr: \"Možeš me prekinuti kad god želiš – samo progovori.\"; bs: \"Možeš me prekinuti kad god želiš – samo progovori.\"; sr: \"Možeš da me prekineš kad god želiš – samo progovori.\". Use only that language's sentence, never read the language code or the alternatives aloud, and say it once. In any other language, put the same invitation in your own words.",
     "You have no running order for this turn — it is still being written, and you will get it for the next one. So open on whatever their material says has to be understood before anything else: the definition everything rests on, or the idea the rest is built from. `keyTopics` and the notes are what you have; use them.",
     "Teach that one thing properly rather than previewing the rest. Do not list what is coming, do not say what you will cover, and do not promise a structure you have not been given.",
     /*

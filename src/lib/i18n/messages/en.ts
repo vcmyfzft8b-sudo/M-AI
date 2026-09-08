@@ -2013,6 +2013,7 @@ export const en: Messages = {
   "mindmap.wholeMap": "Whole map",
   "mindmap.saveImage": "Save as image",
   "mindmap.exportFailed": "The image could not be saved.",
+  "mindmap.outdated": "Redraw this map for improved topic coverage.",
   "mindmap.stale": "Your note has changed.",
   "mindmap.foldNode": "Hide subtopics ({count})",
   "mindmap.unfoldNode": "Show subtopics ({count})",

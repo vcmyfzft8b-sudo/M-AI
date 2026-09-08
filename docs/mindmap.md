@@ -7,30 +7,32 @@ fold, search and save as an image.
 
 Two phases, for every note however short:
 
-1. **Topics**, decided once over the whole note — in full when it fits, and otherwise over a
-   *skeleton* of it: every heading and the first line of prose under it, which stays a couple of
-   thousand characters however long the note runs. So the shape is always judged by something
-   that has seen all of the material.
-2. **Filling**, one call per window (`planSourceWriteWindows`, the same helper note writing uses),
-   each sorting its part of the note into that one agreed topic list, four at a time.
+1. **Topics**, decided once over source sections spanning the **whole note**. Sections retain
+   their heading ancestry and are split at 900 words, including a single long paragraph. Short
+   notes are planned from the full text; long notes supply the beginning and end of every section.
+   Unheaded prose, tables, bullets and fifth/sixth-level headings all reach the plan. Every topic
+   lists its source section IDs; every section must be assigned. Blank/duplicate topics, unknown
+   IDs, unassigned sections and a single branch for a substantial note trigger one repair.
+2. **Filling**, one topic per call, with long topics windowed at 1,800 words, four calls at a
+   time. Every topic gets its own output budget and its assigned source sections in full. Ideas cite their source IDs.
+   Every assigned topic/section pair must contribute a usable idea after merging. Missing pairs,
+   renamed topics and invalid references trigger one complete replacement attempt for that window.
 
-A map is a *shape* rather than a set of items, so the topics can never be windowed: windows that
-each choose their own merge into several maps sharing a title, which is the structureless column
-the competing implementation draws. Only the filling is windowed.
+An incomplete or failed window can no longer disappear into a `ready` map. If repair fails, the
+job reports failure and retains any previous map so the learner can retry. Source IDs check
+structural coverage; they are model-supplied evidence, not a proof that every fact is correct.
 
-There used to be a second path — a note that fitted one call got one call, which had to invent
-the shape and fill it in the same budget. That is the request models economise on, and they
-economise by writing fewer children, which is exactly the thin map this was sent back to fix.
-Splitting the two jobs costs one extra call on a short note and buys every topic a call that has
-nothing else to do.
+`mergeWindowedBranches` keeps the plan's order and normalises label spelling. Repeated ideas
+merge their new facts and source references instead of throwing away later windows. The old
+10-idea topic cap is removed. Empty echoes are pruned, but informative details are retained.
+The parser's defensive limit rises from 520 to 5,000 nodes so long notes keep their later topics.
+Generation verifies its node count after parsing and fails rather than saving a truncated map.
 
-`mergeWindowedBranches` folds the answers back together: ordered by the plan so the map reads in
-the note's own order, matched on a normalised label so a window that wrote "povprasevanje" is not
-silently dropped, and deduplicated because two windows describing the same idea either side of a
-page break is the normal case. A window that never comes back costs its own share and not the map.
-
-This replaced a hard 60,000-character cut with the rest of the note thrown away — a quiet way of
-not covering the material, and the reason the windowing exists at all.
+No part of a long note is discarded to meet an input length limit. The generator's decisions and
+repair orchestration live in `src/lib/mindmap-generation.ts`, tested with synthetic provider
+responses by `tests/mindmap-generation.test.mjs`. Run
+`node --experimental-strip-types scripts/mindmap-eval.mjs` for a paid, synthetic-only check against
+the configured model. It writes its report under gitignored `evals/output`, never to a database.
 
 - Stage: `mindmap` in `src/lib/ai/model-config.ts` — GLM, `medium` thinking, 180s timeout.
 - Prompt and wire schema: `src/lib/ai/mindmap-prompt.ts`. The tree is written at a **fixed depth**
@@ -38,9 +40,8 @@ not covering the material, and the reason the windowing exists at all.
   because a map deeper than four levels is not glanceable anyway. Free-text fields carry no
   `.max()` — Gemini rejects a schema whose string bounds multiply out across nested arrays — so
   the caps live in `src/lib/mindmap-doc.ts` and are applied to what comes back.
-- Generation: `src/lib/mindmap.ts` drives it; the decisions that are not calls — the skeleton and
-  the merge — live in `src/lib/mindmap-merge.ts`, free of `server-only` so
-  `tests/mindmap-coverage.test.mjs` can assert on them. The finished tree is stored whole as one
+- Generation: `src/lib/mindmap.ts` drives it; the merge lives in `src/lib/mindmap-merge.ts`, free of `server-only` so
+  `tests/mindmap-coverage.test.mjs` can assert on it. The finished tree is stored whole as one
   `jsonb` document alongside a hash of the note it was drawn from.
 
 ## Cost and when it runs
@@ -53,6 +54,10 @@ enough to make on demand.
 Opening the tab is free when the note has not changed: `generateLectureMindmap` compares the
 stored `notes_hash` against the note and returns without a call. "Draw again"
 (`POST /api/lectures/[id]/mindmap/regenerate`, paid only) is the one control that always spends.
+
+Maps from an older generation version are still shown and cost nothing to open. A separate
+`outdated` flag offers “draw again” with a coverage-upgrade notice, rather than falsely claiming
+the note changed. A redraw remains an explicit action using the existing entitlement check.
 
 An edited note does **not** invalidate the stored map. It is still a map of most of the note, and
 throwing it away on the reader's behalf would replace something they can read with a spinner they

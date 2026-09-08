@@ -21,13 +21,11 @@ export const MINDMAP_LABEL_MAX_LENGTH = 90;
 export const MINDMAP_DETAIL_MAX_LENGTH = 320;
 export const MINDMAP_TITLE_MAX_LENGTH = 120;
 /**
- * Beyond this a map stops being a map and becomes the note again, drawn sideways.
- *
- * Raised from 260 with windowed generation: a long note now reaches the map whole, and the old
- * ceiling would have thrown away the last of it after all the work of reading it. The screen
- * copes because a big map opens folded, not because it is small.
+ * Defensive bound on a stored tree, not a content target. Long notes now keep every topic's
+ * contributions; the old 520-node budget could erase their ending after generation. Folding
+ * bounds what is drawn. Generation checks this ceiling explicitly instead of saving a cut tree.
  */
-export const MINDMAP_MAX_NODES = 520;
+export const MINDMAP_MAX_NODES = 5_000;
 /**
  * A label is a handle, not a sentence. Past this the words that will not fit are not dropped —
  * they become the node's detail, where the reader can still get at them.

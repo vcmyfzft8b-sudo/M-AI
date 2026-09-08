@@ -2026,6 +2026,7 @@ export const hr: Messages = {
   "mindmap.wholeMap": "Cijela mapa",
   "mindmap.saveImage": "Spremi kao sliku",
   "mindmap.exportFailed": "Sliku nije bilo moguće spremiti.",
+  "mindmap.outdated": "Ponovno nacrtaj mapu za bolju pokrivenost gradiva.",
   "mindmap.stale": "Bilješka se promijenila.",
   "mindmap.foldNode": "Sakrij podteme ({count})",
   "mindmap.unfoldNode": "Prikaži podteme ({count})",

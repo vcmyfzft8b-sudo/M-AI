@@ -96,6 +96,7 @@ export async function generate({
   model,
   maxOutputTokens,
   thinkingLevel,
+  providerSort,
 }) {
   if (isOpenRouterModel(model) || isOpenAiModel(model)) {
     const run = isOpenRouterModel(model) ? generateOpenRouter : generateOpenAi;
@@ -108,6 +109,7 @@ export async function generate({
       model,
       maxOutputTokens,
       thinkingLevel,
+      providerSort,
       ledger,
       prices: PRICES,
       timeoutMs: CALL_TIMEOUT_MS,

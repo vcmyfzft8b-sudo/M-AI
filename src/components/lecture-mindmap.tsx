@@ -43,6 +43,7 @@ type MindmapResponse = {
   errorMessage: string | null;
   generatedAt: string | null;
   stale: boolean;
+  outdated: boolean;
 };
 
 type MindmapState = {
@@ -50,6 +51,7 @@ type MindmapState = {
   doc: MindmapDoc | null;
   errorMessage: string | null;
   stale: boolean;
+  outdated: boolean;
   /**
    * When the *map* was last finished — not when its row was last touched.
    *
@@ -174,6 +176,7 @@ export function LectureMindmap({
       doc: parseMindmapDoc(payload.doc),
       errorMessage: payload.errorMessage,
       stale: Boolean(payload.stale),
+      outdated: Boolean(payload.outdated),
       readyAt: payload.status === "ready" ? payload.generatedAt : (previous?.readyAt ?? null),
     };
 
@@ -201,6 +204,7 @@ export function LectureMindmap({
             doc: previous?.doc ?? null,
             errorMessage: null,
             stale: previous?.stale ?? false,
+            outdated: previous?.outdated ?? false,
             readyAt: previous?.readyAt ?? null,
           };
 
@@ -714,9 +718,9 @@ export function LectureMindmap({
             {t("common.retry")}
           </button>
         </div>
-      ) : state?.stale && !isRunning(status) ? (
+      ) : (state?.stale || state?.outdated) && !isRunning(status) ? (
         <div className="memo-mm-stale">
-          <span>{t("mindmap.stale")}</span>
+          <span>{t(state?.stale ? "mindmap.stale" : "mindmap.outdated")}</span>
           <button type="button" onClick={() => void start({ regenerate: true })}>
             {t("mindmap.redraw")}
           </button>

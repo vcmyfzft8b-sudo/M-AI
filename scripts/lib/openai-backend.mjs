@@ -170,6 +170,7 @@ export async function generateOpenRouter({
   model,
   maxOutputTokens,
   thinkingLevel,
+  providerSort,
   ledger,
   prices,
   timeoutMs = 180_000,
@@ -205,6 +206,9 @@ export async function generateOpenRouter({
           },
         },
         ...reasoningBlock(routedModel, thinkingLevel),
+        ...(providerSort && isMandatoryReasoningModel(routedModel)
+          ? { provider: { sort: providerSort, require_parameters: true } }
+          : {}),
       }),
     });
     const payload = await response.json();

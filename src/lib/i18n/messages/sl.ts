@@ -1996,6 +1996,7 @@ export const sl = {
   "palace.notReady": "Palača se odpre, ko so kartice pripravljene.",
   "palace.empty": "Ta zapisek še nima kartic, zato v mestu ni kaj postaviti.",
   "palace.loading": "Gradim mesto …",
+  "palace.loadingHint": "Znano mesto za vsak nov spomin.",
   "palace.unsupported": "Ta naprava ne zmore 3D palače. Kartice delujejo povsod.",
   "palace.exit": "Nazaj na zapisek",
   "palace.stops": "Postaje",

@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 
 import { useT } from "@/components/i18n-provider";
 import { StudyQuizQuestion, StudyPracticeQuestion } from "@/components/study-question";
-import { StudyGenerationNotice } from "@/components/generation-notice";
+import { PalaceLoading } from "@/components/palace-loading";
 import { MemoPortal } from "@/components/memo-portal";
 import { Emoji, Msym } from "@/components/msym";
 import { StudyCompletionCard } from "@/components/study-completion-card";
@@ -617,9 +617,11 @@ export function LecturePalace({
       movementStartedRef.current = false;
       setHasMoved(false);
       const { createPalaceGame } = await import("@/lib/palace/game");
+      // Let the loading artwork paint before synchronous geometry and shader work.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       const canvas = canvasRef.current;
 
-      if (!canvas) return;
+      if (!canvas || gameRef.current) return;
 
       sizeMinimap();
 
@@ -1566,16 +1568,7 @@ export function LecturePalace({
 
             {!hasMoved && !station && !isMapOpen ? <p className="memo-palace-hint">{t(isTouch ? "palace.hintTouch" : "palace.hintDesktop")}</p> : null}
 
-            {!isBuilt && !loadError ? (
-              /* The app's own wait, in the shape of the thing being built. */
-              <div className="memo-palace-loading">
-                <StudyGenerationNotice
-                  preview="palace"
-                  stageCopy={t("palace.loading")}
-                  bodyCopy=""
-                />
-              </div>
-            ) : null}
+            {!loadError ? <PalaceLoading ready={isBuilt} /> : null}
 
             {loadError ? (
               <div className="memo-palace-loading">

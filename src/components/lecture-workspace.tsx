@@ -60,6 +60,7 @@ import { LecturePodcast } from "@/components/lecture-podcast";
 import { StudyGenerationNotice } from "@/components/generation-notice";
 import { LectureMindmap } from "@/components/lecture-mindmap";
 import { LecturePalace } from "@/components/lecture-palace";
+import { palacePreparation } from "@/lib/palace/preparation";
 import { StudyQuizQuestion, StudyPracticeQuestion } from "@/components/study-question";
 import { StudyFlashcard } from "@/components/study-flashcard";
 import { LectureTutor } from "@/components/lecture-tutor";
@@ -1334,6 +1335,8 @@ export function LectureWorkspace({
   const [isAwaitingPracticeTestGeneration, setIsAwaitingPracticeTestGeneration] = useState(false);
   const [isSubmittingPracticeTest, setIsSubmittingPracticeTest] = useState(false);
   const [studyError, setStudyError] = useState<string | null>(null);
+  const [isPreparingPalace, setIsPreparingPalace] = useState(false);
+  const palacePreparationLock = useRef(false);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [isSavingNoteDoc, setIsSavingNoteDoc] = useState(false);
   const [noteSelection, setNoteSelection] = useState<NoteSelectionRange | null>(null);
@@ -2161,6 +2164,37 @@ export function LectureWorkspace({
   const isQuizGenerating = shouldPollAsset(detail.quizAsset?.status) || isAwaitingQuizGeneration;
   const isPracticeTestGenerating =
     shouldPollAsset(detail.practiceTestAsset?.status) || isAwaitingPracticeTestGeneration;
+  const palaceMaterials = palacePreparation({
+    study: { count: detail.flashcards.length, status: detail.studyAsset?.status },
+    quiz: { count: detail.quizQuestions.length, status: detail.quizAsset?.status },
+    "practice-test": { count: detail.practiceTestQuestions.length, status: detail.practiceTestAsset?.status },
+  });
+
+  async function handlePalacePrepare() {
+    if (palacePreparationLock.current) return;
+    palacePreparationLock.current = true;
+    setIsPreparingPalace(true);
+    setStudyError(null);
+    try {
+      // A partial detail read must never regenerate material that already exists.
+      const requests = detail.degraded ? [] : palaceMaterials.request;
+      const outcomes = await Promise.allSettled(requests.map(async (kind) => {
+        const response = await fetch(`/api/lectures/${detail.lecture.id}/${kind}`, { method: "POST" });
+        await parseApiResponse<{ ok: true }>(response, t);
+      }));
+      // Refresh successful queues even when another request failed.
+      await refreshLectureDetail({ force: true });
+      const failed = outcomes.find((outcome) => outcome.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
+    } catch (error) {
+      if (!redirectToBillingIfNeeded({ error, router })) {
+        setStudyError(getRequestErrorMessage(error, t("error.studyRegenerate"), t));
+      }
+    } finally {
+      palacePreparationLock.current = false;
+      setIsPreparingPalace(false);
+    }
+  }
 
   useEffect(() => {
     if (
@@ -3977,6 +4011,20 @@ export function LectureWorkspace({
     }
 
     if (activeTab === "palace") {
+      if (detail.lecture.status === "ready" && !palaceMaterials.ready) {
+        return <div className="memo-study-empty">
+          <div className="memo-study-empty-orb"><Emoji symbol="🗺️" size="4.4rem" /></div>
+          <p className="memo-study-empty-title">{t("palace.title")}</p>
+          <p className="memo-study-empty-copy">{t("palace.prepareCopy")}</p>
+          {studyError ? <p className="memo-inline-error" role="alert">{studyError}</p> : null}
+          <button type="button" className="memo-study-empty-cta"
+            disabled={isPreparingPalace || palaceMaterials.pending}
+            onClick={() => void handlePalacePrepare()}>
+            {isPreparingPalace || palaceMaterials.pending ? <Msym name="progress_activity" className="memo-spin" size="1.2rem" /> : null}
+            {t(isPreparingPalace || palaceMaterials.pending ? "palace.preparing" : palaceMaterials.request.length && !detail.degraded ? "palace.prepare" : "common.retry")}
+          </button>
+        </div>;
+      }
       return (
         <LecturePalace
           lectureId={detail.lecture.id}

@@ -256,9 +256,20 @@ export function selectPalaceItems({
    * does not feel like it has a quiz in it at all, and being asked in three
    * different ways is most of what makes the walk worth taking over the deck.
    */
-  const quizWanted = Math.min(quiz.length, Math.round(limit * 0.25));
-  const testWanted = Math.min(test.length, Math.round(limit * 0.15));
-  const cardsWanted = Math.min(cards.length, limit - quizWanted - testWanted);
+  const capacity = Math.max(0, Math.floor(limit));
+  let quizWanted = Math.min(quiz.length, Math.round(capacity * 0.25));
+  let testWanted = Math.min(test.length, Math.round(capacity * 0.15));
+  let cardsWanted = Math.min(cards.length, capacity - quizWanted - testWanted);
+  // Unused reservations belong to the available banks. A short or quiz-only
+  // note should not lose questions just because it has fewer flashcards.
+  let remaining = capacity - quizWanted - testWanted - cardsWanted;
+  while (remaining > 0) {
+    const before = remaining;
+    if (quizWanted < quiz.length && remaining > 0) { quizWanted++; remaining--; }
+    if (testWanted < test.length && remaining > 0) { testWanted++; remaining--; }
+    if (cardsWanted < cards.length && remaining > 0) { cardsWanted++; remaining--; }
+    if (before === remaining) break;
+  }
 
   /*
    * One queue per section, each in importance order, drained a card at a time

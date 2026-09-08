@@ -1003,3 +1003,18 @@ test("releasing movement stops immediately even after sprinting", () => {
   assert.equal(stopped.z, running.z);
   assert.equal(stopped.speed, 0);
 });
+
+test('unused card slots include all quiz and test questions that fit', () => {
+  const quiz = Array.from({length:24},(_,i)=>({id:`q${i}`}));
+  const practice = Array.from({length:16},(_,i)=>({id:`t${i}`}));
+  const chosen = selectPalaceItems({cards:[{id:'c',sectionId:null}],quiz,test:practice});
+  assert.equal(chosen.length,41);
+  assert.equal(chosen.filter(x=>x.kind==='quiz').length,24);
+  assert.equal(chosen.filter(x=>x.kind==='test').length,16);
+  for (const kind of ['quiz','test']) {
+    const bank = Array.from({length:80},(_,i)=>({id:`${kind}${i}`}));
+    const single = selectPalaceItems({cards:[],quiz:kind==='quiz'?bank:[],test:kind==='test'?bank:[]});
+    assert.equal(single.length,MAX_STATIONS);
+    assert.ok(single.every(x=>x.kind===kind));
+  }
+});

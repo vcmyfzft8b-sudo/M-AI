@@ -1961,6 +1961,7 @@ export const en: Messages = {
   "palace.notReady": "The palace opens once your cards are ready.",
   "palace.empty": "This note has no cards yet, so there is nothing to place in the city.",
   "palace.loading": "Building the city…",
+  "palace.loadingHint": "A familiar place for every new memory.",
   "palace.unsupported": "This device can't run the 3D palace. The flashcards work everywhere.",
   "palace.exit": "Back to the note",
   "palace.stops": "Stops",

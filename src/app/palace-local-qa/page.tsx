@@ -1,3 +1,5 @@
+import { PalaceLoading } from "@/components/palace-loading";
+import { MemoPortal } from "@/components/memo-portal";
 import { notFound } from "next/navigation";
 import { LecturePalace } from "@/components/lecture-palace";
 import type {
@@ -10,10 +12,11 @@ import type {
 export default async function PalaceLocalQA({
   searchParams,
 }: {
-  searchParams: Promise<{ large?: string; isolated?: string }>;
+  searchParams: Promise<{ large?: string; isolated?: string; loading?: string }>;
 }) {
   if (process.env.NODE_ENV !== "development") notFound();
-  const { large, isolated } = await searchParams;
+  const { large, isolated, loading } = await searchParams;
+  if (loading) return <MemoPortal><div className="memo-palace-stage"><PalaceLoading /></div></MemoPortal>;
   const cards = [
     {
       id: "qa-card",

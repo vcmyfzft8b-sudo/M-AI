@@ -17279,9 +17279,49 @@
   overflow-y: auto;
 }
 
-.memo-palace-loading .memo-gen {
-  width: min(30rem, 100%);
+/* An illustrated arrival screen that stays mounted for the reveal transition. */
+.memo-palace-arrival {
+  z-index: 2;
+  color: var(--text);
+  background: radial-gradient(ellipse at 50% 42%, var(--surface), var(--bg) 70%);
+  transition: opacity 240ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 240ms;
 }
+.memo-palace-arrival.is-ready {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.memo-palace-arrival.is-ready .memo-gen-track > span { animation: none; }
+.memo-palace-arrival-content {
+  width: min(26rem, 100%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: memo-fade-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.memo-palace-arrival-scene {
+  position: relative;
+  width: min(22rem, 100%);
+  margin-bottom: 1.6rem;
+}
+.memo-palace-arrival-scene svg { display: block; width: 100%; }
+.memo-palace-arrival-ground { fill: var(--tile); }
+.memo-palace-arrival-buildings { fill: var(--surface); stroke: var(--muted); }
+.memo-palace-arrival-route { stroke: var(--promo); }
+.memo-palace-arrival-pin { fill: var(--promo); }
+.memo-palace-arrival-mascot {
+  position: absolute;
+  width: 24%;
+  height: auto;
+  left: 42%;
+  top: 17%;
+}
+.memo-palace-arrival-content .memo-eyebrow { margin: 0 0 0.85rem; color: var(--muted); }
+.memo-palace-arrival-content h2 { margin: 0; font-size: 1.55rem; font-weight: 800; letter-spacing: -0.04em; }
+.memo-palace-arrival-copy { max-width: 22rem; margin: 0.85rem 0 1.6rem; color: var(--muted); font-size: 0.95rem; line-height: 1.6; text-wrap: pretty; }
+.memo-palace-arrival-content .memo-gen-track { display: block; width: min(12rem, 65%); margin: 0; }
+
 
 /*
  * The study screen you are standing in front of.

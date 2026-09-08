@@ -1974,6 +1974,7 @@ export const bs: Messages = {
   "palace.notReady": "Palača se otvara kada kartice budu spremne.",
   "palace.empty": "Ova bilješka još nema kartica pa u gradu nema šta postaviti.",
   "palace.loading": "Gradim grad …",
+  "palace.loadingHint": "Poznato mjesto za svaku novu uspomenu.",
   "palace.unsupported": "Ovaj uređaj ne može pokrenuti 3D palaču. Kartice rade svugdje.",
   "palace.exit": "Nazad na bilješku",
   "palace.stops": "Stanice",

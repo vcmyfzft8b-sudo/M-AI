@@ -152,7 +152,13 @@ export class FakeAudioContext {
   }
 
   createGain() {
-    return { connect() {} };
+    const events = [];
+    return { connect() {}, gain: {
+      events,
+      cancelScheduledValues(time) { events.push(["cancel", time]); },
+      setValueAtTime(value, time) { events.push(["set", value, time]); },
+      linearRampToValueAtTime(value, time) { events.push(["ramp", value, time]); },
+    } };
   }
 
   createAnalyser() {
@@ -169,7 +175,8 @@ export class FakeAudioContext {
   }
 
   createBufferSource() {
-    return { buffer: null, onended: null, connect() {}, start() {}, stop() {} };
+    return { buffer: null, onended: null, stops: [], connect() {}, disconnect() {}, start() {},
+      stop(time) { this.stops.push(time); } };
   }
 
   resume() {

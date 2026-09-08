@@ -62,6 +62,8 @@ const WRITER_QUIET_CLOSE_MS = 3_500;
 const ROOM_TAIL_MS = 1_200;
 /** Includes recognizer/network lag without treating a whole lesson as room echo. */
 const ACTIVE_ECHO_WINDOW_SECONDS = 6;
+/** De-click a recognized interruption without waiting for another word or endpoint. */
+const INTERRUPTION_FADE_SECONDS = 0.07;
 
 /**
  * How much of that last turn is kept.
@@ -175,6 +177,7 @@ export class TutorSpeechOutput {
   private analyserBuffer: Float32Array<ArrayBuffer> | null = null;
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
   private sources = new Set<AudioBufferSourceNode>();
+  private fadingSources = new Set<AudioBufferSourceNode>();
   private turn: ActiveTurn | null = null;
   private turnCounter = 0;
   /** The last thing said out loud, and how long it can still be in the room. */
@@ -767,16 +770,29 @@ export class TutorSpeechOutput {
   }
 
   /**
-   * Stops the turn now and reports what was actually heard of it.
+   * Cancels the turn now and reports what was actually heard of it. A recognized
+   * interruption may fade the existing audio over 70ms; Pause and End stop it hard.
    *
    * Everything still queued is discarded, the socket is told to stop generating,
    * and the text is cut at the last character whose audio had already left the
    * speaker — see `spokenTextBefore` for why that is not the same as the text
    * that was generated.
    */
-  stop() {
+  stop({ fadeOut = false }: { fadeOut?: boolean } = {}) {
     const turn = this.turn;
     const context = this.context;
+
+    // Pause, End and replacement speech also silence any unfinished fade.
+    for (const source of this.fadingSources) {
+      source.onended = null;
+      try { source.stop(); } catch { /* Already ended. */ }
+      source.disconnect();
+    }
+    this.fadingSources.clear();
+    if (context && this.gain) {
+      this.gain.gain.cancelScheduledValues(context.currentTime);
+      this.gain.gain.setValueAtTime(1, context.currentTime);
+    }
 
     if (!turn || !context) {
       return { spokenText: "", wasSpeaking: false };
@@ -784,6 +800,10 @@ export class TutorSpeechOutput {
 
     const wasSpeaking = turn.scheduledUntil > context.currentTime;
     const spokenText = spokenTextBefore(turn.timings, this.playedSeconds(turn, context), turn.text);
+    const fade = fadeOut && wasSpeaking && context.state === "running" &&
+      turn.audioStartedAt !== null && turn.audioStartedAt <= context.currentTime;
+    const stopAt = context.currentTime + (fade ? INTERRUPTION_FADE_SECONDS : 0);
+    if (fade) this.gain?.gain.linearRampToValueAtTime(0, stopAt);
 
     this.clearQuietTimer(turn);
     turn.pending = "";
@@ -804,8 +824,18 @@ export class TutorSpeechOutput {
 
     for (const source of this.sources) {
       try {
-        source.onended = null;
-        source.stop();
+        if (fade) {
+          this.fadingSources.add(source);
+          source.onended = () => {
+            this.fadingSources.delete(source);
+            source.disconnect();
+          };
+          source.stop(stopAt);
+        } else {
+          source.onended = null;
+          source.stop();
+          source.disconnect();
+        }
       } catch {
         // Already finished. Stopping a stopped source throws and means nothing.
       }

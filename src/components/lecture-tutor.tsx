@@ -1195,7 +1195,7 @@ export function LectureTutor({
     turnAbortRef.current?.abort();
     turnAbortRef.current = null;
 
-    const stopped = outputRef.current?.stop();
+    const stopped = outputRef.current?.stop({ fadeOut: true });
 
     if (stopped?.spokenText) {
       /*

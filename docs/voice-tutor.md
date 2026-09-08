@@ -396,3 +396,11 @@ Two things follow from the shape of that bill:
 - The note toolbar measures its actual overflow (including translated labels).
   On desktop, rows that fit are centered with no edge fades or horizontal scrolling;
   rows that overflow retain their existing navigation behavior.
+
+## Interruption fade
+
+A recognized learner partial cancels the current turn immediately and ramps its existing
+audio to silence over 70ms. Late audio is discarded as soon as the turn is cancelled.
+Pause, End and replacement speech also hard-stop an unfinished fade; the next turn restores
+full volume. Noise and echo do not trigger a fade. This smooths the cutoff after recognition;
+it does not claim to remove speech-recognition latency or change semantic endpointing.

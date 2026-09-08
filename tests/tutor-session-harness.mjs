@@ -44,11 +44,12 @@ export function sessionHarness({ source } = {}) {
   }
   class Output {
     room = "";
+    stops = [];
     constructor() { state.output = this; }
     async connect() {} async resumeAudio() {} close() { this.stop(); }
     ensureOpen() { calls.push({ kind: "socket", at: now }); return state.open(); }
     spokenIntoRoom() { return this.room; }
-    stop() { this.live?.done.resolve(); this.live = null; return null; }
+    stop(options) { this.stops.push(options); this.live?.done.resolve(); this.live = null; return null; }
     speak() {
       const entry = { at: now, text: "", done: deferred() };
       audio.push(entry); this.live = entry;

@@ -88,13 +88,23 @@ test("noise and speaker echo neither interrupt nor ask for an answer", async () 
   const h = sessionHarness(); await h.start();
   h.state.output.room = "Mitohondrij je elektrarna celice";
   const count = h.calls.length;
+  const stops = h.state.output.stops.length;
   for (const text of ["", "hmmmm", "uh", "...", "mitohondrij je elektrarna"]) {
     h.state.input.handlers.onPartial(text);
     h.state.input.handlers.onUtterance(text);
   }
   await settle();
   assert.equal(h.calls.length, count);
+  assert.equal(h.state.output.stops.length, stops, "noise and echo cannot fade the voice");
   assert.equal(h.tutor.phaseRef.current, "speaking");
+});
+
+test("the first recognized learner partial starts the short interruption fade before endpointing", async () => {
+  const h = sessionHarness(); await h.start();
+  h.state.input.handlers.onPartial("Wait");
+  assert.equal(h.state.output.stops.at(-1)?.fadeOut, true);
+  assert.equal(h.tutor.phaseRef.current, "listening");
+  assert.equal(h.calls.filter(c => c.kind === "answer").length, 0);
 });
 
 test("explain-back stays silent while the learner is still finding words", async () => {

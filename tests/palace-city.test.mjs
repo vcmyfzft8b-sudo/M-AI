@@ -942,3 +942,64 @@ test('clock roofs cover all four tower corners with outward-facing closed slopes
   }
   geometry.dispose(); mesh.material.dispose();
 });
+
+
+test('background streets are mostly low distinct buildings instead of repeated skyscrapers', () => {
+  const tall=new Set(['helix','spire','tower']);
+  for(const count of [3,30,90]) {
+    const layout=buildPalaceLayout({seedSource:`varied-streets-${count}`,items:Array.from({length:count},(_,i)=>({id:`v-${i}`,kind:'card',sectionId:null})),sections:[]});
+    const background=layout.houses.map((house,index)=>({house,profile:buildingProfile(house,index)})).filter(p=>!p.house.landmark);
+    assert.equal(background.filter(p=>tall.has(p.profile.kind)).length,0,'background lots repeat a landmark skyscraper');
+    for(const kind of tall) assert.ok(layout.houses.filter((house,index)=>buildingProfile(house,index).kind===kind).length<=1,`${kind} repeats across the skyline`);
+    assert.ok(new Set(background.map(p=>p.profile.kind)).size>=8,'background silhouettes lack variety');
+    for(const {profile} of background) if(['terrace','courtyard'].includes(profile.kind)) assert.ok(profile.height<=12,'a low-rise block became another skyscraper');
+  }
+});
+
+
+test('conservatory roofs close both triangular ends without crossing the doorway', () => {
+  const layout=buildPalaceLayout({seedSource:'closed-conservatories',items:Array.from({length:30},(_,i)=>({id:`g-${i}`,kind:'card',sectionId:null})),sections:[]});
+  let checked=0;
+  for(const [index,house] of layout.houses.entries()) {
+    if(buildingProfile(house,index).kind!=='greenhouse') continue;
+    const ends=cityBuilding(house,index).filter(part=>part.shape==='gable');
+    assert.equal(ends.length,2);
+    for(const side of [-1,1]) {
+      const end=ends.find(part=>Math.sign(part.z)===side);
+      assert.ok(end.glass);
+      assert.equal(end.width,house.width);
+      assert.equal(end.height,3.8);
+      assert.ok(Math.abs(end.y-end.height/2-LOBBY_HEIGHT)<1e-9);
+      assert.equal(Math.abs(end.z),house.depth/2);
+    }
+    checked++;
+  }
+  assert.ok(checked>0);
+});
+
+
+test('every town has one central pyramid without displacing any study memory', () => {
+  for(const count of [3,60]) {
+    const layout=buildPalaceLayout({seedSource:`central-pyramid-${count}`,items:Array.from({length:count},(_,i)=>({id:`p-${i}`,kind:'card',sectionId:null})),sections:[]});
+    const pyramids=layout.houses.filter(house=>house.monument==='pyramid');
+    assert.equal(pyramids.length,1);
+    assert.ok(!pyramids[0].landmark);
+    const distance=Math.hypot(pyramids[0].x,pyramids[0].z);
+    assert.ok(layout.houses.filter(house=>!house.landmark).every(house=>Math.hypot(house.x,house.z)>=distance));
+    assert.equal(new Set(layout.stations.map(station=>station.id)).size,count);
+  }
+});
+
+test("releasing movement stops immediately even after sprinting", () => {
+  const environment = { cameraYaw: 0, colliders: [], bounds: 200, delta: 1 / 60 };
+  const running = stepCharacter({ ...environment, state: createCharacter(0, 0, 0),
+    input: { forward: 1, right: 0, jump: false, sprint: true } });
+  let stopped = running;
+  for (let frame = 0; frame < 120; frame++) {
+    stopped = stepCharacter({ ...environment, state: stopped,
+      input: { forward: 0, right: 0, jump: false, sprint: false } });
+  }
+  assert.equal(stopped.x, running.x);
+  assert.equal(stopped.z, running.z);
+  assert.equal(stopped.speed, 0);
+});

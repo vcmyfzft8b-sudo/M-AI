@@ -77,6 +77,8 @@ export type HouseFeature =
   | "gardenTree";
 
 export type PalaceHouse = {
+  /** One central civic landmark, separate from the study route. */
+  monument?: "pyramid";
   x: number;
   z: number;
   width: number;
@@ -1101,6 +1103,10 @@ export function buildPalaceLayout({
    * every time, which is what makes the walk repeatable. The direction comes
    * from the house the stop is remembered by, so you arrive facing both.
    */
+  const pyramidHouse = houses.filter((house) => !house.landmark)
+    .sort((a,b) => Math.hypot(a.x,a.z)-Math.hypot(b.x,b.z))[0];
+  if (pyramidHouse) pyramidHouse.monument = "pyramid";
+
   const first = stations[0];
   const firstHouse = first ? houses[first.houseIndex] : null;
   const approach = firstHouse ? roomPoint(firstHouse, 0, firstHouse.depth / 2 + 7) : { x: 0, z: 0 };

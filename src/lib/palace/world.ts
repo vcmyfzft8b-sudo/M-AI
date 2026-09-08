@@ -320,7 +320,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   const spheres: Instance[] = [];
   const glassCylinders: Instance[] = [];
   const ribbons: Instance[] = [];
-  const gables: Instance[] = [], pyramids: Instance[] = [], bows: Instance[] = [], domes: Instance[] = [], sails: Instance[] = [], water: Instance[] = [];
+  const gables: Instance[] = [], glassGables: Instance[] = [], pyramids: Instance[] = [], bows: Instance[] = [], domes: Instance[] = [], sails: Instance[] = [], water: Instance[] = [];
   const rings: Instance[] = [];
   const palmLeaves: Instance[] = [];
   const carBodies: Instance[] = [],
@@ -358,7 +358,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     const entries = part.surface === "wood" ? woodwork
       : part.surface === "stone" ? walls
       : part.surface === "water" ? water
-      : part.shape === "gable" ? gables
+      : part.shape === "gable" ? (part.glass ? glassGables : gables)
       : part.shape === "pyramid" ? pyramids
       : part.shape === "bow" ? bows
       : part.shape === "dome" ? domes
@@ -1311,6 +1311,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     }),
   );
   group.add(instanced(gableGeometry, tinted(), gables));
+  group.add(instanced(gableGeometry, cityGlassMaterial, glassGables));
   group.add(instanced(pyramidGeometry, tinted(), pyramids));
   group.add(instanced(sailGeometry, tinted(), sails));
   group.add(instanced(bowGeometry, tinted(), bows));

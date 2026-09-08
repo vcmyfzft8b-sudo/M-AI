@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { insideHouse, roomPoint, roomIdentity } from "./rooms";
+import { insideHouse } from "./rooms";
 import { createAvatar } from "@/lib/palace/avatar";
 import type { PalaceLayout } from "@/lib/palace/layout";
 import {
@@ -36,7 +36,6 @@ export type PalaceSnapshot = {
 export type PalaceGame = {
   /** Stick or WASD, each axis in [-1, 1]. */
   setMove: (forward: number, right: number) => void;
-  setSprint: (sprinting: boolean) => void;
   /** Drag or mouse look, in pixels. */
   look: (deltaX: number, deltaY: number) => void;
   markCollected: (stationId: string) => void;
@@ -45,9 +44,7 @@ export type PalaceGame = {
    * station will not re-open until they have stepped away from it.
    */
   releaseStation: () => void;
-  /** Walk the camera to a district without walking there — the map's shortcut. */
-  travelTo: (districtIndex: number) => void;
-  travelToStation: (stationId: string) => void;
+  /** Freeze movement while an overlay is open or the page is hidden. */
   setPaused: (paused: boolean) => void;
   resize: () => void;
   snapshot: () => PalaceSnapshot;
@@ -121,6 +118,7 @@ export function createPalaceGame({
   lighting.follow(layout.spawn.x, layout.spawn.z);
 
   const collected = new Set(collectedIds);
+  const collectionPulses = new Map<string, number>();
 
   /*
    * A collected station keeps its ring, faded: the marks on the ground are the
@@ -149,7 +147,6 @@ export function createPalaceGame({
   let cameraPitch = 0.3;
   const cameraTarget = new THREE.Vector3();
   const move = { forward: 0, right: 0 };
-  let sprinting = false;
   let paused = false;
   let nearStationId: string | null = null;
   /*
@@ -259,22 +256,14 @@ export function createPalaceGame({
     if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) event.preventDefault();
     if (event.repeat) return;
 
-    if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
-      sprinting = true;
-    }
-
     keysDown.add(event.code);
   };
 
   const onKeyUp = (event: KeyboardEvent) => {
-    if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
-      sprinting = false;
-    }
-
     keysDown.delete(event.code);
   };
 
-  const clearInput = () => { keysDown.clear(); move.forward = 0; move.right = 0; sprinting = false; };
+  const clearInput = () => { keysDown.clear(); move.forward = 0; move.right = 0; };
   window.addEventListener("blur", clearInput);
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
@@ -320,7 +309,7 @@ export function createPalaceGame({
            * ground over the kerbs.
            */
           jump: false,
-          sprint: sprinting,
+          sprint: keysDown.has("ShiftLeft") || keysDown.has("ShiftRight"),
         };
 
     character = stepCharacter({
@@ -359,7 +348,16 @@ export function createPalaceGame({
     const seconds = time / 1000;
 
     city.stations.forEach((visual) => {
-      if (visual.collected) return;
+      if (visual.collected) {
+        const started = collectionPulses.get(visual.station.id);
+        if (started !== undefined) {
+          const progress = Math.min(1, (time - started) / 550);
+          visual.ring.scale.setScalar(1 + Math.sin(progress * Math.PI) * .7);
+          (visual.ring.material as THREE.MeshBasicMaterial).opacity = .18 + (1 - progress) * .65;
+          if (progress === 1) collectionPulses.delete(visual.station.id);
+        }
+        return;
+      }
 
       /*
        * A sprite always faces the camera, so there is nothing to spin: the
@@ -426,46 +424,11 @@ export function createPalaceGame({
   const findVisual = (stationId: string): StationVisual | undefined =>
     city.stations.find((visual) => visual.station.id === stationId);
 
-  const travelToStation = (stationId: string) => {
-    const target = findVisual(stationId);
-    if (!target) return;
-    const house = layout.houses[target.station.houseIndex];
-    const room = roomIdentity(target.station.index);
-    const approach = target.station.placement === "inside"
-      ? roomPoint(house, room.anchorX, room.anchorZ + 1.7)
-      : { x: target.station.x, z: target.station.z + 1.7 };
-    character = createCharacter(approach.x, approach.z, target.station.placement === "inside" ? house.facing + Math.PI : Math.PI);
-    cameraYaw = character.facing;
-    nearStationId = null;
-    clearInput();
-    interacting = false;
-    suppressedStationId = null;
-    lighting.follow(character.x, character.z);
-
-    const eye = { x: character.x, y: 0.9, z: character.z };
-    const spot = cameraPosition({
-      target: eye,
-      yaw: cameraYaw,
-      pitch: cameraPitch,
-      distance: clampCameraDistance({
-        target: eye,
-        yaw: cameraYaw,
-        pitch: cameraPitch,
-        maxDistance: CAMERA_DISTANCE,
-        colliders: city.colliders,
-      }),
-    });
-
-    camera.position.set(spot.x, Math.max(spot.y, 1.2), spot.z);
-  };
 
   return {
     setMove: (forward, right) => {
       move.forward = forward;
       move.right = right;
-    },
-    setSprint: (value) => {
-      sprinting = value;
     },
     look: (deltaX, deltaY) => {
       cameraYaw -= deltaX * LOOK_SENSITIVITY;
@@ -480,17 +443,14 @@ export function createPalaceGame({
       markVisualCollected(visual);
     },
     releaseStation: () => {
+      if (nearStationId && collected.has(nearStationId) && !reducedMotion) {
+        collectionPulses.set(nearStationId, performance.now());
+      }
       suppressedStationId = nearStationId ?? suppressedStationId;
       nearStationId = null;
       interacting = false;
       onNearStation(null);
     },
-    travelTo: (index) => {
-      const target = city.stations.find((visual) => visual.station.districtIndex === index && !visual.collected)
-        ?? city.stations.find((visual) => visual.station.districtIndex === index);
-      if (target) travelToStation(target.station.id);
-    },
-    travelToStation,
     setPaused: (value) => {
       paused = value;
       if (value) clearInput();

@@ -15291,10 +15291,35 @@
    * here, the pair sits exactly where the tutor's sphere sits between sentences.
    *
    * Over `--orb-level` rather than a flat 0, because the contract is the same one: whoever is
-   * speaking sets the level and the sphere answers. Nothing sets it on this screen yet — the
-   * podcast plays a rendered file rather than a live stream — and 0 is the rest state.
+   * speaking sets the level and the sphere answers. This is the rest state and the fallback —
+   * a cover nobody is metering, which is every one of them except the player's.
    */
   --orb-swell: clamp(0, calc(var(--orb-level, 0) * 4.2), 1);
+}
+
+/*
+ * Two spheres, two levels.
+ *
+ * The tutor has one voice and one sphere, so one `--orb-level` says everything. A podcast has
+ * two hosts taking turns, and a single level would swell both of them on every syllable either
+ * one spoke — two objects moving as one, which is precisely what the pair is drawn not to be.
+ * So each host has its own channel, `--orb-level-a` and `--orb-level-b`, and the player writes
+ * the speaking one while driving the other to zero.
+ *
+ * Declared on the parts rather than on the cover because a custom property set on an element
+ * beats the same property inherited from its parent: this is what lets one sphere answer while
+ * the other rests, inside a box that still carries a shared fallback for hosts that meter
+ * nothing. `--orb-level-*` is deliberately unset by default, so a cover nobody drives keeps the
+ * rest state above rather than pinning itself to zero.
+ */
+.memo-podcast-cover .memo-orb-body.a,
+.memo-podcast-cover .memo-orb-glow.a {
+  --orb-swell: clamp(0, calc(var(--orb-level-a, var(--orb-level, 0)) * 4.2), 1);
+}
+
+.memo-podcast-cover .memo-orb-body.b,
+.memo-podcast-cover .memo-orb-glow.b {
+  --orb-swell: clamp(0, calc(var(--orb-level-b, var(--orb-level, 0)) * 4.2), 1);
 }
 
 .memo-podcast-cover > * {
@@ -15366,7 +15391,17 @@
   flex: 0 1 auto;
   /* Under about this the two spheres stop reading as a pair and start reading as two dots. */
   min-height: 4.5rem;
-  max-height: min(var(--cover-h), 24vh);
+  /*
+   * The share of the screen the artwork may take before the column starts taking it back.
+   *
+   * It was 24vh, which was a comfortable ceiling over a cover half this size and is a cap
+   * that bites at the new one — and biting is the wrong word for what it does: the spheres
+   * are absolutely positioned in rem, so a capped box does not shrink them, it just stops
+   * reserving room for them and lets them sit over the title. The number is raised with the
+   * artwork so it stays what it was meant to be, a floor for the controls rather than a
+   * second opinion about how big a sphere is.
+   */
+  max-height: min(var(--cover-h), 30vh);
   max-width: 100%;
 }
 
@@ -15440,15 +15475,30 @@
   --b-top: 2.55rem;
 }
 
+/*
+ * Playing, which is the one state where the artwork is the screen.
+ *
+ * It used to be a size up from the library thumbnail and no more — a pair of balls about as
+ * wide, together, as the tutor's single sphere, floating in the middle of a screen with room
+ * to spare above and below them. The tutor is the same object on the same phone and it reads
+ * as a presence; this read as an illustration of one. So each host is now drawn at the
+ * tutor's own 7.5rem rather than at two thirds of it, and the nine numbers below are the old
+ * ones scaled together so the pair still overlaps exactly as it did.
+ *
+ * The height is what bounds this rather than the width: the cover is capped at 24vh on the
+ * note tab, which is 202 points on the phone this is written for, and 11.9rem is 190 of them.
+ */
 .memo-podcast-cover.playing {
-  --cover-w: 12rem;
-  --cover-h: 8.5rem;
-  --body-a: 5.1rem;
-  --body-b: 4.2rem;
-  --glow-a: 7.6rem;
-  --glow-b: 6.4rem;
-  --a-top: 1.65rem;
-  --b-right: 1.3rem;
+  --cover-w: 16.8rem;
+  --cover-h: 11.9rem;
+  --body-a: 7.15rem;
+  --body-b: 5.9rem;
+  --glow-a: 10.65rem;
+  --glow-b: 8.95rem;
+  --a-left: 2.15rem;
+  --a-top: 2.3rem;
+  --b-right: 1.8rem;
+  --b-top: 3.55rem;
 }
 
 /*
@@ -16416,6 +16466,31 @@
 }
 
 /* The short-screen floor: a small phone, or any phone in landscape. */
+/*
+ * A short window under the desktop breakpoint, which on a phone means landscape.
+ *
+ * The player's artwork holds the size it had before the spheres were grown, and it is the one
+ * tier that does. Height is what bounds this artwork, and 390 points of it — a phone on its
+ * side — is already less than the full-size pair asks for; the cover is capped at a share of
+ * the screen, and a cap that bites does not shrink the spheres, it just stops reserving room
+ * for them. The portrait phone's own floor is declared below this one and wins where both
+ * apply, which is every phone held the usual way up.
+ */
+@media (max-width: 1099px) and (max-height: 740px) {
+  .memo-podcast-cover.playing {
+    --cover-w: 12rem;
+    --cover-h: 8.5rem;
+    --body-a: 5.1rem;
+    --body-b: 4.2rem;
+    --glow-a: 7.6rem;
+    --glow-b: 6.4rem;
+    --a-left: 1.55rem;
+    --a-top: 1.65rem;
+    --b-right: 1.3rem;
+    --b-top: 2.55rem;
+  }
+}
+
 @media (max-width: 640px) and (max-height: 800px) {
   .memo-podcast {
     gap: 0.6rem;
@@ -16450,15 +16525,23 @@
     --b-top: 2rem;
   }
 
+  /*
+   * The player's own floor. It still grows against what it used to be — the artwork was the
+   * smallest thing on the screen that needed to be the largest — but it keeps a step below
+   * the full size, because this tier exists for the 667-point phone where 24vh is 160 points
+   * and there is a title, a transport and a scrubber under it.
+   */
   .memo-podcast-cover.playing {
-    --cover-w: 9.4rem;
-    --cover-h: 6.6rem;
-    --body-a: 4rem;
-    --body-b: 3.3rem;
-    --glow-a: 6rem;
-    --glow-b: 5rem;
-    --a-top: 1.3rem;
-    --b-right: 1rem;
+    --cover-w: 13.2rem;
+    --cover-h: 9.3rem;
+    --body-a: 5.6rem;
+    --body-b: 4.6rem;
+    --glow-a: 8.4rem;
+    --glow-b: 7rem;
+    --a-left: 1.7rem;
+    --a-top: 1.8rem;
+    --b-right: 1.4rem;
+    --b-top: 2.8rem;
   }
 
   .memo-podcast-cover.writing {
@@ -16569,16 +16652,16 @@
 
   /* The sphere is most of what the player is, so it takes the room the phone does not have. */
   .memo-podcast-cover.playing {
-    --cover-w: 15rem;
-    --cover-h: 10.5rem;
-    --body-a: 6.4rem;
-    --body-b: 5.3rem;
-    --glow-a: 9.5rem;
-    --glow-b: 8rem;
-    --a-left: 1.95rem;
-    --a-top: 2.05rem;
-    --b-right: 1.65rem;
-    --b-top: 3.2rem;
+    --cover-w: 21rem;
+    --cover-h: 14.7rem;
+    --body-a: 8.95rem;
+    --body-b: 7.4rem;
+    --glow-a: 13.3rem;
+    --glow-b: 11.2rem;
+    --a-left: 2.75rem;
+    --a-top: 2.85rem;
+    --b-right: 2.3rem;
+    --b-top: 4.5rem;
   }
 
   /* Centred rather than stretched: a player across a widescreen is a control bar, not a player. */
@@ -16734,16 +16817,16 @@
   }
 
   .memo-podcast-cover.playing {
-    --cover-w: 12rem;
-    --cover-h: 8.5rem;
-    --body-a: 5.1rem;
-    --body-b: 4.2rem;
-    --glow-a: 7.6rem;
-    --glow-b: 6.4rem;
-    --a-left: 1.55rem;
-    --a-top: 1.65rem;
-    --b-right: 1.3rem;
-    --b-top: 2.55rem;
+    --cover-w: 16.8rem;
+    --cover-h: 11.9rem;
+    --body-a: 7.15rem;
+    --body-b: 5.9rem;
+    --glow-a: 10.65rem;
+    --glow-b: 8.95rem;
+    --a-left: 2.15rem;
+    --a-top: 2.3rem;
+    --b-right: 1.8rem;
+    --b-top: 3.55rem;
   }
 
   /* The title comes back to the sheet rung; at this height it is a label, not a headline. */
@@ -16773,16 +16856,16 @@
   }
 
   .memo-podcast-cover.playing {
-    --cover-w: 10.6rem;
-    --cover-h: 7.5rem;
-    --body-a: 4.5rem;
-    --body-b: 3.7rem;
-    --glow-a: 6.7rem;
-    --glow-b: 5.6rem;
-    --a-left: 1.4rem;
-    --a-top: 1.45rem;
-    --b-right: 1.15rem;
-    --b-top: 2.25rem;
+    --cover-w: 14.8rem;
+    --cover-h: 10.5rem;
+    --body-a: 6.3rem;
+    --body-b: 5.2rem;
+    --glow-a: 9.4rem;
+    --glow-b: 7.85rem;
+    --a-left: 1.95rem;
+    --a-top: 2.05rem;
+    --b-right: 1.6rem;
+    --b-top: 3.15rem;
   }
 }
 

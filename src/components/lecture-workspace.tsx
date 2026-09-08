@@ -1360,6 +1360,8 @@ export function LectureWorkspace({
   const studyManagerSheetRef = useRef<HTMLDivElement | null>(null);
   const noteScrollRef = useRef<HTMLDivElement | null>(null);
   const tabRowRef = useRef<HTMLDivElement | null>(null);
+  /* Where the active pill sat last time, so the row knows which way it is being walked. */
+  const lastTabPositionRef = useRef<number | null>(null);
   const [tabsOverflow, setTabsOverflow] = useState(true);
   const studyManagerItemSuppressClickRef = useRef(false);
   const studyManagerItemDragRef = useRef<StudyManagerItemDragState | null>(null);
@@ -5642,10 +5644,24 @@ export function LectureWorkspace({
     const pill = row?.querySelector<HTMLElement>(".memo-tab.active");
     if (!row || !pill) return;
 
-    /* The next pill comes along too, so the obvious thing to reach for next is readable. */
+    /*
+     * Which way the reader is going, so the row uncovers what is ahead of them
+     * rather than always what is to the right. Held as a position in the row
+     * rather than as a tab id because that is what the arithmetic compares, and
+     * the row's pills change with the note (a lecture with no transcript has one
+     * fewer). The first run has nothing to compare against and is left as
+     * rightwards — a note opened straight onto a study tab is arriving at it,
+     * not stepping back to it.
+     */
+    const position = Array.prototype.indexOf.call(row.children, pill);
+    const from = lastTabPositionRef.current;
+    lastTabPositionRef.current = position;
+
+    /* The pill ahead comes along too, so the obvious thing to reach for next is readable. */
     const previous = pill.previousElementSibling;
     const next = pill.nextElementSibling;
     const target = pillNeighbourhoodScrollTarget({
+      travel: from !== null && position < from ? "previous" : "next",
       /*
        * Named explicitly, never spread: scrollLeft, clientWidth and scrollWidth are
        * getters on the prototype, so `{ ...row }` silently yields none of them and the

@@ -74,6 +74,9 @@ export function tabScrollTarget(geometry: TabScrollGeometry): number | null {
   return Math.abs(target - scrollLeft) < 1 ? null : target;
 }
 
+/** Which way along the row the reader is moving, and so which neighbour matters. */
+export type PillTravel = "next" | "previous";
+
 /**
  * Where a row should sit so the chosen pill and the pills either side of it are readable.
  *
@@ -81,34 +84,66 @@ export function tabScrollTarget(geometry: TabScrollGeometry): number | null {
  * time: it lands flush against a fade with its neighbours half-cut behind it, so the
  * things you are most likely to reach for next are the things you cannot read.
  *
- * The two sides are not equal, though, and pretending they were is what made the first
- * attempt at this wrong. The pill after the chosen one is where the row is going, so it is
- * required; the pill before it is where the row has been, so it is merely wanted. When
- * everything fits, all three are shown. When it does not, the previous pill is given up
- * first and the chosen pill is never given up at all.
+ * The two sides are not equal — but which of them is the important one depends on which
+ * way the reader is going, and that is what the first two attempts at this got wrong. Both
+ * of them made the pill on the right required and the pill on the left optional. That is
+ * correct while the reader is working rightwards, and exactly backwards when they turn
+ * around: stepping back one tab, the pill they are heading for is the one on the left, and
+ * it was the one being given up. On a row where three pills do not fit — the note tabs on
+ * a phone — that meant every leftward tap parked them against the left fade with nothing
+ * ahead of them, and the only way to see the tab before was to drag the row by hand.
+ *
+ * So the neighbour on the side being travelled towards is required, the one behind is
+ * merely wanted. When the whole neighbourhood fits, all three are shown. When it does not,
+ * the pill behind is given up and the chosen pill is never given up at all.
  */
 export function pillNeighbourhoodScrollTarget(params: {
   row: { scrollLeft: number; clientWidth: number; scrollWidth: number; left: number };
   pill: { left: number; width: number };
   previous: { left: number; width: number } | null;
   next: { left: number; width: number } | null;
+  /** Defaults to rightwards, which is where a row with no history is assumed to be going. */
+  travel?: PillTravel;
 }): number | null {
   const { row, pill, previous, next } = params;
+  const travel = params.travel ?? "next";
   const toContent = (clientLeft: number) => clientLeft - row.left + row.scrollLeft;
 
-  const pillLeft = toContent(pill.left);
-  const requiredEnd = next ? toContent(next.left) + next.width : pillLeft + pill.width;
-  const wantedStart = previous ? toContent(previous.left) : pillLeft;
+  const pillStart = toContent(pill.left);
+  const pillEnd = pillStart + pill.width;
+  /* Both neighbours, collapsing to the pill's own edge at either end of the row. */
+  const bothStart = previous ? toContent(previous.left) : pillStart;
+  const bothEnd = next ? toContent(next.left) + next.width : pillEnd;
 
-  // Take the previous pill along only when the whole neighbourhood still fits the row;
-  // otherwise it would push the chosen pill towards the far edge to make room.
-  const start = requiredEnd - wantedStart <= row.clientWidth ? wantedStart : pillLeft;
+  /*
+   * What to try and show, best first, each one giving up more than the last: all three
+   * pills, then the chosen one with the neighbour it is heading towards, then the chosen
+   * one alone. The first that fits the row wins, which is what keeps the chosen pill
+   * whole on a row too narrow to hold even a pair.
+   */
+  const spans =
+    travel === "next"
+      ? [
+          [bothStart, bothEnd],
+          [pillStart, bothEnd],
+          [pillStart, pillEnd],
+        ]
+      : [
+          [bothStart, bothEnd],
+          [bothStart, pillEnd],
+          [pillStart, pillEnd],
+        ];
+
+  const [start, end] = spans.find(([from, to]) => to - from <= row.clientWidth) ?? [
+    pillStart,
+    pillEnd,
+  ];
 
   return tabScrollTarget({
     scrollLeft: row.scrollLeft,
     viewportWidth: row.clientWidth,
     contentWidth: row.scrollWidth,
     pillLeft: start,
-    pillWidth: Math.max(pill.width, requiredEnd - start),
+    pillWidth: end - start,
   });
 }

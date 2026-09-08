@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+} from "react";
 
 import { useTranslations } from "@/components/i18n-provider";
 import { MemoPortal } from "@/components/memo-portal";
@@ -41,7 +49,9 @@ import {
   PROGRESS_SAVE_INTERVAL_MS,
   savePodcastProgress,
 } from "@/lib/podcast-progress";
+import { PodcastLevelMeter } from "@/lib/podcast-level";
 import { TutorClipPlayer } from "@/lib/tutor/clip-player";
+import { LevelEnvelope } from "@/lib/tutor/turn-audio";
 import { podcastVoiceHue } from "@/lib/tutor/voice-colors";
 import { podcastVoiceSampleClip } from "@/lib/tutor/voice-clips";
 import { formatCalendarDate } from "@/lib/utils";
@@ -287,6 +297,22 @@ export function LecturePodcast({
   const audioARef = useRef<HTMLAudioElement | null>(null);
   const audioBRef = useRef<HTMLAudioElement | null>(null);
   const activeSlotRef = useRef<"a" | "b">("a");
+  /*
+   * The spheres, and what makes them move.
+   *
+   * The player's artwork is the two hosts, and until now it sat still through the whole
+   * conversation — the same picture whether somebody was mid-sentence or the episode had
+   * ended. The tutor's sphere has always ridden the level of its own voice, and this is the
+   * same object; so the elements above are metered and the speaking host's sphere is given
+   * the level, exactly as the walkthrough gives its own.
+   *
+   * One envelope per host rather than one shared: they are two objects, and a level handed
+   * from one to the other at a hand-off would make the arriving sphere start mid-swell.
+   */
+  const coverRef = useRef<HTMLDivElement | null>(null);
+  const meterRef = useRef<PodcastLevelMeter | null>(null);
+  const levelFrameRef = useRef<number | null>(null);
+  const envelopesRef = useRef({ a: new LevelEnvelope(), b: new LevelEnvelope() });
   /** Which turn is already loaded into which element, so a prepared hand-off is recognised. */
   const preparedRef = useRef<{ slot: "a" | "b"; index: number } | null>(null);
   const segmentsRef = useRef(new Map<number, LoadedSegment>());
@@ -321,11 +347,14 @@ export function LecturePodcast({
    * the stale reply happens to land after the fresh one.
    */
   const statusRequestRef = useRef(0);
+  const currentIndexRef = useRef(0);
 
   voicesRef.current = voices;
   podcastRef.current = podcast;
   isPlayingRef.current = isPlaying;
   isWritingRef.current = isWriting;
+  /* Read by the level loop, which runs for the life of the screen and must not be rebuilt. */
+  currentIndexRef.current = currentIndex;
 
   /*
    * How much of the episode is already made, counted forward from the turn playing. Read from
@@ -414,6 +443,74 @@ export function LecturePodcast({
 
   const elementFor = useCallback(
     (slot: "a" | "b") => (slot === "a" ? audioARef.current : audioBRef.current),
+    [],
+  );
+
+  /*
+   * Wires both elements into the meter and wakes its context.
+   *
+   * Called from the two places a listener starts audio, rather than once on mount, because a
+   * context built before any gesture starts suspended — and a suspended context's analyser
+   * reads silence while the speakers play, which is a still sphere over a talking host. Both
+   * elements are attached together: the hand-off between turns swaps which one is playing with
+   * no gesture of its own, and an element first met halfway through an episode would have to be
+   * wired mid-sentence.
+   */
+  const startMetering = useCallback(() => {
+    const meter = (meterRef.current ??= new PodcastLevelMeter());
+
+    meter.attach(audioARef.current);
+    meter.attach(audioBRef.current);
+    meter.resume();
+  }, []);
+
+  /*
+   * One frame loop for the life of the screen, handing the level of whichever element is playing
+   * to whichever host is speaking.
+   *
+   * The audio slot and the speaker are two different things — the slots alternate so a turn can
+   * be decoded while the one before it is still playing, and which of them holds host A depends
+   * on where the listener seeked from. So the level is read from the active element and written
+   * to the sphere named by the turn, never to the sphere named by the slot.
+   *
+   * The other sphere is driven to zero rather than left where it was: a host who has just
+   * stopped talking must settle, and its envelope's release is what makes that a fall rather
+   * than a cut.
+   */
+  useEffect(() => {
+    const pump = () => {
+      const cover = coverRef.current;
+
+      if (cover) {
+        const speaking =
+          podcastRef.current?.turns[currentIndexRef.current]?.speaker === "b" ? "b" : "a";
+        const level = meterRef.current?.getLevel(elementFor(activeSlotRef.current)) ?? 0;
+
+        for (const host of ["a", "b"] as const) {
+          const value = envelopesRef.current[host].push(host === speaking ? level : 0);
+          cover.style.setProperty(`--orb-level-${host}`, value.toFixed(4));
+        }
+      }
+
+      levelFrameRef.current = window.requestAnimationFrame(pump);
+    };
+
+    levelFrameRef.current = window.requestAnimationFrame(pump);
+
+    return () => {
+      if (levelFrameRef.current !== null) {
+        window.cancelAnimationFrame(levelFrameRef.current);
+        levelFrameRef.current = null;
+      }
+    };
+  }, [elementFor]);
+
+  /* The graph outlives every episode on the screen, so it is closed with the screen. */
+  useEffect(
+    () => () => {
+      meterRef.current?.close();
+      meterRef.current = null;
+    },
     [],
   );
 
@@ -1168,6 +1265,7 @@ export function LecturePodcast({
       preparedRef.current = null;
 
       try {
+        startMetering();
         await element.play();
         setIsPlaying(true);
       } catch {
@@ -1175,7 +1273,7 @@ export function LecturePodcast({
         setIsPlaying(false);
       }
     },
-    [elementFor, ensureSegment, t],
+    [elementFor, ensureSegment, startMetering, t],
   );
 
   /*
@@ -1432,6 +1530,7 @@ export function LecturePodcast({
     }
 
     if (element?.src && element.readyState > 0) {
+      startMetering();
       void element.play().then(
         () => setIsPlaying(true),
         () => setIsPlaying(false),
@@ -1496,8 +1595,9 @@ export function LecturePodcast({
    * and its modifiers, because it is nine related numbers per size and putting them in the markup
    * is how a bloom drifts off its ball the next time one of them is tuned.
    */
-  const cover = (variant?: "playing" | "writing") => (
+  const cover = (variant?: "playing" | "writing", ref?: RefObject<HTMLDivElement | null>) => (
     <div
+      ref={ref}
       className={`memo-podcast-cover ${variant ?? ""} ${speakerCount === 1 ? "solo" : ""}`.trim()}
       aria-hidden="true"
     >
@@ -1991,7 +2091,7 @@ export function LecturePodcast({
             * `.memo-esc` puts there too.
             */}
           <div className="memo-podcast-stage">
-            {cover("playing")}
+            {cover("playing", coverRef)}
 
             <div className="memo-podcast-titles">
               <h2 className="memo-podcast-title">{podcast?.title ?? t("podcast.title")}</h2>

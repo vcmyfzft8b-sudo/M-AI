@@ -7,7 +7,10 @@ import { SonioxNodeClient, type TranscriptToken } from "@soniox/node";
 import { getUserEntitlementState } from "@/lib/billing";
 import { STORAGE_BUCKET } from "@/lib/constants";
 import type { Json, LectureTtsChunkRow, TtsGenerationEventRow } from "@/lib/database.types";
-import { normalizeNoteLanguage } from "@/lib/languages";
+import { resolveMaterialLanguage } from "@/lib/languages";
+import { resolveSourceLanguage } from "@/lib/source-language";
+import { needsEnglishSpeechFallback, resolveSpeechLanguage, toSpeechScript } from "@/lib/speech-language";
+import { prepareSpeechText } from "@/lib/speech-translation";
 import { DEFAULT_NOTE_TTS_VOICE, type NoteTtsVoice } from "@/lib/note-tts-settings";
 import type { TtsAlignmentPiece } from "@/lib/note-tts-alignment";
 import {
@@ -197,7 +200,7 @@ export function getLjubljanaUsageDate(now = new Date()) {
 
 export function hashNoteTtsContent(content: string) {
   return createHash("sha256")
-    .update(`note-tts-v8-speakable-math:${NOTE_TTS_CHUNK_PLAN_VERSION}:${content}`)
+    .update(`note-tts-v9-source-language:${NOTE_TTS_CHUNK_PLAN_VERSION}:${content}`)
     .digest("hex");
 }
 
@@ -1033,19 +1036,24 @@ async function generateTtsChunk(params: {
   contentHash: string;
   chunk: NoteTtsChunkPlan;
   chunkWords: NoteTtsWord[];
+  sourceLanguage: string;
   language: string;
   voice: NoteTtsVoice;
 }) {
   const env = getServerEnv();
-  const { audio, durationMs, alignment } = await synthesizeAlignedTtsChunk({
-    text: params.chunk.text,
-    chunkWords: params.chunkWords,
+  const speechText = await prepareSpeechText(params.chunk.text, params.sourceLanguage);
+  const { audio, durationMs, alignment: spokenAlignment } = await synthesizeAlignedTtsChunk({
+    text: speechText,
+    chunkWords: params.chunkWords.map((word) => ({ ...word, text: toSpeechScript(word.text, params.sourceLanguage) })),
     wordStartIndex: params.chunk.wordStartIndex,
     estimatedSeconds: params.chunk.estimatedSeconds,
     language: params.language,
     voice: params.voice,
     clientReferenceId: `${params.lectureId}:${params.contentHash}:${params.chunk.chunkIndex}`,
   });
+  // A translation has no truthful word-for-word timing against the written source.
+  // Empty alignment keeps playback and seeking, while suppressing misleading word highlights.
+  const alignment = needsEnglishSpeechFallback(params.sourceLanguage) ? [] : spokenAlignment;
   const audioStoragePath = buildTtsStoragePath({
     userId: params.userId,
     lectureId: params.lectureId,
@@ -1204,11 +1212,15 @@ export async function getOrCreateTtsChunk(params: {
   chunk: NoteTtsChunkPlan;
   allWords: NoteTtsWord[];
   languageHint: string | null;
+  sourceText: string;
+  sourceMetadata?: unknown;
   voice?: NoteTtsVoice;
   quotaContext: TtsQuotaContext;
 }) {
   const env = getServerEnv();
-  const language = normalizeNoteLanguage(params.languageHint);
+  const sourceLanguage = await resolveSourceLanguage({ text: params.sourceText, hint: params.languageHint,
+    metadata: params.sourceMetadata, lectureId: params.lectureId, userId: params.userId });
+  const language = resolveSpeechLanguage(sourceLanguage);
   const voice = params.voice ?? DEFAULT_NOTE_TTS_VOICE;
   const identity: TtsGenerationIdentity = {
     userId: params.userId,
@@ -1268,6 +1280,7 @@ export async function getOrCreateTtsChunk(params: {
       contentHash: params.contentHash,
       chunk: params.chunk,
       chunkWords: params.allWords.slice(params.chunk.wordStartIndex, params.chunk.wordEndIndex),
+      sourceLanguage,
       language,
       voice,
     });
@@ -1318,7 +1331,7 @@ export async function getReadyLeadingTtsChunkCount(params: {
     .select("chunk_index")
     .eq("lecture_id", params.lectureId)
     .eq("content_hash", hashNoteTtsContent(content))
-    .eq("language", normalizeNoteLanguage(params.languageHint))
+    .eq("language", resolveSpeechLanguage(resolveMaterialLanguage(content, params.languageHint)))
     .eq("voice", params.voice ?? DEFAULT_NOTE_TTS_VOICE)
     .eq("model", env.SONIOX_TTS_MODEL)
     .lt("chunk_index", limit);

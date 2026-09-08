@@ -5,7 +5,7 @@ import { SonioxNodeClient } from "@soniox/node";
 
 import { generateStructuredObject } from "@/lib/ai/json";
 import { tr } from "@/lib/i18n/server";
-import { normalizeSpokenLanguageCode } from "@/lib/languages";
+import { resolveSpeechLanguage, toSpeechScript } from "@/lib/speech-language";
 import { synthesizeTtsChunkWithTimestamps } from "@/lib/note-tts-synthesis";
 import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -79,7 +79,7 @@ async function sampleLineFor(language: string, context: "tutor" | "podcast") {
     maxAttempts: 1,
   });
 
-  return line;
+  return toSpeechScript(line, language);
 }
 
 export async function GET(request: Request) {
@@ -119,11 +119,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: await tr("api.invalidVoiceRequest") }, { status: 400 });
   }
 
-  const language = normalizeSpokenLanguageCode(parsed.data.language);
+  const language = resolveSpeechLanguage(parsed.data.language);
 
-  if (!language) {
-    return NextResponse.json({ error: await tr("api.invalidVoiceRequest") }, { status: 400 });
-  }
 
   /*
    * A language that has files should never reach here — voiceSampleClip sends it to them — so a

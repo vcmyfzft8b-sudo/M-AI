@@ -280,7 +280,7 @@ export async function processStoredDocumentLecture(params: {
     text: extracted.text,
     blocks: sourceBlocks,
     titleHint,
-    languageHint: lectureRow.language_hint ?? "sl",
+    languageHint: lectureRow.language_hint ?? undefined,
     modelMetadata: {
       importMode:
         sourceType === "pdf"

@@ -2,7 +2,8 @@ import "server-only";
 
 import { SonioxNodeClient } from "@soniox/node";
 
-import { NOTE_LANGUAGE_OPTIONS } from "@/lib/languages";
+import { normalizeSpokenLanguageCode } from "@/lib/languages";
+import { SONIOX_LANGUAGES } from "@/lib/speech-language";
 import { requireSonioxEnv } from "@/lib/server-env";
 import type { TranscriptResult } from "@/lib/types";
 import {
@@ -38,18 +39,16 @@ function getSonioxClient() {
  * `normalizeNoteLanguage` cannot say that — it answers "en" for anything it
  * does not recognise — so the check is against the codes themselves.
  */
-const TRANSCRIPTION_LANGUAGE_HINTS = new Set(["en", "sl", "de", "hr", "it"]);
+const TRANSCRIPTION_LANGUAGE_HINTS = SONIOX_LANGUAGES;
 
 function resolveLanguageHints(languageHint: string | null) {
-  const normalized = languageHint?.trim().toLowerCase();
+  const normalized = normalizeSpokenLanguageCode(languageHint);
 
   if (!normalized) {
     return null;
   }
 
-  // Only the codes this transcriber has been run against. `NOTE_LANGUAGE_OPTIONS` also carries
-  // the ones added for note furniture (bs, sr), and an untested hint is worse than none: an
-  // unknown code leaves the field empty, which is the provider's own auto-detect.
+  // Only provider-supported hints are sent; unknown codes retain automatic detection.
   const known = TRANSCRIPTION_LANGUAGE_HINTS.has(normalized);
 
   return known ? [normalized] : null;

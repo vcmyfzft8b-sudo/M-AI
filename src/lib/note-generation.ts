@@ -1,4 +1,6 @@
 import "server-only";
+import { repairWrittenNote } from "@/lib/ai/language-check";
+import { resolveSourceLanguage } from "@/lib/source-language";
 
 import { chunkSummarySchema, noteArtifactSchema } from "@/lib/ai/schemas";
 import { generateStructuredObject } from "@/lib/ai/json";
@@ -25,6 +27,7 @@ import {
   noteOutlineSchema,
   noteWriteSchema,
   normalizeGeneratedNoteMarkdown,
+  normalizeNoteCalloutLanguage,
   splitTextForExtraction,
   type IndexedKnowledgeItem,
 } from "@/lib/notes/note-prompts";
@@ -237,22 +240,9 @@ const OUTLINE_SIZE_GATE_MAX_ITEMS = 120;
  */
 export type NotesGenerationPhase = "note_extract" | "note_outline";
 
-/*
- * Which language the note's own furniture is written in — its section headings
- * ("Hiter pregled" / "Quick Overview") and its callout labels.
- *
- * These are literal strings handed to the model, so unlike the body they
- * cannot follow the source on their own. They used to follow a language the
- * learner picked; nobody picks one any more, and the stored hint is null on
- * every note made since, which would have quietly given a Slovenian lecture
- * English headings.
- *
- * So it is read off the source, the same way the note's language is. When the
- * source is too short or too mixed to call, the app's own language is the
- * better guess than English — it is what the default used to be.
- */
+// The model-detected source language is authoritative; never invent an app-locale default.
 function resolveNoteLabelLanguage(sourceText: string, outputLanguage?: string | null) {
-  return detectSourceLanguage(sourceText) ?? outputLanguage ?? "sl";
+  return outputLanguage ?? detectSourceLanguage(sourceText);
 }
 
 async function generateNotesContentDriven(
@@ -400,12 +390,15 @@ async function generateNotesContentDriven(
         }),
     });
 
-    windowMarkdowns.push(written.structuredNotesMd.trim());
+    windowMarkdowns.push(await repairWrittenNote({
+      text: normalizeGeneratedNoteMarkdown(written.structuredNotesMd).trim(),
+      language: labelLanguage, usageContext: params.usageContext,
+    }));
   }
 
-  const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(
+  const normalizedStructuredNotesMd = normalizeNoteCalloutLanguage(normalizeGeneratedNoteMarkdown(
     assembleSourceNoteParts(windowMarkdowns),
-  );
+  ), labelLanguage);
   const normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
 
   return {
@@ -470,7 +463,7 @@ async function generateNotesLegacy(
     sourceType === "audio"
       ? buildLegacyAudioNoteTargets(sourceWordCount, windows.length)
       : buildLegacyNoteTargets(sourceWordCount, windows.length);
-  const languageInstruction = buildGeneratedContentLanguageInstruction();
+  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
   const labelLanguage = resolveNoteLabelLanguage(
     segments.map((segment) => segment.text).join("\n\n"),
     params.outputLanguage,
@@ -518,7 +511,9 @@ async function generateNotesLegacy(
     ),
   });
 
-  const normalizedStructuredNotesMd = normalizeGeneratedNoteMarkdown(result.structuredNotesMd);
+  const normalizedStructuredNotesMd = normalizeNoteCalloutLanguage(await repairWrittenNote({
+    text: normalizeGeneratedNoteMarkdown(result.structuredNotesMd), language: labelLanguage,
+  }), labelLanguage);
   const normalizedNoteWordCount = countWords(normalizedStructuredNotesMd);
 
   return {
@@ -554,16 +549,20 @@ export async function generateNotesFromTranscript(
   },
 ): Promise<NoteGenerationResult | null> {
   const sourceType = params.sourceType ?? "audio";
-
-  if (resolveNotesPipelineMode() === "legacy") {
-    // The legacy pipeline has no phases to warm: a warm-up call is a no-op rather than a full
-    // (and prematurely saved) generation.
-    if (params.stopAfter) {
-      return null;
-    }
-
-    return generateNotesLegacy(segments, { ...params, sourceType });
+  if (params.stopAfter && resolveNotesPipelineMode() === "legacy") return null;
+  const sourceLanguage = await resolveSourceLanguage({
+    text: segments.map((segment) => segment.text).join("\n\n"),
+    hint: params.outputLanguage,
+    ...params.usageContext,
+  });
+  const localized = { ...params, sourceType, outputLanguage: sourceLanguage };
+  const generated = resolveNotesPipelineMode() === "legacy"
+    ? await generateNotesLegacy(segments, localized)
+    : await generateNotesContentDriven(segments, localized);
+  if (generated) {
+    generated.modelMetadata = { ...generated.modelMetadata, sourceLanguage: {
+      version: 1, code: sourceLanguage, notesHash: generationCacheKey([generated.structuredNotesMd]),
+    } };
   }
-
-  return generateNotesContentDriven(segments, { ...params, sourceType });
+  return generated;
 }

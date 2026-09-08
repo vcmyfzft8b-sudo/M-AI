@@ -12,31 +12,31 @@ const NOTE_LANGUAGE_LABELS = new Map<string, string>(
   NOTE_LANGUAGE_OPTIONS.map((option) => [option.value, option.label]),
 );
 
-export function normalizeNoteLanguage(value?: string | null) {
-  const normalized = value?.trim().toLowerCase();
-  return normalized && NOTE_LANGUAGE_LABELS.has(normalized) ? normalized : "en";
+/** Content language is independent of the five interface catalogues. */
+export function normalizeContentLanguageCode(value?: string | null): string | null {
+  const input = value?.trim().replaceAll("_", "-");
+  if (!input || !/^[a-z]{2,3}(?:-[a-z]{4})?(?:-[a-z]{2}|-\d{3})?$/iu.test(input)) return null;
+  try {
+    const canonical = Intl.getCanonicalLocales(input)[0];
+    const [base, script] = canonical.split("-");
+    if (["und", "zxx", "mul"].includes(base)) return null;
+    return script?.length === 4 ? `${base}-${script}` : base;
+  } catch {
+    return null;
+  }
 }
 
-/**
- * Any language a voice can be asked to speak, not just the seven this app has furniture for.
- *
- * `normalizeNoteLanguage` answers "en" for everything it does not recognise, which is right for
- * note furniture — headings and labels only exist in the languages they were written in. It is
- * wrong for the tutor. Soniox will speak far more than seven (fr, es, pl and hu were checked
- * against the live synthesizer on 2026-09-04), so a learner studying a Polish lecture was being
- * taught in English for no reason except that this file had not heard of Polish.
- *
- * Returns null rather than a default: "we do not know" and "it is English" are different
- * answers, and only the caller knows which fallback its own case deserves.
- */
-export function normalizeSpokenLanguageCode(value?: string | null) {
-  const code = value?.trim().toLowerCase().split(/[-_]/u)[0];
+export function normalizeNoteLanguage(value?: string | null) {
+  return normalizeContentLanguageCode(value) ?? "en";
+}
 
-  return code && /^[a-z]{2,3}$/u.test(code) ? code : null;
+export function normalizeSpokenLanguageCode(value?: string | null) {
+  return normalizeContentLanguageCode(value)?.split("-")[0] ?? null;
 }
 
 export function resolveNoteLanguageLabel(value?: string | null) {
-  return NOTE_LANGUAGE_LABELS.get(normalizeNoteLanguage(value)) ?? "English";
+  const language = normalizeNoteLanguage(value);
+  return NOTE_LANGUAGE_LABELS.get(language) ?? new Intl.DisplayNames(["en"], { type: "language" }).of(language) ?? language;
 }
 
 /**
@@ -54,7 +54,11 @@ export function resolveNoteLanguageLabel(value?: string | null) {
  * in a language it will not be used in, which is the one thing the audition is for.
  */
 export function resolveMaterialLanguage(text: string, hint?: string | null) {
-  return normalizeNoteLanguage(detectSourceLanguage(text) ?? hint ?? null);
+  const detected = detectSourceLanguage(text);
+  const known = normalizeContentLanguageCode(hint);
+  // Closely related BCS varieties cannot always be distinguished from a short passage.
+  if (known && /^(bs|hr|sr)(-|$)/u.test(known) && detected && ["bs", "hr", "sr"].includes(detected)) return known;
+  return normalizeNoteLanguage(detected ?? known);
 }
 
 /**
@@ -68,13 +72,14 @@ export function resolveMaterialLanguage(text: string, hint?: string | null) {
  * English inside an otherwise Slovenian course, and the body of the material is
  * what should decide.
  */
-export function buildGeneratedContentLanguageInstruction() {
+export function buildGeneratedContentLanguageInstruction(language?: string | null) {
   return (
+    (normalizeContentLanguageCode(language) ? `The detected source language is ${normalizeContentLanguageCode(language)}. Write in that language and preserve its script, regional spelling and vocabulary. ` : "") +
     "Write all generated study material in the same language as the source material. " +
     "Do not translate it into another language, and do not fall back to English because " +
     "the instructions are in English. Where the source mixes languages, follow the one " +
     "the body of the material is written in, and keep technical terms, proper nouns and " +
-    "quoted wording exactly as the source has them."
+    "quoted wording exactly as the source has them. Bosnian, Croatian, Serbian and Slovenian are distinct: never substitute one for another. Keep Serbian Cyrillic when the source uses Cyrillic. All headings, callouts, summaries, questions, answers and explanations follow the same source language and script."
   );
 }
 
@@ -91,19 +96,14 @@ const LANGUAGE_MARKERS: Record<string, readonly string[]> = {
   // orthography, not the vocabulary, so `refineBcsVariety` decides that afterwards.
   hr: ["što", "šta", "koji", "ali", "kada", "također", "takođe", "prema", "jer", "nakon"],
   de: ["der", "die", "das", "und", "nicht", "eine", "auch", "sich", "werden", "wenn"],
+  et: ["ja", "on", "mis", "kui", "ning", "seda", "selle", "võib", "kuidas", "tõttu", "ehk", "kuid"],
+  fr: ["les", "des", "une", "dans", "avec", "pour", "sont", "cette", "aussi", "mais"],
+  pl: ["jest", "który", "które", "przez", "oraz", "się", "ponieważ", "może", "tego", "także"],
   it: ["che", "non", "della", "per", "come", "anche", "sono", "questo", "quando", "perché"],
 };
 
-/*
- * Serbian is written ekavian and Croatian and Bosnian are written ijekavian, and the words that
- * differ are ordinary enough to appear in any page of notes. That split is what separates the
- * three; their stop words do not, which is why they share one marker list above.
- *
- * Bosnian is deliberately not a third answer here. It is ijekavian like Croatian and differs
- * from it in vocabulary rather than orthography — too little to call from a page of text, and
- * the cost of guessing wrong is a heading reading "Usporedba" instead of "Poređenje". Bosnian
- * material is answered as `hr`, whose ijekavian furniture reads correctly in it.
- */
+/* BCS orthography is evidence, not a substitute for a detected document language.
+ * Serbian may be ekavian OR ijekavian and may use either alphabet. */
 const EKAVIAN_MARKERS = [
   "gde", "ovde", "onde", "posle", "pre", "vreme", "uvek", "deo", "delu", "mesto", "mestu",
   "sledeći", "razume", "razumeti", "celo", "ceo", "primer", "primeri", "primera", "beleške",
@@ -125,24 +125,20 @@ function refineBcsVariety(words: readonly string[]) {
   const ekavian = countMarkers(words, EKAVIAN_MARKERS);
   const ijekavian = countMarkers(words, IJEKAVIAN_MARKERS);
 
-  return ekavian > ijekavian ? "sr" : "hr";
+  if (ekavian > ijekavian) return "sr";
+  const bosnian = countMarkers(words, ["historija", "historijski", "opći", "općina", "kahva", "lahko", "poređenje", "funkcioniše", "sedmica", "faktor"]);
+  const croatian = countMarkers(words, ["povijest", "povijesni", "opći", "općina", "kava", "usporedba", "funkcionira", "tjedan", "čimbenik"]);
+  return bosnian > croatian ? "bs" : "hr";
 }
 
 /** Below this the sample is too short for the counts to mean anything. */
 const MIN_WORDS_FOR_DETECTION = 12;
 
-/**
- * The language a piece of source material is written in, as one of the codes
- * above, or `null` when the text is too short or too ambiguous to say.
- *
- * This is not a general language detector and does not need to be. It exists so
- * that read-aloud can align its audio and the assistant can answer in the right
- * language once the user is no longer telling us — and for that, telling five
- * known languages apart on a page of text is the whole job. Returning `null`
- * rather than guessing matters: callers treat "unknown" as "let the provider
- * detect it", which is better than a confident wrong answer.
- */
+/** Fast local evidence for previews, conversation switches and outage fallback.
+ * General document detection is server-side in source-language.ts; unknown stays null. */
 export function detectSourceLanguage(text: string): string | null {
+  // Serbian's distinct Cyrillic letters identify its script without a Latin-only word list.
+  if (/[ђћљњџЂЋЉЊЏ]/u.test(text) && /[\p{Script=Cyrillic}]/u.test(text)) return "sr-Cyrl";
   const words = text
     .toLowerCase()
     .replace(/[^\p{Letter}\s]+/gu, " ")
@@ -166,7 +162,7 @@ export function detectSourceLanguage(text: string): string | null {
   const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
   const [best, runnerUp] = ranked;
 
-  if (!best || best[1] === 0) {
+  if (!best || best[1] < 2 || best[1] / words.length < 0.035) {
     return null;
   }
 

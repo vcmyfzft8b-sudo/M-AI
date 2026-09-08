@@ -10,7 +10,9 @@ import {
   languageRepairSchema,
   reattachPadding,
   shouldCheckLanguage,
+  splitForRepair,
 } from "@/lib/ai/language-repair";
+import { generationCacheKey, stageModelCacheKeyPart, withGenerationCheckpoint } from "@/lib/notes/generation-cache";
 import type { GeminiUsageContext } from "@/lib/ai/usage-logging";
 
 /**
@@ -126,25 +128,38 @@ export async function repairPassage(params: RepairPassageParams): Promise<string
   }
 }
 
-/*
- * There is deliberately no note-side equivalent of this, and the reason is a measurement rather
- * than an oversight.
- *
- * The written notes were audited on 2026-09-04 with scripts/language-audit.mjs over two Slovenian
- * fixtures — 1,387 words of generated markdown — and they came back at 0.12 and 0.18 errors per
- * 100 words, four to six times cleaner than the same model's spoken turns. Running the repair
- * over them changed nothing: one borderline agreement call before, the same one after, no drift,
- * and three of five passages returned untouched.
- *
- * That is not luck. A note is written in the register that suits a page — headings, tables, terse
- * noun phrases, defined terms — and that register barely inflects. A spoken turn is flowing
- * conversational prose full of analogies and second-person verbs, which is exactly where a model
- * that is shaky on a language shows it. Adding a pass that repairs nothing would buy a call per
- * passage, a rewrite risk on text that is already correct, and no measured gain.
- *
- * `splitForRepair` and the markdown branch of `acceptCorrection` in language-repair.ts exist for
- * the tool that established this, so the decision can be re-taken against a new language or a new
- * writer model rather than argued about:
- *
- *   node --experimental-strip-types scripts/language-audit.mjs --repair evals/output/<note>.md
+/**
+ * The BCS/Estonian audit found foreign connective words and inflection errors in written notes.
+ * Check new note passages once, preserving markdown and keeping the original on a missed deadline.
+ * This runs during note creation, never on the tutor's response path.
  */
+export async function repairWrittenNote(params: {
+  text: string;
+  language: string | null;
+  usageContext?: GeminiUsageContext;
+}): Promise<string> {
+  const language = params.language;
+  if (!language || !isLanguageCheckEnabled() || !shouldCheckLanguage(language)) return params.text;
+  const passages = splitForRepair(params.text);
+  const repaired: string[] = [];
+  for (let start = 0; start < passages.length; start += 2) {
+    repaired.push(...await Promise.all(passages.slice(start, start + 2).map(async (text, offset) => {
+      const preceding = passages[start + offset - 1]?.slice(-600) ?? "";
+      const result = await withGenerationCheckpoint({
+        lectureId: params.usageContext?.lectureId,
+        stage: "note_language_check",
+        cacheKey: generationCacheKey([
+          "written-language-v1", stageModelCacheKeyPart("language_check"),
+          language, text, preceding,
+        ]),
+        schema: languageRepairSchema,
+        generate: async () => ({ corrected: await repairPassage({
+          text, preceding, language, spoken: false,
+          signal: AbortSignal.timeout(12_000), usageContext: params.usageContext,
+        }) ?? text }),
+      });
+      return result.corrected;
+    })));
+  }
+  return repaired.join("");
+}

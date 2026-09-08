@@ -42,7 +42,7 @@ export async function loadSpeechOutput({ quietCloseMs } = {}) {
     fs.writeFileSync(path.join(dir, `${name}.mjs`), rewrite(outputText));
   };
 
-  compile("turn-audio");
+  compile("turn-audio", (code) => code.replace("../speech-language.ts", new URL("../src/lib/speech-language.ts", import.meta.url).href));
   compile("speech-output", (code) => {
     const linked = code.replaceAll("@/lib/tutor/turn-audio", "./turn-audio.mjs");
 

@@ -2783,7 +2783,7 @@ export function LectureWorkspace({
    * settled by the time the click handler runs, so reading `question` back
    * would send the previous value.
    */
-  async function submitChatQuestion(override?: string) {
+  async function submitChatQuestion(override?: string, sourceLanguageAction = false) {
     const draft = (override ?? question).trim();
 
     if (!draft || chatLimitReached) {
@@ -2819,6 +2819,7 @@ export function LectureWorkspace({
         },
         body: JSON.stringify({
           question: currentQuestion,
+          sourceLanguageAction,
         }),
       });
 
@@ -3905,9 +3906,8 @@ export function LectureWorkspace({
                   key={suggestionKey}
                   type="button"
                   className="memo-chip"
-                  /* The prompt is sent as it reads on screen: the assistant
-                     answers in the language it is asked in. */
-                  onClick={() => void submitChatQuestion(t(suggestionKey))}
+                  /* Interface copy is an action label, not a learner's language choice. */
+                  onClick={() => void submitChatQuestion(t(suggestionKey), true)}
                 >
                   {t(suggestionKey)}
                 </button>

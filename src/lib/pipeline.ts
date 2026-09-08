@@ -1,4 +1,5 @@
 import "server-only";
+import { resolveSourceLanguage } from "@/lib/source-language";
 
 import type { PostgrestError } from "@supabase/supabase-js";
 import { z } from "zod";
@@ -707,7 +708,7 @@ export async function generateLectureNotesFromStoredTranscript(params: {
   }
 
   /*
-   * Record what language the notes came out in.
+   * Persist the detected source language for clients and downstream study tools.
    *
    * Nobody picks one any more — the model writes in whatever the source was —
    * but read-aloud still needs a concrete code to align its audio against, and
@@ -718,7 +719,8 @@ export async function generateLectureNotesFromStoredTranscript(params: {
    * A failure to detect is left alone rather than written as a guess; the
    * consumers already treat a missing language as "work it out yourself".
    */
-  const detectedLanguage = detectSourceLanguage(notes.structuredNotesMd);
+  const languageMetadata = notes.modelMetadata.sourceLanguage as { code?: string } | undefined;
+  const detectedLanguage = languageMetadata?.code ?? detectSourceLanguage(notes.structuredNotesMd);
 
   if (detectedLanguage && detectedLanguage !== lecture.language_hint) {
     const { error: languageError } = await supabase
@@ -1172,6 +1174,7 @@ export async function answerLectureChat(params: {
   lectureId: string;
   userId: string;
   question: string;
+  sourceLanguageAction?: boolean;
   /**
    * Chat is the one stage a learner watches happen, so when a delta handler is
    * supplied the answer is streamed as it is written. The model, prompt and
@@ -1214,6 +1217,8 @@ export async function answerLectureChat(params: {
   const artifactRow = (artifact ?? null) as {
     summary: string;
     key_topics: string[];
+    structured_notes_md?: string;
+    model_metadata?: unknown;
   } | null;
   const lectureRow = (lecture ?? null) as { title: string | null } | null;
 
@@ -1236,10 +1241,14 @@ export async function answerLectureChat(params: {
     ((priorMessages ?? []) as TutorHistoryTurn[]).slice().reverse(),
   );
 
+  const actionLanguage = params.sourceLanguageAction ? await resolveSourceLanguage({
+    text: artifactRow?.structured_notes_md ?? artifactRow?.summary ?? "", metadata: artifactRow?.model_metadata,
+    lectureId: params.lectureId, userId: params.userId,
+  }) : null;
   const call = {
     schema: chatAnswerSchema,
     stage: "chat" as const,
-    instructions: buildTutorInstructions("lecture"),
+    instructions: buildTutorInstructions("lecture") + (actionLanguage ? `\nThis request came from a translated interface action, not a typed learner message. Override the message-language rule for this turn: respond entirely in ${actionLanguage}, the source material language and script, including headings and generated questions. The interface label language is irrelevant.` : ""),
     input: JSON.stringify(
       {
         question: params.question,

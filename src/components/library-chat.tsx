@@ -138,7 +138,7 @@ export function LibraryChat({
     return () => window.removeEventListener("keydown", handleEscape);
   }, [dismissChatSheet, open]);
 
-  async function send(preset?: string) {
+  async function send(preset?: string, sourceLanguageAction = false) {
     const question = (preset ?? draft).trim();
 
     if (!question || isTyping) {
@@ -177,6 +177,7 @@ export function LibraryChat({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question,
+          sourceLanguageAction,
           scope,
           folderId: scope === "folder" ? scopeFolderId : null,
           useTranscripts,
@@ -545,7 +546,7 @@ export function LibraryChat({
                       className="memo-chip round"
                       /* Sent as it reads: the assistant answers in the
                          language it is asked in. */
-                      onClick={() => void send(t(suggestionKey))}
+                      onClick={() => void send(t(suggestionKey), true)}
                     >
                       {t(suggestionKey)}
                     </button>

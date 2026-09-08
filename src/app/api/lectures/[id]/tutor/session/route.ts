@@ -1,3 +1,4 @@
+import { resolveSpeechLanguage } from "@/lib/speech-language";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -123,8 +124,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({
       lectureId: id,
       noteTitle: grounding.title,
-      /* What the tutor speaks, and what the notes are written in: the same thing. */
-      language: grounding.language,
+      /* Unsupported source languages use English speech; written notes keep their language. */
+      language: resolveSpeechLanguage(grounding.language),
       grantId: grant.grantId,
       grantedSeconds: grant.grantedSeconds,
       usage: toClientUsage(grant.allowance),

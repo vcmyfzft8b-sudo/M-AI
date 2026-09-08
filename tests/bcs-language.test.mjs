@@ -7,15 +7,7 @@ import {
   getStructuredPlusLabels,
 } from "../src/lib/notes/note-prompts.ts";
 
-/*
- * Croatian, Bosnian and Serbian share their stop words, so the detector cannot tell them apart
- * on vocabulary. What it can read is the orthography: Serbian is ekavian ("cena", "posle",
- * "primer"), Croatian and Bosnian are ijekavian ("cijena", "poslije", "primjer").
- *
- * Bosnian is answered as `hr` on purpose — see `refineBcsVariety`. The assertion below records
- * that as the intended answer rather than a near miss, so a later change that starts returning
- * "bs" has to be a deliberate one.
- */
+// Distinguish the varieties instead of intentionally mapping Bosnian to Croatian.
 const SAMPLES = {
   hr: "Tržište funkcionira kao pregovor između kupaca i prodavača, koji žele nisku cijenu, ali se cijena ustali ondje gdje se količine poklope. To je ravnoteža, jer se nakon toga mijenja samo kada se promijeni neki drugi čimbenik, prema onome što vrijedi.",
   sr: "Tržište funkcioniše kao pregovor između kupaca i prodavaca, koji žele nisku cenu, ali se cena ustali onde gde se količine poklope. To je ravnoteža, jer se posle toga menja samo kada se promeni neki drugi faktor, prema onome što važi, a primer je uvek isti.",
@@ -27,11 +19,11 @@ for (const [code, text] of Object.entries(SAMPLES)) {
   });
 }
 
-test("Bosnian material is answered as Croatian, whose ijekavian furniture reads correctly in it", () => {
+test("Bosnian material retains Bosnian vocabulary", () => {
   const bosnian =
     "Tržište funkcioniše kao pregovor između kupaca i prodavača, koji žele nisku cijenu, ali se cijena ustali ondje gdje se količine poklope. To je ravnoteža, jer se poslije toga mijenja samo kada se promijeni neki drugi faktor, prema onome što vrijedi.";
 
-  assert.equal(detectSourceLanguage(bosnian), "hr");
+  assert.equal(detectSourceLanguage(bosnian), "bs");
 });
 
 test("Slovenian is not swept into the shared bucket", () => {

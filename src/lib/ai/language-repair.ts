@@ -96,6 +96,7 @@ export function buildLanguageRepairInstructions(
     "Repair only these, and only where they are genuinely wrong:",
     "- words that do not exist in the language — invented, misspelled, or mangled forms. These are the reason you are here: the writer occasionally produces a word that looks nearly right and is not. Replace it with the word the sentence plainly means.",
     "- words borrowed from a neighbouring language that a native speaker would not use. This matters most between languages that are close: Slovenian, Croatian, Serbian and Bosnian share a great deal and a word from the wrong one of them is exactly the mistake to catch.",
+    "- ordinary connecting words or heading labels accidentally left in a foreign language: replace them with their natural equivalents in the requested language and script. Preserve quoted foreign phrases and genuine subject terminology.",
     "- wrong inflections: case, number, gender, verb agreement, aspect. Where the language has a dual, or any other form English does not, check it.",
     "- wrong or missing accents, diacritics and letter forms.",
     "- prepositions and particles that do not agree with the word that follows them.",
@@ -106,7 +107,7 @@ export function buildLanguageRepairInstructions(
     "Change nothing else. Specifically, do NOT:",
     "- rephrase, tighten, expand, re-order or improve the style in any way. Leave every word that is not wrong exactly where it is, including conjunctions and filler you would have cut;",
     "- add or remove a single fact, number, name, example or clause;",
-    "- swap a technical term for a different one, or translate anything — subject terminology, acronyms and proper nouns stay exactly as written, including foreign ones;",
+    "- swap a technical term for a different one, or translate subject terminology — subject terminology, acronyms and proper nouns stay exactly as written, including foreign ones;",
     "- change the register, the tone, or how the reader is addressed;",
     "- change punctuation or capitalisation.",
     /*

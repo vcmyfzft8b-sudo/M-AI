@@ -1,3 +1,4 @@
+import { resolveSourceLanguage } from "@/lib/source-language";
 import "server-only";
 
 import { z } from "zod";
@@ -419,7 +420,7 @@ async function generateQuestionsForUnit(params: {
   repairOnly?: boolean;
 }) {
   const targetCount = countTargetQuestions(params.concepts);
-  const languageInstruction = buildGeneratedContentLanguageInstruction();
+  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
   const requestedConceptKeys = new Set(params.concepts.map((concept) => concept.conceptKey));
 
   const batch = await generateStructuredObject({
@@ -541,6 +542,11 @@ async function generateCoverageQuiz(params: {
   artifact: LectureArtifactRow;
   transcript: TranscriptSegmentRow[];
 }) {
+  const outputLanguage = await resolveSourceLanguage({
+    text: params.artifact.structured_notes_md ?? params.transcript.map(segment => segment.text).join("\n"),
+    hint: params.lecture.language_hint, metadata: params.artifact.model_metadata,
+    lectureId: params.lecture.id, userId: params.lecture.user_id,
+  });
   const { units } = buildSourceUnits({
     lecture: params.lecture,
     transcript: params.transcript,
@@ -550,14 +556,14 @@ async function generateCoverageQuiz(params: {
     const items = await extractStudyItems({
       units,
       sourceType: params.lecture.source_type === "audio" ? "audio" : "document",
-      outputLanguage: params.lecture.language_hint,
+      outputLanguage,
       usageContext: { lectureId: params.lecture.id, userId: params.lecture.user_id },
       artifactModelMetadata: params.artifact.model_metadata,
     });
     const { drafts } = await generateItemQuizDrafts({
       items,
       units,
-      outputLanguage: params.lecture.language_hint,
+      outputLanguage,
       usageContext: { lectureId: params.lecture.id, userId: params.lecture.user_id },
     });
 
@@ -590,7 +596,7 @@ async function generateCoverageQuiz(params: {
         unit,
         concepts: plan.concepts,
         contextUnits: units.slice(Math.max(0, index - 1), Math.min(units.length, index + 2)),
-        outputLanguage: params.lecture.language_hint,
+        outputLanguage,
       });
     })
   ).flat();
@@ -618,7 +624,7 @@ async function generateCoverageQuiz(params: {
             unit,
             concepts,
             contextUnits: units.slice(Math.max(0, unitIndex - 1), Math.min(units.length, unitIndex + 2)),
-            outputLanguage: params.lecture.language_hint,
+            outputLanguage,
             repairOnly: true,
           });
         },

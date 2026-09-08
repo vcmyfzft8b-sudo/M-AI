@@ -20,17 +20,7 @@ export const MATH_FORMATTING_INSTRUCTIONS = `Formula formatting rules:
 - For multi-line derivations, use one display math block with an aligned environment inside: $$\\begin{aligned} a &= b \\\\ c &= d \\end{aligned}$$.
 - Never write raw dollar-sign inline math, broken subscripts like $Yt$ or $I{t/0}$, or plain text formulas like Yt / Y0 100.`;
 
-/*
- * A note's furniture — its section headings and its callout labels — is a set of literal strings
- * handed to the model, so unlike the body it cannot simply follow the source. It follows the
- * language the source was detected in, and English is the fallback for a language with no set
- * here rather than the default for everyone.
- *
- * Bosnian has its own set because the two words that differ from Croatian in it — "Poređenje"
- * and "greška" — are exactly the two that would read as foreign. It is only reached through an
- * explicitly stored `bs` hint: the detector answers ijekavian material as `hr` (see
- * `refineBcsVariety`), which is the closer of the two wrong answers when it cannot tell.
- */
+// Known labels are exact; other languages translate semantic examples into the source script.
 const STRUCTURED_PLUS_LABELS: Record<string, Record<string, string>> = {
   sl: {
     overview: "## Hiter pregled",
@@ -80,6 +70,22 @@ const STRUCTURED_PLUS_LABELS: Record<string, Record<string, string>> = {
     commonMistake: "Česta greška",
     keyTakeaway: "Ključno",
   },
+  "sr-Cyrl": {
+    overview: "## Брзи преглед",
+    keyThings: "## Кључне ствари које мораш знати",
+    topicExample: "## 1. Назив теме",
+    coreIdea: "### Главна идеја",
+    detailedNotes: "### Детаљне белешке",
+    keyTerms: "### Кључни појмови",
+    example: "### Пример",
+    compare: "### Поређење",
+    process: "### Процес",
+    checkYourself: "### Провери своје знање",
+    finalReview: "## Завршни преглед",
+    definition: "Дефиниција",
+    commonMistake: "Честа грешка",
+    keyTakeaway: "Кључно",
+  },
   sr: {
     overview: "## Brzi pregled",
     keyThings: "## Ključne stvari koje moraš znati",
@@ -122,6 +128,33 @@ export function getStructuredPlusLabels(outputLanguage?: string | null) {
     commonMistake: "Common mistake",
     keyTakeaway: "Key takeaway",
   };
+}
+
+/** Keep a missed English example label out of otherwise native-language notes. */
+export function normalizeNoteCalloutLanguage(markdown: string, language?: string | null) {
+  const code = normalizeNoteLanguage(language);
+  if (code === "en") return markdown;
+  const labels = STRUCTURED_PLUS_LABELS[code];
+  const keys: Record<string, string> = {
+    definition: "definition", "common mistake": "commonMistake", "key takeaway": "keyTakeaway",
+  };
+  let fence: string | null = null;
+  return markdown.split("\n").map(line => {
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
+    if (marker) {
+      if (!fence) fence = marker;
+      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
+      return line;
+    }
+    if (fence) return line;
+    return line.replace(/^( {0,3}>[ \t]*)\*\*(Definition|Common mistake|Key takeaway):\*\*[ \t]*/iu,
+      (_match, prefix: string, label: string) => {
+        const localized = labels?.[keys[label.toLowerCase()]];
+        // Other languages normally generate a native label themselves. If the writer copied an
+        // English example anyway, retain the highlighted content without that untranslated label.
+        return localized ? `${prefix}**${localized}:** ` : prefix;
+      });
+  }).join("\n");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -444,7 +477,7 @@ export function buildKnowledgeExtractionInstructions(params: {
   outputLanguage?: string | null;
   sourceType: "audio" | "document";
 }) {
-  const languageInstruction = buildGeneratedContentLanguageInstruction();
+  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
   const sourceNoun = params.sourceType === "audio" ? "spoken lecture transcript" : "course material";
 
   return `${languageInstruction}
@@ -469,7 +502,7 @@ ${MATH_FORMATTING_INSTRUCTIONS}`;
 }
 
 export function buildNoteOutlineInstructions(params: { outputLanguage?: string | null }) {
-  const languageInstruction = buildGeneratedContentLanguageInstruction();
+  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
 
   return `${languageInstruction}
 
@@ -647,12 +680,15 @@ export function buildSourceNoteInstructions(params: {
   /** Set when the source is split into consecutive parts; see planSourceWriteWindows. */
   window?: { index: number; count: number };
 }) {
-  const languageInstruction = buildGeneratedContentLanguageInstruction();
+  const languageInstruction = buildGeneratedContentLanguageInstruction(params.outputLanguage);
   const labels = getStructuredPlusLabels(params.outputLanguage);
   const window = params.window;
   const windowed = window && window.count > 1;
   // The renderer recognises these exact bold labels (note-tts-text.ts getCalloutKind) and turns
   // the blockquote into a coloured box; any other label falls back to the plain blue one.
+  const labelInstruction = STRUCTURED_PLUS_LABELS[normalizeNoteLanguage(params.outputLanguage)]
+    ? "Use the exact localized callout labels shown below."
+    : "The callout labels below describe meanings in English only. Translate each label naturally into the source language and script; never print the English example labels in non-English notes.";
   const calloutBudget = windowed ? "at most 2 callouts in this part" : "at most 4 callouts in the whole note";
 
   const outputContract = windowed
@@ -685,6 +721,8 @@ OUTPUT CONTRACT
 ${outputContract}
 
 LANGUAGE
+
+${labelInstruction}
 
 Keep original technical terms and any English terms the source itself uses in brackets (for example: "uporabna informatika - informacijski sistemi (information systems)"). Never translate terminology the student will be tested on.
 
@@ -721,7 +759,7 @@ FORMATTING RULES
 
 CALLOUTS
 
-The app renders blockquotes of the form "> **Label:** text" as coloured highlight boxes. Use them to lift the few things a student must not miss, and you are the judge of what earns one: a make-or-break definition, the distinction everyone gets wrong on the exam, the one takeaway a section exists for. You are also the judge of whether a note needs any at all — a note can have zero callouts. Use ${calloutBudget}, each 1-2 lines, never two in a row, and never for material that is merely interesting. A callout must not restate a sentence that already appears in the surrounding text; it replaces it. Use exactly these labels:
+The app renders blockquotes of the form "> **Label:** text" as coloured highlight boxes. Use them to lift the few things a student must not miss, and you are the judge of what earns one: a make-or-break definition, the distinction everyone gets wrong on the exam, the one takeaway a section exists for. You are also the judge of whether a note needs any at all — a note can have zero callouts. Use ${calloutBudget}, each 1-2 lines, never two in a row, and never for material that is merely interesting. A callout must not restate a sentence that already appears in the surrounding text; it replaces it. ${labelInstruction} The label examples are:
 - "> **${labels.definition}:** ..." for a foundational definition the subject is built on
 - "> **${labels.commonMistake}:** ..." for the confusion or error students are tested on
 - "> **${labels.keyTakeaway}:** ..." for the single most important consequence or rule of a section
@@ -895,7 +933,8 @@ export function buildLegacyStructuredPlusInstructions(params: {
 }) {
   const labels = getStructuredPlusLabels(params.outputLanguage);
 
-  return `Use a selective expert study-notes style: read the source section by section, decide what the learner actually needs to know, and turn that into clear summarized notes with explanations. Cover the material by concepts and learning value, not by rewriting every sentence.
+  return `All headings and callout labels below are semantic examples: translate them into the source language and script when the supplied labels are not already in that language. Preserve their markdown structure.
+Use a selective expert study-notes style: read the source section by section, decide what the learner actually needs to know, and turn that into clear summarized notes with explanations. Cover the material by concepts and learning value, not by rewriting every sentence.
 
 Selection rules:
 - For each source section or chunk, identify the important learning points: central concepts, definitions, rules, formulas, processes, comparisons, causes and effects, exceptions, caveats, and source examples that make a concept easier to understand.

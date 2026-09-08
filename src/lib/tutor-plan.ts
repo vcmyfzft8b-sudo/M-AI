@@ -60,7 +60,7 @@ export async function readCachedTutorPlan(lectureId: string): Promise<TutorLesso
 
   const row = (data ?? null) as CachedPlanRow | null;
 
-  if (!row) {
+  if (!row || (row.tutor_plan as { languagePolicyVersion?: number } | null)?.languagePolicyVersion !== 1) {
     return null;
   }
 
@@ -81,7 +81,7 @@ async function writeCachedTutorPlan(params: {
   const { error } = await supabase
     .from("lecture_artifacts")
     .update({
-      tutor_plan: params.plan as unknown as Json,
+      tutor_plan: { ...params.plan, languagePolicyVersion: 1 } as unknown as Json,
       tutor_plan_notes_hash: hashNotesContent(params.notes),
       tutor_plan_generated_at: new Date().toISOString(),
     } as never)

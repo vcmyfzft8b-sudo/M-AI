@@ -927,6 +927,26 @@ export class TutorSpeechOutput {
         return;
       }
 
+      /*
+       * A segment that is no longer being fed has nothing left to fail.
+       *
+       * Closing a segment is what starts this: `closeSegment` sends `text_end` for a stream
+       * Soniox may already have finished generating, and a stream it has torn down answers
+       * `400 Stream turn-N.M not found. Send a start message first.` The same 400 comes back
+       * from the `text_end` racing the `terminated` that was already on its way. Either way
+       * the segment's audio is scheduled and playing, the turn has moved on to the next
+       * stream or is waiting for that one's `terminated`, and the only thing left to do with
+       * the frame is drop it — which is what MEMOAI-WEB-3M was, a whole lesson ended over a
+       * sentence the learner was in the middle of hearing.
+       *
+       * The turn-level filter above cannot see this: every segment of the live turn is in
+       * `segmentIds`, so a dead segment's error reads as the live turn's. Only the stream
+       * still being fed can be harmed by one, which is the same rule the 408 above follows.
+       */
+      if (turn && streamId && !(turn.segmentOpen && streamId === turn.streamId)) {
+        return;
+      }
+
       const error = new SpeechOutputError(
         typeof message.error_message === "string"
           ? message.error_message

@@ -6,6 +6,7 @@ import {
   installGlobals,
   loadSpeechOutput,
   settle,
+  wait,
 } from "./tutor-speech-harness.mjs";
 
 /*
@@ -179,6 +180,99 @@ test("an error frame with no stream id at all still reaches the learner", async 
   await assert.rejects(turn.finished);
   assert.equal(errors.length, 1);
   assert.equal(errors[0].code, "401");
+
+  output.close();
+});
+
+/*
+ * A turn part-way through a stall: its first stream has been closed by the quiet writer,
+ * so the `text_end` naming it has gone and Soniox may already have torn that stream down.
+ * The turn itself is alive and its audio is playing (MEMOAI-WEB-3M).
+ */
+async function stalled() {
+  const { TutorSpeechOutput } = await loadSpeechOutput({ quietCloseMs: 40 });
+  const sockets = installGlobals();
+  const errors = [];
+  const output = new TutorSpeechOutput(
+    {
+      url: "wss://tts-rt.soniox.com/tts-websocket",
+      apiKey: "key",
+      model: "tts-rt-v2",
+      voice: "sloane",
+      language: "en",
+    },
+    { onError: (error) => errors.push(error) },
+  );
+
+  await output.connect();
+
+  const turn = output.speak();
+  turn.push("Photosynthesis is ");
+  await settle();
+
+  const socket = sockets[0];
+  const closed = socket.liveStreamId;
+
+  socket.receive({ stream_id: closed, audio: AUDIO_FRAME });
+  await settle();
+  // The writer goes quiet, so the segment is closed rather than left to be killed.
+  await wait(80);
+
+  return { output, errors, socket, turn, closed };
+}
+
+test("a closed segment's stale-stream error does not end the turn still being spoken", async () => {
+  const { output, errors, socket, turn, closed } = await stalled();
+
+  assert.deepEqual(socket.sent.at(-1), { text: "", text_end: true, stream_id: closed });
+
+  // Soniox had already finished generating that stream, so the `text_end` above named one
+  // it no longer holds. The 400 arrives before the `terminated` that follows it.
+  socket.receive(staleStreamError(closed));
+  await settle();
+
+  assert.deepEqual(errors, []);
+  assert.equal(output.isSpeaking, true);
+
+  // The stall ends the ordinary way: the turn carries on over a stream of its own.
+  socket.receive({ stream_id: closed, terminated: true });
+  await settle();
+  turn.push("how a leaf eats ");
+  await settle();
+
+  assert.notEqual(socket.liveStreamId, closed);
+
+  output.close();
+});
+
+test("a superseded segment's stale-stream error does not end the turn either", async () => {
+  const { output, errors, socket, turn, closed } = await stalled();
+
+  socket.receive({ stream_id: closed, terminated: true });
+  await settle();
+  turn.push("how a leaf eats ");
+  await settle();
+
+  const live = socket.liveStreamId;
+
+  assert.notEqual(live, closed);
+
+  // The same 400, arriving after the turn has already moved to its next stream.
+  socket.receive(staleStreamError(closed));
+  await settle();
+
+  assert.deepEqual(errors, []);
+  assert.equal(output.isSpeaking, true);
+
+  // The live stream is still the one being fed, and a real fault on it still lands.
+  socket.receive({ stream_id: live, error_code: 401, error_message: "Invalid API key." });
+
+  await assert.rejects(turn.finished, (error) => {
+    assert.equal(error.code, "401");
+
+    return true;
+  });
+  assert.equal(errors.length, 1);
 
   output.close();
 });

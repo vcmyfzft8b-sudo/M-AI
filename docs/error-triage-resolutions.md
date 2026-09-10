@@ -89,6 +89,43 @@ waiting on a human merge, not a regression: update or wait for PR #383 rather th
 duplicate. Only an event after it is deployed is new evidence, and the first thing to check then is
 whether the pill is somehow back in the demo's tab row.
 
+## 2026-09-09 — A closed speech segment's stale-stream error ended the live turn
+
+- **Sentry:** `MEMOAI-WEB-3M`, issue `145971892`
+- **Route:** `/app/lectures/:id` (client-side; the `POST /api/lectures/<id>/tutor/report`
+  records in Vercel are the browser reporting it and return 200, so there is no 5xx)
+- **Operation:** the tutor speaking a turn whose writer stalls, closing one Soniox stream and
+  opening another
+- **Normalized message:** `SpeechOutputError: Stream turn-<n>.<n> not found. Send a start
+  message first.` — Soniox `400 invalid_stream_state`
+- **Historical event:** `2026-09-09T14:12:45.184Z`, release
+  `d618c357ed226723ad65b77efcfef5a7b81cc5b3`, on production deployment
+  `dpl_FDTa1PySFzjGcg3jdCaxuUTYK4nA`
+- **Resolution:** [PR #396](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/396) — **open, and
+  a draft, at the time of writing**
+- **Regression test:** the last two tests in `tests/tutor-speech-error-frames.test.mjs`
+
+`closeSegment` ends a stalled stream with `text_end` (`src/lib/tutor/speech-output.ts:630`), and
+Soniox may already have finished generating that stream or be sending its `terminated` at the
+same moment — so the id names something it no longer holds and it answers with the 400 above.
+The frame is harmless, but the filter in `handleMessage`
+(`src/lib/tutor/speech-output.ts:900`) asked only whether the id belonged to the live *turn*, and
+every segment of that turn is in `segmentIds`. A dead *segment's* error therefore read as the
+live turn's and reached `failTurn`, ending the lesson mid-sentence.
+
+**This is the segment-level counterpart of #342 and #357**, which fixed the turn-level version
+— a dead turn's cancel and a dead turn's error frame — and left this one. Do not read a
+recurrence as either of those regressing. The distinguishing mark is the stream id: a
+`turn-N.M` with a segment suffix naming a stream the *current* turn opened earlier, rather than
+an id belonging to a turn that is already gone.
+
+**While PR #396 is open the defect is still live on production**, so a learner whose tutor
+stalls mid-turn will bump `lastSeen` again. A recurrence before that PR's production cutoff is
+this same known defect waiting on a human merge, not a regression: update or wait for PR #396
+rather than opening a duplicate. Only an event after it is deployed is new evidence, and the
+first thing to check then is whether the error names the stream currently being fed
+(`turn.streamId`) — if it does, it is a genuine fault and not this bug at all.
+
 ## 2026-09-03 — Page translation moved the onboarding CTA's label out of the button
 
 - **Sentry:** `MEMOAI-WEB-3A`, issue `144571793`

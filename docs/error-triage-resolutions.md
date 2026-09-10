@@ -34,7 +34,7 @@ check the deployment timestamp and the event's function and step tags before act
 
 ## 2026-09-01 — Optional document-image description received Gemini 503
 
-- **Sentry:** `MEMOAI-WEB-33`
+- **Sentry:** `MEMOAI-WEB-33`, issue `143233034`
 - **Route:** `POST /api/internal/lectures/document`
 - **Operation:** `document_image_description` / `doc_image_relevance`
 - **Normalized message:** `503: The service is currently unavailable (UNAVAILABLE)`
@@ -265,3 +265,94 @@ variants and three locale/timezone pairs, all clean:
 The next step for a human is the one the automation cannot take: open the `/app/start` replay in
 Sentry, or reproduce with a real not-yet-onboarded account and a browser console, since production
 React reports #418 without naming the component.
+
+## 2026-08-30 — A source with no study-worthy content was thrown as a bare Error
+
+- **Sentry:** `MEMOAI-WEB-2X`, issue `143793775`
+- **Route:** `POST /api/inngest`
+- **Operation:** `runNotesStageWithGuard` → `generateNotesContentDriven`, the notes stage
+- **Normalized message:** `Knowledge extraction found no study-worthy content in the source.`
+- **Historical event:** `2026-08-30T18:14:50.028Z`, release
+  `eb03b25d643afe588937ce567f6edd7bdb6ce71e`
+- **Resolution:** [PR #269](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/269), commit
+  `45e0b2327ac91aaa7595998aadfb7a63c101bafe`, merged as `67ead378`
+- **Production cutoff:** deployment `dpl_84rEVTSmnDJ5CTEDqanHSN4xSZw7` was ready at
+  `2026-08-31T09:36:42.672Z`
+- **Regression test:** `tests/notes-no-study-content.test.mjs`
+
+Knowledge extraction returning zero items was thrown as a bare `Error`, so none of the failure
+path's classifiers could see it: the step failed, Inngest retried it four times against
+checkpointed per-window extractions that replay the same empty result, and the refusal reached
+Sentry as a defect. PR #269 throws `ExpectedLectureInputError` with a learner-facing message and
+the `source_no_study_content` code instead, which `isExpectedLectureInputFailure` keeps out of
+Sentry and which takes the futile retry button off the failed note.
+
+**The English sentence no longer exists in the repository**, so an event carrying it verbatim after
+the cutoff would mean an old deployment is still serving traffic rather than that the bug returned.
+A source genuinely containing nothing testable is now expected behaviour and files nothing at all.
+
+## 2026-08-31 — A quiz that ran out of budget was reported as a defect
+
+- **Sentry:** `MEMOAI-WEB-2N`, issue `141573001`
+- **Route:** `POST /api/inngest`, tag `route: inngest:process-lecture-quiz`
+- **Operation:** `generateLectureQuiz`
+- **Normalized message:** `InvocationBudgetExceededError: Obdelava je trajala predolgo in se je
+  ustavila. Poskusi znova.`, thrown from `src/lib/invocation-budget.ts:63`
+- **Historical event:** `2026-08-31T20:35:55.087Z`, release
+  `c557400fac7d71ade238ef015aba4585dec6648c`; 16 events across 5 users from `2026-08-19`
+- **Resolution:** [PR #300](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/300), commit
+  `62633c6ca702d2b833dcd3aaf21a38205e74e41d`, merged as `4181282b`
+- **Production cutoff:** deployment `dpl_ERBnuqidSEBU2E3auufo2QADoWZg` was ready at
+  `2026-09-01T08:44:11.237Z`
+- **Regression test:** `tests/inngest-step-budget.test.mjs` and `tests/ai-attempt-budget.test.mjs`
+
+The study, quiz and practice-test steps each swallowed their stage's failure on purpose — the deck
+status carries it to the learner — and reported it to Sentry so the team heard about it too. A
+budget overrun is not that kind of failure: the run was healthy and simply ran out of time, and
+every completed batch is checkpointed. PR #300 re-throws `isBudgetOverrunFailure` errors ahead of
+the `captureRouteError` call in all three functions, so the step fails and Inngest resumes from
+those checkpoints on its normal retry rather than turning an unfinished deck into a terminal
+learner-visible failure.
+
+This is the **stage-level** counterpart to the classifier fix recorded above for issue `144291117`,
+and the two are easy to confuse: both are the budget-overrun family, on the same route, a day
+apart. Tell them apart by the message — `InvocationBudgetExceededError`'s own Slovene sentence
+here, `The invocation budget is nearly spent; not starting another model call.` there — and by the
+`route` tag, which names the Inngest function this one died in.
+
+An event after the cutoff is new evidence: check the `operation` and `route` tags, and whether the
+re-throw is still ahead of the capture in that function, before assuming the retry path regressed.
+
+## 2026-09-02 — A photo too large to preview was posted to the preview route anyway
+
+- **Sentry:** `MEMOAI-WEB-38`, issue `144504830`
+- **Route:** `/app` (client-side; the `POST /api/scan-preview` it provokes is refused by the
+  platform before the route runs, so there is no 5xx of ours behind it)
+- **Operation:** picking a HEIC photo in the note-source modal, tag `action: scan-preview`
+- **Normalized message:** `Predogleda ni bilo mogoče ustvariti.` — the Slovenian for
+  `capture.error.previewFailed`
+- **Historical events:** 7 events, all on `2026-09-02` up to and including `T14:50:57.668Z`,
+  release `923817ed72a89593b3b5dc7ac753cdd7d63f6bb1`. The recorded photo was a 5,583,010-byte
+  `image/heic` picked on Android Chrome.
+- **Resolution:** [PR #313](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/313), commit
+  `0768ba77e5bef64e222cee8b6cfe9021f2350585`
+- **Production cutoff:** deployment `dpl_7aJF1iN8X84rkKwYj86qakC2TdsA` was ready at
+  `2026-09-02T17:10:02.544Z`
+- **Regression test:** `tests/scan-preview-size-limit.test.mjs`
+
+A HEIC photo leaves the browser twice with two different ceilings. The photo itself goes straight
+to storage through a signed URL and may be as large as `MAX_SCAN_IMAGE_BYTES`; its thumbnail is
+posted to a Vercel function, and the platform refuses a request body over 4.5 MB with a 413 before
+the route runs. A photo in the gap uploaded fine but could never be previewed, and asking anyway
+bought a failed request and a Sentry error per attempt. PR #313 added `MAX_SCAN_PREVIEW_BYTES` and
+the shared `canConvertScanPreview` guard, so an oversized photo shows "no preview" without the
+round trip.
+
+**Do not confuse this with issue `144530083`** (`Predogleda ni bilo mogoče prebrati.` —
+`capture.error.previewUnreadable`). The two Slovenian messages differ by one word and name opposite
+halves of the same request: "could not be **created**" is this one, the request never getting a
+response; "could not be **read**" is a response arriving with a body that is not an image.
+
+A post-cutoff event here is new evidence. Check the event's `fileSize` context first: above
+`MAX_SCAN_PREVIEW_BYTES` means the guard was bypassed, and at or below it means the route itself
+failed and the platform limit is not the cause at all.

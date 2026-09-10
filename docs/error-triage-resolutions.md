@@ -265,3 +265,52 @@ variants and three locale/timezone pairs, all clean:
 The next step for a human is the one the automation cannot take: open the `/app/start` replay in
 Sentry, or reproduce with a real not-yet-onboarded account and a browser console, since production
 React reports #418 without naming the component.
+
+## 2026-09-02 — The creator demo asked an offline stub for a HEIC thumbnail
+
+- **Sentry:** `MEMOAI-WEB-39`, issue `144530083`
+- **Route:** `/creator` (client-side, and it can have no Vercel counterpart — the demo replaces
+  `window.fetch`, so the request never leaves the browser)
+- **Operation:** picking a `.heic` photo in the demo's "PDF, document or photo" sheet
+- **Normalized message:** `Predogleda ni bilo mogoče prebrati.` — the Slovenian for
+  `capture.error.previewUnreadable`, which is thrown at exactly one place
+- **Historical event:** `2026-09-02T17:05:26.344Z`, release
+  `c6b8aa7a8d8caa24b3ca070418c7388e0a14bb24`, on a preview deployment
+- **Resolution:** [PR #399](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/399) — **open at the
+  time of writing**
+- **Regression test:** `tests/creator-demo-scan-preview.test.mjs`
+
+No browser outside Safari decodes HEIC, so a picked photo gets its thumbnail by posting the raw
+file to `/api/scan-preview`. The demo has no such function: `createCreatorDemoFetch` answers every
+route it does not implement with the catch-all `json({ ok: true })`, so `prepareHeicPhotoPreview`
+read it back as `response.ok` and then found `application/json` where it wanted image bytes
+(`src/components/note-source-modal.tsx:1396`). PR #399 skips the round trip in the demo, reusing
+the silent "no preview" fallback of the size guard beside it, rather than teaching the catch-all a
+case it cannot honour.
+
+**This is the same shape as #383** — the demo offering something it cannot do — and the same
+reasoning applies to telling it apart from a real failure. `capture.error.previewUnreadable` also
+fires in the real app when the conversion genuinely returns a non-image, and there the throw is
+worth hearing about. Separate them by the breadcrumbs: the demo's version has **no fetch breadcrumb
+for `/api/scan-preview`**, because the stub never touches the network, and lands within a frame of
+the file being picked. A genuine one has the fetch breadcrumb and a route response behind it.
+
+**Do not confuse this with `MEMOAI-WEB-33`'s neighbour, issue `144504830`**
+(`Predogleda ni bilo mogoče ustvariti.` — `capture.error.previewFailed`). That one is the *real*
+`/api/scan-preview` returning a platform 413 for an oversized photo, fixed by
+[PR #313](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/313). The two messages differ by one
+word in Slovenian and name different failures: "could not be **read**" is the response body,
+"could not be **created**" is the request never getting one.
+
+**While PR #399 is open the defect is still live on production**, so anyone dropping a HEIC into
+the demo will bump `lastSeen`. A recurrence before that PR's production cutoff is this same known
+defect waiting on a human merge, not a regression: update or wait for PR #399 rather than opening a
+duplicate. Only an event after it is deployed is new evidence, and the first thing to check then is
+whether a fetch breadcrumb for `/api/scan-preview` is present — if it is, this is the real route
+failing and not this bug at all.
+
+**Reproducing this one is safe if Sentry is blocked at the browser.** `/creator` is public and the
+demo is offline by construction, so a Playwright run that aborts requests to `sentry.io` reproduces
+the failure against production without filing anything — confirmed on 2026-09-10, where the blocked
+envelope was an `event` carrying `Error` / "The preview could not be read." Verifying the fix needs
+no such care: the fixed build files nothing at all, and only routine `session` envelopes appear.

@@ -117,7 +117,7 @@ This policy explains which personal data we process, why we process it, who we p
 
 ## 1. Data controller
 
-The controller of your personal data is the provider of the Memo AI service, available at memoai.eu.
+The controller of your personal data is **Memo AI, Nace Valenčič s.p., poslovno svetovanje**, Zgoša 87, 4275 Begunje na Gorenjskem, Slovenia (company registration number 7578474000, tax number 52958248), which operates the Memo AI service available at memoai.eu.
 
 Contact for privacy questions and for exercising your rights: info@memoai.eu
 
@@ -409,7 +409,12 @@ These terms are a legally binding agreement between you and the operator of the 
 
 ## 1. Who we are
 
-Memo AI is an online service available at memoai.eu ("Memo AI", "we" or "us").
+Memo AI is an online service available at memoai.eu ("Memo AI", "we" or "us"). The service is operated by:
+
+- **Memo AI, Nace Valenčič s.p., poslovno svetovanje**
+- registered address: Zgoša 87, 4275 Begunje na Gorenjskem, Slovenia
+- company registration number: 7578474000
+- tax number: 52958248
 
 For any questions, requests and notices under these terms, write to info@memoai.eu.
 

@@ -673,6 +673,20 @@ export function getStripeClient() {
   return new Stripe(env.STRIPE_SECRET_KEY);
 }
 
+/**
+ * Slovenian invoice law wants the issuer's tax number and the reason VAT is not charged on the
+ * document itself; Stripe prints only the trading name and address from the account settings, so
+ * the rest rides along as the invoice footer. Set on the customer rather than through a Dashboard
+ * invoice template, because templates are picked per invoice and never reach subscription renewals.
+ * scripts/backfill-invoice-footer.mjs carries the same text for customers created before this.
+ */
+const INVOICE_FOOTER = [
+  "Memo AI, Nace Valenčič s.p., poslovno svetovanje",
+  "Zgoša 87, 4275 Begunje na Gorenjskem, Slovenija",
+  "Matična številka: 7578474000 · Davčna številka: 52958248",
+  "DDV ni obračunan na podlagi 1. odstavka 94. člena ZDDV-1.",
+].join("\n");
+
 export async function ensureStripeCustomer(params: {
   userId: string;
   email: string | null;
@@ -687,6 +701,9 @@ export async function ensureStripeCustomer(params: {
   const customer = await stripe.customers.create({
     email: params.email ?? undefined,
     name: params.fullName ?? undefined,
+    invoice_settings: {
+      footer: INVOICE_FOOTER,
+    },
     metadata: {
       userId: params.userId,
     },

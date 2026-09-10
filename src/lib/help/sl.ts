@@ -109,7 +109,7 @@ Ta politika pojasnjuje, katere osebne podatke obdelujemo, zakaj jih obdelujemo, 
 
 ## 1. Upravljavec podatkov
 
-Upravljavec tvojih osebnih podatkov je ponudnik storitve Memo AI, dostopne na memoai.eu.
+Upravljavec tvojih osebnih podatkov je **Memo AI, Nace Valenčič s.p., poslovno svetovanje**, Zgoša 87, 4275 Begunje na Gorenjskem, Slovenija (matična številka 7578474000, davčna številka 52958248), ki upravlja storitev Memo AI, dostopno na memoai.eu.
 
 Kontakt za vprašanja o zasebnosti in za uveljavljanje pravic: info@memoai.eu
 
@@ -403,7 +403,12 @@ Ti pogoji so pravno zavezujoča pogodba med tabo in upravljavcem storitve Memo A
 
 ## 1. Kdo smo
 
-Memo AI je spletna storitev, dostopna na memoai.eu (v nadaljevanju »Memo AI«, »mi« ali »nas«).
+Memo AI je spletna storitev, dostopna na memoai.eu (v nadaljevanju »Memo AI«, »mi« ali »nas«). Storitev upravlja:
+
+- **Memo AI, Nace Valenčič s.p., poslovno svetovanje**
+- sedež: Zgoša 87, 4275 Begunje na Gorenjskem, Slovenija
+- matična številka: 7578474000
+- davčna številka: 52958248
 
 Za vsa vprašanja, zahtevke in obvestila po teh pogojih piši na info@memoai.eu.
 

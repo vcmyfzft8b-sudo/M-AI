@@ -1346,7 +1346,14 @@ export function NoteSourceModal({
     // The photo itself still uploads straight to storage through a signed URL, so a
     // photo too large to convert is only missing its thumbnail, not unusable. Sending
     // it anyway just earns a platform 413, so show "no preview" without the round trip.
-    if (!canConvertScanPreview(photoSource.file.size)) {
+    //
+    // The creator demo is the same dead end reached a different way: it is offline by
+    // construction, so there is no function to convert anything, and `createCreatorDemoFetch`
+    // answers the route it does not implement with `json({ ok: true })` — an ok response
+    // whose `application/json` body fails the image check below and reported "the preview
+    // could not be read" to Sentry from a public marketing page. Skip the round trip here
+    // too rather than teach the catch-all a case it cannot honour.
+    if (isCreatorDemo || !canConvertScanPreview(photoSource.file.size)) {
       setPhotoSources((current) =>
         current.map((currentPhotoSource) =>
           currentPhotoSource.id === photoSource.id

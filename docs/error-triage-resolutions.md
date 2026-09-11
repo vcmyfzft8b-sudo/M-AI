@@ -34,7 +34,7 @@ check the deployment timestamp and the event's function and step tags before act
 
 ## 2026-09-01 — Optional document-image description received Gemini 503
 
-- **Sentry:** `MEMOAI-WEB-33`
+- **Sentry:** `MEMOAI-WEB-33`, issue `143233034`
 - **Route:** `POST /api/internal/lectures/document`
 - **Operation:** `document_image_description` / `doc_image_relevance`
 - **Normalized message:** `503: The service is currently unavailable (UNAVAILABLE)`
@@ -65,8 +65,10 @@ fallback completed before deciding that code needs another change.
 - **Normalized message:** `Inštruktorja ni bilo mogoče začeti.` — the Slovenian for
   `tutor.error.startFailed`, which is **the same sentence** as `api.tutorStartFailed`
 - **Historical event:** `2026-09-07T11:16:58.080Z`, release `747887b9125cb5867923c8d2f63fc14935571f9a`
-- **Resolution:** [PR #383](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/383) — **open at the time
-  of writing**
+- **Resolution:** [PR #383](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/383), merge commit
+  `fadbf0e2f1d8fe9b93ac7a1dc939e6e560885286`
+- **Production cutoff:** deployment `dpl_CNgR3UpRJ6ZR6WAXdFLkFd3viJbx` was ready and holds the
+  production alias as of `2026-09-07T22:36:04.123Z`
 - **Regression test:** `tests/creator-demo-tutor-tab.test.mjs`
 
 The demo runs the real workspace against `createCreatorDemoFetch`, which answers unimplemented
@@ -83,10 +85,9 @@ this one fired 24ms after the click with **no fetch breadcrumb** for either tuto
 stub never touches the network. A genuine 502 has a fetch breadcrumb, a Vercel 5xx beside it, and
 takes far longer than a frame.
 
-**While PR #383 is open the button is still live on production**, so a visitor pressing Start will
-bump `lastSeen` again. A recurrence before that PR's production cutoff is the same known defect
-waiting on a human merge, not a regression: update or wait for PR #383 rather than opening a
-duplicate. Only an event after it is deployed is new evidence, and the first thing to check then is
+The one recorded event predates the cutoff by about eleven hours, so it is the old release failing,
+not a regression. Automated triage must not open a second fix for it. An event strictly after the
+cutoff, on a release at or after `fadbf0e`, is new evidence, and the first thing to check then is
 whether the pill is somehow back in the demo's tab row.
 
 ## 2026-09-09 — A closed speech segment's stale-stream error ended the live turn
@@ -103,8 +104,8 @@ whether the pill is somehow back in the demo's tab row.
   `dpl_FDTa1PySFzjGcg3jdCaxuUTYK4nA`
 - **Resolution:** [PR #396](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/396), merge commit
   `078990e4dbf304dba802764633a7c5777d49f9de`
-- **Production cutoff:** deployment `dpl_7tKx4BRotFbdvXBP5JVuNqzV9h2o` was ready at
-  `2026-09-10T08:55:52.921Z`
+- **Production cutoff:** deployment `dpl_7tKx4BRotFbdvXBP5JVuNqzV9h2o` was ready and holds the
+  production alias as of `2026-09-10T08:58:14.904Z`
 - **Regression test:** the last two tests in `tests/tutor-speech-error-frames.test.mjs`
 
 `closeSegment` ends a stalled stream with `text_end` (`src/lib/tutor/speech-output.ts:630`), and
@@ -121,10 +122,11 @@ recurrence as either of those regressing. The distinguishing mark is the stream 
 `turn-N.M` with a segment suffix naming a stream the *current* turn opened earlier, rather than
 an id belonging to a turn that is already gone.
 
-An event at or before the cutoff is the old release failing and must not open a second fix.
-Only an event after it is new evidence, and the first thing to check then is whether the error
-names the stream currently being fed (`turn.streamId`) — if it does, it is a genuine fault and
-not this bug at all. **A different `SpeechOutputError` on the same route is not this one**: see
+The recorded event predates the cutoff, so it is the old release failing, not a regression, and
+automated triage must not open a second fix for it. Only an event strictly after the cutoff, on a
+release at or after `078990e`, is new evidence, and the first thing to check then is whether the
+error names the stream currently being fed (`turn.streamId`) — if it does, it is a genuine fault
+and not this bug at all. **A different `SpeechOutputError` on the same route is not this one**: see
 the entry below, which fired on the fixed release within hours of it going live.
 
 ## 2026-09-10 — The warm speech connection was hung up on before the opening arrived
@@ -138,8 +140,8 @@ the entry below, which fired on the fixed release within hours of it going live.
 - **Historical event:** `2026-09-10T19:59:54.449Z`, release
   `078990e4dbf304dba802764633a7c5777d49f9de`, on production deployment
   `dpl_7tKx4BRotFbdvXBP5JVuNqzV9h2o`
-- **Resolution:** [PR #398](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/398) — **open, and
-  a draft, at the time of writing**
+- **Resolution:** [PR #398](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/398), merged to
+  `main`; its production cutoff is the first production deployment carrying that merge
 - **Regression test:** the idle-timeout test in `tests/tutor-session-turns.test.mjs`
 
 Soniox hangs up on an output stream that has asked for no audio after about ten seconds, which
@@ -159,13 +161,11 @@ are the phase (`opening`) and a `tutor/turn` breadcrumb more than ten seconds af
 `tutor/session` one. Separate them by the message: only this one says *connection*, and it names
 no stream id at all.
 
-**While PR #398 is open the defect is still live on production**, so a learner whose opening
-turn is slow will bump `lastSeen` again. A recurrence before that PR's production cutoff is this
-same known defect waiting on a human merge, not a regression: update or wait for PR #398 rather
-than opening a duplicate. Only an event after it is deployed is new evidence, and the first
-thing to check then is the gap between the `tutor/turn` breadcrumb and the throw — a throw that
-follows the response immediately means the replacement connection died too, which is a different
-fault from this one.
+The recorded event is from before the fix shipped, so it is the old release failing and must not
+open a second fix. Only an event after PR #398's production cutoff is new evidence, and the
+first thing to check then is the gap between the `tutor/turn` breadcrumb and the throw — a
+throw that follows the response immediately means the replacement connection died too, which
+is a different fault from this one.
 
 ## 2026-09-03 — Page translation moved the onboarding CTA's label out of the button
 
@@ -306,3 +306,160 @@ variants and three locale/timezone pairs, all clean:
 The next step for a human is the one the automation cannot take: open the `/app/start` replay in
 Sentry, or reproduce with a real not-yet-onboarded account and a browser console, since production
 React reports #418 without naming the component.
+
+## 2026-08-30 — A source with no study-worthy content was thrown as a bare Error
+
+- **Sentry:** `MEMOAI-WEB-2X`, issue `143793775`
+- **Route:** `POST /api/inngest`
+- **Operation:** `runNotesStageWithGuard` → `generateNotesContentDriven`, the notes stage
+- **Normalized message:** `Knowledge extraction found no study-worthy content in the source.`
+- **Historical event:** `2026-08-30T18:14:50.028Z`, release
+  `eb03b25d643afe588937ce567f6edd7bdb6ce71e`
+- **Resolution:** [PR #269](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/269), commit
+  `45e0b2327ac91aaa7595998aadfb7a63c101bafe`, merged as `67ead378`
+- **Production cutoff:** deployment `dpl_84rEVTSmnDJ5CTEDqanHSN4xSZw7` was ready at
+  `2026-08-31T09:36:42.672Z`
+- **Regression test:** `tests/notes-no-study-content.test.mjs`
+
+Knowledge extraction returning zero items was thrown as a bare `Error`, so none of the failure
+path's classifiers could see it: the step failed, Inngest retried it four times against
+checkpointed per-window extractions that replay the same empty result, and the refusal reached
+Sentry as a defect. PR #269 throws `ExpectedLectureInputError` with a learner-facing message and
+the `source_no_study_content` code instead, which `isExpectedLectureInputFailure` keeps out of
+Sentry and which takes the futile retry button off the failed note.
+
+**The English sentence no longer exists in the repository**, so an event carrying it verbatim after
+the cutoff would mean an old deployment is still serving traffic rather than that the bug returned.
+A source genuinely containing nothing testable is now expected behaviour and files nothing at all.
+
+## 2026-08-31 — A quiz that ran out of budget was reported as a defect
+
+- **Sentry:** `MEMOAI-WEB-2N`, issue `141573001`
+- **Route:** `POST /api/inngest`, tag `route: inngest:process-lecture-quiz`
+- **Operation:** `generateLectureQuiz`
+- **Normalized message:** `InvocationBudgetExceededError: Obdelava je trajala predolgo in se je
+  ustavila. Poskusi znova.`, thrown from `src/lib/invocation-budget.ts:63`
+- **Historical event:** `2026-08-31T20:35:55.087Z`, release
+  `c557400fac7d71ade238ef015aba4585dec6648c`; 16 events across 5 users from `2026-08-19`
+- **Resolution:** [PR #300](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/300), commit
+  `62633c6ca702d2b833dcd3aaf21a38205e74e41d`, merged as `4181282b`
+- **Production cutoff:** deployment `dpl_ERBnuqidSEBU2E3auufo2QADoWZg` was ready at
+  `2026-09-01T08:44:11.237Z`
+- **Regression test:** `tests/inngest-step-budget.test.mjs` and `tests/ai-attempt-budget.test.mjs`
+
+The study, quiz and practice-test steps each swallowed their stage's failure on purpose — the deck
+status carries it to the learner — and reported it to Sentry so the team heard about it too. A
+budget overrun is not that kind of failure: the run was healthy and simply ran out of time, and
+every completed batch is checkpointed. PR #300 re-throws `isBudgetOverrunFailure` errors ahead of
+the `captureRouteError` call in all three functions, so the step fails and Inngest resumes from
+those checkpoints on its normal retry rather than turning an unfinished deck into a terminal
+learner-visible failure.
+
+This is the **stage-level** counterpart to the classifier fix recorded above for issue `144291117`,
+and the two are easy to confuse: both are the budget-overrun family, on the same route, a day
+apart. Tell them apart by the message — `InvocationBudgetExceededError`'s own Slovene sentence
+here, `The invocation budget is nearly spent; not starting another model call.` there — and by the
+`route` tag, which names the Inngest function this one died in.
+
+An event after the cutoff is new evidence: check the `operation` and `route` tags, and whether the
+re-throw is still ahead of the capture in that function, before assuming the retry path regressed.
+
+## 2026-09-02 — A photo too large to preview was posted to the preview route anyway
+
+- **Sentry:** `MEMOAI-WEB-38`, issue `144504830`
+- **Route:** `/app` (client-side; the `POST /api/scan-preview` it provokes is refused by the
+  platform before the route runs, so there is no 5xx of ours behind it)
+- **Operation:** picking a HEIC photo in the note-source modal, tag `action: scan-preview`
+- **Normalized message:** `Predogleda ni bilo mogoče ustvariti.` — the Slovenian for
+  `capture.error.previewFailed`
+- **Historical events:** 7 events, all on `2026-09-02` up to and including `T14:50:57.668Z`,
+  release `923817ed72a89593b3b5dc7ac753cdd7d63f6bb1`. The recorded photo was a 5,583,010-byte
+  `image/heic` picked on Android Chrome.
+- **Resolution:** [PR #313](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/313), commit
+  `0768ba77e5bef64e222cee8b6cfe9021f2350585`
+- **Production cutoff:** deployment `dpl_7aJF1iN8X84rkKwYj86qakC2TdsA` was ready at
+  `2026-09-02T17:10:02.544Z`
+- **Regression test:** `tests/scan-preview-size-limit.test.mjs`
+
+A HEIC photo leaves the browser twice with two different ceilings. The photo itself goes straight
+to storage through a signed URL and may be as large as `MAX_SCAN_IMAGE_BYTES`; its thumbnail is
+posted to a Vercel function, and the platform refuses a request body over 4.5 MB with a 413 before
+the route runs. A photo in the gap uploaded fine but could never be previewed, and asking anyway
+bought a failed request and a Sentry error per attempt. PR #313 added `MAX_SCAN_PREVIEW_BYTES` and
+the shared `canConvertScanPreview` guard, so an oversized photo shows "no preview" without the
+round trip.
+
+**Do not confuse this with issue `144530083`** (`Predogleda ni bilo mogoče prebrati.` —
+`capture.error.previewUnreadable`). The two Slovenian messages differ by one word and name opposite
+halves of the same request: "could not be **created**" is this one, the request never getting a
+response; "could not be **read**" is a response arriving with a body that is not an image.
+
+A post-cutoff event here is new evidence. Check the event's `fileSize` context first: above
+`MAX_SCAN_PREVIEW_BYTES` means the guard was bypassed, and at or below it means the route itself
+failed and the platform limit is not the cause at all.
+
+## 2026-09-02 — The creator demo asked an offline stub for a HEIC thumbnail
+
+- **Sentry:** `MEMOAI-WEB-39`, issue `144530083`; **also `MEMOAI-WEB-3T`, issue `146390279`** —
+  the same defect regrouped, see the recurrence note below
+- **Route:** `/creator` (client-side, and it can have no Vercel counterpart — the demo replaces
+  `window.fetch`, so the request never leaves the browser)
+- **Operation:** picking a `.heic` photo in the demo's "PDF, document or photo" sheet
+- **Normalized message:** `Predogleda ni bilo mogoče prebrati.` — the Slovenian for
+  `capture.error.previewUnreadable`, which is thrown at exactly one place
+- **Historical event:** `2026-09-02T17:05:26.344Z`, release
+  `c6b8aa7a8d8caa24b3ca070418c7388e0a14bb24`, on a preview deployment
+- **Recurrence while the fix waits:** `2026-09-11T09:37:49.034Z`, release
+  `5758292424eae6062b7cb95d126d66ba9abdbf9c` (production deployment
+  `dpl_3A5xVBtgF2j9tecQNZo23awEL7qv`), which does not contain PR #399
+- **Resolution:** [PR #399](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/399) — **open at the
+  time of writing**
+- **Regression test:** `tests/creator-demo-scan-preview.test.mjs`
+
+No browser outside Safari decodes HEIC, so a picked photo gets its thumbnail by posting the raw
+file to `/api/scan-preview`. The demo has no such function: `createCreatorDemoFetch` answers every
+route it does not implement with the catch-all `json({ ok: true })`, so `prepareHeicPhotoPreview`
+read it back as `response.ok` and then found `application/json` where it wanted image bytes
+(`src/components/note-source-modal.tsx:1396`). PR #399 skips the round trip in the demo, reusing
+the silent "no preview" fallback of the size guard beside it, rather than teaching the catch-all a
+case it cannot honour.
+
+**This is the same shape as #383** — the demo offering something it cannot do — and the same
+reasoning applies to telling it apart from a real failure. `capture.error.previewUnreadable` also
+fires in the real app when the conversion genuinely returns a non-image, and there the throw is
+worth hearing about. Separate them by the breadcrumbs: the demo's version has **no fetch breadcrumb
+for `/api/scan-preview`**, because the stub never touches the network, and lands within a frame of
+the file being picked. A genuine one has the fetch breadcrumb and a route response behind it.
+
+**Do not confuse this with `MEMOAI-WEB-33`'s neighbour, issue `144504830`**
+(`Predogleda ni bilo mogoče ustvariti.` — `capture.error.previewFailed`). That one is the *real*
+`/api/scan-preview` returning a platform 413 for an oversized photo, fixed by
+[PR #313](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/313). The two messages differ by one
+word in Slovenian and name different failures: "could not be **read**" is the response body,
+"could not be **created**" is the request never getting one.
+
+**While PR #399 is open the defect is still live on production**, so anyone dropping a HEIC into
+the demo will bump `lastSeen`. A recurrence before that PR's production cutoff is this same known
+defect waiting on a human merge, not a regression: update or wait for PR #399 rather than opening a
+duplicate. Only an event after it is deployed is new evidence, and the first thing to check then is
+whether a fetch breadcrumb for `/api/scan-preview` is present — if it is, this is the real route
+failing and not this bug at all.
+
+**It did recur, and under a new issue id — match this one on the frame, never on the id.** The
+`2026-09-11T09:37:49.034Z` event above filed as `MEMOAI-WEB-3T` / `146390279`, a different issue
+from `144530083`, because the throw moved from `note-source-modal.tsx:1396` to `:1392` between the
+two releases and Sentry groups a client exception by its stack. Everything else is this defect
+exactly: `transaction: /creator`, tag `action: scan-preview`, `handled: yes`,
+`prepareHeicPhotoPreview` ← `prepareHeicPhotoPreviewsSequentially`, and **no fetch breadcrumb for
+`/api/scan-preview`** — 1.8s after the `ui.click` on the quick card, which is the file picker, not
+a round trip. It is one event, no user attributed, on a `204800`-byte `image/heic`; a size that is
+exactly 200 KiB reads as a synthetic test file rather than a photo off a phone, so treat the count
+as evidence the defect is still reachable and not as a measure of who is hitting it. Both ids must
+stay in the backlog entry's `sentryIssues`, or the gate reopens whichever one is missing on every
+run.
+
+**Reproducing this one is safe if Sentry is blocked at the browser.** `/creator` is public and the
+demo is offline by construction, so a Playwright run that aborts requests to `sentry.io` reproduces
+the failure against production without filing anything — confirmed on 2026-09-10, where the blocked
+envelope was an `event` carrying `Error` / "The preview could not be read." Verifying the fix needs
+no such care: the fixed build files nothing at all, and only routine `session` envelopes appear.

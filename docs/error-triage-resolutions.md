@@ -65,8 +65,10 @@ fallback completed before deciding that code needs another change.
 - **Normalized message:** `Inštruktorja ni bilo mogoče začeti.` — the Slovenian for
   `tutor.error.startFailed`, which is **the same sentence** as `api.tutorStartFailed`
 - **Historical event:** `2026-09-07T11:16:58.080Z`, release `747887b9125cb5867923c8d2f63fc14935571f9a`
-- **Resolution:** [PR #383](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/383) — **open at the time
-  of writing**
+- **Resolution:** [PR #383](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/383), merge commit
+  `fadbf0e2f1d8fe9b93ac7a1dc939e6e560885286`
+- **Production cutoff:** deployment `dpl_CNgR3UpRJ6ZR6WAXdFLkFd3viJbx` was ready and holds the
+  production alias as of `2026-09-07T22:36:04.123Z`
 - **Regression test:** `tests/creator-demo-tutor-tab.test.mjs`
 
 The demo runs the real workspace against `createCreatorDemoFetch`, which answers unimplemented
@@ -83,10 +85,9 @@ this one fired 24ms after the click with **no fetch breadcrumb** for either tuto
 stub never touches the network. A genuine 502 has a fetch breadcrumb, a Vercel 5xx beside it, and
 takes far longer than a frame.
 
-**While PR #383 is open the button is still live on production**, so a visitor pressing Start will
-bump `lastSeen` again. A recurrence before that PR's production cutoff is the same known defect
-waiting on a human merge, not a regression: update or wait for PR #383 rather than opening a
-duplicate. Only an event after it is deployed is new evidence, and the first thing to check then is
+The one recorded event predates the cutoff by about eleven hours, so it is the old release failing,
+not a regression. Automated triage must not open a second fix for it. An event strictly after the
+cutoff, on a release at or after `fadbf0e`, is new evidence, and the first thing to check then is
 whether the pill is somehow back in the demo's tab row.
 
 ## 2026-09-09 — A closed speech segment's stale-stream error ended the live turn
@@ -101,8 +102,10 @@ whether the pill is somehow back in the demo's tab row.
 - **Historical event:** `2026-09-09T14:12:45.184Z`, release
   `d618c357ed226723ad65b77efcfef5a7b81cc5b3`, on production deployment
   `dpl_FDTa1PySFzjGcg3jdCaxuUTYK4nA`
-- **Resolution:** [PR #396](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/396) — **open, and
-  a draft, at the time of writing**
+- **Resolution:** [PR #396](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/396), merge commit
+  `078990e4dbf304dba802764633a7c5777d49f9de`
+- **Production cutoff:** deployment `dpl_7tKx4BRotFbdvXBP5JVuNqzV9h2o` was ready and holds the
+  production alias as of `2026-09-10T08:58:14.904Z`
 - **Regression test:** the last two tests in `tests/tutor-speech-error-frames.test.mjs`
 
 `closeSegment` ends a stalled stream with `text_end` (`src/lib/tutor/speech-output.ts:630`), and
@@ -119,12 +122,11 @@ recurrence as either of those regressing. The distinguishing mark is the stream 
 `turn-N.M` with a segment suffix naming a stream the *current* turn opened earlier, rather than
 an id belonging to a turn that is already gone.
 
-**While PR #396 is open the defect is still live on production**, so a learner whose tutor
-stalls mid-turn will bump `lastSeen` again. A recurrence before that PR's production cutoff is
-this same known defect waiting on a human merge, not a regression: update or wait for PR #396
-rather than opening a duplicate. Only an event after it is deployed is new evidence, and the
-first thing to check then is whether the error names the stream currently being fed
-(`turn.streamId`) — if it does, it is a genuine fault and not this bug at all.
+The recorded event predates the cutoff, so it is the old release failing, not a regression, and
+automated triage must not open a second fix for it. Only an event strictly after the cutoff, on a
+release at or after `078990e`, is new evidence, and the first thing to check then is whether the
+error names the stream currently being fed (`turn.streamId`) — if it does, it is a genuine fault
+and not this bug at all.
 
 ## 2026-09-03 — Page translation moved the onboarding CTA's label out of the button
 

@@ -361,7 +361,8 @@ failed and the platform limit is not the cause at all.
 
 ## 2026-09-02 — The creator demo asked an offline stub for a HEIC thumbnail
 
-- **Sentry:** `MEMOAI-WEB-39`, issue `144530083`
+- **Sentry:** `MEMOAI-WEB-39`, issue `144530083`; **also `MEMOAI-WEB-3T`, issue `146390279`** —
+  the same defect regrouped, see the recurrence note below
 - **Route:** `/creator` (client-side, and it can have no Vercel counterpart — the demo replaces
   `window.fetch`, so the request never leaves the browser)
 - **Operation:** picking a `.heic` photo in the demo's "PDF, document or photo" sheet
@@ -369,6 +370,9 @@ failed and the platform limit is not the cause at all.
   `capture.error.previewUnreadable`, which is thrown at exactly one place
 - **Historical event:** `2026-09-02T17:05:26.344Z`, release
   `c6b8aa7a8d8caa24b3ca070418c7388e0a14bb24`, on a preview deployment
+- **Recurrence while the fix waits:** `2026-09-11T09:37:49.034Z`, release
+  `5758292424eae6062b7cb95d126d66ba9abdbf9c` (production deployment
+  `dpl_3A5xVBtgF2j9tecQNZo23awEL7qv`), which does not contain PR #399
 - **Resolution:** [PR #399](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/399) — **open at the
   time of writing**
 - **Regression test:** `tests/creator-demo-scan-preview.test.mjs`
@@ -401,6 +405,19 @@ defect waiting on a human merge, not a regression: update or wait for PR #399 ra
 duplicate. Only an event after it is deployed is new evidence, and the first thing to check then is
 whether a fetch breadcrumb for `/api/scan-preview` is present — if it is, this is the real route
 failing and not this bug at all.
+
+**It did recur, and under a new issue id — match this one on the frame, never on the id.** The
+`2026-09-11T09:37:49.034Z` event above filed as `MEMOAI-WEB-3T` / `146390279`, a different issue
+from `144530083`, because the throw moved from `note-source-modal.tsx:1396` to `:1392` between the
+two releases and Sentry groups a client exception by its stack. Everything else is this defect
+exactly: `transaction: /creator`, tag `action: scan-preview`, `handled: yes`,
+`prepareHeicPhotoPreview` ← `prepareHeicPhotoPreviewsSequentially`, and **no fetch breadcrumb for
+`/api/scan-preview`** — 1.8s after the `ui.click` on the quick card, which is the file picker, not
+a round trip. It is one event, no user attributed, on a `204800`-byte `image/heic`; a size that is
+exactly 200 KiB reads as a synthetic test file rather than a photo off a phone, so treat the count
+as evidence the defect is still reachable and not as a measure of who is hitting it. Both ids must
+stay in the backlog entry's `sentryIssues`, or the gate reopens whichever one is missing on every
+run.
 
 **Reproducing this one is safe if Sentry is blocked at the browser.** `/creator` is public and the
 demo is offline by construction, so a Playwright run that aborts requests to `sentry.io` reproduces

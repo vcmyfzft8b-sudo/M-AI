@@ -91,7 +91,9 @@ whether the pill is somehow back in the demo's tab row.
 
 ## 2026-09-09 — A closed speech segment's stale-stream error ended the live turn
 
-- **Sentry:** `MEMOAI-WEB-3M`, issue `145971892`
+- **Sentry:** `MEMOAI-WEB-3Q`, issue `145971892` — this entry previously named `MEMOAI-WEB-3M`,
+  which is issue `145537971`, the tutor's premature-renewal `Preveč zahtevkov.` and a different
+  defect entirely
 - **Route:** `/app/lectures/:id` (client-side; the `POST /api/lectures/<id>/tutor/report`
   records in Vercel are the browser reporting it and return 200, so there is no 5xx)
 - **Operation:** the tutor speaking a turn whose writer stalls, closing one Soniox stream and
@@ -311,7 +313,9 @@ React reports #418 without naming the component.
 
 ## 2026-08-30 — A source with no study-worthy content was thrown as a bare Error
 
-- **Sentry:** `MEMOAI-WEB-2X`, issue `143793775`
+- **Sentry:** `MEMOAI-WEB-36`, issue `143793775` — this entry previously named `MEMOAI-WEB-2X`,
+  which is issue `142832993`, the resolved `lecture detail ownership lookup timed out` on
+  `POST /api/lectures/[id]/tts/chunks` and a different defect entirely
 - **Route:** `POST /api/inngest`
 - **Operation:** `runNotesStageWithGuard` → `generateNotesContentDriven`, the notes stage
 - **Normalized message:** `Knowledge extraction found no study-worthy content in the source.`

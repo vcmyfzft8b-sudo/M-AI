@@ -51,9 +51,8 @@ through the shared backoff. If the provider is still unavailable, the graceful f
 the failed attempts remain in `ai_usage_events` plus Vercel warnings; handled transient capacity
 errors do not open a Sentry defect. Unexpected parsing, code and file failures still do.
 
-While PR #305 is open, automated triage must update or wait for it rather than create a duplicate.
-After it is merged, events at or before its production deployment cutoff are historical. A strictly
-later recurrence is new evidence: confirm whether both bounded attempts failed and whether the
+PR #305 is merged (`ce5ff7a5`), so events at or before the production cutoff above are historical
+and must not open a second fix. A strictly later recurrence is new evidence: confirm whether both bounded attempts failed and whether the
 fallback completed before deciding that code needs another change.
 
 ## 2026-09-07 — The creator demo offered a walkthrough it cannot start
@@ -140,8 +139,10 @@ the entry below, which fired on the fixed release within hours of it going live.
 - **Historical event:** `2026-09-10T19:59:54.449Z`, release
   `078990e4dbf304dba802764633a7c5777d49f9de`, on production deployment
   `dpl_7tKx4BRotFbdvXBP5JVuNqzV9h2o`
-- **Resolution:** [PR #398](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/398), merged to
-  `main`; its production cutoff is the first production deployment carrying that merge
+- **Resolution:** [PR #398](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/398), merge commit
+  `ec251ca0549584034f2ca60955aa19c6e6e27b7f`
+- **Production cutoff:** deployment `dpl_Bs5PeJc4vszSrBFkmBCDid4prS24` was ready and holds the
+  production alias as of `2026-09-11T12:48:32.567Z`
 - **Regression test:** the idle-timeout test in `tests/tutor-session-turns.test.mjs`
 
 Soniox hangs up on an output stream that has asked for no audio after about ten seconds, which
@@ -162,7 +163,8 @@ are the phase (`opening`) and a `tutor/turn` breadcrumb more than ten seconds af
 no stream id at all.
 
 The recorded event is from before the fix shipped, so it is the old release failing and must not
-open a second fix. Only an event after PR #398's production cutoff is new evidence, and the
+open a second fix. Only an event strictly after the cutoff, on a release at or after `ec251ca`,
+is new evidence, and the
 first thing to check then is the gap between the `tutor/turn` breadcrumb and the throw — a
 throw that follows the response immediately means the replacement connection died too, which
 is a different fault from this one.
@@ -412,8 +414,10 @@ failed and the platform limit is not the cause at all.
 - **Recurrence while the fix waits:** `2026-09-11T09:37:49.034Z`, release
   `5758292424eae6062b7cb95d126d66ba9abdbf9c` (production deployment
   `dpl_3A5xVBtgF2j9tecQNZo23awEL7qv`), which does not contain PR #399
-- **Resolution:** [PR #399](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/399) — **open at the
-  time of writing**
+- **Resolution:** [PR #399](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/399), merge commit
+  `e90d6747d8c18696616fcd4388889c13d66e896b`
+- **Production cutoff:** deployment `dpl_GSHKAkKymNkGaqnmetFS6WWPk8jf` was ready and holds the
+  production alias as of `2026-09-11T12:37:26.465Z`
 - **Regression test:** `tests/creator-demo-scan-preview.test.mjs`
 
 No browser outside Safari decodes HEIC, so a picked photo gets its thumbnail by posting the raw
@@ -438,12 +442,12 @@ the file being picked. A genuine one has the fetch breadcrumb and a route respon
 word in Slovenian and name different failures: "could not be **read**" is the response body,
 "could not be **created**" is the request never getting one.
 
-**While PR #399 is open the defect is still live on production**, so anyone dropping a HEIC into
-the demo will bump `lastSeen`. A recurrence before that PR's production cutoff is this same known
-defect waiting on a human merge, not a regression: update or wait for PR #399 rather than opening a
-duplicate. Only an event after it is deployed is new evidence, and the first thing to check then is
-whether a fetch breadcrumb for `/api/scan-preview` is present — if it is, this is the real route
-failing and not this bug at all.
+Both recorded events — the original and the 2026-09-11 recurrence — fall before the cutoff, so
+they are the old release failing and must not open a second fix. Only an event strictly after
+the cutoff, on a release at or after `e90d674`, is new evidence, and the first thing to check
+then is whether a fetch breadcrumb for `/api/scan-preview` is present — if it is, this is the
+real route failing and not this bug at all. Verified against production after the merge: the
+demo now makes no `/api/scan-preview` request at all.
 
 **It did recur, and under a new issue id — match this one on the frame, never on the id.** The
 `2026-09-11T09:37:49.034Z` event above filed as `MEMOAI-WEB-3T` / `146390279`, a different issue

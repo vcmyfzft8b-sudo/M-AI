@@ -893,6 +893,26 @@ export function LectureTutor({
           throw new Error(payload?.error ?? t("tutor.error.turnFailed"));
         }
 
+        /*
+         * The warm connection may not have survived the wait.
+         *
+         * Soniox hangs up on an output stream that has asked for no audio after about
+         * ten seconds, and warming beside the request starts that clock before the
+         * request is answered rather than when the first word is ready. An opening
+         * takes longer than ten seconds often enough — it is written from the whole
+         * note — and `speak` then threw at a socket that had already gone, which the
+         * learner met as a red box in place of the walkthrough they had just started.
+         * Replacing it here costs a handshake, and only when it really did die.
+         */
+        if (!output.isOpen) {
+          await output.ensureOpen();
+
+          if (!isCurrent()) {
+            controller.abort();
+            return;
+          }
+        }
+
         turn = output.speak();
         setPhaseNow("speaking");
 

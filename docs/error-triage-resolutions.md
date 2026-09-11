@@ -126,7 +126,46 @@ The recorded event predates the cutoff, so it is the old release failing, not a 
 automated triage must not open a second fix for it. Only an event strictly after the cutoff, on a
 release at or after `078990e`, is new evidence, and the first thing to check then is whether the
 error names the stream currently being fed (`turn.streamId`) — if it does, it is a genuine fault
-and not this bug at all.
+and not this bug at all. **A different `SpeechOutputError` on the same route is not this one**: see
+the entry below, which fired on the fixed release within hours of it going live.
+
+## 2026-09-10 — The warm speech connection was hung up on before the opening arrived
+
+- **Sentry:** `MEMOAI-WEB-3S`, issue `146287262`
+- **Route:** `/app/lectures/:id` (client-side; the `POST /api/lectures/<id>/tutor/report`
+  record in Vercel is the browser reporting it and returns 200, so there is no 5xx)
+- **Operation:** pressing Start on a walkthrough — the `opening` turn, before a word is spoken
+- **Normalized message:** `SpeechOutputError: The speech connection is not open.` — thrown by
+  `speak` itself (`src/lib/tutor/speech-output.ts:431`), not a frame from Soniox
+- **Historical event:** `2026-09-10T19:59:54.449Z`, release
+  `078990e4dbf304dba802764633a7c5777d49f9de`, on production deployment
+  `dpl_7tKx4BRotFbdvXBP5JVuNqzV9h2o`
+- **Resolution:** [PR #398](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/398), merged to
+  `main`; its production cutoff is the first production deployment carrying that merge
+- **Regression test:** the idle-timeout test in `tests/tutor-session-turns.test.mjs`
+
+Soniox hangs up on an output stream that has asked for no audio after about ten seconds, which
+is what `ensureOpen` exists for and why it says the connection is "checked immediately before it
+is used". `runTurn` warmed it in `prepareSpeech` beside the turn request instead
+(`src/components/lecture-tutor.tsx:875`), so the ten seconds started when the request went out
+rather than when the first word was ready — and `ensureOpen` replaced nothing, because the
+connection `startSession` had just opened was still up. An opening is written from the whole
+note and passes ten seconds routinely: this one's request took 10.7s, and `speak` threw 7ms
+after it landed. PR #398 checks the connection immediately before speaking and replaces it if
+the wait outlasted it.
+
+**This is not the stale-stream defect above, and not a regression of it.** That one is a Soniox
+`400` frame naming a dead stream, fired mid-turn on a turn that was already speaking; this one
+is thrown by our own guard in `speak`, before any stream exists, and its distinguishing marks
+are the phase (`opening`) and a `tutor/turn` breadcrumb more than ten seconds after the
+`tutor/session` one. Separate them by the message: only this one says *connection*, and it names
+no stream id at all.
+
+The recorded event is from before the fix shipped, so it is the old release failing and must not
+open a second fix. Only an event after PR #398's production cutoff is new evidence, and the
+first thing to check then is the gap between the `tutor/turn` breadcrumb and the throw — a
+throw that follows the response immediately means the replacement connection died too, which
+is a different fault from this one.
 
 ## 2026-09-03 — Page translation moved the onboarding CTA's label out of the button
 

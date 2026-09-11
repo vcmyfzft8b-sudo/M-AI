@@ -32,12 +32,18 @@ export function sessionHarness({ source } = {}) {
   const timers = new Map();
   const calls = [], audio = [], errors = [];
   const pendingPlan = deferred();
-  const state = { updates: [], request: async () => response(), open: async () => {}, input: null, output: null };
+  // `socketOpen` is Soniox's end of the speech connection: warmed by `ensureOpen`, and
+  // hung up on by a wait long enough to reach its idle timeout.
+  const state = {
+    updates: [], request: async () => response(), input: null, output: null,
+    socketOpen: true, open: async () => { state.socketOpen = true; },
+  };
   const window = {
     setTimeout: (fn, delay) => { const id = ++timerId; timers.set(id, { fn, at: now + delay }); return id; },
     clearTimeout: (id) => timers.delete(id),
     localStorage: { getItem: () => null },
   };
+  class SpeechOutputError extends Error {}
   class Input {
     constructor(_config, handlers) { state.input = this; this.handlers = handlers; }
     async start() {} resetUtterance() {} close() {} stopListening() {}
@@ -48,9 +54,11 @@ export function sessionHarness({ source } = {}) {
     constructor() { state.output = this; }
     async connect() {} async resumeAudio() {} close() { this.stop(); }
     ensureOpen() { calls.push({ kind: "socket", at: now }); return state.open(); }
+    get isOpen() { return state.socketOpen; }
     spokenIntoRoom() { return this.room; }
     stop(options) { this.stops.push(options); this.live?.done.resolve(); this.live = null; return null; }
     speak() {
+      if (!state.socketOpen) throw new SpeechOutputError("The speech connection is not open.");
       const entry = { at: now, text: "", done: deferred() };
       audio.push(entry); this.live = entry;
       return { push: (text) => { entry.text += text; }, end() {}, finished: entry.done.promise };
@@ -69,7 +77,7 @@ export function sessionHarness({ source } = {}) {
     "@/lib/tutor/prepared-reply": preparation.exports,
     "@/lib/tutor/spoken-so-far": spokenSoFar,
     "@/lib/tutor/speech-input": { TutorSpeechInput: Input, SpeechInputError: class extends Error {} },
-    "@/lib/tutor/speech-output": { TutorSpeechOutput: Output, SpeechOutputError: class extends Error {} },
+    "@/lib/tutor/speech-output": { TutorSpeechOutput: Output, SpeechOutputError },
     "@/lib/tutor/report": { reportTutorFailure: (error) => errors.push(error), resetTutorFailureReports() {} },
     "@/lib/tutor/slice": { nextSliceDueAt: () => null },
     "@/lib/chat-stream-client": { readChatStream: async (response, delta) => {

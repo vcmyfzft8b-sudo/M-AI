@@ -28,6 +28,24 @@ test("socket preparation overlaps the request without speaking before it arrives
   assert.equal(h.audio.length, 1);
 });
 
+test("a request that outlasts the warm connection's idle timeout replaces it rather than failing", async () => {
+  const h = sessionHarness(), request = deferred();
+  h.state.request = () => request.promise;
+  void h.tutor.runTurn("opening", { index: 0 });
+  await settle();
+  assert.equal(h.calls.filter(c => c.kind === "socket").length, 1);
+
+  // Soniox hangs up on an output stream that has asked for no audio after about ten
+  // seconds, and an opening is written from the whole note. It is gone before the reply.
+  h.state.socketOpen = false;
+  request.resolve(response()); await settle();
+
+  assert.equal(h.errors.length, 0, "a hung-up warm connection is not a failed walkthrough");
+  assert.equal(h.calls.filter(c => c.kind === "socket").length, 2, "the dead connection was replaced");
+  assert.equal(h.audio.length, 1);
+  assert.equal(h.tutor.phaseRef.current, "speaking");
+});
+
 for (const stop of ["pause", "commitInterruption", "end"]) {
   for (const pending of ["plan", "request", "socket", "renewal"]) {
     test(`${stop} invalidates a turn waiting for ${pending}`, async () => {

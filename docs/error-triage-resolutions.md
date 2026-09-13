@@ -471,3 +471,73 @@ demo is offline by construction, so a Playwright run that aborts requests to `se
 the failure against production without filing anything — confirmed on 2026-09-10, where the blocked
 envelope was an `event` carrying `Error` / "The preview could not be read." Verifying the fix needs
 no such care: the fixed build files nothing at all, and only routine `session` envelopes appear.
+
+## 2026-09-06 — A note deleted mid-draw refused its mind map's write twice
+
+- **Sentry:** `MEMOAI-WEB-3G`, issue `145273842`
+- **Route:** `POST /api/inngest`, tag `route: inngest:process-lecture-mindmap`
+- **Operation:** `generateLectureMindmap`
+- **Normalized message:** `insert or update on table "lecture_mindmap_assets" violates foreign key
+  constraint "lecture_mindmap_assets_lecture_id_fkey"`
+- **Historical events:** `2026-09-06T13:11:29.529Z` and `2026-09-06T13:11:47.847Z`, both on release
+  `c25b346ae989e66edbee309714765ec2f1160eeb` (production deployment
+  `dpl_4Bu9hgFEinYj4TfZCEyghJNCYSRp`). Two events, no user attributed.
+- **Resolution:** [PR #379](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/379), commit
+  `1a8745117930f1f1a5ec516117e5ab8b5d3b24bc`
+- **Production cutoff:** deployment `dpl_AAi3cqfB4bLwhukkMdRzSo4NQsT4` was ready at
+  `2026-09-06T16:07:53.966Z`
+- **Regression test:** `tests/mindmap-deleted-lecture.test.mjs`
+
+Drawing a mind map is a background Inngest job that outlives the tab that started it. When the
+learner deletes the note while it runs, every row keyed by `lecture_id` has already cascaded away,
+so the job's write is refused by the foreign key. `setMindmapStatus` re-threw the raw PostgREST
+object and `generateLectureMindmap`'s catch answered it by writing a `failed` row — the same
+foreign key, refused a second time — which escaped to the Inngest function and was reported as a
+defect. It is a race the learner won, not a fault. `src/lib/lecture-processing-errors.ts:116`
+already classified exactly this for podcasts and note TTS; the mindmap module, added later, simply
+never used it. PR #379 returns early on `isLectureNoLongerExistsError`
+(`src/lib/mindmap.ts:401`) and guards the capture in the Inngest function too
+(`src/inngest/functions.ts:386`).
+
+**The `ai_usage_events` foreign key in the breadcrumbs is the same deletion, not a second defect.**
+The event immediately before the throw is a console breadcrumb reading `Failed to log Gemini usage
+event. insert or update on table "ai_usage_events" violates foreign key constraint
+"ai_usage_events_lecture_id_fkey"`. That is the usage logger meeting the same vanished lecture, and
+it is a `console.warn` that is never re-thrown (`src/lib/ai/usage-logging.ts:194`), so it files
+nothing on its own. Seeing both names in one event is the signature of this race, not evidence of
+two bugs.
+
+Both recorded events predate the cutoff by about three hours, so they are the old release failing
+and must not open a second fix. An event strictly after the cutoff, on a release at or after
+`1a87451`, is new evidence — and the first thing to check then is whether the lecture row actually
+vanished, since a foreign key refused while the note still exists is a different fault entirely.
+
+## 2026-09-05 — Distinguishing a developer's local run from production
+
+Not a resolution. This records how to recognise an issue that never happened in production, so each
+triage run does not re-investigate one.
+
+- **Sentry:** `MEMOAI-WEB-3F`, issue `145162692`
+- **Route:** `GET /api/cron/stalled-lectures`, tag `operation: markLecturePipelineFailed`
+- **Normalized message:** `LectureProcessingStalledError: Obdelava se je zataknila. Poskusi znova.`
+- **Event:** `2026-09-05T21:48:05.157Z`, release `dc3c4c099714c4f8570d83f6d0bfe19b589d6e1c`
+
+The single event came from a developer's laptop, not from production or a preview deployment. Four
+independent markers say so, and any one of them is enough to stop triage:
+
+- `environment: preview`, but `url: http://localhost:3000/api/cron/stalled-lectures`
+- `server_name: MacBook-Pro.local` and `os: macOS`, where a Vercel function reports a private IPv4
+  address and `os: Linux`
+- `browser: curl 8.7.1` — the sweep was invoked by hand
+- the `next-app-loader` stack frame carries `isDev=true` and a `.claude/worktrees/` path, so the
+  build was a local `next dev` in a git worktree
+
+The stall sweep doing its job is also `handled: yes`: it marked a lecture that had genuinely stopped
+progressing, which is the behaviour the route exists for.
+
+**The scan cannot filter this out on its own.** `scripts/sentry-error-scan.mjs` asks Sentry for
+`is:unresolved` with no environment filter, which is the same property that makes a reproduction
+against a deployment read back as fresh evidence (see the hydration entry above). So check the
+`url`, `server_name` and `os` tags of any low-count issue before treating it as production traffic.
+An event on this route with `os: Linux`, a Vercel `server_name` and a `www.memoai.eu` or
+`*.vercel.app` url is real and should be triaged on its own evidence.

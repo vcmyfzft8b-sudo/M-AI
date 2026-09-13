@@ -44,6 +44,38 @@ export function isFinalSlice(grant: SliceGrant): boolean {
 }
 
 /**
+ * When the keys in hand stop working, read on the clock that will be asked.
+ *
+ * Soniox answers with an absolute `expires_at`, and using it directly puts the deadline on
+ * Soniox's clock while every check against it — the renewal alarm's delay, and the guard
+ * before each turn — is made with `Date.now()` on the learner's. The two are not the same
+ * clock. A device running behind reads every deadline as further off than it is, by exactly
+ * its error: one learner's was four and a half minutes slow, so their free minute's keys,
+ * minted to live 105 seconds, were still "three minutes from due" when Soniox stopped
+ * accepting them. No renewal was ever attempted and the walkthrough died on a 401.
+ *
+ * So the lifetime is what crosses the wire, not the instant. The server mints the keys for
+ * the slice plus the grace (`openTutorGrant`), and both numbers are already in hand here —
+ * which is what `TUTOR_GRANT_KEY_GRACE_SECONDS` is shared for. Measured from the moment the
+ * response arrived, the answer is on the learner's own clock and a wrong one cannot move it.
+ *
+ * Null when the slice is not a number to count from — a response that malformed has nothing
+ * this can honestly say about it.
+ */
+export function credentialsExpireAt(params: {
+  grantedSeconds: number;
+  keyGraceSeconds: number;
+  /** `Date.now()` as the credentials were adopted. */
+  receivedAt: number;
+}): number | null {
+  if (!Number.isFinite(params.grantedSeconds)) {
+    return null;
+  }
+
+  return params.receivedAt + (params.grantedSeconds + params.keyGraceSeconds) * 1000;
+}
+
+/**
  * The moment the session should reach for its next slice.
  *
  * An ordinary slice is renewed on the margin, early enough to swap the keys between turns.

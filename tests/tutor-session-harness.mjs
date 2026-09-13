@@ -79,7 +79,9 @@ export function sessionHarness({ source } = {}) {
     "@/lib/tutor/speech-input": { TutorSpeechInput: Input, SpeechInputError: class extends Error {} },
     "@/lib/tutor/speech-output": { TutorSpeechOutput: Output, SpeechOutputError },
     "@/lib/tutor/report": { reportTutorFailure: (error) => errors.push(error), resetTutorFailureReports() {} },
-    "@/lib/tutor/slice": { nextSliceDueAt: () => null },
+    // No credentials expiry, so no renewal alarm: these tests are about turn-taking, and a
+    // session that reached for its next slice mid-test would be answering a different question.
+    "@/lib/tutor/slice": { credentialsExpireAt: () => null, nextSliceDueAt: () => null },
     "@/lib/chat-stream-client": { readChatStream: async (response, delta) => {
       for (const text of response.deltas ?? ["An answer. "]) delta(text);
       return response.result ?? { speech: "An answer.", handBack: true, awaitingExplanation: false };

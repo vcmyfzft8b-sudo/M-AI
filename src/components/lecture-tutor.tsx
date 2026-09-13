@@ -889,7 +889,32 @@ export function LectureTutor({
         }
 
         if (!response.ok || !response.headers.get("Content-Type")?.includes("text/event-stream")) {
-          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          const payload = (await response.json().catch(() => null)) as
+            | { error?: string; code?: TutorBlock; usage?: TutorUsage }
+            | null;
+
+          /*
+           * A refusal, not a fault: their access ended while they were inside the
+           * walkthrough. Both `tutor/session` call sites have always met a 402 with the
+           * paywall; this one threw, so a learner who pressed Resume six minutes into a
+           * lesson was shown a red box quoting the billing sentence — and it was reported
+           * as a defect — instead of the wall they had actually hit. Ends the session
+           * where it stands, exactly as a refused renewal does.
+           */
+          if (response.status === 402) {
+            if (payload?.usage) {
+              setUsage(payload.usage);
+            }
+
+            setBlocked(payload?.code ?? "tutor_credits_needed");
+            settleGrant();
+            teardown();
+            planRef.current = null;
+            setPhaseNow("idle");
+
+            return;
+          }
+
           throw new Error(payload?.error ?? t("tutor.error.turnFailed"));
         }
 
@@ -1031,7 +1056,7 @@ export function LectureTutor({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onTurnFinished is defined below and stable
-    [lectureId, setPhaseNow, t],
+    [lectureId, setPhaseNow, settleGrant, t, teardown],
   );
 
   const runTurnRef = useRef(runTurn);

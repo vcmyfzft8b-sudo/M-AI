@@ -241,3 +241,29 @@ test("subtitles show only the latest learner sentence while history keeps the wh
   assert.equal(h.calls.find(c => c.kind === "answer").question, "I understand the channels. Why does calcium trigger release?");
   assert.equal(h.state.updates.at(-2), null, "speaking clears the caption");
 });
+
+/*
+ * A learner whose access ends mid-walkthrough hits the paywall, not a red box.
+ *
+ * `tutor/turn` answers 402 when `canUseLectureFeatures` refuses — the same refusal the
+ * session route has always answered with — but `runTurn` checked only `response.ok`, so
+ * the billing sentence was thrown as an Error, reported as a defect, and left the session
+ * paused behind it.
+ */
+test("a turn refused for billing shows the paywall instead of failing the walkthrough", async () => {
+  const h = sessionHarness();
+  h.tutor.phaseRef.current = "speaking";
+  h.state.request = () => ({
+    ok: false,
+    status: 402,
+    headers: { get: () => "application/json" },
+    json: async () => ({ error: "Tutor is trial-only.", code: "trial_exhausted", usage: { remaining: 0 } }),
+  });
+  void h.tutor.runTurn("resume");
+  await settle();
+
+  assert.equal(h.errors.length, 0, "a paywall is not a reported failure");
+  assert.equal(h.tutor.phaseRef.current, "idle", "the session ends rather than pausing on an error");
+  assert.ok(h.state.updates.includes("trial_exhausted"), "the refusal's code blocks the tutor");
+  assert.equal(h.state.updates.includes("Tutor is trial-only."), false, "the billing sentence is not shown as an error");
+});

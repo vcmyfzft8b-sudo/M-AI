@@ -31,7 +31,7 @@ import { PreparedTutorReply, preparedReplyKey } from "@/lib/tutor/prepared-reply
 import { TutorClipPlayer } from "@/lib/tutor/clip-player";
 import { reportTutorFailure, resetTutorFailureReports } from "@/lib/tutor/report";
 import { SpeechOutputError, TutorSpeechOutput } from "@/lib/tutor/speech-output";
-import { isFinalSlice, nextSliceDueAt } from "@/lib/tutor/slice";
+import { credentialsExpireAt, isFinalSlice, nextSliceDueAt } from "@/lib/tutor/slice";
 import { appendSpokenSoFar } from "@/lib/tutor/spoken-so-far";
 import { voiceHue } from "@/lib/tutor/voice-colors";
 import { hasStaticVoiceSamples, voiceSampleClip } from "@/lib/tutor/voice-clips";
@@ -657,10 +657,18 @@ export function LectureTutor({
   }, [t]);
 
   const adoptCredentials = useCallback((session: TutorSessionResponse) => {
-    const expiresAt = Date.parse(session.realtime.tts.expiresAt);
-
     clearTimer(renewalTimerRef);
-    credentialsExpireAtRef.current = Number.isNaN(expiresAt) ? null : expiresAt;
+
+    /*
+     * Counted from now rather than read off `realtime.tts.expiresAt`: that instant is on
+     * Soniox's clock and every check made against it is on the learner's. See
+     * `credentialsExpireAt` for what a slow one did to a free minute.
+     */
+    credentialsExpireAtRef.current = credentialsExpireAt({
+      grantedSeconds: session.grantedSeconds,
+      keyGraceSeconds: TUTOR_GRANT_KEY_GRACE_SECONDS,
+      receivedAt: Date.now(),
+    });
 
     if (credentialsExpireAtRef.current === null) {
       nextSliceDueAtRef.current = null;

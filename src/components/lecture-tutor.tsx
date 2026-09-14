@@ -1556,6 +1556,14 @@ export function LectureTutor({
             setCanListen(false);
             setError(t("tutor.error.listeningBusy"));
           } else if (inputError.reason === "connection") {
+            /*
+             * The recognizer is gone and nothing reopens it on its own, so the one thing
+             * this screen promises — cut in whenever you like — is a promise it can no
+             * longer keep. Said in the same words as a microphone that was never granted,
+             * because from the learner's side it is the same thing. Pausing and continuing,
+             * or going over a topic again, asks for one back.
+             */
+            setCanListen(false);
             setError(t("tutor.error.connection"));
           }
         },

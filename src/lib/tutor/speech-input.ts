@@ -307,6 +307,7 @@ export class TutorSpeechInput {
             return;
           }
 
+          this.dropSocket();
           this.handlers.onError?.(
             new SpeechInputError("The recognizer connection closed.", "connection"),
           );
@@ -456,6 +457,24 @@ export class TutorSpeechInput {
     }
   }
 
+  /**
+   * Lets go of a recognizer that has stopped working, before anyone is told it has.
+   *
+   * Both ways a stream can end badly — a refusal frame, and a close nobody asked for —
+   * have to come through here, or the session is left believing in a socket that cannot
+   * hear: `isListening` still says yes, so `startListening` returns early instead of
+   * opening a replacement and the microphone is gone for the rest of the walkthrough, and
+   * the keepalive goes on ticking at a dead connection until the page is closed.
+   */
+  private dropSocket() {
+    this.socket = null;
+
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = null;
+    }
+  }
+
   private handleFrame(frame: { pcm: ArrayBuffer }) {
     if (this.muted) {
       return;
@@ -498,7 +517,7 @@ export class TutorSpeechInput {
        */
       const busy = String(message.error_code) === "429";
       const socket = this.socket;
-      this.socket = null;
+      this.dropSocket();
       socket?.close();
 
       this.handlers.onError?.(

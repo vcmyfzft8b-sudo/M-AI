@@ -541,3 +541,71 @@ against a deployment read back as fresh evidence (see the hydration entry above)
 `url`, `server_name` and `os` tags of any low-count issue before treating it as production traffic.
 An event on this route with `os: Linux`, a Vercel `server_name` and a `www.memoai.eu` or
 `*.vercel.app` url is real and should be triaged on its own evidence.
+
+## 2026-09-04 — A dead turn's stale-stream error ended the lesson
+
+- **Sentry:** `MEMOAI-WEB-3D`, issue `144907471` — the **turn-level** form. Do not confuse it with
+  `MEMOAI-WEB-3Q` (issue `145971892`), the segment-level counterpart recorded above
+- **Route:** `/app/lectures/:id` (client-side; the `POST /api/lectures/<id>/tutor/report` records
+  in Vercel are the browser reporting it and return 200, so there is no 5xx)
+- **Operation:** the tutor speaking a turn, on a Soniox stream belonging to a turn that is already
+  over
+- **Normalized message:** `SpeechOutputError: Stream turn-<n> not found. Send a start message
+  first.` — Soniox `400 invalid_stream_state`, raised at
+  `TutorSpeechOutput.handleMessage` (`src/lib/tutor/speech-output.ts`)
+- **Historical events:** 2 events, `2026-09-04T11:15:55.147Z` to `2026-09-04T11:19:52.887Z`
+- **Resolution:** [PR #342](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/342), merge commit
+  `29ce592d914b8a633974c6d9583a8d5ab7365d48`, and
+  [PR #357](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/357), merge commit
+  `c995985e0bdcdd4d4d7807bed3911468ca4384cb`
+- **Production cutoff:** `dpl_DJBL8jSu4LCT6rkjg9mdEoqywdqd` was ready at `2026-09-04T17:49:21.316Z`
+  and `dpl_BdUMenchfZWqMBJKe66aoKnuMgam` at `2026-09-04T18:28:53.303Z`; take the later one as the
+  cutoff, since the pair is what closes the defect
+- **Regression test:** the first three tests in `tests/tutor-speech-error-frames.test.mjs`
+
+**The distinguishing mark is the shape of the stream id.** A bare `turn-<n>` — `turn-24` in these
+events — names a turn that is already gone, and that is this entry. A `turn-<n>.<m>` with a segment
+suffix names a stream the *current* turn opened earlier, and that is the segment-level defect fixed
+by PR #396. The two look alike in a Sentry title and have different fixes, so read the id before
+deciding which one a new event belongs to.
+
+Both events predate the cutoff by about seven hours, so they are the old release failing and must
+not open a second fix. An event strictly after the cutoff is new evidence — and the first thing to
+check is whether the id names the stream currently being fed (`turn.streamId`), because if it does
+it is a genuine fault and neither of these bugs.
+
+## 2026-09-07 — The tutor's premature renewal met its own rate limit
+
+Not a resolution. This records a defect that is **real, unfixed and currently dormant**, so triage
+neither forgets it nor opens a speculative fix while it is producing no events.
+
+- **Sentry:** `MEMOAI-WEB-3C`, issue `144831950` (13 events) and `MEMOAI-WEB-3M`, issue `145537971`
+  (1 event) — the pair the stale-stream entry above disclaims
+- **Route:** `/app/lectures/:id` (client-side; the refusal comes from
+  `POST /api/lectures/<id>/tutor/session`)
+- **Operation:** starting or renewing a tutor session's Soniox credentials
+- **Normalized message:** `Error: Preveč zahtevkov.` — the `api.tooManyRequests` string, i.e. a 429
+- **Events:** 14 in total, `2026-09-04T04:46:39.299Z` to `2026-09-07T16:25:55.425Z`. **None since**,
+  across every release up to and including the deployment running now
+  (`dpl_51AvsAGb8MQ5GrWtyRAhsCmHDsX8`, ready `2026-09-14T07:22:07.083Z`)
+
+The session route is guarded by `rateLimitPresets.expensiveMutate`
+(`src/app/api/lectures/[id]/tutor/session/route.ts`). When the limit trips, `enforceRateLimit`
+answers 429 with `{ error: await tr("api.tooManyRequests") }` (`src/lib/rate-limit.ts:282`), and
+`startSession` in `src/components/lecture-tutor.tsx` throws `payload?.error` verbatim. So the
+learner meets a bare red **“Preveč zahtevkov.”** where a wait-and-retry state belongs. That much is
+established from the stack frame and the code; **what drove the session route hard enough to trip
+its own rate limit is not.**
+
+**Do not credit [PR #404](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/404) with fixing this.**
+Its clock-skew fix is a plausible partial driver — that one deadline was read on two clocks, so a
+device running *fast* would fall due for renewal early and repeatedly, the mirror image of the slow
+clock #404 was opened for — but the evidence does not support the claim: these events stopped on
+2026-09-07, a week and many releases before #404 merged on `2026-09-14T07:21:59Z`. Something else
+ended them, or the traffic that provoked them simply stopped.
+
+What a human should settle, in this order: whether `startSession` should render a 429 as a
+retry-after state rather than throwing the payload (that part is a real defect regardless of the
+trigger), and then what called the route repeatedly enough to trip `expensiveMutate`. A recurrence
+is the evidence that is missing — it would carry the release and the call pattern — so treat a new
+event on this message as valuable rather than as a regression of #404.

@@ -64,7 +64,7 @@ export async function getAuthProviderAvailability(): Promise<AuthProviderAvailab
         ? appleSignInConfigured()
         : process.env.APPLE_WEB_SIGN_IN_ENABLED === "true"),
       email: emailEnabled,
-      google: !native && Boolean(settings.external?.google),
+      google: Boolean(settings.external?.google) && (!native || process.env.NATIVE_GOOGLE_SIGN_IN_ENABLED === "true"),
     };
   } catch {
     return {

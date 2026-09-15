@@ -9,6 +9,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private var webView: WKWebView!
     private let store = Store()
     private let appleSignIn = AppleSignIn()
+    private let googleSignIn = GoogleSignIn()
     private let overlay = UIStackView()
     private let spinner = UIActivityIndicatorView(style: .medium)
     private let message = UILabel()
@@ -276,6 +277,18 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         Task {
             do {
                 switch command {
+                case "signInWithGoogle":
+                    guard let window = view.window else { throw Store.StoreError.unavailable }
+                    let challenge = try await api(path: "/api/mobile/google-auth")
+                    guard let value = challenge["url"] as? String, let url = URL(string: value),
+                          let state = challenge["state"] as? String else { throw Store.StoreError.unavailable }
+                    let result = try await googleSignIn.authorize(url: url, state: state, window: window)
+                    if result["status"] == "cancelled" { replyHandler(result, nil) }
+                    else {
+                        _ = try await api(path: "/api/mobile/google-auth", body: result)
+                        AppleSignIn.setCurrentUser(nil)
+                        replyHandler(["status": "signedIn"], nil)
+                    }
                 case "signInWithApple":
                     guard let window = view.window else { throw Store.StoreError.unavailable }
                     let challenge = try await api(path: "/api/mobile/apple-auth")

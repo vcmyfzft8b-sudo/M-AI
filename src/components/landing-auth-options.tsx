@@ -74,8 +74,14 @@ export function LandingAuthOptions(props: {
           action="/auth/google"
           method="post"
           className="memo-auth-provider-form"
-          onSubmit={() => {
-            setPendingTarget("google");
+          onSubmit={event => {
+            if (!isNativeIOS()) { setPendingTarget("google"); return; }
+            event.preventDefault();
+            if (pendingTarget) return;
+            setPendingTarget("google"); setNotice("");
+            void nativeRequest<{ status: string }>("signInWithGoogle").then(result => {
+              if (result.status === "signedIn") window.location.assign(props.next);
+            }).catch(() => setNotice(t("native.verifyFailed"))).finally(() => setPendingTarget(null));
           }}
         >
           <input type="hidden" name="next" value={props.next} />

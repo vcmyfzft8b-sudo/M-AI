@@ -19,7 +19,7 @@ function load(path, modules, globals = {}) {
   return context.exports;
 }
 
-async function availability({ native = true, configured = true, appleEnabled = true, settingsFail = false, webConfigured = false } = {}) {
+async function availability({ native = true, configured = true, appleEnabled = true, settingsFail = false, webConfigured = false, googleConfigured = true } = {}) {
   const { getAuthProviderAvailability } = load("../src/lib/auth-providers.ts", {
     "server-only": {},
     "next/headers": { headers: async () => new Headers({ "user-agent": native ? "Mozilla/5.0 MemoAI-iOS/1.0" : "Mozilla/5.0" }) },
@@ -27,7 +27,7 @@ async function availability({ native = true, configured = true, appleEnabled = t
     "@/lib/mobile/apple-identity": { appleSignInConfigured: () => configured },
     "@/lib/public-env": { getPublicEnv: () => ({ supabaseUrl: "https://synthetic.invalid" }) },
   }, {
-    process: { env: { NEXT_PUBLIC_SUPABASE_ANON_KEY: "synthetic", APPLE_WEB_SIGN_IN_ENABLED: String(webConfigured) } },
+    process: { env: { NEXT_PUBLIC_SUPABASE_ANON_KEY: "synthetic", APPLE_WEB_SIGN_IN_ENABLED: String(webConfigured), NATIVE_GOOGLE_SIGN_IN_ENABLED: String(googleConfigured) } },
     fetch: async () => ({ ok: !settingsFail, json: async () => ({ external: { apple: appleEnabled, google: true, email: true } }) }),
   });
   return getAuthProviderAvailability();
@@ -44,13 +44,18 @@ const { LandingAuthOptions } = load("../src/components/landing-auth-options.tsx"
   "@/lib/mobile/client": { isNativeIOS: () => true, nativeRequest() { throw new Error("No native calls during rendering"); } },
 });
 
-test("configured iOS login renders Continue with Apple beside the email option", async () => {
+test("configured iOS login renders Google, Apple and email together", async () => {
   const providers = await availability();
   const html = renderToStaticMarkup(React.createElement(LandingAuthOptions, { providers, next: "/app/start" }));
   assert.match(html, /Continue with Apple/);
   assert.match(html, /Continue with email/);
-  assert.doesNotMatch(html, /Continue with Google/);
+  assert.match(html, /Continue with Google/);
   assert.match(html, /action="\/auth\/apple"/);
+});
+
+test("native Google stays gated until the secure browser callback is configured", async () => {
+  assert.equal((await availability({ googleConfigured: false })).google, false);
+  assert.equal((await availability({ native: false, googleConfigured: false })).google, true);
 });
 
 test("iOS does not expose an unusable Apple login before both backend and provider are configured", async () => {

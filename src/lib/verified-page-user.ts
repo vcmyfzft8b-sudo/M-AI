@@ -16,6 +16,7 @@ type VerifiedPageUser = {
   fullName: string | null;
   name: string | null;
   metadataEmail: string | null;
+  nativeAIConsent?: string | null;
 };
 
 function optionalString(value: unknown) {
@@ -31,6 +32,7 @@ export function serializeVerifiedPageUser(user: User) {
     fullName: optionalString(user.user_metadata?.full_name),
     name: optionalString(user.user_metadata?.name),
     metadataEmail: optionalString(user.user_metadata?.email),
+    nativeAIConsent: user.user_metadata?.memo_native_ai_consent === "v1" ? "v1" : null,
   };
 
   // Header values must be ASCII. This also keeps names in every supported
@@ -52,6 +54,7 @@ export function parseVerifiedPageUser(value: string | null): User | null {
     }
 
     const userMetadata = {
+      ...(parsed.nativeAIConsent === "v1" ? { memo_native_ai_consent: "v1" } : {}),
       ...(optionalString(parsed.fullName) ? { full_name: parsed.fullName } : {}),
       ...(optionalString(parsed.name) ? { name: parsed.name } : {}),
       ...(optionalString(parsed.metadataEmail) ? { email: parsed.metadataEmail } : {}),

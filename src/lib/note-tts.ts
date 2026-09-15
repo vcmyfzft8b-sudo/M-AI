@@ -1,3 +1,4 @@
+import { assertStorageOwnerActive } from "@/lib/mobile/storage-owner";
 import "server-only";
 
 import { createHash } from "node:crypto";
@@ -1066,12 +1067,13 @@ async function generateTtsChunk(params: {
   // Same storage fault, one step earlier: here it costs the whole synthesis, because the caller
   // releases the quota reservation and the reader has to pay for the generation again. The upload
   // upserts a path derived from the content hash, so repeating it is safe.
-  const { error: uploadError } = await retryTransientStorageOperation(() =>
-    service.storage.from(STORAGE_BUCKET).upload(audioStoragePath, Buffer.from(audio), {
+  const { error: uploadError } = await retryTransientStorageOperation(async () => {
+    await assertStorageOwnerActive(params.userId);
+    return service.storage.from(STORAGE_BUCKET).upload(audioStoragePath, Buffer.from(audio), {
       contentType: TTS_OUTPUT_MIME_TYPE,
       upsert: true,
-    }),
-  );
+    });
+  });
 
   if (uploadError) {
     throw uploadError;

@@ -16,6 +16,9 @@ import {
   SEO_BRAND_NAME,
 } from "@/lib/brand";
 import { formatCurrency } from "@/lib/utils";
+import { nativeRequest } from "@/lib/mobile/client";
+import { halfOffProducts, type NativeProduct } from "@/lib/mobile/products";
+import { NativePaywall } from "@/components/native-paywall";
 
 /**
  * The one-shot prize wheel and the offer sheet it hands off to.
@@ -169,6 +172,7 @@ export function DiscountOffer({
   onWheelOpenChange,
   onOfferOpenChange,
   onClaimed,
+  nativeOffer = false,
 }: {
   wheelOpen: boolean;
   offerOpen: boolean;
@@ -178,6 +182,7 @@ export function DiscountOffer({
   onOfferOpenChange: (open: boolean) => void;
   /** Fired once the prize is banked, so the home card can stop offering it. */
   onClaimed: () => void;
+  nativeOffer?: boolean;
 }) {
   const { locale, t } = useTranslations();
   const spinTimerRef = useRef<number | null>(null);
@@ -193,6 +198,7 @@ export function DiscountOffer({
   const [plan, setPlan] = useState<OfferPlan["id"]>("yearly");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appleOffers, setAppleOffers] = useState<NativeProduct[]>([]);
   /*
    * The offer's ten minutes. The server is what actually enforces the window —
    * it measures from the recorded spin and refuses the coupon after it — so
@@ -243,6 +249,25 @@ export function DiscountOffer({
 
     setIsSpinning(true);
     setError(null);
+
+    if (nativeOffer) {
+      // Introductory offers are governed by Apple eligibility, with no invented
+      // ten-minute expiry or Stripe coupon written to the learner's profile.
+      try {
+        const offers = halfOffProducts(await nativeRequest("products"));
+        if (!offers.length) throw new Error("Offer unavailable");
+        setAppleOffers(offers);
+        onClaimed();
+        spinTimerRef.current = window.setTimeout(() => {
+          spinTimerRef.current = null;
+          setHasWon(true);
+        }, Math.max(0, REVEAL_MS - (Date.now() - startedAt)));
+      } catch {
+        setIsSpinning(false);
+        setError(t("native.priceChanged"));
+      }
+      return;
+    }
 
     // Bank the prize first: the animation is long enough that a learner could
     // navigate away mid-spin, and the award should survive that.
@@ -320,6 +345,7 @@ export function DiscountOffer({
    * the only place a drag starts, and both leave through the shared exit.
    */
   useEffect(() => {
+    if (nativeOffer) return;
     if (!offerOpen) {
       setSecondsLeft(remainingSeconds(offerRestored));
       expiresAtRef.current = null;
@@ -416,7 +442,7 @@ export function DiscountOffer({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [offerOpen, offerRestored]);
+  }, [offerOpen, offerRestored, nativeOffer]);
 
   const wheelSheet = useSheet(
     useCallback(() => onWheelOpenChange(false), [onWheelOpenChange]),
@@ -437,7 +463,7 @@ export function DiscountOffer({
    */
   const offerSheet = useSheet(
     useCallback(() => {
-      if (!boughtRef.current) {
+      if (!nativeOffer && !boughtRef.current) {
         void fetch("/api/discount-wheel", { method: "DELETE" }).catch(() => {});
       }
 
@@ -450,7 +476,7 @@ export function DiscountOffer({
       clearOfferResume();
       onOfferOpenChange(false);
       onWheelOpenChange(false);
-    }, [onOfferOpenChange, onWheelOpenChange]),
+    }, [onOfferOpenChange, onWheelOpenChange, nativeOffer]),
     { scrollable: true },
   );
 
@@ -545,10 +571,10 @@ export function DiscountOffer({
             <p className="memo-wheel-sub">
               {t(
                 hasWon
-                  ? "offer.wheelWon"
+                  ? (nativeOffer ? "native.introReady" : "offer.wheelWon")
                   : isSpinning
                     ? "offer.wheelSpinning"
-                    : "offer.wheelIdle",
+                    : (nativeOffer ? "native.introReveal" : "offer.wheelIdle"),
               )}
             </p>
 
@@ -590,7 +616,11 @@ export function DiscountOffer({
             {hasWon ? (
               <div className="memo-wheel-prize">
                 <p>{t("offer.prizeAmount")}</p>
-                <p>{t("offer.prizeCaption")}</p>
+                <p>{t(nativeOffer ? "native.introCaption" : "offer.prizeCaption")}</p>
+                {nativeOffer ? appleOffers.map(product => <p key={product.id}>{t(
+                  product.id === "eu.memoai.premium.yearly" ? "native.firstYearPrice" : "native.firstMonthPrice",
+                  { initial: product.introPrice!, renewal: product.price },
+                )}</p>) : null}
               </div>
             ) : null}
 
@@ -615,7 +645,13 @@ export function DiscountOffer({
         </div>
       ) : null}
 
-      {offerOpen ? (
+      {offerOpen && nativeOffer ? (
+        <div className={sheetClass("memo-sheet-full memo-wheel-sheet", offerSheet.closing)} role="dialog" aria-modal="true">
+          <NativePaywall halfOffOnly onClose={closeOffer} />
+        </div>
+      ) : null}
+
+      {offerOpen && !nativeOffer ? (
         <div
           className={sheetClass(`memo-sheet-full memo-offer-sheet ${offerRestored ? "restored" : ""}`.trim(), offerSheet.closing)}
           role="dialog"

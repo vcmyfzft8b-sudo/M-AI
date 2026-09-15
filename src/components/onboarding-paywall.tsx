@@ -9,6 +9,8 @@ import { useT, useTranslations } from "@/components/i18n-provider";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { Msym } from "@/components/msym";
 import { OnboardingFlow } from "@/components/onboarding-flow";
+import { NativePaywall } from "@/components/native-paywall";
+import { useNativeIOS } from "@/lib/mobile/client";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { clearOfferResume } from "@/lib/offer-resume";
 import { formatCurrency } from "@/lib/utils";
@@ -73,6 +75,7 @@ export function OnboardingPaywall({
   plans: BillingPlanCard[];
 }) {
   const { locale, t } = useTranslations();
+  const native = useNativeIOS();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const searchParams = useSearchParams();
   const [selectedPaywallPlan, setSelectedPaywallPlan] = useState<BillingPlanCard["id"]>("yearly");
@@ -132,6 +135,8 @@ export function OnboardingPaywall({
   if (!effectiveOnboardingComplete) {
     return <OnboardingFlow profile={profile} />;
   }
+
+  if (native) return <NativePaywall />;
 
   return (
     <section className="app-start-panel app-start-panel-paywall memo-paywall-shell">

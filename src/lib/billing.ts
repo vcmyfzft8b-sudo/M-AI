@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { cache } from "react";
 import Stripe from "stripe";
+import { getAppleEntitlement } from "@/lib/mobile/apple";
 
 import { PREVIEW_AUTH_BYPASS_USER_ID, getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -269,7 +270,7 @@ async function resolveUserSubscriptionState(params: {
   return {
     subscriptions,
     subscription,
-    hasPaidAccess: hasPaidAccess(subscription),
+    hasPaidAccess: hasPaidAccess(subscription) || Boolean(await getAppleEntitlement(params.userId)),
   };
 }
 

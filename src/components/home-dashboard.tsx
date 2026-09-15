@@ -1,4 +1,6 @@
 "use client";
+import { nativeRequest, useNativeIOS } from "@/lib/mobile/client";
+import { halfOffProducts } from "@/lib/mobile/products";
 
 import Image from "next/image";
 import dynamic from "next/dynamic";
@@ -941,6 +943,7 @@ export function HomeDashboard({
   showDevDashboard: boolean;
 }) {
   const t = useT();
+  const native = useNativeIOS();
   const router = useRouter();
   const {
     navigateWithFeedback: navigateDashboardWithFeedback,
@@ -988,6 +991,15 @@ export function HomeDashboard({
   const [isOfferRestored, setIsOfferRestored] = useState(() => isOfferResumed);
   const isHydrated = useIsHydrated();
   const [hasClaimedDiscount, setHasClaimedDiscount] = useState(false);
+  const [nativeHalfOffAvailable, setNativeHalfOffAvailable] = useState(false);
+  useEffect(() => {
+    if (!native || hasPaidAccess) return;
+    let active = true;
+    nativeRequest("products").then(items => {
+      if (active) setNativeHalfOffAvailable(halfOffProducts(items).length > 0);
+    }).catch(() => { if (active) setNativeHalfOffAvailable(false); });
+    return () => { active = false; };
+  }, [native, hasPaidAccess]);
   /*
    * Whether the wheel has a spin left, as the server sees it. Null until the
    * answer arrives, which is why neither card is drawn before then — guessing
@@ -1573,7 +1585,7 @@ export function HomeDashboard({
    * session has not already used it. `hasClaimedDiscount` is what covers the
    * gap between spinning and the server catching up.
    */
-  const wheelAvailable = canSpinWheel === true && !hasClaimedDiscount;
+  const wheelAvailable = (native ? nativeHalfOffAvailable : canSpinWheel === true) && !hasClaimedDiscount;
   const showDiscountPromo = !hasPaidAccess && wheelAvailable && inLibraryView;
   /*
    * ...and whenever it is not on offer, the slot keeps an ordinary way to buy.
@@ -1925,8 +1937,9 @@ export function HomeDashboard({
       {/* `isHydrated` guards the resumed offer, whose open state is read from
           `sessionStorage` during render: see the seed above. The wheel is
           always closed on the first pass, so it loses nothing by waiting. */}
-      {isHydrated && (isWheelOpen || isOfferOpen) ? (
+      {isHydrated && (isWheelOpen || (!native && isOfferOpen) || (native && isOfferOpen && nativeHalfOffAvailable)) ? (
         <DeferredDiscountOffer
+          nativeOffer={native}
           wheelOpen={isWheelOpen}
           offerOpen={isOfferOpen}
           onWheelOpenChange={setIsWheelOpen}

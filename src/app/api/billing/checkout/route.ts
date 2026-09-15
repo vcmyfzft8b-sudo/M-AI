@@ -1,3 +1,5 @@
+import { isNativeUserAgent } from "@/lib/mobile/runtime";
+import { getAppleEntitlement } from "@/lib/mobile/apple";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { z } from "zod";
@@ -23,6 +25,9 @@ const checkoutSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  if (isNativeUserAgent(request.headers.get("user-agent"))) {
+    return NextResponse.json({ error: await tr("native.manage"), code: "native_purchase_required" }, { status: 403 });
+  }
   const appState = await getViewerAppState();
 
   if (!appState) {
@@ -42,6 +47,9 @@ export async function POST(request: Request) {
 
   if (!appState.onboardingComplete) {
     return NextResponse.json({ error: await tr("api.finishOnboarding") }, { status: 400 });
+  }
+  if (await getAppleEntitlement(appState.user.id)) {
+    return NextResponse.json({ error: await tr("native.active") }, { status: 409 });
   }
 
   const parsed = await parseJsonRequest(request, checkoutSchema, {

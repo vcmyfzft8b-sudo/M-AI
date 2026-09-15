@@ -145,7 +145,9 @@ Kontakt za vprašanja o zasebnosti in za uveljavljanje pravic: info@memoai.eu
 - stanje naročnine, izbrani paket, obdobje in zgodovina plačil
 - identifikator stranke in naročnine pri Stripe
 
-Podatkov o tvoji plačilni kartici ne prejmemo in ne hranimo. Vnašaš jih neposredno pri Stripe.
+Pri naročninah v App Store obdelujemo podpisana potrdila Apple o transakcijah, identifikatorje izdelkov in transakcij, datume nakupa in poteka ter stanje vračila ali preklica dostopa. Družbi Apple pošljemo tehnični identifikator tvojega računa Memo, da nakup povežemo s tvojim računom in preverimo dostop.
+
+Podatkov o tvoji plačilni kartici ne prejmemo in ne hranimo. Plačilne podatke neposredno obdeluje Stripe pri spletnih nakupih oziroma Apple pri nakupih v App Store.
 
 **Tehnični podatki**
 
@@ -208,10 +210,13 @@ Podatkov ne prodajamo. Posredujemo jih le ponudnikom, ki jih potrebujemo za delo
 - **Stripe** — obdelava plačil, naročnin in vračil
 - **Google (Gemini)** — prepisovanje, izluščanje besedila iz dokumentov, embeddingi, ustvarjanje zapiskov in odgovorov v klepetu
 - **Soniox** — prepisovanje zvočnih posnetkov, kadar je ta storitev vklopljena
+- **OpenRouter in izbrani ponudniki modelov** — ustvarjanje odgovorov z umetno inteligenco in učnih vsebin, kadar uporabljamo te storitve
 - **Vercel** — gostovanje aplikacije in agregirana statistika obiska
 - **Inngest** — izvajanje opravil v ozadju, kadar je vklopljen
 - **Sentry** — spremljanje napak in zrušitev
 - **Google in Apple** — prijava, kadar izbereš prijavo prek njiju
+
+Apple obdeluje tudi nakupe in upravljanje naročnin v App Store po svoji [politiki zasebnosti](https://www.apple.com/legal/privacy/). Z družbo Apple izmenjujemo zgoraj opisane podatke o transakcijah za preverjanje in vzdrževanje tvojega plačljivega dostopa.
 
 Podatke lahko razkrijemo tudi pristojnim organom, kadar smo k temu zakonsko zavezani, in svojim pravnim ali računovodskim svetovalcem, kadar je to potrebno.
 
@@ -305,6 +310,10 @@ info@memoai.eu
 Ta politika pojasnjuje, kdaj vrnemo plačilo za naročnino Memo AI, v kakšnem deležu in kako vračilo zahtevaš. Je del pogojev uporabe.
 
 ## 1. Na kratko
+
+**Nakupi v App Store:** vračilo zahtevaj pri [Apple](https://reportaproblem.apple.com/). Te zahteve obravnava Apple; spodnji roki in deleži delnih vračil za spletne nakupe ne veljajo za transakcije v App Store. Tvoje zakonske pravice potrošnika ostanejo nespremenjene. Za pomoč pri sami storitvi piši na info@memoai.eu.
+
+**Spletni nakupi prek Stripe:**
 
 - **zahteva v 24 urah od plačila** — vrnemo 50 % plačanega zneska
 - **zahteva po 24 urah od plačila** — vračila ni
@@ -453,6 +462,8 @@ Za lastne varnostne kopije pomembnega gradiva poskrbi sam.
 
 ## 6. Brezplačna uporaba in preizkusno obdobje
 
+Preizkusno obdobje v App Store velja le, če ga Apple prikaže ob potrditvi nakupa. Spletna preizkusna obdobja in promocijske kode ne veljajo samodejno za nakupe v App Store. Spodnja pravila preizkusnega obdobja opisujejo našo spletno ponudbo.
+
 - brez naročnine lahko ustvariš omejeno količino vsebine, vključno z enim preizkusnim zapiskom in omejenim številom sporočil v klepetu
 - ob prvem nakupu naročnine lahko dobiš 3-dnevno brezplačno preizkusno obdobje, če izpolnjuješ pogoje zanj
 - brezplačno preizkusno obdobje pripada eni osebi enkrat; do njega niso upravičeni uporabniki, ki so pri nas že imeli naročnino
@@ -460,6 +471,12 @@ Za lastne varnostne kopije pomembnega gradiva poskrbi sam.
 - obseg brezplačne uporabe lahko spremenimo za naprej
 
 ## 7. Naročnine, cene in plačila
+
+**Naročnine v App Store**
+
+V aplikaciji za iOS nakupe naročnin obdeluje Apple. Pred potrditvijo nakupa Apple prikaže ceno, valuto, obračunsko obdobje in morebitno ponudbo. Naročnina se samodejno podaljšuje, dokler je ne prekličeš pri Apple. Apple ureja obračunavanje, potrdila o nakupih in ustrezna obvestila o spremembah cen. Mesečni in letni paket ponujata iste funkcije Memo Premium za različni obračunski obdobji. Obnovitev nakupov uporabi, ko si prijavljen v račun Memo, s katerim je bil opravljen prvotni nakup. Naročnine Apple ni mogoče prenesti med računi Memo.
+
+**Spletne naročnine prek Stripe**
 
 - Memo AI se prodaja kot ponavljajoča se naročnina; aktualne cene in obdobja so navedeni na strani s cenami in v Stripe Checkout pred potrditvijo nakupa
 - vse cene so navedene v evrih; ali je davek vključen ali se prišteje, je jasno prikazano pred zaključkom nakupa
@@ -473,6 +490,10 @@ Za lastne varnostne kopije pomembnega gradiva poskrbi sam.
 Račun za vsako plačilo prejmeš na e-naslov, povezan s tvojim računom.
 
 ## 8. Preklic
+
+Za naročnine v App Store uporabi upravljanje naročnine Apple v nastavitvah Memo ali odpri Nastavitve na iPhonu → tvoje ime → Naročnine. Naročnino prekliči pred datumom podaljšanja; plačljivi dostop običajno ostane do poteka naročnine. Izbris aplikacije Memo ali računa Memo ne prekliče naročnine Apple. Vračilo za nakup v App Store zahtevaj pri [Apple](https://reportaproblem.apple.com/).
+
+**Spletne naročnine prek Stripe:**
 
 Naročnino lahko kadar koli prekličeš v nastavitvah računa ali prek povezave do Stripe portala. Preklic začne veljati ob koncu tekočega plačanega obdobja; do takrat plačljive funkcije ostanejo na voljo. Preklic sam po sebi ne pomeni vračila že plačanega zneska.
 

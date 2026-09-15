@@ -44,12 +44,13 @@ const SUPABASE_BOOTSTRAP = `
   create table if not exists auth.users (
     id uuid primary key default gen_random_uuid(),
     email text,
+    raw_app_meta_data jsonb default '{}'::jsonb,
     raw_user_meta_data jsonb default '{}'::jsonb
   );
   create or replace function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
   do $$ begin create role anon; exception when duplicate_object then null; end $$;
   do $$ begin create role authenticated; exception when duplicate_object then null; end $$;
-  do $$ begin create role service_role; exception when duplicate_object then null; end $$;
+  do $$ begin create role service_role bypassrls; exception when duplicate_object then null; end $$;
   create schema if not exists storage;
   create table if not exists storage.buckets (
     id text primary key, name text, public boolean default false,
@@ -927,4 +928,54 @@ test("the backfill frees only the learners who never received a note", options, 
   assert.equal(await consumedAt(query, neverGotOne), null, "gets their free note back");
   assert.notEqual(await consumedAt(query, hasOne), null, "still has the note, still spent");
   assert.notEqual(await consumedAt(query, deletedTheirs), null, "had one and deleted it, still spent");
+});
+
+
+test("account erasure blocks stale storage tokens and survives auth deletion", options, async () => {
+  const { db, query } = await migratedDatabase();
+  try {
+    const owner = "11111111-1111-4111-8111-111111111111";
+    const other = "22222222-2222-4222-8222-222222222222";
+    await query("insert into auth.users(id) values ($1), ($2)", [owner, other]);
+    await db.exec(`
+      create or replace function auth.uid() returns uuid language sql stable as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      grant usage on schema storage, auth to authenticated;
+      grant all on storage.objects to authenticated;
+      alter table storage.objects enable row level security;
+      create policy erasure_test_baseline on storage.objects for all to authenticated
+        using (owner = auth.uid()) with check (owner = auth.uid());
+    `);
+    await query("select set_config('request.jwt.claim.sub', $1, false)", [owner]);
+    await db.exec("set role authenticated");
+    await query("insert into storage.objects(name, owner) values ('before', $1)", [owner]);
+    await assert.rejects(query("select public.request_account_deletion($1)", [owner]), /permission denied/);
+    await assert.rejects(query("select * from public.account_deletion_requests"), /permission denied/);
+    await assert.rejects(query("select * from public.apple_auth_grants"), /permission denied/);
+    await assert.rejects(query("insert into public.apple_auth_grants(user_id,client_id,apple_subject,refresh_token_encrypted) values ($1,'memo','subject','synthetic')", [owner]), /permission denied/);
+    await db.exec("reset role; set role service_role");
+    await query("insert into public.apple_auth_grants(user_id,client_id,apple_subject,refresh_token_encrypted) values ($1,'memo','owner','encrypted-synthetic'),($2,'memo','other','encrypted-synthetic')", [owner, other]);
+    await query("select public.request_account_deletion($1)", [owner]);
+    await db.exec("reset role");
+    const [job] = await query("select *, extract(epoch from cleanup_after-requested_at) as drain from public.account_deletion_requests");
+    assert.equal(Number(job.drain), 10800);
+    assert.equal((await query("select raw_app_meta_data ? 'memo_deletion_requested_at' as blocked from auth.users where id=$1", [owner]))[0].blocked, true);
+    await query("select public.request_account_deletion($1)", [owner]);
+    assert.deepEqual((await query("select cleanup_after from public.account_deletion_requests"))[0].cleanup_after, job.cleanup_after);
+    await db.exec("set role authenticated");
+    assert.deepEqual(await query("select name from storage.objects"), []);
+    await assert.rejects(query("insert into storage.objects(name, owner) values ('late', $1)", [owner]), /row-level security/);
+    await query("select set_config('request.jwt.claim.sub', $1, false)", [other]);
+    await query("insert into storage.objects(name, owner) values ('other', $1)", [other]);
+    assert.equal((await query("select name from storage.objects"))[0].name, "other");
+    await db.exec("reset role");
+    await query("delete from auth.users where id=$1", [owner]);
+    assert.deepEqual(await query("select user_id from public.apple_auth_grants"), [{ user_id: other }]);
+    assert.equal((await query("select count(*)::int as count from public.account_deletion_requests"))[0].count, 1);
+    await query("delete from public.account_deletion_requests where user_id=$1", [owner]);
+    await query("select set_config('request.jwt.claim.sub', $1, false)", [owner]);
+    await db.exec("set role authenticated");
+    await assert.rejects(query("insert into storage.objects(name, owner) values ('after', $1)", [owner]), /row-level security/);
+  } finally { await db.close(); }
 });

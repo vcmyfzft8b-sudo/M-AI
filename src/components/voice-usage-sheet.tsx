@@ -1,4 +1,5 @@
 "use client";
+import { useNativeIOS } from "@/lib/mobile/client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -90,6 +91,7 @@ export function VoiceUsageSheet({
   extra?: ReactNode;
 }) {
   const t = useT();
+  const native = useNativeIOS();
   const [isOpen, setOpen] = useState(false);
   const menuRef = useRef<HTMLDetailsElement | null>(null);
   const close = useCallback(() => {
@@ -218,7 +220,7 @@ export function VoiceUsageSheet({
         * shown once there is nothing left, whether they arrived by running out or by opening the
         * meter to see how much was gone.
         */}
-      {isOutOfTime || blocked ? (
+      {(isOutOfTime || blocked) && !(native && usage.hasPaidAccess) ? (
         <>
           <div className="note-read-settings-divider" />
           <div className="memo-tutor-offer">

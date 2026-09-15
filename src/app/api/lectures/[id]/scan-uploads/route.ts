@@ -1,3 +1,4 @@
+import { assertStorageOwnerActive } from "@/lib/mobile/storage-owner";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -183,6 +184,7 @@ export async function POST(
 
     for (let attempt = 1; attempt <= SIGNED_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
       attempts = attempt;
+      await assertStorageOwnerActive(user!.id);
       const { data: signedUpload, error } = await storage.createSignedUploadUrl(path, {
         upsert: true,
       });

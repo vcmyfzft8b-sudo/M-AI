@@ -1,3 +1,4 @@
+import { assertStorageOwnerActive } from "@/lib/mobile/storage-owner";
 import "server-only";
 
 import { STORAGE_BUCKET } from "@/lib/constants";
@@ -73,7 +74,7 @@ function captureCopyPath(lectureId: string, index: number, originalPath: string)
  * each fail-open: a missing original (already cleaned up, or a path that never existed) just
  * is not captured.
  */
-async function copyOriginalFiles(lectureId: string, references: OriginalFileReference[]) {
+async function copyOriginalFiles(userId: string, lectureId: string, references: OriginalFileReference[]) {
   const storage = createSupabaseServiceRoleClient().storage.from(STORAGE_BUCKET);
   const captured: Array<OriginalFileReference & { capturedPath: string }> = [];
 
@@ -81,6 +82,7 @@ async function copyOriginalFiles(lectureId: string, references: OriginalFileRefe
     const capturedPath = captureCopyPath(lectureId, index, reference.path);
 
     try {
+      await assertStorageOwnerActive(userId);
       const { error } = await storage.copy(reference.path, capturedPath);
 
       if (!error) {
@@ -143,7 +145,9 @@ export async function captureGenerationFailureInput(params: {
   processingMetadata: unknown;
   storagePath: string | null;
 }) {
+  if (!params.userId) return;
   try {
+    await assertStorageOwnerActive(params.userId);
     const metadata =
       params.processingMetadata &&
       typeof params.processingMetadata === "object" &&
@@ -165,6 +169,7 @@ export async function captureGenerationFailureInput(params: {
     });
 
     const capturedFiles = await copyOriginalFiles(
+      params.userId,
       params.lectureId,
       resolveOriginalFileReferences({
         storagePath: params.storagePath,
@@ -174,6 +179,7 @@ export async function captureGenerationFailureInput(params: {
     );
 
     const supabase = createSupabaseServiceRoleClient();
+    await assertStorageOwnerActive(params.userId);
     // captured_at is set explicitly so a re-failure refreshes it — "latest failure wins" is the
     // retention contract, and an upsert without the column would keep the original timestamp.
     const { error } = await supabase

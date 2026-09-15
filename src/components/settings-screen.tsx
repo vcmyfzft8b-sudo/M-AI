@@ -4,6 +4,8 @@ import { Loader2 } from "lucide-react";
 import { useCallback, useState, useSyncExternalStore } from "react";
 
 import { BillingPortalButton } from "@/components/billing-portal-button";
+import { NativeAccountActions } from "@/components/native-account-actions";
+import { useNativeIOS } from "@/lib/mobile/client";
 import { SettingsTestPersona } from "@/components/settings-test-persona";
 import { useTranslations } from "@/components/i18n-provider";
 import { InstantLink } from "@/components/instant-link";
@@ -79,6 +81,7 @@ export function SettingsScreen({
   planLabel,
   planDetail,
   hasSubscription,
+  appleSubscription = false,
   installGuideSeen = false,
   isDemo = false,
   testPersona = null,
@@ -87,6 +90,7 @@ export function SettingsScreen({
   planLabel: string;
   planDetail: string;
   hasSubscription: boolean;
+  appleSubscription?: boolean;
   /**
    * Whether this account has already opened the home screen guide. Read from
    * the profile so the badge is answered once and stays answered on every
@@ -102,6 +106,7 @@ export function SettingsScreen({
   testPersona?: TestPersona | null;
 }) {
   const t = useTranslations().t;
+  const native = useNativeIOS();
   const { navigateWithFeedback, overlay: navigationOverlay, isNavigating } = useInstantNavigation();
   const homeHref = useAppHref("/app");
   const startHref = useAppHref("/app/start");
@@ -150,8 +155,8 @@ export function SettingsScreen({
     t("settings.share.mailSubject", { brand: BRAND_NAME }),
   )}&body=${encodeURIComponent(t("settings.share.mailBody", { brand: BRAND_NAME }))}`;
 
-  // There is no self-serve deletion endpoint; the request goes to support, which
-  // is what the confirmation copy promises.
+  // The web flow still requests deletion through support. Native iOS uses the
+  // in-app endpoint and its own explicit permanent-deletion confirmation below.
   const deleteRequestHref = `mailto:${BRAND_SUPPORT_EMAIL}?subject=${encodeURIComponent(
     t("settings.delete.mailSubject"),
   )}&body=${encodeURIComponent(t("settings.delete.mailBody", { email }))}`;
@@ -297,8 +302,8 @@ export function SettingsScreen({
     delete: {
       emoji: "🗑️",
       title: t("settings.delete.title"),
-      body: t("settings.delete.body"),
-      cta: t("settings.delete.cta"),
+      body: t(native ? "native.deleteBody" : "settings.delete.body"),
+      cta: t(native ? "native.deleteConfirm" : "settings.delete.cta"),
     },
     share: {
       emoji: "📤",
@@ -308,7 +313,7 @@ export function SettingsScreen({
     },
   };
 
-  function runConfirm() {
+  async function runConfirm() {
     const kind = confirm;
 
     if (isLoggingOut) {
@@ -324,6 +329,24 @@ export function SettingsScreen({
     if (isDemo && (kind === "logout" || kind === "delete")) {
       confirmSheet.dismiss();
       showToast(t(kind === "logout" ? "settings.demo.noLogout" : "settings.demo.noDelete"));
+      return;
+    }
+
+    if (native && kind === "delete") {
+      setIsLoggingOut(true);
+      try {
+        const response = await fetch("/api/account/delete", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ confirmation: "delete-my-account" }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.deletionRequested) throw new Error(result.error || t("native.deleteFailed"));
+        window.location.assign(`/auth/account-deleted${result.appleManualRevocationRequired ? "?apple=manual" : ""}`);
+      } catch (error) {
+        setIsLoggingOut(false);
+        confirmSheet.dismiss();
+        showToast(error instanceof Error ? error.message : t("native.deleteFailed"));
+      }
       return;
     }
 
@@ -447,7 +470,7 @@ export function SettingsScreen({
                 <span className="memo-card-row-detail">{planDetail}</span>
               </span>
               {hasSubscription ? (
-                <BillingPortalButton />
+                <BillingPortalButton apple={appleSubscription} />
               ) : (
                 <InstantLink href={startHref} className="memo-primary-pill">
                   <Emoji symbol="✨" size="1rem" />
@@ -456,6 +479,7 @@ export function SettingsScreen({
               )}
             </div>
 
+            {native && !isDemo ? <NativeAccountActions /> : null}
             {testPersona ? <SettingsTestPersona persona={testPersona} /> : null}
 
             <p className="memo-fine-print">

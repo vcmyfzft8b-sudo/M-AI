@@ -1,3 +1,4 @@
+import { assertStorageOwnerActive } from "@/lib/mobile/storage-owner";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -106,6 +107,7 @@ export async function POST(
   const uploads = [];
 
   for (const manifest of manifests) {
+    await assertStorageOwnerActive(user.id);
     const { data: signedUpload, error } = await service.storage
       .from("lecture-audio")
       .createSignedUploadUrl(manifest.path);

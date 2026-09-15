@@ -114,7 +114,7 @@ test("the home screen renders nothing from storage until it has hydrated", () =>
   );
   assert.match(
     dashboard,
-    /\{isHydrated && \(isWheelOpen \|\| isOfferOpen\) \? \(/,
+    /\{isHydrated && \(isWheelOpen \|\| \(!native && isOfferOpen\) \|\| \(native && isOfferOpen && nativeHalfOffAvailable\)\) \? \(/,
     "the deferred offer must not be rendered on the pass that has to match the server",
   );
 });

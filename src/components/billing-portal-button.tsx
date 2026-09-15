@@ -5,9 +5,11 @@ import { useState } from "react";
 
 import { EmojiIcon } from "@/components/emoji-icon";
 import { useT } from "@/components/i18n-provider";
+import { nativeRequest, useNativeIOS } from "@/lib/mobile/client";
 
-export function BillingPortalButton() {
+export function BillingPortalButton({ apple = false }: { apple?: boolean }) {
   const t = useT();
+  const native = useNativeIOS();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,6 +18,12 @@ export function BillingPortalButton() {
     setError(null);
 
     try {
+      if (apple) {
+        if (native) await nativeRequest("manageSubscriptions");
+        else window.location.assign("https://apps.apple.com/account/subscriptions");
+        return;
+      }
+      if (native) { setError(t("native.webSubscription")); return; }
       const response = await fetch("/api/billing/portal", {
         method: "POST",
       });

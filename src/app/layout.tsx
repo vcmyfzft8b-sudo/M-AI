@@ -1,4 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
+import { NativeProvider } from "@/components/native-provider";
+import { isNativeUserAgent } from "@/lib/mobile/runtime";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -219,6 +222,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const locale = await getLocale();
+  const native = isNativeUserAgent((await headers()).get("user-agent"));
 
   return (
     <html lang={LOCALE_BCP47[locale]} suppressHydrationWarning>
@@ -299,11 +303,13 @@ export default async function RootLayout({
           */}
         <LaunchScreen />
         <I18nProvider locale={locale} messages={getMessages(locale)}>
+          <NativeProvider native={native}>
           <ThemeController />
           <ServiceWorkerRegistration />
           <KeyboardInset />
           {children}
           <VisitTracker />
+          </NativeProvider>
         </I18nProvider>
         <Analytics />
         <SpeedInsights />

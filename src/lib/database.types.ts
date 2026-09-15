@@ -6,6 +6,14 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+type MobileEntitlementRow = {
+  id: string; user_id: string; product_id: string; transaction_id: string;
+  original_transaction_id: string; environment: "production" | "sandbox";
+  status: "active" | "expired" | "revoked" | "pending_verification";
+  purchased_at: string | null; expires_at: string | null; revoked_at: string | null;
+  signed_transaction_jws: string; raw_payload: Json; created_at: string; updated_at: string;
+};
+
 export type LectureStatus =
   | "uploading"
   | "queued"
@@ -51,6 +59,21 @@ export interface Citation {
 export type Database = {
   public: {
     Tables: {
+      apple_auth_grants: {
+        Row: { user_id: string; client_id: string; apple_subject: string; refresh_token_encrypted: string; updated_at: string };
+        Insert: { user_id: string; client_id: string; apple_subject: string; refresh_token_encrypted: string; updated_at?: string };
+        Update: { apple_subject?: string; refresh_token_encrypted?: string; updated_at?: string };
+      };
+      account_deletion_requests: {
+        Row: { user_id: string; requested_at: string; cleanup_after: string; failure_lecture_ids: string[] };
+        Insert: { user_id: string; requested_at?: string; cleanup_after?: string; failure_lecture_ids?: string[] };
+        Update: { requested_at?: string; cleanup_after?: string; failure_lecture_ids?: string[] };
+      };
+      mobile_app_store_entitlements: {
+        Row: MobileEntitlementRow;
+        Insert: Omit<MobileEntitlementRow, "id" | "created_at" | "updated_at"> & Partial<Pick<MobileEntitlementRow, "id" | "created_at" | "updated_at">>;
+        Update: Partial<MobileEntitlementRow>;
+      };
       ai_usage_events: {
         Row: {
           id: string;
@@ -1718,6 +1741,7 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      request_account_deletion: { Args: { target_user_id: string }; Returns: undefined };
       record_site_visit: {
         Args: {
           p_session_key: string;

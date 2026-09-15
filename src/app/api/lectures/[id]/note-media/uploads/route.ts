@@ -1,3 +1,4 @@
+import { assertStorageOwnerActive } from "@/lib/mobile/storage-owner";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -100,6 +101,7 @@ export async function POST(
     mimeType,
   });
   const service = createSupabaseServiceRoleClient();
+  await assertStorageOwnerActive(user.id);
   const { data, error } = await service.storage
     .from(STORAGE_BUCKET)
     .createSignedUploadUrl(path);

@@ -1,4 +1,7 @@
 import "server-only";
+import { headers } from "next/headers";
+import { isNativeUserAgent } from "@/lib/mobile/runtime";
+import { appleSignInConfigured } from "@/lib/mobile/apple-identity";
 
 import { getPublicEnv } from "@/lib/public-env";
 
@@ -14,6 +17,7 @@ export type AuthProviderAvailability = {
 };
 
 export async function getAuthProviderAvailability(): Promise<AuthProviderAvailability> {
+  const native = isNativeUserAgent((await headers()).get("user-agent"));
   const env = getPublicEnv();
   const apiKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -54,9 +58,9 @@ export async function getAuthProviderAvailability(): Promise<AuthProviderAvailab
             : false;
 
     return {
-      apple: Boolean(settings.external?.apple),
+      apple: Boolean(settings.external?.apple) && (!native || appleSignInConfigured()),
       email: emailEnabled,
-      google: Boolean(settings.external?.google),
+      google: !native && Boolean(settings.external?.google),
     };
   } catch {
     return {

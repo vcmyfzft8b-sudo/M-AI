@@ -8,20 +8,24 @@ import { NavigationFeedbackProvider } from "@/components/navigation-loading";
 import { getViewerAppState } from "@/lib/billing";
 import { requireUser } from "@/lib/auth";
 import { readActiveTestPersona } from "@/lib/test-persona-server";
+import { isNativeUserAgent } from "@/lib/mobile/runtime";
 
 export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [, appState, headerStore] = await Promise.all([
+  const [user, appState, headerStore] = await Promise.all([
     requireUser(),
     getViewerAppState(),
     headers(),
   ]);
   const pathname = headerStore.get("x-pathname") ?? "/app";
+  const native = isNativeUserAgent(headerStore.get("user-agent"));
+  const nativeAccountPage = native && ["/app/consent", "/app/settings", "/app/support"].includes(pathname);
+  if (native && user.user_metadata?.memo_native_ai_consent !== "v1" && !nativeAccountPage) redirect("/app/consent");
 
-  if (appState && !appState.onboardingComplete && pathname !== "/app/start") {
+  if (appState && !appState.onboardingComplete && pathname !== "/app/start" && !nativeAccountPage) {
     /*
      * Settings is the one exception, and only ever for the one account that can
      * hold a test persona.

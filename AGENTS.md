@@ -9,18 +9,24 @@
 
 - Use a single GitHub repository for this project. Do not create a second repo for testing work.
 - Treat `main` as the production branch. Only production-ready code should be merged into `main`.
+- The primary checkout (`/Users/nacevalencic/dev/Memo_AI` on this Mac) is reserved for a clean local `main` that matches GitHub `origin/main`. Never use it for task edits or switch it onto a feature branch.
 - Start every new work session in a fresh, isolated Git worktree with a descriptive task branch based on the latest `origin/main`, before making code changes. Keep all edits and local testing for that session in its worktree; do not reuse another session's checkout or branch.
+- This applies to every new task/thread, including documentation, reviews that require edits, and tasks launched from inside an existing worktree. Fetch first; do not call a cached `origin/main` current if the fetch fails. Create sibling worktrees, not nested worktrees. If the app already created a worktree dedicated to this task, use it and create a descriptive branch there before editing; preserve any user-selected starting state.
 - Branch names should be descriptive, for example: `fix/login-redirect`, `feature/flashcards-export`, `chore/update-copy`.
 - Continue an existing session in its assigned worktree and branch. Only reuse a different checkout or branch when the user explicitly asks.
 - Concurrent tasks must stay isolated: run every file edit, Git command, install, build, and test from that session's worktree. Use a free, task-specific port for each dev server, and keep `.next`, test artifacts, and local environment files in that worktree. Do not mutate a dependency directory shared with another task.
 - Never switch, reset, stash, clean, delete, or commit another task's checkout or branch, and never stop its processes. Stop only servers started by the current session. Do not remove another task's worktree or branch, including during PR merge cleanup.
 - Git worktrees share repository refs: fetch updates normally, but integrate `origin/main` only into your own task branch. Check the final PR diff contains only the current task's intended changes before pushing or merging.
+- Synchronizing the designated clean `main` checkout is the sole routine cross-worktree exception: at task start and after an authorized PR merge, fetch `origin`, verify that checkout is on `main` with no tracked or untracked changes, then run `git -C <main-checkout> merge --ff-only origin/main`. Serialize concurrent syncs. Verify `main` and `origin/main` have identical commit IDs and the checkout is clean. If it is dirty, on another branch, or divergent, preserve it and report the problem; never reset, stash, or force-update it to make the check pass.
+- Keep other task worktrees on their own branches after a merge. A GitHub merge does not update local files automatically. To incorporate production changes into an ongoing task, merge the freshly fetched `origin/main` inside that task's worktree, resolve conflicts there, and rerun affected checks. Prefer merging over rewriting a published branch; never force-push without explicit authorization.
+- A task branch that has been squash-merged remains historical work. Start a new task from current `origin/main`; do not reuse the merged branch or create substitute production branches such as `main-latest`.
 - Test changes locally first with the normal local development workflow.
 - After local testing, agents may prepare commits on the branch, but they must not push to GitHub unless the user explicitly asks for that push.
 - The user is the default person responsible for pushing branches to GitHub and opening or merging pull requests.
 - Use Vercel Preview Deployments to test branch work on the web before merging to `main`.
 - Do not treat a Vercel preview URL as the production URL. Production remains `https://memoai.eu`.
 - Merge to `main` only after the branch has been checked locally and in its Vercel preview deployment.
+- After an authorized merge, synchronize local `main` as above and verify the production deployment separately. Report the local/GitHub commit IDs and deployment status accurately; a successful Git sync alone does not prove that Vercel has deployed the commit. See [docs/development-workflow.md](docs/development-workflow.md) for commands and conflict handling.
 
 ## Vercel Preview Rule
 

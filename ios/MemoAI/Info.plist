@@ -40,15 +40,8 @@
 	<string>Record lectures and speak with your Memo voice tutor.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<key>UILaunchScreen</key>
-	<dict>
-		<key>UIColorName</key>
-		<string>Canvas</string>
-		<key>UIImageName</key>
-		<string>LaunchMark</string>
-		<key>UIImageRespectsSafeAreaInsets</key>
-		<true/>
-	</dict>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

@@ -11,6 +11,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private let appleSignIn = AppleSignIn()
     private let googleSignIn = GoogleSignIn()
     private let overlay = UIStackView()
+    private let loadingCover = UIView()
     private let spinner = UIActivityIndicatorView(style: .medium)
     private let message = UILabel()
     private let retry = UIButton(type: .system)
@@ -82,6 +83,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.isOpaque = false
+        // Keep partially rendered pages behind the launch artwork until ready.
+        webView.isHidden = true
         webView.backgroundColor = UIColor(named: "Canvas")
         webView.scrollView.backgroundColor = UIColor(named: "Canvas")
         // The web app owns its single scroller. Safe-area layout is supplied once,
@@ -129,11 +132,28 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         overlay.spacing = 20
         overlay.alignment = .center
         overlay.translatesAutoresizingMaskIntoConstraints = false
-        overlay.backgroundColor = UIColor(named: "Canvas")
+        loadingCover.backgroundColor = UIColor(named: "Canvas")
+        loadingCover.translatesAutoresizingMaskIntoConstraints = false
+        loadingCover.accessibilityIdentifier = "launch-cover"
+        view.addSubview(loadingCover)
+        NSLayoutConstraint.activate([
+            loadingCover.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            loadingCover.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            loadingCover.topAnchor.constraint(equalTo: view.topAnchor),
+            loadingCover.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
         let mark = UIImageView(image: UIImage(named: "LaunchMark"))
         mark.contentMode = .scaleAspectFit
         mark.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([mark.widthAnchor.constraint(equalToConstant: 128), mark.heightAnchor.constraint(equalToConstant: 116)])
+        mark.accessibilityIdentifier = "launch-mark"
+        loadingCover.addSubview(mark)
+        // Match LaunchScreen.storyboard exactly: no jump in logo size/position.
+        NSLayoutConstraint.activate([
+            mark.widthAnchor.constraint(equalToConstant: 128),
+            mark.heightAnchor.constraint(equalToConstant: 115),
+            mark.centerXAnchor.constraint(equalTo: loadingCover.centerXAnchor),
+            mark.centerYAnchor.constraint(equalTo: loadingCover.centerYAnchor)
+        ])
         message.font = .preferredFont(forTextStyle: .body)
         message.adjustsFontForContentSizeCategory = true
         message.textColor = .secondaryLabel
@@ -144,11 +164,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         retry.addTarget(self, action: #selector(reload), for: .touchUpInside)
         retry.isHidden = true
         spinner.startAnimating()
-        [mark, spinner, message, retry].forEach(overlay.addArrangedSubview)
-        view.addSubview(overlay)
+        [spinner, message, retry].forEach(overlay.addArrangedSubview)
+        loadingCover.addSubview(overlay)
         NSLayoutConstraint.activate([
             overlay.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            overlay.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            overlay.topAnchor.constraint(equalTo: mark.bottomAnchor, constant: 20),
             overlay.widthAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.widthAnchor, constant: -48)
         ])
     }
@@ -180,6 +200,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private func showFailure() {
         timeout?.cancel()
         webView.isHidden = true
+        loadingCover.isHidden = false
         overlay.isHidden = false
         spinner.stopAnimating()
         message.text = text("connectionFailed")
@@ -187,7 +208,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        if webView.url == nil || webView.isHidden {
+        if !loadingCover.isHidden || webView.isHidden {
+            loadingCover.isHidden = false
             overlay.isHidden = false
             spinner.startAnimating()
             // No wrong-language flash before the first country lookup returns.
@@ -208,6 +230,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         spinner.stopAnimating()
         overlay.isHidden = true
         webView.isHidden = false
+        loadingCover.isHidden = true
         resume()
     }
 

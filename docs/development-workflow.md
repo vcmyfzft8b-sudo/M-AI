@@ -9,6 +9,20 @@ This project uses one GitHub repository, local development for fast testing, and
 - Vercel preview URL = test branch on the web
 - `https://memoai.eu` = live production site only
 
+## Checkout ownership
+
+The primary checkout is reserved for clean `main`; on this Mac it is
+`/Users/nacevalencic/dev/Memo_AI`. Every new task/thread gets a separate worktree
+and branch, including tasks started from another worktree. An ongoing task keeps
+its assigned worktree. An app-created worktree already dedicated to the new task
+counts; create a descriptive branch there if it has a detached HEAD. Respect an
+explicitly selected starting state, and do not nest another worktree inside it.
+
+Keep feature branches in their worktrees throughout development, PR review, and
+merging. There is no need to check them out in the primary folder. Branches such
+as `main-latest` are not production checkouts: `main` is the single local mirror
+of GitHub production code.
+
 ## Why This Setup
 
 Use one repository instead of a separate testing repository.
@@ -25,7 +39,11 @@ That keeps:
 
 ### 1. Start from `main`
 
-Start every new work session in a fresh, isolated Git worktree and task branch from the latest `origin/main`. Continue that session in its assigned worktree; leave other sessions' checkouts untouched.
+Fetch and synchronize the designated clean `main` checkout using the procedure
+below. Then create a fresh, isolated Git worktree and task branch from the latest
+`origin/main`. Continue that session in its assigned worktree; leave other
+sessions' checkouts untouched. If fetching fails, resolve access before claiming
+the starting commit is current.
 
 Example branch names:
 
@@ -36,9 +54,10 @@ Example branch names:
 Example commands:
 
 ```bash
-git fetch origin main
-git worktree add ../Memo_AI-signup-error -b fix/signup-error origin/main
-cd ../Memo_AI-signup-error
+git -C /Users/nacevalencic/dev/Memo_AI fetch origin
+git -C /Users/nacevalencic/dev/Memo_AI worktree add --no-track \
+  -b codex/signup-error /Users/nacevalencic/dev/Memo_AI-signup-error origin/main
+cd /Users/nacevalencic/dev/Memo_AI-signup-error
 ```
 
 ### Concurrent sessions
@@ -59,16 +78,18 @@ branch. Review the final PR diff for unrelated changes before pushing or merging
 
 Do the work on that branch and test it on your Mac first.
 
-Typical local workflow:
+Install dependencies in this worktree and choose an available port. For example,
+after checking that port 3017 is free:
 
 ```bash
-npm run dev
+npm ci
+npm run dev -- --port 3017
 ```
 
 Open:
 
 ```bash
-http://localhost:3000
+http://localhost:3017
 ```
 
 This is the fastest way to check UI, logic, and basic behavior while you are developing.
@@ -80,7 +101,7 @@ When the branch is in a good state, commit the changes.
 Example:
 
 ```bash
-git add .
+git add <files-for-this-task>
 git commit -m "Fix signup redirect flow"
 ```
 
@@ -91,7 +112,7 @@ Push the branch, not `main`.
 Example:
 
 ```bash
-git push -u origin fix/signup-error
+git push -u origin codex/signup-error
 ```
 
 Important:
@@ -161,6 +182,71 @@ The normal release flow is:
 3. review and test the Vercel preview
 4. merge the pull request
 5. let Vercel deploy `main` to production
+6. synchronize the designated local `main` checkout and verify the deployment
+
+## Synchronize local `main` at task start and after merging
+
+A PR merge on GitHub does not update local files. Updating `main` is part of
+finishing an authorized merge, even while other task worktrees remain active.
+This is the only routine exception to operating solely inside the task worktree.
+Do not run simultaneous syncs: use the existing sync result or retry after the
+other sync completes; never delete Git lock files belonging to another process.
+
+First inspect the checkout designated for `main` (adapt the path on other machines):
+
+```bash
+git -C /Users/nacevalencic/dev/Memo_AI worktree list
+git -C /Users/nacevalencic/dev/Memo_AI branch --show-current
+git -C /Users/nacevalencic/dev/Memo_AI status --porcelain
+```
+
+Proceed only if the branch is `main` and status output is empty. Do not switch a
+different branch, discard files, stash, or force-update a divergent `main`.
+Preserve unexpected work and report the exact blocker instead. Ignored local
+configuration and build output are not part of the committed source comparison.
+
+With those preconditions satisfied, run each command only if the previous one succeeds:
+
+```bash
+git -C /Users/nacevalencic/dev/Memo_AI fetch origin
+git -C /Users/nacevalencic/dev/Memo_AI merge --ff-only origin/main
+git -C /Users/nacevalencic/dev/Memo_AI rev-parse main origin/main
+git -C /Users/nacevalencic/dev/Memo_AI status --porcelain
+```
+
+Both commit IDs must match and status output must be empty. A fast-forward keeps
+the exact GitHub commit history; do not create a local merge commit on `main`.
+If GitHub advances again during verification, fetch and repeat the fast-forward.
+This sync is an agent workflow step, not a background watcher: if a PR is merged
+elsewhere while no agent is running, synchronize at the next task start.
+
+Verify Vercel's production deployment separately against the merged commit and
+the canonical domain `https://memoai.eu`. Report pending or failed deployment
+honestly even when Git synchronization succeeded. For Inngest changes follow
+[lecture-pipeline-inngest.md](./lecture-pipeline-inngest.md); Preview does not run
+the production Inngest path.
+
+## Bring production changes into an ongoing task
+
+Synchronizing `main` leaves every feature worktree unchanged. When an ongoing
+task needs the new production code, first finish or commit that task's own edits,
+then run from its worktree:
+
+```bash
+git fetch origin
+git merge origin/main
+```
+
+Resolve conflicts in that worktree, stage only the resolved files, complete the
+merge, and rerun affected checks. Inspect `git diff origin/main...HEAD` before an
+authorized push. Prefer a merge for published branches so another checkout's
+history is not rewritten; force-pushing requires explicit authorization.
+
+After a squash merge, the old task branch need not have the same commit ID as
+`main`. Keep it as historical work; create the next task from current
+`origin/main`. Leave other tasks' worktrees, branches, and processes untouched.
+Do not use PR cleanup options that switch the primary checkout or delete a
+worktree still used by another task.
 
 ## Recommended GitHub And Vercel Setup
 
@@ -219,5 +305,7 @@ When an agent works on this repository, it should:
 7. commit every schema change as a migration file
 8. merge to `main` only when the work is ready for production
 9. treat a release with migrations as incomplete until the production migration workflow passes
+10. synchronize the designated clean local `main` after every authorized merge and verify its commit matches freshly fetched `origin/main`
+11. keep parallel tasks on their own branches and resolve each task's conflicts in its own worktree
 
 See [preview-staging.md](./preview-staging.md) for the exact environment mapping and safety checks.

@@ -80,6 +80,23 @@ test("a recognizer that drops on its own is let go of, so one can be asked for a
   assert.deepEqual(h.utterances, ["Zakaj kalcij?"]);
 });
 
+test("a sentence cut off by the drop is not glued to the replacement's first words", async () => {
+  const h = recognizer();
+  await h.input.openSocket(24000);
+  // The learner is mid-question when the link dies, so no `<end>` ever arrives for it.
+  h.sockets[0].receive({ tokens: [{ text: "Zakaj je kalcij ", is_final: true }] });
+  h.sockets[0].close();
+  await settle();
+
+  await h.input.openSocket(24000);
+  h.sockets[1].receive({ tokens: [{ text: "pomemben?", is_final: true }, { text: "<end>", is_final: true }] });
+
+  // Left behind, the fragment is asked as though the learner had said the whole thing just
+  // now — the same stitching `useKey` drops a half-utterance to avoid.
+  assert.deepEqual(h.utterances, ["pomemben?"]);
+  assert.deepEqual(h.partials, ["Zakaj je kalcij", "pomemben?"]);
+});
+
 test("a refused recognizer is let go of too, and reports once", async () => {
   const h = recognizer();
   await h.input.openSocket(24000);

@@ -465,6 +465,12 @@ export class TutorSpeechInput {
    * hear: `isListening` still says yes, so `startListening` returns early instead of
    * opening a replacement and the microphone is gone for the rest of the walkthrough, and
    * the keepalive goes on ticking at a dead connection until the page is closed.
+   *
+   * Whatever was half-heard goes with it, for the reason `useKey` gives: the replacement
+   * starts its own utterance, and a fragment left over from the dead one would be glued to
+   * the front of the next thing the learner says and asked as though they had said it all
+   * in one breath. That could not happen while a drop was unrecoverable; now that it is
+   * recoverable it can.
    */
   private dropSocket() {
     this.socket = null;
@@ -473,6 +479,8 @@ export class TutorSpeechInput {
       clearInterval(this.keepaliveTimer);
       this.keepaliveTimer = null;
     }
+
+    this.resetUtterance();
   }
 
   private handleFrame(frame: { pcm: ArrayBuffer }) {

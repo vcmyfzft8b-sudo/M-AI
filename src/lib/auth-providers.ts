@@ -58,7 +58,11 @@ export async function getAuthProviderAvailability(): Promise<AuthProviderAvailab
             : false;
 
     return {
-      apple: Boolean(settings.external?.apple) && (!native || appleSignInConfigured()),
+      // Native ID-token auth can be enabled without a web Services ID/secret.
+      // Do not expose the browser OAuth button until that separate setup exists.
+      apple: Boolean(settings.external?.apple) && (native
+        ? appleSignInConfigured()
+        : process.env.APPLE_WEB_SIGN_IN_ENABLED === "true"),
       email: emailEnabled,
       google: !native && Boolean(settings.external?.google),
     };

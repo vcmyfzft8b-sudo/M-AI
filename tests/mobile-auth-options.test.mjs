@@ -19,7 +19,7 @@ function load(path, modules, globals = {}) {
   return context.exports;
 }
 
-async function availability({ native = true, configured = true, appleEnabled = true, settingsFail = false } = {}) {
+async function availability({ native = true, configured = true, appleEnabled = true, settingsFail = false, webConfigured = false } = {}) {
   const { getAuthProviderAvailability } = load("../src/lib/auth-providers.ts", {
     "server-only": {},
     "next/headers": { headers: async () => new Headers({ "user-agent": native ? "Mozilla/5.0 MemoAI-iOS/1.0" : "Mozilla/5.0" }) },
@@ -27,7 +27,7 @@ async function availability({ native = true, configured = true, appleEnabled = t
     "@/lib/mobile/apple-identity": { appleSignInConfigured: () => configured },
     "@/lib/public-env": { getPublicEnv: () => ({ supabaseUrl: "https://synthetic.invalid" }) },
   }, {
-    process: { env: { NEXT_PUBLIC_SUPABASE_ANON_KEY: "synthetic" } },
+    process: { env: { NEXT_PUBLIC_SUPABASE_ANON_KEY: "synthetic", APPLE_WEB_SIGN_IN_ENABLED: String(webConfigured) } },
     fetch: async () => ({ ok: !settingsFail, json: async () => ({ external: { apple: appleEnabled, google: true, email: true } }) }),
   });
   return getAuthProviderAvailability();
@@ -62,8 +62,15 @@ test("iOS does not expose an unusable Apple login before both backend and provid
 });
 
 test("web Apple and Google availability does not depend on native Apple credentials", async () => {
-  const providers = await availability({ native: false, configured: false });
+  const providers = await availability({ native: false, configured: false, webConfigured: true });
   assert.equal(providers.apple, true);
+  assert.equal(providers.google, true);
+  assert.equal(providers.email, true);
+});
+
+test("enabling native Apple authentication alone does not expose unconfigured browser OAuth", async () => {
+  const providers = await availability({ native: false });
+  assert.equal(providers.apple, false);
   assert.equal(providers.google, true);
   assert.equal(providers.email, true);
 });

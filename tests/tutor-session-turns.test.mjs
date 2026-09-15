@@ -267,3 +267,26 @@ test("a turn refused for billing shows the paywall instead of failing the walkth
   assert.ok(h.state.updates.includes("trial_exhausted"), "the refusal's code blocks the tutor");
   assert.equal(h.state.updates.includes("Tutor is trial-only."), false, "the billing sentence is not shown as an error");
 });
+
+/*
+ * A dropped recognizer is not silent: the screen says so.
+ *
+ * The microphone is the whole promise of a walkthrough — cut in whenever you like — and
+ * when Soniox' end of it goes away nothing reopens it on its own. `canListen` was left
+ * true all the same, so the hint that says "I cannot hear you" never appeared and the
+ * learner went on talking to a tutor that had stopped listening several minutes earlier.
+ */
+test("a recognizer that drops mid-session stops the screen promising it can hear", async () => {
+  const h = sessionHarness();
+  await h.start();
+  const dropped = Object.assign(new Error("The recognizer connection closed."), {
+    reason: "connection",
+  });
+
+  const before = h.state.updates.length;
+  h.state.input.handlers.onError(dropped);
+  const said = h.state.updates.slice(before);
+
+  assert.ok(said.includes(false), "the learner is still told they can cut in by speaking");
+  assert.ok(said.includes("tutor.error.connection"), "the drop is shown");
+});

@@ -9,6 +9,12 @@ An event at or before a resolution's production cutoff belongs to the resolved i
 strictly after the cutoff is new evidence and must be investigated against the running release; do
 not assume the old root cause returned.
 
+**Read the `environment` tag before calling an event production evidence.** Verifying a fix means
+replaying the original failure on that fix's own preview deployment, so a triage run routinely
+provokes the very error it is fixing — and that event lands in the same Sentry issue, tagged
+`environment: preview` on a release that is the fix branch's head rather than a merge commit. It is
+the fix being proved, not the bug recurring. Check the tag and the release before opening anything.
+
 ## 2026-09-01 — Inngest budget-clamp message was not classified
 
 - **Sentry:** `MEMOAI-WEB-37`, issue `144291117`
@@ -609,3 +615,54 @@ retry-after state rather than throwing the payload (that part is a real defect r
 trigger), and then what called the route repeatedly enough to trip `expensiveMutate`. A recurrence
 is the evidence that is missing — it would carry the release and the call pattern — so treat a new
 event on this message as valuable rather than as a regression of #404.
+
+## 2026-09-14 — A dropped recognizer was reported but never let go of
+
+- **Sentry:** `MEMOAI-WEB-3Y`, issue `147007726`
+- **Route:** `/app/lectures/:id` (client-side, and it has no Vercel counterpart — the failure is
+  handled, and the `POST /api/lectures/<id>/tutor/report` beside it is the browser reporting it
+  and returns 200)
+- **Operation:** the learner's recognizer socket closing on its own mid-walkthrough, while the
+  tutor is speaking — `tutorStage: recognizer`, `tutorPhase: speaking`, `sonioxCode: connection`
+- **Normalized message:** `SpeechInputError: The recognizer connection closed.` — thrown by the
+  socket's own `close` listener (`src/lib/tutor/speech-input.ts:310`), not a frame from Soniox
+- **Historical event:** `2026-09-14T18:04:33.025Z`, release
+  `23e211b19a69ce7967cf8f055ba50254ed7e31a9`, Chrome Mobile 152 on Android 10
+- **Resolution:** [PR #407](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/407), merge commit
+  `de02d78fdbe0feac115b4d4ff99a6ae4e9ce6b1b` (commits `f6ae966` and `b954bca`)
+- **Production cutoff:** deployment `dpl_JBvD9fWPMACnP3R9YGNX8WNHSSY7` was ready at
+  `2026-09-15T09:04:27.581Z`
+- **Regression test:** `tests/tutor-speech-input-lifecycle.test.mjs` and the recognizer test in
+  `tests/tutor-session-turns.test.mjs`
+
+The close handler reported the failure but left the dead socket in `this.socket`, so the session
+went on believing it had a microphone: `isListening` said yes, `startListening` and
+`restoreListening` both returned early instead of opening a replacement, the keepalive ticked on at
+a closed connection for the life of the page, and `canListen` stayed true — so the screen kept
+promising the learner they could cut in by speaking, to a tutor that had stopped listening. The
+refusal path directly below it already dropped the socket first for exactly this reason; both now
+go through `dropSocket`, which also clears the keepalive and, since `b954bca`, the half-heard
+sentence the dead socket had already settled on, so it cannot be glued to the front of the next
+thing the learner says.
+
+**The message still fires after the fix, by design.** `dropSocket` runs and *then* `onError`
+reports, so a fresh event on this string is not by itself evidence the fix failed — a drop is a
+fact about the network, and the fix is about what happens next. Judge a new event on what follows
+it: `canListen` cleared, a replacement recognizer opened when the learner pauses, continues or goes
+over a topic again, and no utterance glued to the one before it.
+
+**The `2026-09-15T08:59:32.534Z` event on this issue is not a recurrence.** It is tagged
+`environment: preview` on release `b954bca7e5a5b0bdcad22b1472ed028481420727` — the head of this
+fix's own branch — against preview deployment `memo-4225y65he`, two and a half minutes before #407
+merged. That is PR #407 being verified on its own preview, which is what the preamble above warns
+about. The only production event this issue has ever had is the historical one.
+
+**Why the socket closed is still unknown, and was deliberately not guessed at.** Not key expiry:
+the session was about 100 seconds short of its renewal margin and no second `/tutor/session` was
+requested. The link was congested throughout, which makes a mobile transport drop the likeliest
+cause, and one event cannot prove it. Two things a human should settle: the close handler discards
+the `CloseEvent`'s `code`, `reason` and `wasClean`, which is why this is unattributable — capturing
+them as tags would make the next occurrence diagnosable; and nothing reconnects on its own, which
+is safe as it stands but is the obvious next step, and doing it needs backoff plus care that
+`restoreListening` reserves a paid slice, so that a flapping link cannot storm `/tutor/session`.
+The same question is open on `sentry:145277359`.

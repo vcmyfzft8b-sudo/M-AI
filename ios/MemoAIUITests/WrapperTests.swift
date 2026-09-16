@@ -517,8 +517,11 @@ final class WrapperTests: XCTestCase {
                 }
             }
             row("Language", "language", screenshot: "Language") {
-                // The sheet's options are buttons; the settings row's subtitle also says "English".
-                tap("Keep English", web(.button, exact("English")), timeout: 5, required: false)
+                // The settings row's subtitle also says "English"; the sheet's option comes last.
+                if web(.any, exact("Slovenščina")).waitForExistence(timeout: 5),
+                   let option = app.webViews.descendants(matching: .any).matching(exact("English")).allElementsBoundByIndex.last {
+                    option.tap(); settle()
+                }
             }
             row("Help centre", "help", screenshot: "Help centre") {
                 if tap("Refund article", web(.any, contains("Refund policy")), timeout: 5, required: false) { snap("Help article"); back() }
@@ -572,11 +575,74 @@ final class WrapperTests: XCTestCase {
         XCTAssertTrue(language.waitForExistence(timeout: 15))
         for _ in 0..<5 where !language.isHittable { app.webViews.firstMatch.swipeUp() }
         language.tap()
-        let english = app.webViews.buttons.matching(NSPredicate(format: "label == %@", "English")).firstMatch
-        XCTAssertTrue(english.waitForExistence(timeout: 10))
-        english.tap()
+        // The sheet lists native language names; take the last "English" so a
+        // settings-row subtitle with the same text is never the one tapped.
+        XCTAssertTrue(app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Slovenščina")).firstMatch.waitForExistence(timeout: 10), "Language sheet must open")
+        let english = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "English")).allElementsBoundByIndex.last
+        XCTAssertNotNil(english)
+        english?.tap()
         XCTAssertTrue(app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch.waitForExistence(timeout: 20)
                       || app.webViews.staticTexts["Settings"].waitForExistence(timeout: 20), "Settings must render in English again")
+    }
+
+    // Opens each remaining settings row (sheets, native prompts and in-app
+    // pages) and gets back to Settings, relaunching if the way back is lost.
+    @MainActor func testPreviewSettingsRows() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a staging Preview and a signed-in synthetic account")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        continueAfterFailure = true
+        var problems: [String] = []
+        var shot = 0
+        func snap(_ name: String) {
+            shot += 1
+            let image = XCTAttachment(screenshot: app.screenshot())
+            image.name = String(format: "S%02d %@", shot, name)
+            image.lifetime = .keepAlways
+            add(image)
+        }
+        func settle(_ seconds: TimeInterval = 1.5) { RunLoop.current.run(until: Date().addingTimeInterval(seconds)) }
+        func web(_ type: XCUIElement.ElementType, _ label: String) -> XCUIElement {
+            app.webViews.descendants(matching: type).matching(NSPredicate(format: "label CONTAINS %@", label)).firstMatch
+        }
+        func openSettings() -> Bool {
+            if app.webViews.switches["Dark"].waitForExistence(timeout: 5) { return true }
+            let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+            if !settings.waitForExistence(timeout: 10) { app.terminate(); app.launch(); _ = settings.waitForExistence(timeout: 30) }
+            guard settings.exists else { return false }
+            settings.tap()
+            return app.webViews.switches["Dark"].waitForExistence(timeout: 15)
+        }
+        app.launch()
+        XCTAssertTrue(openSettings(), "Settings must open")
+        func row(_ label: String, _ name: String, dismiss: @MainActor () -> Void) {
+            guard openSettings() else { problems.append("\(name): settings unavailable"); return }
+            let element = web(.any, label)
+            var reached = element.exists && element.isHittable
+            for _ in 0..<8 where !reached { app.webViews.firstMatch.swipeUp(); settle(0.4); reached = element.exists && element.isHittable }
+            guard reached else { problems.append("\(name): unreachable"); return }
+            element.tap(); settle(2.5); snap(name); dismiss(); settle()
+        }
+        func tapWeb(_ label: String) { let e = web(.button, label); if e.waitForExistence(timeout: 5) && e.isHittable { e.tap() } }
+        func back() { let b = web(.button, "Back"); if b.exists && b.isHittable { b.tap() } else { app.terminate(); app.launch() } }
+        row("Suggest a feature", "Suggest a feature") { back() }
+        row("Choose a plan", "Settings paywall") { tapWeb("Close the subscription offer") }
+        row("Restore purchases", "Restore purchases") {
+            let cancel = app.buttons["Cancel"]
+            if cancel.waitForExistence(timeout: 8) { snap("Restore prompt"); cancel.tap() }
+        }
+        row("Manage Apple subscriptions", "Manage Apple subscriptions") {
+            let done = app.buttons["Done"]
+            if done.waitForExistence(timeout: 8) { done.tap() } else if app.buttons["Cancel"].exists { app.buttons["Cancel"].tap() }
+        }
+        row("Withdraw AI permission", "Withdraw AI permission") { tapWeb("Cancel") }
+        row("Delete account", "Delete account") { tapWeb("Cancel") }
+        row("Sign out", "Sign out") { tapWeb("Cancel") }
+        row("Share", "Share Memo") { settle(2); snap("After Share"); let cancel = app.buttons["Cancel"]; if cancel.exists { cancel.tap() } }
+        XCTAssertTrue(problems.isEmpty, "Settings rows problems:\n" + problems.joined(separator: "\n"))
     }
 
     @MainActor func testPreviewHelpUsesAppleBillingInstructions() throws {

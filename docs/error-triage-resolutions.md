@@ -713,11 +713,15 @@ The two `Not authorised.` issues are new, and are **not** the defect #412 fixed.
 written off as verification noise either — see the section below, which is an open question rather
 than a resolution.
 
-## Open — every authenticated call in one session began answering 401, and nothing recovered it
+## Open — a tutor turn answered 401 mid-walkthrough in production, once, and was never explained
 
 **This is not a resolved incident.** It is recorded here so the next automated run recognises the
-two issue ids, does not open a speculative patch to the authentication path, and does not have to
+issue ids, does not open a speculative patch to the authentication path, and does not have to
 re-derive the mechanism from scratch.
+
+**Read the correction at the end of this entry first.** The two preview events that prompted it
+turned out to be an artefact of how that verification session was cleaned up, which leaves a single
+production event as the whole of the evidence.
 
 - **Sentry:** `MEMOAI-WEB-41` (issue `147291870`) and `MEMOAI-WEB-42` (issue `147295082`)
 - **Route:** `POST /api/lectures/<id>/tutor/turn`, `.../tutor/report`, `.../tutor/session`
@@ -770,3 +774,35 @@ authentication for all 49 API routes that use this client and adds a `getUser()`
 every API request. Automated triage had no `PREVIEW_TEST_EMAIL` / `PREVIEW_TEST_PASSWORD`, so it
 could not drive an authenticated preview to verify any of it. An unverified change to the auth path
 is not something an unattended run should merge toward production.
+
+### Correction — the two preview 401s were the test account being deleted, not an auth failure
+
+Added on review, from knowledge the automated run did not have. The 22:04–22:35 preview session was
+a manual verification of PR #412, driven from a Claude Code browser pane — which is why both events
+are tagged `Mac OS X` / `Chrome 148` rather than the iPhone the fix was about. That session ran on a
+disposable staging account, and **the account was deleted as cleanup while the tab was still open**,
+moments before #412 merged at `22:07:06Z`.
+
+That accounts for both events without any token rotation:
+
+- `147291870` at `22:06:32Z` (`tutorStage: turn`) — the open tab's next turn, after the user row it
+  was authenticated as had been removed. Deleting the auth user cascades and invalidates its
+  sessions immediately, and every tutor route answers `401` on `!user`.
+- `147295082` at `22:35:16Z` (`tutorStage: renewal`) — the same tab twenty-nine minutes later, when
+  its credential-renewal alarm fired against the same deleted account.
+
+The pattern fits the deletion better than it fits an expired refresh token: there are exactly two
+events, one at the moment of deletion and one when a timer next fired, rather than the cluster a
+tab retrying against a broken session would produce.
+
+**What survives this correction:** issue `145514494` — `2026-09-07T14:21:55Z`, Mobile Safari on
+iOS 18.7, `environment: production`, a real learner, no test interference. That event is genuine and
+still unexplained, and the `setAll` no-op mechanism above remains the best available account of it.
+But it is **one** event, not three. Weigh any change to the authentication path against that, and
+treat a second production occurrence as the evidence that is actually missing.
+
+**For future runs:** a verification session's own cleanup can manufacture errors that look like
+defects, exactly as a verification session can re-provoke the bug being fixed (see the preamble at
+the top of this file). Deleting a seeded account while its browser session is still open is the
+clearest case — prefer closing the page before deleting the user, and read the `os` / `browser` tags
+before believing a preview event describes a learner.

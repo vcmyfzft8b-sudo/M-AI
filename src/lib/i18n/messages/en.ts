@@ -2091,5 +2091,7 @@ export const en: Messages = {
   "native.deletionRequestedTitle": "Account deletion requested",
   "native.deletionRequestedCopy": "You are signed out. Your account and stored materials will normally be erased within 24 hours. Apple subscriptions must be cancelled separately in your Apple Account settings.",
   "native.appleDisconnectCopy": "To finish disconnecting your older Sign in with Apple authorization, remove Memo from Sign in with Apple in your Apple Account settings. Your Memo deletion request will proceed.",
+  "native.redeemHelp": "Codes issued for website purchases cannot be entered in Apple’s purchase sheet. In Settings, choose a plan to see the Apple prices and offers available to your account. Any eligible trial or discounted first period is shown before you confirm the purchase. Check the first charge and renewal price in Apple’s confirmation.",
+  "native.giftHelp": "Memo does not currently offer a way to gift an App Store subscription. Each person should use their own Memo account and Apple Account. Website gift or promotional codes cannot be applied to an App Store purchase.",
   "native.appleDisconnectLink": "See Apple’s instructions",
 };

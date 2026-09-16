@@ -2104,5 +2104,7 @@ export const bs: Messages = {
   "native.deletionRequestedTitle": "Zahtjev za brisanje računa je zaprimljen",
   "native.deletionRequestedCopy": "Odjavljen si. Tvoj račun i sačuvani materijali obično će biti izbrisani u roku od 24 sata. Pretplate Apple moraš zasebno otkazati u postavkama računa Apple.",
   "native.appleDisconnectCopy": "Za prekid starijeg ovlaštenja za prijavu putem Applea ukloni Memo iz opcije Prijava putem Applea u postavkama računa Apple. Zahtjev za brisanje računa Memo bit će proveden.",
+  "native.redeemHelp": "Kodovi izdani za kupovinu na web-stranici ne mogu se unijeti u Appleov prozor za kupovinu. U postavkama odaberi plan da vidiš Appleove cijene i ponude dostupne tvom računu. Dostupno besplatno probno razdoblje ili sniženo prvo razdoblje prikazuje se prije potvrde kupovine. U Appleovoj potvrdi provjeri prvu naplatu i cijenu obnove.",
+  "native.giftHelp": "Memo trenutno ne omogućava poklanjanje pretplate u App Storeu. Svaka osoba treba koristiti vlastiti Memo račun i Apple račun. Poklon ili promotivni kodovi za web-stranicu ne mogu se primijeniti na kupovinu u App Storeu.",
   "native.appleDisconnectLink": "Pogledaj upute Applea",
 };

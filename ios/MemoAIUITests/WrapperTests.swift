@@ -1,6 +1,34 @@
 import XCTest
 
 final class WrapperTests: XCTestCase {
+    @MainActor func testPreviewHelpUsesAppleBillingInstructions() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a staging Preview and a signed-in synthetic account")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        continueAfterFailure = false
+        let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 30))
+        settings.tap()
+        let redeem = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Redeem a code")).firstMatch
+        for _ in 0..<5 {
+            if redeem.exists && redeem.isHittable { break }
+            app.webViews.firstMatch.swipeUp()
+        }
+        XCTAssertTrue(redeem.exists && redeem.isHittable)
+        redeem.tap()
+        let appleHelp = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Codes issued for website purchases cannot be entered")).firstMatch
+        XCTAssertTrue(appleHelp.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Stripe Checkout")).firstMatch.exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Apple billing help"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
     // Opt-in review against a staging Preview with a synthetic account already
     // signed in on this simulator. The ordinary fixture suite skips this test.
     @MainActor func testPreviewSettingsScrollAndTheme() throws {

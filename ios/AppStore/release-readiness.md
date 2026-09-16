@@ -39,8 +39,9 @@ ignored by Git.
    level; configure and test server notifications against staging. Repeat the
    production configuration only as part of an authorized production release.
 4. **Discount codes:** create and test Apple-compatible equivalents of the
-   actual Stripe codes. Do not publish the current native “Redeem a code” help
-   as complete: it still explains Stripe Checkout. Before enabling Apple's
+   actual Stripe codes. Native help now explains the available Apple offers
+   instead of directing iOS users to Stripe; this does not implement code
+   redemption. Before enabling Apple's
    redemption sheet, securely associate tokenless external redemptions with a
    Memo account without permitting purchase theft or account reassignment.
    Existing strict `appAccountToken` verification intentionally rejects such

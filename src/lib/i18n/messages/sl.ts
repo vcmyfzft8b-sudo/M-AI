@@ -2126,5 +2126,7 @@ export const sl = {
   "native.deletionRequestedTitle": "Zahteva za izbris računa je sprejeta",
   "native.deletionRequestedCopy": "Odjavljen si. Tvoj račun in shranjeno gradivo bosta običajno izbrisana v 24 urah. Naročnine Apple moraš ločeno preklicati v nastavitvah računa Apple.",
   "native.appleDisconnectCopy": "Za dokončno prekinitev starejše povezave z Apple odstrani Memo iz možnosti Prijava z Apple v nastavitvah računa Apple. Zahteva za izbris računa Memo bo izvedena.",
+  "native.redeemHelp": "Kod za nakupe na spletni strani ni mogoče vnesti v Applovo okno za nakup. V nastavitvah izberi paket, da vidiš Applove cene in ponudbe, ki so na voljo tvojemu računu. Upravičen brezplačni preizkus ali znižano prvo obdobje se prikaže pred potrditvijo nakupa. V Applovi potrditvi preveri prvi znesek in ceno podaljšanja.",
+  "native.giftHelp": "Memo trenutno ne omogoča podarjanja naročnine v App Store. Vsaka oseba naj uporablja svoj račun Memo in svoj račun Apple. Spletnih darilnih ali promocijskih kod ni mogoče uporabiti pri nakupu v App Store.",
   "native.appleDisconnectLink": "Oglej si navodila Apple",
 };

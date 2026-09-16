@@ -662,7 +662,7 @@ final class WrapperTests: XCTestCase {
         row("Withdraw AI permission", "Withdraw AI permission") { tapWeb("Cancel") }
         row("Delete account", "Delete account") { tapWeb("Cancel") }
         row("Sign out", "Sign out") { tapWeb("Cancel") }
-        row("Share", "Share Memo") { settle(2); snap("After Share"); let cancel = app.buttons["Cancel"]; if cancel.exists { cancel.tap() } }
+        row("Share", "Share Memo") { settle(2); snap("After Share"); tapWeb("Cancel") }
         XCTAssertTrue(problems.isEmpty, "Settings rows problems:\n" + problems.joined(separator: "\n"))
     }
 

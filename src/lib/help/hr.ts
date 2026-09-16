@@ -153,7 +153,9 @@ Kontakt za pitanja o privatnosti i za ostvarivanje prava: info@memoai.eu
 - status pretplate, odabrani paket, razdoblje i povijest plaćanja
 - identifikator kupca i pretplate kod Stripea
 
-Podatke o tvojoj platnoj kartici ne primamo i ne čuvamo. Unosiš ih izravno kod Stripea.
+Za pretplate u App Storeu obrađujemo Appleove potpisane zapise o transakcijama, identifikatore proizvoda i transakcija, datume kupnje i isteka te status povrata ili opoziva pristupa. Appleu šaljemo tehnički identifikator tvog Memo računa kako bismo kupnju povezali s računom i provjerili pristup.
+
+Podatke o tvojoj platnoj kartici ne primamo i ne čuvamo. Podatke o plaćanju izravno obrađuje Stripe za web kupnje ili Apple za kupnje u App Storeu.
 
 **Tehnički podaci**
 
@@ -214,12 +216,15 @@ Podatke ne prodajemo. Prosljeđujemo ih samo pružateljima koji su nam potrebni 
 
 - **Supabase** — autentikacija, baza podataka i pohrana datoteka
 - **Stripe** — obrada plaćanja, pretplata i povrata
+- **OpenRouter i odabrani pružatelji modela** — generiranje AI odgovora i sadržaja za učenje kada se koriste te usluge
 - **Google (Gemini)** — transkripcija, izdvajanje teksta iz dokumenata, ugrađivanja, izrada bilježaka i odgovora u chatu
 - **Soniox** — transkripcija audiosnimki, kada je ta usluga uključena
 - **Vercel** — hosting aplikacije i agregirana statistika posjeta
 - **Inngest** — izvršavanje poslova u pozadini, kada je uključen
 - **Sentry** — praćenje pogrešaka i rušenja
 - **Google i Apple** — prijava, kada odabereš prijavu preko njih
+
+Apple također obrađuje kupnje i upravljanje pretplatama u App Storeu prema svojoj [politici privatnosti](https://www.apple.com/legal/privacy/). S Appleom razmjenjujemo prethodno opisane podatke o transakcijama radi provjere i održavanja tvog plaćenog pristupa.
 
 Podatke možemo otkriti i nadležnim tijelima kada smo na to zakonski obvezani, te svojim pravnim ili računovodstvenim savjetnicima kada je to potrebno.
 
@@ -312,6 +317,10 @@ info@memoai.eu`,
 Ova politika objašnjava kada vraćamo uplatu za pretplatu na Memo AI, u kojem udjelu i kako povrat zatražiti. Dio je uvjeta korištenja.
 
 ## 1. Ukratko
+
+**Kupnje u App Storeu:** povrat zatraži putem [Applea](https://reportaproblem.apple.com/). Apple obrađuje te zahtjeve; rokovi i postotci djelomičnih povrata za web kupnje navedeni u nastavku ne primjenjuju se na transakcije u App Storeu. Tvoja zakonska potrošačka prava ostaju nepromijenjena. Za pomoć sa samom uslugom piši na info@memoai.eu.
+
+**Web kupnje putem Stripea:**
 
 - **zahtjev u roku od 24 sata od uplate** — vraćamo 50 % uplaćenog iznosa
 - **zahtjev nakon 24 sata od uplate** — nema povrata
@@ -459,6 +468,8 @@ Za vlastite sigurnosne kopije važnog gradiva pobrini se sam.
 
 ## 6. Besplatno korištenje i probno razdoblje
 
+Probno razdoblje u App Storeu vrijedi samo ako ga Apple prikaže u potvrdi kupnje. Web probna razdoblja i promotivni kodovi ne primjenjuju se automatski na kupnje u App Storeu. Pravila probnog razdoblja u nastavku opisuju našu web ponudu.
+
 - bez pretplate možeš izraditi ograničenu količinu sadržaja, uključujući jednu probnu bilješku i ograničen broj poruka u chatu
 - pri prvoj kupnji pretplate možeš dobiti 3-dnevno besplatno probno razdoblje, ako ispunjavaš uvjete za njega
 - besplatno probno razdoblje pripada jednoj osobi jednom; na njega nemaju pravo korisnici koji su kod nas već imali pretplatu
@@ -466,6 +477,12 @@ Za vlastite sigurnosne kopije važnog gradiva pobrini se sam.
 - opseg besplatnog korištenja možemo promijeniti za ubuduće
 
 ## 7. Pretplate, cijene i plaćanja
+
+**Pretplate u App Storeu**
+
+Na iOS-u kupnje pretplata u aplikaciji obrađuje Apple. Prije potvrde kupnje Apple prikazuje cijenu, valutu, obračunsko razdoblje i eventualnu ponudu. Pretplata se automatski obnavlja dok je ne otkažeš putem Applea. Apple upravlja naplatom, potvrdama o kupnji i odgovarajućim obavijestima o promjeni cijena. Mjesečni i godišnji paket nude iste značajke Memo Premium za različita obračunska razdoblja. Obnovu kupnji upotrijebi dok si prijavljen u Memo račun korišten za izvornu kupnju. Appleove pretplate nije moguće prenositi između Memo računa.
+
+**Web pretplate putem Stripea**
 
 - Memo AI se prodaje kao pretplata koja se ponavlja; aktualne cijene i razdoblja navedeni su na stranici s cijenama i u Stripe Checkoutu prije potvrde kupnje
 - sve su cijene navedene u eurima; je li porez uključen ili se pribraja jasno je prikazano prije dovršetka kupnje
@@ -479,6 +496,10 @@ Za vlastite sigurnosne kopije važnog gradiva pobrini se sam.
 Račun za svaku uplatu primaš na adresu e-pošte povezanu s tvojim računom.
 
 ## 8. Otkazivanje
+
+Za pretplate u App Storeu upotrijebi upravljanje Apple pretplatom u postavkama Memo-a ili otvori Postavke na iPhoneu → tvoje ime → Pretplate. Otkaži prije datuma obnove; plaćeni pristup obično traje do isteka pretplate. Brisanje Memo-a ili Memo računa ne otkazuje Appleovu pretplatu. Povrat za kupnju u App Storeu zatraži putem [Applea](https://reportaproblem.apple.com/).
+
+**Web pretplate putem Stripea:**
 
 Pretplatu možeš otkazati bilo kada u postavkama računa ili putem poveznice na Stripe portal. Otkazivanje stupa na snagu na kraju tekućeg plaćenog razdoblja; do tada plaćene značajke ostaju dostupne. Otkazivanje samo po sebi ne znači povrat već uplaćenog iznosa.
 

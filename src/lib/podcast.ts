@@ -1,3 +1,4 @@
+import { assertStorageOwnerActive } from "@/lib/mobile/storage-owner";
 import "server-only";
 import { resolveSourceLanguage } from "@/lib/source-language";
 import { buildSpeechLanguageInstruction, resolveSpeechLanguage, toSpeechScript } from "@/lib/speech-language";
@@ -909,12 +910,13 @@ export async function getOrCreatePodcastSegment(params: {
       model,
     });
     const supabase = createSupabaseServiceRoleClient();
-    const { error: uploadError } = await retryTransientStorageOperation(() =>
-      supabase.storage.from(STORAGE_BUCKET).upload(audioStoragePath, Buffer.from(audio), {
+    const { error: uploadError } = await retryTransientStorageOperation(async () => {
+      await assertStorageOwnerActive(params.userId);
+      return supabase.storage.from(STORAGE_BUCKET).upload(audioStoragePath, Buffer.from(audio), {
         contentType: TTS_OUTPUT_MIME_TYPE,
         upsert: true,
-      }),
-    );
+      });
+    });
 
     if (uploadError) {
       throw uploadError;

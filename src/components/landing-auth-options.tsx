@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { useT } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
+import { isNativeIOS, nativeRequest } from "@/lib/mobile/client";
 
 function GoogleMark() {
   return (
@@ -59,6 +60,7 @@ export function LandingAuthOptions(props: {
   const t = useT();
   const router = useRouter();
   const [pendingTarget, setPendingTarget] = useState<PendingTarget>(null);
+  const [notice, setNotice] = useState("");
   const emailHref = `/auth/email-entry?mode=${props.mode ?? "signup"}&next=${encodeURIComponent(props.next)}`;
 
   function isPending(target: Exclude<PendingTarget, null>) {
@@ -72,8 +74,14 @@ export function LandingAuthOptions(props: {
           action="/auth/google"
           method="post"
           className="memo-auth-provider-form"
-          onSubmit={() => {
-            setPendingTarget("google");
+          onSubmit={event => {
+            if (!isNativeIOS()) { setPendingTarget("google"); return; }
+            event.preventDefault();
+            if (pendingTarget) return;
+            setPendingTarget("google"); setNotice("");
+            void nativeRequest<{ status: string }>("signInWithGoogle").then(result => {
+              if (result.status === "signedIn") window.location.assign(props.next);
+            }).catch(() => setNotice(t("native.verifyFailed"))).finally(() => setPendingTarget(null));
           }}
         >
           <input type="hidden" name="next" value={props.next} />
@@ -94,8 +102,14 @@ export function LandingAuthOptions(props: {
           action="/auth/apple"
           method="post"
           className="memo-auth-provider-form"
-          onSubmit={() => {
-            setPendingTarget("apple");
+          onSubmit={event => {
+            if (!isNativeIOS()) { setPendingTarget("apple"); return; }
+            event.preventDefault();
+            if (pendingTarget) return;
+            setPendingTarget("apple"); setNotice("");
+            void nativeRequest<{ status: string }>("signInWithApple").then(result => {
+              if (result.status === "signedIn") window.location.assign(props.next);
+            }).catch(() => setNotice(t("native.verifyFailed"))).finally(() => setPendingTarget(null));
           }}
         >
           <input type="hidden" name="next" value={props.next} />
@@ -130,6 +144,7 @@ export function LandingAuthOptions(props: {
           <span>{t(isPending("email") ? "auth.opening" : "auth.continueEmail")}</span>
         </button>
       ) : null}
+      {notice ? <p className="memo-inline-error" role="status">{notice}</p> : null}
     </div>
   );
 }

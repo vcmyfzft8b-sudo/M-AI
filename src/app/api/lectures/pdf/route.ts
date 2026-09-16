@@ -1,3 +1,4 @@
+import { assertStorageOwnerActive } from "@/lib/mobile/storage-owner";
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -162,6 +163,7 @@ export async function POST(request: Request) {
       fileName: sourceFileName,
       mimeType,
     });
+    await assertStorageOwnerActive(user.id);
     const uploadResult = await createSupabaseServiceRoleClient()
       .storage
       .from(STORAGE_BUCKET)

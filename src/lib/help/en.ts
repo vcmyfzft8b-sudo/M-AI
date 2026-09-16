@@ -153,7 +153,9 @@ Contact for privacy questions and for exercising your rights: info@memoai.eu
 - subscription status, chosen plan, period and payment history
 - your Stripe customer and subscription identifiers
 
-We neither receive nor store your card details. You enter those directly with Stripe.
+For App Store subscriptions, we process Apple's signed transaction records, product and transaction identifiers, purchase and expiry dates, and refund or revocation status. We send Apple your Memo account's technical identifier to associate the purchase with your account and verify access.
+
+We neither receive nor store your card details. Payment details are handled directly by Stripe for web purchases or Apple for App Store purchases.
 
 **Technical data**
 
@@ -216,10 +218,13 @@ We do not sell data. We pass it only to the providers we need in order to run th
 - **Stripe** — processing payments, subscriptions and refunds
 - **Google (Gemini)** — transcription, extracting text from documents, embeddings, generating notes and chat answers
 - **Soniox** — audio transcription, where that service is switched on
+- **OpenRouter and its selected model providers** — generating AI answers and study content where these services are used
 - **Vercel** — hosting the app, and aggregated visit statistics
 - **Inngest** — running background jobs, where switched on
 - **Sentry** — error and crash monitoring
 - **Google and Apple** — sign-in, where you choose to sign in through them
+
+Apple also processes App Store purchases and subscription management under its own [privacy policy](https://www.apple.com/legal/privacy/). We exchange the transaction information described above with Apple to verify and maintain your paid access.
 
 We may also disclose data to competent authorities where we are legally required to, and to our legal or accounting advisers where necessary.
 
@@ -312,6 +317,10 @@ info@memoai.eu`,
 This policy explains when we refund payment for a Memo AI subscription, how much of it, and how you ask. It forms part of the terms of use.
 
 ## 1. In short
+
+**App Store purchases:** request a refund through [Apple](https://reportaproblem.apple.com/). Apple processes these requests; the web purchase deadlines and partial-refund percentages below do not apply to App Store transactions. Your statutory consumer rights remain unaffected. For help with the service itself, contact info@memoai.eu.
+
+**Web purchases through Stripe:**
 
 - **request within 24 hours of payment** — we refund 50% of the amount paid
 - **request more than 24 hours after payment** — no refund
@@ -459,6 +468,8 @@ Keep your own backups of anything important.
 
 ## 6. Free use and the trial period
 
+An App Store trial applies only if Apple shows it in the purchase confirmation. Web trials and promotional codes do not automatically apply to App Store purchases. The trial rules below describe our web offer.
+
 - without a subscription you can create a limited amount of content, including one trial note and a limited number of chat messages
 - on your first subscription purchase you may get a 3-day free trial, if you qualify for it
 - the free trial is available to one person once; users who have already had a subscription with us are not entitled to it
@@ -466,6 +477,12 @@ Keep your own backups of anything important.
 - we may change the scope of free use going forward
 
 ## 7. Subscriptions, prices and payments
+
+**App Store subscriptions**
+
+On iOS, Apple processes in-app subscription purchases. Apple's purchase confirmation shows the price, currency, billing period and any offer before you confirm. The subscription renews automatically until cancelled through Apple. Apple handles billing, receipts and applicable price-change notices. The monthly and yearly plans provide the same Memo Premium features for different billing periods. Use Restore Purchases while signed in to the Memo account used for the original purchase. Apple subscriptions cannot be transferred between Memo accounts.
+
+**Web subscriptions through Stripe**
 
 - Memo AI is sold as a recurring subscription; current prices and periods are stated on the pricing page and in Stripe Checkout before you confirm the purchase
 - all prices are stated in euros; whether tax is included or added is shown clearly before you complete the purchase
@@ -479,6 +496,10 @@ Keep your own backups of anything important.
 You receive an invoice for every payment at the email address linked to your account.
 
 ## 8. Cancellation
+
+For App Store subscriptions, use Manage Apple Subscription in Memo's settings or open iPhone Settings → your name → Subscriptions. Cancel before the renewal date; paid access normally continues until the subscription expires. Deleting Memo or your Memo account does not cancel an Apple subscription. Request App Store refunds through [Apple](https://reportaproblem.apple.com/).
+
+**Web subscriptions through Stripe:**
 
 You can cancel the subscription at any time in your account settings or through the link to the Stripe portal. Cancellation takes effect at the end of the current paid period; until then the paid features remain available. Cancelling does not in itself refund an amount already paid.
 

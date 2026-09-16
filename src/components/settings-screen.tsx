@@ -4,6 +4,8 @@ import { Loader2 } from "lucide-react";
 import { useCallback, useState, useSyncExternalStore } from "react";
 
 import { BillingPortalButton } from "@/components/billing-portal-button";
+import { NativeAccountActions } from "@/components/native-account-actions";
+import { useNativeIOS } from "@/lib/mobile/client";
 import { SettingsTestPersona } from "@/components/settings-test-persona";
 import { useTranslations } from "@/components/i18n-provider";
 import { InstantLink } from "@/components/instant-link";
@@ -58,7 +60,7 @@ function subscribeToInstallGuideSeen(onStoreChange: () => void) {
   return () => window.removeEventListener(INSTALL_GUIDE_SEEN_EVENT, onStoreChange);
 }
 
-type ConfirmKind = "logout" | "delete" | "share";
+type ConfirmKind = "logout" | "delete" | "share" | "withdraw";
 
 type SettingsRow = {
   id: string;
@@ -79,6 +81,7 @@ export function SettingsScreen({
   planLabel,
   planDetail,
   hasSubscription,
+  appleSubscription = false,
   installGuideSeen = false,
   isDemo = false,
   testPersona = null,
@@ -87,6 +90,7 @@ export function SettingsScreen({
   planLabel: string;
   planDetail: string;
   hasSubscription: boolean;
+  appleSubscription?: boolean;
   /**
    * Whether this account has already opened the home screen guide. Read from
    * the profile so the badge is answered once and stays answered on every
@@ -102,6 +106,7 @@ export function SettingsScreen({
   testPersona?: TestPersona | null;
 }) {
   const t = useTranslations().t;
+  const native = useNativeIOS();
   const { navigateWithFeedback, overlay: navigationOverlay, isNavigating } = useInstantNavigation();
   const homeHref = useAppHref("/app");
   const startHref = useAppHref("/app/start");
@@ -150,8 +155,8 @@ export function SettingsScreen({
     t("settings.share.mailSubject", { brand: BRAND_NAME }),
   )}&body=${encodeURIComponent(t("settings.share.mailBody", { brand: BRAND_NAME }))}`;
 
-  // There is no self-serve deletion endpoint; the request goes to support, which
-  // is what the confirmation copy promises.
+  // The web flow still requests deletion through support. Native iOS uses the
+  // in-app endpoint and its own explicit permanent-deletion confirmation below.
   const deleteRequestHref = `mailto:${BRAND_SUPPORT_EMAIL}?subject=${encodeURIComponent(
     t("settings.delete.mailSubject"),
   )}&body=${encodeURIComponent(t("settings.delete.mailBody", { email }))}`;
@@ -220,7 +225,7 @@ export function SettingsScreen({
   );
 
   const rows: SettingsRow[] = [
-    ...(isPhone && !showInstallHint
+    ...(!native && isPhone && !showInstallHint
       ? [
           {
             id: "install",
@@ -297,8 +302,8 @@ export function SettingsScreen({
     delete: {
       emoji: "🗑️",
       title: t("settings.delete.title"),
-      body: t("settings.delete.body"),
-      cta: t("settings.delete.cta"),
+      body: t(native ? "native.deleteBody" : "settings.delete.body"),
+      cta: t(native ? "native.deleteConfirm" : "settings.delete.cta"),
     },
     share: {
       emoji: "📤",
@@ -306,9 +311,15 @@ export function SettingsScreen({
       body: t("settings.share.body", { brand: BRAND_NAME }),
       cta: t("settings.share.cta"),
     },
+    withdraw: {
+      emoji: "🔒",
+      title: t("native.aiWithdrawTitle"),
+      body: t("native.aiWithdrawBody"),
+      cta: t("native.aiWithdrawConfirm"),
+    },
   };
 
-  function runConfirm() {
+  async function runConfirm() {
     const kind = confirm;
 
     if (isLoggingOut) {
@@ -324,6 +335,43 @@ export function SettingsScreen({
     if (isDemo && (kind === "logout" || kind === "delete")) {
       confirmSheet.dismiss();
       showToast(t(kind === "logout" ? "settings.demo.noLogout" : "settings.demo.noDelete"));
+      return;
+    }
+
+    // Withdrawing AI permission ends normal use of the app until it is allowed
+    // again, so it is confirmed like signing out rather than acted on at a tap.
+    if (native && kind === "withdraw") {
+      setIsLoggingOut(true);
+      try {
+        const response = await fetch("/api/mobile/consent", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ allow: false }),
+        });
+        if (!response.ok) throw new Error();
+        window.location.assign("/app/consent");
+      } catch {
+        setIsLoggingOut(false);
+        confirmSheet.dismiss();
+        showToast(t("native.verifyFailed"));
+      }
+      return;
+    }
+
+    if (native && kind === "delete") {
+      setIsLoggingOut(true);
+      try {
+        const response = await fetch("/api/account/delete", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ confirmation: "delete-my-account" }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.deletionRequested) throw new Error(result.error || t("native.deleteFailed"));
+        window.location.assign(`/auth/account-deleted${result.appleManualRevocationRequired ? "?apple=manual" : ""}`);
+      } catch (error) {
+        setIsLoggingOut(false);
+        confirmSheet.dismiss();
+        showToast(error instanceof Error ? error.message : t("native.deleteFailed"));
+      }
       return;
     }
 
@@ -398,7 +446,7 @@ export function SettingsScreen({
               * device has a home screen to add to. Without it a desktop gets a
               * card for a gesture its machine does not have.
               */}
-            {isPhone && showInstallHint ? (
+            {!native && isPhone && showInstallHint ? (
               <button
                 type="button"
                 className="memo-install-cta"
@@ -447,7 +495,7 @@ export function SettingsScreen({
                 <span className="memo-card-row-detail">{planDetail}</span>
               </span>
               {hasSubscription ? (
-                <BillingPortalButton />
+                <BillingPortalButton apple={appleSubscription} />
               ) : (
                 <InstantLink href={startHref} className="memo-primary-pill">
                   <Emoji symbol="✨" size="1rem" />
@@ -500,6 +548,7 @@ export function SettingsScreen({
                   choice, which none of the plain rows above do. */}
               <LanguageSettingsRow />
               {rows.map(renderRow)}
+              {native && !isDemo ? <NativeAccountActions showManage={!appleSubscription} onWithdraw={() => setConfirm("withdraw")} /> : null}
               {accountRows.map(renderRow)}
             </div>
 

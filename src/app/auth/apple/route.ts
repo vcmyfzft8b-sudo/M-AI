@@ -19,7 +19,7 @@ function resolveNextPath(request: NextRequest, value?: FormDataEntryValue | null
 async function startAppleAuth(request: NextRequest, next: string) {
   const providers = await getAuthProviderAvailability();
 
-  if (!providers.apple) {
+  if (!providers.apple || process.env.APPLE_WEB_SIGN_IN_ENABLED !== "true") {
     const errorUrl = request.nextUrl.clone();
     errorUrl.pathname = "/auth/error";
     errorUrl.search = "";

@@ -1,0 +1,6 @@
+PRODUCT_BUNDLE_IDENTIFIER = eu.memoai.memo
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 1
+CODE_SIGN_ENTITLEMENTS = Config/MemoAI.entitlements
+// Set DEVELOPMENT_TEAM in Local.xcconfig (ignored) or Xcode Signing & Capabilities.
+#include? "Local.xcconfig"

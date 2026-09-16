@@ -1,0 +1,130 @@
+{
+  "identifier": "F9BCA496-12E8-4776-BBD5-1E9F21BC6150",
+  "nonRenewingSubscriptions": [],
+  "products": [],
+  "settings": {
+    "_applicationInternalID": "6812409212",
+    "_developerTeamID": "J4PCHZ8P7T",
+    "_failTransactionsEnabled": false,
+    "_locale": "en_GB",
+    "_storefront": "SVN",
+    "_timeRate": 0
+  },
+  "subscriptionGroups": [
+    {
+      "id": "22387267",
+      "localizations": [],
+      "name": "Memo Premium",
+      "subscriptions": [
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "19.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "6812410886",
+          "introductoryOffer": {
+            "internalID": "local-monthly-intro",
+            "displayPrice": "9.99",
+            "paymentMode": "payUpFront",
+            "subscriptionPeriod": "P1M"
+          },
+          "localizations": [
+            {
+              "description": "Synthetic local StoreKit fixture",
+              "displayName": "Memo Premium Monthly",
+              "locale": "en_GB"
+            }
+          ],
+          "productID": "eu.memoai.premium.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "Memo Premium Monthly",
+          "subscriptionGroupID": "22387267",
+          "type": "RecurringSubscription"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "129.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "6812422840",
+          "introductoryOffer": {
+            "internalID": "local-yearly-intro",
+            "displayPrice": "64.99",
+            "paymentMode": "payUpFront",
+            "subscriptionPeriod": "P1Y"
+          },
+          "localizations": [
+            {
+              "description": "Synthetic local StoreKit fixture",
+              "displayName": "Memo Premium Yearly",
+              "locale": "en_GB"
+            }
+          ],
+          "productID": "eu.memoai.premium.yearly",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Memo Premium Yearly",
+          "subscriptionGroupID": "22387267",
+          "type": "RecurringSubscription"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "19.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "local-trial-monthly",
+          "introductoryOffer": {
+            "internalID": "local-trial-intro-monthly",
+            "displayPrice": "0",
+            "paymentMode": "free",
+            "subscriptionPeriod": "P3D"
+          },
+          "localizations": [
+            {
+              "description": "Synthetic local StoreKit fixture",
+              "displayName": "Memo Premium Monthly",
+              "locale": "en_GB"
+            }
+          ],
+          "productID": "eu.memoai.premium.trial.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "Memo Premium Trial Monthly",
+          "subscriptionGroupID": "22387267",
+          "type": "RecurringSubscription"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "129.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "local-trial-yearly",
+          "introductoryOffer": {
+            "internalID": "local-trial-intro-yearly",
+            "displayPrice": "0",
+            "paymentMode": "free",
+            "subscriptionPeriod": "P3D"
+          },
+          "localizations": [
+            {
+              "description": "Synthetic local StoreKit fixture",
+              "displayName": "Memo Premium Yearly",
+              "locale": "en_GB"
+            }
+          ],
+          "productID": "eu.memoai.premium.trial.yearly",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Memo Premium Trial Yearly",
+          "subscriptionGroupID": "22387267",
+          "type": "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version": {
+    "major": 3,
+    "minor": 0
+  }
+}

@@ -1,0 +1,5 @@
+"retry" = "Pokušaj ponovno";
+"loading" = "Otvaranje Mema…";
+"connectionFailed" = "Memo se nije mogao povezati. Provjeri vezu i pokušaj ponovno.";
+"actionFailed" = "Radnju nije bilo moguće dovršiti. Pokušaj ponovno.";
+"ok" = "U redu";

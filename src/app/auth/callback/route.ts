@@ -1,14 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
-import {
-  DEFAULT_LOCALE,
-  LOCALE_COOKIE,
-  LOCALE_COOKIE_MAX_AGE,
-  localeForCountry,
-  parseLocale,
-} from "@/lib/i18n/locales";
-import { reconcileLocaleOnSignIn } from "@/lib/i18n/profile-locale";
+import { applySignInLocale } from "@/lib/i18n/sign-in-locale";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
 import { normalizeNextPath, sanitizeUserInput } from "@/lib/validation";
@@ -104,18 +97,7 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (user) {
-    const requestLocale =
-      parseLocale(request.cookies.get(LOCALE_COOKIE)?.value) ??
-      localeForCountry(request.headers.get("x-vercel-ip-country")) ??
-      DEFAULT_LOCALE;
-
-    const locale = await reconcileLocaleOnSignIn(user.id, requestLocale);
-
-    response.cookies.set(LOCALE_COOKIE, locale, {
-      path: "/",
-      maxAge: LOCALE_COOKIE_MAX_AGE,
-      sameSite: "lax",
-    });
+    await applySignInLocale(request, response, user.id);
   }
 
   return response;

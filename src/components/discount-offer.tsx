@@ -16,6 +16,11 @@ import {
   SEO_BRAND_NAME,
 } from "@/lib/brand";
 import { formatCurrency } from "@/lib/utils";
+import { nativeRequest } from "@/lib/mobile/client";
+import { halfOffProducts, type NativeProduct } from "@/lib/mobile/products";
+import { useAppleBilling } from "@/components/use-apple-billing";
+import { AppleBillingTerms } from "@/components/apple-billing-terms";
+import { APPLE_PRODUCTS } from "@/lib/mobile/runtime";
 
 /**
  * The one-shot prize wheel and the offer sheet it hands off to.
@@ -169,6 +174,7 @@ export function DiscountOffer({
   onWheelOpenChange,
   onOfferOpenChange,
   onClaimed,
+  nativeOffer = false,
 }: {
   wheelOpen: boolean;
   offerOpen: boolean;
@@ -178,8 +184,10 @@ export function DiscountOffer({
   onOfferOpenChange: (open: boolean) => void;
   /** Fired once the prize is banked, so the home card can stop offering it. */
   onClaimed: () => void;
+  nativeOffer?: boolean;
 }) {
   const { locale, t } = useTranslations();
+  const apple = useAppleBilling(nativeOffer && (wheelOpen || offerOpen), true);
   const spinTimerRef = useRef<number | null>(null);
   /** Set once checkout has been started, so leaving does not withdraw a prize
    *  the purchase is already carrying. */
@@ -193,6 +201,7 @@ export function DiscountOffer({
   const [plan, setPlan] = useState<OfferPlan["id"]>("yearly");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appleOffers, setAppleOffers] = useState<NativeProduct[]>([]);
   /*
    * The offer's ten minutes. The server is what actually enforces the window —
    * it measures from the recorded spin and refuses the coupon after it — so
@@ -244,6 +253,25 @@ export function DiscountOffer({
     setIsSpinning(true);
     setError(null);
 
+    if (nativeOffer) {
+      // Introductory offers are governed by Apple eligibility, with no invented
+      // ten-minute expiry or Stripe coupon written to the learner's profile.
+      try {
+        const offers = halfOffProducts(await nativeRequest("products"));
+        if (!offers.length) throw new Error("Offer unavailable");
+        setAppleOffers(offers);
+        onClaimed();
+        spinTimerRef.current = window.setTimeout(() => {
+          spinTimerRef.current = null;
+          setHasWon(true);
+        }, Math.max(0, REVEAL_MS - (Date.now() - startedAt)));
+      } catch {
+        setIsSpinning(false);
+        setError(t("native.priceChanged"));
+      }
+      return;
+    }
+
     // Bank the prize first: the animation is long enough that a learner could
     // navigate away mid-spin, and the award should survive that.
     try {
@@ -276,6 +304,7 @@ export function DiscountOffer({
   }
 
   async function startCheckout() {
+    if (nativeOffer) { await apple.purchase(); return; }
     // The purchase carries the coupon from here on, so leaving this screen
     // must not withdraw it.
     boughtRef.current = true;
@@ -320,6 +349,7 @@ export function DiscountOffer({
    * the only place a drag starts, and both leave through the shared exit.
    */
   useEffect(() => {
+    if (nativeOffer) return;
     if (!offerOpen) {
       setSecondsLeft(remainingSeconds(offerRestored));
       expiresAtRef.current = null;
@@ -416,7 +446,7 @@ export function DiscountOffer({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [offerOpen, offerRestored]);
+  }, [offerOpen, offerRestored, nativeOffer]);
 
   const wheelSheet = useSheet(
     useCallback(() => onWheelOpenChange(false), [onWheelOpenChange]),
@@ -437,7 +467,7 @@ export function DiscountOffer({
    */
   const offerSheet = useSheet(
     useCallback(() => {
-      if (!boughtRef.current) {
+      if (!nativeOffer && !boughtRef.current) {
         void fetch("/api/discount-wheel", { method: "DELETE" }).catch(() => {});
       }
 
@@ -450,7 +480,7 @@ export function DiscountOffer({
       clearOfferResume();
       onOfferOpenChange(false);
       onWheelOpenChange(false);
-    }, [onOfferOpenChange, onWheelOpenChange]),
+    }, [onOfferOpenChange, onWheelOpenChange, nativeOffer]),
     { scrollable: true },
   );
 
@@ -545,10 +575,10 @@ export function DiscountOffer({
             <p className="memo-wheel-sub">
               {t(
                 hasWon
-                  ? "offer.wheelWon"
+                  ? (nativeOffer ? "native.introReady" : "offer.wheelWon")
                   : isSpinning
                     ? "offer.wheelSpinning"
-                    : "offer.wheelIdle",
+                    : (nativeOffer ? "native.introReveal" : "offer.wheelIdle"),
               )}
             </p>
 
@@ -590,7 +620,11 @@ export function DiscountOffer({
             {hasWon ? (
               <div className="memo-wheel-prize">
                 <p>{t("offer.prizeAmount")}</p>
-                <p>{t("offer.prizeCaption")}</p>
+                <p>{t(nativeOffer ? "native.introCaption" : "offer.prizeCaption")}</p>
+                {nativeOffer ? appleOffers.map(product => <p key={product.id}>{t(
+                  product.id === "eu.memoai.premium.yearly" ? "native.firstYearPrice" : "native.firstMonthPrice",
+                  { initial: product.introPrice!, renewal: product.price },
+                )}</p>) : null}
               </div>
             ) : null}
 
@@ -647,25 +681,29 @@ export function DiscountOffer({
             />
             <p className="memo-offer-kicker">{t("offer.kicker")}</p>
             <p className="memo-offer-headline">{t("offer.headline")}</p>
-            <p className="memo-offer-sub">{t("offer.sub")}</p>
+            <p className="memo-offer-sub">{t(nativeOffer ? "native.introCaption" : "offer.sub")}</p>
 
             {/* Big numbers and nothing else. The urgency is the number. */}
-            <p
+            {!nativeOffer ? <p
               className={`memo-offer-timer ${secondsLeft <= 60 ? "urgent" : ""}`.trim()}
               role="timer"
               aria-live="off"
             >
               {String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:
               {String(secondsLeft % 60).padStart(2, "0")}
-            </p>
+            </p> : null}
 
             <div className="memo-offer-plans">
-              {OFFER_PLANS.map((offerPlan) => (
+              {OFFER_PLANS.filter(offerPlan => !nativeOffer || apple.productForPlan(offerPlan.id)).map((offerPlan) => {
+                const product = apple.productForPlan(offerPlan.id);
+                const selectedPlan = nativeOffer ? APPLE_PRODUCTS[apple.selected] : plan;
+                return (
                 <button
                   key={offerPlan.id}
                   type="button"
-                  className={`memo-offer-plan ${plan === offerPlan.id ? "selected" : ""}`.trim()}
-                  onClick={() => setPlan(offerPlan.id)}
+                  className={`memo-offer-plan ${selectedPlan === offerPlan.id ? "selected" : ""}`.trim()}
+                  onClick={() => nativeOffer ? apple.selectPlan(offerPlan.id) : setPlan(offerPlan.id)}
+                  disabled={nativeOffer ? apple.busy : isCheckingOut}
                 >
                   {offerPlan.badgeKey ? (
                     <span className="memo-offer-badge">{t(offerPlan.badgeKey)}</span>
@@ -678,30 +716,36 @@ export function DiscountOffer({
                     <span>{t(offerPlan.labelKey)}</span>
                     <span className="memo-offer-billing">
                       {t(offerPlan.billingKey, {
-                        discounted: formatCurrency(offerPlan.discountedAmount, locale),
-                        renewal: formatCurrency(offerPlan.renewalAmount, locale),
+                        discounted: nativeOffer ? product!.introPrice! : formatCurrency(offerPlan.discountedAmount, locale),
+                        renewal: nativeOffer ? product!.price : formatCurrency(offerPlan.renewalAmount, locale),
                       })}
                     </span>
                   </span>
                   <span className="memo-offer-price">
-                    {t(offerPlan.priceKey, {
-                      amount: formatCurrency(offerPlan.headlineAmount, locale),
-                    })}
+                    {nativeOffer && offerPlan.id === "yearly" && !product?.introWeeklyPrice
+                      ? product?.introPrice
+                      : t(offerPlan.priceKey, {
+                          amount: nativeOffer
+                            ? (offerPlan.id === "yearly" ? product!.introWeeklyPrice! : product!.introPrice!)
+                            : formatCurrency(offerPlan.headlineAmount, locale),
+                        })}
                   </span>
                 </button>
-              ))}
+              ); })}
 
+              {nativeOffer && apple.notice ? <p role="status" className="memo-inline-error">{apple.notice}</p> : null}
               {error ? <p className="memo-inline-error">{error}</p> : null}
 
               <button
                 type="button"
                 className="memo-offer-cta"
                 onClick={() => void startCheckout()}
-                disabled={isCheckingOut}
+                disabled={nativeOffer ? apple.busy || !apple.selectedProduct : isCheckingOut}
               >
-                {t(isCheckingOut ? "offer.opening" : "common.continue")}
+                {t((nativeOffer ? apple.busy : isCheckingOut) ? "offer.opening" : "common.continue")}
               </button>
               <p className="memo-offer-fine">{t("offer.fine")}</p>
+              {nativeOffer ? <AppleBillingTerms busy={apple.busy} onRestore={() => void apple.restore()} /> : null}
             </div>
           </div>
         </div>

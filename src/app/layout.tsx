@@ -1,4 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
+import { NativeProvider } from "@/components/native-provider";
+import { isNativeUserAgent } from "@/lib/mobile/runtime";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -133,12 +136,23 @@ const APPLE_STARTUP_IMAGES = splashScreens();
  * drawn on. iOS ignores the tag outright (measured in #178), so it costs
  * nothing there and is the whole mechanism on Android.
  */
-export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f1f1f5" },
-    { media: "(prefers-color-scheme: dark)", color: "#121214" },
-  ],
-};
+export async function generateViewport(): Promise<Viewport> {
+  const native = isNativeUserAgent((await headers()).get("user-agent"));
+
+  return {
+    themeColor: [
+      { media: "(prefers-color-scheme: light)", color: "#f1f1f5" },
+      { media: "(prefers-color-scheme: dark)", color: "#121214" },
+    ],
+    /*
+     * The iOS wrapper's web view runs edge to edge, so the page must draw under
+     * the status bar and home indicator and lay out with env(safe-area-inset-*)
+     * — the `--memo-safe-*` variables the redesign already uses. Browsers and the
+     * installed PWA keep the default, where those insets are zero.
+     */
+    ...(native ? { viewportFit: "cover" as const } : {}),
+  };
+}
 
 /**
  * Title, description and Open Graph in the language this visitor is being
@@ -219,9 +233,10 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const locale = await getLocale();
+  const native = isNativeUserAgent((await headers()).get("user-agent"));
 
   return (
-    <html lang={LOCALE_BCP47[locale]} suppressHydrationWarning>
+    <html lang={LOCALE_BCP47[locale]} data-native={native ? "ios" : undefined} suppressHydrationWarning>
       <head>
         {/*
           * iOS will not use an `apple-touch-startup-image` unless the page also
@@ -299,11 +314,13 @@ export default async function RootLayout({
           */}
         <LaunchScreen />
         <I18nProvider locale={locale} messages={getMessages(locale)}>
+          <NativeProvider native={native}>
           <ThemeController />
           <ServiceWorkerRegistration />
           <KeyboardInset />
           {children}
           <VisitTracker />
+          </NativeProvider>
         </I18nProvider>
         <Analytics />
         <SpeedInsights />

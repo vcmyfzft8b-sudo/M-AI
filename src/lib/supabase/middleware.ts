@@ -10,6 +10,7 @@ import {
   parseLocale,
 } from "@/lib/i18n/locales";
 import { getPublicEnv } from "@/lib/public-env";
+import { accountDeletionRequested } from "@/lib/mobile/account-lifecycle";
 import {
   serializeVerifiedPageUser,
   VERIFIED_PAGE_USER_HEADER,
@@ -99,7 +100,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (user) {
+  if (user && !accountDeletionRequested(user)) {
     requestHeaders.set(VERIFIED_PAGE_USER_HEADER, serializeVerifiedPageUser(user));
   }
 

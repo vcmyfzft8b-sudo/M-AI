@@ -1,3 +1,4 @@
+import { isNativeUserAgent } from "./mobile/runtime.ts";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 
 /*
@@ -122,6 +123,7 @@ export type InstallPlatform = "ios" | "android" | "other";
  * agent: iPadOS reports itself as a Mac, and has done since iPadOS 13.
  */
 export function detectInstallPlatform(): InstallPlatform {
+  if (typeof navigator !== "undefined" && isNativeUserAgent(navigator.userAgent)) return "other";
   if (typeof navigator === "undefined") {
     return "other";
   }
@@ -157,6 +159,7 @@ export function detectInstallPlatform(): InstallPlatform {
  * look; opening it is what ends it.
  */
 export function shouldOfferInstallGuide(seenOnAccount = false) {
+  if (typeof navigator !== "undefined" && isNativeUserAgent(navigator.userAgent)) return false;
   if (typeof window === "undefined") {
     return false;
   }

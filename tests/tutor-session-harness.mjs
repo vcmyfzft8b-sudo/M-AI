@@ -71,6 +71,7 @@ export function sessionHarness({ source } = {}) {
   const stubs = {
     react: { useRef: (current) => ({ current }), useState: (initial) => [initial, (value) => state.updates.push(value)], useCallback: (fn) => fn, useEffect() {} },
     "@/components/i18n-provider": { useT: () => (key) => key },
+    "@/lib/mobile/client": { useNativeIOS: () => false, isNativeIOS: () => false, nativeRequest: async () => { throw new Error("No native calls in the harness"); } },
     "@/components/use-sheet": { useSheet: () => ({}) },
     "@/lib/tutor/turn-audio": turnAudio,
     "@/lib/tutor/heard-line": heardLine,

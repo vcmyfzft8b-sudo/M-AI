@@ -1,3 +1,4 @@
+import { isNativeUserAgent } from "@/lib/mobile/runtime";
 import { NextResponse } from "next/server";
 
 import {
@@ -11,6 +12,9 @@ import { STRIPE_CHECKOUT_LOCALE } from "@/lib/i18n/locales";
 import { getLocale, tr } from "@/lib/i18n/server";
 
 export async function POST(request: Request) {
+  if (isNativeUserAgent(request.headers.get("user-agent"))) {
+    return NextResponse.json({ error: await tr("native.manage"), code: "native_purchase_required" }, { status: 403 });
+  }
   const appState = await getViewerAppState();
 
   if (!appState) {

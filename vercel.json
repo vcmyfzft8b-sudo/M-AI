@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
+      "path": "/api/cron/account-erasure",
+      "schedule": "40 * * * *"
+    },
+    {
       "path": "/api/cron/ugc-sync?force=1",
       "schedule": "50 21 * * *"
     },

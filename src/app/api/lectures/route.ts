@@ -1,3 +1,4 @@
+import { assertStorageOwnerActive } from "@/lib/mobile/storage-owner";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -154,6 +155,7 @@ export async function POST(request: Request) {
   });
 
   const service = createSupabaseServiceRoleClient();
+  await assertStorageOwnerActive(user.id);
   const { data: signedUpload, error: signedError } = await service.storage
     .from("lecture-audio")
     .createSignedUploadUrl(path);

@@ -1,3 +1,4 @@
+import { getAppleEntitlement } from "@/lib/mobile/apple";
 import { SettingsScreen } from "@/components/settings-screen";
 import { getViewerAppState } from "@/lib/billing";
 import { requireUser } from "@/lib/auth";
@@ -39,7 +40,9 @@ export default async function SettingsPage() {
    */
   const testPersona = isSuperAdmin(user) ? await readTestPersonaOrReal() : null;
   const email = user.email ?? user.user_metadata.email ?? t("settings.signedInUser");
-  const subscription = appState?.subscription ?? null;
+  const apple = await getAppleEntitlement(user.id);
+  // An old cancelled web subscription must not hide the active Apple plan.
+  const subscription = apple ? null : appState?.subscription ?? null;
   // The badge on the "add to home screen" row comes from the profile rather
   // than from this browser's storage, so opening the guide once answers it on
   // every device this account signs in on.
@@ -48,7 +51,8 @@ export default async function SettingsPage() {
   return (
     <SettingsScreen
       email={email}
-      hasSubscription={Boolean(subscription)}
+      hasSubscription={Boolean(subscription || apple)}
+      appleSubscription={Boolean(apple && !subscription)}
       installGuideSeen={installGuideSeen}
       testPersona={testPersona}
       planLabel={
@@ -57,14 +61,14 @@ export default async function SettingsPage() {
               plan: t(PLAN_LABEL_KEYS[subscription.plan]),
               status: t(SUBSCRIPTION_STATUS_KEYS[subscription.status]),
             })
-          : t("settings.plan.none")
+          : apple ? t("native.active") : t("settings.plan.none")
       }
       planDetail={
         subscription?.current_period_end
           ? t("settings.plan.activeUntil", {
               date: formatCalendarDate(subscription.current_period_end, locale),
             })
-          : t("settings.plan.choosePrompt")
+          : apple?.expires_at ? t("settings.plan.activeUntil", { date: formatCalendarDate(apple.expires_at, locale) }) : t("settings.plan.choosePrompt")
       }
     />
   );

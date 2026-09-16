@@ -1,3 +1,4 @@
+import { isNativeUserAgent } from "@/lib/mobile/runtime";
 import { NextResponse } from "next/server";
 
 import {
@@ -23,6 +24,9 @@ import { getTutorCreditPriceId, TUTOR_CREDIT_METADATA_KIND } from "@/lib/tutor-c
  * the plan, not an hour of one feature inside it.
  */
 export async function POST(request: Request) {
+  if (isNativeUserAgent(request.headers.get("user-agent"))) {
+    return NextResponse.json({ error: await tr("native.manage"), code: "native_purchase_required" }, { status: 403 });
+  }
   const appState = await getViewerAppState();
 
   if (!appState) {

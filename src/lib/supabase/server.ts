@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createServerClient } from "@supabase/ssr";
-import { createClient } from "@supabase/supabase-js";
+import { AuthError, createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
@@ -9,6 +9,19 @@ import type { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
 import type { Database } from "@/lib/database.types";
 import { getPublicEnv } from "@/lib/public-env";
 import { getServerEnv } from "@/lib/server-env";
+import { accountDeletionRequested } from "@/lib/mobile/account-lifecycle";
+
+function blockDeletingAccount(client: SupabaseClient<Database>) {
+  const getUser = client.auth.getUser.bind(client.auth);
+  client.auth.getUser = async (jwt?: string) => {
+    const result = await getUser(jwt);
+    if (result.data.user && accountDeletionRequested(result.data.user)) {
+      return { data: { user: null }, error: new AuthError("Account deletion requested", 401) };
+    }
+    return result;
+  };
+  return client;
+}
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
@@ -18,7 +31,7 @@ export async function createSupabaseServerClient() {
     throw new Error("Missing Supabase public environment variables.");
   }
 
-  return createServerClient<Database>(env.supabaseUrl, env.supabaseAnonKey, {
+  return blockDeletingAccount(createServerClient<Database>(env.supabaseUrl, env.supabaseAnonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -27,7 +40,7 @@ export async function createSupabaseServerClient() {
         // Session refresh writes are handled in middleware.
       },
     },
-  });
+  }));
 }
 
 export async function createSupabaseRouteHandlerClient() {
@@ -42,7 +55,7 @@ export async function createSupabaseRouteHandlerClient() {
     [string, string, Partial<ResponseCookie> | undefined]
   > = [];
 
-  const supabase = createServerClient<Database>(env.supabaseUrl, env.supabaseAnonKey, {
+  const supabase = blockDeletingAccount(createServerClient<Database>(env.supabaseUrl, env.supabaseAnonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -55,7 +68,7 @@ export async function createSupabaseRouteHandlerClient() {
         ]);
       },
     },
-  });
+  }));
 
   return {
     supabase,

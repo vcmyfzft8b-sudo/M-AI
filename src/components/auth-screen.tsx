@@ -5,6 +5,8 @@ import { AuthBackLink } from "@/components/auth-back-link";
 import { BrandLogo } from "@/components/brand-logo";
 import { BRAND_NAME } from "@/lib/brand";
 import { getTranslations } from "@/lib/i18n/server";
+import { headers } from "next/headers";
+import { isNativeUserAgent } from "@/lib/mobile/runtime";
 
 /**
  * The frame every auth screen sits in: the header row, then a centred stage.
@@ -25,19 +27,28 @@ export async function AuthScreen({
   children: ReactNode;
 }) {
   const { t } = await getTranslations();
+  // The iOS app has no landing page: the wrapper opens sign-in directly and
+  // rewrites "/" back to it, so a back arrow would only lead to itself.
+  const native = isNativeUserAgent((await headers()).get("user-agent"));
 
   return (
     <main className="memo memo-auth">
       <header className="memo-auth-header">
-        <AuthBackLink href={backHref} />
+        {native ? <span className="memo-auth-header-gap" aria-hidden="true" /> : <AuthBackLink href={backHref} />}
 
-        <Link
-          href="/"
-          className="memo-auth-lockup"
-          aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}
-        >
-          <BrandLogo compact priority />
-        </Link>
+        {native ? (
+          <span className="memo-auth-lockup">
+            <BrandLogo compact priority />
+          </span>
+        ) : (
+          <Link
+            href="/"
+            className="memo-auth-lockup"
+            aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}
+          >
+            <BrandLogo compact priority />
+          </Link>
+        )}
 
         <span className="memo-auth-header-gap" aria-hidden="true" />
       </header>

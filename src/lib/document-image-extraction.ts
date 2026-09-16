@@ -1,3 +1,4 @@
+import { assertStorageOwnerActive } from "@/lib/mobile/storage-owner";
 import "server-only";
 
 import { lookup } from "node:dns/promises";
@@ -1083,6 +1084,7 @@ export async function storeDocumentImagesAsNoteMedia(params: {
     });
     const originalFileName = `document-image-${String(index + 1).padStart(2, "0")}-${image.fileName}`;
 
+    await assertStorageOwnerActive(params.userId);
     const uploadResult = await service.storage.from(STORAGE_BUCKET).upload(storagePath, image.bytes, {
       contentType: image.mimeType,
       upsert: true,

@@ -19912,3 +19912,35 @@
 .memo-native-plans [aria-checked="true"] { box-shadow: inset 0 0 0 2px var(--promo); }
 .memo-native-plans button:focus-visible { box-shadow: 0 0 0 3px var(--focus-ring); outline: none; }
 .memo-native-plans button:hover { box-shadow: inset 0 0 0 1px var(--hover-ring); }
+
+/* =========================================================================
+   Native iOS wrapper
+   The app's web view runs edge to edge and the page is served with
+   viewport-fit=cover, so the status-bar and home-indicator insets are the
+   page's to keep. In browsers and the installed PWA env() is zero, so these
+   rules are no-ops there.
+   ========================================================================= */
+
+.memo-dock {
+  bottom: calc(1.4rem + var(--memo-safe-bottom, 0px));
+}
+
+.memo-toast {
+  bottom: calc(2.2rem + var(--memo-safe-bottom, 0px));
+}
+
+@media (max-width: 1099px) {
+  /* No browser bar under the buttons in the app: sit them closer to the home indicator. */
+  html[data-native] .memo-m-homebar {
+    inset: auto 1.15rem calc(0.75rem + var(--memo-safe-bottom)) 1.15rem;
+  }
+}
+
+@media (min-width: 1100px) {
+  /* The wide layout has no safe-area variables of its own; keep the rail and
+     bars clear of the iPad status bar and home indicator. */
+  html[data-native] body {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}

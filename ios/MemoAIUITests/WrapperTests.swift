@@ -1,6 +1,193 @@
 import XCTest
 
 final class WrapperTests: XCTestCase {
+    // Real study flow on a staging Preview: a synthetic lesson photo becomes a
+    // note, then flashcards, a quiz and a mindmap are generated, the mindmap is
+    // shared through the native sheet, chat and read-aloud run, and the note is
+    // deleted. Seed the photo first: xcrun simctl addmedia <udid> ios/build/synthetic-plant-lesson.png
+    @MainActor func testPreviewCreateStudyNoteFromPhoto() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a staging Preview, synthetic account and seeded lesson photo")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        continueAfterFailure = false
+        func snap(_ name: String) {
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = name
+            shot.lifetime = .keepAlways
+            add(shot)
+        }
+        func contains(_ text: String) -> NSPredicate { NSPredicate(format: "label CONTAINS %@", text) }
+        func webButton(_ text: String) -> XCUIElement { app.webViews.buttons.matching(contains(text)).firstMatch }
+        func webText(_ text: String) -> XCUIElement { app.webViews.staticTexts.matching(contains(text)).firstMatch }
+        let tabNames = ["Notes", "Tutor", "Flashcards", "Podcast", "Quiz", "Mindmap", "Palace", "Test", "Speed reader", "Transcript"]
+        /// The tab strip is a horizontally scrolling chip row: drag it from a
+        /// visible chip until the wanted chip is on screen.
+        func tapTab(_ name: String) {
+            let tab = app.webViews.buttons.matching(NSPredicate(format: "label == %@", name)).firstMatch
+            XCTAssertTrue(tab.waitForExistence(timeout: 15), "\(name) tab must exist")
+            for _ in 0..<6 where !tab.isHittable {
+                let chips = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", tabNames)).allElementsBoundByIndex
+                guard let anchor = chips.first(where: { $0.isHittable }) else { break }
+                let width = app.windows.firstMatch.frame.width
+                let dx: CGFloat = tab.frame.midX > width ? -(width * 0.7) : width * 0.7
+                let start = anchor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: dx, dy: 0)))
+            }
+            XCTAssertTrue(tab.isHittable, "\(name) tab must be reachable")
+            tab.tap()
+        }
+        /// Wait until any element of `ready` appears; fail early if `failure` shows or after `timeout`.
+        func waitForGeneration(_ ready: [XCUIElement], failure: XCUIElement, timeout: TimeInterval, step: String) {
+            let deadline = Date().addingTimeInterval(timeout)
+            while Date() < deadline {
+                if ready.contains(where: { $0.exists }) { return }
+                XCTAssertFalse(failure.exists, "\(step) reported a failure")
+                RunLoop.current.run(until: Date().addingTimeInterval(5))
+            }
+            XCTFail("\(step) did not finish within \(Int(timeout))s")
+        }
+
+        // 1. Home → New note → document/photo source → Photo Library.
+        // A rerun after the free note was spent reopens the note it created.
+        let newNote = webButton("New note")
+        XCTAssertTrue(newNote.waitForExistence(timeout: 30))
+        let existing = app.webViews.descendants(matching: .any).matching(contains("Plant Life Cycle")).firstMatch
+        if existing.waitForExistence(timeout: 5) {
+            existing.tap()
+        } else {
+        newNote.tap()
+        let documents = webButton("PDF, document or photo")
+        XCTAssertTrue(documents.waitForExistence(timeout: 15), "The synthetic account must have its unused free note")
+        documents.tap()
+        let choose = webButton("Choose a file")
+        XCTAssertTrue(choose.waitForExistence(timeout: 15))
+        choose.tap()
+        XCTAssertTrue(app.buttons["Photo Library"].waitForExistence(timeout: 10))
+        app.buttons["Photo Library"].tap()
+        // PHPicker runs out of process; its grid still appears in the app's tree.
+        let photo = app.images.matching(NSPredicate(format: "label BEGINSWITH %@", "Photo, September 16")).firstMatch
+        XCTAssertTrue(photo.waitForExistence(timeout: 20), "Seed the simulator library with ios/build/synthetic-plant-lesson.png")
+        // The picker's remote view reports its cells as not hittable; a
+        // coordinate tap still lands on the cell.
+        photo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let done = app.buttons["Done"]
+        if done.waitForExistence(timeout: 5), done.isEnabled { done.tap() }
+        let create = webButton("Create the note")
+        XCTAssertTrue(create.waitForExistence(timeout: 30))
+        expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: create)
+        waitForExpectations(timeout: 90)
+        snap("01 Photo attached")
+        create.tap()
+        }
+
+        // 2. Processing → ready. The workspace polls the lecture until the notes exist.
+        let flashcardsTab = app.webViews.buttons.matching(NSPredicate(format: "label == %@", "Flashcards")).firstMatch
+        XCTAssertTrue(flashcardsTab.waitForExistence(timeout: 120), "The note workspace must open after upload")
+        snap("02 Processing")
+        let failed = webText("Processing failed")
+        let notesReady = { () -> Bool in
+            let stages = ["being processed", "Reading the photos", "Writing the notes", "Preparing the notes",
+                          "Marking the important", "Getting ready to process", "Uploading the material", "Adding images"]
+            return !stages.contains { webText($0).exists }
+        }
+        let deadline = Date().addingTimeInterval(600)
+        while Date() < deadline, !notesReady() {
+            XCTAssertFalse(failed.exists, "Note generation failed")
+            RunLoop.current.run(until: Date().addingTimeInterval(10))
+        }
+        XCTAssertTrue(notesReady(), "Notes did not finish within 10 minutes")
+        snap("03 Generated note")
+
+        // 3. Flashcards.
+        tapTab("Flashcards")
+        let createCards = webButton("Create flashcards")
+        if createCards.waitForExistence(timeout: 20) { createCards.tap() }
+        let anyCard = app.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Card ")).firstMatch
+        waitForGeneration([anyCard, webText("Every card is done")], failure: webText("could not be created"), timeout: 300, step: "Flashcards")
+        snap("04 Flashcards")
+        let knew = webButton("Knew it")
+        if knew.waitForExistence(timeout: 5) { knew.tap() }
+
+        // 4. Quiz.
+        tapTab("Quiz")
+        let createQuiz = webButton("Create a quiz")
+        if createQuiz.waitForExistence(timeout: 20) { createQuiz.tap() }
+        waitForGeneration([webText("Question 1"), webText("Choose one answer")], failure: webText("could not be created"), timeout: 300, step: "Quiz")
+        snap("05 Quiz")
+
+        // 5. Mindmap, then export through the native share sheet.
+        tapTab("Mindmap")
+        let createMap = webButton("Create a mindmap")
+        if createMap.waitForExistence(timeout: 20) { createMap.tap() }
+        let saveImage = webButton("Save as image")
+        waitForGeneration([saveImage, app.webViews.otherElements["Mindmap of this note"]], failure: webText("could not be drawn"), timeout: 300, step: "Mindmap")
+        snap("06 Mindmap")
+        XCTAssertTrue(saveImage.waitForExistence(timeout: 15))
+        saveImage.tap()
+        let saveToFiles = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Save to Files")).firstMatch
+        XCTAssertTrue(saveToFiles.waitForExistence(timeout: 20), "Mindmap export must open the native share sheet")
+        snap("07 Mindmap share sheet")
+        let closeShare = app.buttons["Close"].firstMatch
+        if closeShare.waitForExistence(timeout: 3) { closeShare.tap() } else { app.swipeDown() }
+
+        // 6. Chat about the note.
+        tapTab("Notes")
+        let openChat = app.webViews.descendants(matching: .any).matching(contains("Chat about this note")).firstMatch
+        XCTAssertTrue(openChat.waitForExistence(timeout: 15))
+        openChat.tap()
+        let suggestion = webButton("Summarise the lecture")
+        if suggestion.waitForExistence(timeout: 10) {
+            suggestion.tap()
+        } else {
+            let field = app.webViews.textViews.firstMatch.exists ? app.webViews.textViews.firstMatch : app.webViews.textFields.firstMatch
+            XCTAssertTrue(field.waitForExistence(timeout: 10), "Chat input must open")
+            field.tap()
+            field.typeText("What is germination?")
+            let send = webButton("Send message")
+            XCTAssertTrue(send.waitForExistence(timeout: 5))
+            send.tap()
+        }
+        let typing = webText("Memo AI is typing")
+        _ = typing.waitForExistence(timeout: 15)
+        let answered = NSPredicate(format: "exists == false")
+        expectation(for: answered, evaluatedWith: typing)
+        waitForExpectations(timeout: 180)
+        XCTAssertFalse(webText("could not be generated").exists, "Chat answer failed")
+        snap("08 Chat answer")
+        let closeChat = webButton("Close chat")
+        if closeChat.waitForExistence(timeout: 5) { closeChat.tap() }
+
+        // 7. Read aloud starts playing inside WKWebView.
+        let listen = webButton("Listen")
+        for _ in 0..<4 where !(listen.exists && listen.isHittable) { app.webViews.firstMatch.swipeDown() }
+        XCTAssertTrue(listen.waitForExistence(timeout: 15))
+        listen.tap()
+        let pause = webButton("Pause")
+        XCTAssertTrue(pause.waitForExistence(timeout: 120), "Read-aloud must start playing")
+        snap("09 Read aloud playing")
+        pause.tap()
+        let closeReader = webButton("Close the reader")
+        if closeReader.waitForExistence(timeout: 5) { closeReader.tap() }
+
+        // 8. Delete the note from the actions sheet and land on an empty home.
+        let actions = app.webViews.buttons["Actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 15))
+        actions.tap()
+        let delete = app.webViews.buttons.matching(NSPredicate(format: "label == %@", "Delete")).firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 10))
+        delete.tap()
+        let confirm = app.webViews.buttons.matching(NSPredicate(format: "label == %@", "Delete note")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+        snap("10 Delete confirmation")
+        confirm.tap()
+        XCTAssertTrue(newNote.waitForExistence(timeout: 60), "Deleting the note must return home")
+        snap("11 Home after deletion")
+    }
+
     @MainActor func testPreviewHelpUsesAppleBillingInstructions() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
               URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {

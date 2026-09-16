@@ -8,6 +8,7 @@ import { sheetClass, useSheet } from "@/components/use-sheet";
 import { useT } from "@/components/i18n-provider";
 import { VoiceUsageSheet, type VoiceUsage } from "@/components/voice-usage-sheet";
 import { readChatStream } from "@/lib/chat-stream-client";
+import { useNativeIOS } from "@/lib/mobile/client";
 import { TUTOR_GRANT_KEY_GRACE_SECONDS } from "@/lib/tutor-allowance";
 import {
   DEFAULT_NOTE_TTS_VOICE,
@@ -185,6 +186,7 @@ export function LectureTutor({
   onOpenFlashcards?: () => void;
 }) {
   const t = useT();
+  const native = useNativeIOS();
 
   const [phase, setPhase] = useState<TutorPhase>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -1618,7 +1620,7 @@ export function LectureTutor({
 
       setError(
         caught instanceof SpeechInputError && caught.reason === "denied"
-          ? t("tutor.error.micDenied")
+          ? t(native ? "native.micDenied" : "tutor.error.micDenied")
           : t("tutor.error.micUnavailable"),
       );
     }
@@ -1645,6 +1647,7 @@ export function LectureTutor({
     settleGrant,
     stopPreview,
     t,
+    native,
     voice,
     whoSpoke,
   ]);

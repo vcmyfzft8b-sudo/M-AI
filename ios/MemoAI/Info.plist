@@ -38,6 +38,8 @@
 	<string>Scan study materials and attach photos to your notes.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Record lectures and speak with your Memo voice tutor.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save mindmap images exported from your notes to your photo library.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

@@ -2106,5 +2106,6 @@ export const sr: Messages = {
   "native.appleDisconnectCopy": "Za prekid starijeg ovlašćenja za prijavu preko Applea ukloni Memo iz opcije Prijava preko Applea u podešavanjima Apple naloga. Zahtev za brisanje Memo naloga biće izvršen.",
   "native.redeemHelp": "Kodovi izdati za kupovinu na veb-sajtu ne mogu se uneti u Appleov prozor za kupovinu. U podešavanjima izaberi plan da vidiš Appleove cene i ponude dostupne tvom nalogu. Dostupan besplatni probni period ili sniženi prvi period prikazuje se pre potvrde kupovine. U Appleovoj potvrdi proveri prvu naplatu i cenu obnove.",
   "native.giftHelp": "Memo trenutno ne omogućava poklanjanje pretplate u App Storeu. Svaka osoba treba da koristi sopstveni Memo nalog i Apple nalog. Poklon ili promotivni kodovi za veb-sajt ne mogu se primeniti na kupovinu u App Storeu.",
+  "native.micDenied": "Memo treba pristup mikrofonu. Dozvoli ga u Podešavanjima iOS-a → Memo AI → Mikrofon.",
   "native.appleDisconnectLink": "Pogledaj Apple uputstva",
 };

@@ -98,8 +98,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         webView.isHidden = true
         webView.backgroundColor = UIColor(named: "Canvas")
         webView.scrollView.backgroundColor = UIColor(named: "Canvas")
-        // The web app owns its single scroller. Safe-area layout is supplied once,
-        // by this native container; the page's env(safe-area-inset-*) then stays zero.
+        // The web app owns its single scroller and, like the installed PWA, the
+        // safe areas: the page is served with viewport-fit=cover for this user
+        // agent and lays out with env(safe-area-inset-*). Insetting the web view
+        // instead left light native bands above and below every dimmed sheet.
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.showsVerticalScrollIndicator = false
         webView.scrollView.showsHorizontalScrollIndicator = false
@@ -111,10 +113,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         webView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(webView)
         NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-            webView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor)
+            webView.topAnchor.constraint(equalTo: view.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
         buildOverlay()
         store.deliver = { [weak self] jws in
@@ -281,12 +283,15 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             decisionHandler(.download)
         } else {
             decisionHandler(.cancel)
+            // Mail and phone hand-offs cannot reach a checkout; the PWA starts
+            // them from scripts (Settings → Share Memo), so accept every type.
+            if ["mailto", "tel"].contains(url.scheme ?? "") { UIApplication.shared.open(url); return }
             // No redirects, scripts or popups can send users to external checkout.
-            guard action.navigationType == .linkActivated,
+            guard action.navigationType == .linkActivated, url.scheme == "https",
                   !["checkout.stripe.com", "billing.stripe.com"].contains(url.host ?? "") else { return }
             // Memo stays in its full-screen web view. User-selected external
             // websites belong in the system browser, not an in-app browser sheet.
-            if ["https", "mailto", "tel"].contains(url.scheme ?? "") { UIApplication.shared.open(url) }
+            UIApplication.shared.open(url)
         }
     }
 

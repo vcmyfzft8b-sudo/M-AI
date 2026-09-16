@@ -20,6 +20,9 @@ plist(app/'Info.plist', {
  'UISupportedInterfaceOrientations~ipad':['UIInterfaceOrientationPortrait','UIInterfaceOrientationPortraitUpsideDown','UIInterfaceOrientationLandscapeLeft','UIInterfaceOrientationLandscapeRight'],
  'NSMicrophoneUsageDescription':'Record lectures and speak with your Memo voice tutor.',
  'NSCameraUsageDescription':'Scan study materials and attach photos to your notes.',
+ # The native share sheet offers "Save Image" for exported mindmap PNGs; without
+ # this string iOS terminates the app when a user picks it.
+ 'NSPhotoLibraryAddUsageDescription':'Save mindmap images exported from your notes to your photo library.',
  'ITSAppUsesNonExemptEncryption':False,
  'NSAppTransportSecurity':{'NSAllowsLocalNetworking':True}
 })
@@ -30,7 +33,9 @@ for kind in ['Name','EmailAddress','UserID','PurchaseHistory','AudioData','Photo
  collected.append({'NSPrivacyCollectedDataType':'NSPrivacyCollectedDataType'+kind,'NSPrivacyCollectedDataTypeLinked':True,'NSPrivacyCollectedDataTypeTracking':False,'NSPrivacyCollectedDataTypePurposes':['NSPrivacyCollectedDataTypePurposeAppFunctionality']})
 for kind in ['ProductInteraction','OtherUsageData','CrashData','PerformanceData','OtherDiagnosticData','CoarseLocation']:
  collected.append({'NSPrivacyCollectedDataType':'NSPrivacyCollectedDataType'+kind,'NSPrivacyCollectedDataTypeLinked':True,'NSPrivacyCollectedDataTypeTracking':False,'NSPrivacyCollectedDataTypePurposes':['NSPrivacyCollectedDataTypePurposeAnalytics','NSPrivacyCollectedDataTypePurposeAppFunctionality']})
-plist(app/'PrivacyInfo.xcprivacy', {'NSPrivacyTracking':False,'NSPrivacyTrackingDomains':[], 'NSPrivacyCollectedDataTypes':collected, 'NSPrivacyAccessedAPITypes':[]})
+plist(app/'PrivacyInfo.xcprivacy', {'NSPrivacyTracking':False,'NSPrivacyTrackingDomains':[], 'NSPrivacyCollectedDataTypes':collected, 'NSPrivacyAccessedAPITypes':[
+ # The app-only theme preference lives in UserDefaults (required-reason API, CA92.1).
+ {'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategoryUserDefaults','NSPrivacyAccessedAPITypeReasons':['CA92.1']}]})
 assets=app/'Assets.xcassets'
 write(assets/'Contents.json',json.dumps({'info':{'author':'xcode','version':1}},indent=2)+'\n')
 write(assets/'AppIcon.appiconset/Contents.json',json.dumps({'images':[{'filename':'AppIcon.png','idiom':'universal','platform':'ios','size':'1024x1024'}],'info':{'author':'xcode','version':1}},indent=2)+'\n')
@@ -52,14 +57,14 @@ strings={
 for locale,table in strings.items():
  write(app/f'{locale}.lproj/Localizable.strings','\n'.join(f'{json.dumps(k)} = {json.dumps(v,ensure_ascii=False)};' for k,v in table.items())+'\n')
 permissions = {
- 'en': ('Scan study materials and attach photos to your notes.', 'Record lectures and speak with your Memo voice tutor.'),
- 'sl': ('Skeniraj učno gradivo in priloži fotografije zapiskom.', 'Snemaj predavanja in se pogovarjaj z glasovnim tutorjem Memo.'),
- 'hr': ('Skeniraj materijale za učenje i priloži fotografije bilješkama.', 'Snimaj predavanja i razgovaraj s glasovnim tutorom Memo.'),
- 'bs': ('Skeniraj materijale za učenje i priloži fotografije bilješkama.', 'Snimaj predavanja i razgovaraj s glasovnim tutorom Memo.'),
- 'sr': ('Skeniraj materijale za učenje i priloži fotografije beleškama.', 'Snimaj predavanja i razgovaraj sa glasovnim tutorom Memo.'),
+ 'en': ('Scan study materials and attach photos to your notes.', 'Record lectures and speak with your Memo voice tutor.', 'Save mindmap images exported from your notes to your photo library.'),
+ 'sl': ('Skeniraj učno gradivo in priloži fotografije zapiskom.', 'Snemaj predavanja in se pogovarjaj z glasovnim tutorjem Memo.', 'Shrani slike miselnih vzorcev, izvožene iz zapiskov, v svojo knjižnico fotografij.'),
+ 'hr': ('Skeniraj materijale za učenje i priloži fotografije bilješkama.', 'Snimaj predavanja i razgovaraj s glasovnim tutorom Memo.', 'Spremi slike mentalnih mapa izvezene iz bilješki u svoju biblioteku fotografija.'),
+ 'bs': ('Skeniraj materijale za učenje i priloži fotografije bilješkama.', 'Snimaj predavanja i razgovaraj s glasovnim tutorom Memo.', 'Sačuvaj slike mentalnih mapa izvezene iz bilješki u svoju biblioteku fotografija.'),
+ 'sr': ('Skeniraj materijale za učenje i priloži fotografije beleškama.', 'Snimaj predavanja i razgovaraj sa glasovnim tutorom Memo.', 'Sačuvaj slike mentalnih mapa izvezene iz beleški u svoju biblioteku fotografija.'),
 }
-for locale, (camera, microphone) in permissions.items():
- table = {'NSCameraUsageDescription': camera, 'NSMicrophoneUsageDescription': microphone}
+for locale, (camera, microphone, photoLibraryAdd) in permissions.items():
+ table = {'NSCameraUsageDescription': camera, 'NSMicrophoneUsageDescription': microphone, 'NSPhotoLibraryAddUsageDescription': photoLibraryAdd}
  write(app/f'{locale}.lproj/InfoPlist.strings','\n'.join(f'{json.dumps(k)} = {json.dumps(v,ensure_ascii=False)};' for k,v in table.items())+'\n')
 # Stable IDs make regeneration diffable. File-system synchronized groups include new Swift/resources.
 project='''// !$*UTF8*$!

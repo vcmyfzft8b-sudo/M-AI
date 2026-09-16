@@ -1,6 +1,58 @@
 import XCTest
 
 final class WrapperTests: XCTestCase {
+    // Opt-in review against a staging Preview with a synthetic account already
+    // signed in on this simulator. The ordinary fixture suite skips this test.
+    @MainActor func testPreviewSettingsScrollAndTheme() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a staging Preview and a signed-in synthetic account")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        continueAfterFailure = false
+        let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 30))
+        settings.tap()
+        let darkControl = app.webViews.switches["Dark"]
+        if !darkControl.waitForExistence(timeout: 15) {
+            print(app.debugDescription)
+            XCTFail("Dark theme control missing")
+            return
+        }
+        app.webViews.switches["Light"].tap()
+        XCTAssertEqual(app.webViews.switches["Light"].value as? String, "1")
+        let light = XCTAttachment(screenshot: app.screenshot())
+        light.name = "PWA settings light appearance"
+        light.lifetime = .keepAlways
+        add(light)
+        darkControl.tap()
+        XCTAssertEqual(darkControl.value as? String, "1")
+        let dark = XCTAttachment(screenshot: app.screenshot())
+        dark.name = "PWA settings dark appearance"
+        dark.lifetime = .keepAlways
+        add(dark)
+        let restore = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Restore purchases")).firstMatch
+        for _ in 0..<5 {
+            if restore.exists && restore.isHittable { break }
+            app.webViews.firstMatch.swipeUp()
+        }
+        XCTAssertTrue(restore.exists && restore.isHittable, "Apple settings must be reachable by scrolling")
+        XCTAssertTrue(app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Manage Apple subscriptions")).firstMatch.exists)
+        let rows = XCTAttachment(screenshot: app.screenshot())
+        rows.name = "PWA settings with Apple rows"
+        rows.lifetime = .keepAlways
+        add(rows)
+        let system = app.webViews.switches["System"]
+        for _ in 0..<5 {
+            if system.isHittable { break }
+            app.webViews.firstMatch.swipeDown()
+        }
+        system.tap()
+        XCTAssertEqual(system.value as? String, "1")
+    }
+
     private func launch() -> XCUIApplication {
         let app = XCUIApplication()
         let fixture = Bundle(for: Self.self).url(forResource: "fixture-url", withExtension: "txt")!

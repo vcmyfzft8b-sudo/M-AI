@@ -19,6 +19,14 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private var downloadFiles: [ObjectIdentifier: URL] = [:]
     private var checkingAppleCredential = false
     private var memoLocale: String?
+    private let themePreferenceKey = "memo.pwa.theme"
+
+    private func setMemoTheme(_ value: String) {
+        guard ["system", "light", "dark"].contains(value) else { return }
+        overrideUserInterfaceStyle = value == "dark" ? .dark : value == "light" ? .light : .unspecified
+        UserDefaults.standard.set(value, forKey: themePreferenceKey)
+        setNeedsStatusBarAppearanceUpdate()
+    }
 
     private func text(_ key: String) -> String {
         let path = Bundle.main.path(forResource: memoLocale ?? "en", ofType: "lproj")
@@ -37,6 +45,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        setMemoTheme(UserDefaults.standard.string(forKey: themePreferenceKey) ?? "system")
         view.backgroundColor = UIColor(named: "Canvas")
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
@@ -74,9 +83,12 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         config.userContentController.addUserScript(WKUserScript(source: """
             (() => {
               if (!\(AppConfiguration.trustedOriginsJSON).includes(location.origin)) return;
-              const sync = () => window.memoNative.request('setLocale', {locale: document.documentElement.lang}).catch(() => {});
+              const sync = () => {
+                window.memoNative.request('setLocale', {locale: document.documentElement.lang}).catch(() => {});
+                window.memoNative.request('setTheme', {theme: document.documentElement.dataset.theme || 'system'}).catch(() => {});
+              };
               sync();
-              new MutationObserver(sync).observe(document.documentElement, {attributes: true, attributeFilter: ['lang']});
+              new MutationObserver(sync).observe(document.documentElement, {attributes: true, attributeFilter: ['lang', 'data-theme']});
             })();
             """, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         webView = WKWebView(frame: .zero, configuration: config)
@@ -344,6 +356,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 case "setLocale":
                     guard let locale = body["locale"] as? String else { throw Store.StoreError.unavailable }
                     setMemoLocale(locale)
+                    replyHandler(["status": "updated"], nil)
+                case "setTheme":
+                    guard let theme = body["theme"] as? String else { throw Store.StoreError.unavailable }
+                    setMemoTheme(theme)
                     replyHandler(["status": "updated"], nil)
                 case "products": replyHandler(try await store.products(), nil)
                 case "pendingProduct": replyHandler(["productId": store.pendingProductID as Any? ?? NSNull()], nil)

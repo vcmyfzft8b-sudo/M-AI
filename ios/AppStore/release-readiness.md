@@ -15,6 +15,7 @@ sessions, the connected iPhone, Sandbox credentials, or the production merge.
 | Sign-in screen in the app | Fresh iPhone 17 Pro Max simulator, signed out: Google, Apple and email all render, the back arrow to the (non-existent) landing page is gone, and a password login with a synthetic staging account reaches the AI-consent gate. |
 | Edge-to-edge layout | The web view now fills the window; the page is served `viewport-fit=cover` for the native user agent and lays out with `--memo-safe-top/bottom`. Home, paywall, note and settings were reviewed by screenshot; the paywall close button and the native consent/support screens were re-inset after the first review. |
 | App Review guideline audit (web side) | Stripe Checkout, Billing Portal and tutor-credit routes refuse the native user agent before any work (now covered by `tests/mobile-billing-guards.test.mjs`); every paywall, upsell and settings surface routes to StoreKit; existing Stripe subscribers see their plan with a "managed where purchased" line and no portal; account deletion is in-app with the Apple-subscription warning; email login is code-based and never leaves the web view; external links open in Safari; `/support` exists. Remaining copy notes are listed under "Known, accepted" below. |
+| Keyboard and layout polish | WKWebView's previous/next/done bar above the keyboard is removed (the content view answers `inputAccessoryView` with nil; fixture screenshot verified). The wrapper upgrades the viewport meta to `viewport-fit=cover` itself when a page arrives without it, so an app pointed at production before this branch ships still lays out under the status bar correctly. The Apple paywall shows one short renewal line plus restore/terms/privacy links instead of a four-line paragraph, so it lands on one viewport like the web paywall. |
 | Native fixes | `NSPhotoLibraryAddUsageDescription` added in five languages (the share sheet's "Save Image" would otherwise terminate the app); script-started `mailto:`/`tel:` links (Settings → Share Memo) reach the system; the tutor's microphone-denied message points at iOS Settings; the project generator matches the checked-in Info.plist and privacy manifest. |
 | Release archive | `xcodebuild archive` (Release, signed, `ios/build/MemoAI-release.xcarchive`) succeeds. **App Store export fails: Xcode has no Apple ID signed in** ("No Accounts", no "iOS Distribution" certificate). The archive also predates the photo-library string; re-archive after signing in. |
 
@@ -102,6 +103,12 @@ ignored by Git.
   rejects under guideline 4.8. Verify on production before the first upload.
 
 ## Known, accepted for the first submission
+
+- Apple prices are Apple's: the plan cards show StoreKit's localized price for
+  the buyer's storefront (€19.99/month and €129.99/year on a Slovenian Apple
+  Account, the nearest Apple price points to the web's €20/€130). The
+  simulator has no Apple Account and shows the US storefront ("$17.99",
+  "$119.99"); that is not a bug in the page and cannot be overridden.
 
 - The in-app terms and refund articles still describe the web channel
   ("Stripe portal", "pricing page") alongside the App Store instructions they

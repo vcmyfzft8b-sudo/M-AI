@@ -12928,7 +12928,7 @@
 
 .memo-offer-body {
   padding-top: min(1.4rem, 2.2dvh);
-  padding-bottom: min(2rem, 3dvh);
+  padding-bottom: calc(min(2rem, 3dvh) + var(--memo-safe-bottom, 0px));
 }
 
 .memo-offer-logo {
@@ -19937,6 +19937,13 @@
   /* No browser bar under the buttons in the app: sit them closer to the home indicator. */
   html[data-native] .memo-m-homebar {
     inset: auto 1.15rem calc(0.75rem + var(--memo-safe-bottom)) 1.15rem;
+  }
+
+  /* The note screen runs under the home indicator. Content that sizes to the
+     scroller (the flashcard stage) must stop above it, or its controls land
+     under the floating chat bar. The sticky dock keeps its own inset. */
+  .memo-note-screen > .memo-screen-scroll {
+    padding-bottom: var(--memo-safe-bottom, 0px);
   }
 }
 

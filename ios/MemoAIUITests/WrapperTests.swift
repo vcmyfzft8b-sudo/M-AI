@@ -1,6 +1,15 @@
 import XCTest
 
 final class WrapperTests: XCTestCase {
+    /// Scrolls the note's horizontal tab strip with a fast drag along its row.
+    /// Chips that are clipped at the edge have no visible frame to swipe from.
+    @MainActor private func dragStrip(_ app: XCUIApplication, rowY: CGFloat, left: Bool) {
+        let window = app.windows.firstMatch.frame
+        let y = rowY / window.height
+        let from = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.85 : 0.15, dy: y))
+        let to = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.15 : 0.85, dy: y))
+        from.press(forDuration: 0.05, thenDragTo: to, withVelocity: .fast, thenHoldForDuration: 0.05)
+    }
     // Real study flow on a staging Preview: a synthetic lesson photo becomes a
     // note, then flashcards, a quiz and a mindmap are generated, the mindmap is
     // shared through the native sheet, chat and read-aloud run, and the note is
@@ -32,9 +41,7 @@ final class WrapperTests: XCTestCase {
             let width = app.windows.firstMatch.frame.width
             func onScreen() -> Bool { tab.frame.minX >= 0 && tab.frame.maxX <= width && tab.isHittable }
             for _ in 0..<6 where !onScreen() {
-                let chips = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", tabNames)).allElementsBoundByIndex
-                guard let anchor = chips.first(where: { $0.isHittable }) else { break }
-                if tab.frame.midX > width { anchor.swipeLeft() } else { anchor.swipeRight() }
+                dragStrip(app, rowY: tab.frame.midY, left: tab.frame.midX > width)
                 RunLoop.current.run(until: Date().addingTimeInterval(1))
             }
             XCTAssertTrue(onScreen(), "\(name) tab must be reachable")
@@ -279,15 +286,23 @@ final class WrapperTests: XCTestCase {
             add(shot)
         }
         func contains(_ text: String) -> NSPredicate { NSPredicate(format: "label CONTAINS %@", text) }
-        let emailButton = app.webViews.buttons.matching(contains("Continue with email")).firstMatch
-        XCTAssertTrue(emailButton.waitForExistence(timeout: 30))
+        // The first page follows the IP country (Slovenian here), so match both catalogues.
+        func either(_ english: String, _ slovenian: String) -> NSPredicate {
+            NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", english, slovenian)
+        }
+        let emailButton = app.webViews.buttons.matching(either("Continue with email", "Nadaljuj z e-po")).firstMatch
+        if !emailButton.waitForExistence(timeout: 60), app.buttons["retry"].exists {
+            app.buttons["retry"].tap()
+            _ = emailButton.waitForExistence(timeout: 60)
+        }
+        XCTAssertTrue(emailButton.exists, "Sign-in must load on a clean simulator")
         snap("S1 Sign in")
-        XCTAssertFalse(app.webViews.links["Back"].exists, "The app has no landing page to go back to")
-        XCTAssertTrue(app.webViews.buttons.matching(contains("Continue with Google")).firstMatch.exists)
-        XCTAssertTrue(app.webViews.buttons.matching(contains("Continue with Apple")).firstMatch.exists,
+        XCTAssertFalse(app.webViews.links.matching(either("Back", "Nazaj")).firstMatch.exists, "The app has no landing page to go back to")
+        XCTAssertTrue(app.webViews.buttons.matching(contains("Google")).firstMatch.exists)
+        XCTAssertTrue(app.webViews.buttons.matching(contains("Apple")).firstMatch.exists,
                       "Sign in with Apple must accompany Google (App Review 4.8)")
         emailButton.tap()
-        let passwordLink = app.webViews.links.matching(contains("Sign in with a password")).firstMatch
+        let passwordLink = app.webViews.links.matching(either("Sign in with a password", "Prijava z geslom")).firstMatch
         XCTAssertTrue(passwordLink.waitForExistence(timeout: 15))
         snap("S2 Email entry")
         passwordLink.tap()
@@ -300,12 +315,12 @@ final class WrapperTests: XCTestCase {
         passwordField.tap()
         passwordField.typeText(password)
         snap("S3 Password form")
-        let submit = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "sign in")).firstMatch
+        let submit = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", "sign in", "prijav")).firstMatch
         XCTAssertTrue(submit.waitForExistence(timeout: 5))
         submit.tap()
         // A first sign-in meets the AI-consent gate; an account that already
         // consented goes straight on.
-        let allow = app.webViews.buttons.matching(contains("Allow AI processing")).firstMatch
+        let allow = app.webViews.buttons.matching(either("Allow AI processing", "Dovoli obdelavo")).firstMatch
         if allow.waitForExistence(timeout: 30) {
             snap("S4 AI consent")
             // The server-rendered button only works once React has hydrated.
@@ -318,6 +333,194 @@ final class WrapperTests: XCTestCase {
         expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: emailButton)
         waitForExpectations(timeout: 30)
         snap("S5 Signed in")
+    }
+
+    // Click-through of every screen on a staging Preview with a signed-in
+    // synthetic account. Problems are collected, not fatal, so the run always
+    // yields the full set of screenshots to review.
+    @MainActor func testPreviewTour() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a staging Preview and a signed-in synthetic account")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        continueAfterFailure = true
+        var problems: [String] = []
+        var shot = 0
+        func snap(_ name: String) {
+            shot += 1
+            let image = XCTAttachment(screenshot: app.screenshot())
+            image.name = String(format: "T%02d %@", shot, name)
+            image.lifetime = .keepAlways
+            add(image)
+        }
+        func contains(_ text: String) -> NSPredicate { NSPredicate(format: "label CONTAINS %@", text) }
+        func exact(_ text: String) -> NSPredicate { NSPredicate(format: "label == %@", text) }
+        func web(_ type: XCUIElement.ElementType, _ predicate: NSPredicate) -> XCUIElement {
+            app.webViews.descendants(matching: type).matching(predicate).firstMatch
+        }
+        func settle(_ seconds: TimeInterval = 1.5) { RunLoop.current.run(until: Date().addingTimeInterval(seconds)) }
+        /// Taps an element if it shows up; records a problem otherwise.
+        @discardableResult func tap(_ what: String, _ element: XCUIElement, timeout: TimeInterval = 10, required: Bool = true) -> Bool {
+            if element.waitForExistence(timeout: timeout) {
+                if !element.isHittable { app.webViews.firstMatch.swipeUp(); settle(0.5) }
+                if element.isHittable {
+                    element.tap(); settle(); return true
+                }
+                if required { problems.append("\(what): present but not hittable") }
+                return false
+            }
+            if required { problems.append("\(what): not found") }
+            return false
+        }
+        func scrollTo(_ element: XCUIElement, down: Bool = true) -> Bool {
+            for _ in 0..<6 {
+                if element.exists && element.isHittable { return true }
+                if down { app.webViews.firstMatch.swipeUp() } else { app.webViews.firstMatch.swipeDown() }
+                settle(0.4)
+            }
+            return element.exists && element.isHittable
+        }
+        func back() {
+            let button = web(.button, exact("Back"))
+            if button.exists && button.isHittable { button.tap() } else { app.swipeRight() }
+            settle()
+        }
+        let tabNames = ["Notes", "Tutor", "Flashcards", "Podcast", "Quiz", "Mindmap", "Palace", "Test", "Speed read", "Transcript"]
+        func tab(_ name: String) -> Bool {
+            let chip = web(.button, exact(name))
+            guard chip.waitForExistence(timeout: 10) else { problems.append("tab \(name): missing"); return false }
+            let width = app.windows.firstMatch.frame.width
+            func onScreen() -> Bool { chip.frame.minX >= 0 && chip.frame.maxX <= width && chip.isHittable }
+            for _ in 0..<6 where !onScreen() {
+                dragStrip(app, rowY: chip.frame.midY, left: chip.frame.midX > width)
+                settle(0.8)
+            }
+            guard onScreen() else { problems.append("tab \(name): unreachable"); return false }
+            chip.tap(); settle(2); return true
+        }
+
+        // ---- Home -----------------------------------------------------------
+        let newNote = web(.button, contains("New note"))
+        XCTAssertTrue(newNote.waitForExistence(timeout: 30), "Home must load")
+        snap("Home")
+        let search = app.webViews.textFields.firstMatch
+        if search.exists { search.tap(); settle(); snap("Home search keyboard") ; app.webViews.staticTexts["My notes"].tap(); settle() }
+        if tap("Discount promo", web(.button, contains("You got a discount")), required: false) {
+            snap("Discount wheel")
+            tap("Spin", web(.button, contains("Spin the wheel")), timeout: 5, required: false)
+            settle(6); snap("Discount wheel result")
+            tap("Claim", web(.button, contains("Claim the discount")), timeout: 5, required: false)
+            settle(3); snap("After claiming the discount")
+            tap("Close offer", web(.button, contains("Close the offer")), timeout: 5, required: false)
+            tap("Close offer paywall", web(.button, contains("Close the subscription offer")), timeout: 5, required: false)
+            if !newNote.waitForExistence(timeout: 10) { back() }
+        }
+        if tap("Unlock Premium card", web(.button, contains("Unlock Premium")), required: false) {
+            snap("Paywall from home")
+            tap("Monthly plan", web(.button, contains("Monthly")), timeout: 5, required: false); snap("Paywall monthly selected")
+            tap("Close paywall", web(.button, contains("Close the subscription offer")))
+            _ = newNote.waitForExistence(timeout: 15)
+        }
+        if tap("New note", newNote) {
+            snap("New note")
+            if !tap("Close new-note paywall", web(.button, contains("Close the subscription offer")), timeout: 5, required: false) {
+                tap("Cancel new note", web(.button, exact("Cancel")), timeout: 5, required: false)
+            }
+            _ = newNote.waitForExistence(timeout: 15)
+        }
+
+        // ---- Note ----------------------------------------------------------
+        if tap("Existing note", web(.any, contains("Plant Life Cycle"))) {
+            _ = web(.button, exact("Flashcards")).waitForExistence(timeout: 30)
+            snap("Note top")
+            app.webViews.firstMatch.swipeUp(); settle(); snap("Note scrolled")
+            app.webViews.firstMatch.swipeDown(); settle()
+            for name in ["Tutor", "Flashcards", "Podcast", "Quiz", "Mindmap", "Palace", "Test", "Speed read", "Transcript"] where tab(name) {
+                snap("Tab \(name)")
+            }
+            _ = tab("Notes")
+            if tap("Actions", app.webViews.buttons["Actions"]) {
+                snap("Note actions sheet")
+                if tap("Rename", web(.button, exact("Rename")), timeout: 5) {
+                    snap("Rename sheet")
+                    tap("Cancel rename", web(.button, exact("Cancel")), timeout: 5)
+                }
+                if tap("Actions again", app.webViews.buttons["Actions"]) && tap("Delete", web(.button, exact("Delete")), timeout: 5) {
+                    snap("Delete confirmation")
+                    tap("Cancel delete", web(.button, exact("Cancel")), timeout: 5)
+                }
+            }
+            if tap("Chat bar", web(.any, contains("Chat about this note"))) {
+                snap("Chat sheet")
+                let field = app.webViews.textViews.firstMatch.exists ? app.webViews.textViews.firstMatch : app.webViews.textFields.firstMatch
+                if field.waitForExistence(timeout: 5) { field.tap(); settle(); snap("Chat keyboard") }
+                tap("Close chat", web(.button, contains("Close chat")), timeout: 5, required: false)
+                if web(.button, contains("Close chat")).exists { app.swipeDown() }
+            }
+            if tap("Listen", web(.button, exact("Listen"))) {
+                if web(.button, exact("Pause")).waitForExistence(timeout: 90) { snap("Read aloud playing"); web(.button, exact("Pause")).tap() }
+                else { problems.append("Read aloud did not start"); snap("Read aloud state") }
+                tap("Close reader", web(.button, contains("Close the reader")), timeout: 5, required: false)
+            }
+            back()
+        }
+
+        // ---- Settings ------------------------------------------------------
+        if tap("Settings", app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch, timeout: 20) {
+            _ = app.webViews.switches["Dark"].waitForExistence(timeout: 15)
+            snap("Settings top")
+            app.webViews.switches["Dark"].tap(); settle(); snap("Settings dark")
+            app.webViews.switches["System"].tap(); settle()
+            app.webViews.firstMatch.swipeUp(); settle(); snap("Settings middle")
+            app.webViews.firstMatch.swipeUp(); settle(); snap("Settings bottom")
+            app.webViews.firstMatch.swipeDown(); app.webViews.firstMatch.swipeDown(); settle()
+            func row(_ label: String, _ name: String, screenshot: String, then: (@MainActor () -> Void)? = nil) {
+                let element = web(.any, contains(label))
+                guard scrollTo(element) else { problems.append("settings row \(name): unreachable"); return }
+                element.tap(); settle(2); snap(screenshot)
+                if let then { then() } else { back() }
+                if !app.webViews.switches["Dark"].waitForExistence(timeout: 10) {
+                    _ = tap("Settings again", app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch, timeout: 10, required: false)
+                    _ = app.webViews.switches["Dark"].waitForExistence(timeout: 10)
+                }
+            }
+            row("Language", "language", screenshot: "Language")
+            row("Help centre", "help", screenshot: "Help centre") {
+                if tap("Refund article", web(.any, contains("Refund policy")), timeout: 5, required: false) { snap("Help article"); back() }
+                back()
+            }
+            row("Redeem a code", "redeem", screenshot: "Redeem a code (Apple help)")
+            row("Privacy", "privacy", screenshot: "Privacy policy page")
+            row("Suggest a feature", "feature", screenshot: "Suggest a feature")
+            row("Choose a plan", "plan", screenshot: "Settings paywall") {
+                tap("Close settings paywall", web(.button, contains("Close the subscription offer")), timeout: 5, required: false)
+            }
+            row("Restore purchases", "restore", screenshot: "Restore purchases") {
+                let cancel = app.buttons["Cancel"]
+                if cancel.waitForExistence(timeout: 8) { cancel.tap(); settle() }
+                snap("After restore")
+            }
+            row("Manage Apple subscriptions", "manage", screenshot: "Manage Apple subscriptions") {
+                let done = app.buttons["Done"]
+                if done.waitForExistence(timeout: 8) { done.tap() } else if app.buttons["Cancel"].exists { app.buttons["Cancel"].tap() }
+                settle()
+            }
+            row("Withdraw AI permission", "withdraw", screenshot: "Withdraw AI permission") {
+                tap("Cancel withdraw", web(.button, exact("Cancel")), timeout: 5, required: false)
+            }
+            row("Delete account", "delete", screenshot: "Delete account sheet") {
+                tap("Cancel delete account", web(.button, exact("Cancel")), timeout: 5, required: false)
+            }
+            row("Sign out", "signout", screenshot: "Sign out sheet") {
+                tap("Cancel sign out", web(.button, exact("Cancel")), timeout: 5, required: false)
+            }
+            back()
+        }
+        snap("Home at the end")
+        XCTAssertTrue(problems.isEmpty, "Tour problems:\n" + problems.joined(separator: "\n"))
     }
 
     @MainActor func testPreviewHelpUsesAppleBillingInstructions() throws {

@@ -78,6 +78,8 @@ Verification: 18 focused locale/auth/catalogue tests passed, covering native/PWA
 
 ### Full-screen web view and safe areas
 
+The wrapper also removes WKWebView's keyboard accessory bar (previous/next/done) by giving the `WKContent…` view an `inputAccessoryView` of nil at runtime — there is no public switch for it — and upgrades the viewport meta to `viewport-fit=cover` if a page arrives without it.
+
 The web view fills the window; there are no native safe-area bands. The page is served with `viewport-fit=cover` only to the native user agent (`generateViewport` in `src/app/layout.tsx`) and the document carries `data-native="ios"`, so the redesign's `--memo-safe-top` / `--memo-safe-bottom` variables (which are zero in browsers and the installed PWA) take the status bar and home indicator into account. The home dock sits closer to the home indicator in the app because no browser bar runs under it, and the sign-in header has no back arrow because the landing page does not exist in the app. Any new fixed or sticky control near the screen edges must add the matching `--memo-safe-*` inset; check it in the simulator against a Preview, not only in a browser.
 
 ## 1. Find your Apple Team ID

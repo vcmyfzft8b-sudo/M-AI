@@ -14,6 +14,10 @@ final class WrapperTests: XCTestCase {
         continueAfterFailure = false
         let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 30))
+        let home = XCTAttachment(screenshot: app.screenshot())
+        home.name = "Full-screen PWA home"
+        home.lifetime = .keepAlways
+        add(home)
         settings.tap()
         let darkControl = app.webViews.switches["Dark"]
         if !darkControl.waitForExistence(timeout: 15) {

@@ -1,7 +1,6 @@
 import UIKit
 import WebKit
 import StoreKit
-import SafariServices
 import AuthenticationServices
 
 @MainActor
@@ -105,6 +104,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         webView.scrollView.showsVerticalScrollIndicator = false
         webView.scrollView.showsHorizontalScrollIndicator = false
         webView.allowsBackForwardNavigationGestures = true
+        webView.allowsLinkPreview = false
         #if DEBUG
         webView.isInspectable = true
         #endif
@@ -284,8 +284,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             // No redirects, scripts or popups can send users to external checkout.
             guard action.navigationType == .linkActivated,
                   !["checkout.stripe.com", "billing.stripe.com"].contains(url.host ?? "") else { return }
-            if url.scheme == "https" { present(SFSafariViewController(url: url), animated: true) }
-            else if ["mailto", "tel"].contains(url.scheme ?? "") { UIApplication.shared.open(url) }
+            // Memo stays in its full-screen web view. User-selected external
+            // websites belong in the system browser, not an in-app browser sheet.
+            if ["https", "mailto", "tel"].contains(url.scheme ?? "") { UIApplication.shared.open(url) }
         }
     }
 

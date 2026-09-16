@@ -18,7 +18,9 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { nativeRequest } from "@/lib/mobile/client";
 import { halfOffProducts, type NativeProduct } from "@/lib/mobile/products";
-import { NativePaywall } from "@/components/native-paywall";
+import { useAppleBilling } from "@/components/use-apple-billing";
+import { AppleBillingTerms } from "@/components/apple-billing-terms";
+import { APPLE_PRODUCTS } from "@/lib/mobile/runtime";
 
 /**
  * The one-shot prize wheel and the offer sheet it hands off to.
@@ -185,6 +187,7 @@ export function DiscountOffer({
   nativeOffer?: boolean;
 }) {
   const { locale, t } = useTranslations();
+  const apple = useAppleBilling(nativeOffer && (wheelOpen || offerOpen), true);
   const spinTimerRef = useRef<number | null>(null);
   /** Set once checkout has been started, so leaving does not withdraw a prize
    *  the purchase is already carrying. */
@@ -301,6 +304,7 @@ export function DiscountOffer({
   }
 
   async function startCheckout() {
+    if (nativeOffer) { await apple.purchase(); return; }
     // The purchase carries the coupon from here on, so leaving this screen
     // must not withdraw it.
     boughtRef.current = true;
@@ -645,13 +649,7 @@ export function DiscountOffer({
         </div>
       ) : null}
 
-      {offerOpen && nativeOffer ? (
-        <div className={sheetClass("memo-sheet-full memo-wheel-sheet", offerSheet.closing)} role="dialog" aria-modal="true">
-          <NativePaywall halfOffOnly onClose={closeOffer} />
-        </div>
-      ) : null}
-
-      {offerOpen && !nativeOffer ? (
+      {offerOpen ? (
         <div
           className={sheetClass(`memo-sheet-full memo-offer-sheet ${offerRestored ? "restored" : ""}`.trim(), offerSheet.closing)}
           role="dialog"
@@ -683,25 +681,29 @@ export function DiscountOffer({
             />
             <p className="memo-offer-kicker">{t("offer.kicker")}</p>
             <p className="memo-offer-headline">{t("offer.headline")}</p>
-            <p className="memo-offer-sub">{t("offer.sub")}</p>
+            <p className="memo-offer-sub">{t(nativeOffer ? "native.introCaption" : "offer.sub")}</p>
 
             {/* Big numbers and nothing else. The urgency is the number. */}
-            <p
+            {!nativeOffer ? <p
               className={`memo-offer-timer ${secondsLeft <= 60 ? "urgent" : ""}`.trim()}
               role="timer"
               aria-live="off"
             >
               {String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:
               {String(secondsLeft % 60).padStart(2, "0")}
-            </p>
+            </p> : null}
 
             <div className="memo-offer-plans">
-              {OFFER_PLANS.map((offerPlan) => (
+              {OFFER_PLANS.filter(offerPlan => !nativeOffer || apple.productForPlan(offerPlan.id)).map((offerPlan) => {
+                const product = apple.productForPlan(offerPlan.id);
+                const selectedPlan = nativeOffer ? APPLE_PRODUCTS[apple.selected] : plan;
+                return (
                 <button
                   key={offerPlan.id}
                   type="button"
-                  className={`memo-offer-plan ${plan === offerPlan.id ? "selected" : ""}`.trim()}
-                  onClick={() => setPlan(offerPlan.id)}
+                  className={`memo-offer-plan ${selectedPlan === offerPlan.id ? "selected" : ""}`.trim()}
+                  onClick={() => nativeOffer ? apple.selectPlan(offerPlan.id) : setPlan(offerPlan.id)}
+                  disabled={nativeOffer ? apple.busy : isCheckingOut}
                 >
                   {offerPlan.badgeKey ? (
                     <span className="memo-offer-badge">{t(offerPlan.badgeKey)}</span>
@@ -714,30 +716,36 @@ export function DiscountOffer({
                     <span>{t(offerPlan.labelKey)}</span>
                     <span className="memo-offer-billing">
                       {t(offerPlan.billingKey, {
-                        discounted: formatCurrency(offerPlan.discountedAmount, locale),
-                        renewal: formatCurrency(offerPlan.renewalAmount, locale),
+                        discounted: nativeOffer ? product!.introPrice! : formatCurrency(offerPlan.discountedAmount, locale),
+                        renewal: nativeOffer ? product!.price : formatCurrency(offerPlan.renewalAmount, locale),
                       })}
                     </span>
                   </span>
                   <span className="memo-offer-price">
-                    {t(offerPlan.priceKey, {
-                      amount: formatCurrency(offerPlan.headlineAmount, locale),
-                    })}
+                    {nativeOffer && offerPlan.id === "yearly" && !product?.introWeeklyPrice
+                      ? product?.introPrice
+                      : t(offerPlan.priceKey, {
+                          amount: nativeOffer
+                            ? (offerPlan.id === "yearly" ? product!.introWeeklyPrice! : product!.introPrice!)
+                            : formatCurrency(offerPlan.headlineAmount, locale),
+                        })}
                   </span>
                 </button>
-              ))}
+              ); })}
 
+              {nativeOffer && apple.notice ? <p role="status" className="memo-inline-error">{apple.notice}</p> : null}
               {error ? <p className="memo-inline-error">{error}</p> : null}
 
               <button
                 type="button"
                 className="memo-offer-cta"
                 onClick={() => void startCheckout()}
-                disabled={isCheckingOut}
+                disabled={nativeOffer ? apple.busy || !apple.selectedProduct : isCheckingOut}
               >
-                {t(isCheckingOut ? "offer.opening" : "common.continue")}
+                {t((nativeOffer ? apple.busy : isCheckingOut) ? "offer.opening" : "common.continue")}
               </button>
               <p className="memo-offer-fine">{t("offer.fine")}</p>
+              {nativeOffer ? <AppleBillingTerms busy={apple.busy} onRestore={() => void apple.restore()} /> : null}
             </div>
           </div>
         </div>

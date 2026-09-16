@@ -38,7 +38,18 @@ final class Store {
             .filter { $0.type == .autoRenewable }
             .sorted { $0.price < $1.price }
         var result: [[String: Any]] = []
-        for product in products { result.append(await presentation(product)) }
+        for product in products {
+            var item = await presentation(product)
+            if product.subscription?.subscriptionPeriod.unit == .year,
+               let monthly = products.first(where: {
+                   $0.subscription?.subscriptionPeriod.unit == .month &&
+                   $0.priceFormatStyle.currencyCode == product.priceFormatStyle.currencyCode
+               }), monthly.price > 0 {
+                let saving = 1 - NSDecimalNumber(decimal: product.price / (monthly.price * 12)).doubleValue
+                item["yearlySavings"] = max(0, min(100, Int((saving * 100).rounded())))
+            }
+            result.append(item)
+        }
         return result
     }
 
@@ -47,6 +58,11 @@ final class Store {
     private func presentation(_ product: Product) async -> [String: Any] {
         var result: [String: Any] = ["id": product.id, "name": product.displayName,
             "price": product.displayPrice]
+        if product.subscription?.subscriptionPeriod.unit == .year {
+            result["monthlyPrice"] = (product.price / 12).formatted(product.priceFormatStyle)
+        } else {
+            result["monthlyPrice"] = product.displayPrice
+        }
         var offerKey = "standard"
         if let subscription = product.subscription,
            let offer = subscription.introductoryOffer,
@@ -72,6 +88,9 @@ final class Store {
                 // Match the badge to the Apple-formatted price we actually show, using
                 // Apple's own currency/locale parser, and fail closed if it cannot parse.
                 if let displayed = try? Decimal(offer.displayPrice, format: product.priceFormatStyle) {
+                    if subscription.subscriptionPeriod.unit == .year {
+                        result["introWeeklyPrice"] = (displayed / 52).formatted(product.priceFormatStyle)
+                    }
                     let introductory = NSDecimalNumber(decimal: displayed).doubleValue
                     result["halfOff"] = regular > 0 && abs(introductory / regular - 0.5) < 0.001
                 } else {

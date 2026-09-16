@@ -9,7 +9,9 @@ import { useT, useTranslations } from "@/components/i18n-provider";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { Msym } from "@/components/msym";
 import { OnboardingFlow } from "@/components/onboarding-flow";
-import { NativePaywall } from "@/components/native-paywall";
+import { useAppleBilling } from "@/components/use-apple-billing";
+import { AppleBillingTerms } from "@/components/apple-billing-terms";
+import { APPLE_PRODUCTS } from "@/lib/mobile/runtime";
 import { useNativeIOS } from "@/lib/mobile/client";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { clearOfferResume } from "@/lib/offer-resume";
@@ -76,6 +78,7 @@ export function OnboardingPaywall({
 }) {
   const { locale, t } = useTranslations();
   const native = useNativeIOS();
+  const apple = useAppleBilling(native && onboardingComplete);
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const searchParams = useSearchParams();
   const [selectedPaywallPlan, setSelectedPaywallPlan] = useState<BillingPlanCard["id"]>("yearly");
@@ -83,6 +86,7 @@ export function OnboardingPaywall({
   const [billingError, setBillingError] = useState<string | null>(null);
 
   async function startCheckout(plan: BillingPlanCard["id"]) {
+    if (native) { await apple.purchase(); return; }
     setBillingError(null);
     setCheckoutPlan(plan);
 
@@ -113,7 +117,10 @@ export function OnboardingPaywall({
 
   const effectiveOnboardingComplete = onboardingComplete;
   const checkoutState = searchParams.get("checkout");
-  const hasNotice = checkoutState === "success" || Boolean(billingError);
+  const hasNotice = checkoutState === "success" || Boolean(billingError) || (native && Boolean(apple.notice));
+  const selectedPlan = native ? APPLE_PRODUCTS[apple.selected] : selectedPaywallPlan;
+  const trialEligible = native ? apple.selectedProduct?.trialDays === 3 : subscriptionTrialEligible;
+  const checkingOut = native ? apple.busy : checkoutPlan !== null;
 
   /*
    * A completed purchase ends the wheel's offer, so the note that would put its
@@ -136,10 +143,9 @@ export function OnboardingPaywall({
     return <OnboardingFlow profile={profile} />;
   }
 
-  if (native) return <NativePaywall />;
 
   return (
-    <section className="app-start-panel app-start-panel-paywall memo-paywall-shell">
+    <section className={`app-start-panel app-start-panel-paywall memo-paywall-shell${native ? " memo-paywall-apple" : ""}`}>
       {navigationOverlay}
       {effectiveOnboardingComplete ? (
         <div className="app-start-dismiss-row">
@@ -164,6 +170,7 @@ export function OnboardingPaywall({
         <div className="memo-paywall-notices" role="status" aria-live="polite">
           <CheckoutBanner state={checkoutState} />
           {billingError ? <div className="app-start-banner">{billingError}</div> : null}
+          {native && apple.notice ? <div className="app-start-banner">{apple.notice}</div> : null}
         </div>
       ) : (
         <div className="memo-paywall-brand">
@@ -213,16 +220,26 @@ export function OnboardingPaywall({
 
       <div className="memo-paywall-plan-grid" role="radiogroup" aria-label={t("paywall.choosePlan")}>
         {paywallPlans.map((plan) => {
-          const selected = selectedPaywallPlan === plan.id;
+          const selected = selectedPlan === plan.id;
+          const appleProduct = apple.productForPlan(plan.id);
           const activePlan = subscription?.plan === plan.id && hasPaidAccess;
           const annualizedMonthly = monthlyPlan?.annualizedAmount ?? 0;
-          const yearlySavings = annualizedMonthly > plan.annualizedAmount
+          const yearlySavings = native ? (appleProduct?.yearlySavings ?? 0) : annualizedMonthly > plan.annualizedAmount
             ? Math.round((1 - plan.annualizedAmount / annualizedMonthly) * 100)
             : 0;
-          const displayPrice = formatCurrency(plan.displayAmount ?? plan.amount, locale);
-          const suffix = t("paywall.perMonth");
-          const detail =
-            plan.id === "yearly"
+          const displayPrice = native
+            ? appleProduct?.monthlyPrice ?? appleProduct?.price ?? "—"
+            : formatCurrency(plan.displayAmount ?? plan.amount, locale);
+          const suffix = native && plan.id === "yearly" && !appleProduct?.monthlyPrice
+            ? `/${t("native.year")}` : t("paywall.perMonth");
+          const detail = native
+            ? !appleProduct ? t("native.working")
+              : appleProduct.trialDays === 3
+                ? t(plan.id === "yearly" ? "native.trialYearPrice" : "native.trialMonthPrice", { renewal: appleProduct.price })
+                : appleProduct.introPrice
+                  ? t(plan.id === "yearly" ? "native.firstYearPrice" : "native.firstMonthPrice", { initial: appleProduct.introPrice, renewal: appleProduct.price })
+                  : plan.id === "yearly" ? t("paywall.billedYearly", { amount: appleProduct.price }) : t("paywall.billedMonthly")
+            : plan.id === "yearly"
               ? t("paywall.billedYearly", { amount: formatCurrency(plan.annualizedAmount, locale) })
               : t("paywall.billedMonthly");
 
@@ -231,7 +248,8 @@ export function OnboardingPaywall({
               type="button"
               key={plan.id}
               className={`memo-paywall-plan ${selected ? "selected" : ""}`}
-              onClick={() => setSelectedPaywallPlan(plan.id)}
+              onClick={() => native ? apple.selectPlan(plan.id) : setSelectedPaywallPlan(plan.id)}
+              disabled={checkingOut || (native && !appleProduct)}
               role="radio"
               aria-checked={selected}
             >
@@ -261,24 +279,24 @@ export function OnboardingPaywall({
 
       <p className="memo-paywall-due">
         <CircleCheck className="h-5 w-5" />
-        {t(subscriptionTrialEligible ? "paywall.nothingToday" : "paywall.securePayment")}
+        {t(trialEligible ? "paywall.nothingToday" : "paywall.securePayment")}
       </p>
 
       <button
         type="button"
-        className={`memo-paywall-cta ${checkoutPlan === selectedPaywallPlan ? "loading" : ""}`}
-        onClick={() => startCheckout(selectedPaywallPlan)}
-        disabled={checkoutPlan !== null || (subscription?.plan === selectedPaywallPlan && hasPaidAccess)}
+        className={`memo-paywall-cta ${checkingOut ? "loading" : ""}`}
+        onClick={() => startCheckout(selectedPlan)}
+        disabled={checkingOut || (native && !apple.selectedProduct) || (subscription?.plan === selectedPlan && hasPaidAccess)}
       >
-        {checkoutPlan === selectedPaywallPlan ? (
+        {checkingOut ? (
           <Loader2 className="memo-paywall-cta-spinner animate-spin" />
         ) : null}
-        {checkoutPlan === selectedPaywallPlan ? null : (
+        {checkingOut ? null : (
           <span className="memo-paywall-cta-label">
-            {subscription?.plan === selectedPaywallPlan && hasPaidAccess
+            {subscription?.plan === selectedPlan && hasPaidAccess
               ? t("paywall.currentPlan")
               : t(
-                  subscriptionTrialEligible
+                  trialEligible
                     ? "paywall.startTrial"
                     : "paywall.continueToPayment",
                 )}
@@ -292,6 +310,7 @@ export function OnboardingPaywall({
           {t("paywall.cancelAnytime")}
         </span>
       </div>
+      {native ? <AppleBillingTerms busy={apple.busy} onRestore={() => void apple.restore()} /> : null}
     </section>
   );
 }

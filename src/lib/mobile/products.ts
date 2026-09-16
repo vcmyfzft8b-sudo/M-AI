@@ -6,6 +6,9 @@ export type NativeProduct = {
   name: string;
   price: string;
   quote: string;
+  monthlyPrice?: string;
+  introWeeklyPrice?: string;
+  yearlySavings?: number;
   available: true;
   introPrice?: string;
   halfOff?: boolean;
@@ -18,6 +21,9 @@ export function nativeProducts(value: unknown): NativeProduct[] {
     isAppleProduct(item.id) && typeof item.name === "string" &&
     typeof item.price === "string" && item.price.length > 0 &&
     typeof item.quote === "string" && item.quote.length > 0 && item.available === true &&
+    (item.monthlyPrice === undefined || (typeof item.monthlyPrice === "string" && item.monthlyPrice.length > 0)) &&
+    (item.introWeeklyPrice === undefined || (typeof item.introWeeklyPrice === "string" && item.introWeeklyPrice.length > 0)) &&
+    (item.yearlySavings === undefined || (Number.isInteger(item.yearlySavings) && item.yearlySavings >= 0 && item.yearlySavings <= 100)) &&
     (item.introPrice === undefined || (typeof item.introPrice === "string" && item.introPrice.length > 0)) &&
     (item.halfOff === undefined || typeof item.halfOff === "boolean") &&
     (item.trialDays === undefined || (item.trialDays === 3 && item.introPrice === undefined && item.halfOff !== true)));

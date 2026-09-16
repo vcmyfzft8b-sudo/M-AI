@@ -666,3 +666,143 @@ them as tags would make the next occurrence diagnosable; and nothing reconnects 
 is safe as it stands but is the obvious next step, and doing it needs backoff plus care that
 `restoreListening` reserves a paid slice, so that a flapping link cannot storm `/tutor/session`.
 The same question is open on `sentry:145277359`.
+
+## 2026-09-15 — A 32 kHz device was offered a sample rate Soniox does not generate
+
+- **Sentry:** `MEMOAI-WEB-3Z` (issue `147248110`, the handled speech failure) and `MEMOAI-WEB-40`
+  (issue `147248129`, the unhandled rejection `failTurn` makes of the same refusal). One defect on
+  two fingerprints; both ids must stay in the backlog or the gate reopens whichever is missing.
+- **Route:** `/app/lectures/:id` (client-side; the `POST /api/lectures/<id>/tutor/report` beside it
+  is the browser reporting the failure and returns 200, so there is no Vercel counterpart)
+- **Operation:** opening the tutor's speech stream — `tutorStage: speech`, phases `speaking` and
+  `opening`, `sonioxCode: 400`
+- **Normalized message:** `SpeechOutputError: Invalid audio format: unsupported audio_sample_rate
+  <n> for format '<value>', allowed: [<n>, <n>, <n>, <n>, <n>]`
+- **Historical events:** `2026-09-15T17:32:34.128Z` to `2026-09-15T17:32:47.295Z`, release
+  `11586e79`, one learner, one session on iPhone / iOS 18.7
+- **Resolution:** [PR #412](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/412), merge commit
+  `222b738208` (fix commit `42a150a`)
+- **Production cutoff:** deployment `dpl_Gd82zd91EpaLr7221Kf7z1B1rWaQ` was ready at
+  `2026-09-15T22:09:22.707Z`
+- **Regression test:** `tests/tutor-speech-sample-rate.test.mjs`
+
+`connect()` took `AudioContext.sampleRate` verbatim and `openSegment` announced every stream with
+it, but Soniox generates only `[8000, 16000, 24000, 44100, 48000]`. This device's audio route ran at
+32000, so every turn was refused before any audio existed and the tutor could not speak at all. The
+fix asks for the nearest supported rate instead (`src/lib/tutor/speech-output.ts`); the graph
+resamples, and a device already on the list is untouched. The test announces 32000 on `main` and
+24000 with the fix.
+
+This is **not** the stale-stream family (#342 / #357 / #396), which names a dead stream id — this
+names a rate, and is refused before a stream exists.
+
+### The 22:04–22:35 preview session is this fix being verified, not three new errors
+
+PR #412 was driven through a full tutor walkthrough on its own preview deployment
+(`memo-er3zexq1r`, release `42a150a`, the branch head) between `2026-09-15T22:04:33Z` and
+`2026-09-15T22:35:17Z`, minutes before it merged. That one browser session produced three Sentry
+issues, all tagged `environment: preview`, and none of them is production evidence:
+
+- `147007726` — `SpeechInputError: The recognizer connection closed.` at `22:13:22Z`. Already
+  covered by the 2026-09-14 entry above, which records that this message still fires after PR #407
+  by design. Its last **production** occurrence remains `2026-09-15T17:25:13Z`.
+- `147291870` — `Error: Not authorised.` at `22:06:32Z`, `tutorStage: turn`.
+- `147295082` — `Error: Not authorised.` at `22:35:16Z`, `tutorStage: renewal`.
+
+The two `Not authorised.` issues are new, and are **not** the defect #412 fixed. They are not
+written off as verification noise either — see the section below, which is an open question rather
+than a resolution.
+
+## Open — a tutor turn answered 401 mid-walkthrough in production, once, and was never explained
+
+**This is not a resolved incident.** It is recorded here so the next automated run recognises the
+issue ids, does not open a speculative patch to the authentication path, and does not have to
+re-derive the mechanism from scratch.
+
+**Read the correction at the end of this entry first.** The two preview events that prompted it
+turned out to be an artefact of how that verification session was cleaned up, which leaves a single
+production event as the whole of the evidence.
+
+- **Sentry:** `MEMOAI-WEB-41` (issue `147291870`) and `MEMOAI-WEB-42` (issue `147295082`)
+- **Route:** `POST /api/lectures/<id>/tutor/turn`, `.../tutor/report`, `.../tutor/session`
+- **Normalized message:** `Error: Not authorised.` — the `en` rendering of `api.unauthorized`
+- **Events:** `2026-09-15T22:06:32Z` (`tutorStage: turn`) and `2026-09-15T22:35:16Z`
+  (`tutorStage: renewal`), both `environment: preview` on release `42a150a`
+- **Status:** `needs-human`. Not reproduced, and deliberately not fixed (triage rule 8).
+
+What the breadcrumbs of the preview session show, in order: `POST .../tutor/session` 200 at
+`22:05:13`, `POST .../tutor/plan` 200 at `22:05:14`, `POST .../tutor/turn` 200 at `22:05:21`,
+`POST .../tutor/turn` 200 at `22:06:01` — and then `POST .../tutor/turn` **401** at `22:06:32`,
+`POST .../tutor/report` **401** at `22:13:22`, and `POST .../tutor/session` **401** at `22:35:16`.
+Between them, the unauthenticated `POST /api/track` keeps answering 200 once a minute for the full
+twenty-nine minutes. So the session did not merely blink: it stopped authenticating partway through
+a walkthrough and never came back, while the page stayed open and the tab kept running.
+
+**This has happened in production once already, and was never explained.** Issue `145514494`,
+`2026-09-07T14:21:55Z`, Mobile Safari on iOS: `POST .../tutor/turn` answered 401 about 1.7s after
+`/tutor/plan` and `/tutor/session` had both answered 200 on the same session. Same route, same
+message, same shape. It is still `needs-human` in the backlog.
+
+**The one code path that can produce exactly this.** Three things are true at once:
+
+1. `src/lib/supabase/middleware.ts:66` returns early for any path under `/api/`, *before* the
+   Supabase client is created at line 80 — so an API request never gets its session refreshed or
+   its cookies rewritten.
+2. `createSupabaseServerClient`'s `setAll` is an empty function
+   (`src/lib/supabase/server.ts:26-28`), documented as a deliberate no-op whose writes are
+   "handled in middleware" — which, per (1), is not true for `/api/`. The route-handler variant
+   that *can* write cookies is used only by `/auth/*` and the admin impersonation route.
+3. All three tutor routes use the non-writing client — `turn/route.ts:74`, `report/route.ts:38`,
+   `session/route.ts:38` — and each returns 401 at the line below it on `!user` and nothing else
+   (rate limiting returns 429, billing returns 402).
+
+When an API request arrives with an expired access token, `auth.getUser()` refreshes it. Supabase
+rotates the refresh token and consumes the old one; the new pair is handed to `setAll`, which drops
+it on the floor. The browser is left holding a refresh token that has already been spent, so once
+its reuse interval lapses the session is gone — and because middleware only repairs sessions on
+page requests, a tab that never navigates again (a tutor walkthrough) can never recover.
+
+**That mechanism is consistent with both events, but is not proven.** Confirming it needs the one
+thing neither event carries: whether the access token had actually expired at `22:06:32`, which
+means the session's issue time or the Supabase auth logs. Do not treat it as established without
+that. A clock-skewed client makes it likelier, and this codebase has already met one — see the
+2026-09-13 entry, where a learner's clock ran 273s slow.
+
+**Why no fix was pushed.** The repair is small to describe — let middleware refresh before it
+short-circuits `/api/`, keeping the `VERIFIED_PAGE_USER_HEADER` deletion — but it changes
+authentication for all 49 API routes that use this client and adds a `getUser()` round trip to
+every API request. Automated triage had no `PREVIEW_TEST_EMAIL` / `PREVIEW_TEST_PASSWORD`, so it
+could not drive an authenticated preview to verify any of it. An unverified change to the auth path
+is not something an unattended run should merge toward production.
+
+### Correction — the two preview 401s were the test account being deleted, not an auth failure
+
+Added on review, from knowledge the automated run did not have. The 22:04–22:35 preview session was
+a manual verification of PR #412, driven from a Claude Code browser pane — which is why both events
+are tagged `Mac OS X` / `Chrome 148` rather than the iPhone the fix was about. That session ran on a
+disposable staging account, and **the account was deleted as cleanup while the tab was still open**,
+moments before #412 merged at `22:07:06Z`.
+
+That accounts for both events without any token rotation:
+
+- `147291870` at `22:06:32Z` (`tutorStage: turn`) — the open tab's next turn, after the user row it
+  was authenticated as had been removed. Deleting the auth user cascades and invalidates its
+  sessions immediately, and every tutor route answers `401` on `!user`.
+- `147295082` at `22:35:16Z` (`tutorStage: renewal`) — the same tab twenty-nine minutes later, when
+  its credential-renewal alarm fired against the same deleted account.
+
+The pattern fits the deletion better than it fits an expired refresh token: there are exactly two
+events, one at the moment of deletion and one when a timer next fired, rather than the cluster a
+tab retrying against a broken session would produce.
+
+**What survives this correction:** issue `145514494` — `2026-09-07T14:21:55Z`, Mobile Safari on
+iOS 18.7, `environment: production`, a real learner, no test interference. That event is genuine and
+still unexplained, and the `setAll` no-op mechanism above remains the best available account of it.
+But it is **one** event, not three. Weigh any change to the authentication path against that, and
+treat a second production occurrence as the evidence that is actually missing.
+
+**For future runs:** a verification session's own cleanup can manufacture errors that look like
+defects, exactly as a verification session can re-provoke the bug being fixed (see the preamble at
+the top of this file). Deleting a seeded account while its browser session is still open is the
+clearest case — prefer closing the page before deleting the user, and read the `os` / `browser` tags
+before believing a preview event describes a learner.

@@ -5,12 +5,9 @@ final class WrapperTests: XCTestCase {
     /// inside the screen (a clipped one has no visible frame), or drag along
     /// the row when none does.
     @MainActor private func scrollStrip(_ app: XCUIApplication, tabNames: [String], rowY: CGFloat, left: Bool) {
+        // Chips near the strip's faded edges report an empty visible frame even
+        // when hittable, so always drag along the row instead of swiping a chip.
         let window = app.windows.firstMatch.frame
-        let chips = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", tabNames)).allElementsBoundByIndex
-        if let anchor = chips.first(where: { $0.frame.minX >= 40 && $0.frame.maxX <= window.width - 40 && $0.isHittable }) {
-            if left { anchor.swipeLeft() } else { anchor.swipeRight() }
-            return
-        }
         let y = rowY / window.height
         // Start well inside the screen: a drag from the left edge is the back gesture.
         let from = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.85 : 0.3, dy: y))

@@ -301,9 +301,13 @@ final class WrapperTests: XCTestCase {
         XCTAssertTrue(app.webViews.buttons.matching(contains("Google")).firstMatch.exists)
         XCTAssertTrue(app.webViews.buttons.matching(contains("Apple")).firstMatch.exists,
                       "Sign in with Apple must accompany Google (App Review 4.8)")
-        emailButton.tap()
         let passwordLink = app.webViews.links.matching(either("Sign in with a password", "Prijava z geslom")).firstMatch
-        XCTAssertTrue(passwordLink.waitForExistence(timeout: 15))
+        // The button works only once React has hydrated; retry a few times.
+        for _ in 0..<4 where !passwordLink.exists {
+            emailButton.tap()
+            _ = passwordLink.waitForExistence(timeout: 6)
+        }
+        XCTAssertTrue(passwordLink.exists, "Continue with email must open the email entry page")
         snap("S2 Email entry")
         passwordLink.tap()
         let emailField = app.webViews.textFields.firstMatch

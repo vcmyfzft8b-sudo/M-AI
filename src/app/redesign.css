@@ -19934,8 +19934,12 @@
 }
 
 @media (max-width: 1099px) {
-  /* No browser bar under the buttons in the app: sit them closer to the home indicator. */
-  html[data-native] .memo-m-homebar {
+  /* No browser bar under the buttons in the app: sit them closer to the home
+     indicator. The note screen's dock and sub-screen chat bar sit at the same
+     height as the home dock. */
+  html[data-native] .memo-m-homebar,
+  html[data-native] .memo-dock,
+  html[data-native] .memo-sub-chatbar {
     inset: auto 1.15rem calc(0.75rem + var(--memo-safe-bottom)) 1.15rem;
   }
 

@@ -5,7 +5,13 @@ final class WrapperTests: XCTestCase {
     /// consent gate at launch; allow it again (retrying until React hydrates).
     @MainActor private func passConsentGate(_ app: XCUIApplication) {
         let allow = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "Allow AI processing", "Dovoli obdelavo")).firstMatch
-        guard allow.waitForExistence(timeout: 8) else { return }
+        let home = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "New note")).firstMatch
+        // Wait for whichever page follows the launch cover: home, or the gate.
+        let deadline = Date().addingTimeInterval(45)
+        while Date() < deadline, !allow.exists, !home.exists {
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
+        }
+        guard allow.exists else { return }
         for _ in 0..<4 where allow.exists {
             allow.tap()
             RunLoop.current.run(until: Date().addingTimeInterval(6))

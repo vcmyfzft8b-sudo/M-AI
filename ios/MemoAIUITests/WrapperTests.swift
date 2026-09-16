@@ -433,9 +433,11 @@ final class WrapperTests: XCTestCase {
             settle(6); snap("Discount wheel result")
             tap("Claim", web(.button, contains("Claim the discount")), timeout: 5, required: false)
             settle(3); snap("After claiming the discount")
-            tap("Close offer", web(.button, contains("Close the offer")), timeout: 5, required: false)
+            if !tap("Close offer", web(.button, contains("Close the offer")), timeout: 5, required: false) {
+                tap("Close offer sheet", web(.button, exact("Close")), timeout: 5, required: false)
+            }
             tap("Close offer paywall", web(.button, contains("Close the subscription offer")), timeout: 5, required: false)
-            if !newNote.waitForExistence(timeout: 10) { back() }
+            if !newNote.waitForExistence(timeout: 10) { problems.append("Discount flow: could not return home"); snap("Stuck after discount") }
         }
         if tap("Unlock Premium card", web(.button, contains("Unlock Premium")), required: false) {
             snap("Paywall from home")

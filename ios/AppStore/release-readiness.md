@@ -1,7 +1,24 @@
-# iOS release readiness — 16 September 2026
+# iOS release readiness — 16 September 2026 (afternoon update)
 
 **Not ready for App Review or production activation.** This is the release gate,
 not a claim that compiling or passing the wrapper tests verifies the whole app.
+Everything below the evidence table needs the account holder: Apple portal
+sessions, the connected iPhone, Sandbox credentials, or the production merge.
+
+## Verified today (branch `codex/ios-app-wrapper`, Preview deployments of `d793285a`/`f20e995f`)
+
+| Check | Result |
+| --- | --- |
+| Web suite, TypeScript, ESLint | 1,344 web tests pass (two files need the branch's `jose` and `@apple/app-store-server-library` installed); `tsc --noEmit` and lint clean. |
+| Native fixture suite | `npm run ios:test` passes the six wrapper tests on iPhone and iPad (iOS 26.5). `StoreOfferTests` still fails from the command line with `SKInternalErrorDomain Code=3`; it passes in the Xcode IDE (known Xcode 26.5 limitation). |
+| Real study flow in the wrapper | `testPreviewCreateStudyNoteFromPhoto` on the staging Preview: a seeded lesson photo became "The Plant Life Cycle" with highlights in about 80 s; flashcards (11 cards) were generated and reviewed. The rest of the walk (quiz, mindmap + native share sheet, chat, read-aloud, deletion) is scripted in the same test; see the run log for the latest pass/fail line. Recording, tutor and podcast still need a physical iPhone (microphone) and are not automated. |
+| Sign-in screen in the app | Fresh iPhone 17 Pro Max simulator, signed out: Google, Apple and email all render, the back arrow to the (non-existent) landing page is gone, and a password login with a synthetic staging account reaches the AI-consent gate. |
+| Edge-to-edge layout | The web view now fills the window; the page is served `viewport-fit=cover` for the native user agent and lays out with `--memo-safe-top/bottom`. Home, paywall, note and settings were reviewed by screenshot; the paywall close button and the native consent/support screens were re-inset after the first review. |
+| App Review guideline audit (web side) | Stripe Checkout, Billing Portal and tutor-credit routes refuse the native user agent before any work (now covered by `tests/mobile-billing-guards.test.mjs`); every paywall, upsell and settings surface routes to StoreKit; existing Stripe subscribers see their plan with a "managed where purchased" line and no portal; account deletion is in-app with the Apple-subscription warning; email login is code-based and never leaves the web view; external links open in Safari; `/support` exists. Remaining copy notes are listed under "Known, accepted" below. |
+| Native fixes | `NSPhotoLibraryAddUsageDescription` added in five languages (the share sheet's "Save Image" would otherwise terminate the app); script-started `mailto:`/`tel:` links (Settings → Share Memo) reach the system; the tutor's microphone-denied message points at iOS Settings; the project generator matches the checked-in Info.plist and privacy manifest. |
+| Release archive | `xcodebuild archive` (Release, signed, `ios/build/MemoAI-release.xcarchive`) succeeds. **App Store export fails: Xcode has no Apple ID signed in** ("No Accounts", no "iOS Distribution" certificate). The archive also predates the photo-library string; re-archive after signing in. |
+
+Previous evidence (screenshots `ios/build/screenshots/01`–`15`, earlier result bundles) still stands; see the sections below.
 
 ## Verified implementation and evidence
 
@@ -47,12 +64,11 @@ ignored by Git.
    Memo account without permitting purchase theft or account reassignment.
    Existing strict `appAccountToken` verification intentionally rejects such
    unassociated transactions.
-5. **Actual study flows:** create a synthetic note through recording, document,
-   text and supported link input; verify generated notes, quizzes, flashcards,
-   mindmap/palace, chat, read-aloud, podcast/tutor, export/share and deletion.
-   Onboarding demonstrations and wrapper fixtures do not prove these flows.
-   Test real microphone/camera, interruptions and audio on the iPhone, and the
-   actual app layout on iPad. Decide/configure Apple purchase support for any
+5. **Actual study flows:** the photo → note → flashcards path is verified in the
+   simulator (see the table above); recording, text and link input, palace,
+   podcast and tutor are not. Onboarding demonstrations and wrapper fixtures do
+   not prove those flows. Test real microphone/camera, interruptions and audio
+   on the iPhone, and the actual app layout on iPad. Decide/configure Apple purchase support for any
    paid voice-credit feature currently hidden from native users.
 6. **Apple metadata:** complete privacy and age-rating questionnaires from the
    deployed implementation; capture the required iPhone/iPad marketing and
@@ -70,14 +86,34 @@ ignored by Git.
    activation, build upload, App Review submission or public release has occurred
    in this task.
 
-## Current operational blocker
+## Current operational blockers
 
-The Mac is locked; the computer-use tool's automatic unlock fails. Xcode UI tests
-can run and capture the simulator independently, but direct Apple portal and
-authentication interaction cannot continue. The previous distribution export
-also returned “No Accounts” / “No signing certificate” while locked. Unlocking
-the Mac with its owner's credentials is required; power and Caffeinate do not
-unlock an existing session. Do not reset credentials or disable the lock.
+- **Xcode has no Apple ID signed in**, so `-exportArchive` for App Store Connect
+  returns "No Accounts" / no "iOS Distribution" certificate (the keychain only
+  holds an Apple Development identity). Sign in under Xcode → Settings →
+  Accounts, then re-run the archive and export; nothing else in the pipeline
+  can substitute for that session.
+- **No physical iPhone is connected** (both registered devices show
+  `unavailable`), so microphone recording, the tutor, Apple/Google sign-in
+  completion and Sandbox purchases remain unverified on hardware.
+- **Sign in with Apple in production** depends on `APPLE_SIGN_IN_*` and
+  `APPLE_AUTH_TOKEN_ENCRYPTION_KEY` being set there; if they are missing the
+  Apple button silently disappears while Google stays, which App Review
+  rejects under guideline 4.8. Verify on production before the first upload.
+
+## Known, accepted for the first submission
+
+- The in-app terms and refund articles still describe the web channel
+  ("Stripe portal", "pricing page") alongside the App Store instructions they
+  lead with. They are legal text, not purchase calls to action; the how-to
+  articles (redeem a code, gifting) are rewritten for the app.
+- Settings offers "Manage Apple subscriptions" to accounts without an Apple
+  subscription (useful after a purchase that has not been delivered yet); a
+  Stripe subscriber sees it next to the "managed where purchased" line.
+- Tapping a legal link leaves the app shell for the public legal page; swipe
+  back or the logo returns to the app.
+- `testPreviewCreateStudyNoteFromPhoto` spends the synthetic account's one free
+  note; a full re-run needs a fresh synthetic staging account.
 
 ## Sources for Apple-specific behavior
 

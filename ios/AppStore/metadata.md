@@ -40,7 +40,7 @@ Draft review notes:
 
 > Memo helps students turn their recordings and documents into notes, flashcards and quizzes. It supports study-content generation, audio tutoring and native file sharing. An internet connection is required.
 >
-> Open Continue with Email, then Sign in with a password, and use the dedicated review account supplied in the sign-in information. [VERIFY LABELS AND REAL ACCOUNT ACCESS IN THE RELEASE BUILD BEFORE SAVING THESE INSTRUCTIONS.]
+> Tap "Continue with email", then the "Sign in with a password" link under the email field, and use the dedicated review account supplied in the sign-in information. [Labels verified on the staging Preview build on 16 September 2026 (`testPreviewSignInScreenAndPasswordLogin`); confirm the review account itself works in the Release build against production before saving these instructions.]
 >
 > The app requests explicit permission before sending study content to the disclosed AI providers. Account deletion and subscription management are in Settings. Deleting a Memo account does not cancel an Apple subscription; the app explains how to cancel it.
 >

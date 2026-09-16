@@ -7,10 +7,21 @@ import ObjectiveC
 /// WKWebView shows a browser-style accessory bar (previous/next/done) above
 /// the keyboard for every form field. Memo's sheets already carry their own
 /// controls, so the content view answers `inputAccessoryView` with nil.
-final class MemoWebView: WKWebView {
+final class MemoWebView: WKWebView, UIScrollViewDelegate {
     override init(frame: CGRect, configuration: WKWebViewConfiguration) {
         super.init(frame: frame, configuration: configuration)
+        scrollView.delegate = self
         hideKeyboardAccessoryBar()
+    }
+
+    /// When the keyboard opens, WebKit scrolls the document to reveal the focused
+    /// field even when the document is not scrollable. Memo's phone screens are
+    /// fixed and already shrink above the keyboard, so that scroll only pushes
+    /// a sheet's header off the top. Keep a non-scrollable document at rest.
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard scrollView.contentSize.height <= scrollView.bounds.height + 1,
+              scrollView.contentOffset.y != 0 || scrollView.contentOffset.x != 0 else { return }
+        scrollView.contentOffset = .zero
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }

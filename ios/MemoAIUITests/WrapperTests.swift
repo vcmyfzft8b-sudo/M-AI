@@ -140,11 +140,16 @@ final class WrapperTests: XCTestCase {
         snap("06 Mindmap")
         XCTAssertTrue(saveImage.waitForExistence(timeout: 15))
         saveImage.tap()
-        let saveToFiles = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Save to Files")).firstMatch
-        XCTAssertTrue(saveToFiles.waitForExistence(timeout: 20), "Mindmap export must open the native share sheet")
+        // The image share sheet lists Copy and Save Image up front; Save to
+        // Files sits under More. The sheet itself is the evidence.
+        let shareSheet = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == %@", "ActivityListView")).firstMatch
+        XCTAssertTrue(shareSheet.waitForExistence(timeout: 20), "Mindmap export must open the native share sheet")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["Save Image", "Copy", "Save to Files"])).firstMatch.waitForExistence(timeout: 5))
         snap("07 Mindmap share sheet")
         let closeShare = app.buttons["Close"].firstMatch
         if closeShare.waitForExistence(timeout: 3) { closeShare.tap() } else { app.swipeDown() }
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: shareSheet)
+        waitForExpectations(timeout: 10)
 
         // 6. Chat about the note.
         tapTab("Notes")
@@ -474,7 +479,13 @@ final class WrapperTests: XCTestCase {
             if tap("Chat bar", web(.any, contains("Chat about this note"))) {
                 snap("Chat sheet")
                 let field = app.webViews.textViews.firstMatch.exists ? app.webViews.textViews.firstMatch : app.webViews.textFields.firstMatch
-                if field.waitForExistence(timeout: 5) { field.tap(); settle(); snap("Chat keyboard") }
+                if field.waitForExistence(timeout: 5) {
+                    field.tap(); settle(); snap("Chat keyboard")
+                    // The sheet header must still be reachable with the keyboard up.
+                    if !web(.button, contains("Close chat")).exists { problems.append("Chat close button hidden behind the keyboard") }
+                    let header = web(.staticText, exact("Chat about this note"))
+                    if header.exists { header.tap(); settle() }
+                }
                 tap("Close chat", web(.button, contains("Close chat")), timeout: 5, required: false)
                 if web(.button, contains("Close chat")).exists { app.swipeDown() }
             }
@@ -506,7 +517,8 @@ final class WrapperTests: XCTestCase {
                 }
             }
             row("Language", "language", screenshot: "Language") {
-                tap("Keep English", web(.any, exact("English")), timeout: 5, required: false)
+                // The sheet's options are buttons; the settings row's subtitle also says "English".
+                tap("Keep English", web(.button, exact("English")), timeout: 5, required: false)
             }
             row("Help centre", "help", screenshot: "Help centre") {
                 if tap("Refund article", web(.any, contains("Refund policy")), timeout: 5, required: false) { snap("Help article"); back() }
@@ -541,6 +553,30 @@ final class WrapperTests: XCTestCase {
         }
         snap("Home at the end")
         XCTAssertTrue(problems.isEmpty, "Tour problems:\n" + problems.joined(separator: "\n"))
+    }
+
+    // Puts the synthetic account back on English after a tour that changed it.
+    @MainActor func testPreviewResetLanguageToEnglish() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a staging Preview and a signed-in synthetic account")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        continueAfterFailure = false
+        let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@ OR label BEGINSWITH %@", "Settings", "Postavke", "Nastavitve")).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 30))
+        settings.tap()
+        let language = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "Language", "Jezik")).firstMatch
+        XCTAssertTrue(language.waitForExistence(timeout: 15))
+        for _ in 0..<5 where !language.isHittable { app.webViews.firstMatch.swipeUp() }
+        language.tap()
+        let english = app.webViews.buttons.matching(NSPredicate(format: "label == %@", "English")).firstMatch
+        XCTAssertTrue(english.waitForExistence(timeout: 10))
+        english.tap()
+        XCTAssertTrue(app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch.waitForExistence(timeout: 20)
+                      || app.webViews.staticTexts["Settings"].waitForExistence(timeout: 20), "Settings must render in English again")
     }
 
     @MainActor func testPreviewHelpUsesAppleBillingInstructions() throws {

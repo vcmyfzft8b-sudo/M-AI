@@ -76,6 +76,27 @@ const INTERRUPTION_FADE_SECONDS = 0.07;
  */
 const ROOM_TAIL_WORDS = 6;
 
+/**
+ * The playback rates Soniox will generate audio at.
+ *
+ * The device's rate is not ours to pick: `AudioContext.sampleRate` is whatever the hardware
+ * and the current audio route give, and an iPhone whose route put the context at 32kHz was
+ * refused with `400 Invalid audio format: unsupported audio_sample_rate 32000` on the very
+ * first stream of every turn, so the tutor could not say a word on that device.
+ *
+ * Asking for a rate the context does not run at costs nothing, which is what makes this safe:
+ * an `AudioBuffer` carries its own rate and the graph resamples it on the way to the speakers,
+ * so the requested rate and the rate the buffers are built at only have to agree with each
+ * other. A device whose rate is already on this list is left exactly where it was.
+ */
+const SUPPORTED_SAMPLE_RATES = [8_000, 16_000, 24_000, 44_100, 48_000];
+
+/** The closest rate Soniox honours. A tie goes up: samples are cheaper than lost voice. */
+const nearestSupportedSampleRate = (rate: number) =>
+  SUPPORTED_SAMPLE_RATES.reduce((best, candidate) =>
+    Math.abs(candidate - rate) <= Math.abs(best - rate) ? candidate : best,
+  );
+
 export type SpeechOutputConfig = {
   url: string;
   apiKey: string;
@@ -187,7 +208,11 @@ export class TutorSpeechOutput {
   /** Interrupted preparation and its replacement share one socket handshake. */
   private connectionPromise: Promise<void> | null = null;
 
-  /** The playback rate the socket is asked for, and the rate the graph is built at. */
+  /**
+   * The playback rate the socket is asked for, and the rate the graph is built at.
+   *
+   * Not necessarily the context's own — see `SUPPORTED_SAMPLE_RATES`.
+   */
   private sampleRate = 24_000;
 
   /**
@@ -233,7 +258,7 @@ export class TutorSpeechOutput {
 
     const context = new AudioContextClass();
     this.context = context;
-    this.sampleRate = context.sampleRate;
+    this.sampleRate = nearestSupportedSampleRate(context.sampleRate);
 
     /*
      * A fixed junction rather than a control: every scheduled buffer connects here so

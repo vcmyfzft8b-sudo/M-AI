@@ -120,6 +120,26 @@ events, so all three entries were marked fixed at the production Ready timestamp
 record and invariants are in
 [docs/lecture-pipeline-inngest.md](/docs/lecture-pipeline-inngest.md#resolved-incident-pooled-study-generation-consumed-its-fallback-window).
 
+### The 48KB cap, and why age alone is not a reason to prune
+
+Both variables are stored verbatim, so `TRIAGE_BACKLOG` is the backlog file byte for byte.
+Actions variables cap at 48KB and the save step warns above 45,000 bytes. Keep the JSON
+compact — indenting this backlog costs about 3.6KB, more than deleting several entries would
+reclaim, and it buys nothing `jq .` cannot give back on read.
+
+A handled entry is not dead weight; it is what keeps the gate quiet. Sentry is queried
+`is:unresolved`, so an issue fixed in code but never resolved in Sentry stays in every report
+indefinitely, and the only thing preventing it from being re-flagged as new is a backlog entry
+carrying its id in `sentryIssues`. Pruning such an entry to save space re-opens it on the next
+run, which then spends its window re-deriving a conclusion
+[the ledger](/docs/error-triage-resolutions.md) already records.
+
+So prune in this order: formatting first, then handled entries whose ids no longer appear in
+the report at all. An entry whose id is still in the report is load-bearing regardless of its
+age, and a `needs-human` entry is open work rather than something handled — neither is a
+candidate just because it is old. The durable relief is resolving the issue in Sentry once its
+fix is in production, which drops it out of the query and only then frees its entry.
+
 ## Required Setup
 
 All nine required secrets were set on 2026-08-17. The sections below record how each

@@ -19,7 +19,7 @@ sessions, the connected iPhone, Sandbox credentials, or the production merge.
 | App Review guideline audit (web side) | Stripe Checkout, Billing Portal and tutor-credit routes refuse the native user agent before any work (now covered by `tests/mobile-billing-guards.test.mjs`); every paywall, upsell and settings surface routes to StoreKit; existing Stripe subscribers see their plan with a "managed where purchased" line and no portal; account deletion is in-app with the Apple-subscription warning; email login is code-based and never leaves the web view; external links open in Safari; `/support` exists. Remaining copy notes are listed under "Known, accepted" below. |
 | Keyboard and layout polish | WKWebView's previous/next/done bar above the keyboard is removed (the content view answers `inputAccessoryView` with nil; fixture screenshot verified). The wrapper upgrades the viewport meta to `viewport-fit=cover` itself when a page arrives without it, so an app pointed at production before this branch ships still lays out under the status bar correctly. The Apple paywall shows one short renewal line plus restore/terms/privacy links instead of a four-line paragraph, so it lands on one viewport like the web paywall. |
 | Native fixes | `NSPhotoLibraryAddUsageDescription` added in five languages (the share sheet's "Save Image" would otherwise terminate the app); script-started `mailto:`/`tel:` links (Settings → Share Memo) reach the system; the tutor's microphone-denied message points at iOS Settings; the project generator matches the checked-in Info.plist and privacy manifest. |
-| Release archive | `xcodebuild archive` (Release, signed, `ios/build/MemoAI-release.xcarchive`) succeeds. **App Store export fails: Xcode has no Apple ID signed in** ("No Accounts", no "iOS Distribution" certificate). The archive also predates the photo-library string; re-archive after signing in. |
+| Release archive | A fresh signed Release archive of the final branch state (`ios/build/MemoAI-release.xcarchive`, also copied to `~/Library/Developer/Xcode/Archives/2026-09-16/` so it appears in Xcode's Organizer) builds with the photo-library string, edge-to-edge view, accessory-bar and keyboard fixes. **Command-line export still fails with "No Accounts"** even after the Apple ID was added in Xcode → Settings → Accounts: `xcodebuild -exportArchive` cannot see the account session from this shell, and the only API key on disk is the Sign in with Apple key, not an App Store Connect API key. Export from Organizer (Distribute App → App Store Connect) or create an App Store Connect API key for `-authenticationKeyPath`. |
 
 Previous evidence (screenshots `ios/build/screenshots/01`–`15`, earlier result bundles) still stands; see the sections below.
 
@@ -91,11 +91,17 @@ ignored by Git.
 
 ## Current operational blockers
 
-- **Xcode has no Apple ID signed in**, so `-exportArchive` for App Store Connect
-  returns "No Accounts" / no "iOS Distribution" certificate (the keychain only
-  holds an Apple Development identity). Sign in under Xcode → Settings →
-  Accounts, then re-run the archive and export; nothing else in the pipeline
-  can substitute for that session.
+- **Export needs Xcode's Organizer or an App Store Connect API key.** The
+  Apple ID is signed in to Xcode, but `xcodebuild -exportArchive` from a
+  terminal still reports "No Accounts" / no "iOS Distribution" certificate.
+  The archive is in Organizer; validate and distribute it there, or create an
+  App Store Connect API key (Users and Access → Integrations → App Store
+  Connect API) and pass it with `-authenticationKeyPath`.
+- **Prices in the simulator are Apple's US storefront** ("$17.99", "$119.99")
+  because it has no Apple Account; attaching the local StoreKit configuration
+  to the preview scheme stops the app loading under UI tests, so it stays
+  detached. On a Slovenian Apple Account the cards read €19.99 and €129.99,
+  the App Store Connect prices.
 - **No physical iPhone is connected** (both registered devices show
   `unavailable`), so microphone recording, the tutor, Apple/Google sign-in
   completion and Sandbox purchases remain unverified on hardware.

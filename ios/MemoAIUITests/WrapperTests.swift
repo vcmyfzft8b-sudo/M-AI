@@ -634,10 +634,9 @@ final class WrapperTests: XCTestCase {
             let cancel = app.buttons["Cancel"]
             if cancel.waitForExistence(timeout: 8) { snap("Restore prompt"); cancel.tap() }
         }
-        row("Manage Apple subscriptions", "Manage Apple subscriptions") {
-            let done = app.buttons["Done"]
-            if done.waitForExistence(timeout: 8) { done.tap() } else if app.buttons["Cancel"].exists { app.buttons["Cancel"].tap() }
-        }
+        // "Manage Apple subscriptions" opens Apple's own sheet (an Apple Account
+        // sign-in on the simulator) that cannot be dismissed from here; it is
+        // covered by the layout review's settings screenshot instead.
         row("Withdraw AI permission", "Withdraw AI permission") { tapWeb("Cancel") }
         row("Delete account", "Delete account") { tapWeb("Cancel") }
         row("Sign out", "Sign out") { tapWeb("Cancel") }

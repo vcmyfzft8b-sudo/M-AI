@@ -2,6 +2,42 @@ import UIKit
 import WebKit
 import StoreKit
 import AuthenticationServices
+import ObjectiveC
+
+/// WKWebView shows a browser-style accessory bar (previous/next/done) above
+/// the keyboard for every form field. Memo's sheets already carry their own
+/// controls, so the content view answers `inputAccessoryView` with nil.
+final class MemoWebView: WKWebView {
+    override init(frame: CGRect, configuration: WKWebViewConfiguration) {
+        super.init(frame: frame, configuration: configuration)
+        hideKeyboardAccessoryBar()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        hideKeyboardAccessoryBar()
+    }
+
+    private func hideKeyboardAccessoryBar() {
+        guard let content = scrollView.subviews.first(where: {
+            String(cString: object_getClassName($0)).hasPrefix("WKContent")
+        }), let base = object_getClass(content) else { return }
+        let name = String(cString: class_getName(base)) + "_MemoNoAccessoryBar"
+        if String(cString: class_getName(base)) == name { return }
+        let selector = #selector(getter: UIResponder.inputAccessoryView)
+        var subclass: AnyClass? = NSClassFromString(name)
+        if subclass == nil, let created = objc_allocateClassPair(base, name, 0),
+           let method = class_getInstanceMethod(UIResponder.self, selector) {
+            let none: @convention(block) (AnyObject) -> UIView? = { _ in nil }
+            class_addMethod(created, selector, imp_implementationWithBlock(none), method_getTypeEncoding(method))
+            objc_registerClassPair(created)
+            subclass = created
+        }
+        if let subclass { object_setClass(content, subclass) }
+    }
+}
 
 @MainActor
 final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandlerWithReply, WKDownloadDelegate {
@@ -82,6 +118,13 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         config.userContentController.addUserScript(WKUserScript(source: """
             (() => {
               if (!\(AppConfiguration.trustedOriginsJSON).includes(location.origin)) return;
+              // The web view runs edge to edge. The site serves viewport-fit=cover to
+              // this user agent; older deployments did not, and without it the page
+              // lays out under the status bar with zero safe-area insets.
+              const viewport = document.querySelector('meta[name="viewport"]');
+              if (viewport && !/viewport-fit\\s*=\\s*cover/.test(viewport.content)) {
+                viewport.content = viewport.content.replace(/,?\\s*viewport-fit\\s*=\\s*\\w+/, '') + ', viewport-fit=cover';
+              }
               const sync = () => {
                 window.memoNative.request('setLocale', {locale: document.documentElement.lang}).catch(() => {});
                 window.memoNative.request('setTheme', {theme: document.documentElement.dataset.theme || 'system'}).catch(() => {});
@@ -90,7 +133,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
               new MutationObserver(sync).observe(document.documentElement, {attributes: true, attributeFilter: ['lang', 'data-theme']});
             })();
             """, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
-        webView = WKWebView(frame: .zero, configuration: config)
+        webView = MemoWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.isOpaque = false

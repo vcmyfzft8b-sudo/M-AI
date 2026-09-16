@@ -29,16 +29,17 @@ final class WrapperTests: XCTestCase {
         func tapTab(_ name: String) {
             let tab = app.webViews.buttons.matching(NSPredicate(format: "label == %@", name)).firstMatch
             XCTAssertTrue(tab.waitForExistence(timeout: 15), "\(name) tab must exist")
-            for _ in 0..<6 where !tab.isHittable {
+            let width = app.windows.firstMatch.frame.width
+            func onScreen() -> Bool { tab.frame.minX >= 0 && tab.frame.maxX <= width && tab.isHittable }
+            for _ in 0..<6 where !onScreen() {
                 let chips = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", tabNames)).allElementsBoundByIndex
                 guard let anchor = chips.first(where: { $0.isHittable }) else { break }
-                let width = app.windows.firstMatch.frame.width
-                let dx: CGFloat = tab.frame.midX > width ? -(width * 0.7) : width * 0.7
-                let start = anchor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-                start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: dx, dy: 0)))
+                if tab.frame.midX > width { anchor.swipeLeft() } else { anchor.swipeRight() }
+                RunLoop.current.run(until: Date().addingTimeInterval(1))
             }
-            XCTAssertTrue(tab.isHittable, "\(name) tab must be reachable")
+            XCTAssertTrue(onScreen(), "\(name) tab must be reachable")
             tab.tap()
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
         }
         /// Wait until any element of `ready` appears; fail early if `failure` shows or after `timeout`.
         func waitForGeneration(_ ready: [XCUIElement], failure: XCUIElement, timeout: TimeInterval, step: String) {
@@ -307,9 +308,12 @@ final class WrapperTests: XCTestCase {
         let allow = app.webViews.buttons.matching(contains("Allow AI processing")).firstMatch
         if allow.waitForExistence(timeout: 30) {
             snap("S4 AI consent")
-            allow.tap()
-            expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: allow)
-            waitForExpectations(timeout: 45)
+            // The server-rendered button only works once React has hydrated.
+            for _ in 0..<4 where allow.exists {
+                allow.tap()
+                RunLoop.current.run(until: Date().addingTimeInterval(6))
+            }
+            XCTAssertFalse(allow.exists, "Allowing AI processing must leave the consent screen")
         }
         expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: emailButton)
         waitForExpectations(timeout: 30)

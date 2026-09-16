@@ -2075,6 +2075,7 @@ export const hr: Messages = {
   "native.year": "godina",
   "native.month": "mjesec",
   "native.renewal": "Plaćanje se naplaćuje s tvog Apple računa. Pretplata se automatski obnavlja ako je ne otkažeš najmanje 24 sata prije kraja tekućeg razdoblja. Upravljaj njome ili je otkaži u postavkama Apple pretplata.",
+  "native.renewalShort": "Pretplata se automatski obnavlja dok je ne otkažeš u Apple postavkama.",
   "native.firstYearPrice": "{initial} za prvu godinu, zatim {renewal}/godina",
   "native.trialMonthPrice": "3 dana besplatno, zatim {renewal}/mjesec",
   "native.trialYearPrice": "3 dana besplatno, zatim {renewal}/godina",

@@ -2062,6 +2062,7 @@ export const en: Messages = {
   "native.year": "year",
   "native.month": "month",
   "native.renewal": "Payment is charged to your Apple Account. The subscription renews automatically unless cancelled at least 24 hours before the current period ends. Manage or cancel it in your Apple subscription settings.",
+  "native.renewalShort": "Renews automatically until cancelled in your Apple subscription settings.",
   "native.firstYearPrice": "{initial} for the first year, then {renewal}/year",
   "native.trialMonthPrice": "3 days free, then {renewal}/month",
   "native.trialYearPrice": "3 days free, then {renewal}/year",

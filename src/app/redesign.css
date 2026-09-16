@@ -19898,17 +19898,20 @@
   width: min(100%, 32rem);
   margin-inline: auto;
   color: var(--muted);
-  font-size: 0.78rem;
-  line-height: 1.45;
+  font-size: 0.74rem;
+  line-height: 1.35;
   text-align: center;
 }
-.memo-apple-billing-terms p { margin: 0 0 0.5rem; }
-.memo-apple-billing-terms > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.5rem; }
+.memo-apple-billing-terms p { margin: 0 0 0.15rem; }
+.memo-apple-billing-terms > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0 0.9rem; }
 .memo-apple-billing-terms a,
 .memo-apple-billing-terms button { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
-.memo-apple-billing-terms button { min-height: 2.7rem; border: 0; background: none; font: inherit; cursor: pointer; }
+.memo-apple-billing-terms button { min-height: 2rem; padding: 0; border: 0; background: none; font: inherit; cursor: pointer; }
 .memo-apple-billing-terms :is(a, button):focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
-.memo-paywall-apple { height: auto; min-height: 100%; overflow: visible; }
+/* The Apple paywall keeps the web paywall's single-viewport layout; the
+   footer gets tighter to make room for the disclosure and links. */
+.memo-paywall-apple .memo-paywall-foot { gap: 0.6rem; }
+.memo-paywall-apple .memo-paywall-due { margin: 0; }
 .memo-native-plans { display: grid; gap: 12px; }
 .memo-native-plans [aria-checked="true"] { box-shadow: inset 0 0 0 2px var(--promo); }
 .memo-native-plans button:focus-visible { box-shadow: 0 0 0 3px var(--focus-ring); outline: none; }

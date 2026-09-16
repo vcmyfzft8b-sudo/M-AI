@@ -345,7 +345,8 @@ a:visited {
 .app-start-panel-paywall .app-start-dismiss-row {
   width: 100%;
   position: absolute;
-  top: clamp(1rem, 2vw, 1.5rem);
+  /* env() is zero outside the iOS app, where the web view runs under the status bar. */
+  top: calc(clamp(1rem, 2vw, 1.5rem) + env(safe-area-inset-top, 0px));
   left: 0;
   right: 0;
   padding-right: 0;
@@ -2472,7 +2473,7 @@ a:visited {
   }
 
   .app-start-panel-paywall .app-start-dismiss-row {
-    top: 1rem;
+    top: calc(1rem + env(safe-area-inset-top, 0px));
   }
 
   .app-start-panel-fullscreen {

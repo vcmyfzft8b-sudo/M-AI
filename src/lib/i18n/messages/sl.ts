@@ -2097,6 +2097,7 @@ export const sl = {
   "native.year": "leto",
   "native.month": "mesec",
   "native.renewal": "Plačilo se obračuna tvojemu računu Apple. Naročnina se samodejno podaljša, razen če jo prekličeš vsaj 24 ur pred koncem trenutnega obdobja. Upravljaj ali prekliči jo v nastavitvah naročnin Apple.",
+  "native.renewalShort": "Naročnina se samodejno obnavlja, dokler je ne prekličeš v nastavitvah Apple.",
   "native.firstYearPrice": "{initial} za prvo leto, nato {renewal}/leto",
   "native.trialMonthPrice": "3 dni brezplačno, nato {renewal}/mesec",
   "native.trialYearPrice": "3 dni brezplačno, nato {renewal}/leto",

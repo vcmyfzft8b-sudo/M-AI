@@ -5,19 +5,15 @@ import { useT } from "@/components/i18n-provider";
 import { nativeRequest } from "@/lib/mobile/client";
 import { Emoji, Msym } from "@/components/msym";
 
-export function NativeAccountActions({ showManage = true }: { showManage?: boolean }) {
+export function NativeAccountActions({ showManage = true, onWithdraw }: { showManage?: boolean; onWithdraw: () => void }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   async function run(command: string) {
+    // Withdrawal is confirmed by the settings sheet; it is not a one-tap action.
+    if (command === "withdrawAI") { onWithdraw(); return; }
     setBusy(true); setNotice("");
     try {
-      if (command === "withdrawAI") {
-        const response = await fetch("/api/mobile/consent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ allow: false }) });
-        if (!response.ok) throw new Error();
-        window.location.assign("/app/consent");
-        return;
-      }
       await nativeRequest(command);
       if (command === "restore") window.location.reload();
     } catch { setNotice(t("native.verifyFailed")); }

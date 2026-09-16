@@ -1,6 +1,17 @@
 import XCTest
 
 final class WrapperTests: XCTestCase {
+    /// A signed-in synthetic account that withdrew AI permission meets the
+    /// consent gate at launch; allow it again (retrying until React hydrates).
+    @MainActor private func passConsentGate(_ app: XCUIApplication) {
+        let allow = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "Allow AI processing", "Dovoli obdelavo")).firstMatch
+        guard allow.waitForExistence(timeout: 8) else { return }
+        for _ in 0..<4 where allow.exists {
+            allow.tap()
+            RunLoop.current.run(until: Date().addingTimeInterval(6))
+        }
+    }
+
     /// Scrolls the note's horizontal tab strip: swipe on a chip that sits well
     /// inside the screen (a clipped one has no visible frame), or drag along
     /// the row when none does.
@@ -26,6 +37,7 @@ final class WrapperTests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["MEMO_IOS_URL"] = preview
         app.launch()
+        passConsentGate(app)
         continueAfterFailure = false
         func snap(_ name: String) {
             let shot = XCTAttachment(screenshot: app.screenshot())
@@ -216,6 +228,7 @@ final class WrapperTests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["MEMO_IOS_URL"] = preview
         app.launch()
+        passConsentGate(app)
         continueAfterFailure = false
         func snap(_ name: String) {
             let shot = XCTAttachment(screenshot: app.screenshot())
@@ -287,6 +300,7 @@ final class WrapperTests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["MEMO_IOS_URL"] = preview
         app.launch()
+        passConsentGate(app)
         continueAfterFailure = false
         func snap(_ name: String) {
             let shot = XCTAttachment(screenshot: app.screenshot())
@@ -359,6 +373,7 @@ final class WrapperTests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["MEMO_IOS_URL"] = preview
         app.launch()
+        passConsentGate(app)
         continueAfterFailure = true
         var problems: [String] = []
         var shot = 0
@@ -617,6 +632,7 @@ final class WrapperTests: XCTestCase {
             return app.webViews.switches["Dark"].waitForExistence(timeout: 15)
         }
         app.launch()
+        passConsentGate(app)
         XCTAssertTrue(openSettings(), "Settings must open")
         func row(_ label: String, _ name: String, dismiss: @MainActor () -> Void) {
             guard openSettings() else { problems.append("\(name): settings unavailable"); return }

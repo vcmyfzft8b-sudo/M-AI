@@ -157,7 +157,15 @@ Enable Sign in with Apple on the existing `eu.memoai.memo` App ID, create a dedi
 
 Enable the Apple provider in Supabase and include `eu.memoai.memo` in the accepted client IDs for native identity tokens. Preserve existing web client IDs and redirect configuration. Replay migration 0050 locally, follow the staging/merge workflow, and verify the `apple_auth_grants` table exists before enabling `APPLE_SIGN_IN_ENABLED`. The native server creates short-lived client-secret JWTs for authorization exchange and revocation; a static six-month client secret is not stored in this implementation.
 
-Web Apple OAuth is separately gated by `APPLE_WEB_SIGN_IN_ENABLED` (default false). Native bundle-ID validation does not configure a web Services ID or its redirect/client-secret settings. Keep the web flag off until those settings and the web redirect flow are verified.
+Web Apple OAuth is separately gated by `APPLE_WEB_SIGN_IN_ENABLED` (default false). The web route (`src/app/auth/apple/route.ts`) and the login button already exist; turning them on is configuration only:
+
+1. **Apple Developer → Identifiers → Services IDs → +**: create e.g. `eu.memoai.web`, enable Sign in with Apple, and under Configure choose the `eu.memoai.memo` App ID as primary, add the domains `memoai.eu`, `www.memoai.eu` and the Supabase auth host (`zrcwmhuwwvguiekzmcdj.supabase.co` for production, `yviipoccwsndxyrhtcjm.supabase.co` for staging), and the return URL `https://<project>.supabase.co/auth/v1/callback` for each project. Only the account holder can do this; there is no API for Services IDs.
+2. **Client secret**: `node scripts/apple/web-client-secret.mjs eu.memoai.web` prints a six-month JWT signed with the existing Sign in with Apple key (`DG2SJQMW8J`, stored outside Git). Note the expiry it prints; Apple rejects secrets older than six months, so rotate before then.
+3. **Supabase → Authentication → Providers → Apple** (staging first, then production): enabled; Client IDs `eu.memoai.memo,eu.memoai.web` (the bundle ID keeps native ID-token sign-in working, the Services ID serves the web); Secret Key = the JWT from step 2. Keep the existing redirect allowlist.
+4. **Vercel**: set `APPLE_WEB_SIGN_IN_ENABLED=true` (Preview for the branch first, then Production). Nothing else changes; Google and email stay as they are.
+5. **Verify on the Preview in Safari**: `/auth/continue` shows "Continue with Apple"; completing Apple's sheet lands on `/auth/callback` and then `/app`, with the same language reconciliation as Google; a repeat sign-in with the same Apple ID resumes the same Memo account. Check "Hide My Email" once, because Apple then issues a relay address.
+
+Until step 1 exists the flag stays off and the web login is unchanged.
 
 The encrypted grants are readable only by the service role and are bound to both user ID and Apple client ID. Do not put Apple tokens in user metadata, browser storage, logs or source control. Test account deletion, a failed revocation followed by a successful retry, and a credential revoked outside Memo.
 

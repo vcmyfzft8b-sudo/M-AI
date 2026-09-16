@@ -19884,7 +19884,8 @@
 .memo-native-paywall {
   width: min(100%, 28rem);
   margin: auto;
-  padding: 24px;
+  /* Native-only screens (AI consent, support) run under the app's status bar. */
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 24px calc(24px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 20px;

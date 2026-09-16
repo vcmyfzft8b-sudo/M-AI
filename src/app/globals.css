@@ -2107,7 +2107,7 @@ a:visited {
   }
 
   .memo-paywall-shell .app-start-dismiss-row {
-    top: 0.85rem;
+    top: calc(0.85rem + env(safe-area-inset-top, 0px));
   }
 
   .memo-paywall-brand {
@@ -2313,7 +2313,7 @@ a:visited {
   }
 
   .memo-paywall-shell .app-start-dismiss-row {
-    top: 0.9rem;
+    top: calc(0.9rem + env(safe-area-inset-top, 0px));
   }
 
   .memo-paywall-brand {

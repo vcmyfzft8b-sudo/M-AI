@@ -188,6 +188,134 @@ final class WrapperTests: XCTestCase {
         snap("11 Home after deletion")
     }
 
+    // Visual review of the edge-to-edge layout on a staging Preview with a
+    // signed-in synthetic account: home, the new-note sheet, a note with its
+    // chat and actions sheets, and settings. Screenshots are the evidence.
+    @MainActor func testPreviewSafeAreaReview() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a staging Preview and a signed-in synthetic account")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        continueAfterFailure = false
+        func snap(_ name: String) {
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = name
+            shot.lifetime = .keepAlways
+            add(shot)
+        }
+        func contains(_ text: String) -> NSPredicate { NSPredicate(format: "label CONTAINS %@", text) }
+        func webButton(_ text: String) -> XCUIElement { app.webViews.buttons.matching(contains(text)).firstMatch }
+        let newNote = webButton("New note")
+        XCTAssertTrue(newNote.waitForExistence(timeout: 30))
+        snap("R1 Home")
+        newNote.tap()
+        let cancel = app.webViews.buttons.matching(NSPredicate(format: "label == %@", "Cancel")).firstMatch
+        if cancel.waitForExistence(timeout: 10) {
+            snap("R2 New note sheet")
+            cancel.tap()
+        } else {
+            snap("R2 New note (paywall)")
+            let close = webButton("Close the subscription offer")
+            XCTAssertTrue(close.waitForExistence(timeout: 10))
+            close.tap()
+            XCTAssertTrue(newNote.waitForExistence(timeout: 20), "Closing the offer must return home")
+        }
+        let existing = app.webViews.descendants(matching: .any).matching(contains("Plant Life Cycle")).firstMatch
+        if existing.waitForExistence(timeout: 10) {
+            existing.tap()
+            let flashcards = app.webViews.buttons.matching(NSPredicate(format: "label == %@", "Flashcards")).firstMatch
+            XCTAssertTrue(flashcards.waitForExistence(timeout: 30))
+            snap("R3 Note")
+            let openChat = app.webViews.descendants(matching: .any).matching(contains("Chat about this note")).firstMatch
+            if openChat.waitForExistence(timeout: 10) {
+                openChat.tap()
+                _ = app.webViews.staticTexts.matching(contains("Ask me anything")).firstMatch.waitForExistence(timeout: 10)
+                snap("R4 Chat sheet")
+                let closeChat = webButton("Close chat")
+                if closeChat.waitForExistence(timeout: 5) { closeChat.tap() }
+            }
+            let actions = app.webViews.buttons["Actions"]
+            if actions.waitForExistence(timeout: 10) {
+                actions.tap()
+                _ = app.webViews.buttons.matching(NSPredicate(format: "label == %@", "Delete")).firstMatch.waitForExistence(timeout: 5)
+                snap("R5 Actions sheet")
+                let dismiss = app.webViews.buttons.matching(NSPredicate(format: "label == %@", "Cancel")).firstMatch
+                if dismiss.waitForExistence(timeout: 5) { dismiss.tap() }
+            }
+            flashcards.tap()
+            _ = app.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Card ")).firstMatch.waitForExistence(timeout: 15)
+            snap("R6 Flashcards")
+            let back = app.webViews.buttons["Back"]
+            if back.waitForExistence(timeout: 5) { back.tap() }
+        }
+        let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 30))
+        settings.tap()
+        XCTAssertTrue(app.webViews.switches["Dark"].waitForExistence(timeout: 15))
+        snap("R7 Settings")
+    }
+
+    // Signed-out review on a fresh simulator: the sign-in screen must offer
+    // Apple, Google and email with no back arrow, and a password login must
+    // reach the AI-consent gate. Credentials come from MEMO_QA_EMAIL/PASSWORD.
+    @MainActor func testPreviewSignInScreenAndPasswordLogin() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              let email = env["MEMO_QA_EMAIL"], let password = env["MEMO_QA_PASSWORD"] else {
+            throw XCTSkip("Requires a staging Preview and a synthetic password account")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        continueAfterFailure = false
+        func snap(_ name: String) {
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = name
+            shot.lifetime = .keepAlways
+            add(shot)
+        }
+        func contains(_ text: String) -> NSPredicate { NSPredicate(format: "label CONTAINS %@", text) }
+        let emailButton = app.webViews.buttons.matching(contains("Continue with email")).firstMatch
+        XCTAssertTrue(emailButton.waitForExistence(timeout: 30))
+        snap("S1 Sign in")
+        XCTAssertFalse(app.webViews.links["Back"].exists, "The app has no landing page to go back to")
+        XCTAssertTrue(app.webViews.buttons.matching(contains("Continue with Google")).firstMatch.exists)
+        XCTAssertTrue(app.webViews.buttons.matching(contains("Continue with Apple")).firstMatch.exists,
+                      "Sign in with Apple must accompany Google (App Review 4.8)")
+        emailButton.tap()
+        let passwordLink = app.webViews.links.matching(contains("Sign in with a password")).firstMatch
+        XCTAssertTrue(passwordLink.waitForExistence(timeout: 15))
+        snap("S2 Email entry")
+        passwordLink.tap()
+        let emailField = app.webViews.textFields.firstMatch
+        XCTAssertTrue(emailField.waitForExistence(timeout: 15))
+        emailField.tap()
+        emailField.typeText(email)
+        let passwordField = app.webViews.secureTextFields.firstMatch
+        XCTAssertTrue(passwordField.waitForExistence(timeout: 5))
+        passwordField.tap()
+        passwordField.typeText(password)
+        snap("S3 Password form")
+        let submit = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "sign in")).firstMatch
+        XCTAssertTrue(submit.waitForExistence(timeout: 5))
+        submit.tap()
+        // A first sign-in meets the AI-consent gate; an account that already
+        // consented goes straight on.
+        let allow = app.webViews.buttons.matching(contains("Allow AI processing")).firstMatch
+        if allow.waitForExistence(timeout: 30) {
+            snap("S4 AI consent")
+            allow.tap()
+            expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: allow)
+            waitForExpectations(timeout: 45)
+        }
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: emailButton)
+        waitForExpectations(timeout: 30)
+        snap("S5 Signed in")
+    }
+
     @MainActor func testPreviewHelpUsesAppleBillingInstructions() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
               URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {

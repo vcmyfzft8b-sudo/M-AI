@@ -1,13 +1,20 @@
 import XCTest
 
 final class WrapperTests: XCTestCase {
-    /// Scrolls the note's horizontal tab strip with a fast drag along its row.
-    /// Chips that are clipped at the edge have no visible frame to swipe from.
-    @MainActor private func dragStrip(_ app: XCUIApplication, rowY: CGFloat, left: Bool) {
+    /// Scrolls the note's horizontal tab strip: swipe on a chip that sits well
+    /// inside the screen (a clipped one has no visible frame), or drag along
+    /// the row when none does.
+    @MainActor private func scrollStrip(_ app: XCUIApplication, tabNames: [String], rowY: CGFloat, left: Bool) {
         let window = app.windows.firstMatch.frame
+        let chips = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", tabNames)).allElementsBoundByIndex
+        if let anchor = chips.first(where: { $0.frame.minX >= 40 && $0.frame.maxX <= window.width - 40 && $0.isHittable }) {
+            if left { anchor.swipeLeft() } else { anchor.swipeRight() }
+            return
+        }
         let y = rowY / window.height
-        let from = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.85 : 0.15, dy: y))
-        let to = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.15 : 0.85, dy: y))
+        // Start well inside the screen: a drag from the left edge is the back gesture.
+        let from = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.85 : 0.3, dy: y))
+        let to = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.3 : 0.85, dy: y))
         from.press(forDuration: 0.05, thenDragTo: to, withVelocity: .fast, thenHoldForDuration: 0.05)
     }
     // Real study flow on a staging Preview: a synthetic lesson photo becomes a
@@ -41,7 +48,7 @@ final class WrapperTests: XCTestCase {
             let width = app.windows.firstMatch.frame.width
             func onScreen() -> Bool { tab.frame.minX >= 0 && tab.frame.maxX <= width && tab.isHittable }
             for _ in 0..<6 where !onScreen() {
-                dragStrip(app, rowY: tab.frame.midY, left: tab.frame.midX > width)
+                scrollStrip(app, tabNames: tabNames, rowY: tab.frame.midY, left: tab.frame.midX > width)
                 RunLoop.current.run(until: Date().addingTimeInterval(1))
             }
             XCTAssertTrue(onScreen(), "\(name) tab must be reachable")
@@ -387,9 +394,17 @@ final class WrapperTests: XCTestCase {
             }
             return element.exists && element.isHittable
         }
+        /// Leaves the current screen: the app's Back button, an open sheet's
+        /// Close button, or the web view's edge-swipe back gesture.
         func back() {
             let button = web(.button, exact("Back"))
-            if button.exists && button.isHittable { button.tap() } else { app.swipeRight() }
+            let close = web(.button, exact("Close"))
+            if button.exists && button.isHittable { button.tap() }
+            else if close.exists && close.isHittable { close.tap() }
+            else {
+                let from = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.5))
+                from.press(forDuration: 0.05, thenDragTo: from.withOffset(CGVector(dx: 260, dy: 0)))
+            }
             settle()
         }
         let tabNames = ["Notes", "Tutor", "Flashcards", "Podcast", "Quiz", "Mindmap", "Palace", "Test", "Speed read", "Transcript"]
@@ -399,7 +414,7 @@ final class WrapperTests: XCTestCase {
             let width = app.windows.firstMatch.frame.width
             func onScreen() -> Bool { chip.frame.minX >= 0 && chip.frame.maxX <= width && chip.isHittable }
             for _ in 0..<6 where !onScreen() {
-                dragStrip(app, rowY: chip.frame.midY, left: chip.frame.midX > width)
+                scrollStrip(app, tabNames: tabNames, rowY: chip.frame.midY, left: chip.frame.midX > width)
                 settle(0.8)
             }
             guard onScreen() else { problems.append("tab \(name): unreachable"); return false }
@@ -491,7 +506,9 @@ final class WrapperTests: XCTestCase {
                     _ = app.webViews.switches["Dark"].waitForExistence(timeout: 10)
                 }
             }
-            row("Language", "language", screenshot: "Language")
+            row("Language", "language", screenshot: "Language") {
+                tap("Keep English", web(.any, exact("English")), timeout: 5, required: false)
+            }
             row("Help centre", "help", screenshot: "Help centre") {
                 if tap("Refund article", web(.any, contains("Refund policy")), timeout: 5, required: false) { snap("Help article"); back() }
                 back()

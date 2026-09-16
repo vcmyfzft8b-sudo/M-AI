@@ -4,6 +4,7 @@ import { z } from "zod";
 import { canSendTrialChatMessage, createBillingRequiredResponse } from "@/lib/billing";
 import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import { createChatEventStream } from "@/lib/chat-stream";
+import { getInvocationBudgetMs, runWithinInvocationBudget } from "@/lib/invocation-budget";
 import { answerLectureChat } from "@/lib/pipeline";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -18,11 +19,18 @@ const chatSchema = z.object({
 
 export const maxDuration = 300;
 const CHAT_REQUEST_MAX_BYTES = 8 * 1024;
+/*
+ * Never reaches the learner: `createChatEventStream` catches whatever `run` throws, logs it and
+ * sends the localised `chat.error.answerFailed` frame instead. This sentence is what a triager
+ * reads in the platform log, so it says which budget fired rather than what went wrong.
+ */
+const CHAT_BUDGET_MESSAGE = "The chat answer outlived its invocation budget.";
 
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  const invocationStartedAt = Date.now();
   /*
    * The preview bypass counts as signed in here, so a preview deployment can
    * actually open the chat. Without it every preview answered 401 at the first
@@ -87,16 +95,37 @@ export async function POST(
     );
   }
 
+  /*
+   * The answer is two model calls deep, not one: a streamed attempt, and — when that attempt
+   * fails — the ordinary call the pipeline falls back to (pipeline.ts, `streamChatAnswer`). Each
+   * one sizes its own timeout, and outside a budget `getRemainingBudgetMs()` is undefined, so
+   * neither knows the other exists: the chat stage has no entry in `STAGE_TIMEOUT_MS`, so both
+   * take the 180s OpenRouter default and 360s of attempts are started inside a 300s invocation.
+   * The platform then killed the function mid-fallback, which the learner saw as a 504 with no
+   * error frame at all.
+   *
+   * The budget is what makes the clamping in `resolveAiAttemptTimeoutMs` work: the fallback is
+   * cut to the time that genuinely remains, and if even that runs out the rejection arrives
+   * while the stream is still open to say so.
+   */
   return createChatEventStream({
     label: "[chat]",
     errorMessage: await tr("chat.error.answerFailed"),
     run: (send) =>
-      answerLectureChat({
-        lectureId: id,
-        userId: user.id,
-        question: parsed.data.question,
-        sourceLanguageAction: parsed.data.sourceLanguageAction,
-        onDelta: send.delta,
+      runWithinInvocationBudget({
+        run: () =>
+          answerLectureChat({
+            lectureId: id,
+            userId: user.id,
+            question: parsed.data.question,
+            sourceLanguageAction: parsed.data.sourceLanguageAction,
+            onDelta: send.delta,
+          }),
+        budgetMs: getInvocationBudgetMs({
+          maxDurationSeconds: maxDuration,
+          elapsedMs: Date.now() - invocationStartedAt,
+        }),
+        deadlineMessage: CHAT_BUDGET_MESSAGE,
       }),
   });
 }

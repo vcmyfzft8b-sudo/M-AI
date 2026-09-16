@@ -89,6 +89,14 @@ ignored by Git.
    activation, build upload, App Review submission or public release has occurred
    in this task.
 
+## Production configuration (17 September 2026)
+
+- Vercel production holds `APPLE_APP_ID`, `APPLE_BUNDLE_ID`, `APPLE_IAP_*`, `APPLE_SIGN_IN_*` and a fresh `APPLE_AUTH_TOKEN_ENCRYPTION_KEY`; `APPLE_SIGN_IN_ENABLED`, `NATIVE_GOOGLE_SIGN_IN_ENABLED`, `APPLE_IAP_ENABLED` and `APPLE_WEB_SIGN_IN_ENABLED` are `true`. Production was redeployed; the app's login on `memoai.eu` shows Google, Apple and email, the web login gained "Continue with Apple" and is otherwise unchanged.
+- Production Supabase: Apple provider enabled with client IDs `eu.memoai.web,eu.memoai.memo` (the web Services ID first, because Supabase sends the first one to Apple's authorize endpoint) and a six-month client secret from `scripts/apple/web-client-secret.mjs` (rotate before **March 2027**); `eu.memoai.memo.auth://google/callback**` added to the redirect allowlist.
+- Apple Developer: Services ID `eu.memoai.web` ("Memo AI web sign in") with Sign in with Apple, primary App ID `eu.memoai.memo`, domains `memoai.eu`, `www.memoai.eu` and both Supabase hosts, return URLs `https://<project>.supabase.co/auth/v1/callback` for production and staging.
+- Web "Continue with Apple" reaches Apple's sign-in page with `client_id=eu.memoai.web`; completing it with a real Apple Account is the remaining check.
+- Still pending in App Store Connect: the server-notifications URLs (`https://www.memoai.eu/api/mobile/notifications` — the bare domain 307-redirects and Apple does not follow redirects), App Store Connect API access (needed for a command-line export/upload), the four products at one service level, screenshots and review notes.
+
 ## Current operational blockers
 
 - **Export needs Xcode's Organizer or an App Store Connect API key.** The

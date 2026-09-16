@@ -13,7 +13,8 @@ final class WrapperTests: XCTestCase {
         let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 30))
         settings.tap()
-        let redeem = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Redeem a code")).firstMatch
+        XCTAssertTrue(app.webViews.switches["Dark"].waitForExistence(timeout: 15))
+        let redeem = app.webViews.links.matching(NSPredicate(format: "label CONTAINS %@", "Redeem a code")).firstMatch
         for _ in 0..<5 {
             if redeem.exists && redeem.isHittable { break }
             app.webViews.firstMatch.swipeUp()

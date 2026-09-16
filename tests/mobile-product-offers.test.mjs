@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { nativeProducts, halfOffProducts, trialPlanProducts } from "../src/lib/mobile/products.ts";
 
-const monthly = { id: "eu.memoai.premium.monthly", name: "Monthly", price: "€20.00", quote: "apple-quote", available: true };
+const monthly = { id: "eu.memoai.premium.monthly", name: "Monthly", price: "€19.99", quote: "apple-quote", available: true };
 
 test("the wheel only advertises an eligible Apple half-price offer", () => {
   assert.deepEqual(halfOffProducts([monthly]), []);

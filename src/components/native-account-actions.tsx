@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useT } from "@/components/i18n-provider";
 import { nativeRequest } from "@/lib/mobile/client";
+import { Emoji, Msym } from "@/components/msym";
 
-export function NativeAccountActions() {
+export function NativeAccountActions({ showManage = true }: { showManage?: boolean }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -22,10 +23,17 @@ export function NativeAccountActions() {
     } catch { setNotice(t("native.verifyFailed")); }
     finally { setBusy(false); }
   }
-  return <div className="memo-native-plans">
-    <button type="button" className="memo-card-row" disabled={busy} onClick={() => void run("restore")}>{t("native.restore")}</button>
-    <button type="button" className="memo-card-row" disabled={busy} onClick={() => void run("manageSubscriptions")}>{t("native.manage")}</button>
-    <button type="button" className="memo-card-row" disabled={busy} onClick={() => void run("withdrawAI")}>{t("native.aiWithdraw")}</button>
+  const actions = [
+    { command: "restore", label: t("native.restore"), emoji: "🔄" },
+    ...(showManage ? [{ command: "manageSubscriptions", label: t("native.manage"), emoji: "💳" }] : []),
+    { command: "withdrawAI", label: t("native.aiWithdraw"), emoji: "🔒" },
+  ];
+  return <>
+    {actions.map(action => <button key={action.command} type="button" className="memo-settings-row" disabled={busy} onClick={() => void run(action.command)}>
+      <span className="memo-settings-tile"><Emoji symbol={action.emoji} size="1.15rem" /></span>
+      <span className="memo-settings-copy"><span className="memo-settings-title">{action.label}</span></span>
+      <Msym name="chevron_right" size="1.5rem" fill={false} weight={400} />
+    </button>)}
     {notice ? <p role="status" className="memo-inline-error">{notice}</p> : null}
-  </div>;
+  </>;
 }

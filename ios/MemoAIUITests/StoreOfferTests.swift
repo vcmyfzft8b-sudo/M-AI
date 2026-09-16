@@ -40,7 +40,7 @@ final class StoreOfferTests: XCTestCase {
             XCTAssertTrue((product["quote"] as? String)?.contains("intro:") == true)
             let yearly = product["id"] as? String == "eu.memoai.premium.yearly"
             XCTAssertTrue((product["introPrice"] as? String)?.contains(yearly ? "64.99" : "9.99") == true)
-            XCTAssertTrue((product["price"] as? String)?.contains(yearly ? "129.99" : "20.00") == true)
+            XCTAssertTrue((product["price"] as? String)?.contains(yearly ? "129.99" : "19.99") == true)
         }
         app.webViews.buttons["Use stale price"].tap()
         XCTAssertTrue(app.webViews.staticTexts["priceChanged"].waitForExistence(timeout: 15))

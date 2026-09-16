@@ -225,7 +225,7 @@ export function SettingsScreen({
   );
 
   const rows: SettingsRow[] = [
-    ...(isPhone && !showInstallHint
+    ...(!native && isPhone && !showInstallHint
       ? [
           {
             id: "install",
@@ -421,7 +421,7 @@ export function SettingsScreen({
               * device has a home screen to add to. Without it a desktop gets a
               * card for a gesture its machine does not have.
               */}
-            {isPhone && showInstallHint ? (
+            {!native && isPhone && showInstallHint ? (
               <button
                 type="button"
                 className="memo-install-cta"
@@ -479,7 +479,6 @@ export function SettingsScreen({
               )}
             </div>
 
-            {native && !isDemo ? <NativeAccountActions /> : null}
             {testPersona ? <SettingsTestPersona persona={testPersona} /> : null}
 
             <p className="memo-fine-print">
@@ -524,6 +523,7 @@ export function SettingsScreen({
                   choice, which none of the plain rows above do. */}
               <LanguageSettingsRow />
               {rows.map(renderRow)}
+              {native && !isDemo ? <NativeAccountActions showManage={!appleSubscription} /> : null}
               {accountRows.map(renderRow)}
             </div>
 

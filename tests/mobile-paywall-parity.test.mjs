@@ -82,7 +82,7 @@ test("missing StoreKit products cannot show Stripe prices as Apple prices", () =
 });
 test("Apple wheel offer keeps the PWA sheet and uses actual first-period prices", () => {
   const offers = [
-    { id: "eu.memoai.premium.monthly", price: "€20.00", introPrice: "€9.99", halfOff: true },
+    { id: "eu.memoai.premium.monthly", price: "€19.99", introPrice: "€9.99", halfOff: true },
     { id: "eu.memoai.premium.yearly", price: "€129.99", introPrice: "€64.99", introWeeklyPrice: "€1.25", halfOff: true },
   ];
   const render = native => {

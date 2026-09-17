@@ -153,6 +153,11 @@ async function main() {
       level: issue.level,
       status: issue.status,
       substatus: issue.substatus ?? null,
+      // Not every unresolved issue is an error: Sentry files its performance span
+      // detectors in the same list, with no exception and no stack trace. Carry the
+      // classification so triage does not have to re-derive it from the API.
+      issueType: issue.issueType ?? null,
+      issueCategory: issue.issueCategory ?? null,
       count: Number(issue.count ?? 0),
       userCount: Number(issue.userCount ?? 0),
       firstSeen: issue.firstSeen ?? null,
@@ -176,6 +181,8 @@ async function main() {
       shortId: issue.shortId,
       title: issue.title,
       culprit: issue.culprit,
+      issueType: issue.issueType ?? null,
+      issueCategory: issue.issueCategory ?? null,
       count: Number(issue.count ?? 0),
       lastSeen: issue.lastSeen ?? null,
       permalink: issue.permalink,

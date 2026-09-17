@@ -114,6 +114,18 @@ export function isFresh(entry, lastSeen) {
   return new Date(lastSeen) > new Date(entry.updatedAt)
 }
 
+// Sentry's performance span detectors -- `performance_consecutive_http` and its
+// siblings -- are unresolved issues in the same list as real errors, but they carry
+// no exception and no stack trace: they are a measurement of how a request spent its
+// time, not something that failed. Each detection also files a brand-new issue id, so
+// recording one in the backlog never stops the next from gating. This triage handles
+// 5xx, timeouts and uncaught exceptions, so they are set aside -- reported, never
+// silently dropped. An issue from a report predating this field has no issueType and
+// stays actionable.
+function isPerformanceDetector(issue) {
+  return typeof issue?.issueType === 'string' && issue.issueType.startsWith('performance_')
+}
+
 export function gate({ vercel, sentry, backlog }) {
   const entries = new Map()
   for (const entry of backlog?.entries ?? []) {
@@ -129,9 +141,11 @@ export function gate({ vercel, sentry, backlog }) {
   // exists nowhere else. Issues past the enrichment cap land in `additional` --
   // sorted by frequency, which is exactly where a brand-new low-count issue sits
   // -- so they gate too.
-  const freshSentry = [...(sentry?.issues ?? []), ...(sentry?.additional ?? [])].filter(
+  const freshSentryAll = [...(sentry?.issues ?? []), ...(sentry?.additional ?? [])].filter(
     (issue) => isFresh(entries.get(`sentry:${issue.id}`), issue.lastSeen),
   )
+  const freshSentry = freshSentryAll.filter((issue) => !isPerformanceDetector(issue))
+  const ignoredSentry = freshSentryAll.filter(isPerformanceDetector)
 
   // A scan that could not read its whole window is itself a reason to run: the
   // agent reports the gap and the cursor stays put. A missing Sentry report means
@@ -146,6 +160,8 @@ export function gate({ vercel, sentry, backlog }) {
   else if (actionable)
     reason = `${freshVercel.length} new or regressed Vercel group(s), ${freshSentry.length} Sentry issue(s)`
   else if (sentryMissing) reason = 'nothing new from Vercel, and the Sentry scan produced no report'
+  else if (ignoredSentry.length > 0)
+    reason = `nothing new since the last run (${ignoredSentry.length} Sentry performance detector(s) set aside)`
   else reason = 'nothing new since the last run'
 
   return {
@@ -159,6 +175,7 @@ export function gate({ vercel, sentry, backlog }) {
     freshSentryIssues: freshSentry.length,
     freshFingerprints: freshVercel.map((group) => group.fingerprint),
     freshSentryIssueIds: freshSentry.map((issue) => issue.id),
+    ignoredSentryIssueIds: ignoredSentry.map((issue) => issue.id),
   }
 }
 

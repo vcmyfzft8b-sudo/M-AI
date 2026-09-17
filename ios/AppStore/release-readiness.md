@@ -51,7 +51,9 @@ ignored by Git.
 - Production Supabase: Apple provider enabled with client ids `eu.memoai.memo,eu.memoai.web` and a six-month client secret generated on 17 September 2026 (rotate before 16 March 2027 with `scripts/apple/web-client-secret.mjs`); the native Google callback `eu.memoai.memo.auth://google/callback**` is on the redirect allowlist.
 - Apple Developer: Services ID `eu.memoai.web` (Sign in with Apple, primary App ID `eu.memoai.memo`, domains memoai.eu, www.memoai.eu and both Supabase hosts, return URLs both Supabase callbacks).
 - App Store Connect: production and sandbox server-notification URLs are `https://www.memoai.eu/api/mobile/notifications` (the apex host answers a POST with a 307 redirect, so the www host is required).
-- Still open: App Store Connect API access (needed for the command-line export/upload; `ios/Config/ExportOptionsUpload.plist` is ready), a completed web and native Apple sign-in on a real Apple Account, Sandbox purchases on a device.
+- App Store Connect API: access approved; team keys `DL79AMQY5C` (App Manager) and `M2VD53GP68` (Admin, required for cloud-managed distribution signing); issuer `6715f045-a181-4ad1-b072-5824a5bf1220`. Private keys live in `~/.config/memoai/apple/` (a symlink in `~/.appstoreconnect/private_keys/` serves altool). `scripts/apple/asc-builds.mjs` lists builds.
+- **Build 1.0.0 (1) exported with cloud signing, validated (no errors) and uploaded to App Store Connect on 17 September 2026** (delivery `c3d6b52d-00ed-49fd-983f-b6d5c312d8dd`). Export compliance is answered by `ITSAppUsesNonExemptEncryption=false` in Info.plist.
+- Still open: Apple's processing of the build and a TestFlight install; a completed web and native Apple sign-in on a real Apple Account; Sandbox purchases on a device; screenshots, age rating and review notes in App Store Connect; the submission itself.
 
 ## Required before calling the app ready
 

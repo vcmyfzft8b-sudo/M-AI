@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <!-- Same as ExportOptions.plist but uploads to App Store Connect instead of
+       writing an .ipa. Use with an App Store Connect API key:
+       xcodebuild -exportArchive -archivePath ios/build/MemoAI-release.xcarchive \
+         -exportOptionsPlist ios/Config/ExportOptionsUpload.plist -exportPath ios/build/upload \
+         -allowProvisioningUpdates -authenticationKeyPath <AuthKey_ID.p8> \
+         -authenticationKeyID <ID> -authenticationKeyIssuerID <ISSUER> -->
+  <key>method</key><string>app-store-connect</string>
+  <key>destination</key><string>upload</string>
+  <key>signingStyle</key><string>automatic</string>
+  <key>teamID</key><string>J4PCHZ8P7T</string>
+  <key>manageAppVersionAndBuildNumber</key><false/>
+  <key>uploadSymbols</key><true/>
+</dict></plist>

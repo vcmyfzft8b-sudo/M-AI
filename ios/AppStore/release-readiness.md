@@ -45,6 +45,14 @@ Screenshots under `ios/build/screenshots/`: `12-full-screen-home.png`,
 release build connected to production. Test results and artifacts are local and
 ignored by Git.
 
+## Production configuration done on 17 September 2026
+
+- Vercel Production: `APPLE_SIGN_IN_ENABLED`, `NATIVE_GOOGLE_SIGN_IN_ENABLED`, `APPLE_IAP_ENABLED` and `APPLE_WEB_SIGN_IN_ENABLED` are `true`; both Apple private keys and the IAP issuer/key ids are set. Production serves Google, Apple and email on the native login; the web login now also shows Continue with Apple.
+- Production Supabase: Apple provider enabled with client ids `eu.memoai.memo,eu.memoai.web` and a six-month client secret generated on 17 September 2026 (rotate before 16 March 2027 with `scripts/apple/web-client-secret.mjs`); the native Google callback `eu.memoai.memo.auth://google/callback**` is on the redirect allowlist.
+- Apple Developer: Services ID `eu.memoai.web` (Sign in with Apple, primary App ID `eu.memoai.memo`, domains memoai.eu, www.memoai.eu and both Supabase hosts, return URLs both Supabase callbacks).
+- App Store Connect: production and sandbox server-notification URLs are `https://www.memoai.eu/api/mobile/notifications` (the apex host answers a POST with a 307 redirect, so the www host is required).
+- Still open: App Store Connect API access (needed for the command-line export/upload; `ios/Config/ExportOptionsUpload.plist` is ready), a completed web and native Apple sign-in on a real Apple Account, Sandbox purchases on a device.
+
 ## Required before calling the app ready
 
 1. **Real authentication:** complete Google and Apple sign-in on the connected
